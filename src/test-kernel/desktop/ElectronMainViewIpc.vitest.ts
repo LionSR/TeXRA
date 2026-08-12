@@ -17,6 +17,7 @@ import {
 import { AgentCategory } from '@shared/schemas/agent';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 // Local imports - desktop test paths
@@ -191,6 +192,7 @@ function createMainViewCommandCapabilities() {
     settings: createUnhandledCapability(),
     progress: createUnhandledCapability(),
     onboarding: createUnhandledCapability(),
+    globalState: new FakeStateStore(),
     logs: {
       readLog: () => ({ path: undefined, text: '', truncated: false }),
       copyLog: vi.fn(async (_text: string) => {}),
@@ -580,14 +582,13 @@ describe('desktop main-view IPC', () => {
   });
 
   it('uses desktop auth status when posting main-view startup login state', async () => {
-    const { installDesktopMainViewIpc, sends, window, sendFromRenderer } =
-      await createMainViewHarness();
-
-    installDesktopMainViewIpc(window, {
-      ...createMainViewCommandCapabilities(),
+    const harness = await createMainViewHarness();
+    installMainView(harness, {
       getAuthStatus: async () => ({ authenticated: true }),
       loadStartupOptions: emptyStartupOptionsLoader(),
     });
+    const { sends, sendFromRenderer } = harness;
+
     sendFromRenderer({
       command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
       view: 'main',
@@ -608,9 +609,7 @@ describe('desktop main-view IPC', () => {
           ]),
         );
       },
-      {
-        timeout: 5000,
-      },
+      { timeout: 5000 },
     );
     expect(
       sends.some(
@@ -621,8 +620,7 @@ describe('desktop main-view IPC', () => {
   });
 
   it('posts the injected startup team options on main-view ready', async () => {
-    const { installDesktopMainViewIpc, sends, window, sendFromRenderer } =
-      await createMainViewHarness();
+    const harness = await createMainViewHarness();
 
     const teamOptions = [
       {
@@ -644,10 +642,10 @@ describe('desktop main-view IPC', () => {
         rootAgentName: 'lead',
       },
     ];
-    installDesktopMainViewIpc(window, {
-      ...createMainViewCommandCapabilities(),
+    installMainView(harness, {
       loadStartupOptions: emptyStartupOptionsLoader(teamOptions),
     });
+    const { sends, sendFromRenderer } = harness;
     sendFromRenderer({
       command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
       view: 'main',

@@ -1,10 +1,5 @@
-// Node imports
-import * as assert from 'node:assert';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Third-party imports
-import { describe, it, afterEach, vi } from 'vitest';
-
-// Local imports
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { ExtractTikzFiguresTool } from '@tools/latex/ExtractTikzFiguresTool';
@@ -31,20 +26,19 @@ describe('ExtractTikzFiguresTool', () => {
       pathToLocation('build/slides/fig_a.pdf'),
     ]);
 
-    const tool = new ExtractTikzFiguresTool();
-    const result = await tool.call({
+    const result = await new ExtractTikzFiguresTool().call({
       texPath: 'slides.tex',
     });
 
-    assert.ok(result.summary?.includes('Found 1 TikZ figure'));
-    assert.ok(result.summary?.includes('Compiled 1 standalone PDF.'));
-    assert.ok(result.output?.includes('TikZ figures in slides.tex'));
-    assert.ok(result.output?.includes('Compiled PDFs'));
-    assert.strictEqual(result.files?.length, 1);
-    assert.strictEqual(result.files?.[0].mimeType, 'application/pdf');
-    assert.strictEqual(result.files?.[0].path, 'build/slides/fig_a.pdf');
-    assert.ok(result.files?.[0].bytes);
-    assert.strictEqual(result.files?.[0].base64Data, undefined);
+    expect(result.summary).toContain('Found 1 TikZ figure');
+    expect(result.summary).toContain('Compiled 1 standalone PDF.');
+    expect(result.output).toContain('TikZ figures in slides.tex');
+    expect(result.output).toContain('Compiled PDFs');
+    expect(result.files).toHaveLength(1);
+    expect(result.files?.[0].mimeType).toBe('application/pdf');
+    expect(result.files?.[0].path).toBe('build/slides/fig_a.pdf');
+    expect(result.files?.[0].bytes).toBeTruthy();
+    expect(result.files?.[0].base64Data).toBeUndefined();
   });
 
   it('omits attachments when compilation disabled', async () => {
@@ -55,21 +49,24 @@ describe('ExtractTikzFiguresTool', () => {
       ['fig:b', ['\\begin{tikzpicture}\\end{tikzpicture}']],
     ]);
 
-    const tool = new ExtractTikzFiguresTool();
-    const result = await tool.call({ texPath: 'draft.tex', compile: false });
+    const result = await new ExtractTikzFiguresTool().call({
+      texPath: 'draft.tex',
+      compile: false,
+    });
 
-    assert.ok(result.summary?.includes('Found 1 TikZ figure'));
-    assert.ok(!result.summary?.includes('Compiled'));
-    assert.strictEqual(result.files, undefined);
+    expect(result.summary).toContain('Found 1 TikZ figure');
+    expect(result.summary).not.toContain('Compiled');
+    expect(result.files).toBeUndefined();
   });
 
   it('returns error when LaTeX file is missing', async () => {
     await installPlatform({});
 
-    const tool = new ExtractTikzFiguresTool();
-    const result = await tool.call({ texPath: 'absent.tex' });
+    const result = await new ExtractTikzFiguresTool().call({
+      texPath: 'absent.tex',
+    });
 
-    assert.strictEqual(result.status, 'error');
-    assert.ok(result.error?.includes('LaTeX file not found'));
+    expect(result.status).toBe('error');
+    expect(result.error).toContain('LaTeX file not found');
   });
 });

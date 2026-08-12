@@ -14,18 +14,17 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 import {
   SwitchViewMessageSchema,
-  ThemeSchema,
   WebviewReadyMessageSchema,
 } from '../commonViewMessages';
 import { commandOnly } from '../messageFactories';
 import {
-  ExternalInquiryThreadIdSchema,
+  InquiryThreadIdSchema,
   InquiryDraftSchema,
   InquiryDropActionSchema,
   InquirySubmitActionSchema,
 } from '../inquiry';
 import { AgentProposalSchema, UserQuestionAnswersSchema } from '../prompts';
-import { StreamScopedBaseSchema } from './data';
+import { StreamScopedBaseSchema, streamScopedCommand } from './data';
 import { GettingStartedActionSchema } from '../mainView/state';
 import { ExhaustionReasonSchema } from '../errors';
 
@@ -33,11 +32,6 @@ const TrimmedStringSchema = z
   .string()
   .transform((s) => s.trim())
   .pipe(z.string().min(1));
-
-/** StreamScopedBaseSchema plus a `command` literal, with no extra fields. */
-function streamScopedCommand<T extends string>(command: T) {
-  return StreamScopedBaseSchema.extend({ command: z.literal(command) });
-}
 
 /** File action carrying the output file and an optional diff base. */
 function fileWithBaseCommand<T extends string>(command: T) {
@@ -47,16 +41,6 @@ function fileWithBaseCommand<T extends string>(command: T) {
     base: z.string().min(1).optional(),
   });
 }
-
-const ThemeSetMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.THEME_SET),
-  theme: ThemeSchema,
-});
-
-const DebugModeSetMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET),
-  debugMode: z.boolean(),
-});
 
 const FollowupConfigSchema = StreamScopedBaseSchema.extend({
   agent: TrimmedStringSchema,
@@ -138,11 +122,6 @@ const RetryStreamRequestMessageSchema = StreamScopedBaseSchema.extend({
 const CancelRetryRequestMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST),
   requestId: z.string(),
-});
-
-const ShowInformationMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE),
-  text: TrimmedStringSchema,
 });
 
 const ToolEditActionMessageBase = {
@@ -228,7 +207,7 @@ const ExternalInquiryActionMessageSchema = z.discriminatedUnion('action', [
   z.object({
     command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
     action: z.literal('draft'),
-    threadId: ExternalInquiryThreadIdSchema,
+    threadId: InquiryThreadIdSchema,
     draft: InquiryDraftSchema.nullable(),
   }),
 ]);
@@ -267,11 +246,6 @@ const OpenFileMessageSchema = z.object({
   line: z.int().nonnegative().optional(),
 });
 
-const OpenFileCompileMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE),
-  file: z.string().min(1),
-});
-
 const ComparePreviousMessageSchema = fileWithBaseCommand(
   PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS,
 ).extend({
@@ -293,8 +267,6 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
   [
     WebviewReadyMessageSchema,
     SwitchViewMessageSchema,
-    ThemeSetMessageSchema,
-    DebugModeSetMessageSchema,
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM),
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
     commandOnly(PROGRESS_VIEW_COMMANDS.DELETE_ALL),
@@ -330,11 +302,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     ExternalInquiryActionMessageSchema,
     UserQuestionActionMessageSchema,
     RestoreProposalConfigMessageSchema,
-    ShowInformationMessageSchema,
-    commandOnly(PROGRESS_VIEW_COMMANDS.OPEN_PROFILE),
-    commandOnly(PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW),
     OpenFileMessageSchema,
-    OpenFileCompileMessageSchema,
     fileWithBaseCommand(PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL),
     ComparePreviousMessageSchema,
     fileWithBaseCommand(PROGRESS_VIEW_COMMANDS.ACCEPT_FILE),

@@ -16,7 +16,6 @@ import { deriveResumability } from './resumability';
  * happens when VS Code reloads mid-execution (the finally block in runToolUseFlow
  * deletes the record on normal completion).
  *
- * @param executionIdMap - Map of streamTabId to executionId from SessionState
  * @returns Set of streamIds that have persisted flows (should be marked WAITING)
  */
 export async function detectWaitingStreams(

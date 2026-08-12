@@ -255,30 +255,35 @@ export function formatCliGrokPreference(status: CliModelAccessStatus): string {
   );
 }
 
+function formatCliKeyedSubscriptionPreference(
+  preferenceOn: boolean,
+  keySet: boolean | undefined,
+): string {
+  if (preferenceOn && keySet !== true) return 'On · key required';
+  if (preferenceOn) return 'On · key configured';
+  return keySet === true
+    ? 'Off · key configured'
+    : 'Off · key required to enable';
+}
+
 /** Format the Kimi preference independently of key availability. */
 export function formatCliKimiCodePreference(
   status: CliModelAccessStatus,
 ): string {
-  if (status.preferences.kimiCode === 'on' && status.kimiCodeKeySet !== true) {
-    return 'On · key required';
-  }
-  if (status.preferences.kimiCode === 'on') return 'On · key configured';
-  return status.kimiCodeKeySet === true
-    ? 'Off · key configured'
-    : 'Off · key required to enable';
+  return formatCliKeyedSubscriptionPreference(
+    status.preferences.kimiCode === 'on',
+    status.kimiCodeKeySet,
+  );
 }
 
 /** Format the GLM Coding Plan preference independently of key availability. */
 export function formatCliGlmCodingPlanPreference(
   status: CliModelAccessStatus,
 ): string {
-  if (status.preferences.glmCode === 'on' && status.glmKeySet !== true) {
-    return 'On · key required';
-  }
-  if (status.preferences.glmCode === 'on') return 'On · key configured';
-  return status.glmKeySet === true
-    ? 'Off · key configured'
-    : 'Off · key required to enable';
+  return formatCliKeyedSubscriptionPreference(
+    status.preferences.glmCode === 'on',
+    status.glmKeySet,
+  );
 }
 
 const cliSubscriptionAccessItems = [

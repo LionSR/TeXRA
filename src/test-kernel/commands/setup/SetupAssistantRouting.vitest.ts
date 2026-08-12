@@ -194,6 +194,7 @@ vi.mock('@agent/runtime/runAgent', () => ({
 
 vi.mock('@logger/logUtils', () => ({
   createChannelWriter: () => () => {},
+  createLog: () => ({ warn: () => {} }),
   initialize: () => {},
   error: mocks.logError,
   warn: () => {},
@@ -233,12 +234,10 @@ describe('setup assistant routing check ordering', () => {
   });
 
   it('shows routing warning before credential prompt when OpenRouter is on without a key', async () => {
-    // Override baseline: enable OpenRouter routing.
     mocks.getUseOpenRouter.mockReturnValue(true);
 
     const result = await launchSetupAssistant();
 
-    // Routing warning must be shown; credential prompt must not.
     expect(result).toBe('not-started');
     expect(mocks.showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('Use OpenRouter'),
@@ -250,11 +249,8 @@ describe('setup assistant routing check ordering', () => {
   });
 
   it('proceeds to credential check when routing is correctly configured', async () => {
-    // Baseline is already correct: OR off, no keys → credential prompt.
-
     const result = await launchSetupAssistant();
 
-    // Credential prompt shown (routing check passed first silently).
     expect(result).toBe('not-started');
     expect(mocks.showWarningMessage).not.toHaveBeenCalled();
     expect(mocks.showQuickPick).toHaveBeenCalledWith(
@@ -266,8 +262,6 @@ describe('setup assistant routing check ordering', () => {
   });
 
   it('passes routing check when OR is on with a key, then reaches credential check', async () => {
-    // OpenRouter on with a valid key → routing OK. The OR key itself
-    // counts as a usable credential, so both preflight checks pass.
     mocks.getUseOpenRouter.mockReturnValue(true);
     mocks.hasUsableApiKey.mockImplementation(
       async (provider: string) => provider === 'openRouter',

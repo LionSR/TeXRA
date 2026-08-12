@@ -1,4 +1,5 @@
 import { computeAgentOptionsData } from '@agent/index';
+import { createLog } from '@logger/logUtils';
 import {
   buildVisibleBasicModelOptionsData,
   computeModelOptionsData,
@@ -6,8 +7,11 @@ import {
 import { AgentCategory, type AgentProposalPermission } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { WebviewUpdater } from './WebviewUpdater';
+
+const log = createLog('agentProposalTransport');
 
 /**
  * Show/dismiss transport for agent proposals, shared by every host that renders
@@ -47,10 +51,18 @@ export function createAgentProposalTransport(options: {
       }));
     };
     const [modelOptionsData, agentOptionsData] = await Promise.all([
-      computeModelOptionsData().catch(() =>
-        buildVisibleBasicModelOptionsData(),
-      ),
-      loadAgentOptions().catch(() => undefined),
+      computeModelOptionsData().catch((error) => {
+        log.debug(
+          `Model options fetch failed; falling back to the static visible-model list: ${toErrorMessage(error)}`,
+        );
+        return buildVisibleBasicModelOptionsData();
+      }),
+      loadAgentOptions().catch((error) => {
+        log.debug(
+          `Agent options fetch failed; omitting the agent dropdown: ${toErrorMessage(error)}`,
+        );
+        return undefined;
+      }),
     ]);
     if (!isPending(proposal.proposalId)) return;
     getWebviewUpdater().showPermission({

@@ -33,6 +33,16 @@ export function isMcpToolName(toolName: string): boolean {
   return toolName.startsWith(MCP_PREFIX);
 }
 
+/** Build the `mcp:<server>/<tool>` wire name for an MCP tool call. Single
+ *  source of the `mcp:` contract so the producer (`buildCodexMcpToolLog` in
+ *  `src/tools/codexShared.ts`) and the recognition/display side here can't
+ *  drift: if the producer used its own literal, a drift would silently make
+ *  `isMcpToolName` return false for every MCP call and names would render
+ *  verbatim. */
+export function buildMcpToolName(server: string, tool: string): string {
+  return `${MCP_PREFIX}${server}/${tool}`;
+}
+
 /** Drop provider/handler and MCP namespaces: `claude:Edit` -> `Edit`,
  *  `mcp:terminal/bash` -> `bash`. Case is preserved for display. The `/` cut
  *  is deliberate MCP `server/tool` unwrapping, not general path splitting; no

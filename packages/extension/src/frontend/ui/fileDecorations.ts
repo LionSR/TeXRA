@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 
-import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession, type SessionEventHub } from '@agent/runtime';
 import { appSignals } from '@eventBus/AppSignals';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 
@@ -69,9 +68,7 @@ export function registerFileDecorations(
           }
         }
       }
-      if (paths.size > 0) {
-        provider.markTouched(paths);
-      }
+      provider.markTouched(paths);
     },
   );
 

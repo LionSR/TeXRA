@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { CONFIRM_CARD_FEEDBACK_PLACEHOLDER } from '@cli/chat/tui/modals/ConfirmCard';
 import {
-  PLAN_APPROVAL_FEEDBACK_PLACEHOLDER,
   isCompactPlanApprovalRows,
   isPlanApprovalGoalActionVisible,
   planApprovalCompactBodyRowsBudget,
@@ -78,14 +78,14 @@ describe('CLI plan approval layout', () => {
     expect(
       confirmCardFeedbackRows({
         columns: 80,
-        placeholder: PLAN_APPROVAL_FEEDBACK_PLACEHOLDER,
+        placeholder: CONFIRM_CARD_FEEDBACK_PLACEHOLDER,
         value: '',
       }),
     ).toBe(2);
     expect(
       confirmCardFeedbackRows({
         columns: 44,
-        placeholder: PLAN_APPROVAL_FEEDBACK_PLACEHOLDER,
+        placeholder: CONFIRM_CARD_FEEDBACK_PLACEHOLDER,
         value:
           'This rejection note is intentionally long enough to wrap on a narrow card.',
       }),

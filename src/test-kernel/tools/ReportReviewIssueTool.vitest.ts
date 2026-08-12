@@ -28,7 +28,6 @@ function useReviewSink(sink: ReportReviewIssueSink): void {
   });
 }
 
-/** Attach an accepting sink and build the tool that should reach it. */
 function useAcceptingSink(): {
   sink: Mock<ReportReviewIssueSink>;
   tool: ReportReviewIssueTool;

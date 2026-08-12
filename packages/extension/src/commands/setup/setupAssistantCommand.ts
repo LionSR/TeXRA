@@ -3,12 +3,12 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { loadAgents } from '@agent/index';
+import { defaultSession, runAgent } from '@agent/runtime';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { runAgent } from '@agent/runtime/runAgent';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { AUTH_COMMANDS } from '@auth/constants';
+import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
-import { GlobalStateKey, globalSM } from '@common/state';
+import { globalSM } from '@common/state';
 import {
   resolveSetupLaunchModel,
   SETUP_INSTRUCTION,
@@ -17,6 +17,7 @@ import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionS
 import * as logger from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { agentName } from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import {
@@ -133,7 +134,9 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
       await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
       break;
     case 'walkthrough':
-      await vscode.commands.executeCommand('texra.openGettingStarted');
+      await vscode.commands.executeCommand(
+        EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
+      );
       return false;
   }
 

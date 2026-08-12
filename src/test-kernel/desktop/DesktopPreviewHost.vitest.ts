@@ -254,7 +254,6 @@ describe('desktop preview host', () => {
     const host = createDesktopPreviewHost({ shell, postToRenderer });
 
     await host.openBuildDisplay(createExternalLocation(texPath));
-    // The overlay path is taken; shell.openPath is NOT called.
     expect(postToRenderer).toHaveBeenCalledTimes(1);
     expect(postToRenderer).toHaveBeenCalledWith(
       expect.objectContaining({

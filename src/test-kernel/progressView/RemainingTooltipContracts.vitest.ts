@@ -12,13 +12,6 @@ import {
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
 
-function expectUniqueIds(root: ShadowRoot): void {
-  const ids = [...root.querySelectorAll<HTMLElement>('[id]')].map(
-    (element) => element.id,
-  );
-  expect(new Set(ids).size).toBe(ids.length);
-}
-
 /**
  * Mount a component and return its shadow root after asserting the shared
  * tooltip contract: no native [title] attributes and no duplicate ids.
@@ -29,7 +22,10 @@ async function mountCheckedShadow<
   const element = await mountComponent<T>(tag, props);
   const shadow = element.shadowRoot!;
   expect(shadow.querySelector('[title]')).toBeNull();
-  expectUniqueIds(shadow);
+  const ids = [...shadow.querySelectorAll<HTMLElement>('[id]')].map(
+    (element) => element.id,
+  );
+  expect(new Set(ids).size).toBe(ids.length);
   return shadow;
 }
 

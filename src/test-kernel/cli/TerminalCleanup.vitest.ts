@@ -107,6 +107,12 @@ describe('installTerminalTitleUpdates', () => {
   const expectLastTitle = (title: string): void => {
     expect(writeSync).toHaveBeenLastCalledWith(1, `\x1b]0;${title}\x07`);
   };
+  /** Advancing the spin timer must not produce any further title writes. */
+  const expectNoTitleWrites = (): void => {
+    const writes = vi.mocked(writeSync).mock.calls.length;
+    vi.advanceTimersByTime(1_500);
+    expect(writeSync).toHaveBeenCalledTimes(writes);
+  };
 
   it('shows root launch as running before the first stream status arrives', async () => {
     enableOscTitles();
@@ -182,18 +188,14 @@ describe('installTerminalTitleUpdates', () => {
     queueTitleApproval('animated-root');
     await flushTitleUpdate();
     expectLastTitle('TeXRA — Approval needed — coauthor');
-    const writesWhileApprovalNeeded = vi.mocked(writeSync).mock.calls.length;
-    vi.advanceTimersByTime(1_500);
-    expect(writeSync).toHaveBeenCalledTimes(writesWhileApprovalNeeded);
+    expectNoTitleWrites();
 
     clearApprovals();
     await flushTitleUpdate();
     expectLastTitle('TeXRA — - — coauthor');
     updates.suspend();
     expectLastTitle('TeXRA — coauthor');
-    const writesWhileSuspended = vi.mocked(writeSync).mock.calls.length;
-    vi.advanceTimersByTime(1_500);
-    expect(writeSync).toHaveBeenCalledTimes(writesWhileSuspended);
+    expectNoTitleWrites();
 
     updates.resume();
     expectLastTitle('TeXRA — - — coauthor');
@@ -203,9 +205,7 @@ describe('installTerminalTitleUpdates', () => {
     });
     await flushTitleUpdate();
     expectLastTitle('TeXRA — coauthor');
-    const writesWhileIdle = vi.mocked(writeSync).mock.calls.length;
-    vi.advanceTimersByTime(1_500);
-    expect(writeSync).toHaveBeenCalledTimes(writesWhileIdle);
+    expectNoTitleWrites();
 
     setStreamStatusInCliState({
       streamId: 'animated-root',
@@ -214,9 +214,7 @@ describe('installTerminalTitleUpdates', () => {
     await flushTitleUpdate();
     expectLastTitle('TeXRA — - — coauthor');
     updates.dispose();
-    const writesAfterDispose = vi.mocked(writeSync).mock.calls.length;
-    vi.advanceTimersByTime(1_500);
-    expect(writeSync).toHaveBeenCalledTimes(writesAfterDispose);
+    expectNoTitleWrites();
   });
 
   it('deduplicates unchanged title projections and resets an active title on teardown', async () => {

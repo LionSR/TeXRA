@@ -64,9 +64,8 @@ function hasCommitValue(value: string): boolean {
   });
 }
 
-// `satisfies Partial<...>` (not `: MainViewHandlerRegistry`): this slice
-// owns only document commands; see bannerSlice.ts for why (registry is now
-// exhaustive, messageDispatcher.ts is the real coverage checkpoint).
+// `satisfies Partial<...>` subset — owns only document commands; see
+// bannerSlice.ts for the rationale.
 export const documentHandlers = {
   [MAIN_VIEW_COMMANDS.SET_EDITED_FILE]: (message) => {
     const files = message.files ?? [];

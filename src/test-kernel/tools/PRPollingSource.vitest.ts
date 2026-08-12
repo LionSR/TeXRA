@@ -41,7 +41,6 @@ interface AnnotationDrainAccess {
   getSubscriptionState(key: string): PRSubscriptionState | undefined;
 }
 
-/** Reaches the private drain surface (no public seam exists yet). */
 function drainAccess(source: PRPollingSource): AnnotationDrainAccess {
   return source as unknown as AnnotationDrainAccess;
 }

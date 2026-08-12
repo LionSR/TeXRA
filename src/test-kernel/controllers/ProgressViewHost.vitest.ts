@@ -1,7 +1,5 @@
-// Node imports
 import { strict as assert } from 'node:assert';
 
-// Third-party imports
 import { beforeEach, describe, it, vi } from 'vitest';
 
 const tryResumeStreamMock = vi.hoisted(() =>
@@ -12,14 +10,10 @@ vi.mock('@platform/platform', () => ({
   platform: () => ({ agentResume: { tryResumeStream: tryResumeStreamMock } }),
 }));
 
-// Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type { RunIdentity } from '@shared/schemas';
-
-// Local file imports
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, type RunIdentity } from '@shared/schemas';
 import {
   createAgentConfig,
   createWorkflowConfig,
@@ -112,7 +106,6 @@ function createHostHarness(
       },
       file: {
         openFile: vi.fn(),
-        openFileCompile: vi.fn(),
       },
       approval: {
         approvePendingDelegatedWork: vi.fn(async () => undefined),

@@ -12,15 +12,18 @@ import {
   DEFAULT_STREAM_METADATA_STATUS,
   STREAM_PHASE,
   STREAM_SUBSTATE,
+  isPlainAgentIdentity,
+  isToolUseState,
   type ConversationProgress,
   type StreamStage,
+  type StreamState,
   type StreamSubstate,
   type StreamTabInfo,
 } from '@shared/schemas';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { deriveGoalState, type GoalStatus } from '@shared/schemas/goal';
 import {
-  formatStreamStatusLabel,
-  streamStatusDisplayKey,
+  progressHeaderStatus,
   streamStatusIndicatorClass,
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
@@ -131,7 +134,7 @@ const NATIVE_AGENT_ONLY_BUTTONS = new Set([
 ]);
 
 @customElement('stream-header')
-export class StreamHeader extends LitElement {
+export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -323,28 +326,13 @@ export class StreamHeader extends LitElement {
   ];
 
   @property({ attribute: false }) stream: StreamTabInfo | null = null;
-  @property({ attribute: false }) status: string =
-    DEFAULT_STREAM_METADATA_STATUS;
-  @property({ attribute: false }) substate: StreamSubstate | undefined;
-  @property({ attribute: false }) progress: ConversationProgress | undefined;
-  @property({ attribute: false }) stage: StreamStage | undefined;
-  @property({ attribute: false }) yoloActive = false;
-  @property({ attribute: false }) superYoloActive = false;
-  @property({ attribute: false }) goalActive = false;
-  @property({ attribute: false }) goalStatus = '';
-  @property({ attribute: false }) goalObjective = '';
   /**
-   * Commands the active host's registry declares `unsupported(...)` (derived
-   * from `unsupportedProgressCommands$`, itself derived from the host's
-   * registry — see `@shared/utils/dispatcher`). A button whose command is in
-   * this set is hidden, the same as an execution-dependent button with no
-   * executionId, rather than rendered disabled-but-visible. `null` before
-   * the host's one-shot capability broadcast arrives — see
-   * `isKnownUnsupported`, which treats that the same as "unsupported" so a
-   * button never flashes visible then hidden.
+   * The full stream state. The header derives its status/substate/progress/
+   * stage display and the tool-use-only bypass/goal indicators from this one
+   * object, so containers bind a single `.state` property instead of the
+   * nine-prop sync surface the old `renderStreamHeader` wrapper maintained.
    */
-  @property({ attribute: false })
-  unsupportedCommands: ReadonlySet<string> | null = null;
+  @property({ attribute: false }) state: StreamState | null = null;
 
   /** Read-only trace-viewer export: no toolbar action reaches a live backend. */
   @consume({ context: archivedContext, subscribe: true })
@@ -359,16 +347,26 @@ export class StreamHeader extends LitElement {
       return nothing;
     }
 
-    const status = this.status || DEFAULT_STREAM_METADATA_STATUS;
-    const statusLabel = formatStreamStatusLabel(status, {
-      style: 'progressHeader',
-      ...(this.substate ? { substate: this.substate } : {}),
-    });
-    const statusClass = streamStatusIndicatorClass(status, this.substate);
+    const state = this.state;
+    const status = state?.status ?? DEFAULT_STREAM_METADATA_STATUS;
+    const substate = state?.substate;
+    const { label: statusLabel, displayKey } = progressHeaderStatus(
+      status,
+      substate,
+    );
+    const statusClass = streamStatusIndicatorClass(status, substate);
+    const progress = state?.conversationProgress;
+    const stage = state?.stage;
+    // Tool-use-only bypass/goal indicators; workflow/process states report off.
+    const toolUse = state && isToolUseState(state) ? state : null;
+    const yoloActive = Boolean(toolUse?.toolEditBypass);
+    const superYoloActive = Boolean(toolUse?.superYoloBypass);
+    const goalActive = Boolean(toolUse?.goalActive);
+    const goalStatus = toolUse?.goalStatus;
+    const goalObjective = toolUse?.goalObjective ?? '';
     const hasExecutionId = Boolean(this.stream.executionId);
     const identity = this.stream.identity;
-    const isNativeAgentRun =
-      identity?.kind === 'agent' && identity.tool === undefined;
+    const isNativeAgentRun = isPlainAgentIdentity(identity);
     const agentCategory = this.stream.agentCategory;
     // Identity decides the chrome: a non-agent run (process, multi-agent-
     // workflow container) gets the neutral toolbar even when a borrowed
@@ -380,7 +378,6 @@ export class StreamHeader extends LitElement {
       isAgentOrPending && agentCategory
         ? TOOLBAR_BUTTONS[agentCategory]
         : NEUTRAL_TOOLBAR;
-    const displayKey = streamStatusDisplayKey(status, this.substate);
     const enabledButtons = displayKey
       ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
       : undefined;
@@ -409,8 +406,8 @@ export class StreamHeader extends LitElement {
       const isActive = Boolean(
         btn.isToggle &&
         (btn.id === ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN
-          ? this.superYoloActive
-          : this.yoloActive),
+          ? superYoloActive
+          : yoloActive),
       );
       const tooltipText =
         isActive && btn.titleActive ? btn.titleActive : btn.title;
@@ -473,7 +470,8 @@ export class StreamHeader extends LitElement {
           <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
             ${statusLabel}
           </wa-tooltip>
-          ${this.renderGoalChip()} ${this.renderProgressBadge()}
+          ${this.renderGoalChip(goalActive, goalStatus, goalObjective)}
+          ${this.renderProgressBadge(progress, stage)}
         </div>
         <div class="header-actions">
           <wa-button-group
@@ -515,15 +513,19 @@ export class StreamHeader extends LitElement {
     return { disabled, hidden };
   }
 
-  private renderGoalChip(): TemplateResult | typeof nothing {
+  private renderGoalChip(
+    goalActive: boolean,
+    goalStatus: GoalStatus | undefined,
+    goalObjective: string,
+  ): TemplateResult | typeof nothing {
     // `goalActive`/`goalStatus`/`goalObjective` are three independently-set
-    // properties (mirroring the wire/storage shape) — derive the canonical
+    // state fields (mirroring the wire/storage shape) — derive the canonical
     // "status/objective only meaningful when active" union once here rather
     // than guarding ad hoc.
     const goal = deriveGoalState({
-      goalActive: this.goalActive,
-      goalStatus: (this.goalStatus || undefined) as GoalStatus | undefined,
-      goalObjective: this.goalObjective || undefined,
+      goalActive,
+      goalStatus,
+      goalObjective: goalObjective || undefined,
     });
     if (!goal.active) return nothing;
     const isPaused = goal.status === 'paused';
@@ -541,19 +543,21 @@ export class StreamHeader extends LitElement {
       <wa-tooltip for=${ELEMENT_IDS.GOAL_CHIP}>${tooltip}</wa-tooltip>`;
   }
 
-  private renderProgressBadge(): TemplateResult | typeof nothing {
-    if (!this.stage && !this.progress?.toolCallCount) {
+  private renderProgressBadge(
+    progress: ConversationProgress | undefined,
+    stage: StreamStage | undefined,
+  ): TemplateResult | typeof nothing {
+    if (!stage && !progress?.toolCallCount) {
       return nothing;
     }
-    const progressTitle = getProgressBadgeTitle(this.progress, this.stage);
+    const progressTitle = getProgressBadgeTitle(progress, stage);
     return html`<wa-tag
         id=${ELEMENT_IDS.PROGRESS_BADGE}
         class="progress-badge"
         variant="neutral"
         size="s"
       >
-        ${waIcon('chart-line')}
-        ${renderProgressBadgeContent(this.progress, this.stage)}
+        ${waIcon('chart-line')} ${renderProgressBadgeContent(progress, stage)}
       </wa-tag>
       ${
         progressTitle

@@ -7,7 +7,7 @@
  * settle helpers in the adapters.
  */
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime';
 import {
   decideHumanInputRequest,
   decideRetryApproval,
@@ -24,7 +24,7 @@ import {
   type ApprovalDecision,
   type RetryPermission,
 } from '@shared/schemas';
-import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
+import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 
 import { type CliContext } from '../cliContext';
 

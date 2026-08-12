@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it, afterEach, vi } from 'vitest';
+import { afterEach, describe, it, vi } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
@@ -51,7 +51,7 @@ import {
 } from '@test/support/streamStatusTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
-import * as subagentResults from '@tools/delegation/subagentResults';
+import * as bashDelivery from '@tools/delegation/bashDelivery';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import * as execUtils from '@utils/system/execUtils';
@@ -351,7 +351,6 @@ describe('BashTool', () => {
     const messages: ProviderMessage[] = [];
     const shared = freshRoundShared(messages);
 
-    // Create and run the flow directly
     const flow = createToolUseRoundFlow();
     flow.setServices(options);
     await withTestRunContext(options.runScope, () => flow.run(shared));
@@ -810,7 +809,7 @@ describe('BashTool', () => {
     // unexpected throw on the completion path left the child stream RUNNING
     // forever, with its interrupt handler still attached to a dead process.
     const resolveCommand = holdCommand();
-    vi.spyOn(subagentResults, 'formatBashDelivery').mockImplementation(() => {
+    vi.spyOn(bashDelivery, 'formatBashDelivery').mockImplementation(() => {
       throw new Error('delivery formatting blew up');
     });
     await installPlatform(BASH_PLATFORM_OPTIONS);

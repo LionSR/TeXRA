@@ -2,7 +2,7 @@
 
 import { DEFAULT_WORKFLOW_AGENT } from '@agent/core/definition/AgentConfig';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { AgentOptionData } from '@shared/schemas';
 import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
@@ -32,7 +32,7 @@ import {
 import { loadRemoteAgents, persistRemoteAgentMeta } from './remoteAgentMeta';
 import type { AgentEntry, ResolvedAgent } from './agentEntry';
 
-const CHANNEL = 'agentRegistry';
+const log = createLog('agentRegistry');
 
 /**
  * Source priority for lookups (higher priority first). `inline` must be listed,
@@ -55,8 +55,6 @@ const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
   'builtInToolUse',
   'builtInWorkflow',
 ];
-
-export type { AgentEntry, ResolvedAgent } from './agentEntry';
 
 // =============================================================================
 // STATE
@@ -196,10 +194,7 @@ async function doLoad(
     cache.set(agentKeyOf(entry), entry);
   }
 
-  logger.info(
-    CHANNEL,
-    `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
-  );
+  log.info(`Loaded ${cache.size} agents in ${Date.now() - startTime}ms`);
   return true;
 }
 
@@ -345,8 +340,7 @@ export function invalidateRemoteAgentsAfterSignOut(): Promise<void> {
     // An older in-flight remote load may have settled before the rebuild.
     // Preserve the signed-out invariant even when local directory I/O fails.
     removeRemoteEntries();
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Local agent catalog rebuild failed after sign-out: ${String(error)}`,
     );
   });

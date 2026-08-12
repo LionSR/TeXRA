@@ -10,19 +10,12 @@ type RenderEmptyState = typeof import('@shared/wa/emptyState').renderEmptyState;
 type EmptyStateOptions = Parameters<RenderEmptyState>[0];
 
 /**
- * The empty-states consolidation moved GoalTab, MemoryList, HistoryList
- * (x2), TaskGroupList, and StreamTabs off hand-rolled `.empty-state` /
- * `.log-placeholder` markup onto this shared helper. These tests pin the
- * contract those six call sites now depend on.
- *
  * `lit` and `lit-html` must NOT be imported statically at module top level
  * here: lit-html caches its DOM-creation helpers off `global.document` the
- * first time it's evaluated, and useLitComponentTestDom only patches
- * `document` onto globalThis inside its `beforeAll`. A static top-level
- * import would freeze lit-html onto a document-less stub before that patch
- * runs (surfacing as `d.createComment is not a function`), so both `lit`
- * and the module under test are imported dynamically, inside test bodies,
- * after the DOM patch has already happened.
+ * first time it's evaluated, before useLitComponentTestDom patches `document`
+ * onto globalThis. A static import would freeze lit-html onto a document-less
+ * stub (`d.createComment is not a function`), so `lit` and the module under
+ * test are imported dynamically, inside test bodies, after the DOM patch.
  */
 async function renderEmptyStateInto(
   options: EmptyStateOptions,

@@ -11,15 +11,15 @@
 import { useMemo } from 'react';
 import { useInput, useWindowSize } from 'ink';
 
+import { isEscapeInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
+import { KeyHints, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import type { StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
-import { isEscapeInput } from '../input/inputKeys';
 import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
@@ -73,16 +73,7 @@ export function TranscriptReader({
       color={COLOR_HINT}
       title={title}
       width={frameWidth}
-      footer={
-        <KeyHints
-          hints={[
-            { key: '↑/↓', action: 'scroll' },
-            { key: 'PgUp/PgDn', action: 'page' },
-            { key: 'Esc', action: 'close' },
-          ]}
-          confirmCancel={false}
-        />
-      }
+      footer={<KeyHints hints={READER_SCROLL_HINTS} confirmCancel={false} />}
     >
       <ScrollableModalText
         hiddenNoun="transcript rows"

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   setLeanLanguageServices,
@@ -27,10 +27,6 @@ function installServices(overrides: Partial<LeanLanguageServices>): void {
 }
 
 describe('LeanInspectTool', () => {
-  beforeEach(() => {
-    installServices({});
-  });
-
   it('reports a failing language-server request with a per-type summary', async () => {
     // The dispatch must be awaited inside execute()'s try block; a bare
     // `return this.executeGoal(...)` settles the promise after the try has

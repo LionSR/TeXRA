@@ -60,6 +60,8 @@ export function getDesktopShortcutService():
 
 const MODIFIER_KEYS = new Set(['Alt', 'Control', 'Meta', 'Shift', 'AltGraph']);
 
+const FUNCTION_KEY_PATTERN = /^F\d{1,2}$/i;
+
 /** Converts a DOM keyboard chord into the canonical Electron-style form. */
 export function keyboardEventToAccelerator(
   event: KeyboardEvent,
@@ -75,7 +77,7 @@ export function keyboardEventToAccelerator(
   if (event.altKey) parts.push(platform === 'darwin' ? 'Option' : 'Alt');
   if (event.shiftKey) parts.push('Shift');
   if (platform !== 'darwin' && event.metaKey) parts.push('Super');
-  if (parts.length === 0 && !/^F\d{1,2}$/.test(key)) return undefined;
+  if (parts.length === 0 && !FUNCTION_KEY_PATTERN.test(key)) return undefined;
   return [...parts, key].join('+');
 }
 
@@ -98,6 +100,6 @@ const SUPPORTED_NAMED_KEYS: Record<string, string> = {
 function normalizeKeyboardKey(key: string): string | undefined {
   if (key === ' ') return 'Space';
   if (key.length === 1) return key.toUpperCase();
-  if (/^F\d{1,2}$/i.test(key)) return key.toUpperCase();
+  if (FUNCTION_KEY_PATTERN.test(key)) return key.toUpperCase();
   return SUPPORTED_NAMED_KEYS[key];
 }

@@ -42,8 +42,6 @@ describe('child run delivery', () => {
         cost: 0,
       },
     } satisfies ResultMeta;
-    mocks.writeReport.mockResolvedValue(undefined);
-    mocks.writeResultMeta.mockResolvedValue(undefined);
 
     await expect(
       persistChildRunReport('exec-1' as ExecutionId, 'payload'),

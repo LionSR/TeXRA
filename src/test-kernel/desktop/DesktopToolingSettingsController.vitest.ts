@@ -1,12 +1,10 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latex';
+import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latexToolchain';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';

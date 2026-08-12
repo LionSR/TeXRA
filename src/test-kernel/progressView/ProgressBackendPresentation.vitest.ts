@@ -53,22 +53,6 @@ function mockSuccessfulClear(
   }
 }
 
-/** Stubs the durable clear for `kind` to retain `stream` as still active. */
-function mockRetainedClear(
-  backend: RecordingBackend,
-  kind: DeletionKind,
-  stream: StreamTabId,
-): void {
-  if (kind === 'one-stream') {
-    vi.spyOn(backend.state, 'clearStream').mockResolvedValue('active');
-  } else {
-    vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
-      active: new Set([stream]),
-      failed: new Set(),
-    });
-  }
-}
-
 async function expectDeletionBeforeStorageRootReplacement(
   deletionKind: DeletionKind,
 ): Promise<void> {
@@ -140,7 +124,10 @@ async function expectDeletionReleasesEarlierRootReplacement(
   vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
     {} as never,
   );
-  vi.spyOn(backend.state, 'waitForOwnedExecutionRelease').mockResolvedValue();
+  vi.spyOn(
+    backend.state.stores,
+    'waitForOwnedExecutionRelease',
+  ).mockResolvedValue();
   mockSuccessfulClear(backend, deletionKind, async () => {
     operations.push('delete');
   });
@@ -175,7 +162,14 @@ async function expectRetentionNoticeDoesNotBlockStorageRootReplacement(
   const { backend } = createIsolatedRecordingBackend(session, lifecycle);
   const stream = `${deletionKind}-retained-before-root-move` as StreamTabId;
   backend.state.streamLogs.ensureStream(stream);
-  mockRetainedClear(backend, deletionKind, stream);
+  if (deletionKind === 'one-stream') {
+    vi.spyOn(backend.state, 'clearStream').mockResolvedValue('active');
+  } else {
+    vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
+      active: new Set([stream]),
+      failed: new Set(),
+    });
+  }
 
   try {
     const deletion = triggerDeletion(backend, deletionKind, stream);

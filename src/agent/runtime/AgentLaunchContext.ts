@@ -366,12 +366,13 @@ async function assembleAgentLaunchContext(
     displayInstruction && !input.streamTabIdOverride
       ? displayInstruction
       : undefined;
-  const initialMediaMayBeInserted =
-    config.mediaFiles.length > 0 &&
-    (setting.agentCategory === AgentCategory.ToolUse
+  const supportsMediaInMessage =
+    setting.agentCategory === AgentCategory.ToolUse
       ? modelHandler.capabilities.supportsVision ||
         modelHandler.capabilities.supportsNativeAudio
-      : modelHandler.capabilities.supportsVision);
+      : modelHandler.capabilities.supportsVision;
+  const initialMediaMayBeInserted =
+    config.mediaFiles.length > 0 && supportsMediaInMessage;
 
   const parentStage = resources.ownParentStage(
     beginRunStage(

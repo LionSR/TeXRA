@@ -1,7 +1,13 @@
 // Local imports
-import { CORE_LATEX_TOOLS, IMAGE_TOOLS } from '@shared/constants/latex';
+import {
+  CORE_LATEX_TOOLS,
+  IMAGE_TOOLS,
+  LATEX_WORKSHOP_EXT_ID,
+} from '@shared/constants/latexToolchain';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { BinaryResolver } from '@utils/system/binaryResolver';
+
+import { getSetupAuthStatus, type SetupPlatform } from './platform';
 
 /** Installation status of one probed tool, with its path when discoverable. */
 interface ToolStatus {
@@ -15,7 +21,7 @@ interface ToolStatus {
  * LaTeX toolchain plus both image-tool candidates. The image requirement is
  * satisfied by either candidate — see {@link missingCoreTools}.
  */
-export const PROBED_CORE_TOOLS = [...CORE_LATEX_TOOLS, ...IMAGE_TOOLS] as const;
+const PROBED_CORE_TOOLS = [...CORE_LATEX_TOOLS, ...IMAGE_TOOLS] as const;
 
 const IMAGE_TOOL_NAMES: ReadonlySet<string> = new Set(IMAGE_TOOLS);
 
@@ -40,7 +46,7 @@ export async function locateTool(name: string): Promise<ToolStatus> {
  * {@link PROBED_CORE_TOOLS}. Either image tool satisfies the image
  * requirement, so both absent report a single `gm/magick` entry.
  */
-export function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
+function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
   const missing = statuses
     .filter((tool) => !tool.installed && !IMAGE_TOOL_NAMES.has(tool.name))
     .map((tool) => tool.name);
@@ -49,4 +55,25 @@ export function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
   );
   if (!hasImageTool) missing.push('gm/magick');
   return missing;
+}
+
+/**
+ * The core-setup status shared by `probe_environment` and `verify_setup`:
+ * auth status, core-tool probing results, and LaTeX Workshop extension
+ * presence. One definition so the two tools can't drift on what "core setup"
+ * means. Each tool's divergent credential/optional-tool handling stays in the
+ * tool.
+ */
+export async function collectCoreSetupStatus(platform: SetupPlatform) {
+  const auth = await getSetupAuthStatus().catch(() => ({
+    authenticated: false as const,
+  }));
+  const coreTools = await Promise.all(
+    PROBED_CORE_TOOLS.map((name) => locateTool(name)),
+  );
+  const missingCore = missingCoreTools(coreTools);
+  const latexWorkshopInstalled = platform.extensions?.isInstalled(
+    LATEX_WORKSHOP_EXT_ID,
+  );
+  return { auth, coreTools, missingCore, latexWorkshopInstalled };
 }

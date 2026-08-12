@@ -14,15 +14,6 @@ import { isWSL } from './wslDetect';
 /** Timeout for git commands in milliseconds. */
 const GIT_TIMEOUT_MS = 3000;
 
-/** Gathered workspace environment information for system prompt injection. */
-interface WorkspaceInfo {
-  workspacePath: string | undefined;
-  platform: string;
-  shell: string | undefined;
-  date: string;
-  git: GitInfo | null;
-}
-
 interface GitInfo {
   branch: string | null;
   dirty: boolean;
@@ -53,7 +44,7 @@ function getPlatformLabel(): string {
       base = 'Windows';
       break;
     case 'linux':
-      base = isWSL() ? 'Linux/WSL' : 'Linux';
+      base = isWSL ? 'Linux/WSL' : 'Linux';
       break;
     default:
       base = process.platform;
@@ -91,28 +82,13 @@ async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
   if (branchResult.timedOut || statusResult.timedOut) return null;
 
   const branch = branchResult.success ? branchResult.stdout : null;
+  // execUtils normalizes empty/whitespace-only output to null (see the
+  // ExecResult.stdout contract in src/shared/schemas/opResults.ts), so a
+  // clean `git status --porcelain` yields null and the null test is what
+  // distinguishes clean from dirty.
   const dirty = statusResult.success && statusResult.stdout !== null;
 
   return { branch, dirty };
-}
-
-/**
- * Gather workspace environment information.
- *
- * @param workspacePath - Workspace root path override. Defaults to VS Code workspace.
- */
-async function gatherWorkspaceInfo(
-  workspacePath?: string,
-): Promise<WorkspaceInfo> {
-  const wsPath = workspacePath ?? WorkspaceFS.getPath();
-
-  return {
-    workspacePath: wsPath,
-    platform: getPlatformLabel(),
-    shell: detectShell(),
-    date: isoDateOnly(),
-    git: wsPath ? await getGitInfo(wsPath) : null,
-  };
 }
 
 /**
@@ -126,33 +102,37 @@ async function gatherWorkspaceInfo(
 export async function buildWorkspaceInfoBlock(
   workspacePath?: string,
 ): Promise<string> {
-  const info = await gatherWorkspaceInfo(workspacePath);
+  const wsPath = workspacePath ?? WorkspaceFS.getPath();
+  const platform = getPlatformLabel();
+  const shell = detectShell();
+  const date = isoDateOnly();
+  const git = wsPath ? await getGitInfo(wsPath) : null;
 
   const lines: string[] = [];
 
-  if (info.workspacePath) {
-    lines.push(`Workspace: ${escapeTextStrict(info.workspacePath)}`);
+  if (wsPath) {
+    lines.push(`Workspace: ${escapeTextStrict(wsPath)}`);
     lines.push(
       `Bash cwd: already set to the workspace path above; use relative paths directly`,
     );
   }
 
-  lines.push(`Platform: ${escapeTextStrict(info.platform)}`);
+  lines.push(`Platform: ${escapeTextStrict(platform)}`);
 
-  if (info.shell) {
-    lines.push(`Shell: ${escapeTextStrict(info.shell)}`);
+  if (shell) {
+    lines.push(`Shell: ${escapeTextStrict(shell)}`);
   }
 
-  lines.push(`Date: ${info.date}`);
+  lines.push(`Date: ${date}`);
 
-  if (info.git) {
-    const branchPart = info.git.branch
-      ? `branch=${escapeTextStrict(info.git.branch)}`
+  if (git) {
+    const branchPart = git.branch
+      ? `branch=${escapeTextStrict(git.branch)}`
       : 'detached HEAD';
     const parts = ['Git: yes', branchPart];
-    if (info.git.dirty) parts.push('uncommitted changes');
+    if (git.dirty) parts.push('uncommitted changes');
     lines.push(parts.join(', '));
-  } else if (info.workspacePath) {
+  } else if (wsPath) {
     lines.push(
       'Git: no repository detected or git could not be checked for this workspace; avoid git history/status checks unless you first confirm a repository exists.',
     );

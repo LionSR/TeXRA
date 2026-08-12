@@ -6,26 +6,27 @@ import type { AgentTrace } from '@agent/trace';
 import { computeAgentOptionsData, getAgent } from '@agent/index';
 import { createChannelTrace } from '@agent/trace';
 import type { SessionStores } from '@agent/storage';
+import {
+  detachSubagentsOnStop,
+  dispatchPresentationEvent,
+  polishTextWithAI,
+  trackTerminalResultPresentation,
+  type PresentationEventHandlers,
+  type RuntimePresentationEvent,
+  type RuntimePresentationEventPayloads,
+  type SessionHandle,
+  type SessionHostInteractions,
+} from '@agent/runtime';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   validateExecutionRequest,
+  type ExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { polishTextWithAI } from '@agent/runtime/textEnhancement';
 import {
   presentFollowUpResult,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import {
-  dispatchPresentationEvent,
-  type PresentationEventHandlers,
-  type RuntimePresentationEvent,
-  type RuntimePresentationEventPayloads,
-} from '@agent/runtime/runtimePresentationEvents';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
@@ -56,7 +57,7 @@ import {
   type ProgressViewSecondTierActions,
 } from '@controllers/progressView/ProgressViewCommandHandlers';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
-import { runCleanRunDir, runPackRunDir } from '@housekeeping';
+import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
 import {
   API_PROVIDERS,
   hasUsableApiKey,
@@ -271,6 +272,8 @@ export class DesktopProgressBridge {
         getProgressStreamControls(stream, this.session),
       getUnsupportedCommands: () =>
         unsupportedCommands(this.progressViewInboundHandlers),
+      reportTranscriptLoadError: (error, stream) =>
+        this.reportTranscriptLoadError(error, stream),
       approvals: {
         // The desktop renderer is always attached (no sidebar/editor re-target).
         canSend: () => true,
@@ -325,10 +328,8 @@ export class DesktopProgressBridge {
           this.workflowFileActions.clearAllBackups();
         },
         rebuildRenderedStreams: ({ syncActiveStream }) => {
-          const activeStream = this.updateStreamMetadata();
-          if (syncActiveStream) this.syncStreamContent(activeStream);
+          void this.syncRenderedStreams(syncActiveStream);
         },
-        activateStream: () => this.syncFullView(),
         notifyDeletionRetained: (activeCount, failedCount) =>
           this.options.host.showInfoMessage(
             failedCount === 0
@@ -617,28 +618,11 @@ export class DesktopProgressBridge {
           return;
         }
         if (!plan.executeImmediately) return;
-
-        const validated = validateExecutionRequest({ config: plan.config });
-        if (!validated.valid) {
-          this.logger.error('Invalid desktop follow-up execution request', {
-            data: validated.issue,
-          });
-          await this.options.host.showErrorMessage(validated.message);
-          return;
-        }
-        await this.runExecution(validated.request);
+        await this.runValidatedExecutionRequest({ config: plan.config });
         return;
       }
       case 'execute': {
-        const validated = validateExecutionRequest(plan.request);
-        if (!validated.valid) {
-          this.logger.error('Invalid desktop follow-up execution request', {
-            data: validated.issue,
-          });
-          await this.options.host.showErrorMessage(validated.message);
-          return;
-        }
-        await this.runExecution(validated.request, {
+        await this.runValidatedExecutionRequest(plan.request, {
           preferHelperModel: true,
         });
       }
@@ -654,7 +638,7 @@ export class DesktopProgressBridge {
       return;
     }
 
-    await this.fileActions.runLatexdiffForStream({
+    await this.fileActions.diffStreamToolbarAction({
       outputsByRound: request.outputsByRound ?? {},
       ...(request.runId && { executionId: request.runId }),
       workspaceScan: {
@@ -752,17 +736,8 @@ export class DesktopProgressBridge {
         state: {
           getRunMetadata: (stream) => this.getRunMetadata(stream),
         },
-        runExecutionRequest: (request) => {
-          const validated = validateExecutionRequest(request);
-          if (!validated.valid) {
-            this.logger.error('Invalid desktop workflow execution request', {
-              data: validated.issue,
-            });
-            return Promise.resolve(
-              this.options.host.showErrorMessage(validated.message),
-            ).then(() => undefined);
-          }
-          return this.runExecution(validated.request);
+        runExecutionRequest: async (request) => {
+          await this.runValidatedExecutionRequest(request);
         },
       },
       workflowFileActions: {
@@ -856,7 +831,6 @@ export class DesktopProgressBridge {
         },
         file: {
           openFile: (file, line) => this.options.host.openPath(file, line),
-          openFileCompile: (file) => this.openFileCompile(file),
         },
         approval: {
           approvePendingDelegatedWork: (stream, initiatingProposalId) =>
@@ -1018,13 +992,6 @@ export class DesktopProgressBridge {
           this.postRecordingStatus({ status: 'stopped' });
         }
       },
-      // Settings navigation
-      openMemoryView: () => {
-        this.showSettings(SETTINGS_TAB.MEMORY);
-      },
-      openProfile: () => {
-        this.showSettings();
-      },
       // Pop-out-to-editor is a VS Code editor-tab concept; the desktop app is
       // a single window.
       popOut: unsupported('Pop-out to editor is a VS Code-only feature.'),
@@ -1089,15 +1056,12 @@ export class DesktopProgressBridge {
     dispatchPresentationEvent(this.presentationEventHandlers, event, payload);
   }
 
-  private updateStreamMetadata(): StreamTabId | '' {
-    return this.backend.webviewUpdater.sendStreamMetadata(
-      this.state,
-      this.session.status.getAllStreamStates(),
-    );
+  private syncFullView(): void {
+    void this.syncRenderedStreams(true);
   }
 
-  private syncFullView(): void {
-    this.syncStreamContent(this.updateStreamMetadata());
+  private async syncRenderedStreams(syncActiveStream: boolean): Promise<void> {
+    await this.backend.syncRenderedStreams({ syncActiveStream });
   }
 
   /** Send canonical state and replay pending prompts after attachment. */
@@ -1106,14 +1070,8 @@ export class DesktopProgressBridge {
     await replayApprovalRequestHandlers(this.backend.approvalHandlers);
   }
 
-  private setActiveStream(streamId: StreamTabId): void {
-    if (!this.streamLogs.has(streamId)) {
-      return;
-    }
-    this.state.switchActiveStream(streamId);
-    this.updateStreamMetadata();
-    this.backend.webviewUpdater.setActiveStream(streamId);
-    this.syncStreamContent(streamId);
+  private async setActiveStream(streamId: StreamTabId): Promise<void> {
+    await this.backend.activateStream(streamId);
   }
 
   /**
@@ -1135,32 +1093,23 @@ export class DesktopProgressBridge {
     if (!this.streamLogs.has(streamId)) {
       return 'missing';
     }
-    this.setActiveStream(streamId);
+    await this.setActiveStream(streamId);
     return 'revealed';
   }
 
-  private syncStreamContent(streamId: StreamTabId | ''): void {
-    if (!streamId) {
-      this.backend.syncStreamContent('');
-      return;
-    }
-
-    void this.streamLogs
-      .ensureLoaded(streamId)
-      .then(() => {
-        if (this.state.activeStream !== streamId) return;
-        this.backend.syncStreamContent(streamId, {
-          includeActiveState: true,
-        });
-      })
-      .catch((error: unknown) => {
-        this.logger.error(`Failed to load desktop transcript ${streamId}`, {
-          data: toLogData(error),
-        });
-        void this.options.host.showErrorMessage(
-          `Transcript load failed: ${toErrorMessage(error)}`,
-        );
-      });
+  private reportTranscriptLoadError(
+    error: unknown,
+    streamId?: StreamTabId | '',
+  ): void {
+    this.logger.error(
+      `Failed to load desktop transcript${streamId ? ` ${streamId}` : ''}`,
+      {
+        data: toLogData(error),
+      },
+    );
+    void this.options.host.showErrorMessage(
+      `Transcript load failed: ${toErrorMessage(error)}`,
+    );
   }
 
   private async runLatexdiffFile(
@@ -1173,7 +1122,7 @@ export class DesktopProgressBridge {
       return;
     }
 
-    await this.fileActions.runLatexdiffForRun(baseFile, editedFile, context);
+    await this.fileActions.diffAcceptedFilePair(baseFile, editedFile, context);
   }
 
   private getActiveLatexdiffRunContext(
@@ -1275,10 +1224,6 @@ export class DesktopProgressBridge {
     return Promise.resolve();
   }
 
-  openFileCompile(filePath: string): Promise<void> {
-    return this.fileActions.openFileCompile(filePath);
-  }
-
   /**
    * Restore a run's setup into the main view: builds the host-neutral
    * persisted-state snapshot and shows it in the launcher. Shared by the
@@ -1317,6 +1262,21 @@ export class DesktopProgressBridge {
       },
       options,
     );
+  }
+
+  private async runValidatedExecutionRequest(
+    request: ExecutionRequest,
+    options?: DesktopRunExecutionOptions,
+  ): Promise<void> {
+    const validated = validateExecutionRequest(request);
+    if (!validated.valid) {
+      this.logger.error('Invalid desktop execution request', {
+        data: validated.issue,
+      });
+      await this.options.host.showErrorMessage(validated.message);
+      return;
+    }
+    await this.runExecution(validated.request, options);
   }
 
   async handleExecute(message: MainViewExecuteMessage): Promise<void> {

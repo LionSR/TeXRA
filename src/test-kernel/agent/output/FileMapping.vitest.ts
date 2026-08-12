@@ -76,38 +76,43 @@ describe('replaceInputCommands', () => {
     );
   });
 
-  it('logs a read failure and leaves the output unchanged', async () => {
-    const base = externalLocation('/workspace/chapter.tex');
-    const output = externalLocation('/run/chapter_r1.tex');
-    vi.spyOn(AbsoluteFS, 'read').mockRejectedValue(new Error('read failed'));
-    const write = vi.spyOn(AbsoluteFS, 'write').mockResolvedValue();
-    const warn = vi.fn<AgentTrace['warn']>();
-    const logger = spiedTrace({ warn });
+  it.each([
+    {
+      name: 'read failure',
+      read: async () => {
+        throw new Error('read failed');
+      },
+      write: async () => {},
+      log: 'Error processing input commands in /run/chapter_r1.tex: read failed',
+      writeNotCalled: true,
+    },
+    {
+      name: 'write failure',
+      read: async () => String.raw`\input{chapter}`,
+      write: async () => {
+        throw new Error('write failed');
+      },
+      log: 'Error processing input commands in /run/chapter_r1.tex: write failed',
+      writeNotCalled: false,
+    },
+  ])(
+    'logs a $name without rejecting the replacement pass',
+    async ({ read, write, log, writeNotCalled }) => {
+      const base = externalLocation('/workspace/chapter.tex');
+      const output = externalLocation('/run/chapter_r1.tex');
+      vi.spyOn(AbsoluteFS, 'read').mockImplementation(read);
+      const writeSpy = vi.spyOn(AbsoluteFS, 'write').mockImplementation(write);
+      const warn = vi.fn<AgentTrace['warn']>();
+      const logger = spiedTrace({ warn });
 
-    await expect(
-      replaceInputCommands([base], [output], logger),
-    ).resolves.toBeUndefined();
+      await expect(
+        replaceInputCommands([base], [output], logger),
+      ).resolves.toBeUndefined();
 
-    expect(write).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledWith(
-      'Error processing input commands in /run/chapter_r1.tex: read failed',
-    );
-  });
-
-  it('logs a write failure without rejecting the replacement pass', async () => {
-    const base = externalLocation('/workspace/chapter.tex');
-    const output = externalLocation('/run/chapter_r1.tex');
-    vi.spyOn(AbsoluteFS, 'read').mockResolvedValue(String.raw`\input{chapter}`);
-    vi.spyOn(AbsoluteFS, 'write').mockRejectedValue(new Error('write failed'));
-    const warn = vi.fn<AgentTrace['warn']>();
-    const logger = spiedTrace({ warn });
-
-    await expect(
-      replaceInputCommands([base], [output], logger),
-    ).resolves.toBeUndefined();
-
-    expect(warn).toHaveBeenCalledWith(
-      'Error processing input commands in /run/chapter_r1.tex: write failed',
-    );
-  });
+      if (writeNotCalled) {
+        expect(writeSpy).not.toHaveBeenCalled();
+      }
+      expect(warn).toHaveBeenCalledWith(log);
+    },
+  );
 });

@@ -12,7 +12,7 @@ import {
   type RunContext,
 } from '@agent/runtime/RunContext';
 import { isTexFile } from '@common/files/fileTypeUtils';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import { ToolResult, ToolError } from '@shared/schemas/toolResult';
 import {
@@ -43,7 +43,7 @@ import {
 } from './pathResolution';
 
 // Constants
-const CHANNEL = 'TextEditorTool';
+const log = createLog('TextEditorTool');
 const SNIPPET_LINES = 4;
 
 /** Columns a literal tab expands to when normalizing text for display and matching. */
@@ -222,13 +222,10 @@ export class TextEditorTool extends defineTool({
       case 'view':
         return this.view(filePath, displayPath, input.view_range ?? undefined);
       case 'create':
-        logger.info(CHANNEL, `create: ${displayPath}`);
+        log.info(`create: ${displayPath}`);
         return this.create(filePath, displayPath, input.file_text);
       case 'str_replace':
-        logger.info(
-          CHANNEL,
-          `str_replace: ${input.old_str} -> ${input.new_str}`,
-        );
+        log.info(`str_replace: ${input.old_str} -> ${input.new_str}`);
         return this.strReplace(
           filePath,
           displayPath,
@@ -236,10 +233,7 @@ export class TextEditorTool extends defineTool({
           input.new_str ?? '',
         );
       case 'insert':
-        logger.info(
-          CHANNEL,
-          `insert: ${input.insert_line} -> ${input.new_str}`,
-        );
+        log.info(`insert: ${input.insert_line} -> ${input.new_str}`);
         return this.insert(
           filePath,
           displayPath,
@@ -247,7 +241,7 @@ export class TextEditorTool extends defineTool({
           input.new_str,
         );
       case 'undo_edit':
-        logger.info(CHANNEL, `undo_edit: ${displayPath}`);
+        log.info(`undo_edit: ${displayPath}`);
         return this.undoEdit(filePath, displayPath);
       default:
         return assertNever(command, 'Unrecognized TextEditor command');

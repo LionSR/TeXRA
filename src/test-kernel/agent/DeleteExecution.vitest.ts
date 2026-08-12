@@ -40,7 +40,6 @@ import { deleteExecution } from '@agent/storage/executionListing';
 beforeEach(() => {
   mocks.exists.mockReset();
   mocks.clear.mockReset();
-  mocks.clear.mockResolvedValue(undefined);
 });
 
 describe('deleteExecution', () => {
@@ -70,7 +69,7 @@ describe('deleteExecution', () => {
       status: 'deleted',
       executionId: 'a73039a36ec9',
     });
-    expect(mocks.clear).toHaveBeenCalledTimes(1);
+    expect(mocks.clear).toHaveBeenCalledOnce();
   });
 
   it('runs required cleanup before removing execution storage', async () => {

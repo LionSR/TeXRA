@@ -9,7 +9,7 @@ import {
   activeModelHandlerCompatibilityKey,
   createModelHandler,
   modelHandlersShareConversationFormat,
-  modelHandlerCompatibilityKey,
+  resolveModelHandlerCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
@@ -20,6 +20,7 @@ import {
   PersistedFlowStateError,
   flowKey,
   readPersistedFlowRecord,
+  stampCompatibilityKey,
   stampFlowRecordSchemaVersion,
 } from '@agent/node/persistedFlow';
 import { type AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
@@ -131,7 +132,7 @@ export interface RunToolUseFlowResult {
   error?: RetryErrorInfo;
 }
 
-interface ToolUseFlowContext {
+export interface ToolUseFlowContext {
   readonly ownerSession: SessionHandle;
   readonly session: ToolUseSessionLifecycle;
   readonly modelHandler: RunModelHandler;
@@ -286,7 +287,7 @@ export async function runToolUseFlow<C = unknown>(
       // check. Keep the UI permissive rather than guessing their format here.
       return undefined;
     }
-    const nextKey = modelHandlerCompatibilityKey(nextConfig);
+    const nextKey = resolveModelHandlerCompatibilityKey(nextConfig);
     if (!nextKey) return `Unsupported model provider: ${nextConfig.provider}`;
     return activeKey === nextKey
       ? undefined
@@ -470,13 +471,10 @@ export async function runToolUseFlow<C = unknown>(
       if (!isDeepStrictEqual(flowRecord.shared, input.resume.sourceShared)) {
         throw new PersistedFlowStateError(executionId, 'invalid-shared');
       }
-      const resumedShared: PreparedShared = {
-        ...input.resume.shared,
-        ...(input.resume.shared.modelHandlerCompatibilityKey === undefined &&
-          compatibilityKey !== undefined && {
-            modelHandlerCompatibilityKey: compatibilityKey,
-          }),
-      };
+      const resumedShared: PreparedShared = stampCompatibilityKey(
+        input.resume.shared,
+        compatibilityKey,
+      );
       if (!isDeepStrictEqual(flowRecord.shared, resumedShared)) {
         flowRecord.shared = resumedShared;
         await kv.write(
@@ -500,19 +498,12 @@ export async function runToolUseFlow<C = unknown>(
       // (SessionResumeRetrieval); this path stamps the active handler's key.
       let migratedData = migrationResult.data;
       let shouldWriteShared = migrationResult.migrated;
-      const backfillCompatibilityKey =
-        migratedData.modelHandlerCompatibilityKey ?? compatibilityKey;
-      if (
-        !migratedData.modelHandlerCompatibilityKey &&
-        backfillCompatibilityKey
-      ) {
+      const backfilled = stampCompatibilityKey(migratedData, compatibilityKey);
+      if (backfilled !== migratedData) {
         logger.debug(
           'Backfilled tool-use model-handler compatibility key in shared state.',
         );
-        migratedData = {
-          ...migratedData,
-          modelHandlerCompatibilityKey: backfillCompatibilityKey,
-        };
+        migratedData = backfilled;
         shouldWriteShared = true;
       }
       if (shouldWriteShared) {

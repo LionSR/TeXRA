@@ -5,13 +5,13 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   ClaudeAgentSessions,
   CodexThreads,
+  registerAgentShutdownHandlers,
 } from '@tools/agentCliSessionStores';
 
 describe('agent shutdown', () => {

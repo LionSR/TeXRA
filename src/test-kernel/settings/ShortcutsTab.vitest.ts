@@ -1,15 +1,13 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - shortcut contract
 import {
   installDesktopShortcutService,
   keyboardEventToAccelerator,
   type DesktopShortcutEntry,
   type DesktopShortcutService,
 } from '@shared/commands/shortcutPreferences';
+import { detectBrowserPlatform } from '@shared/commands/accelerators';
 
-// Local imports - test DOM
 import {
   mountComponent,
   useLitComponentTestDom,
@@ -86,7 +84,7 @@ describe('shortcuts-tab', () => {
       const recorder =
         element.shadowRoot?.querySelector<HTMLElement>('.shortcut-recorder');
       recorder?.click();
-      const isMac = navigator.platform.toLowerCase().includes('mac');
+      const isMac = detectBrowserPlatform() === 'darwin';
       recorder?.dispatchEvent(
         new KeyboardEvent('keydown', {
           bubbles: true,

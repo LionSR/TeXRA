@@ -6,7 +6,7 @@ import {
   getRunContextWorkingDirectory,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -16,7 +16,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from '../core/define';
 
-const CHANNEL = 'InlineCommentTool';
+const log = createLog('InlineCommentTool');
 
 /** A single comment within a thread, as seen by the agent. */
 interface InlineCommentView {
@@ -115,7 +115,7 @@ export const InlineCommentInputSchema = z.strictObject({
     ),
 });
 
-export type InlineCommentInput = z.infer<typeof InlineCommentInputSchema>;
+type InlineCommentInput = z.infer<typeof InlineCommentInputSchema>;
 
 /** Render a thread for the agent: a header line plus each comment indented. */
 function formatThread(thread: InlineCommentThreadView): string {
@@ -189,7 +189,7 @@ export class InlineCommentTool extends defineTool({
     } catch (error) {
       if (error instanceof ToolError) throw error;
       const detail = toErrorMessage(error);
-      logger.error(CHANNEL, `Failed to add inline comment: ${detail}`);
+      log.error(`Failed to add inline comment: ${detail}`);
       throw new ToolError(`Failed to add inline comment: ${detail}`);
     }
   }

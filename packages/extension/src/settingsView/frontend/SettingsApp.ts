@@ -22,6 +22,7 @@ import {
   SETTINGS_TAB,
   SETTINGS_TAB_PANEL_BY_NAME,
   SETTINGS_TAB_PANEL_NAMES,
+  type SettingsTabPanelName,
   type SettingsViewOutboundHandlerRegistry,
 } from '@shared/schemas';
 import { assertSupported, isKnownUnsupported } from '@shared/utils/dispatcher';
@@ -206,14 +207,7 @@ export class SettingsApp extends SettingsAppBase {
 
   protected override handleMessage(raw: unknown): void {
     dispatchSettingsViewOutbound(raw, this.messageHandlers, (error) => {
-      const command =
-        raw && typeof raw === 'object' && 'command' in raw
-          ? String((raw as { command: unknown }).command)
-          : 'unknown';
-      this.logSchemaError(
-        `[SettingsApp] Message validation failed for command "${command}".`,
-        error,
-      );
+      this.logMessageSchemaError('[SettingsApp]', raw, error);
     });
   }
 
@@ -317,7 +311,7 @@ export class SettingsApp extends SettingsAppBase {
 
   private renderSettingsNavigation(
     activeGroup: SettingsNavGroup,
-    activePanel: string,
+    activePanel: SettingsTabPanelName,
     goalSupported: boolean,
   ): TemplateResult {
     const activeEntries = this.entriesForGroup(activeGroup, goalSupported);
@@ -382,7 +376,7 @@ export class SettingsApp extends SettingsAppBase {
   }
 
   private renderActivePanel(
-    activePanel: string,
+    activePanel: SettingsTabPanelName,
     desktopHost: boolean,
     goalSupported: boolean,
   ): TemplateResult {
@@ -515,7 +509,6 @@ export class SettingsApp extends SettingsAppBase {
               'This host does not support autonomous goals.',
             );
       case 'memory':
-      default:
         return html`
           <memory-tab
             .items=${memoryItems.get()}
@@ -524,6 +517,15 @@ export class SettingsApp extends SettingsAppBase {
           ></memory-tab>
         `;
     }
+    // Exhaustiveness guard: `activePanel` is a `SettingsTabPanelName`, so every
+    // entry in `SETTINGS_TAB_ORDER` must have a case above. A tab appended to
+    // `SETTINGS_TAB_ORDER` with no case here is a compile error on the
+    // assignment below instead of silently rendering the Memory panel (the
+    // old `case 'memory': default:` fusion). The guard is unreachable at
+    // runtime for any valid panel, so an unknown value is a loud throw, not a
+    // quiet wrong panel.
+    const unhandled: never = activePanel;
+    throw new Error(`Unhandled settings panel: ${unhandled}`);
   }
 
   override render(): TemplateResult {

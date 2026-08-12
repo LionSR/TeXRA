@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { getExecutionStore } from '@agent/storage';
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace, ResultEvent } from '@agent/trace';
 import {
   ExecutionLeaseLostError,
   type OwnedExecutionLeaseScope,
@@ -30,6 +30,7 @@ import {
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
@@ -51,9 +52,22 @@ const channelTraceMocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
+// terminalPersistence deep-imports finalizeExecution from executionLifecycle
+// (not the `@agent/storage` barrel), so the spy lives on that leaf module.
+// Mocking both the barrel and the leaf with the same `vi.fn` whose
+// implementation points at `importOriginal`'s barrel export recurses through
+// the re-export and blows the stack.
+vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
+  storageMocks.finalizeExecution.mockImplementation(actual.finalizeExecution);
+  return {
+    ...actual,
+    finalizeExecution: storageMocks.finalizeExecution,
+  };
+});
 vi.mock('@agent/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/storage')>();
-  storageMocks.finalizeExecution.mockImplementation(actual.finalizeExecution);
   return {
     ...actual,
     finalizeExecution: storageMocks.finalizeExecution,
@@ -102,14 +116,24 @@ function createHandle(
 }
 
 /** Wires the events/streamStatus/registry trio most tests drive kills through. */
-function createRegistry(): {
+function createRegistry(
+  options: {
+    approvals?: ReturnType<typeof createSessionApprovals>;
+    publishResult?: (event: ResultEvent, streamId: StreamTabId) => void;
+    releaseRootExecutionLease?: (executionId: ExecutionId) => Promise<void>;
+  } = {},
+): {
   events: SessionEventHub;
   streamStatus: StreamStatusMachine;
   registry: ExecutionRegistry;
 } {
   const events = new SessionEventHub();
   const streamStatus = new StreamStatusMachine(events);
-  const registry = new ExecutionRegistry({ streamStatus, events });
+  const registry = new ExecutionRegistry({
+    streamStatus,
+    events,
+    ...options,
+  });
   return { events, streamStatus, registry };
 }
 
@@ -163,7 +187,7 @@ function trackSuspendedWaitingHandle(
 
 describe('executionRegistry', () => {
   it('promotes a pending child activation without an ownership gap', () => {
-    const registry = new ExecutionRegistry();
+    const { registry } = createRegistry();
     const activationEvents: boolean[] = [];
     const executionId = 'pending-child-exec' as ExecutionId;
     const parentStreamId = 'pending-parent' as StreamTabId;
@@ -197,11 +221,8 @@ describe('executionRegistry', () => {
       'stream-waiting-cleanup-completion' as StreamTabId,
       'stream-waiting-cleanup-completion' as StreamTabId,
     );
-    let finishCleanup: () => void = () => undefined;
-    const cleanupFinished = new Promise<void>((resolve) => {
-      finishCleanup = resolve;
-    });
-    handle.suspend(() => cleanupFinished);
+    const cleanupFinished = createDeferred();
+    handle.suspend(() => cleanupFinished.promise);
 
     const teardown = handle.beginSuspendedTermination();
     expect(teardown).toBeDefined();
@@ -216,7 +237,7 @@ describe('executionRegistry', () => {
     await Promise.resolve();
     expect(observedCompletion).toBe(false);
 
-    finishCleanup();
+    cleanupFinished.resolve();
     await observation;
     expect(observedCompletion).toBe(true);
   });
@@ -248,7 +269,7 @@ describe('executionRegistry', () => {
   });
 
   it('observes handle replacements and removal in order', () => {
-    const registry = new ExecutionRegistry();
+    const { registry } = createRegistry();
     const executionId = 'exec-observe-handle';
     const streamId = 'stream-observe-handle' as StreamTabId;
     const first = createHandle(executionId, streamId, streamId, {
@@ -417,9 +438,8 @@ describe('executionRegistry', () => {
     // SessionHandle injects (see SessionHandle.publishRunEvent) so this path
     // reaches those subscribers directly, since the turn's own trace
     // subscriptions are already torn down by the time a kill runs.
-    const { events, streamStatus, registry } = createRegistry();
     const publishResult = vi.fn();
-    registry.attachSessionEvents(events, publishResult);
+    const { streamStatus, registry } = createRegistry({ publishResult });
     const executionId = 'exec-waiting-kill-publish-result-test';
     const parentStreamId =
       'parent-waiting-kill-publish-result-test' as StreamTabId;
@@ -474,10 +494,9 @@ describe('executionRegistry', () => {
   });
 
   it('publishes a waiting cancellation after its transcript cleanup settles', async () => {
-    const { events, streamStatus, registry } = createRegistry();
     const order: string[] = [];
     const publishResult = vi.fn(() => order.push('publish'));
-    registry.attachSessionEvents(events, publishResult);
+    const { streamStatus, registry } = createRegistry({ publishResult });
     const executionId = 'exec-waiting-cleanup-order' as ExecutionId;
     const childStreamId = 'child-waiting-cleanup-order' as StreamTabId;
     let finishCleanup = (): void => undefined;
@@ -517,9 +536,8 @@ describe('executionRegistry', () => {
 
   it('hands a waiting stop to a successor tracked during cleanup', async () => {
     storageMocks.finalizeExecution.mockClear();
-    const { events, streamStatus, registry } = createRegistry();
     const publishResult = vi.fn();
-    registry.attachSessionEvents(events, publishResult);
+    const { streamStatus, registry } = createRegistry({ publishResult });
     const executionId = 'exec-waiting-stop-handoff' as ExecutionId;
     const parentStreamId = 'parent-waiting-stop-handoff' as StreamTabId;
     const childStreamId = 'child-waiting-stop-handoff' as StreamTabId;
@@ -562,9 +580,10 @@ describe('executionRegistry', () => {
   });
 
   it('does not let lost-generation recovery mutate a successor handle or lease', async () => {
-    const { streamStatus, registry } = createRegistry();
     const releaseLease = vi.fn(async () => undefined);
-    registry.attachRootExecutionLeaseRelease(releaseLease);
+    const { streamStatus, registry } = createRegistry({
+      releaseRootExecutionLease: releaseLease,
+    });
     const executionId = 'exec-waiting-lost-generation' as ExecutionId;
     const streamId = 'stream-waiting-lost-generation' as StreamTabId;
     const lostScope: OwnedExecutionLeaseScope = () => {
@@ -592,10 +611,11 @@ describe('executionRegistry', () => {
   });
 
   it('settles waiting termination when detached publication throws', async () => {
-    const { events, streamStatus, registry } = createRegistry();
     const publishFailure = new Error('terminal subscriber failed');
-    registry.attachSessionEvents(events, () => {
-      throw publishFailure;
+    const { streamStatus, registry } = createRegistry({
+      publishResult: () => {
+        throw publishFailure;
+      },
     });
     const executionId = 'exec-waiting-publication-failure' as ExecutionId;
     const childStreamId = 'child-waiting-publication-failure' as StreamTabId;
@@ -1454,7 +1474,7 @@ describe('executionRegistry', () => {
   });
 
   it('clears live tool-use context while the handle remains tracked', () => {
-    const registry = new ExecutionRegistry();
+    const { registry } = createRegistry();
     const executionId = 'exec-live-flow-context-test';
     const streamId = 'stream-live-flow-context-test' as StreamTabId;
     const context: LiveToolUseFlowContext = {
@@ -1490,7 +1510,7 @@ describe('executionRegistry', () => {
   });
 
   it('owns manual compaction admission for active tool-use flows', () => {
-    const registry = new ExecutionRegistry();
+    const { registry } = createRegistry();
     const streamId = 'stream-manual-compaction-test' as StreamTabId;
     const unsupportedStreamId =
       'stream-manual-compaction-unsupported-test' as StreamTabId;
@@ -1680,8 +1700,8 @@ describe('executionRegistry', () => {
   });
 
   it('preserves child approvals when detaching it from its parent', () => {
-    const registry = new ExecutionRegistry();
     const approvals = createSessionApprovals();
+    const { registry } = createRegistry({ approvals });
     const parentStreamId = 'parent-detach-approvals' as StreamTabId;
     const childStreamId = 'child-detach-approvals' as StreamTabId;
     const handle = createHandle(
@@ -1691,7 +1711,6 @@ describe('executionRegistry', () => {
     );
 
     try {
-      registry.attachSessionApprovals(approvals);
       approvals.toolEdit.bypass.setBypass(parentStreamId, true);
       approvals.registerStreamParent(childStreamId, parentStreamId, [
         'toolEdit',

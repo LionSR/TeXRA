@@ -53,9 +53,9 @@ export const DesktopClosePdfMessageSchema = z.object({
 // VS Code-free zone: pure string predicate, no `node:path` import so
 // the renderer can call this without bundling node polyfills.
 export function isSafeAbsolutePdfPath(pdfPath: string): boolean {
-  if (typeof pdfPath !== 'string' || pdfPath.length === 0) return false;
   // Strip wrapping whitespace — if anything non-trivial was trimmed
-  // the path is probably crafted; reject conservatively.
+  // the path is probably crafted; reject conservatively. (An empty
+  // string passes this check but is rejected by the shape checks below.)
   if (pdfPath.trim() !== pdfPath) return false;
   // Accept exactly three absolute-path shapes; everything else
   // (relative paths, URL schemes like `http:` / `javascript:` /

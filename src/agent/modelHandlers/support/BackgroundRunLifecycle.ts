@@ -195,6 +195,20 @@ export class BackgroundRunLifecycle<TClient, TResponse, TRetrieveParams> {
   }
 
   /**
+   * Deadline-timeout side effects: drop the pending id, then await the
+   * provider's best-effort cancel. Runs at the single site where an in-loop
+   * timeout is raised (the poller's {@link BackgroundPollOptions.onTimeout}
+   * hook), rather than being matched by error identity in a catch block.
+   */
+  private async discardPendingOnTimeout(
+    client: TClient,
+    responseId: string,
+  ): Promise<void> {
+    this.clearPendingIfId(responseId);
+    await this.config.onTimeoutDiscard?.(client, responseId);
+  }
+
+  /**
    * Abort-check a pending background run before the caller does any per-call
    * work (token counting, compaction). No-op when nothing is pending. Never
    * awaits the provider's best-effort cancel.
@@ -449,65 +463,54 @@ export class BackgroundRunLifecycle<TClient, TResponse, TRetrieveParams> {
     }
 
     let pollStats: BackgroundPollStats | undefined;
-    let timeoutError: Error | undefined;
-    let polled: TResponse;
-    try {
-      polled = await this.backgroundPoller.poll({
-        initialResponse,
-        retrieve: async (responseId, sig) => {
-          try {
-            return await this.config.retrieve(
-              client,
-              responseId,
-              retrieveParams,
-              sig,
-            );
-          } catch (err) {
-            await this.handleRetrieveFailure(
-              client,
-              err,
-              responseId,
-              deadlineAtMs,
-              sig,
-              this.config.onPollRetrieveError,
-            );
-            // A 'restart' verdict is meaningless mid-poll (there is no "new
-            // request" to fall through to); providers must not return it here.
-            // Treat it as 'clear' and rethrow the original error.
-            throw err;
-          }
-        },
-        extractId: () => pollId,
-        extractStatus: (r) => this.config.extractStatus(r),
-        signal,
-        deadlineAtMs,
-        resourceLabel: this.config.resourceLabel,
-        providerLabel: this.config.providerLabel,
-        onAbort: () => {
-          if (this.clearPendingIfId(pollId)) {
-            this.config.onAbortDiscard?.(client, pollId);
-          }
-        },
-        formatTimeoutError: () => {
-          timeoutError = this.config.createTimeoutError(pollId);
-          return timeoutError;
-        },
-        extraFinishData: (response) =>
-          this.config.extraFinishData?.(response) ?? {},
-        onFinished: (_response, stats) => {
-          pollStats = stats;
-        },
-      });
-    } catch (err) {
-      // The poller rethrows the exact Error formatTimeoutError returned, so
-      // identity recognizes the timeout: discard the pending id and run the
-      // provider's awaited best-effort cancel before it propagates.
-      if (timeoutError !== undefined && err === timeoutError) {
-        this.clearPendingIfId(pollId);
-        await this.config.onTimeoutDiscard?.(client, pollId);
-      }
-      throw err;
-    }
+    const polled = await this.backgroundPoller.poll({
+      initialResponse,
+      retrieve: async (responseId, sig) => {
+        try {
+          return await this.config.retrieve(
+            client,
+            responseId,
+            retrieveParams,
+            sig,
+          );
+        } catch (err) {
+          await this.handleRetrieveFailure(
+            client,
+            err,
+            responseId,
+            deadlineAtMs,
+            sig,
+            this.config.onPollRetrieveError,
+          );
+          // A 'restart' verdict is meaningless mid-poll (there is no "new
+          // request" to fall through to); providers must not return it here.
+          // Treat it as 'clear' and rethrow the original error.
+          throw err;
+        }
+      },
+      extractId: () => pollId,
+      extractStatus: (r) => this.config.extractStatus(r),
+      signal,
+      deadlineAtMs,
+      resourceLabel: this.config.resourceLabel,
+      providerLabel: this.config.providerLabel,
+      onAbort: () => {
+        if (this.clearPendingIfId(pollId)) {
+          this.config.onAbortDiscard?.(client, pollId);
+        }
+      },
+      formatTimeoutError: () => this.config.createTimeoutError(pollId),
+      // The poller raises in-loop deadline timeouts itself; run the discard
+      // here, at the single site where the timeout is raised, instead of
+      // matching the thrown error by identity downstream (which silently skips
+      // the server-side cancel if the error is ever wrapped).
+      onTimeout: () => this.discardPendingOnTimeout(client, pollId),
+      extraFinishData: (response) =>
+        this.config.extraFinishData?.(response) ?? {},
+      onFinished: (_response, stats) => {
+        pollStats = stats;
+      },
+    });
 
     if (this.config.isServiceableStatus(polled)) {
       if (this.config.clearOnServiceableTerminal) {

@@ -483,7 +483,7 @@ function buildWorkflowScriptSections(
   }
 
   if (Object.hasOwn(input, 'args')) {
-    const args = input.args === undefined ? null : input.args;
+    const args = input.args ?? null;
     sections.push(
       buildToolSection('Args:', JSON.stringify(args, null, 2), {
         language: 'json',
@@ -515,19 +515,25 @@ function buildMcpSections(ctx: ToolSectionContext): TemplateResult[] {
   const sections: TemplateResult[] = [];
   let renderedMcpOutput = false;
 
-  if (input != null) {
-    const { text: inputValue, language: inputLanguage } =
-      stringifyWithLanguage(input);
-    if (inputValue) {
-      sections.push(
-        buildToolSection('Arguments:', inputValue, {
-          toolName,
-          language: inputLanguage,
-        }),
-      );
-    }
+  // stringifyWithLanguage collapses null/undefined to an empty text, so the
+  // `if (inputValue)` below is the only guard needed.
+  const { text: inputValue, language: inputLanguage } =
+    stringifyWithLanguage(input);
+  if (inputValue) {
+    sections.push(
+      buildToolSection('Arguments:', inputValue, {
+        toolName,
+        language: inputLanguage,
+      }),
+    );
   }
 
+  // Ad-hoc MCP output is not guaranteed to be Codex-shaped, so a schema
+  // mismatch here is the intended "not structured output" path, not a
+  // producer bug: catch-to-null deliberately drops the structured rendering
+  // and falls back to the raw `outputText` below. (Sibling formatters warn on
+  // malformed payloads, but those target one producer's wire shape, whereas
+  // this schema only structurally describes a subset of MCP output.)
   const mcpOutput: CodexMcpToolOutput | null =
     CodexMcpToolOutputSchema.nullable().catch(null).parse(parsedOutput);
   const contentBlocks = Array.isArray(mcpOutput?.contentBlocks)

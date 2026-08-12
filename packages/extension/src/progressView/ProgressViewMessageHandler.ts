@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 
 import { getAgent } from '@agent/index';
+import { defaultSession } from '@agent/runtime';
 import {
   validateExecutionRequest,
   type ExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { BaseViewMessageHandler } from '@common/webview';
@@ -30,12 +30,14 @@ import { loadOptions } from '@frontend/agents/optionsLoader';
 import { RecordingManager } from '@frontend/media/RecordingManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { PromptHost } from '@hosts/uiHosts';
+import { apiKeySecretName } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
 import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@model/codex/codexPreference';
+import { platform } from '@platform/platform';
 import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas';
@@ -164,15 +166,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    * Each handler receives typed data - no casts or validation needed.
    */
   private createHandlerRegistry(): ProgressViewInboundHandlerRegistry {
-    const forwardToActiveView = (message: ProgressViewInboundMessage) => {
-      this.postToActiveView(message);
-    };
-    const runCommand = (command: string, ...args: unknown[]) => {
-      return async () => {
-        await this.runViewCommand(command, args);
-      };
-    };
-
     // Set for the duration of a POLISH_FOLLOW_UP notification below, so the
     // shared handler's stage reports land in the open progress notification.
     let polishProgress: vscode.Progress<{ message?: string }> | undefined;
@@ -253,8 +246,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           await this.provider.markWebviewReady(view);
         }
       },
-      [PROGRESS_VIEW_COMMANDS.THEME_SET]: forwardToActiveView,
-      [PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET]: forwardToActiveView,
       [COMMON_COMMANDS.SWITCH_VIEW]: (data) => this.switchView(data),
       [PROGRESS_VIEW_COMMANDS.POP_OUT]: () => this.provider.popOutToEditor(),
       [PROGRESS_VIEW_COMMANDS.POP_BACK]: () => this.provider.showInSidebar(),
@@ -308,12 +299,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         const view = this.getActiveView();
         if (view) await this.recordingManager.stop(view);
       },
-
-      // Profile & Memory - direct command execution
-      [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: runCommand(
-        'texra.auth.viewProfile',
-      ),
-      [PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW]: runCommand('texra.showMemory'),
 
       [PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION]: (data) =>
         this.runGettingStartedAction(data.action),
@@ -526,9 +511,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           openFile: async (file, line) => {
             await this.runViewCommand('texra.openFile', [file, line]);
           },
-          openFileCompile: async (file) => {
-            await this.runViewCommand('texra.openFileCompile', [file]);
-          },
         },
         approval: {
           approvePendingDelegatedWork: (stream, initiatingProposalId) =>
@@ -577,8 +559,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private createApiKeyRetryController(): ProgressApiKeyRetryController {
     return new ProgressApiKeyRetryController({
       providers: SecretManager.API_PROVIDERS,
-      readKey: (provider) =>
-        SecretManager.get(SecretManager.getApiKeySecretName(provider)),
+      readKey: (provider) => platform().secrets.get(apiKeySecretName(provider)),
       hasUsableKey: (provider) => SecretManager.hasUsableApiKey(provider),
       promptForApiKey: async (provider) => {
         await this.runViewCommand(apiKeyCommands.setApiKey, [provider]);

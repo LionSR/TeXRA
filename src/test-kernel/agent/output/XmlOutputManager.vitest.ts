@@ -110,6 +110,20 @@ async function expectAbsent(path: string): Promise<void> {
   await expect(AbsoluteFS.exists(`/tmp/run/${path}`)).resolves.toBe(false);
 }
 
+async function assertRecoveredDocuments(
+  outputs: readonly { source: string }[],
+  files: Record<string, string>,
+  absent: readonly string[] = [],
+): Promise<void> {
+  expectSources(outputs, Object.keys(files));
+  for (const [source, content] of Object.entries(files)) {
+    await expectWritten(source, content);
+  }
+  for (const path of absent) {
+    await expectAbsent(path);
+  }
+}
+
 /**
  * A recovery scenario against the default single `paper.tex` input: the raw
  * output lines, the files that must be written (keyed by run-relative path,
@@ -847,15 +861,11 @@ describe('XmlOutputManager', () => {
   });
 
   it.each(RECOVERY_CASES)('%s', async (_name, output, files, absent = []) => {
-    const outputs = await writeAndSplitDocuments(output);
-
-    expectSources(outputs, Object.keys(files));
-    for (const [source, content] of Object.entries(files)) {
-      await expectWritten(source, content);
-    }
-    for (const path of absent) {
-      await expectAbsent(path);
-    }
+    await assertRecoveredDocuments(
+      await writeAndSplitDocuments(output),
+      files,
+      absent,
+    );
   });
 
   it('continues percent recovery for multi-input outputs after leading LaTeX content', async () => {
@@ -923,15 +933,11 @@ Appendix.
   it.each(LABELED_RECOVERY_CASES)(
     '%s',
     async (_name, output, inputFiles, files, absent = []) => {
-      const outputs = await writeAndSplitDocuments(output, [...inputFiles]);
-
-      expectSources(outputs, Object.keys(files));
-      for (const [source, content] of Object.entries(files)) {
-        await expectWritten(source, content);
-      }
-      for (const path of absent) {
-        await expectAbsent(path);
-      }
+      await assertRecoveredDocuments(
+        await writeAndSplitDocuments(output, [...inputFiles]),
+        files,
+        absent,
+      );
     },
   );
 

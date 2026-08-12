@@ -19,11 +19,7 @@ function tagSdkError(
   kind: SdkErrorKind,
   statusCode?: number,
 ): void {
-  attachSdkErrorMetadata(err, {
-    provider,
-    kind,
-    ...(statusCode !== undefined && { statusCode }),
-  });
+  attachSdkErrorMetadata(err, { provider, kind, statusCode });
 }
 
 export function matchMappedSdkError(

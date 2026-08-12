@@ -3,13 +3,13 @@ import path from 'node:path';
 
 // Local imports
 import { getAgent } from '@agent/index';
-import type { AgentEvent } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
 import type {
   SessionEvent,
   SessionEventHub,
   SessionFact,
-} from '@agent/runtime/SessionEventHub';
+} from '@agent/runtime';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   ActiveChildInfo,
   ConversationProgress,
@@ -31,12 +31,16 @@ import { pluralize } from '@utils/text/stringUtils';
 import { writeRawStderr } from './logSinks';
 import type { CliContext } from './cliContext';
 
+// A deliberate sub-vocabulary of the canonical CLI-projection run-fact list
+// (`RUN_FACT_EVENT_TYPES`): only the facts that feed the live status line are
+// admitted, and the `satisfies` check pins the subset against that single
+// source so it cannot drift to a fact the canonical list does not project.
 const RUN_PROGRESS_RUN_FACT_TYPES = [
   'conversation.progress',
   'run.config',
   'stage.start',
   'child.activity',
-] as const satisfies readonly AgentEvent['type'][];
+] as const satisfies ReadonlyArray<(typeof RUN_FACT_EVENT_TYPES)[number]>;
 
 /** The run-fact vocabulary this renderer's subscription filter admits. */
 type RunProgressRunFactEvent = Extract<

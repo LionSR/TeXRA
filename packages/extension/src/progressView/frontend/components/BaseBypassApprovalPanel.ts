@@ -1,8 +1,5 @@
 /** Approval panel capability for edit and bash session bypass. */
 
-// Third-party imports
-import { html, type TemplateResult } from 'lit';
-
 // Local imports - shared copy
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
@@ -45,27 +42,15 @@ export abstract class BaseBypassApprovalPanel<
     action: APPROVE_SESSION_ACTION,
   } as const;
 
-  private get canBypass(): boolean {
+  protected override get canBypass(): boolean {
     return canBypassSession(this.permission);
   }
 
-  override handleKeyboardShortcut(key: string): boolean {
-    if (key !== 'a') return super.handleKeyboardShortcut(key);
-    if (this.archived || this.showFeedback || !this.canBypass) return false;
-    this.emitAction(this.sessionApprovalDecision);
-    return true;
+  protected override get bypassAction(): string {
+    return bypassActionLabel(this.permission);
   }
 
-  protected override renderApproveButton(approveTitle: string): TemplateResult {
-    return html`
-      <approve-split-button
-        .approveTitle=${approveTitle}
-        .canBypass=${this.canBypass}
-        .bypassAction=${bypassActionLabel(this.permission)}
-        .disabled=${this.archived}
-        @approve=${() => this.emitAction(this.approvalDecision)}
-        @approve-session=${() => this.emitAction(this.sessionApprovalDecision)}
-      ></approve-split-button>
-    `;
+  protected override approveSessionHandler(): void {
+    this.emitAction(this.sessionApprovalDecision);
   }
 }

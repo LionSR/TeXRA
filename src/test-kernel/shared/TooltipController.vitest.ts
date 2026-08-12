@@ -1,7 +1,5 @@
-// Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 let installToolbarTooltips: (typeof import('@shared/litControllers/TooltipController'))['installToolbarTooltips'];

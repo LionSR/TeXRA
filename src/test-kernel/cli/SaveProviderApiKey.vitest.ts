@@ -74,8 +74,6 @@ describe('saveProviderApiKey', () => {
 
     await saveProviderApiKey('anthropic', 'sk-ant-secret');
 
-    expect(order.indexOf('set')).toBeLessThan(
-      order.indexOf('invalidateApiKeyCache'),
-    );
+    expect(order).toEqual(['set', 'invalidateApiKeyCache']);
   });
 });

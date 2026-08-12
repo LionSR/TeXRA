@@ -1,7 +1,5 @@
-// Third-party imports
 import { beforeEach, describe, expect, it } from 'vitest';
 
-// Local imports
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
@@ -16,7 +14,6 @@ import {
 } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 
-// Local file imports
 import {
   createStubDesktopAgentSettingsController,
   createStubDesktopCredentialSettingsController,

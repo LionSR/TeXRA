@@ -1,5 +1,5 @@
 // Third-party imports
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports
@@ -14,11 +14,8 @@ const MOONSHOT_ROUTE: Parameters<typeof resolveBaseUrl>[0] = {
 };
 
 describe('Moonshot base URL region resolution', () => {
-  beforeEach(async () => {
+  it('defaults to the China endpoint', async () => {
     await installPlatform();
-  });
-
-  it('defaults to the China endpoint', () => {
     expect(resolveBaseUrl(MOONSHOT_ROUTE)).toBe('https://api.moonshot.cn/v1');
   });
 

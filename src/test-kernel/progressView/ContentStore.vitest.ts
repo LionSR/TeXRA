@@ -51,9 +51,8 @@ describe('createContentStore', () => {
   });
 
   it('resolves object values re-registered as structurally-equal-but-distinct references to the same ID and content', () => {
-    // Mirrors proposalInputStore's usage: each call passes a freshly parsed
-    // object, so the write-guard's reference-equality check always re-sets
-    // rather than skipping — verify that still resolves correctly.
+    // Mirrors proposalInputStore: freshly parsed objects must re-register to
+    // the same ID even though the reference-equality guard sees new references.
     interface Proposal {
       readonly title: string;
       readonly steps: readonly string[];

@@ -1,10 +1,12 @@
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
+import {
+  resolveAndResumeStream,
+  resumeQueuedToolUseFromResumeData,
+  trackTerminalResultPresentation,
+  type SessionHandle,
+} from '@agent/runtime';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
-import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
-import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -67,8 +69,9 @@ async function resolveDesktopResumeState(
   streamId: StreamTabId,
   context: DesktopResumeContext,
 ): Promise<DesktopResumeState | undefined> {
-  let runMetadata = context.session.snapshots.getRunMetadata(streamId);
-  let { config: runState, executionId } = runMetadata;
+  const initialMetadata = context.session.snapshots.getRunMetadata(streamId);
+  let runState = initialMetadata.config;
+  let executionId = initialMetadata.executionId;
   if (!runState || !executionId) {
     try {
       await context.session.snapshots.preload([streamId]);
@@ -79,7 +82,7 @@ async function resolveDesktopResumeState(
       );
       return undefined;
     }
-    runMetadata = context.session.snapshots.getRunMetadata(streamId);
+    const runMetadata = context.session.snapshots.getRunMetadata(streamId);
     runState = runMetadata.config;
     executionId ??= runMetadata.executionId;
     if (!runState || !context.session.transcripts.has(streamId)) {

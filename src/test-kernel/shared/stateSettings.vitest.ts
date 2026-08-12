@@ -11,9 +11,9 @@ import { KNOWN_TEXRA_KEYS } from '@cli/schemas/knownKeys';
 import * as logger from '@logger/logUtils';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import {
-  CLI_CORE_SETTING_CONSUMERS,
+  CLI_CORE_SETTING_PATHS,
   CORE_SETTING_PATHS,
-  EXTENSION_ONLY_CORE_SETTING_CONSUMERS,
+  EXTENSION_ONLY_CORE_SETTING_PATHS,
 } from '@shared/schemas/coreSettings';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import {
@@ -53,7 +53,7 @@ import {
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
 } from '@shared/schemas/agentCliSettings';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { REPO_ROOT } from '@test/support/repoScan';
 import {
@@ -80,13 +80,6 @@ function entryByKey(key: string): StateSettingEntry {
   const entry = stateSettingByKey(key);
   assert.ok(entry, `missing catalog entry ${key}`);
   return entry;
-}
-
-function reachabilitySegments(through: string): string[] {
-  return through
-    .split('->')
-    .map((segment) => segment.trim())
-    .filter(Boolean);
 }
 
 const CLASS_D_KEY_PATTERN = /migrated|version|onboarding|history|cache/i;
@@ -189,7 +182,10 @@ describe('state settings catalog', () => {
         cliConsumer,
         `${entry.key} reachability path cannot be checked without cliConsumer`,
       );
-      const throughSegments = reachabilitySegments(reachability.through);
+      const throughSegments = reachability.through
+        .split('->')
+        .map((segment) => segment.trim())
+        .filter(Boolean);
       assert.ok(
         throughSegments.includes(cliConsumer),
         `${entry.key} reachability path must include its cliConsumer as a path segment: ${cliConsumer}`,
@@ -459,10 +455,75 @@ describe('state settings catalog', () => {
   });
 });
 
-const CLI_CORE_SETTING_PATHS = Object.values(CLI_CORE_SETTING_CONSUMERS).flat();
-const EXTENSION_ONLY_CORE_SETTING_PATHS = Object.values(
-  EXTENSION_ONLY_CORE_SETTING_CONSUMERS,
-).flat();
+// Reader-file registry for the host-split guardrail below. The schema declares
+// only the setting-path lists; the files that read each key (and the host side
+// they sit on) are implementation knowledge, so they live here with the
+// file-existence + host-split check that consumes them.
+const CLI_CORE_SETTING_READER_FILES = {
+  'src/agent/runtime/selectAutoOpenFinalOutput.ts': [
+    'agentOutputs.autoOpenFinal',
+  ],
+  'src/tools/goal/goalFeatureFlag.ts': ['goal.enabled'],
+  'src/agent/runtime/ModelFactory.ts': ['model.useOpenAIResponsesAPI'],
+  'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts': [
+    'model.useGoogleInteractionsServerState',
+  ],
+  'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts': [
+    'model.useBackgroundResponses',
+    'model.gpt5ReasoningSummary',
+  ],
+  'src/agent/modelHandlers/openai/modelHandlerOpenAI.ts': [
+    'model.openaiParallelToolCalls',
+  ],
+  'src/agent/modelHandlers/ModelHandler.ts': [
+    'model.compactionThresholdPercent',
+  ],
+  'src/agent/core/flows/RetryState.ts': ['model.retry.maxAttempts'],
+  // Thin provider modules own the public prefer-switch surface; the shared
+  // factory in subscriptionPreference.ts is not a separate consumer key.
+  'src/model/codex/codexPreference.ts': ['chatgptCodex.preferSubscription'],
+  'src/model/xai/xaiPreference.ts': ['xaiGrok.preferSubscription'],
+  'src/utils/media/img.ts': ['maxImageDimension'],
+  'src/tools/latex/ExtractBibliographyTool.ts': ['bib.defaultPath'],
+  'src/tools/zotero/bbtClient.ts': ['bib.zoteroPort'],
+  'src/latex/formatter/latexindentpt.ts': ['latex.latexindentConfig'],
+  'src/latex/formatter/texfmt.ts': ['latex.texfmtConfig'],
+  'src/latex/texTools.ts': [
+    'latex.tikzInputDirectory',
+    'latex.includeWorkspaceInTexinputs',
+  ],
+  'src/latex/TikzPictureManager.ts': ['latex.tikzTemplate'],
+  'src/replacement/engine.ts': [
+    'latex.wrapCritiqueInAlign',
+    'latex.enabledReplacements',
+    'latex.enabledReplacementsRegex',
+    'latex.customReplacementsRegex',
+    'latex.customReplacements',
+  ],
+  'src/tools/approval/latexPreview.ts': ['latexdiff.tempFileLocation'],
+  // Only the extension's git commands read the commit count, but the setup
+  // assistant's `update_config` tool writes it from any host, so a CLI-written
+  // value must not then be reported as unknown.
+  'src/tools/setup/ConfigTools.ts': ['git.numberOfCommitsToShow'],
+  'src/tools/media/audio.ts': ['audio.soxPath'],
+  'src/logger/logUtils.ts': ['logger.debugMode'],
+  'src/telemetry/UsageLogService.ts': ['telemetry.enabled'],
+  'src/agent/utils/debugMessageSaver.ts': ['debug.saveModelIO'],
+  'src/agent/utils/userVars.ts': ['skills.enabled'],
+  'src/tools/approval/toolEditApproval.ts': ['toolUse.requireEditApproval'],
+  'src/tools/approval/bashApproval.ts': ['toolUse.requireBashApproval'],
+} as const;
+
+const EXTENSION_ONLY_CORE_SETTING_READER_FILES = {
+  // The criticism sink that honors this flag is a VS Code diagnostics surface;
+  // the desktop reports inline criticism as unsupported.
+  'packages/extension/src/frontend/latex/inlineCriticism.ts': [
+    'inlineCriticism.enabled',
+  ],
+  'packages/extension/src/frontend/review/agentReviewCommitWatcher.ts': [
+    'agentReview.runOnCommit',
+  ],
+} as const;
 
 describe('knownKeys derivation', () => {
   it('recognizes config-slot CLI keys, but warns on state.json keys in config.json', () => {
@@ -513,7 +574,7 @@ describe('core settings host split', () => {
   });
 
   it('names an existing consumer file on the side it is filed under', () => {
-    for (const consumer of Object.keys(CLI_CORE_SETTING_CONSUMERS)) {
+    for (const consumer of Object.keys(CLI_CORE_SETTING_READER_FILES)) {
       assert.ok(
         existsSync(resolve(REPO_ROOT, consumer)),
         `CLI consumer does not exist: ${consumer}`,
@@ -523,7 +584,9 @@ describe('core settings host split', () => {
         `CLI consumer lives inside the extension host: ${consumer}`,
       );
     }
-    for (const consumer of Object.keys(EXTENSION_ONLY_CORE_SETTING_CONSUMERS)) {
+    for (const consumer of Object.keys(
+      EXTENSION_ONLY_CORE_SETTING_READER_FILES,
+    )) {
       assert.ok(
         existsSync(resolve(REPO_ROOT, consumer)),
         `extension consumer does not exist: ${consumer}`,

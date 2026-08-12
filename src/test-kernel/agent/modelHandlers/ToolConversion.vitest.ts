@@ -131,6 +131,32 @@ function googleSchemasFor(definition: ToolDefinition): {
   return { interaction, generateContent };
 }
 
+function expectFlattenedObjectUnion(
+  parameters: unknown,
+  enumValues: readonly string[],
+  propertyNames: readonly string[],
+): void {
+  const schema = parameters as {
+    type?: unknown;
+    oneOf?: unknown;
+    anyOf?: unknown;
+    allOf?: unknown;
+    $schema?: unknown;
+    required?: unknown;
+    properties?: Record<string, { enum?: readonly string[] } | undefined>;
+  };
+  expect(schema.type).toBe('object');
+  expect(schema.oneOf).toBeUndefined();
+  expect(schema.anyOf).toBeUndefined();
+  expect(schema.allOf).toBeUndefined();
+  expect(schema.$schema).toBeUndefined();
+  expect(schema.properties?.command?.enum).toEqual(enumValues);
+  for (const name of propertyNames) {
+    expect(schema.properties?.[name]).toBeDefined();
+  }
+  expect(schema.required).toEqual(['command']);
+}
+
 describe('OpenAI tool conversion', () => {
   it('flattens discriminated object unions into a single object schema', () => {
     // OpenAI's function-calling API rejects schemas whose root is
@@ -156,23 +182,11 @@ describe('OpenAI tool conversion', () => {
     ];
 
     const tools = toOpenAITools(defs);
-    const tool = tools[0] as OpenAIFunctionTool;
-    const parameters = tool.function.parameters as Record<string, unknown>;
-
-    expect(parameters.type).toBe('object');
-    expect(parameters.oneOf).toBeUndefined();
-    expect(parameters.anyOf).toBeUndefined();
-    expect(parameters.allOf).toBeUndefined();
-    expect(parameters.$schema).toBeUndefined();
-
-    const properties = parameters.properties as Record<
-      string,
-      Record<string, unknown>
-    >;
-    expect(properties.command.enum).toEqual(['ask', 'read']);
-    expect(properties.question).toBeDefined();
-    expect(properties.thread_id).toBeDefined();
-    expect(parameters.required).toEqual(['command']);
+    expectFlattenedObjectUnion(
+      (tools[0] as OpenAIFunctionTool).function.parameters,
+      ['ask', 'read'],
+      ['question', 'thread_id'],
+    );
   });
 
   it('uses an empty object schema when parameters are omitted', () => {
@@ -266,23 +280,13 @@ describe('Anthropic tool conversion', () => {
       },
     ]);
 
-    const tool = tools[0] as { input_schema?: Record<string, unknown> };
-    const inputSchema = tool.input_schema;
-
-    expect(inputSchema?.type).toBe('object');
-    expect(inputSchema?.oneOf).toBeUndefined();
-    expect(inputSchema?.anyOf).toBeUndefined();
-    expect(inputSchema?.allOf).toBeUndefined();
-    expect(inputSchema?.$schema).toBeUndefined();
-
-    const properties = inputSchema?.properties as Record<
-      string,
-      Record<string, unknown>
-    >;
-    expect(properties.command.enum).toEqual(['ask', 'read']);
-    expect(properties.question).toBeDefined();
-    expect(properties.thread_id).toBeDefined();
-    expect(inputSchema?.required).toEqual(['command']);
+    const inputSchema = (tools[0] as { input_schema?: Record<string, unknown> })
+      .input_schema;
+    expectFlattenedObjectUnion(
+      inputSchema,
+      ['ask', 'read'],
+      ['question', 'thread_id'],
+    );
   });
 
   it('emits valid object input schemas for the first CLI chat tools', () => {
@@ -550,10 +554,8 @@ describe('toOpenAIResponseTools', () => {
     },
   ])('$label', ({ def, options }) => {
     const defs: ToolDefinition[] = [def];
-    // The default cases call with no options argument, exactly as before.
-    const tools = options
-      ? toOpenAIResponseTools(defs, options)
-      : toOpenAIResponseTools(defs);
+    // `options` may be undefined; toOpenAIResponseTools defaults it to {}.
+    const tools = toOpenAIResponseTools(defs, options);
     expect(tools.length).toBe(1);
     const tool = tools[0] as FunctionTool;
     expect(tool.type).toBe('function');
@@ -938,6 +940,7 @@ describe('toGoogleTools', () => {
       expect(schema.properties.upperExclusiveStricter.maximum).toBe(3);
     }
   });
+
   it('rejects Google literal constraints that cannot be represented', () => {
     expect(() =>
       convertGoogleToolSchema({

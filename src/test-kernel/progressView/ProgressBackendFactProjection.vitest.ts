@@ -979,7 +979,7 @@ describe('ProgressBackend', () => {
         messageType: MESSAGE_TYPES.DEFAULT,
         text: 'seed-2',
       });
-      // Durability must drain first; dirty streams only queue pendingRelease.
+      // Durability must drain first; dirty streams only queue release.
       await backend.state.flush();
       const expectedHead = backend.state.streamLogs.get(background)?.head;
       expect(expectedHead).toBeGreaterThan(0);
@@ -1259,9 +1259,10 @@ describe('ProgressBackend', () => {
     });
     expect(backend.state.getStreamMetadata(stream).creationTimestamp).toBe(100);
 
-    vi.spyOn(backend.state.streamLogs, 'getFirstTimestamp').mockReturnValue(
-      undefined,
-    );
+    vi.spyOn(backend.state.streamLogs, 'getTimestampRange').mockReturnValue({
+      first: undefined,
+      last: undefined,
+    });
 
     expect(backend.state.getStreamMetadata(stream).creationTimestamp).toBe(100);
   });

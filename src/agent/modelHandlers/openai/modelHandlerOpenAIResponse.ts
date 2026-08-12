@@ -19,7 +19,7 @@ import {
   isOpenAIServerToolContent,
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
-} from '@agent/types/ServerToolTypes';
+} from '@agent/types/ServerTools';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
@@ -56,7 +56,7 @@ import { getWebSocketEnabled } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
 
 // Local file imports
-import { computeUtilizationPercent } from '../support/contextUtilization';
+import { roundedUtilizationPercent } from '../support/contextUtilization';
 import { logCompactionEvent } from '../support/compactionLogging';
 import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import { toDataUrl } from '../support/dataUrl';
@@ -96,10 +96,10 @@ import { ResponseStreamProcessor } from './ResponseStreamProcessor';
 import { OpenAIResponseWebSocketTransport } from './OpenAIResponseWebSocketTransport';
 import { createOpenAIBackgroundRunLifecycle } from './openAIBackgroundRunLifecycle';
 import { ServerChainState } from '../support/ServerChainState';
-import { isResponseFunctionToolCallItem } from './responseStreamEvents';
+import { isResponseFunctionToolCallItem } from './responsesShapeGuards';
 import {
+  contentToText,
   createInputText,
-  extractTextContentPart,
   hasResponseOutputText,
   isAssistantTextMessage,
   isMessageItem,
@@ -800,7 +800,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   ): Promise<ResponseInputItem[]> {
     const tokensBefore = this.chainState.getCumulativeInputTokens();
     const contextWindow = this.getEffectiveContextWindow();
-    const utilizationBefore = computeUtilizationPercent(
+    const utilizationBefore = roundedUtilizationPercent(
       tokensBefore,
       contextWindow,
     );
@@ -951,7 +951,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     this.logger.debug('Compacting conversation (client-side)', {
       data: {
         inputTokens: tokensBefore,
-        utilizationPercent: computeUtilizationPercent(
+        utilizationPercent: roundedUtilizationPercent(
           tokensBefore,
           contextWindow,
         ),
@@ -1074,20 +1074,12 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
    * text-length heuristic over exactly what gets resent.
    */
   private estimateResentInputTokens(messages: ResponseInputItem[]): number {
+    // Flatten message content (string or typed parts) to plain text;
+    // non-text items contribute nothing to the estimate.
     const text = messages
-      .map((message) => {
-        // Flatten message content (string or typed parts) to plain text;
-        // non-text items contribute nothing to the estimate.
-        const content = (message as { content?: unknown }).content;
-        if (typeof content === 'string') return content;
-        if (!Array.isArray(content)) return '';
-        return content
-          .map((part) => {
-            const partText = (part as { text?: unknown } | null)?.text;
-            return typeof partText === 'string' ? partText : '';
-          })
-          .join('');
-      })
+      .map((message) =>
+        contentToText((message as { content?: unknown }).content, ''),
+      )
       .join('\n');
     return Math.max(1, estimateTokensFromText(text));
   }
@@ -2793,20 +2785,11 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       return undefined;
     }
 
-    // String content (from createAssistantMessage)
-    if (typeof message.content === 'string') {
-      return message.content;
-    }
-
-    // Array content (input_text history or output_text response parts)
-    if (Array.isArray(message.content)) {
-      const texts = message.content
-        .map((part) => extractTextContentPart(part))
-        .filter(filterNotNullish);
-      return texts.length > 0 ? texts.join('') : undefined;
-    }
-
-    return undefined;
+    // String content (from createAssistantMessage) or array content
+    // (input_text history or output_text response parts); empty flattens to
+    // undefined.
+    const text = contentToText(message.content, '');
+    return text.length > 0 ? text : undefined;
   }
 
   private appendInputText(message: ResponseInputItem, text: string): void {
@@ -2844,9 +2827,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       return true;
     }
 
-    const existingText = Array.isArray(content)
-      ? content.map((part) => extractTextContentPart(part) ?? '').join('')
-      : '';
+    const existingText = contentToText(content, '');
 
     Object.assign(
       message,

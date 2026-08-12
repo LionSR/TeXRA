@@ -1,18 +1,14 @@
-// Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import * as logger from '@logger/logUtils';
 import * as config from '@utils/config/configUtils';
 
 const SECRET = 'sk-proj-redaction-example-1234567890abcdef';
 
-/** Enables debug-level logging for the duration of a test. */
 function enableDebugLogging(): void {
   vi.spyOn(config, 'getConfig').mockReturnValue(true);
 }
 
-/** Installs a capturing sink and returns the lines it receives. */
 function captureLines(options?: { trusted: boolean }): string[] {
   const lines: string[] = [];
   logger.setOutputChannelFactory(
@@ -115,6 +111,30 @@ describe('logUtils', () => {
     expect(lines[1]).toContain('"password": "[redacted]"');
     expect(lines[1]).toContain('"refreshToken": "[redacted]"');
     expect(lines[1]).toContain('"requestId": "visible-request-id"');
+  });
+
+  it('createLog binds the channel and emits through the shared sink', () => {
+    const lines = captureLines();
+
+    const log = logger.createLog('BoundChannel');
+    log.warn('bound warning');
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('WARN');
+    expect(lines[0]).toContain('[BoundChannel] bound warning');
+  });
+
+  it('createLog forwards debug data identically to the free debug fn', () => {
+    enableDebugLogging();
+    const lines = captureLines();
+
+    const log = logger.createLog('BoundChannel');
+    log.debug('with data', { data: { requestId: 'visible-request-id' } });
+
+    const output = lines.join('\n');
+    expect(lines).toHaveLength(2);
+    expect(output).toContain('[BoundChannel] with data');
+    expect(output).toContain('"requestId": "visible-request-id"');
   });
 
   it('disposes a shared underlying sink exactly once', () => {

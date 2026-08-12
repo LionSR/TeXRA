@@ -9,6 +9,10 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
+function enabledModels(state: FakeStateStore): string[] {
+  return state.get<string[]>(GlobalStateKey.ENABLED_MODELS, []);
+}
+
 /**
  * #7216 review: the retired-model sweep in `reconcileEnabledModels` used to
  * be gated behind `previousVersion < 21`, a threshold frozen from the
@@ -36,9 +40,7 @@ describe('refreshModelListStateIfNeeded', () => {
 
     expect(result.skipped).toBe(false);
     expect(result.removed).toContain('grok4');
-    expect(
-      state.get<string[]>(GlobalStateKey.ENABLED_MODELS, []),
-    ).not.toContain('grok4');
+    expect(enabledModels(state)).not.toContain('grok4');
   });
 });
 
@@ -61,10 +63,7 @@ describe('migrateCopilotModelRouteSelections', () => {
 
     await migrateCopilotModelRouteSelections(state);
 
-    expect(state.get<string[]>(GlobalStateKey.ENABLED_MODELS, [])).toEqual([
-      'gpt55',
-      'sonnet46',
-    ]);
+    expect(enabledModels(state)).toEqual(['gpt55', 'sonnet46']);
     expect(state.get<string>(GlobalStateKey.HELPER_MODEL)).toBe('gpt56');
     expect(
       state.get<Record<string, string>>(GlobalStateKey.REASONING_LEVELS, {}),
@@ -82,9 +81,7 @@ describe('migrateCopilotModelRouteSelections', () => {
 
     await migrateCopilotModelRouteSelections(state);
 
-    expect(state.get<string[]>(GlobalStateKey.ENABLED_MODELS, [])).toEqual([
-      'sonnet46',
-    ]);
+    expect(enabledModels(state)).toEqual(['sonnet46']);
     expect(
       state.get<string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS, []),
     ).toEqual(['sonnet46']);
@@ -98,29 +95,24 @@ describe('migrateCopilotModelRouteSelections', () => {
 
     await migrateCopilotModelRouteSelections(state);
 
-    expect(state.get<string[]>(GlobalStateKey.ENABLED_MODELS, [])).toEqual([
-      'gpt55',
-    ]);
+    expect(enabledModels(state)).toEqual(['gpt55']);
     expect(
       state.get<string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS),
     ).toBeUndefined();
   });
 
-  it.each([
-    { 'copilot:sonnet46': 'high', sonnet46: 'low' },
-    { sonnet46: 'low', 'copilot:sonnet46': 'high' },
-  ])(
-    'keeps a pre-existing canonical reasoning override over the copilot one (%#)',
-    async (levels) => {
-      const state = new FakeStateStore({
-        [GlobalStateKey.REASONING_LEVELS]: levels,
-      });
+  it('keeps a pre-existing canonical reasoning override over the copilot one', async () => {
+    const state = new FakeStateStore({
+      [GlobalStateKey.REASONING_LEVELS]: {
+        'copilot:sonnet46': 'high',
+        sonnet46: 'low',
+      },
+    });
 
-      await migrateCopilotModelRouteSelections(state);
+    await migrateCopilotModelRouteSelections(state);
 
-      expect(
-        state.get<Record<string, string>>(GlobalStateKey.REASONING_LEVELS, {}),
-      ).toEqual({ sonnet46: 'low' });
-    },
-  );
+    expect(
+      state.get<Record<string, string>>(GlobalStateKey.REASONING_LEVELS, {}),
+    ).toEqual({ sonnet46: 'low' });
+  });
 });

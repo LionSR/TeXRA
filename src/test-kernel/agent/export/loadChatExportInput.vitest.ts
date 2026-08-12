@@ -57,7 +57,6 @@ const CONVERSATION = [
 
 describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     mocks.readConfig.mockResolvedValue(null);
     mocks.readConversation.mockResolvedValue(null);
     mocks.readMeta.mockResolvedValue(null);

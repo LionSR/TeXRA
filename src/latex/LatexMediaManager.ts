@@ -439,24 +439,23 @@ export class LatexMediaManager {
         pathToLocation(path.normalize(path.join(baseDir, relativePath))),
       );
 
-      const existenceChecks = await pMap(
-        fileLocations,
-        async (loc) => ({
-          loc,
-          exists: await AbsoluteFS.exists(loc.absolutePath),
-        }),
-        { concurrency: LATEX_CONCURRENCY, stopOnError: false },
-      );
-
-      for (const { loc, exists } of existenceChecks) {
-        if (!exists) {
+      // A figure that no longer exists cannot be compiled into the PDF or
+      // attached to vision context, so it must not enter media. The resolution
+      // above re-derives baseDir (unlike extractFigurePathsFromLatex, whose
+      // paths were checked against the original latexDir), so this filter is a
+      // real gate, not a re-check of already-known data.
+      const existingLocations: FileLocation[] = [];
+      for (const loc of fileLocations) {
+        if (!(await AbsoluteFS.exists(loc.absolutePath))) {
           this.logger.debug('Extracted figure path does not exist', {
             data: { figurePath: loc.absolutePath, from: file.absolutePath },
           });
+          continue;
         }
+        existingLocations.push(loc);
       }
 
-      workspaceState.media.addMediaFiles(fileLocations);
+      workspaceState.media.addMediaFiles(existingLocations);
       mirrorTasks.push(this.mirrorFigureDependencies(file, figures, baseDir));
     }
 

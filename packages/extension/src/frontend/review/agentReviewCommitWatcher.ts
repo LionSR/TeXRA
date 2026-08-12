@@ -13,7 +13,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { getGitAPI, type GitRepository } from '@frontend/git/gitExtensionTypes';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { createFlushableDebounce } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
@@ -22,7 +22,7 @@ import { getConfig } from '@utils/config/configUtils';
 
 import { AgentReviewService } from './AgentReviewService';
 
-const CHANNEL = 'AgentReview';
+const log = createLog('AgentReview');
 const COMMIT_DEBOUNCE_MS = 1500;
 
 function watchRepository(
@@ -61,10 +61,7 @@ function watchRepository(
     // Re-check at fire time: the user may have disabled run-on-commit
     // during the debounce window, and a review costs a model session.
     if (!getConfig<boolean>('agentReview.runOnCommit', false)) return;
-    logger.info(
-      CHANNEL,
-      `Commit detected on ${name ?? 'HEAD'}; starting agent review`,
-    );
+    log.info(`Commit detected on ${name ?? 'HEAD'}; starting agent review`);
     void AgentReviewService.runReview('commit', {
       baseRef,
       baseDescription: `previous commit on ${name ?? 'HEAD'}`,
@@ -145,8 +142,7 @@ export function registerAgentReviewCommitWatcher(
       ),
     );
   })().catch((err: unknown) => {
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Could not watch git commits for agent review: ${toErrorMessage(err)}`,
     );
   });

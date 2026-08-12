@@ -21,7 +21,6 @@ function newHandler(): ModelHandlerOpenAI {
   return handler;
 }
 
-/** A completion whose single choice carries the given `tool_calls` payload. */
 function completionWithToolCalls(toolCalls: unknown[]) {
   return {
     id: 'test-completion',
@@ -46,17 +45,8 @@ const VALID_TOOL_CALL = {
   function: { name: 'do_thing', arguments: '{}' },
 };
 
-/** A well-formed completion with a single `function` tool call. */
 function completionWithValidToolCall() {
   return completionWithToolCalls([VALID_TOOL_CALL]);
-}
-
-/**
- * A malformed completion whose `tool_calls` entry has an unsupported
- * `type` — the shape a corrupted/unexpected provider payload produces.
- */
-function completionWithMalformedToolCall() {
-  return completionWithToolCalls([{ id: 'call_1', type: 'not_a_real_type' }]);
 }
 
 describe('ModelHandlerOpenAI.extractToolUse', () => {
@@ -76,7 +66,9 @@ describe('ModelHandlerOpenAI.extractToolUse', () => {
     const handler = newHandler();
 
     assert.throws(() =>
-      handler.extractToolUse(completionWithMalformedToolCall()),
+      handler.extractToolUse(
+        completionWithToolCalls([{ id: 'call_1', type: 'not_a_real_type' }]),
+      ),
     );
   });
 });

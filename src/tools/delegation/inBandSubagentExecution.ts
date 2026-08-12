@@ -14,6 +14,7 @@
 
 // Local imports
 import { getExecutionStore, type ResultMeta } from '@agent/storage';
+import { persistChildRunDeliveryBestEffort } from '@agent/storage/childRunDeliveryPersistence';
 import {
   persistChildRunReport,
   persistChildRunResultMeta,
@@ -35,11 +36,7 @@ import { getStreamTabId } from '@agent/runtime/streamTab';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import * as logger from '@logger/logUtils';
-import {
-  USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import { USER_FOLLOW_UP_SUPPORT, type ExecutionId } from '@shared/schemas';
 import { generateExecutionId, KeyedMutex } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveExecutionId } from '@utils/core/idHash';
@@ -49,11 +46,9 @@ import {
 } from './subagentResults';
 
 // Local file imports
-import {
-  buildSubagentResult,
-  formatBuiltSubagentDelivery,
-  type BuiltSubagentResult,
-} from './subagentDeliveryFormat';
+// Type-only: the strategy module pulls in `@agent/runtime/executeAgent` at
+// runtime (see the lazy import below), but a type import is erased at build.
+import { type BuiltSubagentResult } from './subagentDeliveryFormat';
 import {
   readStableSubagentAttempt,
   readStableSubagentSequence,
@@ -63,26 +58,13 @@ import {
   type StableSubagentAttempt,
   type StableSubagentSequence,
 } from './stableSubagentAttempt';
+import type { ChildRunLaunchOptions } from './nativeSubagentStrategy';
 
 const LOG_CHANNEL = 'inBandSubagentExecution';
 
-interface InBandSubagentExecutionBaseOptions {
+interface InBandSubagentExecutionBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
-  readonly agentName: string;
-  readonly parentStreamId: StreamTabId;
-  readonly session: SessionHandle;
-  readonly approvalPromptsUnavailable?: boolean;
-  readonly onApprovalPolicyDenial?: () => void;
-  readonly runtimeUnavailableTools?: readonly string[];
-  readonly signal?: AbortSignal;
-  readonly onStreamResolved?: (streamId: StreamTabId) => void;
   readonly onCost?: (totalCostUsd: number | undefined) => void | Promise<void>;
-  /**
-   * Workflow-script phase owning this child, when the caller is a
-   * workflow-script run. Rides to the child's roster row so a host can group
-   * grandchild rows by phase.
-   */
-  readonly workflowPhase?: string;
 }
 
 /** Options for the typed child API. Direct persisted parentage is required. */
@@ -263,7 +245,6 @@ function logPersistenceFailure(
   executionId: ExecutionId,
   error: unknown,
 ): void {
-  markOwnedExecutionLeaseUndurable(executionId);
   logger.warn(
     LOG_CHANNEL,
     `Failed to persist subagent ${kind} for ${executionId}: ${toErrorMessage(error)}`,
@@ -306,23 +287,6 @@ async function throwRetryableDurabilityError(
     );
   }
   throw error;
-}
-
-async function persistDeliveryBestEffort(
-  executionId: ExecutionId,
-  delivery: string,
-  resultMeta: ResultMeta,
-): Promise<void> {
-  const [reportResult, metaResult] = await Promise.all([
-    persistChildRunReport(executionId, delivery),
-    persistChildRunResultMeta(executionId, resultMeta),
-  ]);
-  if (reportResult.kind === 'failed') {
-    logPersistenceFailure('report', executionId, reportResult.err);
-  }
-  if (metaResult.kind === 'failed') {
-    logPersistenceFailure('result manifest', executionId, metaResult.err);
-  }
 }
 
 function recordCost(
@@ -408,7 +372,12 @@ async function persistFailure(
     workingDirectory,
     memoryMisses: result?.memoryMisses,
   });
-  await persistDeliveryBestEffort(executionId, delivery, resultMeta);
+  await persistChildRunDeliveryBestEffort(
+    executionId,
+    delivery,
+    resultMeta,
+    (kind, failure) => logPersistenceFailure(kind, executionId, failure),
+  );
 }
 
 /**
@@ -474,22 +443,17 @@ async function executeInBand(
         });
       }
 
+      // The base options carry the shared ChildRunLaunchOptions fields, so a
+      // spread forwards every launch option to the strategy automatically — a
+      // new shared option needs a single declaration, not a second mapping.
       const strategy = createNativeSubagentStrategy({
+        ...options,
         config,
         agentCategoryExplicit: true,
         executionId,
-        parentExecutionId: options.parentExecutionId,
-        agentName: options.agentName,
-        orchestratorStreamId: options.parentStreamId,
-        parentSession: options.session,
         startedAt,
         workingDirectory,
-        approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-        onApprovalPolicyDenial: options.onApprovalPolicyDenial,
-        runtimeUnavailableTools: options.runtimeUnavailableTools,
-        workflowPhase: options.workflowPhase,
         executionMode: 'single-cycle',
-        signal: options.signal,
         onStreamResolved: options.onStreamResolved ?? (() => {}),
       });
       let flowResult: AgentFlowResult;
@@ -532,15 +496,7 @@ async function executeInBand(
 
       let built: BuiltSubagentResult;
       try {
-        built = await buildSubagentResult(
-          executionId,
-          options.agentName,
-          flowResult,
-          {
-            startedAt,
-            parentExecutionId: options.parentExecutionId,
-          },
-        );
+        built = await strategy.buildResult(flowResult);
       } catch (error) {
         // The runtime has already finalized this child. A post-flow construction
         // error must not rewrite a completed execution as failed or try to parse
@@ -570,29 +526,25 @@ async function executeInBand(
         await persistResultMetaRequired(executionId, built.resultMeta);
       } else {
         try {
-          delivery = formatBuiltSubagentDelivery(
-            executionId,
-            options.agentName,
+          delivery = await strategy.formatDelivery(
             flowResult,
-            built,
-            workingDirectory,
+            built.wallTimeMs,
           );
         } catch (error) {
-          await persistDeliveryBestEffort(
+          await persistChildRunDeliveryBestEffort(
             executionId,
-            formatSubagentError(executionId, options.agentName, error, {
-              wallTimeMs: built.wallTimeMs,
-              workingDirectory,
-              memoryMisses: flowResult.memoryMisses,
-            }),
+            await strategy.formatError(flowResult, error),
             built.resultMeta,
+            (kind, failure) =>
+              logPersistenceFailure(kind, executionId, failure),
           );
           throw error;
         }
-        await persistDeliveryBestEffort(
+        await persistChildRunDeliveryBestEffort(
           executionId,
           delivery,
           built.resultMeta,
+          (kind, error) => logPersistenceFailure(kind, executionId, error),
         );
       }
 

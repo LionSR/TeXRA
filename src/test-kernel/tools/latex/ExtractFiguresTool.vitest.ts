@@ -1,10 +1,5 @@
-// Node imports
-import * as assert from 'node:assert';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Third-party imports
-import { describe, it, afterEach, vi } from 'vitest';
-
-// Local imports
 import * as figureModule from '@latex/extractFigure';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { ExtractLatexFiguresTool } from '@tools/latex/ExtractFiguresTool';
@@ -27,20 +22,18 @@ describe('ExtractLatexFiguresTool', () => {
       'figures/plot.pdf',
     ]);
 
-    const tool = new ExtractLatexFiguresTool();
-    const result = await tool.call({
+    const result = await new ExtractLatexFiguresTool().call({
       texPath: 'main.tex',
     });
 
-    assert.strictEqual(result.summary, 'Found 1 figure file in main.tex.');
-    assert.ok(result.output?.includes('Figures referenced in main.tex'));
-    assert.ok(result.output?.includes('- figures/plot.pdf'));
-    assert.ok(result.files);
-    assert.strictEqual(result.files?.length, 1);
-    assert.strictEqual(result.files?.[0].mimeType, 'application/pdf');
-    assert.strictEqual(result.files?.[0].path, 'figures/plot.pdf');
-    assert.ok(result.files?.[0].bytes);
-    assert.strictEqual(result.files?.[0].base64Data, undefined);
+    expect(result.summary).toBe('Found 1 figure file in main.tex.');
+    expect(result.output).toContain('Figures referenced in main.tex');
+    expect(result.output).toContain('- figures/plot.pdf');
+    expect(result.files).toHaveLength(1);
+    expect(result.files?.[0].mimeType).toBe('application/pdf');
+    expect(result.files?.[0].path).toBe('figures/plot.pdf');
+    expect(result.files?.[0].bytes).toBeTruthy();
+    expect(result.files?.[0].base64Data).toBeUndefined();
   });
 
   it('returns graceful message when figures are absent', async () => {
@@ -49,21 +42,23 @@ describe('ExtractLatexFiguresTool', () => {
     });
     vi.spyOn(figureModule, 'extractFigurePathsFromLatex').mockResolvedValue([]);
 
-    const tool = new ExtractLatexFiguresTool();
-    const result = await tool.call({ texPath: 'report.tex' });
+    const result = await new ExtractLatexFiguresTool().call({
+      texPath: 'report.tex',
+    });
 
-    assert.strictEqual(result.summary, 'No figures found in report.tex.');
-    assert.ok(result.output?.includes('(no entries)'));
-    assert.strictEqual(result.files, undefined);
+    expect(result.summary).toBe('No figures found in report.tex.');
+    expect(result.output).toContain('(no entries)');
+    expect(result.files).toBeUndefined();
   });
 
   it('returns error when tex file is missing', async () => {
     await installPlatform({});
 
-    const tool = new ExtractLatexFiguresTool();
-    const result = await tool.call({ texPath: 'missing.tex' });
+    const result = await new ExtractLatexFiguresTool().call({
+      texPath: 'missing.tex',
+    });
 
-    assert.strictEqual(result.status, 'error');
-    assert.ok(result.error?.includes('LaTeX file not found'));
+    expect(result.status).toBe('error');
+    expect(result.error).toContain('LaTeX file not found');
   });
 });

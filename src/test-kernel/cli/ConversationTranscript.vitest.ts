@@ -45,9 +45,9 @@ import {
   type StreamSlice,
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
+import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
-import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import {
   AgentCategory,
@@ -239,7 +239,7 @@ describe('CLI conversation transcript', () => {
       ],
     }));
 
-    projectStreamTranscript(STREAM_ID, { finalize: true });
+    syncStreamLog(STREAM_ID, { forceFinal: true });
 
     const slice = streams.get().get(STREAM_ID);
     expect(slice?.entries.map((item) => item.finalized)).toEqual([true, true]);
@@ -350,7 +350,7 @@ describe('CLI conversation transcript', () => {
     expect(split.finalized).toHaveLength(0);
     expect(split.pending.map((e) => e.id)).toEqual(['a1', 't1']);
 
-    projectStreamTranscript(STREAM_ID, { finalize: true });
+    syncStreamLog(STREAM_ID, { forceFinal: true });
 
     split = splitTranscriptEntries(
       streams.get().get(STREAM_ID)?.entries ?? [],
@@ -941,11 +941,10 @@ describe('CLI conversation transcript', () => {
   });
 
   it('keeps session metadata authoritative for root stream identity', () => {
-    const ROOT = 'root-stream' as StreamTabId;
     const streams = new Map<StreamTabId, StreamSlice>([
       [
-        ROOT,
-        sliceWithEntries(ROOT, [], {
+        ROOT_STREAM,
+        sliceWithEntries(ROOT_STREAM, [], {
           model: 'previous-model',
         }),
       ],
@@ -959,7 +958,7 @@ describe('CLI conversation transcript', () => {
           model: 'current-model',
         },
         {
-          streamId: ROOT,
+          streamId: ROOT_STREAM,
           streams,
         },
       ),
@@ -967,14 +966,17 @@ describe('CLI conversation transcript', () => {
   });
 
   it('labels focused subagent scrollback with the child stream identity', () => {
-    const ROOT = 'root-stream' as StreamTabId;
     const CHILD = 'search-stream' as StreamTabId;
     const streams = new Map<StreamTabId, StreamSlice>([
       [
-        ROOT,
-        sliceWithEntries(ROOT, [entry('u1', 'user', 'send scouts', true)], {
-          model: 'deepseekT',
-        }),
+        ROOT_STREAM,
+        sliceWithEntries(
+          ROOT_STREAM,
+          [entry('u1', 'user', 'send scouts', true)],
+          {
+            model: 'deepseekT',
+          },
+        ),
       ],
       [
         CHILD,
@@ -984,7 +986,7 @@ describe('CLI conversation transcript', () => {
       ],
     ]);
     const childStreamEntries = buildChildStreamEntries({
-      parentStreamId: ROOT,
+      parentStreamId: ROOT_STREAM,
       activeOnly: [
         {
           executionId: 'ei_search',
@@ -999,7 +1001,7 @@ describe('CLI conversation transcript', () => {
     expect(
       sessionHeaderIdentityLine(SESSION_META, {
         childStreamEntries,
-        parentStream: new Map([[CHILD, ROOT]]),
+        parentStream: new Map([[CHILD, ROOT_STREAM]]),
         streamId: CHILD,
         streams,
       }),
@@ -1012,7 +1014,7 @@ describe('CLI conversation transcript', () => {
         streams,
         childStreamEntries,
         meta: SESSION_META,
-        parentStream: new Map([[CHILD, ROOT]]),
+        parentStream: new Map([[CHILD, ROOT_STREAM]]),
       })[0],
     ).toMatchObject({
       kind: 'header',
@@ -1021,12 +1023,13 @@ describe('CLI conversation transcript', () => {
   });
 
   it('waits for child task state before printing a focused subagent header', () => {
-    const ROOT = 'root-stream' as StreamTabId;
     const CHILD = 'search-stream' as StreamTabId;
-    const parentStream = new Map<StreamTabId, StreamTabId>([[CHILD, ROOT]]);
+    const parentStream = new Map<StreamTabId, StreamTabId>([
+      [CHILD, ROOT_STREAM],
+    ]);
     const childEntry = entry('a1', 'assistant', 'checking', true);
     const streamsWithoutChildModel = new Map<StreamTabId, StreamSlice>([
-      [ROOT, sliceWithEntries(ROOT, [])],
+      [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [])],
       [CHILD, sliceWithEntries(CHILD, [childEntry])],
     ]);
 
@@ -1041,7 +1044,7 @@ describe('CLI conversation transcript', () => {
     ).toEqual([]);
 
     const streamsWithChildModel = new Map<StreamTabId, StreamSlice>([
-      [ROOT, sliceWithEntries(ROOT, [])],
+      [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [])],
       [
         CHILD,
         sliceWithEntries(CHILD, [childEntry], {

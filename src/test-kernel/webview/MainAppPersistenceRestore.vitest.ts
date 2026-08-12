@@ -65,10 +65,7 @@ const PERSISTED_SEED = {
 function seedWebviewState(
   state: Record<string, unknown> = PERSISTED_SEED,
 ): void {
-  if (!webviewState) {
-    webviewState = { mainViewState: structuredClone(state) };
-    return;
-  }
+  webviewState ??= {};
   for (const key of Object.keys(webviewState)) {
     delete webviewState[key];
   }
@@ -216,7 +213,7 @@ describe('MainApp persistence and restore characterization', () => {
   it('lifts legacy flat agent/instruction fields into the persisted records', () => {
     // Old blob shape: per-category agent and instruction as flat fields.
     // Parsing must lift them, not silently reset to the record prefaults.
-    const legacyBlob = {
+    const legacyBlob: Record<string, unknown> = {
       ...PERSISTED_SEED,
       agent: undefined,
       instruction: undefined,
@@ -225,8 +222,8 @@ describe('MainApp persistence and restore characterization', () => {
       workflowInstruction: 'legacy workflow instruction',
       toolUseInstruction: 'legacy tool-use instruction',
     };
-    delete (legacyBlob as Record<string, unknown>).agent;
-    delete (legacyBlob as Record<string, unknown>).instruction;
+    delete legacyBlob.agent;
+    delete legacyBlob.instruction;
 
     const parsed = MainViewPersistedStateSchema.parse(legacyBlob);
     expect(parsed.agent).toEqual({ workflow: 'polish', toolUse: 'research' });

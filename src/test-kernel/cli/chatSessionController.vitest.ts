@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => ({
   resolveAndResumeStream: vi.fn(),
   resumeQueuedToolUseFromResumeData: vi.fn(),
   resumeToolUseFromResumeData: vi.fn(),
-  projectStreamTranscript: vi.fn(),
+  syncStreamLog: vi.fn(),
   notify: vi.fn(),
   appendLocalAssistantTranscript: vi.fn(),
   appendLocalErrorTranscript: vi.fn(),
@@ -109,9 +109,13 @@ vi.mock('@cli/chat/tui/state/sessionSignalsAdapter', () => ({
   attachSessionSignalsAdapter: mocks.attachSessionSignalsAdapter,
 }));
 
-vi.mock('@cli/chat/tui/state/transcriptProjection', () => ({
-  projectStreamTranscript: mocks.projectStreamTranscript,
-}));
+vi.mock('@cli/chat/tui/state/subscribeStreamLog', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('@cli/chat/tui/state/subscribeStreamLog')
+    >();
+  return { ...actual, syncStreamLog: mocks.syncStreamLog };
+});
 
 vi.mock('@cli/chat/tui/state/transcript', () => ({
   appendLocalAssistantTranscript: mocks.appendLocalAssistantTranscript,
@@ -631,14 +635,11 @@ describe('createChatSessionController', () => {
   it('canStartRootRun() delegates to chatTuiCanStartRootRun(session)', () => {
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
-    // Fresh session — no run pending
     expect(ctrl.canStartRootRun()).toBe(true);
 
-    // Simulate a pending run
     session.markRunPending(new Promise(() => {}));
     expect(ctrl.canStartRootRun()).toBe(false);
 
-    // Complete the run
     session.markRunCompleted();
     expect(ctrl.canStartRootRun()).toBe(true);
   });
@@ -1200,10 +1201,9 @@ describe('createChatSessionController', () => {
     await session.runPromise;
 
     expect(session.runExitCode).toBe(CliExitCode.Success);
-    expect(mocks.projectStreamTranscript).toHaveBeenCalledWith(
-      'stream-resume',
-      { finalize: true },
-    );
+    expect(mocks.syncStreamLog).toHaveBeenCalledWith('stream-resume', {
+      forceFinal: true,
+    });
     expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
   });
 
@@ -1501,8 +1501,8 @@ describe('createChatSessionController', () => {
         isCancellationRequested: expect.any(Function),
       }),
     );
-    expect(mocks.projectStreamTranscript).toHaveBeenCalledWith('stream-1', {
-      finalize: true,
+    expect(mocks.syncStreamLog).toHaveBeenCalledWith('stream-1', {
+      forceFinal: true,
     });
     expect(rootStreamId.get()).toBe('stream-1');
     expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
@@ -1718,8 +1718,8 @@ describe('createChatSessionController', () => {
       }),
       undefined,
     );
-    expect(mocks.projectStreamTranscript).not.toHaveBeenCalledWith('stream-1', {
-      finalize: true,
+    expect(mocks.syncStreamLog).not.toHaveBeenCalledWith('stream-1', {
+      forceFinal: true,
     });
     expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
     expect(session.runExitCode).toBe(CliExitCode.Interrupted);
@@ -1739,8 +1739,8 @@ describe('createChatSessionController', () => {
 
     await expect(ctrl.tryResumeStream('stream-1')).resolves.toBe(false);
 
-    expect(mocks.projectStreamTranscript).not.toHaveBeenCalledWith('stream-1', {
-      finalize: true,
+    expect(mocks.syncStreamLog).not.toHaveBeenCalledWith('stream-1', {
+      forceFinal: true,
     });
   });
 });

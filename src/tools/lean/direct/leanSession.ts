@@ -19,6 +19,7 @@ import pTimeout from 'p-timeout';
 
 import { debug, info, warn } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { DiagnosticSeverity } from '@utils/diagnostics/diagnosticFormatting';
 import {
   registerLeanServer,
   unregisterLeanServer,
@@ -124,7 +125,7 @@ export class LeanSession {
       this.releaseDiagnosticsWaiters(state);
       this.openFiles.delete(absolute);
     }
-    await this.ensureFileOpen(absolute, { forceReload: true });
+    await this.ensureFileOpen(absolute, true);
   }
 
   /**
@@ -158,7 +159,7 @@ export class LeanSession {
   private async openAndSettle(filePath: string): Promise<string> {
     const absolute = path.resolve(filePath);
     await this.ensureReady();
-    await this.ensureFileOpen(absolute, { forceReload: false });
+    await this.ensureFileOpen(absolute, false);
     await this.waitForDiagnosticsQuiet(absolute);
     return absolute;
   }
@@ -285,11 +286,11 @@ export class LeanSession {
 
   private async ensureFileOpen(
     absolute: string,
-    options: { forceReload: boolean },
+    forceReload: boolean,
   ): Promise<void> {
     this.requireRpc();
     let existing = this.openFiles.get(absolute);
-    if (existing && !options.forceReload) return;
+    if (existing && !forceReload) return;
     // Uses fs/promises directly rather than platform().fs: this must read the
     // same real on-disk bytes the spawned `lean --server` process itself sees,
     // not a host's virtual/faked workspace fs.
@@ -299,7 +300,7 @@ export class LeanSession {
       });
     });
     existing = this.openFiles.get(absolute);
-    if (existing && !options.forceReload) return;
+    if (existing && !forceReload) return;
     // Re-check after the await: the session may have been disposed mid-read.
     const rpc = this.requireRpc();
     const version = (existing?.version ?? 0) + 1;
@@ -396,10 +397,14 @@ function toLeanDiagnostic(d: LspDiagnostic): LeanDiagnostic {
   };
 }
 
-function lspSeverityToVsCode(severity: number): number {
+function lspSeverityToVsCode(severity: number): DiagnosticSeverity {
   // VS Code: Error=0, Warning=1, Information=2, Hint=3
   // LSP:     Error=1, Warning=2, Information=3, Hint=4
-  return Math.max(0, severity - 1);
+  // LSP severities are 1-4 so the shift always lands in 0-3; the cast keeps
+  // the mapping to the DiagnosticSeverity union without adding a clamp (an
+  // unexpected out-of-range value is still dropped by SEVERITY_CONFIG's
+  // numeric lookup downstream, exactly as before).
+  return Math.max(0, severity - 1) as DiagnosticSeverity;
 }
 
 function pathToUri(absolute: string): string {

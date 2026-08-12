@@ -1,10 +1,7 @@
-// Node imports
 import { join } from 'node:path';
 
-// Third-party imports
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput } from '@controllers/settingsView/ChatExportController';
@@ -17,7 +14,6 @@ import { writeForeignLease } from '@test/support/executionLeaseFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { GoalStore } from '@tools/goal';
 
-// Local file imports
 import { createStubDesktopHistoryOptions } from './desktopSettingsTestSupport';
 import { repoPath } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
@@ -456,8 +452,8 @@ describe('DesktopHistoryHandlers', () => {
       logTail: '! Undefined control sequence.',
     });
     const openPath = vi.fn();
-    const showInfoMessage = vi.fn();
-    const actions = createHistoryHandlers({ openPath, showInfoMessage });
+    const showWarningMessage = vi.fn();
+    const actions = createHistoryHandlers({ openPath, showWarningMessage });
 
     await assertSupported(actions.exportChatTex)({
       command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
@@ -465,7 +461,7 @@ describe('DesktopHistoryHandlers', () => {
     });
 
     expect(openPath).toHaveBeenCalledWith('/tmp/executions/abc/chat.tex');
-    expect(showInfoMessage).toHaveBeenCalledWith(
+    expect(showWarningMessage).toHaveBeenCalledWith(
       'LaTeX compilation failed. The .tex source file has been opened instead.',
     );
   });
@@ -497,11 +493,11 @@ describe('DesktopHistoryHandlers', () => {
     chatExportMocks.buildExportInput.mockResolvedValue({
       status: 'config_missing',
     });
-    const showInfoMessage = vi.fn();
-    const actions = createHistoryHandlers({ showInfoMessage });
+    const showErrorMessage = vi.fn();
+    const actions = createHistoryHandlers({ showErrorMessage });
 
     await exportChatMd(actions, 'missing');
 
-    expect(showInfoMessage).toHaveBeenCalledWith('History item not found');
+    expect(showErrorMessage).toHaveBeenCalledWith('History item not found');
   });
 });

@@ -15,10 +15,12 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { createRunStorageLocation } from '@utils/files/fileLocation';
+import {
+  createRunStorageLocation,
+  getComparablePath,
+} from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import { getComparablePath } from '@utils/files/fileLocation';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -110,7 +112,7 @@ export class LatexDiffManager {
     }
   }
 
-  async handleLatexdiffofOutput(
+  async handleLatexdiffOfOutput(
     currRound: number,
     mapping: RoundFileMapping,
     stage?: StageHandle,

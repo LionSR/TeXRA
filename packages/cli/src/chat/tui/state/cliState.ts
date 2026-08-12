@@ -31,7 +31,10 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
-import type { CompactionActivityBlock } from '@shared/streams/compactionActivityProjection';
+import type {
+  CompactionActivityBlock,
+  CompactionActivityProjection,
+} from '@shared/streams/compactionActivityProjection';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import {
@@ -151,6 +154,32 @@ export interface TranscriptFoldItem {
 }
 
 /**
+ * Incremental task-group projection state: the upsert engine's mutable
+ * working set plus the immutable `snapshot` the slice holds. `applied`
+ * remembers the last log-entry object applied per group row — `StreamLog`
+ * replaces the entry object on every update (including the in-place
+ * GROUP_START → GROUP_END upsert at stage end), so a reference change is
+ * exactly a content change and only new/changed rows are fed to
+ * `upsertTaskGroupFromStreamLog`, never a full re-projection. That same
+ * reference dedupe makes the memo survive fold rebuilds unchanged: a
+ * `getRange(0)` replay skips every already-applied entry.
+ */
+interface TaskGroupProjectionState {
+  readonly working: TaskGroup[];
+  readonly index: Map<string, number>;
+  readonly applied: Map<string, StreamLogEntry>;
+  snapshot: readonly TaskGroup[];
+}
+
+/** Incremental compaction-activity projection state, cursored on the source
+ *  log (`appliedHead`), so it too survives fold rebuilds. */
+interface CompactionProjectionState {
+  readonly projection: CompactionActivityProjection;
+  appliedHead: number;
+  terminal: boolean;
+}
+
+/**
  * Mutable per-stream transcript-projection working state. Carried on the
  * stream's slice (never rendered) so its lifetime is exactly the stream's:
  * it dies with stream removal and CLI-state reset, and is cleared when the
@@ -186,6 +215,12 @@ export interface TranscriptFoldState {
   liveActivityEntry?: StreamLogEntry;
   /** Synthetic rows reconciled into `items`, in slice order, by identity. */
   synthetics: readonly ConversationEntry[];
+  /** Incremental task-group / compaction memos. Unlike the fold fields above
+   *  they are NOT cleared by a fold rebuild (each is self-consistent against
+   *  a full replay); they are dropped only when the stream's transcript
+   *  residency is released, and die with the slice like everything here. */
+  taskGroupProjection?: TaskGroupProjectionState;
+  compactionProjection?: CompactionProjectionState;
   /** Whether the last emitted `entries` was the full transcript or compact;
    *  undefined until the first emission. */
   lastOutputFull?: boolean;

@@ -16,6 +16,7 @@ import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
 import {
   LEAN4_EXTENSION_ID,
+  type FetchDiagnosticsResult,
   type LeanDiagnostic,
   type LeanFileCommand,
   type LeanProjectCommand,
@@ -357,20 +358,27 @@ export async function getHoverInfo(
  */
 export async function fetchDiagnosticsForFile(
   file: string,
-): Promise<LeanDiagnostic[] | null> {
+): Promise<FetchDiagnosticsResult> {
   const absolutePath = WorkspaceFS.toAbsolute(file);
   const diagnosticsWait = waitForDiagnosticsChange(
     vscode.Uri.file(absolutePath),
     10000,
   );
 
-  const openedPath = await openFileInEditor(file, { preserveFocus: true });
-  if (!openedPath) return null;
+  const opened = await openFileInEditor(file, { preserveFocus: true });
+  if (!opened) {
+    // Could not be opened in the editor — the file itself is the problem.
+    return {
+      ok: false,
+      kind: 'file_missing',
+      message: `Could not open ${absolutePath} in the editor.`,
+    };
+  }
 
   noteVscodeLeanServer(workspaceRootForFile(absolutePath));
 
   await diagnosticsWait;
-  return getDiagnostics(openedPath);
+  return { ok: true, diagnostics: getDiagnostics(opened.absolutePath) };
 }
 
 /** Navigate editor to first error location if present. */

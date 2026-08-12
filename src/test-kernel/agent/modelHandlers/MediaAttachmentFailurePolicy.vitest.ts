@@ -128,7 +128,7 @@ describe('media attachment failure policy (#7465)', () => {
     '$name initializeMessages fails the round on a media error',
     async ({ create }) => {
       const handler = create();
-      handler.setLogger(createFailureRecorder().logger);
+      handler.setLogger({ ...noopTrace });
 
       await assert.rejects(
         handler.initializeMessages('prefix', 'request', MEDIA_FILES),

@@ -17,6 +17,7 @@ import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteract
 import type { FileLocation } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 
 // Local file imports
@@ -443,7 +444,7 @@ export class ToolUseDispatchNode<C> extends Node<
     const { call, result, parsedInput, extracted, editedFiles, logRef } =
       execResult;
     const options = this.services;
-    const { workspace, fileService } = options;
+    const { workspace } = options;
 
     // The status discriminator belongs to model-facing tool results. Progress
     // logs should expose only visible tool content.
@@ -486,7 +487,7 @@ export class ToolUseDispatchNode<C> extends Node<
         }
         const location = pathToLocation(attachment.path);
         try {
-          if (await fileService.pathExists(location.absolutePath)) {
+          if (await AbsoluteFS.exists(location.absolutePath)) {
             validLocations.push(location);
           }
         } catch (err) {

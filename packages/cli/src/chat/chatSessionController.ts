@@ -6,6 +6,16 @@ import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
 import { getExecutionStore } from '@agent/storage';
+import {
+  attachTerminalResultToast,
+  detachSubagentsOnStop,
+  resolveAndResumeStream,
+  resumeQueuedToolUseFromResumeData,
+  resumeToolUseFromResumeData,
+  runAgent,
+  type SessionHandle,
+  type ToolUseResumeData,
+} from '@agent/runtime';
 import type {
   FollowUpQueueInput,
   FollowUpRecoveryLease,
@@ -15,14 +25,7 @@ import {
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
-import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
-import { runAgent } from '@agent/runtime/runAgent';
-import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
-import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
+import { chatAgentSupportsDelegation } from '@cli/runtime/agents';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from '@cli/runtime/approval/settleApprovals';
@@ -52,7 +55,6 @@ import { StreamSnapshotStore } from '@transcript';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { chatAgentSupportsDelegation } from './tui/commands/handlers/agentModelCommands';
 import { clearApprovals } from './tui/state/approvalQueue';
 import {
   focusStream,
@@ -73,7 +75,7 @@ import {
   clearLocalTranscript,
   moveLocalTranscriptToStream,
 } from './tui/state/transcript';
-import { projectStreamTranscript } from './tui/state/transcriptProjection';
+import { syncStreamLog } from './tui/state/subscribeStreamLog';
 
 type InterruptedFollowUp = Pick<
   FollowUpQueueInput,
@@ -412,7 +414,7 @@ export function createChatSessionController(
             },
             onIdle: () => {
               if (!session.streamId) return;
-              projectStreamTranscript(session.streamId, { finalize: true });
+              syncStreamLog(session.streamId, { forceFinal: true });
             },
           },
         ),
@@ -420,7 +422,7 @@ export function createChatSessionController(
       .then((result) => {
         session.runExitCode = runOutcomeExitCode(result.outcome);
         if (result.streamId) {
-          projectStreamTranscript(result.streamId, { finalize: true });
+          syncStreamLog(result.streamId, { forceFinal: true });
         }
         notify('agentFinished');
       })
@@ -515,7 +517,7 @@ export function createChatSessionController(
           plan: restored.plan,
         };
       });
-      projectStreamTranscript(resolution.streamId);
+      syncStreamLog(resolution.streamId);
       focusStream(resolution.streamId);
 
       const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
@@ -576,7 +578,7 @@ export function createChatSessionController(
    */
   const settleResumedTurn = (outcome: TurnOutcome): void => {
     if (session.streamId) {
-      projectStreamTranscript(session.streamId, { finalize: true });
+      syncStreamLog(session.streamId, { forceFinal: true });
     }
     session.runExitCode = runOutcomeExitCode(outcome);
     if (outcome !== STREAM_PHASE.WAITING) {

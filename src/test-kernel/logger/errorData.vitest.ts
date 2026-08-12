@@ -1,17 +1,11 @@
 import { strict as assert } from 'node:assert';
-import { beforeEach, describe, it } from 'vitest';
+import { describe, it } from 'vitest';
 
 import { createRunTrace, StreamLogStore } from '@transcript';
 
 describe('AgentTrace error data', () => {
-  let store: StreamLogStore;
-
-  beforeEach(async () => {
-    store = StreamLogStore.ephemeral('test');
-    await store.clear();
-  });
-
   it('emits error data with stack', () => {
+    const store = StreamLogStore.ephemeral('test');
     const logger = createRunTrace('TestErrorLogger', store).trace;
     const err = new Error('test failure');
     logger.error(`Error occurred: ${err.message}`, { data: err });

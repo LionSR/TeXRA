@@ -21,7 +21,7 @@ import {
 } from '@latex/acceptedFileTarget';
 import * as logger from '@logger/logUtils';
 import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
-import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
+import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latexTiming';
 import { workflowOutputCopyStem } from '@shared/constants/workflowOutput';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -35,7 +35,7 @@ function validateFileLocations(
   errorMessage: string,
 ): FileLocation | null {
   const fileToUseLocation = baseLocation ?? inputLocation;
-  if (!fileToUseLocation || !editedLocation) {
+  if (!fileToUseLocation) {
     void showLoggedMessage(CHANNEL, errorMessage);
     return null;
   }

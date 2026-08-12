@@ -41,6 +41,7 @@ import { formatCliDeviceAuthMessage } from '../runtime/supabaseAuthDeviceCode';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
+import { withCliAuthError } from './_helpers/cliAuthError';
 import { withUsageSections } from './_helpers/dispatch';
 import { booleanArg, GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { cliProgressWriter, emitCliResult } from './_helpers/output';
@@ -105,21 +106,18 @@ async function runDeviceLogin(context: CliContext): Promise<number> {
   // Human-facing progress goes to stdout only in text mode so the JSON/NDJSON
   // result stream stays machine-readable (same convention as --no-browser).
   const writeProgress = cliProgressWriter(context);
-  let session: SupabaseSession;
-  try {
-    session = await signInCliSupabaseDeviceCode({
+  const deviceResult = await withCliAuthError(() =>
+    signInCliSupabaseDeviceCode({
       onDeviceCode: (authorization) => {
         writeProgress(formatCliDeviceAuthMessage(authorization));
         writeProgress(
           'Waiting for you to approve in the browser… (Ctrl-C cancels)',
         );
       },
-    });
-  } catch (error) {
-    writeErrorStderr(error);
-    return CliExitCode.ModelOrNetworkError;
-  }
-  emitLoginResult(context, session);
+    }),
+  );
+  if (!deviceResult.ok) return CliExitCode.ModelOrNetworkError;
+  emitLoginResult(context, deviceResult.value);
   return CliExitCode.Success;
 }
 
@@ -140,20 +138,22 @@ async function runLogin(
   if (init.device) {
     return runDeviceLogin(context);
   }
-  if (!isOAuthProvider(init.provider)) {
-    writeTextStderr(unsupportedLoginProviderMessage(init.provider));
+  // Bind before the type-guard so TS narrows a local (property access on
+  // `init.provider` is not re-narrowed across later statements).
+  const provider = init.provider;
+  if (!isOAuthProvider(provider)) {
+    writeTextStderr(unsupportedLoginProviderMessage(provider));
     return CliExitCode.Usage;
   }
   await initCliPlatform({ ...context, quietLogs: true });
   const accountWarning = githubSelectAccountWarning(init);
   if (accountWarning) writeTextStderr(accountWarning);
   if (context.outputFormat === 'text' && !init.noBrowser) {
-    writeTextStdout(`Opening browser for TeXRA ${init.provider} sign-in...`);
+    writeTextStdout(`Opening browser for TeXRA ${provider} sign-in...`);
   }
-  let session: SupabaseSession;
-  try {
-    session = await signInCliSupabase({
-      provider: init.provider,
+  const loginResult = await withCliAuthError(() =>
+    signInCliSupabase({
+      provider,
       openBrowser: !init.noBrowser,
       selectAccount: init.selectAccount,
       loginHint: init.loginHint,
@@ -163,13 +163,11 @@ async function runLogin(
           cliProgressWriter(context)(formatCliManualAuthUrlMessage(url));
         }
       },
-    });
-  } catch (error) {
-    writeErrorStderr(error);
-    return CliExitCode.ModelOrNetworkError;
-  }
+    }),
+  );
+  if (!loginResult.ok) return CliExitCode.ModelOrNetworkError;
 
-  emitLoginResult(context, session);
+  emitLoginResult(context, loginResult.value);
   return CliExitCode.Success;
 }
 
@@ -257,12 +255,8 @@ export const logoutCommand = defineCliCommand({
   },
   async run(context) {
     await initCliPlatform({ ...context, quietLogs: true });
-    try {
-      await signOutCliSupabase();
-    } catch (error) {
-      writeErrorStderr(error);
-      return CliExitCode.ModelOrNetworkError;
-    }
+    const signOutResult = await withCliAuthError(() => signOutCliSupabase());
+    if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
 
     // Sign-out only clears the stored session; a configured TEXRA_RELAY_TOKEN
     // keeps authenticating relay calls, so report it instead of a clean exit.
@@ -302,14 +296,12 @@ const authStatusCommand = defineCliCommand({
     ...GLOBAL_ARGS,
   },
   async run(context) {
-    let profile: CliAuthProfile;
-    try {
+    const statusResult = await withCliAuthError(async () => {
       await initCliPlatform({ ...context, quietLogs: true });
-      profile = await getCliAuthProfile();
-    } catch (error) {
-      writeErrorStderr(error);
-      return CliExitCode.ModelOrNetworkError;
-    }
+      return await getCliAuthProfile();
+    });
+    if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
+    const profile = statusResult.value;
 
     emitCliResult(context, {
       json: profile,
@@ -345,8 +337,7 @@ const usageCommand = defineCliCommand({
         return CliExitCode.Usage;
       }
     }
-    let summary: RelayUsageSummary;
-    try {
+    const usageResult = await withCliAuthError(async () => {
       await initCliPlatform({ ...context, quietLogs: true });
       const profile = await getCliAuthProfile();
       // Usage reads usage_logs via PostgREST, which needs a GoTrue session —
@@ -360,14 +351,14 @@ const usageCommand = defineCliCommand({
             ? 'Run `texra login` to see your usage, or open the account dashboard. TEXRA_RELAY_TOKEN on its own cannot read usage.'
             : 'Not signed in. Run `texra login` first.',
         );
-        return CliExitCode.ModelOrNetworkError;
+        return undefined;
       }
       const tier = (await resolveCliUsageTier(profile)) ?? 'free';
-      summary = await fetchRelayUsageSummary({ tier, month });
-    } catch (error) {
-      writeErrorStderr(error);
-      return CliExitCode.ModelOrNetworkError;
-    }
+      return await fetchRelayUsageSummary({ tier, month });
+    });
+    if (!usageResult.ok) return CliExitCode.ModelOrNetworkError;
+    const summary = usageResult.value;
+    if (!summary) return CliExitCode.ModelOrNetworkError;
 
     const periodMonth = summary.periodStart.slice(0, 7);
     emitCliResult(context, {

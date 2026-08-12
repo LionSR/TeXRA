@@ -370,15 +370,9 @@ export class ModelRetryGate {
    * Opens a request-admission route as soon as its server-provided cooldown
    * admits the recovery attempt. Unlike a transport route, it must not hold
    * the queued cohort until a potentially long-lived model response finishes.
-   * Return a current healthy permit so an immediate rejection can close the
-   * route again.
    */
-  private releaseProbe(route: string, permit: RetryPermit): RetryPermit {
+  private releaseProbe(route: string, permit: RetryPermit): void {
     this.markReachable(route, permit);
-    const state = this.routes.get(route);
-    return state?.phase === 'healthy'
-      ? { version: state.version, probe: false }
-      : permit;
   }
 
   private abandon(route: string, permit: RetryPermit): void {

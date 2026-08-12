@@ -54,7 +54,7 @@ import {
   type ResponseTextProcessing,
 } from '@agent/runtime/responseTextProcessing';
 import { hasConfigurableReasoningEffort } from '@agent/modelHandlers/support/reasoningEffort';
-import type { ServerToolExtractionResult } from '@agent/types/ServerToolTypes';
+import type { ServerToolExtractionResult } from '@agent/types/ServerTools';
 import {
   attachContextWindowError,
   attachMissingApiKeyError,
@@ -103,7 +103,7 @@ import {
   COMPACTION_SUMMARY_PREFIX,
   COMPACTION_SYSTEM_PROMPT,
 } from './contextManagementConstants';
-import { computeUtilizationPercent } from './support/contextUtilization';
+import { roundedUtilizationPercent } from './support/contextUtilization';
 import { logCompactionEvent } from './support/compactionLogging';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
@@ -1364,7 +1364,7 @@ export abstract class ModelHandler<
       {
         data: {
           inputTokens,
-          utilizationPercent: computeUtilizationPercent(
+          utilizationPercent: roundedUtilizationPercent(
             inputTokens,
             contextWindow,
           ),
@@ -1780,7 +1780,7 @@ export abstract class ModelHandler<
       throw error;
     }
 
-    const utilizationPercent = computeUtilizationPercent(
+    const utilizationPercent = roundedUtilizationPercent(
       inputTokens,
       contextWindow,
     );
@@ -1944,7 +1944,7 @@ export abstract class ModelHandler<
         contextWindow,
         utilizationBefore:
           utilizationPercent ??
-          computeUtilizationPercent(tokensBefore, contextWindow),
+          roundedUtilizationPercent(tokensBefore, contextWindow),
         originalMaxTokens,
         reducedMaxTokens,
         details,

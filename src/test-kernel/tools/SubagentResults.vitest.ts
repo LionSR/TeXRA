@@ -11,6 +11,8 @@ import {
 import {
   formatBashDelivery,
   formatBashError,
+} from '@tools/delegation/bashDelivery';
+import {
   formatSubagentDelivery,
   formatSubagentError,
 } from '@tools/delegation/subagentResults';

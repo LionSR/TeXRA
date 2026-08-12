@@ -46,6 +46,7 @@ vi.mock('@controllers/settingsView/SettingsAgentControllerFactory', () => ({
     catalog: {},
     directory: {},
     visibility: {},
+    roster: {},
   }),
 }));
 vi.mock('@controllers/settingsView/SettingsAgentFileController', () => ({
@@ -120,11 +121,7 @@ const CUSTOMIZE_MY_AGENT = {
 } as const;
 
 describe('AgentHandlers custom-agent file actions', () => {
-  beforeEach(() => {
-    // Call history only: the hoisted defaults above already supply the
-    // baseline implementations, and tests layer mockReturnValueOnce overrides.
-    vi.clearAllMocks();
-  });
+  beforeEach(() => vi.clearAllMocks());
 
   it('coalesces repeated requests while the host confirmation is pending', async () => {
     let resolveConfirmation!: (choice: string | undefined) => void;

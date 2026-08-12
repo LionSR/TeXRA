@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { RunUsageAccumulatorJSONSchema } from '@agent/core/usage/RunUsageAccumulator';
+import * as logger from '@logger/logUtils';
 import {
   ActiveChildInfoSchema,
   ContextManagementDataSchema,
@@ -52,15 +53,26 @@ describe('RunUsageAccumulatorJSONSchema — legacy normalizedSnapshots migration
   });
 
   it('preserves the last valid usage when an earlier snapshot is malformed', () => {
-    const result = RunUsageAccumulatorJSONSchema.parse({
-      normalizedSnapshots: [
-        { round: 0, usage: { bogus: 'not a usage' } },
-        { round: 1, usage: usageFixture },
-      ],
-    });
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    try {
+      const result = RunUsageAccumulatorJSONSchema.parse({
+        normalizedSnapshots: [
+          { round: 0, usage: { bogus: 'not a usage' } },
+          { round: 1, usage: usageFixture },
+        ],
+      });
 
-    // A malformed earlier snapshot must not drop the latest valid usage.
-    expect(result.latestUsage).toMatchObject(usageFixture);
+      // A malformed earlier snapshot must not drop the latest valid usage.
+      expect(result.latestUsage).toMatchObject(usageFixture);
+      // The degradation must be logged, not silent.
+      expect(warnSpy).toHaveBeenCalledWith(
+        'RunUsageAccumulator',
+        expect.stringContaining('Malformed legacy normalizedSnapshots entry'),
+        expect.anything(),
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it('parses empty object to zero totals and null latestUsage', () => {

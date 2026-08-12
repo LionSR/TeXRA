@@ -27,7 +27,26 @@ const mocks = vi.hoisted(() => ({
   writeTurnState: vi.fn(),
   resumeToolUseFromResumeData: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
+  throwDeliveryFormatting: false,
 }));
+
+vi.mock('@tools/delegation/subagentDeliveryFormat', async (importOriginal) => {
+  const original =
+    await importOriginal<
+      typeof import('@tools/delegation/subagentDeliveryFormat')
+    >();
+  return {
+    ...original,
+    formatBuiltSubagentDelivery: (
+      ...args: Parameters<typeof original.formatBuiltSubagentDelivery>
+    ) => {
+      if (mocks.throwDeliveryFormatting) {
+        throw new Error('delivery formatting failed');
+      }
+      return original.formatBuiltSubagentDelivery(...args);
+    },
+  };
+});
 
 vi.mock('@agent/runtime/executeAgent', () => ({
   executeAgent: mocks.executeAgent,
@@ -125,8 +144,8 @@ function baseParams(
     agentCategoryExplicit: true,
     executionId: 'exec-1' as ExecutionId,
     agentName: 'review',
-    orchestratorStreamId: 'orchestrator-stream' as StreamTabId,
-    parentSession,
+    parentStreamId: 'orchestrator-stream' as StreamTabId,
+    session: parentSession,
     startedAt: Date.now(),
     onStreamResolved: vi.fn(),
   };
@@ -150,13 +169,14 @@ async function launchWaitingTurn(
   await strategy.launch(fakePorts(), new AbortController());
   mocks.executeAgent.mock.calls.at(-1)?.[2].onRun?.({
     childStreamId: CHILD_STREAM_ID,
-    deliveryTargetStreamId: params.orchestratorStreamId,
+    deliveryTargetStreamId: params.parentStreamId,
   });
 }
 
 describe('NativeSubagentStrategy', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mocks.throwDeliveryFormatting = false;
     mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
     mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
     mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
@@ -178,14 +198,12 @@ describe('NativeSubagentStrategy', () => {
     const strategy = createNativeSubagentStrategy(params);
 
     // Before any turn ran, falls back to the static orchestrator stream.
-    expect(strategy.resolveDeliveryTarget?.()).toBe(
-      params.orchestratorStreamId,
-    );
+    expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
 
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
       options.onRun?.({
         childStreamId: CHILD_STREAM_ID,
-        deliveryTargetStreamId: params.orchestratorStreamId,
+        deliveryTargetStreamId: params.parentStreamId,
       });
       return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
     });
@@ -196,26 +214,21 @@ describe('NativeSubagentStrategy', () => {
       params.executionId,
       expect.objectContaining({ enforceCategory: true }),
     );
-    expect(strategy.resolveDeliveryTarget?.()).toBe(
-      params.orchestratorStreamId,
-    );
+    expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
 
     // Detach: the same handle object's deliveryTargetStreamId flips to
     // undefined (AgentExecutionHandle.detach) — the strategy must track the
     // LIVE handle, not a stale copy, so it observes this without a new turn.
     const liveHandle = {
       childStreamId: CHILD_STREAM_ID,
-      deliveryTargetStreamId: params.orchestratorStreamId as
-        StreamTabId | undefined,
+      deliveryTargetStreamId: params.parentStreamId as StreamTabId | undefined,
     };
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
       options.onRun?.(liveHandle);
       return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
     });
     await strategy.launch(fakePorts(), new AbortController());
-    expect(strategy.resolveDeliveryTarget?.()).toBe(
-      params.orchestratorStreamId,
-    );
+    expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
     liveHandle.deliveryTargetStreamId = undefined;
     expect(strategy.resolveDeliveryTarget?.()).toBeUndefined();
   });
@@ -246,7 +259,7 @@ describe('NativeSubagentStrategy', () => {
       expect.objectContaining({
         allowWaitingResult: true,
         enforceCategory: true,
-        parentStreamId: params.orchestratorStreamId,
+        parentStreamId: params.parentStreamId,
         stopAfterCycle: true,
         workflowPhase: 'review',
       }),
@@ -268,7 +281,7 @@ describe('NativeSubagentStrategy', () => {
 
     const { completion } = startChildRunLoop({
       childStreamId: 'child-stream',
-      parentStreamId: params.orchestratorStreamId,
+      parentStreamId: params.parentStreamId,
       executionId: params.executionId,
       agentName: params.agentName,
       strategy: createNativeSubagentStrategy(params),
@@ -344,7 +357,7 @@ describe('NativeSubagentStrategy', () => {
     const childStreamId = CHILD_STREAM_ID;
     const initialHandle = {
       childStreamId,
-      deliveryTargetStreamId: params.orchestratorStreamId,
+      deliveryTargetStreamId: params.parentStreamId,
       interrupt: vi.fn(),
     };
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
@@ -368,7 +381,7 @@ describe('NativeSubagentStrategy', () => {
       async (_resume, options) => {
         options.onRun?.({
           childStreamId,
-          deliveryTargetStreamId: params.orchestratorStreamId,
+          deliveryTargetStreamId: params.parentStreamId,
           interrupt: replacementInterrupt,
         } as never);
         replacementReady();
@@ -407,6 +420,20 @@ describe('NativeSubagentStrategy', () => {
     expect(msg).toContain('<response>');
     expect(msg).toContain('The proof holds.');
     expect(msg).toContain('status="completed"');
+  });
+
+  it('builds the durable result before fallible delivery formatting', async () => {
+    const params = baseParams();
+    const strategy = createNativeSubagentStrategy(params);
+    const turn = toolUseTurnResult('completed', params.executionId) as never;
+
+    const built = await strategy.buildResult(turn);
+    mocks.throwDeliveryFormatting = true;
+
+    await expect(strategy.formatDelivery(turn, 1000)).rejects.toThrow(
+      'delivery formatting failed',
+    );
+    await expect(strategy.buildResult(turn)).resolves.toBe(built);
   });
 
   it('reports a non-throwing subagent failure via isTurnError, captured from onRunError', async () => {
@@ -507,7 +534,7 @@ describe('NativeSubagentStrategy', () => {
       snapshot,
       expect.objectContaining({
         approvalPromptsUnavailable: true,
-        parentStreamId: params.orchestratorStreamId,
+        parentStreamId: params.parentStreamId,
         drainedFollowUps: [
           {
             text: 'keep going',
@@ -517,7 +544,7 @@ describe('NativeSubagentStrategy', () => {
           },
         ],
         runtimeUnavailableTools: ['ask_user'],
-        session: params.parentSession,
+        session: params.session,
       }),
     );
     expect(strategy.isTerminal(turn)).toBe(true);
@@ -556,7 +583,7 @@ describe('NativeSubagentStrategy', () => {
     const params = {
       ...baseParams(session),
       executionId,
-      orchestratorStreamId: parentStreamId,
+      parentStreamId,
       interactions,
     };
     const waitingTurn = (response: string) => ({
@@ -757,7 +784,7 @@ describe('NativeSubagentStrategy', () => {
     const params = {
       ...baseParams(session, 'workflow'),
       executionId,
-      orchestratorStreamId: parentStreamId,
+      parentStreamId,
       interactions,
     };
 

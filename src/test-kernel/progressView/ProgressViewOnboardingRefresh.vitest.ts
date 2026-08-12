@@ -154,13 +154,11 @@ describe('progress-view onboarding refresh wiring', () => {
         'ProgressView',
       );
       expect(provider.refreshOnboardingFunnel).toHaveBeenCalledOnce();
-      const setupCallOrder =
-        mocks.safeExecuteCommand.mock.invocationCallOrder[0];
-      const refreshCallOrder =
-        provider.refreshOnboardingFunnel.mock.invocationCallOrder[0];
-      expect(setupCallOrder).toBeDefined();
-      expect(refreshCallOrder).toBeDefined();
-      expect(setupCallOrder!).toBeLessThan(refreshCallOrder!);
+      expect(
+        mocks.safeExecuteCommand.mock.invocationCallOrder[0]!,
+      ).toBeLessThan(
+        provider.refreshOnboardingFunnel.mock.invocationCallOrder[0]!,
+      );
     });
   });
 

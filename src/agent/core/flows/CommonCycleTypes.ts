@@ -122,7 +122,7 @@ export function defaultPostCompactionContext(
   );
 }
 
-export interface ExtractedModelResponse {
+interface ExtractedModelResponse {
   text: string;
   usage: ProviderUsage;
   stopReason: ProviderStopReason;

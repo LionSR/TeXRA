@@ -103,12 +103,11 @@ describe('subscription usage rendering', () => {
     await tab.updateComplete;
     const kimiRow = getKimiUsageRow(tab);
     expect(kimiRow).not.toBeNull();
-    if (!kimiRow) return;
-    await kimiRow.updateComplete;
-    const details = kimiRow.shadowRoot?.querySelector('wa-details');
+    await kimiRow!.updateComplete;
+    const details = kimiRow!.shadowRoot?.querySelector('wa-details');
     expect(details?.closest('.settings-row-text')).not.toBeNull();
     const styleText = (
-      kimiRow.constructor as unknown as {
+      kimiRow!.constructor as unknown as {
         styles: readonly { cssText: string }[];
       }
     ).styles
@@ -119,12 +118,12 @@ describe('subscription usage rendering', () => {
     expect(details?.getAttribute('summary')).toContain(
       '5-hour: 25% · 7-day: 100%',
     );
-    const meters = kimiRow.shadowRoot?.querySelectorAll('progress');
+    const meters = kimiRow!.shadowRoot?.querySelectorAll('progress');
     expect(meters).toHaveLength(2);
     expect(meters?.[0]?.getAttribute('aria-label')).toBe(
       'Kimi Code 5-hour usage: 25% used',
     );
-    expect(kimiRow.shadowRoot?.textContent).toContain('resets in 1d 21h');
+    expect(kimiRow!.shadowRoot?.textContent).toContain('resets in 1d 21h');
     expect(tab.shadowRoot?.textContent).not.toContain('Grok usage unavailable');
   });
 

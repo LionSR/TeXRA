@@ -1,4 +1,3 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -30,7 +29,7 @@ vi.mock('@tools/inquiry/externalInquiryStorage', () => ({
 
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type { ExternalInquiryThreadId, StreamTabId } from '@shared/schemas';
+import type { InquiryThreadId, StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   injectContinuationForAnsweredThread,
@@ -38,7 +37,7 @@ import {
 } from '@tools/inquiry/inquiryContinuation';
 import type { ExternalInquiryThreadManifest } from '@tools/inquiry/externalInquiryStorage';
 
-const THREAD = 'ei_aabbccdd0011' as ExternalInquiryThreadId;
+const THREAD = 'ei_aabbccdd0011' as InquiryThreadId;
 const STREAM = 'stream:desktop-parent' as StreamTabId;
 
 /** Collects the session facts emitted on a hub until detached. */

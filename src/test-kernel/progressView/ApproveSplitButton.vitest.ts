@@ -13,12 +13,14 @@ import {
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
 
-function mount(options: {
-  canBypass?: boolean;
-  bypassAction?: string;
-  canApproveAllDelegatedWork?: boolean;
-  disabled?: boolean;
-}): Promise<ApproveSplitButton> {
+function mount(
+  options: {
+    canBypass?: boolean;
+    bypassAction?: string;
+    canApproveAllDelegatedWork?: boolean;
+    disabled?: boolean;
+  } = {},
+): Promise<ApproveSplitButton> {
   return mountComponent<ApproveSplitButton>('approve-split-button', {
     approveTitle: 'Approve',
     canBypass: options.canBypass ?? false,
@@ -64,7 +66,7 @@ describe('approve-split-button', () => {
   );
 
   it('renders a plain Approve button (no menu) when canBypass is false', async () => {
-    const element = await mount({});
+    const element = await mount();
     const events = recordEvents(element);
 
     expect(element.shadowRoot?.querySelector('.approve-split')).toBeFalsy();

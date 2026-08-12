@@ -69,7 +69,8 @@ export function parseUtcMonth(month: string): { start: Date; end: Date } {
 
   const year = Number(match[1]);
   const monthIndex = Number(match[2]) - 1;
-  if (!Number.isInteger(year) || monthIndex < 0 || monthIndex > 11) {
+  // `year` is always an integer: the regex only admits four digits.
+  if (monthIndex < 0 || monthIndex > 11) {
     throw new Error('Expected month in YYYY-MM format.');
   }
 

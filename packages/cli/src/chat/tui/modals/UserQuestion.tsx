@@ -1,7 +1,19 @@
 import { useMemo, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
-import { parseUserQuestionAnswer } from '@cli/runtime/userQuestionAnswer';
+import {
+  parseUserQuestionAnswer,
+  USER_QUESTION_SKIPPED_FEEDBACK,
+} from '@cli/runtime/userQuestionAnswer';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { isEscapeInput } from '@cli/tui/inputKeys';
+import {
+  previousRowsText,
+  selectVisibleInlineOverflowText,
+} from '@cli/tui/overflowText';
+import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
+import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { Select } from '@cli/tui/ui/Select';
 import { COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import {
@@ -9,10 +21,6 @@ import {
   CONFIRM_CARD_HORIZONTAL_DECORATION,
   isCompactRows,
 } from '@cli/tui/ui/theme';
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
-import { Select } from '@cli/tui/ui/Select';
-import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
-import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import type {
   UserQuestionAnswers,
   UserQuestionPermission,
@@ -22,15 +30,9 @@ import type {
 import {
   toggleUserQuestionSelection,
   updateUserQuestionAnswers,
-  USER_QUESTION_SKIPPED_FEEDBACK,
   userQuestionDecision,
 } from './UserQuestionState';
 import { BaseTextInput } from '../input/BaseTextInput';
-import { isEscapeInput } from '../input/inputKeys';
-import {
-  previousRowsText,
-  selectVisibleInlineOverflowText,
-} from '../render/overflowText';
 import { clipToWidth, textDisplayWidth } from '../render/terminalText';
 import type { ApprovalDecision } from '../state/approvalQueue';
 

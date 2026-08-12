@@ -8,8 +8,9 @@ import type {
   AgentOptionData,
   AgentProposal,
   ModelOptionData,
+  StreamTabId,
 } from '@shared/schemas';
-import type { RunIdentity, StreamTabId } from '@shared/schemas';
+import { isPlainAgentIdentity } from '@shared/schemas';
 import type {
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
@@ -26,7 +27,7 @@ import {
 import {
   continueExternalInquiryAction,
   persistExternalInquiryAction,
-} from '@tools/inquiry/ExternalInquiryTool';
+} from '@tools/inquiry/inquiryActions';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
@@ -42,27 +43,35 @@ import type {
 } from './ProgressFollowUpPolishController';
 
 /**
- * Resume, rerun, and restore are native-agent affordances. A workflow-script
- * stream's persisted config is a borrowed default agent, a process stream's is
- * synthetic, and an external-CLI session resumes through its own tool — for
- * all three, relaunching the stored config would run the wrong thing
- * (live defect 3 of the run-classification consolidation).
+ * Shared native-agent-run gate for the resume / re-run / restore affordances:
+ * resolve the stream's run metadata, refuse with a user-facing message when
+ * the run is not a native TeXRA agent run, and require a persisted config.
+ * Workflow-script configs are borrowed, process configs are synthetic, and
+ * external CLI sessions resume through their own tool, so relaunching any of
+ * those stored configs would run the wrong thing.
+ * Returns the resolved metadata when the action may proceed, else null.
  */
-export function isNativeAgentRun(identity: RunIdentity | undefined): boolean {
-  return identity?.kind === 'agent' && identity.tool === undefined;
-}
-
-/** User-facing refusal for the resume/re-run/restore gate. Front-end button
- *  hiding makes this rare (stale renderer state, direct IPC), but a refused
- *  action must still say why instead of silently doing nothing. */
-export async function reportNonNativeRunRefusal(
+export async function resolveNativeAgentRun(
+  getRunMetadata: (stream: StreamTabId) => RunMetadata,
+  stream: StreamTabId,
   showInfo: (message: string) => void | PromiseLike<unknown>,
   action: string,
-): Promise<void> {
-  await showInfo(
-    `Only TeXRA agent runs can be ${action} from here; this stream's run is ` +
-      'not one.',
-  );
+): Promise<
+  (RunMetadata & { config: NonNullable<RunMetadata['config']> }) | null
+> {
+  const metadata = getRunMetadata(stream);
+  if (!isPlainAgentIdentity(metadata.identity)) {
+    await showInfo(
+      `Only TeXRA agent runs can be ${action} from here; this stream's run is ` +
+        'not one.',
+    );
+    return null;
+  }
+  const { config, ...rest } = metadata;
+  if (!config) return null;
+  // The config guard above guarantees the resolved metadata carries a config,
+  // so the return type narrows `config` to defined for callers.
+  return { ...rest, config };
 }
 
 type ProgressViewMessage<C extends ProgressViewInboundMessage['command']> =
@@ -96,7 +105,6 @@ interface ProgressViewRunCommandActions {
 
 export interface ProgressViewFileCommandActions {
   openFile(file: string, line?: number): Promise<void> | void;
-  openFileCompile(file: string): Promise<void> | void;
   openTaskStorage(stream: StreamTabId): Promise<void> | void;
   compareOriginal(file: string, base?: string): Promise<void> | void;
   comparePrevious(
@@ -227,8 +235,6 @@ export function createProgressViewCommandHandlers(
 
     [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: (data) =>
       file.openFile(data.file, data.line),
-    [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]: (data) =>
-      file.openFileCompile(data.file),
     [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]: (data) =>
       file.openTaskStorage(data.stream),
     [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]: (data) =>
@@ -482,13 +488,14 @@ export function createProgressViewSecondTierHandlers(
 
     // ── State restore ──
     [CMD.RESTORE_STATE]: async (data) => {
-      const { config, identity } = deps.getRunMetadata(data.stream);
-      if (!isNativeAgentRun(identity)) {
-        await reportNonNativeRunRefusal(deps.host.showInfo, 'restored');
-        return;
-      }
-      if (!config) return;
-      await deps.restoreRunConfig(config);
+      const metadata = await resolveNativeAgentRun(
+        deps.getRunMetadata,
+        data.stream,
+        deps.host.showInfo,
+        'restored',
+      );
+      if (!metadata) return;
+      await deps.restoreRunConfig(metadata.config);
     },
 
     // ── Manual compaction ──
@@ -514,11 +521,6 @@ export function createProgressViewSecondTierHandlers(
           );
           return;
       }
-    },
-
-    // ── Show info ──
-    [CMD.SHOW_INFORMATION_MESSAGE]: async (data) => {
-      await deps.host.showInfo(data.text);
     },
 
     // ── Proposal config restore ──

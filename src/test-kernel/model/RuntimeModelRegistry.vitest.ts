@@ -7,8 +7,8 @@ import {
   type ModelOptionsAccess,
 } from '@model/computeModelOptions';
 import {
+  copilotRouteUnavailableReason,
   preferredCopilotRouteModels,
-  shouldRouteModelThroughCopilot,
   setCopilotRoutePreference,
 } from '@model/copilotRouting';
 import { apiKeySecretName } from '@model/apiProviders';
@@ -100,6 +100,10 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 function resetModelCaches(): void {
   invalidateRuntimeModelRegistry();
   invalidateModelOptionsCache();
+}
+
+function googleKeySecrets(): FakeSecrets {
+  return new FakeSecrets({ [apiKeySecretName('google')]: 'sk-google' });
 }
 
 function modelOptionsAccess(
@@ -412,20 +416,26 @@ describe('runtime model registry', () => {
     ).toBe('ModelHandlerVscodeLm');
   });
 
-  it('routes a preferred model through Copilot only when access is allowed', async () => {
+  it('reports no route error only when preferred Copilot access is allowed', async () => {
     const port = languageModelPort([GEMINI_FLASH]);
     await installPlatform(
-      { globalState: { [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini36f'] } },
+      {
+        globalState: {
+          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini36f', 'gpt56'],
+        },
+      },
       { languageModel: port },
     );
 
     await refreshRuntimeModelRegistry();
-    expect(shouldRouteModelThroughCopilot('gemini36f')).toBe(true);
+    expect(copilotRouteUnavailableReason('gemini36f')).toBeUndefined();
     // A preference for a model the editor does not offer cannot route.
-    expect(shouldRouteModelThroughCopilot('gpt56')).toBe(false);
+    expect(copilotRouteUnavailableReason('gpt56')).toMatch(
+      /does not currently/,
+    );
 
     await setCopilotRoutePreference('gemini36f', false);
-    expect(shouldRouteModelThroughCopilot('gemini36f')).toBe(false);
+    expect(copilotRouteUnavailableReason('gemini36f')).toBeUndefined();
   });
 
   it('replaces route state after invalidation', async () => {
@@ -505,11 +515,7 @@ describe('Copilot route in model pickers', () => {
 
     const options = await computeModelOptionsData(
       ['gemini36f'],
-      modelOptionsAccess({
-        secrets: new FakeSecrets({
-          [apiKeySecretName('google')]: 'sk-google',
-        }),
-      }),
+      modelOptionsAccess({ secrets: googleKeySecrets() }),
     );
 
     expect(options).toHaveLength(1);
@@ -583,11 +589,7 @@ describe('Copilot route in model pickers', () => {
 
     const options = await computeModelOptionsData(
       ['gemini36f'],
-      modelOptionsAccess({
-        secrets: new FakeSecrets({
-          [apiKeySecretName('google')]: 'sk-google',
-        }),
-      }),
+      modelOptionsAccess({ secrets: googleKeySecrets() }),
     );
 
     expect(options).toHaveLength(1);
@@ -607,11 +609,7 @@ describe('Copilot route in model pickers', () => {
 
     const options = await computeModelOptionsData(
       ['gemini36f'],
-      modelOptionsAccess({
-        secrets: new FakeSecrets({
-          [apiKeySecretName('google')]: 'sk-google',
-        }),
-      }),
+      modelOptionsAccess({ secrets: googleKeySecrets() }),
     );
 
     expect(options[0]).toEqual(

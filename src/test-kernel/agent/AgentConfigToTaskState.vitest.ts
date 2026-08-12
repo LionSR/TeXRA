@@ -27,12 +27,14 @@ describe('agentConfigToTaskState', () => {
 
     const taskState = agentConfigToTaskState(config);
 
-    assert.equal(taskState.agentConfig, config);
-    assert.deepEqual('activeFiles' in taskState && taskState.activeFiles, {
-      input: true,
-      context: false,
-      media: true,
-      output: false,
+    assert.deepEqual(taskState, {
+      agentConfig: config,
+      activeFiles: {
+        input: true,
+        context: false,
+        media: true,
+        output: false,
+      },
     });
   });
 
@@ -47,7 +49,6 @@ describe('agentConfigToTaskState', () => {
 
     const taskState = agentConfigToTaskState(config);
 
-    assert.equal(taskState.agentConfig, config);
     assert.deepEqual(taskState, { agentConfig: config });
   });
 

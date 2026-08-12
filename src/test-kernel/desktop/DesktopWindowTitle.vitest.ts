@@ -1,10 +1,7 @@
-// Node imports
 import { EventEmitter } from 'node:events';
 
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   getDesktopSessionActivity,

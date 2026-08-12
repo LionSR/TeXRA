@@ -2,9 +2,9 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 
-const CHANNEL = 'extension';
+const log = createLog('extension');
 const TEXRA_ACTIVE_VIEW_CONTEXT_KEY = 'texra.activeView';
 
 export const SIDEBAR_VIEWS = {
@@ -31,8 +31,7 @@ export function setActiveSidebarView(view: SidebarView): void {
   void vscode.commands
     .executeCommand('setContext', TEXRA_ACTIVE_VIEW_CONTEXT_KEY, view)
     .then(undefined, (error: unknown) => {
-      logger.error(
-        CHANNEL,
+      log.error(
         `Failed to publish the ${TEXRA_ACTIVE_VIEW_CONTEXT_KEY} context key`,
         { data: error },
       );

@@ -13,10 +13,8 @@ import {
   type ProgressViewMessageSender,
 } from '@controllers/progressView/backend/WebviewBridge';
 import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
-import {
-  LitSessionRenderer,
-  type GetProgressStreamControls,
-} from '@controllers/progressView/backend/LitSessionRenderer';
+import { LitSessionRenderer } from '@controllers/progressView/backend/LitSessionRenderer';
+import type { GetProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import {
   SessionFactApplier,
   type SessionRunFactEvent,
@@ -28,7 +26,7 @@ import {
   type ApprovalRequestHandlerSet,
   type BuildApprovalRequestHandlerSetParams,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
 import { STREAM_PHASE } from '@shared/schemas';
@@ -36,7 +34,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 
-const CHANNEL = 'ProgressBackend';
+const log = createLog('ProgressBackend');
 
 type ProgressBackendApprovalOptions = Omit<
   BuildApprovalRequestHandlerSetParams,
@@ -51,7 +49,6 @@ interface ProgressBackendLifecycleOptions {
   cleanupDeletedStream(stream: StreamTabId): void;
   cleanupDeletedStreams(options: { allDeleted: boolean }): void;
   rebuildRenderedStreams(options: { syncActiveStream: boolean }): void;
-  activateStream(stream: StreamTabId): Promise<void> | void;
   notifyDeletionRetained(
     activeCount: number,
     failedCount: number,
@@ -65,6 +62,7 @@ export interface ProgressBackendOptions {
   hasTarget(): boolean;
   approvals: ProgressBackendApprovalOptions;
   lifecycle: ProgressBackendLifecycleOptions;
+  reportTranscriptLoadError(error: unknown, stream: StreamTabId | ''): void;
   getStreamControls?: GetProgressStreamControls;
   /** Session that owns this backend's coordination state (defaults to the process session). */
   session?: SessionHandle;
@@ -102,6 +100,7 @@ export class ProgressBackend {
   private readonly litRenderer: LitSessionRenderer;
   private readonly session: SessionHandle;
   private readonly lifecycle: ProgressBackendLifecycleOptions;
+  private readonly reportTranscriptLoadError: ProgressBackendOptions['reportTranscriptLoadError'];
   private readonly postMessage: (message: ProgressViewOutboundMessage) => void;
   private readonly stateOwnership: 'backend' | 'session';
   private readonly storageOperationQueue = new PQueue({ concurrency: 1 });
@@ -114,6 +113,7 @@ export class ProgressBackend {
     this.session = options.session ?? defaultSession();
     this.stateOwnership = options.stateOwnership ?? 'backend';
     this.lifecycle = options.lifecycle;
+    this.reportTranscriptLoadError = options.reportTranscriptLoadError;
     this.postMessage = (message) => {
       if (!options.hasTarget()) return;
       // View refreshes are best-effort; a closed transport must not take down
@@ -122,7 +122,7 @@ export class ProgressBackend {
       // next full refresh re-sends whatever this frame carried.
       void (async () => options.sendMessage(message))().catch(
         (error: unknown) => {
-          logger.debug(CHANNEL, 'Failed to deliver message to webview', {
+          log.debug('Failed to deliver message to webview', {
             data: { command: message.command, error },
           });
         },
@@ -172,6 +172,78 @@ export class ProgressBackend {
     options?: Parameters<LitSessionRenderer['syncStreamContent']>[1],
   ): void {
     this.litRenderer.syncStreamContent(stream, options);
+  }
+
+  /** Rebuild stream tabs and, when requested, rehydrate the active viewport. */
+  async syncRenderedStreams(options: {
+    syncActiveStream: boolean;
+    theme?: 'dark' | 'light';
+  }): Promise<void> {
+    const activeStream = this.webviewUpdater.sendStreamMetadata(
+      this.state,
+      this.state.streamStatus.getAllStreamStates(),
+      options.theme,
+    );
+    if (!options.syncActiveStream) return;
+
+    const hasStreams = this.state.streamLogs.keys().length > 0;
+    if (!activeStream && hasStreams) return;
+    try {
+      await this.syncActiveStream(activeStream, {
+        notifyActivation: false,
+      });
+    } catch (error) {
+      this.reportTranscriptLoadError(error, activeStream);
+    }
+  }
+
+  /** Select and render one existing stream without rebuilding the tab list. */
+  async activateStream(stream: StreamTabId): Promise<void> {
+    if (!this.state.streamLogs.has(stream)) return;
+    this.state.switchActiveStream(stream);
+    try {
+      await this.syncActiveStream(stream, {
+        notifyActivation: true,
+      });
+    } catch (error) {
+      this.reportTranscriptLoadError(error, stream);
+    }
+  }
+
+  private async syncActiveStream(
+    stream: StreamTabId | '',
+    options: {
+      notifyActivation: boolean;
+    },
+  ): Promise<void> {
+    if (!this.litRenderer.isAvailable()) return;
+    let hydrationError: unknown;
+    if (stream) {
+      const hydration = await Promise.allSettled([
+        this.state.streamLogs.ensureLoaded(stream),
+        this.state.snapshots.preload([stream]),
+      ]);
+      const failures = hydration.filter(
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected',
+      );
+      if (failures.length === 1) {
+        hydrationError = failures[0].reason;
+      } else if (failures.length > 1) {
+        hydrationError = new AggregateError(
+          failures.map((failure) => failure.reason),
+          `Failed to hydrate stream ${stream}`,
+        );
+      }
+    }
+    if (this.state.activeStream !== stream) {
+      if (hydrationError !== undefined) throw hydrationError;
+      return;
+    }
+    if (options.notifyActivation)
+      this.litRenderer.onActiveStreamChanged(stream);
+    this.litRenderer.syncStreamContent(stream, { includeActiveState: true });
+    if (hydrationError !== undefined) throw hydrationError;
   }
 
   /**
@@ -241,10 +313,14 @@ export class ProgressBackend {
     );
   }
 
-  private async prepareStreamDeletion(stream: StreamTabId): Promise<void> {
-    if (!canUseStreamDataDir(stream)) return;
-    if (!this.hasDeletableStreamData(stream)) return;
-
+  /**
+   * Per-stream prepare shared by single- and all-delete: stop an in-flight
+   * stream we own locally, then wait for the execution-lease release. The
+   * `waitForOwnedExecutionRelease` no-ops for streams with no owned execution,
+   * so the all-delete path can run it over every stream without changing
+   * behavior.
+   */
+  private async prepareStreamDeletionCore(stream: StreamTabId): Promise<void> {
     const ownedLocally =
       this.session.executions.getAgentHandleByStream(stream) !== undefined;
     if (ownedLocally && isInFlightPhase(this.session.status.get(stream))) {
@@ -254,7 +330,13 @@ export class ProgressBackend {
     // A terminal child is untracked before its artifact flush releases the
     // execution lease. Auto-close can land in that interval, so the handle is
     // not a reliable indication that local durable writes have finished.
-    await this.state.waitForOwnedExecutionRelease(stream);
+    await this.state.stores.waitForOwnedExecutionRelease(stream);
+  }
+
+  private async prepareStreamDeletion(stream: StreamTabId): Promise<void> {
+    if (!canUseStreamDataDir(stream)) return;
+    if (!this.hasDeletableStreamData(stream)) return;
+    await this.prepareStreamDeletionCore(stream);
   }
 
   private async deleteStreamNow(
@@ -295,7 +377,10 @@ export class ProgressBackend {
 
     const nextActive = this.state.activeStream;
     if (shouldActivateStream && nextActive) {
-      await this.lifecycle.activateStream(nextActive);
+      // DELETE_STREAM clears the frontend selection when the deleted tab was
+      // active. Reassert the surviving selection even when a concurrent
+      // activation already selected it while storage deletion was pending.
+      await this.activateStream(nextActive);
     } else {
       // The deleted stream was not the active one, so only the stream list
       // changed; the active stream's content is still on screen and correct.
@@ -322,22 +407,13 @@ export class ProgressBackend {
   }
 
   private async prepareAllStreamDeletions(): Promise<void> {
-    const streamIds = this.state.streamLogs.keys();
-    const locallyOwnedStreams = streamIds.filter(
-      (stream) =>
-        this.session.executions.getAgentHandleByStream(stream) !== undefined,
-    );
+    // Runs the per-stream prepare over every known stream — deliberately
+    // without the single-delete guards, so in-flight reserved-segment streams
+    // are still stopped before clearAll() exactly as before the shared core.
     await Promise.all(
-      locallyOwnedStreams.map(async (stream) => {
-        if (isInFlightPhase(this.session.status.get(stream))) {
-          await this.lifecycle.stopStream(stream);
-        }
-      }),
-    );
-    await Promise.all(
-      locallyOwnedStreams.map((stream) =>
-        this.state.waitForOwnedExecutionRelease(stream),
-      ),
+      this.state.streamLogs
+        .keys()
+        .map((stream) => this.prepareStreamDeletionCore(stream)),
     );
   }
 

@@ -1,13 +1,13 @@
 /** Remote agent metadata persistence and loading for the agent registry. */
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { AgentCategory } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { AgentEntry } from './agentEntry';
 
-const CHANNEL = 'agentRegistry';
+const log = createLog('agentRegistry');
 
 /**
  * Cached metadata for a remote agent, persisted in globalState.
@@ -35,11 +35,9 @@ export function persistRemoteAgentMeta(
 
 /** Load persisted remote agent metadata from globalState. */
 function getPersistedRemoteAgentMeta(): RemoteAgentMetaCache {
-  return (
-    platform().globalState.get<RemoteAgentMetaCache>(
-      GlobalStateKey.REMOTE_AGENT_META_CACHE,
-      {},
-    ) ?? {}
+  return platform().globalState.get<RemoteAgentMetaCache>(
+    GlobalStateKey.REMOTE_AGENT_META_CACHE,
+    {},
   );
 }
 
@@ -65,10 +63,7 @@ export async function loadRemoteAgents(): Promise<AgentEntry[]> {
       };
     });
   } catch (err) {
-    logger.warn(
-      CHANNEL,
-      `Failed to load remote agents: ${toErrorMessage(err)}`,
-    );
+    log.warn(`Failed to load remote agents: ${toErrorMessage(err)}`);
     return [];
   }
 }

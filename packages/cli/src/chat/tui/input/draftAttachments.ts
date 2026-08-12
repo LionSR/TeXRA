@@ -60,7 +60,6 @@ interface ChipMatch {
 function matchChips(input: string): ChipMatch[] {
   const matches: ChipMatch[] = [];
   for (const m of input.matchAll(CHIP_RE)) {
-    if (m.index === undefined) continue;
     matches.push({
       id: Number(m[1]),
       start: m.index,

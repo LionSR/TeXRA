@@ -1,6 +1,6 @@
 // Mirror canonical session status facts into the per-stream status signal.
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime';
 import {
   isTerminalOutcomePhase,
   isTranscriptSettlementPhase,
@@ -13,7 +13,10 @@ import {
   focusStream,
   setStreamStatusInCliState,
 } from './cliState';
-import { projectStreamTranscript } from './transcriptProjection';
+import {
+  releaseInactiveStreamTranscript,
+  syncStreamLog,
+} from './subscribeStreamLog';
 
 export function subscribeStreamStatus(): () => void {
   return defaultSession().events.subscribeStatus((change) => {
@@ -25,12 +28,17 @@ export function subscribeStreamStatus(): () => void {
     const recognized = setStreamStatusInCliState({
       streamId: change.streamId,
       status: change.phase,
-      ...(change.substate ? { substate: change.substate } : {}),
+      substate: change.substate,
     });
     if (recognized) {
-      projectStreamTranscript(change.streamId, {
-        finalize: isTranscriptSettlementPhase(change.phase),
-      });
+      syncStreamLog(
+        change.streamId,
+        isTranscriptSettlementPhase(change.phase) ? { forceFinal: true } : {},
+      );
+      // Lifecycle owns transcript residency: a stream that just left its
+      // active phase releases here, after the sync above folded its final
+      // rows — not from the render path, which may never run for it again.
+      releaseInactiveStreamTranscript(change.streamId);
     }
 
     // A completed or user-stopped child returns manual focus to that child's

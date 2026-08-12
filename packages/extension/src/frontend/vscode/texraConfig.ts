@@ -9,13 +9,15 @@ import PQueue from 'p-queue';
 import {
   tryDefaultSession,
   type WorkspaceStorageTransitionHooks,
-} from '@agent/runtime/SessionHandle';
+} from '@agent/runtime';
 
 // Local imports - common
 import { isFileNotFoundError } from '@common/errors';
 
+// Local imports - eventBus
+import { appSignals } from '@eventBus/AppSignals';
+
 // Local imports - logging
-import { refreshApprovalPolicyTooltip } from '@frontend/statusBar/approvalPolicyTooltipRefresh';
 import * as logger from '@logger/logUtils';
 
 // Local imports - platform
@@ -130,7 +132,7 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
             this.get(key, fallback),
           ),
         );
-        refreshApprovalPolicyTooltip();
+        appSignals.emit('approvalPolicyChanged', undefined);
       };
       const rollbackConfig = () => {
         if (!previousStore) return;

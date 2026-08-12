@@ -4,14 +4,17 @@
 import { useState } from 'react';
 import { Box, Text, useInput, useWindowSize, type BoxProps } from 'ink';
 
-import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
+import { isEscapeInput } from '@cli/tui/inputKeys';
+import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import {
   KEY_HINT_SEPARATOR,
   KeyHints,
+  keyHintSpans,
   type KeyHint,
 } from '@cli/tui/ui/KeyHints';
-import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { POINTER } from '@cli/tui/ui/glyphs';
+import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
+import { useLiveNowMs } from '@cli/tui/useLiveNowMs';
 import {
   confirmCardCompactHintLayout,
   confirmCardFeedbackHints,
@@ -21,12 +24,14 @@ import {
   type ConfirmCardRejectionMode,
 } from './ConfirmCardState';
 import { BaseTextInput } from '../input/BaseTextInput';
-import { isEscapeInput } from '../input/inputKeys';
-import { useLiveNowMs } from '../state/useLiveNowMs';
 import type {
   ApprovalBypassKind,
   ApprovalDecision,
 } from '../state/approvalQueue';
+
+/** Rejection-note prompt for every ConfirmCard-based approval modal. */
+export const CONFIRM_CARD_FEEDBACK_PLACEHOLDER =
+  'Feedback to send with rejection';
 
 export interface ConfirmCardProps {
   readonly borderStyle: BoxProps['borderStyle'];
@@ -61,7 +66,7 @@ export function ConfirmCard({
   rejectionMode,
   alwaysAllow,
   extraActions = [],
-  feedbackPlaceholder = 'Feedback to send with rejection',
+  feedbackPlaceholder = CONFIRM_CARD_FEEDBACK_PLACEHOLDER,
   compact = false,
   onFeedbackModeChange,
   onFeedbackValueChange,
@@ -197,14 +202,7 @@ export function ConfirmCard({
           <Text bold color={color} wrap="truncate-end">
             {pulsedTitle}
             <Text dimColor>{KEY_HINT_SEPARATOR}</Text>
-            <Text dimColor>
-              {hints.map((hint, index) => (
-                <Text key={`${hint.key}-${hint.action}-${index}`}>
-                  {index > 0 ? KEY_HINT_SEPARATOR : ''}
-                  <Text bold>{hint.key}</Text> {hint.action}
-                </Text>
-              ))}
-            </Text>
+            <Text dimColor>{keyHintSpans(hints)}</Text>
           </Text>
         )}
         {feedbackMode ? feedbackInput(0) : children}

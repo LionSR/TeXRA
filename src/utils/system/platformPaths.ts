@@ -9,7 +9,7 @@ import { LRUCache } from 'lru-cache';
 import which from 'which';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { normalizeFilePath, unique } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { hasExtension } from '@utils/core/pathCore';
@@ -20,7 +20,7 @@ export const IS_WINDOWS = process.platform === 'win32';
 // Common LaTeX tool names used across the system
 const TEX_TOOLS = ['latexdiff', 'latexindent', 'latexmk'] as const;
 
-const CHANNEL = 'platformPaths';
+const log = createLog('platformPaths');
 
 // Cache for extra directories to avoid repeated glob operations
 let cachedExtraDirs: string[] | null = null;
@@ -263,48 +263,6 @@ export function extendEnvPath(
 }
 
 /**
- * Environment keys that let git invoke arbitrary helper programs (editors,
- * pagers, askpass, external-diff, config overrides). Stripped before handing
- * the environment to a non-interactive git subprocess so an inherited value
- * can't run a helper or redirect config during automated operations.
- */
-const GIT_UNSAFE_ENV_KEYS = new Set([
-  'editor',
-  'git_askpass',
-  'git_config_global',
-  'git_config_system',
-  'git_config_count',
-  'git_config',
-  'git_editor',
-  'git_exec_path',
-  'git_external_diff',
-  'git_pager',
-  'git_proxy_command',
-  'git_sequence_editor',
-  'git_template_dir',
-  'pager',
-  'prefix',
-  'ssh_askpass',
-]);
-
-/**
- * Build an environment for a non-interactive git subprocess: the current
- * environment with the helper-invoking keys in {@link GIT_UNSAFE_ENV_KEYS}
- * removed and `PATH` extended via {@link extendEnvPath} so GUI-launched hosts
- * (whose minimal PATH may omit Homebrew / /usr/local/bin) can still resolve
- * the `git` binary.
- */
-export function makeMachineGitEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (GIT_UNSAFE_ENV_KEYS.has(key.toLowerCase())) continue;
-    env[key] = value;
-  }
-  env.PATH = extendEnvPath(env.PATH);
-  return env;
-}
-
-/**
  * Check if a path is safe (doesn't contain dangerous sequences)
  */
 function isPathSafe(filepath: string): boolean {
@@ -338,7 +296,7 @@ export function findToolInCommonPaths(tool: string): string | null {
 function findToolInCommonPathsUncached(tool: string): string | null {
   // Basic security validation
   if (!isPathSafe(tool)) {
-    logger.warn(CHANNEL, `Unsafe tool name rejected: ${tool}`);
+    log.warn(`Unsafe tool name rejected: ${tool}`);
     return null;
   }
   const candidates = [tool];

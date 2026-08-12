@@ -25,8 +25,7 @@ import {
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
-  formatStreamStatusLabel,
-  streamStatusDisplayKey,
+  progressHeaderStatus,
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
 import {
@@ -38,12 +37,11 @@ import {
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import './WorktreeChip';
-import { formatRelativeTime } from '@shared/utils/string';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { type TeXRAIconName } from '@shared/wa/iconNames';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
-import { formatResultCount } from '@utils/text/stringUtils';
+import { formatRelativeTime, formatResultCount } from '@utils/text/stringUtils';
 import { layoutStyles } from '../styles/logStyles';
 import { streamTabStyles } from './StreamTab.styles';
 import { streamTabsContainerStyles } from './StreamTabsContainer.styles';
@@ -159,13 +157,9 @@ class StreamTab extends LitElement {
   override render(): TemplateResult {
     const stream = this.info;
     const status = this.status || DEFAULT_STREAM_METADATA_STATUS;
-    const displayKey = streamStatusDisplayKey(status, this.substate);
+    const { label, displayKey } = progressHeaderStatus(status, this.substate);
     const statusKey = displayKey ?? status;
-    const lifecycleStatusLabel =
-      formatStreamStatusLabel(status, {
-        style: 'progressHeader',
-        ...(this.substate ? { substate: this.substate } : {}),
-      }) ?? status;
+    const lifecycleStatusLabel = label ?? status;
     // Pending approval outranks the lifecycle phase: a run held at the
     // approval gate is still "running", and the gate is what you act on.
     const statusGlyph = this.hasPendingApproval
@@ -439,23 +433,19 @@ export class StreamTabs extends LitElement {
         if (nextVisited.has(child.name)) return false;
         // Background bash/process tabs are ephemeral: once terminal, drop
         // them from the Sessions tree even if autoClose has not removed the
-        // stream record yet.
+        // stream record yet. isTerminalOutcomePhase only matches the three
+        // terminal phases, so the unstarted 'ready' default needs no special
+        // handling here.
         if (child.identity?.kind === 'process') {
           const childStatus = this.streamStates.get(child.name)?.status;
-          const phase =
-            childStatus === DEFAULT_STREAM_METADATA_STATUS
-              ? undefined
-              : childStatus;
-          if (isTerminalOutcomePhase(phase)) return false;
+          if (isTerminalOutcomePhase(childStatus)) return false;
         }
         return true;
       },
     );
     const childCount = children.length;
-    const expanded =
-      !options.compact &&
-      childCount > 0 &&
-      this.expandedParents.has(stream.name);
+    const showChildren = !options.compact && childCount > 0;
+    const expanded = showChildren && this.expandedParents.has(stream.name);
     const streamState = this.streamStates.get(stream.name);
 
     return html`
@@ -471,7 +461,7 @@ export class StreamTabs extends LitElement {
         ?expanded=${expanded}
       ></stream-tab>
       ${
-        !options.compact && childCount > 0
+        showChildren
           ? html`<div class="child-streams" ?hidden=${!expanded}>
               ${repeat(
                 children,

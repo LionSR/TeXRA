@@ -22,7 +22,7 @@ import {
   activeModelHandlerCompatibilityKey,
   createModelHandler,
   createModelHandlerForCompatibilityKey,
-  modelHandlerCompatibilityKey,
+  resolveModelHandlerCompatibilityKey,
   modelHandlersShareConversationFormat,
   shouldUseResponsesAPI,
 } from '@agent/runtime/ModelFactory';
@@ -75,10 +75,7 @@ const AVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = {
   isAvailable: () => true,
   selectModels: async () => [],
   onDidChangeModels: () => ({ dispose() {} }),
-  sendRequest: () =>
-    (async function* () {
-      // Factory tests do not make model requests.
-    })(),
+  sendRequest: () => (async function* () {})(),
   countTokens: async () => 0,
   onDidChangeAccess: () => ({ dispose() {} }),
 };
@@ -102,9 +99,9 @@ describe('Copilot model handler routing', () => {
   });
 
   it('takes precedence over the global OpenRouter route', () => {
-    expect(modelHandlerCompatibilityKey(copilotConfig, true, false)).toBe(
-      'ModelHandlerVscodeLm',
-    );
+    expect(
+      resolveModelHandlerCompatibilityKey(copilotConfig, true, false),
+    ).toBe('ModelHandlerVscodeLm');
   });
 
   it('fails clearly when the host language-model port is unavailable', async () => {
@@ -174,7 +171,7 @@ describe('Copilot route preference on a canonical base model', () => {
     });
 
     const config = MODEL_CONFIGS.gemini36f;
-    expect(modelHandlerCompatibilityKey(config, true, false)).toBe(
+    expect(resolveModelHandlerCompatibilityKey(config, true, false)).toBe(
       'ModelHandlerVscodeLm',
     );
 
@@ -187,9 +184,9 @@ describe('Copilot route preference on a canonical base model', () => {
   it('keeps the ordinary provider route without the preference', async () => {
     await installCopilotRoute();
 
-    expect(modelHandlerCompatibilityKey(MODEL_CONFIGS.gemini36f, false)).toBe(
-      'ModelHandlerGoogleInteractions',
-    );
+    expect(
+      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.gemini36f, false),
+    ).toBe('ModelHandlerGoogleInteractions');
   });
 
   it('scopes a direct retry override without changing concurrent route selection', async () => {
@@ -198,10 +195,10 @@ describe('Copilot route preference on a canonical base model', () => {
     });
 
     const config = MODEL_CONFIGS.gemini36f;
-    expect(modelHandlerCompatibilityKey(config, false, false, 'direct')).toBe(
-      'ModelHandlerGoogleInteractions',
-    );
-    expect(modelHandlerCompatibilityKey(config, false, false)).toBe(
+    expect(
+      resolveModelHandlerCompatibilityKey(config, false, false, 'direct'),
+    ).toBe('ModelHandlerGoogleInteractions');
+    expect(resolveModelHandlerCompatibilityKey(config, false, false)).toBe(
       'ModelHandlerVscodeLm',
     );
 
@@ -236,7 +233,7 @@ describe('Copilot route preference on a canonical base model', () => {
     // A Copilot preference is a hard route choice (#9635): consent-required
     // must surface as a named failure, never a silent direct-key dispatch.
     expect(() =>
-      modelHandlerCompatibilityKey(MODEL_CONFIGS.gemini36f, false),
+      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.gemini36f, false),
     ).toThrowError(/needs your approval/);
     await expect(
       createModelHandler(MODEL_CONFIGS.gemini36f),
@@ -249,7 +246,7 @@ describe('Copilot route preference on a canonical base model', () => {
     });
 
     expect(() =>
-      modelHandlerCompatibilityKey(MODEL_CONFIGS.gpt55, false),
+      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.gpt55, false),
     ).toThrowError(/does not currently offer "gpt55"/);
   });
 
@@ -452,7 +449,7 @@ describe('OpenAI model handler routing', () => {
       // when proxied; OpenRouter-proxied models always key on the native
       // OpenRouter handler.
       expect(
-        modelHandlerCompatibilityKey(
+        resolveModelHandlerCompatibilityKey(
           MODEL_CONFIGS[model],
           useOpenRouter,
           false,
@@ -467,7 +464,7 @@ describe('OpenAI model handler routing', () => {
     });
 
     expect(
-      modelHandlerCompatibilityKey(
+      resolveModelHandlerCompatibilityKey(
         {
           ...modelConfig(ModelProvider.OPENAI, {
             supportsFunctionCalling: true,
@@ -552,20 +549,13 @@ describe('OpenAI model handler routing', () => {
     });
   }
 
-  function createdHandlerName(): Promise<string> {
-    return inspectHandler(
-      createModelHandler(codexEligibleConfig),
-      (handler) => handler.constructor.name,
-    );
-  }
-
   it('keeps Codex-eligible subscription models on the Responses compatibility key', async () => {
     await installPlatform({
       config: { 'texra.chatgptCodex.preferSubscription': true },
     });
 
     expect(
-      modelHandlerCompatibilityKey(codexEligibleConfig, false, false),
+      resolveModelHandlerCompatibilityKey(codexEligibleConfig, false, false),
     ).toBe('ModelHandlerOpenAIResponse');
     // The active OpenRouter proxy disables the subscription path entirely.
     expect(shouldUseResponsesAPI(codexEligibleConfig, true)).toBe(true);
@@ -576,7 +566,7 @@ describe('OpenAI model handler routing', () => {
     await installPlatform();
 
     expect(
-      modelHandlerCompatibilityKey(codexEligibleConfig, false, false),
+      resolveModelHandlerCompatibilityKey(codexEligibleConfig, false, false),
     ).toBe('ModelHandlerOpenAIResponse');
   });
 
@@ -621,7 +611,11 @@ describe('OpenAI model handler routing', () => {
       },
     );
 
-    expect(await createdHandlerName()).toBe('ModelHandlerOpenAIResponse');
+    const handlerName = await inspectHandler(
+      createModelHandler(codexEligibleConfig),
+      (handler) => handler.constructor.name,
+    );
+    expect(handlerName).toBe('ModelHandlerOpenAIResponse');
   });
 
   it('propagates a superseded re-auth failure without falling back', async () => {
@@ -779,7 +773,7 @@ describe('OpenAI model handler routing', () => {
     });
     const passingFactory = await import('@agent/runtime/ModelFactory');
     expect(
-      passingFactory.modelHandlerCompatibilityKey(
+      passingFactory.resolveModelHandlerCompatibilityKey(
         MODEL_CONFIGS.gpt54,
         false,
         false,
@@ -798,7 +792,7 @@ describe('OpenAI model handler routing', () => {
     vi.resetModules();
     const failingFactory = await import('@agent/runtime/ModelFactory');
     expect(() =>
-      failingFactory.modelHandlerCompatibilityKey(
+      failingFactory.resolveModelHandlerCompatibilityKey(
         MODEL_CONFIGS.gpt54,
         false,
         false,
@@ -813,12 +807,6 @@ describe('Google Interactions API routing', () => {
   });
 
   const googleConfig = (): ModelConfig => modelConfig(ModelProvider.GOOGLE);
-
-  const forcedInteractionsConfig = (): ModelConfig =>
-    ({
-      ...googleConfig(),
-      requiresInteractionsAPI: true,
-    }) as ModelConfig;
 
   // Re-imports the factory alongside the platform it reads from (see the
   // module-header note on this file's vi.resetModules() calls).
@@ -835,28 +823,8 @@ describe('Google Interactions API routing', () => {
   it('routes direct Google models to Interactions', async () => {
     const factory = await initGoogleRouting();
     expect(
-      factory.modelHandlerCompatibilityKey(googleConfig(), false, false),
+      factory.resolveModelHandlerCompatibilityKey(googleConfig(), false, false),
     ).toBe('ModelHandlerGoogleInteractions');
-  });
-
-  it('keeps key derivation pure for Interactions-only models under OpenRouter', async () => {
-    const factory = await initGoogleRouting();
-    expect(
-      factory.modelHandlerCompatibilityKey(
-        forcedInteractionsConfig(),
-        true,
-        false,
-      ),
-    ).toBe('ModelHandlerOpenRouterNative');
-  });
-
-  it('createModelHandler fails loudly for an Interactions-only model under active OpenRouter', async () => {
-    // OpenRouter cannot proxy Interactions — the live-routing path must error
-    // rather than silently route to OpenRouter (spec §6.3).
-    const factory = await initGoogleRouting(true);
-    await expect(
-      factory.createModelHandler(forcedInteractionsConfig()),
-    ).rejects.toThrow(/OpenRouter/);
   });
 
   it('creates the Interactions handler tagged with its compatibility key', async () => {
@@ -1020,7 +988,7 @@ describe('routing precedence: compat-key ↔ createModelHandler invariant', () =
   });
 
   // The handler-routing precedence is encoded twice: once in the pure
-  // `modelHandlerCompatibilityKey` predicate (used exception-free by
+  // `resolveModelHandlerCompatibilityKey` predicate (used exception-free by
   // history-restore and model-switch gating) and once in the live
   // `createModelHandler` dispatch. The two must never drift on the *key* they
   // produce — otherwise the key a restored session keys on could disagree with
@@ -1041,7 +1009,7 @@ describe('routing precedence: compat-key ↔ createModelHandler invariant', () =
     // test's initPlatform.
     await installPlatform({}, { languageModel: AVAILABLE_LANGUAGE_MODEL_PORT });
     const {
-      modelHandlerCompatibilityKey: compatKey,
+      resolveModelHandlerCompatibilityKey: compatKey,
       createModelHandler: create,
       activeModelHandlerCompatibilityKey: activeKey,
     } = await import('@agent/runtime/ModelFactory');

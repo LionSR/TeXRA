@@ -14,6 +14,7 @@ import {
 } from 'electron';
 
 import type { SessionStores } from '@agent/storage';
+import { attachTerminalResultToast, SessionHandle } from '@agent/runtime';
 import {
   computeAgentOptionsData,
   getAgent,
@@ -22,9 +23,6 @@ import {
   loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
-import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
@@ -44,12 +42,13 @@ import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { normalizePlatform } from '@shared/constants/latex';
+import { normalizePlatform } from '@shared/constants/latexToolchain';
 import {
   AgentCategory,
   agentKeyOf,
   type AgentSource,
 } from '@shared/schemas/agent';
+import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { debounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
@@ -118,15 +117,13 @@ import {
   type DesktopAuthCoordinator,
   type DesktopSupabaseAuthHost,
 } from './desktopSupabaseAuth.js';
-import {
-  buildDesktopMenuTemplate,
-  DESKTOP_DOCS_URL,
-} from '../shared/desktopCommandSurface.js';
+import { buildDesktopMenuTemplate } from './desktopMenuTemplate.js';
 import { reportFatalStartupError } from './fatalStartupError.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
+import { DESKTOP_DOCS_URL } from '../shared/desktopCommandSurface.js';
 import {
   DESKTOP_WORKSPACE_PATH_STATE_KEY,
   serializeWorkspacePresenceArg,
@@ -413,15 +410,6 @@ function createWindow(options: {
       },
     }).catch(reportAsyncError);
   }
-  /**
-   * Fire-and-forget post for controllers that don't act on delivery. The
-   * bridge's own `webContents.isDestroyed()` no-op (see above) is the guard
-   * here; only callers that branch on delivery need
-   * {@link postToRendererIfAlive}.
-   */
-  const postToRenderer = (message: unknown): void => {
-    ipcRef.current?.postToRenderer(message);
-  };
   const previewHost = createDesktopPreviewHost({
     shell,
     showErrorMessage,
@@ -605,7 +593,7 @@ function createWindow(options: {
     return agentExecutionLoad;
   };
   const fileSelection = createDesktopFileSelection({
-    postToRenderer,
+    postToRenderer: postToRendererIfAlive,
     showOpenFileDialog: async (options) => {
       const result = await dialog.showOpenDialog(window, {
         title: options.title,
@@ -658,7 +646,7 @@ function createWindow(options: {
       revealPath: async (filePath) => shell.showItemInFolder(filePath),
     },
     renderer: {
-      postToRenderer,
+      postToRenderer: postToRendererIfAlive,
     },
     prompts: {
       promptText: (input) => promptController.request(input),
@@ -682,7 +670,7 @@ function createWindow(options: {
       config: platform().config,
       secrets: platform().secrets,
       renderer: {
-        postToRenderer,
+        postToRenderer: postToRendererIfAlive,
       },
       prompt: {
         input: (input) =>
@@ -743,7 +731,7 @@ function createWindow(options: {
       workspaceState: platform().workspaceState,
       globalState: platform().globalState,
       renderer: {
-        postToRenderer,
+        postToRenderer: postToRendererIfAlive,
       },
       dashboard: {
         buildItems: async (cachedResults) => {
@@ -770,7 +758,7 @@ function createWindow(options: {
       navigation: { openExternal: previewHost.openExternal },
       commands: {
         run: async (command: string) => {
-          postToRenderer({
+          postToRendererIfAlive({
             command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
             initialCommand: command,
           });
@@ -822,7 +810,7 @@ function createWindow(options: {
   };
   const historySettingsController = new DesktopHistoryHandlers({
     resourcesPath: options.resourcesPath,
-    postToRenderer,
+    postToRenderer: postToRendererIfAlive,
     // Rerun and restore use the same host-neutral owners as the extension,
     // reached through the desktop execution bridge instead of VS Code commands.
     runExecution: (request) =>
@@ -862,7 +850,7 @@ function createWindow(options: {
     reportAsyncError(error);
   }
   const settingsIpc = createDesktopSettingsIpc({
-    postToRenderer,
+    postToRenderer: postToRendererIfAlive,
     agentSettingsController,
     credentialSettingsController,
     historySettingsController,
@@ -892,7 +880,7 @@ function createWindow(options: {
     },
   });
   const onboardingIpc = createDesktopOnboardingIpc(
-    { postToRenderer },
+    { postToRenderer: postToRendererIfAlive },
     {
       // Single source of truth for "does the user have a usable credential",
       // shared by every host (extension, desktop, CLI) so this credential-gating
@@ -981,7 +969,7 @@ function createWindow(options: {
     );
   };
   const shellActions = createDesktopShellActions(
-    { postToRenderer },
+    { postToRenderer: postToRendererIfAlive },
     {
       getCustomAgentDirectory: () => platform().agentDirectories.custom(),
       openExternalUrl: previewHost.openExternal,
@@ -1070,6 +1058,7 @@ function createWindow(options: {
     settings: settingsIpc,
     progress: progressIpc,
     onboarding: onboardingIpc,
+    globalState: platform().globalState,
     logs: {
       readLog: () =>
         readDesktopLogSnapshot({ workspacePath: options.workspacePath }),

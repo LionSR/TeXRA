@@ -1,12 +1,15 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - types
+// Local imports
 import {
   NormalizedUsageSchema,
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
+import * as logger from '@logger/logUtils';
 import { TokenCountSchema } from '@shared/schemas';
+
+const CHANNEL = 'RunUsageAccumulator';
 
 /**
  * Schema for run usage totals. Internal only.
@@ -28,6 +31,28 @@ const RunUsageTotalsSchema = z.object({
   totalServerToolRequests: TokenCountSchema.prefault(0),
 });
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
+
+/**
+ * Single source of truth mapping each accumulative {@link NormalizedUsage}
+ * metric to the {@link RunUsageTotals} field it sums into. `RunUsageTotalsSchema`
+ * deliberately stays explicit above — it documents the persisted wire shape —
+ * but `recordNormalizedUsage` iterates this table, so adding a metric means
+ * touching exactly two places (schema + one row here) and renaming a field on
+ * either side fails the type check via `satisfies`.
+ */
+const TOTAL_ACCUMULATORS = [
+  ['inputTokens', 'totalInputTokens'],
+  ['outputTokens', 'totalOutputTokens'],
+  ['cost', 'totalCost'],
+  ['cachedInputTokens', 'totalCacheReadInputTokens'],
+  ['cacheMissInputTokens', 'totalCacheMissInputTokens'],
+  ['cacheCreationTokens', 'totalCacheCreationInputTokens'],
+  ['reasoningTokens', 'totalReasoningTokens'],
+  ['toolUsePromptTokens', 'totalToolUsePromptTokens'],
+  ['serverToolRequests', 'totalServerToolRequests'],
+] as const satisfies ReadonlyArray<
+  readonly [usageField: keyof NormalizedUsage, totalField: keyof RunUsageTotals]
+>;
 
 /**
  * Canonical schema for RunUsageAccumulator JSON serialization.
@@ -59,16 +84,23 @@ export type RunUsageAccumulatorJSON = z.output<
  * Each snapshot is parsed tolerantly (`.catch`): the old preprocess only ever
  * read the last element's `usage`, so a malformed earlier snapshot must not
  * fail the whole arm (which would drop the latest valid usage on resume). A
- * malformed `usage` degrades to `null` rather than rejecting the payload.
+ * malformed `usage` degrades to `null` rather than rejecting the payload, but
+ * the degradation is logged so a corrupted legacy record doesn't vanish
+ * silently.
  */
 const LegacyRunUsageAccumulatorSchema = z
   .object({
     totals: RunUsageTotalsSchema.prefault({}),
     latestUsage: NormalizedUsageSchema.nullish(),
     normalizedSnapshots: z.array(
-      z
-        .object({ usage: NormalizedUsageSchema.nullish() })
-        .catch({ usage: null }),
+      z.object({ usage: NormalizedUsageSchema.nullish() }).catch((ctx) => {
+        logger.warn(
+          CHANNEL,
+          'Malformed legacy normalizedSnapshots entry, discarding its usage',
+          { data: ctx.issues },
+        );
+        return { usage: null };
+      }),
     ),
   })
   .transform((legacy): RunUsageAccumulatorJSON => ({
@@ -109,15 +141,9 @@ export function recordNormalizedUsage(
     acc.totals.firstInputTokens = usage.inputTokens;
   }
 
-  acc.totals.totalInputTokens += usage.inputTokens;
-  acc.totals.totalOutputTokens += usage.outputTokens;
-  acc.totals.totalCost += usage.cost;
-  acc.totals.totalCacheReadInputTokens += usage.cachedInputTokens ?? 0;
-  acc.totals.totalCacheMissInputTokens += usage.cacheMissInputTokens ?? 0;
-  acc.totals.totalCacheCreationInputTokens += usage.cacheCreationTokens ?? 0;
-  acc.totals.totalReasoningTokens += usage.reasoningTokens ?? 0;
-  acc.totals.totalToolUsePromptTokens += usage.toolUsePromptTokens ?? 0;
-  acc.totals.totalServerToolRequests += usage.serverToolRequests ?? 0;
+  for (const [usageField, totalField] of TOTAL_ACCUMULATORS) {
+    acc.totals[totalField] += usage[usageField] ?? 0;
+  }
 
   acc.latestUsage = usage;
 }

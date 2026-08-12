@@ -7,8 +7,9 @@ import {
 } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
-import { writeTextStderr } from '@cli/runtime/logSinks';
 import { attachClipboardImage } from '@cli/runtime/clipboardImage';
+import { writeTextStderr } from '@cli/runtime/logSinks';
+import { isCtrlInput } from '@cli/tui/inputKeys';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -22,7 +23,6 @@ import {
   type ImagePasteAttempt,
 } from '../input/imagePasteQueue';
 import { ReverseSearch } from '../input/ReverseSearch';
-import { isCtrlInput } from '../input/inputKeys';
 import {
   appendSlashCommandEcho,
   openRegisteredCliSlashForm,

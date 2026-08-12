@@ -17,13 +17,13 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type {
   InlineCommentProvider,
   InlineCommentThreadView,
 } from '@tools/comment/InlineCommentTool';
 
-const CHANNEL = 'InlineComments';
+const log = createLog('InlineComments');
 const CONTROLLER_ID = 'texra.inlineComments';
 const CONTROLLER_LABEL = 'TeXRA';
 const AGENT_AUTHOR = 'TeXRA';
@@ -173,7 +173,7 @@ function enable(context: vscode.ExtensionContext): void {
       },
     ),
   );
-  logger.info(CHANNEL, 'Inline comments enabled');
+  log.info('Inline comments enabled');
 }
 
 function disable(): void {

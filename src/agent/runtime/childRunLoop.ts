@@ -20,7 +20,6 @@ import {
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
-  markOwnedExecutionLeaseUndurable,
   onOwnedExecutionLeaseLost,
   runWithOwnedExecutionLease,
 } from '@agent/storage/executionLease';
@@ -28,7 +27,10 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
+import {
+  finalizeRunTerminal,
+  type RunTerminalPersistence,
+} from '@agent/runtime/AgentRunLifecycle';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import type {
   AgentExecutionHandle,
@@ -41,10 +43,7 @@ import type {
 } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpConsumerLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
-import {
-  persistChildRunReport,
-  persistChildRunResultMeta,
-} from '@agent/storage/childRunPersistence';
+import { persistChildRunDeliveryBestEffort } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
@@ -55,10 +54,6 @@ import {
 } from '@shared/schemas';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
-import type {
-  ChildStream,
-  ChildStreamOutcome,
-} from '@tools/delegation/childStream';
 import { aggregateError, formatDuration } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -78,6 +73,46 @@ type TurnUsage = { input_tokens?: number; output_tokens?: number };
 export interface ChildRunPorts {
   notify(update: SubagentProgressUpdate): void;
   recordCost(totalCostUsd: number | undefined): void;
+}
+
+/**
+ * A child run's reported terminal outcome. A report, not a verdict: the
+ * stream phase owns the terminal outcome, so an explicit stop/kill that
+ * already landed CANCELLED outranks a non-zero exit this reports.
+ */
+type ChildRunOutcome =
+  | { kind: 'completed' }
+  | { kind: 'failed'; error?: unknown; errorMessage?: string }
+  | { kind: 'cancelled' };
+
+/**
+ * Presentation/lifecycle port for agent-CLI child streams. The concrete
+ * tool-layer stream satisfies this structurally, but the generic driver
+ * declares the handful of hooks it needs here so it never imports a concrete
+ * tools type. Native strategies have no stream tab of their own and omit it
+ * entirely — `executeAgent`/`resumeToolUseFromResumeData` own handle creation,
+ * tracking, and terminal finalization for every turn via `runFlowWithLifecycle`.
+ */
+interface ChildStreamPort {
+  readonly logger: AgentTrace;
+  /** The child loop is idle and waiting for the next follow-up instruction. */
+  waitForInput(): void;
+  /** The child loop has started processing a turn. */
+  beginTurn(): void;
+  /** The active turn failed; preserve explicit user stops. */
+  failTurn(): void;
+  /**
+   * Complete the child stream lifecycle through the owning execution handle.
+   * Resolves once the shared terminal finalizer has persisted, settled, and
+   * untracked.
+   */
+  finalize(options?: {
+    outcome?: ChildRunOutcome;
+    /** Session stage closed with the derived outcome (the loop's stage). */
+    stage?: Pick<StageHandle, 'end'>;
+    /** Durable execution-state action; background bash owns its richer block. */
+    persistence?: RunTerminalPersistence;
+  }): Promise<void>;
 }
 
 /**
@@ -204,7 +239,7 @@ export interface ChildRunLoopParams<TTurn> {
    * every turn via `runFlowWithLifecycle`, so there is no separate stream tab
    * for this loop to finalize.
    */
-  readonly childStream?: ChildStream;
+  readonly childStream?: ChildStreamPort;
   /**
    * The child's stream id, known deterministically upfront by every caller
    * (agent-CLI: `createChildStream`'s own id; native: `getStreamTabId` — the
@@ -346,40 +381,6 @@ async function attemptTurn<TTurn>(
     return { kind: 'failed', err: caught };
   } finally {
     loop.finishTurn();
-  }
-}
-
-/**
- * Persist a turn report, swallowing storage errors. Best-effort — but the report
- * is the only durable copy of the result when delivery fails, so leave a trace.
- */
-async function persistReportBestEffort(
-  executionId: ExecutionId,
-  msg: string,
-  logger: AgentTrace,
-): Promise<void> {
-  const result = await persistChildRunReport(executionId, msg);
-  if (result.kind === 'failed') {
-    markOwnedExecutionLeaseUndurable(executionId);
-    logger.warn(`Failed to persist report for ${executionId}`, {
-      data: result.err,
-    });
-  }
-}
-
-/** Persist the optional structured result manifest. Best-effort. */
-async function persistResultMetaBestEffort(
-  executionId: ExecutionId,
-  resultMeta: ResultMeta | undefined,
-  logger: AgentTrace,
-): Promise<void> {
-  if (!resultMeta) return;
-  const result = await persistChildRunResultMeta(executionId, resultMeta);
-  if (result.kind === 'failed') {
-    markOwnedExecutionLeaseUndurable(executionId);
-    logger.warn(`Failed to persist result manifest for ${executionId}`, {
-      data: result.err,
-    });
   }
 }
 
@@ -550,8 +551,16 @@ async function deliverTurn<TTurn>(params: {
       ? { ...resultMeta, turnToken: turnRef.token }
       : resultMeta;
 
-  await persistReportBestEffort(executionId, msg, logger);
-  await persistResultMetaBestEffort(executionId, stampedMeta, logger);
+  await persistChildRunDeliveryBestEffort(
+    executionId,
+    msg,
+    stampedMeta,
+    (kind, error) => {
+      logger.warn(`Failed to persist ${kind} for ${executionId}`, {
+        data: error,
+      });
+    },
+  );
   // The turn's result slots now hold this turn: record it as the latest
   // completed turn, clearing the active marker written at acceptance. The
   // store does not serialize per-key writes, so this must queue behind the
@@ -911,7 +920,7 @@ export function startChildRunLoop<TTurn>(
           // CANCELLED still outranks this report, while a failure that
           // already terminalized the phase keeps its diagnosis instead of
           // publishing FAILED with no error facts at all.
-          let loopOutcome: ChildStreamOutcome;
+          let loopOutcome: ChildRunOutcome;
           if (sawTurnFailure) {
             loopOutcome = { kind: 'failed', error: lastTurnErr };
           } else if (loop.isInterrupted()) {

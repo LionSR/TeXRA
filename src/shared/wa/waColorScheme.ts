@@ -1,3 +1,4 @@
+import type { Theme } from '@shared/schemas';
 /**
  * Apply Web Awesome's native color-scheme classes (wa-light / wa-dark) onto
  * the document root, mirroring the host theme.
@@ -12,26 +13,49 @@
  *
  * The observer also keeps the html class in sync if the host swaps themes
  * mid-session (e.g. user toggles VS Code light/dark).
+ *
+ * This module is the single owner of the theme-kind vocabulary: the
+ * kind→darkness mapping (`themeIsDark`) and the derived `vscode-*` / `texra-*`
+ * body-class list (`THEME_CLASSES`) live here, and `hostTheme.ts` imports them
+ * rather than re-encoding a parallel copy.
  */
 
-const DARK_BODY_CLASSES: readonly string[] = [
-  'vscode-dark',
-  'vscode-high-contrast',
-  'texra-dark',
-  'texra-high-contrast',
-];
-
-const LIGHT_BODY_CLASSES: readonly string[] = [
-  'vscode-light',
-  'vscode-high-contrast-light',
-  'texra-light',
-];
-
-const DARK_THEME_KINDS: readonly string[] = [
-  'vscode-dark',
-  'vscode-high-contrast',
+/** The host theme kinds we recognize. Single source for the `vscode-*` /
+ *  `texra-*` class names and the kind→darkness mapping. */
+const THEME_KINDS = [
+  'light',
   'dark',
   'high-contrast',
+] as const satisfies readonly Theme[];
+
+/** Every `vscode-<kind>` / `texra-<kind>` body class, derived from THEME_KINDS.
+ *  `applyHostBodyTheme` strips these on re-apply and `isDarkTheme` below
+ *  classifies body classes against this same list. */
+export const THEME_CLASSES: readonly string[] = THEME_KINDS.flatMap((kind) => [
+  `vscode-${kind}`,
+  `texra-${kind}`,
+]);
+
+/**
+ * Convert a `Theme` kind to whether it should render as dark.
+ * 'high-contrast' is treated as dark (matches the desktop theme tokens
+ * and VS Code's dark-on-dark default for high-contrast themes).
+ */
+export function themeIsDark(theme: Theme): boolean {
+  return theme === 'dark' || theme === 'high-contrast';
+}
+
+const DARK_BODY_CLASSES: readonly string[] = THEME_KINDS.flatMap((kind) =>
+  themeIsDark(kind) ? [`vscode-${kind}`, `texra-${kind}`] : [],
+);
+
+const LIGHT_BODY_CLASSES: readonly string[] = [
+  ...THEME_KINDS.flatMap((kind) =>
+    themeIsDark(kind) ? [] : [`vscode-${kind}`, `texra-${kind}`],
+  ),
+  // VS Code's special light high-contrast class, not derivable from
+  // THEME_KINDS (it is a theme variant, not a kind).
+  'vscode-high-contrast-light',
 ];
 
 let observer: MutationObserver | null = null;
@@ -45,9 +69,15 @@ function isDarkTheme(): boolean {
     if (LIGHT_BODY_CLASSES.some((name) => body.classList.contains(name))) {
       return false;
     }
+    // data-vscode-theme-kind carries the kind with or without the 'vscode-'
+    // prefix; strip it and classify through the shared mapping. Unknown kinds
+    // fall out as non-dark, matching the retired hand-rolled DARK_THEME_KINDS.
     const kind = body.dataset.vscodeThemeKind;
     if (kind) {
-      return DARK_THEME_KINDS.includes(kind);
+      const bare = kind.startsWith('vscode-')
+        ? kind.slice('vscode-'.length)
+        : kind;
+      return themeIsDark(bare as Theme);
     }
   }
   return window.matchMedia('(prefers-color-scheme: dark)').matches;

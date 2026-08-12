@@ -6,10 +6,6 @@ import {
   AgentSetting,
   AgentPrompt,
 } from '@agent/core/definition/AgentDataclass';
-import {
-  resolveDelegationScopeAgents,
-  type AgentEntry,
-} from '@agent/index/agentRegistry';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import { shouldSaveModelIO } from '@agent/utils/debugMessageSaver';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -22,6 +18,10 @@ import {
   AgentSkillsEnabledSchema,
 } from '@shared/schemas/agentSkills';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
+import {
+  formatAgentList,
+  getDelegationAgents,
+} from '@tools/delegation/delegationAvailability';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { filterNotNull, isNonEmptyString, unique } from '@utils/core';
@@ -59,9 +59,15 @@ export type UserVars = Record<string, unknown>;
  * fixed list; they remain caller-supplied names and `throwOnUndefined` stays
  * disabled until there is a separate validation story for them.
  */
+
+/** Transient user-variable key carrying the run's live model id. */
+export const USER_VAR_MODEL = 'MODEL';
+/** Transient user-variable key carrying the current user instruction. */
+export const USER_VAR_INSTRUCTION = 'INSTRUCTION';
+
 export const USER_VAR_RUNTIME_TOKENS = [
-  'MODEL',
-  'INSTRUCTION',
+  USER_VAR_MODEL,
+  USER_VAR_INSTRUCTION,
   'IS_OPENAI_MODEL',
   'IS_ANTHROPIC_MODEL',
   'IS_GOOGLE_MODEL',
@@ -227,39 +233,20 @@ function getBasicVars(
   providerFlags: ModelProviderFlags,
   options: BuildUserVarsOptions,
 ): UserVars {
-  // Build agent lists for template use. Tool-use agents append their tools.
-  function formatAgentList(
-    agents: Pick<AgentEntry, 'name' | 'description' | 'tools'>[],
-    includeTools = false,
-  ): string {
-    return agents
-      .map((a) => {
-        const toolsStr =
-          includeTools && a.tools?.length ? ` [${a.tools.join(', ')}]` : '';
-        return `- ${a.name}: ${a.description || 'No description'}${toolsStr}`;
-      })
-      .join('\n');
-  }
-
-  function getPromptAgents(category: AgentCategory): AgentEntry[] {
-    return resolveDelegationScopeAgents(
-      options.delegationAgentScope ?? undefined,
-      category,
-    );
-  }
-
   // Filter out the current agent so it doesn't see itself as a delegation target
   const selfName = agentConfig.agent;
+  const scope = options.delegationAgentScope ?? undefined;
   const workflowAgentsList = formatAgentList(
-    getPromptAgents(AgentCategory.Workflow).filter(
+    getDelegationAgents(AgentCategory.Workflow, scope).filter(
       (agent) => agent.name !== selfName,
     ),
+    { tools: 'none', collapseDescriptionNewlines: false },
   );
   const toolUseAgentsList = formatAgentList(
-    getPromptAgents(AgentCategory.ToolUse).filter(
+    getDelegationAgents(AgentCategory.ToolUse, scope).filter(
       (agent) => agent.name !== selfName,
     ),
-    true,
+    { tools: 'inline', collapseDescriptionNewlines: false },
   );
 
   // Get default bib path from settings (empty string if not configured)

@@ -5,12 +5,9 @@ import type { ProgressViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import { appState } from '../progressState';
 
-// The composed registry is exhaustive (every ProgressView outbound command
-// needs a real handler or `unsupported(...)` — see `@shared/utils/dispatcher`).
-// This slice only owns a subset, so it's typed as a `satisfies Partial<...>`
-// subset rather than the full registry; `messageDispatcher.ts` spreads all
-// slices together and is the actual exhaustiveness checkpoint TypeScript
-// enforces.
+// Registry contract: every outbound command needs a handler or
+// `unsupported(...)`; exhaustiveness is enforced at the composed spread in
+// messageDispatcher.ts. This slice only owns a subset.
 export const inquiryHandlers = {
   [PROGRESS_VIEW_COMMANDS.SYNC_INQUIRY_THREADS]: (data) => {
     appState.set(

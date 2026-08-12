@@ -1,8 +1,6 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports
 import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,

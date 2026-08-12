@@ -11,7 +11,7 @@ import type { FileLocation } from '@shared/schemas';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,
   LATEX_VIEWER_REFRESH_DELAY_MS,
-} from '@shared/constants/latex';
+} from '@shared/constants/latexTiming';
 
 // Local imports - utilities
 import { getFileStem } from '@utils/core';

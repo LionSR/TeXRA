@@ -19,20 +19,23 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import type { ManualCriticismEntry } from '@agent/runtime/HostInteractions';
-import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { defaultSession } from '@agent/runtime/SessionHandle';
-import { globalSM, GlobalStateKey } from '@common/state';
+import {
+  defaultSession,
+  type ManualCriticismEntry,
+  type SessionEventHub,
+} from '@agent/runtime';
+import { globalSM } from '@common/state';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { hasExtension } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const CHANNEL = 'InlineCriticism';
+const log = createLog('InlineCriticism');
 const COLLECTION_NAME = 'texra-criticism';
 const SOURCE_LABEL = 'TeXRA';
 const CODE_PARSED = 'criticize';
@@ -85,10 +88,7 @@ async function refreshFileDiagnostics(file: OutputFileInfo): Promise<void> {
   try {
     text = await AbsoluteFS.read(absolutePath);
   } catch (error) {
-    logger.error(
-      CHANNEL,
-      `Failed to read ${absolutePath}: ${toErrorMessage(error)}`,
-    );
+    log.error(`Failed to read ${absolutePath}: ${toErrorMessage(error)}`);
     return;
   }
 
@@ -128,8 +128,7 @@ function handleAddOutputFiles(payload: AddOutputFilesPayload): void {
   const allFiles = Object.values(payload.filesByRound).flat();
   void Promise.all(allFiles.map((f) => refreshFileDiagnostics(f))).catch(
     (error: unknown) => {
-      logger.error(
-        CHANNEL,
+      log.error(
         `Failed to refresh criticism diagnostics: ${toErrorMessage(error)}`,
       );
     },
@@ -144,7 +143,7 @@ function enable(context: vscode.ExtensionContext): void {
     sessionEvents ?? defaultSession().events,
     handleAddOutputFiles,
   );
-  logger.info(CHANNEL, 'Inline criticism diagnostics enabled');
+  log.info('Inline criticism diagnostics enabled');
 }
 
 function disable(): void {
@@ -157,7 +156,7 @@ function disable(): void {
     collection.dispose();
     collection = undefined;
   }
-  logger.info(CHANNEL, 'Inline criticism diagnostics disabled');
+  log.info('Inline criticism diagnostics disabled');
 }
 
 /**

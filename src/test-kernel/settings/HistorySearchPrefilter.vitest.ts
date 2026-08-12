@@ -95,7 +95,7 @@ describe('history search prefilter', () => {
 
   it('matches the rendered short-month timestamp text (kept in sync with HistoryItemElement)', () => {
     // HistoryItemElement renders its meta-strip timestamp via
-    // formatShortDateTime (@shared/utils/string) — the search index must
+    // formatShortDateTime (@utils/text/stringUtils) — the search index must
     // include that same shaped text, not just the raw ISO timestamp, so a
     // search for what the user actually sees still matches. Midday UTC
     // keeps the rendered month stable across any real-world timezone.

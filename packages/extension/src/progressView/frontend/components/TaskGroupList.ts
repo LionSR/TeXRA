@@ -9,6 +9,8 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
 import {
+  GETTING_STARTED_ACTION_PRESENTATION,
+  GettingStartedActionSchema,
   MESSAGE_TYPES,
   STREAM_PHASE,
   StreamPhaseSchema,
@@ -72,14 +74,14 @@ const GROUP_MESSAGE_WINDOW_STEP = 400;
  */
 function getStatusIcon(status: string): TeXRAIconName {
   switch (status) {
-    case STREAM_PHASE.RUNNING:
-      return 'circle';
     case STREAM_PHASE.FAILED:
       return 'circle-exclamation';
     case STREAM_PHASE.COMPLETED:
       return 'check';
     case STREAM_PHASE.CANCELLED:
       return 'circle-stop';
+    // Running and every unrecognized status share the plain steady-state
+    // circle (running is the default look for a live group).
     default:
       return 'circle';
   }
@@ -459,9 +461,7 @@ export class TaskGroupList extends LitElement {
     return html`
       <span class="group-status-icon">
         ${waIcon(statusIcon, {
-          label: formatStreamStatusLabel(group.status, {
-            style: 'progressHeader',
-          }),
+          label: formatStreamStatusLabel(group.status),
         })}
       </span>
       <span class="group-title">${title}</span>
@@ -580,39 +580,11 @@ export class TaskGroupList extends LitElement {
         body: 'Start an agent from the New tab or Commands.',
         headingTag: 'h3',
         className: 'log-placeholder',
-        actions: [
-          {
-            label: 'Run setup assistant',
-            icon: 'rocket',
-            size: 's',
-            onClick: () => this.handleGettingStartedAction('runSetup'),
-          },
-          {
-            label: 'Create sample project',
-            icon: 'file-circle-plus',
-            size: 's',
-            onClick: () =>
-              this.handleGettingStartedAction('createSampleProject'),
-          },
-          {
-            label: 'Import Overleaf',
-            icon: 'cloud-arrow-down',
-            size: 's',
-            onClick: () => this.handleGettingStartedAction('cloneOverleaf'),
-          },
-          {
-            label: 'Import arXiv',
-            icon: 'download',
-            size: 's',
-            onClick: () => this.handleGettingStartedAction('downloadArxiv'),
-          },
-          {
-            label: 'Open walkthrough',
-            icon: 'book',
-            size: 's',
-            onClick: () => this.handleGettingStartedAction('openWalkthrough'),
-          },
-        ],
+        actions: GettingStartedActionSchema.options.map((action) => ({
+          ...GETTING_STARTED_ACTION_PRESENTATION[action],
+          size: 's' as const,
+          onClick: () => this.handleGettingStartedAction(action),
+        })),
       });
     }
 

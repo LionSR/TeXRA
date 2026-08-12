@@ -1,10 +1,7 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Third-party imports
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-// Local imports
 import type { FinalizeExecutionResult } from '@agent/storage';
 import { noopTrace, TraceEmitter, type StatusEvent } from '@agent/trace';
 import {
@@ -32,7 +29,6 @@ import {
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { platform } from '@platform/platform';
 import {
-  EXECUTION_STATUS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
@@ -58,11 +54,9 @@ import {
 import { withTranscriptWriter } from '@test/support/storeTestDrivers';
 import { StorageFS } from '@utils/files/storageFS';
 
-// Local file imports
 import {
   recordSessionEvents,
   runEventsOfType,
-  sessionFactPayloads,
   sessionFactsOfType,
 } from '../progressTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
@@ -83,6 +77,15 @@ const channelTraceMocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
+// terminalPersistence deep-imports finalizeExecution from executionLifecycle
+// (not the `@agent/storage` barrel). Spy only that leaf to avoid re-export
+// recursion through a dual mock.
+vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@agent/storage/executionLifecycle')
+  >()),
+  finalizeExecution: storageMocks.finalizeExecution,
+}));
 vi.mock('@agent/storage', () => ({
   finalizeExecution: storageMocks.finalizeExecution,
 }));

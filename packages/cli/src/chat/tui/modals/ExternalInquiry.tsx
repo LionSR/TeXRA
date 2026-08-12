@@ -2,32 +2,33 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { writeClipboardText } from '@cli/runtime/clipboardText';
-import { COLOR_ERROR, COLOR_SUCCESS } from '@cli/tui/ui/colors';
-import { POINTER } from '@cli/tui/ui/glyphs';
+import { isEscapeInput } from '@cli/tui/inputKeys';
 import {
-  clampModalWidth,
-  CONFIRM_CARD_HORIZONTAL_DECORATION,
-} from '@cli/tui/ui/theme';
+  moreRowsText,
+  previousRowsText,
+  scrollStatusText,
+} from '@cli/tui/overflowText';
+import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import {
   KEY_HINT_SEPARATOR,
   KeyHints,
   keyHintText,
   type KeyHint,
 } from '@cli/tui/ui/KeyHints';
-import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
+import { COLOR_ERROR, COLOR_SUCCESS } from '@cli/tui/ui/colors';
+import { POINTER } from '@cli/tui/ui/glyphs';
+import {
+  clampModalWidth,
+  CONFIRM_CARD_HORIZONTAL_DECORATION,
+} from '@cli/tui/ui/theme';
 import type { ExternalInquiryPermission } from '@shared/schemas';
 import { clamp } from '@utils/core';
 
 import { modalTextDisplayLines } from './ScrollableModalText';
 import { BaseTextInput } from '../input/BaseTextInput';
-import { isEscapeInput } from '../input/inputKeys';
-import {
-  moreRowsText,
-  previousRowsText,
-  scrollStatusText,
-} from '../render/overflowText';
 import {
   compactAwareMaxScrollOffset,
+  COMPACT_SCROLLABLE_CONTENT_ROWS,
   scrollBoundedRows,
   type ScrollableDisplayLine,
 } from '../render/scrollBounds';
@@ -56,7 +57,6 @@ function copyStatusLabel(status: Exclude<CopyStatus, 'idle'>): string {
 }
 
 const DEFAULT_EXTERNAL_INQUIRY_QUESTION_ROWS = 16;
-const COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS = 3;
 const EXTERNAL_INQUIRY_FIXED_ROWS = 6;
 
 // Measured through the canonical `keyHintText` projection so the fit check
@@ -143,27 +143,40 @@ export function boundedExternalInquiryQuestionLines({
   question,
   scrollOffset = 0,
   width,
+  lines,
 }: {
   readonly maxDisplayLines: number;
   readonly question: string;
   readonly scrollOffset?: number;
   readonly width: number;
+  /** The question already wrapped to `width` (see the component's shared
+   *  memo). Skips a second wrap pass per render; absent for standalone callers
+   *  (tests) that only have the raw text. */
+  readonly lines?: readonly ExternalInquiryDisplayLine[];
 }): ExternalInquiryDisplayLine[] {
-  const lines = modalTextDisplayLines({ text: question, width });
+  const wrappedLines =
+    lines ??
+    modalTextDisplayLines({
+      text: question,
+      width,
+    });
   if (maxDisplayLines <= 0) return [];
-  if (lines.length <= maxDisplayLines) return lines;
+  if (wrappedLines.length <= maxDisplayLines) return [...wrappedLines];
 
-  if (maxDisplayLines <= COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS) {
+  if (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS) {
     const visibleCount = Math.max(1, maxDisplayLines - 1);
     const maxOffset = compactAwareMaxScrollOffset({
-      compactRows: COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS,
+      compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
       maxDisplayLines,
-      totalLines: lines.length,
+      totalLines: wrappedLines.length,
     });
     const offset = clamp(scrollOffset, 0, maxOffset);
-    const visible = lines.slice(offset, offset + visibleCount);
+    const visible = wrappedLines.slice(offset, offset + visibleCount);
     const hiddenBefore = offset;
-    const hiddenAfter = Math.max(0, lines.length - (offset + visible.length));
+    const hiddenAfter = Math.max(
+      0,
+      wrappedLines.length - (offset + visible.length),
+    );
     if (maxDisplayLines === 1) return visible;
     return [
       ...visible,
@@ -174,9 +187,9 @@ export function boundedExternalInquiryQuestionLines({
   }
 
   const { hiddenAfter, hiddenBefore, visibleRows } = scrollBoundedRows({
-    compactRows: COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS,
+    compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     maxDisplayLines,
-    rows: lines,
+    rows: wrappedLines,
     scrollOffset,
   });
 
@@ -202,24 +215,28 @@ export function ExternalInquiry(
     answerRows,
     availableRows: props.availableRows,
   });
-  const questionLineCount = useMemo(
+  // One wrap pass for both the scroll-offset budget and the bounded display
+  // lines. The component re-renders on every keystroke in the answer input, so
+  // this memo is what keeps the full grapheme-segmentation wrap off the hot path.
+  const questionLines = useMemo(
     () =>
       modalTextDisplayLines({
         text: props.payload.question,
         width: contentWidth,
-      }).length,
+      }),
     [contentWidth, props.payload.question],
   );
   const maxQuestionOffset = compactAwareMaxScrollOffset({
-    compactRows: COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS,
+    compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     maxDisplayLines: questionRows,
-    totalLines: questionLineCount,
+    totalLines: questionLines.length,
   });
   const questionScrollable = maxQuestionOffset > 0;
   const pageRows = Math.max(1, questionRows - 2);
   const questionDisplayLines = boundedExternalInquiryQuestionLines({
     maxDisplayLines: questionRows,
     question: props.payload.question,
+    lines: questionLines,
     scrollOffset: questionOffset,
     width: contentWidth,
   });

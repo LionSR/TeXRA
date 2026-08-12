@@ -22,6 +22,10 @@ import {
   CLI_MODEL_ACCESS_DESCRIPTION,
   type CliModelAccessStatus,
 } from '../runtime/modelAccessRoute';
+import {
+  AUTH_SIGNED_IN_LINE_PREFIX,
+  AUTH_STATUS_SEGMENT_SEPARATOR,
+} from '../runtime/apiStatus';
 import type { CliModelAccess } from '../runtime/modelAccess';
 
 export interface OrchestrationAppProps {
@@ -156,8 +160,8 @@ function compactOrchestrationStatusLines(
   statusLines: readonly string[],
 ): readonly string[] {
   return statusLines.map((line) => {
-    if (!line.startsWith('auth: signed in')) return line;
-    const suffix = line.indexOf(' · ');
+    if (!line.startsWith(AUTH_SIGNED_IN_LINE_PREFIX)) return line;
+    const suffix = line.indexOf(AUTH_STATUS_SEGMENT_SEPARATOR);
     return suffix < 0 ? line : line.slice(0, suffix);
   });
 }

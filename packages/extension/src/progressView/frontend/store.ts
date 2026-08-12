@@ -8,7 +8,7 @@ import {
   type StreamTabId,
   type SetFollowupOptionsMessage,
   type InquiryThreadUpdatedEvent,
-  type ExternalInquiryThreadId,
+  type InquiryThreadId,
 } from '@shared/schemas';
 import {
   createCompactionActivityProjection,
@@ -79,7 +79,7 @@ export interface ProgressState {
   /** Workflow-result follow-up option data, keyed per stream. */
   followupOptionsByStream: Map<StreamTabId, FollowupOptionsState>;
   /** Durable external inquiry thread summaries, keyed by thread id. */
-  inquiries: Map<ExternalInquiryThreadId, InquiryThreadUpdatedEvent>;
+  inquiries: Map<InquiryThreadId, InquiryThreadUpdatedEvent>;
 }
 
 /**

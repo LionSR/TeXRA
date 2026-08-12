@@ -147,10 +147,8 @@ describe('SupabaseClient', () => {
 
       // Observe the rejection (tier-config answers without userStatus for
       // unrecognized credentials); the settled status is cached.
-      const publicConfig = (() =>
-        Promise.resolve(
-          new Response(JSON.stringify({ tiers: {} }), { status: 200 }),
-        )) as unknown as typeof fetch;
+      const publicConfig = async () =>
+        new Response(JSON.stringify({ tiers: {} }), { status: 200 });
       assert.deepEqual(await fetchRelayTokenStatus(relayToken, publicConfig), {
         state: 'invalid',
       });

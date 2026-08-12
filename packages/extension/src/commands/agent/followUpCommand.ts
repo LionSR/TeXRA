@@ -2,13 +2,13 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { defaultSession } from '@agent/runtime';
 import {
   presentFollowUpResult,
   submitFollowUp,
   type SubmitFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
-import { defaultSession } from '@agent/runtime/SessionHandle';
-import { registerCommands } from '@commands/_shared/registerCommands';
+import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import type { StreamTabId } from '@shared/schemas';
 
 function emitQueuedFollowUpsChanged(streamId: StreamTabId): void {
@@ -52,7 +52,7 @@ async function handleFollowUpResult(
 export function registerFollowUpCommand(
   context: vscode.ExtensionContext,
 ): void {
-  registerCommands(context, [
+  registerCommandEntries(context, [
     {
       id: 'texra.sendFollowUp',
       handler: async (payload: {

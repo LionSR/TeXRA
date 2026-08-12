@@ -1,11 +1,11 @@
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
 import { StreamLogDeltaBuffer } from '@transcript/StreamLog';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { createFlushableDebounce, type FlushableDebounce } from '@utils/core';
 
-const CHANNEL = 'WebviewBridge';
+const log = createLog('WebviewBridge');
 
 const FRAME_INTERVAL_MS = 16;
 
@@ -179,7 +179,7 @@ export class WebviewBridge {
       return await this.sendMessage(message);
     } catch (error) {
       // Webview may be disposed/unreachable; drop the frame and retry next flush.
-      logger.debug(CHANNEL, 'Failed to deliver message to webview', {
+      log.debug('Failed to deliver message to webview', {
         data: error,
       });
       return false;

@@ -49,6 +49,7 @@ export interface SettingsAgentControllers {
   readonly catalog: SettingsAgentCatalogController;
   readonly directory: SettingsAgentDirectoryController;
   readonly visibility: SettingsAgentVisibilityController;
+  readonly roster: AgentRosterController;
   readonly fileController: SettingsAgentFileController;
   readonly remotePromptController: SettingsRemoteAgentPromptController;
 }
@@ -116,16 +117,7 @@ export function createSettingsAgentControllers(
     },
   });
   const visibility = new SettingsAgentVisibilityController({
-    state: {
-      getEnabledAgentKeys: state.getEnabledAgentKeys,
-      setAgentEnabled: (input) => roster.setAgentEnabled(input),
-      setEnabledAgentKeys: state.setEnabledAgentKeys,
-      getAgents: (category) =>
-        getAgents(category).map((entry) => ({
-          source: entry.source,
-          name: entry.name,
-        })),
-    },
+    state,
   });
   const fileController = new SettingsAgentFileController();
   const remotePromptController = new SettingsRemoteAgentPromptController({
@@ -138,6 +130,7 @@ export function createSettingsAgentControllers(
     catalog,
     directory,
     visibility,
+    roster,
     fileController,
     remotePromptController,
   };

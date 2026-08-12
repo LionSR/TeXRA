@@ -284,10 +284,10 @@ describe('runCompileCheck', () => {
       [texPathB]: '\\documentclass{article}\\begin{document}B\\end{document}',
     });
 
-    mocks.compileLatex2Pdf.mockImplementation(async (location) => {
-      const abs = location.absolutePath;
-      return { ok: false, logTail: `LOG MARKER FOR ${abs}` };
-    });
+    mocks.compileLatex2Pdf.mockImplementation(async (location) => ({
+      ok: false,
+      logTail: `LOG MARKER FOR ${location.absolutePath}`,
+    }));
 
     const outputState = createOutputState();
     ensureRoundData(outputState, 0).outputs = [

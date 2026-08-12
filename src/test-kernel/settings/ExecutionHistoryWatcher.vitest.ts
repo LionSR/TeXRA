@@ -126,12 +126,12 @@ describe('settings execution history watcher', () => {
     sendHistoryData = vi
       .spyOn(HistoryHandlers.prototype, 'sendHistoryData')
       .mockResolvedValue(undefined) as ReturnType<typeof vi.spyOn>;
+    vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
   });
 
   afterEach(() => vi.restoreAllMocks());
 
   it('registers only once a visible view dispatches, not on construction', async () => {
-    vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
     const createWatcher = vi
       .spyOn(vscode.workspace, 'createFileSystemWatcher')
       .mockReturnValue(watcher());
@@ -146,7 +146,6 @@ describe('settings execution history watcher', () => {
   });
 
   it('does not register while the view is hidden', async () => {
-    vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
     const createWatcher = vi
       .spyOn(vscode.workspace, 'createFileSystemWatcher')
       .mockReturnValue(watcher());
@@ -162,7 +161,6 @@ describe('settings execution history watcher', () => {
   });
 
   it('disposes the watcher on hide and re-registers with one refresh on show', async () => {
-    vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
     const firstWatcher = watcher();
     const secondWatcher = watcher();
     const createWatcher = vi
@@ -187,7 +185,6 @@ describe('settings execution history watcher', () => {
   });
 
   it('tears the watcher down when the view is cleared', async () => {
-    vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
     const currentWatcher = watcher();
     vi.spyOn(vscode.workspace, 'createFileSystemWatcher').mockReturnValue(
       currentWatcher,
@@ -251,7 +248,6 @@ describe('settings execution history watcher', () => {
   });
 
   it('disposes a candidate made stale by synchronous reentrancy', async () => {
-    vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
     const staleWatcher = watcher();
     const currentWatcher = watcher();
     const createWatcher = vi

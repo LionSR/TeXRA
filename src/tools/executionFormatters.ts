@@ -19,10 +19,9 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import {
+import type {
   AgentExecutionHandle,
-  type ExecutionHandle,
-  type ExecutionStatusInfo,
+  ExecutionStatusInfo,
 } from '@agent/runtime/ExecutionHandle';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
@@ -201,11 +200,10 @@ export interface ExecutionSummaryOptions {
  */
 export function shouldSuppressAutoDeliveredSubagentReport(
   options: ExecutionSummaryOptions,
-  handle: ExecutionHandle,
+  handle: AgentExecutionHandle,
 ): boolean {
   if (!options.suppressAutoDeliveredSubagentReport) return false;
   return (
-    handle instanceof AgentExecutionHandle &&
     handle.category === 'toolUse' &&
     handle.isOwnedBy(getRunContextStreamId(tryUseRunContext()))
   );
@@ -225,7 +223,7 @@ export function formatChildLine(
 /** Build the summary lines for a still-running execution (in-memory handle). */
 export function buildRunningSummaryLines(
   executionId: ExecutionId,
-  handle: ExecutionHandle,
+  handle: AgentExecutionHandle,
   category: ExecutionDisplayCategory | undefined,
   info: ExecutionStatusInfo,
   meta: ExecutionMeta | null,

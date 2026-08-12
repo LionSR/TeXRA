@@ -4,7 +4,7 @@ import {
   showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import type { LatexdiffPackResult } from '@housekeeping';
+import type { LatexdiffPackResult } from '@housekeeping/packLatexdiffvc';
 import type { IndentLatexResult } from '@latex/formatter/indentDirectory';
 
 interface LatexHousekeepingNotification {
@@ -88,10 +88,6 @@ export async function showLatexHousekeepingNotification(
       );
       return;
     case 'message':
-      await showLoggedMessage(channel, notification.message);
-      return;
-    default:
-      // A severity added later must still surface, not vanish.
       await showLoggedMessage(channel, notification.message);
       return;
   }

@@ -40,11 +40,11 @@ export interface ArxivPaperMetadata extends ArxivPaperBase {
 
 export type ArxivClientInstance = typeof arxivClient;
 
-export function createArxivClient(options?: unknown): ArxivClientInstance {
+export function createArxivClient(): ArxivClientInstance {
   const ClientCtor = arxivClient.constructor as {
-    new (ctorOptions?: unknown): ArxivClientInstance;
+    new (): ArxivClientInstance;
   };
-  return new ClientCtor(options);
+  return new ClientCtor();
 }
 
 function extractEntryIdentifier(rawId: unknown): string | null {

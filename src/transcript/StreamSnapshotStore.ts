@@ -26,7 +26,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import {
   CompileFailureSchema,
   cloneRoundIndexed,
@@ -53,7 +53,9 @@ import {
   type TokenUsageStats,
   type UserFollowUpSupport,
   type WorkPlanSnapshot,
+  formatZodIssuesMessage,
 } from '@shared/schemas';
+
 import { mapToRecord, throwAggregated } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -81,7 +83,7 @@ import {
 } from './streamSnapshotRead';
 import type { StreamSummaryMeta } from './StreamLogStore';
 
-const CHANNEL = 'StreamSnapshotStore';
+const log = createLog('StreamSnapshotStore');
 
 /** Bounded fan-out for seeding many streams' sidecars, so startup does not
  *  open a file handle per tab. */
@@ -109,7 +111,6 @@ const SNAPSHOT_RUN_FACT_TYPES = Object.freeze([
   'addOutputFiles',
   'updateMissingOutputs',
   'updateCompileFailures',
-  'goalPaused',
 ] as const satisfies readonly AgentEvent['type'][]);
 
 type SnapshotRunFactType = (typeof SNAPSHOT_RUN_FACT_TYPES)[number];
@@ -476,8 +477,7 @@ export class StreamSnapshotStore {
     const key = `${stream}::${accessor}`;
     if (this.unseededReadWarned.has(key)) return;
     this.unseededReadWarned.add(key);
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `${accessor}(${stream}) served a record with unestablished disk ` +
         `provenance; persisted sidecar state may be missing from the ` +
         `result. Await preload([stream]) first or read the stream summary ` +
@@ -594,11 +594,6 @@ export class StreamSnapshotStore {
           case 'updateCompileFailures':
             this.updateCompileFailures(event.streamId, event.filesByRound);
             return;
-          case 'goalPaused':
-            // Subscribed so the goal plane can grow a snapshot-visible fact
-            // later, but deliberately not persisted: pausing changes liveness,
-            // and liveness is not durable display state (see the file header).
-            return;
           default: {
             // Exhaustiveness check: adding a type to `SNAPSHOT_RUN_FACT_TYPES`
             // without handling it here is a compile error, not a silent drop.
@@ -680,7 +675,7 @@ export class StreamSnapshotStore {
         if (record?.diskState === 'unknown' && record.seedChain === next) {
           record.seedChain = undefined;
         }
-        logger.warn(CHANNEL, `Deferred update failed for stream ${stream}`, {
+        log.warn(`Deferred update failed for stream ${stream}`, {
           data: err,
         });
       });
@@ -724,8 +719,7 @@ export class StreamSnapshotStore {
       // The probe only ever shortcuts the read; a failed listing must not
       // fail the seed and must NEVER claim absence. Fall back to the full
       // read, whose own fallback policy governs unreadable storage.
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Sidecar existence probe failed for stream ${stream}; falling back to a full read.`,
         { data: error },
       );
@@ -967,14 +961,11 @@ export class StreamSnapshotStore {
   ): UsageUpdateResult {
     const parsed = TokenUsageStatsParsingBaseSchema.safeParse(usage);
     if (!parsed.success) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Discarding malformed usage delta for run ${storageKey} on stream ` +
           `${stream} instead of silently zeroing accumulated cost.`,
         {
-          data: parsed.error.issues
-            .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
-            .join('; '),
+          data: formatZodIssuesMessage(parsed.error.issues),
         },
       );
     }
@@ -1154,8 +1145,7 @@ export class StreamSnapshotStore {
         try {
           children = await this.detachPersistedChildren(stream);
         } catch (error) {
-          logger.warn(
-            CHANNEL,
+          log.warn(
             `Stream ${stream} was deleted, but child parent-edge cleanup was incomplete.`,
             { data: error },
           );
@@ -1163,8 +1153,7 @@ export class StreamSnapshotStore {
         try {
           await onCommitted?.(children);
         } catch (error) {
-          logger.warn(
-            CHANNEL,
+          log.warn(
             `Stream ${stream} was deleted, but child-detachment projection was incomplete.`,
             { data: error },
           );
@@ -1172,8 +1161,7 @@ export class StreamSnapshotStore {
         try {
           await this.flush();
         } catch (error) {
-          logger.warn(
-            CHANNEL,
+          log.warn(
             `Stream ${stream} was deleted, but child parent-edge persistence was incomplete.`,
             { data: error },
           );
@@ -1445,8 +1433,7 @@ export class StreamSnapshotStore {
         // An unreadable sidecar proves nothing about this stream's parent;
         // treat it as unrelated so one bad file cannot block the detach
         // sweep for every other child.
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Skipping unreadable sidecar meta for stream ${stream} during child detach.`,
           { data: error },
         );
@@ -1508,8 +1495,7 @@ export class StreamSnapshotStore {
     const write = { stream, key, value } satisfies DirtySidecarWrite;
     this.dirtyWrites.set(chainKey, write);
     void this.persistDirtyWrite(chainKey, write).catch((err: unknown) =>
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Failed to persist ${key}.json for stream ${stream}; sidecar remains dirty.`,
         { data: err },
       ),
@@ -1842,19 +1828,16 @@ export class StreamSnapshotStore {
         userFollowUpSupport = execMeta?.userFollowUpSupport;
         if (execMeta && !identity && !this.preIdentityWarned.has(stream)) {
           this.preIdentityWarned.add(stream);
-          logger.warn(
-            CHANNEL,
+          log.warn(
             `Stream ${stream} maps to pre-identity execution row ${executionId}; hydrating without a run identity (reader retired per #9590 Stage 7)`,
           );
         }
         description = execMeta?.description;
         config = execConfig;
       } catch (error) {
-        logger.warn(
-          CHANNEL,
-          `Could not read execution record for stream ${stream}.`,
-          { data: { stream, executionId, error } },
-        );
+        log.warn(`Could not read execution record for stream ${stream}.`, {
+          data: { stream, executionId, error },
+        });
       }
       if (config) {
         return { config, identity, userFollowUpSupport, description };

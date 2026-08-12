@@ -1,14 +1,10 @@
-// Node imports
-import { strict as assert } from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-// Third-party imports
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports
 import { noopTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentSettingSchema } from '@agent/core/definition/AgentDataclass';
@@ -60,76 +56,75 @@ async function expectPrefillPreserved<M extends ProviderMessage>(
       outputLocation,
     );
 
-  assert.equal(isComplete, false);
-  assert.deepEqual(updatedMessages, messages);
-  assert.equal(workspaceState.assembly.accumulatedOutput, '');
+  expect(isComplete).toBe(false);
+  expect(updatedMessages).toEqual(messages);
+  expect(workspaceState.assembly.accumulatedOutput).toBe('');
 }
 
 describe('model handler output initialization with no output file', () => {
-  it('OpenAI chat preserves user content when no output file exists', async () => {
-    await withMissingOutput(async (outputLocation) => {
-      const handler = new ModelHandlerOpenAI(
-        buildTestModelConfig({
-          provider: ModelProvider.OPENAI,
-          capabilities: { supportsReasoning: false, supportsVision: false },
-        }),
-      );
-
-      await expectPrefillPreserved(
-        handler,
-        [
-          {
-            role: 'user',
-            content: [{ type: 'text', text: 'revise the document' }],
-          },
-        ],
-        outputLocation,
-      );
-    });
-  });
-
-  it('Google Interactions preserves user content when no output file exists', async () => {
-    await withMissingOutput(async (outputLocation) => {
-      const handler = new ModelHandlerGoogleInteractions(
-        buildTestModelConfig({
-          provider: ModelProvider.GOOGLE,
-          capabilities: { supportsReasoning: false, supportsVision: false },
-        }),
-      );
-
-      await expectPrefillPreserved(
-        handler,
-        [
-          {
-            type: 'user_input',
-            content: [{ type: 'text', text: 'revise the document' }],
-          },
-        ],
-        outputLocation,
-      );
-    });
-  });
-
-  it('OpenRouter native preserves user content when no output file exists', async () => {
-    await withMissingOutput(async (outputLocation) => {
-      const handler = new ModelHandlerOpenRouterNative(
-        buildTestModelConfig({
-          provider: ModelProvider.OPENAI,
-          capabilities: { supportsReasoning: false, supportsVision: false },
-          openrouterFullName: 'openai/test-model',
-        }),
-      );
-
-      await expectPrefillPreserved(
-        handler,
-        [
-          {
-            role: 'user',
-            content: [{ type: 'text', text: 'revise the document' }],
-          },
-        ],
-        outputLocation,
-      );
-    });
-  });
+  it.each([
+    {
+      name: 'OpenAI chat',
+      run: (outputLocation: FileLocation) =>
+        expectPrefillPreserved(
+          new ModelHandlerOpenAI(
+            buildTestModelConfig({
+              provider: ModelProvider.OPENAI,
+              capabilities: { supportsReasoning: false, supportsVision: false },
+            }),
+          ),
+          [
+            {
+              role: 'user',
+              content: [{ type: 'text', text: 'revise the document' }],
+            },
+          ],
+          outputLocation,
+        ),
+    },
+    {
+      name: 'Google Interactions',
+      run: (outputLocation: FileLocation) =>
+        expectPrefillPreserved(
+          new ModelHandlerGoogleInteractions(
+            buildTestModelConfig({
+              provider: ModelProvider.GOOGLE,
+              capabilities: { supportsReasoning: false, supportsVision: false },
+            }),
+          ),
+          [
+            {
+              type: 'user_input',
+              content: [{ type: 'text', text: 'revise the document' }],
+            },
+          ],
+          outputLocation,
+        ),
+    },
+    {
+      name: 'OpenRouter native',
+      run: (outputLocation: FileLocation) =>
+        expectPrefillPreserved(
+          new ModelHandlerOpenRouterNative(
+            buildTestModelConfig({
+              provider: ModelProvider.OPENAI,
+              capabilities: { supportsReasoning: false, supportsVision: false },
+              openrouterFullName: 'openai/test-model',
+            }),
+          ),
+          [
+            {
+              role: 'user',
+              content: [{ type: 'text', text: 'revise the document' }],
+            },
+          ],
+          outputLocation,
+        ),
+    },
+  ])(
+    '$name preserves user content when no output file exists',
+    async ({ run }) => {
+      await withMissingOutput(run);
+    },
+  );
 });

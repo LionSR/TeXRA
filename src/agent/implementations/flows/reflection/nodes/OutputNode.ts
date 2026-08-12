@@ -17,6 +17,7 @@ import { traceFileLineage } from '@agent/output/lineageMapping';
 import { resolveBaseFilesForDiff } from '@agent/output/snapshotResolution';
 import { checkExpectedOutputs } from '@agent/output/outputValidation';
 import {
+  blankRoundSummary,
   summarizeRound,
   getRoundOutput,
   type RoundSummary,
@@ -216,14 +217,12 @@ export class OutputNode<C = unknown> extends Node<
         `Output fallback summary failed; output files may be dropped: ${toErrorMessage(summaryError)}`,
         { data: summaryError },
       );
-      summary = {
+      summary = blankRoundSummary({
         storageKey: getStorageKey(outputState),
         currRound: currentRound,
-        fileInfos: [],
-        filesToOpen: [],
         outputFile: outputLocation,
         endTurn,
-      };
+      });
     }
 
     outputState.rounds.set(currentRound, {
@@ -367,6 +366,6 @@ export class OutputNode<C = unknown> extends Node<
       return [];
     }
 
-    return diffManager.handleLatexdiffofOutput(currentRound, mapping);
+    return diffManager.handleLatexdiffOfOutput(currentRound, mapping);
   }
 }

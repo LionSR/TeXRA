@@ -217,6 +217,15 @@ function stubRunExecutionDeps(): void {
   });
 }
 
+/** Loads executeCliRequest against a fresh fake platform for shutdown tests. */
+async function installFakePlatform() {
+  const { initPlatform } = await import('@platform/platform');
+  const platform = createFakePlatform();
+  initPlatform(platform);
+  const { executeCliRequest } = await loadRunExecution();
+  return { platform, executeCliRequest };
+}
+
 describe('executeCliRequest', () => {
   beforeEach(async () => {
     stubRunExecutionDeps();
@@ -748,10 +757,7 @@ describe('executeCliRequest', () => {
   });
 
   it('marks owned executions interrupted during platform shutdown', async () => {
-    const { initPlatform } = await import('@platform/platform');
-    const platform = createFakePlatform();
-    initPlatform(platform);
-    const { executeCliRequest } = await loadRunExecution();
+    const { platform, executeCliRequest } = await installFakePlatform();
     const runWithOwnership = vi.fn((operation: () => unknown) => operation());
     let publishLeaseScope:
       ((scope: typeof runWithOwnership) => void) | undefined;
@@ -790,10 +796,7 @@ describe('executeCliRequest', () => {
   });
 
   it('does not finalize shutdown through a captured lease that is already lost', async () => {
-    const { initPlatform } = await import('@platform/platform');
-    const platform = createFakePlatform();
-    initPlatform(platform);
-    const { executeCliRequest } = await loadRunExecution();
+    const { platform, executeCliRequest } = await installFakePlatform();
     // Imported dynamically (matching the module above) so the `instanceof`
     // check in runExecution.ts sees the same module instance even after an
     // earlier test's `vi.resetModules()` in this file.
@@ -818,10 +821,7 @@ describe('executeCliRequest', () => {
   });
 
   it('closes the runtime host when shutdown finalization fails', async () => {
-    const { initPlatform } = await import('@platform/platform');
-    const platform = createFakePlatform();
-    initPlatform(platform);
-    const { executeCliRequest } = await loadRunExecution();
+    const { platform, executeCliRequest } = await installFakePlatform();
     const persistenceError = new Error('terminal metadata disk full');
     mocks.finalizeExecution.mockResolvedValue({
       status: 'failed',
@@ -862,10 +862,7 @@ describe('executeCliRequest', () => {
   });
 
   it('removes the shutdown status hook after owned executions finish', async () => {
-    const { initPlatform } = await import('@platform/platform');
-    const platform = createFakePlatform();
-    initPlatform(platform);
-    const { executeCliRequest } = await loadRunExecution();
+    const { platform, executeCliRequest } = await installFakePlatform();
     const request = baseRequest();
 
     await executeCliRequest(request, cliContext(), {

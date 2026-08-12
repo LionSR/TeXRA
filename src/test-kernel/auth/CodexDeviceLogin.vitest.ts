@@ -24,6 +24,10 @@ function stubDeviceUserCode(overrides: Record<string, unknown> = {}): void {
   });
 }
 
+function coordinatorStub(): CodexSessionCoordinator {
+  return { completeDeviceLogin: vi.fn() } as unknown as CodexSessionCoordinator;
+}
+
 describe('Codex device login', () => {
   it('does not exchange a token when cancellation follows polling', async () => {
     const controller = new AbortController();
@@ -35,10 +39,7 @@ describe('Codex device login', () => {
         code_verifier: 'code-verifier',
       };
     });
-    const completeDeviceLogin = vi.fn();
-    const coordinator = {
-      completeDeviceLogin,
-    } as unknown as CodexSessionCoordinator;
+    const coordinator = coordinatorStub();
 
     await expect(
       loginWithDeviceCode({
@@ -48,7 +49,7 @@ describe('Codex device login', () => {
       }),
     ).rejects.toMatchObject({ name: 'AbortError' });
 
-    expect(completeDeviceLogin).not.toHaveBeenCalled();
+    expect(coordinator.completeDeviceLogin).not.toHaveBeenCalled();
   });
 
   it('gives up at the expiry the server reported, not the local fallback', async () => {
@@ -66,9 +67,7 @@ describe('Codex device login', () => {
 
     await expect(
       loginWithDeviceCode({
-        coordinator: {
-          completeDeviceLogin: vi.fn(),
-        } as unknown as CodexSessionCoordinator,
+        coordinator: coordinatorStub(),
         onPrompt: vi.fn(),
       }),
     ).rejects.toThrow('Device-code sign-in timed out.');

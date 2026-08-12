@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - common
 import { isTexFile } from '@common/files/fileTypeUtils';
 import { invokeLatexWorkshopBuild } from '@frontend/latex/openBuild';
-import { ensureFileOpen } from '@frontend/vscode/vscodeEditor';
+import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
 
 // Local imports
@@ -36,7 +36,11 @@ async function triggerLaTeXBuild(
   filePath: string,
   fileUri: vscode.Uri,
 ): Promise<void> {
-  await ensureFileOpen(filePath, { preserveFocus: true, save: true });
+  await openFileInEditor(filePath, {
+    preserveFocus: true,
+    save: true,
+    reuseVisible: true,
+  });
 
   const diagnosticsWait = waitForDiagnosticsChange(
     fileUri,

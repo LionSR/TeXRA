@@ -4,12 +4,9 @@ import { type ToolUseFollowUpQueueReason } from '@agent/runtime/executionRegistr
 import {
   currentSession,
   defaultSession,
+  resolveEmitSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import {
-  getRunContextSession,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
 import { platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
@@ -78,15 +75,10 @@ export function notifyFollowUpSent(
   streamId: StreamTabId,
   session?: SessionHandle,
 ): void {
-  followUpSentSession(session).events.emit({
+  (resolveEmitSession(session) ?? defaultSession()).events.emit({
     scope: 'session',
     event: { type: 'followUpSent', payload: { streamId } },
   });
-}
-
-function followUpSentSession(session?: SessionHandle): SessionHandle {
-  const owner = session ?? getRunContextSession(tryUseRunContext());
-  return owner?.events ? owner : defaultSession();
 }
 
 /**

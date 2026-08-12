@@ -4,6 +4,7 @@ import * as path from 'node:path';
 
 // Local imports - common
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import type { ActiveSkillSourceScope } from '@shared/schemas';
 import { byName } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -11,6 +12,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { type SkillLoadIssue, issue, loadSkillDirectory } from './skillLoader';
 import type { Dirent } from 'node:fs';
 import type { Skill } from './SkillSchema';
+
+// Local imports - shared schemas
 
 export { type SkillLoadIssue } from './skillLoader';
 
@@ -25,7 +28,10 @@ export interface DiscoverSkillsResult {
   errors: SkillLoadIssue[];
 }
 
-type SkillSourceScope = 'bundled' | 'user' | 'project' | 'interop' | 'custom';
+/** Canonical scope vocabulary, derived from the shared wire-contract enum
+ *  (`@shared/schemas/activeSkills`) so the loader and the persisted snapshot
+ *  can't drift. */
+type SkillSourceScope = ActiveSkillSourceScope;
 
 export interface SkillSource {
   readonly scope: SkillSourceScope;

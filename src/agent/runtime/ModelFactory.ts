@@ -14,20 +14,17 @@ import {
   isCodexSessionRoutable,
 } from '@auth/codex';
 import { AgentError } from '@common/errors';
-import * as logger from '@logger/logUtils';
-import { apiKeyExists } from '@model/apiProviders';
+import { createLog } from '@logger/logUtils';
 import {
   copilotRouteUnavailableReason,
   prefersCopilotRoute,
   type CopilotRouteOverride,
 } from '@model/copilotRouting';
-import { includedModelAccess } from '@model/includedModelAccess';
 import { resolveCodexSubscriptionCapabilities } from '@model/providerCapabilities';
 import {
-  isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
-  kimiCodeRuntimeConfig,
-  resolveKimiCodeRoute,
+  kimiCodeEffectiveConfig,
+  resolveKimiCodeRoutingFacts,
 } from '@model/kimiCodeSubscriptionRouting';
 import { isGpt5ModelName } from '@model/modelNames';
 import {
@@ -43,14 +40,11 @@ import {
 import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
-import {
-  getPreferKimiCode,
-  getUseOpenRouter,
-} from '@utils/config/providerConfig';
+import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
-const CHANNEL = 'ModelFactory';
+const log = createLog('ModelFactory');
 
 type ModelHandlerConstructor = new (
   config: ModelConfig,
@@ -167,42 +161,11 @@ function withReasoningOverride<T extends ModelHandler>(handler: T): T {
   const effort = level ? LEVEL_TO_EFFORT[level] : undefined;
   if (effort === undefined) return handler;
 
-  logger.debug(
-    CHANNEL,
+  log.debug(
     `Applying reasoning level override for ${handler.config.name}: ${level}`,
   );
   handler.capabilities.reasoningEffort = effort;
   return handler;
-}
-
-/**
- * Whether a model is pinned to the Interactions API. `requiresInteractionsAPI`
- * is a future per-model opt-in (parallel to `requiresResponsesAPI`); it is not
- * yet on the external llm-zoo ModelConfig, so read it defensively. v0 registers
- * no model with it set.
- */
-function modelRequiresInteractionsAPI(config: ModelConfig): boolean {
-  return (
-    config.provider === ModelProvider.GOOGLE &&
-    !config.openRouterOnly &&
-    (config as { requiresInteractionsAPI?: boolean })
-      .requiresInteractionsAPI === true
-  );
-}
-
-/**
- * Fail loudly when an Interactions-only model resolves to OpenRouter —
- * OpenRouter cannot proxy Interactions, so silently routing it through the
- * OpenRouter handler would be wrong (spec §6.3). Called from
- * `createModelHandler` only (the live-routing path that actually instantiates a
- * handler), keeping the routing predicate pure.
- */
-function assertGoogleInteractionsRoutable(config: ModelConfig): void {
-  if (modelRequiresInteractionsAPI(config)) {
-    throw new Error(
-      `Model ${config.name} requires the Google Interactions API, which cannot be used through OpenRouter. Disable OpenRouter or select a different model.`,
-    );
-  }
 }
 
 /** Check if OpenAI Responses API should be used for this config. */
@@ -260,7 +223,7 @@ function applyShortModelNamePreference(
 }
 
 /** Returns the conversation-history format used by the handler for this model. */
-export function modelHandlerCompatibilityKey(
+export function resolveModelHandlerCompatibilityKey(
   originalConfig: ModelConfig,
   useOpenRouter = getUseOpenRouter(),
   preferShortModelNames = getPreferShortModelNames(),
@@ -315,10 +278,7 @@ function providerHandlerRoute(
 ): ProviderHandlerRoute | undefined {
   const route = PROVIDER_HANDLER_ROUTES[provider];
   if (!route) {
-    logger.warn(
-      CHANNEL,
-      `No model handler route is registered for provider ${provider}`,
-    );
+    log.warn(`No model handler route is registered for provider ${provider}`);
     return undefined;
   }
   return route;
@@ -385,8 +345,7 @@ function withShortModelName(config: ModelConfig): ModelConfig {
   );
   if (resolved === config) return config;
 
-  logger.debug(
-    CHANNEL,
+  log.debug(
     `Using short model name for ${config.name}: ${config.fullName} → ${resolved.fullName}`,
   );
   return resolved;
@@ -413,7 +372,7 @@ function withCompatibilityRoutingMode(
  * Applies short model name preference and reasoning level overrides.
  *
  * The ordered routing precedence is owned solely by
- * {@link modelHandlerCompatibilityKey}; this live path computes that key and
+ * {@link resolveModelHandlerCompatibilityKey}; this live path computes that key and
  * `switch`es on it for instantiation, so the two can never drift on the key
  * they produce. The only routing decision made here is the async
  * Codex-subscription override, which the pure key predicate deliberately omits
@@ -427,7 +386,7 @@ export async function createModelHandler(
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
   const useOpenRouter = getUseOpenRouter();
-  const compatibilityKey = modelHandlerCompatibilityKey(
+  const compatibilityKey = resolveModelHandlerCompatibilityKey(
     config,
     useOpenRouter,
     // Short-name preference was already applied by withShortModelName above;
@@ -436,10 +395,6 @@ export async function createModelHandler(
     false,
     copilotRouteOverride,
   );
-  if (compatibilityKey === 'ModelHandlerOpenRouterNative') {
-    assertGoogleInteractionsRoutable(config);
-  }
-
   return createModelHandlerForResolvedCompatibilityKey(
     config,
     compatibilityKey,
@@ -476,6 +431,106 @@ export async function createModelHandlerForCompatibilityKey(
   );
 }
 
+/**
+ * ChatGPT subscription (Codex backend via the user's OAuth session) — an
+ * async, key-neutral override of the Responses path: these are OpenAI
+ * Responses-shaped models the user has opted to drive through their
+ * subscription instead of an API key. Gated on the key not being the
+ * validation override so the package-validation gate still wins, and not
+ * being the Copilot route: a "Via Copilot" row must not silently dispatch
+ * through ChatGPT (#9635). Returns a ready handler, or undefined when the
+ * subscription route does not apply.
+ */
+async function tryCodexSubscriptionRoute(
+  config: ModelConfig,
+  compatibilityKey: ModelHandlerCompatibilityKey | undefined,
+  useOpenRouter: boolean,
+  allowCodexSubscriptionOverride: boolean,
+  responseTextProcessing?: ResponseTextProcessing,
+): Promise<ModelHandler | undefined> {
+  const codexSubscriptionEligible =
+    allowCodexSubscriptionOverride &&
+    compatibilityKey !== 'ModelHandlerValidation' &&
+    compatibilityKey !== 'ModelHandlerVscodeLm' &&
+    resolveCodexSubscriptionCapabilities(config, useOpenRouter) !== null;
+  if (!codexSubscriptionEligible) {
+    return undefined;
+  }
+
+  let codexSessionRoutable: boolean;
+  try {
+    codexSessionRoutable = await isCodexSessionRoutable();
+  } catch (error) {
+    if (error instanceof CodexAuthError) {
+      throw new AgentError(formatCodexAuthUnavailableMessage(error), {
+        cause: error,
+      });
+    }
+    throw error;
+  }
+
+  if (!codexSessionRoutable) {
+    return undefined;
+  }
+  log.debug('Using ChatGPT subscription (Codex) Handler');
+  const { ModelHandlerCodex } =
+    await import('@agent/modelHandlers/openai/modelHandlerCodex');
+  return finalizeModelHandler(
+    new ModelHandlerCodex(config, responseTextProcessing),
+    'ModelHandlerOpenAIResponse',
+  );
+}
+
+/**
+ * Kimi Code (Moonshot coding subscription via a console API key) — a
+ * key-neutral override of the Kimi chat-completions path. The conversation
+ * format is unchanged, so the persisted compatibility key stays
+ * 'ModelHandlerKimi' and resume paths are unaffected; only the request's
+ * backend model id, base URL, and credential change. Exclusive plan aliases
+ * already carry the pinned coding baseUrl (the registry-fact predicates route
+ * their key and endpoint automatically), so they keep `config` untouched.
+ * Dual-backend `kimi3` is rerouted only while the "Prefer Kimi Code" switch
+ * is on, a key is stored, and the relay is not actually serving requests —
+ * under included (relay) access the relay owns eligible models, and the
+ * rerouted config's pinned coding `baseUrl` would outrank the relay URL
+ * while the credential layer still resolves a relay token (see
+ * resolveClientCredential). The reroute swaps in a synthesized runtime
+ * config that the normal ModelHandlerKimi switch below then builds.
+ *
+ * On the resume path `useOpenRouter` is derived from the compatibility key
+ * (false unless it's `ModelHandlerOpenRouterNative`), not the live global
+ * toggle — and that is correct here: `kimi3` carries an `openrouterFullName`,
+ * so an OpenRouter-routed session persists as `ModelHandlerOpenRouterNative`,
+ * never `ModelHandlerKimi`. Reaching this branch therefore means the session
+ * was a *direct* Kimi session, for which OpenRouter is irrelevant; honoring
+ * the current Prefer-Kimi-Code + key on resume keeps a Kimi-Code-only user's
+ * resumed sessions runnable when the relay cannot serve them (signed out or
+ * included access off — they have no Moonshot key to fall back to).
+ *
+ * The relay only owns the model when included access is on AND the account
+ * can actually use it — a signed-out user with the default-on toggle must
+ * still reach their Kimi Code key, matching picker availability. Shared
+ * fact assembly + post-route config synthesis live with the route resolver
+ * so dispatch and availability cannot drift. Returns the resolved config
+ * (unchanged when the route does not apply).
+ */
+async function applyKimiCodeRoute(
+  config: ModelConfig,
+  compatibilityKey: ModelHandlerCompatibilityKey | undefined,
+  useOpenRouter: boolean,
+): Promise<ModelConfig> {
+  if (
+    compatibilityKey !== 'ModelHandlerKimi' ||
+    !isKimiSubscriptionEligible(config)
+  ) {
+    return config;
+  }
+  return kimiCodeEffectiveConfig(
+    config,
+    await resolveKimiCodeRoutingFacts(useOpenRouter),
+  );
+}
+
 async function createModelHandlerForResolvedCompatibilityKey(
   config: ModelConfig,
   compatibilityKey: ModelHandlerCompatibilityKey | undefined,
@@ -494,89 +549,20 @@ async function createModelHandlerForResolvedCompatibilityKey(
     );
   }
 
-  // ChatGPT subscription (Codex backend via the user's OAuth session) — an
-  // async, key-neutral override of the Responses path: these are OpenAI
-  // Responses-shaped models the user has opted to drive through their
-  // subscription instead of an API key. Gated on the key not being the
-  // validation override so the package-validation gate still wins, and not
-  // being the Copilot route: a "Via Copilot" row must not silently dispatch
-  // through ChatGPT (#9635).
-  const codexSubscriptionEligible =
-    options.allowCodexSubscriptionOverride &&
-    compatibilityKey !== 'ModelHandlerValidation' &&
-    compatibilityKey !== 'ModelHandlerVscodeLm' &&
-    resolveCodexSubscriptionCapabilities(config, useOpenRouter) !== null;
-  if (codexSubscriptionEligible) {
-    let codexSessionRoutable: boolean;
-    try {
-      codexSessionRoutable = await isCodexSessionRoutable();
-    } catch (error) {
-      if (error instanceof CodexAuthError) {
-        throw new AgentError(formatCodexAuthUnavailableMessage(error), {
-          cause: error,
-        });
-      }
-      throw error;
-    }
-
-    if (codexSessionRoutable) {
-      logger.debug(CHANNEL, 'Using ChatGPT subscription (Codex) Handler');
-      const { ModelHandlerCodex } =
-        await import('@agent/modelHandlers/openai/modelHandlerCodex');
-      return finalizeModelHandler(
-        new ModelHandlerCodex(config, responseTextProcessing),
-        'ModelHandlerOpenAIResponse',
-      );
-    }
+  // Key-neutral subscription overrides short-circuit before the per-key switch
+  // below: Codex returns a ready handler, Kimi rewrites `config` so the
+  // `ModelHandlerKimi` case builds the subscription-backed request.
+  const codexHandler = await tryCodexSubscriptionRoute(
+    config,
+    compatibilityKey,
+    useOpenRouter,
+    options.allowCodexSubscriptionOverride,
+    responseTextProcessing,
+  );
+  if (codexHandler) {
+    return codexHandler;
   }
-
-  // Kimi Code (Moonshot coding subscription via a console API key) — a
-  // key-neutral override of the Kimi chat-completions path. The conversation
-  // format is unchanged, so the persisted compatibility key stays
-  // 'ModelHandlerKimi' and resume paths are unaffected; only the request's
-  // backend model id, base URL, and credential change. Exclusive plan aliases
-  // already carry the pinned coding baseUrl (the registry-fact predicates route
-  // their key and endpoint automatically), so they keep `config` untouched.
-  // Dual-backend `kimi3` is rerouted only while the "Prefer Kimi Code" switch
-  // is on, a key is stored, and the relay is not actually serving requests —
-  // under included (relay) access the relay owns eligible models, and the
-  // rerouted config's pinned coding `baseUrl` would outrank the relay URL
-  // while the credential layer still resolves a relay token (see
-  // resolveClientCredential). The reroute swaps in a synthesized runtime
-  // config that the normal ModelHandlerKimi switch below then builds.
-  //
-  // On the resume path `useOpenRouter` is derived from the compatibility key
-  // (false unless it's `ModelHandlerOpenRouterNative`), not the live global
-  // toggle — and that is correct here: `kimi3` carries an `openrouterFullName`,
-  // so an OpenRouter-routed session persists as `ModelHandlerOpenRouterNative`,
-  // never `ModelHandlerKimi`. Reaching this branch therefore means the session
-  // was a *direct* Kimi session, for which OpenRouter is irrelevant; honoring
-  // the current Prefer-Kimi-Code + key on resume keeps a Kimi-Code-only user's
-  // resumed sessions runnable when the relay cannot serve them (signed out or
-  // included access off — they have no Moonshot key to fall back to).
-  if (
-    compatibilityKey === 'ModelHandlerKimi' &&
-    isKimiSubscriptionEligible(config)
-  ) {
-    const included = includedModelAccess();
-    // The relay only owns the model when included access is on AND the account
-    // can actually use it — a signed-out user with the default-on toggle must
-    // still reach their Kimi Code key, matching picker availability.
-    const includedAccess = included.getUseIncludedModelAccess()
-      ? await included.canUseServerSideKeys()
-      : false;
-    const keySet = await apiKeyExists(platform().secrets, 'kimiCode');
-    const route = resolveKimiCodeRoute(
-      config,
-      useOpenRouter,
-      keySet,
-      getPreferKimiCode(),
-      includedAccess,
-    );
-    if (route === 'kimiCode' && !isKimiCodeExclusiveModel(config)) {
-      config = kimiCodeRuntimeConfig(config);
-    }
-  }
+  config = await applyKimiCodeRoute(config, compatibilityKey, useOpenRouter);
 
   if (
     compatibilityKey === 'ModelHandlerVscodeLm' &&
@@ -593,8 +579,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
       // Package validation still enters the real CLI and executeAgent path.
       // Only the provider boundary is deterministic, so this must not become
       // a user-facing model selector or an injected command-layer substitute.
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `${internalValidationModelHandlerEnvName()}=1 is replacing provider handlers with the internal validation handler.`,
       );
       const { ModelHandlerValidation } =
@@ -606,7 +591,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
     }
 
     case 'ModelHandlerOpenAIResponse': {
-      logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
+      log.debug('Using OpenAI Responses API Handler');
       const { ModelHandlerOpenAIResponse } =
         await import('@agent/modelHandlers/openai/modelHandlerOpenAIResponse');
       return finalizeModelHandler(
@@ -653,7 +638,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
         throw new Error(`Unsupported model provider: ${config.provider}`);
       }
       const HandlerClass = await route.load();
-      logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
+      log.debug(`Using Handler: ${HandlerClass.name}`);
       return finalizeModelHandler(
         new HandlerClass(config, responseTextProcessing),
         route.compatibilityKey,

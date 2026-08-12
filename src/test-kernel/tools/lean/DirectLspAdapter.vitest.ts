@@ -154,9 +154,7 @@ describe('createDirectLspLeanAdapter', () => {
     await expect(
       Promise.race([
         pendingDiagnostics.then(() => 'settled'),
-        new Promise<string>((resolve) =>
-          setTimeout(() => resolve('timed out'), 500),
-        ),
+        delay(500).then(() => 'timed out'),
       ]),
     ).resolves.toBe('settled');
   });
@@ -171,8 +169,14 @@ describe('createDirectLspLeanAdapter', () => {
           adapter.fetchDiagnosticsForFile(filePath),
         ]);
 
-        expect(first?.[0]?.message).toBe('fake diagnostic');
-        expect(second?.[0]?.message).toBe('fake diagnostic');
+        expect(first).toMatchObject({
+          ok: true,
+          diagnostics: [{ message: 'fake diagnostic' }],
+        });
+        expect(second).toMatchObject({
+          ok: true,
+          diagnostics: [{ message: 'fake diagnostic' }],
+        });
         expect(await countStarts()).toBe(1);
       } finally {
         await adapter.dispose();
@@ -180,14 +184,14 @@ describe('createDirectLspLeanAdapter', () => {
     },
   );
 
-  it('handles a missing lake command as a reported adapter failure', async () => {
+  it('reports a missing lake command as toolchain_unavailable, not "file missing"', async () => {
     const adapter = createDirectLspLeanAdapter({
       lakeCommand: path.join(tempRoot, 'missing-lake'),
     });
     try {
       await expect(
         adapter.fetchDiagnosticsForFile(filePath),
-      ).resolves.toBeNull();
+      ).resolves.toMatchObject({ ok: false, kind: 'toolchain_unavailable' });
     } finally {
       await adapter.dispose();
     }

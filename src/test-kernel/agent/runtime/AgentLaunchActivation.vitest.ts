@@ -1,4 +1,3 @@
-// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -50,7 +49,6 @@ vi.mock('@agent/storage/executionLease', () => ({
     mocks.releaseOwnedExecutionLeaseAfterFailure,
 }));
 
-// Local imports
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -64,12 +62,8 @@ import {
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
-
-// Test support imports
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
-
-// Local file imports
 import { recordSessionEvents, sessionFactPayloads } from '../progressTestUtils';
 
 const LAUNCH_FAILURE = new Error('stop after stream activation');

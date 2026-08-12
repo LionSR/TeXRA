@@ -24,17 +24,14 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import {
-  AgentExecutionHandle,
-  type ExecutionHandle,
-} from '@agent/runtime/ExecutionHandle';
+import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
   getRunContextExecutionId,
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { FileStat } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import {
@@ -67,7 +64,7 @@ import {
   readCompletedRunConversation,
   readCompletedRunTodos,
 } from '@transcript';
-import { clamp, unique } from '@utils/core';
+import { assertNever, clamp, unique } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -107,7 +104,7 @@ import {
 } from './executions/waitCoordination';
 import { formatSizedEntryLines } from './executions/fileListingFormat';
 
-const CHANNEL = 'ExecutionsTool';
+const log = createLog('ExecutionsTool');
 
 // ============================================================================
 // Resource path catalog
@@ -178,11 +175,9 @@ const EXECUTION_PATH_LIST = EXECUTION_PATH_CATALOG.map(
 
 function getRunningTodos(
   session: SessionHandle,
-  handle: ExecutionHandle,
+  handle: AgentExecutionHandle,
 ): TodoEntry[] {
-  return handle instanceof AgentExecutionHandle
-    ? session.snapshots.getWorkPlan(handle.childStreamId).todos
-    : [];
+  return session.snapshots.getWorkPlan(handle.childStreamId).todos;
 }
 
 /**
@@ -444,40 +439,81 @@ function projectProcessOutput(
 // Schema
 // ============================================================================
 
-const ExecutionsToolInputSchema = z.strictObject({
-  /** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/workspace-files/{path} */
-  path: z.string().describe('Path starting with /executions'),
+/** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/workspace-files/{path} */
+const PathFieldSchema = z.string().describe('Path starting with /executions');
 
-  /** Action to perform. */
+const ViewActionSchema = z.strictObject({
+  path: PathFieldSchema,
+  // Optional + defaulted, NOT .nullish() (unlike every other nullish field in
+  // this file): 'view' is the common no-op-preamble call, so omitting
+  // `action` must both dispatch to this branch and keep `action` out of the
+  // JSON-schema `required` list, matching the pre-refactor `.prefault('view')`
+  // and AGENTS.md's "design for the model's first call" rule.
+  // `.optional().default('view')` keeps the emitted per-branch JSON schema a
+  // clean single-value `const` (not an `anyOf` with `null`) — required so
+  // `convertToolSchema`'s `flattenTopLevelUnion`/`schemaLiteralValue` (which
+  // only recognizes a bare `const`/one-item `enum` as a discriminator
+  // literal) still merges all five actions into one enum for the
+  // OpenAI/Anthropic/Google-facing schema. `.nullish()` here produces an
+  // `anyOf` that flattening can't read as a literal, silently dropping
+  // wait/kill/subscribe/unsubscribe from the advertised schema instead.
+  // The explicit-`null` case AGENTS.md's rule calls out (a structured-output
+  // provider representing an omitted optional field as `null` rather than
+  // absent) is handled separately below by ExecutionsToolInputSchema's
+  // preprocess, which strips a `null` action down to omitted before this
+  // branch's own default runs — so the type stays a plain optional literal.
   action: z
-    .enum(['view', 'wait', 'kill', 'subscribe', 'unsubscribe'])
-    .prefault('view')
-    .describe(
-      'view: read execution data (returns immediately). ' +
-        'wait: wait for a status change on /executions or /executions/{id}, then return the same data as view (avoids sleep-poll loops). ' +
-        'kill: terminate a running execution by ID (use on /executions/{id}). ' +
-        'subscribe: receive future status changes for /executions/{id} as <execution-activity> follow-ups; auto-disposes when the execution finishes or this stream is released. ' +
-        'unsubscribe: stop receiving <execution-activity> follow-ups for /executions/{id}.',
-    ),
+    .literal('view')
+    .optional()
+    .default('view')
+    .describe('Read execution data (returns immediately). Default action.'),
 
-  /** Optional line range [start, end] for large outputs (action="view" only). */
+  /** Optional line range [start, end] for large outputs. */
   view_range: ViewRangeSchema.nullish().describe(
-    'Line range [start, end] for paginating file and background-command output (action="view" only). Conversation pagination uses offset and limit.',
+    'Line range [start, end] for paginating file and background-command output. Conversation pagination uses offset and limit.',
   ),
 
-  /** Execution IDs to wait on (action="wait" with /executions only). */
+  /** Zero-based offset for list or conversation pagination. */
+  offset: z
+    .int()
+    .min(0)
+    .nullish()
+    .describe(
+      'Zero-based offset into the executions list or conversation messages. Use with limit on /executions or /executions/{id}/conversation. Default: 0.',
+    ),
+
+  /** Maximum list entries or conversation messages to return. */
+  limit: z
+    .int()
+    .min(1)
+    .max(200)
+    .nullish()
+    .describe(
+      'Max entries or conversation messages to return. Use on /executions or /executions/{id}/conversation. Default: 100, max: 200.',
+    ),
+});
+
+const WaitActionSchema = z.strictObject({
+  path: PathFieldSchema,
+  action: z
+    .literal('wait')
+    .describe(
+      'Wait for a status change on /executions or /executions/{id}, then return the same data as view (avoids sleep-poll loops).',
+    ),
+
+  /** Execution IDs to wait on (with /executions only; ignored on /executions/{id}). */
   ids: z
     .array(ExecutionIdSchema)
     .min(1)
     .max(50)
     .nullish()
     .describe(
-      'List of execution IDs to wait on (action="wait" with /executions only). ' +
+      'List of execution IDs to wait on (with /executions only). ' +
         'Waits for any of the listed executions to change status. ' +
         'If omitted, waits for any active execution.',
     ),
 
-  /** Max seconds to wait (action="wait" only). Default: 300. */
+  /** Max seconds to wait. Default: 300. */
   timeout: z
     .number()
     .finite()
@@ -492,30 +528,85 @@ const ExecutionsToolInputSchema = z.strictObject({
       ),
     )
     .describe(
-      `Max seconds to wait for a status change (action="wait" only). Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}; finite values are clamped to the ${EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS}-${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} range.`,
+      `Max seconds to wait for a status change. Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}; finite values are clamped to the ${EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS}-${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} range.`,
     ),
 
-  /** Zero-based offset for list or conversation pagination (action="view" only). */
+  /** Zero-based offset for the /executions listing returned once the wait resolves. */
   offset: z
     .int()
     .min(0)
     .nullish()
     .describe(
-      'Zero-based offset into the executions list or conversation messages. Use with limit on /executions or /executions/{id}/conversation. Default: 0.',
+      'Zero-based offset into the executions list returned once the wait resolves (with /executions only). Default: 0.',
     ),
 
-  /** Maximum list entries or conversation messages to return (action="view" only). */
+  /** Maximum list entries in the /executions listing returned once the wait resolves. */
   limit: z
     .int()
     .min(1)
     .max(200)
     .nullish()
     .describe(
-      'Max entries or conversation messages to return. Use on /executions or /executions/{id}/conversation. Default: 100, max: 200.',
+      'Max entries in the executions list returned once the wait resolves (with /executions only). Default: 100, max: 200.',
     ),
 });
 
-type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
+const KillActionSchema = z.strictObject({
+  path: PathFieldSchema,
+  action: z
+    .literal('kill')
+    .describe('Terminate a running execution by ID (use on /executions/{id}).'),
+});
+
+const SubscribeActionSchema = z.strictObject({
+  path: PathFieldSchema,
+  action: z
+    .literal('subscribe')
+    .describe(
+      'Receive future status changes for /executions/{id} as <execution-activity> follow-ups; auto-disposes when the execution finishes or this stream is released.',
+    ),
+});
+
+const UnsubscribeActionSchema = z.strictObject({
+  path: PathFieldSchema,
+  action: z
+    .literal('unsubscribe')
+    .describe(
+      'Stop receiving <execution-activity> follow-ups for /executions/{id}.',
+    ),
+});
+
+const ExecutionsToolActionSchema = z.discriminatedUnion('action', [
+  ViewActionSchema,
+  WaitActionSchema,
+  KillActionSchema,
+  SubscribeActionSchema,
+  UnsubscribeActionSchema,
+]);
+
+// A structured-output provider represents an omitted optional field as an
+// explicit `action: null` rather than leaving the key absent (AGENTS.md's
+// tool-input-schema rule). z.discriminatedUnion reads the raw `action` value
+// to pick a branch before any field-level default runs, and `null` isn't one
+// of the branch literals, so strip it down to "key absent" here — the view
+// branch's own `.optional().default('view')` then takes over exactly as it
+// does for a truly omitted key. A genuinely absent key needs no help: Zod
+// already matches that against the one branch whose discriminator accepts
+// undefined.
+const ExecutionsToolInputSchema = z.preprocess((value) => {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'action' in value &&
+    value.action === null
+  ) {
+    const { action: _null, ...rest } = value;
+    return rest;
+  }
+  return value;
+}, ExecutionsToolActionSchema);
+
+type ExecutionsToolInput = z.infer<typeof ExecutionsToolActionSchema>;
 
 export class ExecutionsTool extends defineTool({
   name: 'executions',
@@ -547,13 +638,18 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     // /executions - list all executions
     if (!id) {
-      if (input.action === 'subscribe' || input.action === 'unsubscribe') {
+      if (
+        input.action === 'subscribe' ||
+        input.action === 'unsubscribe' ||
+        input.action === 'kill'
+      ) {
         throw new ToolError(
           `action='${input.action}' requires a specific execution: use /executions/{id}.`,
         );
       }
-      if (input.action === 'wait')
+      if (input.action === 'wait') {
         await this.waitForAnyChange(input.timeout, input.ids);
+      }
       return this.listExecutions(input.offset ?? 0, input.limit ?? 100);
     }
 
@@ -561,21 +657,34 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     // /executions/{id} - execution summary or actions
     if (!resource) {
-      // Kill action: terminate a running execution (only valid on /executions/{id})
-      if (input.action === 'kill') {
-        return this.handleKill(executionId);
+      switch (input.action) {
+        case 'kill':
+          return this.handleKill(executionId);
+        case 'subscribe':
+          return this.handleSubscribe(executionId);
+        case 'unsubscribe':
+          return this.handleUnsubscribe(executionId);
+        case 'wait':
+          await this.waitForChange(executionId, input.timeout);
+          return this.showSummary(executionId, {
+            suppressAutoDeliveredSubagentReport: true,
+          });
+        case 'view':
+          return this.showSummary(executionId, {
+            suppressAutoDeliveredSubagentReport: false,
+          });
+        default:
+          return assertNever(input, 'Unrecognized executions action');
       }
-      if (input.action === 'subscribe') {
-        return this.handleSubscribe(executionId);
-      }
-      if (input.action === 'unsubscribe') {
-        return this.handleUnsubscribe(executionId);
-      }
-      if (input.action === 'wait')
-        await this.waitForChange(executionId, input.timeout);
-      return this.showSummary(executionId, {
-        suppressAutoDeliveredSubagentReport: input.action === 'wait',
-      });
+    }
+
+    // Sub-resource paths (config, conversation, files, ...) only support
+    // reading — wait/kill/subscribe/unsubscribe operate on /executions or
+    // /executions/{id}, never a deeper resource.
+    if (input.action !== 'view') {
+      throw new ToolError(
+        `action='${input.action}' is only valid on /executions or /executions/{id}; use action='view' to read /executions/${id}/${resource}.`,
+      );
     }
 
     const viewRange = input.view_range ?? undefined;
@@ -801,8 +910,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     // display category, loudly.
     const identity = meta?.identity;
     if (meta && !identity) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Execution ${executionId} is a pre-identity row; showing config-derived category only (reader retired per #9590 Stage 7)`,
       );
     }
@@ -894,10 +1002,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
 
     // Scope: can only kill your own children. Deny if no context.
-    if (
-      !(target instanceof AgentExecutionHandle) ||
-      !target.isOwnedBy(callerStreamId)
-    ) {
+    if (!target.isOwnedBy(callerStreamId)) {
       throw new ToolError(
         `Cannot kill execution ${executionId}: not a child of this session.`,
       );
@@ -1045,8 +1150,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const meta = await store.readMeta();
     const identity = meta?.identity;
     if (meta && !identity) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Execution ${executionId} is a pre-identity row; filtering config by its config-derived category only (reader retired per #9590 Stage 7)`,
       );
     }
@@ -1137,22 +1241,16 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     const transcripts = currentSession().transcripts;
     // The stream is the one stamped on execution metadata at registration.
-    const streamId =
-      handle instanceof AgentExecutionHandle
-        ? handle.childStreamId
-        : meta?.streamId;
-    // Resident while the command runs (an open writer refuses eviction); a
-    // released stream rehydrates from disk, and an ephemeral store no-ops.
-    if (streamId) await transcripts.ensureLoaded(streamId);
-    const log = streamId ? transcripts.get(streamId) : undefined;
-    if (!log) {
+    const streamId = handle?.childStreamId ?? meta?.streamId;
+    if (!streamId || !transcripts.has(streamId)) {
       return executed(
         `No retained output for ${executionId}: its stream log is no longer available. ` +
           `Use /executions/${executionId}/report for the result summary.`,
       );
     }
+    const entries = await transcripts.readEntries(streamId);
 
-    const { lines, chars } = projectProcessOutput(log.toJSON());
+    const { lines, chars } = projectProcessOutput(entries);
     const info = getExecutionStatusInfo(executionId, meta?.outcome);
     const footer = handle
       ? `[still running: re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`

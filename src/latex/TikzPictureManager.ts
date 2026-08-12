@@ -11,18 +11,16 @@ import { getConfig } from '@utils/config/configUtils';
 
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';
+import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 
-const CHANNEL = 'LaTeXCommands';
-
-class TikzPictureManagerImpl {
-  /**
-   * Get the TikZ template from configuration or use default
-   * @returns The TikZ template string
-   */
-  private getTikzTemplate(): string {
-    return getConfig<string>(
-      'texra.latex.tikzTemplate',
-      `
+/**
+ * Get the TikZ template from configuration or use default
+ * @returns The TikZ template string
+ */
+function getTikzTemplate(): string {
+  return getConfig<string>(
+    'texra.latex.tikzTemplate',
+    `
   \\documentclass[tikz,border=10pt]{standalone}
   \\usepackage{tikz}
   \\usepackage{pgfplots}
@@ -35,9 +33,46 @@ class TikzPictureManagerImpl {
   {{ tikzpicture }}
   \\end{document}
   `,
-    );
-  }
+  );
+}
 
+/**
+ * Create a standalone LaTeX file for a TikZ picture
+ * @param tikzpictures TikZ picture content
+ * @param label Label for the figure
+ * @param buildDir Absolute build directory path
+ * @param suffix Optional suffix for multiple pictures with same label
+ * @returns FileLocation of created LaTeX file
+ */
+async function createStandalone(
+  tikzpictures: string,
+  label: string,
+  buildDir: string,
+  suffix?: string,
+): Promise<FileLocation> {
+  const standaloneContent = await renderPrompt(getTikzTemplate(), {
+    tikzpicture: tikzpictures,
+  });
+
+  const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
+  const texLocation = pathToLocation(path.join(buildDir, filename));
+
+  await AbsoluteFS.write(texLocation.absolutePath, standaloneContent);
+  logger.debug(
+    CHANNEL,
+    `Created standalone LaTeX file: ${texLocation.absolutePath}`,
+  );
+
+  return texLocation;
+}
+
+/**
+ * TikZ picture extraction and compilation, exported as a stateless module of
+ * functions (no class state or lifecycle). `compile` keeps `this.extract` so
+ * a `vi.spyOn(TikzPictureManager, 'extract')` still intercepts the internal
+ * call, matching the previous class behavior.
+ */
+export const TikzPictureManager = {
   /**
    * Extract TikZ pictures with their labels from a LaTeX file
    * @param latexFile FileLocation of the LaTeX file
@@ -74,37 +109,7 @@ class TikzPictureManagerImpl {
     }
 
     return labeledTikzPictures;
-  }
-
-  /**
-   * Create a standalone LaTeX file for a TikZ picture
-   * @param tikzpictures TikZ picture content
-   * @param label Label for the figure
-   * @param buildDir Absolute build directory path
-   * @param suffix Optional suffix for multiple pictures with same label
-   * @returns FileLocation of created LaTeX file
-   */
-  private async createStandalone(
-    tikzpictures: string,
-    label: string,
-    buildDir: string,
-    suffix?: string,
-  ): Promise<FileLocation> {
-    const standaloneContent = await renderPrompt(this.getTikzTemplate(), {
-      tikzpicture: tikzpictures,
-    });
-
-    const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
-    const texLocation = pathToLocation(path.join(buildDir, filename));
-
-    await AbsoluteFS.write(texLocation.absolutePath, standaloneContent);
-    logger.debug(
-      CHANNEL,
-      `Created standalone LaTeX file: ${texLocation.absolutePath}`,
-    );
-
-    return texLocation;
-  }
+  },
 
   /**
    * Extract and compile TikZ pictures from a LaTeX file
@@ -140,7 +145,7 @@ class TikzPictureManagerImpl {
         // Disambiguate multiple pictures under one label with a/b/c… suffixes.
         const suffix = hasMultiple ? String.fromCharCode(97 + i) : undefined;
 
-        const texLocation = await this.createStandalone(
+        const texLocation = await createStandalone(
           tikzpictures,
           label,
           buildDir,
@@ -179,7 +184,5 @@ class TikzPictureManagerImpl {
     }
 
     return compiledFiles;
-  }
-}
-
-export const TikzPictureManager = new TikzPictureManagerImpl();
+  },
+};

@@ -1,14 +1,8 @@
-// Suites for @latex/latexdiff/runLatexdiff (execution flow + command-config
-// normalization).
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { LaTeXdiffService } from '@latex/latexdiff';
 import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/runLatexdiff';
 import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
 import { createOutputFile } from '../support/ProgressControllerHarnesses';
-
-// ---------------------------------------------------------------------------
-// RunLatexdiff
-// ---------------------------------------------------------------------------
 
 const mocks = vi.hoisted(() => ({
   scanRunDirForOutputs: vi.fn(),
@@ -27,10 +21,13 @@ vi.mock('@latex/latexdiff/diffOperations', () => ({
   runLatexdiffViaWorkspaceScan: mocks.runLatexdiffViaWorkspaceScan,
 }));
 
-vi.mock('@latex/latexdiff/service', () => ({ CHANNEL: 'LaTeXCommands' }));
-
 const { runLatexdiffForExecution } =
   await import('@latex/latexdiff/runLatexdiff');
+
+const latexdiff = {
+  channel: 'test',
+  service: {} as LaTeXdiffService,
+};
 
 const METADATA_OUTCOME = { results: [], totalOperations: 1 };
 const SCAN_OUTCOME = { results: [], totalOperations: 2 };
@@ -44,6 +41,7 @@ const baseRequest = {
   model: 'claude-opus-4-8',
   inputFile: 'paper.tex',
   generateBetweenRoundDiffs: false,
+  latexdiff,
   progress: { report: () => undefined },
 } as const;
 
@@ -83,6 +81,7 @@ describe('runLatexdiffForExecution', () => {
       'abc123',
       'paper.tex',
       undefined,
+      'test',
     );
     expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
     expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalled();
@@ -123,11 +122,14 @@ describe('runLatexdiffForExecution', () => {
 
     expect(result.source).toBe('metadata');
     expect(result.executionId).toBe('def456');
-    expect(mocks.discoverLatestExecutionOutputs).toHaveBeenCalledWith({
-      agent: 'revise',
-      model: 'claude-opus-4-8',
-      inputFile: 'paper.tex',
-    });
+    expect(mocks.discoverLatestExecutionOutputs).toHaveBeenCalledWith(
+      {
+        agent: 'revise',
+        model: 'claude-opus-4-8',
+        inputFile: 'paper.tex',
+      },
+      'test',
+    );
     expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalled();
   });
 
@@ -146,10 +148,6 @@ describe('runLatexdiffForExecution', () => {
     );
   });
 });
-
-// ---------------------------------------------------------------------------
-// RunLatexdiffCommandConfig
-// ---------------------------------------------------------------------------
 
 describe('normalizeRunLatexdiffOutputsByRound', () => {
   it('keeps non-empty round-record entries, dropping empty rounds', () => {

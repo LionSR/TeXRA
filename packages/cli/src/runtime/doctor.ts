@@ -11,7 +11,6 @@ import {
   probeLatexToolchain,
   type LatexToolchainProbe,
 } from '@latex/latexToolchain';
-import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import {
   TELEMETRY_ENABLED_KEY,
   usageLoggingOptOut,
@@ -298,7 +297,10 @@ async function checkLatex(
   }
 }
 
-async function checkConfig(context: CliContext): Promise<DoctorCheck> {
+async function checkConfig(
+  context: CliContext,
+  deps: ResolvedDoctorDependencies,
+): Promise<DoctorCheck> {
   if (!context.configFilePath) {
     return skip(
       'config',
@@ -315,10 +317,13 @@ async function checkConfig(context: CliContext): Promise<DoctorCheck> {
       context.configWarnings.join(' '),
     );
   }
-  const workspaceConfig = workspaceTexraConfigPath(context.cwd);
   try {
-    await access(workspaceConfig, fsConstants.R_OK);
-    return pass('config', 'Config', `Workspace config: ${workspaceConfig}`);
+    await deps.pathAccess(context.configFilePath, fsConstants.R_OK);
+    return pass(
+      'config',
+      'Config',
+      `Workspace config: ${context.configFilePath}`,
+    );
   } catch {
     return warn(
       'config',
@@ -380,6 +385,7 @@ function checkTelemetry(deps: ResolvedDoctorDependencies): DoctorCheck {
 export async function buildDoctorReport(
   context: CliContext,
   deps: DoctorDependencies = {},
+  initError?: unknown,
 ): Promise<DoctorReport> {
   const resolved = {
     nodeVersion: deps.nodeVersion ?? process.versions.node,
@@ -390,6 +396,25 @@ export async function buildDoctorReport(
     pathAccess: deps.pathAccess ?? access,
     usageLoggingOptOut: deps.usageLoggingOptOut ?? usageLoggingOptOut,
   };
+  // A platform-init failure takes out every dependency-based check
+  // (auth/models/telemetry), so surface it once here rather than as N
+  // unrelated-looking failures. The checks that do not need the platform
+  // (node, workspace, resources, LaTeX, config) still run.
+  const sessionDependentChecks =
+    initError == null
+      ? [
+          await checkAuth(resolved),
+          await checkModels(resolved),
+          checkTelemetry(resolved),
+        ]
+      : [
+          failFromError(
+            'platform',
+            'Platform init',
+            'Could not initialize the TeXRA platform.',
+            initError,
+          ),
+        ];
   const checks: DoctorCheck[] = [
     checkNode(resolved.nodeVersion),
     await checkDirectory('workspace', 'Workspace', context.cwd, resolved),
@@ -399,11 +424,9 @@ export async function buildDoctorReport(
       context.resourcesPath,
       resolved,
     ),
-    await checkAuth(resolved),
-    await checkModels(resolved),
+    ...sessionDependentChecks,
     ...(await checkLatex(resolved)),
-    await checkConfig(context),
-    checkTelemetry(resolved),
+    await checkConfig(context, resolved),
   ];
   return {
     ok: !checks.some((check) => check.status === 'fail'),

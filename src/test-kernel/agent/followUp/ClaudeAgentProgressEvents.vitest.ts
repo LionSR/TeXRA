@@ -20,9 +20,7 @@ vi.mock('@tools/claudeAgentImport', () => ({
 const streamId = 'stream:claude-child' as StreamTabId;
 
 async function* streamMessages(messages: unknown[]): AsyncGenerator<unknown> {
-  for (const message of messages) {
-    yield message;
-  }
+  yield* messages;
 }
 
 async function runWithLoggerStore<T>(

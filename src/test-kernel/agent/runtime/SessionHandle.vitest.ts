@@ -1,10 +1,7 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import {
   SessionHandle,
   defaultSession,
@@ -16,8 +13,6 @@ import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { StreamLogStore } from '@transcript';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
-
-// Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
 const plan: Plan = { objective: 'Compose the per-session runtime owners.' };

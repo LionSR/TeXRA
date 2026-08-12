@@ -278,7 +278,6 @@ printf '%s\\n' "\${COMPREPLY[@]}"
         description: '',
         subcommands: [],
         flags: [],
-        positionals: [],
       },
     ]);
 

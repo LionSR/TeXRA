@@ -1,9 +1,8 @@
-import { structuredPatch } from 'diff';
-
 import type {
   HostBashApprovalRequest,
   HostUserQuestionRequest,
-} from '@agent/runtime/HostInteractions';
+} from '@agent/runtime';
+import { buildHunks, formatHunkHeader } from '@cli/runtime/diffHunks';
 import {
   agentProposalCategoryLabel,
   getProposalFileGroups,
@@ -12,14 +11,7 @@ import {
 } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
-import {
-  CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT,
-  CLI_PERSONAL_API_RETRY_HINT,
-  codingPlanRetryHint,
-  isCliApiSwitchableRetry,
-  isCliChatGptSubscriptionRetry,
-  isCliCodingPlanRetry,
-} from './approvalPrompts';
+import { cliRetryActionHint, classifyCliRetryAction } from './approvalPrompts';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
 const TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS = 12_000;
@@ -130,19 +122,8 @@ export function formatAgentProposalApprovalSummary(
 
 export function formatRetryRequestMessage(payload: RetryPermission): string {
   const message = `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
-  if (isCliChatGptSubscriptionRetry(payload)) {
-    return [message, CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT].join('\n');
-  }
-  const codingPlanHint = codingPlanRetryHint(
-    payload.errorDetails?.exhaustionReason,
-  );
-  if (codingPlanHint) {
-    return [message, codingPlanHint].join('\n');
-  }
-  if (isCliApiSwitchableRetry(payload)) {
-    return [message, CLI_PERSONAL_API_RETRY_HINT].join('\n');
-  }
-  return message;
+  const hint = cliRetryActionHint(classifyCliRetryAction(payload));
+  return hint ? [message, hint].join('\n') : message;
 }
 
 export function formatBashApprovalSummary(
@@ -152,34 +133,20 @@ export function formatBashApprovalSummary(
   return `Command requested:\n${cwd}${request.command}`;
 }
 
-function formatDiffRange(start: number, lineCount: number): string {
-  return lineCount === 1 ? String(start) : `${start},${lineCount}`;
-}
-
 function toolEditDiffLines(
   request: ToolEditApprovalRequest,
 ): readonly string[] {
-  const patch = structuredPatch(
-    request.path,
+  const hunks = buildHunks(
     request.path,
     request.originalContent,
     request.proposedContent,
-    '',
-    '',
-    { context: 3 },
   );
-  if (patch.hunks.length === 0) return [];
+  if (hunks.length === 0) return [];
 
   return [
     `--- ${request.path}`,
     `+++ ${request.path}`,
-    ...patch.hunks.flatMap((hunk) => [
-      `@@ -${formatDiffRange(hunk.oldStart, hunk.oldLines)} +${formatDiffRange(
-        hunk.newStart,
-        hunk.newLines,
-      )} @@`,
-      ...hunk.lines,
-    ]),
+    ...hunks.flatMap((hunk) => [formatHunkHeader(hunk), ...hunk.lines]),
   ];
 }
 

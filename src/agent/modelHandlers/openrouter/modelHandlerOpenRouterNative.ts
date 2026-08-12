@@ -67,16 +67,14 @@ import {
 import { ModelHandler } from '../ModelHandler';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 
-// Third-party imports
+// Third-party type imports
 import type {
   ChatResult,
   ChatStreamChunk,
   ChatUsage,
   ChatMessages,
-  ChatAssistantMessage,
   ChatToolCall,
   ChatContentItems,
-  ChatContentText,
   ChatRequest,
 } from '@openrouter/sdk/models';
 
@@ -462,7 +460,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   }
 
   createAssistantMessage(text: string): ChatMessages {
-    return { role: 'assistant', content: text } as ChatMessages;
+    return { role: 'assistant', content: text };
   }
 
   extractAssistantText(message: ChatMessages): string | undefined {
@@ -489,7 +487,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
               url: toDataUrl(media.media_type, media.data),
               detail: 'high',
             },
-          } as ChatContentItems,
+          },
         ];
       }
 
@@ -508,7 +506,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
               data: media.data,
               format: extractMimeSubtype(media.media_type).toLowerCase(),
             },
-          } as ChatContentItems,
+          },
         ];
       }
 
@@ -541,7 +539,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       newResponse = this.normalizeResponseText(msg.content);
     } else if (Array.isArray(msg.content)) {
       newResponse = this.normalizeResponseText(
-        (msg.content as ChatContentItems[])
+        msg.content
           .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
           .map((p) => p.text)
           .join(''),
@@ -551,7 +549,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       (msg.toolCalls && msg.toolCalls.length > 0)
     ) {
       this.logger.debug('Received tool call without message content');
-    } else if (!msg.content) {
+    } else {
       this.logger.error('content is empty');
     }
 
@@ -601,7 +599,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     if (!message) return null;
 
     // Try reasoningDetails first (OpenRouter normalized format)
-    const reasoningDetails = (message as ChatAssistantMessage).reasoningDetails;
+    const reasoningDetails = message.reasoningDetails;
     if (reasoningDetails) {
       const extracted = extractTextFromReasoningDetails(reasoningDetails);
       if (extracted) {
@@ -611,7 +609,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     }
 
     // Fall back to reasoning string
-    const reasoning = (message as ChatAssistantMessage).reasoning;
+    const reasoning = message.reasoning;
     if (isNonEmptyString(reasoning)) {
       this.setThinkingState(reasoning, workspaceState);
       return reasoning;
@@ -683,19 +681,18 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       role: 'assistant',
       toolCalls: entries.map(({ call }) => call.raw),
       ...(text ? { content: text } : {}),
-    } as ChatMessages;
+    };
 
     const resultMsgs: ChatMessages[] = entries.map(
-      ({ call, result, attachments }) =>
-        ({
-          role: 'tool',
-          toolCallId: call.callId,
-          content: formatToolResultTextWithAttachments(
-            result,
-            attachments,
-            this.canProcessToolResultAttachments,
-          ),
-        }) as ChatMessages,
+      ({ call, result, attachments }) => ({
+        role: 'tool',
+        toolCallId: call.callId,
+        content: formatToolResultTextWithAttachments(
+          result,
+          attachments,
+          this.canProcessToolResultAttachments,
+        ),
+      }),
     );
 
     return [callMsg, ...resultMsgs];
@@ -738,17 +735,17 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     }
 
     const targetMessage = messages.at(targetIndex);
-    if (targetMessage?.role !== 'assistant') return false;
+    if (!targetMessage || targetMessage.role !== 'assistant') return false;
 
-    const message = targetMessage as ChatAssistantMessage;
+    const message = targetMessage;
     if (Array.isArray(message.content)) {
       if (this.isAnthropicViaOpenRouter && !options.afterContinuationPrompt) {
-        const lastPart = (message.content as ChatContentItems[]).at(-1);
+        const lastPart = message.content.at(-1);
         if (lastPart && 'text' in lastPart) {
-          (lastPart as ChatContentText).text = text;
+          lastPart.text = text;
         }
       } else {
-        (message.content as ChatContentItems[]).push({ type: 'text', text });
+        message.content.push({ type: 'text', text });
       }
     } else {
       message.content = [

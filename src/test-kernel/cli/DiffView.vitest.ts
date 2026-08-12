@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { buildHunks } from '@cli/runtime/diffHunks';
 import {
-  buildHunks,
   initialDiffScrollOffset,
   maxDiffScrollOffset,
   scrollBoundedDiffDisplayLines,

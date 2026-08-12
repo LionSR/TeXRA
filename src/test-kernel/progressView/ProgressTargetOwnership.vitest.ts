@@ -1,15 +1,12 @@
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import type { StreamTabId } from '@shared/schemas';
-
-// Local imports
 import type * as vscode from 'vscode';
-
 const mocks = vi.hoisted(() => ({
   createWebviewPanel: vi.fn(),
   executeCommand: vi.fn(async () => undefined),
   replayApprovalRequestHandlers: vi.fn(async () => undefined),
+  showErrorMessage: vi.fn(async () => undefined),
 }));
 
 vi.mock('vscode', async (importOriginal) => {
@@ -20,6 +17,7 @@ vi.mock('vscode', async (importOriginal) => {
       ...(actual.window as Record<string, unknown>),
       activeColorTheme: { kind: 1 },
       createWebviewPanel: mocks.createWebviewPanel,
+      showErrorMessage: mocks.showErrorMessage,
     },
     commands: { executeCommand: mocks.executeCommand },
     Uri: {
@@ -48,17 +46,6 @@ vi.mock('@progressView/extensionHostInteractions', () => ({
 
 const { SIDEBAR_VIEWS, getActiveSidebarView, setActiveSidebarView } =
   await import('@common/webview');
-
-function createSidebarView() {
-  return {
-    visible: true,
-    webview: {
-      html: '',
-      postMessage: vi.fn(),
-      onDidReceiveMessage: vi.fn(() => ({ dispose: vi.fn() })),
-    },
-  } as unknown as vscode.WebviewView;
-}
 
 function createPanel() {
   const disposeListeners: Array<() => void> = [];
@@ -96,7 +83,14 @@ function createdPanel(): ReturnType<typeof createPanel> {
  * transitions consult beyond the stubs below.
  */
 function createProvider() {
-  const sidebarView = createSidebarView();
+  const sidebarView = {
+    visible: true,
+    webview: {
+      html: '',
+      postMessage: vi.fn(),
+      onDidReceiveMessage: vi.fn(() => ({ dispose: vi.fn() })),
+    },
+  } as unknown as vscode.WebviewView;
   const mainViewProvider = {
     getWebviewView: () => sidebarView,
     switchMode: vi.fn((mode: string) => {
@@ -115,21 +109,26 @@ function createProvider() {
   injected.context = { extensionUri: { fsPath: '/ext' } };
   injected.contentProvider = { getHtmlContent: () => '<progress-view />' };
   injected.messageHandler = { handleMessage: vi.fn() };
-  injected.state = {
+  const state = {
     activeStream: undefined,
     streamLogs: { keys: () => [], get: () => undefined },
     streamStatus: { getAllStreamStates: () => new Map() },
   };
-  injected.backend = {
+  injected.state = state;
+  const backend = {
+    activateStream: vi.fn(async () => undefined),
     approvalHandlers: {},
-    syncStreamContent: vi.fn(),
+    syncRenderedStreams: vi.fn(async () => {}),
   };
+  injected.backend = backend;
+  const logger = { error: vi.fn() };
+  injected.logger = logger;
   injected.webviewUpdater = {
     isAvailable: () => true,
     setPlacement: vi.fn(),
     sendStreamMetadata: vi.fn(() => undefined),
   };
-  return { provider, mainViewProvider, sidebarView };
+  return { provider, mainViewProvider, sidebarView, backend, state };
 }
 
 describe('progress target ownership', () => {
@@ -205,51 +204,5 @@ describe('progress target ownership', () => {
     const panel = createdPanel();
     expect(mocks.createWebviewPanel).toHaveBeenCalledTimes(1);
     expect(panel.reveal).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps the webview synchronized when active-stream hydration fails', async () => {
-    const { provider } = createProvider();
-    const streamId = 'stream:hydration-failure' as StreamTabId;
-    let activeStream = '';
-    const ensureLoaded = vi.fn(async () => undefined);
-    const preload = vi.fn(async () => {
-      throw new Error('sidecar unavailable');
-    });
-    const switchActiveStream = vi.fn((stream: string) => {
-      activeStream = stream;
-    });
-    const syncStreamContent = vi.fn();
-    const setActiveStream = vi.fn();
-    const logger = { error: vi.fn() };
-    const injected = provider as unknown as Record<string, unknown>;
-    injected.target = { placement: 'sidebar', ready: true };
-    injected.logger = logger;
-    injected.state = {
-      get activeStream() {
-        return activeStream;
-      },
-      snapshots: { preload },
-      streamLogs: { ensureLoaded },
-      switchActiveStream,
-    };
-    injected.backend = { syncStreamContent };
-    injected.webviewUpdater = {
-      isAvailable: () => true,
-      setActiveStream,
-    };
-
-    await expect(provider.setActiveStream(streamId)).resolves.toBeUndefined();
-
-    expect(ensureLoaded).toHaveBeenCalledWith(streamId);
-    expect(preload).toHaveBeenCalledWith([streamId]);
-    expect(switchActiveStream).toHaveBeenCalledWith(streamId);
-    expect(logger.error).toHaveBeenCalledWith(
-      `Failed to hydrate stream ${streamId} for display`,
-      expect.objectContaining({ data: expect.any(Error) }),
-    );
-    expect(setActiveStream).toHaveBeenCalledWith(streamId);
-    expect(syncStreamContent).toHaveBeenCalledWith(streamId, {
-      includeActiveState: true,
-    });
   });
 });

@@ -1,7 +1,5 @@
-// Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import {
   attachChannelSubscriber,
   createChannelTrace,

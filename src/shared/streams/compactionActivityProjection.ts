@@ -132,10 +132,10 @@ export function applyCompactionActivityEntries(
     if (existingIndex === undefined) continue;
     const block = projection.blocks[existingIndex];
     const withinSettlementBoundary =
-      block?.status === 'interrupted' &&
+      block.status === 'interrupted' &&
       block.settledThroughSeqNo !== undefined &&
       entry.seqNo <= block.settledThroughSeqNo;
-    if (!block || (block.finalized && !withinSettlementBoundary)) continue;
+    if (block.finalized && !withinSettlementBoundary) continue;
     const { settledThroughSeqNo: _settledThroughSeqNo, ...unsettledBlock } =
       block;
     projection.blocks[existingIndex] = {
@@ -174,24 +174,4 @@ export function settleCompactionActivities(
     changedIndices.push(index);
   }
   return changedIndices;
-}
-
-/** Full-replay convenience with the same reducer used by incremental clients. */
-export function projectCompactionActivities(
-  entries: readonly StreamLogEntry[],
-  options: {
-    readonly streamTerminal?: boolean;
-    readonly settledThroughSeqNo?: number;
-    readonly finishedAt?: number;
-  } = {},
-): CompactionActivityProjection {
-  const projection = createCompactionActivityProjection();
-  applyCompactionActivityEntries(projection, entries);
-  if (options.streamTerminal) {
-    settleCompactionActivities(projection, {
-      throughSeqNo: options.settledThroughSeqNo,
-      finishedAt: options.finishedAt,
-    });
-  }
-  return projection;
 }

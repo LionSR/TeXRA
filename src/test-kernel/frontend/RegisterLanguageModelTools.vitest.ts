@@ -20,7 +20,15 @@ vi.mock('vscode', () => ({
   LanguageModelToolResult,
 }));
 
-vi.mock('@logger/logUtils', () => ({ warn: vi.fn() }));
+vi.mock('@logger/logUtils', () => ({
+  warn: vi.fn(),
+  createLog: vi.fn(() => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  })),
+}));
 
 vi.mock('@tools/registry', () => ({
   getDefaultToolRegistry: () => ({ get: mocks.getTool }),

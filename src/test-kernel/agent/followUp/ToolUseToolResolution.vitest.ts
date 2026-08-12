@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
+import {
+  resolveAgentTools,
+  type ResolvedAgentTools,
+} from '@agent/runtime/agentToolResolution';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -26,7 +29,6 @@ describe('tool-use tool resolution', () => {
     toolInjections = new ToolInjectionRegistry();
   });
 
-  /** Resolves the named tools against the default registry, returning names. */
   async function resolveNames(
     names: readonly string[],
     options: {
@@ -42,6 +44,21 @@ describe('tool-use tool resolution', () => {
       ...options,
     });
     return tools.map((tool) => tool.name);
+  }
+
+  async function resolveDiagnostics(
+    runtimeUnavailableTools: readonly string[],
+  ): Promise<ResolvedAgentTools> {
+    const diagnostics = new DiagnosticsTool();
+    const registry = new MapToolRegistry({ diagnostics });
+    return resolveAgentTools({
+      tools: [diagnostics.definition],
+      registry,
+      logger,
+      toolInjections,
+      runtimeUnavailableTools,
+      approvalPromptsUnavailable: false,
+    });
   }
 
   it('filters approval-gated tools when approval prompts are unavailable', async () => {
@@ -92,17 +109,9 @@ describe('tool-use tool resolution', () => {
   });
 
   it('narrows diagnostics to read-only commands when add is host-unavailable', async () => {
-    const diagnostics = new DiagnosticsTool();
-    const registry = new MapToolRegistry({ diagnostics });
-
-    const { tools } = await resolveAgentTools({
-      tools: [diagnostics.definition],
-      registry,
-      logger,
-      toolInjections,
-      runtimeUnavailableTools: [DIAGNOSTICS_ADD_RUNTIME_CAPABILITY],
-      approvalPromptsUnavailable: false,
-    });
+    const { tools } = await resolveDiagnostics([
+      DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
+    ]);
 
     const [tool] = tools;
     expect(tool?.name).toBe('diagnostics');
@@ -123,17 +132,9 @@ describe('tool-use tool resolution', () => {
   });
 
   it('omits diagnostics when read support is host-unavailable', async () => {
-    const diagnostics = new DiagnosticsTool();
-    const registry = new MapToolRegistry({ diagnostics });
-
-    const { tools } = await resolveAgentTools({
-      tools: [diagnostics.definition],
-      registry,
-      logger,
-      toolInjections,
-      runtimeUnavailableTools: [DIAGNOSTICS_READ_RUNTIME_CAPABILITY],
-      approvalPromptsUnavailable: false,
-    });
+    const { tools } = await resolveDiagnostics([
+      DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
+    ]);
 
     expect(tools).toEqual([]);
   });

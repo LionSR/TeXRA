@@ -4,7 +4,7 @@
 
 import { LRUCache } from 'lru-cache';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
@@ -47,7 +47,7 @@ import {
   FENCED_LATEX_BLOCK_REPLACEMENTS,
 } from './rulesRegex';
 
-const CHANNEL = 'ReplacementEngine';
+const log = createLog('ReplacementEngine');
 
 /**
  * High-level APIs for applying text replacement rules.
@@ -83,8 +83,14 @@ const replacementEngine = {
   },
 };
 
-// Non-regex categories, applied in this order.
-const NON_REGEX_CATEGORIES: NonRegexReplacementCategory[] = [
+/**
+ * Non-regex categories, applied in this order. Exported so a completeness test
+ * can assert this registry stays in sync with the config-facing name universe
+ * (`NON_REGEX_REPLACEMENT_CATEGORIES` in `@shared/constants/latex`): a category
+ * missing from this list silently never runs, and a universe name without an
+ * entry here makes the config accept a no-op.
+ */
+export const NON_REGEX_CATEGORIES: NonRegexReplacementCategory[] = [
   // LaTeX content formatting
   EQUATION_REPLACEMENTS,
   SECTION_REPLACEMENTS,
@@ -104,8 +110,11 @@ const NON_REGEX_CATEGORIES: NonRegexReplacementCategory[] = [
   LATEXDIFF_REPLACEMENTS,
 ];
 
-// Regex categories, applied in this order.
-const REGEX_CATEGORIES: RegexReplacementCategory[] = [
+/**
+ * Regex categories, applied in this order. Exported for the same
+ * registry/universe completeness check as {@link NON_REGEX_CATEGORIES}.
+ */
+export const REGEX_CATEGORIES: RegexReplacementCategory[] = [
   EQUATION_MACRO_REPLACEMENTS,
   FENCED_LATEX_BLOCK_REPLACEMENTS,
   INLINE_MATH_REPLACEMENTS,
@@ -259,8 +268,7 @@ export function applyReplacements(
               ? result.replace(regex, repl)
               : result.replace(regex, repl);
         } catch (regexErr) {
-          logger.error(
-            CHANNEL,
+          log.error(
             `Error with regex pattern "${pattern}": ${toErrorMessage(regexErr)}`,
           );
         }

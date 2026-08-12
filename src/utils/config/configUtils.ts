@@ -1,5 +1,5 @@
 // Local imports
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { tryPlatform } from '@platform/platform';
 import type { ConfigTarget, Disposable } from '@platform/interfaces';
 import { ensureArray } from '@utils/core';
@@ -8,7 +8,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Third-party imports
 import type { ZodType } from 'zod';
 
-const CHANNEL = 'configUtils';
+const log = createLog('configUtils');
 
 interface UpdateConfigOptions {
   target?: ConfigTarget;
@@ -67,8 +67,7 @@ export function getValidatedConfig<T>(
   // Warn only when the user explicitly set the value (global, workspace, or
   // workspace folder); an unset setting failing the schema is normal.
   if (configProvider()?.isExplicitlySet(path)) {
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Ignoring invalid value for setting "${path}": ${toErrorMessage(result.error)}`,
     );
   }

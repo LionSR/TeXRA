@@ -12,7 +12,6 @@ export interface CompletionCommand {
   readonly description: string;
   readonly subcommands: readonly string[];
   readonly flags: readonly CompletionFlag[];
-  readonly positionals: readonly string[];
 }
 
 export interface CompletionFlag {
@@ -157,21 +156,15 @@ export async function collectCommands(
     commandSubcommands(command),
   ]);
   const flags: CompletionFlag[] = [];
-  const positionals: string[] = [];
   for (const [name, arg] of Object.entries(args)) {
-    if (arg.type === 'positional') {
-      positionals.push(name);
-    } else {
-      const flag = flagFromArg(name, arg);
-      if (flag !== undefined) flags.push(flag);
-    }
+    const flag = flagFromArg(name, arg);
+    if (flag !== undefined) flags.push(flag);
   }
   const current: CompletionCommand = {
     path,
     description: meta.description ?? '',
     subcommands: Object.keys(subcommands),
     flags,
-    positionals,
   };
   const children = await Promise.all(
     Object.entries(subcommands).map(([name, child]) =>
@@ -198,7 +191,7 @@ export interface CompletionSource {
   readonly column: number;
 }
 
-export const COMPLETION_SOURCES = {
+const COMPLETION_SOURCES = {
   agents: {
     shellFunction: '_texra_agents',
     command: 'agents list --quiet',
@@ -217,12 +210,41 @@ const AGENT_COMPLETION_SHELL_FUNCTIONS: ByCategory<string> = {
 };
 
 /** Per-category agent listing sources (roster-filtered `agents list`). */
-export const AGENT_COMPLETION_SOURCES: ByCategory<CompletionSource> =
-  byCategory((category) => ({
+const AGENT_COMPLETION_SOURCES: ByCategory<CompletionSource> = byCategory(
+  (category) => ({
     shellFunction: AGENT_COMPLETION_SHELL_FUNCTIONS[category],
     command: `agents list --quiet --all --category ${category}`,
     column: 2,
-  }));
+  }),
+);
+
+/**
+ * Positional completions backed by a dynamic listing source, keyed by the
+ * space-joined command path whose Nth argument (e.g. `texra run <agent>`) is
+ * completed against the source. Every shell generator renders this into its own
+ * syntax, so a positional source only ever changes here.
+ */
+export const POSITIONAL_COMPLETION_SOURCES: Readonly<
+  Record<string, CompletionSource>
+> = {
+  run: AGENT_COMPLETION_SOURCES.workflow,
+  'agents run': AGENT_COMPLETION_SOURCES.toolUse,
+  'agents show': COMPLETION_SOURCES.agents,
+  'models show': COMPLETION_SOURCES.models,
+};
+
+/**
+ * Dynamic flag-value completions, keyed by flag name. `--model`/`-m` and
+ * `--agent` complete their value from a listing source; generators with a
+ * dynamic-value mechanism (bash, zsh, fish) derive their flag cases from this,
+ * so a new dynamic-value flag is not silently absent in one shell.
+ */
+export const DYNAMIC_VALUE_FLAG_SOURCES: Readonly<
+  Record<string, CompletionSource>
+> = {
+  model: COMPLETION_SOURCES.models,
+  agent: AGENT_COMPLETION_SOURCES.toolUse,
+};
 
 /** Every dynamic listing source, for the generators that emit each function. */
 export function allCompletionSources(): CompletionSource[] {

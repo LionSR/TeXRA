@@ -1,5 +1,5 @@
 // Local imports - runtime events
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime';
 
 export interface StatusBarSessionEventOptions {
   session: Pick<SessionHandle, 'events' | 'status'>;
@@ -18,9 +18,7 @@ export function subscribeStatusBarSessionEvents({
   onStatusChanged,
   onUsageChanged,
 }: StatusBarSessionEventOptions): () => void {
-  const disposeStatus = session.events.subscribeStatus(() => {
-    onStatusChanged();
-  });
+  const disposeStatus = session.events.subscribeStatus(onStatusChanged);
 
   const disposeUsage = session.events.subscribe(
     (sessionEvent) => {

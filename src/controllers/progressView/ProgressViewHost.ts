@@ -8,8 +8,7 @@ import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 // Local file imports
 import {
   createProgressViewCommandHandlers,
-  isNativeAgentRun,
-  reportNonNativeRunRefusal,
+  resolveNativeAgentRun,
   type ProgressViewApprovalCommandActions,
   type ProgressViewBypassCommandOptions,
   type ProgressViewExternalInquiryCommandActions,
@@ -28,7 +27,7 @@ import {
 
 type ProgressViewFileHostActions = Pick<
   ProgressViewFileCommandActions,
-  'openFile' | 'openFileCompile'
+  'openFile'
 >;
 
 type ProgressViewApprovalHostActions = Omit<
@@ -71,13 +70,14 @@ async function resumeStream(
   stream: StreamTabId,
   showInfo: (message: string) => void | PromiseLike<unknown>,
 ): Promise<void> {
-  const { config, executionId, identity } =
-    dependencies.state.getRunMetadata(stream);
-  if (!isNativeAgentRun(identity)) {
-    await reportNonNativeRunRefusal(showInfo, 'resumed');
-    return;
-  }
-  if (!config) return;
+  const metadata = await resolveNativeAgentRun(
+    dependencies.state.getRunMetadata,
+    stream,
+    showInfo,
+    'resumed',
+  );
+  if (!metadata) return;
+  const { config, executionId } = metadata;
 
   if (config.agentCategory !== AgentCategory.Workflow) {
     await platform().agentResume.tryResumeStream(stream);
@@ -95,14 +95,15 @@ async function runNewStream(
   stream: StreamTabId,
   showInfo: (message: string) => void | PromiseLike<unknown>,
 ): Promise<void> {
-  const { config, identity } = dependencies.state.getRunMetadata(stream);
-  if (!isNativeAgentRun(identity)) {
-    await reportNonNativeRunRefusal(showInfo, 're-run');
-    return;
-  }
-  if (!config) return;
+  const metadata = await resolveNativeAgentRun(
+    dependencies.state.getRunMetadata,
+    stream,
+    showInfo,
+    're-run',
+  );
+  if (!metadata) return;
 
-  await dependencies.runExecutionRequest({ config });
+  await dependencies.runExecutionRequest({ config: metadata.config });
 }
 
 export interface ProgressViewHostOptions {
@@ -137,7 +138,6 @@ export class ProgressViewHost {
       bypass: options.commands.bypass,
       file: {
         openFile: options.commands.file.openFile,
-        openFileCompile: options.commands.file.openFileCompile,
         openTaskStorage: (stream) =>
           this.workflowFileActionsController.openTaskStorage(stream),
         compareOriginal: (file, base) =>

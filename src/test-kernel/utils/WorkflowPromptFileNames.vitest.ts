@@ -1,6 +1,3 @@
-// Node imports
-import * as path from 'node:path';
-
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
@@ -48,17 +45,17 @@ describe('workflow prompt file names', () => {
 
   it('keeps extracted outputs inside the round directory for absolute document names', () => {
     expect(getExtractedDocOutputFileName('chapter/main.tex', 'r0')).toBe(
-      path.posix.join('r0', 'chapter', 'main.tex'),
+      'r0/chapter/main.tex',
     );
     expect(getExtractedDocOutputFileName('/tmp/main.tex', 'r0')).toBe(
-      path.posix.join('r0', 'main.tex'),
+      'r0/main.tex',
     );
     expect(getExtractedDocOutputFileName('../main.tex', 'r0')).toBe(
-      path.posix.join('r0', 'main.tex'),
+      'r0/main.tex',
     );
     expect(getSafeDocumentRelativePath('/tmp/main.tex')).toBe('main.tex');
     expect(getSafeDocumentRelativePath('chapters/main.tex')).toBe(
-      path.posix.join('chapters', 'main.tex'),
+      'chapters/main.tex',
     );
   });
 });

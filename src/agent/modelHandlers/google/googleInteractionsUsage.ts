@@ -45,13 +45,12 @@ export function computeGoogleInteractionsPrice(
   usage: InteractionsUsage | null,
   config: StandardPricingConfig,
 ): number {
-  if (!usage) return 0;
   const { inputTokens, outputTokens } = tokenCounts(usage);
   return computeStandardPrice(
     {
       inputTokens,
       outputTokens,
-      cachedTokens: usage.total_cached_tokens ?? 0,
+      cachedTokens: usage?.total_cached_tokens ?? 0,
     },
     config,
   );

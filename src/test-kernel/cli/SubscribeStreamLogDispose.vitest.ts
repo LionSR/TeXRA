@@ -9,13 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
+  releaseInactiveStreamTranscript,
   streamRenderCacheSizesForTest,
   subscribeStreamLog,
   syncStreamLog,
 } from '@cli/chat/tui/state/subscribeStreamLog';
 import {
   activeStreamId,
-  patchStream,
   resetCliState,
   streams,
   setStreamStatusInCliState,
@@ -171,6 +171,7 @@ describe('subscribeStreamLog batching and dispose', () => {
     const requestEviction = vi.spyOn(store, 'requestEviction');
 
     syncStreamLog(streamB);
+    releaseInactiveStreamTranscript(streamB);
 
     expect(streams.get().get(streamB)).toMatchObject({
       latestLine: 'starting',
@@ -190,9 +191,31 @@ describe('subscribeStreamLog batching and dispose', () => {
     activeStreamId.set(streamA);
     const requestEviction = vi.spyOn(store, 'requestEviction');
 
-    syncStreamLog(streamB);
+    releaseInactiveStreamTranscript(streamB);
 
     expect(requestEviction).toHaveBeenCalledWith(streamB);
+  });
+
+  it('never releases the focused stream, nor anything while focus is unset', () => {
+    const store = defaultSession().transcripts;
+    appendUserMessage(store, streamA, 'a-1', 'done but focused');
+    setStreamStatusInCliState({
+      streamId: streamA,
+      status: STREAM_PHASE.COMPLETED,
+    });
+    // `vi.spyOn` on an already-spied method returns the existing spy with
+    // its accumulated history from earlier tests — clear it first.
+    const requestEviction = vi.spyOn(store, 'requestEviction');
+    requestEviction.mockClear();
+
+    // No focused stream: every stream projects the full transcript.
+    activeStreamId.set(undefined);
+    releaseInactiveStreamTranscript(streamA);
+    // Focused: the active stream keeps its residency even when terminal.
+    activeStreamId.set(streamA);
+    releaseInactiveStreamTranscript(streamA);
+
+    expect(requestEviction).not.toHaveBeenCalled();
   });
 
   it('drops per-stream render caches when a completed transcript is released', () => {
@@ -200,8 +223,7 @@ describe('subscribeStreamLog batching and dispose', () => {
     appendUserMessage(store, streamB, 'b-1', 'hello');
     activeStreamId.set(streamA);
 
-    // No status yet, so the release condition can't fire — this sync is
-    // what actually seeds streamB's per-stream caches.
+    // This sync is what seeds streamB's per-stream projection state.
     syncStreamLog(streamB);
     expect(streamRenderCacheSizesForTest()).toEqual({
       taskGroups: 1,
@@ -209,14 +231,15 @@ describe('subscribeStreamLog batching and dispose', () => {
       render: 1,
     });
 
-    // Completed and not focused: the next sync both requests store
-    // eviction and must drop these caches too, or they outlive the store's
-    // own retention and keep the whole transcript reachable indefinitely.
+    // Completed and not focused: the lifecycle release both requests store
+    // eviction and must drop the projection state too, or it outlives the
+    // store's own retention and keeps the whole transcript reachable
+    // indefinitely.
     setStreamStatusInCliState({
       streamId: streamB,
       status: STREAM_PHASE.COMPLETED,
     });
-    syncStreamLog(streamB);
+    releaseInactiveStreamTranscript(streamB);
 
     expect(streamRenderCacheSizesForTest()).toEqual({
       taskGroups: 0,

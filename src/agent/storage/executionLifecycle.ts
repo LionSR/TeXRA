@@ -9,7 +9,7 @@
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { flowKey } from '@agent/node/persistedFlow';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
@@ -25,6 +25,7 @@ import {
 import { KeyedMutex } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { throwUnwrapAggregate } from './storageErrors';
 import { getExecutionStore } from './ExecutionKVStore';
 import {
   acquireFreshExecutionLease,
@@ -33,7 +34,7 @@ import {
   releaseOwnedExecutionLease,
 } from './executionLease';
 
-const CHANNEL = 'ExecutionLifecycle';
+const log = createLog('ExecutionLifecycle');
 
 function pinExecutionWorkingDirectory(record: RunRecord): RunRecord {
   const workingDirectory =
@@ -158,13 +159,10 @@ export async function registerExecution(
       const errors = results.flatMap((result) =>
         result.status === 'rejected' ? [result.reason] : [],
       );
-      if (errors.length === 1) throw errors[0];
-      if (errors.length > 1) {
-        throw new AggregateError(
-          errors,
-          `Multiple execution registration writes failed for ${executionId}`,
-        );
-      }
+      throwUnwrapAggregate(
+        errors,
+        `Multiple execution registration writes failed for ${executionId}`,
+      );
     } catch (error) {
       try {
         await releaseOwnedExecutionLease(executionId);
@@ -319,8 +317,7 @@ export async function writeSessionDescription(
     await enqueueMetaUpdate(executionId, () => ({ description }));
   } catch (err) {
     // Swallow and log — don't let storage I/O errors disrupt execution lifecycle.
-    logger.debug(
-      CHANNEL,
+    log.debug(
       `Failed to persist session description for ${executionId}: ${toErrorMessage(err)}`,
     );
   }

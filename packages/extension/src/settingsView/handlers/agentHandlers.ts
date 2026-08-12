@@ -8,7 +8,12 @@ import * as path from 'node:path';
 
 import * as vscode from 'vscode';
 
-import { getAgent, loadAgents, refresh as refreshAgents } from '@agent/index';
+import {
+  type AgentRosterController,
+  getAgent,
+  loadAgents,
+  refresh as refreshAgents,
+} from '@agent/index';
 import {
   AGENT_TEMPLATE_FILES,
   DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
@@ -54,6 +59,7 @@ export class AgentHandlers {
   private readonly fileController: SettingsAgentFileController;
   private readonly remotePromptController: SettingsRemoteAgentPromptController;
   private readonly visibilityController: SettingsAgentVisibilityController;
+  private readonly roster: AgentRosterController;
   private readonly agentActions;
   private readonly activeCustomAgentDeletions = new Set<string>();
 
@@ -73,6 +79,7 @@ export class AgentHandlers {
     this.catalogController = controllers.catalog;
     this.directoryController = controllers.directory;
     this.visibilityController = controllers.visibility;
+    this.roster = controllers.roster;
     this.fileController = controllers.fileController;
     this.remotePromptController = controllers.remotePromptController;
     this.agentActions = createSettingsAgentActions({
@@ -134,7 +141,7 @@ export class AgentHandlers {
       this.ctx,
       'Failed to update agent visibility',
       async () => {
-        await this.visibilityController.setAgentEnabled({
+        await this.roster.setAgentEnabled({
           category: data.category,
           source: data.agentSource,
           name: data.agentName,
@@ -338,8 +345,11 @@ export class AgentHandlers {
           );
           return;
         }
-        if (result.status === 'choice-required') return;
-        if (result.status === 'cancelled') return;
+        if (
+          result.status === 'choice-required' ||
+          result.status === 'cancelled'
+        )
+          return;
         if (result.status === 'unavailable') {
           await showLoggedMessage(
             this.ctx.channel,

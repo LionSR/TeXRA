@@ -1,13 +1,13 @@
-import { defaultSession } from '@agent/runtime/SessionHandle';
-import type {
-  HostAgentProposalRequest,
-  HostApprovalBypassStateUpdate,
-  HostInteractions,
-  HostRetryRequest,
-  HostUserQuestionRequest,
-  RetryResult,
-  UserQuestionSettlement,
-} from '@agent/runtime/HostInteractions';
+import {
+  defaultSession,
+  type HostAgentProposalRequest,
+  type HostApprovalBypassStateUpdate,
+  type HostInteractions,
+  type HostRetryRequest,
+  type HostUserQuestionRequest,
+  type RetryResult,
+  type UserQuestionSettlement,
+} from '@agent/runtime';
 import {
   type AgentProposalPermission,
   type ApprovalDecision,
@@ -15,7 +15,7 @@ import {
   type RetryPermission,
   type UserQuestionAnswers,
 } from '@shared/schemas';
-import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
+import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
@@ -39,7 +39,10 @@ import {
   formatToolEditApprovalSummary,
   formatUserQuestionPrompt,
 } from './approval/approvalSummaries';
-import { parseUserQuestionAnswer } from './userQuestionAnswer';
+import {
+  parseUserQuestionAnswer,
+  USER_QUESTION_SKIPPED_FEEDBACK,
+} from './userQuestionAnswer';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
 
@@ -86,8 +89,11 @@ function summarizeApprovalEvent<K extends CliDecisionApprovalEvent>(
       return formatAgentProposalApprovalSummary(data);
     }
     case 'showRetryRequest': {
-      const data = payload as RetryPermission;
-      return `Retry requested for ${data.operation}: ${data.errorMessage ?? 'unknown error'}`;
+      // The prompt surface owns the retry hint: the operator must see the
+      // `/api personal` / coding-plan switch guidance in the prompt they
+      // actually answer, not only in the pre-prompt stderr line.
+      // `formatRetryRequestMessage` is the single retry formatter.
+      return formatRetryRequestMessage(payload as RetryPermission);
     }
     default: {
       const never: never = event;
@@ -196,7 +202,7 @@ async function askHeadlessUserQuestion(
   }
 
   if (Object.keys(answers).length === 0) {
-    return { action: 'skip', feedback: 'User question skipped by user.' };
+    return { action: 'skip', feedback: USER_QUESTION_SKIPPED_FEEDBACK };
   }
   return { action: 'submit', answers };
 }

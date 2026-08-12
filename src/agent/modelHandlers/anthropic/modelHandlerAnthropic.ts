@@ -27,7 +27,7 @@ import { ANTHROPIC_STOP } from '@agent/types/StopReasonTypes';
 import {
   isAnthropicServerToolContent,
   type ServerToolExtractionResult,
-} from '@agent/types/ServerToolTypes';
+} from '@agent/types/ServerTools';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type {
   CreateResponseOptions,
@@ -854,14 +854,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         ? await this.executeStreamingResponse(client, options, signal)
         : await client.beta.messages.create(options, { signal });
       compactionOutcome = resolveAnthropicCompactionOutcome(response);
-      if (!useStreaming) {
-        if (compactionOutcome) {
-          const activity =
-            compactionActivity ?? startCompactionActivity(this.logger);
-          activity.finish(compactionOutcome.state);
-        } else {
-          compactionActivity?.finish('skipped');
-        }
+      if (!useStreaming && (compactionActivity || compactionOutcome)) {
+        const activity =
+          compactionActivity ?? startCompactionActivity(this.logger);
+        activity.finish(compactionOutcome?.state ?? 'skipped');
       }
     } catch (error) {
       compactionActivity?.finish(isUserAbort(error) ? 'cancelled' : 'failed');
@@ -1493,25 +1489,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
     responseObject: BetaMessage,
     workspaceState?: AgentWorkspaceState,
   ): string | null {
-    if (!responseObject) {
-      return null;
-    }
-
     // Extract all thinking blocks from the response
     const thinkingBlocks: (BetaThinkingBlock | BetaRedactedThinkingBlock)[] =
       [];
     let regularThinkingContent: string | null = null;
 
-    if (Array.isArray(responseObject.content)) {
-      for (const item of responseObject.content) {
-        if (item.type === 'thinking' && item.thinking) {
-          thinkingBlocks.push(item);
-          if (regularThinkingContent === null) {
-            regularThinkingContent = item.thinking;
-          }
-        } else if (item.type === 'redacted_thinking' && item.data) {
-          thinkingBlocks.push(item);
+    for (const item of responseObject.content) {
+      if (item.type === 'thinking' && item.thinking) {
+        thinkingBlocks.push(item);
+        if (regularThinkingContent === null) {
+          regularThinkingContent = item.thinking;
         }
+      } else if (item.type === 'redacted_thinking' && item.data) {
+        thinkingBlocks.push(item);
       }
     }
 

@@ -12,8 +12,7 @@
  * extension supplies only how it resolves persisted state and launches a run.
  */
 import { createChannelTrace } from '@agent/trace';
-import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession, resolveAndResumeStream } from '@agent/runtime';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { StreamTabId } from '@shared/schemas';

@@ -7,7 +7,6 @@ import { z } from 'zod';
 
 // Local imports
 import type { ToolResult } from '@shared/schemas/toolResult';
-import { formatBytes } from '@shared/utils/string';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
@@ -19,7 +18,7 @@ import {
   toErrorMessage,
 } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
-import { isNonEmptyString } from '@utils/text/stringUtils';
+import { formatBytes, isNonEmptyString } from '@utils/text/stringUtils';
 
 const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
 

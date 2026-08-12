@@ -1,10 +1,5 @@
-// Standard library imports
-import { strict as assert } from 'node:assert';
+import { describe, expect, it } from 'vitest';
 
-// Third-party imports
-import { describe, it } from 'vitest';
-
-// Local imports - controllers, shared constants and schemas
 import {
   LatexToolingController,
   type LatexPathTool,
@@ -13,7 +8,7 @@ import {
 import {
   HOMEBREW_INSTALL_COMMAND,
   type OSPlatform,
-} from '@shared/constants/latex';
+} from '@shared/constants/latexToolchain';
 import { DEFAULT_LATEX_SETTINGS_STATUS } from '@shared/schemas/settingsViewMessages';
 
 const INSTALLED_TOOLS = {
@@ -87,7 +82,7 @@ describe('LatexToolingController', () => {
       autoRevealExclude: true,
     }).detectStatus();
 
-    assert.deepEqual(status, {
+    expect(status).toStrictEqual({
       outDir: true,
       autoRevealExclude: true,
       texDistributionInstalled: true,
@@ -117,9 +112,9 @@ describe('LatexToolingController', () => {
       },
     }).detectStatus();
 
-    assert.equal(status.texDistributionInstalled, true);
-    assert.equal(status.latexindentInstalled, false);
-    assert.equal(status.imageProcessingInstalled, false);
+    expect(status.texDistributionInstalled).toBe(true);
+    expect(status.latexindentInstalled).toBe(false);
+    expect(status.imageProcessingInstalled).toBe(false);
   });
 
   it('falls back to defaults when detection fails', async () => {
@@ -136,20 +131,19 @@ describe('LatexToolingController', () => {
       onDetectionError: (error) => errors.push(error),
     });
 
-    assert.deepEqual(await controller.detectStatus(), {
+    expect(await controller.detectStatus()).toStrictEqual({
       ...DEFAULT_LATEX_SETTINGS_STATUS,
       platform: 'win32',
     });
-    assert.equal(errors.length, 1);
+    expect(errors).toHaveLength(1);
   });
 
   it('allowlists structured install commands only', () => {
     const controller = createController();
 
-    assert.equal(
-      controller.isAllowedInstallCommand(HOMEBREW_INSTALL_COMMAND),
+    expect(controller.isAllowedInstallCommand(HOMEBREW_INSTALL_COMMAND)).toBe(
       true,
     );
-    assert.equal(controller.isAllowedInstallCommand('rm -rf ~/.texra'), false);
+    expect(controller.isAllowedInstallCommand('rm -rf ~/.texra')).toBe(false);
   });
 });

@@ -7,11 +7,11 @@ describe('getStreamTabId', () => {
   const EXEC_ID = 'abcdef012345' as ExecutionId;
 
   it.each([
-    { agent: 'polish' },
+    'polish',
     // Only valid AgentSource prefixes are stripped ('builtInWorkflow',
     // 'builtInToolUse', 'custom', 'remote'); unknown prefixes are kept.
-    { agent: 'builtInWorkflow:polish' },
-  ])('builds the tab id `polish#<executionId>` from $agent', ({ agent }) => {
+    'builtInWorkflow:polish',
+  ])('builds the tab id `polish#<executionId>` from `%s`', (agent) => {
     expect(getStreamTabId(agent, { executionId: EXEC_ID })).toBe(
       `polish#${EXEC_ID}`,
     );

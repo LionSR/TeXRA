@@ -12,7 +12,7 @@ import type {
   OutputFileInfo,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { LATEX_CONFIG_RANGES } from '@shared/constants/latex';
+import { LATEX_CONFIG_RANGES } from '@shared/constants/latexConfig';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
@@ -219,6 +219,21 @@ interface PerFileOptions {
   timeoutMs: number;
 }
 
+/**
+ * Per-file compile context shared by the failure-persistence and
+ * artifact-publish helpers. Constructed once inside {@link compileOne} and
+ * spread into each helper's args so a new derived value only needs adding
+ * here (and to the helper that consumes it), not to every call site.
+ */
+interface CompileTarget {
+  ctx: CompileCheckContext;
+  opts: PerFileOptions;
+  displayName: string;
+  currentRound: number;
+  outputFile: OutputFileInfo;
+  executionId: ExecutionId;
+}
+
 // Short hex digest length appended to safeName below — enough to make
 // collisions between distinct paths astronomically unlikely while keeping
 // log filenames legible.
@@ -306,6 +321,15 @@ async function compileOne(
   ].map((name) => path.join(opts.compileRoot, `r${currentRound}_${name}.log`));
   const { executionId } = ctx.fileService;
 
+  const target: CompileTarget = {
+    ctx,
+    opts,
+    displayName,
+    currentRound,
+    outputFile,
+    executionId,
+  };
+
   const clearStaleLogs = (): Promise<void[]> =>
     Promise.all(
       [logDest.absolutePath, ...legacyLogPaths].map((logPath) =>
@@ -357,14 +381,9 @@ async function compileOne(
       data: err,
     });
     return writeCompileFailure({
-      ctx,
-      opts,
-      displayName,
-      currentRound,
-      outputFile,
+      ...target,
       logDest,
       logRelativePath,
-      executionId,
       failureLogExcerpt: `Compile check errored for ${displayName}\n\n${message}`,
     });
   }
@@ -376,14 +395,9 @@ async function compileOne(
     // crash mid-check masquerading as success.
     await clearStaleLogs();
     const artifact = await tryPublishArtifact({
-      ctx,
-      opts,
-      displayName,
-      currentRound,
-      outputFile,
+      ...target,
       compiledBasename,
       buildDir,
-      executionId,
     });
     return { failure: null, failureLogExcerpt: '', artifact };
   }
@@ -393,27 +407,16 @@ async function compileOne(
     data: path.relative(opts.runDirectory, logDest.absolutePath),
   });
   return writeCompileFailure({
-    ctx,
-    opts,
-    displayName,
-    currentRound,
-    outputFile,
+    ...target,
     logDest,
     logRelativePath,
-    executionId,
     failureLogExcerpt,
   });
 }
 
-interface WriteCompileFailureArgs {
-  ctx: CompileCheckContext;
-  opts: PerFileOptions;
-  displayName: string;
-  currentRound: number;
-  outputFile: OutputFileInfo;
+interface WriteCompileFailureArgs extends CompileTarget {
   logDest: FileLocation;
   logRelativePath: string;
-  executionId: ExecutionId;
   failureLogExcerpt: string;
 }
 
@@ -429,9 +432,9 @@ async function writeCompileFailure({
   displayName,
   currentRound,
   outputFile,
+  executionId,
   logDest,
   logRelativePath,
-  executionId,
   failureLogExcerpt,
 }: WriteCompileFailureArgs): Promise<{
   failure: CompileFailure;
@@ -466,15 +469,9 @@ async function writeCompileFailure({
   };
 }
 
-interface TryPublishArtifactArgs {
-  ctx: CompileCheckContext;
-  opts: PerFileOptions;
-  displayName: string;
-  currentRound: number;
-  outputFile: OutputFileInfo;
+interface TryPublishArtifactArgs extends CompileTarget {
   compiledBasename: string;
   buildDir: string;
-  executionId: ExecutionId;
 }
 
 /**

@@ -2,12 +2,8 @@
 import * as nodePath from 'node:path';
 
 // Local imports
+import { teardownDefaultSession, tryDefaultSession } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
-import {
-  teardownDefaultSession,
-  tryDefaultSession,
-} from '@agent/runtime/SessionHandle';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
@@ -32,6 +28,7 @@ import {
 } from '@platform/defaults/nodeStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup/platform';
 import { getUseOpenRouter } from '@utils/config/providerConfig';

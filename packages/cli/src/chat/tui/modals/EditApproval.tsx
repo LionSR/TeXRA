@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
+import { buildHunks } from '@cli/runtime/diffHunks';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import {
   clampModalWidth,
@@ -12,20 +13,19 @@ import { KeyHints } from '@cli/tui/ui/KeyHints';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-import { ConfirmCard } from './ConfirmCard';
+import { ConfirmCard, CONFIRM_CARD_FEEDBACK_PLACEHOLDER } from './ConfirmCard';
 import {
   confirmCardContentRowsBudget,
   confirmCardFeedbackRows,
 } from './confirmCardRowsBudget';
 import {
-  buildHunks,
-  COMPACT_DIFF_DISPLAY_LINES,
   DiffView,
   initialDiffScrollOffset,
   maxDiffScrollOffset,
   statsFromHunks,
   wrappedDiffDisplayLines,
 } from '../render/DiffView';
+import { COMPACT_SCROLLABLE_CONTENT_ROWS } from '../render/scrollBounds';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
@@ -33,7 +33,6 @@ const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
 const EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
 export const COMPACT_EDIT_APPROVAL_MAX_ROWS = 9;
 const DEFAULT_EDIT_DIFF_ROWS = 30;
-const EDIT_APPROVAL_FEEDBACK_PLACEHOLDER = 'Feedback to send with rejection';
 
 export interface EditApprovalProps {
   readonly availableRows?: number;
@@ -44,7 +43,7 @@ export interface EditApprovalProps {
 export function editApprovalDiffRowsBudget({
   availableRows,
   columns,
-  feedbackPlaceholder = EDIT_APPROVAL_FEEDBACK_PLACEHOLDER,
+  feedbackPlaceholder = CONFIRM_CARD_FEEDBACK_PLACEHOLDER,
   feedbackMode,
   feedbackValue = '',
   title,
@@ -70,7 +69,7 @@ export function editApprovalDiffRowsBudget({
     title,
     minContentWidth: MIN_MODAL_CONTENT_WIDTH,
     defaultRows: DEFAULT_EDIT_DIFF_ROWS,
-    compactMaxRows: COMPACT_DIFF_DISPLAY_LINES,
+    compactMaxRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     spaciousFixedRows: EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE,
     compactFixedRows: EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE,
     extraFixedRows: feedbackRows,
@@ -136,7 +135,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
         feedbackMode: true,
         feedbackValue: value,
         title,
-      }) <= COMPACT_DIFF_DISPLAY_LINES,
+      }) <= COMPACT_SCROLLABLE_CONTENT_ROWS,
     [columns, props.availableRows, title],
   );
   useEffect(() => {
@@ -164,7 +163,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     pageRows: Math.max(1, maxDiffLines - 2),
     resetKey: scrollResetKey,
   });
-  const compactDiffLayout = maxDiffLines <= COMPACT_DIFF_DISPLAY_LINES;
+  const compactDiffLayout = maxDiffLines <= COMPACT_SCROLLABLE_CONTENT_ROWS;
   const compactCard = isCompactRows(
     props.availableRows,
     COMPACT_EDIT_APPROVAL_MAX_ROWS,
@@ -177,7 +176,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       title={title}
       rejectionMode="feedback"
       alwaysAllow={{ kind: 'toolEdit', label: 'approve edits for session' }}
-      feedbackPlaceholder={EDIT_APPROVAL_FEEDBACK_PLACEHOLDER}
+      feedbackPlaceholder={CONFIRM_CARD_FEEDBACK_PLACEHOLDER}
       compact={compactCard}
       onFeedbackModeChange={handleFeedbackModeChange}
       onFeedbackValueChange={setFeedbackValue}

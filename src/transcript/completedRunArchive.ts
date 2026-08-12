@@ -342,9 +342,9 @@ async function conversationFromStream(
   streamLogStore: StreamLogStore,
   streamId: StreamTabId,
 ): Promise<unknown[]> {
-  await streamLogStore.ensureLoaded(streamId);
-  const log = streamLogStore.get(streamId);
-  return log ? streamLogEntriesToConversation(log.toJSON()) : [];
+  return streamLogEntriesToConversation(
+    await streamLogStore.readEntries(streamId),
+  );
 }
 
 /**

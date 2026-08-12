@@ -72,25 +72,16 @@ function dispatch(
   actions: ExtensionCommandActions,
   id: ExtensionRegistryCommandId,
   ...args: unknown[]
-): boolean | Promise<boolean> {
-  return dispatchCommandFromRegistry(
-    id,
-    EXTENSION_COMMAND_HANDLERS,
-    actions,
-    undefined,
-    ...args,
-  );
-}
-
-// Async handlers return a promise; awaiting must resolve to `true`. Sync
-// handlers settle immediately, so the raw `dispatch` result is asserted
-// directly wherever the sync `false` return is the behavior under test.
-function dispatchAsync(
-  actions: ExtensionCommandActions,
-  id: ExtensionRegistryCommandId,
-  ...args: unknown[]
 ): Promise<boolean> {
-  return Promise.resolve(dispatch(actions, id, ...args));
+  return Promise.resolve(
+    dispatchCommandFromRegistry(
+      id,
+      EXTENSION_COMMAND_HANDLERS,
+      actions,
+      undefined,
+      ...args,
+    ),
+  );
 }
 
 describe('extension command registry — catalog-driven registration', () => {
@@ -156,15 +147,15 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
     ['texra.toggleView', 'toggleView'],
   ] as const)('%s dispatches to actions.%s', async (id, actionKey) => {
     const actions = makeActions();
-    await expect(dispatchAsync(actions, id)).resolves.toBe(true);
+    await expect(dispatch(actions, id)).resolves.toBe(true);
     expect(actions[actionKey]).toHaveBeenCalledOnce();
   });
 
   it('texra.auth.viewProfile opens the account tab', async () => {
     const actions = makeActions();
-    await expect(
-      dispatchAsync(actions, 'texra.auth.viewProfile'),
-    ).resolves.toBe(true);
+    await expect(dispatch(actions, 'texra.auth.viewProfile')).resolves.toBe(
+      true,
+    );
     expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
       SETTINGS_TAB.ACCOUNT,
     );
@@ -172,9 +163,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
 
   it('texra.showMemory passes the memory tab index', async () => {
     const actions = makeActions();
-    await expect(dispatchAsync(actions, 'texra.showMemory')).resolves.toBe(
-      true,
-    );
+    await expect(dispatch(actions, 'texra.showMemory')).resolves.toBe(true);
     expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
       SETTINGS_TAB.MEMORY,
     );
@@ -183,7 +172,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
   it('texra.showAgents forwards parsed agent-category sub-tab', async () => {
     const actions = makeActions();
     await expect(
-      dispatchAsync(actions, 'texra.showAgents', 'toolUse'),
+      dispatch(actions, 'texra.showAgents', 'toolUse'),
     ).resolves.toBe(true);
     expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
       SETTINGS_TAB.AGENTS,
@@ -193,9 +182,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
 
   it('texra.showAgents with no arg opens the agents tab without a sub-tab', async () => {
     const actions = makeActions();
-    await expect(dispatchAsync(actions, 'texra.showAgents')).resolves.toBe(
-      true,
-    );
+    await expect(dispatch(actions, 'texra.showAgents')).resolves.toBe(true);
     expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
       SETTINGS_TAB.AGENTS,
       undefined,
@@ -205,34 +192,38 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
   it('texra.openDoc forwards parsed page argument', async () => {
     const actions = makeActions();
     await expect(
-      dispatchAsync(actions, 'texra.openDoc', 'getting-started'),
+      dispatch(actions, 'texra.openDoc', 'getting-started'),
     ).resolves.toBe(true);
     expect(actions.openDoc).toHaveBeenCalledExactlyOnceWith('getting-started');
   });
 
-  it('texra.openDoc rejects non-string raw arg', () => {
+  it('texra.openDoc rejects non-string raw arg', async () => {
     const actions = makeActions();
-    expect(dispatch(actions, 'texra.openDoc', 42)).toBe(false);
+    await expect(dispatch(actions, 'texra.openDoc', 42)).resolves.toBe(false);
     expect(actions.openDoc).not.toHaveBeenCalled();
   });
 
-  it('texra.stopAgent forwards parsed streamId', () => {
+  it('texra.stopAgent forwards parsed streamId', async () => {
     const actions = makeActions();
-    expect(dispatch(actions, 'texra.stopAgent', 'stream-1')).toBe(true);
+    await expect(
+      dispatch(actions, 'texra.stopAgent', 'stream-1'),
+    ).resolves.toBe(true);
     expect(actions.stopAgent).toHaveBeenCalledExactlyOnceWith('stream-1');
   });
 
   it('texra.compactResponse forwards parsed streamId', async () => {
     const actions = makeActions();
     await expect(
-      dispatchAsync(actions, 'texra.compactResponse', 'stream-2'),
+      dispatch(actions, 'texra.compactResponse', 'stream-2'),
     ).resolves.toBe(true);
     expect(actions.compactResponse).toHaveBeenCalledExactlyOnceWith('stream-2');
   });
 
-  it('texra.compactResponse rejects empty streamId', () => {
+  it('texra.compactResponse rejects empty streamId', async () => {
     const actions = makeActions();
-    expect(dispatch(actions, 'texra.compactResponse', '')).toBe(false);
+    await expect(dispatch(actions, 'texra.compactResponse', '')).resolves.toBe(
+      false,
+    );
     expect(actions.compactResponse).not.toHaveBeenCalled();
   });
 
@@ -260,10 +251,8 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
         model: 'gpt-5',
       };
 
-      await expect(dispatchAsync(actions, 'texra.pack', config)).resolves.toBe(
-        true,
-      );
-      await expect(dispatchAsync(actions, 'texra.clean', config)).resolves.toBe(
+      await expect(dispatch(actions, 'texra.pack', config)).resolves.toBe(true);
+      await expect(dispatch(actions, 'texra.clean', config)).resolves.toBe(
         true,
       );
       expect(actions.pack).toHaveBeenCalledExactlyOnceWith({
@@ -280,22 +269,10 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       const actions = makeActions();
 
       await expect(
-        dispatchAsync(
-          actions,
-          'texra.packSingle',
-          'main.tex',
-          'editor',
-          'gpt-5',
-        ),
+        dispatch(actions, 'texra.packSingle', 'main.tex', 'editor', 'gpt-5'),
       ).resolves.toBe(true);
       await expect(
-        dispatchAsync(
-          actions,
-          'texra.cleanSingle',
-          'main.tex',
-          'editor',
-          'gpt-5',
-        ),
+        dispatch(actions, 'texra.cleanSingle', 'main.tex', 'editor', 'gpt-5'),
       ).resolves.toBe(true);
       expect(actions.packSingle).toHaveBeenCalledExactlyOnceWith(
         'main.tex',
@@ -313,22 +290,10 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       const actions = makeActions();
 
       await expect(
-        dispatchAsync(
-          actions,
-          'texra.packMultiple',
-          'main.tex',
-          'editor',
-          'gpt-5',
-        ),
+        dispatch(actions, 'texra.packMultiple', 'main.tex', 'editor', 'gpt-5'),
       ).resolves.toBe(true);
       await expect(
-        dispatchAsync(
-          actions,
-          'texra.cleanMultiple',
-          'main.tex',
-          'editor',
-          'gpt-5',
-        ),
+        dispatch(actions, 'texra.cleanMultiple', 'main.tex', 'editor', 'gpt-5'),
       ).resolves.toBe(true);
       expect(actions.packMultiple).toHaveBeenCalledExactlyOnceWith(
         'main.tex',
@@ -348,7 +313,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       const actions = makeActions();
 
       await expect(
-        dispatchAsync(actions, 'texra.packMultiple', '', 'editor', 'gpt-5', [
+        dispatch(actions, 'texra.packMultiple', '', 'editor', 'gpt-5', [
           'chapter.tex',
         ]),
       ).resolves.toBe(true);
@@ -364,7 +329,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       const actions = makeActions();
 
       await expect(
-        dispatchAsync(
+        dispatch(
           actions,
           'texra.compare',
           WORKSPACE_INPUT,
@@ -373,7 +338,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
         ),
       ).resolves.toBe(true);
       await expect(
-        dispatchAsync(
+        dispatch(
           actions,
           'texra.acceptEdited',
           WORKSPACE_INPUT,
@@ -399,7 +364,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       const actions = makeActions();
 
       await expect(
-        dispatchAsync(
+        dispatch(
           actions,
           'texra.acceptEdited',
           WORKSPACE_INPUT,
@@ -419,7 +384,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       const actions = makeActions();
 
       await expect(
-        dispatchAsync(
+        dispatch(
           actions,
           'texra.compare',
           WORKSPACE_INPUT,
@@ -428,7 +393,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
         ),
       ).resolves.toBe(true);
       await expect(
-        dispatchAsync(
+        dispatch(
           actions,
           'texra.acceptEdited',
           WORKSPACE_INPUT,
@@ -449,37 +414,39 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       );
     });
 
-    it('rejects malformed positional arguments before calling actions', () => {
+    it('rejects malformed positional arguments before calling actions', async () => {
       const actions = makeActions();
 
-      expect(dispatch(actions, 'texra.packSingle', '', 'editor', 'gpt-5')).toBe(
-        false,
-      );
+      await expect(
+        dispatch(actions, 'texra.packSingle', '', 'editor', 'gpt-5'),
+      ).resolves.toBe(false);
       expect(actions.packSingle).not.toHaveBeenCalled();
     });
   });
 
   it('texra.showProgressView with no arg defaults to inPlace=false', async () => {
     const actions = makeActions();
-    await expect(
-      dispatchAsync(actions, 'texra.showProgressView'),
-    ).resolves.toBe(true);
+    await expect(dispatch(actions, 'texra.showProgressView')).resolves.toBe(
+      true,
+    );
     expect(actions.showProgressView).toHaveBeenCalledExactlyOnceWith(false);
   });
 
   it('texra.showProgressView forwards inPlace=true', async () => {
     const actions = makeActions();
     await expect(
-      dispatchAsync(actions, 'texra.showProgressView', { inPlace: true }),
+      dispatch(actions, 'texra.showProgressView', { inPlace: true }),
     ).resolves.toBe(true);
     expect(actions.showProgressView).toHaveBeenCalledExactlyOnceWith(true);
   });
 
   it.each([null, true, 'true', { inPlace: 'true' }, { extra: true }])(
     'texra.showProgressView rejects malformed argument %j',
-    (argument) => {
+    async (argument) => {
       const actions = makeActions();
-      expect(dispatch(actions, 'texra.showProgressView', argument)).toBe(false);
+      await expect(
+        dispatch(actions, 'texra.showProgressView', argument),
+      ).resolves.toBe(false);
       expect(actions.showProgressView).not.toHaveBeenCalled();
     },
   );
@@ -487,28 +454,30 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
   it('texra.setApiKey forwards parsed provider', async () => {
     const actions = makeActions();
     await expect(
-      dispatchAsync(actions, 'texra.setApiKey', 'anthropic'),
+      dispatch(actions, 'texra.setApiKey', 'anthropic'),
     ).resolves.toBe(true);
     expect(actions.setApiKey).toHaveBeenCalledExactlyOnceWith('anthropic');
   });
 
   it('texra.setApiKey passes undefined when no provider given', async () => {
     const actions = makeActions();
-    await expect(dispatchAsync(actions, 'texra.setApiKey')).resolves.toBe(true);
+    await expect(dispatch(actions, 'texra.setApiKey')).resolves.toBe(true);
     expect(actions.setApiKey).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 
-  it('texra.setApiKey rejects unknown provider', () => {
+  it('texra.setApiKey rejects unknown provider', async () => {
     const actions = makeActions();
-    expect(dispatch(actions, 'texra.setApiKey', 'not-a-provider')).toBe(false);
+    await expect(
+      dispatch(actions, 'texra.setApiKey', 'not-a-provider'),
+    ).resolves.toBe(false);
     expect(actions.setApiKey).not.toHaveBeenCalled();
   });
 
   it('texra.createAgentWithAI defaults to workflow when no category given', async () => {
     const actions = makeActions();
-    await expect(
-      dispatchAsync(actions, 'texra.createAgentWithAI'),
-    ).resolves.toBe(true);
+    await expect(dispatch(actions, 'texra.createAgentWithAI')).resolves.toBe(
+      true,
+    );
     expect(actions.createAgentWithAI).toHaveBeenCalledExactlyOnceWith(
       'workflow',
     );
@@ -517,7 +486,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
   it('texra.createAgentWithAI forwards parsed toolUse category', async () => {
     const actions = makeActions();
     await expect(
-      dispatchAsync(actions, 'texra.createAgentWithAI', 'toolUse'),
+      dispatch(actions, 'texra.createAgentWithAI', 'toolUse'),
     ).resolves.toBe(true);
     expect(actions.createAgentWithAI).toHaveBeenCalledExactlyOnceWith(
       'toolUse',
@@ -527,9 +496,9 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
   it('texra.execute forwards raw input through z.unknown() schema', async () => {
     const actions = makeActions();
     const payload = { config: { name: 'test' } };
-    await expect(
-      dispatchAsync(actions, 'texra.execute', payload),
-    ).resolves.toBe(true);
+    await expect(dispatch(actions, 'texra.execute', payload)).resolves.toBe(
+      true,
+    );
     expect(actions.execute).toHaveBeenCalledExactlyOnceWith(payload);
   });
 
@@ -549,7 +518,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
 
       (actions[actionKey] as any).mockRejectedValueOnce(failure);
 
-      await expect(dispatchAsync(actions, id)).rejects.toBe(failure);
+      await expect(dispatch(actions, id)).rejects.toBe(failure);
     });
 
     it('typed handler texra.compactResponse rejection bubbles up', async () => {
@@ -559,7 +528,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       (actions.compactResponse as any).mockRejectedValueOnce(failure);
 
       await expect(
-        dispatchAsync(actions, 'texra.compactResponse', 'stream-3'),
+        dispatch(actions, 'texra.compactResponse', 'stream-3'),
       ).rejects.toBe(failure);
     });
   });

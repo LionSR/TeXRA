@@ -37,7 +37,7 @@ import {
   readOnboardingFlags,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import { providerDisplayName } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import {
@@ -836,7 +836,7 @@ function KeyProviderStep(props: {
       <Select<ApiProvider>
         items={API_PROVIDERS.map((provider) => ({
           value: provider,
-          label: PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+          label: providerDisplayName(provider),
         }))}
         activeValue={props.activeProvider}
         onSelect={props.onSelect}

@@ -16,12 +16,9 @@ useLitComponentTestDom(async () => {
 });
 
 /**
- * Regression coverage for #8157: the model-option dropdown used to bake a
- * raw unicode/emoji provider glyph into the option's text label
- * (`MODEL_PROVIDER_DECORATORS[...].unicode`), while the sibling agent-option
- * dropdown rendered its icons through `wa-icon` via the texra Font Awesome
- * resolver. `renderModelOption` now uses the same `wa-icon` mechanism as
- * `renderAgentOption` — never a unicode glyph baked into the label text.
+ * Regression coverage for #8157: the model-option dropdown used to bake a raw
+ * unicode/emoji provider glyph into the option's text label. `renderModelOption`
+ * now uses the same `wa-icon` mechanism as `renderAgentOption`.
  */
 describe('renderModelOption uses wa-icon, matching renderAgentOption', () => {
   function renderOptions(template: TemplateResult): HTMLElement {
@@ -45,8 +42,7 @@ describe('renderModelOption uses wa-icon, matching renderAgentOption', () => {
     expect(icon?.getAttribute('name')).toBe('brain');
     expect(icon?.getAttribute('library')).toBe('texra');
 
-    // The label text itself carries no baked-in glyph — the old unicode
-    // decorators (𝔸, ⬡, 𝔾, 𝕏, 🐳, 𝕂, ☄, ⎇, ◇) are gone entirely.
+    // The label text must not carry a baked-in unicode/emoji glyph.
     expect(option?.textContent).toContain('Claude X');
     expect(option?.textContent).not.toMatch(
       /[\u{1D400}-\u{1D7FF}\u{1F300}-\u{1FAFF}⌀-⏿☀-➿]/u,

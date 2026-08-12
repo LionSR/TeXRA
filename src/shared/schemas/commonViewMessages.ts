@@ -7,7 +7,7 @@ import { COMMON_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from './mainView/state';
 
 /** Theme values - single source of truth for all theme schemas */
-export const ThemeSchema = z.enum(['dark', 'light', 'high-contrast']);
+const ThemeSchema = z.enum(['dark', 'light', 'high-contrast']);
 export type Theme = z.infer<typeof ThemeSchema>;
 
 /** Theme kinds as reported by the Electron desktop host. */
@@ -49,19 +49,12 @@ export const SwitchViewMessageSchema = z.object({
   openInEditor: z.boolean().nullish(),
 });
 
-const ErrorMessageSchema = z.object({
-  command: z.literal(COMMON_COMMANDS.ERROR),
-  message: z.string(),
-  details: z.unknown().nullish(),
-});
-
 export const CommonViewMessageSchema = z.discriminatedUnion('command', [
   SetThemeMessageSchema,
   SetDebugModeMessageSchema,
   StateRestoreMessageSchema,
   WebviewReadyMessageSchema,
   SwitchViewMessageSchema,
-  ErrorMessageSchema,
 ]);
 
 export type StateRestoreMessage = z.infer<typeof StateRestoreMessageSchema>;

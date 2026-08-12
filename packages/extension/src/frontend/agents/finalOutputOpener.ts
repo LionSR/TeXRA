@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
 
-import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
-import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
-import * as logger from '@logger/logUtils';
+import {
+  selectAutoOpenFinalOutput,
+  type WorkflowFlowResult,
+} from '@agent/runtime';
+import { createLog } from '@logger/logUtils';
 
-const CHANNEL = 'FinalOutputOpener';
+const log = createLog('FinalOutputOpener');
 
 /**
  * On successful workflow completion, preview the final revised output so
@@ -33,8 +35,7 @@ export async function openFinalOutputIfAvailable(
       8000,
     );
   } catch (error) {
-    logger.debug(
-      CHANNEL,
+    log.debug(
       `Unable to auto-open final output ${primary.absolutePath}: ${String(error)}`,
     );
   }

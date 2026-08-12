@@ -280,6 +280,5 @@ export function parseSlashInput(
   const ws = body.search(/\s/);
   const name = ws === -1 ? body : body.slice(0, ws);
   if (!/^[\w-]*$/.test(name)) return undefined;
-  if (ws === -1) return { name, remainder: '' };
-  return { name, remainder: body.slice(ws + 1) };
+  return { name, remainder: ws === -1 ? '' : body.slice(ws + 1) };
 }

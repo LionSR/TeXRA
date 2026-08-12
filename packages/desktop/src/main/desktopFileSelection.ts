@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 
 import { createChannelTrace } from '@agent/trace';
 import {
@@ -11,15 +11,27 @@ import {
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import { platform } from '@platform/platform';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
+import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  MainViewInboundMessageSchema,
+  type MainViewInboundMessage,
+} from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
-import { isPathWithin } from '@utils/core/pathCore';
 
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
 } from './desktopIpcTypes.js';
+
+type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
+  MainViewInboundMessage,
+  { command: C }
+>;
+
+type SelectMultipleFilesMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES
+>;
 
 interface DesktopFileSelectionDialogOptions {
   title: string;
@@ -94,19 +106,17 @@ function resolveWorkspaceFile(workspacePath: string, filePath: string): string {
 
 function toWorkspaceRelative(workspacePath: string, filePath: string): string {
   const absolutePath = resolveWorkspaceFile(workspacePath, filePath);
-  if (isPathWithin(workspacePath, absolutePath)) {
-    return normalizeFilePath(relative(workspacePath, absolutePath));
-  }
-  // A native file-dialog selection can resolve through a symlink (e.g. a
-  // symlinked folder inside the workspace); retry via the same
-  // canonicalize-then-compare fallback createNodeWorkspace().asRelativePath
-  // uses, so a symlinked pick lands as workspace-relative here too, matching
-  // what WorkspaceFS.relativePath would produce for the same absolute path.
-  const canonicalRoot = canonicalizeWorkspacePath(workspacePath);
-  const canonicalFile = canonicalizeWorkspacePath(absolutePath);
-  return isPathWithin(canonicalRoot, canonicalFile)
-    ? normalizeFilePath(relative(canonicalRoot, canonicalFile))
-    : normalizeFilePath(absolutePath);
+  // relativeToRoot shares the canonicalize-then-compare fallback
+  // createNodeWorkspace().asRelativePath uses, so a native dialog pick that
+  // resolves through a symlink (e.g. a symlinked folder inside the workspace)
+  // lands workspace-relative here too, matching WorkspaceFS.relativePath for
+  // the same absolute path. Unlike asRelativePath's identity fallback, an
+  // outside-workspace pick stays an explicit normalized absolute path — the
+  // renderer must be able to open a file chosen outside the workspace.
+  return (
+    relativeToRoot(workspacePath, absolutePath) ??
+    normalizeFilePath(absolutePath)
+  );
 }
 
 export function createDesktopFileSelection(
@@ -171,22 +181,19 @@ export function createDesktopFileSelection(
   }
 
   function isDesktopMultiFileType(
-    value: unknown,
+    value: string,
   ): value is DesktopMultiFileType {
-    return (
-      typeof value === 'string' &&
-      Object.hasOwn(MULTI_SET_COMMAND_BY_FILE_TYPE, value)
-    );
+    return Object.hasOwn(MULTI_SET_COMMAND_BY_FILE_TYPE, value);
   }
 
-  async function selectMultipleFiles(message: DesktopCommandMessage) {
+  async function selectMultipleFiles(message: SelectMultipleFilesMessage) {
     if (!options.showOpenFileDialog) return;
     if (!isDesktopMultiFileType(message.fileType)) {
       // The shared webview posts this for 'output' too, which the desktop has
       // no picker for. Say so rather than dropping it: handleMessage already
       // reported the message as handled.
       createChannelTrace('DesktopFileSelection').warn(
-        `Unsupported multiple file selection: ${String(message.fileType)}`,
+        `Unsupported multiple file selection: ${message.fileType}`,
       );
       return;
     }
@@ -195,8 +202,7 @@ export function createDesktopFileSelection(
 
     const fileType = message.fileType;
     const listConfig = getFileListConfig(fileType, loadFileListSettings());
-    const currentFile =
-      typeof message.currentFile === 'string' ? message.currentFile : undefined;
+    const currentFile = message.currentFile;
     const defaultPath =
       currentFile != null
         ? resolveWorkspaceFile(workspacePath, currentFile)
@@ -226,7 +232,7 @@ export function createDesktopFileSelection(
     });
   }
 
-  function handleMessage(message: DesktopCommandMessage): boolean {
+  function dispatch(message: MainViewInboundMessage): boolean {
     switch (message.command) {
       case MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES:
         runAsync(selectMultipleFiles(message));
@@ -238,15 +244,20 @@ export function createDesktopFileSelection(
         runAsync(refreshDiskBackedDropdowns());
         return true;
       case MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE:
-        runAsync(
-          updateEditedFiles(
-            typeof message.baseFile === 'string' ? message.baseFile : undefined,
-          ),
-        );
+        runAsync(updateEditedFiles(message.baseFile));
         return true;
       default:
         return false;
     }
+  }
+
+  // Single discriminated-union parse at the entry point, matching every
+  // other desktop IPC adapter (see desktopShellIpc.ts) — the switch above
+  // then operates on the narrowed variant with no per-case guessing at field
+  // types or presence.
+  function handleMessage(message: DesktopCommandMessage): boolean {
+    const parsed = MainViewInboundMessageSchema.safeParse(message);
+    return parsed.success ? dispatch(parsed.data) : false;
   }
 
   return { handleMessage };

@@ -2,16 +2,18 @@
 
 import { useInput, useWindowSize } from 'ink';
 
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { isEscapeInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
-import { COLOR_HINT } from '@cli/tui/ui/colors';
 import {
   KeyHints,
   KEY_HINT_SEPARATOR,
   keyHintText,
+  READER_SCROLL_HINTS,
   type KeyHint,
 } from '@cli/tui/ui/KeyHints';
+import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   TODO_STATUS,
   type Plan,
@@ -21,7 +23,6 @@ import {
 } from '@shared/schemas';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
-import { isEscapeInput } from '../input/inputKeys';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
 import { streams as streamsSignal } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
@@ -32,11 +33,6 @@ const TODO_STATUS_LABELS: Record<TodoStatus, string> = {
   [TODO_STATUS.COMPLETED]: 'completed',
 };
 
-const WORK_PLAN_READER_HINTS: readonly KeyHint[] = [
-  { key: '↑/↓', action: 'scroll' },
-  { key: 'PgUp/PgDn', action: 'page' },
-  { key: 'Esc', action: 'close' },
-];
 const WORK_PLAN_LOADING_HINTS: readonly KeyHint[] = [
   { key: 'Esc', action: 'close' },
 ];
@@ -51,7 +47,7 @@ function wrappedRows(text: string, width: number): number {
 export function workPlanReaderLayout({
   availableRows,
   contentWidth,
-  hints = WORK_PLAN_READER_HINTS,
+  hints = READER_SCROLL_HINTS,
   title,
 }: {
   readonly availableRows: number;
@@ -119,7 +115,7 @@ export function WorkPlanReader({
   const slice = streams.get(streamId);
   const frameWidth = formFrameWidth(columns);
   const width = Math.max(1, frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION);
-  const hints = loading ? WORK_PLAN_LOADING_HINTS : WORK_PLAN_READER_HINTS;
+  const hints = loading ? WORK_PLAN_LOADING_HINTS : READER_SCROLL_HINTS;
   const layout = workPlanReaderLayout({
     availableRows,
     contentWidth: width,

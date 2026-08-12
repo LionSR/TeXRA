@@ -1,9 +1,13 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
 
 import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
-import type { GettingStartedAction } from '@shared/schemas';
+import {
+  GETTING_STARTED_ACTION_PRESENTATION,
+  type GettingStartedAction,
+} from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { renderBannerFrame } from '@shared/wa/bannerFrame';
@@ -79,6 +83,24 @@ export class GettingStartedBanner extends LitElement {
     this.dispatchEvent(MainViewEvents.gettingStartedAction({ action }));
   }
 
+  private renderAction(
+    action: GettingStartedAction,
+    appearance: 'filled' | 'outlined',
+    variant?: 'brand',
+  ): TemplateResult {
+    const { icon, label } = GETTING_STARTED_ACTION_PRESENTATION[action];
+    return html`
+      <wa-button
+        variant=${ifDefined(variant)}
+        appearance=${appearance}
+        size="s"
+        @click=${() => this.handleAction(action)}
+      >
+        ${waIcon(icon, { slot: 'start' })} ${label}
+      </wa-button>
+    `;
+  }
+
   override render(): TemplateResult {
     return renderBannerFrame({
       id: 'gettingStartedBanner',
@@ -96,43 +118,11 @@ export class GettingStartedBanner extends LitElement {
               agent team.
             </p>
             <div class="getting-started-actions actions">
-              <wa-button
-                variant="brand"
-                appearance="filled"
-                size="s"
-                @click=${() => this.handleAction('runSetup')}
-              >
-                ${waIcon('rocket', { slot: 'start' })} Run setup assistant
-              </wa-button>
-              <wa-button
-                appearance="outlined"
-                size="s"
-                @click=${() => this.handleAction('createSampleProject')}
-              >
-                ${waIcon('file-circle-plus', { slot: 'start' })} Create sample
-                project
-              </wa-button>
-              <wa-button
-                appearance="outlined"
-                size="s"
-                @click=${() => this.handleAction('cloneOverleaf')}
-              >
-                ${waIcon('cloud-arrow-down', { slot: 'start' })} Import Overleaf
-              </wa-button>
-              <wa-button
-                appearance="outlined"
-                size="s"
-                @click=${() => this.handleAction('downloadArxiv')}
-              >
-                ${waIcon('download', { slot: 'start' })} Import arXiv
-              </wa-button>
-              <wa-button
-                appearance="outlined"
-                size="s"
-                @click=${() => this.handleAction('openWalkthrough')}
-              >
-                ${waIcon('book', { slot: 'start' })} Open walkthrough
-              </wa-button>
+              ${this.renderAction('runSetup', 'filled', 'brand')}
+              ${this.renderAction('createSampleProject', 'outlined')}
+              ${this.renderAction('cloneOverleaf', 'outlined')}
+              ${this.renderAction('downloadArxiv', 'outlined')}
+              ${this.renderAction('openWalkthrough', 'outlined')}
             </div>
           </div>
           <wa-button

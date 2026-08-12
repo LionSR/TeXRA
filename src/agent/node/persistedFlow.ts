@@ -9,7 +9,7 @@ import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Local imports - utilities
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - flow engine
@@ -23,7 +23,7 @@ export function flowKey(runId: string): string {
   return `${FLOW_KEY_PREFIX}${runId}`;
 }
 
-const CHANNEL = 'PersistedFlow';
+const log = createLog('PersistedFlow');
 
 export const FLOW_RECORD_SCHEMA_VERSION = 2;
 const START_NODE_ID = 'start';
@@ -164,6 +164,21 @@ export function stampFlowRecordSchemaVersion<T extends FlowRecord>(flow: T): T {
 }
 
 /**
+ * Stamps the active handler's compatibility key onto a keyless legacy shared
+ * record so {@link PersistedFlow.ensureRecord} never sees a stale legacy
+ * shape. Records that already carry a key — or that have no active key to
+ * stamp — are returned unchanged (same object identity). Model-based
+ * inference for keyless records lives at the resume-retrieval boundary
+ * (SessionResumeRetrieval); this path stamps the handler currently in play.
+ */
+export function stampCompatibilityKey<
+  T extends { modelHandlerCompatibilityKey?: string | null },
+>(record: T, compatibilityKey: string | undefined): T {
+  if (record.modelHandlerCompatibilityKey || !compatibilityKey) return record;
+  return { ...record, modelHandlerCompatibilityKey: compatibilityKey };
+}
+
+/**
  * Result from a step execution.
  * Used by stepWithResult() for subclasses that need action and shared state.
  */
@@ -298,7 +313,7 @@ export class PersistedFlow<
     try {
       await this.projection(shared, this.kv);
     } catch (err) {
-      logger.warn(CHANNEL, `Projection failed: ${toErrorMessage(err)}`, {
+      log.warn(`Projection failed: ${toErrorMessage(err)}`, {
         data: err,
       });
     }

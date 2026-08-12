@@ -1,6 +1,7 @@
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime';
 import {
   assertCliAgentLaunch,
+  chatAgentSupportsDelegation,
   resolveCliAgentInCategory,
 } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
@@ -19,20 +20,11 @@ import {
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { AgentCategory } from '@shared/schemas';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
   type SlashCommandContext,
 } from './slashContext';
-
-export function chatAgentSupportsDelegation(agentName: string): boolean {
-  return (
-    resolveCliAgentInCategory(agentName, AgentCategory.ToolUse)?.tools?.some(
-      (toolName) => DELEGATION_TOOLS.has(toolName),
-    ) ?? false
-  );
-}
 
 export function chatToolUseAgentUsageError(
   agentName: string,

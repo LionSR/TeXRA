@@ -10,7 +10,6 @@ import {
   workflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from './absoluteFS';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -150,26 +149,6 @@ export class TaskRunFileService {
       runStorageLocationFromAnyAbsolutePath(inputPath) ??
       pathToLocation(inputPath)
     );
-  }
-
-  /** Whether a file exists at the given absolute path. */
-  public async pathExists(absolutePath: string): Promise<boolean> {
-    return AbsoluteFS.exists(absolutePath);
-  }
-
-  /** Write text to an absolute path, creating parent directories first. */
-  public async writeFile(absolutePath: string, content: string): Promise<void> {
-    await AbsoluteFS.ensureDir(path.dirname(absolutePath));
-    await AbsoluteFS.write(absolutePath, content);
-  }
-
-  /** Append text to a file at an absolute path, creating parent directories first. */
-  public async appendFile(
-    absolutePath: string,
-    content: string,
-  ): Promise<void> {
-    await AbsoluteFS.ensureDir(path.dirname(absolutePath));
-    await AbsoluteFS.appendFile(absolutePath, content);
   }
 
   /**

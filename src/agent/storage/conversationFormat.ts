@@ -26,7 +26,7 @@ import { CONVERSATION_BLOCK_TYPES } from '@agent/types/ConversationBlockTypes';
 import {
   ANTHROPIC_SERVER_TOOL_BLOCK_TYPES,
   extractWebFetchResultFields,
-} from '@agent/types/ServerToolTypes';
+} from '@agent/types/ServerTools';
 import { isObject } from '@utils/core';
 
 const DEFAULT_TRUNCATION_MARKER = '...';
@@ -263,7 +263,7 @@ function formatConversationBlock(
   // Non-text tags are shared with the `assistantBlockToNode` switch in
   // `@agent/export/normalizeConversation` via `CONVERSATION_BLOCK_TYPES`
   // (`@agent/types/ConversationBlockTypes`) and `ANTHROPIC_SERVER_TOOL_BLOCK_TYPES`
-  // (`@agent/types/ServerToolTypes`) — both switches must recognize the same
+  // (`@agent/types/ServerTools`) — both switches must recognize the same
   // tags, just into different output shapes (a truncated marker string here
   // vs. a structured `ExportNode` there). `text`/`input_text`/`output_text`
   // are the exception: they're caught by the duck-typed `block.text` check

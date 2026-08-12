@@ -6,11 +6,11 @@
 
 import * as vscode from 'vscode';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const CHANNEL = 'vscodeEditor';
+const log = createLog('vscodeEditor');
 
 /**
  * Clamp a 1-based line number to a 0-based VS Code line index. Floors first
@@ -44,10 +44,10 @@ function findVisibleEditor(uri: vscode.Uri): vscode.TextEditor | undefined {
 
 /**
  * Show `existingEditor`'s document if one is already open for `uri`,
- * otherwise open and show `uri` fresh. Shared by `openFileInEditor` and
- * `ensureFileOpen`, whose only difference is whether an already-open,
- * already-focused editor can be reused without another `showTextDocument`
- * call.
+ * otherwise open and show `uri` fresh. `openFileInEditor` skips this entirely
+ * when `reuseVisible` is set and the editor is already visible, so an
+ * already-open, already-focused editor is reused without another
+ * `showTextDocument` call.
  */
 async function showDocument(
   uri: vscode.Uri,
@@ -68,19 +68,31 @@ async function showDocument(
 }
 
 /**
- * Open a file in VS Code editor, optionally positioning cursor at a line.
- * Reuses existing editor if file is already open.
+ * Open a file in a VS Code editor, optionally positioning the cursor at a
+ * line, saving a dirty document, and (with `reuseVisible`) reusing an
+ * already-visible editor without re-showing it.
  */
 export async function openFileInEditor(
   filePath: string,
-  options: { line?: number; column?: number; preserveFocus?: boolean } = {},
-): Promise<string | undefined> {
+  options: {
+    line?: number;
+    column?: number;
+    preserveFocus?: boolean;
+    save?: boolean;
+    /** Reuse an already-visible editor without re-showing it. */
+    reuseVisible?: boolean;
+  } = {},
+): Promise<{ editor: vscode.TextEditor; absolutePath: string } | undefined> {
   try {
-    const { line, column, preserveFocus = false } = options;
+    const { line, column, save, reuseVisible } = options;
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
     const existingEditor = findVisibleEditor(uri);
+    const preserveFocus = options.preserveFocus ?? false;
 
-    const editor = await showDocument(uri, existingEditor, preserveFocus);
+    const editor =
+      reuseVisible && existingEditor && preserveFocus
+        ? existingEditor
+        : await showDocument(uri, existingEditor, preserveFocus);
 
     if (line !== undefined) {
       const position = new vscode.Position(
@@ -94,44 +106,13 @@ export async function openFileInEditor(
       );
     }
 
-    return uri.fsPath;
-  } catch (err) {
-    logger.warn(
-      CHANNEL,
-      `Failed to open ${filePath} in an editor: ${toErrorMessage(err)}`,
-    );
-    return undefined;
-  }
-}
-
-/**
- * Ensure a file is open in an editor, optionally saving if dirty.
- * Reuses existing editor if file is already open.
- */
-export async function ensureFileOpen(
-  filePath: string,
-  options: { preserveFocus?: boolean; save?: boolean } = {},
-): Promise<{ editor: vscode.TextEditor; absolutePath: string } | undefined> {
-  try {
-    const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
-    const existingEditor = findVisibleEditor(uri);
-    const preserveFocus = options.preserveFocus ?? !existingEditor;
-
-    const editor =
-      existingEditor && preserveFocus
-        ? existingEditor
-        : await showDocument(uri, existingEditor, preserveFocus);
-
-    if (options.save && editor.document.isDirty) {
+    if (save && editor.document.isDirty) {
       await editor.document.save();
     }
 
     return { editor, absolutePath: uri.fsPath };
   } catch (err) {
-    logger.warn(
-      CHANNEL,
-      `Failed to ensure ${filePath} is open in an editor: ${toErrorMessage(err)}`,
-    );
+    log.warn(`Failed to open ${filePath} in an editor: ${toErrorMessage(err)}`);
     return undefined;
   }
 }

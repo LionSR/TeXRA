@@ -4,29 +4,13 @@
 // hand-roll body.classList mutation + setWaColorScheme() in lockstep. Keep
 // the class names + ordering in one place so any future addition (e.g.
 // `wa-high-contrast`) doesn't need parallel edits across hosts.
+//
+// The theme-kind vocabulary and the kind→darkness mapping live in
+// `waColorScheme.ts` (the leaf this module already depends on); import them
+// here rather than re-encoding a parallel copy.
 
 import type { Theme } from '@shared/schemas/commonViewMessages';
-import { setWaColorScheme } from './waColorScheme';
-
-const THEME_KINDS = [
-  'light',
-  'dark',
-  'high-contrast',
-] as const satisfies readonly Theme[];
-
-const THEME_CLASSES = THEME_KINDS.flatMap((kind) => [
-  `vscode-${kind}`,
-  `texra-${kind}`,
-]);
-
-/**
- * Convert a `Theme` kind to whether it should render as dark.
- * 'high-contrast' is treated as dark (matches the desktop theme tokens
- * and VS Code's dark-on-dark default for high-contrast themes).
- */
-export function themeIsDark(theme: Theme): boolean {
-  return theme === 'dark' || theme === 'high-contrast';
-}
+import { setWaColorScheme, THEME_CLASSES, themeIsDark } from './waColorScheme';
 
 /**
  * Apply Electron-renderer-style host theme classes:

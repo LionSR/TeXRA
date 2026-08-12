@@ -250,7 +250,7 @@ export class SessionState {
       state = {
         metadata: {},
         provisionalCreationTimestamp:
-          this.streamLogs.getFirstTimestamp(stream) ?? Date.now(),
+          this.streamLogs.getTimestampRange(stream).first ?? Date.now(),
       };
       this._sessionState.set(stream, state);
     }
@@ -331,7 +331,7 @@ export class SessionState {
    */
   getStreamMetadata(stream: StreamTabId): Readonly<SessionStreamMetadata> {
     const session = this.getOrCreateSession(stream);
-    const firstTimestamp = this.streamLogs.getFirstTimestamp(stream);
+    const firstTimestamp = this.streamLogs.getTimestampRange(stream).first;
     if (firstTimestamp !== undefined) {
       session.provisionalCreationTimestamp = firstTimestamp;
     }
@@ -462,10 +462,6 @@ export class SessionState {
   }
 
   // -- Lifecycle --------------------------------------------------------------
-
-  waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void> {
-    return this.stores.waitForOwnedExecutionRelease(stream);
-  }
 
   async clearStream(stream: StreamTabId): Promise<DeleteStreamResult> {
     const deletion = await this.stores.deleteStream(stream);

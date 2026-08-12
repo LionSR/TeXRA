@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
     >(),
 }));
 
+const readTool = new ReadConfigTool();
+const updateTool = new UpdateConfigTool();
+
 vi.mock('@tools/setup/platform', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tools/setup/platform')>();
   return {
@@ -55,9 +58,8 @@ afterEach(() => {
 describe('ConfigTools — read_config', () => {
   it('reads an existing texra.* key', async () => {
     createPlatform({ 'texra.bib.zoteroPort': 23119 });
-    const tool = new ReadConfigTool();
 
-    const result = await tool.call({ key: 'texra.bib.zoteroPort' });
+    const result = await readTool.call({ key: 'texra.bib.zoteroPort' });
 
     assert.equal(result.status, 'executed');
     assert.match(result.output ?? '', /23119/);
@@ -65,9 +67,8 @@ describe('ConfigTools — read_config', () => {
 
   it('rejects keys not starting with texra.', async () => {
     createPlatform();
-    const tool = new ReadConfigTool();
 
-    const result = await tool.call({ key: 'editor.fontSize' });
+    const result = await readTool.call({ key: 'editor.fontSize' });
 
     assert.equal(result.status, 'error');
   });
@@ -78,9 +79,8 @@ describe('ConfigTools — update_config allowlist', () => {
     const { store, updates } = createPlatform({
       'texra.bib.zoteroPort': 23119,
     });
-    const tool = new UpdateConfigTool();
 
-    const result = await tool.call({
+    const result = await updateTool.call({
       key: 'texra.bib.zoteroPort',
       value: 23200,
       target: 'user',
@@ -114,9 +114,8 @@ describe('ConfigTools — update_config allowlist', () => {
     { case: 'port 70000', key: 'texra.bib.zoteroPort', value: 70000 },
   ])('rejects $case without writing', async ({ key, value }) => {
     const { updates } = createPlatform();
-    const tool = new UpdateConfigTool();
 
-    const result = await tool.call({ key, value, target: 'user' });
+    const result = await updateTool.call({ key, value, target: 'user' });
 
     assert.equal(result.status, 'error');
     assert.equal(updates.length, 0, 'must not call platform.update');
@@ -124,9 +123,8 @@ describe('ConfigTools — update_config allowlist', () => {
 
   it('honors target=workspace scope', async () => {
     const { updates } = createPlatform();
-    const tool = new UpdateConfigTool();
 
-    await tool.call({
+    await updateTool.call({
       key: 'texra.bib.defaultPath',
       value: 'refs.bib',
       target: 'workspace',

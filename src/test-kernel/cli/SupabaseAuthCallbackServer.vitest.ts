@@ -5,10 +5,12 @@ import { startLoopbackCallbackServer } from '@cli/runtime/supabaseAuthCallbackSe
 
 type LoopbackServer = Awaited<ReturnType<typeof startLoopbackCallbackServer>>;
 
-function stubCoordinator(overrides: {
-  createSessionFromCallback?: ReturnType<typeof vi.fn>;
-  storeSession?: ReturnType<typeof vi.fn>;
-}): SupabaseSessionCoordinator {
+function stubCoordinator(
+  overrides: {
+    createSessionFromCallback?: ReturnType<typeof vi.fn>;
+    storeSession?: ReturnType<typeof vi.fn>;
+  } = {},
+): SupabaseSessionCoordinator {
   return {
     createSessionFromCallback: vi.fn(),
     storeSession: vi.fn(),
@@ -36,7 +38,7 @@ function postCallbackCompletion(
 
 describe('CLI Supabase authentication callback server', () => {
   it('stops waiting when interactive sign-in is cancelled', async () => {
-    const coordinator = stubCoordinator({});
+    const coordinator = stubCoordinator();
     const server = await startLoopbackCallbackServer(coordinator);
     const controller = new AbortController();
     const completion = server.waitForSession(controller.signal);

@@ -3,11 +3,9 @@
  * through the editor's GitHub Copilot language-model access instead of a
  * provider key, OpenRouter, or a subscription.
  *
- * Mirrors the OpenRouter precedent (`openRouterRouting.ts`): the preference
- * is persisted state, the discovered route lives in
- * `runtimeModelRegistry`, and this module owns the single predicate both the
- * availability computation and `ModelFactory` consult, so picker and request
- * construction can never drift on which transport a model uses.
+ * The preference is persisted state, while the discovered route lives in
+ * `runtimeModelRegistry`. This module combines those facts when explaining
+ * why a preferred route is unavailable.
  */
 
 import { platform } from '@platform/platform';
@@ -55,20 +53,6 @@ export async function setCopilotRoutePreference(
 }
 
 /**
- * Whether a request for this model should be served through Copilot. The
- * preference alone is not enough: the editor must currently offer the model
- * with access granted. When the route cannot serve a preferred model, the
- * availability layer reports the route state (consent required / unavailable)
- * instead of silently switching transports.
- */
-export function shouldRouteModelThroughCopilot(model: string): boolean {
-  return (
-    prefersCopilotRoute(model) &&
-    copilotRouteForModel(model)?.access === 'allowed'
-  );
-}
-
-/**
  * Why a Copilot-preferred model cannot be served through Copilot right now,
  * or undefined when it can. The preference is a hard route choice (#9635):
  * handler routing reports this reason and never falls through to a provider
@@ -78,16 +62,14 @@ export function copilotRouteUnavailableReason(
   model: string,
 ): string | undefined {
   if (!prefersCopilotRoute(model)) return undefined;
-  if (shouldRouteModelThroughCopilot(model)) return undefined;
   const access = copilotRouteForModel(model)?.access;
+  if (access === 'allowed') return undefined;
   switch (access) {
     case 'consent-required':
       return `Copilot access to "${model}" needs your approval in VS Code. Grant it from Settings → Models, or stop using Copilot for this model.`;
     case 'unavailable':
       return `Copilot access to "${model}" is temporarily unavailable in VS Code.`;
-    // No discovered route, or a route reported allowed that something else
-    // blocked: both mean Copilot cannot serve the model right now.
-    case 'allowed':
+    // No discovered route means Copilot cannot serve the model right now.
     case undefined:
       break;
     default:

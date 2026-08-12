@@ -1,10 +1,10 @@
 /**
- * Shared helpers for the GitHub event formatters and pollers.
+ * Shared message-formatter helpers for the GitHub event formatters.
  *
  * Trivial enough to inline at each call site — but having one canonical
- * version means the truncation cap, the cursor-advance semantics, and the
- * webhook-activity wrapper tag stay consistent across all subscription
- * paths (PR / repo / issue).
+ * version means the truncation cap and the webhook-activity wrapper tag stay
+ * consistent across all subscription paths (PR / repo / issue). Reference
+ * paths and polling URL/cursor helpers live in `./githubPaths`.
  */
 
 import { DELIVERY_TAG } from '@shared/deliveryTags';
@@ -32,16 +32,6 @@ export function wrapWebhookEvent(inner: string): string {
  */
 export function formatPreviousStateHint(prevState: string | undefined): string {
   return prevState ? ` (was "${prevState}")` : '';
-}
-
-/** Canonical PR reference path, e.g. `owner/repo/pulls/42`. */
-export function prRef(slug: string, prNumber: number): string {
-  return `${slug}/pulls/${prNumber}`;
-}
-
-/** Canonical issue reference path, e.g. `owner/repo/issues/42`. */
-export function issueRef(slug: string, issueNumber: number): string {
-  return `${slug}/issues/${issueNumber}`;
 }
 
 /**
@@ -96,29 +86,4 @@ export function formatCommentEvent(
       c.html_url,
     ),
   );
-}
-
-/**
- * Append a `since=` query param to a poll URL, choosing `?` or `&` based on
- * whether the URL already has a query string. No-op when `since` is undefined.
- */
-export function withSince(url: string, since: string | undefined): string {
-  if (!since) return url;
-  const sep = url.includes('?') ? '&' : '?';
-  return `${url}${sep}since=${encodeURIComponent(since)}`;
-}
-
-/** Newest `updated_at` (falling back to `created_at`) in a list, or undefined. */
-export function getNewestTimestamp(
-  items: ReadonlyArray<{
-    created_at?: string | null;
-    updated_at?: string | null;
-  }>,
-): string | undefined {
-  let best: string | undefined;
-  for (const it of items) {
-    const t = it.updated_at ?? it.created_at;
-    if (t && (!best || t > best)) best = t;
-  }
-  return best;
 }

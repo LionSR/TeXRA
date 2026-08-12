@@ -53,32 +53,26 @@ import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
 import '@webview/frontend';
 import { hostBridge, postMessage } from '@shared/hostBridge';
-import type { StreamTabId } from '@shared/schemas';
+import {
+  SETTINGS_TAB,
+  type StreamTabId,
+  type DesktopThemeKind,
+} from '@shared/schemas';
+
 import { Signal } from '@shared/signals';
 import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
-import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
+
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
-import {
-  SetThemeMessageSchema,
-  type DesktopThemeKind,
-} from '@shared/schemas/commonViewMessages';
+
 import { applyHostBodyTheme } from '@shared/wa/hostTheme';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@shared/wa/actionButtons';
 import { renderEmptyState } from '@shared/wa/emptyState';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
-import {
-  DesktopOpenWorkbenchMessageSchema,
-  DesktopSaveFileMessageSchema,
-  DesktopShowLauncherMessageSchema,
-  DesktopToggleLayoutMessageSchema,
-  type DesktopLayoutPanel,
-} from '../shared/desktopShellMessages';
-import { DesktopSetLogMessageSchema } from '../shared/desktopLogMessages';
+import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';
 import {
   buildDesktopMainViewResetMessage,
   buildDesktopSettingsTabMessage,
@@ -87,19 +81,7 @@ import {
   type DesktopCommandActions,
   type DesktopCommandId,
 } from '../shared/desktopCommandSurface';
-import {
-  DESKTOP_ONBOARDING_COMMANDS,
-  DesktopOnboardingSetStateMessageSchema,
-} from '../shared/desktopOnboardingMessages';
-import {
-  DesktopShowDiffMessageSchema,
-  DesktopCloseDiffMessageSchema,
-} from '../shared/desktopDiffMessages';
-import {
-  DesktopShowPdfMessageSchema,
-  DesktopClosePdfMessageSchema,
-} from '../shared/desktopPdfMessages';
-import { DesktopShowPromptMessageSchema } from '../shared/desktopPromptMessages';
+import { DESKTOP_ONBOARDING_COMMANDS } from '../shared/desktopOnboardingMessages';
 import {
   createDesktopCommandPalette,
   type CommandPaletteController,
@@ -148,17 +130,6 @@ import {
 } from '../shared/desktopTaskShell';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
-  DesktopBrowserStateMessageSchema,
-  DesktopEnvironmentStateMessageSchema,
-  DesktopFileErrorMessageSchema,
-  DesktopFileReadMessageSchema,
-  DesktopFilesListErrorMessageSchema,
-  DesktopFilesListedMessageSchema,
-  DesktopFileWrittenMessageSchema,
-  DesktopTerminalDataMessageSchema,
-  DesktopTerminalErrorMessageSchema,
-  DesktopTerminalExitMessageSchema,
-  DesktopTerminalOpenCommandMessageSchema,
   type DesktopEnvironmentSummary,
 } from '../shared/desktopWorkspaceMessages';
 import { getRendererPlatform } from './rendererPlatform';
@@ -166,16 +137,18 @@ import { createPdfOverlay } from './pdfOverlay';
 import { createReviewPane } from './reviewPane';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import { createLogsPane } from './logsPane';
-import type { EditorFileEntry } from './editorTree';
-import type { ZodType } from 'zod';
+import {
+  requestFileRead,
+  requestFileWrite,
+  requestFiles,
+} from './fileRequests';
+import { createMessageRoutes } from './messageRoutes';
 
-const root = document.querySelector<HTMLElement>('#app');
+const appRoot = document.querySelector<HTMLElement>('#app')!;
 
-if (root == null) {
+if (appRoot == null) {
   throw new Error('TeXRA desktop renderer root was not found.');
 }
-
-const appRoot = root;
 const startupTeamPanel = createStartupTeamPanel({
   dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
   onVisibilityChanged: rerenderShell,
@@ -400,92 +373,9 @@ const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
 
 // =============================================================================
 // Editor / terminal / browser request plumbing
-// =============================================================================
-//
-// The renderer is sandboxed, so file I/O runs in the main process. These
-// helpers turn the fire-and-forget message pairs into promises the editor pane
-// can await, correlated by request id so concurrent requests — even for the
-// same path — can't cross-resolve.
-
-type PendingFileRequest =
-  | {
-      readonly kind: 'read';
-      resolve(contents: string): void;
-      reject(error: Error): void;
-    }
-  | {
-      readonly kind: 'write';
-      resolve(): void;
-      reject(error: Error): void;
-    }
-  | {
-      readonly kind: 'list';
-      readonly directory: string;
-      readonly promise: Promise<readonly EditorFileEntry[]>;
-      resolve(files: readonly EditorFileEntry[]): void;
-      reject(error: Error): void;
-    };
-
-const pendingFileRequests = new Map<string, PendingFileRequest>();
-
-function takePendingFileRequest(
-  requestId: string,
-): PendingFileRequest | undefined {
-  const pending = pendingFileRequests.get(requestId);
-  pendingFileRequests.delete(requestId);
-  return pending;
-}
-
-function requestFiles(directory: string): Promise<readonly EditorFileEntry[]> {
-  // A second list for a directory already in flight shares the promise rather
-  // than posting a redundant LIST_FILES.
-  for (const request of pendingFileRequests.values()) {
-    if (request.kind === 'list' && request.directory === directory) {
-      return request.promise;
-    }
-  }
-
-  const requestId = crypto.randomUUID();
-  let resolveList!: (files: readonly EditorFileEntry[]) => void;
-  let rejectList!: (error: Error) => void;
-  const promise = new Promise<readonly EditorFileEntry[]>((resolve, reject) => {
-    resolveList = resolve;
-    rejectList = reject;
-  });
-  pendingFileRequests.set(requestId, {
-    kind: 'list',
-    directory,
-    promise,
-    resolve: resolveList,
-    reject: rejectList,
-  });
-  postMessage(DESKTOP_WORKSPACE_COMMANDS.LIST_FILES, { requestId, directory });
-  return promise;
-}
-
-function requestFileRead(path: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const requestId = crypto.randomUUID();
-    pendingFileRequests.set(requestId, { kind: 'read', resolve, reject });
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.READ_FILE, { requestId, path });
-  });
-}
-
-function requestFileWrite(path: string, contents: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const requestId = crypto.randomUUID();
-    pendingFileRequests.set(requestId, {
-      kind: 'write',
-      resolve: () => resolve(),
-      reject,
-    });
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE, {
-      requestId,
-      path,
-      contents,
-    });
-  });
-}
+// The renderer is sandboxed, so file I/O runs in the main process. The
+// promise-correlated request bridge for editor reads/writes/lists lives in
+// ./fileRequests.ts.
 
 /**
  * Reports the browser slot's geometry to the main process, which positions the
@@ -1460,111 +1350,53 @@ const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
   summaryBar: toggleSummaryBarVisibility,
 };
 
-function messageRoute<T>(
-  schema: ZodType<T>,
-  handle: (message: T) => void,
-): (data: unknown) => boolean {
-  return (data) => {
-    const parsed = schema.safeParse(data);
-    if (!parsed.success) return false;
-    handle(parsed.data);
-    return true;
-  };
-}
-
 /**
  * Every inbound window message the shell claims, in match order: the first
  * route whose schema parses handles it. Shell routes come first, then the
  * main-process replies for the editor, terminal, and browser panes.
  */
-const MESSAGE_ROUTES: ReadonlyArray<(data: unknown) => boolean> = [
-  messageRoute(DesktopSaveFileMessageSchema, () => {
+const MESSAGE_ROUTES = createMessageRoutes({
+  saveAllFiles: () => {
     void editorPane.save();
-  }),
-  messageRoute(DesktopShowLauncherMessageSchema, () => {
-    if (!bootstrapFailed) returnToLauncher();
-  }),
-  messageRoute(DesktopOpenWorkbenchMessageSchema, (message) => {
-    if (!bootstrapFailed) openKind(message.kind);
-  }),
-  messageRoute(DesktopToggleLayoutMessageSchema, (message) => {
-    LAYOUT_PANEL_TOGGLES[message.panel]();
-  }),
-  messageRoute(DesktopOnboardingSetStateMessageSchema, (message) => {
-    if (message.shouldShow) {
-      startupTeamPanel.show();
-    } else {
-      startupTeamPanel.hide();
-    }
-  }),
-  messageRoute(SetThemeMessageSchema, (message) =>
-    applyDesktopTheme(message.theme),
-  ),
-  messageRoute(DesktopSetLogMessageSchema, (message) =>
-    logsController.applySnapshot(message),
-  ),
-  messageRoute(DesktopShowDiffMessageSchema, (message) => {
-    reviewPane.open(message);
-    openKind('review');
-  }),
-  messageRoute(DesktopCloseDiffMessageSchema, () => {
-    reviewPane.clear();
-    disposeWorkbenchTab('workbench:review');
-  }),
-  messageRoute(DesktopShowPdfMessageSchema, (message) =>
-    pdfOverlay.open(message),
-  ),
-  messageRoute(DesktopClosePdfMessageSchema, () => pdfOverlay.close()),
-  messageRoute(DesktopShowPromptMessageSchema, (message) =>
-    promptOverlay.open(message),
-  ),
-  messageRoute(DesktopFilesListedMessageSchema, (message) => {
-    const pending = takePendingFileRequest(message.requestId);
-    if (pending?.kind === 'list') pending.resolve(message.files);
-  }),
-  messageRoute(DesktopFilesListErrorMessageSchema, (message) => {
-    const pending = takePendingFileRequest(message.requestId);
-    if (pending?.kind === 'list') pending.reject(new Error(message.message));
-  }),
-  messageRoute(DesktopFileReadMessageSchema, (message) => {
-    const pending = takePendingFileRequest(message.requestId);
-    if (pending?.kind === 'read') pending.resolve(message.contents);
-  }),
-  messageRoute(DesktopFileWrittenMessageSchema, (message) => {
-    const pending = takePendingFileRequest(message.requestId);
-    if (pending?.kind === 'write') pending.resolve();
-  }),
-  messageRoute(DesktopFileErrorMessageSchema, (message) => {
-    // One request, one rejection: the requestId names the single pending read
-    // or write, so there is no read/write queue pair to sweep.
-    const pending = takePendingFileRequest(message.requestId);
-    if (pending?.kind === 'read' || pending?.kind === 'write') {
-      pending.reject(new Error(message.message));
-    }
-  }),
-  messageRoute(DesktopTerminalDataMessageSchema, (message) =>
-    terminalPane.write(message.sessionId, message.data),
-  ),
-  messageRoute(DesktopTerminalOpenCommandMessageSchema, (message) =>
-    openTerminalCommand(message.initialCommand),
-  ),
-  messageRoute(DesktopTerminalExitMessageSchema, (message) =>
-    terminalPane.reportExit(message.sessionId, message.exitCode),
-  ),
-  messageRoute(DesktopTerminalErrorMessageSchema, (message) =>
-    terminalPane.reportError(message.sessionId, message.message),
-  ),
-  // Only the title is surfaced today: it renames the document so a browser tab
-  // reads as its page rather than a generic "Browser".
-  messageRoute(DesktopBrowserStateMessageSchema, (message) =>
-    updateShell(renameWorkbenchTab(shellState, message.tabId, message.title)),
-  ),
-  messageRoute(DesktopEnvironmentStateMessageSchema, (message) => {
-    environmentSummary = message.environment;
-    environmentLoading = false;
-    rerenderShell();
-  }),
-];
+  },
+  isBootstrapFailed: () => bootstrapFailed,
+  returnToLauncher,
+  openKind,
+  toggleLayoutPanel: (panel) => LAYOUT_PANEL_TOGGLES[panel](),
+  onboarding: {
+    show: () => startupTeamPanel.show(),
+    hide: () => startupTeamPanel.hide(),
+  },
+  applyTheme: applyDesktopTheme,
+  logs: { applySnapshot: (message) => logsController.applySnapshot(message) },
+  review: {
+    open: (message) => reviewPane.open(message),
+    clear: () => reviewPane.clear(),
+  },
+  disposeReviewTab: () => disposeWorkbenchTab('workbench:review'),
+  pdf: {
+    open: (message) => pdfOverlay.open(message),
+    close: () => pdfOverlay.close(),
+  },
+  prompt: { open: (message) => promptOverlay.open(message) },
+  terminal: {
+    write: (sessionId, data) => terminalPane.write(sessionId, data),
+    reportExit: (sessionId, exitCode) =>
+      terminalPane.reportExit(sessionId, exitCode),
+    reportError: (sessionId, message) =>
+      terminalPane.reportError(sessionId, message),
+  },
+  openTerminalCommand,
+  renameBrowserTab: (tabId, title) =>
+    updateShell(renameWorkbenchTab(shellState, tabId, title)),
+  environment: {
+    set: (summary, loading) => {
+      environmentSummary = summary;
+      environmentLoading = loading;
+    },
+    rerender: rerenderShell,
+  },
+});
 
 window.addEventListener('message', (event) => {
   for (const route of MESSAGE_ROUTES) {

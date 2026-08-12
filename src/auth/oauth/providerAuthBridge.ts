@@ -11,6 +11,7 @@ import type { SubscriptionOAuthClient } from './SubscriptionOAuthCoordinator';
 interface ProviderAuthError extends Error {
   readonly kind: SubscriptionOAuthErrorKind;
   readonly status?: number;
+  readonly needsReauth: boolean;
 }
 
 export type ProviderAuthErrorCtor = new (

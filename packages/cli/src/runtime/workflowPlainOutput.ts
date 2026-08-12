@@ -1,5 +1,5 @@
 import type { AgentEvent } from '@agent/trace';
-import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import type { SessionEventHub } from '@agent/runtime';
 import {
   MESSAGE_TYPES,
   STREAM_PHASE,

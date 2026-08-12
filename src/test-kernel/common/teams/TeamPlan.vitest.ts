@@ -71,15 +71,12 @@ describe('teamPresets', () => {
   it('tags built-ins and customs while preserving provenance and order', () => {
     const custom = preset({ id: 'zeta', name: 'Zeta' });
     const presets = teamPresets([custom]);
+    const builtIn = presets.slice(0, AGENT_MODE_PRESETS.length);
 
-    expect(
-      presets.slice(0, AGENT_MODE_PRESETS.length).map((item) => item.id),
-    ).toEqual(AGENT_MODE_PRESETS.map((item) => item.id));
-    expect(
-      presets
-        .slice(0, AGENT_MODE_PRESETS.length)
-        .every((item) => item.source === 'built-in'),
-    ).toBe(true);
+    expect(builtIn.map((item) => item.id)).toEqual(
+      AGENT_MODE_PRESETS.map((item) => item.id),
+    );
+    expect(builtIn.every((item) => item.source === 'built-in')).toBe(true);
     expect(presets.at(-1)).toMatchObject({ id: 'zeta', source: 'custom' });
   });
 

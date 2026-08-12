@@ -108,7 +108,6 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> & {
 } & Partial<
     Pick<
       SessionHandle,
-      | 'executions'
       | 'subscriptions'
       | 'events'
       | 'followUps'
@@ -189,15 +188,14 @@ export class SessionHandle {
     const followUps = init.followUps ?? new ToolUseFollowUpQueue();
     const interactions = init.interactions ?? new SessionHostInteractions();
     const approvals = createSessionApprovals(interactions);
-    const executions =
-      init.executions ??
-      new ExecutionRegistry({ streamStatus: status, events });
-    // Attaching here also supports an explicitly supplied registry while
-    // keeping result publication scoped to this session's listeners.
-    executions.attachSessionEvents(events, (event, streamId) =>
-      this.publishRunEvent(streamId, event),
-    );
-    executions.attachSessionApprovals(approvals);
+    const executions = new ExecutionRegistry({
+      streamStatus: status,
+      events,
+      approvals,
+      publishResult: (event, streamId) => this.publishRunEvent(streamId, event),
+      releaseRootExecutionLease: (executionId) =>
+        releaseExecutionLeaseAfterArtifacts(this, executionId),
+    });
 
     this.executions = executions;
     this.subscriptions =
@@ -233,17 +231,12 @@ export class SessionHandle {
     // Every session owns exactly one trace-flusher map. There is no
     // process-wide registry: a host drains the session it is shutting down.
     this.flushers = init.flushers ?? new Map<string, RunTraceFlushEntry>();
-    executions.attachRootExecutionLeaseRelease((executionId) =>
-      releaseExecutionLeaseAfterArtifacts(this, executionId),
-    );
     liveSessions.add(this);
     if (
       this.transcripts.mode.kind === 'persistent' &&
       init.restartRepair !== 'deferred'
     ) {
-      this.restartRepairPromise = this.enqueueRestartRepair(() =>
-        this.repairStoresAfterRestart(this.storageGeneration),
-      );
+      this.restartRepairPromise = this.ensureRestartRepair();
       // Construction cannot be awaited. Hosts observe the same promise
       // through waitUntilReady(); this branch only prevents a rejection from
       // becoming unhandled before the host reaches that boundary.
@@ -271,12 +264,7 @@ export class SessionHandle {
     ) {
       return Promise.resolve();
     }
-    if (!this.restartRepairPromise) {
-      this.restartRepairPromise = this.enqueueRestartRepair(() =>
-        this.repairStoresAfterRestart(this.storageGeneration),
-      );
-    }
-    return this.restartRepairPromise.then(() => undefined);
+    return this.ensureRestartRepair().then(() => undefined);
   }
 
   /**
@@ -387,6 +375,19 @@ export class SessionHandle {
   private enqueueRestartRepair<T>(work: () => Promise<T>): Promise<T> {
     // `add` widens to `T | void` for abort/timeout options; neither is used.
     return this.restartRepairQueue.add(work) as Promise<T>;
+  }
+
+  /**
+   * Start the restart-repair pass for the current storage generation, or reuse
+   * the in-flight one. Shared by the constructor and {@link waitUntilReady}.
+   */
+  private ensureRestartRepair(): Promise<unknown> {
+    if (!this.restartRepairPromise) {
+      this.restartRepairPromise = this.enqueueRestartRepair(() =>
+        this.repairStoresAfterRestart(this.storageGeneration),
+      );
+    }
+    return this.restartRepairPromise;
   }
 
   private async repairStoresAfterRestart(
@@ -810,7 +811,7 @@ export class SessionHandle {
    * terminal `result` events for missed replay when no replay-subscribed
    * listener is attached. Shared by `attachRunTrace` (the live per-run trace
    * subscription above) and by `ExecutionRegistry`'s injected `publishResult`
-   * callback (see `attachSessionEvents`), which needs the identical
+   * constructor callback, which needs the identical
    * forwarding for a terminal event synthesized *after* the originating run's
    * own trace has already been disposed — killing a native subagent suspended
    * at WAITING (`terminateWaitingHandle`) settles `handle.result` and the
@@ -959,4 +960,26 @@ export function defaultSession(): SessionHandle {
  */
 export function currentSession(): SessionHandle {
   return getRunContextSession(tryUseRunContext()) ?? defaultSession();
+}
+
+/**
+ * Resolve the session an emit should target: an explicit session, else the
+ * active run's session, else the process default. This is {@link currentSession}
+ * with an explicit-session override, plus `tryDefaultSession()` instead of
+ * the throwing `defaultSession()` so bootstrap-tolerant callers (e.g. local
+ * storage commands that notify goal state with no observer live) can skip the
+ * emit rather than throw. Callers that must not silently drop the emit fall
+ * back to `defaultSession()` themselves.
+ *
+ * A resolved owner is only used when it carries an event hub: an explicit
+ * override or run-context session without `.events` (e.g. a call-site stub
+ * threaded in for wake-decision routing) falls through to the process default
+ * rather than crashing the emit. This preserves the `owner?.events ? owner :
+ * defaultSession()` guard the collapsed call sites originally hand-rolled.
+ */
+export function resolveEmitSession(
+  session?: SessionHandle,
+): SessionHandle | undefined {
+  const owner = session ?? getRunContextSession(tryUseRunContext());
+  return owner?.events ? owner : tryDefaultSession();
 }

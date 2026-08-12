@@ -1,10 +1,20 @@
 /** Shared types for latexdiff output discovery and operation building. */
 
-import type {
-  FileLocation,
-  OutputFileInfo,
-  RoundIndexed,
-} from '@shared/schemas';
+import type { FileLocation } from '@shared/schemas';
+import type { LaTeXdiffService } from '../latexdiff';
+import type { RunLatexdiffForExecutionParams } from './runLatexdiff';
+
+/**
+ * Host-supplied latexdiff runtime: the diff service instance bound to the
+ * caller's own logger channel. Keeps the host-neutral engine from importing a
+ * module-scope singleton (or the extension command group's channel name).
+ */
+export interface LatexdiffRuntime {
+  /** Logger channel the diff run reports under (host-specific). */
+  readonly channel: string;
+  /** Diff service instance bound to that channel. */
+  readonly service: LaTeXdiffService;
+}
 
 /**
  * Minimal progress sink for long-running diff runs. Host-neutral so the core
@@ -15,14 +25,16 @@ export interface DiffProgressReporter {
   report(value: { message?: string; increment?: number }): void;
 }
 
-export interface RunLatexdiffCommandConfig {
-  agent: string;
-  model: string;
-  inputFile: string;
-  outputFiles?: string[];
-  runId?: string | null;
-  outputsByRound?: RoundIndexed<OutputFileInfo>;
-}
+/**
+ * Command-payload config for a latexdiff run. The six run-scoped fields are
+ * the shared subset of {@link RunLatexdiffForExecutionParams} — declared once
+ * there, derived here — so command handlers can forward a config straight into
+ * `runLatexdiffForExecution` without re-declaring or re-mapping the shape.
+ */
+export type RunLatexdiffCommandConfig = Pick<
+  RunLatexdiffForExecutionParams,
+  'agent' | 'model' | 'inputFile' | 'outputFiles' | 'runId' | 'outputsByRound'
+>;
 
 export interface DiffRunResult {
   success: boolean;

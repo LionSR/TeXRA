@@ -11,7 +11,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { registerCommands } from '@commands/_shared/registerCommands';
+import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import {
   AGENT_REVIEW_VIEW_ID,
   AgentReviewService,
@@ -116,7 +116,7 @@ export function registerAgentReviewCommands(
 
   registerAgentReviewCommitWatcher(context);
 
-  registerCommands(context, [
+  registerCommandEntries(context, [
     {
       id: 'texra.agentReview.run',
       handler: () => void AgentReviewService.runReview('manual'),

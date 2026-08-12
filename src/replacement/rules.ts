@@ -16,7 +16,7 @@ import {
   generateXmlLatexConversions,
 } from '@replacement/helpers';
 import { NonRegexReplacementCategory } from '@replacement/types';
-import type { NonRegexReplacementCategory as NonRegexReplacementCategoryName } from '@shared/constants/latex';
+import type { NonRegexReplacementCategory as NonRegexReplacementCategoryName } from '@shared/constants/replacementCategories';
 
 export const CHARACTER_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'characters' satisfies NonRegexReplacementCategoryName,

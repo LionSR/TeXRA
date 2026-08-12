@@ -1,4 +1,3 @@
-// Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@agent/index', () => ({
@@ -25,7 +24,6 @@ vi.mock('@auth/serverKeys', () => ({
   getServerSideKeyService: () => serverSideKeyService,
 }));
 
-// Local imports
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
 

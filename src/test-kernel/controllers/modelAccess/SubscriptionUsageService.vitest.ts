@@ -17,6 +17,7 @@ import {
   parseKimiCodeUsage,
 } from '@controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter';
 import {
+  DEFAULT_PLAN_NAMES,
   SubscriptionUsageService,
   type SubscriptionUsageCredentials,
 } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
@@ -165,12 +166,15 @@ describe('subscription usage parsers', () => {
       expect(parsed.windows).toStrictEqual([
         { name: 'primary', percentUsed: 10, percentRemaining: 90 },
       ]);
+      // The adapters no longer fabricate a display name; the service owns the
+      // default (`available()` applies `?? DEFAULT_PLAN_NAMES`), so the
+      // snapshot is built with that same default here.
       expect(
         SubscriptionUsageSnapshotSchema.safeParse({
           state: 'available',
           provider: 'chatgpt',
           providerName: 'ChatGPT',
-          planName: parsed.planName,
+          planName: parsed.planName ?? DEFAULT_PLAN_NAMES.chatgpt,
           fetchedAt: 1,
           windows: parsed.windows,
         }).success,
@@ -514,13 +518,10 @@ describe('SubscriptionUsageService', () => {
       GLM_CODING_PLAN_USAGE_URL,
       GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
     ]);
-    expect(china.state === 'available' && china.windows[0]?.percentUsed).toBe(
-      10,
-    );
-    expect(
-      international.state === 'available' &&
-        international.windows[0]?.percentUsed,
-    ).toBe(80);
+    expect(china.state).toBe('available');
+    expect(china.windows[0]?.percentUsed).toBe(10);
+    expect(international.state).toBe('available');
+    expect(international.windows[0]?.percentUsed).toBe(80);
   });
 
   it.each([
