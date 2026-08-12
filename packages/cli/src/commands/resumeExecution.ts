@@ -27,6 +27,13 @@ function loadFailureMessage(id: ExecutionId, error: unknown): string {
   return `Could not load session ${id}: ${toErrorMessage(error)}`;
 }
 
+function leaseInspectionFailureMessage(
+  id: ExecutionId,
+  error: unknown,
+): string {
+  return `Could not check whether execution ${id} is active: ${toErrorMessage(error)}`;
+}
+
 function activeExecutionMessage(id: ExecutionId): string {
   return `Execution ${id} is active in TeXRA.`;
 }
@@ -63,7 +70,7 @@ export async function runResumeExecution(
       return CliExitCode.Usage;
     }
   } catch (error) {
-    writeTextStderr(loadFailureMessage(id, error));
+    writeTextStderr(leaseInspectionFailureMessage(id, error));
     return CliExitCode.AgentError;
   }
   // FK-first: the stream id stamped at registration is the reproduction

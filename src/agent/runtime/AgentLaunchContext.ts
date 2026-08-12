@@ -107,6 +107,8 @@ export interface AgentLaunchInput {
   modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
   /** Deliberate one-run bypass used only by a Copilot direct-key fallback. */
   copilotRouteOverride?: CopilotRouteOverride;
+  /** Cancel launch preparation and the resulting live run. */
+  signal?: AbortSignal;
 }
 
 const STATUS_MESSAGES: Record<string, string> = {
@@ -248,6 +250,7 @@ async function assembleAgentLaunchContext(
   streamId: StreamTabId,
   resources: AgentLaunchResources,
 ): Promise<AgentLaunchContext> {
+  input.signal?.throwIfAborted();
   const fullConfig = input.config;
   // Resolve by the source the delegation captured at validation time, so launch
   // lands on the exact entry validation/display resolved. When no source is
@@ -259,11 +262,13 @@ async function assembleAgentLaunchContext(
     fullConfig.agentCategory,
     fullConfig.agentSource,
   );
+  input.signal?.throwIfAborted();
   // `loadAgentSettingAndPrompts` already applies `ensureAgentCategoryForSource`
   // before parsing, and `AgentSettingSchema` prefaults `agentCategory` (to
   // Workflow when absent), so `setting.agentCategory` is always populated here —
   // a second `ensureAgentCategoryForSource` pass would be a guaranteed no-op.
   const [setting, prompt] = await loadAgentSettingAndPrompts(resolution);
+  input.signal?.throwIfAborted();
 
   // Block category mismatch: prevent launching a tool-use agent as a workflow
   // (or vice versa). Source-pinned resolution already guarantees launch lands on
@@ -287,6 +292,7 @@ async function assembleAgentLaunchContext(
   }
 
   const modelConfig = await validateModelExists(fullConfig.model, interactions);
+  input.signal?.throwIfAborted();
 
   const config: AgentConfig = {
     ...fullConfig,
@@ -300,6 +306,7 @@ async function assembleAgentLaunchContext(
   const modelHandlerCompatibilityKey =
     input.modelHandlerCompatibilityKey ??
     (await inferLaunchModelHandlerCompatibilityKey(executionId, config.model));
+  input.signal?.throwIfAborted();
   const modelHandler = resources.ownModelHandler(
     modelHandlerCompatibilityKey
       ? await createModelHandlerForCompatibilityKey(
@@ -313,12 +320,14 @@ async function assembleAgentLaunchContext(
           input.copilotRouteOverride,
         ),
   );
+  input.signal?.throwIfAborted();
   const modelCell = new ModelCell(modelHandler, config.model);
 
   const transcriptWriter = await session.transcripts.loadAndAcquireWriter(
     streamId,
     executionId,
   );
+  input.signal?.throwIfAborted();
   const rawRunTrace = createRunTrace(
     streamId,
     session.transcripts,
@@ -343,6 +352,7 @@ async function assembleAgentLaunchContext(
   modelHandler.setLogger(agentLogger);
 
   session.events.assertRunSubscribersAttachedBeforeActivation(streamId);
+  input.signal?.throwIfAborted();
   input.onBeforeActivation?.(streamId);
 
   session.events.emit({
@@ -403,6 +413,9 @@ async function assembleAgentLaunchContext(
   const agentPath = path.dirname(resolution.entry.path);
   const workingDirectory = config.workingDirectory?.trim() || undefined;
   const runAbortController = new AbortController();
+  const runSignal = input.signal
+    ? AbortSignal.any([input.signal, runAbortController.signal])
+    : runAbortController.signal;
   const runScope = createRunScope({
     streamId,
     executionId,
@@ -410,7 +423,7 @@ async function assembleAgentLaunchContext(
     workingDirectory,
     delegationAgentScope: fullConfig.delegationAgentScope,
     session,
-    signal: runAbortController.signal,
+    signal: runSignal,
   });
   const buildVars = () =>
     buildUserVars(
@@ -431,6 +444,7 @@ async function assembleAgentLaunchContext(
     setting.agentCategory === AgentCategory.ToolUse
       ? await buildVars()
       : await parentStage.child('Init').run(buildVars);
+  input.signal?.throwIfAborted();
 
   const userVarChannels: UserVariableChannels = {
     input: Object.freeze(baseVars),
@@ -564,6 +578,7 @@ function compensateFailedActivation(args: {
 export async function buildAgentLaunchContext(
   input: AgentLaunchInput,
 ): Promise<AgentLaunchContext> {
+  input.signal?.throwIfAborted();
   const { config } = input;
   const launchSession = input.session ?? currentSession();
   const interactions = launchSession.interactions;

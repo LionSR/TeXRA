@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from 'node:timers/promises';
+
 import {
   attachTerminalResultToast,
   runAgent,
@@ -5,7 +7,6 @@ import {
   type RunAgentOptions,
 } from '@agent/runtime';
 import {
-  completeOwnedExecutionLease,
   ExecutionLeaseLostError,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
@@ -24,7 +25,10 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { warnApprovalDenied } from './approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
-import { finalizeCliExecution } from './executionFinalization';
+import {
+  finalizeCliExecution,
+  releaseCliExecutionLeaseAfterArtifacts,
+} from './executionFinalization';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { initializeHeadlessTranscriptSession } from './transcriptSession';
 import { createCliRuntimeHost } from './cliPresentationHost';
@@ -38,6 +42,8 @@ import {
 import { CLI_UNAVAILABLE_TOOLS } from './unavailableTools';
 import { attachWorkflowPlainOutput } from './workflowPlainOutput';
 import type { CliContext } from './cliContext';
+
+const CLI_RUN_SHUTDOWN_GRACE_MS = 5_000;
 
 interface CliExecuteOptions {
   /** Forwarded to `runAgent`. */
@@ -238,7 +244,11 @@ export async function executeCliRequest(
       })
     : () => undefined;
   let ownedExecutionId: ExecutionId | undefined;
+  const launchAbortController = new AbortController();
+  let shutdownRequested = false;
   let shutdownInterrupted = false;
+  let runLifecycleStarted = false;
+  let shutdownArtifactFailure: unknown;
   let shutdownFinalizationFailureReported = false;
   const reportFinalizationFailure = (error: unknown): void => {
     session.interactions.emit('requestShowError', {
@@ -258,13 +268,17 @@ export async function executeCliRequest(
       settleLeaseScope = resolve;
     },
   );
-  let shutdownStatusFinalized: Promise<void> | undefined;
-  const finalizeShutdownStatus = (): Promise<void> => {
-    if (!shutdownInterrupted) return Promise.resolve();
+  let settleShutdownFinalization: () => void = () => undefined;
+  const shutdownFinalizationDone = new Promise<void>((resolve) => {
+    settleShutdownFinalization = resolve;
+  });
+  let shutdownStatusFinalized: Promise<boolean> | undefined;
+  const finalizeShutdownStatus = (): Promise<boolean> => {
+    if (!shutdownInterrupted) return Promise.resolve(false);
     shutdownStatusFinalized ??= (async () => {
       const runWithOwnership = await leaseScopeReady;
       const executionId = ownedExecutionId;
-      if (!runWithOwnership || !executionId) return;
+      if (!runWithOwnership || !executionId) return false;
       try {
         await runWithOwnership(async () => {
           await finalizeCliExecution(
@@ -273,10 +287,18 @@ export async function executeCliRequest(
             'preserve',
             reportShutdownFinalizationFailure,
           );
-          await completeOwnedExecutionLease(executionId);
+          await releaseCliExecutionLeaseAfterArtifacts(session, executionId);
         });
+        return true;
       } catch (error) {
-        if (!(error instanceof ExecutionLeaseLostError)) throw error;
+        // Record the original drain failure for the one-shot runtime adapter
+        // below, which rethrows it into runAgent's artifact aggregate. This
+        // memoized operation itself resolves false so the outer shutdown await
+        // cannot rethrow the same error over the primary run failure.
+        if (!(error instanceof ExecutionLeaseLostError)) {
+          shutdownArtifactFailure = error;
+        }
+        return false;
       }
     })();
     return shutdownStatusFinalized;
@@ -284,8 +306,33 @@ export async function executeCliRequest(
   const disposeShutdownStatus = tryPlatform()?.lifecycle.onShutdown(
     SHUTDOWN_PHASE.BEFORE,
     async () => {
-      shutdownInterrupted = true;
-      await finalizeShutdownStatus();
+      shutdownRequested = true;
+      launchAbortController.abort();
+      const interruptionAccepted = ownedExecutionId
+        ? session.executions.kill(ownedExecutionId)
+        : false;
+      // Before lifecycle registration, the launch signal is the cancellation
+      // authority. Afterwards, only an accepted registry stop may replace the
+      // run's own terminal verdict with CANCELLED.
+      shutdownInterrupted =
+        !runLifecycleStarted || interruptionAccepted || shutdownInterrupted;
+      // Earlier shutdown handlers interrupt the live agent sessions. Wait for
+      // runAgent to finish unwinding before the final drain releases ownership,
+      // so no transcript or checkpoint writer can race the lease release. A
+      // provider or filesystem operation outside our abortable boundaries must
+      // not prevent signal termination indefinitely; on timeout, leave the
+      // lease intact for stale-owner recovery rather than releasing it early.
+      const grace = new AbortController();
+      try {
+        await Promise.race([
+          shutdownFinalizationDone,
+          sleep(CLI_RUN_SHUTDOWN_GRACE_MS, undefined, {
+            signal: grace.signal,
+          }),
+        ]);
+      } finally {
+        grace.abort();
+      }
     },
   );
   const invoke = async (): Promise<ExecuteAgentResult> => {
@@ -296,10 +343,31 @@ export async function executeCliRequest(
         registerExecution: options.registerExecution,
         openWorkflowOutput: options.openWorkflowOutput,
         modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-        beforeLeaseRelease: finalizeShutdownStatus,
+        launchSignal: launchAbortController.signal,
+        beforeLeaseRelease: async () => {
+          const handled = await finalizeShutdownStatus();
+          if (shutdownArtifactFailure !== undefined) {
+            const error = shutdownArtifactFailure;
+            shutdownArtifactFailure = undefined;
+            throw error;
+          }
+          return handled;
+        },
         onExecutionLeaseAcquired: (runWithOwnership, executionId) => {
           ownedExecutionId = executionId;
           settleLeaseScope(runWithOwnership);
+          if (shutdownRequested && !runLifecycleStarted) {
+            shutdownInterrupted = true;
+          }
+        },
+        onRun: () => {
+          runLifecycleStarted = true;
+          // Acquisition precedes registry tracking. If shutdown landed in
+          // between, interrupt as soon as the canonical handle becomes live.
+          if (shutdownRequested && ownedExecutionId) {
+            shutdownInterrupted =
+              session.executions.kill(ownedExecutionId) || shutdownInterrupted;
+          }
         },
         stopAfterCycle: options.stopAfterCycle,
         approvalPromptsUnavailable: cliApprovalPromptsUnavailable(
@@ -323,6 +391,7 @@ export async function executeCliRequest(
   let runResult:
     | { readonly ok: true; readonly result: ExecuteAgentResult }
     | { readonly ok: false } = { ok: false };
+  let primaryRunFailure: { readonly error: unknown } | undefined;
   let presentationAttached = true;
   const detachPresentation = async (): Promise<void> => {
     if (!presentationAttached) return;
@@ -344,28 +413,54 @@ export async function executeCliRequest(
     // workspaceState.update failures) is unexpected and must keep
     // propagating to bin/texra.ts's crash handler.
     if (!(err instanceof AgentError)) {
-      throw err;
-    }
-    // A failure before lifecycle startup has no `result` event. Preserve the
-    // ordinary toast path when it ran, and provide the missing direct fallback
-    // while the presentation host is still attached.
-    if (!failurePresented && !terminalResult.isHandled()) {
+      primaryRunFailure = { error: err };
+    } else if (!failurePresented && !terminalResult.isHandled()) {
+      // A failure before lifecycle startup has no `result` event. Preserve the
+      // ordinary toast path when it ran, and provide the missing direct fallback
+      // while the presentation host is still attached.
       session.interactions.emit('requestShowError', {
         message: toErrorMessage(err),
       });
     }
+  }
+
+  disposeShutdownStatus?.dispose();
+  let finalizationCompleted = false;
+  const cleanupFailures: unknown[] = [];
+  try {
+    await finalizeShutdownStatus();
+    await session.flushArtifacts();
+    finalizationCompleted = true;
+  } catch (error) {
+    cleanupFailures.push(error);
   } finally {
-    disposeShutdownStatus?.dispose();
-    let finalizationCompleted = false;
-    try {
-      await finalizeShutdownStatus();
-      await session.flushArtifacts();
-      finalizationCompleted = true;
-    } finally {
-      if (!runResult.ok || !finalizationCompleted) {
+    settleShutdownFinalization();
+    if (!runResult.ok || !finalizationCompleted) {
+      try {
         await detachPresentation();
+      } catch (error) {
+        cleanupFailures.push(error);
       }
     }
+  }
+  if (cleanupFailures.length > 0) {
+    const cleanupFailure =
+      cleanupFailures.length === 1
+        ? cleanupFailures[0]
+        : new AggregateError(
+            cleanupFailures,
+            'CLI execution cleanup encountered multiple failures',
+          );
+    if (primaryRunFailure) {
+      throw new AggregateError(
+        [primaryRunFailure.error, cleanupFailure],
+        'CLI execution failed and its final artifacts could not be persisted',
+      );
+    }
+    throw cleanupFailure;
+  }
+  if (primaryRunFailure) {
+    throw primaryRunFailure.error;
   }
 
   if (!runResult.ok) {
