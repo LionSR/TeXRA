@@ -328,8 +328,15 @@ export function syncStreamLog(
         );
         for (const chunk of changes.textChunks) {
           // `canFold` pinned the log instance and emission head, so a chunk's
-          // id always resolves to a live entry — `getById` cannot miss here.
-          const current = log.getById(chunk.id)!;
+          // id always resolves to a live entry. A miss means the fold
+          // invariant broke upstream — fail loudly instead of letting
+          // `undefined` corrupt the fold state (#9985 review finding).
+          const current = log.getById(chunk.id);
+          if (!current) {
+            throw new Error(
+              `Transcript fold invariant violation: text chunk for unknown entry ${chunk.id} in stream ${streamId}`,
+            );
+          }
           const appendedIndex = appendedIndexById.get(chunk.id);
           if (appendedIndex !== undefined) {
             appended[appendedIndex] = current;
