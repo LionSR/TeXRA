@@ -31,7 +31,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 const CODING_PLAN_PROVIDER_NAMES = Object.fromEntries(
   CODING_PLAN_SUBSCRIPTIONS.map((plan) => [
     plan.usageProvider,
-    plan.apiProvider === 'glm' ? 'GLM' : plan.displayName,
+    plan.credentialName,
   ]),
 ) as Record<
   (typeof CODING_PLAN_SUBSCRIPTIONS)[number]['usageProvider'],
