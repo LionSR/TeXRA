@@ -1,7 +1,7 @@
 /** Host-specific user copy for the delegated-work approval grant. */
 export const DELEGATION_APPROVAL_COPY = Object.freeze({
   cliAction: 'approve agent work for this chat',
-  cliCompactAction: 'agent work in this chat',
+  cliCompactAction: 'all agent work',
   cliExplanation:
     'Approves this task and later tasks from this agent, plus file edits and commands. Other prompts still ask.',
   progressViewAction: 'Approve agent work for this run',
