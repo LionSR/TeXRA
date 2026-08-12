@@ -9,6 +9,7 @@ import * as log from '@logger/logUtils';
 import {
   AgentCategorySchema,
   END_GROUP_STATUS,
+  ExecutionIdSchema,
   RUN_OUTCOME,
   RunIdentitySchema,
   STREAM_LOG_ENTRY_TYPES,
@@ -65,7 +66,7 @@ type StreamLogListener = (streamId: StreamTabId, delta: StreamLogDelta) => void;
  */
 const StreamSummaryMetaSchema = z.object({
   identity: RunIdentitySchema.optional(),
-  executionId: z.string().min(1).optional(),
+  executionId: ExecutionIdSchema.optional(),
   parentStreamId: z.string().min(1).optional(),
   userFollowUpSupport: UserFollowUpSupportSchema.optional(),
   agentCategory: AgentCategorySchema.optional(),
@@ -533,7 +534,10 @@ export class StreamLogStore {
     this.assertWritableStore('record stream summary metadata');
     const summary = this.summaries.get(streamId);
     if (!summary) {
+      if (isDeepStrictEqual(this.pendingSummaryMeta.get(streamId), meta))
+        return;
       this.pendingSummaryMeta.set(streamId, meta);
+      this.stateRevision += 1;
       return;
     }
     this.pendingSummaryMeta.delete(streamId);
@@ -1168,6 +1172,10 @@ export class StreamLogStore {
   }
 
   private async executeReload(discardPendingWrites: boolean): Promise<void> {
+    // Sample before the first await: run facts may arrive while pending writes
+    // drain or the replacement adapters prepare, and the reload must not fold
+    // those new-root facts into the state it is about to replace.
+    const revision = this.stateRevision;
     if (discardPendingWrites) {
       this.saveThrottle.cancel();
       // Invalidate and drain any in-flight batch before the adapters
@@ -1194,7 +1202,6 @@ export class StreamLogStore {
     this.summaryCacheMaintenanceEnabled = true;
     if (this.mode.kind === 'persistent') await this.prepareSummaryCache();
 
-    const revision = this.stateRevision;
     const summaries = await this.readPersistentSummaries();
     if (revision !== this.stateRevision || this.pendingLoads().length > 0) {
       throw new Error(
@@ -1244,8 +1251,14 @@ export class StreamLogStore {
     // Metadata recorded while a stream was unregistered lands now if the
     // replacement set knows the stream (no-op on read-only opens: the
     // antechamber only fills through recordSummaryMeta, which is writable-only).
+    // Entries absent from the replacement belong to the previous storage root
+    // and are discarded.
     for (const streamId of [...this.pendingSummaryMeta.keys()]) {
-      if (this.summaries.has(streamId)) this.adoptPendingSummaryMeta(streamId);
+      if (this.summaries.has(streamId)) {
+        this.adoptPendingSummaryMeta(streamId);
+      } else {
+        this.pendingSummaryMeta.delete(streamId);
+      }
     }
     this.writeTombstones.clear();
     this.clearing = false;
