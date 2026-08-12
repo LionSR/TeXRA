@@ -12,6 +12,13 @@ All notable changes to this project will be documented in this file.
   number of active background tasks while retaining the focused session's own
   status.
 
+### Shared (all surfaces)
+
+#### Bug Fixes
+
+- **Claude Code forks leave the original conversation unchanged** — an
+  incomplete fork now stops instead of continuing the original conversation.
+
 ## [0.40.2] - 2026-08-12
 
 ### CLI
