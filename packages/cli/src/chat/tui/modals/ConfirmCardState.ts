@@ -165,7 +165,7 @@ export function confirmCardKeyHintsForWidth(
   const coreHints = compactHints.filter(isCoreApprovalHint);
   if (hintsFit(coreHints, options.maxColumns)) return coreHints;
 
-  return [{ key: 'Esc', action: options.escapeLabel ?? 'reject' }];
+  return fullHints.slice(-1);
 }
 
 export function confirmCardCompactHintLayout({
