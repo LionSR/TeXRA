@@ -9,7 +9,7 @@
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { flowKey } from '@agent/node/persistedFlow';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
@@ -34,7 +34,7 @@ import {
   releaseOwnedExecutionLease,
 } from './executionLease';
 
-const CHANNEL = 'ExecutionLifecycle';
+const log = createLog('ExecutionLifecycle');
 
 function pinExecutionWorkingDirectory(record: RunRecord): RunRecord {
   const workingDirectory =
@@ -231,7 +231,8 @@ export type FinalizeExecutionResult =
       readonly status: 'failed';
       readonly error: unknown;
       readonly stage:
-        'terminal-status' | 'terminal-status-and-flow-record-delete';
+        | 'terminal-status'
+        | 'terminal-status-and-flow-record-delete';
       readonly outcomePersisted: false;
     }
   | {
@@ -317,8 +318,7 @@ export async function writeSessionDescription(
     await enqueueMetaUpdate(executionId, () => ({ description }));
   } catch (err) {
     // Swallow and log — don't let storage I/O errors disrupt execution lifecycle.
-    logger.debug(
-      CHANNEL,
+    log.debug(
       `Failed to persist session description for ${executionId}: ${toErrorMessage(err)}`,
     );
   }

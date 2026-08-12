@@ -10,7 +10,7 @@ import {
   type AgentDefinition,
 } from '@agent/core/definition/AgentDataclass';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { AgentCategory } from '@shared/schemas';
 import type { AgentSource } from '@shared/schemas/agent';
 import { filterNotNull, groupBy } from '@utils/core';
@@ -18,7 +18,7 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { AgentEntry } from './agentEntry';
 
-const CHANNEL = 'agentRegistry';
+const log = createLog('agentRegistry');
 
 interface ParsedAgentYaml {
   readonly name: string;
@@ -65,10 +65,10 @@ export async function scanDirectory(
       .map((entry) => scanYaml(entry, source, definitions))
       .filter(filterNotNull);
 
-    logger.debug(CHANNEL, `Scanned ${entries.length} agents from ${source}`);
+    log.debug(`Scanned ${entries.length} agents from ${source}`);
     return entries;
   } catch (err) {
-    logger.error(CHANNEL, `Failed to scan ${dir}: ${toErrorMessage(err)}`);
+    log.error(`Failed to scan ${dir}: ${toErrorMessage(err)}`);
     return [];
   }
 }
@@ -82,8 +82,7 @@ function entriesWithUniqueNames(
   for (const [name, matches] of byName) {
     if (matches.length > 1) {
       const paths = matches.map((entry) => entry.path).join(', ');
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Duplicate agent name "${name}" in ${paths}; skipping all duplicates.`,
       );
       continue;
@@ -100,10 +99,7 @@ async function readYamlDefinition(
     const content = await AbsoluteFS.read(yamlPath);
     const parsed = parseYamlWith(content, AgentDefinitionSchema);
     if (parsed.isErr()) {
-      logger.warn(
-        CHANNEL,
-        `Failed to scan ${yamlPath}: ${toErrorMessage(parsed.error)}`,
-      );
+      log.warn(`Failed to scan ${yamlPath}: ${toErrorMessage(parsed.error)}`);
       return null;
     }
     return {
@@ -112,7 +108,7 @@ async function readYamlDefinition(
       definition: parsed.value,
     };
   } catch (err) {
-    logger.warn(CHANNEL, `Failed to scan ${yamlPath}: ${toErrorMessage(err)}`);
+    log.warn(`Failed to scan ${yamlPath}: ${toErrorMessage(err)}`);
     return null;
   }
 }
@@ -184,7 +180,8 @@ function scanYaml(
     const rawSettings = settingsBlock.value;
     const rawPrompts = promptsBlock.value;
     const defaultOutputFiles = rawSettings.defaultOutputFiles as
-      string[] | undefined;
+      | string[]
+      | undefined;
 
     const tools = extractToolNames(rawSettings.tools as unknown[] | undefined);
 
@@ -209,8 +206,7 @@ function scanYaml(
           userRequestTemplateCount(rawPrompts.userRequest),
         );
       } else {
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Ignoring malformed rounds in ${entry.path}: ${toErrorMessage(parsedRounds.error)}`,
         );
       }
@@ -229,10 +225,7 @@ function scanYaml(
       rounds,
     };
   } catch (err) {
-    logger.warn(
-      CHANNEL,
-      `Failed to scan ${entry.path}: ${toErrorMessage(err)}`,
-    );
+    log.warn(`Failed to scan ${entry.path}: ${toErrorMessage(err)}`);
     return null;
   }
 }

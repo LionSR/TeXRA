@@ -16,18 +16,18 @@ import {
   runHelperModelCompletion,
 } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
-const CHANNEL = 'SessionDescription';
+const log = createLog('SessionDescription');
 const MAX_DESCRIPTION_LENGTH = 80;
 const MAX_DESCRIPTION_WORDS = 12;
 
 function warnWithoutRejecting(message: string): void {
   try {
-    logger.warn(CHANNEL, message);
+    log.warn(message);
   } catch {
     // Best-effort diagnostics must not make description generation reject.
   }
@@ -146,7 +146,7 @@ export async function generateSessionDescription(
         payload: { streamId, description },
       },
     });
-    logger.info(CHANNEL, `Generated session description for ${executionId}`);
+    log.info(`Generated session description for ${executionId}`);
   } catch (err) {
     warnWithoutRejecting(
       `Failed to generate session description: ${getSdkErrorMessage(err)}`,

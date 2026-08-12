@@ -5,7 +5,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { delay } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
@@ -18,7 +18,7 @@ import {
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
-const CHANNEL = 'AudioUtils';
+const log = createLog('AudioUtils');
 
 const RECORDINGS_DIR = 'recordings';
 
@@ -63,10 +63,7 @@ export async function startRecording(): Promise<{
             'Sox is required for audio recording. Please install it first.',
         };
       }
-      logger.warn(
-        CHANNEL,
-        `Sox check failed but found at: ${soxCommand.resolvedPath}`,
-      );
+      log.warn(`Sox check failed but found at: ${soxCommand.resolvedPath}`);
     }
 
     await StorageFS.ensureDir(RECORDINGS_DIR);
@@ -89,8 +86,7 @@ export async function startRecording(): Promise<{
       absPath,
     ];
 
-    logger.info(
-      CHANNEL,
+    log.info(
       `Starting audio recording with sox: ${soxCommand?.resolvedPath ?? 'sox'} ${soxArgs.join(' ')}`,
     );
 
@@ -114,30 +110,27 @@ export async function startRecording(): Promise<{
         const intentional =
           result.signal === 'SIGTERM' || result.signal === 'SIGKILL';
         if (intentional) {
-          logger.info(CHANNEL, 'Recording stopped intentionally');
+          log.info('Recording stopped intentionally');
         } else if (result.exitCode !== 0) {
-          logger.error(
-            CHANNEL,
-            `Sox process exited with code ${result.exitCode}`,
-          );
+          log.error(`Sox process exited with code ${result.exitCode}`);
         } else {
-          logger.info(CHANNEL, 'Recording process completed successfully');
+          log.info('Recording process completed successfully');
         }
         resetRecordingState();
       })
       .catch((error) => {
-        logger.error(CHANNEL, `Sox process error: ${error.message}`);
+        log.error(`Sox process error: ${error.message}`);
         resetRecordingState();
       });
 
     subprocess.stderr?.on('data', (data: Buffer) => {
-      logger.debug(CHANNEL, `Sox stderr: ${data.toString()}`);
+      log.debug(`Sox stderr: ${data.toString()}`);
     });
 
     return { success: true, recordingPath: absPath };
   } catch (err) {
     const message = getSdkErrorMessage(err);
-    logger.error(CHANNEL, `Error in startRecording: ${message}`);
+    log.error(`Error in startRecording: ${message}`);
     resetRecordingState();
     return { success: false, error: message };
   }
@@ -191,7 +184,7 @@ export async function stopRecordingAndTranscribe(): Promise<{
     return { success: true, text: result.text };
   } catch (err) {
     const message = getSdkErrorMessage(err);
-    logger.error(CHANNEL, `Error in stopRecordingAndTranscribe: ${message}`);
+    log.error(`Error in stopRecordingAndTranscribe: ${message}`);
     resetRecordingState();
     return { success: false, text: '', error: message };
   }

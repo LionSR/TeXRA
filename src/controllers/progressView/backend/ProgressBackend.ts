@@ -26,7 +26,7 @@ import {
   type ApprovalRequestHandlerSet,
   type BuildApprovalRequestHandlerSetParams,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
 import { STREAM_PHASE } from '@shared/schemas';
@@ -34,7 +34,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 
-const CHANNEL = 'ProgressBackend';
+const log = createLog('ProgressBackend');
 
 type ProgressBackendApprovalOptions = Omit<
   BuildApprovalRequestHandlerSetParams,
@@ -120,7 +120,7 @@ export class ProgressBackend {
       // next full refresh re-sends whatever this frame carried.
       void (async () => options.sendMessage(message))().catch(
         (error: unknown) => {
-          logger.debug(CHANNEL, 'Failed to deliver message to webview', {
+          log.debug('Failed to deliver message to webview', {
             data: { command: message.command, error },
           });
         },

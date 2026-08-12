@@ -34,7 +34,7 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { FileStat } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import {
@@ -107,7 +107,7 @@ import {
 } from './executions/waitCoordination';
 import { formatSizedEntryLines } from './executions/fileListingFormat';
 
-const CHANNEL = 'ExecutionsTool';
+const log = createLog('ExecutionsTool');
 
 // ============================================================================
 // Resource path catalog
@@ -801,8 +801,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     // display category, loudly.
     const identity = meta?.identity;
     if (meta && !identity) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Execution ${executionId} is a pre-identity row; showing config-derived category only (reader retired per #9590 Stage 7)`,
       );
     }
@@ -1045,8 +1044,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const meta = await store.readMeta();
     const identity = meta?.identity;
     if (meta && !identity) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Execution ${executionId} is a pre-identity row; filtering config by its config-derived category only (reader retired per #9590 Stage 7)`,
       );
     }

@@ -1,5 +1,5 @@
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { isNonEmptyString } from '@utils/core';
 
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
@@ -7,7 +7,7 @@ import { renderPolishPrompt } from './polishModel';
 import { createHelperModelKit, runHelperModelCompletion } from './helperModel';
 import type { SessionHandle } from './SessionHandle';
 
-const CHANNEL = 'TextEnhancement';
+const log = createLog('TextEnhancement');
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -68,15 +68,14 @@ export async function polishTextWithAI(
 
     const corrected = extractTextFromTag(responseText, 'corrected_text');
     if (!corrected) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         'Model did not wrap response in <corrected_text> tags; using raw response',
       );
     }
     return { success: true, text: (corrected ?? responseText).trim() };
   } catch (error) {
     const message = getSdkErrorMessage(error);
-    logger.error(CHANNEL, `Error polishing text: ${message}`);
+    log.error(`Error polishing text: ${message}`);
     return { success: false, text, error: message };
   }
 }

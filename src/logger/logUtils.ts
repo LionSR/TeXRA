@@ -209,3 +209,54 @@ export const debug = makeLogFn(LOG_LEVELS.DEBUG);
 export const info = makeLogFn(LOG_LEVELS.INFO);
 export const warn = makeLogFn(LOG_LEVELS.WARN);
 export const error = makeLogFn(LOG_LEVELS.ERROR);
+
+/** A channel-bound view of the four level writers. */
+export interface Log {
+  debug(message: string, options?: LogUtilsOptions): void;
+  info(message: string, options?: LogUtilsOptions): void;
+  warn(message: string, options?: LogUtilsOptions): void;
+  error(message: string, options?: LogUtilsOptions): void;
+}
+
+/**
+ * Bind the four level writers to one channel so a module names its channel
+ * once instead of threading it through every call:
+ * `const log = createLog('X'); log.warn(message)`. Emits through the same
+ * {@link writeLine} sink as the free `debug/info/warn/error` functions.
+ */
+export function createLog(channel: string): Log {
+  return {
+    debug: (message, options = {}) =>
+      writeLine(
+        LOG_LEVELS.DEBUG,
+        channel,
+        /* isAgent */ false,
+        message,
+        options.data,
+      ),
+    info: (message, options = {}) =>
+      writeLine(
+        LOG_LEVELS.INFO,
+        channel,
+        /* isAgent */ false,
+        message,
+        options.data,
+      ),
+    warn: (message, options = {}) =>
+      writeLine(
+        LOG_LEVELS.WARN,
+        channel,
+        /* isAgent */ false,
+        message,
+        options.data,
+      ),
+    error: (message, options = {}) =>
+      writeLine(
+        LOG_LEVELS.ERROR,
+        channel,
+        /* isAgent */ false,
+        message,
+        options.data,
+      ),
+  };
+}

@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Internal imports
 import { REVIEW_SEVERITIES } from '@agent/review/reviewIssues';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -13,7 +13,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { defineTool } from './core/define';
 import { normalizeStructuredOutputSchema } from './structuredOutput';
 
-const CHANNEL = 'ReportReviewIssueTool';
+const log = createLog('ReportReviewIssueTool');
 
 const ReportReviewIssueInputSchema = z.strictObject({
   file: z
@@ -86,7 +86,7 @@ export class ReportReviewIssueTool extends defineTool({
       return executed(summary, summary);
     } catch (error) {
       const detail = toErrorMessage(error);
-      logger.error(CHANNEL, `Failed to report review issue: ${detail}`);
+      log.error(`Failed to report review issue: ${detail}`);
       throw new ToolError(`Failed to report review issue: ${detail}`);
     }
   }

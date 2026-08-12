@@ -11,7 +11,7 @@
 
 import * as vscode from 'vscode';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { getDefaultToolRegistry } from '@tools/registry';
 
@@ -21,7 +21,7 @@ import {
   type LanguageModelResearchToolName,
 } from './languageModelToolInvocationMessage';
 
-const CHANNEL = 'LanguageModelTools';
+const log = createLog('LanguageModelTools');
 
 /** VS Code tool name (manifest) → canonical TeXRA registry tool name. */
 const LM_TOOL_NAMES = {
@@ -51,8 +51,7 @@ export function registerLanguageModelTools(
   for (const [lmName, toolName] of Object.entries(LM_TOOL_NAMES)) {
     const tool = registry.get(toolName);
     if (!tool) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Tool "${toolName}" missing from registry; skipping LM registration for "${lmName}".`,
       );
       continue;
