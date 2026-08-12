@@ -40,7 +40,12 @@ async function isGlmCodingPlanActive(modelId: string): Promise<boolean> {
     return false;
   }
   const includedAccess = includedModelAccess();
-  if (await includedAccess.canUseServerSideKeys()) return false;
+  await includedAccess.canUseServerSideKeys();
+  if (
+    includedAccess.shouldUseServerSideKeysSync(config.provider, config.name)
+  ) {
+    return false;
+  }
   return apiKeyExists(platform().secrets, 'glm');
 }
 
