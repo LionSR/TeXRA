@@ -128,12 +128,6 @@ interface StreamState {
    * the stream remains a known, listable stream. `undefined` = released.
    */
   log?: StreamLog;
-  /**
-   * Membership flag: eviction was requested but is waiting for writers or
-   * persistence. A read or writer acquisition clears it; otherwise the store
-   * evicts as soon as the remaining ownership and durability guards leave.
-   */
-  releaseRequested?: boolean;
   /** Reasons that currently require the heavy transcript to stay resident. */
   leases?: Set<TranscriptResidencyLeaseReason>;
   /**
@@ -256,6 +250,12 @@ export class StreamLogStore {
    * still listed here — see `pruneStreamState`.
    */
   private readonly dirtyIds = new Set<StreamTabId>();
+  /**
+   * Streams that return to cold storage whenever their leases drain. This
+   * policy outlives resident state so a terminal stream remains cold after a
+   * late writer; direct focus clears it.
+   */
+  private readonly releaseRequests = new Set<StreamTabId>();
   private readonly listeners = createListenerSet<StreamLogListener>();
   private kv = createLogKv();
   private summaryKv = createSummaryKv();
@@ -316,7 +316,6 @@ export class StreamLogStore {
       streamId,
       (s) =>
         s.log === undefined &&
-        !s.releaseRequested &&
         (s.leases === undefined || s.leases.size === 0) &&
         !s.loadFailed &&
         s.pendingLoad === undefined &&
@@ -498,13 +497,13 @@ export class StreamLogStore {
     // Ephemeral entries have no durable copy from which they could be restored.
     if (this.mode.kind === 'ephemeral') return;
 
-    // An absent record is already non-resident. A later writer re-establishes
-    // release intent when it reserves a known cold stream.
     const state = this.streams.get(streamId);
-    if (!state) return;
-    state.releaseRequested = true;
-    state.leases?.delete('focus');
-    if (state.leases?.size === 0) state.leases = undefined;
+    if (!state && !this.summaries.has(streamId)) return;
+    this.releaseRequests.add(streamId);
+    if (state) {
+      state.leases?.delete('focus');
+      if (state.leases?.size === 0) state.leases = undefined;
+    }
     this.tryRelease(streamId);
   }
 
@@ -547,12 +546,6 @@ export class StreamLogStore {
       throw new Error('A transcript writer requires a non-empty owner key.');
     }
 
-    const knownColdStream =
-      allowReleased &&
-      this.mode.kind === 'persistent' &&
-      this.summaries.has(streamId) &&
-      this.streams.get(streamId)?.log === undefined;
-
     if (
       !allowReleased &&
       this.mode.kind === 'persistent' &&
@@ -577,9 +570,6 @@ export class StreamLogStore {
     ownership.tokens.add(token);
     const writerState = this.ensureStreamState(streamId);
     writerState.writer = ownership;
-    // A writer that rehydrates an already-evicted stream is its only reason
-    // for residency. Release it again when the writer and flush leases end.
-    if (knownColdStream) writerState.releaseRequested = true;
     this.acquireLease(streamId, 'writer');
     let closed = false;
 
@@ -641,8 +631,7 @@ export class StreamLogStore {
     if (!reserved && !this.summaries.has(streamId)) return;
     if (reserved?.writer === undefined) {
       this.acquireLease(streamId, 'focus');
-      const focused = this.ensureStreamState(streamId);
-      focused.releaseRequested = false;
+      this.releaseRequests.delete(streamId);
     }
     // Normally skip when already resident. A concurrent append may have
     // populated a fresh log before a rehydrate failed, so a retry must still
@@ -1141,11 +1130,12 @@ export class StreamLogStore {
     summaries: ReadonlyMap<StreamTabId, StreamLogSummary>,
   ): void {
     // One clear drops every resident per-stream field (log, leases,
-    // loadFailed, releaseRequested, pendingLoad, writer). `summaries`,
+    // loadFailed, pendingLoad, writer). `summaries`, `releaseRequests`,
     // `writeTombstones`, and `dirtyIds` do not share the record's lifecycle
     // and are cleared separately.
     this.streams.clear();
     this.dirtyIds.clear();
+    this.releaseRequests.clear();
     this.summaries.clear();
     for (const [streamId, summary] of summaries) {
       this.summaries.set(streamId, summary);
@@ -1284,6 +1274,7 @@ export class StreamLogStore {
     // `delete()`'s try/finally, not by this cascade.
     this.streams.delete(streamId);
     this.dirtyIds.delete(streamId);
+    this.releaseRequests.delete(streamId);
     this.summaries.delete(streamId);
   }
 
@@ -1293,6 +1284,7 @@ export class StreamLogStore {
     // own finally block.
     this.streams.clear();
     this.dirtyIds.clear();
+    this.releaseRequests.clear();
     this.summaries.clear();
   }
 
@@ -1391,14 +1383,13 @@ export class StreamLogStore {
     const state = this.streams.get(streamId);
     if (
       !state ||
-      !state.releaseRequested ||
+      !this.releaseRequests.has(streamId) ||
       (state.leases?.size ?? 0) > 0 ||
       this.dirtyIds.has(streamId) ||
       state.pendingLoad
     ) {
       return;
     }
-    state.releaseRequested = false;
     if (state.log) {
       this.refreshSummary(streamId, state.log);
       state.log = undefined;

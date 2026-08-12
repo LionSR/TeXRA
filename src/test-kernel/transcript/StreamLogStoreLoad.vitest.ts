@@ -1742,6 +1742,21 @@ describe('StreamLogStore save throttle', () => {
     expect(store.get('alpha')).toBeUndefined();
   });
 
+  it('keeps a cold stream resident when no eviction was requested', async () => {
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: { alpha: summary(100, 100) },
+    });
+    const store = await StreamLogStore.open();
+
+    const writer = await store.loadAndAcquireWriter('alpha', 'active-writer');
+    writer.append(namedEntry('active', 200, 'active write'));
+    writer.close();
+    await store.flush();
+
+    expect(store.get('alpha')?.size).toBe(2);
+  });
+
   it('does not retain eviction state for an unknown stream', async () => {
     mockStorage({ logs: {}, summaries: {} });
     const store = await StreamLogStore.open();
