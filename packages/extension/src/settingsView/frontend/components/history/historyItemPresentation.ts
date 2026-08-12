@@ -5,7 +5,7 @@ import {
   type HistoryRunStatus,
 } from '@shared/schemas/settingsViewMessages';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
-import { formatShortDateTime } from '@shared/utils/string';
+import { formatShortDateTime } from '@utils/text/stringUtils';
 
 export type HistoryConfigValue =
   string | number | boolean | string[] | null | undefined;
