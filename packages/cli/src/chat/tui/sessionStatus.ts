@@ -5,6 +5,7 @@ import {
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { StreamSubstate } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
+import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { truncateSummary } from '@utils/text/stringUtils';
 
@@ -28,6 +29,7 @@ export interface CliSessionStatusInput {
   readonly approvalBypasses?: Partial<BypassState>;
   readonly status: string;
   readonly substate?: StreamSubstate;
+  readonly activeChildSessions?: number;
   readonly goal?: CliSessionGoalStatus | null;
   readonly queuedFollowUpMessages: readonly string[];
   /** Root execution id, when a run has started. Surfaces the resume command
@@ -94,6 +96,9 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]
       : []),
     `status: ${formatCliStatusLabel(input.status, input.substate)}`,
+    ...(input.activeChildSessions && input.activeChildSessions > 0
+      ? [`active ${BACKGROUND_TASK.inlinePlural}: ${input.activeChildSessions}`]
+      : []),
     ...(input.goal
       ? [
           `goal: ${input.goal.status}`,
