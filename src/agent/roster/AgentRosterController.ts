@@ -84,8 +84,9 @@ function allPresets(
  * Read the canonical workspace selection. A value that does not parse is
  * tried against the legacy pair-shaped format (`{workflowAgentKeys,
  * toolUseAgentKeys}`, with or without a stray `kind` field) via the existing
- * AgentDelegationScopeLegacySchema. On a match the stored value is
- * immediately repaired so the warning is a one-time event per workspace.
+ * AgentDelegationScopeLegacySchema. The compatibility reader is deliberately
+ * pure: only the serialized mutation methods below own durable roster writes,
+ * so reading old state cannot race a newer user selection.
  */
 function readAgentRosterSelection(
   workspaceState: StateStore,
@@ -96,14 +97,8 @@ function readAgentRosterSelection(
   if (raw === undefined) return INHERITED_AGENT_ROSTER;
   const parsed = AgentRosterSelectionSchema.safeParse(raw);
   if (parsed.success) return parsed.data;
-  const repaired = repairLegacySelection(raw);
-  if (repaired) {
-    void workspaceState.update(
-      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-      repaired,
-    );
-    return repaired;
-  }
+  const legacy = parseLegacySelection(raw);
+  if (legacy) return legacy;
   console.warn(
     `[agentRoster] Ignoring malformed roster selection; falling back to ` +
       `the inherited roster: ${parsed.error.message}`,
@@ -111,13 +106,13 @@ function readAgentRosterSelection(
   return INHERITED_AGENT_ROSTER;
 }
 
-function repairLegacySelection(raw: unknown): AgentRosterSelection | undefined {
+function parseLegacySelection(raw: unknown): AgentRosterSelection | undefined {
   // The legacy pair-shaped value may carry a stray `kind` field: an
   // intermediate version wrote `{kind: 'custom', workflowAgentKeys,
   // toolUseAgentKeys}` under AGENT_ROSTER_SELECTION, which neither the
   // canonical schema (missing `agentKeys`) nor the strict legacy schema
   // (rejects `kind`) accepts. Drop the discriminant before parsing so both
-  // the pure and hybrid legacy shapes repair to the same canonical value.
+  // the pure and hybrid legacy shapes normalize to the same canonical value.
   const candidate =
     raw !== null && typeof raw === 'object' && 'kind' in raw
       ? Object.fromEntries(

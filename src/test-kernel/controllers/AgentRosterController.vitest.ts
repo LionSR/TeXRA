@@ -117,7 +117,7 @@ describe('AgentRosterController', () => {
     });
   });
 
-  it('repairs the hybrid pair-shaped roster that carries a stray kind field in place', () => {
+  it('reads the hybrid pair-shaped roster without mutating workspace state', () => {
     // An intermediate version wrote `{kind: 'custom', workflowAgentKeys,
     // toolUseAgentKeys}` under AGENT_ROSTER_SELECTION. Neither the canonical
     // schema (missing `agentKeys`) nor the strict legacy schema (rejects
@@ -132,6 +132,7 @@ describe('AgentRosterController', () => {
     const workspaceState = new FakeStateStore({
       [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: hybrid,
     });
+    const update = vi.spyOn(workspaceState, 'update');
     const roster = controller(workspaceState);
 
     expect(roster.getSelection()).toEqual({
@@ -142,15 +143,10 @@ describe('AgentRosterController', () => {
       },
     });
     expect(warn).not.toHaveBeenCalled();
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toEqual({
-      kind: 'custom',
-      agentKeys: {
-        workflow: ['builtInWorkflow:write'],
-        toolUse: ['builtInToolUse:lead'],
-      },
-    });
+    expect(update).not.toHaveBeenCalled();
+    expect(workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION)).toBe(
+      hybrid,
+    );
   });
 
   it('uses the user default only for inherited workspaces', () => {
