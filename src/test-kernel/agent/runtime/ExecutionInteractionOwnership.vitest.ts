@@ -9,7 +9,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { StreamTabId } from '@shared/schemas';
-import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import {
+  testExecutionHandle,
+  testExecutionRegistry,
+} from '@test/support/executionHandleFixtures';
 
 const liveRegistries: ExecutionRegistry[] = [];
 
@@ -20,7 +23,7 @@ afterEach(() => {
 });
 
 function createRegistry(): ExecutionRegistry {
-  const registry = new ExecutionRegistry();
+  const registry = testExecutionRegistry();
   liveRegistries.push(registry);
   return registry;
 }

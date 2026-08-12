@@ -4,6 +4,9 @@ import {
   AgentExecutionHandle,
   type ExecutionRun,
 } from '@agent/runtime/ExecutionHandle';
+import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { ExecutionId, RunIdentity, StreamTabId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 
@@ -32,4 +35,13 @@ export function testExecutionHandle(input: {
     category: input.category ?? AgentCategory.ToolUse,
   };
   return new AgentExecutionHandle(run, input.parentStreamId, input.trace);
+}
+
+/** A registry with the canonical status-machine/event-hub pair for tests. */
+export function testExecutionRegistry(): ExecutionRegistry {
+  const events = new SessionEventHub();
+  return new ExecutionRegistry({
+    events,
+    streamStatus: new StreamStatusMachine(events),
+  });
 }

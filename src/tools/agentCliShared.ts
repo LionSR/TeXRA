@@ -12,7 +12,6 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import {
   startChildRunLoop,
@@ -110,11 +109,7 @@ async function queueAgentCliFollowUp(
   // accept follow-ups from its former orchestrator. A missing handle falls
   // through to submitFollowUp's no-session outcome below.
   const handle = stored.executions.getHandle(stored.executionId);
-  if (
-    callerStreamId &&
-    handle instanceof AgentExecutionHandle &&
-    !handle.isOwnedBy(callerStreamId)
-  ) {
+  if (callerStreamId && handle && !handle.isOwnedBy(callerStreamId)) {
     throw new ToolError(
       `${labels.notActiveLabel} '${id}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
     );
