@@ -20,7 +20,6 @@ interface CommonMessageContext {
   setTheme: (theme: string) => void;
   setDebugMode: (enabled: boolean) => void;
   restoreState: (message: StateRestoreMessage) => void;
-  onError: (message: string, details?: unknown) => void;
   onSchemaError?: (context: string, error: ZodError) => void;
 }
 
@@ -46,9 +45,6 @@ function handleCommonMessage(
       return true;
     case COMMON_COMMANDS.STATE_RESTORE:
       context.restoreState(result.data);
-      return true;
-    case COMMON_COMMANDS.ERROR:
-      context.onError(result.data.message, result.data.details);
       return true;
     case COMMON_COMMANDS.WEBVIEW_READY:
       return true;
@@ -84,7 +80,6 @@ export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
         this.debugMode = enabled;
       },
       restoreState: (message) => this.onStateRestore(message),
-      onError: (message, details) => this.onError(message, details),
       onSchemaError: (context, error) => this.logSchemaError(context, error),
     });
     if (!handled) {
@@ -157,13 +152,6 @@ export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
    */
   protected onStateRestore(_message: StateRestoreMessage): void {
     // Override in subclasses if needed.
-  }
-
-  /**
-   * Handle error messages from the extension host.
-   */
-  protected onError(message: string, details?: unknown): void {
-    console.error(message, details);
   }
 
   override connectedCallback(): void {

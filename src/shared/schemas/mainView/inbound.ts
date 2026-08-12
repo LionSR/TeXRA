@@ -14,11 +14,7 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
-import {
-  SetDebugModeMessageSchema,
-  SetThemeMessageSchema,
-  SwitchViewMessageSchema,
-} from '../commonViewMessages';
+import { SwitchViewMessageSchema } from '../commonViewMessages';
 import { commandOnly, withFilesArray } from '../messageFactories';
 import {
   CurrentFileTypeSchema,
@@ -37,8 +33,6 @@ const CommonMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.GET_THEME),
   commandOnly(MAIN_VIEW_COMMANDS.GET_DEBUG_MODE),
   SwitchViewMessageSchema,
-  SetThemeMessageSchema,
-  SetDebugModeMessageSchema,
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE),
     text: z.string().min(1),
@@ -65,7 +59,6 @@ const SettingsMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS),
-  commandOnly(MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS),
   OpenAgentSettingsMessageSchema,
   OpenAgentDirectoryMessageSchema,
 ] as const;
@@ -112,7 +105,6 @@ const ExecutionMessages = [
 ] as const;
 
 const FileSelectionMessages = [
-  commandOnly(MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES),
     fileType: ExtendedDocumentFileTypeSchema,
@@ -317,10 +309,6 @@ const HousekeepingMessages = [
   CleanMultipleMessageSchema,
 ] as const;
 
-const NavigationMessages = [
-  commandOnly(MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY),
-] as const;
-
 // Onboarding funnel (PRD: agent-native onboarding). Common commands stay
 // shared where possible; ChatGPT sign-in and State 1 setup actions need
 // explicit messages because they update the funnel after host-side effects.
@@ -345,7 +333,6 @@ export const MainViewInboundMessageSchema = z.discriminatedUnion('command', [
   ...BannerMessages,
   ...GitDiffMessages,
   ...HousekeepingMessages,
-  ...NavigationMessages,
   ...OnboardingMessages,
 ]);
 

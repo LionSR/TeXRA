@@ -10,8 +10,6 @@ import type { MainViewInboundHost } from '../mainViewInboundContext';
 
 export function createDocumentHandlers(host: MainViewInboundHost) {
   return {
-    [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: () =>
-      host.fileManager.handleEditedFileSelection(),
     [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: (m) =>
       host.fileManager.handleSelectMultipleFiles(m),
 

@@ -122,7 +122,6 @@ interface ProgressViewRunCommandActions {
 
 export interface ProgressViewFileCommandActions {
   openFile(file: string, line?: number): Promise<void> | void;
-  openFileCompile(file: string): Promise<void> | void;
   openTaskStorage(stream: StreamTabId): Promise<void> | void;
   compareOriginal(file: string, base?: string): Promise<void> | void;
   comparePrevious(
@@ -253,8 +252,6 @@ export function createProgressViewCommandHandlers(
 
     [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: (data) =>
       file.openFile(data.file, data.line),
-    [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]: (data) =>
-      file.openFileCompile(data.file),
     [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]: (data) =>
       file.openTaskStorage(data.stream),
     [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]: (data) =>
@@ -541,11 +538,6 @@ export function createProgressViewSecondTierHandlers(
           );
           return;
       }
-    },
-
-    // ── Show info ──
-    [CMD.SHOW_INFORMATION_MESSAGE]: async (data) => {
-      await deps.host.showInfo(data.text);
     },
 
     // ── Proposal config restore ──

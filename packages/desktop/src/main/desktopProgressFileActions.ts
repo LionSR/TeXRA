@@ -65,14 +65,6 @@ export class DesktopProgressFileActions {
     private readonly host: DesktopProgressFileActionHost,
   ) {}
 
-  openFileCompile(filePath: string): Promise<void> {
-    return this.ui.openBuildDisplay(
-      path.isAbsolute(filePath)
-        ? createExternalLocation(filePath)
-        : pathToLocation(filePath),
-    );
-  }
-
   async compareFiles(baseFile: string, editedFile: string): Promise<void> {
     await this.ui.openDiff(
       { filePath: baseFile },
