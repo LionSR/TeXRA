@@ -20,7 +20,6 @@ import {
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
-  markOwnedExecutionLeaseUndurable,
   onOwnedExecutionLeaseLost,
   runWithOwnedExecutionLease,
 } from '@agent/storage/executionLease';
