@@ -26,8 +26,6 @@ const mocks = vi.hoisted(() => ({
   setCliApiMode: vi.fn(),
   setCliCodexSubscription: vi.fn(),
   setCliCodingPlanSubscription: vi.fn(),
-  setCliKimiCode: vi.fn(),
-  setCliGlmCodingPlan: vi.fn(),
   setPreferKimiCode: vi.fn(),
   setGLMCodingPlan: vi.fn(),
   updateGlobalState: vi.fn(),
@@ -69,8 +67,6 @@ vi.mock('@cli/runtime/apiAccessMode', async (importActual) => {
 vi.mock('@cli/chat/tui/state/codexSubscription', () => ({
   setCliCodexSubscription: mocks.setCliCodexSubscription,
   setCliCodingPlanSubscription: mocks.setCliCodingPlanSubscription,
-  setCliKimiCode: mocks.setCliKimiCode,
-  setCliGlmCodingPlan: mocks.setCliGlmCodingPlan,
 }));
 
 vi.mock('@utils/config/providerConfig', async (importActual) => {
