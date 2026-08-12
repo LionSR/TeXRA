@@ -37,12 +37,11 @@ import {
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import './WorktreeChip';
-import { formatRelativeTime } from '@shared/utils/string';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { type TeXRAIconName } from '@shared/wa/iconNames';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
-import { formatResultCount } from '@utils/text/stringUtils';
+import { formatRelativeTime, formatResultCount } from '@utils/text/stringUtils';
 import { layoutStyles } from '../styles/logStyles';
 import { streamTabStyles } from './StreamTab.styles';
 import { streamTabsContainerStyles } from './StreamTabsContainer.styles';

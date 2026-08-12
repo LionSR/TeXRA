@@ -1,3 +1,5 @@
+import { intlFormatDistance } from 'date-fns';
+import prettyBytes from 'pretty-bytes';
 import prettyMilliseconds from 'pretty-ms';
 import pluralizeWord from 'pluralize';
 import { serializeError } from 'serialize-error';
@@ -308,4 +310,39 @@ export function formatLocaleTimestamp(ts: number | string): string {
  */
 export function formatWallTimeSeconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
+}
+
+const SHORT_DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/** Calendar-aware "X ago" / "in X" via Intl.RelativeTimeFormat (handles future timestamps too). */
+export function formatRelativeTime(timestamp: number): string {
+  if (!timestamp) return '';
+  return intlFormatDistance(timestamp, Date.now());
+}
+
+/**
+ * Formats a date-parsable value as a compact, locale-aware absolute
+ * timestamp (short month, no seconds) — the shared "list-item timestamp"
+ * shape used across the settingsView History and Memory lists. Returns
+ * `null` for missing/invalid input so callers can supply their own fallback
+ * copy (e.g. an "Updated: unknown" meta-strip entry).
+ */
+export function formatShortDateTime(
+  value: string | number | Date | null | undefined,
+): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return SHORT_DATE_TIME_FORMATTER.format(date);
+}
+
+/** Human-readable byte size (binary units, e.g. `1.5 MiB`). */
+export function formatBytes(bytes: number): string {
+  return prettyBytes(bytes, { binary: true });
 }

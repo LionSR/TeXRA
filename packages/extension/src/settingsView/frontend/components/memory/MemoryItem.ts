@@ -23,12 +23,15 @@ import type { MemoryViewItem } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { markdownStyles } from '@shared/styles/markdownStyles';
-import { formatBytes, formatShortDateTime } from '@shared/utils/string';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
-import { formatResultCount } from '@utils/text/stringUtils';
+import {
+  formatBytes,
+  formatResultCount,
+  formatShortDateTime,
+} from '@utils/text/stringUtils';
 
 @customElement('memory-item')
 export class MemoryItem extends LitElement {

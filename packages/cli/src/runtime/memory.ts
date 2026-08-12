@@ -1,11 +1,11 @@
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import type { MemoryViewItem } from '@shared/schemas';
-import { formatBytes } from '@shared/utils/string';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { loadMemoryPreview } from '@tools/memory/memoryFileSystem';
 import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
 import { filterNotNullish, normalizeFilePath } from '@utils/core';
 import {
+  formatBytes,
   formatLocaleTimestamp,
   truncateSummary,
 } from '@utils/text/stringUtils';
