@@ -444,40 +444,61 @@ function projectProcessOutput(
 // Schema
 // ============================================================================
 
-const ExecutionsToolInputSchema = z.strictObject({
-  /** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/workspace-files/{path} */
-  path: z.string().describe('Path starting with /executions'),
+/** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/workspace-files/{path} */
+const PathFieldSchema = z.string().describe('Path starting with /executions');
 
-  /** Action to perform. */
+const ViewActionSchema = z.strictObject({
+  path: PathFieldSchema,
   action: z
-    .enum(['view', 'wait', 'kill', 'subscribe', 'unsubscribe'])
-    .prefault('view')
-    .describe(
-      'view: read execution data (returns immediately). ' +
-        'wait: wait for a status change on /executions or /executions/{id}, then return the same data as view (avoids sleep-poll loops). ' +
-        'kill: terminate a running execution by ID (use on /executions/{id}). ' +
-        'subscribe: receive future status changes for /executions/{id} as <execution-activity> follow-ups; auto-disposes when the execution finishes or this stream is released. ' +
-        'unsubscribe: stop receiving <execution-activity> follow-ups for /executions/{id}.',
-    ),
+    .literal('view')
+    .describe('Read execution data (returns immediately).'),
 
-  /** Optional line range [start, end] for large outputs (action="view" only). */
+  /** Optional line range [start, end] for large outputs. */
   view_range: ViewRangeSchema.nullish().describe(
-    'Line range [start, end] for paginating file and background-command output (action="view" only). Conversation pagination uses offset and limit.',
+    'Line range [start, end] for paginating file and background-command output. Conversation pagination uses offset and limit.',
   ),
 
-  /** Execution IDs to wait on (action="wait" with /executions only). */
+  /** Zero-based offset for list or conversation pagination. */
+  offset: z
+    .int()
+    .min(0)
+    .nullish()
+    .describe(
+      'Zero-based offset into the executions list or conversation messages. Use with limit on /executions or /executions/{id}/conversation. Default: 0.',
+    ),
+
+  /** Maximum list entries or conversation messages to return. */
+  limit: z
+    .int()
+    .min(1)
+    .max(200)
+    .nullish()
+    .describe(
+      'Max entries or conversation messages to return. Use on /executions or /executions/{id}/conversation. Default: 100, max: 200.',
+    ),
+});
+
+const WaitActionSchema = z.strictObject({
+  path: PathFieldSchema,
+  action: z
+    .literal('wait')
+    .describe(
+      'Wait for a status change on /executions or /executions/{id}, then return the same data as view (avoids sleep-poll loops).',
+    ),
+
+  /** Execution IDs to wait on (with /executions only; ignored on /executions/{id}). */
   ids: z
     .array(ExecutionIdSchema)
     .min(1)
     .max(50)
     .nullish()
     .describe(
-      'List of execution IDs to wait on (action="wait" with /executions only). ' +
+      'List of execution IDs to wait on (with /executions only). ' +
         'Waits for any of the listed executions to change status. ' +
         'If omitted, waits for any active execution.',
     ),
 
-  /** Max seconds to wait (action="wait" only). Default: 300. */
+  /** Max seconds to wait. Default: 300. */
   timeout: z
     .number()
     .finite()
@@ -492,30 +513,77 @@ const ExecutionsToolInputSchema = z.strictObject({
       ),
     )
     .describe(
-      `Max seconds to wait for a status change (action="wait" only). Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}; finite values are clamped to the ${EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS}-${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} range.`,
+      `Max seconds to wait for a status change. Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}; finite values are clamped to the ${EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS}-${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} range.`,
     ),
 
-  /** Zero-based offset for list or conversation pagination (action="view" only). */
+  /** Zero-based offset for the /executions listing returned once the wait resolves. */
   offset: z
     .int()
     .min(0)
     .nullish()
     .describe(
-      'Zero-based offset into the executions list or conversation messages. Use with limit on /executions or /executions/{id}/conversation. Default: 0.',
+      'Zero-based offset into the executions list returned once the wait resolves (with /executions only). Default: 0.',
     ),
 
-  /** Maximum list entries or conversation messages to return (action="view" only). */
+  /** Maximum list entries in the /executions listing returned once the wait resolves. */
   limit: z
     .int()
     .min(1)
     .max(200)
     .nullish()
     .describe(
-      'Max entries or conversation messages to return. Use on /executions or /executions/{id}/conversation. Default: 100, max: 200.',
+      'Max entries in the executions list returned once the wait resolves (with /executions only). Default: 100, max: 200.',
     ),
 });
 
-type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
+const KillActionSchema = z.strictObject({
+  path: PathFieldSchema,
+  action: z
+    .literal('kill')
+    .describe('Terminate a running execution by ID (use on /executions/{id}).'),
+});
+
+const SubscribeActionSchema = z.strictObject({
+  path: PathFieldSchema,
+  action: z
+    .literal('subscribe')
+    .describe(
+      'Receive future status changes for /executions/{id} as <execution-activity> follow-ups; auto-disposes when the execution finishes or this stream is released.',
+    ),
+});
+
+const UnsubscribeActionSchema = z.strictObject({
+  path: PathFieldSchema,
+  action: z
+    .literal('unsubscribe')
+    .describe(
+      'Stop receiving <execution-activity> follow-ups for /executions/{id}.',
+    ),
+});
+
+const ExecutionsToolActionSchema = z.discriminatedUnion('action', [
+  ViewActionSchema,
+  WaitActionSchema,
+  KillActionSchema,
+  SubscribeActionSchema,
+  UnsubscribeActionSchema,
+]);
+
+// Preprocess rather than a per-branch default: z.discriminatedUnion picks a
+// branch by reading the raw `action` value before any field-level default
+// runs, so an omitted `action` (the common "just view this path" call) would
+// otherwise match no branch at all. Defaulting here keeps that call shape
+// working exactly like the pre-refactor `.prefault('view')` did, while every
+// branch below only declares the fields that action actually uses instead of
+// one flat bag of cross-action-optional fields.
+const ExecutionsToolInputSchema = z.preprocess((value) => {
+  if (value && typeof value === 'object' && !('action' in value)) {
+    return { ...value, action: 'view' };
+  }
+  return value;
+}, ExecutionsToolActionSchema);
+
+type ExecutionsToolInput = z.infer<typeof ExecutionsToolActionSchema>;
 
 export class ExecutionsTool extends defineTool({
   name: 'executions',
@@ -547,13 +615,18 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     // /executions - list all executions
     if (!id) {
-      if (input.action === 'subscribe' || input.action === 'unsubscribe') {
+      if (
+        input.action === 'subscribe' ||
+        input.action === 'unsubscribe' ||
+        input.action === 'kill'
+      ) {
         throw new ToolError(
           `action='${input.action}' requires a specific execution: use /executions/{id}.`,
         );
       }
-      if (input.action === 'wait')
+      if (input.action === 'wait') {
         await this.waitForAnyChange(input.timeout, input.ids);
+      }
       return this.listExecutions(input.offset ?? 0, input.limit ?? 100);
     }
 
@@ -561,21 +634,32 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     // /executions/{id} - execution summary or actions
     if (!resource) {
-      // Kill action: terminate a running execution (only valid on /executions/{id})
-      if (input.action === 'kill') {
-        return this.handleKill(executionId);
+      switch (input.action) {
+        case 'kill':
+          return this.handleKill(executionId);
+        case 'subscribe':
+          return this.handleSubscribe(executionId);
+        case 'unsubscribe':
+          return this.handleUnsubscribe(executionId);
+        case 'wait':
+          await this.waitForChange(executionId, input.timeout);
+          return this.showSummary(executionId, {
+            suppressAutoDeliveredSubagentReport: true,
+          });
+        case 'view':
+          return this.showSummary(executionId, {
+            suppressAutoDeliveredSubagentReport: false,
+          });
       }
-      if (input.action === 'subscribe') {
-        return this.handleSubscribe(executionId);
-      }
-      if (input.action === 'unsubscribe') {
-        return this.handleUnsubscribe(executionId);
-      }
-      if (input.action === 'wait')
-        await this.waitForChange(executionId, input.timeout);
-      return this.showSummary(executionId, {
-        suppressAutoDeliveredSubagentReport: input.action === 'wait',
-      });
+    }
+
+    // Sub-resource paths (config, conversation, files, ...) only support
+    // reading — wait/kill/subscribe/unsubscribe operate on /executions or
+    // /executions/{id}, never a deeper resource.
+    if (input.action !== 'view') {
+      throw new ToolError(
+        `action='${input.action}' is only valid on /executions or /executions/{id}; use action='view' to read /executions/${id}/${resource}.`,
+      );
     }
 
     const viewRange = input.view_range ?? undefined;
