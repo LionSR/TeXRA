@@ -11,6 +11,7 @@ import {
   SettingsAgentCatalogController,
   type SettingsAgentCatalogEntry,
 } from '@controllers/settingsView/SettingsAgentCatalogController';
+import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import type { AgentCategory } from '@shared/schemas/agent';
 import {
   AGENT_MODE_PRESETS_BY_ID,
@@ -68,7 +69,6 @@ function createController(options?: {
   enabled?: Partial<Record<AgentCategory, string[] | undefined>>;
   visible?: Partial<Record<AgentCategory, SettingsAgentCatalogEntry[]>>;
   customPresets?: unknown;
-  builtInOrchestratorAgentNames?: readonly string[];
   now?: number;
 }): {
   controller: SettingsAgentCatalogController;
@@ -80,7 +80,6 @@ function createController(options?: {
   return {
     controller: new SettingsAgentCatalogController({
       now: () => options?.now ?? 123,
-      builtInOrchestratorAgentNames: options?.builtInOrchestratorAgentNames,
       state: {
         getEnabledAgentKeys: (category) => enabled[category],
         setEnabledAgentKeys: async (category, enabledKeys) => {
@@ -237,19 +236,16 @@ describe('SettingsAgentCatalogController', () => {
           },
         ],
       },
-      builtInOrchestratorAgentNames: ['orchestrator'],
     });
 
-    assert.deepEqual(controller.getOrchestratorAgentNames(), [
-      'orchestrator',
-      'teamLead',
-    ]);
+    assert.deepEqual(
+      controller.getOrchestratorAgentNames(),
+      [...BUILTIN_TEAM_ROOT_AGENT_NAMES, 'teamLead'].sort(),
+    );
   });
 
   it('selects preset roots without matching arbitrary orchestrator substrings', () => {
-    const { controller } = createController({
-      builtInOrchestratorAgentNames: ['engineer'],
-    });
+    const { controller } = createController();
 
     assert.equal(
       controller.getPresetToolUseRoot([
