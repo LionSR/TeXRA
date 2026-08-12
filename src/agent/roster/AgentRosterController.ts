@@ -74,10 +74,11 @@ export interface AgentRosterSnapshot<
   readonly unresolvedNames: string[];
 }
 
-function allPresets(
-  extra: readonly AgentModePreset[] = [],
-): readonly AgentModePreset[] {
-  return [STARTER_AGENT_MODE_PRESET, ...AGENT_MODE_PRESETS, ...extra];
+interface ResolvedRosterSelection {
+  readonly effectiveSelection: AgentRosterSnapshot['effectiveSelection'];
+  readonly defaultTeamId?: string;
+  readonly missingTeamId?: string;
+  readonly presets: readonly AgentModePreset[];
 }
 
 /**
@@ -139,9 +140,7 @@ function selectedIdentifiers(
     const categorySelection = selection.agentKeys[category];
     return categorySelection === 'all' ? undefined : categorySelection;
   }
-  const preset = allPresets(presets).find(
-    (candidate) => candidate.id === selection.teamId,
-  );
+  const preset = presets.find((candidate) => candidate.id === selection.teamId);
   if (!preset) return undefined;
   return preset.agents[category];
 }
@@ -151,18 +150,17 @@ export class AgentRosterController<
 > {
   constructor(private readonly deps: AgentRosterControllerDeps<Entry>) {}
 
-  /** Host-supplied presets, added to the built-ins by {@link allPresets}. */
-  private extraPresets(): readonly AgentModePreset[] {
-    return this.deps.getPresets?.() ?? [];
-  }
-
   /**
    * Every selectable team preset: built-ins plus the host's custom presets.
    * The one list roster pickers render — a form composing its own preset
    * list can drift from what {@link setTeam} accepts.
    */
   allPresets(): readonly AgentModePreset[] {
-    return allPresets(this.extraPresets());
+    return [
+      STARTER_AGENT_MODE_PRESET,
+      ...AGENT_MODE_PRESETS,
+      ...(this.deps.getPresets?.() ?? []),
+    ];
   }
 
   getSelection(): AgentRosterSelection {
@@ -174,17 +172,86 @@ export class AgentRosterController<
   }
 
   getEffectiveSelection(): AgentRosterSnapshot<Entry>['effectiveSelection'] {
-    const selection = this.getSelection();
-    return this.resolveEffectiveSelection(selection);
+    return this.resolveSelection(this.getSelection()).effectiveSelection;
   }
 
   getVisibleAgents(category: AgentCategory): Entry[] {
-    const effective = this.getEffectiveSelection();
-    const identifiers = selectedIdentifiers(
-      effective,
+    const resolved = this.resolveSelection(this.getSelection());
+    return this.visibleAgents(
+      resolved.effectiveSelection,
       category,
-      this.extraPresets(),
+      resolved.presets,
     );
+  }
+
+  /** Return the effective stored identifiers, including unavailable members. */
+  getEnabledAgentKeys(category: AgentCategory): string[] | undefined {
+    const resolved = this.resolveSelection(this.getSelection());
+    return this.selectionKeys(
+      resolved.effectiveSelection,
+      category,
+      resolved.presets,
+    );
+  }
+
+  snapshot(): AgentRosterSnapshot<Entry> {
+    const selection = this.getSelection();
+    const resolved = this.resolveSelection(selection);
+    const unresolvedNames = AGENT_CATEGORIES.flatMap((category) => {
+      const identifiers = selectedIdentifiers(
+        resolved.effectiveSelection,
+        category,
+        resolved.presets,
+      );
+      if (identifiers === undefined) return [];
+      return identifiers
+        .filter((identifier) => !this.deps.resolveAgent(category, identifier))
+        .map(agentName);
+    });
+    return {
+      selection,
+      effectiveSelection: resolved.effectiveSelection,
+      defaultTeamId: resolved.defaultTeamId,
+      missingTeamId: resolved.missingTeamId,
+      agents: byCategory((category) =>
+        this.visibleAgents(
+          resolved.effectiveSelection,
+          category,
+          resolved.presets,
+        ),
+      ),
+      unresolvedNames: unique(unresolvedNames),
+    };
+  }
+
+  private resolveSelection(
+    selection: AgentRosterSelection,
+  ): ResolvedRosterSelection {
+    const defaultTeamId = this.getDefaultTeamId();
+    const presets = this.allPresets();
+    let teamId: string | undefined;
+    if (selection.kind === 'inherit') teamId = defaultTeamId;
+    if (selection.kind === 'team') teamId = selection.teamId;
+    const missingTeamId =
+      teamId && !presets.some((preset) => preset.id === teamId)
+        ? teamId
+        : undefined;
+    let effectiveSelection: AgentRosterSnapshot['effectiveSelection'];
+    if (selection.kind === 'inherit') {
+      effectiveSelection = teamId ? { kind: 'team', teamId } : { kind: 'all' };
+    } else {
+      effectiveSelection = selection;
+    }
+    if (missingTeamId !== undefined) effectiveSelection = { kind: 'all' };
+    return { effectiveSelection, defaultTeamId, missingTeamId, presets };
+  }
+
+  private visibleAgents(
+    selection: AgentRosterSnapshot['effectiveSelection'],
+    category: AgentCategory,
+    presets: readonly AgentModePreset[],
+  ): Entry[] {
+    const identifiers = selectedIdentifiers(selection, category, presets);
     if (identifiers === undefined) return this.deps.getAgents(category);
 
     const resolved = identifiers
@@ -195,45 +262,12 @@ export class AgentRosterController<
     ];
   }
 
-  /** Return the effective stored identifiers, including unavailable members. */
-  getEnabledAgentKeys(category: AgentCategory): string[] | undefined {
-    return this.selectionKeys(this.getEffectiveSelection(), category);
-  }
-
-  snapshot(): AgentRosterSnapshot<Entry> {
-    const selection = this.getSelection();
-    const effectiveSelection = this.resolveEffectiveSelection(selection);
-    const presets = this.extraPresets();
-    const unresolvedNames = AGENT_CATEGORIES.flatMap((category) => {
-      const identifiers = selectedIdentifiers(
-        effectiveSelection,
-        category,
-        presets,
-      );
-      if (identifiers === undefined) return [];
-      return identifiers
-        .filter((identifier) => !this.deps.resolveAgent(category, identifier))
-        .map(agentName);
-    });
-    return {
-      selection,
-      effectiveSelection,
-      defaultTeamId: this.getDefaultTeamId(),
-      missingTeamId: this.missingTeamId(selection),
-      agents: byCategory((category) => this.getVisibleAgents(category)),
-      unresolvedNames: unique(unresolvedNames),
-    };
-  }
-
   private selectionKeys(
     selection: Exclude<AgentRosterSelection, { readonly kind: 'inherit' }>,
     category: AgentCategory,
+    presets: readonly AgentModePreset[],
   ): string[] | undefined {
-    const identifiers = selectedIdentifiers(
-      selection,
-      category,
-      this.extraPresets(),
-    );
+    const identifiers = selectedIdentifiers(selection, category, presets);
     if (identifiers === undefined) return undefined;
 
     return unique(
@@ -245,44 +279,17 @@ export class AgentRosterController<
     );
   }
 
-  /** Team identity a selection resolves to, following inherit to the default. */
-  private teamIdOf(selection: AgentRosterSelection): string | undefined {
-    if (selection.kind === 'inherit') {
-      return this.getDefaultTeamId();
-    }
-    return selection.kind === 'team' ? selection.teamId : undefined;
-  }
-
-  private hasPreset(teamId: string): boolean {
-    return allPresets(this.extraPresets()).some(
-      (preset) => preset.id === teamId,
-    );
-  }
-
-  private resolveEffectiveSelection(
-    selection: AgentRosterSelection,
-  ): AgentRosterSnapshot<Entry>['effectiveSelection'] {
-    if (selection.kind === 'inherit') {
-      const teamId = this.teamIdOf(selection);
-      if (!teamId) return { kind: 'all' };
-      selection = { kind: 'team', teamId };
-    }
-    if (selection.kind === 'team' && !this.hasPreset(selection.teamId)) {
-      return { kind: 'all' };
-    }
-    return selection;
-  }
-
-  private missingTeamId(selection: AgentRosterSelection): string | undefined {
-    const teamId = this.teamIdOf(selection);
-    if (!teamId) return undefined;
-    return this.hasPreset(teamId) ? undefined : teamId;
-  }
-
-  private effectiveCategorySelection(
+  private categorySelection(
+    resolved: ResolvedRosterSelection,
     category: AgentCategory,
   ): AgentRosterCategorySelection {
-    return this.selectionKeys(this.getEffectiveSelection(), category) ?? 'all';
+    return (
+      this.selectionKeys(
+        resolved.effectiveSelection,
+        category,
+        resolved.presets,
+      ) ?? 'all'
+    );
   }
 
   private materializeCategorySelection(
@@ -309,7 +316,7 @@ export class AgentRosterController<
   }
 
   async setTeam(teamId: string): Promise<void> {
-    const preset = allPresets(this.extraPresets()).find(
+    const preset = this.allPresets().find(
       (candidate) => candidate.id === teamId,
     );
     if (!preset)
@@ -334,12 +341,13 @@ export class AgentRosterController<
     enabledKeys: readonly string[],
   ): Promise<void> {
     await serializeWorkspaceWrite(this.deps.workspaceState, async () => {
+      const resolved = this.resolveSelection(this.getSelection());
       await this.writeSelection({
         kind: 'custom',
         agentKeys: byCategory((candidate) =>
           candidate === category
             ? unique(enabledKeys)
-            : this.effectiveCategorySelection(candidate),
+            : this.categorySelection(resolved, candidate),
         ),
       });
     });
@@ -360,8 +368,9 @@ export class AgentRosterController<
     readonly enabled: boolean;
   }): Promise<void> {
     await serializeWorkspaceWrite(this.deps.workspaceState, async () => {
+      const resolved = this.resolveSelection(this.getSelection());
       const selections = byCategory((category) =>
-        this.effectiveCategorySelection(category),
+        this.categorySelection(resolved, category),
       );
       const target = this.materializeCategorySelection(
         selections[input.category],
@@ -394,10 +403,12 @@ export class AgentRosterController<
     await serializeWorkspaceWrite(this.deps.workspaceState, async () => {
       const selection = this.getSelection();
       if (selection.kind === 'team' && selection.teamId === teamId) {
+        const presets = this.allPresets();
         await this.writeSelection({
           kind: 'custom',
           agentKeys: byCategory(
-            (category) => this.selectionKeys(selection, category) ?? 'all',
+            (category) =>
+              this.selectionKeys(selection, category, presets) ?? 'all',
           ),
         });
       }
@@ -406,7 +417,8 @@ export class AgentRosterController<
   }
 
   async setDefaultTeam(teamId: string): Promise<void> {
-    if (!allPresets().some((preset) => preset.id === teamId)) {
+    const builtInPresets = [STARTER_AGENT_MODE_PRESET, ...AGENT_MODE_PRESETS];
+    if (!builtInPresets.some((preset) => preset.id === teamId)) {
       throw new InvalidAgentTeamError(
         `Only a built-in team can be the user default: ${teamId}`,
       );

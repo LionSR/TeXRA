@@ -308,6 +308,34 @@ describe('AgentRosterController', () => {
     expect(roster.snapshot().missingTeamId).toBe('deleted-team');
   });
 
+  it('builds a snapshot from one coherent preset catalog', async () => {
+    let presetReads = 0;
+    const workspaceState = new FakeStateStore();
+    const roster = controller(workspaceState, {
+      getPresets: () => {
+        presetReads += 1;
+        return presetReads === 1 ? [preset] : [];
+      },
+    });
+    await roster.setTeam(preset.id);
+    presetReads = 0;
+
+    const snapshot = roster.snapshot();
+
+    expect(presetReads).toBe(1);
+    expect(snapshot.effectiveSelection).toEqual({
+      kind: 'team',
+      teamId: preset.id,
+    });
+    expect(snapshot.missingTeamId).toBeUndefined();
+    expect(snapshot.agents.workflow.map((agent) => agent.name)).toEqual([
+      'write',
+    ]);
+    expect(snapshot.agents.toolUse.map((agent) => agent.name)).toEqual([
+      'lead',
+    ]);
+  });
+
   it('materializes an active custom team before deleting its preset', async () => {
     let presets: AgentModePreset[] = [preset];
     const workspaceState = new FakeStateStore();
