@@ -5,6 +5,12 @@ import {
   migrateCopilotModelRouteSelections,
   refreshModelListStateIfNeeded,
 } from '@model/modelListRefresh';
+import {
+  computeModelListVersion,
+  MODEL_LIST_VERSION,
+  PREFERRED_DEFAULT_MODELS,
+} from '@model/modelOptionsBasic';
+import { staticModelConfigEntries } from '@model/runtimeModelRegistry';
 
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
@@ -26,13 +32,39 @@ function enabledModels(state: FakeStateStore): string[] {
  * `previousVersion`.
  */
 describe('refreshModelListStateIfNeeded', () => {
-  it('strips a retired model even when previousVersion is already a hash-derived value past the legacy migration threshold', async () => {
+  it('reconciles when a non-preferred model retires in a catalogue update', async () => {
+    expect(MODEL_CONFIGS.kimi2?.retired).toBe(true);
+    const previousCatalogue = staticModelConfigEntries().map(
+      ([model, config]) =>
+        [
+          model,
+          model === 'kimi2' ? { ...config, retired: false } : config,
+        ] as const,
+    );
+    const previousVersion = computeModelListVersion(
+      PREFERRED_DEFAULT_MODELS,
+      previousCatalogue,
+    );
+    expect(previousVersion).toBe(MODEL_LIST_VERSION);
+
+    const state = new FakeStateStore({
+      [GlobalStateKey.MODEL_LIST_VERSION]: previousVersion,
+      [GlobalStateKey.ENABLED_MODELS]: ['opus5T', 'kimi2'],
+    });
+
+    const result = await refreshModelListStateIfNeeded(state);
+
+    expect(result.skipped).toBe(false);
+    expect(result.added).toEqual([]);
+    expect(result.removed).toContain('kimi2');
+    expect(enabledModels(state)).toEqual(['opus5T']);
+  });
+
+  it('strips a retired model when the preferred-model version is unchanged', async () => {
     expect(MODEL_CONFIGS.grok4?.retired).toBe(true);
 
     const state = new FakeStateStore({
-      // Simulates a user who already reconciled once under the hash-based
-      // scheme (any value > 21, e.g. MODEL_LIST_HASH_BASE + some hash).
-      [GlobalStateKey.MODEL_LIST_VERSION]: 5000,
+      [GlobalStateKey.MODEL_LIST_VERSION]: MODEL_LIST_VERSION,
       [GlobalStateKey.ENABLED_MODELS]: ['opus48T', 'grok4'],
     });
 
