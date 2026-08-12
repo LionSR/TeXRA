@@ -393,7 +393,7 @@ export class WebviewUpdater {
       status: streamState?.phase,
       substate: streamState?.substate,
       userFollowUpSupport: streamInfo.userFollowUpSupport,
-      lastTimestamp: state.streamLogs.getLastTimestamp(streamInfo.name),
+      lastTimestamp: state.streamLogs.getTimestampRange(streamInfo.name).last,
       conversationProgress: current?.conversationProgress,
       stage: current?.stage,
       subagents: current?.subagents,
