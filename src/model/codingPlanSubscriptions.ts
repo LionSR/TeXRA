@@ -40,9 +40,9 @@ async function isGlmCodingPlanActive(modelId: string): Promise<boolean> {
     return false;
   }
   const includedAccess = includedModelAccess();
-  await includedAccess.canUseServerSideKeys();
   if (
-    includedAccess.shouldUseServerSideKeysSync(config.provider, config.name)
+    includedAccess.getUseIncludedModelAccess() &&
+    (await includedAccess.canUseServerSideKeys())
   ) {
     return false;
   }

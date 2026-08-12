@@ -19,6 +19,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { setProviderEndpoint } from '@utils/config/providerConfig';
 
 describe('coding-plan subscription runtime', () => {
+  let includedAccessEnabled = false;
   let includedAccessAvailable = false;
   let relayServesModel = false;
 
@@ -32,11 +33,13 @@ describe('coding-plan subscription runtime', () => {
   });
 
   beforeEach(() => {
+    includedAccessEnabled = false;
     includedAccessAvailable = false;
     relayServesModel = false;
     invalidateApiKeyCache();
     setIncludedModelAccess({
       ...includedModelAccess(),
+      getUseIncludedModelAccess: () => includedAccessEnabled,
       canUseServerSideKeys: async () => includedAccessAvailable,
       shouldUseServerSideKeysSync: () => relayServesModel,
     });
@@ -88,16 +91,26 @@ describe('coding-plan subscription runtime', () => {
       descriptor: { id: 'glmCodingPlan' },
     });
 
+    includedAccessEnabled = true;
     relayServesModel = true;
     includedAccessAvailable = true;
 
     await expect(activeCodingPlanForModel('glm52')).resolves.toBeUndefined();
   });
 
-  it('reports the GLM plan when included access does not serve that model tier', async () => {
+  it('does not report the GLM plan when included access rejects the model tier', async () => {
     await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+    includedAccessEnabled = true;
     includedAccessAvailable = true;
     relayServesModel = false;
+
+    await expect(activeCodingPlanForModel('glm52')).resolves.toBeUndefined();
+  });
+
+  it('reports the GLM plan when included access is disabled', async () => {
+    await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+    includedAccessEnabled = false;
+    includedAccessAvailable = true;
 
     await expect(activeCodingPlanForModel('glm52')).resolves.toMatchObject({
       descriptor: { id: 'glmCodingPlan' },
