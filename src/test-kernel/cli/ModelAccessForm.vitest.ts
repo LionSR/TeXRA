@@ -90,13 +90,14 @@ describe('ModelAccessForm status', () => {
         preferences: {
           chatGpt: 'on',
           grok: 'off',
-          kimiCode: 'on',
-          glmCode: 'off',
+        },
+        codingPlans: {
+          kimiCode: { preferred: true, keySet: true },
+          glmCodingPlan: { preferred: false, keySet: false },
         },
         chatGptSignedIn: true,
         grokSignedIn: false,
         chatGptAccountLabel: 'user@example.com',
-        kimiCodeKeySet: true,
         texraSignedIn: true,
       },
       lines: [],

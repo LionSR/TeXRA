@@ -142,33 +142,34 @@ function subscriptionPreference(
   return { kind: 'subscription-preference', provider, state } as const;
 }
 
-function expectedAccessStatus(overrides: Record<string, unknown>) {
-  const status = {
+function expectedAccessStatus(
+  overrides: Record<string, unknown>,
+  plans: {
+    kimiPreferred?: boolean;
+    kimiKeySet?: boolean;
+    glmPreferred?: boolean;
+    glmKeySet?: boolean;
+  } = {},
+) {
+  return {
     preferences: {
       chatGpt: 'off',
       grok: 'off',
-      kimiCode: 'off',
-      glmCode: 'off',
     },
     chatGptSignedIn: false,
     chatGptAccountLabel: undefined,
     grokSignedIn: false,
     grokAccountLabel: undefined,
-    kimiCodeKeySet: false,
-    glmKeySet: false,
     personalKeyProviders: [],
     ...overrides,
-  };
-  return {
-    ...status,
     codingPlans: {
       glmCodingPlan: {
-        preferred: status.preferences.glmCode === 'on',
-        keySet: status.glmKeySet === true,
+        preferred: plans.glmPreferred ?? false,
+        keySet: plans.glmKeySet ?? false,
       },
       kimiCode: {
-        preferred: status.preferences.kimiCode === 'on',
-        keySet: status.kimiCodeKeySet === true,
+        preferred: plans.kimiPreferred ?? false,
+        keySet: plans.kimiKeySet ?? false,
       },
     },
   };
@@ -364,8 +365,6 @@ describe('CLI model access routes', () => {
         preferences: {
           chatGpt: 'on',
           grok: 'off',
-          kimiCode: 'off',
-          glmCode: 'off',
         },
         chatGptSignedIn: true,
         chatGptAccountLabel: 'user@example.com',
@@ -379,8 +378,6 @@ describe('CLI model access routes', () => {
         preferences: {
           chatGpt: 'on',
           grok: 'off',
-          kimiCode: 'off',
-          glmCode: 'off',
         },
       }),
     );
@@ -393,29 +390,27 @@ describe('CLI model access routes', () => {
     mocks.getPreferKimiCode.mockReturnValue(true);
 
     await expect(readCliModelAccessStatus('personal')).resolves.toEqual(
-      expectedAccessStatus({
-        apiFallback: 'personal',
-        preferences: {
-          chatGpt: 'off',
-          grok: 'off',
-          kimiCode: 'on',
-          glmCode: 'off',
+      expectedAccessStatus(
+        {
+          apiFallback: 'personal',
+          preferences: {
+            chatGpt: 'off',
+            grok: 'off',
+          },
         },
-        kimiCodeKeySet: true,
-      }),
+        { kimiPreferred: true, kimiKeySet: true },
+      ),
     );
 
     await expect(readCliModelAccessStatus('included')).resolves.toMatchObject({
       apiFallback: 'included',
-      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'on' },
-      kimiCodeKeySet: true,
+      codingPlans: { kimiCode: { preferred: true, keySet: true } },
     });
 
     mocks.apiKeyExists.mockResolvedValue(false);
     await expect(readCliModelAccessStatus('personal')).resolves.toMatchObject({
       apiFallback: 'personal',
-      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'on' },
-      kimiCodeKeySet: false,
+      codingPlans: { kimiCode: { preferred: true, keySet: false } },
     });
   });
 
@@ -493,27 +488,21 @@ describe('CLI model access routes', () => {
     mocks.getGLMCodingPlan.mockReturnValue(true);
 
     await expect(readCliModelAccessStatus('personal')).resolves.toEqual(
-      expectedAccessStatus({
-        apiFallback: 'personal',
-        preferences: {
-          chatGpt: 'off',
-          grok: 'off',
-          kimiCode: 'off',
-          glmCode: 'on',
+      expectedAccessStatus(
+        {
+          apiFallback: 'personal',
+          preferences: {
+            chatGpt: 'off',
+            grok: 'off',
+          },
         },
-        glmKeySet: true,
-      }),
+        { glmPreferred: true, glmKeySet: true },
+      ),
     );
 
     await expect(readCliModelAccessStatus('included')).resolves.toMatchObject({
       apiFallback: 'included',
-      preferences: {
-        chatGpt: 'off',
-        grok: 'off',
-        kimiCode: 'off',
-        glmCode: 'on',
-      },
-      glmKeySet: true,
+      codingPlans: { glmCodingPlan: { preferred: true, keySet: true } },
     });
   });
 
@@ -690,8 +679,6 @@ describe('CLI model access routes', () => {
     expect(status.preferences).toEqual({
       chatGpt: 'on',
       grok: 'off',
-      kimiCode: 'on',
-      glmCode: 'off',
     });
     const descriptions = Object.fromEntries(
       buildCliModelAccessItems({ kind: 'loaded', access: status })
