@@ -37,7 +37,6 @@ const mocks = vi.hoisted(() => ({
   disposeHostInteractions: vi.fn(),
   prepareInteractivePrompt: vi.fn(),
   readCliRunOutcome: vi.fn(),
-  releaseExecutionLeaseAfterArtifacts: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
   finalizeExecution: vi.fn(),
@@ -81,11 +80,6 @@ async function installStoragePlatform(): Promise<void> {
 
 vi.mock('@agent/runtime/runAgent', () => ({
   runAgent: mocks.runAgent,
-}));
-
-vi.mock('@agent/runtime/executionOwnership', () => ({
-  releaseExecutionLeaseAfterArtifacts:
-    mocks.releaseExecutionLeaseAfterArtifacts,
 }));
 
 vi.mock('@agent/storage', async (importOriginal) => ({
@@ -211,7 +205,6 @@ function stubRunExecutionDeps(): void {
     close: mocks.close,
   });
   mocks.readCliRunOutcome.mockResolvedValue('completed');
-  mocks.releaseExecutionLeaseAfterArtifacts.mockResolvedValue(undefined);
   mocks.finalizeExecution.mockResolvedValue({
     status: 'durable',
     outcomePersisted: true,
@@ -794,10 +787,11 @@ describe('executeCliRequest', () => {
     async ({ options }) => {
       const { platform, executeCliRequest } = await installFakePlatform();
       const { flushSpy } = await spyOnTranscriptFlush();
-      mocks.releaseExecutionLeaseAfterArtifacts.mockImplementationOnce(
-        async (session, executionId) => session.flushArtifacts(executionId),
-      );
-      const runWithOwnership = vi.fn((operation: () => unknown) => operation());
+      const { acquireFreshExecutionLease, captureOwnedExecutionLease } =
+        await import('@agent/storage/executionLease');
+      const executionId = 'exec-1' as ExecutionId;
+      await acquireFreshExecutionLease(executionId);
+      const runWithOwnership = captureOwnedExecutionLease(executionId);
       let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
       const hangingRun = stubHangingRun((options) => {
         publishLeaseScope = options.onExecutionLeaseAcquired;
@@ -808,11 +802,9 @@ describe('executeCliRequest', () => {
       const shutdown = platform.lifecycle.runShutdown();
       await Promise.resolve();
       expect(mocks.finalizeExecution).not.toHaveBeenCalled();
-      publishLeaseScope?.(runWithOwnership, 'exec-1' as ExecutionId);
+      publishLeaseScope?.(runWithOwnership, executionId);
       await shutdown;
 
-      expect(runWithOwnership).toHaveBeenCalledOnce();
-      expect(mocks.releaseExecutionLeaseAfterArtifacts).toHaveBeenCalledOnce();
       expect(flushSpy).toHaveBeenCalledOnce();
       expect(mocks.finalizeExecution).toHaveBeenCalledWith({
         executionId: 'exec-1',
@@ -904,14 +896,15 @@ describe('executeCliRequest', () => {
   it('reports a shutdown artifact drain failure once', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();
     const artifactError = new Error('shutdown transcript flush failed');
-    mocks.releaseExecutionLeaseAfterArtifacts.mockRejectedValueOnce(
-      artifactError,
-    );
+    const { flushSpy } = await spyOnTranscriptFlush();
+    flushSpy.mockRejectedValueOnce(artifactError);
+    const { acquireFreshExecutionLease, captureOwnedExecutionLease } =
+      await import('@agent/storage/executionLease');
+    const executionId = 'exec-1' as ExecutionId;
+    await acquireFreshExecutionLease(executionId);
+    const runWithOwnership = captureOwnedExecutionLease(executionId);
     const hangingRun = stubHangingRun((options) => {
-      options.onExecutionLeaseAcquired?.(
-        (operation: () => unknown) => operation(),
-        'exec-1' as ExecutionId,
-      );
+      options.onExecutionLeaseAcquired?.(runWithOwnership, executionId);
     });
 
     const run = executeCliRequest(baseRequest(), cliContext(), {
