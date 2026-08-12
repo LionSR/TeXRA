@@ -2,11 +2,8 @@
 import * as nodePath from 'node:path';
 
 // Local imports
+import { teardownDefaultSession, tryDefaultSession } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import {
-  teardownDefaultSession,
-  tryDefaultSession,
-} from '@agent/runtime/SessionHandle';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';

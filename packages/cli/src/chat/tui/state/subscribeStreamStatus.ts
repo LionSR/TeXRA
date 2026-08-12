@@ -1,6 +1,6 @@
 // Mirror canonical session status facts into the per-stream status signal.
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime';
 import {
   isTerminalOutcomePhase,
   isTranscriptSettlementPhase,

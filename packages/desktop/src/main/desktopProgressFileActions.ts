@@ -84,7 +84,7 @@ export class DesktopProgressFileActions {
   async runMergeFile(baseFile: string, editedFile: string): Promise<void> {
     const [{ getHelperModelName }, { validateExecutionRequest }] =
       await Promise.all([
-        import('@agent/runtime/helperModelName'),
+        import('@agent/runtime'),
         import('@agent/core/state/executionRequests'),
       ]);
     const validation = validateExecutionRequest({

@@ -1,10 +1,10 @@
 import { createChannelTrace } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
-} from '@agent/runtime/SessionResumeRetrieval';
+} from '@agent/runtime';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';

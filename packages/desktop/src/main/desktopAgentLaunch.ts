@@ -1,8 +1,10 @@
+import {
+  selectAutoOpenFinalOutput,
+  type AgentRunHandle,
+  type ModelHandlerCompatibilityKey,
+  type SessionHandle,
+} from '@agent/runtime';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
-import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
-import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
 import type { RequestOpenFilePayload } from '@shared/schemas';
 import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import type { RegisteredToolName } from '@tools/registry';
@@ -45,7 +47,7 @@ export async function launchDesktopAgent(
   context: DesktopAgentLaunchContext,
   options: DesktopAgentLaunchOptions = {},
 ): Promise<void> {
-  const { runAgent } = await import('@agent/runtime/runAgent');
+  const { runAgent } = await import('@agent/runtime');
   await runAgent(request, {
     session: context.session,
     runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,

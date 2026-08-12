@@ -2,12 +2,12 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
 import {
+  defaultSession,
+  resumeQueuedToolUseFromResumeData,
   retrieveSessionResumeData,
   type ToolUseResumeData,
-} from '@agent/runtime/SessionResumeRetrieval';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+} from '@agent/runtime';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
