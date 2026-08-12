@@ -4,7 +4,11 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import type { CliContext } from '@cli/runtime/cliContext';
+import {
+  acquireFreshExecutionLease,
+  releaseOwnedExecutionLease,
+} from '@agent/storage/executionLease';
+import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import type { ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -16,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   initializeHeadlessTranscriptSession: vi.fn(),
   readConfig: vi.fn(),
   readMeta: vi.fn(),
+  resolveCliLaunchAgent: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   runChat: vi.fn(),
   writeTextStderr: vi.fn(),
@@ -31,6 +36,10 @@ vi.mock('@cli/runtime/initPlatform', () => ({
 
 vi.mock('@cli/runtime/logSinks', () => ({
   writeTextStderr: mocks.writeTextStderr,
+}));
+
+vi.mock('@cli/runtime/agents', () => ({
+  resolveCliLaunchAgent: mocks.resolveCliLaunchAgent,
 }));
 
 vi.mock('@agent/storage', async (importActual) => ({
@@ -115,6 +124,10 @@ describe('runResumeExecution', () => {
     });
     mocks.readConfig.mockResolvedValue(TOOL_USE_CONFIG);
     mocks.readMeta.mockResolvedValue(STAMPED_META);
+    mocks.resolveCliLaunchAgent.mockResolvedValue({
+      name: 'correct',
+      category: AgentCategory.Workflow,
+    });
     mocks.retrieveSessionResumeData.mockResolvedValue(
       createToolUseResumeData({
         executionId: EXECUTION_ID,
@@ -174,7 +187,23 @@ describe('runResumeExecution', () => {
         modelHandlerCompatibilityKey: 'anthropic',
       }),
     );
+    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('correct', 'run');
     expect(mocks.runChat).not.toHaveBeenCalled();
+  });
+
+  it('reports a missing workflow agent as a usage error', async () => {
+    mocks.readConfig.mockResolvedValue(WORKFLOW_CONFIG);
+    mocks.resolveCliLaunchAgent.mockRejectedValue(
+      new CliUsageError('Agent not found: correct.'),
+    );
+
+    await expect(run(cliContext())).resolves.toBe(2);
+
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'Agent not found: correct.',
+    );
+    expect(mocks.initializeHeadlessTranscriptSession).not.toHaveBeenCalled();
+    expect(mocks.executeCliWorkflowConfig).not.toHaveBeenCalled();
   });
 
   it('rejects tool-use resume when the context says stdout is not a TTY', async () => {
@@ -232,6 +261,20 @@ describe('runResumeExecution', () => {
       `Execution ${EXECUTION_ID} cannot be resumed (it completed or was cleared).`,
     );
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
+  });
+
+  it('reports a live execution instead of failing silently', async () => {
+    await acquireFreshExecutionLease(EXECUTION_ID);
+    try {
+      await expect(run(cliContext())).resolves.toBe(2);
+
+      expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+        `Execution ${EXECUTION_ID} is active in TeXRA.`,
+      );
+      expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
+    } finally {
+      await releaseOwnedExecutionLease(EXECUTION_ID);
+    }
   });
 
   it('reports empty retrieval as not resumable', async () => {

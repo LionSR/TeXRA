@@ -13,6 +13,9 @@ import type { ValidatedExecutionRequest } from '@agent/core/state/executionReque
 import {
   AgentCategory,
   RUN_OUTCOME,
+  type ExecutionId,
+  type RunOutcome,
+  type StreamTabId,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
@@ -49,7 +52,10 @@ export interface RunAgentOptions extends Pick<
   /** Persist host-owned final artifacts while this run still owns its lease. */
   beforeLeaseRelease?: () => Promise<void>;
   /** Bind host callbacks that may run outside the agent's async context. */
-  onExecutionLeaseAcquired?: (scope: OwnedExecutionLeaseScope) => void;
+  onExecutionLeaseAcquired?: (
+    scope: OwnedExecutionLeaseScope,
+    executionId: ExecutionId,
+  ) => void;
   registerExecution?: boolean;
   /** Recheck canonical admission atomically while acquiring a resumed lease. */
   canAcquireResumeLease?: () => boolean | Promise<boolean>;
@@ -125,12 +131,14 @@ export async function runAgent(
   }
 
   const runWithOwnership = captureOwnedExecutionLease(executionId);
-  onExecutionLeaseAcquired?.(runWithOwnership);
+  onExecutionLeaseAcquired?.(runWithOwnership, executionId);
   return await runWithOwnership(async () => {
     let lifecycleStarted = false;
     let runResult: AgentFlowResult | undefined;
     let runFailure: { error: unknown } | undefined;
     let artifactsDurable = false;
+    let previousTerminalOutcome: RunOutcome | undefined;
+    let resumedStreamId: StreamTabId | undefined;
     const callerOnRun = executeAgentOptions.onRun;
     try {
       try {
@@ -138,10 +146,13 @@ export async function runAgent(
         // previous run persisted; drop them before this run writes anything a
         // reader would project them onto.
         if (!shouldRegister) {
-          await clearTerminalExecutionState(executionId);
+          const cleared = await clearTerminalExecutionState(executionId);
+          resumedStreamId = cleared.streamId;
+          previousTerminalOutcome = cleared.previousOutcome;
         }
         const result = await executeAgent(config, executionId, {
           ...executeAgentOptions,
+          streamTabIdOverride: resumedStreamId,
           userFollowUpSupport,
           onRun: async (handle) => {
             lifecycleStarted = true;
@@ -154,14 +165,17 @@ export async function runAgent(
         runResult = result;
       } catch (error) {
         runFailure = { error };
-        if (shouldRegister && !lifecycleStarted) {
+        const restoredOutcome = shouldRegister
+          ? RUN_OUTCOME.FAILED
+          : previousTerminalOutcome;
+        if (!lifecycleStarted && restoredOutcome !== undefined) {
           // finalizeExecutionWithLease already marks the owned lease undurable
           // when the terminal status did not reach disk; this site only needs
           // to fold the persistence error into the run failure.
           const finalization = await finalizeExecutionWithLease({
             executionId,
-            outcome: RUN_OUTCOME.FAILED,
-            flowRecord: 'delete',
+            outcome: restoredOutcome,
+            flowRecord: shouldRegister ? 'delete' : 'preserve',
           });
           let finalizationError: unknown;
           if ('thrownError' in finalization) {
@@ -173,7 +187,7 @@ export async function runAgent(
             runFailure = {
               error: new AggregateError(
                 [error, finalizationError],
-                `Execution ${executionId} failed before lifecycle startup and its error status could not be persisted`,
+                `Execution ${executionId} failed before lifecycle startup and its terminal status could not be persisted`,
               ),
             };
           }
