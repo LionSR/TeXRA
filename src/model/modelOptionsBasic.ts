@@ -133,10 +133,10 @@ export function computeModelListVersion(
 ): number {
   const catalogueByModel = new Map(catalogue);
   const entries = preferred
+    .toSorted()
     .map(
       (model) => `${model}:${modelStatus(catalogueByModel.get(model) ?? {})}`,
-    )
-    .toSorted();
+    );
   return MODEL_LIST_HASH_BASE + fnv1aHash(entries.join(','));
 }
 

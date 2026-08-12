@@ -134,6 +134,10 @@ describe('computeModelListVersion', () => {
     );
   });
 
+  it('preserves the established hash for the current preferred set', () => {
+    expect(MODEL_LIST_VERSION).toBe(494_338_219);
+  });
+
   it('does not change when a non-preferred catalogue model retires', () => {
     const activeCatalogue = [
       ['preferred', {}],
