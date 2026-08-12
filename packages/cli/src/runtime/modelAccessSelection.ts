@@ -1,7 +1,11 @@
 import { getCodexStatus } from '@auth/codex';
 import { getXaiStatus, xaiAccountLabel } from '@auth/xai';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
-import { apiKeyExists, configuredApiKeyProviders } from '@model/apiProviders';
+import {
+  apiKeyExists,
+  configuredApiKeyProviders,
+  type ApiProvider,
+} from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { SubscriptionPreferenceUpdate } from '@model/subscriptionPreference';
 import {
@@ -147,7 +151,7 @@ const CHATGPT_ADAPTER: SubscriptionAccessAdapter = {
 };
 
 interface KeyedSubscriptionAdapter {
-  readonly keyName: string;
+  readonly keyName: ApiProvider;
   readonly missingKeyHint: string;
   readonly disabledMessage: string;
   readonly enabledMessage: (apiMode: ApiAccessMode) => string;

@@ -138,19 +138,22 @@ async function runLogin(
   if (init.device) {
     return runDeviceLogin(context);
   }
-  if (!isOAuthProvider(init.provider)) {
-    writeTextStderr(unsupportedLoginProviderMessage(init.provider));
+  // Bind before the type-guard so TS narrows a local (property access on
+  // `init.provider` is not re-narrowed across later statements).
+  const provider = init.provider;
+  if (!isOAuthProvider(provider)) {
+    writeTextStderr(unsupportedLoginProviderMessage(provider));
     return CliExitCode.Usage;
   }
   await initCliPlatform({ ...context, quietLogs: true });
   const accountWarning = githubSelectAccountWarning(init);
   if (accountWarning) writeTextStderr(accountWarning);
   if (context.outputFormat === 'text' && !init.noBrowser) {
-    writeTextStdout(`Opening browser for TeXRA ${init.provider} sign-in...`);
+    writeTextStdout(`Opening browser for TeXRA ${provider} sign-in...`);
   }
   const loginResult = await withCliAuthError(() =>
     signInCliSupabase({
-      provider: init.provider,
+      provider,
       openBrowser: !init.noBrowser,
       selectAccount: init.selectAccount,
       loginHint: init.loginHint,

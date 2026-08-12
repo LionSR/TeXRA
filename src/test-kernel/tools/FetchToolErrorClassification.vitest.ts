@@ -47,7 +47,8 @@ describe('toFetchToolError', () => {
     );
 
     const response = new Response('', { status: 503 });
-    const httpError = new HTTPError(response, request, {});
+    // ky requires NormalizedOptions; tests only need status/request metadata.
+    const httpError = new HTTPError(response, request, {} as never);
     expect(toFetchToolError(httpError, MESSAGES).message).toBe('HTTP 503');
   });
 });

@@ -10,6 +10,7 @@ import {
   commandCatalog,
   commandKeybindings,
   packageCommandContributions,
+  type CommandCatalogEntry,
 } from '@shared/commands/catalog';
 
 interface PackageJson {
@@ -49,9 +50,11 @@ describe('commandCatalog', () => {
   // (commandKeybindingOrder) in catalog.ts; this guards the silent-drift case
   // where a catalog entry gains a keybinding without being added to that list.
   it('covers every catalog entry that carries a keybinding', () => {
-    const keybindingEntryCount = commandCatalog.filter(
-      (entry) => entry.keybinding !== undefined,
-    ).length;
+    // `as const satisfies` yields a union of per-entry shapes; only some
+    // members declare `keybinding`, so widen to the catalog entry surface.
+    const keybindingEntryCount = (
+      commandCatalog as readonly CommandCatalogEntry[]
+    ).filter((entry) => entry.keybinding !== undefined).length;
     assert.strictEqual(keybindingEntryCount, commandKeybindings.length);
   });
 });
