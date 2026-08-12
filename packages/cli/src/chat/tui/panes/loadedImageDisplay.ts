@@ -1,10 +1,10 @@
 // Local imports - shared formatting
+import { safeTerminalText } from '@cli/runtime/terminalText';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { collapseWhitespace, formatBytes } from '@utils/text/stringUtils';
 
 // Local imports - CLI TUI rendering
 import {
-  safeTerminalText,
   textDisplayWidth,
   truncateSummaryToWidth,
   truncateToWidth,
