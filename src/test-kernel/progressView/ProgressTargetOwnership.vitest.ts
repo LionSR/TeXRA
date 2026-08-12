@@ -114,6 +114,7 @@ function createProvider() {
     streamStatus: { getAllStreamStates: () => new Map() },
   };
   injected.backend = {
+    activateStream: vi.fn(async () => false),
     approvalHandlers: {},
     syncRenderedStreams: vi.fn(async () => {}),
   };

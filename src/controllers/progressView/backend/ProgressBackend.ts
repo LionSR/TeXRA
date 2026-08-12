@@ -185,27 +185,33 @@ export class ProgressBackend {
 
     const hasStreams = this.state.streamLogs.keys().length > 0;
     if (!activeStream && hasStreams) return;
-    await this.syncActiveStream(activeStream, false, false);
+    await this.syncActiveStream(activeStream, {
+      notifyActivation: false,
+    });
   }
 
   /** Select and render one existing stream without rebuilding the tab list. */
   async activateStream(stream: StreamTabId): Promise<boolean> {
     if (!this.state.streamLogs.has(stream)) return false;
     this.state.switchActiveStream(stream);
-    await this.syncActiveStream(stream, true, true);
+    await this.syncActiveStream(stream, {
+      notifyActivation: true,
+    });
     return true;
   }
 
   private async syncActiveStream(
     stream: StreamTabId | '',
-    includeActiveState: boolean,
-    notifyActivation: boolean,
+    options: {
+      notifyActivation: boolean;
+    },
   ): Promise<void> {
     if (!this.litRenderer.isAvailable()) return;
     if (stream) await this.state.streamLogs.ensureLoaded(stream);
     if (this.state.activeStream !== stream) return;
-    if (notifyActivation) this.litRenderer.onActiveStreamChanged(stream);
-    this.litRenderer.syncStreamContent(stream, { includeActiveState });
+    if (options.notifyActivation)
+      this.litRenderer.onActiveStreamChanged(stream);
+    this.litRenderer.syncStreamContent(stream, { includeActiveState: true });
   }
 
   /**
@@ -346,7 +352,9 @@ export class ProgressBackend {
       if (notifyActivation) {
         await this.activateStream(nextActive);
       } else {
-        await this.syncActiveStream(nextActive, true, false);
+        await this.syncActiveStream(nextActive, {
+          notifyActivation: false,
+        });
       }
     } else {
       // The deleted stream was not the active one, so only the stream list

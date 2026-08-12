@@ -1070,10 +1070,11 @@ export class DesktopProgressBridge {
   }
 
   private async syncRenderedStreams(syncActiveStream: boolean): Promise<void> {
+    const activeStream = this.state.activeStream;
     try {
       await this.backend.syncRenderedStreams({ syncActiveStream });
     } catch (error) {
-      this.reportTranscriptLoadError(error);
+      this.reportTranscriptLoadError(error, activeStream);
     }
   }
 
@@ -1087,7 +1088,7 @@ export class DesktopProgressBridge {
     try {
       await this.backend.activateStream(streamId);
     } catch (error) {
-      this.reportTranscriptLoadError(error);
+      this.reportTranscriptLoadError(error, streamId);
     }
   }
 
@@ -1114,10 +1115,16 @@ export class DesktopProgressBridge {
     return 'revealed';
   }
 
-  private reportTranscriptLoadError(error: unknown): void {
-    this.logger.error('Failed to load desktop transcript', {
-      data: toLogData(error),
-    });
+  private reportTranscriptLoadError(
+    error: unknown,
+    streamId?: StreamTabId | '',
+  ): void {
+    this.logger.error(
+      `Failed to load desktop transcript${streamId ? ` ${streamId}` : ''}`,
+      {
+        data: toLogData(error),
+      },
+    );
     void this.options.host.showErrorMessage(
       `Transcript load failed: ${toErrorMessage(error)}`,
     );

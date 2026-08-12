@@ -328,7 +328,7 @@ describe('ProgressBackend', () => {
 
   it('preserves a stream switch during active-stream deletion', async () => {
     const target = createIsolatedRecordingBackend();
-    const { backend, lifecycle } = target;
+    const { backend, messages } = target;
     const active = 'active-stream' as StreamTabId;
     const fallback = 'fallback-stream' as StreamTabId;
     const selected = 'selected-during-delete' as StreamTabId;
@@ -347,6 +347,10 @@ describe('ProgressBackend', () => {
     for (const stream of [active, fallback, selected]) {
       backend.state.streamLogs.ensureStream(stream);
     }
+    backend.state.updateStreamMetadata(selected, {
+      agentCategory: AgentCategory.ToolUse,
+    });
+    backend.state.getOrCreateStreamState(selected, AgentCategory.ToolUse);
     backend.state.switchActiveStream(active);
 
     const deletion = backend.deleteStream(active);
@@ -355,6 +359,20 @@ describe('ProgressBackend', () => {
     await deletion;
 
     expect(backend.state.activeStream).toBe(selected);
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+        action: 'render',
+        stream: selected,
+        activeState: expect.any(Object),
+      }),
+    );
+    expect(
+      messages.filter(
+        (message) =>
+          message.command === PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      ),
+    ).toHaveLength(0);
   });
 
   it('cleans every stream and emits one bulk deletion', async () => {

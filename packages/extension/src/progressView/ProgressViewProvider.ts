@@ -315,7 +315,9 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
     void this.backend
       .syncRenderedStreams({ syncActiveStream, theme })
-      .catch((error: unknown) => this.reportTranscriptLoadError(error));
+      .catch((error: unknown) =>
+        this.reportTranscriptLoadError(error, this.state.activeStream),
+      );
   }
 
   public async markWebviewReady(
@@ -364,12 +366,18 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     try {
       await this.backend.activateStream(streamId);
     } catch (error) {
-      this.reportTranscriptLoadError(error);
+      this.reportTranscriptLoadError(error, streamId);
     }
   }
 
-  private reportTranscriptLoadError(error: unknown): void {
-    this.logger.error('Failed to load transcript for display', { data: error });
+  private reportTranscriptLoadError(
+    error: unknown,
+    streamId?: StreamTabId | '',
+  ): void {
+    this.logger.error(
+      `Failed to load transcript for display${streamId ? ` ${streamId}` : ''}`,
+      { data: error },
+    );
     void vscode.window.showErrorMessage(
       'TeXRA could not read this transcript. Select the run again to retry.',
     );
