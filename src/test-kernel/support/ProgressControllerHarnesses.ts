@@ -184,7 +184,7 @@ export function createLifecycleOptions(
     stopStream: vi.fn(),
     cleanupDeletedStream: vi.fn(),
     cleanupDeletedStreams: vi.fn(),
-    rebuildRenderedStreams: vi.fn(),
+    rebuildRenderedStreams: vi.fn(async () => {}),
     notifyDeletionRetained: vi.fn(),
     ...overrides,
   };

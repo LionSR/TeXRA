@@ -11,6 +11,7 @@
       "ephemeral",
       "flush",
       "get",
+      "getSummaryMeta",
       "getTimestampRange",
       "getUnfinishedStreamIds",
       "has",
@@ -20,9 +21,9 @@
       "onChange",
       "open",
       "openOrEphemeral",
-      "openReadOnly",
       "openReadOnlyForStream",
       "readEntries",
+      "recordSummaryMeta",
       "reload",
       "requestEviction"
     ],
