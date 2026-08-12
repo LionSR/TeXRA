@@ -63,10 +63,10 @@ function reconcileEnabledModels(
   // deliberately *not* gated behind a version threshold like the two sweeps
   // above. `reconcileEnabledModels` only ever runs when MODEL_LIST_VERSION
   // has changed (see `refreshModelListStateIfNeeded`), and since #7191 that
-  // version is a hash of the resolved default set: it changes again every
-  // time a future pick quietly retires, at which point the user's persisted
-  // version is already a hash-derived value from a prior run, permanently
-  // past any legacy "< N" gate. Freezing this sweep behind such a gate (it
+  // version hashes the full catalogue lifecycle: it changes whenever any
+  // model retires, including a non-default model a user enabled explicitly.
+  // The user's persisted version may already be permanently past any legacy
+  // "< N" gate. Freezing this sweep behind such a gate (it
   // used to read `previousVersion < 21`, the last hand-bumped version before
   // #7191) would mean it fires exactly once during the pre-#7191 migration
   // and then never again -- silently leaving future retired defaults stuck in

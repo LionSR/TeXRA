@@ -7,7 +7,10 @@ import {
   isExpensiveModel,
   isFastFirstResponseModel,
 } from '@shared/constants/providers';
-import { getRuntimeModelConfig } from './runtimeModelRegistry';
+import {
+  getRuntimeModelConfig,
+  staticModelConfigEntries,
+} from './runtimeModelRegistry';
 import { resolveModelSource } from './openRouterRouting';
 
 /** Return whether the registry marks a model as deprecated. */
@@ -26,21 +29,9 @@ export function isRetiredModel(model: string): boolean {
  * servable. `llm-zoo`'s `ModelConfig` has no "featured"/"default" capability
  * flag to derive this set from directly, so -- the same way
  * `setupModelDefaults.ts` curates one setup-probe model per provider -- this
- * table is hand-maintained. What IS derived from the registry, so this table
- * going stale can never silently ship a dead default, is {@link
- * DEFAULT_MODELS} below: it drops any pick the live registry has since
- * retired or deprecated. {@link MODEL_LIST_VERSION} hashes this table paired
- * with each pick's *live status* -- not the resolved post-filter set -- so
- * either this table changing, or a pick's status quietly transitioning
- * underneath it (active to deprecated, deprecated to retired, or back),
- * changes the reconciliation trigger automatically. Hashing status alongside
- * id matters specifically for the deprecated-to-retired case: a pick already
- * excluded from the resolved set for being deprecated stays excluded once
- * it's retired too, so hashing only the resolved set would never notice that
- * transition -- yet `reconcileEnabledModels`'s unconditional retired-model
- * sweep needs exactly that trigger to strip the now-unservable model from
- * existing users. No maintainer has to remember to hand-bump a version
- * constant either way.
+ * table is hand-maintained. {@link DEFAULT_MODELS} drops picks that the live
+ * registry has retired or deprecated, while {@link MODEL_LIST_VERSION}
+ * includes this membership and every catalogue entry's lifecycle status.
  */
 export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
   'gemini36f',
@@ -122,43 +113,37 @@ function fnv1aHash(input: string): number {
  * way.
  */
 type ModelStatus = 'active' | 'deprecated' | 'retired';
+type ModelLifecycleConfig = Pick<ModelConfig, 'deprecated' | 'retired'>;
+type ModelLifecycleEntry = readonly [string, ModelLifecycleConfig];
 
-function modelStatus(model: string): ModelStatus {
-  if (isRetiredModel(model)) return 'retired';
-  if (isDeprecatedModel(model)) return 'deprecated';
+function modelStatus(config: ModelLifecycleConfig): ModelStatus {
+  if (config.retired) return 'retired';
+  if (config.deprecated) return 'deprecated';
   return 'active';
 }
 
 /**
- * Compute the reconciliation trigger for a preferred-model list: a hash of
- * each pick's id *and* live registry status, sorted so only membership (not
- * order) affects the result. Hashing status alongside id -- rather than
- * hashing only the resolved (post-filter) set -- matters because two picks
- * that both filter out of that set, e.g. one deprecated and one retired,
- * must still produce different hashes: a deprecated pick transitioning to
- * retired needs to change the hash so `reconcileEnabledModels` re-runs and
- * its unconditional retired-model sweep can strip the now-unservable model
- * from existing users. Exported so tests can confirm the trigger actually
- * changes when the registry-derived status does, rather than only asserting
- * today's value.
+ * Compute the reconciliation trigger from preferred membership and the full
+ * catalogue lifecycle. The latter matters because users may have enabled a
+ * non-preferred model that is retired by a later catalogue release.
  */
-export function computeModelListVersion(preferred: readonly string[]): number {
-  const entries = preferred
-    .toSorted()
-    .map((model) => `${model}:${modelStatus(model)}`);
+export function computeModelListVersion(
+  preferred: readonly string[],
+  catalogue: readonly ModelLifecycleEntry[] = staticModelConfigEntries(),
+): number {
+  const entries = [
+    ...preferred.toSorted().map((model) => `preferred:${model}`),
+    ...catalogue.map(
+      ([model, config]) => `catalogue:${model}:${modelStatus(config)}`,
+    ),
+  ].toSorted();
   return MODEL_LIST_HASH_BASE + fnv1aHash(entries.join(','));
 }
 
 /**
  * Reconciliation trigger for the persisted enabled-models list
- * (`modelListRefresh.ts`). Derived from a hash of {@link
- * PREFERRED_DEFAULT_MODELS} paired with each pick's live registry status,
- * instead of a hand-bumped integer, so a registry change that alters what
- * resolves -- a curated pick's status transitioning (including between two
- * statuses that both drop it from {@link DEFAULT_MODELS}, like deprecated to
- * retired), or a maintainer editing {@link PREFERRED_DEFAULT_MODELS} -- is
- * detected automatically on the next launch rather than relying on someone
- * remembering to bump this value.
+ * (`modelListRefresh.ts`). Catalogue lifecycle changes and edits to the
+ * preferred set both change this value automatically.
  */
 export const MODEL_LIST_VERSION: number = computeModelListVersion(
   PREFERRED_DEFAULT_MODELS,
