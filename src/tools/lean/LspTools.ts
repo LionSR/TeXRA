@@ -147,15 +147,29 @@ Tips:
 
     try {
       const services = getLeanLanguageServices();
-      const diagnostics = await services.fetchDiagnosticsForFile(file);
-      if (!diagnostics) {
+      const result = await services.fetchDiagnosticsForFile(file);
+      if (!result.ok) {
+        // The adapter distinguishes a genuinely missing file from a broken or
+        // absent Lean toolchain — only the former is a "could not open file";
+        // the latter gets the same actionable setup guidance as a general
+        // tool failure.
+        if (result.kind === 'toolchain_unavailable') {
+          return errorResult(
+            `Failed to get diagnostics for ${file}: ${result.message}\n\nIn VS Code: install the Lean 4 extension (leanprover.lean4). In CLI/desktop: install elan so that \`lake\` is on PATH, and make sure the file is inside a Lake project (lakefile.lean / lakefile.toml).`,
+            { summary: 'Failed to get diagnostics' },
+          );
+        }
         return errorResult(
           `Could not open file: ${file}\n\nMake sure the file exists and is accessible.`,
           { summary: 'Failed to open file' },
         );
       }
+      const diagnostics = result.diagnostics;
 
-      await services.navigateToFirstError(file, diagnostics);
+      // Host capability: VS Code moves the editor cursor to the first error;
+      // CLI/desktop adapters omit it and this is a no-op rather than a pretend
+      // navigation. The tool result below still carries the diagnostic list.
+      await services.navigateToFirstError?.(file, diagnostics);
 
       const counts = countBySeverity(diagnostics);
       const countsStr = formatCounts(counts);

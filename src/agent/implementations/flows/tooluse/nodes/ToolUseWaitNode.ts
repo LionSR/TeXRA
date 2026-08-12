@@ -8,6 +8,7 @@ import {
   userFollowUpInstruction,
 } from '@agent/followUp/followUpMessages';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
+import { USER_VAR_INSTRUCTION } from '@agent/utils/userVars';
 import { STREAM_PHASE } from '@shared/schemas';
 import { GoalStore, setGoalSessionBashAutoApproval } from '@tools/goal';
 
@@ -186,7 +187,8 @@ export class ToolUseWaitNode<C> extends Node<
     if (!execRes.synthetic) {
       const instruction = userFollowUpInstruction(execRes.followUps);
       if (instruction && shared.stateSlices) {
-        shared.stateSlices.userChannels.transient.INSTRUCTION = instruction;
+        shared.stateSlices.userChannels.transient[USER_VAR_INSTRUCTION] =
+          instruction;
       }
     }
 

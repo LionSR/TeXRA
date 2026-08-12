@@ -78,6 +78,15 @@ interface BackgroundPollOptions<TResponse> {
   readonly formatTimeoutError?: (
     context: BackgroundPollTimeoutContext<TResponse>,
   ) => Error | string;
+  /**
+   * Optional callback invoked (awaited) immediately before a deadline timeout
+   * error is raised. Lets the caller run its own timeout side effects (e.g. a
+   * server-side cancel or dropping pending-id bookkeeping) at the single site
+   * where the timeout is raised, instead of matching the thrown error by
+   * identity in a catch block (which silently skips the side effects if the
+   * error is ever wrapped).
+   */
+  readonly onTimeout?: () => void | Promise<void>;
   /** Provider-specific fields to append to the final polling-finished log. */
   readonly extraFinishData?: (
     response: TResponse,
@@ -185,7 +194,7 @@ export class BackgroundPoller<TResponse> {
     let current = initialResponse;
     let pollCount = 0;
 
-    const throwIfTimedOut = (response: TResponse): void => {
+    const throwIfTimedOut = async (response: TResponse): Promise<void> => {
       const now = Date.now();
       const elapsedMs = now - startTime;
       const timedOut =
@@ -211,6 +220,9 @@ export class BackgroundPoller<TResponse> {
           response,
         }) ??
         `${providerLabel} ${resourceLabel} ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms.`;
+      // Fire the caller's timeout side effects before the error propagates, so
+      // they run even if a caller wraps the thrown error downstream.
+      await options.onTimeout?.();
       throw timeout instanceof Error ? timeout : new Error(timeout);
     };
 
@@ -262,7 +274,7 @@ export class BackgroundPoller<TResponse> {
         }
 
         if (deadlineAtMs !== undefined) signal?.throwIfAborted();
-        throwIfTimedOut(current);
+        await throwIfTimedOut(current);
 
         let retrieved: TResponse;
         try {
@@ -270,13 +282,13 @@ export class BackgroundPoller<TResponse> {
         } catch (err) {
           if (deadlineAtMs !== undefined && !isUserAbort(err)) {
             signal?.throwIfAborted();
-            throwIfTimedOut(current);
+            await throwIfTimedOut(current);
           }
           throw err;
         }
         if (deadlineAtMs !== undefined) {
           signal?.throwIfAborted();
-          throwIfTimedOut(retrieved);
+          await throwIfTimedOut(retrieved);
         }
         current = retrieved;
 

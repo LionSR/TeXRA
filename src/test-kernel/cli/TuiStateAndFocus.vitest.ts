@@ -72,7 +72,7 @@ import {
   chatTuiSigintAction,
   TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
-import { chatTuiFocusedChildFollowUpRoute } from '@cli/chat/tui/runChatTui';
+import { chatTuiFocusedChildFollowUpRoute } from '@cli/chat/tui/chatSubmitDriver';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
   appendLocalAssistantTranscript,

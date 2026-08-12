@@ -77,6 +77,15 @@ const channelTraceMocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
+// terminalPersistence deep-imports finalizeExecution from executionLifecycle
+// (not the `@agent/storage` barrel). Spy only that leaf to avoid re-export
+// recursion through a dual mock.
+vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@agent/storage/executionLifecycle')
+  >()),
+  finalizeExecution: storageMocks.finalizeExecution,
+}));
 vi.mock('@agent/storage', () => ({
   finalizeExecution: storageMocks.finalizeExecution,
 }));

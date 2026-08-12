@@ -7,10 +7,10 @@
 import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
-import { COLOR_ACCENT } from '@cli/tui/ui/colors';
+import { isCtrlInput, isEscapeInput } from '@cli/tui/inputKeys';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { COLOR_ACCENT } from '@cli/tui/ui/colors';
 import { BaseTextInput } from './BaseTextInput';
-import { isCtrlInput, isEscapeInput } from './inputKeys';
 import type { InputHistory } from '../history/inputHistory';
 
 export interface ReverseSearchProps {

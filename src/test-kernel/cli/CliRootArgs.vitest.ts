@@ -6,16 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hasMagic } from 'glob';
 import stripAnsi from 'strip-ansi';
 
-import {
-  detectUnknownCliCommand,
-  detectUnknownCliFlag,
-  runCli,
-} from '@cli/commands/root';
+import { rootCommand, runCli } from '@cli/commands/root';
 import { doctorPlatformInitContext } from '@cli/commands/doctor';
 import {
   normalizeRootShortcuts,
   reorderGlobalFlags,
   hasUsageNoColorFlag,
+  detectUnknownCliCommand,
+  detectUnknownCliFlag,
   formatUnknownCliCommand,
   formatUnknownCliFlag,
 } from '@cli/commands/_helpers/dispatch';
@@ -235,14 +233,18 @@ describe('CLI root argument routing', () => {
   });
 
   it('detects unknown top-level commands before citty falls back to help', async () => {
-    await expect(detectUnknownCliCommand(['bogus'])).resolves.toEqual({
+    await expect(
+      detectUnknownCliCommand(rootCommand, ['bogus']),
+    ).resolves.toEqual({
       typedCommand: 'texra bogus',
       helpCommand: 'texra',
     });
   });
 
   it('suggests close command names for mistyped top-level commands', async () => {
-    await expect(detectUnknownCliCommand(['chatt'])).resolves.toEqual({
+    await expect(
+      detectUnknownCliCommand(rootCommand, ['chatt']),
+    ).resolves.toEqual({
       typedCommand: 'texra chatt',
       helpCommand: 'texra',
       suggestedCommand: 'texra chat',
@@ -258,7 +260,9 @@ describe('CLI root argument routing', () => {
       'skills',
       'tools',
     ]) {
-      await expect(detectUnknownCliCommand([group, 'bogus'])).resolves.toEqual({
+      await expect(
+        detectUnknownCliCommand(rootCommand, [group, 'bogus']),
+      ).resolves.toEqual({
         typedCommand: `texra ${group} bogus`,
         helpCommand: `texra ${group}`,
       });
@@ -267,7 +271,7 @@ describe('CLI root argument routing', () => {
 
   it('suggests close command names inside command groups', async () => {
     await expect(
-      detectUnknownCliCommand(['multi-agent', 'rn']),
+      detectUnknownCliCommand(rootCommand, ['multi-agent', 'rn']),
     ).resolves.toEqual({
       typedCommand: 'texra multi-agent rn',
       helpCommand: 'texra multi-agent',
@@ -299,12 +303,14 @@ describe('CLI root argument routing', () => {
   });
 
   it('detects unknown command-scoped flags before command execution', async () => {
-    await expect(detectUnknownCliFlag(['doctor', '--bogus'])).resolves.toEqual({
+    await expect(
+      detectUnknownCliFlag(rootCommand, ['doctor', '--bogus']),
+    ).resolves.toEqual({
       flag: '--bogus',
       helpCommand: 'texra doctor',
     });
     await expect(
-      detectUnknownCliFlag([
+      detectUnknownCliFlag(rootCommand, [
         'models',
         'list',
         '--unknown',
@@ -316,7 +322,9 @@ describe('CLI root argument routing', () => {
       flag: '--unknown',
       helpCommand: 'texra models list',
     });
-    await expect(detectUnknownCliFlag(['--bogus', 'doctor'])).resolves.toEqual({
+    await expect(
+      detectUnknownCliFlag(rootCommand, ['--bogus', 'doctor']),
+    ).resolves.toEqual({
       flag: '--bogus',
       helpCommand: 'texra doctor',
     });
@@ -331,13 +339,20 @@ describe('CLI root argument routing', () => {
       ['multi-agent', 'run', 'mathematician', '--instruction-file=prompt.md'],
       ['run', 'polish', '--input', 'paper.tex', '--instruction-file=prompt.md'],
     ]) {
-      await expect(detectUnknownCliFlag(args)).resolves.toBeUndefined();
+      await expect(
+        detectUnknownCliFlag(rootCommand, args),
+      ).resolves.toBeUndefined();
     }
   });
 
   it('rejects camelCase spellings for kebab-case flags', async () => {
     await expect(
-      detectUnknownCliFlag(['models', 'list', '--outputFormat', 'json']),
+      detectUnknownCliFlag(rootCommand, [
+        'models',
+        'list',
+        '--outputFormat',
+        'json',
+      ]),
     ).resolves.toEqual({
       flag: '--outputFormat',
       helpCommand: 'texra models list',
@@ -346,13 +361,18 @@ describe('CLI root argument routing', () => {
 
   it('validates help command paths against the displayed command', async () => {
     await expect(
-      detectUnknownCliFlag(['help', 'models', 'list', '--unknown']),
+      detectUnknownCliFlag(rootCommand, [
+        'help',
+        'models',
+        'list',
+        '--unknown',
+      ]),
     ).resolves.toEqual({
       flag: '--unknown',
       helpCommand: 'texra models list',
     });
     await expect(
-      detectUnknownCliFlag([
+      detectUnknownCliFlag(rootCommand, [
         'help',
         'models',
         'list',
@@ -379,7 +399,9 @@ describe('CLI root argument routing', () => {
       ['completion', 'zsh'],
       ['--unknown', 'bogus'],
     ]) {
-      await expect(detectUnknownCliCommand(args)).resolves.toBeUndefined();
+      await expect(
+        detectUnknownCliCommand(rootCommand, args),
+      ).resolves.toBeUndefined();
     }
   });
 

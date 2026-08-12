@@ -2,7 +2,7 @@
 import type {
   NonRegexReplacementCategory as NonRegexReplacementCategoryName,
   RegexReplacementCategory as RegexReplacementCategoryName,
-} from '@shared/constants/latex';
+} from '@shared/constants/replacementCategories';
 import { GREEK_LETTERS } from './constants';
 import { NonRegexReplacementCategory, RegexReplacementCategory } from './types';
 import {

@@ -8,7 +8,7 @@
 
 import { Box, Text } from 'ink';
 
-import { useLiveNowMs } from '@cli/chat/tui/state/useLiveNowMs';
+import { useLiveNowMs } from '@cli/tui/useLiveNowMs';
 
 // Plain ASCII spin cycle (not a braille cli-spinners frame set) — ticking at
 // 1 Hz off the shared clock reads as a slow rotation, not a smooth spin, so a

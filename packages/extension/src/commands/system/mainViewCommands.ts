@@ -3,7 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { computeAgentOptionsData, refresh } from '@agent/index';
-import { registerCommands } from '@commands/_shared/registerCommands';
+import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import {
   loadMainViewModelOptions,
   type MainViewModelOptionsByCategory,
@@ -73,7 +74,7 @@ async function runRefresh(
 export function registerMainViewCommands(
   context: vscode.ExtensionContext,
 ): void {
-  registerCommands(context, [
+  registerCommandEntries(context, [
     {
       id: 'texra.refreshModelOptions',
       handler: () =>
@@ -121,27 +122,27 @@ export async function showImportOptions(): Promise<void> {
       {
         label: '$(repo-clone) Pull from Overleaf',
         description: 'Import an existing Overleaf/ShareLaTeX project',
-        command: 'texra.cloneOverleafProject',
+        command: EXTENSION_COMMANDS.CLONE_OVERLEAF_PROJECT,
       },
       {
         label: '$(cloud-download) Grab from arXiv',
         description: "Download a paper's source files",
-        command: 'texra.downloadArXivSource',
+        command: EXTENSION_COMMANDS.DOWNLOAD_ARXIV_SOURCE,
       },
       {
         label: '$(file-add) Try the sample project',
         description: 'Create a sample project to play around risk-free',
-        command: 'texra.createSampleProject',
+        command: EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT,
       },
       {
         label: '$(rocket) Run the setup assistant',
         description: 'Check tools, credentials, and LaTeX setup',
-        command: 'texra.runSetupAssistant',
+        command: EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT,
       },
       {
         label: '$(book) Walk me through setup',
         description: 'Open the getting started walkthrough',
-        command: 'texra.openGettingStarted',
+        command: EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
       },
     ],
     { placeHolder: 'Import or create a LaTeX project' },

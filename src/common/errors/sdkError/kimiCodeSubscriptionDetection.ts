@@ -1,6 +1,7 @@
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { isObject } from '@utils/core';
 
+import { formatResetDuration } from './chatgptSubscriptionDetection';
 import {
   errorBodyCandidates,
   pickNumberField,
@@ -80,9 +81,11 @@ export function parseKimiCodeSubscriptionLimit(
 export function describeKimiCodeSubscriptionLimit(
   info: KimiCodeSubscriptionLimit,
 ): string {
+  // Shared with the ChatGPT and GLM detectors so all three providers render the
+  // same reset-window format for the same `resets_in_seconds` field.
   const reset =
     info.resetsInSeconds !== undefined
-      ? ` Resets in ${Math.max(0, Math.floor(info.resetsInSeconds / 60))} minutes.`
+      ? ` Resets in ${formatResetDuration(info.resetsInSeconds)}.`
       : '';
   return (
     `Kimi Code subscription usage limit reached.${reset}` +

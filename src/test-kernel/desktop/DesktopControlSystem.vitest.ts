@@ -314,7 +314,7 @@ describe('desktop control system', () => {
     const bridge = read('packages/desktop/src/main/desktopAgentExecution.ts');
 
     expect(bridge).toMatch(
-      /case 'restoreState':[\s\S]*?if \(!plan\.executeImmediately\) return;[\s\S]*?await this\.runExecution\(validated\.request\);/u,
+      /case 'restoreState':[\s\S]*?if \(!plan\.executeImmediately\) return;[\s\S]*?await this\.runValidatedExecutionRequest\(\{ config: plan\.config \}\);/u,
     );
   });
 });

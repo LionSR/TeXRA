@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import { registerCommands } from '@commands/_shared/registerCommands';
+import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import { FILE_SELECTION_COMMAND_IDS } from '@frontend/files/fileSelectionRegistry';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -60,7 +60,7 @@ function createMultiPicker(
 export function registerFileSelectionCommands(
   context: vscode.ExtensionContext,
 ): void {
-  registerCommands(context, [
+  registerCommandEntries(context, [
     {
       id: FILE_SELECTION_COMMAND_IDS.selectInputFiles,
       handler: selectInputFiles,

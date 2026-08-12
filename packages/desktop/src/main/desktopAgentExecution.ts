@@ -9,6 +9,7 @@ import type { SessionStores } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   validateExecutionRequest,
+  type ExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
@@ -56,7 +57,7 @@ import {
   type ProgressViewSecondTierActions,
 } from '@controllers/progressView/ProgressViewCommandHandlers';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
-import { runCleanRunDir, runPackRunDir } from '@housekeeping';
+import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
 import {
   API_PROVIDERS,
   hasUsableApiKey,
@@ -620,28 +621,11 @@ export class DesktopProgressBridge {
           return;
         }
         if (!plan.executeImmediately) return;
-
-        const validated = validateExecutionRequest({ config: plan.config });
-        if (!validated.valid) {
-          this.logger.error('Invalid desktop follow-up execution request', {
-            data: validated.issue,
-          });
-          await this.options.host.showErrorMessage(validated.message);
-          return;
-        }
-        await this.runExecution(validated.request);
+        await this.runValidatedExecutionRequest({ config: plan.config });
         return;
       }
       case 'execute': {
-        const validated = validateExecutionRequest(plan.request);
-        if (!validated.valid) {
-          this.logger.error('Invalid desktop follow-up execution request', {
-            data: validated.issue,
-          });
-          await this.options.host.showErrorMessage(validated.message);
-          return;
-        }
-        await this.runExecution(validated.request, {
+        await this.runValidatedExecutionRequest(plan.request, {
           preferHelperModel: true,
         });
       }
@@ -657,7 +641,7 @@ export class DesktopProgressBridge {
       return;
     }
 
-    await this.fileActions.runLatexdiffForStream({
+    await this.fileActions.diffStreamToolbarAction({
       outputsByRound: request.outputsByRound ?? {},
       ...(request.runId && { executionId: request.runId }),
       workspaceScan: {
@@ -756,15 +740,7 @@ export class DesktopProgressBridge {
           getRunMetadata: (stream) => this.getRunMetadata(stream),
         },
         runExecutionRequest: async (request) => {
-          const validated = validateExecutionRequest(request);
-          if (!validated.valid) {
-            this.logger.error('Invalid desktop workflow execution request', {
-              data: validated.issue,
-            });
-            await this.options.host.showErrorMessage(validated.message);
-            return;
-          }
-          await this.runExecution(validated.request);
+          await this.runValidatedExecutionRequest(request);
         },
       },
       workflowFileActions: {
@@ -1175,7 +1151,7 @@ export class DesktopProgressBridge {
       return;
     }
 
-    await this.fileActions.runLatexdiffForRun(baseFile, editedFile, context);
+    await this.fileActions.diffAcceptedFilePair(baseFile, editedFile, context);
   }
 
   private getActiveLatexdiffRunContext(
@@ -1319,6 +1295,21 @@ export class DesktopProgressBridge {
       },
       options,
     );
+  }
+
+  private async runValidatedExecutionRequest(
+    request: ExecutionRequest,
+    options?: DesktopRunExecutionOptions,
+  ): Promise<void> {
+    const validated = validateExecutionRequest(request);
+    if (!validated.valid) {
+      this.logger.error('Invalid desktop execution request', {
+        data: validated.issue,
+      });
+      await this.options.host.showErrorMessage(validated.message);
+      return;
+    }
+    await this.runExecution(validated.request, options);
   }
 
   async handleExecute(message: MainViewExecuteMessage): Promise<void> {

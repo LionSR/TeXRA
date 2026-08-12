@@ -1,5 +1,8 @@
 import { isApiProvider, type ApiProvider } from './apiProviders';
-import { isKimiCodeExclusiveModel } from './kimiCodeSubscriptionRouting';
+import {
+  isKimiCodeExclusiveModel,
+  type KimiSubscriptionModelFields,
+} from './kimiCodeSubscriptionRouting';
 
 import type { ModelConfig } from 'llm-zoo';
 
@@ -27,18 +30,15 @@ interface OpenRouterRoutingConfig {
 }
 
 /**
- * Managed-route facts read straight off the llm-zoo registry entry: a model
- * whose `kimiSubscription` flag pairs with a pinned Kimi Code `baseUrl` is
- * served ONLY by that managed endpoint (see
- * {@link isKimiCodeExclusiveModel}), so its credential and endpoint stay
- * paired and it always bypasses OpenRouter and the included-access relay.
+ * Managed-route facts read straight off the llm-zoo registry entry (see
+ * {@link KimiSubscriptionModelFields}): a model whose `kimiSubscription` flag
+ * pairs with a pinned Kimi Code `baseUrl` is served ONLY by that managed
+ * endpoint (see {@link isKimiCodeExclusiveModel}), so its credential and
+ * endpoint stay paired and it always bypasses OpenRouter and the
+ * included-access relay.
  */
-interface ManagedRouteFields {
-  kimiSubscription?: boolean;
-  baseUrl?: string;
-}
-
-export type ModelRoutingConfig = OpenRouterRoutingConfig & ManagedRouteFields;
+export type ModelRoutingConfig = OpenRouterRoutingConfig &
+  KimiSubscriptionModelFields;
 
 /** Whether a registry entry owns an atomic managed-service route. */
 export function hasManagedDirectRoute(

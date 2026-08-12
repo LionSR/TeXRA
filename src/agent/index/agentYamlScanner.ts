@@ -55,7 +55,7 @@ export async function scanDirectory(
       })
     ).toSorted();
     const parsed = (
-      await pMap(files, (file) => readYamlDefinition(file), { concurrency: 8 })
+      await pMap(files, readYamlDefinition, { concurrency: 8 })
     ).filter(filterNotNull);
     const unique = entriesWithUniqueNames(parsed);
     const definitions = new Map(

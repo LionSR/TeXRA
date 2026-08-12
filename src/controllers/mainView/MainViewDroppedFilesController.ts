@@ -42,14 +42,16 @@ export function planMainViewDroppedFileAttachments(
   let rejectedCount = 0;
 
   for (const filePath of input.paths) {
-    const category = filePath
-      ? resolveDroppedFileCategory(
-          filePath,
-          input.allowedExtensions,
-          input.target,
-        )
-      : null;
-    if (!filePath || !category) {
+    if (!filePath) {
+      rejectedCount += 1;
+      continue;
+    }
+    const category = resolveDroppedFileCategory(
+      filePath,
+      input.allowedExtensions,
+      input.target,
+    );
+    if (!category) {
       rejectedCount += 1;
       continue;
     }

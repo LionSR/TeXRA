@@ -15,13 +15,11 @@ import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
 import {
   ExecutionLeaseActiveError,
   type OwnedExecutionLeaseScope,
-  runWithOwnedExecutionLeaseLaunchGuard,
 } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import {
   AgentCategory,
@@ -51,6 +49,7 @@ import {
 } from './childStream';
 
 // Local file imports
+import { startDetachedChildRunLoop } from './detachedChildRun';
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
 import {
   createWorkflowScriptStrategy,
@@ -492,9 +491,13 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       // lease - otherwise it survives to its heartbeat timeout and a prompt
       // relaunch is refused.
       const { childStreamId: runChildStreamId, completion: runCompletion } =
-        await runWithOwnedExecutionLeaseLaunchGuard(
-          runExecutionId,
-          async () => {
+        await startDetachedChildRunLoop({
+          executionId: runExecutionId,
+          parentStreamId: runScope.streamId,
+          childStreamId: getChildStreamId(runExecutionId, STREAM_PREFIX),
+          agentName: meta.name,
+          recordCost,
+          buildLaunch: async () => {
             // A deterministic execution id may retain the prior attempt's report.
             // Clear it before starting this attempt so an interruption before
             // delivery cannot be mistaken for a newly persisted result.
@@ -514,24 +517,19 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
                 config: runConfig,
               },
             );
-            const childStreamId = childStream.childStreamId;
 
             // A proposal-bypass approval carries the same explicit child edit
             // grant as delegate_agent/delegate_workflow. A human one-off approval
             // inherits only the parent's ordinary per-kind bypass state.
             configureDelegatedChildApprovals(
-              childStreamId,
+              childStream.childStreamId,
               runScope.streamId,
               proposalDecision.autoApproved ? 'auto-approved' : 'inherit',
               runScope.session,
             );
 
-            const completion = startChildRunLoop({
+            return {
               childStream,
-              childStreamId,
-              parentStreamId: runScope.streamId,
-              executionId: runExecutionId,
-              agentName: meta.name,
               strategy: createWorkflowScriptStrategy({
                 executionId: runExecutionId,
                 logger: childStream.logger,
@@ -554,26 +552,27 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
                     parent,
                     defaultAgent,
                     checkpointId,
-                    { executionId: runExecutionId, streamId: childStreamId },
+                    {
+                      executionId: runExecutionId,
+                      streamId: childStream.childStreamId,
+                    },
                     hooks,
                   ),
               }),
-              recordCost,
-            }).completion;
-            if (!parent.stopAfterCycle) {
               // Detached callers do not await completion. Own late finalization
               // failures here as trace diagnostics; the child loop already owns
               // its one user-facing result/error delivery.
-              void completion.catch((error: unknown) => {
-                childStream.logger.error(
-                  `Workflow script '${meta.name}' run loop failed after launch`,
-                  { data: error },
-                );
-              });
-            }
-            return { childStreamId, completion };
+              ...(!parent.stopAfterCycle && {
+                onLoopFailed: (error: unknown): void => {
+                  childStream.logger.error(
+                    `Workflow script '${meta.name}' run loop failed after launch`,
+                    { data: error },
+                  );
+                },
+              }),
+            };
           },
-        );
+        });
 
       if (parent.stopAfterCycle) {
         await runCompletion;

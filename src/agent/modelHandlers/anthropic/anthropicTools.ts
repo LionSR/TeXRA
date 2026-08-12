@@ -1,19 +1,18 @@
 // Node imports
 import { Buffer } from 'node:buffer';
 
-// Third-party imports
-import { toFile } from '@anthropic-ai/sdk';
-
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 
 // Local file imports
-import { FILES_API_BETA } from './anthropicContextManagement';
-import { sanitizeAnthropicFilename } from './anthropicDocumentHandling';
+import {
+  countPdfPagesWithDegrade,
+  sanitizeAnthropicFilename,
+  uploadFileToFilesApi,
+} from './anthropicDocumentHandling';
 import { loadAttachmentBuffer, wipeBuffer } from '../utils/toolAttachmentUtils';
 import { reportMediaAttachmentFailure } from '../support/mediaAttachmentPolicy';
 
@@ -96,16 +95,14 @@ export async function uploadToolAttachments(
     // Check PDF page limit before uploading
     let pdfPageCount = 0;
     if (isPdf) {
-      try {
-        pdfPageCount = await countPdfPagesInBuffer(buffer);
-      } catch (err) {
-        // An unreadable PDF still uploads and Anthropic enforces the limit
-        // server-side, so the local budget check is skipped rather than the
-        // attachment dropped. Logged because the budget then undercounts.
+      // An unreadable PDF still uploads and Anthropic enforces the limit
+      // server-side, so the local budget check is skipped rather than the
+      // attachment dropped. Logged because the budget then undercounts.
+      pdfPageCount = await countPdfPagesWithDegrade(buffer, (err) =>
         logger.warn(
           `Unable to count pages in ${attachment.path ?? 'attachment'}; uploading without a local page-limit check: ${toErrorMessage(err)}`,
-        );
-      }
+        ),
+      );
       if (trackedPages + pdfPageCount > maxPdfPages) {
         pageLimitExceeded.push(attachment);
         buffer = wipeBuffer(buffer);
@@ -120,19 +117,21 @@ export async function uploadToolAttachments(
       );
 
       const base64Data = buffer.toString('base64');
-      const uploadedFile = await client.beta.files.upload({
-        file: await toFile(buffer, filename, { type: mimeType }),
-        betas: [FILES_API_BETA],
-      });
+      const fileId = await uploadFileToFilesApi(
+        client,
+        buffer,
+        filename,
+        mimeType,
+      );
 
       if (isPdf && pdfPageCount > 0) {
-        onPageCount(uploadedFile.id, pdfPageCount);
+        onPageCount(fileId, pdfPageCount);
         trackedPages += pdfPageCount;
       }
 
       uploaded.push({
         attachment,
-        fileId: uploadedFile.id,
+        fileId,
         blockType: isPdf ? 'document' : 'image',
         base64Data,
         mediaType: normalized,

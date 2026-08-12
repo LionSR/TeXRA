@@ -34,7 +34,7 @@ const followUpMocks = vi.hoisted(() => ({
   notifyFollowUpSent: vi.fn(),
 }));
 
-vi.mock('@tools/inquiry/ExternalInquiryTool', () => externalInquiryMocks);
+vi.mock('@tools/inquiry/inquiryActions', () => externalInquiryMocks);
 vi.mock('@agent/followUp/ToolUseFollowUp', () => followUpMocks);
 vi.mock('@utils/files/pastedImageUtils', () => ({
   savePastedImageBase64: vi.fn(),

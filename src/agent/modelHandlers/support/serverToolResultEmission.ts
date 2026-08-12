@@ -1,5 +1,5 @@
 import { logWebSearch, type AgentTrace } from '@agent/trace';
-import type { WebSearchResult } from '@agent/types/ServerToolTypes';
+import type { WebSearchResult } from '@agent/types/ServerTools';
 
 /**
  * Emits a web search result to the progress view during streaming, gated on

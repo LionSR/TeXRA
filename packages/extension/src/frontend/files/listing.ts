@@ -25,29 +25,30 @@ function getRelativePathPreservingSymlinks(
   root: string,
 ): string {
   // WorkspaceFS.relativePath() handles symlinks via asRelativePath
-  // and always returns forward slashes.
+  // and always returns forward slashes. Outside the workspace it returns
+  // the (still absolute) path, so only the workspace-relative cases below
+  // can resolve against `root`; everything else falls back to path.relative.
   const wsRelative = WorkspaceFS.relativePath(absolutePath);
 
-  // If outside workspace, relativePath returns the absolute path (still absolute)
-  if (path.isAbsolute(wsRelative)) {
-    return normalizeFilePath(path.relative(root, absolutePath));
-  }
+  if (!path.isAbsolute(wsRelative)) {
+    // If root is the workspace root, the workspace-relative path is the answer.
+    const workspaceRoot = WorkspaceFS.getPath();
+    if (
+      workspaceRoot &&
+      path.normalize(root) === path.normalize(workspaceRoot)
+    ) {
+      return wsRelative;
+    }
 
-  // If root is the workspace root, the workspace-relative path is the answer
-  const workspaceRoot = WorkspaceFS.getPath();
-  if (workspaceRoot && path.normalize(root) === path.normalize(workspaceRoot)) {
-    return wsRelative;
-  }
-
-  // root is a subdirectory — get its workspace-relative path too
-  const rootRelative = WorkspaceFS.relativePath(root);
-  if (path.isAbsolute(rootRelative)) {
-    return normalizeFilePath(path.relative(root, absolutePath));
-  }
-
-  // Both paths are workspace-relative and forward-slash normalized
-  if (wsRelative.startsWith(rootRelative + '/')) {
-    return wsRelative.slice(rootRelative.length + 1);
+    // root is a subdirectory — get its workspace-relative path too, and strip
+    // that prefix from wsRelative when both are workspace-relative.
+    const rootRelative = WorkspaceFS.relativePath(root);
+    if (
+      !path.isAbsolute(rootRelative) &&
+      wsRelative.startsWith(rootRelative + '/')
+    ) {
+      return wsRelative.slice(rootRelative.length + 1);
+    }
   }
 
   return normalizeFilePath(path.relative(root, absolutePath));

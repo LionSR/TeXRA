@@ -12,11 +12,11 @@ import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 export function formatWorkflowCallMetadataParts(
   call: WorkflowCallProgress,
 ): string[] {
-  if (
-    call.status !== 'completed' &&
-    call.status !== 'failed' &&
-    (call.status !== 'skipped' || call.reason === 'not-reached')
-  ) {
+  const hasTerminalMetadata =
+    call.status === 'completed' ||
+    call.status === 'failed' ||
+    (call.status === 'skipped' && call.reason === 'user');
+  if (!hasTerminalMetadata) {
     return [];
   }
   return [

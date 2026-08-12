@@ -74,9 +74,7 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
    * Active-stream selection surfaces the prompt in whichever view is open, so nothing has
    * to open ahead of it.
    */
-  revealApprovalSurface(): Promise<void> {
-    return Promise.resolve();
-  }
+  async revealApprovalSurface(): Promise<void> {}
 
   reportError(message: string): void {
     void this.options.ui.showErrorMessage(message);
@@ -105,12 +103,11 @@ class DesktopToolEditPreview implements ToolEditPreview {
   }
 
   /** The prompt carries the request on its own, so the diff opens alongside it. */
-  present(): Promise<void> {
+  async present(): Promise<void> {
     void this.showDiff().catch((error: unknown) => {
       if (this.context.isSettled()) return;
       void this.ui.showErrorMessage(toErrorMessage(error));
     });
-    return Promise.resolve();
   }
 
   async showDiff(): Promise<void> {

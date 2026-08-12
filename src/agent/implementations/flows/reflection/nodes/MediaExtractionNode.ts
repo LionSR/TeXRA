@@ -4,7 +4,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 
-import { getFilesForRound } from '../helpers';
+import { getFilesForRound, workspaceFromSnapshot } from '../helpers';
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionServices } from '../ReflectionServices';
 
@@ -24,13 +24,7 @@ export class MediaExtractionNode<C = unknown> extends Node<
     const modelHandler = this.services.modelCell.handler;
     const { currentRound, roundOutputs } = shared;
 
-    // shared.workspaceSnapshot was produced by this same flow's own
-    // toSnapshot() last round (or by the one-time resume hydration in
-    // runReflectionFlow) — never raw persisted/legacy data — so re-deriving
-    // it here uses the canonical-only path (see AgentWorkspaceState.fromCanonicalSnapshot).
-    const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(
-      shared.workspaceSnapshot,
-    );
+    const workspaceState = workspaceFromSnapshot(shared.workspaceSnapshot);
 
     const extraMediaFiles: FileLocation[] = [];
     if (currentRound === 0 && modelHandler.capabilities.supportsVision) {

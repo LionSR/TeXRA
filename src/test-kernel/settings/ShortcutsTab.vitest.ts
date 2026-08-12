@@ -6,6 +6,7 @@ import {
   type DesktopShortcutEntry,
   type DesktopShortcutService,
 } from '@shared/commands/shortcutPreferences';
+import { detectBrowserPlatform } from '@shared/commands/accelerators';
 
 import {
   mountComponent,
@@ -83,7 +84,7 @@ describe('shortcuts-tab', () => {
       const recorder =
         element.shadowRoot?.querySelector<HTMLElement>('.shortcut-recorder');
       recorder?.click();
-      const isMac = navigator.platform.toLowerCase().includes('mac');
+      const isMac = detectBrowserPlatform() === 'darwin';
       recorder?.dispatchEvent(
         new KeyboardEvent('keydown', {
           bubbles: true,

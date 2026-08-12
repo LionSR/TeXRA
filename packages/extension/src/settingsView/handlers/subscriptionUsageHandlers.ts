@@ -2,14 +2,9 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
+  SubscriptionUsageSnapshots,
 } from '@shared/schemas';
 import type * as vscode from 'vscode';
-
-const SUBSCRIPTION_USAGE_PROVIDERS = [
-  'chatgpt',
-  'kimiCode',
-  'glmCodingPlan',
-] as const;
 
 export interface SubscriptionUsageReader {
   getUsage(
@@ -25,13 +20,15 @@ export async function sendSubscriptionUsage(
   reader: SubscriptionUsageReader,
   forceRefresh = false,
 ): Promise<void> {
-  const [chatgpt, kimiCode, glmCodingPlan] = await Promise.all(
-    SUBSCRIPTION_USAGE_PROVIDERS.map((provider) =>
-      reader.getUsage(provider, { forceRefresh }),
-    ),
-  );
+  // Each snapshot key is the provider id itself, so key and provider can never
+  // drift apart the way a positional destructure would allow.
+  const snapshots: SubscriptionUsageSnapshots = {
+    chatgpt: await reader.getUsage('chatgpt', { forceRefresh }),
+    kimiCode: await reader.getUsage('kimiCode', { forceRefresh }),
+    glmCodingPlan: await reader.getUsage('glmCodingPlan', { forceRefresh }),
+  };
   await webview.postMessage({
     command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
-    snapshots: { chatgpt, kimiCode, glmCodingPlan },
+    snapshots,
   });
 }

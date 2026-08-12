@@ -42,7 +42,7 @@ export {
   StreamTabIdSchema,
 } from '@shared/schemas';
 export type {
-  AgentSourceType,
+  AgentSource,
   ExecutionId,
   RunOutcome,
   StreamTabId,

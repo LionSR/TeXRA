@@ -27,6 +27,9 @@ export {
   // Types
   type AgentEntry,
   type ResolvedAgent,
+} from './agentEntry';
+
+export {
   // Core functions
   loadAgents,
   registerInlineAgents,

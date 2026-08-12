@@ -2,6 +2,7 @@ import type {
   MainViewAuthStatus,
   MainViewStartupOptions,
 } from '@controllers/mainView/MainViewStartupController';
+import type { StateStore } from '@platform/interfaces';
 import type { DesktopThemeKind } from '@shared/schemas';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import { installDesktopHostBridge } from './hostBridge.js';
@@ -49,6 +50,9 @@ export interface DesktopMainViewIpcOptions {
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
   loadStartupOptions?: () => Promise<MainViewStartupOptions>;
   handleExecuteMessage(message: MainViewExecuteMessage): Promise<void>;
+  /** Main-process global store, threaded in by the caller (windows outlive a
+   *  single platform init in some hosts). */
+  globalState: StateStore;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -91,6 +95,7 @@ export function installDesktopMainViewIpc(
     getAuthStatus: options.getAuthStatus,
     loadOptions: options.loadStartupOptions,
     onAsyncError: options.onAsyncError,
+    globalState: options.globalState,
   });
   const messageHandlers: DesktopMessageHandler[] = [
     startup,

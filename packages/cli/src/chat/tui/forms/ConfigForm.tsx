@@ -10,11 +10,12 @@
 import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 
-import { COLOR_ERROR } from '@cli/tui/ui/colors';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
-import { CROSS, POINTER } from '@cli/tui/ui/glyphs';
-import { Select, type SelectItem } from '@cli/tui/ui/Select';
+import { isCtrlInput, type ReturnKeyInput } from '@cli/tui/inputKeys';
 import { computeSelectWindowSize } from '@cli/tui/selectWindow';
+import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { Select, type SelectItem } from '@cli/tui/ui/Select';
+import { COLOR_ERROR } from '@cli/tui/ui/colors';
+import { CROSS, POINTER } from '@cli/tui/ui/glyphs';
 import { stripPrefix } from '@shared/config/configKeys';
 import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
 import {
@@ -26,7 +27,6 @@ import {
 } from '@shared/schemas/stateSettings';
 
 import { BaseTextInput } from '../input/BaseTextInput';
-import { isCtrlInput, type ReturnKeyInput } from '../input/inputKeys';
 import {
   buildConfigCategoryItems,
   configCategoryLabel,

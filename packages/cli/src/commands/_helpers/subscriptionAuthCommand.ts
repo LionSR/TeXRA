@@ -3,7 +3,6 @@ import { defineCommand, type CommandDef } from 'citty';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
-import { writeErrorStderr } from '@cli/runtime/logSinks';
 import {
   shouldUseSubscriptionDeviceCode,
   type CliSubscriptionLoginTransportInit,
@@ -11,6 +10,7 @@ import {
 } from '@cli/runtime/subscriptionLogin';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
+import { withCliAuthError } from './cliAuthError';
 import { defineCliCommand } from './defineCliCommand';
 import { booleanArg, GLOBAL_ARGS } from './globalArgs';
 import { cliProgressWriter, emitCliResult } from './output';
@@ -115,22 +115,19 @@ export function defineSubscriptionAuthCommand<
     await initCliPlatform({ ...context, quietLogs: true });
     const writeProgress = cliProgressWriter(context);
 
-    let session: Session;
-    try {
-      session = await options.signIn(
+    const signInResult = await withCliAuthError(() =>
+      options.signIn(
         {
           ...init,
           device: shouldUseSubscriptionDeviceCode(context, init),
         },
         { writeProgress },
-      );
-    } catch (error) {
-      writeErrorStderr(error);
-      return CliExitCode.ModelOrNetworkError;
-    }
+      ),
+    );
+    if (!signInResult.ok) return CliExitCode.ModelOrNetworkError;
 
     const update = await options.setPreferSubscription(true);
-    emitLogin(context, session, update.effective);
+    emitLogin(context, signInResult.value, update.effective);
     invalidateModelOptionsCache();
     return CliExitCode.Success;
   }
@@ -168,13 +165,9 @@ export function defineSubscriptionAuthCommand<
     args: { ...GLOBAL_ARGS },
     async run(context) {
       await initCliPlatform({ ...context, quietLogs: true });
-      let update: CliSubscriptionSignOutResult;
-      try {
-        update = await options.signOut();
-      } catch (error) {
-        writeErrorStderr(error);
-        return CliExitCode.ModelOrNetworkError;
-      }
+      const signOutResult = await withCliAuthError(() => options.signOut());
+      if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
+      const update = signOutResult.value;
       invalidateModelOptionsCache();
       const payload = {
         authenticated: false,
@@ -200,7 +193,9 @@ export function defineSubscriptionAuthCommand<
     args: { ...GLOBAL_ARGS },
     async run(context) {
       await initCliPlatform({ ...context, quietLogs: true });
-      const status = await options.getStatus();
+      const statusResult = await withCliAuthError(() => options.getStatus());
+      if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
+      const status = statusResult.value;
       emitCliResult(context, {
         json: status,
         ndjson: { kind: `${options.ndjsonKind}-status`, ...status },

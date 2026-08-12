@@ -1,16 +1,14 @@
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
+import { USER_VAR_MODEL } from '@agent/utils/userVars';
 import { isNonEmptyString } from '@utils/core';
 
 import type { ToolUseRunShared } from './nodes/types';
-
-const MODEL_USER_VARIABLE = 'MODEL';
 
 export function currentModelFromUserChannels(
   channels: UserVariableChannels,
 ): string | undefined {
   const value =
-    channels.transient[MODEL_USER_VARIABLE] ??
-    channels.input[MODEL_USER_VARIABLE];
+    channels.transient[USER_VAR_MODEL] ?? channels.input[USER_VAR_MODEL];
   return isNonEmptyString(value) ? value.trim() : undefined;
 }
 
@@ -33,7 +31,7 @@ export function setToolUseSharedModel(
       input: shared.stateSlices.userChannels.input,
       transient: {
         ...shared.stateSlices.userChannels.transient,
-        [MODEL_USER_VARIABLE]: model,
+        [USER_VAR_MODEL]: model,
       },
     },
   };

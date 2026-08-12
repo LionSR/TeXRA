@@ -14,9 +14,11 @@ import {
   LATEX_CONFIG_RANGES,
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
+} from '@shared/constants/latexConfig';
+import {
   NON_REGEX_REPLACEMENT_CATEGORIES,
   REGEX_REPLACEMENT_CATEGORIES,
-} from '@shared/constants/latex';
+} from '@shared/constants/replacementCategories';
 import {
   createDispatcher,
   type HandlerRegistry,
@@ -94,16 +96,41 @@ export const SETTINGS_TAB_ORDER = [
 
 export type SettingsTabName = (typeof SETTINGS_TAB_ORDER)[number];
 
+/**
+ * Recursive replace used to derive the panel-name literal type from the
+ * uppercase tab name (`MULTI_AGENT` → `multi-agent`), mirroring the runtime
+ * transformation in `SETTINGS_TAB_PANEL_BY_NAME`.
+ */
+type ReplaceAll<
+  S extends string,
+  From extends string,
+  To extends string,
+> = S extends `${infer Head}${From}${infer Tail}`
+  ? `${Head}${To}${ReplaceAll<Tail, From, To>}`
+  : S;
+
+/**
+ * Webview panel-addressing key for a tab, e.g. `'multi-agent'`. A literal
+ * union derived from {@link SettingsTabName}, so an appended tab widens it and
+ * exhaustiveness-checked switches (SettingsApp's `renderActivePanel`) become
+ * compile errors until they add a case — the panel-name equivalent of the
+ * `Record<SettingsTabName, …>` metadata maps.
+ */
+export type SettingsTabPanelName = ReplaceAll<
+  Lowercase<SettingsTabName>,
+  '_',
+  '-'
+>;
+
 export const SETTINGS_TAB_PANEL_BY_NAME = Object.fromEntries(
   SETTINGS_TAB_ORDER.map((name) => [
     name,
     name.toLowerCase().replaceAll('_', '-'),
   ]),
-) as Record<SettingsTabName, string>;
+) as Record<SettingsTabName, SettingsTabPanelName>;
 
-export const SETTINGS_TAB_PANEL_NAMES = SETTINGS_TAB_ORDER.map(
-  (name) => SETTINGS_TAB_PANEL_BY_NAME[name],
-);
+export const SETTINGS_TAB_PANEL_NAMES: readonly SettingsTabPanelName[] =
+  SETTINGS_TAB_ORDER.map((name) => SETTINGS_TAB_PANEL_BY_NAME[name]);
 
 /** Tab indices derived from ordered array */
 export const SETTINGS_TAB = Object.fromEntries(

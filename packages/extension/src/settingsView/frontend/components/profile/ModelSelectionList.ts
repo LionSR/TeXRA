@@ -1,6 +1,5 @@
 /** Checkbox list of models grouped by provider, with deprecated toggles and helper-model picker. */
 
-import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 

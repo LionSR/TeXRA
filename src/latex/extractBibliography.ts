@@ -59,10 +59,6 @@ export interface BibliographyEntriesResult {
   missingKeys: string[];
 }
 
-function collectCitationKeys(content: string): string[] {
-  return collectCommaSeparatedMatches(content, CITATION_PATTERN);
-}
-
 export async function extractBibliographyContext(
   texPath: string,
 ): Promise<BibliographyReferenceResult> {
@@ -82,7 +78,10 @@ export async function extractBibliographyContext(
     }
   }
 
-  const citationKeys = collectCitationKeys(uncommented);
+  const citationKeys = collectCommaSeparatedMatches(
+    uncommented,
+    CITATION_PATTERN,
+  );
 
   return {
     bibliographyFiles: existing,

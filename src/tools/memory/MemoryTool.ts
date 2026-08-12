@@ -249,13 +249,11 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   private requireViewBeforeModify(
     inputPath: string,
     operation = 'editing',
-  ): ToolResult | undefined {
-    return (
-      requireFileReadForEdit(
-        inputPath,
-        true,
-        `Modifications to memory files require viewing the file first. Please use the view command before ${operation}.`,
-      ) ?? undefined
+  ): ToolResult | null {
+    return requireFileReadForEdit(
+      inputPath,
+      true,
+      `Modifications to memory files require viewing the file first. Please use the view command before ${operation}.`,
     );
   }
 

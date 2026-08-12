@@ -21,7 +21,7 @@ export function auxiliaryRetry<T>(
     minTimeout: 500,
     factor: 2,
     randomize: true,
-    ...(signal ? { signal } : {}),
+    signal,
     shouldRetry: ({ error }) => isProviderErrorAutoRetryable(error),
   });
 }

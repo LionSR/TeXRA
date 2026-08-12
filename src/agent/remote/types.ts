@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 import {
-  AgentSettingSchema,
-  AgentPromptSchema,
+  type AgentPrompt,
+  type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
 import { AgentNameSchema, AgentCategory } from '@shared/schemas/agent';
 
@@ -30,10 +30,15 @@ export const EdgeFunctionResponseSchema = z.object({
   config: z.string().min(1, 'Server returned empty configuration'),
 });
 
-/** Loaded remote agent configuration (settings + prompts). */
-const RemoteAgentConfigSchema = z.strictObject({
-  settings: AgentSettingSchema,
-  prompts: AgentPromptSchema,
-});
-
-export type RemoteAgentConfig = z.infer<typeof RemoteAgentConfigSchema>;
+/**
+ * Loaded remote agent configuration (settings + prompts).
+ *
+ * Plain interface, not a zod schema: the loader already validates `settings`
+ * and `prompts` through their own schemas (AgentSettingSchema / AgentPromptSchema)
+ * before building this object, so a combined schema here would only assert a
+ * strict shape nothing ever parses against.
+ */
+export interface RemoteAgentConfig {
+  settings: AgentSetting;
+  prompts: AgentPrompt;
+}

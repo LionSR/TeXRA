@@ -49,7 +49,7 @@ import {
   TOOL_USE_STATUS,
   type ActiveChildInfo,
   type ExecutionId,
-  type ExternalInquiryThreadId,
+  type InquiryThreadId,
   type NormalizedToolUse,
   type PlanApprovalPermission,
   type RetryPermission,
@@ -242,7 +242,7 @@ const EXTERNAL_INQUIRY_QUESTION =
     '',
     'Degenerate triples: (0,b,b) for 0 <= b <= 60.',
   ].join('\n');
-const EXTERNAL_INQUIRY_THREAD_ID = 'ei_123456abcdef' as ExternalInquiryThreadId;
+const EXTERNAL_INQUIRY_THREAD_ID = 'ei_123456abcdef' as InquiryThreadId;
 const USER_QUESTION_CONTEXT =
   process.env.HARNESS_USER_QUESTION_CONTEXT ??
   [

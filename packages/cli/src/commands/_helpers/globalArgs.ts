@@ -161,6 +161,19 @@ export const INTERACTIVE_AGENT_GLOBAL_ARGS = {
   ...SKILL_SOURCE_ARGS,
 } as const;
 
+/**
+ * Commands that necessarily own the terminal and therefore reject the
+ * headless-only globals with the explicit "interactive command" usage error
+ * (see {@link rejectHeadlessOnlyFlags} and dispatch's flag-spec handling)
+ * instead of reporting them as unknown flags.
+ */
+export const INTERACTIVE_COMMAND_NAMES: readonly string[] = [
+  'chat',
+  'orchestrate',
+  'setup',
+  'resume',
+];
+
 // The long flag plus any single-character alias for a routable global flag.
 function flagSpellings(
   name: string,

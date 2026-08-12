@@ -46,7 +46,7 @@ import {
   formatBashDelivery,
   formatBashError,
   type BashDeliveryStreamExcerpt,
-} from '@tools/delegation/subagentResults';
+} from '@tools/delegation/bashDelivery';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
@@ -246,7 +246,8 @@ const BashInputSchema = z.strictObject({
     ),
   run_in_background: z
     .boolean()
-    .prefault(false)
+    .nullish()
+    .transform((v) => v ?? false)
     .describe(
       'Run command in background. Returns immediately with execution ID and a background task tab. Result delivered as follow-up when complete.',
     ),
@@ -347,6 +348,9 @@ export class BashTool extends defineTool({
       cwd,
       buffer: false,
       timeout: timeoutMs,
+      // String form + explicit shell teardown: abort/timeout signal the whole
+      // process group so piped children and backgrounded jobs are torn down.
+      mode: 'shell',
       onStdout: (chunk) => {
         stdout.append(chunk);
         ctx?.hooks?.onToolOutput?.(chunk);
@@ -494,6 +498,10 @@ export class BashTool extends defineTool({
           cwd,
           timeout: timeoutMs,
           buffer: false,
+          // String form + explicit shell teardown: abort/timeout signal the
+          // whole process group so backgrounded jobs and piped children are
+          // torn down rather than left running.
+          mode: 'shell',
           signal: session.signal,
           onStdout: (chunk) => {
             stdout.append(chunk);

@@ -126,7 +126,7 @@ export class TraceEmitter implements AgentTrace {
     this.emitLog('error', message, options);
   }
 
-  protected emitLog(
+  private emitLog(
     level: 'debug' | 'info' | 'warn' | 'error',
     message: string,
     options: LogOptions,

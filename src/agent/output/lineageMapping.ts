@@ -114,14 +114,12 @@ export function traceFileLineage(
   const prevLocations = prevOutputs.map((entry) => entry.location);
   // 'basename' with roundAware=true strips round suffixes before comparing, so
   // "paper_r1" and "paper_r2" are treated as the same file across rounds.
-  // Returns an empty map when there are no previous-round outputs to pair with.
-  const prevToOutput =
-    prevLocations.length === 0
-      ? new Map<string, FileLocation>()
-      : invertMapping(
-          createFileMapping(prevLocations, currentLocations, 'basename', true),
-          prevLocations,
-        );
+  // createFileMapping already returns an empty map when there are no
+  // previous-round outputs to pair with.
+  const prevToOutput = invertMapping(
+    createFileMapping(prevLocations, currentLocations, 'basename', true),
+    prevLocations,
+  );
 
   const mapping = new Map<string, RoundFileEntry>();
   for (const entry of currentOutputs) {

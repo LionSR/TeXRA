@@ -73,6 +73,7 @@ import {
 // Third-party imports
 import type {
   RunResult,
+  SandboxMode,
   Thread,
   ThreadItem,
   ThreadOptions,
@@ -434,6 +435,7 @@ function startCodexLoop(params: {
 
 async function createCodexThread(
   input: CodexInput,
+  sandboxMode: SandboxMode,
   workingDir?: string,
 ): Promise<Thread> {
   const CodexClass = await importCodexClass();
@@ -441,7 +443,6 @@ async function createCodexThread(
     codexPathOverride: await findCodexBinaryPath(),
   });
   const config = await getCodexConfig();
-  const sandboxMode = input.sandbox_mode ?? undefined;
   // Resumed threads keep their stored workspace unless explicitly overridden.
   const workspace =
     workingDir || !input.thread_id
@@ -478,14 +479,14 @@ export class CodexTool extends defineTool({
   schema: CodexInputSchema,
 }) {
   protected async execute(input: CodexInput): Promise<ToolResult> {
-    if (!input.sandbox_mode) {
-      const config = await getCodexConfig();
-      input.sandbox_mode = config.getCodexSandboxMode();
-    }
+    // Resolve the effective sandbox mode once (per-call override, else the
+    // user-configured default) rather than mutating the parsed input object.
+    const sandboxMode =
+      input.sandbox_mode ?? (await getCodexConfig()).getCodexSandboxMode();
 
     return dispatchAgentCliTool({
       agentName: 'codex',
-      approvalLabel: `[codex ${input.sandbox_mode}] ${input.prompt}`,
+      approvalLabel: `[codex ${sandboxMode}] ${input.prompt}`,
       store: CodexThreads,
       resumeId: input.thread_id ?? undefined,
       prompt: input.prompt,
@@ -498,6 +499,7 @@ export class CodexTool extends defineTool({
       launch: (context) =>
         launchCodexSession(
           input,
+          sandboxMode,
           context.parentStreamId,
           context.parentExecutionId,
           context.parentWorkingDirectory,
@@ -509,13 +511,14 @@ export class CodexTool extends defineTool({
 
 async function launchCodexSession(
   input: CodexInput,
+  sandboxMode: SandboxMode,
   parentStreamId: StreamTabId,
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
 ): Promise<ToolResult> {
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
-  const thread = await createCodexThread(input, workingDir);
+  const thread = await createCodexThread(input, sandboxMode, workingDir);
   const config = (await getCodexConfig()).buildCodexConfig(input.prompt);
   const preview = truncateWithEllipsis(input.prompt, 60);
 
@@ -538,7 +541,7 @@ async function launchCodexSession(
         releaseFallbackClaim,
       }),
     summary: `Launched Codex: ${preview}`,
-    launchedLine: `Codex agent launched (sandbox: ${input.sandbox_mode}).`,
+    launchedLine: `Codex agent launched (sandbox: ${sandboxMode}).`,
     followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the thread_id. Pass it to codex on a later call to send a follow-up instruction.`,
   });
 }

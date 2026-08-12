@@ -29,6 +29,10 @@ const MYTHOS_FAMILY_PREFIX = 'claude-mythos-';
  * Per Anthropic docs, Claude 4 and Opus 5 don't support temperature with
  * thinking. Mythos-class models (Fable 5, Mythos 5) and Sonnet 5 reject all
  * sampling parameters (temperature/top_p/top_k), so they belong here too.
+ *
+ * Kept separate from {@link ANTHROPIC_REQUEST_TRAITS}: compaction/display are
+ * version-specific, while temperature exclusion applies to the whole Claude 4
+ * family (e.g. still-supported `claude-sonnet-4-5`).
  */
 const THINKING_TEMPERATURE_EXCLUDED_PATTERNS = [
   'claude-opus-4',
@@ -38,7 +42,7 @@ const THINKING_TEMPERATURE_EXCLUDED_PATTERNS = [
   'claude-haiku-4',
   'claude-fable-',
   'claude-mythos-',
-];
+] as const;
 
 /** Local Anthropic request traits selected by `fullName` prefix. */
 interface AnthropicRequestTraits {
@@ -64,10 +68,9 @@ const ANTHROPIC_REQUEST_TRAITS: ReadonlyArray<
   [OPUS_5_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
   [SONNET_46_FULLNAME, { compactionEligible: true, summarizedDisplay: false }],
   [SONNET_5_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
-  // Mythos-class entries match the whole family (like the temperature
-  // patterns above): their API default is display 'omitted', so a new family
-  // member falling through to DEFAULT_REQUEST_TRAITS would silently lose all
-  // visible reasoning output.
+  // Mythos-class entries match the whole family: their API default is display
+  // 'omitted', so a new family member falling through to DEFAULT_REQUEST_TRAITS
+  // would silently lose all visible reasoning output.
   [MYTHOS_FAMILY_PREFIX, { compactionEligible: true, summarizedDisplay: true }],
   [FABLE_FAMILY_PREFIX, { compactionEligible: true, summarizedDisplay: true }],
 ];

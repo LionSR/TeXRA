@@ -115,7 +115,7 @@ export const ConversationProgressSchema = z.object({
 
 export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 
-export const DEFAULT_CONVERSATION_PROGRESS: ConversationProgress = {
+const DEFAULT_CONVERSATION_PROGRESS: ConversationProgress = {
   toolCallCount: 0,
 };
 
@@ -196,12 +196,31 @@ export type ToolUseStreamState = z.infer<typeof ToolUseStreamStateSchema>;
 // Workflow Stream State
 // One run per tab — all run-scoped data is flat, not keyed by runId.
 
+/**
+ * Value schemas for the three round-keyed output sidecars
+ * (`streamData/{id}/outputFiles.json` / `missingOutputs.json` /
+ * `compileFailures.json`). Shared between the live workflow stream state and
+ * the persisted `StreamSnapshot` (which assembles those files under its own
+ * `*ByRound` field names) so the element schemas and `.prefault({})` default
+ * can't drift between the two surfaces — the same unification
+ * `SharedBackendOwnedFieldsSchema` provides for the metadata fields.
+ */
+export const RoundKeyedOutputSidecarValueSchemas = {
+  outputFiles: roundIndexedRecord(OutputFileInfoSchema),
+  missingOutputs: roundIndexedRecord(z.string()),
+  compileFailures: roundIndexedRecord(CompileFailureSchema),
+} as const;
+
 const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
   category: z.literal(AgentCategory.Workflow),
   // Frontend-owned fields updated by targeted progress-view messages.
-  files: roundIndexedRecord(OutputFileInfoSchema).prefault({}),
-  missingOutputs: roundIndexedRecord(z.string()).prefault({}),
-  compileFailures: roundIndexedRecord(CompileFailureSchema).prefault({}),
+  files: RoundKeyedOutputSidecarValueSchemas.outputFiles.prefault({}),
+  missingOutputs: RoundKeyedOutputSidecarValueSchemas.missingOutputs.prefault(
+    {},
+  ),
+  compileFailures: RoundKeyedOutputSidecarValueSchemas.compileFailures.prefault(
+    {},
+  ),
 });
 
 export type WorkflowStreamState = z.infer<typeof WorkflowStreamStateSchema>;

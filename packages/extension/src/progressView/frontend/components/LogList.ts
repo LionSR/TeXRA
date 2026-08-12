@@ -55,11 +55,9 @@ import { getCopyContent, getProposalInput } from '../formatters/contentStore';
 // Local imports - progress view components (type-only)
 import type { TaskGroupList } from './TaskGroupList';
 
-const LogListStateSchema = z
-  .object({
-    groupToggleStates: z.array(z.tuple([z.string(), z.boolean()])).catch([]),
-  })
-  .catch({ groupToggleStates: [] });
+const LogListStateSchema = z.object({
+  groupToggleStates: z.array(z.tuple([z.string(), z.boolean()])).prefault([]),
+});
 
 /** Cached per-stream data and DOM state */
 interface CachedStream {
@@ -153,6 +151,12 @@ export class LogList extends LitElement {
     }
 
     return html`${repeat(
+      // `rentries()` yields stream cache entries oldest-inserted first (the
+      // reverse of `entries()`) — the DOM order of the per-stream task-group
+      // lists below depends on that ordering, so don't swap it for `entries()`.
+      // The cast is required because lru-cache types `rentries()` as yielding
+      // heterogeneous `(K | V)[]` tuples; the runtime values are `[string,
+      // CachedStream]`.
       this.streamCache.rentries() as Iterable<[string, CachedStream]>,
       ([id]) => id,
       ([id, data]) => html`

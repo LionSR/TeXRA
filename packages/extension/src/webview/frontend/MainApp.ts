@@ -14,7 +14,8 @@ import {
   dispatchMainView,
   type ActionDetail,
   type AgentChangeDetail,
-  type BannerActionDetail,
+  type AgentConfigBannerActionDetail,
+  type ApiKeyBannerActionDetail,
   type BaseFileChangeDetail,
   type CheckboxChangeDetail,
   type CommitChangeDetail,
@@ -456,10 +457,12 @@ export class MainApp extends MainAppBase {
 
     const banners = html`
       <div
-        @api-key-action=${({ detail }: CustomEvent<BannerActionDetail>) =>
-          runApiKeyBannerAction(detail.action as 'set' | 'guide')}
-        @agent-config-action=${({ detail }: CustomEvent<BannerActionDetail>) =>
-          runAgentConfigAction(detail.action as 'edit' | 'dir' | 'docs')}
+        @api-key-action=${({ detail }: CustomEvent<ApiKeyBannerActionDetail>) =>
+          runApiKeyBannerAction(detail.action)}
+        @agent-config-action=${({
+          detail,
+        }: CustomEvent<AgentConfigBannerActionDetail>) =>
+          runAgentConfigAction(detail.action)}
         @dependency-dismiss=${() => dependencyBanner$.set({ visible: false })}
         @recheck-dependencies=${() =>
           postMessage(MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES)}

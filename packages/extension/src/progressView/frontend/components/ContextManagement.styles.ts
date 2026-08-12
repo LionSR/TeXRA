@@ -10,8 +10,6 @@ export const contextManagementStyles: CSSResult = css`
 
   wa-details {
     margin: 0;
-    content-visibility: auto;
-    contain-intrinsic-size: auto 40px;
   }
 
   /* Extend .details-summary from commonViewStyles with accent color */

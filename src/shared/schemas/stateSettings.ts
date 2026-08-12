@@ -12,7 +12,7 @@ import {
   LATEX_CONFIG_RANGES,
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
-} from '@shared/constants/latex';
+} from '@shared/constants/latexConfig';
 import {
   DASHSCOPE_USE_CHINA_PROVIDER_SETTING,
   GLM_CODING_PLAN_PROVIDER_SETTING,

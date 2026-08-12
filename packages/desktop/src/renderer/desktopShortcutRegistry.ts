@@ -64,8 +64,10 @@ export function createDesktopShortcutRegistry(
     return [desktopCommandPaletteShortcut(platform), ...menuEntries].map(
       (entry) => {
         const override = overrides[entry.id];
+        // `null` overrides (explicitly removed shortcuts) are dropped by the
+        // truthy spread below, so they need no explicit normalization.
         const accelerator =
-          override === undefined ? entry.accelerator : (override ?? undefined);
+          override === undefined ? entry.accelerator : override;
         return {
           id: entry.id,
           label: entry.label,

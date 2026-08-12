@@ -374,12 +374,27 @@ const CheckboxChangeDetailSchema = z.object({
 });
 export type CheckboxChangeDetail = z.infer<typeof CheckboxChangeDetailSchema>;
 
-const BannerActionDetailSchema = z.object({
-  action: z.string(),
+/**
+ * Per-banner action details. Each banner's detail carries its own action
+ * literal set plus only the fields that banner fills, so handlers receive a
+ * closed union instead of a shared loose `{ action: string }` type that
+ * required casts at every dispatch site.
+ */
+const ApiKeyBannerActionDetailSchema = z.object({
+  action: z.enum(['set', 'guide']),
   provider: z.string().nullish(),
+});
+export type ApiKeyBannerActionDetail = z.infer<
+  typeof ApiKeyBannerActionDetailSchema
+>;
+
+const AgentConfigBannerActionDetailSchema = z.object({
+  action: z.enum(['edit', 'dir', 'docs']),
   customDirSet: z.boolean().nullish(),
 });
-export type BannerActionDetail = z.infer<typeof BannerActionDetailSchema>;
+export type AgentConfigBannerActionDetail = z.infer<
+  typeof AgentConfigBannerActionDetailSchema
+>;
 
 export const GettingStartedActionSchema = z.enum([
   'runSetup',

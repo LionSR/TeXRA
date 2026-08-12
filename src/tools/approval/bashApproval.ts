@@ -51,7 +51,7 @@ export function setBashApprovalSessionBypass(
   (options?.session ?? currentSession()).approvals.bash.bypass.setBypass(
     streamId,
     enabled,
-    options,
+    { silent: options?.silent },
   );
 }
 

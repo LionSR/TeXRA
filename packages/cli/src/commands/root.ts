@@ -19,12 +19,10 @@ import {
   showUsage,
   showUsageStderr,
   withUsageSections,
-  detectUnknownCliCommand as detectUnknownCliCommandImpl,
+  detectUnknownCliCommand,
   formatUnknownCliCommand,
-  type UnknownCliCommand,
-  detectUnknownCliFlag as detectUnknownCliFlagImpl,
+  detectUnknownCliFlag,
   formatUnknownCliFlag,
-  type UnknownCliFlag,
 } from './_helpers/dispatch';
 import { getExitCode, resetExitCode } from './_helpers/exitCode';
 import { AGENT_RUN_GLOBAL_ARGS } from './_helpers/globalArgs';
@@ -141,18 +139,6 @@ export const rootCommand = withUsageSections(
   ],
 );
 
-export async function detectUnknownCliCommand(
-  rawArgs: readonly string[],
-): Promise<UnknownCliCommand | undefined> {
-  return detectUnknownCliCommandImpl(rootCommand, rawArgs);
-}
-
-export async function detectUnknownCliFlag(
-  rawArgs: readonly string[],
-): Promise<UnknownCliFlag | undefined> {
-  return detectUnknownCliFlagImpl(rootCommand, rawArgs);
-}
-
 /**
  * Re-implement the surface citty's `runMain` provides — explicit `--help`
  * detection plus error handling around `runCommand` — so usage errors (missing
@@ -177,7 +163,7 @@ export async function runCli(
   });
   setUsageColorOverrideFromRawArgs(rawArgs);
 
-  const unknownCommand = await detectUnknownCliCommand(rawArgs);
+  const unknownCommand = await detectUnknownCliCommand(rootCommand, rawArgs);
   if (unknownCommand) {
     writeTextStderr(formatUnknownCliCommand(unknownCommand));
     return { exitCode: CliExitCode.Usage };
@@ -192,7 +178,7 @@ export async function runCli(
     return { exitCode: CliExitCode.Success };
   }
 
-  const unknownFlag = await detectUnknownCliFlag(rawArgs);
+  const unknownFlag = await detectUnknownCliFlag(rootCommand, rawArgs);
   if (unknownFlag) {
     writeTextStderr(formatUnknownCliFlag(unknownFlag));
     return { exitCode: CliExitCode.Usage };

@@ -9,6 +9,9 @@ const ACTIVE_SKILL_DESCRIPTION_MAX_LENGTH = 180;
 const ACTIVE_SKILL_DESCRIPTION_FALLBACK = 'Details available on activation.';
 export const ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS = 200;
 
+/** Canonical skill-source scope vocabulary, shared with the skills loader
+ *  (`src/skills/loadSkills.ts`) so the loader and the persisted snapshot wire
+ *  contract can't drift — a scope added here is representable everywhere. */
 const ActiveSkillSourceScopeSchema = z.enum([
   'bundled',
   'user',
@@ -16,6 +19,10 @@ const ActiveSkillSourceScopeSchema = z.enum([
   'interop',
   'custom',
 ]);
+
+export type ActiveSkillSourceScope = z.infer<
+  typeof ActiveSkillSourceScopeSchema
+>;
 
 const ANSI_ESCAPE_SEQUENCE =
   // eslint-disable-next-line no-control-regex -- untrusted summaries may contain terminal escapes

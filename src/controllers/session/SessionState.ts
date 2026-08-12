@@ -481,10 +481,6 @@ export class SessionState {
 
   // -- Lifecycle --------------------------------------------------------------
 
-  waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void> {
-    return this.stores.waitForOwnedExecutionRelease(stream);
-  }
-
   async clearStream(stream: StreamTabId): Promise<DeleteStreamResult> {
     const deletion = await this.stores.deleteStream(stream);
     if (deletion !== 'deleted') return deletion;

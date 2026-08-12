@@ -45,7 +45,9 @@ export class ArxivMetadataTool extends defineTool({
       throw new ToolError(validationError);
     }
 
-    const requestId = normaliseArxivIdentifier(rawId);
+    // validateId above guarantees extraction succeeds, so the null fallback is
+    // unreachable and just satisfies the type.
+    const requestId = normaliseArxivIdentifier(rawId) ?? rawId;
 
     // Use arxiv-client's ids() method for direct ID lookup.
     const entries = await rateLimitedApiCall(

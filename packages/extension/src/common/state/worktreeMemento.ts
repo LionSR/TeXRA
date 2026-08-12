@@ -33,15 +33,12 @@ export class WorktreeMemento implements vscode.Memento {
   get<T>(key: string): T | undefined;
   get<T>(key: string, defaultValue: T): T;
   get<T>(key: string, defaultValue?: T): T | undefined {
-    if (!this.sharedKeys.has(key)) {
-      return defaultValue === undefined
-        ? this.workspaceState.get<T>(key)
-        : this.workspaceState.get<T>(key, defaultValue);
-    }
-
+    const shared = this.sharedKeys.has(key);
+    const memento = shared ? this.globalState : this.workspaceState;
+    const storageKey = shared ? this.namespacedKey(key) : key;
     return defaultValue === undefined
-      ? this.globalState.get<T>(this.namespacedKey(key))
-      : this.globalState.get<T>(this.namespacedKey(key), defaultValue);
+      ? memento.get<T>(storageKey)
+      : memento.get<T>(storageKey, defaultValue);
   }
 
   async update(key: string, value: unknown): Promise<void> {

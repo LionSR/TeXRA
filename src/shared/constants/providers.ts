@@ -51,10 +51,16 @@ export type ProviderEndpointStateEntry = ProviderStateEntry & {
 };
 
 /**
- * Canonical provider registry. All provider lists are derived from this.
+ * Canonical provider registry. Registry-derived lists (MODEL_SOURCE_ORDER,
+ * SERVER_SIDE_PROVIDER_IDS, PROVIDER_DISPLAY_NAMES, PROVIDER_URLS,
+ * API_KEY_PROVIDER_IDS) are derived from this — no manual sync needed.
  * Order here determines display order for direct model providers.
  *
- * To add a new provider: add a single entry here.
+ * To add a new provider that has a ModelProvider enum value: add a single entry
+ * here, and it automatically flows into every derived list plus the API-key
+ * provider set. Providers without a ModelProvider enum value (e.g. OpenRouter,
+ * Kimi Code) live in EXTRA_API_KEY_PROVIDER_IDS instead.
+ *
  * hasServerKey: true → automatically included in SERVER_SIDE_PROVIDERS.
  */
 const PROVIDER_REGISTRY = [
@@ -169,6 +175,14 @@ const PROVIDER_REGISTRY = [
   },
 ] as const satisfies readonly ProviderDef[];
 
+/**
+ * Direct API-key provider ids that have no ModelProvider enum counterpart and
+ * therefore cannot live in PROVIDER_REGISTRY. Single home for these ids;
+ * API_KEY_PROVIDER_IDS composes them with the registry so a new provider is
+ * added in exactly one place.
+ */
+const EXTRA_API_KEY_PROVIDER_IDS = ['openRouter', 'kimiCode'] as const;
+
 /** Providers not in the main registry (no server-side keys, no model selection). */
 const EXTRA_DISPLAY_NAMES: Record<string, string> = {
   openRouter: 'OpenRouter',
@@ -210,6 +224,15 @@ export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   ...Object.fromEntries(PROVIDER_REGISTRY.map((p) => [p.id, p.displayName])),
   ...EXTRA_DISPLAY_NAMES,
 };
+
+/**
+ * Display name for a provider id, falling back to the id itself when the id is
+ * unknown. The single home of the `PROVIDER_DISPLAY_NAMES[id] ?? id` fallback
+ * that call sites used to inline.
+ */
+export function providerDisplayName(provider: string): string {
+  return PROVIDER_DISPLAY_NAMES[provider] ?? provider;
+}
 
 /** URLs for obtaining API keys from each provider. */
 export const PROVIDER_URLS: Record<string, string> = {
@@ -434,21 +457,19 @@ export const PROVIDER_SETTINGS: Record<string, ProviderSettingDef[]> = {
 
 /**
  * Provider IDs where users can configure direct API keys — the single source
- * for direct key-provider enumeration.
+ * for direct key-provider enumeration, derived from PROVIDER_REGISTRY (plus
+ * EXTRA_API_KEY_PROVIDER_IDS for the two non-enum providers). Order = display
+ * order in the settings key rows; a registry addition flows in automatically.
  */
 export const API_KEY_PROVIDER_IDS = Object.freeze([
-  'openai',
-  'anthropic',
-  'openRouter',
-  'google',
-  'xai',
-  'deepseek',
-  'moonshot',
-  'kimiCode',
-  'dashscope',
-  'minimax',
-  'glm',
-  'meta',
+  // `as const` on the registry objects keeps `provider.id` as its enum-member
+  // type; the template-literal cast recovers the string value so the derived
+  // tuple's element type stays a string-literal union (like the hand-written
+  // list it replaces) and callers can pass plain 'anthropic'-style strings.
+  ...PROVIDER_REGISTRY.map(
+    (provider) => provider.id as `${typeof provider.id}`,
+  ),
+  ...EXTRA_API_KEY_PROVIDER_IDS,
 ] as const);
 
 // ============================================================================

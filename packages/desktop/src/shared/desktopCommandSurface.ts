@@ -19,7 +19,6 @@ import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopWorkbenchKind,
 } from './desktopShellMessages.js';
-import type { MenuItemConstructorOptions } from 'electron';
 
 export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
@@ -61,7 +60,7 @@ export function vsCodeOnlyGettingStartedMessage(
 type DesktopLocalCommandId =
   (typeof DESKTOP_LOCAL_COMMANDS)[keyof typeof DESKTOP_LOCAL_COMMANDS];
 
-const DESKTOP_MENU_GROUPS = [
+export const DESKTOP_MENU_GROUPS = [
   [
     'texra.showMainView',
     DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
@@ -85,12 +84,12 @@ const DESKTOP_MENU_GROUPS = [
   CommandId | DesktopLocalCommandId
 )[])[];
 
-const DESKTOP_FILE_COMMANDS = [
+export const DESKTOP_FILE_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
 ] as const satisfies readonly DesktopLocalCommandId[];
 
-const DESKTOP_HELP_COMMANDS = [
+export const DESKTOP_HELP_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
   DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
 ] as const satisfies readonly DesktopLocalCommandId[];
@@ -135,15 +134,6 @@ export interface DesktopCommandMenuEntry {
   category: string;
   icon: TeXRAIconName;
   accelerator?: string;
-}
-
-/** Menu template shape produced before Electron materializes native menus. */
-export interface DesktopMenuTemplateItem extends Omit<
-  MenuItemConstructorOptions,
-  'click' | 'submenu'
-> {
-  click?: () => void;
-  submenu?: DesktopMenuTemplateItem[];
 }
 
 /**
@@ -410,53 +400,4 @@ export function buildDesktopMainViewResetMessage(): DesktopMainViewResetMessage 
     state: {},
     isResetOperation: true,
   };
-}
-
-export function buildDesktopMenuTemplate(
-  actions: DesktopCommandActions,
-  platform: NodeJS.Platform = process.platform,
-): DesktopMenuTemplateItem[] {
-  const entriesById = new Map(
-    getDesktopCommandMenuEntries(platform).map((entry) => [entry.id, entry]),
-  );
-  const commandItem = (id: DesktopCommandId): DesktopMenuTemplateItem => {
-    const entry = entriesById.get(id);
-    if (!entry) throw new Error(`Missing desktop menu entry: ${id}`);
-    return {
-      label: entry.label,
-      click: () => dispatchDesktopCommand(id, actions),
-    };
-  };
-  const customMenu: DesktopMenuTemplateItem = {
-    label: 'TeXRA',
-    submenu: [
-      ...DESKTOP_MENU_GROUPS[0].map(commandItem),
-      { type: 'separator' },
-      ...DESKTOP_MENU_GROUPS[1].map(commandItem),
-    ],
-  };
-  const fileMenu: DesktopMenuTemplateItem = {
-    label: 'File',
-    submenu: [
-      ...DESKTOP_FILE_COMMANDS.map(commandItem),
-      { type: 'separator' },
-      platform === 'darwin' ? { role: 'close' } : { role: 'quit' },
-    ],
-  };
-
-  const leadingMenus: DesktopMenuTemplateItem[] =
-    platform === 'darwin' ? [{ role: 'appMenu' }, fileMenu] : [fileMenu];
-
-  return [
-    ...leadingMenus,
-    customMenu,
-    { role: 'editMenu' },
-    { role: 'viewMenu' },
-    { role: 'windowMenu' },
-    {
-      label: 'Help',
-      role: 'help',
-      submenu: DESKTOP_HELP_COMMANDS.map(commandItem),
-    },
-  ];
 }

@@ -6,7 +6,7 @@
  */
 
 // Local imports
-import type { AgentEntry } from '@agent/index/agentRegistry';
+import type { AgentEntry } from '@agent/index/agentEntry';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import type { ProposalResult } from '@agent/runtime/HostInteractions';
@@ -140,7 +140,7 @@ export function proposalResultToToolResult(
   }
 }
 
-export interface DelegationProposalDecision {
+interface DelegationProposalDecision {
   readonly result: ProposalResult;
   /** True only when the stream's proposal-bypass policy supplied approval. */
   readonly autoApproved: boolean;

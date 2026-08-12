@@ -6,9 +6,8 @@ export class MemoryStateStore implements StateStore {
   private readonly values = new Map<string, unknown>();
 
   get<T>(key: string, defaultValue?: T): T {
-    return this.values.has(key)
-      ? (this.values.get(key) as T)
-      : (defaultValue as T);
+    const value = this.values.get(key);
+    return value === undefined ? (defaultValue as T) : (value as T);
   }
 
   async update(key: string, value: unknown): Promise<void> {

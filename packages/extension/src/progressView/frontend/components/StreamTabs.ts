@@ -25,8 +25,7 @@ import {
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
-  formatStreamStatusLabel,
-  streamStatusDisplayKey,
+  progressHeaderStatus,
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
 import {
@@ -159,13 +158,9 @@ class StreamTab extends LitElement {
   override render(): TemplateResult {
     const stream = this.info;
     const status = this.status || DEFAULT_STREAM_METADATA_STATUS;
-    const displayKey = streamStatusDisplayKey(status, this.substate);
+    const { label, displayKey } = progressHeaderStatus(status, this.substate);
     const statusKey = displayKey ?? status;
-    const lifecycleStatusLabel =
-      formatStreamStatusLabel(status, {
-        style: 'progressHeader',
-        ...(this.substate ? { substate: this.substate } : {}),
-      }) ?? status;
+    const lifecycleStatusLabel = label ?? status;
     // Pending approval outranks the lifecycle phase: a run held at the
     // approval gate is still "running", and the gate is what you act on.
     const statusGlyph = this.hasPendingApproval
@@ -450,10 +445,8 @@ export class StreamTabs extends LitElement {
       },
     );
     const childCount = children.length;
-    const expanded =
-      !options.compact &&
-      childCount > 0 &&
-      this.expandedParents.has(stream.name);
+    const showChildren = !options.compact && childCount > 0;
+    const expanded = showChildren && this.expandedParents.has(stream.name);
     const streamState = this.streamStates.get(stream.name);
 
     return html`
@@ -469,7 +462,7 @@ export class StreamTabs extends LitElement {
         ?expanded=${expanded}
       ></stream-tab>
       ${
-        !options.compact && childCount > 0
+        showChildren
           ? html`<div class="child-streams" ?hidden=${!expanded}>
               ${repeat(
                 children,

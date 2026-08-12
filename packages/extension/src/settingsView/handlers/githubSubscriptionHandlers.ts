@@ -14,6 +14,7 @@ import {
 } from '@controllers/settingsView/githubSubscriptions';
 import { SecretManager } from '@frontend/secretManager';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { platform } from '@platform/platform';
 import {
   getProgressStreamLabel,
   revealProgressStream,
@@ -23,6 +24,7 @@ import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
+import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import {
   withHandlerErrorHandling,
   type SettingsHandlerContext,
@@ -53,7 +55,7 @@ export class GitHubSubscriptionHandlers {
       this.ctx,
       'Failed to save GitHub token',
       async () => {
-        await SecretManager.set(SecretManager.GITHUB_TOKEN_KEY, token.trim());
+        await platform().secrets.set(GITHUB_TOKEN_STORAGE_KEY, token.trim());
         void vscode.window.showInformationMessage('GitHub token saved.');
         await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
       },
@@ -65,7 +67,7 @@ export class GitHubSubscriptionHandlers {
       this.ctx,
       'Failed to remove GitHub token',
       async () => {
-        await SecretManager.delete(SecretManager.GITHUB_TOKEN_KEY);
+        await platform().secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
         void vscode.window.showInformationMessage('GitHub token removed.');
         await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
       },

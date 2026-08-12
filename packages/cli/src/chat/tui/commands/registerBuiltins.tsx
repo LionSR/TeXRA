@@ -13,7 +13,7 @@ import {
 import type { ApiProvider } from '@model/apiProviders';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type ExecutionId } from '@shared/schemas';
-import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import { providerDisplayName } from '@shared/constants/providers';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -53,7 +53,10 @@ import {
   applyCliProviderApiKey,
   showCliAuthStatus,
 } from './handlers/apiModeCommands';
-import { applyCliApprovalPolicySelection } from './handlers/approvalCommand';
+import {
+  applyCliApprovalPolicySelection,
+  YOLO_USAGE,
+} from './handlers/approvalCommand';
 import {
   loginFromChat,
   loginStartMessage,
@@ -391,7 +394,7 @@ export function registerBuiltinSlashCommands(options?: {
         availableRows={props.availableRows}
         onSave={(provider, key) => Promise.resolve(onApiKeySave(provider, key))}
         onDone={(provider, modelNotice) => {
-          const label = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
+          const label = providerDisplayName(provider);
           appendLocalAssistantTranscript(
             [
               `Saved the ${label} API key.`,
@@ -643,7 +646,7 @@ export function registerBuiltinSlashCommands(options?: {
     category: 'configuration',
     echo: 'ifPersists',
     handler: (remainder, context) =>
-      applyCliApprovalPolicySelection(remainder || 'yolo', context),
+      applyCliApprovalPolicySelection(remainder || 'yolo', context, YOLO_USAGE),
   });
   registerSlashCommand({
     name: 'status',

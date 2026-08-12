@@ -140,6 +140,11 @@ export async function runPackMultiple(
         runPackSingle(model, file, agent, commonOutputFolder),
       ),
     );
+    // Match runCleanMultiple's aggregation contract: a per-file error takes
+    // precedence over partial success, so a failed pack is never misreported
+    // as success or as 'noFiles'.
+    const errored = results.find((r) => r.status === 'error');
+    if (errored) return errored;
     const anyFilesPacked = results.some((r) => r.status === 'success');
 
     const xmlFilesPacked = await packAdditionalXmlFiles(

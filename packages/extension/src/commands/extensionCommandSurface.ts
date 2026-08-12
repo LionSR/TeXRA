@@ -54,7 +54,7 @@ import { SIDEBAR_VIEWS, getActiveSidebarView } from '@common/webview';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { signInWithGrokSubscription } from '@frontend/auth/xaiSubscriptionSignIn';
-import { runCleanBuild, runCleanOutput } from '@housekeeping';
+import { runCleanBuild, runCleanOutput } from '@housekeeping/clean';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';

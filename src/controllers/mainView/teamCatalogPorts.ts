@@ -22,7 +22,7 @@ export function createTeamCatalogPorts(): {
     customPresetsRaw: platform().workspaceState.get<unknown>(
       WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
     ),
-    ensureCatalogLoaded: () => loadAgents(),
+    ensureCatalogLoaded: loadAgents,
     getAgents: getAgentsByCategory,
     canAccessRemoteCatalog: () => SupabaseClient.canAccessRemoteAgentCatalog(),
     refreshRemote: () => refresh({ includeRemote: true }),

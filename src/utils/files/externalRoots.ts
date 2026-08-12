@@ -105,15 +105,13 @@ export function registerExternalRoot(
     );
   }
   // Canonicalise at registration so find-time canonicalisation lands in the
-  // same space. Falls back to path.resolve only on canonicalise failure —
-  // registration is setup-time and the caller already has a try/catch that
-  // will surface a meaningful error.
-  let canonicalPath: string;
-  try {
-    canonicalPath = canonicalise(absolutePath);
-  } catch {
-    canonicalPath = path.resolve(absolutePath);
-  }
+  // same space. canonicalise tolerates non-existent trailing segments itself
+  // and only throws on permission errors or unexpected failures; per the
+  // fail-closed contract in its JSDoc, let those propagate so an
+  // un-verifiable path is never admitted to the allowlist. Registration is
+  // setup-time and the caller already has a try/catch that surfaces a
+  // meaningful error.
+  const canonicalPath = canonicalise(absolutePath);
   // Frozen: the registry hands these entries to tool code and to
   // `listExternalRoots`, and a mutated `writable` or `absolutePath` would
   // silently widen the allowlist for every later lookup.

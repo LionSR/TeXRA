@@ -123,21 +123,18 @@ export function getProviderKeyUrl(
   return defaultUrl;
 }
 
-// Named region accessors retained for direct callers in other files.
-export function getDashScopeUseChina(): boolean {
-  return regionSet('dashscope') ?? false;
-}
+// China-region routing defaults per provider, used when the provider's region
+// key is unset (providers without region metadata).
+const USE_CHINA_DEFAULT: Readonly<Record<string, boolean>> = {
+  dashscope: false,
+  minimax: false,
+  moonshot: true,
+  glm: true,
+};
 
-export function getMiniMaxUseChina(): boolean {
-  return regionSet('minimax') ?? false;
-}
-
-export function getMoonshotUseChina(): boolean {
-  return regionSet('moonshot') ?? true;
-}
-
-export function getGLMUseChina(): boolean {
-  return regionSet('glm') ?? true;
+/** Whether a provider routes through its China-region endpoint. */
+export function useChinaRegion(provider: string): boolean {
+  return regionSet(provider) ?? USE_CHINA_DEFAULT[provider] ?? false;
 }
 
 // ---------------------------------------------------------------------------

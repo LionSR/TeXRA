@@ -3,9 +3,10 @@ import type { HistoryItem } from '@shared/schemas';
 import {
   getHistoryItemPresentation,
   hasHistoryConfigValue,
+  type HistoryConfigValue,
 } from './historyItemPresentation';
 
-type ToolConfigEntry = [string, unknown];
+type ToolConfigEntry = [string, HistoryConfigValue];
 
 function normalizeSearchText(text: string): string {
   return text

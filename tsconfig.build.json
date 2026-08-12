@@ -64,7 +64,6 @@
         "./src/skills/*.ts",
         "./src/skills/*/index.ts"
       ],
-      "@housekeeping": ["./src/housekeeping/index.ts"],
       "@housekeeping/*": [
         "./src/housekeeping/*",
         "./src/housekeeping/*.ts",

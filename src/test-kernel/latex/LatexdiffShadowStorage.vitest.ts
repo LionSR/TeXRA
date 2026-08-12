@@ -167,9 +167,14 @@ describe('LaTeXdiffService shadow output', () => {
     const { runLatexdiffFromMetadata } =
       await import('@latex/latexdiff/diffOperations');
 
+    const { LaTeXdiffService } = await import('@latex/latexdiff');
     const result = await runLatexdiffFromMetadata({
       rounds: { 1: [output(1, first)], 2: [output(2, second, './paper.tex')] },
       generateBetweenRoundDiffs: true,
+      latexdiff: {
+        channel: 'test',
+        service: new LaTeXdiffService('test'),
+      },
       progress: { report: vi.fn() },
     });
 

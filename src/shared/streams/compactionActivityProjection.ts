@@ -132,10 +132,10 @@ export function applyCompactionActivityEntries(
     if (existingIndex === undefined) continue;
     const block = projection.blocks[existingIndex];
     const withinSettlementBoundary =
-      block?.status === 'interrupted' &&
+      block.status === 'interrupted' &&
       block.settledThroughSeqNo !== undefined &&
       entry.seqNo <= block.settledThroughSeqNo;
-    if (!block || (block.finalized && !withinSettlementBoundary)) continue;
+    if (block.finalized && !withinSettlementBoundary) continue;
     const { settledThroughSeqNo: _settledThroughSeqNo, ...unsettledBlock } =
       block;
     projection.blocks[existingIndex] = {
