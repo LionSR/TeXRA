@@ -1,5 +1,5 @@
 /**
- * Polymorphic execution handles.
+ * Live agent execution handle and terminal settlement.
  *
  * A handle owns one run's identity, its live control surfaces (interrupt,
  * tool-use flow, execution lease), and its exactly-once terminal settlement.
@@ -380,9 +380,6 @@ export type AgentRunHandle = Pick<
 
 /**
  * True when the handle is a child of parentStreamId (not the parent itself).
- * Only an `AgentExecutionHandle` can be one, so callers that need the child's
- * agent-run members narrow through this predicate rather than re-testing
- * `instanceof` alongside it.
  */
 export function isChildExecution(
   handle: AgentExecutionHandle,
