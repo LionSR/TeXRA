@@ -1,5 +1,5 @@
 // Local imports - stream state
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime';
 import { sumUsageStats, type TokenUsageStats } from '@shared/schemas';
 import { isActivePhase, isInFlightPhase } from '@shared/streams/streamStatus';
 

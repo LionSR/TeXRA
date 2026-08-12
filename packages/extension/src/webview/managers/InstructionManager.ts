@@ -1,4 +1,4 @@
-import { polishTextWithAI, FileContext } from '@agent/runtime/textEnhancement';
+import { polishTextWithAI, FileContext } from '@agent/runtime';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';

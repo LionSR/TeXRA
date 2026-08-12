@@ -4,8 +4,7 @@ import * as vscode from 'vscode';
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import { defaultSession } from '@agent/runtime/SessionHandle';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
+import { attachTerminalResultToast, defaultSession } from '@agent/runtime';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
