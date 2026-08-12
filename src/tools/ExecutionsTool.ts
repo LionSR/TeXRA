@@ -67,7 +67,7 @@ import {
   readCompletedRunConversation,
   readCompletedRunTodos,
 } from '@transcript';
-import { clamp, unique } from '@utils/core';
+import { assertNever, clamp, unique } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -449,9 +449,18 @@ const PathFieldSchema = z.string().describe('Path starting with /executions');
 
 const ViewActionSchema = z.strictObject({
   path: PathFieldSchema,
+  // Optional + defaulted (not a bare literal, unlike the other branches):
+  // 'view' is the common no-op-preamble call, so omitting `action` entirely
+  // must both dispatch to this branch and keep it out of the JSON-schema
+  // `required` list — matching the pre-refactor `.prefault('view')` and the
+  // "design for the model's first call" rule (AGENTS.md). z.discriminatedUnion
+  // matches an omitted discriminator against a branch whose discriminator
+  // schema itself accepts undefined, so no top-level preprocess is needed.
   action: z
     .literal('view')
-    .describe('Read execution data (returns immediately).'),
+    .optional()
+    .default('view')
+    .describe('Read execution data (returns immediately). Default action.'),
 
   /** Optional line range [start, end] for large outputs. */
   view_range: ViewRangeSchema.nullish().describe(
@@ -561,7 +570,7 @@ const UnsubscribeActionSchema = z.strictObject({
     ),
 });
 
-const ExecutionsToolActionSchema = z.discriminatedUnion('action', [
+const ExecutionsToolInputSchema = z.discriminatedUnion('action', [
   ViewActionSchema,
   WaitActionSchema,
   KillActionSchema,
@@ -569,21 +578,7 @@ const ExecutionsToolActionSchema = z.discriminatedUnion('action', [
   UnsubscribeActionSchema,
 ]);
 
-// Preprocess rather than a per-branch default: z.discriminatedUnion picks a
-// branch by reading the raw `action` value before any field-level default
-// runs, so an omitted `action` (the common "just view this path" call) would
-// otherwise match no branch at all. Defaulting here keeps that call shape
-// working exactly like the pre-refactor `.prefault('view')` did, while every
-// branch below only declares the fields that action actually uses instead of
-// one flat bag of cross-action-optional fields.
-const ExecutionsToolInputSchema = z.preprocess((value) => {
-  if (value && typeof value === 'object' && !('action' in value)) {
-    return { ...value, action: 'view' };
-  }
-  return value;
-}, ExecutionsToolActionSchema);
-
-type ExecutionsToolInput = z.infer<typeof ExecutionsToolActionSchema>;
+type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
 
 export class ExecutionsTool extends defineTool({
   name: 'executions',
@@ -650,6 +645,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           return this.showSummary(executionId, {
             suppressAutoDeliveredSubagentReport: false,
           });
+        default:
+          return assertNever(input, 'Unrecognized executions action');
       }
     }
 
