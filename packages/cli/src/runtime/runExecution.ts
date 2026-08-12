@@ -1,10 +1,10 @@
 import {
   attachTerminalResultToast,
+  releaseExecutionLeaseAfterArtifacts,
   runAgent,
   trackTerminalResultPresentation,
   type RunAgentOptions,
 } from '@agent/runtime';
-import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import {
   ExecutionLeaseLostError,
   type OwnedExecutionLeaseScope,
@@ -258,13 +258,15 @@ export async function executeCliRequest(
       settleLeaseScope = resolve;
     },
   );
-  let shutdownStatusFinalized: Promise<boolean> | undefined;
-  const finalizeShutdownStatus = (): Promise<boolean> => {
-    if (!shutdownInterrupted) return Promise.resolve(false);
+  type ShutdownFinalizationResult =
+    { readonly artifactsHandled: true; readonly error?: unknown } | undefined;
+  let shutdownStatusFinalized: Promise<ShutdownFinalizationResult> | undefined;
+  const finalizeShutdownStatus = (): Promise<ShutdownFinalizationResult> => {
+    if (!shutdownInterrupted) return Promise.resolve(undefined);
     shutdownStatusFinalized ??= (async () => {
       const runWithOwnership = await leaseScopeReady;
       const executionId = ownedExecutionId;
-      if (!runWithOwnership || !executionId) return false;
+      if (!runWithOwnership || !executionId) return undefined;
       try {
         await runWithOwnership(async () => {
           await finalizeCliExecution(
@@ -275,10 +277,15 @@ export async function executeCliRequest(
           );
           await releaseExecutionLeaseAfterArtifacts(session, executionId);
         });
-        return true;
+        return { artifactsHandled: true };
       } catch (error) {
-        if (!(error instanceof ExecutionLeaseLostError)) throw error;
-        return false;
+        if (error instanceof ExecutionLeaseLostError) return undefined;
+        reportShutdownFinalizationFailure(
+          error instanceof Error
+            ? error
+            : new Error(toErrorMessage(error), { cause: error }),
+        );
+        return { artifactsHandled: true, error };
       }
     })();
     return shutdownStatusFinalized;

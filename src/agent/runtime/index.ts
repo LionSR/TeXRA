@@ -58,6 +58,9 @@ export type {
 export { runAgent } from './runAgent';
 export type { RunAgentOptions } from './runAgent';
 
+// executionOwnership
+export { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
+
 // SessionResumeRetrieval
 export { retrieveSessionResumeData } from './SessionResumeRetrieval';
 export type { ToolUseResumeData } from './SessionResumeRetrieval';

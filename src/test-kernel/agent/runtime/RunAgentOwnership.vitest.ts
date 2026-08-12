@@ -305,13 +305,30 @@ describe('runAgent execution ownership', () => {
       registerExecution: true,
       beforeLeaseRelease: async () => {
         order.push('host-artifacts-and-release');
-        return true;
+        return { artifactsHandled: true };
       },
     });
 
     expect(order).toEqual(['execute', 'host-artifacts-and-release']);
     expect(flushArtifacts).not.toHaveBeenCalled();
     expect(mocks.completeOwnedExecutionLease).not.toHaveBeenCalled();
+  });
+
+  it('does not retry after a handled host artifact failure', async () => {
+    const artifactError = new Error('shutdown transcript flush failed');
+
+    const failure = await launch({
+      registerExecution: true,
+      beforeLeaseRelease: async () => ({
+        artifactsHandled: true,
+        error: artifactError,
+      }),
+    }).catch((error: unknown) => error);
+
+    expect(failure).toBe(artifactError);
+    expect(flushArtifacts).not.toHaveBeenCalled();
+    expect(mocks.completeOwnedExecutionLease).not.toHaveBeenCalled();
+    expect(mocks.abandonOwnedExecutionLease).toHaveBeenCalledWith(EXECUTION_ID);
   });
 
   it('preserves run and final-artifact failures before releasing ownership', async () => {

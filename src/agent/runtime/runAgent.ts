@@ -51,9 +51,13 @@ export interface RunAgentOptions extends Pick<
   openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
   /**
    * Persist host-owned final state before the ordinary session drain. Return
-   * true when the hook already drained artifacts and disposed of ownership.
+   * an explicit result when the hook already drained artifacts and disposed
+   * of ownership, including any failure that should remain observable.
    */
-  beforeLeaseRelease?: () => Promise<boolean | void>;
+  beforeLeaseRelease?: () => Promise<{
+    readonly artifactsHandled: true;
+    readonly error?: unknown;
+  } | void>;
   /** Bind host callbacks that may run outside the agent's async context. */
   onExecutionLeaseAcquired?: (
     scope: OwnedExecutionLeaseScope,
@@ -200,7 +204,11 @@ export async function runAgent(
 
       const artifactFailures: unknown[] = [];
       try {
-        finalArtifactsHandled = (await beforeLeaseRelease?.()) === true;
+        const hostArtifacts = await beforeLeaseRelease?.();
+        finalArtifactsHandled = hostArtifacts?.artifactsHandled === true;
+        if (hostArtifacts?.error !== undefined) {
+          artifactFailures.push(hostArtifacts.error);
+        }
       } catch (error) {
         artifactFailures.push(error);
       }

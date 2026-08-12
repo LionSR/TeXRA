@@ -901,6 +901,35 @@ describe('executeCliRequest', () => {
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
+  it('reports a shutdown artifact drain failure once', async () => {
+    const { platform, executeCliRequest } = await installFakePlatform();
+    const artifactError = new Error('shutdown transcript flush failed');
+    mocks.releaseExecutionLeaseAfterArtifacts.mockRejectedValueOnce(
+      artifactError,
+    );
+    const hangingRun = stubHangingRun((options) => {
+      options.onExecutionLeaseAcquired?.(
+        (operation: () => unknown) => operation(),
+        'exec-1' as ExecutionId,
+      );
+    });
+
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+    });
+    await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledOnce());
+    await platform.lifecycle.runShutdown();
+
+    expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
+      message: artifactError.message,
+    });
+
+    hangingRun.resolve(COMPLETED_RUN);
+    mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
+    await run;
+    expect(mocks.emit).toHaveBeenCalledTimes(1);
+  });
+
   it('removes the shutdown status hook after owned executions finish', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();
     const request = baseRequest();
