@@ -1,10 +1,10 @@
 import {
   attachTerminalResultToast,
+  releaseExecutionLeaseAfterArtifacts,
   runAgent,
   trackTerminalResultPresentation,
   type RunAgentOptions,
 } from '@agent/runtime';
-import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import {
   ExecutionLeaseLostError,
   type OwnedExecutionLeaseScope,

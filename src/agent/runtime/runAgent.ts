@@ -205,6 +205,11 @@ export async function runAgent(
         artifactFailures.push(error);
       }
       if (!finalArtifactsHandled) {
+        // A failed host hook may already have abandoned ownership. Still try
+        // the ordinary drain: callbacks can also fail before touching session
+        // artifacts, and preserving those artifacts is worth the attempt. If
+        // ownership is gone, the resulting lease-lost error remains secondary
+        // to the host hook's original failure in the aggregate below.
         try {
           await flushOwnedExecutionArtifacts(runSession, executionId);
         } catch (error) {
