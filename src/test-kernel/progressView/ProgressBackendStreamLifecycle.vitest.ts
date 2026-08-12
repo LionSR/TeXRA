@@ -274,7 +274,7 @@ describe('ProgressBackend', () => {
     await backend.deleteStream(second);
 
     expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(second);
-    expect(lifecycle.activateStream).toHaveBeenCalledWith(first);
+    expect(backend.state.activeStream).toBe(first);
     expect(messages).toContainEqual({
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
       stream: second,
@@ -314,11 +314,12 @@ describe('ProgressBackend', () => {
 
     backend.state.streamLogs.ensureStream(only);
     backend.state.switchActiveStream(only);
+    const activateStream = vi.spyOn(backend, 'activateStream');
 
     await backend.deleteStream(only);
 
     expect(backend.state.activeStream).toBe('');
-    expect(lifecycle.activateStream).not.toHaveBeenCalled();
+    expect(activateStream).not.toHaveBeenCalled();
     // No stream was activated, so only the stream list is resent.
     expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
       syncActiveStream: false,
@@ -354,7 +355,6 @@ describe('ProgressBackend', () => {
     await deletion;
 
     expect(backend.state.activeStream).toBe(selected);
-    expect(lifecycle.activateStream).toHaveBeenCalledWith(selected);
   });
 
   it('cleans every stream and emits one bulk deletion', async () => {

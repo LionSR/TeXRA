@@ -115,7 +115,7 @@ function createProvider() {
   };
   injected.backend = {
     approvalHandlers: {},
-    syncStreamContent: vi.fn(),
+    syncRenderedStreams: vi.fn(async () => {}),
   };
   injected.webviewUpdater = {
     isAvailable: () => true,

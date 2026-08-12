@@ -49,7 +49,6 @@ interface ProgressBackendLifecycleOptions {
   cleanupDeletedStream(stream: StreamTabId): void;
   cleanupDeletedStreams(options: { allDeleted: boolean }): void;
   rebuildRenderedStreams(options: { syncActiveStream: boolean }): void;
-  activateStream(stream: StreamTabId): Promise<void> | void;
   notifyDeletionRetained(
     activeCount: number,
     failedCount: number,
@@ -172,6 +171,43 @@ export class ProgressBackend {
     this.litRenderer.syncStreamContent(stream, options);
   }
 
+  /** Rebuild stream tabs and, when requested, rehydrate the active viewport. */
+  async syncRenderedStreams(options: {
+    syncActiveStream: boolean;
+    theme?: 'dark' | 'light';
+  }): Promise<void> {
+    const activeStream = this.webviewUpdater.sendStreamMetadata(
+      this.state,
+      this.state.streamStatus.getAllStreamStates(),
+      options.theme,
+    );
+    if (!options.syncActiveStream) return;
+
+    const hasStreams = this.state.streamLogs.keys().length > 0;
+    if (!activeStream && hasStreams) return;
+    await this.syncActiveStream(activeStream, false, false);
+  }
+
+  /** Select and render one existing stream without rebuilding the tab list. */
+  async activateStream(stream: StreamTabId): Promise<boolean> {
+    if (!this.state.streamLogs.has(stream)) return false;
+    this.state.switchActiveStream(stream);
+    await this.syncActiveStream(stream, true, true);
+    return true;
+  }
+
+  private async syncActiveStream(
+    stream: StreamTabId | '',
+    includeActiveState: boolean,
+    notifyActivation: boolean,
+  ): Promise<void> {
+    if (!this.litRenderer.isAvailable()) return;
+    if (stream) await this.state.streamLogs.ensureLoaded(stream);
+    if (this.state.activeStream !== stream) return;
+    if (notifyActivation) this.litRenderer.onActiveStreamChanged(stream);
+    this.litRenderer.syncStreamContent(stream, { includeActiveState });
+  }
+
   /**
    * Cancel every still-running stream because the app itself is going away.
    * App-lifecycle only (extension deactivating); not a session fact.
@@ -285,6 +321,7 @@ export class ProgressBackend {
     this.webviewBridge.clearStream(stream);
 
     let shouldActivateStream = false;
+    let notifyActivation = true;
     const activeAfterClear = this.state.activeStream;
     const remainingStreams = this.state.selectableStreamNames();
     const hasVisibleActive =
@@ -294,6 +331,9 @@ export class ProgressBackend {
         this.state.rotateActiveStream(remainingStreams) !== '';
     } else if (wasActive && hasVisibleActive) {
       shouldActivateStream = true;
+      // A newer activation won while deletion awaited storage. Its fact
+      // already focused the renderer; only refresh its content here.
+      notifyActivation = false;
     }
 
     this.postMessage({
@@ -303,7 +343,11 @@ export class ProgressBackend {
 
     const nextActive = this.state.activeStream;
     if (shouldActivateStream && nextActive) {
-      await this.lifecycle.activateStream(nextActive);
+      if (notifyActivation) {
+        await this.activateStream(nextActive);
+      } else {
+        await this.syncActiveStream(nextActive, true, false);
+      }
     } else {
       // The deleted stream was not the active one, so only the stream list
       // changed; the active stream's content is still on screen and correct.
