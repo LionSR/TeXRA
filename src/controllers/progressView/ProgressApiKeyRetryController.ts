@@ -27,6 +27,7 @@ interface CodingPlanToggle {
   readonly exhaustionReason: ExhaustionReason;
   readonly getEnabled: () => boolean;
   readonly setEnabled: (enabled: boolean) => Promise<void>;
+  readonly restoreEnabled?: (enabled: boolean) => Promise<void>;
 }
 
 interface ProgressApiKeyPreparationResult {
@@ -89,6 +90,7 @@ export class ProgressApiKeyRetryController {
         exhaustionReason: runtime.descriptor.exhaustionReason,
         getEnabled: runtime.getEnabled,
         setEnabled: runtime.setEnabled,
+        restoreEnabled: runtime.restoreEnabled,
       }))
     );
   }
@@ -275,7 +277,9 @@ export class ProgressApiKeyRetryController {
       );
       if (toggle)
         restores.push(
-          toggle.setEnabled(before.codingPlans.get(reason) ?? false),
+          (toggle.restoreEnabled ?? toggle.setEnabled)(
+            before.codingPlans.get(reason) ?? false,
+          ),
         );
     }
     await Promise.all(restores);

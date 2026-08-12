@@ -28,8 +28,8 @@ import {
   type StreamSubstate,
   type StreamTabId,
   type TokenUsageStats,
+  type UsageRoute,
 } from '@shared/schemas';
-import type { UsageRoute } from '@shared/schemas/usage';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import {
   FOREGROUND_OWNERSHIP,
