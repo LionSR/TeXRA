@@ -32,11 +32,13 @@ export interface ModelListRefreshResult {
 
 /**
  * Reconciles a persisted enabled-models list with the current defaults.
- * Existing user choices are preserved unless a versioned removal rule applies.
+ * Existing user choices are preserved unless a removal rule applies. Defaults
+ * are added only when the preferred-model version changes.
  */
 function reconcileEnabledModels(
   currentModels: readonly string[],
   previousVersion: number | undefined,
+  addDefaults: boolean,
 ): EnabledModelReconciliation {
   const strippedSet = new Set<string>();
 
@@ -49,8 +51,8 @@ function reconcileEnabledModels(
   // intentionally remains guarded at version 16. These thresholds are frozen
   // historical facts about specific past migrations, not tied to the current
   // value of MODEL_LIST_VERSION: it is now a hash of preferred membership and
-  // status plus catalogue retirements rather than a hand-bumped integer, so it no
-  // longer makes sense to "bump the guard to the current version" -- a future
+  // status rather than a hand-bumped integer, so it no longer makes sense to
+  // "bump the guard to the current version" -- a future
   // one-time sweep would add its own new numeric threshold here instead.
   if ((previousVersion ?? 0) < 16) {
     for (const model of currentModels) {
@@ -61,10 +63,8 @@ function reconcileEnabledModels(
   // Retired models are hard unavailable even for users with included relay
   // access. This sweep runs on every reconciliation, unconditionally --
   // deliberately *not* gated behind a version threshold like the two sweeps
-  // above. `reconcileEnabledModels` only ever runs when MODEL_LIST_VERSION
-  // has changed (see `refreshModelListStateIfNeeded`), and since #7191 that
-  // version hashes every catalogue retirement: it changes whenever any model
-  // retires, including a non-default model a user enabled explicitly.
+  // above. `reconcileEnabledModels` runs on every startup so a catalogue
+  // retirement is applied even when preferred-model membership is unchanged.
   // The user's persisted version may already be permanently past any legacy
   // "< N" gate. Freezing this sweep behind such a gate (it
   // used to read `previousVersion < 21`, the last hand-bumped version before
@@ -82,7 +82,9 @@ function reconcileEnabledModels(
   // resolveDefaultModels (modelOptionsBasic.ts) drops retired/deprecated
   // picks before this module ever sees them -- so the only remaining check
   // here is "not already present".
-  const added = DEFAULT_MODELS.filter((model) => !kept.includes(model));
+  const added = addDefaults
+    ? DEFAULT_MODELS.filter((model) => !kept.includes(model))
+    : [];
 
   return {
     models: [...kept, ...added],
@@ -91,21 +93,12 @@ function reconcileEnabledModels(
   };
 }
 
-/** Refreshes persisted model selection when MODEL_LIST_VERSION changes. */
+/** Sweep retired entries and reconcile defaults when MODEL_LIST_VERSION changes. */
 export async function refreshModelListStateIfNeeded(
   state: ModelListState,
 ): Promise<ModelListRefreshResult> {
   const previousVersion = state.get<number>(GlobalStateKey.MODEL_LIST_VERSION);
-  if (previousVersion === MODEL_LIST_VERSION) {
-    return {
-      skipped: true,
-      previousVersion,
-      currentVersion: MODEL_LIST_VERSION,
-      added: [],
-      removed: [],
-    };
-  }
-
+  const versionChanged = previousVersion !== MODEL_LIST_VERSION;
   const currentModels = state.get<string[]>(GlobalStateKey.ENABLED_MODELS);
   let added: string[] = [];
   let removed: string[] = [];
@@ -113,6 +106,7 @@ export async function refreshModelListStateIfNeeded(
     const reconciliation = reconcileEnabledModels(
       currentModels,
       previousVersion,
+      versionChanged,
     );
     added = reconciliation.added;
     removed = reconciliation.removed;
@@ -121,9 +115,11 @@ export async function refreshModelListStateIfNeeded(
     }
   }
 
-  await state.update(GlobalStateKey.MODEL_LIST_VERSION, MODEL_LIST_VERSION);
+  if (versionChanged) {
+    await state.update(GlobalStateKey.MODEL_LIST_VERSION, MODEL_LIST_VERSION);
+  }
   return {
-    skipped: false,
+    skipped: !versionChanged && removed.length === 0,
     previousVersion,
     currentVersion: MODEL_LIST_VERSION,
     added,

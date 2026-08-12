@@ -31,8 +31,7 @@ export function isRetiredModel(model: string): boolean {
  * `setupModelDefaults.ts` curates one setup-probe model per provider -- this
  * table is hand-maintained. {@link DEFAULT_MODELS} drops picks that the live
  * registry has retired or deprecated, while {@link MODEL_LIST_VERSION}
- * includes this membership, each preferred pick's lifecycle status, and the
- * set of retired catalogue entries.
+ * includes this membership and each preferred pick's lifecycle status.
  */
 export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
   'gemini36f',
@@ -124,32 +123,27 @@ function modelStatus(config: ModelLifecycleConfig): ModelStatus {
 }
 
 /**
- * Compute the reconciliation trigger from preferred membership and status,
- * plus the set of retired catalogue entries. Non-preferred active and
- * deprecated entries do not affect reconciliation, so excluding them avoids
- * restoring defaults a user disabled when the catalogue merely grows.
+ * Compute the reconciliation trigger from preferred membership and status.
+ * Non-preferred catalogue changes do not affect the default-addition pass;
+ * retired entries are swept independently on every startup.
  */
 export function computeModelListVersion(
   preferred: readonly string[],
   catalogue: readonly ModelLifecycleEntry[] = staticModelConfigEntries(),
 ): number {
   const catalogueByModel = new Map(catalogue);
-  const entries = [
-    ...preferred.map(
-      (model) =>
-        `preferred:${model}:${modelStatus(catalogueByModel.get(model) ?? {})}`,
-    ),
-    ...catalogue.flatMap(([model, config]) =>
-      config.retired ? [`retired:${model}`] : [],
-    ),
-  ].toSorted();
+  const entries = preferred
+    .map(
+      (model) => `${model}:${modelStatus(catalogueByModel.get(model) ?? {})}`,
+    )
+    .toSorted();
   return MODEL_LIST_HASH_BASE + fnv1aHash(entries.join(','));
 }
 
 /**
  * Reconciliation trigger for the persisted enabled-models list
- * (`modelListRefresh.ts`). Preferred-set changes, preferred lifecycle changes,
- * and catalogue retirements change this value automatically.
+ * (`modelListRefresh.ts`). Preferred-set and preferred-lifecycle changes alter
+ * this value automatically; catalogue retirements are swept separately.
  */
 export const MODEL_LIST_VERSION: number = computeModelListVersion(
   PREFERRED_DEFAULT_MODELS,

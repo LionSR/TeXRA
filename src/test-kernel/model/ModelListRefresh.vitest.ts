@@ -45,7 +45,7 @@ describe('refreshModelListStateIfNeeded', () => {
       PREFERRED_DEFAULT_MODELS,
       previousCatalogue,
     );
-    expect(previousVersion).not.toBe(MODEL_LIST_VERSION);
+    expect(previousVersion).toBe(MODEL_LIST_VERSION);
 
     const state = new FakeStateStore({
       [GlobalStateKey.MODEL_LIST_VERSION]: previousVersion,
@@ -55,17 +55,16 @@ describe('refreshModelListStateIfNeeded', () => {
     const result = await refreshModelListStateIfNeeded(state);
 
     expect(result.skipped).toBe(false);
+    expect(result.added).toEqual([]);
     expect(result.removed).toContain('kimi2');
-    expect(enabledModels(state)).not.toContain('kimi2');
+    expect(enabledModels(state)).toEqual(['opus5T']);
   });
 
-  it('strips a retired model even when previousVersion is already a hash-derived value past the legacy migration threshold', async () => {
+  it('strips a retired model when the preferred-model version is unchanged', async () => {
     expect(MODEL_CONFIGS.grok4?.retired).toBe(true);
 
     const state = new FakeStateStore({
-      // Simulates a user who already reconciled once under the hash-based
-      // scheme (any value > 21, e.g. MODEL_LIST_HASH_BASE + some hash).
-      [GlobalStateKey.MODEL_LIST_VERSION]: 5000,
+      [GlobalStateKey.MODEL_LIST_VERSION]: MODEL_LIST_VERSION,
       [GlobalStateKey.ENABLED_MODELS]: ['opus48T', 'grok4'],
     });
 

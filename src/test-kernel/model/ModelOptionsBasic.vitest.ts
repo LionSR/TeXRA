@@ -134,7 +134,7 @@ describe('computeModelListVersion', () => {
     );
   });
 
-  it('changes when a non-preferred catalogue model retires', () => {
+  it('does not change when a non-preferred catalogue model retires', () => {
     const activeCatalogue = [
       ['preferred', {}],
       ['optional', {}],
@@ -144,8 +144,22 @@ describe('computeModelListVersion', () => {
       ['optional', { retired: true }],
     ] as const;
 
-    expect(computeModelListVersion(['preferred'], activeCatalogue)).not.toBe(
+    expect(computeModelListVersion(['preferred'], activeCatalogue)).toBe(
       computeModelListVersion(['preferred'], retiredCatalogue),
+    );
+  });
+
+  it('distinguishes deprecated and retired preferred models', () => {
+    expect(
+      computeModelListVersion(
+        ['preferred'],
+        [['preferred', { deprecated: true }]],
+      ),
+    ).not.toBe(
+      computeModelListVersion(
+        ['preferred'],
+        [['preferred', { retired: true }]],
+      ),
     );
   });
 
