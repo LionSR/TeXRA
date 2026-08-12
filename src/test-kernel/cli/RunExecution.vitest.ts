@@ -672,6 +672,28 @@ describe('executeCliRequest', () => {
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves a run failure when the final artifact flush also fails', async () => {
+    const { executeCliRequest } = await loadRunExecution();
+    const { flushSpy } = await spyOnTranscriptFlush();
+    const runError = new Error('provider transport failed');
+    const flushError = new Error('transcript flush failed');
+    mocks.runAgent.mockRejectedValueOnce(runError);
+    flushSpy.mockRejectedValueOnce(flushError);
+
+    const rejection = executeCliRequest(baseRequest(), cliContext()).catch(
+      (error: unknown) => error,
+    );
+
+    await expect(rejection).resolves.toEqual(
+      expect.objectContaining({
+        errors: [runError, flushError],
+        message:
+          'CLI execution failed and its final artifacts could not be persisted',
+      }),
+    );
+    expect(mocks.close).toHaveBeenCalledOnce();
+  });
+
   it('keeps a completed run terminal status when wrap cleanup fails after invoke succeeded (#7863)', async () => {
     const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();

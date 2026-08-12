@@ -391,6 +391,7 @@ export async function executeCliRequest(
   let runResult:
     | { readonly ok: true; readonly result: ExecuteAgentResult }
     | { readonly ok: false } = { ok: false };
+  let primaryRunFailure: { readonly error: unknown } | undefined;
   let presentationAttached = true;
   const detachPresentation = async (): Promise<void> => {
     if (!presentationAttached) return;
@@ -412,29 +413,54 @@ export async function executeCliRequest(
     // workspaceState.update failures) is unexpected and must keep
     // propagating to bin/texra.ts's crash handler.
     if (!(err instanceof AgentError)) {
-      throw err;
-    }
-    // A failure before lifecycle startup has no `result` event. Preserve the
-    // ordinary toast path when it ran, and provide the missing direct fallback
-    // while the presentation host is still attached.
-    if (!failurePresented && !terminalResult.isHandled()) {
+      primaryRunFailure = { error: err };
+    } else if (!failurePresented && !terminalResult.isHandled()) {
+      // A failure before lifecycle startup has no `result` event. Preserve the
+      // ordinary toast path when it ran, and provide the missing direct fallback
+      // while the presentation host is still attached.
       session.interactions.emit('requestShowError', {
         message: toErrorMessage(err),
       });
     }
+  }
+
+  disposeShutdownStatus?.dispose();
+  let finalizationCompleted = false;
+  const cleanupFailures: unknown[] = [];
+  try {
+    await finalizeShutdownStatus();
+    await session.flushArtifacts();
+    finalizationCompleted = true;
+  } catch (error) {
+    cleanupFailures.push(error);
   } finally {
-    disposeShutdownStatus?.dispose();
-    let finalizationCompleted = false;
-    try {
-      await finalizeShutdownStatus();
-      await session.flushArtifacts();
-      finalizationCompleted = true;
-    } finally {
-      settleShutdownFinalization();
-      if (!runResult.ok || !finalizationCompleted) {
+    settleShutdownFinalization();
+    if (!runResult.ok || !finalizationCompleted) {
+      try {
         await detachPresentation();
+      } catch (error) {
+        cleanupFailures.push(error);
       }
     }
+  }
+  if (cleanupFailures.length > 0) {
+    const cleanupFailure =
+      cleanupFailures.length === 1
+        ? cleanupFailures[0]
+        : new AggregateError(
+            cleanupFailures,
+            'CLI execution cleanup encountered multiple failures',
+          );
+    if (primaryRunFailure) {
+      throw new AggregateError(
+        [primaryRunFailure.error, cleanupFailure],
+        'CLI execution failed and its final artifacts could not be persisted',
+      );
+    }
+    throw cleanupFailure;
+  }
+  if (primaryRunFailure) {
+    throw primaryRunFailure.error;
   }
 
   if (!runResult.ok) {
