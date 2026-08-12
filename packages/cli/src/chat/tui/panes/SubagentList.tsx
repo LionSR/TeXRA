@@ -5,6 +5,11 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
 // Local imports - shared stream state
+import {
+  Select,
+  visibleSelectRange,
+  type SelectItem,
+} from '@cli/tui/ui/Select';
 import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
   POINTER,
@@ -12,11 +17,7 @@ import {
   TICK,
   TOKENS_GENERATED,
 } from '@cli/tui/ui/glyphs';
-import {
-  Select,
-  visibleSelectRange,
-  type SelectItem,
-} from '@cli/tui/ui/Select';
+import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import {
   WORKFLOW_TASK_STATUS_LABEL,
   isTerminalWorkflowCallProgress,
@@ -51,7 +52,6 @@ import {
   workflowTaskListValue,
   type ChildListValue,
 } from '../state/childListSelection';
-import { useLiveNowMs } from '../state/useLiveNowMs';
 import {
   uniqueWorkflowChildStreamId,
   workflowDashboardSelection,
@@ -307,16 +307,14 @@ function WorkflowDashboard({
     workflowDashboardSelection(model, selectedValue);
   const uniqueChildId = (entry: WorkflowTaskEntry): StreamTabId | undefined =>
     uniqueWorkflowChildStreamId(entry, model.childTaskIndex, streams);
-  const liveElapsedKey = tasks
-    .map((entry) => {
+  const nowMs = useLiveNowMsSince(
+    tasks.map((entry) => {
       const childStreamId = uniqueChildId(entry);
       return childStreamId === undefined
         ? undefined
         : streams.get(childStreamId)?.runStartedAt;
-    })
-    .filter((startedAt): startedAt is number => startedAt !== undefined)
-    .join(':');
-  const nowMs = useLiveNowMs(liveElapsedKey.length > 0, liveElapsedKey);
+    }),
+  );
   const phaseItems: SelectItem<ChildListValue>[] = groups.map((group) => ({
     label: group.label,
     value: group.value,
@@ -524,12 +522,8 @@ export function SubagentList(
   props: SubagentListProps = {},
 ): React.JSX.Element | null {
   const sessions = props.sessions ?? [];
-  const liveElapsedKey = useMemo(
-    () =>
-      sessions
-        .map((session) => session.slice?.runStartedAt)
-        .filter((startedAt): startedAt is number => startedAt !== undefined)
-        .join(':') || undefined,
+  const startedAts = useMemo(
+    () => sessions.map((session) => session.slice?.runStartedAt),
     [sessions],
   );
   const { items, sessionsByValue } = useMemo(() => {
@@ -545,7 +539,7 @@ export function SubagentList(
     }
     return { items: nextItems, sessionsByValue: byValue };
   }, [sessions]);
-  const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
+  const nowMs = useLiveNowMsSince(startedAts);
   const { columns } = useWindowSize();
   const metadataColumn = columns >= CHILD_ROW_METADATA_MIN_COLUMNS;
   const dashboard = props.dashboard;

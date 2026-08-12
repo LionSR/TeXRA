@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 
 import { createChannelTrace } from '@agent/trace';
 import {
@@ -11,10 +11,9 @@ import {
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import { platform } from '@platform/platform';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
+import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { normalizeFilePath } from '@utils/core';
-import { isPathWithin } from '@utils/core/pathCore';
 
 import type {
   DesktopCommandMessage,
@@ -94,19 +93,17 @@ function resolveWorkspaceFile(workspacePath: string, filePath: string): string {
 
 function toWorkspaceRelative(workspacePath: string, filePath: string): string {
   const absolutePath = resolveWorkspaceFile(workspacePath, filePath);
-  if (isPathWithin(workspacePath, absolutePath)) {
-    return normalizeFilePath(relative(workspacePath, absolutePath));
-  }
-  // A native file-dialog selection can resolve through a symlink (e.g. a
-  // symlinked folder inside the workspace); retry via the same
-  // canonicalize-then-compare fallback createNodeWorkspace().asRelativePath
-  // uses, so a symlinked pick lands as workspace-relative here too, matching
-  // what WorkspaceFS.relativePath would produce for the same absolute path.
-  const canonicalRoot = canonicalizeWorkspacePath(workspacePath);
-  const canonicalFile = canonicalizeWorkspacePath(absolutePath);
-  return isPathWithin(canonicalRoot, canonicalFile)
-    ? normalizeFilePath(relative(canonicalRoot, canonicalFile))
-    : normalizeFilePath(absolutePath);
+  // relativeToRoot shares the canonicalize-then-compare fallback
+  // createNodeWorkspace().asRelativePath uses, so a native dialog pick that
+  // resolves through a symlink (e.g. a symlinked folder inside the workspace)
+  // lands workspace-relative here too, matching WorkspaceFS.relativePath for
+  // the same absolute path. Unlike asRelativePath's identity fallback, an
+  // outside-workspace pick stays an explicit normalized absolute path — the
+  // renderer must be able to open a file chosen outside the workspace.
+  return (
+    relativeToRoot(workspacePath, absolutePath) ??
+    normalizeFilePath(absolutePath)
+  );
 }
 
 export function createDesktopFileSelection(

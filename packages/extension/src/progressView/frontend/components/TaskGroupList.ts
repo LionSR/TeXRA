@@ -459,9 +459,7 @@ export class TaskGroupList extends LitElement {
     return html`
       <span class="group-status-icon">
         ${waIcon(statusIcon, {
-          label: formatStreamStatusLabel(group.status, {
-            style: 'progressHeader',
-          }),
+          label: formatStreamStatusLabel(group.status),
         })}
       </span>
       <span class="group-title">${title}</span>

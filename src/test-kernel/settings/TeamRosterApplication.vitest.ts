@@ -21,6 +21,10 @@ const preset: AgentModePreset = {
 const unresolved = {
   keys: {
     workflow: [],
+    toolUse: [],
+  },
+  nameSlots: {
+    workflow: [],
     toolUse: ['orchestrator'],
   },
   unresolvedNames: ['orchestrator'],
@@ -30,6 +34,10 @@ const resolved = {
   keys: {
     workflow: [],
     toolUse: ['remote:orchestrator'],
+  },
+  nameSlots: {
+    workflow: [],
+    toolUse: [],
   },
   unresolvedNames: [],
 };
@@ -154,7 +162,11 @@ describe('team roster application', () => {
             resolution: {
               keys: {
                 workflow: [],
-                toolUse: ['builtInToolUse:review', 'remoteSpecialist'],
+                toolUse: ['builtInToolUse:review'],
+              },
+              nameSlots: {
+                workflow: [],
+                toolUse: ['remoteSpecialist'],
               },
               unresolvedNames: ['remoteSpecialist'],
             },
@@ -194,8 +206,12 @@ describe('team roster application', () => {
             preset: legacyPreset,
             resolution: {
               keys: {
+                workflow: [],
+                toolUse: ['builtInToolUse:review'],
+              },
+              nameSlots: {
                 workflow: ['generic'],
-                toolUse: ['builtInToolUse:review', 'remoteSpecialist'],
+                toolUse: ['remoteSpecialist'],
               },
               unresolvedNames: ['generic', 'remoteSpecialist'],
             },

@@ -10,8 +10,8 @@ import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { CROSS, POINTER } from '@cli/tui/ui/glyphs';
 import { apiKeyEnvName, type ApiProvider } from '@model/apiProviders';
 import {
-  PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
+  providerDisplayName,
 } from '@shared/constants/providers';
 
 import { BaseTextInput } from '../input/BaseTextInput';
@@ -31,7 +31,7 @@ export function ApiKeyEntryForm(
   props: ApiKeyEntryFormProps,
 ): React.JSX.Element {
   const [key, setKey] = useState('');
-  const label = PROVIDER_DISPLAY_NAMES[props.provider] ?? props.provider;
+  const label = providerDisplayName(props.provider);
   const keyUrl = PROVIDER_URLS[props.provider];
 
   // BaseTextInput ignores Escape (returns early in its own useInput), so handle

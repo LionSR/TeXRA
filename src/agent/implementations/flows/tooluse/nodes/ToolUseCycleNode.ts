@@ -5,6 +5,7 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { createToolUseRoundFlow } from '@agent/core/flows/ToolUseRoundFlow';
 import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundShared';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
+import { USER_VAR_INSTRUCTION } from '@agent/utils/userVars';
 import { buildFailedRetryInfo } from '@common/errors/sdkError/providerErrorFormat';
 import {
   MESSAGE_TYPES,
@@ -83,7 +84,7 @@ export class ToolUseCycleNode<C> extends Node<
         ? this.services.finalTool
         : undefined;
 
-    const instruction = prepRes.userChannels.transient.INSTRUCTION;
+    const instruction = prepRes.userChannels.transient[USER_VAR_INSTRUCTION];
     const roundShared: ToolUseRoundShared = {
       messages: prepRes.messages,
       shouldStop: false,
@@ -172,7 +173,7 @@ export class ToolUseCycleNode<C> extends Node<
     } finally {
       roundStage.end(roundOutcome);
       if (roundShared.currentUserInstruction !== undefined) {
-        prepRes.userChannels.transient.INSTRUCTION =
+        prepRes.userChannels.transient[USER_VAR_INSTRUCTION] =
           roundShared.currentUserInstruction;
       }
       prepRes.workspaceState.workPlan.clearOnUpdate();

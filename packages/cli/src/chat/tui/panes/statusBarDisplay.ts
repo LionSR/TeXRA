@@ -1,6 +1,6 @@
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { computeUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
+import { roundedUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import {
   shortCliModelAccessRoute,
   type CliModelAccessRoute,
@@ -14,7 +14,7 @@ import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
 import { STATUS_BAR_HORIZONTAL_PADDING } from '@cli/tui/ui/theme';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import { resolveProviderCapabilities } from '@model/providerCapabilities';
+import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   spendingQuotaRemainingPercent,
@@ -175,7 +175,7 @@ interface StatusBarDisplay {
 // window than the model's raw API contextWindow (see providerCapabilities.ts).
 // `usage.usageRoute` is stamped by the handler that produced this specific
 // snapshot, so it's ground truth for *this* usage regardless of what the CLI
-// is currently configured to use — and resolveProviderCapabilities() only
+// is currently configured to use — and resolveCodexSubscriptionProfile() only
 // ever stamps 'chatgpt-subscription' when useOpenRouter was false for that
 // turn, so passing `false` here isn't an assumption, it's already implied.
 function effectiveContextWindow(
@@ -185,7 +185,7 @@ function effectiveContextWindow(
   if (usage.usageRoute === 'chatgpt-subscription') {
     const config = getRuntimeModelConfig(model);
     return config
-      ? resolveProviderCapabilities({ model: config, useOpenRouter: false })
+      ? resolveCodexSubscriptionProfile({ model: config, useOpenRouter: false })
           ?.contextWindow
       : undefined;
   }
@@ -264,7 +264,7 @@ function formatUsage(
   const ratio = used / contextWindow;
   const percent = Math.max(
     1,
-    Math.round(computeUtilizationPercent(used, contextWindow)),
+    roundedUtilizationPercent(used, contextWindow, 0),
   );
   let color: StatusBarColor;
   if (ratio >= 0.9) color = COLOR_ERROR;
@@ -592,14 +592,12 @@ function firstRowThatFits(
   );
 }
 
-// Single-slot memo for the bindings cascade below: it eagerly builds ~13
-// candidate rows and stringWidth-measures them until one fits, yet its
-// inputs are a handful of flags that change far less often than the
-// StatusBar re-renders (every stream-sync tick plus every elapsed-seconds
-// tick). Keyed on all inputs, so a changed flag just recomputes.
-let lastBindingsKey: string | undefined;
-let lastBindingsText = '';
-
+// No module-level memo: the bindings cascade below eagerly builds ~13
+// candidate rows and stringWidth-measures them until one fits, and its inputs
+// are a handful of flags that change far less often than the StatusBar
+// re-renders. Any render-path caching belongs in the React component
+// (`useMemo`), not in this pure module — module-scoped `let`s survive across
+// vitest cases and silently alias inputs if a joined value ever contains '|'.
 function statusBarBindingsText(
   {
     agentSelectionAvailable = false,
@@ -613,18 +611,6 @@ function statusBarBindingsText(
   ctrlCAction: CtrlCAction,
   maxColumns: number | undefined,
 ): string {
-  const memoKey = [
-    agentSelectionAvailable,
-    childNavigationAvailable,
-    parentNavigationAvailable,
-    streamFocusAvailable,
-    modifierLabel,
-    shiftEnterNewline,
-    transcriptAvailable,
-    ctrlCAction,
-    maxColumns,
-  ].join('|');
-  if (memoKey === lastBindingsKey) return lastBindingsText;
   const childList = childNavigationAvailable
     ? keyHintText({ key: 'Tab', action: SESSION_LIST.openAction })
     : undefined;
@@ -697,10 +683,7 @@ function statusBarBindingsText(
   );
   if (parentBack) candidates.push(parentBack);
 
-  const text = firstRowThatFits(candidates, maxColumns, ctrlC);
-  lastBindingsKey = memoKey;
-  lastBindingsText = text;
-  return text;
+  return firstRowThatFits(candidates, maxColumns, ctrlC);
 }
 
 function foregroundBindingsText(

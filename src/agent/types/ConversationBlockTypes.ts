@@ -23,7 +23,7 @@
  * The three Anthropic server-tool block types (`server_tool_use`,
  * `web_search_tool_result`, `web_fetch_tool_result`) are the same kind of
  * shared vocabulary but already live in
- * `ANTHROPIC_SERVER_TOOL_BLOCK_TYPES` (`@agent/types/ServerToolTypes`) —
+ * `ANTHROPIC_SERVER_TOOL_BLOCK_TYPES` (`@agent/types/ServerTools`) —
  * not duplicated here.
  */
 export const CONVERSATION_BLOCK_TYPES = Object.freeze({

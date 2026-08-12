@@ -66,24 +66,41 @@ import {
   formatBuiltSubagentDelivery,
 } from './subagentDeliveryFormat';
 
-export interface NativeSubagentStrategyParams {
+/**
+ * The launch fields every native child run needs, shared between the two
+ * native subagent callers — durable in-band (`InBandSubagentExecutionBaseOptions`)
+ * and detached (`NativeSubagentStrategyParams`) — so a new launch option has a
+ * single home and can't drift between the two interfaces or the executeInBand
+ * field mapping.
+ */
+export interface ChildRunLaunchOptions {
+  readonly agentName: string;
+  readonly parentStreamId: StreamTabId;
+  readonly session: SessionHandle;
+  readonly approvalPromptsUnavailable?: boolean;
+  readonly onApprovalPolicyDenial?: () => void;
+  readonly runtimeUnavailableTools?: readonly string[];
+  /**
+   * Workflow-script phase owning this child, when the caller is a
+   * workflow-script run. Rides to the child's roster row so a host can group
+   * grandchild rows by phase.
+   */
+  readonly workflowPhase?: string;
+  /** Caller cancellation for a durable in-band launch. */
+  readonly signal?: AbortSignal;
+  /** Fires with the resolved child stream id — the caller inherits approvals onto it. */
+  readonly onStreamResolved?: (streamId: StreamTabId) => void;
+}
+
+export interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
   readonly config: AgentConfig;
   readonly agentCategoryExplicit: boolean;
   readonly executionId: ExecutionId;
   readonly parentExecutionId?: ExecutionId;
-  readonly agentName: string;
-  readonly orchestratorStreamId: StreamTabId;
-  readonly parentSession: SessionHandle;
   readonly startedAt: number;
   readonly workingDirectory?: string;
-  readonly approvalPromptsUnavailable?: boolean;
-  readonly onApprovalPolicyDenial?: () => void;
-  readonly runtimeUnavailableTools?: readonly string[];
-  readonly workflowPhase?: string;
   /** Omit for ordinary interactive delegation; durable calls end after one cycle. */
   readonly executionMode?: 'single-cycle';
-  /** Caller cancellation for a durable in-band launch. */
-  readonly signal?: AbortSignal;
   /** Fires with the resolved child stream id — the caller inherits approvals onto it. */
   readonly onStreamResolved: (streamId: StreamTabId) => void;
 }
@@ -144,7 +161,7 @@ export function createNativeSubagentStrategy(
   let cachedDelivery: { msg: string; resultMeta: ResultMeta } | undefined;
 
   const resolveDeliveryTarget = (): StreamTabId | undefined =>
-    runHandle ? runHandle.deliveryTargetStreamId : params.orchestratorStreamId;
+    runHandle ? runHandle.deliveryTargetStreamId : params.parentStreamId;
 
   const runNative = async (
     ports: ChildRunPorts,
@@ -222,10 +239,10 @@ export function createNativeSubagentStrategy(
     launch: (ports, abortController) =>
       runNative(ports, abortController, async (onRun) => {
         const executeOptions = {
-          session: params.parentSession,
+          session: params.session,
           isSubagent: true,
           enforceCategory: params.agentCategoryExplicit,
-          parentStreamId: params.orchestratorStreamId,
+          parentStreamId: params.parentStreamId,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
           onApprovalPolicyDenial: params.onApprovalPolicyDenial,
           runtimeUnavailableTools: params.runtimeUnavailableTools,
@@ -284,18 +301,18 @@ export function createNativeSubagentStrategy(
         // Hand it directly to the persisted WAITING cursor instead. Any item
         // that races into the queue after this drain remains there for the
         // loop's next turn.
-        params.parentSession.status.transition(
+        params.session.status.transition(
           streamId,
           STREAM_PHASE.RUNNING,
           STREAM_TRANSITION_CAUSE.RESUME,
           { substate: STREAM_SUBSTATE.RESUMING },
         );
         return await resumeToolUseFromResumeData(resume, {
-          session: params.parentSession,
+          session: params.session,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
           onApprovalPolicyDenial: params.onApprovalPolicyDenial,
           runtimeUnavailableTools: params.runtimeUnavailableTools,
-          parentStreamId: params.orchestratorStreamId,
+          parentStreamId: params.parentStreamId,
           // The loop's queue never admits synthetic goal continuations for
           // a subagent, but its batch type is shared with root flows. Keep
           // the existing defensive downgrade rather than silently dropping

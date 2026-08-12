@@ -112,11 +112,11 @@ export function parseChatGptUsage(
     );
   }
 
+  // No inline default: the service's DEFAULT_PLAN_NAMES owns the fallback.
   return {
     planName:
       stringField(root, 'plan_type', 'planType') ??
-      stringField(normalizedRateLimits, 'plan_type', 'planType') ??
-      'ChatGPT Coding Plan',
+      stringField(normalizedRateLimits, 'plan_type', 'planType'),
     windows,
   };
 }

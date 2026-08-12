@@ -113,12 +113,10 @@ export class TodoList extends CollapsiblePanel {
   }
 
   private renderTodo(todo: TodoItem): TemplateResult {
-    const status = todo.status ?? TODO_STATUS.PENDING;
+    const status = todo.status;
     const isInProgress = status === TODO_STATUS.IN_PROGRESS;
-    const icon = STATUS_ICONS[status] ?? STATUS_ICONS[TODO_STATUS.PENDING];
-    const content = isInProgress
-      ? (todo.activeForm ?? todo.content)
-      : todo.content;
+    const icon = STATUS_ICONS[status];
+    const content = isInProgress ? todo.activeForm : todo.content;
 
     return html`
       <div

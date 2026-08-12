@@ -148,6 +148,15 @@ interface FetchToolErrorMessages {
 /**
  * Classify the error from a failed {@link retryTransientFetch} call into a
  * {@link ToolError}: timeout, HTTP status, network failure, or fallback.
+ *
+ * The network predicate here is the same one `isTransientHttpError` uses for
+ * the retry decision — `isNetworkError`, not a bare `instanceof TypeError`.
+ * A bare TypeError check would label a genuine bug in the fetch/response path
+ * (e.g. reading a property of `undefined`) as a network failure, contradicting
+ * this module's own guidance; `is-network-error` matches only the known
+ * fetch/undici network-failure shapes. Because the retry loop and the final
+ * user-facing label now share one predicate, an error cannot be retried as
+ * transient and then mislabeled as a network failure, or vice versa.
  */
 export function toFetchToolError(
   error: unknown,
@@ -163,8 +172,8 @@ export function toFetchToolError(
   if (err instanceof HTTPError) {
     return new ToolError(messages.http(err.response.status));
   }
-  if (err instanceof TypeError) {
-    return new ToolError(messages.network(err.message));
+  if (isNetworkError(err)) {
+    return new ToolError(messages.network(toErrorMessage(err)));
   }
   return new ToolError(messages.fallback(toErrorMessage(err)));
 }

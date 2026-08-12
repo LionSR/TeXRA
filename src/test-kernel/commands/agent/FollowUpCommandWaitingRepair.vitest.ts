@@ -18,7 +18,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   submitFollowUp: mocks.submitFollowUp,
 }));
 vi.mock('@commands/_shared/registerCommands', () => ({
-  registerCommands: (
+  registerCommandEntries: (
     _context: unknown,
     entries: Array<{
       id: string;

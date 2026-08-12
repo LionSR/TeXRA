@@ -3,7 +3,7 @@ import { execa } from 'execa';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { registerCommands } from '@commands/_shared/registerCommands';
+import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   cloneOverleafProject as runOverleafClone,
@@ -25,7 +25,7 @@ import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
 import { readRecentCommitLabels } from '@utils/git/repositoryOverview';
 import { executeCommandSync } from '@utils/system/execUtils';
 import { extendEnvPath } from '@utils/system/platformPaths';
-import { isGitRepository } from '@utils/system/isGitRepository';
+import { isGitRepository } from '@utils/git/isGitRepository';
 
 const CHANNEL = 'gitCommands';
 
@@ -37,7 +37,7 @@ export function registerGitCommands(context: vscode.ExtensionContext): void {
   // registration. `texra.cloneOverleafProject` migrated through the
   // shared command registry in #3781 batch 3 (see
   // `extensionCommandSurface.ts`).
-  registerCommands(context, [
+  registerCommandEntries(context, [
     { id: 'texra.isGitRepository', handler: isGitRepository },
     { id: 'texra.getRecentCommits', handler: getRecentCommits },
     { id: 'texra.findCommitInHistory', handler: findCommitInHistory },

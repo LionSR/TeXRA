@@ -30,7 +30,7 @@ import {
   normalizedCtrlInput,
   rewriteKittyEnterInput,
   SYNTHETIC_SHIFT_RETURN_INPUT,
-} from '@cli/chat/tui/input/inputKeys';
+} from '@cli/tui/inputKeys';
 
 const ESC = String.fromCharCode(27);
 const NEWLINE_MODE = { shiftEnter: 'newline' } as const;

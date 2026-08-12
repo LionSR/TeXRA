@@ -72,9 +72,9 @@ export function parseKimiCodeUsage(body: unknown): ParsedSubscriptionUsage {
   addWindow(windows, 'five_hour', data?.quota_5_hour);
   addWindow(windows, 'seven_day', data?.quota_7_day);
 
+  // No inline default: the service's DEFAULT_PLAN_NAMES owns the fallback.
   return {
-    planName:
-      stringField(data, 'plan', 'plan_name', 'account_status') ?? 'Kimi Code',
+    planName: stringField(data, 'plan', 'plan_name', 'account_status'),
     windows: [...windows.values()],
   };
 }

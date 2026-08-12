@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
+import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
   CleanConfigSchema,
   CleanMultipleCommandArgsSchema,
@@ -296,13 +297,13 @@ export const EXTENSION_COMMAND_HANDLERS = {
   'texra.auth.signOut': (actions) => awaitTrue(actions.signOut()),
   'texra.auth.viewProfile': (actions) =>
     awaitTrue(actions.showSettings(SETTINGS_TAB.ACCOUNT)),
-  'texra.runSetupAssistant': (actions) =>
+  [EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT]: (actions) =>
     awaitTrue(actions.runSetupAssistant()),
-  'texra.openGettingStarted': (actions) =>
+  [EXTENSION_COMMANDS.OPEN_GETTING_STARTED]: (actions) =>
     awaitTrue(actions.openGettingStarted()),
-  'texra.createSampleProject': (actions) =>
+  [EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT]: (actions) =>
     awaitTrue(actions.createSampleProject()),
-  'texra.downloadArXivSource': (actions) =>
+  [EXTENSION_COMMANDS.DOWNLOAD_ARXIV_SOURCE]: (actions) =>
     awaitTrue(actions.downloadArXivSource()),
   'texra.openProgressViewInTab': (actions) =>
     awaitTrue(actions.openProgressViewInTab()),
@@ -330,7 +331,7 @@ export const EXTENSION_COMMAND_HANDLERS = {
     awaitTrue(actions.extractTikzFigures()),
   'texra.compileTikzFigures': (actions) =>
     awaitTrue(actions.compileTikzFigures()),
-  'texra.cloneOverleafProject': (actions) =>
+  [EXTENSION_COMMANDS.CLONE_OVERLEAF_PROJECT]: (actions) =>
     awaitTrue(actions.cloneOverleafProject()),
   // Batch 4 (#3781).
   'texra.removeApiKey': (actions) => awaitTrue(actions.removeApiKey()),

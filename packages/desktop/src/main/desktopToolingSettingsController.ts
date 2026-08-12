@@ -100,16 +100,14 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
 
   async postStartupData(): Promise<void> {
     await Promise.all([
-      this.postToolDashboardData(true),
+      this.postToolDashboardData(),
       this.postLatexSettingsStatus(),
     ]);
     void this.refreshToolDashboard().catch(this.options.onError);
   }
 
-  private async postToolDashboardData(useCachedResults = false): Promise<void> {
-    const cachedResults = useCachedResults
-      ? await this.options.dashboard.getCachedCheckResults()
-      : undefined;
+  private async postToolDashboardData(): Promise<void> {
+    const cachedResults = await this.options.dashboard.getCachedCheckResults();
     const items = await this.options.dashboard.buildItems(cachedResults);
     this.options.renderer.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
@@ -127,12 +125,12 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
 
   private async toggleTool(toolId: string, enabled: boolean): Promise<void> {
     await setToolEnabled(toolId, enabled, this.options.globalState);
-    await this.postToolDashboardData(true);
+    await this.postToolDashboardData();
   }
 
   private async refreshToolDashboard(): Promise<void> {
     await this.options.dashboard.refreshAvailability();
-    await this.postToolDashboardData(true);
+    await this.postToolDashboardData();
   }
 
   private async runToolCommand(input: {

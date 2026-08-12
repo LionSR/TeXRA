@@ -156,13 +156,14 @@ ${describeTeams()}`,
       unresolvedNames,
     );
 
-    // Names that didn't resolve in the registry right now stay in the roster
-    // (visibility matches by name, so they activate the moment they appear).
-    // Relay-served leads are absent until sign-in — say so instead of letting
-    // it read as a silent failure; check registry resolution, never auth.
-    const unresolved = new Set(unresolvedNames);
-    const activeWorkflow = keys.workflow.filter((key) => !unresolved.has(key));
-    const activeToolUse = keys.toolUse.filter((key) => !unresolved.has(key));
+    // `keys` holds only the agent keys that resolved in the registry; names
+    // that didn't resolve right now stay in the roster as name slots (from
+    // `unresolvedNames`), where visibility matches by name and they activate
+    // the moment they appear. Relay-served leads are absent until sign-in —
+    // say so instead of letting it read as a silent failure; check registry
+    // resolution, never auth.
+    const activeWorkflow = keys.workflow;
+    const activeToolUse = keys.toolUse;
     const pendingRemoteLeads = unresolvedNames.filter((name) =>
       texraHostedNames.has(name),
     );

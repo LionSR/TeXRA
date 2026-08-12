@@ -8,19 +8,18 @@ import { customElement } from 'lit/decorators.js';
 import { isWorkflowState, type WorkflowStreamState } from '@shared/schemas';
 
 // Local imports - progress view
-import { hasOutputFiles, totalRunUsage } from '../stateUtils';
+import { hasOutputFiles } from '../stateUtils';
 import { BaseStreamContent } from './BaseStreamContent';
 import { conversationContentStyles } from './ConversationContent.styles';
-import { renderStreamHeader } from './streamHeaderView';
+
+// Side-effect imports - register the <stream-header> element
+import './StreamHeader';
 
 // Side-effect imports - sibling components
 import './TaskGroupList';
-import './LogList';
-import './UsagePanel';
 import './FileList';
 import './WorkflowToolUseFollowupSection';
 import './BackgroundTasksPanel';
-import './RequestPanels';
 
 @customElement('workflow-stream-content')
 export class WorkflowStreamContent extends BaseStreamContent {
@@ -40,36 +39,23 @@ export class WorkflowStreamContent extends BaseStreamContent {
     }
 
     return html`
-      ${renderStreamHeader(
-        streamInfo,
-        state,
-        this.streamContext.unsupportedCommands,
-      )}
+      <stream-header
+        .stream=${streamInfo}
+        .state=${state}
+        .unsupportedCommands=${this.streamContext.unsupportedCommands}
+      ></stream-header>
 
       <div class="conversation-content">
-        ${
-          this.filteredPermissions.length > 0
-            ? html`
-                <div class="conversation-column conversation-approval-dock">
-                  <request-panels
-                    .permissions=${this.filteredPermissions}
-                  ></request-panels>
-                </div>
-              `
-            : nothing
-        }
+        ${this.renderApprovalDock()}
 
         <div class="conversation-column conversation-prelude">
           <background-tasks-panel scope="inquiries"></background-tasks-panel>
         </div>
 
-        <div class="conversation-log"><log-list></log-list></div>
+        ${this.renderLog()}
 
         <div class="conversation-column conversation-epilogue">
-          <usage-panel
-            .usage=${totalRunUsage(state.runUsage)}
-            .contextState=${state.contextState ?? null}
-          ></usage-panel>
+          ${this.renderUsagePanel(state.runUsage, state.contextState)}
 
           <file-list
             .filesByRound=${state.files}

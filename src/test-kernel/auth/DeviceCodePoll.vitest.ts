@@ -151,26 +151,4 @@ describe('pollUntilDeviceAuthorized', () => {
 
     expect(attempt).not.toHaveBeenCalled();
   });
-
-  it('calls onPoll once per attempt after the wait', async () => {
-    const clock = fakeClock();
-    const onPoll = vi.fn();
-    let attempts = 0;
-
-    await pollUntilDeviceAuthorized({
-      intervalMs: 100,
-      deadlineMs: 10_000,
-      now: clock.now,
-      sleep: clock.sleep,
-      onPoll,
-      createTimeoutError: () => new Error('timed out'),
-      attempt: async () => {
-        attempts += 1;
-        if (attempts < 2) return deviceCodePending();
-        return deviceCodeAuthorized(1);
-      },
-    });
-
-    expect(onPoll).toHaveBeenCalledTimes(2);
-  });
 });

@@ -168,28 +168,35 @@ export interface LeanDiagnostic extends GenericDiagnostic {
   source?: string;
 }
 
+/**
+ * Result of {@link LeanLanguageServices.fetchDiagnosticsForFile}. A
+ * discriminated result so callers can tell a genuinely missing/unopenable file
+ * apart from a broken or absent Lean toolchain (no `lake`/`lean`, or the file
+ * is not inside a Lake project) — the two failure modes the old
+ * `LeanDiagnostic[] | null` contract conflated, which forced every failure to
+ * read as "could not open file".
+ */
+export type FetchDiagnosticsResult =
+  | { readonly ok: true; readonly diagnostics: LeanDiagnostic[] }
+  | {
+      readonly ok: false;
+      readonly kind: 'file_missing' | 'toolchain_unavailable';
+      readonly message: string;
+    };
+
 // Helpers
 
 /** Extract text value from hover contents (handles all LSP content formats) */
-export function extractHoverText(
-  contents: LspHover['contents'],
-): string | null {
+export function extractHoverText(contents: LspHover['contents']): string {
   if (typeof contents === 'string') {
     return contents;
   }
 
   if (Array.isArray(contents)) {
-    const texts = contents.flatMap((item) => {
-      if (typeof item === 'string') return item;
-      if ('value' in item) return item.value;
-      return [];
-    });
-    return texts.join('\n\n');
+    return contents
+      .map((item) => (typeof item === 'string' ? item : item.value))
+      .join('\n\n');
   }
 
-  if ('value' in contents) {
-    return contents.value;
-  }
-
-  return null;
+  return contents.value;
 }

@@ -8,6 +8,12 @@
 // `assertKnownOutboundMessage`). Inbound (renderer → main) halves of a
 // request/response pair are deliberately excluded: they never cross this
 // channel in the outbound direction.
+//
+// Parity note: every per-surface schema here uses `z.object`, not
+// `z.strictObject`. Unknown-key drift on this channel is caught by this union
+// (a `command` that matches no member fails the whole parse) and by the route
+// table, so no surface opts into stricter unknown-key handling. Keep it that
+// way for new members.
 
 import { z } from 'zod';
 

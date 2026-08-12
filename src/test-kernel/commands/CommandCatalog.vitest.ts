@@ -7,8 +7,10 @@ import { describe, it } from 'vitest';
 
 // Local imports - commands
 import {
+  commandCatalog,
   commandKeybindings,
   packageCommandContributions,
+  type CommandCatalogEntry,
 } from '@shared/commands/catalog';
 
 interface PackageJson {
@@ -42,5 +44,17 @@ describe('commandCatalog', () => {
       packageJson.contributes.keybindings ?? [],
       commandKeybindings,
     );
+  });
+
+  // commandKeybindings is derived from a hand-mirrored order list
+  // (commandKeybindingOrder) in catalog.ts; this guards the silent-drift case
+  // where a catalog entry gains a keybinding without being added to that list.
+  it('covers every catalog entry that carries a keybinding', () => {
+    // `as const satisfies` yields a union of per-entry shapes; only some
+    // members declare `keybinding`, so widen to the catalog entry surface.
+    const keybindingEntryCount = (
+      commandCatalog as readonly CommandCatalogEntry[]
+    ).filter((entry) => entry.keybinding !== undefined).length;
+    assert.strictEqual(keybindingEntryCount, commandKeybindings.length);
   });
 });

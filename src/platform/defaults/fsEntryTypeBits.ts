@@ -11,10 +11,6 @@ export type FileTypeProbe = {
   isDirectory(): boolean;
 };
 
-/**
- * Minimal duck-typed stat-capable fs handle, satisfied by both node:fs and
- * memfs's IFs (used by the test-kernel fake platform).
- */
 type StatCapableFs = {
   promises: {
     stat(

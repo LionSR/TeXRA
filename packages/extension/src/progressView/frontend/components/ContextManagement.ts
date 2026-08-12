@@ -19,6 +19,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { buildDetailsSummary } from '../formatters/htmlBuilders';
 
 // Local imports - styles
+import { bannerDetailsWaDetailsStyles } from '../styles/logEntryStyles';
 import { contextManagementStyles } from './ContextManagement.styles';
 
 /** Stat item to display */
@@ -40,6 +41,7 @@ export class ContextManagement extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    bannerDetailsWaDetailsStyles,
     contextManagementStyles,
   ];
 

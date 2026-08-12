@@ -17,6 +17,7 @@ import {
 import { AgentCategory } from '@shared/schemas/agent';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 // Local imports - desktop test paths
@@ -191,6 +192,7 @@ function createMainViewCommandCapabilities() {
     settings: createUnhandledCapability(),
     progress: createUnhandledCapability(),
     onboarding: createUnhandledCapability(),
+    globalState: new FakeStateStore(),
     logs: {
       readLog: () => ({ path: undefined, text: '', truncated: false }),
       copyLog: vi.fn(async (_text: string) => {}),

@@ -16,7 +16,11 @@ import {
   signInCliGrok,
   signOutCliGrok,
 } from '@cli/runtime/grokLogin';
-import { shouldUseSubscriptionDeviceCode } from '@cli/runtime/subscriptionLogin';
+import {
+  shouldUseSubscriptionDeviceCode,
+  type CliSubscriptionLoginOptions,
+  type CliSubscriptionLoginTransportInit,
+} from '@cli/runtime/subscriptionLogin';
 import { loadCliModelAccessOverview } from '@cli/runtime/apiStatus';
 import { type CliContext } from '@cli/runtime/cliContext';
 import {
@@ -36,6 +40,7 @@ import {
   signOutCliSupabase,
 } from '@cli/runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
+import type { SubscriptionPreferenceUpdate } from '@model/subscriptionPreference';
 import {
   CHATGPT_AUTH,
   GROK_AUTH,
@@ -76,26 +81,63 @@ export function loginStartMessage(args: CliLoginSlashArgs): string {
   return RESEARCHER_ACCESS_AUTH.startingBrowser(args.provider);
 }
 
+/** Sign-in outcome copy shared by the subscription auth objects. */
+interface SubscriptionAuthCopy {
+  readonly signedInEnabled: (accountLabel: string) => string;
+  readonly signedInOverrideDisabled: (
+    accountLabel: string,
+    target: string,
+  ) => string;
+}
+
+/**
+ * Shared subscription sign-in flow, mirroring `signOutSubscription` below:
+ * sign in with a copyable progress writer, flip the subscription preference,
+ * then report the outcome. Only the provider-specific pieces vary (the sign-in
+ * fn, the preference setter, the account-label fn, and the auth copy), so a
+ * future post-login step has one place to live instead of two.
+ */
+async function signInSubscription<TSession>(params: {
+  init: CliSubscriptionLoginTransportInit;
+  output: SlashCommandOutput;
+  signal: AbortSignal;
+  signIn: (
+    init: CliSubscriptionLoginTransportInit,
+    options: CliSubscriptionLoginOptions,
+  ) => Promise<TSession>;
+  setEnabled: () => Promise<SubscriptionPreferenceUpdate>;
+  accountLabel: (session: TSession) => string;
+  auth: SubscriptionAuthCopy;
+}): Promise<void> {
+  const { init, output, signal, signIn, setEnabled, accountLabel, auth } =
+    params;
+  const session = await signIn(init, {
+    writeProgress: (message) =>
+      output.writeProgress(message, { copyable: true }),
+    signal,
+  });
+  const update = await setEnabled();
+  output.appendOutcome(
+    update.effective
+      ? auth.signedInEnabled(accountLabel(session))
+      : auth.signedInOverrideDisabled(accountLabel(session), update.target),
+  );
+}
+
 async function loginToChatGptSubscription(
   args: Extract<CliLoginSlashArgs, { target: 'chatgpt' }>,
   output: SlashCommandOutput,
   signal: AbortSignal,
 ): Promise<void> {
-  const session = await signInCliChatGpt(args, {
-    writeProgress: (message) =>
-      output.writeProgress(message, { copyable: true }),
+  await signInSubscription({
+    init: args,
+    output,
     signal,
+    signIn: signInCliChatGpt,
+    setEnabled: () => setCliCodexSubscription(true),
+    accountLabel: codexAccountLabel,
+    auth: CHATGPT_AUTH,
   });
-  const update = await setCliCodexSubscription(true);
-
-  output.appendOutcome(
-    update.effective
-      ? CHATGPT_AUTH.signedInEnabled(codexAccountLabel(session))
-      : CHATGPT_AUTH.signedInOverrideDisabled(
-          codexAccountLabel(session),
-          update.target,
-        ),
-  );
 }
 
 async function loginToGrokSubscription(
@@ -103,21 +145,15 @@ async function loginToGrokSubscription(
   output: SlashCommandOutput,
   signal: AbortSignal,
 ): Promise<void> {
-  const session = await signInCliGrok(args, {
-    writeProgress: (message) =>
-      output.writeProgress(message, { copyable: true }),
+  await signInSubscription({
+    init: args,
+    output,
     signal,
+    signIn: signInCliGrok,
+    setEnabled: () => setCliXaiSubscription(true),
+    accountLabel: xaiAccountLabel,
+    auth: GROK_AUTH,
   });
-  const update = await setCliXaiSubscription(true);
-
-  output.appendOutcome(
-    update.effective
-      ? GROK_AUTH.signedInEnabled(xaiAccountLabel(session))
-      : GROK_AUTH.signedInOverrideDisabled(
-          xaiAccountLabel(session),
-          update.target,
-        ),
-  );
 }
 
 async function loginToTexraIncludedAccess(

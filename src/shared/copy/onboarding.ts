@@ -30,7 +30,6 @@ export const ONBOARDING_CHOICE_CHATGPT = {
  */
 export const RESEARCHER_ACCESS = {
   label: 'Researcher Access',
-  inline: 'Researcher Access',
 } as const;
 
 /** State 0 choice 2. */

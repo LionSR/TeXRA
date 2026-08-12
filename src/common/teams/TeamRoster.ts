@@ -18,7 +18,19 @@ export interface TeamRosterState {
 }
 
 export interface TeamRosterResolution {
+  /**
+   * Agent keys that resolved against the catalog at resolve time. Contains
+   * only canonical source keys — never raw member names (see {@link nameSlots}).
+   */
   readonly keys: ByCategory<string[]>;
+  /**
+   * Roster member names that did not resolve to a catalog entry at resolve
+   * time, per category. These persist alongside `keys` as name-matched slots,
+   * so an agent activates the moment it appears in the catalog (sign-in,
+   * install) — never silently dropped.
+   */
+  readonly nameSlots: ByCategory<string[]>;
+  /** Unresolved member names across all categories, in canonical order. */
   readonly unresolvedNames: string[];
 }
 
@@ -49,8 +61,9 @@ export function resolveTeamRoster(
   );
   return {
     keys: byCategory((category) => resolved[category].keys),
+    nameSlots: byCategory((category) => resolved[category].nameSlots),
     unresolvedNames: AGENT_CATEGORIES.flatMap(
-      (category) => resolved[category].unresolved,
+      (category) => resolved[category].nameSlots,
     ),
   };
 }
@@ -61,7 +74,12 @@ export async function commitTeamRoster(
   resolution: TeamRosterResolution,
 ): Promise<void> {
   for (const category of AGENT_CATEGORIES) {
-    await state.setEnabledAgentKeys(category, resolution.keys[category]);
+    // Resolved keys and unresolved name slots persist side by side so a
+    // name-matched member activates the moment it appears in the catalog.
+    await state.setEnabledAgentKeys(category, [
+      ...resolution.keys[category],
+      ...resolution.nameSlots[category],
+    ]);
   }
 }
 
@@ -81,16 +99,19 @@ function resolveAgentKeys(
   state: Pick<TeamRosterState, 'getAgents'>,
   category: AgentCategory,
   names: string[],
-): { keys: string[]; unresolved: string[] } {
+): { keys: string[]; nameSlots: string[] } {
   const entries = state.getAgents(category);
-  const unresolved: string[] = [];
-  const keys = names.map((name) => {
+  const keys: string[] = [];
+  const nameSlots: string[] = [];
+  for (const name of names) {
     const entry = entries.find((candidate) =>
       agentMatchesIdentifier(candidate, name),
     );
-    if (entry) return agentKeyOf(entry);
-    unresolved.push(name);
-    return name;
-  });
-  return { keys, unresolved };
+    if (entry) {
+      keys.push(agentKeyOf(entry));
+    } else {
+      nameSlots.push(name);
+    }
+  }
+  return { keys, nameSlots };
 }

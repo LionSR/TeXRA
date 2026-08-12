@@ -1,9 +1,11 @@
 import path from 'node:path';
 
+import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import type { OutputFileSummary } from '@shared/schemas/output';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { getRunDir, ensureRunDir } from '@utils/files/runStorageFs';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   diffTextByLine,
   DIFF_DELETE,
@@ -25,6 +27,8 @@ const LARGE_CHANGE_DIFF_LINES = 80;
  * The orchestrator still gets a diff file but truncated shorter.
  */
 const LARGE_CHANGE_RATIO = 0.4;
+
+const LOG_CHANNEL = 'subagentDiffs';
 
 const DIFF_LINE_PREFIX: Readonly<Record<number, string>> = Object.freeze({
   [DIFF_INSERT]: '+',
@@ -130,8 +134,15 @@ export async function computeAndWriteWorkflowDiffs(
           results.set(o.absolutePath, { diffRelPath, largeChange });
           diffsToWrite.push({ diffRelPath, content: truncated });
         }
-      } catch {
-        // File read failure is non-fatal — skip diff for this file.
+      } catch (error) {
+        // File read failure is non-fatal — skip diff for this file — but
+        // surface the skip so a missing diff is not indistinguishable from an
+        // unchanged file (matching the loud diff-unavailable note the caller
+        // boundary logs).
+        logger.warn(
+          LOG_CHANNEL,
+          `Skipping diff for ${o.absolutePath}: ${toErrorMessage(error)}`,
+        );
       }
     }),
   );

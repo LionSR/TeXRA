@@ -27,8 +27,8 @@
 import {
   findAgentByIdentifier,
   resolveDelegationScopeAgents,
-  type AgentEntry,
 } from '@agent/index/agentRegistry';
+import type { AgentEntry } from '@agent/index/agentEntry';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { decideRunModel } from '@model/runModelDecision';
@@ -84,23 +84,44 @@ const AVAILABLE_AGENTS_BLOCK = /^Available agents:.*(?:\n(?!\n).+)*/m;
 const NO_AGENTS_LINE =
   'Available agents: none are currently in the active roster. Ask the user to enable delegation targets in Settings → Agents before delegating.';
 
-/** Format an agent list for tool descriptions. Newlines inside a description
- * are collapsed to single spaces so each agent stays one paragraph — a blank
- * line in a (e.g. user- or remote-defined) description would otherwise look
- * like the end of the "Available agents:" block to a reader or the block
- * regex. */
+/** How an agent's tool list is rendered inside a roster entry. */
+type AgentListToolsStyle = 'block' | 'inline' | 'none';
+
+export interface FormatAgentListOptions {
+  /** Where an agent's tool list goes when present. Defaults to `'block'`. */
+  readonly tools?: AgentListToolsStyle;
+  /** Collapse newlines inside descriptions to spaces. Defaults to `true`. */
+  readonly collapseDescriptionNewlines?: boolean;
+}
+
+/**
+ * Format an agent list for a delegation roster (tool descriptions and
+ * prompt-template agent vars share this one formatter so the copy can't drift).
+ *
+ * For tool descriptions newlines inside a description are collapsed to single
+ * spaces so each agent stays one paragraph — a blank line in a (e.g. user- or
+ * remote-defined) description would otherwise look like the end of the
+ * "Available agents:" block to a reader or the block regex. Prompt-template
+ * rendering passes `collapseDescriptionNewlines: false` because the prompt
+ * needs the description verbatim.
+ */
 export function formatAgentList(
   agents: { name: string; description?: string; tools?: string[] }[],
+  options: FormatAgentListOptions = {},
 ): string {
+  const { tools = 'block', collapseDescriptionNewlines = true } = options;
   return agents
     .map((agent) => {
-      const desc = (agent.description || 'No description').replaceAll(
-        /\s*\n\s*/g,
-        ' ',
-      );
-      const toolsSuffix = agent.tools?.length
-        ? `\n  Tools: ${agent.tools.join(', ')}`
-        : '';
+      const desc = collapseDescriptionNewlines
+        ? (agent.description || 'No description').replaceAll(/\s*\n\s*/g, ' ')
+        : agent.description || 'No description';
+      let toolsSuffix = '';
+      if (tools !== 'none' && agent.tools?.length) {
+        toolsSuffix =
+          tools === 'inline'
+            ? ` [${agent.tools.join(', ')}]`
+            : `\n  Tools: ${agent.tools.join(', ')}`;
+      }
       return `- ${agent.name}: ${desc}${toolsSuffix}`;
     })
     .join('\n');

@@ -6,7 +6,10 @@ import { consume } from '@lit/context';
 // Local imports - shared modules
 import { themeContext } from '@shared/BaseWebviewApp';
 import { commonViewStyles, designTokens } from '@shared/styles';
-import { DESKTOP_THEME_KIND } from '@shared/schemas/commonViewMessages';
+import {
+  DESKTOP_THEME_KIND,
+  type Theme,
+} from '@shared/schemas/commonViewMessages';
 import {
   loadMonaco,
   monacoThemeForHostTheme,
@@ -86,6 +89,9 @@ export class TexraDiffView extends LitElement {
 
   @consume({ context: themeContext, subscribe: true })
   @property({ attribute: false })
+  // Kept `string` because themeContext carries a plain string; the value is
+  // always one of DESKTOP_THEME_KIND at runtime, asserted at the Monaco
+  // boundary below.
   hostTheme: string = DESKTOP_THEME_KIND.DARK;
   @state() private loading = false;
   @state() private errorMessage = '';
@@ -205,7 +211,11 @@ export class TexraDiffView extends LitElement {
   }
 
   private applyTheme(): void {
-    this.monaco?.editor.setTheme(monacoThemeForHostTheme(this.hostTheme));
+    // themeContext is typed `string` but only ever carries DESKTOP_THEME_KIND
+    // values, so the boundary cast is the invariant we trust here.
+    this.monaco?.editor.setTheme(
+      monacoThemeForHostTheme(this.hostTheme as Theme),
+    );
   }
 
   private disposeMonacoObjects(): void {

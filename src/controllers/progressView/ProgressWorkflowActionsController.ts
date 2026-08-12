@@ -6,8 +6,8 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { unique } from '@utils/core';
+import type { StreamOutputsSource } from './streamOutputs';
 
 export interface WorkflowDiffRequest {
   agent: string;
@@ -32,9 +32,7 @@ export interface WorkflowFileOperationRequest {
   skipProgressViewClear: boolean;
 }
 
-interface ProgressWorkflowActionsState {
-  getRunMetadata(stream: StreamTabId): RunMetadata;
-  getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo>;
+interface ProgressWorkflowActionsState extends StreamOutputsSource {
   getKnownWorkspaceOutputPaths(stream: StreamTabId): Set<string>;
 }
 

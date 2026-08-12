@@ -2,16 +2,17 @@
 
 import { useInput, useWindowSize } from 'ink';
 
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { isEscapeInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
-import { COLOR_HINT } from '@cli/tui/ui/colors';
 import {
   KeyHints,
   KEY_HINT_SEPARATOR,
   keyHintText,
   type KeyHint,
 } from '@cli/tui/ui/KeyHints';
+import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   TODO_STATUS,
   type Plan,
@@ -21,7 +22,6 @@ import {
 } from '@shared/schemas';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
-import { isEscapeInput } from '../input/inputKeys';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
 import { streams as streamsSignal } from '../state/cliState';
 import { useSignal } from '../state/useSignal';

@@ -5,22 +5,7 @@
 // and reading a field only some event variants declare. Everything that is a
 // straight discriminant check is written inline at its use site.
 
-import type {
-  ResponseFunctionToolCallItem,
-  ResponseStreamEvent,
-} from 'openai/resources/responses/responses';
-
-/** Type guard for function-call output items. */
-export function isResponseFunctionToolCallItem(
-  item: unknown,
-): item is ResponseFunctionToolCallItem {
-  return (
-    typeof item === 'object' &&
-    item !== null &&
-    'type' in item &&
-    item.type === 'function_call'
-  );
-}
+import type { ResponseStreamEvent } from 'openai/resources/responses/responses';
 
 /**
  * Extract the `response_id` an event belongs to, when present. Used to filter

@@ -5,10 +5,8 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import {
-  LitSessionRenderer,
-  type GetProgressStreamControls,
-} from '@controllers/progressView/backend/LitSessionRenderer';
+import { LitSessionRenderer } from '@controllers/progressView/backend/LitSessionRenderer';
+import type { GetProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import type { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import type { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import { SessionState } from '@controllers/session/SessionState';

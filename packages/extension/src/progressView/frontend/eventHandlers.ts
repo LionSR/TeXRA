@@ -20,7 +20,7 @@ import {
 import { deleteFollowUpInputTransientState } from './followUpInputState';
 import { addResolvedProposalId, removePrompt } from './slices/permissionSlice';
 import { updateToolUseState } from './stateUtils';
-import { clearInquiryDraft } from './components/ExternalInquiryPanel';
+import { clearInquiryDraft } from './slices/inquiryDraftState';
 import {
   APPROVE_SESSION_ACTION,
   APPROVE_ALL_DELEGATED_WORK_ACTION,
@@ -258,49 +258,62 @@ export function handlePermissionAction(
   const detail = event.detail;
 
   switch (detail.kind) {
-    case PERMISSION_KIND.TOOL_EDIT: {
-      const { data, decision } = detail;
-      // The broader action approves the current request like a normal approve
-      // and enables auto-approval of file edits for the rest of the run,
-      // mirroring the CLI's broader `a` action. Shell commands keep asking.
-      // It never reaches the backend approval protocol.
-      const isYolo = decision.action === APPROVE_SESSION_ACTION;
-      const bypassMessage = isYolo
-        ? approvalBypassMessage(data.streamId, PERMISSION_KIND.TOOL_EDIT)
-        : undefined;
-      const action = isYolo ? 'approve' : decision.action;
-      postWithOptionalBypass(bypassMessage, {
-        command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-        requestId: data.requestId,
-        action,
-        ...(decision.action === 'reject' && decision.feedback
-          ? { feedback: decision.feedback }
-          : {}),
-      });
-      // Only remove for terminal actions (approve/reject/approveSession).
-      // Non-terminal actions like openDiff, previewProposed, showLatexdiff
-      // just open editors without settling the approval.
-      if (action === 'approve' || action === 'reject') {
-        removePrompt(detail.kind, data.requestId);
-      }
-      break;
-    }
+    case PERMISSION_KIND.TOOL_EDIT:
     case PERMISSION_KIND.BASH: {
       const { data, decision } = detail;
-      // Grants shell-command auto-approval only; file edits keep asking.
+      // The broader action approves the current request like a normal approve
+      // and enables auto-approval of the kind's actions (file edits or shell
+      // commands) for the rest of the run, mirroring the CLI's broader `a`
+      // action. The other kind keeps asking. It never reaches the backend
+      // approval protocol.
       const isYolo = decision.action === APPROVE_SESSION_ACTION;
       const bypassMessage = isYolo
-        ? approvalBypassMessage(data.streamId, PERMISSION_KIND.BASH)
+        ? approvalBypassMessage(data.streamId, detail.kind)
         : undefined;
-      postWithOptionalBypass(bypassMessage, {
-        command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
-        requestId: data.requestId,
-        action: decision.action === 'reject' ? decision.action : 'approve',
-        ...(decision.action === 'reject' && decision.feedback
-          ? { feedback: decision.feedback }
-          : {}),
-      });
-      removePrompt(detail.kind, data.requestId);
+      // The two commands share the requestId/action/feedback payload and differ
+      // only in command constant + action vocabulary, but the payload must
+      // match a single discriminated message member — branch on the kind and
+      // read `detail.decision` inside the branch (a destructured `decision`
+      // loses its kind↔action correlation) so `action` narrows to the kind's
+      // own set.
+      if (detail.kind === PERMISSION_KIND.TOOL_EDIT) {
+        const toolDecision = detail.decision;
+        postWithOptionalBypass(bypassMessage, {
+          command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+          requestId: data.requestId,
+          action:
+            toolDecision.action === APPROVE_SESSION_ACTION
+              ? 'approve'
+              : toolDecision.action,
+          ...(toolDecision.action === 'reject' && toolDecision.feedback
+            ? { feedback: toolDecision.feedback }
+            : {}),
+        });
+      } else {
+        const bashDecision = detail.decision;
+        postWithOptionalBypass(bypassMessage, {
+          command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
+          requestId: data.requestId,
+          action:
+            bashDecision.action === APPROVE_SESSION_ACTION
+              ? 'approve'
+              : bashDecision.action,
+          ...(bashDecision.action === 'reject' && bashDecision.feedback
+            ? { feedback: bashDecision.feedback }
+            : {}),
+        });
+      }
+      // Only remove for terminal actions (approve/reject/approveSession).
+      // TOOL_EDIT non-terminal actions like openDiff, previewProposed,
+      // showLatexdiff just open editors without settling the approval; BASH's
+      // action is always terminal after the yolo normalization above.
+      if (
+        isYolo ||
+        decision.action === 'approve' ||
+        decision.action === 'reject'
+      ) {
+        removePrompt(detail.kind, data.requestId);
+      }
       break;
     }
     case PERMISSION_KIND.RETRY: {

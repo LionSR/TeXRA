@@ -34,8 +34,6 @@ export interface CodexDeviceLoginOptions {
   coordinator: CodexSessionCoordinator;
   /** Show the user the verification URL + one-time code. */
   onPrompt: (prompt: CodexDevicePrompt) => void;
-  /** Optional heartbeat called once per poll (e.g. to print a dot). */
-  onPoll?: () => void;
   signal?: AbortSignal;
 }
 
@@ -67,7 +65,6 @@ export async function loginWithDeviceCode(
     intervalMs,
     deadlineMs: Date.now() + expiresInMs,
     signal: options.signal,
-    onPoll: options.onPoll,
     createTimeoutError: () =>
       new Error('Device-code sign-in timed out. Run sign-in again.'),
     attempt: async () => {

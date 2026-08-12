@@ -40,13 +40,11 @@ export function getOriginalSnapshotPath(
   );
 }
 
-export function findExistingRunStoragePath(
+export async function findExistingRunStoragePath(
   ...segments: string[]
 ): Promise<string | undefined> {
   const storagePath = resolveRunStoragePath(...segments);
-  return StorageFS.exists(storagePath).then((exists) =>
-    exists ? storagePath : undefined,
-  );
+  return (await StorageFS.exists(storagePath)) ? storagePath : undefined;
 }
 
 export async function findRunDir(id: ExecutionId): Promise<string | undefined> {

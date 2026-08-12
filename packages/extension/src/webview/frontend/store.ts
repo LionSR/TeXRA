@@ -67,37 +67,31 @@ interface MultiFileList {
   readonly key: keyof MultiFiles;
   /** Command the host pushes to replace the whole list. */
   readonly setCommand: string;
-  /** Command the webview posts after the user edits the list. */
-  readonly updateCommand: string;
 }
 
 /**
  * Everything that varies per multi-file list, one row per
- * `MultipleDocumentFileType`. The `MultiFiles` key, the inbound `SET_*` command
- * and the outbound `UPDATE_*` command are one relation, so they are written
- * once here and looked up through the derived maps below rather than through
- * parallel tables or `${type}Files` string surgery.
+ * `MultipleDocumentFileType`. The `MultiFiles` key and the inbound `SET_*`
+ * command are one relation, so they are written once here and looked up
+ * through the derived maps below rather than through parallel tables or
+ * `${type}Files` string surgery.
  */
 export const MULTI_FILE_LISTS = {
   input: {
     key: 'inputFiles',
     setCommand: MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
-    updateCommand: MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES,
   },
   context: {
     key: 'contextFiles',
     setCommand: MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES,
-    updateCommand: MAIN_VIEW_COMMANDS.UPDATE_CONTEXT_FILES,
   },
   media: {
     key: 'mediaFiles',
     setCommand: MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
-    updateCommand: MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES,
   },
   output: {
     key: 'outputFiles',
     setCommand: MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES,
-    updateCommand: MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES,
   },
 } as const satisfies Record<MultipleDocumentFileType, MultiFileList>;
 

@@ -16,6 +16,7 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - shared
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import { designTokens, commonViewStyles, historyStyles } from '@shared/styles';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { renderEmptyState } from '@shared/wa/emptyState';
 
 // Side-effect imports - register WA icon component
@@ -41,19 +42,11 @@ import type { HistoryViewState } from './state';
 export type SearchAction = 'next' | 'prev' | null;
 
 @customElement('history-list')
-export class HistoryList extends LitElement {
+export class HistoryList extends UnsupportedCommandsMixin(LitElement) {
   static override styles = [designTokens, commonViewStyles, historyStyles];
 
   @property({ attribute: false }) items: HistoryItemData[] = [];
   @property({ attribute: false }) state?: HistoryViewState;
-  /**
-   * Settings-view commands the active host's registry declares
-   * `unsupported(...)`; forwarded to each `history-item` so its per-item
-   * actions (rerun, setup, export) can hide on a host that can't act on
-   * them. See `HistoryTab`'s property of the same name.
-   */
-  @property({ attribute: false })
-  unsupportedCommands: ReadonlySet<string> | null = null;
 
   @property({ attribute: false }) searchTerm = '';
   @property({ attribute: false }) searchAction: SearchAction = null;
@@ -148,7 +141,7 @@ export class HistoryList extends LitElement {
     }
   }
 
-  protected updated(changedProps: Map<string, unknown>): void {
+  protected updated(changedProps: PropertyValues<this>): void {
     // Apply search after DOM update so candidate items are rendered.
     if (
       this.searchTerm &&

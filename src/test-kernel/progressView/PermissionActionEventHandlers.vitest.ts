@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@shared/hostBridge', () => ({ postMessage: mocks.postMessage }));
-vi.mock('@progressView/frontend/components/ExternalInquiryPanel', () => ({
+vi.mock('@progressView/frontend/slices/inquiryDraftState', () => ({
   clearInquiryDraft: mocks.clearInquiryDraft,
 }));
 

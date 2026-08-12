@@ -30,6 +30,28 @@ const RunUsageTotalsSchema = z.object({
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
 /**
+ * Single source of truth mapping each accumulative {@link NormalizedUsage}
+ * metric to the {@link RunUsageTotals} field it sums into. `RunUsageTotalsSchema`
+ * deliberately stays explicit above — it documents the persisted wire shape —
+ * but `recordNormalizedUsage` iterates this table, so adding a metric means
+ * touching exactly two places (schema + one row here) and renaming a field on
+ * either side fails the type check via `satisfies`.
+ */
+const TOTAL_ACCUMULATORS = [
+  ['inputTokens', 'totalInputTokens'],
+  ['outputTokens', 'totalOutputTokens'],
+  ['cost', 'totalCost'],
+  ['cachedInputTokens', 'totalCacheReadInputTokens'],
+  ['cacheMissInputTokens', 'totalCacheMissInputTokens'],
+  ['cacheCreationTokens', 'totalCacheCreationInputTokens'],
+  ['reasoningTokens', 'totalReasoningTokens'],
+  ['toolUsePromptTokens', 'totalToolUsePromptTokens'],
+  ['serverToolRequests', 'totalServerToolRequests'],
+] as const satisfies ReadonlyArray<
+  readonly [usageField: keyof NormalizedUsage, totalField: keyof RunUsageTotals]
+>;
+
+/**
  * Canonical schema for RunUsageAccumulator JSON serialization.
  *
  * `latestUsage` replaces the old unbounded `normalizedSnapshots` array;
@@ -109,15 +131,9 @@ export function recordNormalizedUsage(
     acc.totals.firstInputTokens = usage.inputTokens;
   }
 
-  acc.totals.totalInputTokens += usage.inputTokens;
-  acc.totals.totalOutputTokens += usage.outputTokens;
-  acc.totals.totalCost += usage.cost;
-  acc.totals.totalCacheReadInputTokens += usage.cachedInputTokens ?? 0;
-  acc.totals.totalCacheMissInputTokens += usage.cacheMissInputTokens ?? 0;
-  acc.totals.totalCacheCreationInputTokens += usage.cacheCreationTokens ?? 0;
-  acc.totals.totalReasoningTokens += usage.reasoningTokens ?? 0;
-  acc.totals.totalToolUsePromptTokens += usage.toolUsePromptTokens ?? 0;
-  acc.totals.totalServerToolRequests += usage.serverToolRequests ?? 0;
+  for (const [usageField, totalField] of TOTAL_ACCUMULATORS) {
+    acc.totals[totalField] += usage[usageField] ?? 0;
+  }
 
   acc.latestUsage = usage;
 }

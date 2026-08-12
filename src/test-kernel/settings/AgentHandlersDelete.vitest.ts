@@ -46,6 +46,7 @@ vi.mock('@controllers/settingsView/SettingsAgentControllerFactory', () => ({
     catalog: {},
     directory: {},
     visibility: {},
+    roster: {},
   }),
 }));
 vi.mock('@controllers/settingsView/SettingsAgentFileController', () => ({

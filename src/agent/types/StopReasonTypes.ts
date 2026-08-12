@@ -45,8 +45,16 @@ export const GOOGLE_FINISH = {
 type GoogleFinishReason = (typeof GOOGLE_FINISH)[keyof typeof GOOGLE_FINISH];
 
 /**
- * Union type covering all known provider stop reasons.
- * Additional string values are allowed for providers without explicit enums.
+ * Provider stop reasons flowing through shared flow code.
+ *
+ * The trailing `| string` escape hatch collapses the union to `string`, which
+ * is deliberate: production handlers assign literals that do not exist in the
+ * provider SDK enums (e.g. `'UNKNOWN_EMPTY_RESPONSE'` in the Google
+ * Interactions handler, `'stop'` in the Anthropic handler), so narrowing to
+ * the enum members above would break those assignments. The const tables
+ * (`OPENAI_CHAT_FINISH`, `ANTHROPIC_STOP`, ...) serve as the typed,
+ * enumerable documentation of the known values; the escape hatch keeps this
+ * type usable for reasons the enums haven't caught up to.
  */
 export type ProviderStopReason =
   | OpenAIChatFinishReason

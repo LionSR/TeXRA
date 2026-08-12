@@ -13,6 +13,12 @@ import {
 
 // Local imports - shared runtime
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
+import {
+  isEscapeInput,
+  isUnhandledControlInput,
+  metaChordInput,
+  rewriteKittyEnterInput,
+} from '@cli/tui/inputKeys';
 import { type StreamTabId, type WorkflowControlAction } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
@@ -50,12 +56,6 @@ import {
   pendingApprovalSummaries,
   promoteApprovalsForStream,
 } from './state/approvalQueue';
-import {
-  isEscapeInput,
-  isUnhandledControlInput,
-  metaChordInput,
-  rewriteKittyEnterInput,
-} from './input/inputKeys';
 import {
   ActiveDraftScope,
   createActiveDraftRegistry,

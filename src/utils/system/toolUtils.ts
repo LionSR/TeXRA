@@ -23,7 +23,7 @@ import {
   WOLFRAM_INSTALL_GUIDE,
   PANDOC_INSTALL_GUIDE,
   getInstallGuide,
-} from '@shared/constants/latex';
+} from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports

@@ -56,9 +56,17 @@ export function listGitHubSubscriptionEntries(
   ];
 }
 
-/** Removes every binding for a GitHub URL-shaped subscription key. */
+/**
+ * Removes every binding for a GitHub URL-shaped subscription key.
+ * Repo keys are exactly `owner/repo`; a malformed, legacy, or future key
+ * shape must not silently default to the repo registry (a destructive unbind),
+ * so it is treated as an explicit no-match instead.
+ */
 export function unsubscribeGitHubKey(key: string): number {
   if (key.includes('/pulls/')) return prSubscriptionRegistry.unbindAll(key);
   if (key.includes('/issues/')) return issueSubscriptionRegistry.unbindAll(key);
-  return repoSubscriptionRegistry.unbindAll(key);
+  if (/^[^/\s]+\/[^/\s]+$/.test(key)) {
+    return repoSubscriptionRegistry.unbindAll(key);
+  }
+  return 0;
 }

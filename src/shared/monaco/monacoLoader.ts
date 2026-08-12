@@ -11,7 +11,7 @@
 // lives in monacoLanguage.ts precisely so callers that only need a language id
 // do not import this module — see the comment there for what that costs.
 
-import { DESKTOP_THEME_KIND } from '@shared/schemas';
+import { DESKTOP_THEME_KIND, type Theme } from '@shared/schemas';
 
 export type MonacoModule = typeof import('monaco-editor/editor/editor.api.js');
 type MonacoWorkerModule = { default: new () => Worker };
@@ -218,9 +218,9 @@ function registerTexLanguages(monaco: MonacoModule): void {
 }
 
 export function monacoThemeForHostTheme(
-  themeKind: string,
+  theme: Theme,
 ): 'vs' | 'vs-dark' | 'hc-black' {
-  if (themeKind === DESKTOP_THEME_KIND.LIGHT) return 'vs';
-  if (themeKind === DESKTOP_THEME_KIND.HIGH_CONTRAST) return 'hc-black';
+  if (theme === DESKTOP_THEME_KIND.LIGHT) return 'vs';
+  if (theme === DESKTOP_THEME_KIND.HIGH_CONTRAST) return 'hc-black';
   return 'vs-dark';
 }

@@ -17,7 +17,7 @@
 // ↑/↓ (line motion falling back to history recall), and Ctrl-V (async image
 // paste). Those stay explicit in BaseTextInput.
 
-import { isCtrlInput, metaChordInput } from './inputKeys';
+import { isCtrlInput, metaChordInput } from '@cli/tui/inputKeys';
 import {
   deleteAtCursor,
   deleteBeforeCursor,

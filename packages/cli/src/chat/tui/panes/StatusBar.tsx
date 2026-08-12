@@ -1,11 +1,13 @@
 import { Box, Text, useWindowSize } from 'ink';
 import { Badge } from '@inkjs/ui';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
-import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
+import { COLOR_ERROR } from '@cli/tui/ui/colors';
+import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
+import { usePollingInterval } from '@cli/tui/usePollingInterval';
 import {
   isCodexSubscriptionActive,
   isKimiCodeSubscriptionActive,
@@ -32,7 +34,6 @@ import {
   parentStream as parentStreamSignal,
   visibleSubagentRows,
 } from '../state/childExecutions';
-import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 import {
   buildStatusBarDisplay,
@@ -119,47 +120,57 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     usageRoute: statusSlice?.usage?.usageRoute,
   });
 
-  useEffect(() => {
-    let cancelled = false;
-    const resolve = (
-      active: boolean,
-      grokActive: boolean,
-      kimiActive: boolean,
-    ): void => {
-      if (cancelled) return;
-      setSubscriptionResolution({
-        model: accessModel,
-        preferenceVersion: codexPreferenceVersion,
-        active,
-        grokActive,
-        kimiCodeActive: kimiActive,
-      });
-    };
-    let inFlight = false;
-    const refresh = (): void => {
-      if (inFlight) return; // Skip if the previous read has not resolved.
-      inFlight = true;
+  // Both periodic reads run on the shared poll registry (`usePollingInterval`)
+  // so cadence and cleanup live in one place; the `resetKey` re-fires
+  // immediately when the read's inputs change, matching the old effect deps.
+  // Scope the in-flight guard by read key so a pending lookup for the old
+  // model/preference cannot suppress the reset-triggered re-fire. Completions
+  // also check the latest desired key so a superseded promise cannot overwrite
+  // a newer resolution (resolutionCurrent would then hide the current route).
+  const subscriptionInFlightKeyRef = useRef<string | null>(null);
+  const subscriptionDesiredKeyRef = useRef(
+    `${accessModel}:${codexPreferenceVersion}`,
+  );
+  subscriptionDesiredKeyRef.current = `${accessModel}:${codexPreferenceVersion}`;
+  usePollingInterval(
+    () => {
+      const readKey = `${accessModel}:${codexPreferenceVersion}`;
+      if (subscriptionInFlightKeyRef.current === readKey) return;
+      subscriptionInFlightKeyRef.current = readKey;
       void Promise.all([
         isCodexSubscriptionActive(accessModel),
         isXaiSubscriptionActive(accessModel),
         isKimiCodeSubscriptionActive(accessModel),
       ])
-        .then(([active, grokActive, kimiActive]) =>
-          resolve(active, grokActive, kimiActive),
-        )
-        .catch(() => resolve(false, false, false))
+        .then(([active, grokActive, kimiActive]) => {
+          if (subscriptionDesiredKeyRef.current !== readKey) return;
+          setSubscriptionResolution({
+            model: accessModel,
+            preferenceVersion: codexPreferenceVersion,
+            active,
+            grokActive,
+            kimiCodeActive: kimiActive,
+          });
+        })
+        .catch(() => {
+          if (subscriptionDesiredKeyRef.current !== readKey) return;
+          setSubscriptionResolution({
+            model: accessModel,
+            preferenceVersion: codexPreferenceVersion,
+            active: false,
+            grokActive: false,
+            kimiCodeActive: false,
+          });
+        })
         .finally(() => {
-          inFlight = false;
+          if (subscriptionInFlightKeyRef.current === readKey) {
+            subscriptionInFlightKeyRef.current = null;
+          }
         });
-    };
-    refresh();
-    const refreshTimer = setInterval(refresh, CODEX_SUBSCRIPTION_REFRESH_MS);
-    refreshTimer.unref?.();
-    return () => {
-      cancelled = true;
-      clearInterval(refreshTimer);
-    };
-  }, [accessModel, codexPreferenceVersion]);
+    },
+    CODEX_SUBSCRIPTION_REFRESH_MS,
+    `${accessModel}:${codexPreferenceVersion}`,
+  );
 
   // The relay spend snapshot only changes when the tier config is refetched
   // (5-minute TTL), so poll the cached accessor rather than waiting for the
@@ -167,19 +178,16 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // session that crosses the threshold mid-run. `getSpendingStatus` returns
   // the retained snapshot object, so an unchanged read re-renders nothing.
   const [relayQuota, setRelayQuota] = useState<SpendingStatus>();
-  useEffect(() => {
-    const readRelayQuota = (): void =>
-      setRelayQuota(getServerSideKeyService().getSpendingStatus() ?? undefined);
-    readRelayQuota();
-    const quotaTimer = setInterval(readRelayQuota, RELAY_QUOTA_REFRESH_MS);
-    quotaTimer.unref?.();
-    return () => clearInterval(quotaTimer);
-  }, []);
+  usePollingInterval(
+    () =>
+      setRelayQuota(getServerSideKeyService().getSpendingStatus() ?? undefined),
+    RELAY_QUOTA_REFRESH_MS,
+  );
 
   const runStartedAt = isActivePhase(statusSlice?.status)
     ? statusSlice?.runStartedAt
     : undefined;
-  const now = useLiveNowMs(runStartedAt !== undefined, runStartedAt);
+  const now = useLiveNowMsSince([runStartedAt]);
 
   // Rebuilds the retained + active child rows, so keep it off the 1 Hz
   // elapsed-time re-render path.

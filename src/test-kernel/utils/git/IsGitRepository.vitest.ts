@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
-import { isGitRepository } from '@utils/system/isGitRepository';
+import { isGitRepository } from '@utils/git/isGitRepository';
 
 const execFileAsync = promisify(execFile);
 

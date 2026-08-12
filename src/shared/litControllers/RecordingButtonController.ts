@@ -56,7 +56,8 @@ export class RecordingButtonController implements ReactiveController {
     this.host.addController(this);
   }
 
-  // Required by the Lit ReactiveController interface; state is managed via setRecording().
+  // Satisfies ReactiveController's structural requirement; state is driven via
+  // setRecording(), not host lifecycle callbacks.
   hostConnected(): void {}
 
   /**

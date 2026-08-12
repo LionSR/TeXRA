@@ -16,6 +16,8 @@
 
 import { z } from 'zod';
 
+import { formatZodIssuesMessage } from './toolResult';
+
 /**
  * Round number → items for that round. Runtime keys are strings (JSON), so a
  * `Record<string, T[]>` (e.g. a parsed {@link roundIndexedRecord}) is
@@ -122,9 +124,7 @@ function warnDroppedItem(
   error: { issues: readonly { path: PropertyKey[]; message: string }[] },
 ): void {
   console.warn(
-    `[roundIndexed] Dropping malformed ${kind} entry: ${error.issues
-      .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
-      .join('; ')}`,
+    `[roundIndexed] Dropping malformed ${kind} entry: ${formatZodIssuesMessage(error.issues)}`,
   );
 }
 

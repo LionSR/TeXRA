@@ -4,9 +4,8 @@ import {
 } from '@agent/runtime/helperModel';
 import { classifyAgentError } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import * as logger from '@logger/logUtils';
-
-const CHANNEL = 'LaTeXCommands';
 
 interface ConnectionResult {
   connector: string;
@@ -19,7 +18,10 @@ const CASE_CONNECTORS: Record<string, string> = {
   C: '\n',
 };
 
-const DEFAULT_RESULT: ConnectionResult = { connector: ' ', choice: 'B' };
+const DEFAULT_RESULT: ConnectionResult = {
+  connector: CASE_CONNECTORS.B,
+  choice: 'B',
+};
 
 function buildPrompt(str1: string, str2: string): string {
   return (

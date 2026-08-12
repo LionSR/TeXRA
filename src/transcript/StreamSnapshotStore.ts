@@ -53,7 +53,9 @@ import {
   type TokenUsageStats,
   type UserFollowUpSupport,
   type WorkPlanSnapshot,
+  formatZodIssuesMessage,
 } from '@shared/schemas';
+
 import { mapToRecord, throwAggregated } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -108,7 +110,6 @@ const SNAPSHOT_RUN_FACT_TYPES = Object.freeze([
   'addOutputFiles',
   'updateMissingOutputs',
   'updateCompileFailures',
-  'goalPaused',
 ] as const satisfies readonly AgentEvent['type'][]);
 
 type SnapshotRunFactType = (typeof SNAPSHOT_RUN_FACT_TYPES)[number];
@@ -505,11 +506,6 @@ export class StreamSnapshotStore {
           case 'updateCompileFailures':
             this.updateCompileFailures(event.streamId, event.filesByRound);
             return;
-          case 'goalPaused':
-            // Subscribed so the goal plane can grow a snapshot-visible fact
-            // later, but deliberately not persisted: pausing changes liveness,
-            // and liveness is not durable display state (see the file header).
-            return;
           default: {
             // Exhaustiveness check: adding a type to `SNAPSHOT_RUN_FACT_TYPES`
             // without handling it here is a compile error, not a silent drop.
@@ -883,9 +879,7 @@ export class StreamSnapshotStore {
         `Discarding malformed usage delta for run ${storageKey} on stream ` +
           `${stream} instead of silently zeroing accumulated cost.`,
         {
-          data: parsed.error.issues
-            .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
-            .join('; '),
+          data: formatZodIssuesMessage(parsed.error.issues),
         },
       );
     }

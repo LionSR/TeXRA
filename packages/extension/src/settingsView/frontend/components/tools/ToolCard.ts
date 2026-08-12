@@ -267,8 +267,7 @@ export class ToolCard extends LitElement {
 
   private renderStatusBadge(): TemplateResult {
     const { status } = this.item;
-    const config =
-      ToolCard.STATUS_CONFIG[status] ?? ToolCard.STATUS_CONFIG.unknown;
+    const config = ToolCard.STATUS_CONFIG[status];
     const label = toolStatusLabel(status, this.item.statusLabel);
 
     return html`

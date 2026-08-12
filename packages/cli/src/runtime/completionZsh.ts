@@ -1,9 +1,9 @@
 import { quote } from 'shell-quote';
 
 import {
-  AGENT_COMPLETION_SOURCES,
   CLI_COMPLETION_SHELLS,
-  COMPLETION_SOURCES,
+  DYNAMIC_VALUE_FLAG_SOURCES,
+  POSITIONAL_COMPLETION_SOURCES,
   allCompletionSources,
   commandKey,
   completionFlagVariants,
@@ -13,31 +13,30 @@ import {
   type CompletionFlagVariant,
 } from './completionCommandTree';
 
-const { agents, models } = COMPLETION_SOURCES;
-
-const DYNAMIC_FLAG_VALUE_SOURCES: ReadonlyMap<string, string> = new Map([
-  ['agent', AGENT_COMPLETION_SOURCES.toolUse.shellFunction],
-  ['model', models.shellFunction],
-]);
-
 function zshFlagValueSuffix(
   flag: CompletionFlag,
   variant: CompletionFlagVariant,
 ): string {
   if (variant.values.length > 0) return `: :(${variant.values.join(' ')})`;
   if (!variant.takesValue) return '';
-  const dynamicSource = DYNAMIC_FLAG_VALUE_SOURCES.get(flag.name);
-  if (dynamicSource) return `:${flag.name}:($(${dynamicSource}))`;
+  const dynamicSource = DYNAMIC_VALUE_FLAG_SOURCES[flag.name];
+  if (dynamicSource) return `:${flag.name}:($(${dynamicSource.shellFunction}))`;
   return `:${variant.valueKind ?? 'value'}:`;
 }
 
-const POSITIONAL_SPECS: Readonly<Record<string, string>> = {
-  completion: `1:shell:(${CLI_COMPLETION_SHELLS.join(' ')})`,
-  run: `1:agent:($(${AGENT_COMPLETION_SOURCES.workflow.shellFunction}))`,
-  'agents show': `1:agent:($(${agents.shellFunction}))`,
-  'agents run': `1:agent:($(${AGENT_COMPLETION_SOURCES.toolUse.shellFunction}))`,
-  'models show': `1:model:($(${models.shellFunction}))`,
-};
+/** Positional specs for the source-backed paths, plus the fixed shell list. */
+function positionalSpecs(): Readonly<Record<string, string>> {
+  const specs: Record<string, string> = {
+    completion: `1:shell:(${CLI_COMPLETION_SHELLS.join(' ')})`,
+  };
+  for (const [commandPath, source] of Object.entries(
+    POSITIONAL_COMPLETION_SOURCES,
+  )) {
+    const tag = commandPath === 'models show' ? 'model' : 'agent';
+    specs[commandPath] = `1:${tag}:($(${source.shellFunction}))`;
+  }
+  return specs;
+}
 
 function dynamicSourceFunctions(): string {
   return allCompletionSources()
@@ -64,6 +63,7 @@ function zshFlagSpec(flag: CompletionFlag): string[] {
 
 export function zshCompletion(commands: readonly CompletionCommand[]): string {
   const root = commands.find((command) => command.path.length === 0);
+  const specsByPath = positionalSpecs();
   const pathCases = commands
     .filter((command) => command.path.length > 0)
     .map((command) => {
@@ -71,7 +71,7 @@ export function zshCompletion(commands: readonly CompletionCommand[]): string {
       const subs = command.subcommands.length
         ? `_values 'subcommands' ${quote(command.subcommands)}`
         : 'true';
-      const positionalSpec = POSITIONAL_SPECS[key];
+      const positionalSpec = specsByPath[key];
       const specs = [
         ...command.flags.flatMap(zshFlagSpec),
         ...(positionalSpec ? [positionalSpec] : []),

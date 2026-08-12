@@ -34,8 +34,6 @@ export interface XaiDeviceLoginOptions {
   coordinator: XaiSessionCoordinator;
   /** Show the user the verification URL + one-time code. */
   onPrompt: (prompt: XaiDevicePrompt) => void;
-  /** Optional heartbeat called once per poll. */
-  onPoll?: () => void;
   signal?: AbortSignal;
 }
 
@@ -65,7 +63,6 @@ export async function loginWithDeviceCode(
     intervalMs,
     deadlineMs: Date.now() + expiresInMs,
     signal: options.signal,
-    onPoll: options.onPoll,
     createTimeoutError: () =>
       new Error('Device-code sign-in timed out. Run sign-in again.'),
     attempt: async () => {
@@ -75,7 +72,7 @@ export async function loginWithDeviceCode(
           options.signal,
         );
         options.signal?.throwIfAborted();
-        const session = await options.coordinator.completeDeviceLogin(tokens);
+        const session = await options.coordinator.storeTokens(tokens);
         return deviceCodeAuthorized(session);
       } catch (error) {
         if (error instanceof XaiAuthError && error.kind === 'pending') {

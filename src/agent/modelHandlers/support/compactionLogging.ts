@@ -1,7 +1,6 @@
 import { logContextManagementEvent, type AgentTrace } from '@agent/trace';
-import { roundTo } from '@utils/core';
 
-import { computeUtilizationPercent } from './contextUtilization';
+import { roundedUtilizationPercent } from './contextUtilization';
 
 interface LogCompactionEventOptions {
   readonly logger: AgentTrace;
@@ -33,14 +32,8 @@ export function logCompactionEvent({
       tokensBefore,
       tokensAfter,
       contextWindow,
-      utilizationBefore: roundTo(
-        computeUtilizationPercent(tokensBefore, contextWindow),
-        1,
-      ),
-      utilizationAfter: roundTo(
-        computeUtilizationPercent(tokensAfter, contextWindow),
-        1,
-      ),
+      utilizationBefore: roundedUtilizationPercent(tokensBefore, contextWindow),
+      utilizationAfter: roundedUtilizationPercent(tokensAfter, contextWindow),
       details,
     },
   );

@@ -24,6 +24,16 @@ export type ProgressViewPlacement = z.infer<typeof ProgressViewPlacementSchema>;
  */
 export const StreamScopedBaseSchema = z.object({ stream: StreamTabIdSchema });
 
+/**
+ * StreamScopedBaseSchema plus a `command` literal, with no extra fields.
+ * Lives here (not in a per-view message module) so inbound and outbound
+ * message schemas that echo the same command — e.g. DELETE_STREAM — compose
+ * the identical shape instead of hand-declaring it in each direction.
+ */
+export function streamScopedCommand<T extends string>(command: T) {
+  return StreamScopedBaseSchema.extend({ command: z.literal(command) });
+}
+
 // ============================================================
 // Progress View Data Schemas
 // ============================================================

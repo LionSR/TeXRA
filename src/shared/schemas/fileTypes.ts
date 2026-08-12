@@ -25,9 +25,7 @@ export const ExtendedDocumentFileTypeSchema = z.enum([
   'edited',
   'output',
 ]);
-export type ExtendedDocumentFileType = z.infer<
-  typeof ExtendedDocumentFileTypeSchema
->;
+type ExtendedDocumentFileType = z.infer<typeof ExtendedDocumentFileTypeSchema>;
 
 /**
  * Values accepted by the "get/set current editor file" round trip
