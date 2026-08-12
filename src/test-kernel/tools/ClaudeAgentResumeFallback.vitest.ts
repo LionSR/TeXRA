@@ -536,6 +536,38 @@ describe('claude_agent tool launch and resume fallback', () => {
     ClaudeAgentSessions.release('forked-session');
   });
 
+  it('fails a fork whose success result omits session_id', async () => {
+    mocks.query.mockReturnValue(
+      (async function* () {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          result: 'Forked without identifying the new session.',
+          modelUsage: {},
+          total_cost_usd: 0,
+        };
+      })(),
+    );
+    const captured = captureStrategy();
+
+    await new ClaudeAgentTool().call({
+      prompt: 'try a different proof',
+      session_id: 'source-session',
+      fork_session: true,
+    });
+    const turn = await captured.strategy?.launch?.(
+      { notify: () => {}, recordCost: () => {} },
+      new AbortController(),
+    );
+
+    expect(turn).toMatchObject({
+      isError: true,
+      sessionId: undefined,
+      errorMessage: expect.stringContaining('missing session_id'),
+    });
+    expect(mocks.query).toHaveBeenCalledOnce();
+  });
+
   it('rejects a fork from a live session owned by another stream', async () => {
     const sourceExecutionId = 'source-execution' as ExecutionId;
     const sourceOwner = 'stream:other-owner' as StreamTabId;

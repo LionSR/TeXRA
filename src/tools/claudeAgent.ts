@@ -250,6 +250,7 @@ export async function runStreamedTurn(params: {
   let totalCostUsd: number | undefined;
   let isError = false;
   let errorMessage: string | undefined;
+  let succeeded = false;
 
   try {
     for await (const raw of stream) {
@@ -276,6 +277,7 @@ export async function runStreamedTurn(params: {
               : aggregateClaudeModelUsage(raw.modelUsage);
           totalCostUsd = raw.total_cost_usd;
           if (raw.subtype === 'success') {
+            succeeded = true;
             if (isNonEmptyString(raw.result)) {
               responseParts.push(raw.result);
             }
@@ -299,6 +301,12 @@ export async function runStreamedTurn(params: {
     }
   } finally {
     backgroundTasks.finish();
+  }
+
+  if (params.forkSession && succeeded && !sessionId) {
+    isError = true;
+    errorMessage =
+      'Claude SDK fork success result is missing session_id; refusing to resume the source session.';
   }
 
   return {
