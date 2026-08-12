@@ -1,6 +1,5 @@
 import {
   attachTerminalResultToast,
-  releaseExecutionLeaseAfterArtifacts,
   runAgent,
   trackTerminalResultPresentation,
   type RunAgentOptions,
@@ -24,7 +23,10 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { warnApprovalDenied } from './approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
-import { finalizeCliExecution } from './executionFinalization';
+import {
+  finalizeCliExecution,
+  releaseCliExecutionLeaseAfterArtifacts,
+} from './executionFinalization';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { initializeHeadlessTranscriptSession } from './transcriptSession';
 import { createCliRuntimeHost } from './cliPresentationHost';
@@ -273,7 +275,7 @@ export async function executeCliRequest(
             'preserve',
             reportShutdownFinalizationFailure,
           );
-          await releaseExecutionLeaseAfterArtifacts(session, executionId);
+          await releaseCliExecutionLeaseAfterArtifacts(session, executionId);
         });
         return true;
       } catch (error) {

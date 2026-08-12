@@ -1,3 +1,7 @@
+import {
+  releaseExecutionLeaseAfterArtifacts,
+  type SessionHandle,
+} from '@agent/runtime';
 import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
 import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
 import type { RunOutcome } from '@shared/schemas';
@@ -57,4 +61,16 @@ export async function finalizeCliExecution(
 
   const message = finalizationFailureMessage(result, executionId, outcome);
   reportFailure(new Error(message, { cause: result.error }));
+}
+
+/**
+ * Drain a CLI session's artifacts before releasing its execution lease.
+ * Keeping this operation beside CLI finalization gives the host one local
+ * boundary for the terminal durability sequence.
+ */
+export function releaseCliExecutionLeaseAfterArtifacts(
+  session: SessionHandle,
+  executionId: FinalizeExecutionInput['executionId'],
+): Promise<void> {
+  return releaseExecutionLeaseAfterArtifacts(session, executionId);
 }

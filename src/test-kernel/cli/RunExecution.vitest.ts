@@ -83,8 +83,11 @@ vi.mock('@agent/runtime/runAgent', () => ({
   runAgent: mocks.runAgent,
 }));
 
-vi.mock('@agent/runtime/executionOwnership', () => ({
-  releaseExecutionLeaseAfterArtifacts:
+vi.mock('@cli/runtime/executionFinalization', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@cli/runtime/executionFinalization')
+  >()),
+  releaseCliExecutionLeaseAfterArtifacts:
     mocks.releaseExecutionLeaseAfterArtifacts,
 }));
 
