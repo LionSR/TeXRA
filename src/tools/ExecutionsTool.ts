@@ -449,17 +449,19 @@ const PathFieldSchema = z.string().describe('Path starting with /executions');
 
 const ViewActionSchema = z.strictObject({
   path: PathFieldSchema,
-  // Optional + defaulted (not a bare literal, unlike the other branches):
-  // 'view' is the common no-op-preamble call, so omitting `action` entirely
-  // must both dispatch to this branch and keep it out of the JSON-schema
-  // `required` list — matching the pre-refactor `.prefault('view')` and the
-  // "design for the model's first call" rule (AGENTS.md). z.discriminatedUnion
-  // matches an omitted discriminator against a branch whose discriminator
-  // schema itself accepts undefined, so no top-level preprocess is needed.
+  // nullish + normalized (not a bare literal, unlike the other branches):
+  // 'view' is the common no-op-preamble call, so omitting `action` — or, per
+  // AGENTS.md's tool-input-schema rule, sending it as `null` (OpenAI-
+  // compatible structured-output providers represent an omitted optional
+  // field that way) — must both dispatch to this branch and keep `action`
+  // out of the JSON-schema `required` list, matching the pre-refactor
+  // `.prefault('view')`. z.discriminatedUnion matches a missing/null
+  // discriminator against a branch whose discriminator schema itself accepts
+  // it, so no top-level preprocess is needed.
   action: z
     .literal('view')
-    .optional()
-    .default('view')
+    .nullish()
+    .transform((v) => v ?? ('view' as const))
     .describe('Read execution data (returns immediately). Default action.'),
 
   /** Optional line range [start, end] for large outputs. */
