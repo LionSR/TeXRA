@@ -1,9 +1,10 @@
 import {
-  AGENT_COMPLETION_SOURCES,
   CLI_COMPLETION_SHELLS,
-  COMPLETION_SOURCES,
+  DYNAMIC_VALUE_FLAG_SOURCES,
+  POSITIONAL_COMPLETION_SOURCES,
   completionFlagVariants,
   type CompletionCommand,
+  type CompletionFlag,
   type CompletionSource,
 } from './completionCommandTree';
 
@@ -13,33 +14,41 @@ function dynamicListSource(source: CompletionSource): string {
   return `(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra ${source.command} 2>/dev/null | awk "{print \\$${source.column}}")`;
 }
 
-const AGENTS_LIST_SOURCE = dynamicListSource(COMPLETION_SOURCES.agents);
-const WORKFLOW_AGENTS_LIST_SOURCE = dynamicListSource(
-  AGENT_COMPLETION_SOURCES.workflow,
-);
-const TOOL_USE_AGENTS_LIST_SOURCE = dynamicListSource(
-  AGENT_COMPLETION_SOURCES.toolUse,
-);
-const MODELS_LIST_SOURCE = dynamicListSource(COMPLETION_SOURCES.models);
 const TOP_LEVEL_RUN_CONDITION =
   "-n '__fish_seen_subcommand_from run; and not __fish_seen_subcommand_from agents; and not __fish_seen_subcommand_from multi-agent'";
 
-// Positional agent/model completions, in emission order.
-const DYNAMIC_POSITIONAL_COMPLETIONS: readonly (readonly [string, string])[] = [
-  [TOP_LEVEL_RUN_CONDITION, WORKFLOW_AGENTS_LIST_SOURCE],
-  [
-    "-n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from run'",
-    TOOL_USE_AGENTS_LIST_SOURCE,
-  ],
-  [
-    "-n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from show'",
-    AGENTS_LIST_SOURCE,
-  ],
-  [
-    "-n '__fish_seen_subcommand_from models; and __fish_seen_subcommand_from show'",
-    MODELS_LIST_SOURCE,
-  ],
-];
+// Positional agent/model completions, in emission order. Each source-backed
+// path resolves its listing source from POSITIONAL_COMPLETION_SOURCES.
+const DYNAMIC_POSITIONAL_COMPLETIONS: readonly (readonly [string, string])[] =
+  Object.entries(POSITIONAL_COMPLETION_SOURCES).map(([commandPath, source]) => [
+    commandPath === 'run'
+      ? TOP_LEVEL_RUN_CONDITION
+      : fishCondition(commandPath.split(' ')),
+    dynamicListSource(source),
+  ]);
+
+// A dynamic-value flag emits one generic `complete` line regardless of which
+// command carries it, so a flag added to DYNAMIC_VALUE_FLAG_SOURCES completes
+// in fish without manual special-casing.
+function dynamicFlagValueLines(commands: readonly CompletionCommand[]): string[] {
+  const flagsByName = new Map<string, CompletionFlag>();
+  for (const command of commands) {
+    for (const flag of command.flags) {
+      if (flag.name in DYNAMIC_VALUE_FLAG_SOURCES && !flagsByName.has(flag.name)) {
+        flagsByName.set(flag.name, flag);
+      }
+    }
+  }
+  return Object.keys(DYNAMIC_VALUE_FLAG_SOURCES)
+    .filter((name) => flagsByName.has(name))
+    .map((name) => {
+      const flag = flagsByName.get(name)!;
+      const base = [`-l ${flag.name}`];
+      for (const alias of flag.aliases) base.push(`-s ${alias}`);
+      base.push('-r', `-a '${dynamicListSource(DYNAMIC_VALUE_FLAG_SOURCES[name])}'`);
+      return fishCompleteLine(base);
+    });
+}
 
 function fishEscape(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
@@ -118,11 +127,8 @@ export function fishCompletion(commands: readonly CompletionCommand[]): string {
   for (const [condition, source] of DYNAMIC_POSITIONAL_COMPLETIONS) {
     lines.push(fishCompleteLine([condition, `-a '${source}'`]));
   }
-  lines.push(
-    fishCompleteLine(['-l model', '-s m', '-r', `-a '${MODELS_LIST_SOURCE}'`]),
-  );
-  lines.push(
-    fishCompleteLine(['-l agent', '-r', `-a '${TOOL_USE_AGENTS_LIST_SOURCE}'`]),
-  );
+  for (const line of dynamicFlagValueLines(commands)) {
+    lines.push(line);
+  }
   return `${lines.join('\n')}\n`;
 }

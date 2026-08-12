@@ -1,9 +1,9 @@
 import { quote } from 'shell-quote';
 
 import {
-  AGENT_COMPLETION_SOURCES,
   CLI_COMPLETION_SHELLS,
-  COMPLETION_SOURCES,
+  DYNAMIC_VALUE_FLAG_SOURCES,
+  POSITIONAL_COMPLETION_SOURCES,
   allCompletionSources,
   commandKey,
   completionFlagTokens,
@@ -12,8 +12,6 @@ import {
   type CompletionCommand,
   type CompletionFlag,
 } from './completionCommandTree';
-
-const { agents, models } = COMPLETION_SOURCES;
 
 interface FlagValueTokenEntry {
   readonly flag: CompletionFlag;
@@ -59,19 +57,31 @@ function fixedFlagValueCases(commands: readonly CompletionCommand[]): string {
     .join('\n    ');
 }
 
-const DYNAMIC_VALUE_FLAG_CASES = [
-  { tokens: ['--model', '-m'], source: models.shellFunction },
-  {
-    tokens: ['--agent'],
-    source: AGENT_COMPLETION_SOURCES.toolUse.shellFunction,
-  },
-] as const;
+/** The dynamic-value flag tokens present in the tree, grouped per flag name. */
+function dynamicValueFlagTokens(
+  commands: readonly CompletionCommand[],
+): Map<string, string[]> {
+  const byFlagName = new Map<string, string[]>();
+  for (const command of commands) {
+    for (const flag of command.flags) {
+      if (!(flag.name in DYNAMIC_VALUE_FLAG_SOURCES)) continue;
+      if (!byFlagName.has(flag.name)) {
+        byFlagName.set(flag.name, completionFlagTokens(flag));
+      }
+    }
+  }
+  return byFlagName;
+}
 
-function dynamicFlagValueCases(): string {
-  return DYNAMIC_VALUE_FLAG_CASES.map(
-    (flagCase) =>
-      `${flagCase.tokens.join('|')}) COMPREPLY=( $(compgen -W "$(${flagCase.source})" -- "$cur") ); return ;;`,
-  ).join('\n    ');
+function dynamicFlagValueCases(commands: readonly CompletionCommand[]): string {
+  const byFlagName = dynamicValueFlagTokens(commands);
+  return Object.keys(DYNAMIC_VALUE_FLAG_SOURCES)
+    .filter((name) => byFlagName.has(name))
+    .map((name) => {
+      const shellFunction = DYNAMIC_VALUE_FLAG_SOURCES[name].shellFunction;
+      return `${byFlagName.get(name)?.join('|')}) COMPREPLY=( $(compgen -W "$(${shellFunction})" -- "$cur") ); return ;;`;
+    })
+    .join('\n    ');
 }
 
 function genericFlagValueCases(commands: readonly CompletionCommand[]): string {
@@ -83,7 +93,7 @@ function genericFlagValueCases(commands: readonly CompletionCommand[]): string {
     ),
   );
   const dynamicValueFlags = new Set<string>(
-    DYNAMIC_VALUE_FLAG_CASES.flatMap((flagCase) => flagCase.tokens),
+    [...dynamicValueFlagTokens(commands).values()].flat(),
   );
   const fileFlags: string[] = [];
   const directoryFlags: string[] = [];
@@ -118,22 +128,30 @@ function genericFlagValueCases(commands: readonly CompletionCommand[]): string {
 }
 
 // Positional completions keyed by command path, with the `compgen -W` word list
-// each one offers. Emitted in order after the flag-value cases.
+// each one offers. Source-backed paths resolve their listing source from
+// POSITIONAL_COMPLETION_SOURCES; `completion` offers the fixed shell list.
+// Emitted in order after the flag-value cases.
 const POSITIONAL_COMPLETIONS: readonly {
   readonly commandPath: string;
   readonly words: string;
 }[] = [
   {
     commandPath: 'run',
-    words: `"$(${AGENT_COMPLETION_SOURCES.workflow.shellFunction})"`,
+    words: `"$(${POSITIONAL_COMPLETION_SOURCES.run.shellFunction})"`,
   },
   {
     commandPath: 'agents run',
-    words: `"$(${AGENT_COMPLETION_SOURCES.toolUse.shellFunction})"`,
+    words: `"$(${POSITIONAL_COMPLETION_SOURCES['agents run'].shellFunction})"`,
   },
   { commandPath: 'completion', words: `'${CLI_COMPLETION_SHELLS.join(' ')}'` },
-  { commandPath: 'agents show', words: `"$(${agents.shellFunction})"` },
-  { commandPath: 'models show', words: `"$(${models.shellFunction})"` },
+  {
+    commandPath: 'agents show',
+    words: `"$(${POSITIONAL_COMPLETION_SOURCES['agents show'].shellFunction})"`,
+  },
+  {
+    commandPath: 'models show',
+    words: `"$(${POSITIONAL_COMPLETION_SOURCES['models show'].shellFunction})"`,
+  },
 ];
 
 function positionalCompletionBlocks(): string {
@@ -168,7 +186,7 @@ function commandCaseBlock(command: CompletionCommand): string {
 export function bashCompletion(commands: readonly CompletionCommand[]): string {
   const root = commands.find((command) => command.path.length === 0);
   const fixedValueCases = fixedFlagValueCases(commands);
-  const dynamicValueCases = dynamicFlagValueCases();
+  const dynamicValueCases = dynamicFlagValueCases(commands);
   const genericValueCases = genericFlagValueCases(commands);
   const valueFlagPattern =
     flagValueTokenEntries(commands)
