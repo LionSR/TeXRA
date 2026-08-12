@@ -12,7 +12,7 @@
  */
 
 import type { StreamTabId } from '@shared/schemas';
-import { AgentExecutionHandle, type ExecutionHandle } from './ExecutionHandle';
+import type { AgentExecutionHandle } from './ExecutionHandle';
 import type {
   ChildExecutionActivation,
   ExecutionRegistry,
@@ -85,7 +85,7 @@ export class ExecutionInteractionOwnership {
 
     const observeRegistration = (
       executionId: string,
-      handle: ExecutionHandle | undefined,
+      handle: AgentExecutionHandle | undefined,
     ): void => {
       if (!handle) {
         if (this.executionOwners.get(executionId) === scope) {
@@ -109,9 +109,7 @@ export class ExecutionInteractionOwnership {
 
       this.executionOwners.set(executionId, scope);
       liveExecutions.add(executionId);
-      if (handle instanceof AgentExecutionHandle) {
-        this.streamOwners.set(handle.childStreamId, scope);
-      }
+      this.streamOwners.set(handle.childStreamId, scope);
     };
 
     const observeActivation = (

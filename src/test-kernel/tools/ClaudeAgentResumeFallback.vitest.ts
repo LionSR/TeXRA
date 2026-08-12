@@ -13,6 +13,7 @@ import type {
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { ClaudeAgentSessions } from '@tools/agentCliSessionStores';
 
 const mocks = vi.hoisted(() => ({
@@ -288,6 +289,8 @@ describe('claude_agent tool launch and resume fallback', () => {
           subtype: 'success',
           session_id: 'stale-session',
           result: 'Resumed and continued.',
+          modelUsage: {},
+          total_cost_usd: 0,
         };
       })(),
     );
@@ -431,5 +434,165 @@ describe('claude_agent tool launch and resume fallback', () => {
     expect(result.status).toBe('executed');
     expect(result.summary).toMatch(/Follow-up queued/);
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+  });
+
+  it('forks an active session into a distinct child and only forks its first turn', async () => {
+    ClaudeAgentSessions.register('source-session', {
+      childStreamId,
+      executionId,
+      executions: stubExecutions(),
+      model: 'claude-sonnet-4-6',
+      permissionMode: 'acceptEdits',
+      effort: 'high',
+    });
+    let queryIndex = 0;
+    mocks.query.mockImplementation(() => {
+      queryIndex += 1;
+      const sessionId = 'forked-session';
+      return (async function* () {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          session_id: sessionId,
+          result: `Fork turn ${queryIndex}`,
+          modelUsage: {},
+          total_cost_usd: 0,
+        };
+      })();
+    });
+    const captured = captureStrategy();
+
+    const result = await new ClaudeAgentTool().call({
+      prompt: 'try a different proof',
+      session_id: 'source-session',
+      fork_session: true,
+    });
+
+    expect(result.status).toBe('executed');
+    expect(mocks.submitFollowUp).not.toHaveBeenCalled();
+    expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
+    const ports: ChildRunPorts = { notify: () => {}, recordCost: () => {} };
+    const firstTurn = await captured.strategy?.launch?.(
+      ports,
+      new AbortController(),
+    );
+    captured.strategy?.onTurnSuccess?.(firstTurn, {
+      executions: stubExecutions(),
+    } as any);
+    await captured.strategy?.runTurn?.(
+      [{ text: 'continue the fork', origin: 'user' }],
+      ports,
+      new AbortController(),
+    );
+
+    expect(mocks.query).toHaveBeenCalledTimes(2);
+    expect(mocks.query.mock.calls[0]?.[0]).toMatchObject({
+      options: { resume: 'source-session', forkSession: true },
+    });
+    expect(mocks.query.mock.calls[1]?.[0]).toMatchObject({
+      options: { resume: 'forked-session' },
+    });
+    expect(mocks.query.mock.calls[1]?.[0].options).not.toHaveProperty(
+      'forkSession',
+    );
+    expect(ClaudeAgentSessions.lookup('source-session')?.childStreamId).toBe(
+      childStreamId,
+    );
+    expect(ClaudeAgentSessions.lookup('forked-session')).toBeDefined();
+    captured.strategy?.releaseSessionOwnership?.();
+    ClaudeAgentSessions.release('forked-session');
+  });
+
+  it('keeps forking the source after a failed first turn has no new session id', async () => {
+    ClaudeAgentSessions.register('source-session', {
+      childStreamId,
+      executionId,
+      executions: stubExecutions(),
+      model: 'claude-sonnet-4-6',
+      permissionMode: 'acceptEdits',
+      effort: 'high',
+    });
+    mocks.query
+      .mockImplementationOnce(() =>
+        (async function* () {
+          yield {
+            type: 'result',
+            subtype: 'error_during_execution',
+            errors: ['fork failed before initialization'],
+            modelUsage: {},
+            total_cost_usd: 0,
+          };
+        })(),
+      )
+      .mockImplementationOnce(() =>
+        (async function* () {
+          yield {
+            type: 'result',
+            subtype: 'success',
+            session_id: 'forked-session',
+            result: 'Fork retry succeeded',
+            modelUsage: {},
+            total_cost_usd: 0,
+          };
+        })(),
+      );
+    const captured = captureStrategy();
+
+    await new ClaudeAgentTool().call({
+      prompt: 'try a different proof',
+      session_id: 'source-session',
+      fork_session: true,
+    });
+
+    const ports: ChildRunPorts = { notify: () => {}, recordCost: () => {} };
+    await captured.strategy?.launch?.(ports, new AbortController());
+    await captured.strategy?.runTurn?.(
+      [{ text: 'retry the fork', origin: 'user' }],
+      ports,
+      new AbortController(),
+    );
+
+    expect(mocks.query.mock.calls[0]?.[0]).toMatchObject({
+      options: { resume: 'source-session', forkSession: true },
+    });
+    expect(mocks.query.mock.calls[1]?.[0]).toMatchObject({
+      options: { resume: 'source-session', forkSession: true },
+    });
+    captured.strategy?.releaseSessionOwnership?.();
+    ClaudeAgentSessions.release('source-session');
+  });
+
+  it('rejects a fork from a live session owned by another stream', async () => {
+    const sourceExecutionId = 'source-execution' as ExecutionId;
+    const sourceOwner = 'stream:other-owner' as StreamTabId;
+    const handle = testExecutionHandle({
+      executionId: sourceExecutionId,
+      parentStreamId: sourceOwner,
+      childStreamId,
+      agent: 'claude_code',
+    });
+    ClaudeAgentSessions.register('foreign-session', {
+      childStreamId,
+      executionId: sourceExecutionId,
+      executions: {
+        getHandle: () => handle,
+      } as any,
+      model: 'claude-sonnet-4-6',
+      permissionMode: 'acceptEdits',
+      effort: 'high',
+    });
+
+    const result = await new ClaudeAgentTool().call({
+      prompt: 'read a foreign branch',
+      session_id: 'foreign-session',
+      fork_session: true,
+    });
+
+    expect(result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining('owned by a different session'),
+    });
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+    ClaudeAgentSessions.release('foreign-session');
   });
 });
