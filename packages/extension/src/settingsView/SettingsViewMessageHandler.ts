@@ -77,7 +77,6 @@ import {
   type SettingsMessageFor,
 } from '@shared/schemas';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
 
 import {

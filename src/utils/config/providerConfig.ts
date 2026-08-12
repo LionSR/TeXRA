@@ -174,9 +174,10 @@ export function getPreferKimiCode(): boolean {
 export async function setPreferKimiCode(
   enabled: boolean,
   state: StateStore | null = tryGlobalState(),
+  options: { readonly preserveOpenRouter?: boolean } = {},
 ): Promise<void> {
   await state?.update(GlobalStateKey.KIMI_CODE_PREFER, enabled);
-  if (enabled) {
+  if (enabled && options.preserveOpenRouter !== true) {
     await state?.update(GlobalStateKey.USE_OPENROUTER, false);
   }
 }
