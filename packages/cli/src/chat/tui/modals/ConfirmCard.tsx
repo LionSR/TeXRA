@@ -37,6 +37,7 @@ export interface ConfirmCardProps {
   readonly borderStyle: BoxProps['borderStyle'];
   readonly color: string;
   readonly title: string;
+  /** Omitted labels are resolved by `confirmCardKeyHints`. */
   readonly approveLabel?: string;
   readonly rejectLabel?: string;
   readonly rejectionMode: ConfirmCardRejectionMode;
@@ -61,8 +62,8 @@ export function ConfirmCard({
   borderStyle,
   color,
   title,
-  approveLabel = 'approve',
-  rejectLabel = 'reject with note',
+  approveLabel,
+  rejectLabel,
   rejectionMode,
   alwaysAllow,
   extraActions = [],
@@ -156,15 +157,13 @@ export function ConfirmCard({
     key: action.key,
     action: action.label,
   }));
-  // Immediate: Esc and `n` share rejectLabel; feedback: Esc is note-free "reject".
-  const escapeLabel = rejectionMode === 'immediate' ? rejectLabel : 'reject';
   const compactHintLayout =
     compact && !feedbackMode
       ? confirmCardCompactHintLayout({
           title,
           approveLabel,
           rejectLabel,
-          escapeLabel,
+          rejectionMode,
           alwaysAllowLabel: alwaysAllow?.label,
           extraActions: mappedExtraActions,
           columns,
@@ -179,7 +178,7 @@ export function ConfirmCard({
     hints = confirmCardKeyHintsForWidth({
       approveLabel,
       rejectLabel,
-      escapeLabel,
+      rejectionMode,
       alwaysAllowLabel: alwaysAllow?.label,
       extraActions: mappedExtraActions,
       maxColumns: Math.max(0, columns - CONFIRM_CARD_HORIZONTAL_DECORATION),
