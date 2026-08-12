@@ -192,8 +192,8 @@ async function persistRows(
   await logs.flush();
   for (const streamId of rowsByStream.keys()) logs.requestEviction(streamId);
 
-  const reopened = await StreamLogStore.openReadOnly();
   for (const streamId of rowsByStream.keys()) {
+    const reopened = await StreamLogStore.openReadOnlyForStream(streamId);
     await reopened.ensureLoaded(streamId);
     expect(reopened.get(streamId)).toBeDefined();
   }
