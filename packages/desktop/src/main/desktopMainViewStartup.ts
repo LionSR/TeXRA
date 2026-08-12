@@ -55,7 +55,7 @@ export function createDesktopMainViewStartup({
       };
     },
     getAuthStatus: getAuthStatus ?? defaultGetAuthStatus,
-    globalState: globalState ?? platform().globalState,
+    globalState,
   });
 
   async function postStartupMessages(): Promise<void> {
