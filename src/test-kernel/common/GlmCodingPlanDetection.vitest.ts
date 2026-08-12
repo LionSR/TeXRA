@@ -108,8 +108,9 @@ describe('parseGlmCodingPlanLimit', () => {
     expect(parseGlmCodingPlanLimit(rateLimitBody)).toBeNull();
     // But it IS recognized as a rate limit with a clear retry hint.
     expect(isGlmCodingPlanRateLimit(rateLimitBody)).toBe(true);
-    expect(describeGlmCodingPlanRateLimit()).toContain('rate limit');
-    expect(describeGlmCodingPlanRateLimit()).toContain('retry');
+    const description = describeGlmCodingPlanRateLimit();
+    expect(description).toContain('rate limit');
+    expect(description).toContain('retry');
   });
 
   it('recognizes a GLM Coding Plan overload (1305) as a rate limit', () => {

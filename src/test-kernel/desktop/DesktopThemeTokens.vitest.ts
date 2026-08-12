@@ -1,12 +1,9 @@
-// Node imports
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-// Third-party imports
 import { JSDOM } from 'jsdom';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-// Local imports - desktop test paths
 import { repoPath } from './desktopTestPaths.ts';
 
 function readThemeTokens(): string {

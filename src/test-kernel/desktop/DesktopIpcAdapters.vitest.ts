@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - webview command constants
 import {
   COMMON_COMMANDS,
   MAIN_VIEW_COMMANDS,
@@ -13,7 +11,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
-// Local imports - test support
 import { loadSourceModule } from './loadSourceModule.ts';
 
 const mocks = createModuleMocks();
@@ -33,20 +30,15 @@ type OnboardingHarnessOptions = Partial<
   seed?: Readonly<Record<string, unknown>>;
 };
 
-// The WEBVIEW_READY / run-setup handlers trigger refreshOnboardingFunnel as a
-// fire-and-forget task whose chain (credential probe → selectSetupAgent →
-// guarded kickoffSetup → re-derive) is several awaits deep.
-// Drain via macrotask boundaries rather than counting microtask hops: each
-// setTimeout(0) lets the entire pending microtask queue — and any
-// setTimeout(0)-scheduled credential probe — settle, so this stays correct if
-// the chain depth changes.
+// refreshOnboardingFunnel runs fire-and-forget through a chain several awaits
+// deep; each setTimeout(0) settles the whole pending microtask queue (and any
+// scheduled credential probe), so this stays correct if the chain deepens.
 async function flushAsync(): Promise<void> {
   for (let i = 0; i < 3; i++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }
 
-// Drain a promise and its .then() continuation (two microtask hops).
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
@@ -79,9 +71,7 @@ async function createShellHarness(
   };
 }
 
-// Own the repeated onboarding boundary setup so each test declares only its
-// initial state and host callbacks. `update` is spied so tests can assert
-// persisted keys; `state` is the store the adapter reads and writes.
+// `update` is spied so tests can assert persisted keys.
 async function createOnboardingHarness({
   seed = {},
   ...options
@@ -470,7 +460,6 @@ describe('desktop IPC adapters', () => {
     const { onboarding, postToRenderer, update } =
       await createOnboardingHarness({ hasCredential: () => true });
 
-    // Enter State 1 first.
     onboarding.handleMessage({
       command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
       view: 'main',
@@ -480,7 +469,6 @@ describe('desktop IPC adapters', () => {
     postToRenderer.mockClear();
     update.mockClear();
 
-    // Skip setup → firstRunDone=true, funnel → 'done'.
     expect(
       onboarding.handleMessage({
         command: MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP,

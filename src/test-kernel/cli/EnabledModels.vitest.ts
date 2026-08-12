@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -29,10 +29,6 @@ const { getCliEnabledModels, setCliModelEnabled, listCliEnabledModelCatalog } =
 describe('CLI enabled models catalog', () => {
   beforeEach(() => {
     state.clear();
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
   });
 
   it('falls back to DEFAULT_MODELS when nothing is stored', () => {

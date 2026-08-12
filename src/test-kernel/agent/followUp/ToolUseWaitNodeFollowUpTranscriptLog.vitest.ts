@@ -1,13 +1,8 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { TraceEmitter } from '@agent/trace';
 import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseWaitNode';
-import type {
-  ToolUseRunShared,
-  WaitExecResult,
-} from '@agent/implementations/flows/tooluse/nodes/types';
+import type { WaitExecResult } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import {
   testRunScope,
@@ -65,7 +60,7 @@ function runPost(
   execRes: WaitExecResult,
 ): Promise<unknown> {
   const node = new ToolUseWaitNode().setServices(services);
-  const shared: ToolUseRunShared = toolUseRunShared();
+  const shared = toolUseRunShared();
   return withTestRunContext(services.runScope, () =>
     node.post(shared, PREP_RES, execRes),
   );

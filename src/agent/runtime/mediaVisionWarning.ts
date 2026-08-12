@@ -3,14 +3,14 @@ import type { ModelCapabilities } from 'llm-zoo';
 
 type MediaVisionWarningKind = 'attached' | 'pasted';
 
-function needsVision(filePath: string): boolean {
-  return !getMimeType(filePath)?.startsWith('audio/');
-}
-
 export function countMediaFilesNeedingVision(
   mediaFiles: readonly string[] | undefined,
 ): number {
-  return mediaFiles?.filter(needsVision).length ?? 0;
+  return (
+    mediaFiles?.filter(
+      (filePath) => !getMimeType(filePath)?.startsWith('audio/'),
+    ).length ?? 0
+  );
 }
 
 export function shouldWarnMediaNeedsVision(

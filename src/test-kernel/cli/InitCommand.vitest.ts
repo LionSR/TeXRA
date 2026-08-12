@@ -49,10 +49,13 @@ import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 function modelAccess(
   value: string,
-  overrides: Partial<CliModelAccess> = {},
+  {
+    label = value,
+    ...overrides
+  }: { label?: string } & Partial<CliModelAccess> = {},
 ): CliModelAccess {
   return {
-    model: { value, label: value },
+    model: { value, label },
     available: true,
     status: 'available',
     ...overrides,
@@ -171,12 +174,12 @@ describe('CLI init command', () => {
       name: 'disables init model rows unavailable in the active API mode',
       models: [
         modelAccess('sonnet46T', {
-          model: { value: 'sonnet46T', label: 'Sonnet' },
+          label: 'Sonnet',
           available: true,
           status: 'included access',
         }),
         modelAccess('deepseekT', {
-          model: { value: 'deepseekT', label: 'DeepSeek' },
+          label: 'DeepSeek',
           available: false,
           status: 'api key set',
         }),
@@ -200,12 +203,12 @@ describe('CLI init command', () => {
       name: 'keeps all-unavailable init model rows selectable as a fallback',
       models: [
         modelAccess('sonnet46T', {
-          model: { value: 'sonnet46T', label: 'Sonnet' },
+          label: 'Sonnet',
           available: false,
           status: 'login required',
         }),
         modelAccess('deepseekT', {
-          model: { value: 'deepseekT', label: 'DeepSeek' },
+          label: 'DeepSeek',
           available: false,
           status: 'missing key',
         }),

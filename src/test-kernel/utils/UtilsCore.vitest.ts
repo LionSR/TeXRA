@@ -1,8 +1,5 @@
 // Suites for @utils/core (comparators, type guards, async helpers).
 
-// Standard library imports
-import * as assert from 'node:assert';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   aggregateError,
@@ -20,10 +17,6 @@ import {
   type FlushableDebounce,
 } from '@utils/core';
 import { deriveExecutionId } from '@utils/core/idHash';
-
-// ---------------------------------------------------------------------------
-// Comparators
-// ---------------------------------------------------------------------------
 
 describe('toNewestFirstByTimestamp', () => {
   it('orders values by newest timestamp first', () => {
@@ -52,10 +45,6 @@ describe('toNewestFirstByTimestamp', () => {
     expect(rows.map((row) => row.id)).toEqual(['first', 'second']);
   });
 });
-
-// ---------------------------------------------------------------------------
-// TypeGuards
-// ---------------------------------------------------------------------------
 
 describe('core type guard predicates', () => {
   it('filters null values as an Array.filter predicate', () => {
@@ -86,10 +75,6 @@ describe('core type guard predicates', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Failure aggregation
-// ---------------------------------------------------------------------------
-
 describe('aggregateError', () => {
   it('unwraps the lone failure when exactly one is collected', () => {
     const only = new Error('boom');
@@ -99,11 +84,9 @@ describe('aggregateError', () => {
   it('wraps several failures in an AggregateError carrying the message', () => {
     const a = new Error('a');
     const b = new Error('b');
-    const result = aggregateError([a, b], 'both failed');
-    expect(result).toBeInstanceOf(AggregateError);
-    const aggregate = result as AggregateError;
-    expect(aggregate.message).toBe('both failed');
-    expect(aggregate.errors).toEqual([a, b]);
+    const aggregate = aggregateError([a, b], 'both failed');
+    expect(aggregate).toBeInstanceOf(AggregateError);
+    expect(aggregate).toMatchObject({ message: 'both failed', errors: [a, b] });
   });
 
   it('preserves a lone falsy failure rather than aggregating it', () => {
@@ -126,19 +109,11 @@ describe('throwAggregated', () => {
   it('throws an AggregateError when several failed', () => {
     const a = new Error('a');
     const b = new Error('b');
-    try {
-      throwAggregated([a, b], 'both failed');
-      assert.fail('expected throwAggregated to throw');
-    } catch (error) {
-      expect(error).toBeInstanceOf(AggregateError);
-      expect((error as AggregateError).errors).toEqual([a, b]);
-    }
+    const throwing = () => throwAggregated([a, b], 'both failed');
+    expect(throwing).toThrow(AggregateError);
+    expect(throwing).toThrowError(expect.objectContaining({ errors: [a, b] }));
   });
 });
-
-// ---------------------------------------------------------------------------
-// pathBasics
-// ---------------------------------------------------------------------------
 
 describe('getBasename', () => {
   it.each([
@@ -173,7 +148,7 @@ describe('getBasename', () => {
     ['folder/', 'folder'],
     ['/home/user/folder/', 'folder'],
   ])('getBasename(%j) === %j', (input, expected) => {
-    assert.strictEqual(getBasename(input), expected);
+    expect(getBasename(input)).toBe(expected);
   });
 });
 
@@ -194,17 +169,13 @@ describe('getFileStem', () => {
     ['', ''],
     ['/', ''],
   ])('getFileStem(%j) === %j', (input, expected) => {
-    assert.strictEqual(getFileStem(input), expected);
+    expect(getFileStem(input)).toBe(expected);
   });
 
   it.each([[undefined], [null]])('getFileStem(%j) === ""', (input) => {
-    assert.strictEqual(getFileStem(input), '');
+    expect(getFileStem(input)).toBe('');
   });
 });
-
-// ---------------------------------------------------------------------------
-// Async
-// ---------------------------------------------------------------------------
 
 interface Deferred {
   readonly promise: Promise<void>;

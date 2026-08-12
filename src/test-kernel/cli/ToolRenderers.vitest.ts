@@ -455,7 +455,6 @@ describe('ToolUseRow edit patch rendering', () => {
       ),
     );
     const errorLine = lines.at(-1);
-    expect(errorLine?.kind).toBe('row');
     if (errorLine?.kind !== 'row') throw new Error('expected an error row');
 
     expect(toolDisplaySpanTextProps(errorLine.spans[0])).toEqual({

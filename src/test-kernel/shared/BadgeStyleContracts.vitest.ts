@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 const BADGE_PROPERTIES = [

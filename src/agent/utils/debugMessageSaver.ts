@@ -1,10 +1,7 @@
 import * as path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
-import {
-  resolveRunStoragePath,
-  RUNS_STORAGE_DIR,
-} from '@platform/defaults/workspaceStorage';
+import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';

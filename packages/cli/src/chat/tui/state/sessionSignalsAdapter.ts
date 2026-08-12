@@ -31,7 +31,6 @@ import {
   activeStreamId,
   focusStream,
   getCliStateGeneration,
-  isCliStreamRetired,
   patchStream,
   registerCliStateResetHook,
   removeStream,

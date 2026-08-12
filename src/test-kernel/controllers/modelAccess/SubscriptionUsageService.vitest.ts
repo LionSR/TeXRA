@@ -514,13 +514,10 @@ describe('SubscriptionUsageService', () => {
       GLM_CODING_PLAN_USAGE_URL,
       GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
     ]);
-    expect(china.state === 'available' && china.windows[0]?.percentUsed).toBe(
-      10,
-    );
-    expect(
-      international.state === 'available' &&
-        international.windows[0]?.percentUsed,
-    ).toBe(80);
+    expect(china.state).toBe('available');
+    expect(china.windows[0]?.percentUsed).toBe(10);
+    expect(international.state).toBe('available');
+    expect(international.windows[0]?.percentUsed).toBe(80);
   });
 
   it.each([

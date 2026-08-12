@@ -93,7 +93,7 @@ describe('tool-edit-request-panel', () => {
   });
 
   it('keeps the non-LaTeX diff action as a plain standalone button', async () => {
-    const element = await mountPanel(createPermission({ isLatex: false }));
+    const element = await mountPanel(createPermission({}));
     const button = element.shadowRoot?.querySelector(
       'wa-button[data-action="openDiff"]',
     );
@@ -232,26 +232,28 @@ describe('tool-edit-request-panel', () => {
     expect(element.shadowRoot?.querySelector('texra-diff-view')).toBeNull();
   });
 
-  it('renders a non-bypass Approve and ignores "a" when bypass is not allowed', async () => {
-    const element = await mountPanel(createPermission({ allowBypass: false }));
-    const actions = recordPermissionActions(element);
+  it.each([
+    {
+      name: 'bypass is not allowed',
+      permission: createPermission({ allowBypass: false }),
+    },
+    {
+      name: 'streamId is empty despite allowBypass',
+      permission: createPermission({ allowBypass: true, streamId: '' }),
+    },
+  ])(
+    'renders a non-bypass Approve and ignores "a" when $name',
+    async ({ permission }) => {
+      const element = await mountPanel(permission);
+      const actions = recordPermissionActions(element);
 
-    const split = querySplitButton(element);
-    expect(split).toBeTruthy();
-    expect(split?.canBypass).toBe(false);
-    expect(element.handleKeyboardShortcut('a')).toBe(false);
-    expect(actions).toEqual([]);
-  });
-
-  it('renders a non-bypass Approve when streamId is empty even if bypass is allowed', async () => {
-    const element = await mountPanel(
-      createPermission({ allowBypass: true, streamId: '' }),
-    );
-
-    const split = querySplitButton(element);
-    expect(split?.canBypass).toBe(false);
-    expect(element.handleKeyboardShortcut('a')).toBe(false);
-  });
+      const split = querySplitButton(element);
+      expect(split).toBeTruthy();
+      expect(split?.canBypass).toBe(false);
+      expect(element.handleKeyboardShortcut('a')).toBe(false);
+      expect(actions).toEqual([]);
+    },
+  );
 
   it('passes canBypass to the split button and "a" emits approveSession', async () => {
     const element = await mountPanel(

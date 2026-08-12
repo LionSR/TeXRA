@@ -1,6 +1,5 @@
 // Third-party imports
-import { strict as assert } from 'node:assert';
-import { describe, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { tryOperation } from '@agent/output/outputOperations';
@@ -47,10 +46,10 @@ describe('tryOperation', () => {
         { logger, level: 'warn', label, messageType, recover },
       );
 
-      assert.equal(result, expectedResult);
-      assert.deepEqual(warn.mock.calls, [
-        [`${label}: ${message}`, { messageType: loggedType }],
-      ]);
+      expect(result).toBe(expectedResult);
+      expect(warn).toHaveBeenCalledWith(`${label}: ${message}`, {
+        messageType: loggedType,
+      });
     },
   );
 });

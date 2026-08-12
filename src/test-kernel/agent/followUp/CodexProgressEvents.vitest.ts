@@ -44,22 +44,15 @@ const usage: TokenUsageStats = {
 async function* streamEvents(
   events: ThreadEvent[],
 ): AsyncGenerator<ThreadEvent> {
-  for (const event of events) {
-    yield event;
-  }
-}
-
-async function createLogStore(): Promise<StreamLogStore> {
-  const store = StreamLogStore.ephemeral('test');
-  await store.clear();
-  return store;
+  yield* events;
 }
 
 async function createLogger(): Promise<{
   store: StreamLogStore;
   logger: AgentTrace;
 }> {
-  const store = await createLogStore();
+  const store = StreamLogStore.ephemeral('test');
+  await store.clear();
   return { store, logger: createRunTrace(streamId, store).trace };
 }
 

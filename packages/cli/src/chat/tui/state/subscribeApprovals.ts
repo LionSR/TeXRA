@@ -62,7 +62,6 @@ import {
   type AgentProposalPermission,
   type ExternalInquiryPermission,
   type PlanApprovalPermission,
-  type RetryPermission,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {

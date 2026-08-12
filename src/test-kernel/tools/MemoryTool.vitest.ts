@@ -73,7 +73,6 @@ describe('MemoryTool view with an omitted path', () => {
     const omitted = await viewMemory();
     const explicitRoot = await viewMemory(MEMORY_DISPLAY_ROOT);
 
-    expect(omitted.status).toBe('executed');
     expect(omitted).toEqual(explicitRoot);
     expect(omitted).toMatchObject({
       status: 'executed',

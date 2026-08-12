@@ -50,15 +50,19 @@ function isPublicMethod(
   );
 }
 
-/** Public (static + instance) method names of one store class, sorted. */
-function publicMethodNames(store: StoreName): string[] {
+function storeSourceFile(store: StoreName): ts.SourceFile {
   const file = resolve(REPO_ROOT, STORES[store]);
-  const sourceFile = ts.createSourceFile(
+  return ts.createSourceFile(
     file,
     readFileSync(file, 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   );
+}
+
+/** Public (static + instance) method names of one store class, sorted. */
+function publicMethodNames(store: StoreName): string[] {
+  const sourceFile = storeSourceFile(store);
   const names: string[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isClassDeclaration(node) && node.name?.text === store) {
@@ -76,13 +80,7 @@ function publicMethodNames(store: StoreName): string[] {
 }
 
 function aggregateFieldNames(store: StoreName, methodName: string): string[] {
-  const file = resolve(REPO_ROOT, STORES[store]);
-  const sourceFile = ts.createSourceFile(
-    file,
-    readFileSync(file, 'utf8'),
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const sourceFile = storeSourceFile(store);
   let returnTypeName: string | undefined;
   const visit = (node: ts.Node): void => {
     if (ts.isClassDeclaration(node) && node.name?.text === store) {
@@ -111,10 +109,10 @@ function aggregateFieldNames(store: StoreName, methodName: string): string[] {
   if (!declaration) return [];
   return declaration.members
     .filter(
-      (member): member is ts.PropertySignature =>
+      (member): member is ts.PropertySignature & { name: ts.Identifier } =>
         ts.isPropertySignature(member) && ts.isIdentifier(member.name),
     )
-    .map((member) => (member.name as ts.Identifier).text)
+    .map((member) => member.name.text)
     .toSorted((a, b) => a.localeCompare(b));
 }
 

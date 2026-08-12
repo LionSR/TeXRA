@@ -19,7 +19,6 @@ describe('createCliStyle', () => {
     expect(style.enabled).toBe(true);
     for (const method of STYLE_METHODS) {
       const out = style[method]('text');
-      // Styled output keeps the original text but adds opening/closing escapes.
       expect(out).toContain('text');
       expect(out.startsWith(ESC)).toBe(true);
       expect(out).not.toBe('text');

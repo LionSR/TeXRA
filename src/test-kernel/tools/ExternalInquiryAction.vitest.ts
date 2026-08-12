@@ -31,8 +31,6 @@ vi.mock('@tools/inquiry/inquiryContinuation', () => continuationMocks);
 describe('handleExternalInquiryAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    storageMocks.recordAnswerForOpenTurn.mockResolvedValue(null);
-    storageMocks.markDropped.mockResolvedValue(null);
   });
 
   it('persists and continues submit actions', async () => {

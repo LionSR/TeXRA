@@ -1,4 +1,3 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
 const roster = vi.hoisted(() => ({
@@ -35,11 +34,9 @@ const roster = vi.hoisted(() => ({
   ],
 }));
 
-// `resolveDelegationScopeAgents` is the single source of truth for scope
-// resolution (agentRegistry.ts, tested there); this test only exercises how
-// buildUserVars formats its result into WORKFLOW_AGENTS/TOOL_USE_AGENTS, so
-// the mock reproduces the fixture's key-to-entry mapping rather than
-// re-implementing the real resolver's priority/dedup logic.
+// buildUserVars formats resolveDelegationScopeAgents (tested in agentRegistry)
+// into WORKFLOW_AGENTS/TOOL_USE_AGENTS; mock the resolver with the fixture
+// mapping rather than re-implementing its priority/dedup logic.
 vi.mock('@agent/index/agentRegistry', () => ({
   resolveDelegationScopeAgents: (
     scope: { workflow: string[]; toolUse: string[] } | undefined,
@@ -56,7 +53,6 @@ vi.mock('@agent/index/agentRegistry', () => ({
   },
 }));
 
-// Local imports
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {

@@ -1,12 +1,9 @@
-// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - webview command constants
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { unsupported } from '@shared/utils/dispatcher';
 
-// Local imports - test support
 import { loadSourceModule } from './loadSourceModule.ts';
 
 /** Default reason for the handlers this test doesn't stub explicitly. */

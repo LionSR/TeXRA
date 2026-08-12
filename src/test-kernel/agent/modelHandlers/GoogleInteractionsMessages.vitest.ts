@@ -9,7 +9,10 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Local file imports
-import { GOOGLE_INTERACTIONS_TEST_CONFIG } from './googleInteractionsTestUtils';
+import {
+  GOOGLE_INTERACTIONS_TEST_CONFIG,
+  userStep,
+} from './googleInteractionsTestUtils';
 
 // Third-party imports
 import type { GoogleGenAI, Interactions } from '@google/genai';
@@ -38,10 +41,6 @@ function textOf(step: Step): string {
     .filter((c): c is Interactions.TextContent => c.type === 'text')
     .map((c) => c.text)
     .join('');
-}
-
-function userStep(text: string): Step {
-  return { type: 'user_input', content: [{ type: 'text', text }] };
 }
 
 /**

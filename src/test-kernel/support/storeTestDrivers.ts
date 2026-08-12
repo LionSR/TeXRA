@@ -10,10 +10,10 @@ import type {
   RoundIndexed,
   RunIdentity,
   StorageKey,
+  StreamLogEntry,
   StreamTabId,
   TodoItem,
 } from '@shared/schemas';
-import type { StreamLogEntry } from '@shared/schemas';
 import type { StreamSnapshotStore, StreamLogAppendInput } from '@transcript';
 import type {
   StreamLogStore,

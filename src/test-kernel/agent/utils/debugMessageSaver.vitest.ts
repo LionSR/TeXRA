@@ -1,11 +1,8 @@
-// Node imports
 import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
 
-// Third-party imports
 import { describe, it, afterEach, vi } from 'vitest';
 
-// Local imports
 import type { AgentTrace } from '@agent/trace';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import {
@@ -29,66 +26,49 @@ describe('maybeSaveDebugObject', () => {
   });
 
   it('creates the run directory and writes debug objects under storage when executionId is provided', async () => {
-    const storageWrites: { relativePath: string; value: unknown }[] = [];
-    const ensured: string[] = [];
-    const workspaceWrites: { relativePath: string; value: unknown }[] = [];
-    const infoLogs: string[] = [];
-    const errorLogs: string[] = [];
-
-    vi.spyOn(StorageFS, 'write').mockImplementation(
-      async (relativePath, value) => {
-        storageWrites.push({ relativePath, value });
-      },
-    );
-    vi.spyOn(StorageFS, 'ensureDir').mockImplementation(
-      async (relativePath) => {
-        ensured.push(relativePath);
-      },
-    );
+    const writeStorage = vi
+      .spyOn(StorageFS, 'write')
+      .mockResolvedValue(undefined);
+    const ensureDir = vi
+      .spyOn(StorageFS, 'ensureDir')
+      .mockResolvedValue(undefined);
     vi.spyOn(StorageFS, 'fullPath').mockImplementation((relativePath) =>
       path.join('/mock/storage', relativePath),
     );
-    vi.spyOn(WorkspaceFS, 'write').mockImplementation(
-      async (relativePath, value) => {
-        workspaceWrites.push({ relativePath, value });
-      },
-    );
-
-    const executionId = 'run-42' as ExecutionId;
-
-    const logger = {
-      info: (message: string) => {
-        infoLogs.push(message);
-      },
-      error: (message: string) => {
-        errorLogs.push(message);
-      },
-    } as unknown as AgentTrace;
+    const writeWorkspace = vi
+      .spyOn(WorkspaceFS, 'write')
+      .mockResolvedValue(undefined);
+    const info = vi.fn();
+    const error = vi.fn();
+    const logger = { info, error } as unknown as AgentTrace;
 
     await maybeSaveDebugObject({
       object: { foo: 'bar' },
       objectType: 'response',
       context: {
         logger,
-        executionId,
+        executionId: 'run-42' as ExecutionId,
       },
     });
 
-    const expectedDir = resolveRunStoragePath(executionId);
-    assert.deepEqual(ensured, [RUNS_STORAGE_DIR, expectedDir]);
+    const expectedDir = resolveRunStoragePath('run-42' as ExecutionId);
+    assert.deepEqual(
+      ensureDir.mock.calls.map(([relativePath]) => relativePath),
+      [RUNS_STORAGE_DIR, expectedDir],
+    );
 
-    assert.equal(storageWrites.length, 1);
     const expectedRelativePath = resolveRunStoragePath(
-      executionId,
+      'run-42' as ExecutionId,
       'response.json',
     );
-    assert.equal(storageWrites[0].relativePath, expectedRelativePath);
-    assert.equal(workspaceWrites.length, 0);
+    assert.equal(writeStorage.mock.calls.length, 1);
+    assert.equal(writeStorage.mock.calls[0]?.[0], expectedRelativePath);
+    assert.equal(writeWorkspace.mock.calls.length, 0);
 
-    assert.equal(infoLogs.length, 1);
-    assert.equal(errorLogs.length, 0);
+    assert.equal(info.mock.calls.length, 1);
+    assert.equal(error.mock.calls.length, 0);
     assert.equal(
-      infoLogs[0],
+      info.mock.calls[0]?.[0],
       `Saved response object to ${path.join(
         '/mock/storage',
         expectedRelativePath,

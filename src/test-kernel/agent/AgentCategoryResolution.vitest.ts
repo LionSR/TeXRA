@@ -85,8 +85,9 @@ describe('cross-category agent resolution', () => {
   it('demonstrates the divergence the category-scoped resolver closes', () => {
     // Category-blind resolution picks the custom workflow entry by source
     // priority…
-    expect(resolveAgent('assistant')?.entry.source).toBe('custom');
-    expect(resolveAgent('assistant')?.entry.category).toBe('workflow');
+    const categoryBlind = resolveAgent('assistant')?.entry;
+    expect(categoryBlind?.source).toBe('custom');
+    expect(categoryBlind?.category).toBe('workflow');
 
     // …while validation correctly resolves the visible tool-use entry.
     expect(getVisibleAgent('toolUse', 'assistant')?.source).toBe(

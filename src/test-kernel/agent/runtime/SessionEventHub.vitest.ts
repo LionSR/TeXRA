@@ -137,78 +137,27 @@ describe('SessionEventHub', () => {
     );
     trace.emit({ type: 'stream.chunk', id: 'ignored', text: 'x' });
 
-    expect(recorded.events).toMatchObject([
+    const events = [
+      { type: 'updateTodos', streamId, todos },
+      { type: 'updatePlan', streamId, plan },
+      { type: 'addOutputFiles', streamId, filesByRound: { 1: [] } },
+      { type: 'updateMissingOutputs', streamId, filesByRound: { 1: [] } },
+      { type: 'updateCompileFailures', streamId, filesByRound: { 1: [] } },
+      { type: 'goalPaused', streamId },
       {
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'updateTodos',
+        type: 'usage',
+        payload: {
           streamId,
-          todos,
+          storageKey: 'run:usage',
+          usage: { inputTokens: 10, outputTokens: 5, cost: 0 },
         },
       },
-      {
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'updatePlan',
-          streamId,
-          plan,
-        },
-      },
-      {
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'addOutputFiles',
-          streamId,
-          filesByRound: { 1: [] },
-        },
-      },
-      {
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'updateMissingOutputs',
-          streamId,
-          filesByRound: { 1: [] },
-        },
-      },
-      {
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'updateCompileFailures',
-          streamId,
-          filesByRound: { 1: [] },
-        },
-      },
-      {
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'goalPaused',
-          streamId,
-        },
-      },
-      {
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'usage',
-          payload: {
-            streamId,
-            storageKey: 'run:usage',
-            usage: { inputTokens: 10, outputTokens: 5, cost: 0 },
-          },
-        },
-      },
-      {
-        scope: 'run',
-        streamId,
-        event: { type: 'stream.chunk', id: 'ignored', text: 'x' },
-      },
-    ]);
+      { type: 'stream.chunk', id: 'ignored', text: 'x' },
+    ];
+
+    expect(recorded.events).toMatchObject(
+      events.map((event) => ({ scope: 'run', streamId, event })),
+    );
 
     recorded.detach();
     detachTrace();

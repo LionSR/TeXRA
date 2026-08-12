@@ -338,8 +338,11 @@ export class AgentHandlers {
           );
           return;
         }
-        if (result.status === 'choice-required') return;
-        if (result.status === 'cancelled') return;
+        if (
+          result.status === 'choice-required' ||
+          result.status === 'cancelled'
+        )
+          return;
         if (result.status === 'unavailable') {
           await showLoggedMessage(
             this.ctx.channel,

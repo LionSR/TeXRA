@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentEntry, ResolvedAgent } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import {
+  assertCliAgentLaunch,
+  resolveCliAgent,
+  resolveCliLaunchAgent,
+} from '@cli/runtime/agents';
 import { AgentCategory } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
@@ -53,7 +58,6 @@ describe('CLI agent resolution', () => {
   it('loads the local registry and returns a local agent for signed-out users', async () => {
     const local = agent('lean');
     mocks.getAgent.mockReturnValue(local);
-    const { resolveCliAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliAgent('lean')).resolves.toBe(local);
 
@@ -65,7 +69,6 @@ describe('CLI agent resolution', () => {
   it('does a full registry load when the local registry misses', async () => {
     const remote = agent('orchestrator', 'remote');
     mocks.getAgent.mockReturnValueOnce(undefined).mockReturnValueOnce(remote);
-    const { resolveCliAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliAgent('orchestrator')).resolves.toBe(remote);
 
@@ -81,7 +84,6 @@ describe('CLI agent resolution', () => {
     isAuthenticatedSpy.mockResolvedValue(true);
     canAccessRemoteAgentCatalogSpy.mockResolvedValue(false);
     mocks.getAgent.mockReturnValue(local);
-    const { resolveCliAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliAgent('lean')).resolves.toBe(local);
 
@@ -99,7 +101,6 @@ describe('CLI agent resolution', () => {
     mocks.resolveAgentForLaunch
       .mockReturnValueOnce(resolution(local))
       .mockReturnValueOnce(resolution(remote));
-    const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliLaunchAgent('lean', 'chat')).resolves.toBe(remote);
 
@@ -125,7 +126,6 @@ describe('CLI agent resolution', () => {
     const local = agent('local:lean');
     canAccessRemoteAgentCatalogSpy.mockResolvedValue(true);
     mocks.getAgent.mockReturnValue(local);
-    const { resolveCliAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliAgent('local:lean')).resolves.toBe(local);
 
@@ -139,7 +139,6 @@ describe('CLI agent resolution', () => {
     mocks.resolveAgentForLaunch
       .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(resolution(remote));
-    const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliLaunchAgent('assistant', 'agentsRun')).resolves.toBe(
       remote,
@@ -162,7 +161,6 @@ describe('CLI agent resolution', () => {
   it('pins a source-qualified launch identifier to that exact source', async () => {
     const shadowed = agent('review', 'builtInToolUse');
     mocks.resolveAgentForLaunch.mockReturnValue(resolution(shadowed));
-    const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
     await expect(
       resolveCliLaunchAgent('builtInToolUse:review', 'chat'),
@@ -178,7 +176,6 @@ describe('CLI agent resolution', () => {
 
   it('reports launch-specific missing-agent messages', async () => {
     mocks.resolveAgentForLaunch.mockReturnValue(undefined);
-    const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliLaunchAgent('missing', 'agentsRun')).rejects.toThrow(
       'Tool-use agent not found: missing. Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.',
@@ -190,7 +187,6 @@ describe('CLI agent resolution', () => {
     mocks.resolveAgentForLaunch.mockImplementation((category: AgentCategory) =>
       category === AgentCategory.Workflow ? resolution(workflow) : undefined,
     );
-    const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliLaunchAgent('polish', 'chat')).rejects.toThrow(
       'Agent "polish" is a workflow agent; `texra chat` only handles tool-use agents.',
@@ -203,7 +199,6 @@ describe('CLI agent resolution', () => {
       'builtInWorkflow',
       AgentCategory.Workflow,
     );
-    const { assertCliAgentLaunch } = await import('@cli/runtime/agents');
 
     expect(() => assertCliAgentLaunch('correct', workflow, 'chat')).toThrow(
       'Agent "correct" is a workflow agent; `texra chat` only handles tool-use agents.',

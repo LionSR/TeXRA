@@ -31,16 +31,6 @@ vi.mock('@agent/storage', () => ({
   writeSessionDescription: mocks.writeSessionDescription,
 }));
 
-function configFor(category: AgentCategory, agentSource?: string) {
-  return AgentConfigSchema.parse({
-    agent: category === AgentCategory.ToolUse ? 'chat' : 'correct',
-    model: 'gemini35f',
-    instruction: 'Fix grammar.',
-    agentCategory: category,
-    ...(agentSource ? { agentSource } : {}),
-  });
-}
-
 function runDescription(
   executionId: string,
   streamId: string,
@@ -51,7 +41,13 @@ function runDescription(
   return generateSessionDescription(
     executionId as ExecutionId,
     streamId as StreamTabId,
-    configFor(category, agentSource),
+    AgentConfigSchema.parse({
+      agent: category === AgentCategory.ToolUse ? 'chat' : 'correct',
+      model: 'gemini35f',
+      instruction: 'Fix grammar.',
+      agentCategory: category,
+      ...(agentSource ? { agentSource } : {}),
+    }),
     session,
   );
 }
@@ -63,6 +59,14 @@ function helperAnswering(text: string) {
     extractResponse: vi.fn().mockReturnValue({ text }),
     initializeMessages: vi.fn().mockResolvedValue([]),
   };
+}
+
+/** Point the launch resolver and helper-model kit at one resolved answer. */
+function mockToolUseAnswer(description: string, text: string): void {
+  mocks.resolveAgentForLaunch.mockReturnValue({ entry: { description } });
+  mocks.createHelperModelKit.mockResolvedValue({
+    kit: { client: {}, handler: helperAnswering(text) },
+  });
 }
 
 describe('session description helpers', () => {
@@ -96,19 +100,7 @@ describe('session description helpers', () => {
     const detach = session.events.subscribe((event) => events.push(event), {
       scope: 'session',
     });
-    const handler = {
-      createResponse: vi.fn().mockResolvedValue({ response: {} }),
-      extractResponse: vi
-        .fn()
-        .mockReturnValue({ text: 'Correcting derivation signs' }),
-      initializeMessages: vi.fn().mockResolvedValue([]),
-    };
-    mocks.resolveAgentForLaunch.mockReturnValue({
-      entry: { description: 'Corrects a draft' },
-    });
-    mocks.createHelperModelKit.mockResolvedValue({
-      kit: { client: {}, handler },
-    });
+    mockToolUseAnswer('Corrects a draft', 'Correcting derivation signs');
 
     await runDescription(
       'exec-workflow',
@@ -146,15 +138,7 @@ describe('session description helpers', () => {
 
   it('passes the pinned agent source to the launch resolver', async () => {
     const session = createTestSession();
-    mocks.resolveAgentForLaunch.mockReturnValue({
-      entry: { description: 'The custom roster copy' },
-    });
-    mocks.createHelperModelKit.mockResolvedValue({
-      kit: {
-        client: {},
-        handler: helperAnswering('Correcting derivation signs'),
-      },
-    });
+    mockToolUseAnswer('The custom roster copy', 'Correcting derivation signs');
 
     await runDescription(
       'exec-pinned',
@@ -216,17 +200,7 @@ describe('session description helpers', () => {
     const detach = session.events.subscribe((event) => events.push(event), {
       scope: 'session',
     });
-    const handler = {
-      createResponse: vi.fn().mockResolvedValue({ response: {} }),
-      extractResponse: vi.fn().mockReturnValue({ text: 'Fixing proof typos' }),
-      initializeMessages: vi.fn().mockResolvedValue([]),
-    };
-    mocks.resolveAgentForLaunch.mockReturnValue({
-      entry: { description: 'General chat assistant' },
-    });
-    mocks.createHelperModelKit.mockResolvedValue({
-      kit: { client: {}, handler },
-    });
+    mockToolUseAnswer('General chat assistant', 'Fixing proof typos');
 
     await runDescription('exec-tool', 'stream-tool', session);
     detach();

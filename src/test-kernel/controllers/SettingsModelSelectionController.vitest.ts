@@ -12,10 +12,6 @@ import type { CopilotModelRoute } from '@model/runtimeModelRegistry';
 import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
-const NO_COPILOT_ROUTES = async (): Promise<
-  ReadonlyMap<string, CopilotModelRoute>
-> => new Map();
-
 // Stub the injected availability resolver so the controller stays decoupled
 // from the global platform / server-side key service in unit tests.
 const resolveModelOptions = async (
@@ -69,7 +65,7 @@ function createController(
   return new SettingsModelSelectionController({
     state: createState(),
     resolveModelOptions,
-    getCopilotRoutes: NO_COPILOT_ROUTES,
+    getCopilotRoutes: async () => new Map(),
     getPreferredCopilotRouteModels: () => [],
     ...overrides,
   });

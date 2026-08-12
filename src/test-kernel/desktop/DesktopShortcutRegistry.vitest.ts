@@ -1,10 +1,7 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - shared shortcut contract
 import { getDesktopShortcutService } from '@shared/commands/shortcutPreferences';
 
-// Local imports - test DOM
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 interface ShortcutRegistry {

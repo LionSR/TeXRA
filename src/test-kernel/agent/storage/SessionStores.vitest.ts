@@ -2,18 +2,36 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { getExecutionStore, SessionStores } from '@agent/storage';
 import type { DeleteExecutionOptions } from '@agent/storage/executionListing';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import * as logUtils from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
 import { releaseStreamResources } from '@tools/approval';
 import { StreamLogStore, StreamSnapshotStore } from '@transcript';
+
+// One restore after each test covers every vi.spyOn in this file.
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+/** Run `fn` against an isolated session that is always disposed. */
+async function withSession<T>(
+  fn: (session: SessionHandle) => Promise<T>,
+): Promise<T> {
+  const session = createTestSession();
+  try {
+    return await fn(session);
+  } finally {
+    session.dispose();
+  }
+}
 
 /** Records the stream's execution ownership through the sidecar FK. */
 function ownExecution(
@@ -43,170 +61,152 @@ function deletionSpy() {
 
 describe('SessionStores deletion coordination', () => {
   it('detaches durable child parent edges only after deleting the parent', async () => {
-    const session = createTestSession();
-    const parent = 'deleted-parent' as StreamTabId;
-    const child = 'retained-child' as StreamTabId;
-    const childExecution = 'c9862001' as ExecutionId;
-    session.transcripts.ensureStream(parent);
-    session.transcripts.ensureStream(child);
-    const snapshots = new StreamSnapshotStore();
-    snapshotFacts(snapshots).setRunConfig(
-      child,
-      AgentConfigSchema.parse({
-        agent: 'chat',
-        model: 'deepseekT',
-        agentCategory: 'toolUse',
-      }),
-      childExecution,
-    );
-    snapshotFacts(snapshots).setParentStream(child, parent);
-    await snapshots.flush();
-    const reloadedSnapshots = new StreamSnapshotStore();
-    const projectionFacts = snapshotFacts(reloadedSnapshots);
-    const detached: Array<[StreamTabId, readonly StreamTabId[]]> = [];
-    const stores = new SessionStores({
-      streamLogs: session.transcripts,
-      snapshots: reloadedSnapshots,
-      onChildrenDetached: (deletedParent, children) => {
-        detached.push([deletedParent, children]);
-        for (const detachedChild of children) {
-          projectionFacts.setParentStream(detachedChild, null);
-        }
-      },
-    });
+    await withSession(async (session) => {
+      const parent = 'deleted-parent' as StreamTabId;
+      const child = 'retained-child' as StreamTabId;
+      const childExecution = 'c9862001' as ExecutionId;
+      session.transcripts.ensureStream(parent);
+      session.transcripts.ensureStream(child);
+      const snapshots = new StreamSnapshotStore();
+      ownExecution(snapshots, child, childExecution);
+      snapshotFacts(snapshots).setParentStream(child, parent);
+      await snapshots.flush();
+      const reloadedSnapshots = new StreamSnapshotStore();
+      const projectionFacts = snapshotFacts(reloadedSnapshots);
+      const detached: Array<[StreamTabId, readonly StreamTabId[]]> = [];
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots: reloadedSnapshots,
+        onChildrenDetached: (deletedParent, children) => {
+          detached.push([deletedParent, children]);
+          for (const detachedChild of children) {
+            projectionFacts.setParentStream(detachedChild, null);
+          }
+        },
+      });
 
-    try {
       await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
       expect(reloadedSnapshots.getParentStreamId(child)).toBeUndefined();
       expect(reloadedSnapshots.getRunMetadata(child).executionId).toBe(
         childExecution,
       );
       expect(detached).toEqual([[parent, [child]]]);
-    } finally {
-      session.dispose();
-    }
+    });
   });
 
   it('projects child detachment when durable discovery fails', async () => {
-    const session = createTestSession();
-    const parent = 'discovery-failure-parent' as StreamTabId;
-    session.transcripts.ensureStream(parent);
-    const snapshots = new StreamSnapshotStore();
-    vi.spyOn(snapshots, 'listPersistedStreams').mockRejectedValueOnce(
-      new Error('sidecar unavailable'),
-    );
-    const onChildrenDetached = vi.fn();
-    const stores = new SessionStores({
-      streamLogs: session.transcripts,
-      snapshots,
-      onChildrenDetached,
-    });
+    await withSession(async (session) => {
+      const parent = 'discovery-failure-parent' as StreamTabId;
+      session.transcripts.ensureStream(parent);
+      const snapshots = new StreamSnapshotStore();
+      vi.spyOn(snapshots, 'listPersistedStreams').mockRejectedValueOnce(
+        new Error('sidecar unavailable'),
+      );
+      const onChildrenDetached = vi.fn();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        onChildrenDetached,
+      });
 
-    try {
       await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
       expect(onChildrenDetached).toHaveBeenCalledWith(parent, []);
-    } finally {
-      session.dispose();
-    }
+    });
   });
 
   it('keeps a committed deletion successful when child projection fails', async () => {
-    const session = createTestSession();
-    const parent = 'projection-failure-parent' as StreamTabId;
-    const child = 'projection-failure-child' as StreamTabId;
-    session.transcripts.ensureStream(parent);
-    session.transcripts.ensureStream(child);
-    const snapshots = new StreamSnapshotStore();
-    snapshotFacts(snapshots).setParentStream(child, parent);
-    await snapshots.flush();
-    const stores = new SessionStores({
-      streamLogs: session.transcripts,
-      snapshots,
-      onChildrenDetached: () => {
-        throw new Error('renderer unavailable');
-      },
-    });
+    await withSession(async (session) => {
+      const parent = 'projection-failure-parent' as StreamTabId;
+      const child = 'projection-failure-child' as StreamTabId;
+      session.transcripts.ensureStream(parent);
+      session.transcripts.ensureStream(child);
+      const snapshots = new StreamSnapshotStore();
+      snapshotFacts(snapshots).setParentStream(child, parent);
+      await snapshots.flush();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        onChildrenDetached: () => {
+          throw new Error('renderer unavailable');
+        },
+      });
 
-    try {
       await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
       expect(session.transcripts.has(parent)).toBe(false);
       expect(snapshots.getParentStreamId(child)).toBe(parent);
-    } finally {
-      session.dispose();
-    }
+    });
   });
 
   it('tracks lease-gated deletion without blocking its artifact flush', async () => {
-    const session = createTestSession();
-    const stream = 'lease-gated-delete' as StreamTabId;
-    session.transcripts.ensureStream(stream);
-    const snapshots = new StreamSnapshotStore();
-    const stores = new SessionStores({
-      streamLogs: session.transcripts,
-      snapshots,
-    });
-    let releaseLease!: () => void;
-    const leaseReleased = new Promise<void>((resolve) => {
-      releaseLease = resolve;
-    });
-    vi.spyOn(stores, 'waitForOwnedExecutionRelease').mockReturnValue(
-      leaseReleased,
-    );
-    const flush = vi.spyOn(snapshots, 'flush');
-
-    try {
-      const deletion = stores.deleteStreamAfterOwnedExecutionRelease(stream);
-      const drain = stores.waitForPendingStreamDeletions();
-      let drainFinished = false;
-      void drain.then(() => {
-        drainFinished = true;
+    await withSession(async (session) => {
+      const stream = 'lease-gated-delete' as StreamTabId;
+      session.transcripts.ensureStream(stream);
+      const snapshots = new StreamSnapshotStore();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
       });
+      let releaseLease!: () => void;
+      const leaseReleased = new Promise<void>((resolve) => {
+        releaseLease = resolve;
+      });
+      vi.spyOn(stores, 'waitForOwnedExecutionRelease').mockReturnValue(
+        leaseReleased,
+      );
+      const flush = vi.spyOn(snapshots, 'flush');
 
-      await stores.flushSnapshotsAfterStartedDeletions();
-      expect(flush).toHaveBeenCalledOnce();
-      expect(drainFinished).toBe(false);
-      expect(session.transcripts.has(stream)).toBe(true);
+      try {
+        const deletion = stores.deleteStreamAfterOwnedExecutionRelease(stream);
+        const drain = stores.waitForPendingStreamDeletions();
+        let drainFinished = false;
+        void drain.then(() => {
+          drainFinished = true;
+        });
 
-      releaseLease();
-      await expect(deletion).resolves.toBe('deleted');
-      await drain;
-      expect(session.transcripts.has(stream)).toBe(false);
-    } finally {
-      releaseLease();
-      session.dispose();
-    }
+        await stores.flushSnapshotsAfterStartedDeletions();
+        expect(flush).toHaveBeenCalledOnce();
+        expect(drainFinished).toBe(false);
+        expect(session.transcripts.has(stream)).toBe(true);
+
+        releaseLease();
+        await expect(deletion).resolves.toBe('deleted');
+        await drain;
+        expect(session.transcripts.has(stream)).toBe(false);
+      } finally {
+        releaseLease();
+      }
+    });
   });
 
   it('releases one canonical stream once when single and bulk deletion overlap', async () => {
-    const session = createTestSession();
-    const stream = 'tool@test#abc001' as StreamTabId;
-    session.transcripts.ensureStream(stream);
-    session.followUps.claimLive(stream, 'flow');
-    let unblockDeletion!: () => void;
-    const deletionBlocked = new Promise<void>((resolve) => {
-      unblockDeletion = resolve;
-    });
-    const deleteExecution = vi.fn(
-      async (executionId: ExecutionId, options?: DeleteExecutionOptions) => {
-        await deletionBlocked;
-        await options?.beforeDelete?.();
-        return { status: 'deleted' as const, executionId };
-      },
-    );
-    const releases: StreamTabId[] = [];
-    session.followUps.onRelease((released) => releases.push(released));
-    const snapshots = new StreamSnapshotStore();
-    // Ownership is the sidecar FK, never the stream-name suffix.
-    ownExecution(snapshots, stream, 'abc001' as ExecutionId);
-    const stores = new SessionStores({
-      streamLogs: session.transcripts,
-      snapshots,
-      deleteExecution,
-      onCanonicalStreamDeleted: (deleted) =>
-        releaseStreamResources(deleted, session),
-    });
+    await withSession(async (session) => {
+      const stream = 'tool@test#abc001' as StreamTabId;
+      session.transcripts.ensureStream(stream);
+      session.followUps.claimLive(stream, 'flow');
+      let unblockDeletion!: () => void;
+      const deletionBlocked = new Promise<void>((resolve) => {
+        unblockDeletion = resolve;
+      });
+      const deleteExecution = vi.fn(
+        async (executionId: ExecutionId, options?: DeleteExecutionOptions) => {
+          await deletionBlocked;
+          await options?.beforeDelete?.();
+          return { status: 'deleted' as const, executionId };
+        },
+      );
+      const releases: StreamTabId[] = [];
+      session.followUps.onRelease((released) => releases.push(released));
+      const snapshots = new StreamSnapshotStore();
+      // Ownership is the sidecar FK, never the stream-name suffix.
+      ownExecution(snapshots, stream, 'abc001' as ExecutionId);
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        deleteExecution,
+        onCanonicalStreamDeleted: (deleted) =>
+          releaseStreamResources(deleted, session),
+      });
 
-    try {
       const single = stores.deleteStream(stream);
       await vi.waitFor(() => expect(deleteExecution).toHaveBeenCalledOnce());
       const bulk = stores.deleteAll();
@@ -217,133 +217,120 @@ describe('SessionStores deletion coordination', () => {
         { active: new Set(), failed: new Set() },
       ]);
       expect(releases).toEqual([stream]);
-    } finally {
-      session.dispose();
-    }
+    });
   });
 
   it('releases deleted streams and excludes retained active streams', async () => {
-    const session = createTestSession();
-    const deleted = 'canonical-delete' as StreamTabId;
-    const retained = 'tool@test#ac71e1' as StreamTabId;
-    session.transcripts.ensureStream(deleted);
-    session.transcripts.ensureStream(retained);
-    const releases: StreamTabId[] = [];
-    session.followUps.onRelease((stream) => releases.push(stream));
-    const snapshots = new StreamSnapshotStore();
-    // The retained stream owns its execution through the sidecar FK; the
-    // deleted stream has none and only its adjacent state is removed.
-    ownExecution(snapshots, retained, 'ac71e1' as ExecutionId);
-    const stores = new SessionStores({
-      streamLogs: session.transcripts,
-      snapshots,
-      deleteExecution: async (executionId) => ({
-        status: 'active',
-        executionId,
-        heartbeatAt: Date.now(),
-      }),
-      onCanonicalStreamDeleted: (stream) =>
-        releaseStreamResources(stream, session),
-    });
+    await withSession(async (session) => {
+      const deleted = 'canonical-delete' as StreamTabId;
+      const retained = 'tool@test#ac71e1' as StreamTabId;
+      session.transcripts.ensureStream(deleted);
+      session.transcripts.ensureStream(retained);
+      const releases: StreamTabId[] = [];
+      session.followUps.onRelease((stream) => releases.push(stream));
+      const snapshots = new StreamSnapshotStore();
+      // The retained stream owns its execution through the sidecar FK; the
+      // deleted stream has none and only its adjacent state is removed.
+      ownExecution(snapshots, retained, 'ac71e1' as ExecutionId);
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        deleteExecution: async (executionId) => ({
+          status: 'active',
+          executionId,
+          heartbeatAt: Date.now(),
+        }),
+        onCanonicalStreamDeleted: (stream) =>
+          releaseStreamResources(stream, session),
+      });
 
-    try {
       const result = await stores.deleteAll();
 
       expect(result.active).toEqual(new Set([retained]));
       expect(result.failed).toEqual(new Set());
       expect(releases).toEqual([deleted]);
-    } finally {
-      session.dispose();
-    }
+    });
   });
 });
 
 describe('SessionStores deletion admission (#9590 A2)', () => {
   it('never lets suffix resemblance authorize deleting an execution registered to another stream', async () => {
-    const session = createTestSession();
-    const executionId = 'abc777' as ExecutionId;
-    const ownerStream = `owner@model#${executionId}` as StreamTabId;
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: '2026-07-31T00:00:00.000Z',
-      streamId: ownerStream,
-    });
-    // Carries the execution's id as a name suffix but has no sidecar
-    // ownership: a formatting hint, not deletion authority.
-    const impostor = `rogue@model#${executionId}` as StreamTabId;
-    session.transcripts.ensureStream(impostor);
-    const deleteExecution = deletionSpy();
-    const stores = new SessionStores({
-      streamLogs: session.transcripts,
-      snapshots: new StreamSnapshotStore(),
-      deleteExecution,
-    });
+    await withSession(async (session) => {
+      const executionId = 'abc777' as ExecutionId;
+      const ownerStream = `owner@model#${executionId}` as StreamTabId;
+      await getExecutionStore(executionId).writeMeta({
+        timestamp: '2026-07-31T00:00:00.000Z',
+        streamId: ownerStream,
+      });
+      // Carries the execution's id as a name suffix but has no sidecar
+      // ownership: a formatting hint, not deletion authority.
+      const impostor = `rogue@model#${executionId}` as StreamTabId;
+      session.transcripts.ensureStream(impostor);
+      const deleteExecution = deletionSpy();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots: new StreamSnapshotStore(),
+        deleteExecution,
+      });
 
-    try {
       await expect(stores.deleteStream(impostor)).resolves.toBe('deleted');
       expect(deleteExecution).not.toHaveBeenCalled();
       await expect(
         getExecutionStore(executionId).readMeta(),
       ).resolves.toMatchObject({ streamId: ownerStream });
-    } finally {
-      session.dispose();
-    }
+    });
   });
 
   it('propagates sidecar FK storage failures instead of deciding ownership', async () => {
-    const session = createTestSession();
-    const executionId = 'abc111' as ExecutionId;
-    const stream = `flaky@model#${executionId}` as StreamTabId;
-    session.transcripts.ensureStream(stream);
-    const snapshots = new StreamSnapshotStore();
-    const readPersistedExecutionId = vi
-      .spyOn(snapshots, 'readPersistedExecutionId')
-      .mockRejectedValue(new Error('storage read failed'));
-    const deleteExecution = deletionSpy();
-    const stores = new SessionStores({
-      streamLogs: session.transcripts,
-      snapshots,
-      deleteExecution,
-    });
+    await withSession(async (session) => {
+      const executionId = 'abc111' as ExecutionId;
+      const stream = `flaky@model#${executionId}` as StreamTabId;
+      session.transcripts.ensureStream(stream);
+      const snapshots = new StreamSnapshotStore();
+      vi.spyOn(snapshots, 'readPersistedExecutionId').mockRejectedValue(
+        new Error('storage read failed'),
+      );
+      const deleteExecution = deletionSpy();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        deleteExecution,
+      });
 
-    try {
       await expect(stores.deleteStream(stream)).rejects.toThrow(
         'storage read failed',
       );
       expect(deleteExecution).not.toHaveBeenCalled();
       expect(session.transcripts.has(stream)).toBe(true);
-    } finally {
-      readPersistedExecutionId.mockRestore();
-      session.dispose();
-    }
+    });
   });
 
   it('retains only the unreadable stream during bulk deletion, deleting the rest', async () => {
-    const session = createTestSession();
-    const flakyExecutionId = 'abc222' as ExecutionId;
-    const goodExecutionId = 'abc333' as ExecutionId;
-    const flakyStream = `flaky@model#${flakyExecutionId}` as StreamTabId;
-    const goodStream = `good@model#${goodExecutionId}` as StreamTabId;
-    session.transcripts.ensureStream(flakyStream);
-    session.transcripts.ensureStream(goodStream);
-    const snapshots = new StreamSnapshotStore();
-    // The good stream owns its execution through the sidecar FK; the flaky
-    // stream's persisted FK is unreadable.
-    ownExecution(snapshots, goodStream, goodExecutionId);
-    vi.spyOn(snapshots, 'listPersistedStreams').mockResolvedValue([
-      flakyStream,
-    ]);
-    const readPersistedExecutionId = vi
-      .spyOn(snapshots, 'readPersistedExecutionId')
-      .mockRejectedValue(new Error('storage read failed'));
-    const warn = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-    const deleteExecution = deletionSpy();
-    const stores = new SessionStores({
-      streamLogs: session.transcripts,
-      snapshots,
-      deleteExecution,
-    });
+    await withSession(async (session) => {
+      const flakyExecutionId = 'abc222' as ExecutionId;
+      const goodExecutionId = 'abc333' as ExecutionId;
+      const flakyStream = `flaky@model#${flakyExecutionId}` as StreamTabId;
+      const goodStream = `good@model#${goodExecutionId}` as StreamTabId;
+      session.transcripts.ensureStream(flakyStream);
+      session.transcripts.ensureStream(goodStream);
+      const snapshots = new StreamSnapshotStore();
+      // The good stream owns its execution through the sidecar FK; the flaky
+      // stream's persisted FK is unreadable.
+      ownExecution(snapshots, goodStream, goodExecutionId);
+      vi.spyOn(snapshots, 'listPersistedStreams').mockResolvedValue([
+        flakyStream,
+      ]);
+      vi.spyOn(snapshots, 'readPersistedExecutionId').mockRejectedValue(
+        new Error('storage read failed'),
+      );
+      vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+      const deleteExecution = deletionSpy();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        deleteExecution,
+      });
 
-    try {
       const result = await stores.deleteAll();
 
       expect(result.failed).toEqual(new Set([flakyStream]));
@@ -357,37 +344,30 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
       );
       expect(session.transcripts.has(flakyStream)).toBe(true);
       expect(session.transcripts.has(goodStream)).toBe(false);
-    } finally {
-      readPersistedExecutionId.mockRestore();
-      warn.mockRestore();
-      session.dispose();
-    }
+    });
   });
 
   it('never derives ownership from a name suffix, even for legacy records without a sidecar FK', async () => {
-    const session = createTestSession();
-    const executionId = 'abc888' as ExecutionId;
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: '2026-07-31T00:00:00.000Z',
-    });
-    const stream = `legacy@model#${executionId}` as StreamTabId;
-    session.transcripts.ensureStream(stream);
-    const deleteExecution = deletionSpy();
-    const stores = new SessionStores({
-      streamLogs: session.transcripts,
-      snapshots: new StreamSnapshotStore(),
-      deleteExecution,
-    });
+    await withSession(async (session) => {
+      const executionId = 'abc888' as ExecutionId;
+      await getExecutionStore(executionId).writeMeta({
+        timestamp: '2026-07-31T00:00:00.000Z',
+      });
+      const stream = `legacy@model#${executionId}` as StreamTabId;
+      session.transcripts.ensureStream(stream);
+      const deleteExecution = deletionSpy();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots: new StreamSnapshotStore(),
+        deleteExecution,
+      });
 
-    try {
       await expect(stores.deleteStream(stream)).resolves.toBe('deleted');
       expect(deleteExecution).not.toHaveBeenCalled();
       await expect(
         getExecutionStore(executionId).readMeta(),
       ).resolves.not.toBeNull();
-    } finally {
-      session.dispose();
-    }
+    });
   });
 });
 
@@ -611,19 +591,15 @@ describe('SessionStores orphan sweep', () => {
       },
     });
 
-    try {
-      const result = await stores.sweepOrphanedStreams(new Set());
+    const result = await stores.sweepOrphanedStreams(new Set());
 
-      expect(result.executionIds).toEqual([]);
-      expect(deleteExecution).not.toHaveBeenCalled();
-      expect(warn).toHaveBeenCalledWith(
-        'SessionStores',
-        'Skipping execution-side orphan cleanup; startup will continue: execution directory unreadable',
-        expect.anything(),
-      );
-    } finally {
-      warn.mockRestore();
-    }
+    expect(result.executionIds).toEqual([]);
+    expect(deleteExecution).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      'SessionStores',
+      'Skipping execution-side orphan cleanup; startup will continue: execution directory unreadable',
+      expect.anything(),
+    );
   });
 
   it('skips the sweep when a degraded host runs on an ephemeral transcript index', async () => {

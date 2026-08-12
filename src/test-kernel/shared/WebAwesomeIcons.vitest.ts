@@ -1,8 +1,6 @@
-// Third-party imports
 import { getIconLibrary } from '@awesome.me/webawesome/dist/components/icon/library.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-// Local imports - shared icon registration
 import {
   registerTeXRAWebAwesomeIcons,
   TEXRA_ICON_LIBRARY,
@@ -19,16 +17,17 @@ beforeAll(() => {
   texraResolver = texraLibrary.resolver;
 });
 
-async function resolve(name: string): Promise<string> {
-  return texraResolver(name, 'classic', 'solid', false);
-}
-
 describe('extension Web Awesome icon registration', () => {
   // #6981: retire this compatibility regression with the private alias table
   // after 2026-10-29, once supported extension data cannot contain old names.
   it('resolves retained legacy aliases through the public registration surface', async () => {
-    const legacyIcon = await resolve('tools');
-    const canonicalIcon = await resolve('screwdriver-wrench');
+    const legacyIcon = await texraResolver('tools', 'classic', 'solid', false);
+    const canonicalIcon = await texraResolver(
+      'screwdriver-wrench',
+      'classic',
+      'solid',
+      false,
+    );
 
     expect(legacyIcon).toBe(canonicalIcon);
     expect(legacyIcon).toMatch(/^data:image\/svg\+xml,/);

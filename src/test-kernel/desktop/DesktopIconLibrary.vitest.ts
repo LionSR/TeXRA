@@ -1,15 +1,11 @@
-// Node imports
 import { readFileSync } from 'node:fs';
 
-// Third-party imports
 import { getIconLibrary } from '@awesome.me/webawesome/dist/components/icon/library.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-// Local imports - shared icon contract
 import { TEXRA_ICON_CANONICAL_NAMES } from '@shared/wa/iconNames';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
-// Local imports - test support
 import { desktopSourcePath } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
 

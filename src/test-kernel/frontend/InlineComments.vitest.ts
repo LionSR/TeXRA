@@ -33,23 +33,20 @@ import {
 } from '@frontend/comments/inlineComments';
 
 describe('inline comments', () => {
-  const platformSpy = vi.spyOn(process, 'platform', 'get');
-  const subscriptions: Array<{ dispose(): void }> = [];
-
   afterEach(() => {
-    for (const subscription of subscriptions.splice(0)) subscription.dispose();
     mocks.createCommentThread.mockReset();
     vi.restoreAllMocks();
   });
 
   it('matches Windows paths case-insensitively when listing threads', () => {
-    platformSpy.mockReturnValue('win32');
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
     mocks.createCommentThread.mockImplementation((uri, range, comments) => ({
       uri,
       range,
       comments,
       dispose: vi.fn(),
     }));
+    const subscriptions: Array<{ dispose(): void }> = [];
     registerInlineComments({ subscriptions } as never);
     const provider = getInlineCommentProvider();
 

@@ -20,10 +20,6 @@ import {
 } from '@transcript';
 import { StorageFS } from '@utils/files/storageFS';
 
-function storageFile(dir: string, key: string): string {
-  return path.join(dir, `${encodeURIComponent(key)}.json`);
-}
-
 function notFound(): NodeJS.ErrnoException {
   const error = new Error('not found') as NodeJS.ErrnoException;
   error.code = 'ENOENT';
@@ -74,7 +70,10 @@ describe('CLI StreamLog persistence (flush on exit is load-bearing)', () => {
     const store = await StreamLogStore.open();
 
     const streamId = 'reviewer@opus#e1';
-    const logFile = storageFile(STREAM_LOGS_DIR, streamId);
+    const logFile = path.join(
+      STREAM_LOGS_DIR,
+      `${encodeURIComponent(streamId)}.json`,
+    );
     appendTranscriptEntry(store, streamId, entry('a', 'first'));
     appendTranscriptEntry(store, streamId, entry('b', 'second'));
 

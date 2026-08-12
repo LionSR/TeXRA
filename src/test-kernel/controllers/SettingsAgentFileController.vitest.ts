@@ -1,11 +1,8 @@
-// Standard library imports
 import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
 
-// Third-party imports
 import { describe, it } from 'vitest';
 
-// Local imports - controllers
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 
 const controller = new SettingsAgentFileController();

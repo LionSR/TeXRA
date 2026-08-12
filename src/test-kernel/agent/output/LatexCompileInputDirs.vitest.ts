@@ -83,14 +83,6 @@ function createDiffCompiler(executionId: ExecutionId, logger: AgentTrace) {
   };
 }
 
-function diffDirectory(executionId: ExecutionId, round: number) {
-  return {
-    absolutePath: path.join(runDir(executionId), 'diff', `r${round}`),
-    relativePath: path.join('diff', `r${round}`),
-    executionId,
-  };
-}
-
 /** Compiles a successful main-diff.tex for `round` and returns the result. */
 async function compileDiff(
   executionId: ExecutionId,
@@ -102,7 +94,11 @@ async function compileDiff(
   return createDiffCompiler(executionId, trace).compileDiffIfSuccessful(
     { success: true, diffFileName: 'main-diff.tex' },
     referenceLocation,
-    diffDirectory(executionId, round),
+    {
+      absolutePath: path.join(runDir(executionId), 'diff', `r${round}`),
+      relativePath: path.join('diff', `r${round}`),
+      executionId,
+    },
     round,
     sourceLocation,
     '-diff',

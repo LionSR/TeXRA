@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - tools
 import {
   formatCheckAnnotations,
   formatCIStarted,

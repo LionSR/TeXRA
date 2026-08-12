@@ -102,6 +102,10 @@ function resetModelCaches(): void {
   invalidateModelOptionsCache();
 }
 
+function googleKeySecrets(): FakeSecrets {
+  return new FakeSecrets({ [apiKeySecretName('google')]: 'sk-google' });
+}
+
 function modelOptionsAccess(
   overrides: Partial<ModelOptionsAccess> = {},
 ): ModelOptionsAccess {
@@ -505,11 +509,7 @@ describe('Copilot route in model pickers', () => {
 
     const options = await computeModelOptionsData(
       ['gemini36f'],
-      modelOptionsAccess({
-        secrets: new FakeSecrets({
-          [apiKeySecretName('google')]: 'sk-google',
-        }),
-      }),
+      modelOptionsAccess({ secrets: googleKeySecrets() }),
     );
 
     expect(options).toHaveLength(1);
@@ -583,11 +583,7 @@ describe('Copilot route in model pickers', () => {
 
     const options = await computeModelOptionsData(
       ['gemini36f'],
-      modelOptionsAccess({
-        secrets: new FakeSecrets({
-          [apiKeySecretName('google')]: 'sk-google',
-        }),
-      }),
+      modelOptionsAccess({ secrets: googleKeySecrets() }),
     );
 
     expect(options).toHaveLength(1);
@@ -607,11 +603,7 @@ describe('Copilot route in model pickers', () => {
 
     const options = await computeModelOptionsData(
       ['gemini36f'],
-      modelOptionsAccess({
-        secrets: new FakeSecrets({
-          [apiKeySecretName('google')]: 'sk-google',
-        }),
-      }),
+      modelOptionsAccess({ secrets: googleKeySecrets() }),
     );
 
     expect(options[0]).toEqual(

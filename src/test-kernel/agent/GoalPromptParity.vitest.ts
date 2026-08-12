@@ -1,14 +1,11 @@
-// Node imports
 import { readFileSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 import * as yaml from 'yaml';
 
-// Local imports
 import {
   getContinuationTemplate,
   initializeGoalPrompts,

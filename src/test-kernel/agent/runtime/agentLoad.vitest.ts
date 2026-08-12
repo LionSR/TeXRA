@@ -1,4 +1,3 @@
-// Standard library imports
 import { strict as assert } from 'node:assert';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -6,7 +5,6 @@ import * as path from 'node:path';
 import { beforeAll, describe, it, beforeEach, afterEach, vi } from 'vitest';
 import { z } from 'zod';
 
-// Local imports - agent runtime
 import {
   clearInlineAgents,
   getAgent,

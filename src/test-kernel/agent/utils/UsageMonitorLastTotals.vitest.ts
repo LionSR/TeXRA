@@ -1,7 +1,5 @@
-// Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { TraceEmitter } from '@agent/trace';
 import {
   AgentRunStateSnapshotSchema,
@@ -25,6 +23,13 @@ import {
 import { testModelCell } from '../modelCellTestUtils';
 import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
 import { testModelInfo } from '../runtime/launchContextTestUtils';
+
+// One restore after each test covers every vi.spyOn in this file.
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+type MonitorContext = ReturnType<typeof createMonitorWithEvents>;
 
 function createMonitorWithEvents() {
   const logger = new TraceEmitter();
@@ -53,10 +58,21 @@ function createMonitorWithEvents() {
   };
 }
 
+/** Run `fn` against a fresh monitor that is always disposed. */
+async function withMonitor<T>(
+  fn: (ctx: MonitorContext) => Promise<T>,
+): Promise<T> {
+  const ctx = createMonitorWithEvents();
+  try {
+    return await fn(ctx);
+  } finally {
+    ctx.dispose();
+  }
+}
+
 describe('UsageMonitor', () => {
   it('is undefined before any round and caches the totals after recordUsage', async () => {
-    const { dispose, monitor } = createMonitorWithEvents();
-    try {
+    await withMonitor(async ({ monitor }) => {
       expect(monitor.lastTotals()).toBeUndefined();
 
       const state = AgentRunStateSnapshotSchema.parse({});
@@ -65,14 +81,11 @@ describe('UsageMonitor', () => {
       // The cache holds the exact totals object the accumulator exposed, so a
       // failed run's terminal `result` event can report usage from the catch arm.
       expect(monitor.lastTotals()).toBe(state.usageAccumulator.totals);
-    } finally {
-      dispose();
-    }
+    });
   });
 
   it('forwards the ChatGPT subscription route to session usage facts', async () => {
-    const { dispose, events, monitor } = createMonitorWithEvents();
-    try {
+    await withMonitor(async ({ monitor, events }) => {
       const state = AgentRunStateSnapshotSchema.parse({});
       recordNormalizedUsage(state.usageAccumulator, {
         inputTokens: 10,
@@ -94,15 +107,12 @@ describe('UsageMonitor', () => {
       expect(usageEvent?.payload.usage).not.toHaveProperty(
         'viaChatGptSubscription',
       );
-    } finally {
-      dispose();
-    }
+    });
   });
 
   it('does not replay prior usage during a usage-less tool-use continuation', async () => {
-    const { dispose, events, monitor } = createMonitorWithEvents();
-    const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
-    try {
+    await withMonitor(async ({ monitor, events }) => {
+      const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
       const state = AgentRunStateSnapshotSchema.parse({});
       const usage = {
         inputTokens: 10,
@@ -125,16 +135,12 @@ describe('UsageMonitor', () => {
         totalInputTokens: 10,
         totalOutputTokens: 2,
       });
-    } finally {
-      log.mockRestore();
-      dispose();
-    }
+    });
   });
 
   it('bills a round against the model the run switched to', async () => {
-    const { dispose, modelCell, monitor } = createMonitorWithEvents();
-    const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
-    try {
+    await withMonitor(async ({ monitor, modelCell }) => {
+      const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
       modelCell.swap(
         {
           ...testModelInfo,
@@ -159,21 +165,17 @@ describe('UsageMonitor', () => {
       expect(log).toHaveBeenCalledWith(
         expect.objectContaining({ model: 'Switched Model' }),
       );
-    } finally {
-      log.mockRestore();
-      dispose();
-    }
+    });
   });
 
   it('reports permanent relay rejection to the spend-cap caller', async () => {
-    const { dispose, logger, monitor } = createMonitorWithEvents();
-    const error = vi.spyOn(logger, 'error');
-    const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
-    const flush = vi
-      .spyOn(UsageLogService, 'flush')
-      .mockResolvedValue(USAGE_LOG_FLUSH_OUTCOME.REJECTED);
+    await withMonitor(async ({ logger, monitor }) => {
+      const error = vi.spyOn(logger, 'error');
+      vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
+      vi.spyOn(UsageLogService, 'flush').mockResolvedValue(
+        USAGE_LOG_FLUSH_OUTCOME.REJECTED,
+      );
 
-    try {
       const state = AgentRunStateSnapshotSchema.parse({});
       recordNormalizedUsage(state.usageAccumulator, {
         inputTokens: 10,
@@ -189,11 +191,6 @@ describe('UsageMonitor', () => {
       expect(error).toHaveBeenCalledWith(
         'Relay usage logging was permanently rejected; spend-cap accounting is incomplete.',
       );
-    } finally {
-      error.mockRestore();
-      log.mockRestore();
-      flush.mockRestore();
-      dispose();
-    }
+    });
   });
 });

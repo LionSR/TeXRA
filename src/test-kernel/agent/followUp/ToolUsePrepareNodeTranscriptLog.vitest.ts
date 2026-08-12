@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentPromptSchema } from '@agent/core/definition/AgentDataclass';
@@ -48,9 +46,9 @@ describe('ToolUsePrepareNode transcript logging (regression #7508)', () => {
     const services = buildServices({
       initialUserMessageForTranscript: 'Do the thing.',
     });
-    (
-      services.modelCell.handler.initializeMessages as ReturnType<typeof vi.fn>
-    ).mockRejectedValue(new Error('media processing failed'));
+    services.modelCell.handler.initializeMessages = vi
+      .fn()
+      .mockRejectedValue(new Error('media processing failed')) as never;
     const node = new ToolUsePrepareNode().setServices(services);
 
     await expect(node.exec(undefined)).rejects.toThrow(

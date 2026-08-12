@@ -755,17 +755,16 @@ export class DesktopProgressBridge {
         state: {
           getRunMetadata: (stream) => this.getRunMetadata(stream),
         },
-        runExecutionRequest: (request) => {
+        runExecutionRequest: async (request) => {
           const validated = validateExecutionRequest(request);
           if (!validated.valid) {
             this.logger.error('Invalid desktop workflow execution request', {
               data: validated.issue,
             });
-            return Promise.resolve(
-              this.options.host.showErrorMessage(validated.message),
-            ).then(() => undefined);
+            await this.options.host.showErrorMessage(validated.message);
+            return;
           }
-          return this.runExecution(validated.request);
+          await this.runExecution(validated.request);
         },
       },
       workflowFileActions: {

@@ -1,4 +1,3 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -597,7 +596,7 @@ describe('desktop settings IPC', () => {
 
   it('reports a failure to show an unsupported-command reason', async () => {
     const failure = new Error('notification failed');
-    const showInfoMessage = vi.fn(async () => Promise.reject(failure));
+    const showInfoMessage = vi.fn(() => Promise.reject(failure));
     const onError = vi.fn();
     const { settings } = createSettingsFixture({
       ui: { showInfoMessage, onError },

@@ -1,10 +1,7 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import {
   createProgressViewCommandHandlers as createSharedProgressViewCommandHandlers,
   createProgressViewSecondTierHandlers,

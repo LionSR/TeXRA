@@ -27,17 +27,9 @@ function extract(content: string) {
 
 describe('extractFilenameHeaderDocuments — sawSoleOutputChunkLabel resets', () => {
   it('does not carry a stale sole-output-chunk label across an unrelated non-LaTeX aside fence', () => {
-    // 1. `% output.tex` establishes the sole coalesced output.
-    // 2. A bare label ("Continued.tex:") that doesn't name a known file sets
-    //    sawSoleOutputChunkLabel = true, signaling "the next fence may be a
-    //    continuation of the sole output".
-    // 3. A ```json aside appears next — it fails the isLatexMarkdownFence
-    //    gate, so it is prose/example content, not a continuation. Before the
-    //    fix, entering this branch left sawSoleOutputChunkLabel stale-true.
-    // 4. The aside's own (bare) closing fence is then evaluated fresh against
-    //    the sole-output-chunk gate: with the stale flag, it is
-    //    misinterpreted as *opening* a new coalesced chunk, silently
-    //    absorbing the unrelated text that follows into output.tex.
+    // A bare "Continued.tex:" label that names no known file sets
+    // sawSoleOutputChunkLabel stale-true; the unrelated ```json aside must not
+    // let that flag absorb the following text into output.tex.
     const content = [
       '```',
       '% output.tex',
@@ -76,13 +68,9 @@ describe('extractFilenameHeaderDocuments — sawSoleOutputChunkLabel resets', ()
   });
 
   it('resets the label across a synthesized single-output document and its auto-close', () => {
-    // Reproduces the full chain the issue describes: a prose segment leaves
-    // sawSoleOutputChunkLabel stale-true, then a *synthesized* (unlabeled
-    // LaTeX prefix) document is created and auto-closed while that flag is
-    // live, exercising both the synthesis branch (currentName =
-    // synthesisName) and its auto-close path. The whole call must still
-    // resolve to a single, correctly-assembled output.tex with no corrupted
-    // or duplicated documents.
+    // A prose segment leaves sawSoleOutputChunkLabel live while a synthesized
+    // (unlabeled) document is created and auto-closed; the call must still
+    // resolve to one correctly-assembled output.tex.
     const content = [
       '```',
       '\\section{Intro}',

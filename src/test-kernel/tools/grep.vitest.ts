@@ -1,10 +1,5 @@
-// Standard library imports
-import { strict as assert } from 'node:assert';
-
-// Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { platform } from '@platform/platform';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -19,24 +14,24 @@ describe('buildArguments', () => {
 
   it('omits --files-with-matches when using content mode', () => {
     const args = buildArguments(baseInput, 'content');
-    assert.deepEqual(args, ['--color=never']);
+    expect(args).toEqual(['--color=never']);
   });
 
   it('includes --files-with-matches when explicitly requested', () => {
     const args = buildArguments(baseInput, 'files_with_matches');
-    assert.ok(args.includes('--files-with-matches'));
+    expect(args).toContain('--files-with-matches');
   });
 
   it('includes --fixed-strings when literal is true', () => {
     const args = buildArguments({ ...baseInput, literal: true }, 'content');
-    assert.ok(args.includes('--fixed-strings'));
+    expect(args).toContain('--fixed-strings');
   });
 
   it.each([false, null, undefined])(
     'omits --fixed-strings when literal is %s',
     (literal) => {
       const args = buildArguments({ ...baseInput, literal }, 'content');
-      assert.ok(!args.includes('--fixed-strings'));
+      expect(args).not.toContain('--fixed-strings');
     },
   );
 });

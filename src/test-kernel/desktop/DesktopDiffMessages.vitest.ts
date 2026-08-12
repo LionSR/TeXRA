@@ -2,10 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { loadSourceModule } from './loadSourceModule.ts';
 
-function loadDesktopDiffMessages() {
-  return loadSourceModule('@desktop/shared/desktopDiffMessages');
-}
-
 describe('DesktopShowDiffMessageSchema', () => {
   const basePayload = {
     command: 'desktop:showDiff',
@@ -15,7 +11,9 @@ describe('DesktopShowDiffMessageSchema', () => {
   } as const;
 
   it('round-trips a complete payload', async () => {
-    const { DesktopShowDiffMessageSchema } = await loadDesktopDiffMessages();
+    const { DesktopShowDiffMessageSchema } = await loadSourceModule(
+      '@desktop/shared/desktopDiffMessages',
+    );
     const parsed = DesktopShowDiffMessageSchema.parse({
       ...basePayload,
       displayPath: 'src/file.ts',
@@ -29,13 +27,17 @@ describe('DesktopShowDiffMessageSchema', () => {
   });
 
   it('requires displayPath', async () => {
-    const { DesktopShowDiffMessageSchema } = await loadDesktopDiffMessages();
+    const { DesktopShowDiffMessageSchema } = await loadSourceModule(
+      '@desktop/shared/desktopDiffMessages',
+    );
     const result = DesktopShowDiffMessageSchema.safeParse(basePayload);
     expect(result.success).toBe(false);
   });
 
   it('defaults missing language to plaintext', async () => {
-    const { DesktopShowDiffMessageSchema } = await loadDesktopDiffMessages();
+    const { DesktopShowDiffMessageSchema } = await loadSourceModule(
+      '@desktop/shared/desktopDiffMessages',
+    );
     const parsed = DesktopShowDiffMessageSchema.parse({
       ...basePayload,
       displayPath: 'src/file.ts',

@@ -30,7 +30,6 @@ setupPlatform({
 
 afterEach(() => {
   vi.restoreAllMocks();
-  __resetSetupPlatformForTests();
   SupabaseClient.resetForTests();
   resetRelayTokenTierCacheForTests();
   vi.unstubAllEnvs();

@@ -57,7 +57,7 @@ const SHARED_LITERALS = [
 ] as const;
 
 describe('shared literal exports', () => {
-  it.each(SHARED_LITERALS)('%s is frozen', (_name, value) => {
+  it.each(SHARED_LITERALS)('%s is frozen', (name, value) => {
     expect(Object.isFrozen(value)).toBe(true);
   });
 });

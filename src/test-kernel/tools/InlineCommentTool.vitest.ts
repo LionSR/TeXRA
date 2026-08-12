@@ -7,7 +7,7 @@ import {
   type InlineCommentProvider,
 } from '@tools/comment/InlineCommentTool';
 
-/** Minimal in-memory provider so the tool can be exercised without VS Code. */
+/** Minimal in-memory provider. */
 function fakeProvider(
   overrides: Partial<InlineCommentProvider> = {},
 ): InlineCommentProvider {
@@ -115,7 +115,6 @@ describe('InlineCommentTool.call', () => {
       }),
     );
     const result = await tool.call({ command: 'list' });
-    // Plural summary plus single-line/open and multi-line/resolved rendering.
     expect(result.summary).toBe('2 comment threads');
     expect(result.output).toBe(
       '[c1] /abs/paper.tex:2 (open)\n  TeXRA: reword\n  You: done\n\n' +

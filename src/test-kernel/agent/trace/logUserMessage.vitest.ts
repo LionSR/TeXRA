@@ -1,15 +1,12 @@
-// Third-party imports
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-// Local imports
 import { logUserMessage, type AgentTrace } from '@agent/trace';
-import { MESSAGE_TYPES } from '@shared/schemas';
+import { MESSAGE_TYPES, type StreamLogEntry } from '@shared/schemas';
 import { createRunTrace, StreamLogStore } from '@transcript';
 
-// #7508: the `userMessage` row's attachment-kind/count payload — verifies
-// `logUserMessage` stamps `data.attachments` when attachments are present,
-// and stays byte-for-byte the same (no `data` at all) for the common no-media
-// case so every other consumer of this row is unaffected.
+// #7508: the userMessage row's attachment-kind/count payload — logUserMessage
+// stamps data.attachments when attachments are present and stays byte-for-byte
+// the same (no `data` at all) for the common no-media case.
 describe('logUserMessage', () => {
   let logger: AgentTrace;
   let disposeTrace: () => void;
@@ -27,7 +24,7 @@ describe('logUserMessage', () => {
     disposeTrace();
   });
 
-  function capturedEntries() {
+  function capturedEntries(): StreamLogEntry[] {
     const log = store.get('TestUserMessageLogger');
     return log?.getRange(0, log.head) ?? [];
   }

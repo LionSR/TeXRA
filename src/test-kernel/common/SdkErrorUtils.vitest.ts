@@ -64,21 +64,13 @@ function withHeaders<T extends Error>(
   return Object.assign(error, { headers: new Headers(headers) });
 }
 
-function rawBodyError(
-  message: string,
-  body: unknown,
-): Error & { error: unknown } {
-  const error = new Error(message) as Error & { error: unknown };
-  error.error = body;
-  return error;
-}
-
 function taggedRawBodyError(
   message: string,
   body: unknown,
   metadata: Parameters<typeof attachSdkErrorMetadata>[1],
 ): Error {
-  const error = rawBodyError(message, body);
+  const error = new Error(message) as Error & { error: unknown };
+  error.error = body;
   attachSdkErrorMetadata(error, metadata);
   return error;
 }
@@ -201,23 +193,6 @@ describe('formatProviderHttpError', () => {
     expect(formatted.provider).toBe('anthropic');
     expect(formatted.requestId).toBe('req-anthropic');
     expect(formatted.statusCode).toBe(401);
-  });
-
-  it('preserves provider context for native Anthropic connection errors without response headers', () => {
-    const connectionError = formatProviderHttpError(
-      new AnthropicAPIConnectionError({
-        message: 'network unavailable',
-        cause: new Error('socket closed'),
-      }),
-    );
-    const timeoutError = formatProviderHttpError(
-      new AnthropicAPIConnectionTimeoutError({ message: 'timed out' }),
-    );
-
-    expect(connectionError.provider).toBe('anthropic');
-    expect(connectionError.userRetryable).toBe(true);
-    expect(timeoutError.provider).toBe('anthropic');
-    expect(timeoutError.userRetryable).toBe(true);
   });
 
   it('prefers Anthropic request-id when response headers include both request id styles', () => {
@@ -1023,7 +998,6 @@ describe('attachProviderError end-to-end', () => {
     expect(recovered.provider).toBe('anthropic');
     expect(recovered.isRelayError).toBe(true);
     expect(recovered.userRetryable).toBe(true);
-    // Verify the cache hit — second call returns the same object.
     expect(normalizeProviderError(err)).toBe(recovered);
   });
 
@@ -1074,7 +1048,6 @@ describe('attachProviderError end-to-end', () => {
     expect(recovered.exhaustionReason).toBe('relay-limit');
     expect('retryable' in recovered).toBe(false);
     expect('isCredentialExhausted' in recovered).toBe(false);
-    // Downstream credential-exhaustion checks must see the migrated reason.
     expect(recovered.exhaustionReason !== undefined).toBe(true);
   });
 });

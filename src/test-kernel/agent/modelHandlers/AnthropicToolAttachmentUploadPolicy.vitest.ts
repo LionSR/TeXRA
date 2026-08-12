@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - agent
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import { uploadToolAttachments } from '@agent/modelHandlers/anthropic/anthropicTools';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
