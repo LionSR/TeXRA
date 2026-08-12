@@ -79,6 +79,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { notify } from '../notifications/terminalNotifier';
 import { patchSessionMeta, patchStream } from './cliState';
 import {
+  refreshSubscriptionPreferenceViews,
   setCliCodingPlanSubscription,
   setCliCodexSubscription,
 } from './codexSubscription';
@@ -715,6 +716,7 @@ async function switchRetryToPersonalCredentials(
                 needsRollback: () => runtime.getEnabled() !== previous,
                 restore: async () => {
                   await runtime.restoreEnabled(previous);
+                  refreshSubscriptionPreferenceViews();
                   if (runtime.getEnabled() !== previous) {
                     throw new Error(
                       `${runtime.descriptor.displayName} remained ${String(runtime.getEnabled())}.`,

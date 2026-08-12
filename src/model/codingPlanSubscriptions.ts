@@ -2,6 +2,10 @@ import { ModelProvider } from 'llm-zoo';
 
 import { apiKeyExists } from '@model/apiProviders';
 import { includedModelAccess } from '@model/includedModelAccess';
+import {
+  shouldRouteModelThroughOpenRouter,
+  type ModelRoutingConfig,
+} from '@model/openRouterRouting';
 import { isKimiCodeSubscriptionActive } from '@model/providerCapabilities';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { platform } from '@platform/platform';
@@ -28,12 +32,12 @@ export interface CodingPlanSubscriptionRuntime {
 }
 
 /** Whether GLM requests use the coding-plan endpoint rather than another route. */
-export function isGlmCodingPlanRouteActive(config: {
-  readonly baseUrl?: string | null;
-}): boolean {
+export function isGlmCodingPlanRouteActive(
+  config: ModelRoutingConfig,
+): boolean {
   return (
     getGLMCodingPlan() &&
-    !getUseOpenRouter() &&
+    !shouldRouteModelThroughOpenRouter(config, getUseOpenRouter()) &&
     config.baseUrl == null &&
     getProviderEndpoint('glm') === ''
   );
