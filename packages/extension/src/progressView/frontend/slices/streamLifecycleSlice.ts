@@ -20,7 +20,6 @@ import {
   deleteStreamState,
   detachChildStreamTabs,
   ensureStreamState,
-  firstStreamId,
   type ProgressState,
 } from '../store';
 import {
@@ -117,19 +116,21 @@ function updateStreamInfo(
   });
 }
 
-/**
- * Resolve the next active stream id for an incoming `activeStream` value:
- * an explicit empty string means "no selection", a known stream id is kept
- * as-is, and anything else (unset or no-longer-present) falls back to the
- * first available stream.
- */
-function resolveActiveStreamId(
+// Backend is sole source of truth for activeStream selection (see
+// WebviewUpdater.sendStreamMetadata); pass its value through unchanged and
+// warn rather than silently re-deriving one if it's locally unknown.
+function assertKnownActiveStreamId(
   activeStream: StreamTabId | '',
   streamById: Map<StreamTabId, StreamTabInfo>,
 ): StreamTabId | null {
   if (activeStream === '') return null;
-  if (activeStream && streamById.has(activeStream)) return activeStream;
-  return firstStreamId(streamById);
+  if (!streamById.has(activeStream)) {
+    console.warn(
+      '[streamLifecycleSlice] activeStream not present in streamById',
+      activeStream,
+    );
+  }
+  return activeStream;
 }
 
 // ============================================================
@@ -150,10 +151,8 @@ export const streamLifecycleHandlers = {
       data.streamStates,
     );
     // Honor explicit empty-string as "no selection" — backend sends this
-    // when the current filter excludes every stream. Since the backend now
-    // emits all streams unfiltered, falling back to firstStreamId would
-    // re-pick a filtered-out tab and render hidden-category content.
-    const nextActiveStreamId = resolveActiveStreamId(
+    // when the current filter excludes every stream.
+    const nextActiveStreamId = assertKnownActiveStreamId(
       data.activeStream,
       updated.streamById,
     );
@@ -167,7 +166,7 @@ export const streamLifecycleHandlers = {
 
   [PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM]: (data) => {
     const prev = appState.get();
-    const nextActiveStreamId = resolveActiveStreamId(
+    const nextActiveStreamId = assertKnownActiveStreamId(
       data.activeStream,
       prev.streamById,
     );
