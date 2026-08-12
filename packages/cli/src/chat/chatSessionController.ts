@@ -277,6 +277,33 @@ export function createChatSessionController(
     ];
   };
 
+  // A cancelled root can publish completion just before its run promise
+  // settles. During that narrow interval its teardown can still overwrite a
+  // successor's root-slot state. Retain every unsettled interrupted generation
+  // so a later interruption cannot discard an earlier blocker.
+  const recoveryBlockedByInterruptedRuns = new Set<Promise<void>>();
+  const blockRecoveryUntilInterruptedRunSettles = (): void => {
+    const interruptedRun = session.runPromise;
+    if (
+      !interruptedRun ||
+      session.runCompleted ||
+      recoveryBlockedByInterruptedRuns.has(interruptedRun)
+    ) {
+      return;
+    }
+    recoveryBlockedByInterruptedRuns.add(interruptedRun);
+    const clearBlock = (): void => {
+      recoveryBlockedByInterruptedRuns.delete(interruptedRun);
+    };
+    void interruptedRun.then(clearBlock, clearBlock);
+  };
+
+  // Cancellation of an admitted automatic resume is monotone for that
+  // attempt. `/clear` may reset the shared session fields while asynchronous
+  // preparation is still running, but it must not re-enable lease admission.
+  let activeAutoResumeCancellation:
+    { cancellationRequested: boolean } | undefined;
+
   // -----------------------------------------------------------------------
   // Internal helpers
   // -----------------------------------------------------------------------
@@ -590,6 +617,13 @@ export function createChatSessionController(
     streamId: StreamTabId,
     options: AutoResumeOptions = {},
   ): Promise<boolean> => {
+    // Do not let a recovery wake claim the slot after the interrupted root
+    // publishes completion but before that root's teardown settles. The
+    // captured promise remains authoritative even if `/clear` resets the
+    // mutable session state in the meantime.
+    if (options.recovery && recoveryBlockedByInterruptedRuns.size > 0) {
+      return Promise.resolve(false);
+    }
     const {
       promise: runPromise,
       resolve: resolveRun,
@@ -601,6 +635,10 @@ export function createChatSessionController(
     if (!session.tryClaimRootRunSlot(runPromise.then(() => undefined))) {
       return Promise.resolve(false);
     }
+    const attemptCancellation = { cancellationRequested: false };
+    activeAutoResumeCancellation = attemptCancellation;
+    const isCancellationRequested = (): boolean =>
+      attemptCancellation.cancellationRequested || session.stopRequested;
 
     const runResume = async (): Promise<boolean> => {
       let finalize = (): void => session.markRunCompleted();
@@ -616,7 +654,7 @@ export function createChatSessionController(
           runMetadata.config ??
           (await getExecutionStore(executionId).readConfig());
         if (!config) return false;
-        if (session.stopRequested) return false;
+        if (isCancellationRequested()) return false;
         const parentStreamId = snapshotStore.getParentStreamId(streamId);
 
         const sessionContext = beginRunContext(config, 'history');
@@ -653,7 +691,7 @@ export function createChatSessionController(
             {
               interactions: runtimeSession.interactions,
               streamStatus: runtimeSession.status,
-              isCancellationRequested: () => session.stopRequested,
+              isCancellationRequested,
               resolveResumeState: async () => ({
                 runState: config,
                 executionId,
@@ -676,11 +714,12 @@ export function createChatSessionController(
                       restoreRecoveryFollowUps(recovery, lease);
                     }
                   },
-                  isCancellationRequested: () => session.stopRequested,
+                  isCancellationRequested,
                   onResult: (result) => {
                     resumedOutcome = result.outcome;
                   },
                   onError: reportRunFailure,
+                  canAcquireResumeLease: () => !isCancellationRequested(),
                 }),
               executeWorkflow: async () => {
                 throw new Error(
@@ -701,7 +740,7 @@ export function createChatSessionController(
 
         if (resumed) {
           settleResumedTurn(resumedOutcome);
-        } else if (session.stopRequested) {
+        } else if (isCancellationRequested()) {
           session.runExitCode = CliExitCode.Interrupted;
         }
         return resumed;
@@ -710,6 +749,9 @@ export function createChatSessionController(
         return false;
       } finally {
         finalize();
+        if (activeAutoResumeCancellation === attemptCancellation) {
+          activeAutoResumeCancellation = undefined;
+        }
       }
     };
 
@@ -780,6 +822,10 @@ export function createChatSessionController(
   // -----------------------------------------------------------------------
 
   const stop = (): void => {
+    blockRecoveryUntilInterruptedRunSettles();
+    if (activeAutoResumeCancellation) {
+      activeAutoResumeCancellation.cancellationRequested = true;
+    }
     session.stopRequested = true;
     interruptActiveRun();
   };
@@ -790,6 +836,10 @@ export function createChatSessionController(
       cause: 'Run interrupted.',
     });
     if (streamId === session.streamId) {
+      blockRecoveryUntilInterruptedRunSettles();
+      if (activeAutoResumeCancellation) {
+        activeAutoResumeCancellation.cancellationRequested = true;
+      }
       session.stopRequested = true;
       session.interruptedStreamId = streamId;
     }

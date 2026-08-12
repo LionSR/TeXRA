@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 - **Session status reports active delegated work** — `/status` now shows the
   number of active background tasks while retaining the focused session's own
   status.
+- **Interrupted multi-agent chats can be resumed immediately** — leaving a
+  cancelled team session no longer leaves its printed resume command
+  temporarily unavailable.
 
 ### Shared (all surfaces)
 
