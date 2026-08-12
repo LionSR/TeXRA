@@ -13,7 +13,6 @@ import {
 } from '@shared/schemas';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
-  codingPlanForExhaustionReason,
   type CodingPlanSubscriptionId,
 } from '@shared/codingPlanSubscriptions';
 
@@ -91,7 +90,9 @@ export function classifyCliRetryAction(
 ): CliRetryAction {
   const details = payload.errorDetails;
   if (isChatGptSubscriptionLimitError(details)) return 'disable-chatgpt';
-  const codingPlan = codingPlanForExhaustionReason(details?.exhaustionReason);
+  const codingPlan = CODING_PLAN_SUBSCRIPTIONS.find(
+    (plan) => plan.exhaustionReason === details?.exhaustionReason,
+  );
   if (codingPlan) return `disable-coding-plan:${codingPlan.id}`;
   if (
     details != null &&
