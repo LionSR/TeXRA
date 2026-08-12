@@ -313,28 +313,6 @@ export function formatCliCodingPlanPreference(
   return formatCliKeyedSubscriptionPreference(state.preferred, state.keySet);
 }
 
-/** Format the Kimi preference independently of key availability. */
-export function formatCliKimiCodePreference(
-  status: CliModelAccessStatus,
-): string {
-  const plan = CODING_PLAN_SUBSCRIPTIONS.find(
-    (candidate) => candidate.id === 'kimiCode',
-  );
-  if (!plan) return 'Off · key required to enable';
-  return formatCliCodingPlanPreference(status, plan);
-}
-
-/** Format the GLM Coding Plan preference independently of key availability. */
-export function formatCliGlmCodingPlanPreference(
-  status: CliModelAccessStatus,
-): string {
-  const plan = CODING_PLAN_SUBSCRIPTIONS.find(
-    (candidate) => candidate.id === 'glmCodingPlan',
-  );
-  if (!plan) return 'Off · key required to enable';
-  return formatCliCodingPlanPreference(status, plan);
-}
-
 const oauthSubscriptionAccessItems = [
   {
     provider: 'chatgpt',
@@ -429,7 +407,7 @@ export function formatCliModelAccessSummary(
   const chatGpt = status.preferences.chatGpt === 'on' ? 'On' : 'Off';
   const grok = status.preferences.grok === 'on' ? 'On' : 'Off';
   const codingPlans = CODING_PLAN_SUBSCRIPTIONS.map((plan) => {
-    const label = plan.apiProvider === 'kimiCode' ? 'Kimi' : 'GLM';
+    const label = plan.displayName.split(' ')[0];
     return `${label} ${cliCodingPlanStatus(status, plan).preferred ? 'On' : 'Off'}`;
   });
   return `ChatGPT ${chatGpt} · Grok ${grok} · ${codingPlans.join(' · ')} · otherwise: ${formatCliModelAccessRouteInline(status.apiFallback)}`;

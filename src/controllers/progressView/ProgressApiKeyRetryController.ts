@@ -22,7 +22,7 @@ export interface ProgressApiKeyRetryRequest {
  * quota-exhaustion reason that signals the toggle should be disabled so requests
  * re-route through the regular pay-as-you-go endpoint.
  */
-export interface CodingPlanToggle {
+interface CodingPlanToggle {
   /** The exhaustion reason that signals this plan's quota ran out. */
   readonly exhaustionReason: ExhaustionReason;
   readonly getEnabled: () => boolean;

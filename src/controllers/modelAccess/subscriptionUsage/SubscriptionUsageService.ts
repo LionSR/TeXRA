@@ -6,7 +6,7 @@ import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
 } from '@shared/schemas';
-import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas/subscriptionUsage';
+import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
 import { useChinaRegion } from '@utils/config/providerConfig';
 
 import {
