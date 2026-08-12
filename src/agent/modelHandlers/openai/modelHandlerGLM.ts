@@ -2,6 +2,7 @@
 import type { StandardPricingConfig } from '@agent/utils/priceUtils';
 import { clampReasoningEffortToHighOrMax } from '@agent/modelHandlers/support/reasoningEffort';
 import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
+import { isGlmCodingPlanRouteActive } from '@model/codingPlanSubscriptions';
 
 // Local file imports
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
@@ -30,8 +31,10 @@ export class ModelHandlerGLM extends ReasoningModelHandlerOpenAI {
   override async getClient(
     selection: ModelCredentialSelection = 'configured',
   ): Promise<OpenAI> {
+    const codingPlanRoute = isGlmCodingPlanRouteActive(this.config);
     const client = await super.getClient(selection);
-    return client.baseURL.replace(/\/+$/, '').endsWith('/api/coding/paas/v4')
+    return codingPlanRoute &&
+      this.getCredentialRouteForClient(client) === 'api-key'
       ? this.rememberClientUsageRoute(client, 'glm-coding-plan-subscription')
       : client;
   }

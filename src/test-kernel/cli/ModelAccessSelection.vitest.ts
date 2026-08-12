@@ -297,6 +297,16 @@ describe('CLI model access routes', () => {
     ).toBe('included');
   });
 
+  it('reports an active GLM plan after included access falls back', () => {
+    expect(
+      resolveCliModelAccessRoute({
+        apiMode: 'included',
+        subscriptionActive: false,
+        glmCodingPlanActive: true,
+      }),
+    ).toBe('glm-code');
+  });
+
   it('formats the shared access routes for detailed and compact surfaces', () => {
     const detailed: Array<[AccessRoute, string]> = [
       ['chatgpt', 'ChatGPT subscription'],

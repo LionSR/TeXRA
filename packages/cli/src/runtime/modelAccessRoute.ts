@@ -185,7 +185,9 @@ export function resolveCliModelAccessRoute({
   // The Kimi Code route only describes personal access — under included
   // access the relay owns eligible models.
   if (kimiCodeActive === true && apiMode === 'personal') return 'kimi-code';
-  if (glmCodingPlanActive === true && apiMode === 'personal') return 'glm-code';
+  // The active predicate already excludes relay-owned requests. It therefore
+  // wins over a stale session apiMode left at `included` after quota fallback.
+  if (glmCodingPlanActive === true) return 'glm-code';
   return apiMode;
 }
 
