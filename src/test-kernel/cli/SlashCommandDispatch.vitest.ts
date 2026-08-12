@@ -39,6 +39,7 @@ import {
   type ConversationEntry,
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
+import { projectChildRoster } from '@cli/chat/tui/state/childExecutions';
 import type { StreamArtifactReader } from '@cli/chat/tui/state/subscribeStreamArtifacts';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as chatGptLogin from '@cli/runtime/chatgptLogin';
@@ -867,6 +868,39 @@ describe('handleTuiSlashCommand', () => {
     const statusText = lastEntryText(streamId);
     expect(statusText).toContain('resume later with: texra resume exec-1');
     expect(statusText).not.toContain('--cwd');
+  });
+
+  it('reports active children while preserving an idle focused root status', async () => {
+    registerBuiltinSlashCommands();
+    const session = createSession();
+    const rootStreamId = 'stream-root' as StreamTabId;
+    const childStreamId = 'stream-child' as StreamTabId;
+    activeStreamId.set(rootStreamId);
+    setStreamStatusInCliState({
+      streamId: rootStreamId,
+      status: STREAM_PHASE.WAITING,
+    });
+    setStreamStatusInCliState({
+      streamId: childStreamId,
+      status: STREAM_PHASE.RUNNING,
+    });
+    projectChildRoster(rootStreamId, [
+      {
+        executionId: 'child-exec',
+        identity: { kind: 'agent', agent: 'critic' },
+        agentName: 'critic',
+        status: STREAM_PHASE.RUNNING,
+        startedAt: 1,
+        elapsed: '1s',
+        childStreamId,
+      },
+    ]);
+
+    await handleTuiSlashCommand('/status', createContext(session));
+
+    const statusText = lastEntryText(rootStreamId);
+    expect(statusText).toContain('status: idle');
+    expect(statusText).toContain('active child sessions: 1');
   });
 
   it('reports the access route that produced the focused stream usage', async () => {

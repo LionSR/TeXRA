@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### CLI
+
+#### Bug Fixes
+
+- **Session status reports active delegated work** — `/status` now shows the
+  number of active child sessions while retaining the focused session's own
+  status.
+
 ## [0.40.2] - 2026-08-12
 
 ### CLI

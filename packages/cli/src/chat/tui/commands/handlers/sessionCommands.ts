@@ -8,6 +8,10 @@ import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import { requestCliCompaction } from '@cli/chat/tui/state/compactionRequest';
 import {
+  activeSubagentsFor,
+  childStreamEntries,
+} from '@cli/chat/tui/state/childExecutions';
+import {
   activeStreamId as activeStreamIdSignal,
   beginWorkPlanReaderRequest,
   cancelPendingWorkPlanReaderRequest,
@@ -90,7 +94,8 @@ export async function showCliSessionStatus(
 ): Promise<void> {
   const meta = sessionMeta.get();
   const activeStreamId = activeStreamIdSignal.get();
-  const slice = activeStreamId ? streams.get().get(activeStreamId) : undefined;
+  const streamSlices = streams.get();
+  const slice = activeStreamId ? streamSlices.get(activeStreamId) : undefined;
   // Use root-session access facts only before any stream exists.
   const model = slice?.model ?? (meta.model || context.initialModel);
   const subscriptionActive = await isCodexSubscriptionActive(model);
@@ -112,6 +117,13 @@ export async function showCliSessionStatus(
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
       substate: slice?.substate,
+      activeChildSessions: activeStreamId
+        ? activeSubagentsFor(
+            activeStreamId,
+            childStreamEntries.get(),
+            streamSlices,
+          ).length
+        : 0,
       goal: activeStreamId ? GoalStore.getForStream(activeStreamId) : undefined,
       // Only surface the resume id once a stream exists — never next to
       // a "not started" status.

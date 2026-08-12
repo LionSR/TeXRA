@@ -149,6 +149,16 @@ describe('CLI session status formatter', () => {
     ).toContain('queued follow-ups: 0');
   });
 
+  it('reports active child sessions only when the count is nonzero', () => {
+    expect(sessionStatus({ activeChildSessions: 1 })).toContain(
+      ['status: running', 'active child sessions: 1'].join('\n'),
+    );
+    expect(sessionStatus({ activeChildSessions: 0 })).not.toContain(
+      'active child sessions:',
+    );
+    expect(sessionStatus()).not.toContain('active child sessions:');
+  });
+
   it('reports active session approval bypasses', () => {
     const status = sessionStatus({
       approval: 'ask before privileged actions',

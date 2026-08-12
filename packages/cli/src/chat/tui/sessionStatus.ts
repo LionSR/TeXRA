@@ -28,6 +28,7 @@ export interface CliSessionStatusInput {
   readonly approvalBypasses?: Partial<BypassState>;
   readonly status: string;
   readonly substate?: StreamSubstate;
+  readonly activeChildSessions?: number;
   readonly goal?: CliSessionGoalStatus | null;
   readonly queuedFollowUpMessages: readonly string[];
   /** Root execution id, when a run has started. Surfaces the resume command
@@ -94,6 +95,9 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]
       : []),
     `status: ${formatCliStatusLabel(input.status, input.substate)}`,
+    ...(input.activeChildSessions && input.activeChildSessions > 0
+      ? [`active child sessions: ${input.activeChildSessions}`]
+      : []),
     ...(input.goal
       ? [
           `goal: ${input.goal.status}`,
