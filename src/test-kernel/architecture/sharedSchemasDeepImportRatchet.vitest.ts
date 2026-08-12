@@ -753,7 +753,7 @@ describe('@shared/schemas deep-import ratchet', () => {
     expect(surface['@shared/schemas/commonViewMessages']?.type).not.toContain(
       'NumberSetting',
     );
-    expect(surface['@shared/schemas/commonViewMessages']?.value).toContain(
+    expect(surface['@shared/schemas/commonViewMessages']?.value).not.toContain(
       'ThemeSchema',
     );
     expect(surface['@shared/schemas/commonViewMessages']?.value).not.toContain(
