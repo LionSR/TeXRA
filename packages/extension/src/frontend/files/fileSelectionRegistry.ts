@@ -7,7 +7,6 @@ export const FILE_SELECTION_COMMAND_IDS = {
   selectContextFiles: 'texra.selectContextFiles',
   selectMediaFiles: 'texra.selectMediaFiles',
   selectOutputFiles: 'texra.selectOutputFiles',
-  selectEditedFile: 'texra.selectEditedFile',
   getCurrentFile: 'texra.getCurrentFile',
 } as const;
 
