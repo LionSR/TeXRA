@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### CLI
+
+#### Bug Fixes
+
+- **Interrupted workflows resume immediately and remain visible in history** —
+  stopping a workflow releases its execution promptly, preserves its cancelled
+  state if a relaunch fails, and reports workflow checkpoints as resumable.
+  Resume failures now print an explanation instead of exiting silently.
+
 ## [0.40.1] - 2026-08-08
 
 ### CLI

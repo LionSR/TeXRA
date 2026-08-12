@@ -31,12 +31,11 @@ const mocks = vi.hoisted(() => ({
   readResultMeta: vi.fn(),
   readReport: vi.fn(),
   exists: vi.fn(),
-  deriveResumability: vi.fn(),
   listExecutions: vi.fn(),
   deleteExecution: vi.fn(),
   deleteAllExecutions: vi.fn(),
   readCliToolUseResumeData: vi.fn(),
-  readCliToolUseResumeDataForListing: vi.fn(),
+  readCliResumeDataForListing: vi.fn(),
   assembleTrace: vi.fn(),
 }));
 
@@ -56,7 +55,6 @@ vi.mock('@agent/storage', async () => {
         exists: mocks.exists,
       }),
     ),
-    deriveResumability: mocks.deriveResumability,
     listExecutions: mocks.listExecutions,
     deleteExecution: mocks.deleteExecution,
     deleteAllExecutions: mocks.deleteAllExecutions,
@@ -69,7 +67,7 @@ vi.mock('@utils/files/taskRunStorage', () => ({
 
 vi.mock('@cli/runtime/toolUseResumeData', () => ({
   readCliToolUseResumeData: mocks.readCliToolUseResumeData,
-  readCliToolUseResumeDataForListing: mocks.readCliToolUseResumeDataForListing,
+  readCliResumeDataForListing: mocks.readCliResumeDataForListing,
 }));
 
 vi.mock('@transcript', async () => {
@@ -225,11 +223,10 @@ function mockBulkDelete(deleted: string[]): void {
 // An interrupted tool-use run whose resume data carries `agentConfig`, so the
 // history list labels it as resumable.
 function mockResumableToolUseListing(agentConfig: unknown): void {
-  mocks.deriveResumability.mockResolvedValue({
-    resumable: true,
-    cause: 'interrupted-with-flow',
+  mocks.readCliResumeDataForListing.mockResolvedValue({
+    type: 'toolUse',
+    agentConfig,
   });
-  mocks.readCliToolUseResumeDataForListing.mockResolvedValue({ agentConfig });
 }
 
 // A fresh temp directory to point --assets-dir at.
@@ -268,12 +265,8 @@ describe('CLI history runtime', () => {
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readReport.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);
-    mocks.deriveResumability.mockResolvedValue({
-      resumable: false,
-      cause: 'missing-flow',
-    });
     mocks.readCliToolUseResumeData.mockResolvedValue(null);
-    mocks.readCliToolUseResumeDataForListing.mockResolvedValue(null);
+    mocks.readCliResumeDataForListing.mockResolvedValue(null);
   });
 
   afterEach(async () => {
@@ -297,7 +290,7 @@ describe('CLI history runtime', () => {
         entry: entries[0],
       },
     ]);
-    expect(mocks.readCliToolUseResumeDataForListing).not.toHaveBeenCalled();
+    expect(mocks.readCliResumeDataForListing).toHaveBeenCalledTimes(1);
   });
 
   it('projects NDJSON status onto the frozen pre-consolidation vocabulary', async () => {
@@ -581,11 +574,7 @@ describe('CLI history runtime', () => {
       agentCategory: 'toolUse',
     });
     mocks.readConfig.mockResolvedValue(toolUseConfig);
-    mocks.deriveResumability.mockResolvedValue({
-      resumable: true,
-      cause: 'interrupted-with-flow',
-    });
-    mocks.readCliToolUseResumeDataForListing.mockResolvedValue(
+    mocks.readCliResumeDataForListing.mockResolvedValue(
       createToolUseResumeData({
         agentConfig: { ...toolUseConfig, model: 'gpt55' },
       }),

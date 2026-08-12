@@ -319,6 +319,8 @@ export interface SubagentRunOptions {
 
 /** Options for executeAgent. */
 export interface ExecuteAgentOptions extends SubagentRunOptions {
+  /** Registration-stamped stream identity for a resumed workflow launch. */
+  streamTabIdOverride?: StreamTabId;
   /** The caller owns presentation for failures before the run lifecycle. */
   suppressErrorNotification?: boolean;
   /** When true, proposal tools are filtered out to prevent nesting. */
@@ -380,6 +382,7 @@ export async function executeAgent(
     const ctx = await buildAgentLaunchContext({
       config,
       executionId,
+      streamTabIdOverride: options.streamTabIdOverride,
       onBeforeActivation: options.onStreamResolved,
       suppressViewSwitch: options.isSubagent,
       enforceCategory: options.enforceCategory,

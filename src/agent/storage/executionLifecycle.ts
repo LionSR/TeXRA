@@ -209,10 +209,18 @@ export async function registerOwnedExecution(
  */
 export async function clearTerminalExecutionState(
   executionId: ExecutionId,
-): Promise<void> {
+): Promise<{
+  readonly previousOutcome: RunOutcome | undefined;
+  readonly streamId: StreamTabId | undefined;
+}> {
   const meta = await getExecutionStore(executionId).readMeta();
-  if (meta?.outcome === undefined) return;
-  await enqueueMetaUpdate(executionId, () => ({ outcome: undefined }));
+  if (meta?.outcome !== undefined) {
+    await enqueueMetaUpdate(executionId, () => ({ outcome: undefined }));
+  }
+  return {
+    previousOutcome: meta?.outcome,
+    streamId: meta?.streamId,
+  };
 }
 
 export interface FinalizeExecutionInput {
