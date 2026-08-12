@@ -13,8 +13,8 @@
 
 import PQueue from 'p-queue';
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
+  defaultSession,
   matchesCancelSelector,
   type BashSettlement,
   type HostApprovalBypassStateUpdate,
@@ -28,7 +28,7 @@ import {
   type ProposalResult,
   type RetryResult,
   type UserQuestionSettlement,
-} from '@agent/runtime/HostInteractions';
+} from '@agent/runtime';
 import { getCliApiMode, setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   toApprovalSettlement,

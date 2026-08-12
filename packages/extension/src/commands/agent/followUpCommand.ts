@@ -2,12 +2,12 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { defaultSession } from '@agent/runtime';
 import {
   presentFollowUpResult,
   submitFollowUp,
   type SubmitFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import type { StreamTabId } from '@shared/schemas';
 

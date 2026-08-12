@@ -1,6 +1,6 @@
 import PQueue from 'p-queue';
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkError/relayDetection';
 import {
   isChatGptSubscriptionLimitError,

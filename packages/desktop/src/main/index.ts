@@ -14,6 +14,7 @@ import {
 } from 'electron';
 
 import type { SessionStores } from '@agent/storage';
+import { attachTerminalResultToast, SessionHandle } from '@agent/runtime';
 import {
   computeAgentOptionsData,
   getAgent,
@@ -22,8 +23,6 @@ import {
   loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
