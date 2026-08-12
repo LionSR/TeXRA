@@ -62,6 +62,10 @@ function context(overrides: Partial<CliContext> = {}): CliContext {
   return ctx;
 }
 
+function stubStderrWrites() {
+  return vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+}
+
 function useCliHostInteractions(
   cliContext: CliContext,
   hooks: CliApprovalPromptHooks = {},
@@ -156,6 +160,7 @@ afterEach(() => {
   detachHostInteractions();
   detachHostInteractions = () => {};
   handleExternalInquiryActionMock.mockClear();
+  vi.restoreAllMocks();
 });
 
 describe('shared retry and human-input decisions', () => {
@@ -437,7 +442,7 @@ describe('bounded yolo retry batches (#9532)', () => {
   });
 });
 
-describe('formatToolEditApprovalSummary', () => {
+describe('buildToolEditApprovalContent', () => {
   it('includes the proposed edit diff in interactive CLI prompts', () => {
     const { summary } = buildToolEditApprovalContent({
       path: '/tmp/proof.tex',
@@ -530,36 +535,108 @@ describe('formatToolEditApprovalSummary', () => {
   it('shows complete bounded content without settling the approval', async () => {
     const prompts: string[] = [];
     const summaries: string[] = [];
+    const answers = ['view', 'y'];
+    const beforePrompt = vi.fn();
+    const stderrWrite = stubStderrWrites();
+
+    const decision = await askApproval(
+      context({
+        approvalPrompt: async (request) => {
+          prompts.push(request.prompt);
+          summaries.push(request.summary);
+          return answers.shift() ?? '';
+        },
+      }),
+      { summary: 'bounded preview', details: () => 'complete proposal' },
+      { beforePrompt },
+    );
+
+    expect(decision).toEqual({ accepted: true, userMessage: undefined });
+    expect(prompts).toEqual([
+      'Approve? [y/N, v view full, or n <feedback>] ',
+      'Approve? [y/N, v view full, or n <feedback>] ',
+    ]);
+    expect(summaries).toEqual(['bounded preview', 'bounded preview']);
+    expect(beforePrompt).toHaveBeenCalledTimes(2);
+    expect(stderrWrite).toHaveBeenCalledWith(
+      'complete proposal\n',
+      expect.any(Function),
+    );
+  });
+
+  it('does not construct complete content unless it is requested', async () => {
+    const details = vi.fn(() => 'complete proposal');
+    const decision = await askApproval(
+      context({
+        approvalPrompt: async () => 'y',
+      }),
+      { summary: 'bounded preview', details },
+    );
+
+    expect(details).not.toHaveBeenCalled();
+    expect(decision).toEqual({ accepted: true, userMessage: undefined });
+  });
+
+  it('removes terminal control sequences from complete content', async () => {
     const answers = ['v', 'y'];
-    const stderrWrite = vi
-      .spyOn(process.stderr, 'write')
-      .mockImplementation(() => true);
+    const stderrWrite = stubStderrWrites();
 
-    try {
-      const decision = await askApproval(
-        context({
-          approvalPrompt: async (request) => {
-            prompts.push(request.prompt);
-            summaries.push(request.summary);
-            return answers.shift() ?? '';
-          },
-        }),
-        { summary: 'bounded preview', details: 'complete proposal' },
-      );
+    await askApproval(
+      context({
+        approvalPrompt: async () => answers.shift() ?? '',
+      }),
+      {
+        summary: 'bounded preview',
+        details: () => 'safe\u001b]0;unsafe\u0007\ntext',
+      },
+    );
 
-      expect(decision).toEqual({ accepted: true, userMessage: undefined });
-      expect(prompts).toEqual([
-        'Approve? [y/N, v view full, or n <feedback>] ',
-        'Approve? [y/N, v view full, or n <feedback>] ',
-      ]);
-      expect(summaries).toEqual(['bounded preview', 'bounded preview']);
-      expect(stderrWrite).toHaveBeenCalledWith(
-        'complete proposal\n',
-        expect.any(Function),
-      );
-    } finally {
-      stderrWrite.mockRestore();
-    }
+    expect(stderrWrite).toHaveBeenCalledWith(
+      'safe\ntext\n',
+      expect.any(Function),
+    );
+  });
+
+  it('holds the prompt queue while complete content is viewed', async () => {
+    const summaries: string[] = [];
+    let firstPromptCount = 0;
+    let resolveView!: (answer: string) => void;
+    let resolveDecision!: (answer: string) => void;
+    const viewAnswer = new Promise<string>((resolve) => {
+      resolveView = resolve;
+    });
+    const decisionAnswer = new Promise<string>((resolve) => {
+      resolveDecision = resolve;
+    });
+    stubStderrWrites();
+    const cliContext = context({
+      approvalPrompt: async (request) => {
+        summaries.push(request.summary);
+        if (request.summary !== 'first') return 'y';
+        firstPromptCount += 1;
+        return firstPromptCount === 1 ? viewAnswer : decisionAnswer;
+      },
+    });
+
+    const first = askApproval(cliContext, {
+      summary: 'first',
+      details: () => 'complete first proposal',
+    });
+    const second = askApproval(cliContext, { summary: 'second' });
+
+    resolveView('v');
+    await vi.waitFor(() => expect(summaries).toEqual(['first', 'first']));
+
+    resolveDecision('y');
+    await expect(first).resolves.toEqual({
+      accepted: true,
+      userMessage: undefined,
+    });
+    await expect(second).resolves.toEqual({
+      accepted: true,
+      userMessage: undefined,
+    });
+    expect(summaries).toEqual(['first', 'first', 'second']);
   });
 
   it('bounds long diff lines before prompting', () => {
@@ -574,7 +651,7 @@ describe('formatToolEditApprovalSummary', () => {
     expect(summary).toContain('[line truncated]');
     expect(summary).not.toContain(longLine);
     expect(summary.length).toBeLessThan(1_000);
-    expect(details).toContain(longLine);
+    expect(details?.()).toContain(longLine);
   });
 
   it('marks hidden diff lines when the line budget is exceeded', () => {
@@ -590,8 +667,8 @@ describe('formatToolEditApprovalSummary', () => {
     });
 
     expect(summary).toContain('diff lines hidden');
-    expect(details).toContain('+generated line 100');
-    expect(details).not.toContain('diff lines hidden');
+    expect(details?.()).toContain('+generated line 100');
+    expect(details?.()).not.toContain('diff lines hidden');
   });
 
   it('skips prompting for auto-approved edits', async () => {
@@ -618,7 +695,7 @@ describe('formatToolEditApprovalSummary', () => {
   });
 });
 
-describe('formatAgentProposalApprovalSummary', () => {
+describe('buildAgentProposalApprovalContent', () => {
   it('formats subagent approvals without raw JSON internals', () => {
     const { summary, details } = buildAgentProposalApprovalContent(
       agentProposal({
@@ -659,8 +736,8 @@ describe('formatAgentProposalApprovalSummary', () => {
     expect(summary).toContain('[line truncated]');
     expect(summary).toContain('instruction lines hidden');
     expect(summary).not.toContain(longLine);
-    expect(details).toContain(`  60. ${longLine}`);
-    expect(details).not.toContain('instruction lines hidden');
+    expect(details?.()).toContain(`  60. ${longLine}`);
+    expect(details?.()).not.toContain('instruction lines hidden');
   });
 
   it('includes workflow proposal file groups', () => {
@@ -687,8 +764,8 @@ describe('formatAgentProposalApprovalSummary', () => {
     expect(summary).toContain('Input: draft-1.tex');
     expect(summary).toContain('+2 more');
     expect(summary).not.toContain('draft-12.tex');
-    expect(details).toContain('draft-12.tex');
-    expect(details).not.toContain('+2 more');
+    expect(details?.()).toContain('draft-12.tex');
+    expect(details?.()).not.toContain('+2 more');
     expect(summary).toContain('Context: notes.md');
     expect(summary).toContain('Media: figure.png');
     expect(summary).toContain('Output: draft-polished.tex');

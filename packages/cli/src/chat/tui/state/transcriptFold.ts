@@ -13,6 +13,7 @@
  */
 
 import { appendCliApiSwitchHint } from '@cli/runtime/approval/approvalPrompts';
+import { safeTerminalText } from '@cli/runtime/terminalText';
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { redactSecrets } from '@logger/redaction';
 import {
@@ -45,7 +46,6 @@ import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjectio
 import type { StreamLog } from '@transcript';
 import { truncateSummary } from '@utils/text/stringUtils';
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
-import { safeTerminalText } from '../render/terminalText';
 import {
   isRenderableTranscriptEntry,
   trimAssistantTranscriptLead,

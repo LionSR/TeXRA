@@ -77,13 +77,16 @@ function truncateLineToWidth(line: string, maxChars: number): string {
   return `${line.slice(0, prefixLength)}${TRUNCATED_DIFF_LINE_MARKER}`;
 }
 
-function boundedAgentProposalInstructionLines(
-  instruction: string,
-): readonly string[] {
-  const instructionLines = instruction
+function agentProposalInstructionLines(instruction: string): readonly string[] {
+  return instruction
     .replaceAll('\r\n', '\n')
     .replaceAll('\r', '\n')
     .split('\n');
+}
+
+function boundedAgentProposalInstructionLines(
+  instructionLines: readonly string[],
+): readonly string[] {
   return boundedLines(instructionLines, {
     maxLines: AGENT_PROPOSAL_INSTRUCTION_MAX_LINES,
     maxChars: AGENT_PROPOSAL_INSTRUCTION_MAX_CHARS,
@@ -91,6 +94,16 @@ function boundedAgentProposalInstructionLines(
     truncateLine: (line) =>
       truncateLineToWidth(line, AGENT_PROPOSAL_INSTRUCTION_MAX_LINE_CHARS),
   });
+}
+
+function equalLines(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((line, index) => line === right[index])
+  );
 }
 
 function formatAgentProposalFileGroup(
@@ -105,15 +118,9 @@ function formatAgentProposalFileGroup(
 
 function agentProposalApprovalSummary(
   proposal: AgentProposalPermission,
-  bounded: boolean,
+  instructionLines: readonly string[],
+  boundFileGroups: boolean,
 ): string {
-  const fullInstructionLines = proposal.instruction
-    .replaceAll('\r\n', '\n')
-    .replaceAll('\r', '\n')
-    .split('\n');
-  const instructionLines = bounded
-    ? boundedAgentProposalInstructionLines(proposal.instruction)
-    : fullInstructionLines;
   const workingDirectory = proposal.workingDirectory?.trim();
   return [
     `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
@@ -122,7 +129,7 @@ function agentProposalApprovalSummary(
     `Model: ${proposal.model}`,
     ...(workingDirectory ? [`Working directory: ${workingDirectory}`] : []),
     ...getProposalFileGroups(proposal).map((group) =>
-      bounded
+      boundFileGroups
         ? formatAgentProposalFileGroup(group.label, group.files)
         : `${group.label}: ${group.files.join(', ')}`,
     ),
@@ -134,9 +141,26 @@ function agentProposalApprovalSummary(
 export function buildAgentProposalApprovalContent(
   proposal: AgentProposalPermission,
 ): CliApprovalContent {
-  const summary = agentProposalApprovalSummary(proposal, true);
-  const details = agentProposalApprovalSummary(proposal, false);
-  return summary === details ? { summary } : { summary, details };
+  const instructionLines = agentProposalInstructionLines(proposal.instruction);
+  const boundedInstructionLines =
+    boundedAgentProposalInstructionLines(instructionLines);
+  const hasHiddenContent =
+    !equalLines(boundedInstructionLines, instructionLines) ||
+    getProposalFileGroups(proposal).some(
+      (group) => group.files.length > AGENT_PROPOSAL_FILE_GROUP_MAX_FILES,
+    );
+  const summary = agentProposalApprovalSummary(
+    proposal,
+    boundedInstructionLines,
+    true,
+  );
+  return hasHiddenContent
+    ? {
+        summary,
+        details: () =>
+          agentProposalApprovalSummary(proposal, instructionLines, false),
+      }
+    : { summary };
 }
 
 export function formatRetryRequestMessage(payload: RetryPermission): string {
@@ -183,27 +207,28 @@ function boundedToolEditDiffLines(
 
 function toolEditApprovalSummary(
   request: ToolEditApprovalRequest,
-  bounded: boolean,
+  diffLines: readonly string[],
 ): string {
   const header = `Tool edit requested by ${request.sourceTool}: ${request.path}`;
-  const diffLines = toolEditDiffLines(request);
   if (diffLines.length === 0) {
     return `${header}\nNo content changes proposed.`;
   }
 
-  const visibleLines = bounded
-    ? boundedToolEditDiffLines(diffLines)
-    : diffLines;
-
-  return `${header}\nProposed diff:\n${visibleLines.join('\n')}`;
+  return `${header}\nProposed diff:\n${diffLines.join('\n')}`;
 }
 
 export function buildToolEditApprovalContent(
   request: ToolEditApprovalRequest,
 ): CliApprovalContent {
-  const summary = toolEditApprovalSummary(request, true);
-  const details = toolEditApprovalSummary(request, false);
-  return summary === details ? { summary } : { summary, details };
+  const diffLines = toolEditDiffLines(request);
+  const boundedDiffLines = boundedToolEditDiffLines(diffLines);
+  const summary = toolEditApprovalSummary(request, boundedDiffLines);
+  return equalLines(boundedDiffLines, diffLines)
+    ? { summary }
+    : {
+        summary,
+        details: () => toolEditApprovalSummary(request, diffLines),
+      };
 }
 
 export function formatUserQuestionPrompt(

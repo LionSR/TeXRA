@@ -6,6 +6,7 @@
 
 import { Box, Text } from 'ink';
 
+import { safeTerminalText } from '@cli/runtime/terminalText';
 import {
   COLOR_BORDER,
   COLOR_ERROR,
@@ -30,7 +31,6 @@ import {
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import { formatCompactDuration } from '@utils/core';
 
-import { safeTerminalText } from '../render/terminalText';
 import type { StreamSlice } from '../state/cliState';
 
 type WorkflowRunDetailTone =
