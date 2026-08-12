@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   secrets: {},
   setCliApiMode: vi.fn(),
   setCliCodexSubscription: vi.fn(),
+  setCliCodingPlanSubscription: vi.fn(),
   setCliKimiCode: vi.fn(),
   setCliGlmCodingPlan: vi.fn(),
   setPreferKimiCode: vi.fn(),
@@ -67,6 +68,7 @@ vi.mock('@cli/runtime/apiAccessMode', async (importActual) => {
 
 vi.mock('@cli/chat/tui/state/codexSubscription', () => ({
   setCliCodexSubscription: mocks.setCliCodexSubscription,
+  setCliCodingPlanSubscription: mocks.setCliCodingPlanSubscription,
   setCliKimiCode: mocks.setCliKimiCode,
   setCliGlmCodingPlan: mocks.setCliGlmCodingPlan,
 }));
@@ -259,6 +261,20 @@ function chatGptSubscriptionRetry(streamId: string): RetryPermission {
   } as RetryPermission;
 }
 
+function kimiCodeSubscriptionRetry(streamId: string): RetryPermission {
+  const message = 'Kimi Code subscription usage limit reached.';
+  return {
+    streamId,
+    operation: 'model request',
+    errorMessage: message,
+    errorDetails: {
+      message,
+      exhaustionReason: 'kimi-code-subscription',
+      provider: 'moonshot',
+    },
+  } as RetryPermission;
+}
+
 function decideRetry(decision: ApprovalDecision): void {
   const pending = currentApproval.get();
   expect(pending?.payload.kind).toBe('retry');
@@ -372,6 +388,10 @@ beforeEach(() => {
     mocks.preferSubscription = enabled;
     return { effective: enabled, target: 'global' };
   });
+  mocks.setCliCodingPlanSubscription.mockImplementation(async (id, enabled) => {
+    if (id === 'kimiCode') mocks.preferKimiCode = enabled;
+    if (id === 'glmCodingPlan') mocks.glmCodingPlan = enabled;
+  });
 });
 
 afterEach(() => {
@@ -385,6 +405,7 @@ afterEach(() => {
   mocks.notify.mockReset();
   mocks.setCliApiMode.mockReset();
   mocks.setCliCodexSubscription.mockReset();
+  mocks.setCliCodingPlanSubscription.mockReset();
   mocks.updateGlobalState.mockReset();
 });
 
@@ -760,6 +781,37 @@ describe('TUI retry approvals', () => {
     expect(prepareRetry).toHaveBeenCalledOnce();
     expect(prepareRetry).toHaveBeenCalledWith('personal', expect.anything());
     expect(currentApproval.get()).toBeUndefined();
+  });
+
+  it('disables a catalogued coding plan before retrying with a personal key', async () => {
+    mocks.preferKimiCode = true;
+    mocks.hasUsableApiKey.mockImplementation(
+      async (_secrets, provider: ApiProvider) => provider === 'moonshot',
+    );
+
+    const { interactions } = tui();
+    const result = interactions.requestRetry?.(
+      kimiCodeSubscriptionRetry('kimi-limit'),
+    );
+    await waitForApproval('retry', {
+      streamId: 'kimi-limit',
+      personalApiKeyAvailable: true,
+    });
+
+    decideRetry({
+      accepted: true,
+      apiMode: 'personal',
+      disableCodingPlan: 'kimiCode',
+    });
+
+    await expect(result).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledWith(
+      'kimiCode',
+      false,
+    );
   });
 
   it('does not offer or apply the subscription switch without an OpenAI API key', async () => {

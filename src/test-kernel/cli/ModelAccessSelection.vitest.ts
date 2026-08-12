@@ -143,7 +143,7 @@ function subscriptionPreference(
 }
 
 function expectedAccessStatus(overrides: Record<string, unknown>) {
-  return {
+  const status = {
     preferences: {
       chatGpt: 'off',
       grok: 'off',
@@ -158,6 +158,19 @@ function expectedAccessStatus(overrides: Record<string, unknown>) {
     glmKeySet: false,
     personalKeyProviders: [],
     ...overrides,
+  };
+  return {
+    ...status,
+    codingPlans: {
+      glmCodingPlan: {
+        preferred: status.preferences.glmCode === 'on',
+        keySet: status.glmKeySet === true,
+      },
+      kimiCode: {
+        preferred: status.preferences.kimiCode === 'on',
+        keySet: status.kimiCodeKeySet === true,
+      },
+    },
   };
 }
 
@@ -440,10 +453,7 @@ describe('CLI model access routes', () => {
     );
 
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      'texra.kimiCode.prefer',
-      true,
-    );
+    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true);
     expect(mocks.updateGlobalState).toHaveBeenCalledWith(
       'texra.useOpenRouter',
       false,
@@ -700,10 +710,7 @@ describe('CLI model access routes', () => {
       subscriptionPreference('kimi-code', 'off'),
       { writeProgress: vi.fn() },
     );
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      'texra.kimiCode.prefer',
-      false,
-    );
+    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(false);
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
     expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
 
@@ -771,10 +778,7 @@ describe('CLI model access routes', () => {
     await updateCliModelAccess(context, selection.value);
 
     expect(mocks.apiKeyExists).not.toHaveBeenCalled();
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      'texra.kimiCode.prefer',
-      false,
-    );
+    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(false);
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
   });
 });

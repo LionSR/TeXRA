@@ -16,6 +16,7 @@
 import { computed, signal, type Signal } from '@lit-labs/signals';
 
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
+import type { CodingPlanSubscriptionId } from '@shared/codingPlanSubscriptions';
 import type { StreamTabId } from '@shared/schemas';
 import type {
   AgentProposalPermission,
@@ -66,12 +67,8 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   /** Turn off the "prefer ChatGPT subscription" preference before accepting,
    *  so a Codex usage-limit retry routes through the OpenAI API key. */
   readonly disableChatGptSubscription?: boolean;
-  /** Turn off the "Prefer Kimi Code" preference before accepting, so a Kimi
-   *  Code usage-limit retry routes through the Moonshot open-platform API key. */
-  readonly disableKimiCode?: boolean;
-  /** Turn off the GLM Coding Plan toggle before accepting, so a GLM Coding
-   *  Plan usage-limit retry routes through the regular GLM endpoint. */
-  readonly disableGlmCodingPlan?: boolean;
+  /** Turn off the exhausted coding-plan preference before accepting. */
+  readonly disableCodingPlan?: CodingPlanSubscriptionId;
   /** Plan-only approval action when plain approve/reject is not specific enough. */
   readonly planAction?: Extract<PlanApprovalAction, 'approve_and_goal'>;
 }
