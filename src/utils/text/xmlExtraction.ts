@@ -8,7 +8,7 @@
  */
 
 // Local imports - utils
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { OUTPUT_DOCUMENT_TAG } from '@shared/schemas/output';
 import { isObject } from '@utils/core';
 
@@ -16,7 +16,7 @@ import { isObject } from '@utils/core';
 import { removeCDATA } from './xmlCdata';
 import { formatContent } from './xmlConversion';
 
-const CHANNEL = 'xmlExtraction';
+const log = createLog('xmlExtraction');
 
 /**
  * Opening `<document … name="…">` tag fragment; group 1 is the name attribute
@@ -127,10 +127,7 @@ export function extractContentFromXMLbyTagMultiple(
   containerTag: string,
 ): Array<{ content: string; name: string }> | null {
   if (!isObject(root)) {
-    logger.error(
-      CHANNEL,
-      `Invalid root object. Structure: ${getObjectStructure(root)}`,
-    );
+    log.error(`Invalid root object. Structure: ${getObjectStructure(root)}`);
     return null;
   }
 
@@ -150,15 +147,13 @@ export function extractContentFromXMLbyTagMultiple(
           };
         });
       }
-      logger.error(
-        CHANNEL,
+      log.error(
         `Document property is not an array in multiple document case. Structure: ${getObjectStructure(container)}`,
       );
     }
   }
 
-  logger.error(
-    CHANNEL,
+  log.error(
     `No ${containerTag} or document elements found in output file. Structure: ${getObjectStructure(root)}`,
   );
   return null;

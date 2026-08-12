@@ -10,7 +10,7 @@
 import { z } from 'zod';
 
 import { KVStore } from '@common/storage/KVStore';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import {
   CompileFailureSchema,
   OutputFileInfoSchema,
@@ -34,7 +34,7 @@ import { isObject, mapToRecord } from '@utils/core';
 
 import { STREAM_DATA_KEYS } from './streamDataPaths';
 
-const CHANNEL = 'StreamSnapshotStore';
+const log = createLog('StreamSnapshotStore');
 
 /** The canonical empty work plan (no todos, no plan). Single source for the
  *  "no durable plan yet" value, reused by the store's in-memory default. */
@@ -90,11 +90,9 @@ async function tryRead(kv: KVStore, key: string): Promise<unknown | undefined> {
     return await kv.read(key);
   } catch (error) {
     if (error instanceof SyntaxError) {
-      logger.warn(
-        CHANNEL,
-        `Discarding unreadable ${key}.json; treating as missing.`,
-        { data: error },
-      );
+      log.warn(`Discarding unreadable ${key}.json; treating as missing.`, {
+        data: error,
+      });
       return undefined;
     }
     throw error;
@@ -115,8 +113,7 @@ export async function readMeta(
     const { executionId: _executionId, ...rest } = raw;
     const retried = StreamTabMetaSchema.safeParse(rest);
     if (retried.success) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         'Dropping malformed execution FK from persisted stream metadata; ' +
           'keeping the remaining fields.',
         { data: parsed.error },
@@ -124,7 +121,7 @@ export async function readMeta(
       return retried.data;
     }
   }
-  logger.warn(CHANNEL, 'Discarding unreadable persisted stream metadata.', {
+  log.warn('Discarding unreadable persisted stream metadata.', {
     data: parsed.error,
   });
   return undefined;
@@ -150,11 +147,9 @@ function readPersistedWorkPlan(raw: unknown): WorkPlanSnapshot {
   if (version > STREAM_SNAPSHOT_SCHEMA_VERSION) return EMPTY_WORK_PLAN;
   const result = PersistedWorkPlanSchema.safeParse(raw);
   if (!result.success) {
-    logger.warn(
-      CHANNEL,
-      'Discarding unreadable persisted work plan; using empty.',
-      { data: result.error },
-    );
+    log.warn('Discarding unreadable persisted work plan; using empty.', {
+      data: result.error,
+    });
     return EMPTY_WORK_PLAN;
   }
   return result.data;
@@ -219,8 +214,7 @@ export function assembleSnapshot(
     // Defense-in-depth for the unwrapped CLI resume path (`await store.read`):
     // an unexpected on-disk shape degrades to an empty-but-valid snapshot,
     // logged so it stays diagnosable, rather than aborting hydration.
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Could not assemble snapshot for stream ${streamId}; using empty.`,
       { data: error },
     );

@@ -6,11 +6,11 @@ import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { getFileLister } from '@frontend/files/fileLister';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { openFirstLabelMatch } from '@latex/labelSearch';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const CHANNEL = 'openFileCommands';
+const log = createLog('openFileCommands');
 
 interface OpenLabelOptions {
   notifyNotFound?: boolean;
@@ -50,10 +50,7 @@ async function openLabel(
       try {
         return await WorkspaceFS.read(file);
       } catch (error) {
-        logger.debug(
-          CHANNEL,
-          `Could not read file ${file}: ${toErrorMessage(error)}`,
-        );
+        log.debug(`Could not read file ${file}: ${toErrorMessage(error)}`);
         throw error;
       }
     },

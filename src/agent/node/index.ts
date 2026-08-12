@@ -1,11 +1,11 @@
 import pRetry, { AbortError } from 'p-retry';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 
 /** Flow transition action - typically 'default' or a custom action name */
 export type Action = string;
 
-const CHANNEL = 'PocketFlow';
+const log = createLog('PocketFlow');
 // Actions that deliberately end a flow when a node returns them with no
 // registered successor. `finalize` is the reflection flow's terminal action on
 // failure (ResponseCycleNode.post → FlowTransition.FINALIZE); without listing it
@@ -59,7 +59,7 @@ class BaseNode<S = unknown, Svc = unknown> {
   }
   async run(shared: S): Promise<Action | undefined> {
     if (this._successors.size > 0)
-      logger.warn(CHANNEL, "Node won't run successors. Use Flow.");
+      log.warn("Node won't run successors. Use Flow.");
     return await this._run(shared);
   }
   setServices(services: Svc): this {
@@ -72,7 +72,7 @@ class BaseNode<S = unknown, Svc = unknown> {
   }
   on(action: Action, node: BaseNode): this {
     if (this._successors.has(action))
-      logger.warn(CHANNEL, `Overwriting successor for action '${action}'`);
+      log.warn(`Overwriting successor for action '${action}'`);
     this._successors.set(action, node);
     return this;
   }
@@ -80,8 +80,7 @@ class BaseNode<S = unknown, Svc = unknown> {
     const next = this._successors.get(action);
     if (!next && TERMINAL_ACTIONS.has(action)) return undefined;
     if (!next && this._successors.size > 0) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Flow ends: '${action}' not found in [${[...this._successors.keys()]}]`,
       );
     }
@@ -171,8 +170,7 @@ class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
   }
   async _exec(prepRes: unknown): Promise<unknown> {
     if (this.maxRetries < 1) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Node maxRetries must be >= 1, got ${this.maxRetries}. Using 1.`,
       );
     }

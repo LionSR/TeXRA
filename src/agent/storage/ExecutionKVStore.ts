@@ -16,7 +16,7 @@ import {
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
 import { KVStore } from '@common/storage/KVStore';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   ExecutionMetaCoreSchema,
@@ -71,7 +71,7 @@ export function isReservedKvKeyName(key: string): boolean {
   return RESERVED_KEY_NAMES.has(key) || key.startsWith(CHILD_KEY_PREFIX);
 }
 
-const CHANNEL = 'ExecutionKVStore';
+const log = createLog('ExecutionKVStore');
 type ExecutionMetaInput = z.input<typeof ExecutionMetaSchema>;
 
 // ============================================================================
@@ -230,8 +230,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     if (raw === undefined) return null;
     const result = schema.safeParse(raw);
     if (result.success) return result.data;
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Failed to parse execution ${this.executionId} ${key}.json: ${toErrorMessage(
         result.error,
       )}`,
@@ -249,8 +248,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
 
     const core = ExecutionMetaCoreSchema.safeParse(raw);
     if (!core.success) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Failed to parse execution ${this.executionId} meta.json: ${toErrorMessage(
           core.error,
         )}`,
@@ -264,8 +262,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
       (raw as { workflow?: unknown }).workflow,
     );
     if (!workflow.success) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Failed to parse execution ${this.executionId} meta.json workflow: ${toErrorMessage(
           workflow.error,
         )}`,
