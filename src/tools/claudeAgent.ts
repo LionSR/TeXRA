@@ -84,7 +84,6 @@ import {
 import type {
   Options as ClaudeAgentSdkOptions,
   SDKAssistantMessage,
-  SDKMessage,
   SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 
@@ -253,7 +252,7 @@ export async function runStreamedTurn(params: {
   let errorMessage: string | undefined;
 
   try {
-    for await (const raw of stream as AsyncIterable<SDKMessage>) {
+    for await (const raw of stream) {
       if ('session_id' in raw && raw.session_id) sessionId = raw.session_id;
 
       switch (raw.type) {
