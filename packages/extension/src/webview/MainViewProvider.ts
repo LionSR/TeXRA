@@ -201,6 +201,11 @@ export class MainViewProvider
    */
   async refreshOnboardingFunnel(): Promise<void> {
     const view = this.getMainModeView();
+    // Mode === MAIN is not enough: after an HTML swap the document has not
+    // installed its listener yet. Posting into that window drops messages, and
+    // selectSetupAgent is edge-triggered so a later WEBVIEW_READY recompute
+    // would not re-emit the selection. Treat mid-load like "no view".
+    const canPost = view != null && this.mainWebviewReady;
 
     // Same usable-credential check the setup command uses: non-blank provider
     // key or server-side key access.
@@ -213,7 +218,7 @@ export class MainViewProvider
     );
     this.onboardingFunnelState = transition.state;
 
-    if (view) {
+    if (canPost) {
       this.postToWebview(view, {
         command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
         state: transition.state,
@@ -223,15 +228,15 @@ export class MainViewProvider
     if (transition.clearDeclined) {
       await setOnboardingDeclined(this.context.globalState, false);
     }
-    // An off-view advance consumes the transition (previous latches to
-    // 'setup'), so remember the selection until a view exists to receive it —
-    // otherwise a credential arriving while the panel is hidden would leave
-    // the dropdown on the old agent when the launcher reopens.
-    if (transition.selectSetupAgent && !view) {
+    // An off-view or mid-load advance consumes the transition edge (previous
+    // latches to 'setup'), so remember the selection until a ready launcher
+    // can receive it — otherwise a credential arriving while the panel is
+    // hidden or still loading would leave the dropdown on the old agent.
+    if (transition.selectSetupAgent && !canPost) {
       this.pendingSetupAgentSelection = true;
     }
     if (
-      view &&
+      canPost &&
       (transition.selectSetupAgent ||
         (this.pendingSetupAgentSelection && transition.state === 'setup'))
     ) {
@@ -449,7 +454,9 @@ export class MainViewProvider
     // Flush only when the current launcher document has already reported ready.
     // Mode switches from progress (and any mid-load window) wait for
     // WEBVIEW_READY so STATE_RESTORE is not posted into an unloading document.
-    if (alreadyMain) {
+    // flushPendingState also guards on mainWebviewReady; the check here avoids
+    // a no-op call during the load window after an HTML swap.
+    if (alreadyMain && this.mainWebviewReady) {
       this.flushPendingState();
     }
     await vscode.commands.executeCommand('texra.mainView.focus');
