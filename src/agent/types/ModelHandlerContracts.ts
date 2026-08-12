@@ -149,62 +149,57 @@ export interface StopConditionsResult {
 }
 
 /**
- * Shared tool-call shape. Members of {@link SdkToolCall} instantiate this with
- * their provider literal, input, raw wire type, and any provider-specific
- * extras. `provider` stays a literal so `SdkToolCall` remains a discriminated
- * union on it.
+ * Shared tool-call base. Members of {@link SdkToolCall} specialize this with
+ * their provider literal, input, and raw wire type. Provider-specific extras
+ * (e.g. Google `thoughtSignature`) are intersected at the alias, not via a
+ * default `Record<string, never>` Extra — that intersection is uninhabitable
+ * for objects with known keys under current TypeScript.
  */
-type ToolCallShape<
-  P extends string,
-  I,
-  R,
-  Extra extends Record<string, unknown> = Record<string, never>,
-> = {
+type ToolCallBase<P extends string, I, R> = {
   provider: P;
   callId: string;
   name: string;
   input: I;
   raw: R;
-} & Extra;
+};
 
-export type OpenAIToolCall = ToolCallShape<
+export type OpenAIToolCall = ToolCallBase<
   'openai',
   ChatCompletionMessageFunctionToolCall['function']['arguments'],
   ChatCompletionMessageToolCall
 >;
 
-export type DeepSeekToolCall = ToolCallShape<
+export type DeepSeekToolCall = ToolCallBase<
   'deepseek',
   unknown,
   ChatCompletionMessageToolCall
 >;
 
-export type OpenAIResponseToolCall = ToolCallShape<
+export type OpenAIResponseToolCall = ToolCallBase<
   'openai-response',
   unknown,
   ResponseFunctionToolCallItem
 >;
 
-export type GoogleToolCall = ToolCallShape<
+export type GoogleToolCall = ToolCallBase<
   'google',
   FunctionCall['args'],
-  FunctionCall,
-  { thoughtSignature?: string }
->;
+  FunctionCall
+> & { thoughtSignature?: string };
 
-export type AnthropicToolCall = ToolCallShape<
+export type AnthropicToolCall = ToolCallBase<
   'anthropic',
   ToolUseBlock['input'],
   ToolUseBlock
 >;
 
-export type OpenRouterToolCall = ToolCallShape<
+export type OpenRouterToolCall = ToolCallBase<
   'openrouter',
   unknown,
   ORChatToolCall
 >;
 
-export type VscodeLmToolCall = ToolCallShape<
+export type VscodeLmToolCall = ToolCallBase<
   'vscode-lm',
   object,
   LanguageModelToolCallPart
