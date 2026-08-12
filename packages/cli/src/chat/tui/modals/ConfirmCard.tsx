@@ -37,6 +37,7 @@ export interface ConfirmCardProps {
   readonly borderStyle: BoxProps['borderStyle'];
   readonly color: string;
   readonly title: string;
+  /** Omitted labels are resolved by `confirmCardKeyHints`. */
   readonly approveLabel?: string;
   readonly rejectLabel?: string;
   readonly rejectionMode: ConfirmCardRejectionMode;
