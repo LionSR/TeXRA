@@ -95,10 +95,6 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
 
   protected override handleExtraKey(key: string): boolean {
     switch (key) {
-      case 'a':
-        if (this.showFeedback) return false;
-        this.emitAction(this.approveAllDelegatedWorkDecision);
-        return true;
       case 's':
         this.emitAction({ action: 'setup' });
         return true;
@@ -108,20 +104,15 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
   }
 
   // Proposals carry a stronger approval action than the edit/bash bypass.
-  // Override the base Approve button to surface it and map the shared `a`
-  // accelerator to the same action. A proposal always has a streamId.
-  protected override renderApproveButton(approveTitle: string): TemplateResult {
-    return html`
-      <approve-split-button
-        .approveTitle=${approveTitle}
-        .canBypass=${false}
-        .canApproveAllDelegatedWork=${true}
-        .disabled=${this.archived}
-        @approve=${() => this.emitAction(this.approvalDecision)}
-        @approve-all-delegated-work=${() =>
-          this.emitAction(this.approveAllDelegatedWorkDecision)}
-      ></approve-split-button>
-    `;
+  // Enabling canApproveAllDelegatedWork surfaces it on the Approve menu and
+  // maps the shared `a` accelerator to it (the base owns both). A proposal
+  // always has a streamId.
+  protected override get canApproveAllDelegatedWork(): boolean {
+    return true;
+  }
+
+  protected override approveAllDelegatedWorkHandler(): void {
+    this.emitAction(this.approveAllDelegatedWorkDecision);
   }
 
   override render(): TemplateResult {
