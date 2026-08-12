@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { getHelperModelName } from '@agent/runtime/helperModelName';
+import { getHelperModelName } from '@agent/runtime';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 

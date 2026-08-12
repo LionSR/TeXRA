@@ -1,8 +1,8 @@
 // Session-scoped slash commands (`/help`, `/goal`, `/status`, `/compact`),
 // wired to their command names in `registerBuiltins`.
 
+import { defaultSession } from '@agent/runtime';
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';

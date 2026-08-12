@@ -1,5 +1,5 @@
 import { getExecutionStore } from '@agent/storage';
-import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
+import { resolveAndResumeStream } from '@agent/runtime';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

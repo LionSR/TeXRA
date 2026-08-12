@@ -1,12 +1,12 @@
 // Local imports - runtime
 import {
   dispatchPresentationEvent,
+  type HostApprovalBypassStateUpdate,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
-} from '@agent/runtime/runtimePresentationEvents';
-import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
-import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
+  type SessionEventHub,
+} from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
