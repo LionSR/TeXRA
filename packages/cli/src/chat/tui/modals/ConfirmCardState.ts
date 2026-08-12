@@ -30,8 +30,6 @@ export interface ConfirmCardHintOptions {
   readonly approveLabel?: string;
   readonly rejectLabel?: string;
   readonly rejectionMode?: ConfirmCardRejectionMode;
-  /** Esc maps to `reject` (`confirmCardKeyAction`), not a dismiss — label the consequence. */
-  readonly escapeLabel?: string;
   readonly alwaysAllowLabel?: string;
   readonly extraActions?: readonly KeyHint[];
 }
@@ -84,15 +82,13 @@ export function confirmCardKeyHints({
   approveLabel = 'approve',
   rejectLabel,
   rejectionMode = 'feedback',
-  escapeLabel,
   alwaysAllowLabel,
   extraActions = [],
 }: ConfirmCardHintOptions): KeyHint[] {
   const resolvedRejectLabel =
     rejectLabel ?? (rejectionMode === 'feedback' ? 'reject & note' : 'reject');
   const resolvedEscapeLabel =
-    escapeLabel ??
-    (rejectionMode === 'immediate' ? resolvedRejectLabel : 'reject');
+    rejectionMode === 'immediate' ? resolvedRejectLabel : 'reject';
   return [
     { key: 'y', action: approveLabel },
     { key: 'n', action: resolvedRejectLabel },
@@ -174,7 +170,6 @@ export function confirmCardCompactHintLayout({
   approveLabel,
   rejectLabel,
   rejectionMode,
-  escapeLabel,
   alwaysAllowLabel,
   extraActions,
 }: ConfirmCardCompactHintLayoutOptions): ConfirmCardCompactHintLayout {
@@ -183,7 +178,6 @@ export function confirmCardCompactHintLayout({
     approveLabel,
     rejectLabel,
     rejectionMode,
-    escapeLabel,
     alwaysAllowLabel,
     extraActions,
     maxColumns: Math.max(
@@ -195,7 +189,6 @@ export function confirmCardCompactHintLayout({
     approveLabel,
     rejectLabel,
     rejectionMode,
-    escapeLabel,
     alwaysAllowLabel,
     extraActions,
     maxColumns: columns,
