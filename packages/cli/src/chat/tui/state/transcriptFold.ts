@@ -23,6 +23,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   TOOL_USE_STATUS,
   WorkflowCallProgressSchema,
+  isPlainAgentIdentity,
   isTerminalWorkflowCallProgress,
   type StreamLogEntry,
   type TaskGroup,
@@ -141,10 +142,7 @@ export function isFullLogChildStream(
   slice: Pick<StreamSlice, 'identity'> | undefined,
 ): boolean {
   const identity = slice?.identity;
-  return (
-    identity !== undefined &&
-    !(identity.kind === 'agent' && identity.tool === undefined)
-  );
+  return identity !== undefined && !isPlainAgentIdentity(identity);
 }
 
 function safeWorkflowOperationalSummary(text: string): string | undefined {
