@@ -357,8 +357,9 @@ export class SessionFactApplier {
   }
 
   private handleRunConfig(streamId: StreamTabId): void {
-    this.state.refreshStreamMetadataFromSnapshot(streamId);
-
+    // No explicit refresh: `getStreamMetadata` overlays the summary mirror —
+    // already updated synchronously by the snapshot store's projection of
+    // this same fact — at read time (#9947).
     if (this.renderer.isAvailable()) {
       // A run start or config change may update agent name, model, or label,
       // which the frontend tabs display even for background subagents. Patch
