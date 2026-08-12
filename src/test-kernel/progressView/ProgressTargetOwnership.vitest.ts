@@ -117,7 +117,7 @@ function createProvider() {
   };
   injected.state = state;
   const backend = {
-    activateStream: vi.fn(async () => false),
+    activateStream: vi.fn(async () => undefined),
     approvalHandlers: {},
     syncRenderedStreams: vi.fn(async () => {}),
   };
@@ -129,7 +129,7 @@ function createProvider() {
     setPlacement: vi.fn(),
     sendStreamMetadata: vi.fn(() => undefined),
   };
-  return { provider, mainViewProvider, sidebarView, backend, logger, state };
+  return { provider, mainViewProvider, sidebarView, backend, state };
 }
 
 describe('progress target ownership', () => {
@@ -155,27 +155,6 @@ describe('progress target ownership', () => {
 
     await provider.markWebviewReady(panel as unknown as vscode.WebviewPanel);
     expect(mocks.replayApprovalRequestHandlers).toHaveBeenCalledTimes(2);
-  });
-
-  it('reports the stream whose refresh failed after selection changes', async () => {
-    const { provider, backend, logger, state } = createProvider();
-    let rejectRefresh!: (error: Error) => void;
-    backend.syncRenderedStreams.mockImplementationOnce(
-      () =>
-        new Promise<void>((_resolve, reject) => {
-          rejectRefresh = reject;
-        }),
-    );
-    state.activeStream = 'refreshing-stream' as never;
-    (provider as unknown as { target: { ready: boolean } }).target.ready = true;
-
-    provider.syncFullView();
-    state.activeStream = 'new-selection' as never;
-    rejectRefresh(new Error('read failed'));
-
-    await vi.waitFor(() => expect(logger.error).toHaveBeenCalledOnce());
-    expect(logger.error.mock.calls[0]?.[0]).toContain('refreshing-stream');
-    expect(logger.error.mock.calls[0]?.[0]).not.toContain('new-selection');
   });
 
   it('drops the target when the editor panel is closed', async () => {

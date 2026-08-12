@@ -110,6 +110,8 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       getStreamControls: getProgressStreamControls,
       getUnsupportedCommands: () =>
         this.messageHandler.getUnsupportedCommands(),
+      reportTranscriptLoadError: (error, stream) =>
+        this.reportTranscriptLoadError(error, stream),
       approvals: {
         canSend: () => this.canSendToWebview(),
         logger: this.logger,
@@ -313,12 +315,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
     this.webviewUpdater.setPlacement(target.placement);
 
-    const activeStream = this.state.activeStream;
-    void this.backend
-      .syncRenderedStreams({ syncActiveStream, theme })
-      .catch((error: unknown) =>
-        this.reportTranscriptLoadError(error, activeStream),
-      );
+    void this.backend.syncRenderedStreams({ syncActiveStream, theme });
   }
 
   public async markWebviewReady(
@@ -364,11 +361,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   }
 
   public async setActiveStream(streamId: StreamTabId): Promise<void> {
-    try {
-      await this.backend.activateStream(streamId);
-    } catch (error) {
-      this.reportTranscriptLoadError(error, streamId);
-    }
+    await this.backend.activateStream(streamId);
   }
 
   private reportTranscriptLoadError(

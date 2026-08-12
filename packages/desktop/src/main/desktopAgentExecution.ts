@@ -272,6 +272,8 @@ export class DesktopProgressBridge {
         getProgressStreamControls(stream, this.session),
       getUnsupportedCommands: () =>
         unsupportedCommands(this.progressViewInboundHandlers),
+      reportTranscriptLoadError: (error, stream) =>
+        this.reportTranscriptLoadError(error, stream),
       approvals: {
         // The desktop renderer is always attached (no sidebar/editor re-target).
         canSend: () => true,
@@ -1070,12 +1072,7 @@ export class DesktopProgressBridge {
   }
 
   private async syncRenderedStreams(syncActiveStream: boolean): Promise<void> {
-    const activeStream = this.state.activeStream;
-    try {
-      await this.backend.syncRenderedStreams({ syncActiveStream });
-    } catch (error) {
-      this.reportTranscriptLoadError(error, activeStream);
-    }
+    await this.backend.syncRenderedStreams({ syncActiveStream });
   }
 
   /** Send canonical state and replay pending prompts after attachment. */
@@ -1085,11 +1082,7 @@ export class DesktopProgressBridge {
   }
 
   private async setActiveStream(streamId: StreamTabId): Promise<void> {
-    try {
-      await this.backend.activateStream(streamId);
-    } catch (error) {
-      this.reportTranscriptLoadError(error, streamId);
-    }
+    await this.backend.activateStream(streamId);
   }
 
   /**

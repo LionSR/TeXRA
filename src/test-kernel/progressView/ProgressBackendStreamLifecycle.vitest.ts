@@ -285,6 +285,59 @@ describe('ProgressBackend', () => {
     });
   });
 
+  it('keeps the fallback selected when its transcript fails to load', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, messages, reportTranscriptLoadError } = target;
+    const fallback = 'fallback-stream' as StreamTabId;
+    const active = 'active-stream' as StreamTabId;
+    const loadError = new Error('transcript unavailable');
+
+    backend.state.streamLogs.ensureStream(fallback);
+    backend.state.streamLogs.ensureStream(active);
+    backend.state.switchActiveStream(active);
+    vi.spyOn(backend.state.streamLogs, 'ensureLoaded').mockRejectedValueOnce(
+      loadError,
+    );
+
+    await backend.deleteStream(active);
+
+    expect(backend.state.activeStream).toBe(fallback);
+    expect(reportTranscriptLoadError).toHaveBeenCalledWith(loadError, fallback);
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: fallback,
+    });
+  });
+
+  it('reports the stream whose full refresh fails after selection changes', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, reportTranscriptLoadError } = target;
+    const refreshing = 'refreshing-stream' as StreamTabId;
+    const selected = 'new-selection' as StreamTabId;
+    const loadError = new Error('read failed');
+    let rejectRefresh!: (error: Error) => void;
+
+    backend.state.streamLogs.ensureStream(refreshing);
+    backend.state.streamLogs.ensureStream(selected);
+    backend.state.switchActiveStream(refreshing);
+    vi.spyOn(backend.state.streamLogs, 'ensureLoaded').mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectRefresh = reject;
+        }),
+    );
+
+    const refresh = backend.syncRenderedStreams({ syncActiveStream: true });
+    backend.state.switchActiveStream(selected);
+    rejectRefresh(loadError);
+    await refresh;
+
+    expect(reportTranscriptLoadError).toHaveBeenCalledWith(
+      loadError,
+      refreshing,
+    );
+  });
+
   it('releases the tab left behind when deletion rotates the selection', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend, lifecycle } = target;
@@ -500,6 +553,7 @@ describe('ProgressBackend', () => {
         session,
         sendMessage: vi.fn(),
         hasTarget: () => true,
+        reportTranscriptLoadError: vi.fn(),
         approvals: createApprovalOptions(),
         lifecycle,
       }),
@@ -525,6 +579,7 @@ describe('ProgressBackend', () => {
         storage: new FakeStateStore(),
         sendMessage: sent,
         hasTarget: () => hasTarget,
+        reportTranscriptLoadError: vi.fn(),
         approvals: createApprovalOptions(),
         lifecycle: createLifecycleOptions(),
       }),
@@ -556,6 +611,7 @@ describe('ProgressBackend', () => {
         storage: new FakeStateStore(),
         sendMessage: sent,
         hasTarget: () => true,
+        reportTranscriptLoadError: vi.fn(),
         approvals: createApprovalOptions(),
         lifecycle: createLifecycleOptions(),
       }),
