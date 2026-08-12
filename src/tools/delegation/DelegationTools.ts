@@ -16,7 +16,7 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import {
   getRunContextStreamId,
   tryUseRunContext,
@@ -279,9 +279,9 @@ Git worktree support: resolved from the active workspace at runtime.`,
     const parentContext = tryUseRunContext();
     const session = currentSession();
     const handle = session.executions.getHandle(executionId);
-    if (!(handle instanceof AgentExecutionHandle)) {
+    if (!handle) {
       throw new Error(
-        `Execution '${executionId}' not found or not an agent execution. Use the executions tool to check status.`,
+        `Execution '${executionId}' not found. Use the executions tool to check status.`,
       );
     }
 

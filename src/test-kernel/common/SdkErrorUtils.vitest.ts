@@ -37,6 +37,7 @@ import {
   buildErrorLogData,
   formatProviderHttpError,
   getSdkErrorMessage,
+  isProviderErrorAutoRetryable,
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
 import { sdkErrorKindFromStatusCode } from '@common/errors/sdkError/sdkErrorKinds';
@@ -375,6 +376,39 @@ describe('formatProviderHttpError', () => {
     expect(formatted.statusCode).toBe(500);
     expect(formatted.userRetryable).toBe(true);
     expect(formatted.rawErrorBody).toEqual(body);
+  });
+
+  it('infers a retryable 503 from a status-less OpenAI overload body', () => {
+    const body = {
+      type: 'service_unavailable_error',
+      code: 'server_is_overloaded',
+      message: 'Our servers are currently overloaded. Please try again later.',
+      param: null,
+    };
+    const error = new OpenAIAPIError(undefined, body, body.message, undefined);
+    tagOpenAISdkError(error, 'openai');
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.provider).toBe('openai');
+    expect(formatted.statusCode).toBe(503);
+    expect(formatted.userRetryable).toBe(true);
+    expect(isProviderErrorAutoRetryable(error)).toBe(true);
+    expect(formatted.rawErrorBody).toEqual(body);
+
+    const codeOnlyBody = {
+      code: 'server_is_overloaded',
+      message: body.message,
+    };
+    const codeOnlyError = new OpenAIAPIError(
+      undefined,
+      codeOnlyBody,
+      codeOnlyBody.message,
+      undefined,
+    );
+    tagOpenAISdkError(codeOnlyError, 'openai');
+
+    expect(formatProviderHttpError(codeOnlyError).statusCode).toBe(503);
   });
 
   it('keeps unknown status-less OpenAI API errors non-retryable', () => {
