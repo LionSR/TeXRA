@@ -6,7 +6,10 @@ import {
   type AgentRosterEntry,
 } from '@agent/roster/AgentRosterController';
 import type { StateStore } from '@platform/interfaces';
-import type { AgentCategory } from '@shared/schemas/agent';
+import {
+  agentMatchesIdentifier,
+  type AgentCategory,
+} from '@shared/schemas/agent';
 import {
   STARTER_AGENT_MODE_PRESET,
   type AgentModePreset,
@@ -40,12 +43,21 @@ function controller(
   workspaceState: StateStore,
   overrides: Partial<AgentRosterControllerDeps> = {},
 ): AgentRosterController {
+  const getAgents =
+    overrides.getAgents ?? ((category: AgentCategory) => agents[category]);
+  const resolveAgent =
+    overrides.resolveAgent ??
+    ((category: AgentCategory, identifier: string) =>
+      getAgents(category).find((entry) =>
+        agentMatchesIdentifier(entry, identifier),
+      ));
   return new AgentRosterController({
     workspaceState,
     globalState: new FakeStateStore(),
-    getAgents: (category) => agents[category],
     getPresets: () => [preset],
     ...overrides,
+    getAgents,
+    resolveAgent,
   });
 }
 

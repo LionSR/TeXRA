@@ -44,7 +44,7 @@ export interface AgentRosterControllerDeps<
   readonly getAgents: (category: AgentCategory) => Entry[];
   readonly getPresets?: () => readonly AgentModePreset[];
   /** Resolve one stored identifier without collapsing exact source identity. */
-  readonly resolveAgent?: (
+  readonly resolveAgent: (
     category: AgentCategory,
     identifier: string,
   ) => Entry | undefined;
@@ -193,7 +193,7 @@ export class AgentRosterController<
     if (identifiers === undefined) return this.deps.getAgents(category);
 
     const resolved = identifiers
-      .map((identifier) => this.resolveEntry(category, identifier))
+      .map((identifier) => this.deps.resolveAgent(category, identifier))
       .filter((entry): entry is Entry => entry !== undefined);
     return [
       ...new Map(resolved.map((entry) => [agentKeyOf(entry), entry])).values(),
@@ -217,7 +217,7 @@ export class AgentRosterController<
       );
       if (identifiers === undefined) return [];
       return identifiers
-        .filter((identifier) => !this.resolveEntry(category, identifier))
+        .filter((identifier) => !this.deps.resolveAgent(category, identifier))
         .map(agentName);
     });
     return {
@@ -244,23 +244,10 @@ export class AgentRosterController<
     return unique(
       identifiers.map((identifier) => {
         if (selection.kind === 'custom') return identifier;
-        const entry = this.resolveEntry(category, identifier);
+        const entry = this.deps.resolveAgent(category, identifier);
         return entry ? agentKeyOf(entry) : identifier;
       }),
     );
-  }
-
-  private resolveEntry(
-    category: AgentCategory,
-    identifier: string,
-  ): Entry | undefined {
-    const resolved = this.deps.resolveAgent?.(category, identifier);
-    if (resolved) {
-      return resolved.category === category ? resolved : undefined;
-    }
-    return this.deps
-      .getAgents(category)
-      .find((entry) => agentMatchesIdentifier(entry, identifier));
   }
 
   /** Team identity a selection resolves to, following inherit to the default. */
