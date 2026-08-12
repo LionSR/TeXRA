@@ -426,6 +426,8 @@ export class StreamSnapshotStore {
    */
   private summaryMetaSink:
     ((stream: StreamTabId, meta: StreamSummaryMeta) => void) | undefined;
+  private summaryMetaSource:
+    ((stream: StreamTabId) => StreamSummaryMeta | undefined) | undefined;
 
   /**
    * Publish the whole current metadata view of a stream to the summary
@@ -545,10 +547,16 @@ export class StreamSnapshotStore {
     events: SessionEventHub,
     options?: {
       summaryMetaSink?: (stream: StreamTabId, meta: StreamSummaryMeta) => void;
+      summaryMetaSource?: (
+        stream: StreamTabId,
+      ) => StreamSummaryMeta | undefined;
     },
   ): () => void {
     if (options?.summaryMetaSink) {
       this.summaryMetaSink = options.summaryMetaSink;
+    }
+    if (options?.summaryMetaSource) {
+      this.summaryMetaSource = options.summaryMetaSource;
     }
     const detachRunEvents = events.subscribe(
       (sessionEvent) => {
@@ -1872,7 +1880,7 @@ export class StreamSnapshotStore {
     const metaOverlay = record.metaOverlay ? record.meta : undefined;
     const usageOverlayToReplay = new Map(record.overlays.usage);
     const sidecarsToWrite = new Set<OverlaySidecarKey>();
-    let summaryMetaComplete = true;
+    let publishHydratedSummaryMeta = true;
 
     record.outputFiles = data.outputFiles;
     record.missingOutputs = data.missingOutputs;
@@ -1921,7 +1929,10 @@ export class StreamSnapshotStore {
       const pendingLiveWrite = metaOverlay !== undefined;
       const configBeforeHydration = record.runConfig;
       const hydrated = await this.hydrateRunStateFromMeta(stream, meta);
-      summaryMetaComplete = hydrated.authorityReadComplete;
+      const mirroredExecutionId =
+        this.summaryMetaSource?.(stream)?.executionId ?? previousExecutionId;
+      publishHydratedSummaryMeta =
+        hydrated.authorityReadComplete || mirroredExecutionId !== executionId;
       if (this.streamVersion(stream) !== version) return;
       // Re-checked after the await: a `run.start` for another execution can
       // land during it, and this seed's pair belongs to the run it read.
@@ -1999,7 +2010,7 @@ export class StreamSnapshotStore {
     // Every hydration republishes the metadata mirror: the deep-equal gate
     // downstream makes an unchanged republish free, and this is what lazily
     // backfills summaries persisted before the mirror existed (#9947).
-    if (summaryMetaComplete && this.records.get(stream) === record) {
+    if (publishHydratedSummaryMeta && this.records.get(stream) === record) {
       this.publishSummaryMeta(stream);
     }
   }

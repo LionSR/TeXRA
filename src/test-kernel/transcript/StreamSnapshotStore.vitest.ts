@@ -2761,6 +2761,7 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
       summaryMetaSink: (_stream, meta) => {
         mirroredMeta = meta;
       },
+      summaryMetaSource: () => mirroredMeta,
     });
 
     await store.load([STREAM]);
@@ -2771,5 +2772,31 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
       description: 'Existing summary metadata',
       model: 'deepseekproT',
     });
+  });
+
+  it('clears old execution metadata when handoff hydration is incomplete', async () => {
+    vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const executionId = 'b88f88' as ExecutionId;
+    await writeMetaFile(STREAM, { executionId });
+    vi.spyOn(getExecutionStore(executionId), 'readMeta').mockRejectedValueOnce(
+      new Error('transient execution read failure'),
+    );
+    let mirroredMeta: Record<string, unknown> = {
+      executionId: 'a77e77',
+      identity: { kind: 'agent', agent: 'search' },
+      description: 'Previous execution',
+      model: 'deepseekproT',
+    };
+    const store = new StreamSnapshotStore();
+    store.attachSessionEvents(new SessionEventHub(), {
+      summaryMetaSink: (_stream, meta) => {
+        mirroredMeta = meta;
+      },
+      summaryMetaSource: () => mirroredMeta,
+    });
+
+    await store.load([STREAM]);
+
+    expect(mirroredMeta).toEqual({ executionId });
   });
 });

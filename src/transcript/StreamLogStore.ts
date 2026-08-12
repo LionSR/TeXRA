@@ -534,7 +534,10 @@ export class StreamLogStore {
     this.assertWritableStore('record stream summary metadata');
     const summary = this.summaries.get(streamId);
     if (!summary) {
+      if (isDeepStrictEqual(this.pendingSummaryMeta.get(streamId), meta))
+        return;
       this.pendingSummaryMeta.set(streamId, meta);
+      this.stateRevision += 1;
       return;
     }
     this.pendingSummaryMeta.delete(streamId);

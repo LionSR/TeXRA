@@ -1928,6 +1928,32 @@ describe('StreamLogStore summary metadata mirror', () => {
     expect(store.getSummaryMeta('old-root-stream')).toBeUndefined();
   });
 
+  it('preserves metadata recorded while reload reads are in flight', async () => {
+    const reloadReadStarted = createDeferred();
+    const releaseReloadRead = createDeferred();
+    let reads = 0;
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: {},
+      onLogRead: async () => {
+        reads += 1;
+        if (reads === 2) {
+          reloadReadStarted.resolve();
+          await releaseReloadRead.promise;
+        }
+      },
+    });
+    const store = await StreamLogStore.open();
+
+    const reload = store.reload({ discardPendingWrites: true });
+    await reloadReadStarted.promise;
+    store.recordSummaryMeta('new-run', META);
+    releaseReloadRead.resolve();
+
+    await expect(reload).rejects.toThrow('state changed during reload');
+    expect(store.getSummaryMeta('new-run')).toEqual(META);
+  });
+
   it('discards a stale-shaped summary cache loudly and rebuilds from the log', async () => {
     const storage = mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 200)] },
