@@ -108,11 +108,6 @@ const CODING_PLAN_BY_USAGE_ROUTE = new Map<UsageRoute, CodingPlanSubscription>(
   CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.usageRoute, plan]),
 );
 
-const CODING_PLAN_BY_EXHAUSTION_REASON = new Map<
-  ExhaustionReason,
-  CodingPlanSubscription
->(CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.exhaustionReason, plan]));
-
 const CODING_PLAN_BY_API_PROVIDER = new Map<string, CodingPlanSubscription>(
   CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.apiProvider, plan]),
 );
@@ -130,15 +125,6 @@ export function codingPlanForUsageRoute(
   return route === undefined
     ? undefined
     : CODING_PLAN_BY_USAGE_ROUTE.get(route);
-}
-
-/** Resolve a coding plan from a provider quota failure. */
-export function codingPlanForExhaustionReason(
-  reason: ExhaustionReason | undefined,
-): CodingPlanSubscription | undefined {
-  return reason === undefined
-    ? undefined
-    : CODING_PLAN_BY_EXHAUSTION_REASON.get(reason);
 }
 
 /** Resolve a coding plan whose credential is owned by an API provider. */
