@@ -28,14 +28,23 @@ export interface CodingPlanSubscriptionRuntime {
   readonly isActiveForModel: (modelId: string) => Promise<boolean>;
 }
 
+/** Whether GLM requests use the coding-plan endpoint rather than another route. */
+export function isGlmCodingPlanRouteActive(config: {
+  readonly baseUrl?: string | null;
+}): boolean {
+  return (
+    getGLMCodingPlan() &&
+    !getUseOpenRouter() &&
+    config.baseUrl == null &&
+    getProviderEndpoint('glm') === ''
+  );
+}
+
 async function isGlmCodingPlanActive(modelId: string): Promise<boolean> {
   const config = await resolveRuntimeModelConfig(modelId);
   if (
     config?.provider !== ModelProvider.GLM ||
-    getUseOpenRouter() ||
-    config.baseUrl != null ||
-    getProviderEndpoint('glm') !== '' ||
-    !getGLMCodingPlan()
+    !isGlmCodingPlanRouteActive(config)
   ) {
     return false;
   }
