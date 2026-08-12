@@ -48,9 +48,9 @@ function reconcileEnabledModels(
   // only add or reorder models (no removals), so the deprecated-model sweep
   // intentionally remains guarded at version 16. These thresholds are frozen
   // historical facts about specific past migrations, not tied to the current
-  // value of MODEL_LIST_VERSION: since #7191, that value is a hash of the
-  // resolved default set rather than a hand-bumped integer, so it no longer
-  // makes sense to "bump the guard to the current version" -- a future
+  // value of MODEL_LIST_VERSION: it is now a hash of preferred membership and
+  // the full catalogue lifecycle rather than a hand-bumped integer, so it no
+  // longer makes sense to "bump the guard to the current version" -- a future
   // one-time sweep would add its own new numeric threshold here instead.
   if ((previousVersion ?? 0) < 16) {
     for (const model of currentModels) {
