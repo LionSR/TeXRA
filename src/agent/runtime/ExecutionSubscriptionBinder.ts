@@ -13,7 +13,7 @@
 
 import { createChannelTrace } from '@agent/trace';
 import type {
-  ExecutionHandle,
+  AgentExecutionHandle,
   ExecutionStatusInfo,
 } from '@agent/runtime/ExecutionHandle';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
@@ -48,14 +48,14 @@ interface ExecutionSubscriptionBinderOptions {
 class ExecutionSubscription {
   private readonly executionId: string;
   private readonly agentName: string;
-  private readonly category: ExecutionHandle['category'];
+  private readonly category: AgentExecutionHandle['category'];
   private last: ExecutionStatusInfo;
   private removeListener: (() => void) | null = null;
   private disposed = false;
 
   constructor(
     private readonly streamId: StreamTabId,
-    handle: ExecutionHandle,
+    handle: AgentExecutionHandle,
     private readonly registry: Pick<
       ExecutionRegistry,
       'addListener' | 'getHandle' | 'getStatus'
@@ -96,7 +96,7 @@ class ExecutionSubscription {
     this.onDisposed();
   }
 
-  private handleChange(handle: ExecutionHandle | undefined): void {
+  private handleChange(handle: AgentExecutionHandle | undefined): void {
     if (!handle) {
       this.sendFinished();
       this.dispose();

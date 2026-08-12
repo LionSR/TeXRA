@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import {
+  testExecutionHandle,
+  testExecutionRegistry,
+} from '@test/support/executionHandleFixtures';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 
 describe('AgentCliSessionRegistry', () => {
@@ -29,7 +31,7 @@ describe('AgentCliSessionRegistry', () => {
         persistSessionId,
         reportPersistenceFailure,
       });
-      const executions = new ExecutionRegistry();
+      const executions = testExecutionRegistry();
 
       try {
         expect(
@@ -66,7 +68,7 @@ describe('AgentCliSessionRegistry', () => {
         throw new Error('log sink unavailable');
       },
     });
-    const executions = new ExecutionRegistry();
+    const executions = testExecutionRegistry();
 
     registry.register('session-log-failure', {
       childStreamId: 'child-log-failure' as StreamTabId,
@@ -83,7 +85,7 @@ describe('AgentCliSessionRegistry', () => {
 
   it('atomically claims a session id and wakes waiters when it becomes active', async () => {
     const registry = new AgentCliSessionRegistry('test_session_id');
-    const executions = new ExecutionRegistry();
+    const executions = testExecutionRegistry();
     const entry = {
       childStreamId: 'child-a' as StreamTabId,
       executionId: 'execution-a' as ExecutionId,
@@ -140,7 +142,7 @@ describe('AgentCliSessionRegistry', () => {
 
   it('releases every active alias owned by one execution', () => {
     const registry = new AgentCliSessionRegistry('test_session_id');
-    const executions = new ExecutionRegistry();
+    const executions = testExecutionRegistry();
     const executionA = 'execution-a' as ExecutionId;
     const executionB = 'execution-b' as ExecutionId;
     const entry = (executionId: ExecutionId, childStreamId: StreamTabId) => ({
@@ -203,8 +205,8 @@ describe('AgentCliSessionRegistry', () => {
 
   it('interrupts each child through the execution registry that owns the session', () => {
     const registry = new AgentCliSessionRegistry('test_session_id');
-    const ownerA = new ExecutionRegistry();
-    const ownerB = new ExecutionRegistry();
+    const ownerA = testExecutionRegistry();
+    const ownerB = testExecutionRegistry();
     const interruptA = vi.fn();
     const interruptB = vi.fn();
 
