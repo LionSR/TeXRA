@@ -1242,10 +1242,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const transcripts = currentSession().transcripts;
     // The stream is the one stamped on execution metadata at registration.
     const streamId = handle?.childStreamId ?? meta?.streamId;
-    // Resident while the command runs (an open writer refuses eviction); a
-    // released stream rehydrates from disk, and an ephemeral store no-ops.
-    if (streamId) await transcripts.ensureLoaded(streamId);
-    if (!streamId || !transcripts.get(streamId)) {
+    if (!streamId || !transcripts.has(streamId)) {
       return executed(
         `No retained output for ${executionId}: its stream log is no longer available. ` +
           `Use /executions/${executionId}/report for the result summary.`,
