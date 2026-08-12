@@ -260,15 +260,6 @@ describe('computeModelOptionsData relay quota state', () => {
     expect(model.disabled).toBe(false);
   });
 
-  it('does not treat non-API providers as personal API-key access', async () => {
-    const access = createModelOptionsAccess({ useIncludedAccess: false });
-
-    const [model] = await computeModelOptionsData(['copilot4o'], access);
-
-    expect(model.availability).toBe('missing-key');
-    expect(model.disabled).toBe(true);
-  });
-
   it('marks retired models unavailable before included-access checks', async () => {
     const access = createModelOptionsAccess({
       useIncludedAccess: true,
@@ -290,13 +281,20 @@ describe('computeModelOptionsData relay quota state', () => {
     );
   });
 
-  it('does not tell users to configure API keys for keyless providers', async () => {
+  it('honors the catalogue retirement of the legacy Copilot model', async () => {
     const access = createModelOptionsAccess({ useIncludedAccess: false });
 
+    const [model] = await computeModelOptionsData(['copilot4o'], access);
     const reason = await getModelUnavailableReason('copilot4o', access);
 
+    expect(model).toMatchObject({
+      availability: 'retired',
+      availabilityLabel: 'Retired',
+      disabled: true,
+      requiresKey: false,
+    });
     expect(reason).toBe(
-      'Model "copilot4o" is provided by Copilot, which does not use provider API keys. Use a host that supports Copilot models or choose another model.',
+      'Model "copilot4o" is retired and no longer available from its provider. Choose an active model.',
     );
   });
 
