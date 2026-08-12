@@ -14,8 +14,15 @@ const customReview = {
   name: 'review',
   path: '/agents/custom-review.yaml',
 } as const;
+const workflowCorrect = {
+  category: 'workflow',
+  source: 'builtInWorkflow',
+  name: 'correct',
+  path: '/agents/correct.yaml',
+} as const;
 const mocks = vi.hoisted(() => ({
   context: undefined as unknown,
+  resolutionCalls: [] as string[],
 }));
 
 vi.mock('@agent/runtime/RunContext', () => ({
@@ -35,7 +42,10 @@ vi.mock('@agent/index/agentRegistry', () => {
       scope: { toolUse: readonly string[] } | undefined,
       category: string,
     ) => {
-      if (!scope) return [customReview];
+      mocks.resolutionCalls.push(category);
+      if (!scope) {
+        return category === 'workflow' ? [workflowCorrect] : [customReview];
+      }
       return category === 'toolUse' && scope.toolUse.includes('remote:review')
         ? [remoteReview]
         : [];
@@ -49,9 +59,12 @@ vi.mock('@agent/index/agentRegistry', () => {
 
 const { getDelegationAgent, getDelegationAgents } =
   await import('@tools/delegation/delegationAvailability');
+const { requireVisibleAgent, requireWorkflowOrToolUseAgent } =
+  await import('@tools/delegation/proposalFlow');
 
 describe('execution-scoped delegation agents', () => {
   beforeEach(() => {
+    mocks.resolutionCalls = [];
     mocks.context = {
       kind: 'launch',
       runScope: {
@@ -88,5 +101,38 @@ describe('execution-scoped delegation agents', () => {
 
     expect(getDelegationAgents('toolUse')).toEqual([customReview]);
     expect(getDelegationAgent('toolUse', 'review')).toBe(customReview);
+  });
+
+  it('resolves a cross-category target without exception fallback', () => {
+    mocks.context = undefined;
+
+    expect(requireWorkflowOrToolUseAgent('review')).toEqual({
+      agent: customReview,
+      category: 'toolUse',
+    });
+    expect(requireWorkflowOrToolUseAgent('correct')).toEqual({
+      agent: workflowCorrect,
+      category: 'workflow',
+    });
+  });
+
+  it('reports both category catalogs when a cross-category target is missing', () => {
+    mocks.context = undefined;
+
+    expect(() => requireWorkflowOrToolUseAgent('missing')).toThrow(
+      "Unknown workflow or toolUse agent 'missing'. Available: workflow: correct; toolUse: review",
+    );
+  });
+
+  it('uses one candidate set for visible-agent resolution and its error', () => {
+    mocks.context = undefined;
+
+    expect(requireVisibleAgent('toolUse', 'review')).toBe(customReview);
+    expect(mocks.resolutionCalls).toEqual(['toolUse']);
+    mocks.resolutionCalls = [];
+    expect(() => requireVisibleAgent('toolUse', 'missing')).toThrow(
+      "Unknown toolUse agent 'missing'. Available: review",
+    );
+    expect(mocks.resolutionCalls).toEqual(['toolUse']);
   });
 });
