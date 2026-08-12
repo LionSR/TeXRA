@@ -48,8 +48,6 @@ export interface AgentRosterControllerDeps<
     category: AgentCategory,
     identifier: string,
   ) => Entry | undefined;
-  /** Host policy used only when an inherited roster has no user default. */
-  readonly fallbackTeamId?: string | null;
 }
 
 const workspaceWriteMutex = new KeyedMutex<StateStore>();
@@ -266,9 +264,9 @@ export class AgentRosterController<
   }
 
   /** Team identity a selection resolves to, following inherit to the default. */
-  private teamIdOf(selection: AgentRosterSelection): string | null | undefined {
+  private teamIdOf(selection: AgentRosterSelection): string | undefined {
     if (selection.kind === 'inherit') {
-      return this.getDefaultTeamId() ?? this.deps.fallbackTeamId;
+      return this.getDefaultTeamId();
     }
     return selection.kind === 'team' ? selection.teamId : undefined;
   }

@@ -42,7 +42,6 @@ function controller(
     globalState: new FakeStateStore(),
     getAgents: (category) => agents[category],
     getPresets: () => [preset],
-    fallbackTeamId: null,
     ...overrides,
   });
 }
