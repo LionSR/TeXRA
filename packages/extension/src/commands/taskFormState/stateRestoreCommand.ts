@@ -46,9 +46,9 @@ async function restoreState(
     const nextState = buildMainViewState(parsed.data);
 
     // The MainViewProvider is the sole deliverer of pending restores: it flushes
-    // the queue on WEBVIEW_READY (after an HTML load) or immediately when the
-    // launcher is already active, so there is no need to probe for a live
-    // webview here or to invoke showMainView twice.
+    // the queue only after the launcher document reports WEBVIEW_READY (or
+    // immediately when that document is already ready), so there is no need to
+    // probe for a live webview here or to invoke showMainView twice.
     setPendingState(nextState, executeImmediately);
     await vscode.commands.executeCommand('texra.showMainView');
     logger.info(CHANNEL, 'State stored for restoration', {

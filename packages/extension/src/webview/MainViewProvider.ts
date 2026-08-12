@@ -62,6 +62,14 @@ export class MainViewProvider
   private _messageDisposable?: vscode.Disposable;
   private _progressViewProvider?: ProgressViewProvider;
 
+  /**
+   * True only after the current launcher HTML document has posted
+   * WEBVIEW_READY. Mode === MAIN alone is not enough: after a progress→main
+   * HTML swap (or resolveWebviewView) the document is still loading and any
+   * STATE_RESTORE posted now is dropped. Cleared on every main HTML assign.
+   */
+  private mainWebviewReady = false;
+
   /** Last computed funnel state, so credential hooks can detect the
    *  in-session State 0 → 1 transition. Session-scoped by design. */
   private onboardingFunnelState: OnboardingFunnelState | undefined;
@@ -80,7 +88,10 @@ export class MainViewProvider
     this.messageHandler = new MainViewMessageHandler(
       context,
       () => this.refreshOnboardingFunnel(),
-      () => this.flushPendingState(),
+      () => {
+        this.mainWebviewReady = true;
+        this.flushPendingState();
+      },
     );
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -165,7 +176,10 @@ export class MainViewProvider
   private async refreshOptionsAndView(): Promise<void> {
     await refresh();
     const view = this.getMainModeView();
-    if (view) {
+    // Only synthesize WEBVIEW_READY when the launcher document is already live.
+    // During a post-swap load window the real ready signal will re-push options
+    // and flush restores; a synthetic ready would drain the queue too early.
+    if (view && this.mainWebviewReady) {
       await this.messageHandler.handleMessage(
         { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY },
         view,
@@ -315,6 +329,7 @@ export class MainViewProvider
     this.cleanupView();
     this._view = webviewView;
 
+    this.mainWebviewReady = false;
     webviewView.webview.html = this.contentProvider.getHtmlContent(
       webviewView.webview,
     );
@@ -333,6 +348,7 @@ export class MainViewProvider
   protected override cleanupView(): void {
     this._messageDisposable?.dispose();
     this._messageDisposable = undefined;
+    this.mainWebviewReady = false;
     if (getActiveSidebarView() === SIDEBAR_VIEWS.PROGRESS) {
       this._progressViewProvider?.resetSidebarReady();
     }
@@ -352,10 +368,12 @@ export class MainViewProvider
 
   /**
    * Sole deliverer of queued restores (see stateRestoreCommand). Called from
-   * WEBVIEW_READY after an HTML (re)load, and from showInSidebar when the
-   * launcher is already active (no reload → no ready re-fire).
+   * WEBVIEW_READY after the launcher document installs its listener, and from
+   * showInSidebar when that document is already ready (no reload → no ready
+   * re-fire). Mode === MAIN alone is not sufficient.
    */
   private flushPendingState(): void {
+    if (!this.mainWebviewReady) return;
     const webviewView = this.getMainModeView();
     if (!webviewView) return;
     for (
@@ -403,6 +421,8 @@ export class MainViewProvider
 
     setActiveSidebarView(mode);
     this._messageDisposable?.dispose();
+    // Any HTML swap invalidates the previous document's ready handshake.
+    this.mainWebviewReady = false;
 
     if (mode === SIDEBAR_VIEWS.PROGRESS) {
       const pvp = this._progressViewProvider!;
@@ -426,8 +446,9 @@ export class MainViewProvider
   public async showInSidebar(): Promise<void> {
     const alreadyMain = getActiveSidebarView() === SIDEBAR_VIEWS.MAIN;
     this.switchMode(SIDEBAR_VIEWS.MAIN);
-    // Already on the launcher → no HTML swap, so WEBVIEW_READY will not re-fire.
-    // Mode switches from progress rely on the ready handshake instead.
+    // Flush only when the current launcher document has already reported ready.
+    // Mode switches from progress (and any mid-load window) wait for
+    // WEBVIEW_READY so STATE_RESTORE is not posted into an unloading document.
     if (alreadyMain) {
       this.flushPendingState();
     }
