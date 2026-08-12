@@ -32,14 +32,6 @@ export interface MainViewInboundHost {
   runWithActiveView<T>(fn: (view: vscode.WebviewView) => T): T | undefined;
   getActiveView(): vscode.WebviewView | undefined;
   postToActiveView(message: unknown): void;
-  handleTheme(
-    message: { theme?: string },
-    view: vscode.WebviewView,
-  ): Promise<void>;
-  handleDebugMode(
-    message: { debugMode?: boolean },
-    view: vscode.WebviewView,
-  ): Promise<void>;
   handleWebviewReady(): Promise<void>;
   handleThemeRequest(): void;
   handleDebugModeRequest(): void;

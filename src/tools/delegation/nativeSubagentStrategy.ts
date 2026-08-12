@@ -26,7 +26,6 @@
  * launching, resuming (tool-use only), and formatting its result shape.
  */
 
-import type { ResultMeta } from '@agent/storage';
 import { getExecutionStore } from '@agent/storage';
 import {
   isWaitingFlowResult,
@@ -64,6 +63,7 @@ import {
 import {
   buildSubagentResult,
   formatBuiltSubagentDelivery,
+  type BuiltSubagentResult,
 } from './subagentDeliveryFormat';
 
 /**
@@ -146,6 +146,10 @@ export function createNativeSubagentStrategy(
   readonly getTurnError: () => unknown;
   /** Terminal-shaped result captured from the most recent turn's return. */
   readonly getTurnResult: () => AgentFlowResult | undefined;
+  /** Shared typed result construction used by detached and in-band drivers. */
+  readonly buildResult: (
+    turn: AgentRuntimeFlowResult,
+  ) => Promise<BuiltSubagentResult>;
 } {
   let runHandle: AgentRunHandle | undefined;
   // Captured for the turn currently in flight; read once the call resolves.
@@ -155,10 +159,11 @@ export function createNativeSubagentStrategy(
   // observable through this callback.
   let lastErr: unknown;
   let lastResult: AgentFlowResult | undefined;
-  // formatDelivery always runs before buildResultMeta for the same turn (see
-  // childRunLoop's deliverTurn) — cache the one diff-computing pass here so
-  // the subagent's diffs are written once per turn, not twice.
-  let cachedDelivery: { msg: string; resultMeta: ResultMeta } | undefined;
+  // Result construction computes and persists diffs, so every consumer of a
+  // turn shares one result. Formatting remains separate: if it throws, the
+  // already-built result manifest is still available for persistence.
+  let cachedBuilt: BuiltSubagentResult | undefined;
+  let cachedDelivery: string | undefined;
 
   const resolveDeliveryTarget = (): StreamTabId | undefined =>
     runHandle ? runHandle.deliveryTargetStreamId : params.parentStreamId;
@@ -172,6 +177,7 @@ export function createNativeSubagentStrategy(
   ): Promise<AgentRuntimeFlowResult> => {
     lastErr = undefined;
     lastResult = undefined;
+    cachedBuilt = undefined;
     cachedDelivery = undefined;
     let detachAbort = (): void => {};
     try {
@@ -196,12 +202,12 @@ export function createNativeSubagentStrategy(
     }
   };
 
-  const buildDelivery = async (
+  const buildResult = async (
     turn: AgentRuntimeFlowResult,
-  ): Promise<{ msg: string; resultMeta: ResultMeta }> => {
-    if (!cachedDelivery) {
+  ): Promise<BuiltSubagentResult> => {
+    if (!cachedBuilt) {
       const result = toDeliveryResult(turn, params.executionId);
-      const built = await buildSubagentResult(
+      cachedBuilt = await buildSubagentResult(
         params.executionId,
         params.agentName,
         result,
@@ -210,18 +216,8 @@ export function createNativeSubagentStrategy(
           parentExecutionId: params.parentExecutionId,
         },
       );
-      cachedDelivery = {
-        msg: formatBuiltSubagentDelivery(
-          params.executionId,
-          params.agentName,
-          result,
-          built,
-          params.workingDirectory,
-        ),
-        resultMeta: built.resultMeta,
-      };
     }
-    return cachedDelivery;
+    return cachedBuilt;
   };
 
   return {
@@ -338,7 +334,18 @@ export function createNativeSubagentStrategy(
 
     resolveDeliveryTarget,
 
-    formatDelivery: async (turn) => (await buildDelivery(turn)).msg,
+    buildResult,
+
+    formatDelivery: async (turn) => {
+      cachedDelivery ??= formatBuiltSubagentDelivery(
+        params.executionId,
+        params.agentName,
+        toDeliveryResult(turn, params.executionId),
+        await buildResult(turn),
+        params.workingDirectory,
+      );
+      return cachedDelivery;
+    },
 
     formatError: (turn, err) => {
       const wallTimeMs = Date.now() - params.startedAt;
@@ -372,7 +379,7 @@ export function createNativeSubagentStrategy(
           { parentExecutionId: params.parentExecutionId },
         );
       }
-      return (await buildDelivery(turn)).resultMeta;
+      return (await buildResult(turn)).resultMeta;
     },
   };
 }

@@ -24,7 +24,7 @@ export const SetThemeMessageSchema = z.object({
   theme: ThemeSchema,
 });
 
-export const SetDebugModeMessageSchema = z.object({
+const SetDebugModeMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.DEBUG_MODE_SET),
   debugMode: z.boolean(),
 });
@@ -49,19 +49,12 @@ export const SwitchViewMessageSchema = z.object({
   openInEditor: z.boolean().nullish(),
 });
 
-const ErrorMessageSchema = z.object({
-  command: z.literal(COMMON_COMMANDS.ERROR),
-  message: z.string(),
-  details: z.unknown().nullish(),
-});
-
 export const CommonViewMessageSchema = z.discriminatedUnion('command', [
   SetThemeMessageSchema,
   SetDebugModeMessageSchema,
   StateRestoreMessageSchema,
   WebviewReadyMessageSchema,
   SwitchViewMessageSchema,
-  ErrorMessageSchema,
 ]);
 
 export type StateRestoreMessage = z.infer<typeof StateRestoreMessageSchema>;

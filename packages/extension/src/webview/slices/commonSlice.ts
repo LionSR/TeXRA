@@ -15,10 +15,6 @@ import type { MainViewInboundHost } from '../mainViewInboundContext';
 
 export function createCommonHandlers(host: MainViewInboundHost) {
   return {
-    [MAIN_VIEW_COMMANDS.THEME_SET]: (m) =>
-      host.runWithActiveView((view) => host.handleTheme(m, view)),
-    [MAIN_VIEW_COMMANDS.DEBUG_MODE_SET]: (m) =>
-      host.runWithActiveView((view) => host.handleDebugMode(m, view)),
     [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: () => host.handleWebviewReady(),
     [MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: (m) => {
       vscode.window.showInformationMessage(m.text);
@@ -79,7 +75,5 @@ export function createCommonHandlers(host: MainViewInboundHost) {
     },
     [MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS]: () =>
       safeExecuteCommand('texra.openDoc', ['custom-agents'], host.viewName),
-    [MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS]: () =>
-      safeExecuteCommand('texra.openDoc', ['installation'], host.viewName),
   } satisfies Partial<MainViewInboundHandlerRegistry>;
 }

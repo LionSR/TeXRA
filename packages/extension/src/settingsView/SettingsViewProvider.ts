@@ -18,10 +18,7 @@ import type { AgentCategory } from '@shared/schemas/agent';
 // Local file imports
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
 
-export class SettingsViewProvider
-  extends BaseWebviewProvider
-  implements vscode.WebviewViewProvider
-{
+export class SettingsViewProvider extends BaseWebviewProvider {
   public static readonly viewType = 'texra.settingsView';
   protected contentProvider: BundledViewContentProvider;
   protected messageHandler: SettingsViewMessageHandler;
@@ -53,10 +50,6 @@ export class SettingsViewProvider
         void this.messageHandler.sendAllData(this._view.webview);
       }
     });
-  }
-
-  protected override getViewPath(): string {
-    return 'settingsView';
   }
 
   /** Refresh every credential-dependent surface after any API-key mutation. */
