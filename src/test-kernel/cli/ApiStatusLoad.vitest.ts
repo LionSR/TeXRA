@@ -82,6 +82,18 @@ function setPersonalKeys(...providers: string[]): void {
   );
 }
 
+function codingPlans(
+  kimiPreferred = false,
+  kimiKeySet = false,
+  glmPreferred = false,
+  glmKeySet = false,
+) {
+  return {
+    kimiCode: { preferred: kimiPreferred, keySet: kimiKeySet },
+    glmCodingPlan: { preferred: glmPreferred, keySet: glmKeySet },
+  };
+}
+
 /** Model-access status with the included fallback and every route off. */
 function useIncludedAccessStatus(): void {
   mocks.readCliModelAccessStatus.mockResolvedValue({
@@ -89,13 +101,10 @@ function useIncludedAccessStatus(): void {
     preferences: {
       chatGpt: 'off',
       grok: 'off',
-      kimiCode: 'off',
-      glmCode: 'off',
     },
+    codingPlans: codingPlans(),
     chatGptSignedIn: false,
     grokSignedIn: false,
-    kimiCodeKeySet: false,
-    glmKeySet: false,
   });
 }
 
@@ -115,15 +124,17 @@ function renderPreferenceRoute(
     preferences: {
       chatGpt: route === 'chatGpt' ? preference : 'off',
       grok: 'off',
-      kimiCode: route === 'kimiCode' ? preference : 'off',
-      glmCode: route === 'glmCode' ? preference : 'off',
     },
+    codingPlans: codingPlans(
+      route === 'kimiCode' && preference === 'on',
+      route === 'kimiCode' && enabled,
+      route === 'glmCode' && preference === 'on',
+      route === 'glmCode' && enabled,
+    ),
     chatGptSignedIn: route === 'chatGpt' && enabled,
     grokSignedIn: false,
     chatGptAccountLabel:
       route === 'chatGpt' && enabled ? 'chatgpt@example.com' : undefined,
-    kimiCodeKeySet: route === 'kimiCode' && enabled,
-    glmKeySet: route === 'glmCode' && enabled,
   });
   return accountStatusLines('personal');
 }
@@ -144,13 +155,10 @@ describe('loadCliApiStatus', () => {
       preferences: {
         chatGpt: 'off',
         grok: 'off',
-        kimiCode: 'off',
-        glmCode: 'off',
       },
+      codingPlans: codingPlans(),
       chatGptSignedIn: false,
       grokSignedIn: false,
-      kimiCodeKeySet: false,
-      glmKeySet: false,
     });
     mocks.lookupApiKeyOrigin.mockReset().mockResolvedValue('none');
     mocks.getSubscriptionUsage
@@ -264,14 +272,11 @@ describe('loadCliApiStatus', () => {
       preferences: {
         chatGpt: 'on',
         grok: 'off',
-        kimiCode: 'on',
-        glmCode: 'off',
       },
+      codingPlans: codingPlans(true, true),
       chatGptSignedIn: true,
       grokSignedIn: false,
       chatGptAccountLabel: 'chatgpt@example.com',
-      kimiCodeKeySet: true,
-      glmKeySet: false,
     });
     mocks.getCliAuthProfile.mockResolvedValue({
       authenticated: true,
@@ -312,13 +317,10 @@ describe('loadCliApiStatus', () => {
       preferences: {
         chatGpt: 'off',
         grok: 'off',
-        kimiCode: 'on',
-        glmCode: 'on',
       },
+      codingPlans: codingPlans(true, true, true, true),
       chatGptSignedIn: false,
       grokSignedIn: false,
-      kimiCodeKeySet: true,
-      glmKeySet: true,
     });
     mocks.getSubscriptionUsage.mockImplementation(async (provider: string) => {
       if (provider === 'glmCodingPlan') {
@@ -507,13 +509,10 @@ describe('loadCliApiStatus', () => {
       preferences: {
         chatGpt: 'off',
         grok: 'off',
-        kimiCode: 'off',
-        glmCode: 'off',
       },
+      codingPlans: codingPlans(false, false, false, true),
       chatGptSignedIn: false,
       grokSignedIn: false,
-      kimiCodeKeySet: false,
-      glmKeySet: true,
     });
     setPersonalKeys('glm');
 
@@ -626,14 +625,11 @@ describe('loadCliApiStatus', () => {
       preferences: {
         chatGpt: 'on',
         grok: 'off',
-        kimiCode: 'off',
-        glmCode: 'off',
       },
+      codingPlans: codingPlans(),
       chatGptSignedIn: true,
       grokSignedIn: false,
       chatGptAccountLabel: 'chatgpt@example.com',
-      kimiCodeKeySet: false,
-      glmKeySet: false,
     });
     mocks.getCliAuthProfile.mockResolvedValue({
       authenticated: true,
@@ -649,14 +645,11 @@ describe('loadCliApiStatus', () => {
         preferences: {
           chatGpt: 'on',
           grok: 'off',
-          kimiCode: 'off',
-          glmCode: 'off',
         },
+        codingPlans: codingPlans(),
         chatGptSignedIn: true,
         grokSignedIn: false,
         chatGptAccountLabel: 'chatgpt@example.com',
-        kimiCodeKeySet: false,
-        glmKeySet: false,
         texraSignedIn: true,
       },
       lines: [

@@ -520,16 +520,16 @@ const HARNESS_MODEL_ACCESS =
           // Grok stays off in the dual-subscription harness so ChatGPT + Kimi
           // remain the visible "on" pair (Grok still appears as a row).
           grok: 'off' as const,
-          kimiCode: 'on' as const,
-          glmCode: 'off' as const,
+        },
+        codingPlans: {
+          kimiCode: { preferred: true, keySet: true },
+          glmCodingPlan: { preferred: false, keySet: true },
         },
         chatGptSignedIn: SHOW_BOTH_SUBSCRIPTION_PREFERENCES,
         ...(SHOW_BOTH_SUBSCRIPTION_PREFERENCES
           ? { chatGptAccountLabel: 'harness@example.edu' }
           : {}),
         grokSignedIn: false,
-        kimiCodeKeySet: true,
-        glmKeySet: true,
       }
     : undefined;
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
