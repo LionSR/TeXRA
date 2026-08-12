@@ -1,6 +1,6 @@
 ---
 created: 2026-08-04
-updated: 2026-08-04
+updated: 2026-08-12
 ---
 
 # PRD: xAI Responses API and `previous_response_id` for Grok
@@ -247,3 +247,50 @@ Items 1–3 help Completions **and** make Responses land cleaner; none require w
 - `src/agent/runtime/ModelFactory.ts` — `shouldUseResponsesAPI`
 - `src/model/providerCapabilities.ts` — `OpenAIResponseProviderCapabilities` / Codex profile
 - `src/agent/modelHandlers/support/ProxyConfigResolver.ts` — `https://api.x.ai/v1`
+
+## 14. Update — 2026-08-12 (re-check against current xAI docs)
+
+Recon pass through the current `docs.x.ai` Pricing, Prompt Caching, and Context
+Compaction pages, prompted by a request to check whether TeXRA's Grok
+integration needs anything for the current model/pricing lineup. **No code or
+catalog changes made — recon only**, per the §2 non-goals.
+
+1. **Chat Completions is now labeled "Deprecated" on xAI's own
+   Responses-vs-Completions comparison page**, not merely "not preferred."
+   §4.1 already treats Responses as the long-term destination for direct
+   xAI; this raises the priority of that call — `ModelHandlerXAI`, TeXRA's
+   only xAI path, is Chat-Completions-only today.
+2. **`grok-4.6` is a new model** on the current pricing page, alongside
+   `grok-build-0.1` and three `grok-4.20-*` variants
+   (`multi-agent-0309`, `0309-reasoning`, `0309-non-reasoning`) — none are in
+   TeXRA's catalog yet (§3 still shows only 4.5/4.3). The catalog is
+   `llm-zoo`-sourced; `package.json` pins `1.25.0`, npm's current latest is
+   `1.26.0`. Unverified whether `1.26.0` already carries these models —
+   check before bumping.
+3. **Long-context pricing is a real, documented xAI mechanic**, not
+   speculative: once a prompt's total tokens (cached and non-cached both)
+   cross a model's threshold, xAI bills *all* prompt tokens for that request
+   at roughly double the short-context rate. Still unmodeled anywhere in
+   TeXRA — `StandardPricingConfig` / `computeStandardPrice`
+   (`src/agent/utils/priceUtils.ts`) only carries one flat `inputPrice` /
+   `outputPrice` pair, and `llm-zoo`'s public schema has no long-context tier
+   field either (per its npm package description). Already flagged as a
+   non-goal in §2 ("long-context pricing accuracy | llm-zoo / billing
+   follow-up"); still open, now with a concrete billing mechanism to model
+   against once a rate source exists.
+4. **§11 open question 3 (does `/responses/compact` exist) is answered:
+   yes.** `POST /v1/responses/compact` is documented and generally
+   available. It takes the same `input` shape as `/v1/responses` and returns
+   a `response.compaction` object carrying an opaque `encrypted_content`
+   blob to replay verbatim as the head of the next request. Responses-only —
+   unreachable from TeXRA until this PRD's routing lands.
+5. Prompt-cache accounting itself is already correct at the *rate* level:
+   Chat Completions' `usage.prompt_tokens_details.cached_tokens` is exactly
+   what `src/agent/modelHandlers/openai/openAIUsage.ts` already reads for
+   every OpenAI-compatible handler, `ModelHandlerXAI` included. The only gap
+   is the long-context *tier* switch in point 3, not cache-token extraction.
+
+Candidate next steps, smallest first: (a) verify and bump `llm-zoo` for the
+new model IDs, (b) model long-context tiered pricing in
+`computeStandardPrice` once a rate source exists, (c) revisit this PRD's
+default-off timeline given Chat Completions' now-explicit deprecated status.
