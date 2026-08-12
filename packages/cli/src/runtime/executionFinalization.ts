@@ -65,8 +65,9 @@ export async function finalizeCliExecution(
 
 /**
  * Drain a CLI session's artifacts before releasing its execution lease.
- * Keeping this operation beside CLI finalization gives the host one local
- * boundary for the terminal durability sequence.
+ * This host-local seam lets CLI lifecycle tests replace the release operation
+ * without mocking the public agent-runtime barrel, which would replace every
+ * runtime export consumed by the same test module.
  */
 export function releaseCliExecutionLeaseAfterArtifacts(
   session: SessionHandle,
