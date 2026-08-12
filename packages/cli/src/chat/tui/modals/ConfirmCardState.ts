@@ -29,8 +29,7 @@ export interface ConfirmCardKeyOptions {
 export interface ConfirmCardHintOptions {
   readonly approveLabel?: string;
   readonly rejectLabel?: string;
-  /** Esc maps to `reject` (`confirmCardKeyAction`), not a dismiss — label the consequence. */
-  readonly escapeLabel?: string;
+  readonly rejectionMode?: ConfirmCardRejectionMode;
   readonly alwaysAllowLabel?: string;
   readonly extraActions?: readonly KeyHint[];
 }
@@ -81,19 +80,23 @@ export function confirmCardKeyAction(
 
 export function confirmCardKeyHints({
   approveLabel = 'approve',
-  rejectLabel = 'reject & note',
-  escapeLabel = 'reject',
+  rejectLabel,
+  rejectionMode = 'feedback',
   alwaysAllowLabel,
   extraActions = [],
 }: ConfirmCardHintOptions): KeyHint[] {
+  const resolvedRejectLabel =
+    rejectLabel ?? (rejectionMode === 'feedback' ? 'reject & note' : 'reject');
+  const resolvedEscapeLabel =
+    rejectionMode === 'immediate' ? resolvedRejectLabel : 'reject';
   return [
     { key: 'y', action: approveLabel },
-    { key: 'n', action: rejectLabel },
+    { key: 'n', action: resolvedRejectLabel },
     ...(alwaysAllowLabel == null
       ? []
       : [{ key: 'a', action: alwaysAllowLabel }]),
     ...extraActions,
-    { key: 'Esc', action: escapeLabel },
+    { key: 'Esc', action: resolvedEscapeLabel },
   ];
 }
 
@@ -158,7 +161,7 @@ export function confirmCardKeyHintsForWidth(
   const coreHints = compactHints.filter(isCoreApprovalHint);
   if (hintsFit(coreHints, options.maxColumns)) return coreHints;
 
-  return [{ key: 'Esc', action: options.escapeLabel ?? 'reject' }];
+  return fullHints.slice(-1);
 }
 
 export function confirmCardCompactHintLayout({
@@ -166,7 +169,7 @@ export function confirmCardCompactHintLayout({
   columns,
   approveLabel,
   rejectLabel,
-  escapeLabel,
+  rejectionMode,
   alwaysAllowLabel,
   extraActions,
 }: ConfirmCardCompactHintLayoutOptions): ConfirmCardCompactHintLayout {
@@ -174,7 +177,7 @@ export function confirmCardCompactHintLayout({
   const inlineHints = confirmCardKeyHintsForWidth({
     approveLabel,
     rejectLabel,
-    escapeLabel,
+    rejectionMode,
     alwaysAllowLabel,
     extraActions,
     maxColumns: Math.max(
@@ -185,7 +188,7 @@ export function confirmCardCompactHintLayout({
   const stackedHints = confirmCardKeyHintsForWidth({
     approveLabel,
     rejectLabel,
-    escapeLabel,
+    rejectionMode,
     alwaysAllowLabel,
     extraActions,
     maxColumns: columns,
