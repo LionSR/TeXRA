@@ -20,7 +20,6 @@ import {
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
-  markOwnedExecutionLeaseUndurable,
   onOwnedExecutionLeaseLost,
   runWithOwnedExecutionLease,
 } from '@agent/storage/executionLease';
@@ -44,10 +43,7 @@ import type {
 } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpConsumerLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
-import {
-  persistChildRunReport,
-  persistChildRunResultMeta,
-} from '@agent/storage/childRunPersistence';
+import { persistChildRunDeliveryBestEffort } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
@@ -389,40 +385,6 @@ async function attemptTurn<TTurn>(
 }
 
 /**
- * Persist a turn report, swallowing storage errors. Best-effort — but the report
- * is the only durable copy of the result when delivery fails, so leave a trace.
- */
-async function persistReportBestEffort(
-  executionId: ExecutionId,
-  msg: string,
-  logger: AgentTrace,
-): Promise<void> {
-  const result = await persistChildRunReport(executionId, msg);
-  if (result.kind === 'failed') {
-    markOwnedExecutionLeaseUndurable(executionId);
-    logger.warn(`Failed to persist report for ${executionId}`, {
-      data: result.err,
-    });
-  }
-}
-
-/** Persist the optional structured result manifest. Best-effort. */
-async function persistResultMetaBestEffort(
-  executionId: ExecutionId,
-  resultMeta: ResultMeta | undefined,
-  logger: AgentTrace,
-): Promise<void> {
-  if (!resultMeta) return;
-  const result = await persistChildRunResultMeta(executionId, resultMeta);
-  if (result.kind === 'failed') {
-    markOwnedExecutionLeaseUndurable(executionId);
-    logger.warn(`Failed to persist result manifest for ${executionId}`, {
-      data: result.err,
-    });
-  }
-}
-
-/**
  * Mint the logical identity of one accepted child turn (#9531): a stable turn
  * token plus the delivery id the turn's single parent delivery is admitted
  * under. Deterministic per execution and turn index — execution-owned, no
@@ -589,8 +551,16 @@ async function deliverTurn<TTurn>(params: {
       ? { ...resultMeta, turnToken: turnRef.token }
       : resultMeta;
 
-  await persistReportBestEffort(executionId, msg, logger);
-  await persistResultMetaBestEffort(executionId, stampedMeta, logger);
+  await persistChildRunDeliveryBestEffort(
+    executionId,
+    msg,
+    stampedMeta,
+    (kind, error) => {
+      logger.warn(`Failed to persist ${kind} for ${executionId}`, {
+        data: error,
+      });
+    },
+  );
   // The turn's result slots now hold this turn: record it as the latest
   // completed turn, clearing the active marker written at acceptance. The
   // store does not serialize per-key writes, so this must queue behind the

@@ -27,7 +27,26 @@ const mocks = vi.hoisted(() => ({
   writeTurnState: vi.fn(),
   resumeToolUseFromResumeData: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
+  throwDeliveryFormatting: false,
 }));
+
+vi.mock('@tools/delegation/subagentDeliveryFormat', async (importOriginal) => {
+  const original =
+    await importOriginal<
+      typeof import('@tools/delegation/subagentDeliveryFormat')
+    >();
+  return {
+    ...original,
+    formatBuiltSubagentDelivery: (
+      ...args: Parameters<typeof original.formatBuiltSubagentDelivery>
+    ) => {
+      if (mocks.throwDeliveryFormatting) {
+        throw new Error('delivery formatting failed');
+      }
+      return original.formatBuiltSubagentDelivery(...args);
+    },
+  };
+});
 
 vi.mock('@agent/runtime/executeAgent', () => ({
   executeAgent: mocks.executeAgent,
@@ -157,6 +176,7 @@ async function launchWaitingTurn(
 describe('NativeSubagentStrategy', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mocks.throwDeliveryFormatting = false;
     mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
     mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
     mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
@@ -400,6 +420,20 @@ describe('NativeSubagentStrategy', () => {
     expect(msg).toContain('<response>');
     expect(msg).toContain('The proof holds.');
     expect(msg).toContain('status="completed"');
+  });
+
+  it('builds the durable result before fallible delivery formatting', async () => {
+    const params = baseParams();
+    const strategy = createNativeSubagentStrategy(params);
+    const turn = toolUseTurnResult('completed', params.executionId) as never;
+
+    const built = await strategy.buildResult(turn);
+    mocks.throwDeliveryFormatting = true;
+
+    await expect(strategy.formatDelivery(turn, 1000)).rejects.toThrow(
+      'delivery formatting failed',
+    );
+    await expect(strategy.buildResult(turn)).resolves.toBe(built);
   });
 
   it('reports a non-throwing subagent failure via isTurnError, captured from onRunError', async () => {
