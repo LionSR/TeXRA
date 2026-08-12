@@ -24,7 +24,10 @@ import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { StreamTabId } from '@shared/schemas';
 
 // Test support imports
-import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import {
+  testExecutionHandle,
+  testExecutionRegistry,
+} from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Local file imports
@@ -54,7 +57,7 @@ function createReleaseSource() {
 }
 
 function setupBinder(executionId: string, session?: SessionHandle) {
-  const registry = new ExecutionRegistry();
+  const registry = testExecutionRegistry();
   const releaseSource = createReleaseSource();
   const logger = { info: vi.fn(), warn: vi.fn() };
   const binder = new ExecutionSubscriptionBinder({

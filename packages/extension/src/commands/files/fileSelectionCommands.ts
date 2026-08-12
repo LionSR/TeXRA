@@ -77,10 +77,6 @@ export function registerFileSelectionCommands(
       id: FILE_SELECTION_COMMAND_IDS.selectOutputFiles,
       handler: selectOutputFiles,
     },
-    {
-      id: FILE_SELECTION_COMMAND_IDS.selectEditedFile,
-      handler: selectEditedFile,
-    },
     { id: FILE_SELECTION_COMMAND_IDS.getCurrentFile, handler: getCurrentFile },
   ]);
 }
@@ -111,18 +107,6 @@ const selectOutputFiles = createMultiPicker({
   openLabel: 'Select Output Files',
   filters: () => ({ 'Text files': ['tex', 'txt', 'md'] }),
 });
-
-const selectEditedFile = (currentFile?: string) =>
-  announceSelection(
-    async () =>
-      (
-        await selectFiles({
-          currentFile,
-          openLabel: 'Select Edited File',
-          filters: {},
-        })
-      )?.[0] ?? null,
-  );
 
 async function getCurrentFile(): Promise<string | null> {
   // Try activeTextEditor first (for text files)

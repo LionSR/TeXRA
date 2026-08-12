@@ -97,6 +97,18 @@ describe('claude agent progress events', () => {
           session_id: 'sess-2',
           result: 'Lint passed.',
           usage: { input_tokens: 12, output_tokens: 4 },
+          modelUsage: {
+            'claude-sonnet-4-6': {
+              inputTokens: 12,
+              outputTokens: 4,
+              cacheReadInputTokens: 0,
+              cacheCreationInputTokens: 0,
+              webSearchRequests: 0,
+              costUSD: 0.01,
+              contextWindow: 200_000,
+              maxOutputTokens: 32_000,
+            },
+          },
           total_cost_usd: 0.01,
         },
       ]),
@@ -156,9 +168,11 @@ describe('claude agent progress events', () => {
         },
         {
           type: 'result',
-          subtype: 'error',
+          subtype: 'error_during_execution',
           session_id: 'sess-error',
-          result: 'Claude failed',
+          errors: ['Claude failed'],
+          modelUsage: {},
+          total_cost_usd: 0,
         },
       ]),
     );

@@ -1,10 +1,7 @@
-import nunjucks from 'nunjucks';
 import { z } from 'zod';
 
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-
-const nunjucksEnv = nunjucks.configure({ autoescape: false });
 
 let polishPromptPath: string | null = null;
 let templatePromise: Promise<string> | null = null;
@@ -51,8 +48,14 @@ export async function renderPolishPrompt(
   fileContext: string,
   text: string,
 ): Promise<string> {
-  const template = await loadPromptTemplate();
+  const [template, { default: nunjucks }] = await Promise.all([
+    loadPromptTemplate(),
+    import('nunjucks'),
+  ]);
+  const environment = new nunjucks.Environment(undefined, {
+    autoescape: false,
+  });
   return (
-    nunjucksEnv.renderString(template, { FILE_CONTEXT: fileContext }) + text
+    environment.renderString(template, { FILE_CONTEXT: fileContext }) + text
   );
 }
