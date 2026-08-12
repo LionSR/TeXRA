@@ -389,10 +389,12 @@ export async function activate(context: vscode.ExtensionContext) {
           await refreshModelListStateIfNeeded(globalSM);
         await migrateCopilotModelRouteSelections(globalSM);
         if (!skipped) {
-          logger.info(
-            'extension',
-            `Model list version changed (${previousVersion ?? 'none'} -> ${currentVersion}), updating model list`,
-          );
+          if (previousVersion !== currentVersion) {
+            logger.info(
+              'extension',
+              `Model list version changed (${previousVersion ?? 'none'} -> ${currentVersion}), updating model list`,
+            );
+          }
           logger.info('extension', 'Model list refresh completed successfully');
           if (added.length > 0 || removed.length > 0) {
             invalidateModelOptionsCache();
