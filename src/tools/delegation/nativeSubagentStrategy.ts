@@ -26,7 +26,6 @@
  * launching, resuming (tool-use only), and formatting its result shape.
  */
 
-import type { ResultMeta } from '@agent/storage';
 import { getExecutionStore } from '@agent/storage';
 import {
   isWaitingFlowResult,
@@ -64,6 +63,7 @@ import {
 import {
   buildSubagentResult,
   formatBuiltSubagentDelivery,
+  type BuiltSubagentResult,
 } from './subagentDeliveryFormat';
 
 /**
@@ -146,6 +146,10 @@ export function createNativeSubagentStrategy(
   readonly getTurnError: () => unknown;
   /** Terminal-shaped result captured from the most recent turn's return. */
   readonly getTurnResult: () => AgentFlowResult | undefined;
+  /** Shared typed result construction used by detached and in-band drivers. */
+  readonly buildResult: (
+    turn: AgentRuntimeFlowResult,
+  ) => Promise<BuiltSubagentResult>;
 } {
   let runHandle: AgentRunHandle | undefined;
   // Captured for the turn currently in flight; read once the call resolves.
@@ -158,7 +162,7 @@ export function createNativeSubagentStrategy(
   // formatDelivery always runs before buildResultMeta for the same turn (see
   // childRunLoop's deliverTurn) — cache the one diff-computing pass here so
   // the subagent's diffs are written once per turn, not twice.
-  let cachedDelivery: { msg: string; resultMeta: ResultMeta } | undefined;
+  let cachedDelivery: { msg: string; built: BuiltSubagentResult } | undefined;
 
   const resolveDeliveryTarget = (): StreamTabId | undefined =>
     runHandle ? runHandle.deliveryTargetStreamId : params.parentStreamId;
@@ -198,7 +202,7 @@ export function createNativeSubagentStrategy(
 
   const buildDelivery = async (
     turn: AgentRuntimeFlowResult,
-  ): Promise<{ msg: string; resultMeta: ResultMeta }> => {
+  ): Promise<{ msg: string; built: BuiltSubagentResult }> => {
     if (!cachedDelivery) {
       const result = toDeliveryResult(turn, params.executionId);
       const built = await buildSubagentResult(
@@ -218,7 +222,7 @@ export function createNativeSubagentStrategy(
           built,
           params.workingDirectory,
         ),
-        resultMeta: built.resultMeta,
+        built,
       };
     }
     return cachedDelivery;
@@ -338,6 +342,9 @@ export function createNativeSubagentStrategy(
 
     resolveDeliveryTarget,
 
+    buildResult: async (turn: AgentRuntimeFlowResult) =>
+      (await buildDelivery(turn)).built,
+
     formatDelivery: async (turn) => (await buildDelivery(turn)).msg,
 
     formatError: (turn, err) => {
@@ -372,7 +379,7 @@ export function createNativeSubagentStrategy(
           { parentExecutionId: params.parentExecutionId },
         );
       }
-      return (await buildDelivery(turn)).resultMeta;
+      return (await buildDelivery(turn)).built.resultMeta;
     },
   };
 }
