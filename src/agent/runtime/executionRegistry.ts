@@ -1,7 +1,7 @@
 /**
  * Handle-based execution registry.
  *
- * Manages ExecutionHandle instances and provides registration, lookup, change
+ * Manages agent execution handles and provides registration, lookup, change
  * notification, and subagent lineage tracking in a single module.
  */
 
@@ -32,11 +32,10 @@ import {
 import { formatDuration, onAbort } from '@utils/core';
 import { createListenerSet, type ListenerSet } from '@utils/core/listenerSet';
 import {
-  type ExecutionHandle,
+  isChildExecution,
+  type AgentExecutionHandle,
   type ExecutionStatusInfo,
   type LiveToolUseFlowContext,
-  AgentExecutionHandle,
-  isChildExecution,
 } from './ExecutionHandle';
 import { ExecutionInteractionOwnership } from './executionInteractionOwnership';
 import { SessionEventHub } from './SessionEventHub';
@@ -122,7 +121,7 @@ export class ExecutionRegistry {
    * other's runs; the CLI chat controller is its only writer.
    */
   readonly interactionOwnership = new ExecutionInteractionOwnership(this);
-  private readonly handles = new Map<string, ExecutionHandle>();
+  private readonly handles = new Map<string, AgentExecutionHandle>();
   private disposed = false;
   private readonly changeCallbacks = new Map<string, Array<() => void>>();
   private disposeStatusSubscription = (): void => undefined;
@@ -144,10 +143,10 @@ export class ExecutionRegistry {
   // waiters in `changeCallbacks`). Used by the executions subscribe action.
   private readonly persistentListeners = new Map<
     string,
-    Set<(handle: ExecutionHandle | undefined) => void>
+    Set<(handle: AgentExecutionHandle | undefined) => void>
   >();
   private readonly registrationListeners: ListenerSet<
-    (executionId: string, handle: ExecutionHandle | undefined) => void
+    (executionId: string, handle: AgentExecutionHandle | undefined) => void
   > = createListenerSet();
   private readonly childActivations = new Map<
     string,
@@ -176,10 +175,7 @@ export class ExecutionRegistry {
     // bookkeeping retains the status machine subscription's original ordering.
     this.disposeStatusSubscription = events.subscribeStatus(({ streamId }) => {
       for (const [executionId, handle] of this.handles) {
-        if (
-          handle instanceof AgentExecutionHandle &&
-          handle.childStreamId === streamId
-        ) {
+        if (handle.childStreamId === streamId) {
           this.notifyWaiters(executionId);
           if (handle.isChildExecution) {
             this.emitChildActivity(handle.parentStreamId);
@@ -223,14 +219,10 @@ export class ExecutionRegistry {
   }
 
   /** Register an execution handle. */
-  track(handle: ExecutionHandle): void {
+  track(handle: AgentExecutionHandle): void {
     this.assertActive();
     const previous = this.handles.get(handle.executionId);
-    if (
-      previous instanceof AgentExecutionHandle &&
-      handle instanceof AgentExecutionHandle &&
-      previous.suspendedTerminationStarted
-    ) {
+    if (previous && previous.suspendedTerminationStarted) {
       // A resumed lifecycle can replace its suspended predecessor while the
       // predecessor's asynchronous teardown is still in progress. The
       // stop already claimed that execution, so carry it across the ownership
@@ -238,7 +230,7 @@ export class ExecutionRegistry {
       handle.interrupt();
     }
     this.handles.set(handle.executionId, handle);
-    if (handle instanceof AgentExecutionHandle && handle.isChildExecution) {
+    if (handle.isChildExecution) {
       this.emitChildActivity(handle.parentStreamId);
       this.emitParentStreamUpdate({
         childStreamId: handle.childStreamId,
@@ -314,32 +306,30 @@ export class ExecutionRegistry {
   }
 
   /** Remove `handle` only if it is still the current registration. */
-  private untrackIfCurrent(handle: ExecutionHandle): boolean {
+  private untrackIfCurrent(handle: AgentExecutionHandle): boolean {
     if (this.handles.get(handle.executionId) !== handle) return false;
     this.untrackHandle(handle);
     return true;
   }
 
-  private untrackHandle(handle: ExecutionHandle): void {
+  private untrackHandle(handle: AgentExecutionHandle): void {
     this.handles.delete(handle.executionId);
     this.notifyRegistrationListeners(handle.executionId, undefined);
     this.notifyWaiters(handle.executionId);
-    if (handle instanceof AgentExecutionHandle && handle.isChildExecution) {
+    if (handle.isChildExecution) {
       this.emitChildActivity(handle.parentStreamId);
     }
   }
 
-  getHandle(executionId: string): ExecutionHandle | undefined {
+  getHandle(executionId: string): AgentExecutionHandle | undefined {
     return this.handles.get(executionId);
   }
 
   getStatus(
-    handle: ExecutionHandle,
+    handle: AgentExecutionHandle,
   ): ExecutionStatusInfo & { status: StreamPhase } {
     const status =
-      handle instanceof AgentExecutionHandle
-        ? (this.streamStatus.get(handle.childStreamId) ?? STREAM_PHASE.RUNNING)
-        : STREAM_PHASE.RUNNING;
+      this.streamStatus.get(handle.childStreamId) ?? STREAM_PHASE.RUNNING;
 
     if (!isActivePhase(status)) {
       return { status, elapsed: null };
@@ -355,10 +345,7 @@ export class ExecutionRegistry {
     streamId: StreamTabId,
   ): AgentExecutionHandle | undefined {
     for (const handle of this.handles.values()) {
-      if (
-        handle instanceof AgentExecutionHandle &&
-        handle.childStreamId === streamId
-      ) {
+      if (handle.childStreamId === streamId) {
         return handle;
       }
     }
@@ -366,10 +353,7 @@ export class ExecutionRegistry {
   }
 
   getAgentHandles(): AgentExecutionHandle[] {
-    return [...this.handles.values()].filter(
-      (handle): handle is AgentExecutionHandle =>
-        handle instanceof AgentExecutionHandle,
-    );
+    return [...this.handles.values()];
   }
 
   getToolUseFlowContext(
@@ -442,10 +426,7 @@ export class ExecutionRegistry {
     const handle = this.handles.get(executionId);
     if (!handle) return false;
     const visited = new Set<string>();
-    if (
-      options.detachActiveChildren === true &&
-      handle instanceof AgentExecutionHandle
-    ) {
+    if (options.detachActiveChildren === true) {
       this.detachActiveChildren(handle.childStreamId);
     }
     const result = this.terminate(handle, visited, {
@@ -474,9 +455,7 @@ export class ExecutionRegistry {
    */
   killBackgroundProcesses(): void {
     for (const handle of this.handles.values()) {
-      if (handle instanceof AgentExecutionHandle) {
-        handle.interruptBackgroundProcess();
-      }
+      handle.interruptBackgroundProcess();
     }
   }
 
@@ -610,12 +589,12 @@ export class ExecutionRegistry {
    * Add a persistent listener invoked on every change to `executionId` (status
    * transition, progress update, kill, untrack). Returns a disposer.
    *
-   * The callback receives the current `ExecutionHandle`, or `undefined` once the
+   * The callback receives the current handle, or `undefined` once the
    * execution has been untracked (terminal event).
    */
   addListener(
     executionId: string,
-    cb: (handle: ExecutionHandle | undefined) => void,
+    cb: (handle: AgentExecutionHandle | undefined) => void,
   ): () => void {
     let set = this.persistentListeners.get(executionId);
     if (!set) {
@@ -633,7 +612,7 @@ export class ExecutionRegistry {
 
   /** Observe handle registrations, replacements, and removals across all ids. */
   addRegistrationListener(
-    cb: (executionId: string, handle: ExecutionHandle | undefined) => void,
+    cb: (executionId: string, handle: AgentExecutionHandle | undefined) => void,
   ): () => void {
     return this.registrationListeners.add(cb);
   }
@@ -722,29 +701,25 @@ export class ExecutionRegistry {
   }
 
   private terminate(
-    handle: ExecutionHandle,
+    handle: AgentExecutionHandle,
     visited: Set<string>,
     options: TerminateOptions,
   ): boolean {
     if (visited.has(handle.executionId)) return false;
     visited.add(handle.executionId);
-    if (handle instanceof AgentExecutionHandle) {
-      if (options.cascadeChildren === true) {
-        this.interruptActiveChildren(handle.childStreamId, visited, options);
-      }
-      if (handle.interrupt()) {
-        this.cancelStreamStatus(handle.childStreamId);
-        return true;
-      }
-      // No live interrupt context: a native subagent suspended at WAITING has
-      // already had its tool-use session disposed and interrupt handler detached
-      // (runToolUseFlow's finally), while the handle stays tracked for resume
-      // (runFlowWithLifecycle). Run the teardown it parked with instead of
-      // silently no-oping the kill.
-      return this.terminateWaitingHandle(handle);
+    if (options.cascadeChildren === true) {
+      this.interruptActiveChildren(handle.childStreamId, visited, options);
     }
-
-    return false;
+    if (handle.interrupt()) {
+      this.cancelStreamStatus(handle.childStreamId);
+      return true;
+    }
+    // No live interrupt context: a native subagent suspended at WAITING has
+    // already had its tool-use session disposed and interrupt handler detached
+    // (runToolUseFlow's finally), while the handle stays tracked for resume
+    // (runFlowWithLifecycle). Run the teardown it parked with instead of
+    // silently no-oping the kill.
+    return this.terminateWaitingHandle(handle);
   }
 
   /**
@@ -1007,7 +982,7 @@ export class ExecutionRegistry {
 
   private notifyRegistrationListeners(
     executionId: string,
-    handle: ExecutionHandle | undefined,
+    handle: AgentExecutionHandle | undefined,
   ): void {
     for (const listener of [...this.registrationListeners]) {
       listener(executionId, handle);
