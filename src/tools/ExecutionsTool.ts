@@ -1245,8 +1245,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     // Resident while the command runs (an open writer refuses eviction); a
     // released stream rehydrates from disk, and an ephemeral store no-ops.
     if (streamId) await transcripts.ensureLoaded(streamId);
-    const log = streamId ? transcripts.get(streamId) : undefined;
-    if (!log) {
+    if (!streamId || !transcripts.get(streamId)) {
       return executed(
         `No retained output for ${executionId}: its stream log is no longer available. ` +
           `Use /executions/${executionId}/report for the result summary.`,
