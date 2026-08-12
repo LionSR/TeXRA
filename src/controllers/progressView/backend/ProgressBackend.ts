@@ -49,7 +49,6 @@ interface ProgressBackendLifecycleOptions {
   cleanupDeletedStream(stream: StreamTabId): void;
   cleanupDeletedStreams(options: { allDeleted: boolean }): void;
   rebuildRenderedStreams(options: { syncActiveStream: boolean }): void;
-  activateStream(stream: StreamTabId): Promise<void> | void;
   notifyDeletionRetained(
     activeCount: number,
     failedCount: number,
@@ -63,6 +62,7 @@ export interface ProgressBackendOptions {
   hasTarget(): boolean;
   approvals: ProgressBackendApprovalOptions;
   lifecycle: ProgressBackendLifecycleOptions;
+  reportTranscriptLoadError(error: unknown, stream: StreamTabId | ''): void;
   getStreamControls?: GetProgressStreamControls;
   /** Session that owns this backend's coordination state (defaults to the process session). */
   session?: SessionHandle;
@@ -100,6 +100,7 @@ export class ProgressBackend {
   private readonly litRenderer: LitSessionRenderer;
   private readonly session: SessionHandle;
   private readonly lifecycle: ProgressBackendLifecycleOptions;
+  private readonly reportTranscriptLoadError: ProgressBackendOptions['reportTranscriptLoadError'];
   private readonly postMessage: (message: ProgressViewOutboundMessage) => void;
   private readonly stateOwnership: 'backend' | 'session';
   private readonly storageOperationQueue = new PQueue({ concurrency: 1 });
@@ -112,6 +113,7 @@ export class ProgressBackend {
     this.session = options.session ?? defaultSession();
     this.stateOwnership = options.stateOwnership ?? 'backend';
     this.lifecycle = options.lifecycle;
+    this.reportTranscriptLoadError = options.reportTranscriptLoadError;
     this.postMessage = (message) => {
       if (!options.hasTarget()) return;
       // View refreshes are best-effort; a closed transport must not take down
@@ -170,6 +172,65 @@ export class ProgressBackend {
     options?: Parameters<LitSessionRenderer['syncStreamContent']>[1],
   ): void {
     this.litRenderer.syncStreamContent(stream, options);
+  }
+
+  /** Rebuild stream tabs and, when requested, rehydrate the active viewport. */
+  async syncRenderedStreams(options: {
+    syncActiveStream: boolean;
+    theme?: 'dark' | 'light';
+  }): Promise<void> {
+    const activeStream = this.webviewUpdater.sendStreamMetadata(
+      this.state,
+      this.state.streamStatus.getAllStreamStates(),
+      options.theme,
+    );
+    if (!options.syncActiveStream) return;
+
+    const hasStreams = this.state.streamLogs.keys().length > 0;
+    if (!activeStream && hasStreams) return;
+    try {
+      await this.syncActiveStream(activeStream, {
+        notifyActivation: false,
+      });
+    } catch (error) {
+      this.reportTranscriptLoadError(error, activeStream);
+    }
+  }
+
+  /** Select and render one existing stream without rebuilding the tab list. */
+  async activateStream(stream: StreamTabId): Promise<void> {
+    if (!this.state.streamLogs.has(stream)) return;
+    this.state.switchActiveStream(stream);
+    try {
+      await this.syncActiveStream(stream, {
+        notifyActivation: true,
+      });
+    } catch (error) {
+      this.reportTranscriptLoadError(error, stream);
+    }
+  }
+
+  private async syncActiveStream(
+    stream: StreamTabId | '',
+    options: {
+      notifyActivation: boolean;
+    },
+  ): Promise<void> {
+    if (!this.litRenderer.isAvailable()) return;
+    if (stream) {
+      try {
+        await this.state.streamLogs.ensureLoaded(stream);
+      } catch (error) {
+        if (options.notifyActivation && this.state.activeStream === stream) {
+          this.litRenderer.onActiveStreamChanged(stream);
+        }
+        throw error;
+      }
+    }
+    if (this.state.activeStream !== stream) return;
+    if (options.notifyActivation)
+      this.litRenderer.onActiveStreamChanged(stream);
+    this.litRenderer.syncStreamContent(stream, { includeActiveState: true });
   }
 
   /**
@@ -303,7 +364,10 @@ export class ProgressBackend {
 
     const nextActive = this.state.activeStream;
     if (shouldActivateStream && nextActive) {
-      await this.lifecycle.activateStream(nextActive);
+      // DELETE_STREAM clears the frontend selection when the deleted tab was
+      // active. Reassert the surviving selection even when a concurrent
+      // activation already selected it while storage deletion was pending.
+      await this.activateStream(nextActive);
     } else {
       // The deleted stream was not the active one, so only the stream list
       // changed; the active stream's content is still on screen and correct.
