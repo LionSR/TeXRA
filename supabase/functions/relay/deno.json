@@ -2,6 +2,6 @@
   "imports": {
     "@hono/hono": "jsr:@hono/hono@4.13.1",
     "@supabase/supabase-js": "jsr:@supabase/supabase-js@2.111.0",
-    "llm-zoo": "npm:llm-zoo@1.26.0"
+    "llm-zoo": "npm:llm-zoo@1.27.0"
   }
 }

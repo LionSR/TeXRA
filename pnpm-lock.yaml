@@ -22,8 +22,8 @@ importers:
         specifier: ^3.11.0
         version: 3.11.0(@floating-ui/utils@0.2.11)(@types/node@22.19.17)(@types/react@19.2.18)
       '@cantoo/pdf-lib':
-        specifier: ^2.8.1
-        version: 2.8.1(html-entities@2.6.0)
+        specifier: ^2.8.2
+        version: 2.8.2(html-entities@2.6.0)
       '@fortawesome/free-solid-svg-icons':
         specifier: ^7.3.1
         version: 7.3.1
@@ -58,8 +58,8 @@ importers:
         specifier: ^0.147.0
         version: 0.147.0
       '@openrouter/sdk':
-        specifier: ^1.2.27
-        version: 1.2.27
+        specifier: ^1.2.29
+        version: 1.2.29
       '@supabase/supabase-js':
         specifier: 2.112.3
         version: 2.112.3(@opentelemetry/api@1.9.1)
@@ -160,8 +160,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.26.0
-        version: 1.26.0(zod@4.4.3)
+        specifier: ^1.27.0
+        version: 1.27.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -422,8 +422,8 @@ importers:
         specifier: ^0.116.0
         version: 0.116.0(zod@4.4.3)
       '@cantoo/pdf-lib':
-        specifier: ^2.8.1
-        version: 2.8.1(html-entities@2.6.0)
+        specifier: ^2.8.2
+        version: 2.8.2(html-entities@2.6.0)
       '@google/genai':
         specifier: ^2.16.0
         version: 2.16.0(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))
@@ -443,8 +443,8 @@ importers:
         specifier: ^0.147.0
         version: 0.147.0
       '@openrouter/sdk':
-        specifier: ^1.2.27
-        version: 1.2.27
+        specifier: ^1.2.29
+        version: 1.2.29
       '@supabase/supabase-js':
         specifier: 2.112.3
         version: 2.112.3(@opentelemetry/api@1.9.1)
@@ -518,8 +518,8 @@ importers:
         specifier: ^2.0.2
         version: 2.0.2
       llm-zoo:
-        specifier: ^1.26.0
-        version: 1.26.0(zod@4.4.3)
+        specifier: ^1.27.0
+        version: 1.27.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -803,8 +803,8 @@ importers:
         specifier: ^3.11.0
         version: 3.11.0(@floating-ui/utils@0.2.11)(@types/node@22.19.17)(@types/react@19.2.18)
       '@cantoo/pdf-lib':
-        specifier: ^2.8.1
-        version: 2.8.1(html-entities@2.6.0)
+        specifier: ^2.8.2
+        version: 2.8.2(html-entities@2.6.0)
       '@fortawesome/free-solid-svg-icons':
         specifier: ^7.3.1
         version: 7.3.1
@@ -830,8 +830,8 @@ importers:
         specifier: ^0.147.0
         version: 0.147.0
       '@openrouter/sdk':
-        specifier: ^1.2.27
-        version: 1.2.27
+        specifier: ^1.2.29
+        version: 1.2.29
       '@supabase/supabase-js':
         specifier: 2.112.3
         version: 2.112.3(@opentelemetry/api@1.9.1)
@@ -890,8 +890,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.26.0
-        version: 1.26.0(zod@4.4.3)
+        specifier: ^1.27.0
+        version: 1.27.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -1107,8 +1107,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.26.0
-        version: 1.26.0(zod@4.4.3)
+        specifier: ^1.27.0
+        version: 1.27.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -1486,8 +1486,8 @@ packages:
     resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
     hasBin: true
 
-  '@cantoo/pdf-lib@2.8.1':
-    resolution: {integrity: sha512-ChSLQuCqetxsElt45FXs/4CmsgYIlI12PBfo0HPyQnhH6U+Rs1WSNekNwG8ppAi2N/1eqjIr7ldeGrtjtkRhbQ==}
+  '@cantoo/pdf-lib@2.8.2':
+    resolution: {integrity: sha512-f0BJM3uPOjbPR3YriSEUIaTM0qnqthjFmTZX9NGI0NDM2Tj4a8xv7Z5Hb6jzUrhfb3/9Y77+xxoOln0IIiYq+w==}
     peerDependencies:
       html-entities: ^2.3.2
 
@@ -2197,8 +2197,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@openrouter/sdk@1.2.27':
-    resolution: {integrity: sha512-qSX6Ps4v8AzP4gdcV5Pg7smmzFDdDqRX3VaMpecLYwCqsLBNijybKDUvIxq/uB0xeY2+LmVuthfE/1IOfyFKlg==}
+  '@openrouter/sdk@1.2.29':
+    resolution: {integrity: sha512-zQUsKFJQSlnYCX32Vl3q3LcsN4N9i/6FX09pu0XH85xagYIp2XKJam/JIh3XWPotLUvpF+OS/OP3u8oSgzFN+A==}
 
   '@opentelemetry/api-logs@0.220.0':
     resolution: {integrity: sha512-CmVa4ImJ+ynfrPMNaAXHET6Bhb44SwzmfyVJFq9ni2jgXJR/l7C6gfVFddNmHP+ZOkP9cf4f9DBe68qVLTHc9w==}
@@ -5098,8 +5098,8 @@ packages:
   lit@3.3.3:
     resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
 
-  llm-zoo@1.26.0:
-    resolution: {integrity: sha512-1lvx5/N+WCMX+rehIjZjbpJ0tcysWmkUfQJcxhYx3kQumPiqgJLePwoK1OULEIOOqPW3Xx67bhvXSmeUzxx3fw==}
+  llm-zoo@1.27.0:
+    resolution: {integrity: sha512-hx0SFcdKcqohlwr9styXqxnV4Zzend/RMEtLUrNPeWnQzK0LFjljMsvy6TtWIaWWrBgL3LGk3w2aHAMiJepCLA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^4.0.0
@@ -7339,7 +7339,7 @@ snapshots:
     dependencies:
       css-tree: 3.2.1
 
-  '@cantoo/pdf-lib@2.8.1(html-entities@2.6.0)':
+  '@cantoo/pdf-lib@2.8.2(html-entities@2.6.0)':
     dependencies:
       '@pdf-lib/standard-fonts': 1.0.0
       '@pdf-lib/upng': 1.0.1
@@ -8063,7 +8063,7 @@ snapshots:
   '@openai/codex@0.147.0-win32-x64':
     optional: true
 
-  '@openrouter/sdk@1.2.27':
+  '@openrouter/sdk@1.2.29':
     dependencies:
       zod: 4.4.3
 
@@ -11057,7 +11057,7 @@ snapshots:
       lit-element: 4.2.2
       lit-html: 3.3.2
 
-  llm-zoo@1.26.0(zod@4.4.3):
+  llm-zoo@1.27.0(zod@4.4.3):
     optionalDependencies:
       zod: 4.4.3
 
