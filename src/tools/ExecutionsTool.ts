@@ -449,19 +449,28 @@ const PathFieldSchema = z.string().describe('Path starting with /executions');
 
 const ViewActionSchema = z.strictObject({
   path: PathFieldSchema,
-  // nullish + normalized (not a bare literal, unlike the other branches):
-  // 'view' is the common no-op-preamble call, so omitting `action` — or, per
-  // AGENTS.md's tool-input-schema rule, sending it as `null` (OpenAI-
-  // compatible structured-output providers represent an omitted optional
-  // field that way) — must both dispatch to this branch and keep `action`
-  // out of the JSON-schema `required` list, matching the pre-refactor
-  // `.prefault('view')`. z.discriminatedUnion matches a missing/null
-  // discriminator against a branch whose discriminator schema itself accepts
-  // it, so no top-level preprocess is needed.
+  // Optional + defaulted, NOT .nullish() (unlike every other nullish field in
+  // this file): 'view' is the common no-op-preamble call, so omitting
+  // `action` must both dispatch to this branch and keep `action` out of the
+  // JSON-schema `required` list, matching the pre-refactor `.prefault('view')`
+  // and AGENTS.md's "design for the model's first call" rule.
+  // `.optional().default('view')` keeps the emitted per-branch JSON schema a
+  // clean single-value `const` (not an `anyOf` with `null`) — required so
+  // `convertToolSchema`'s `flattenTopLevelUnion`/`schemaLiteralValue` (which
+  // only recognizes a bare `const`/one-item `enum` as a discriminator
+  // literal) still merges all five actions into one enum for the
+  // OpenAI/Anthropic/Google-facing schema. `.nullish()` here produces an
+  // `anyOf` that flattening can't read as a literal, silently dropping
+  // wait/kill/subscribe/unsubscribe from the advertised schema instead.
+  // The explicit-`null` case AGENTS.md's rule calls out (a structured-output
+  // provider representing an omitted optional field as `null` rather than
+  // absent) is handled separately below by ExecutionsToolInputSchema's
+  // preprocess, which strips a `null` action down to omitted before this
+  // branch's own default runs — so the type stays a plain optional literal.
   action: z
     .literal('view')
-    .nullish()
-    .transform((v) => v ?? ('view' as const))
+    .optional()
+    .default('view')
     .describe('Read execution data (returns immediately). Default action.'),
 
   /** Optional line range [start, end] for large outputs. */
@@ -572,7 +581,7 @@ const UnsubscribeActionSchema = z.strictObject({
     ),
 });
 
-const ExecutionsToolInputSchema = z.discriminatedUnion('action', [
+const ExecutionsToolActionSchema = z.discriminatedUnion('action', [
   ViewActionSchema,
   WaitActionSchema,
   KillActionSchema,
@@ -580,7 +589,29 @@ const ExecutionsToolInputSchema = z.discriminatedUnion('action', [
   UnsubscribeActionSchema,
 ]);
 
-type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
+// A structured-output provider represents an omitted optional field as an
+// explicit `action: null` rather than leaving the key absent (AGENTS.md's
+// tool-input-schema rule). z.discriminatedUnion reads the raw `action` value
+// to pick a branch before any field-level default runs, and `null` isn't one
+// of the branch literals, so strip it down to "key absent" here — the view
+// branch's own `.optional().default('view')` then takes over exactly as it
+// does for a truly omitted key. A genuinely absent key needs no help: Zod
+// already matches that against the one branch whose discriminator accepts
+// undefined.
+const ExecutionsToolInputSchema = z.preprocess((value) => {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'action' in value &&
+    value.action === null
+  ) {
+    const { action: _null, ...rest } = value;
+    return rest;
+  }
+  return value;
+}, ExecutionsToolActionSchema);
+
+type ExecutionsToolInput = z.infer<typeof ExecutionsToolActionSchema>;
 
 export class ExecutionsTool extends defineTool({
   name: 'executions',
