@@ -40,11 +40,16 @@ import { setPreferXaiSubscription } from '@model/xai/xaiPreference';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  codingPlanForApiProvider,
+  codingPlanForUsageSetting,
+} from '@shared/codingPlanSubscriptions';
 import type {
   SettingsViewInboundHandlerRegistry,
   SpendingStatus,
+  SubscriptionUsageSnapshots,
 } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
 import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
@@ -235,14 +240,17 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   async postSubscriptionUsage(forceRefresh = false): Promise<void> {
-    const [chatgpt, kimiCode, glmCodingPlan] = await Promise.all([
-      this.subscriptionUsage.getUsage('chatgpt', { forceRefresh }),
-      this.subscriptionUsage.getUsage('kimiCode', { forceRefresh }),
-      this.subscriptionUsage.getUsage('glmCodingPlan', { forceRefresh }),
-    ]);
+    const snapshots = Object.fromEntries(
+      await Promise.all(
+        SUBSCRIPTION_USAGE_PROVIDERS.map(async (provider) => [
+          provider,
+          await this.subscriptionUsage.getUsage(provider, { forceRefresh }),
+        ]),
+      ),
+    ) as SubscriptionUsageSnapshots;
     this.options.renderer.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
-      snapshots: { chatgpt, kimiCode, glmCodingPlan },
+      snapshots,
     });
   }
 
@@ -409,7 +417,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     }
 
     await this.postProfileData();
-    if (key === GlobalStateKey.GLM_USE_CHINA) {
+    if (codingPlanForUsageSetting(key)) {
       await this.postSubscriptionUsage();
     }
     if (!result.affectsModelAvailability) return;
@@ -422,9 +430,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   private async refreshAfterProviderKeyChange(provider: string): Promise<void> {
     invalidateApiKeyCache();
     invalidateModelOptionsCache();
-    let usageProvider: 'kimiCode' | 'glmCodingPlan' | undefined;
-    if (provider === 'kimiCode') usageProvider = 'kimiCode';
-    else if (provider === 'glm') usageProvider = 'glmCodingPlan';
+    const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
     if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
     await this.postProfileData();
     await this.postModelSelectionData();

@@ -8,6 +8,7 @@ import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { UsageRoute } from '@shared/schemas';
+import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
@@ -83,7 +84,7 @@ const PLAN_ACCOUNTING_ROUTES = new Set<UsageRoute>([
   'relay',
   'chatgpt-subscription',
   'xai-subscription',
-  'kimi-code-subscription',
+  ...CODING_PLAN_SUBSCRIPTIONS.map((plan) => plan.usageRoute),
 ]);
 
 function isPlanAccounting(

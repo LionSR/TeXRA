@@ -112,6 +112,7 @@ import {
 } from './support/mediaAttachmentPolicy';
 import {
   resolveBaseUrl,
+  resolveProxyEndpoint,
   shouldUseOpenRouter,
   usesServerSideKeysRoute,
   type ProxyConfig,
@@ -203,10 +204,15 @@ export abstract class ModelHandler<
 > {
   private readonly clientWireIdentities = new WeakMap<
     object,
-    { route: ModelCredentialRoute; credentialIdentity: string }
+    {
+      route: ModelCredentialRoute;
+      credentialIdentity: string;
+      usageRoute?: NonNullable<NormalizedUsage['usageRoute']>;
+    }
   >();
   private activeAttemptCredentialRoute: ModelCredentialRoute | undefined;
   private lastAttemptCredentialRoute: ModelCredentialRoute | undefined;
+  private lastAttemptUsageRoute: NormalizedUsage['usageRoute'];
   /** Set while {@link withSingleTurnGuard} is bracketing a `createResponse`. */
   private singleTurnInFlight = false;
   public config: ResolvedModelConfig;
@@ -559,10 +565,14 @@ export abstract class ModelHandler<
         ? `Missing OpenRouter API key. Set an OpenRouter API key in settings.`
         : `Missing API key for ${provider}. ${INCLUDED_MODEL_ACCESS_REMEDY}`,
     );
+    const endpoint = resolveProxyEndpoint(
+      this.buildProxyConfig(false, useOpenRouter),
+    );
     return {
       apiKey,
-      baseUrl: resolveBaseUrl(this.buildProxyConfig(false, useOpenRouter)),
+      baseUrl: endpoint.baseUrl,
       route: useOpenRouter ? 'openrouter' : 'api-key',
+      ...('usageRoute' in endpoint && { usageRoute: endpoint.usageRoute }),
     };
   }
 
@@ -619,6 +629,17 @@ export abstract class ModelHandler<
     return client;
   }
 
+  /** Associate a constructed client with a more precise accounting route. */
+  protected rememberClientUsageRoute<Candidate extends object>(
+    client: Candidate,
+    route: NonNullable<NormalizedUsage['usageRoute']>,
+  ): Candidate {
+    const identity = this.clientWireIdentities.get(client);
+    if (!identity) throw new Error('Client credential route is not registered');
+    identity.usageRoute = route;
+    return client;
+  }
+
   /** Route of the credential a client built by this handler captured, if known. */
   getCredentialRouteForClient(client: C): ModelCredentialRoute | undefined {
     return typeof client === 'object' && client !== null
@@ -661,6 +682,9 @@ export abstract class ModelHandler<
 
   /** Route tag for usage recorded after a successful attempt. */
   getLastCredentialUsageRoute(): NormalizedUsage['usageRoute'] {
+    if (this.lastAttemptUsageRoute !== undefined) {
+      return this.lastAttemptUsageRoute;
+    }
     const route = this.lastAttemptCredentialRoute;
     switch (route) {
       case 'chatgpt-subscription':
@@ -1139,6 +1163,10 @@ export abstract class ModelHandler<
     return this.withCreateResponseGuard(async () => {
       this.activeAttemptCredentialRoute = credentialRoute;
       this.lastAttemptCredentialRoute = credentialRoute;
+      this.lastAttemptUsageRoute =
+        typeof options.client === 'object' && options.client !== null
+          ? this.clientWireIdentities.get(options.client)?.usageRoute
+          : undefined;
       try {
         return await this.createResponseImpl(options);
       } catch (err) {

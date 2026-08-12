@@ -11,6 +11,10 @@ import {
   type RetryPermission,
   type ApprovalDecision,
 } from '@shared/schemas';
+import {
+  CODING_PLAN_SUBSCRIPTIONS,
+  type CodingPlanSubscriptionId,
+} from '@shared/codingPlanSubscriptions';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion, writeTextStderr } from '../logSinks';
@@ -39,14 +43,6 @@ const CLI_PERSONAL_API_RETRY_HINT =
 
 const CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT =
   'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch from your ChatGPT subscription to your own API keys.';
-
-/** Coding-plan exhaustion reasons whose retry hint names the regular endpoint. */
-const CODING_PLAN_RETRY_HINTS: Readonly<Record<string, string>> = {
-  'glm-coding-plan':
-    'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch from your GLM Coding Plan to the regular GLM endpoint.',
-  'kimi-code-subscription':
-    'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch from your Kimi Code subscription to your own Moonshot API keys.',
-};
 
 export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
@@ -85,8 +81,7 @@ export function warnApprovalDenied(context: CliContext, gate?: string): void {
  */
 export type CliRetryAction =
   | 'disable-chatgpt'
-  | 'disable-glm'
-  | 'disable-kimi'
+  | `disable-coding-plan:${CodingPlanSubscriptionId}`
   | 'switch-to-personal'
   | 'none';
 
@@ -95,12 +90,10 @@ export function classifyCliRetryAction(
 ): CliRetryAction {
   const details = payload.errorDetails;
   if (isChatGptSubscriptionLimitError(details)) return 'disable-chatgpt';
-  switch (details?.exhaustionReason) {
-    case 'glm-coding-plan':
-      return 'disable-glm';
-    case 'kimi-code-subscription':
-      return 'disable-kimi';
-  }
+  const codingPlan = CODING_PLAN_SUBSCRIPTIONS.find(
+    (plan) => plan.exhaustionReason === details?.exhaustionReason,
+  );
+  if (codingPlan) return `disable-coding-plan:${codingPlan.id}`;
   if (
     details != null &&
     isCredentialExhausted(details) &&
@@ -114,18 +107,22 @@ export function classifyCliRetryAction(
 
 /** The switch hint line for a retry action, or undefined for 'none'. */
 export function cliRetryActionHint(action: CliRetryAction): string | undefined {
-  switch (action) {
-    case 'disable-chatgpt':
-      return CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT;
-    case 'disable-glm':
-      return CODING_PLAN_RETRY_HINTS['glm-coding-plan'];
-    case 'disable-kimi':
-      return CODING_PLAN_RETRY_HINTS['kimi-code-subscription'];
-    case 'switch-to-personal':
-      return CLI_PERSONAL_API_RETRY_HINT;
-    case 'none':
-      return undefined;
+  if (action.startsWith('disable-coding-plan:')) {
+    const id = action.slice(
+      'disable-coding-plan:'.length,
+    ) as CodingPlanSubscriptionId;
+    const plan = CODING_PLAN_SUBSCRIPTIONS.find(
+      (candidate) => candidate.id === id,
+    );
+    if (!plan) return undefined;
+    return `Use \`/api personal\` in the chat TUI, or press \`k\` on the retry prompt, to switch from your ${plan.retrySourceName} to ${plan.retryFallbackName}.`;
   }
+  if (action === 'disable-chatgpt') {
+    return CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT;
+  }
+  return action === 'switch-to-personal'
+    ? CLI_PERSONAL_API_RETRY_HINT
+    : undefined;
 }
 
 /** Whether a retry could be re-run against a personal API key. */
@@ -144,8 +141,7 @@ interface CliRetryApiSwitchDecision {
   readonly accepted: true;
   readonly apiMode: 'personal';
   readonly disableChatGptSubscription?: boolean;
-  readonly disableGlmCodingPlan?: boolean;
-  readonly disableKimiCode?: boolean;
+  readonly disableCodingPlan?: CodingPlanSubscriptionId;
 }
 
 /**
@@ -159,29 +155,25 @@ export function cliRetryApiSwitchDecision(
   payload: RetryPermission,
 ): CliRetryApiSwitchDecision {
   const action = classifyCliRetryAction(payload);
-  switch (action) {
-    case 'disable-chatgpt':
-      return {
-        accepted: true,
-        disableChatGptSubscription: true,
-        apiMode: 'personal',
-      };
-    case 'disable-glm':
-      return {
-        accepted: true,
-        disableGlmCodingPlan: true,
-        apiMode: 'personal',
-      };
-    case 'disable-kimi':
-      return { accepted: true, disableKimiCode: true, apiMode: 'personal' };
-    case 'switch-to-personal':
-    case 'none':
-      // A relay or ineligible retry has no subscription/plan toggle to turn
-      // off; the switch only re-routes the retry onto personal keys.
-      return { accepted: true, apiMode: 'personal' };
-    default:
-      return action satisfies never;
+  if (action.startsWith('disable-coding-plan:')) {
+    return {
+      accepted: true,
+      disableCodingPlan: action.slice(
+        'disable-coding-plan:'.length,
+      ) as CodingPlanSubscriptionId,
+      apiMode: 'personal',
+    };
   }
+  if (action === 'disable-chatgpt') {
+    return {
+      accepted: true,
+      disableChatGptSubscription: true,
+      apiMode: 'personal',
+    };
+  }
+  // A relay or ineligible retry has no subscription/plan toggle to turn off;
+  // the switch only re-routes the retry onto personal keys.
+  return { accepted: true, apiMode: 'personal' };
 }
 
 export function appendCliApiSwitchHint(

@@ -1,5 +1,8 @@
-// Local file imports
+// Local imports - agent
+import type { StandardPricingConfig } from '@agent/utils/priceUtils';
 import { clampReasoningEffortToHighOrMax } from '@agent/modelHandlers/support/reasoningEffort';
+
+// Local file imports
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
 /**
@@ -19,6 +22,13 @@ import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
  * @see https://open.bigmodel.cn/dev/api
  */
 export class ModelHandlerGLM extends ReasoningModelHandlerOpenAI {
+  /** Coding-plan usage is covered by the subscription, not billed per token. */
+  protected override standardPricingConfig(): StandardPricingConfig {
+    return this.getLastCredentialUsageRoute() === 'glm-coding-plan-subscription'
+      ? { ...super.standardPricingConfig(), inputPrice: 0, outputPrice: 0 }
+      : super.standardPricingConfig();
+  }
+
   /**
    * GLM keeps reasoning continuity without batching parallel tool results into
    * one follow-up message. See the base getter's doc comment (#7101 triage)

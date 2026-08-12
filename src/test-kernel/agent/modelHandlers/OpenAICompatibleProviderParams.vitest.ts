@@ -2,7 +2,7 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports
@@ -178,7 +178,49 @@ class KimiUsageRouteProbe extends ModelHandlerKimi {
   }
 }
 
+class GlmUsageRouteProbe extends ModelHandlerGLM {
+  tagCodingPlanClient<Candidate extends object>(client: Candidate): Candidate {
+    this.rememberClientCredentialRoute(client, 'api-key', 'test-glm-key');
+    return this.rememberClientUsageRoute(
+      client,
+      'glm-coding-plan-subscription',
+    );
+  }
+}
+
 describe('OpenAI-compatible provider request params', () => {
+  it('keeps GLM coding-plan attribution and pricing on the request client', async () => {
+    const handler = configureHandler(
+      new GlmUsageRouteProbe(
+        buildTestModelConfig(
+          { provider: ModelProvider.GLM },
+          { inputPrice: 2, outputPrice: 4 },
+        ),
+      ),
+    );
+    const { client } = createClientStub();
+
+    await handler.createResponse({
+      client: handler.tagCodingPlanClient(client) as any,
+      messages: SINGLE_TURN,
+      temperature: 0,
+    });
+
+    expect(handler.getLastCredentialUsageRoute()).toBe(
+      'glm-coding-plan-subscription',
+    );
+    expect(
+      handler.normalizeUsage(
+        {
+          prompt_tokens: 1_000_000,
+          completion_tokens: 1_000_000,
+          total_tokens: 2_000_000,
+        },
+        10,
+      ).cost,
+    ).toBe(0);
+  });
+
   it('records coding-endpoint Kimi requests as subscription usage', async () => {
     const handler = configureKimiHandler(
       new KimiUsageRouteProbe(
