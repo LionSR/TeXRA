@@ -12,8 +12,8 @@ import {
   type ApprovalDecision,
 } from '@shared/schemas';
 import {
+  CODING_PLAN_SUBSCRIPTIONS,
   codingPlanForExhaustionReason,
-  codingPlanForId,
   type CodingPlanSubscriptionId,
 } from '@shared/codingPlanSubscriptions';
 
@@ -110,7 +110,10 @@ export function cliRetryActionHint(action: CliRetryAction): string | undefined {
     const id = action.slice(
       'disable-coding-plan:'.length,
     ) as CodingPlanSubscriptionId;
-    const plan = codingPlanForId(id);
+    const plan = CODING_PLAN_SUBSCRIPTIONS.find(
+      (candidate) => candidate.id === id,
+    );
+    if (!plan) return undefined;
     return `Use \`/api personal\` in the chat TUI, or press \`k\` on the retry prompt, to switch from your ${plan.retrySourceName} to ${plan.retryFallbackName}.`;
   }
   if (action === 'disable-chatgpt') {
