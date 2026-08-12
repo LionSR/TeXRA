@@ -8,13 +8,13 @@ import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { EXTERNAL_INQUIRY_THREADS_DIR } from '@platform/defaults/globalStorage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
-  ExternalInquirySessionLinksSchema,
-  ExternalInquiryThreadIdSchema,
+  InquirySessionLinksSchema,
+  InquiryThreadIdSchema,
   InquiryDraftSchema,
   type InquiryTranscriptTurn,
   StreamTabIdSchema,
-  type ExternalInquiryThreadId,
-  type ExternalInquiryThreadSummary,
+  type InquiryThreadId,
+  type InquiryThreadSummary,
   type InquiryDraft,
   type InquiryThreadStatus,
 } from '@shared/schemas';
@@ -71,7 +71,7 @@ const AnsweredInquiryTurnSchema = z.object({
   answer: z.string(),
   answeredAt: z.string().min(1),
   answerRelativePath: z.string().min(1),
-  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
+  sessionLinks: InquirySessionLinksSchema.nullish(),
 });
 type AnsweredInquiryTurn = z.infer<typeof AnsweredInquiryTurnSchema>;
 
@@ -87,7 +87,7 @@ const EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION = 1;
 
 const ManifestBaseShape = {
   schemaVersion: z.literal(EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION),
-  threadId: ExternalInquiryThreadIdSchema,
+  threadId: InquiryThreadIdSchema,
   parentStreamId: StreamTabIdSchema.nullable(),
   status: z.enum(['open', 'answered', 'dropped']),
   createdAt: z.string().min(1),
@@ -122,13 +122,13 @@ interface ExternalInquiryThreadMirrorPaths {
 }
 
 interface PersistedOpenTurn {
-  threadId: ExternalInquiryThreadId;
+  threadId: InquiryThreadId;
   manifest: ExternalInquiryThreadManifest;
   turn: OpenInquiryTurn;
 }
 
 interface PersistedAnsweredTurn {
-  threadId: ExternalInquiryThreadId;
+  threadId: InquiryThreadId;
   manifest: ExternalInquiryThreadManifest;
   turn: AnsweredInquiryTurn;
   executionMirrorPaths?: ExternalInquiryExecutionMirrorPaths;
@@ -148,18 +148,15 @@ function turnDir(turnIndex: number): string {
   return `t${turnIndex}`;
 }
 
-function threadDir(threadId: ExternalInquiryThreadId): string {
+function threadDir(threadId: InquiryThreadId): string {
   return path.join(THREADS_DIR, threadId);
 }
 
-function threadManifestPath(threadId: ExternalInquiryThreadId): string {
+function threadManifestPath(threadId: InquiryThreadId): string {
   return path.join(threadDir(threadId), 'manifest.json');
 }
 
-function threadTurnDir(
-  threadId: ExternalInquiryThreadId,
-  turnIndex: number,
-): string {
+function threadTurnDir(threadId: InquiryThreadId, turnIndex: number): string {
   return path.join(threadDir(threadId), turnDir(turnIndex));
 }
 
@@ -173,7 +170,7 @@ function threadTurnDir(
  * the #7210 pattern.
  */
 async function readThreadManifest(
-  threadId: ExternalInquiryThreadId,
+  threadId: InquiryThreadId,
 ): Promise<ExternalInquiryThreadManifest | null> {
   let raw: unknown;
   try {
@@ -254,7 +251,7 @@ async function copyGlobalDirectoryToExecution(
 
 export async function ensureExternalInquiryThreadMirror(params: {
   executionId: ExecutionId;
-  threadId: ExternalInquiryThreadId;
+  threadId: InquiryThreadId;
 }): Promise<ExternalInquiryThreadMirrorPaths> {
   const threadStoragePath = `${RUNS_STORAGE_DIR}/${params.executionId}/${EXEC_DIR}/${params.threadId}`;
   await copyGlobalDirectoryToExecution(
@@ -272,7 +269,7 @@ export async function ensureExternalInquiryThreadMirror(params: {
 
 async function mirrorThreadToExecution(params: {
   executionId: ExecutionId;
-  threadId: ExternalInquiryThreadId;
+  threadId: InquiryThreadId;
   turn: AnsweredInquiryTurn;
 }): Promise<ExternalInquiryExecutionMirrorPaths | undefined> {
   const mirror = await ensureExternalInquiryThreadMirror({
@@ -326,7 +323,7 @@ interface OpenTurnUpdate<T> {
  * concurrent mutation of the same thread.
  */
 async function withOpenTurnUpdate<T>(
-  threadId: ExternalInquiryThreadId,
+  threadId: InquiryThreadId,
   update: (
     existing: ExternalInquiryThreadManifest,
     lastTurn: OpenInquiryTurn,
@@ -365,15 +362,14 @@ async function withOpenTurnUpdate<T>(
  *   - 'dropped'         → reject (terminal)
  */
 export async function recordOpenQuestion(params: {
-  threadId?: ExternalInquiryThreadId;
+  threadId?: InquiryThreadId;
   parentStreamId: StreamTabId;
   question: string;
   context?: string;
   suggestSearch?: boolean;
   attachFiles?: string[];
 }): Promise<PersistedOpenTurn> {
-  const threadId =
-    params.threadId ?? (`ei_${hexId12()}` as ExternalInquiryThreadId);
+  const threadId = params.threadId ?? (`ei_${hexId12()}` as InquiryThreadId);
 
   return threadMutex.runExclusive(threadId, async () => {
     const existing = await readThreadManifest(threadId);
@@ -473,7 +469,7 @@ export async function recordOpenQuestion(params: {
  * or dropped).
  */
 export async function recordAnswerForOpenTurn(params: {
-  threadId: ExternalInquiryThreadId;
+  threadId: InquiryThreadId;
   answer: string;
   sessionLinks?: string[] | null;
   executionId?: ExecutionId;
@@ -554,7 +550,7 @@ export async function recordAnswerForOpenTurn(params: {
  * or not found).
  */
 export async function markDropped(params: {
-  threadId: ExternalInquiryThreadId;
+  threadId: InquiryThreadId;
 }): Promise<ExternalInquiryThreadManifest | null> {
   return threadMutex.runExclusive(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
@@ -578,7 +574,7 @@ export async function markDropped(params: {
  * if the thread has no open turn.
  */
 export async function persistOpenTurnDraft(params: {
-  threadId: ExternalInquiryThreadId;
+  threadId: InquiryThreadId;
   draft: InquiryDraft | null;
 }): Promise<void> {
   await withOpenTurnUpdate(params.threadId, (existing, lastTurn) => {
@@ -633,7 +629,7 @@ export function manifestToTranscript(
 export async function readExternalInquiryThread(
   threadId: string,
 ): Promise<ExternalInquiryThreadManifest | null> {
-  const parsed = ExternalInquiryThreadIdSchema.safeParse(threadId);
+  const parsed = InquiryThreadIdSchema.safeParse(threadId);
   if (!parsed.success) return null;
   return threadMutex.runExclusive(parsed.data, () =>
     readThreadManifest(parsed.data),
@@ -642,7 +638,7 @@ export async function readExternalInquiryThread(
 
 function manifestToSummary(
   manifest: ExternalInquiryThreadManifest,
-): ExternalInquiryThreadSummary {
+): InquiryThreadSummary {
   const lastTurn = manifest.turns.at(-1);
   return {
     threadId: manifest.threadId,
@@ -669,7 +665,7 @@ async function listAllManifests(): Promise<ExternalInquiryThreadManifest[]> {
 
   const reads = entries.flatMap(([name, type]) => {
     if (!isDirectory(type)) return [];
-    const parsed = ExternalInquiryThreadIdSchema.safeParse(name);
+    const parsed = InquiryThreadIdSchema.safeParse(name);
     return parsed.success ? [readThreadManifest(parsed.data)] : [];
   });
   const manifests = await Promise.all(reads);
@@ -679,8 +675,8 @@ async function listAllManifests(): Promise<ExternalInquiryThreadManifest[]> {
 }
 
 export async function getThreadSummary(
-  threadId: ExternalInquiryThreadId,
-): Promise<ExternalInquiryThreadSummary | null> {
+  threadId: InquiryThreadId,
+): Promise<InquiryThreadSummary | null> {
   const manifest = await readThreadManifest(threadId);
   return manifest ? manifestToSummary(manifest) : null;
 }
@@ -691,7 +687,7 @@ export async function listThreadsByStatus(params: {
   streamId?: StreamTabId;
   limit?: number;
   since?: string;
-}): Promise<ExternalInquiryThreadSummary[]> {
+}): Promise<InquiryThreadSummary[]> {
   const all = await listAllManifests();
   const cutoff = params.since ? Date.parse(params.since) : null;
 

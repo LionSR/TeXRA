@@ -17,12 +17,13 @@ import {
   formatCommentEvent,
   formatPreviousStateHint,
   makeTruncator,
-  prRef,
   sections,
   truncate as truncateBody,
   wrapWebhookEvent as wrap,
 } from './formatUtils';
+import { prRef } from './githubPaths';
 import { formatCheckAnnotationLevelList } from './checkAnnotationLevels';
+import { isPassingConclusion } from './prCheckRunDomain';
 import type {
   GhCheckAnnotation,
   GhCheckRun,
@@ -48,17 +49,6 @@ const REVIEW_VERBS: Readonly<Record<string, string>> = {
 };
 
 const FALLBACK_REVIEW_VERB = 'reviewed';
-
-/** Conclusions GitHub treats as non-blocking (success / advisory / skipped). */
-const PASSING_CONCLUSIONS: ReadonlySet<string> = new Set([
-  'success',
-  'neutral',
-  'skipped',
-]);
-
-export function isPassingConclusion(conclusion: string | null): boolean {
-  return conclusion !== null && PASSING_CONCLUSIONS.has(conclusion);
-}
 
 const reviewCommentLocation = (c: GhReviewComment): string => {
   const line = c.line ?? c.original_line;

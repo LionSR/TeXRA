@@ -306,32 +306,24 @@ export class BackgroundTasksPanel extends LitElement {
   private renderInquirySection(
     withHeader: boolean,
   ): TemplateResult | typeof nothing {
-    if (this.inquiries.length === 0) return nothing;
-
-    const content = html`
-      <div class="section-content">
-        ${repeat(
-          this.inquiries,
-          (thread) => thread.threadId,
-          (thread, index) => this.renderInquiryItem(thread, index),
-        )}
-      </div>
-    `;
-    if (!withHeader) return content;
-
-    return renderSectionDetails({
-      icon: 'comments',
-      label: 'Inquiries',
-      counts: (['open', 'answered', 'dropped'] as const)
-        .map((status) => ({
-          status,
-          count: this.inquiries.filter((t) => t.status === status).length,
-        }))
-        .filter(({ count }) => count > 0)
-        .map(({ status, count }) => `${count} ${status}`),
-      open: true,
-      content,
-    });
+    return this.renderSectionRows(
+      this.inquiries,
+      (thread) => thread.threadId,
+      (thread, index) => this.renderInquiryItem(thread, index),
+      withHeader,
+      {
+        icon: 'comments',
+        label: 'Inquiries',
+        counts: (['open', 'answered', 'dropped'] as const)
+          .map((status) => ({
+            status,
+            count: this.inquiries.filter((t) => t.status === status).length,
+          }))
+          .filter(({ count }) => count > 0)
+          .map(({ status, count }) => `${count} ${status}`),
+        open: true,
+      },
+    );
   }
 
   private renderInquiryItem(
@@ -372,34 +364,49 @@ export class BackgroundTasksPanel extends LitElement {
     children: ActiveChildInfo[],
     withHeader: boolean,
   ): TemplateResult | typeof nothing {
-    if (children.length === 0) return nothing;
-
-    const content = html`
-      <div class="section-content">
-        ${repeat(
-          children,
-          (c) => c.executionId,
-          (c, index) => this.renderTaskItem(c, index),
-        )}
-      </div>
-    `;
-    if (!withHeader) return content;
-
     const activeCount = children.filter(
       (child) => child.finishedAt === undefined,
     ).length;
     const finishedCount = children.length - activeCount;
 
-    return renderSectionDetails({
-      icon: 'server',
-      label: 'Subagents',
-      counts: [
-        ...(activeCount ? [`${activeCount} active`] : []),
-        ...(finishedCount ? [`${finishedCount} done`] : []),
-      ],
-      open: false,
-      content,
-    });
+    return this.renderSectionRows(
+      children,
+      (c) => c.executionId,
+      (c, index) => this.renderTaskItem(c, index),
+      withHeader,
+      {
+        icon: 'server',
+        label: 'Subagents',
+        counts: [
+          ...(activeCount ? [`${activeCount} active`] : []),
+          ...(finishedCount ? [`${finishedCount} done`] : []),
+        ],
+        open: false,
+      },
+    );
+  }
+
+  /**
+   * Shared section shape: guard against an empty list, build the
+   * `.section-content` rows, and either return them bare (single populated
+   * section under the outer panel) or wrap them in the counted disclosure
+   * header via {@link renderSectionDetails}.
+   */
+  private renderSectionRows<T>(
+    items: readonly T[],
+    key: (item: T) => unknown,
+    renderItem: (item: T, index: number) => TemplateResult,
+    withHeader: boolean,
+    section: Omit<Parameters<typeof renderSectionDetails>[0], 'content'>,
+  ): TemplateResult | typeof nothing {
+    if (items.length === 0) return nothing;
+
+    const content = html`
+      <div class="section-content">${repeat(items, key, renderItem)}</div>
+    `;
+    if (!withHeader) return content;
+
+    return renderSectionDetails({ ...section, content });
   }
 
   private renderTaskItem(
@@ -542,13 +549,12 @@ function streamStatusBadgeVariant(
 ): 'neutral' | 'brand' | 'success' | 'danger' {
   switch (status) {
     case STREAM_PHASE.RUNNING:
+    case STREAM_PHASE.COMPLETED:
       return 'success';
     case STREAM_PHASE.WAITING:
       return 'brand';
     case STREAM_PHASE.FAILED:
       return 'danger';
-    case STREAM_PHASE.COMPLETED:
-      return 'success';
     case STREAM_PHASE.CANCELLED:
     default:
       return 'neutral';
@@ -583,7 +589,7 @@ function taskStatusBadge(child: ActiveChildInfo): {
         ? STREAM_PHASE.WAITING
         : STREAM_PHASE.RUNNING;
     return {
-      text: formatStreamStatusLabel(status, { style: 'progressHeader' }),
+      text: formatStreamStatusLabel(status),
       variant: streamStatusBadgeVariant(status),
     };
   }
@@ -592,9 +598,7 @@ function taskStatusBadge(child: ActiveChildInfo): {
     case STREAM_PHASE.CANCELLED:
     case STREAM_PHASE.COMPLETED:
       return {
-        text: formatStreamStatusLabel(child.status, {
-          style: 'progressHeader',
-        }),
+        text: formatStreamStatusLabel(child.status),
         variant: streamStatusBadgeVariant(child.status),
       };
     default:
@@ -602,9 +606,7 @@ function taskStatusBadge(child: ActiveChildInfo): {
       // finish, but claiming success would render a failed command green;
       // say only what is known — use the completed word with a neutral fill.
       return {
-        text: formatStreamStatusLabel(STREAM_PHASE.COMPLETED, {
-          style: 'progressHeader',
-        }),
+        text: formatStreamStatusLabel(STREAM_PHASE.COMPLETED),
         variant: 'neutral',
       };
   }

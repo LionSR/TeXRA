@@ -19,7 +19,7 @@ import {
   isAnthropicWebFetchResult,
   isAnthropicWebSearchResult,
   type ServerToolExtractionResult,
-} from '@agent/types/ServerToolTypes';
+} from '@agent/types/ServerTools';
 import { LONG_CACHE_CONTROL } from './anthropicContextManagement';
 
 // Type imports - Anthropic SDK

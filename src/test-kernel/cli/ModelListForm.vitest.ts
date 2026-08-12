@@ -18,7 +18,7 @@ import {
   selectItemRenderKey,
   visibleSelectRange,
 } from '@cli/tui/ui/Select';
-import { selectVisibleInlineOverflowText } from '@cli/chat/tui/render/overflowText';
+import { selectVisibleInlineOverflowText } from '@cli/tui/overflowText';
 
 describe('CLI ModelListForm empty state', () => {
   it.each<{

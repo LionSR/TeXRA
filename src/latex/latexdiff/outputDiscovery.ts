@@ -41,13 +41,16 @@ import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
 // Local file imports
 import { hasBetweenRoundDiffSuffix } from './diffFileNameManager';
-import { CHANNEL } from './service';
 
 /**
  * Recursively collect all `.tex` file paths under `dir`, returned as paths
  * relative to `dir` using forward slashes (e.g. `"chapters/main.tex"`).
  */
-async function collectTexFiles(dir: string, prefix = ''): Promise<string[]> {
+async function collectTexFiles(
+  dir: string,
+  channel: string,
+  prefix = '',
+): Promise<string[]> {
   const fs = platform().fs;
   let entries: [string, number][];
   try {
@@ -56,7 +59,7 @@ async function collectTexFiles(dir: string, prefix = ''): Promise<string[]> {
     // This is a recovery scan: a missing/unreadable subtree means this subtree
     // contributes no outputs, but other rounds/subtrees may still be useful.
     if (isFileNotFoundError(error)) return [];
-    logger.warn(CHANNEL, `Skipping unreadable directory '${dir}': ${error}`);
+    logger.warn(channel, `Skipping unreadable directory '${dir}': ${error}`);
     return [];
   }
   const results: string[] = [];
@@ -69,7 +72,7 @@ async function collectTexFiles(dir: string, prefix = ''): Promise<string[]> {
     if (isFile(type) && hasExtension(name, '.tex')) {
       results.push(relative);
     } else if (isDirectory(type)) {
-      results.push(...(await collectTexFiles(absPath, relative)));
+      results.push(...(await collectTexFiles(absPath, channel, relative)));
     }
   }
   return results;
@@ -88,7 +91,8 @@ async function collectTexFiles(dir: string, prefix = ''): Promise<string[]> {
 export async function scanRunDirForOutputs(
   executionId: ExecutionId,
   inputFile: string,
-  extraBaseFiles?: string[],
+  extraBaseFiles: string[] | undefined,
+  channel: string,
 ): Promise<RoundIndexed<OutputFileInfo> | null> {
   try {
     const runDirAbsolute = await findRunDir(executionId);
@@ -132,7 +136,7 @@ export async function scanRunDirForOutputs(
       const outputs: OutputFileInfo[] = [];
       // Collect .tex files recursively — extracted docs may live in subdirs
       // (e.g. r0/chapters/main.tex) when source names include path segments.
-      const allTexFiles = await collectTexFiles(roundDirAbsolute);
+      const allTexFiles = await collectTexFiles(roundDirAbsolute, channel);
       // Between-round artifacts written to run storage always carry both round
       // numbers (e.g. output_diffr1r0.tex). The bare _diff suffix only appears
       // in workspace-side diffs, never here, so a legitimately-named source
@@ -191,7 +195,7 @@ export async function scanRunDirForOutputs(
     return Object.keys(rounds).length > 0 ? rounds : null;
   } catch (error) {
     logger.debug(
-      CHANNEL,
+      channel,
       `RunDir scan for ${executionId} failed: ${toErrorMessage(error)}`,
     );
     return null;
@@ -204,11 +208,14 @@ export async function scanRunDirForOutputs(
  * its persisted `OutputFileInfo[]` from the stream-tab store. Returns null
  * when no matching execution exists.
  */
-export async function discoverLatestExecutionOutputs(query: {
-  agent: string;
-  model: string;
-  inputFile: string;
-}): Promise<{
+export async function discoverLatestExecutionOutputs(
+  query: {
+    agent: string;
+    model: string;
+    inputFile: string;
+  },
+  channel: string,
+): Promise<{
   executionId: ExecutionId;
   rounds: RoundIndexed<OutputFileInfo>;
 } | null> {
@@ -264,6 +271,7 @@ export async function discoverLatestExecutionOutputs(query: {
         candidate.id,
         query.inputFile,
         candidate.record.inputFiles.slice(1),
+        channel,
       );
       if (scanned) {
         return { executionId: candidate.id, rounds: scanned };
@@ -271,7 +279,7 @@ export async function discoverLatestExecutionOutputs(query: {
     }
   } catch (error) {
     logger.debug(
-      CHANNEL,
+      channel,
       `Metadata-driven latexdiff discovery failed: ${toErrorMessage(error)}`,
     );
   }

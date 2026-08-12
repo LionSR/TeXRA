@@ -143,7 +143,7 @@ export class ArxivSearchTool extends defineTool({
         ...base,
         abstract: entry.summary ?? null,
         arxivUrl: base.id
-          ? `https://arxiv.org/abs/${normaliseArxivIdentifier(base.id)}`
+          ? `https://arxiv.org/abs/${normaliseArxivIdentifier(base.id) ?? base.id}`
           : null,
       };
     });

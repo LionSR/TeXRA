@@ -11,7 +11,7 @@ import pDefer from 'p-defer';
 import type { AgentTrace, ResultEvent } from '@agent/trace';
 import type { OwnedExecutionLeaseScope } from '@agent/storage/executionLease';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
+import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import {
   runIdentityName,
   type ExecutionId,
@@ -84,27 +84,39 @@ type RunSuspension =
  */
 type TerminalState = 'open' | 'claimed' | 'settled';
 
-export interface LiveToolUseFlowContext {
+/**
+ * The projection of the flow's {@link ToolUseFlowContext} that an execution
+ * handle retains for its lifetime.
+ *
+ * This is derived from — not a parallel re-declaration of — {@link
+ * ToolUseFlowContext}, so a shape change to either surface fails type-checking
+ * instead of silently diverging: the nested `session`/`modelHandler` views are
+ * `Pick`s of the flow context's own types, and the method members are picked
+ * through directly. `runToolUseFlow`'s context is deliberately richer (it owns
+ * the live `ToolUseSessionLifecycle` and the full `RunModelHandler`); the
+ * handle keeps only what a consumer of an attached run needs.
+ *
+ * {@link AgentExecutionHandle.interrupt} falls back to this context's
+ * `interrupt()` when no explicit {@link ExecutionInterruptHandler} is
+ * attached. Native child-run strategies use it to delegate a
+ * child-run-loop-level interrupt into an in-flight tool-use turn. A live
+ * `flowContext` is attached via `attachToolUseFlow` for the duration of one
+ * turn and knows how to cancel the in-progress model/tool round.
+ */
+export type LiveToolUseFlowContext = {
   readonly ownerSession?: SessionHandle;
-  readonly session: {
-    appendFollowUp(followUp: FollowUpQueueInput): void;
-  };
-  readonly modelHandler: {
-    readonly supportsManualCompaction: boolean;
-  };
-
-  requestImmediateCompaction(): void;
-  modelSwitchDisabledReason(model: string): string | undefined;
-  switchModel(model: string): Promise<void>;
-  /**
-   * Interrupt the live turn. Native child-run strategies use this to
-   * delegate a child-run-loop-level interrupt into an in-flight tool-use
-   * turn. A live `flowContext` is attached via `attachToolUseFlow` for the
-   * duration of one turn and knows how to cancel the in-progress model/tool
-   * round.
-   */
-  interrupt(): void;
-}
+  readonly session: Pick<ToolUseFlowContext['session'], 'appendFollowUp'>;
+  readonly modelHandler: Pick<
+    ToolUseFlowContext['modelHandler'],
+    'supportsManualCompaction'
+  >;
+} & Pick<
+  ToolUseFlowContext,
+  | 'requestImmediateCompaction'
+  | 'modelSwitchDisabledReason'
+  | 'switchModel'
+  | 'interrupt'
+>;
 
 /**
  * Handle for agent-based executions (workflow or toolUse subagents).

@@ -12,6 +12,7 @@ import { decodeJwtClaimsWithSchema } from '@auth/oauth/jwtDecode';
 class TestAuthError extends Error {
   readonly kind: 'fatal' | 'expired' | 'transient' | 'config' | 'pending';
   readonly status?: number;
+  readonly needsReauth = false;
 
   constructor(
     message: string,

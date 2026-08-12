@@ -22,6 +22,7 @@ import {
   type StreamLifecycleStatus,
 } from '@shared/schemas';
 import { designTokens, commonViewStyles, selectStyles } from '@shared/styles';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
@@ -35,7 +36,9 @@ import { ProgressEvents } from '../events';
 import type { FollowupOptionsState } from '../store';
 
 @customElement('workflow-tool-use-followup-section')
-export class WorkflowToolUseFollowupSection extends LitElement {
+export class WorkflowToolUseFollowupSection extends UnsupportedCommandsMixin(
+  LitElement,
+) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -99,16 +102,6 @@ export class WorkflowToolUseFollowupSection extends LitElement {
   @property({ type: Boolean }) hasOutputFiles = false;
   @property({ attribute: false }) options: FollowupOptionsState | null = null;
   @property({ attribute: false }) streamModel: string | null = null;
-  /**
-   * Progress-view commands the active host's registry declares
-   * `unsupported(...)` (see StreamHeader's `unsupportedCommands` for the
-   * same convention). Hides this whole section on a host where
-   * GET_FOLLOWUP_OPTIONS is unsupported, instead of leaving a follow-up
-   * panel visible whose first interaction (expanding it) can only produce
-   * an unavailable-command toast.
-   */
-  @property({ attribute: false })
-  unsupportedCommands: ReadonlySet<string> | null = null;
 
   @state() private selectedAgent = '';
   @state() private selectedModel = '';

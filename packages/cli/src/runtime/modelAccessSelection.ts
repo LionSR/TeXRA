@@ -1,8 +1,13 @@
 import { getCodexStatus } from '@auth/codex';
 import { getXaiStatus, xaiAccountLabel } from '@auth/xai';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
-import { apiKeyExists, configuredApiKeyProviders } from '@model/apiProviders';
+import {
+  apiKeyExists,
+  configuredApiKeyProviders,
+  type ApiProvider,
+} from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import type { SubscriptionPreferenceUpdate } from '@model/subscriptionPreference';
 import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
@@ -12,7 +17,7 @@ import {
   setPreferXaiSubscription,
 } from '@model/xai/xaiPreference';
 import { platform } from '@platform/platform';
-import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import { providerDisplayName } from '@shared/constants/providers';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
@@ -25,7 +30,11 @@ import {
 import { signInCliChatGpt } from './chatgptLogin';
 import { signInCliGrok } from './grokLogin';
 import { setKimiCodePreference } from './kimiCodePreference';
-import { shouldUseSubscriptionDeviceCode } from './subscriptionLogin';
+import {
+  shouldUseSubscriptionDeviceCode,
+  type CliSubscriptionLoginOptions,
+  type CliSubscriptionLoginTransportInit,
+} from './subscriptionLogin';
 import {
   effectiveCliApiMode,
   getCliApiMode,
@@ -70,8 +79,8 @@ export async function readCliModelAccessStatus(
     kimiCode: getPreferKimiCode() ? 'on' : 'off',
     glmCode: getGLMCodingPlan() ? 'on' : 'off',
   } as const;
-  const personalKeyProviders = configuredProviders.map(
-    (provider) => PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+  const personalKeyProviders = configuredProviders.map((provider) =>
+    providerDisplayName(provider),
   );
   return {
     apiFallback: apiMode,
@@ -84,6 +93,151 @@ export async function readCliModelAccessStatus(
     glmKeySet,
     personalKeyProviders,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Provider adapters. The four subscription arms share two skeletons — an OAuth
+// sign-in flow (Grok/ChatGPT) and a key-credential gate (Kimi Code/GLM) — so a
+// fifth provider is one adapter plus a dispatch case, not another 30-line copy.
+// ---------------------------------------------------------------------------
+
+type CliSubscriptionSelection = Extract<
+  CliModelAccessSelection,
+  { readonly kind: 'subscription-preference' }
+>;
+
+interface SubscriptionAccessAdapter {
+  readonly displayName: string;
+  readonly disabledFor: string;
+  readonly getStatus: () => Promise<{
+    readonly signedIn: boolean;
+    readonly email?: string | null;
+    readonly accountId?: string | null;
+  }>;
+  readonly accountLabelOf: (
+    account:
+      | { readonly email?: string | null; readonly accountId?: string | null }
+      | null
+      | undefined,
+  ) => string;
+  readonly signIn: (
+    init: CliSubscriptionLoginTransportInit,
+    options: CliSubscriptionLoginOptions,
+  ) => Promise<{
+    readonly email?: string | null;
+    readonly accountId?: string | null;
+  }>;
+  readonly setPreference: (
+    enabled: boolean,
+  ) => Promise<SubscriptionPreferenceUpdate>;
+}
+
+const GROK_ADAPTER: SubscriptionAccessAdapter = {
+  displayName: 'Grok',
+  disabledFor: 'xAI models',
+  getStatus: getXaiStatus,
+  accountLabelOf: xaiAccountLabel,
+  signIn: signInCliGrok,
+  setPreference: setPreferXaiSubscription,
+};
+
+const CHATGPT_ADAPTER: SubscriptionAccessAdapter = {
+  displayName: 'ChatGPT',
+  disabledFor: 'Codex models',
+  getStatus: getCodexStatus,
+  accountLabelOf: codexAccountLabel,
+  signIn: signInCliChatGpt,
+  setPreference: setPreferCodexSubscription,
+};
+
+interface KeyedSubscriptionAdapter {
+  readonly keyName: ApiProvider;
+  readonly missingKeyHint: string;
+  readonly disabledMessage: string;
+  readonly enabledMessage: (apiMode: ApiAccessMode) => string;
+  readonly setPreference: (enabled: boolean) => Promise<unknown>;
+}
+
+const KIMI_CODE_ADAPTER: KeyedSubscriptionAdapter = {
+  keyName: 'kimiCode',
+  missingKeyHint:
+    'No Kimi Code API key configured — add one with /key or /config → API keys (get one at https://www.kimi.com/code/console).',
+  disabledMessage: 'Prefer Kimi Code subscription disabled for Kimi models.',
+  enabledMessage: (apiMode) =>
+    `Prefer Kimi Code subscription enabled for Kimi models · other models still use ${formatCliModelAccessRouteInline(apiMode)}.`,
+  setPreference: setKimiCodePreference,
+};
+
+const GLM_CODE_ADAPTER: KeyedSubscriptionAdapter = {
+  keyName: 'glm',
+  missingKeyHint:
+    'No GLM API key configured — add one with /key or /config → API keys (get one at https://open.bigmodel.cn or https://z.ai).',
+  disabledMessage: 'Prefer GLM Coding Plan disabled for GLM models.',
+  enabledMessage: (apiMode) =>
+    `Prefer GLM Coding Plan enabled for GLM models · other models still use ${formatCliModelAccessRouteInline(apiMode)}.`,
+  setPreference: setGLMCodingPlan,
+};
+
+/** Toggle an OAuth-subscription preference (Grok/ChatGPT) with sign-in. */
+async function updateSubscriptionCliModelAccess(
+  context: CliContext | undefined,
+  apiMode: ApiAccessMode,
+  selection: CliSubscriptionSelection,
+  adapter: SubscriptionAccessAdapter,
+  options: CliSubscriptionLoginOptions,
+): Promise<CliModelAccessSelectionResult> {
+  if (selection.state === 'off') {
+    const update = await adapter.setPreference(false);
+    invalidateModelOptionsCache();
+    return {
+      apiMode,
+      message: update.effective
+        ? `${adapter.displayName} subscription preference remains enabled because a more specific setting overrides ${update.target} config.`
+        : `Prefer ${adapter.displayName} subscription disabled for ${adapter.disabledFor}.`,
+    };
+  }
+
+  const status = await adapter.getStatus();
+  let accountLabel = adapter.accountLabelOf(status);
+  if (!status.signedIn) {
+    const init = { device: false, noBrowser: false };
+    const device =
+      context != null && shouldUseSubscriptionDeviceCode(context, init);
+    const session = await adapter.signIn({ ...init, device }, options);
+    accountLabel = adapter.accountLabelOf(session);
+  }
+
+  const update = await adapter.setPreference(true);
+  await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+  invalidateModelOptionsCache();
+  return {
+    apiMode,
+    message: update.effective
+      ? `Prefer ${adapter.displayName} subscription enabled for ${adapter.disabledFor} (${accountLabel}).`
+      : `${adapter.displayName} sign-in succeeded, but a more specific setting keeps subscription access disabled.`,
+  };
+}
+
+/** Toggle a key-credential subscription preference (Kimi Code/GLM). */
+async function updateKeyedCliModelAccess(
+  apiMode: ApiAccessMode,
+  selection: CliSubscriptionSelection,
+  adapter: KeyedSubscriptionAdapter,
+): Promise<CliModelAccessSelectionResult> {
+  if (selection.state === 'off') {
+    await adapter.setPreference(false);
+    invalidateModelOptionsCache();
+    return { apiMode, message: adapter.disabledMessage };
+  }
+
+  // The provider API key is the subscription credential — there is no
+  // separate sign-in flow.
+  if (!(await apiKeyExists(platform().secrets, adapter.keyName))) {
+    return { apiMode, message: adapter.missingKeyHint };
+  }
+  await adapter.setPreference(true);
+  invalidateModelOptionsCache();
+  return { apiMode, message: adapter.enabledMessage(apiMode) };
 }
 
 /** Apply one declarative preference or fallback transition. */
@@ -107,121 +261,26 @@ export async function updateCliModelAccess(
   }
 
   const apiMode = context ? effectiveCliApiMode(context) : getCliApiMode();
-  if (selection.provider === 'kimi-code') {
-    if (selection.state === 'off') {
-      await setKimiCodePreference(false);
-      invalidateModelOptionsCache();
-      return {
+  switch (selection.provider) {
+    case 'kimi-code':
+      return updateKeyedCliModelAccess(apiMode, selection, KIMI_CODE_ADAPTER);
+    case 'glm-code':
+      return updateKeyedCliModelAccess(apiMode, selection, GLM_CODE_ADAPTER);
+    case 'grok':
+      return updateSubscriptionCliModelAccess(
+        context,
         apiMode,
-        message: 'Prefer Kimi Code subscription disabled for Kimi models.',
-      };
-    }
-
-    // The Kimi Code API key is the subscription credential — there is no
-    // separate sign-in flow.
-    if (!(await apiKeyExists(platform().secrets, 'kimiCode'))) {
-      return {
+        selection,
+        GROK_ADAPTER,
+        options,
+      );
+    case 'chatgpt':
+      return updateSubscriptionCliModelAccess(
+        context,
         apiMode,
-        message:
-          'No Kimi Code API key configured — add one with /key or /config → API keys (get one at https://www.kimi.com/code/console).',
-      };
-    }
-    await setKimiCodePreference(true);
-    invalidateModelOptionsCache();
-    return {
-      apiMode,
-      message: `Prefer Kimi Code subscription enabled for Kimi models · other models still use ${formatCliModelAccessRouteInline(apiMode)}.`,
-    };
+        selection,
+        CHATGPT_ADAPTER,
+        options,
+      );
   }
-
-  if (selection.provider === 'glm-code') {
-    if (selection.state === 'off') {
-      await setGLMCodingPlan(false);
-      invalidateModelOptionsCache();
-      return {
-        apiMode,
-        message: 'Prefer GLM Coding Plan disabled for GLM models.',
-      };
-    }
-
-    // The GLM API key is the Coding Plan credential — there is no separate
-    // sign-in flow.
-    if (!(await apiKeyExists(platform().secrets, 'glm'))) {
-      return {
-        apiMode,
-        message:
-          'No GLM API key configured — add one with /key or /config → API keys (get one at https://open.bigmodel.cn or https://z.ai).',
-      };
-    }
-    await setGLMCodingPlan(true);
-    invalidateModelOptionsCache();
-    return {
-      apiMode,
-      message: `Prefer GLM Coding Plan enabled for GLM models · other models still use ${formatCliModelAccessRouteInline(apiMode)}.`,
-    };
-  }
-
-  if (selection.provider === 'grok') {
-    if (selection.state === 'off') {
-      const update = await setPreferXaiSubscription(false);
-      invalidateModelOptionsCache();
-      return {
-        apiMode,
-        message: update.effective
-          ? `Grok subscription preference remains enabled because a more specific setting overrides ${update.target} config.`
-          : 'Prefer Grok subscription disabled for xAI models.',
-      };
-    }
-
-    const status = await getXaiStatus();
-    let accountLabel = xaiAccountLabel(status);
-    if (!status.signedIn) {
-      const init = { device: false, noBrowser: false };
-      const device =
-        context != null && shouldUseSubscriptionDeviceCode(context, init);
-      const session = await signInCliGrok({ ...init, device }, options);
-      accountLabel = xaiAccountLabel(session);
-    }
-
-    const update = await setPreferXaiSubscription(true);
-    await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-    invalidateModelOptionsCache();
-    return {
-      apiMode,
-      message: update.effective
-        ? `Prefer Grok subscription enabled for xAI models (${accountLabel}).`
-        : 'Grok sign-in succeeded, but a more specific setting keeps subscription access disabled.',
-    };
-  }
-
-  if (selection.state === 'off') {
-    const update = await setPreferCodexSubscription(false);
-    invalidateModelOptionsCache();
-    return {
-      apiMode,
-      message: update.effective
-        ? `ChatGPT subscription preference remains enabled because a more specific setting overrides ${update.target} config.`
-        : 'Prefer ChatGPT subscription disabled for Codex models.',
-    };
-  }
-
-  const status = await getCodexStatus();
-  let accountLabel = codexAccountLabel(status);
-  if (!status.signedIn) {
-    const init = { device: false, noBrowser: false };
-    const device =
-      context != null && shouldUseSubscriptionDeviceCode(context, init);
-    const session = await signInCliChatGpt({ ...init, device }, options);
-    accountLabel = codexAccountLabel(session);
-  }
-
-  const update = await setPreferCodexSubscription(true);
-  await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-  invalidateModelOptionsCache();
-  return {
-    apiMode,
-    message: update.effective
-      ? `Prefer ChatGPT subscription enabled for Codex models (${accountLabel}).`
-      : 'ChatGPT sign-in succeeded, but a more specific setting keeps subscription access disabled.',
-  };
 }

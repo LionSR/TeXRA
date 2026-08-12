@@ -29,9 +29,12 @@ import {
   discoverLatestExecutionOutputs,
   scanRunDirForOutputs,
 } from './outputDiscovery';
-import { CHANNEL } from './service';
 import type { MathMarkupOption } from './mathMarkup';
-import type { DiffProgressReporter, DiffRunOutcome } from './types';
+import type {
+  DiffProgressReporter,
+  DiffRunOutcome,
+  LatexdiffRuntime,
+} from './types';
 
 /**
  * Normalize arbitrary command payload metadata into the canonical round
@@ -68,6 +71,8 @@ export interface RunLatexdiffForExecutionParams {
   readonly outputsByRound?: RoundIndexed<OutputFileInfo> | null;
   readonly mathMarkup?: MathMarkupOption;
   readonly generateBetweenRoundDiffs: boolean;
+  /** Host-supplied diff service + logger channel (see {@link LatexdiffRuntime}). */
+  readonly latexdiff: LatexdiffRuntime;
   readonly progress: DiffProgressReporter;
 }
 
@@ -88,6 +93,7 @@ export async function runLatexdiffForExecution(
     outputFiles,
     mathMarkup,
     generateBetweenRoundDiffs,
+    latexdiff,
     progress,
   } = params;
   const runId = params.runId ?? undefined;
@@ -109,13 +115,14 @@ export async function runLatexdiffForExecution(
         parsedRunId.data,
         inputFile,
         outputFiles,
+        latexdiff.channel,
       );
       if (scanned) {
         outputsByRound = scanned;
         source = 'run-dir-scan';
         discoveredExecutionId = parsedRunId.data;
         logger.debug(
-          CHANNEL,
+          latexdiff.channel,
           `Using run-dir scan outputs from execution ${parsedRunId.data}`,
         );
       }
@@ -128,17 +135,20 @@ export async function runLatexdiffForExecution(
   // auto-discovery — that would silently diff against a different (usually
   // newer) execution with the same agent/model/input.
   if (!outputsByRound && !runId) {
-    const discovered = await discoverLatestExecutionOutputs({
-      agent,
-      model,
-      inputFile,
-    });
+    const discovered = await discoverLatestExecutionOutputs(
+      {
+        agent,
+        model,
+        inputFile,
+      },
+      latexdiff.channel,
+    );
     if (discovered) {
       outputsByRound = discovered.rounds;
       source = 'metadata';
       discoveredExecutionId = discovered.executionId;
       logger.debug(
-        CHANNEL,
+        latexdiff.channel,
         `Using metadata outputs from execution ${discovered.executionId}`,
       );
     }
@@ -149,6 +159,7 @@ export async function runLatexdiffForExecution(
         rounds: outputsByRound,
         mathMarkup,
         generateBetweenRoundDiffs,
+        latexdiff,
         progress,
       })
     : await runLatexdiffViaWorkspaceScan({
@@ -158,6 +169,7 @@ export async function runLatexdiffForExecution(
         outputFiles,
         mathMarkup,
         generateBetweenRoundDiffs,
+        latexdiff,
         progress,
       });
 

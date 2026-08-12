@@ -69,9 +69,7 @@ export function registerFileDecorations(
           }
         }
       }
-      if (paths.size > 0) {
-        provider.markTouched(paths);
-      }
+      provider.markTouched(paths);
     },
   );
 

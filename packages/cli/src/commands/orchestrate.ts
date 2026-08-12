@@ -85,6 +85,30 @@ import {
 } from './_helpers/globalArgs';
 import { runResumeExecution } from './resumeExecution';
 import { type CliContext } from '../runtime/cliContext';
+import type { CliSubscriptionSignOutResult } from '../runtime/subscriptionLogin';
+
+/**
+ * Sign-out bindings for the subscription providers the launcher's `account`
+ * action can target. The same provider set the `<provider> login|logout`
+ * auth-command definitions declare; a new subscription provider adds one row
+ * here and its own auth-command definition.
+ */
+const SUBSCRIPTION_SIGN_OUT = {
+  chatgpt: {
+    signOut: signOutCliChatGpt,
+    outcomeMessage: chatGptSignOutOutcomeMessage,
+  },
+  grok: {
+    signOut: signOutCliGrok,
+    outcomeMessage: grokSignOutOutcomeMessage,
+  },
+} as const satisfies Record<
+  'chatgpt' | 'grok',
+  {
+    readonly signOut: () => Promise<CliSubscriptionSignOutResult>;
+    readonly outcomeMessage: (result: CliSubscriptionSignOutResult) => string;
+  }
+>;
 
 async function canLaunchWithDefaultModel(
   context: CliContext,
@@ -357,15 +381,8 @@ async function runOrchestration(context: CliContext): Promise<number> {
         try {
           if (action.provider === 'chatgpt' || action.provider === 'grok') {
             if (action.operation === 'sign-out') {
-              if (action.provider === 'chatgpt') {
-                writeTextStdout(
-                  chatGptSignOutOutcomeMessage(await signOutCliChatGpt()),
-                );
-              } else {
-                writeTextStdout(
-                  grokSignOutOutcomeMessage(await signOutCliGrok()),
-                );
-              }
+              const entry = SUBSCRIPTION_SIGN_OUT[action.provider];
+              writeTextStdout(entry.outcomeMessage(await entry.signOut()));
             } else {
               const result = await updateCliModelAccess(
                 launchContext,

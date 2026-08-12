@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
+import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 
 const storageMocks = vi.hoisted(() => ({
   ensureExternalInquiryThreadMirror: vi.fn(),

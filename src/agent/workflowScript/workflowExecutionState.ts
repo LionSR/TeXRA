@@ -400,10 +400,9 @@ export class WorkflowExecutionState {
         (stage) => stage.id === activeStageId,
       );
       if (activeStage) {
-        activeStage.lifecycle =
-          lifecycle === WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED
-            ? WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED
-            : WORKFLOW_EXECUTION_LIFECYCLE.FAILED;
+        // Guarded above to lifecycle === FAILED | CANCELLED, so the lifecycle
+        // is its own mapping.
+        activeStage.lifecycle = lifecycle;
         activeStage.completedAt = completedAt;
       }
     }

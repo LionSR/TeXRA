@@ -13,7 +13,7 @@ import {
   extractWebFetchResultFields,
   mapAnthropicWebSearchEntries,
   type WebFetchResult,
-} from '@agent/types/ServerToolTypes';
+} from '@agent/types/ServerTools';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type {
   CompactionActivityOutcome,
@@ -142,7 +142,7 @@ export class AnthropicStreamHandler {
   ) {}
 
   /**
-   * Attaches event listeners to the stream and returns the handler for cleanup.
+   * Attaches event listeners to the stream. Cleanup happens via {@link finalize}.
    */
   attachToStream(stream: AnthropicMessageStream): void {
     stream.on('streamEvent', (event: BetaRawMessageStreamEvent) => {

@@ -23,6 +23,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { tryPlatform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { readCliEnv } from './cliContext';
@@ -321,8 +322,14 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
   let tier = 'free';
   try {
     tier = await SupabaseClient.getUserTier();
-  } catch {
-    // Keep status usable even if profile metadata is temporarily unavailable.
+  } catch (error) {
+    // Keep status usable even if profile metadata is temporarily unavailable,
+    // but surface the cause so a transient provider/network failure is not
+    // mistaken for a clean 'free' tier.
+    activeAuthLog?.warn(
+      'cli-auth',
+      `Could not resolve usage tier: ${toErrorMessage(error)}`,
+    );
   }
   return {
     authenticated: true,

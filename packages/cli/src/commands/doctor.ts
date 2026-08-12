@@ -24,22 +24,7 @@ async function runDoctor(context: CliContext): Promise<number> {
     initError = error;
   }
   const report = await suppressCliFetchStackLogs(() =>
-    buildDoctorReport(
-      context,
-      initError == null
-        ? undefined
-        : {
-            authProfile: async () => {
-              throw initError;
-            },
-            modelAccessList: async () => {
-              throw initError;
-            },
-            usageLoggingOptOut: () => {
-              throw initError;
-            },
-          },
-    ),
+    buildDoctorReport(context, undefined, initError),
   );
   writeDoctorReport(context, report);
   return doctorExitCode(report);

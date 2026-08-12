@@ -2,8 +2,6 @@ import { z } from 'zod';
 
 import {
   AgentCategorySchema,
-  DEFAULT_CONVERSATION_PROGRESS,
-  DEFAULT_STREAM_METADATA_STATUS,
   StreamMetadataSchema,
   type StreamMetadata,
 } from '@shared/schemas';
@@ -25,15 +23,20 @@ export function buildStreamMetadata(
   inputs: StreamMetadataInputs,
 ): StreamMetadata {
   return {
-    category: inputs.category,
-    status: inputs.status ?? DEFAULT_STREAM_METADATA_STATUS,
+    // BackendOwnedFieldsSchema's .prefault() members are the single source of
+    // truth for the backend-owned defaults — parse through StreamMetadataSchema
+    // so a default added there can't silently miss this builder's output. Only
+    // the two semantics the schema can't express are owned here: `stage` is
+    // normalized to an explicit null (the wire's "clear the held stage"
+    // signal) and the optional passthrough fields are restored so the returned
+    // shape always carries them.
+    ...StreamMetadataSchema.parse({
+      ...inputs,
+      stage: inputs.stage ?? null,
+    }),
     substate: inputs.substate,
     userFollowUpSupport: inputs.userFollowUpSupport,
     lastTimestamp: inputs.lastTimestamp,
-    conversationProgress: inputs.conversationProgress ?? {
-      ...DEFAULT_CONVERSATION_PROGRESS,
-    },
-    stage: inputs.stage ?? null,
-    subagents: inputs.subagents ?? [],
+    category: inputs.category,
   };
 }

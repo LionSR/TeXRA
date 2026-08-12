@@ -1,22 +1,17 @@
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import { includedModelAccess } from '@model/includedModelAccess';
 import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
 import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
-import { platform } from '@platform/platform';
 import type { UsageRoute } from '@shared/schemas';
-import {
-  getPreferKimiCode,
-  getUseOpenRouter,
-} from '@utils/config/providerConfig';
+import { getUseOpenRouter } from '@utils/config/providerConfig';
 
-import { apiKeyExists } from './apiProviders';
 import {
+  isKimiCodeRoute,
   isKimiSubscriptionEligible,
-  resolveKimiCodeRoute,
+  resolveKimiCodeRoutingFacts,
 } from './kimiCodeSubscriptionRouting';
 import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
 
@@ -118,8 +113,8 @@ export function isCodexSubscriptionEligible(model: ModelConfig): boolean {
   return model.codexSubscription === true;
 }
 
-/** Resolve the active ChatGPT-subscription provider profile. */
-export function resolveProviderCapabilities({
+/** Resolve the active ChatGPT-subscription (Codex) provider profile. */
+export function resolveCodexSubscriptionProfile({
   model,
   useOpenRouter,
 }: ProviderCapabilityKey): ProviderCapabilityProfile | null {
@@ -166,21 +161,40 @@ export function resolveCodexSubscriptionCapabilities(
   useOpenRouter: boolean,
 ): ProviderCapabilityProfile | null {
   if (!isPreferCodexSubscription()) return null;
-  return resolveProviderCapabilities({ model: config, useOpenRouter });
+  return resolveCodexSubscriptionProfile({ model: config, useOpenRouter });
+}
+
+/**
+ * Shared signed-in-subscription probe: resolve the model config, ask the
+ * per-provider capability resolver whether the subscription route is active
+ * under the live OpenRouter toggle, and confirm the provider is signed in.
+ * The Kimi probe cannot share this (it has no sign-in probe and adds the
+ * key-set + included-access facts), so it stays standalone.
+ */
+async function isSignedInSubscriptionActive(
+  modelId: string,
+  resolveCapabilities: (
+    config: ModelConfig,
+    useOpenRouter: boolean,
+  ) => ProviderCapabilityProfile | null,
+  isSignedIn: () => boolean | Promise<boolean>,
+): Promise<boolean> {
+  const config = await resolveRuntimeModelConfig(modelId);
+  if (!config) return false;
+  const capabilities = resolveCapabilities(config, getUseOpenRouter());
+  if (!capabilities) return false;
+  return await isSignedIn();
 }
 
 /** Whether the model currently routes through a signed-in ChatGPT subscription. */
 export async function isCodexSubscriptionActive(
   modelId: string,
 ): Promise<boolean> {
-  const config = await resolveRuntimeModelConfig(modelId);
-  if (!config) return false;
-  const capabilities = resolveCodexSubscriptionCapabilities(
-    config,
-    getUseOpenRouter(),
+  return isSignedInSubscriptionActive(
+    modelId,
+    resolveCodexSubscriptionCapabilities,
+    isCodexSignedIn,
   );
-  if (!capabilities) return false;
-  return isCodexSignedIn();
 }
 
 /**
@@ -208,14 +222,11 @@ export function resolveXaiSubscriptionCapabilities(
 export async function isXaiSubscriptionActive(
   modelId: string,
 ): Promise<boolean> {
-  const config = await resolveRuntimeModelConfig(modelId);
-  if (!config) return false;
-  const capabilities = resolveXaiSubscriptionCapabilities(
-    config,
-    getUseOpenRouter(),
+  return isSignedInSubscriptionActive(
+    modelId,
+    resolveXaiSubscriptionCapabilities,
+    isXaiSignedIn,
   );
-  if (!capabilities) return false;
-  return isXaiSignedIn();
 }
 
 /**
@@ -230,19 +241,8 @@ export async function isKimiCodeSubscriptionActive(
 ): Promise<boolean> {
   const config = await resolveRuntimeModelConfig(modelId);
   if (!config || !isKimiSubscriptionEligible(config)) return false;
-  const included = includedModelAccess();
-  // The relay only owns the model when included access can actually serve it.
-  const includedAccess = included.getUseIncludedModelAccess()
-    ? await included.canUseServerSideKeys()
-    : false;
-  const keySet = await apiKeyExists(platform().secrets, 'kimiCode');
-  return (
-    resolveKimiCodeRoute(
-      config,
-      getUseOpenRouter(),
-      keySet,
-      getPreferKimiCode(),
-      includedAccess,
-    ) === 'kimiCode'
+  return isKimiCodeRoute(
+    config,
+    await resolveKimiCodeRoutingFacts(getUseOpenRouter()),
   );
 }

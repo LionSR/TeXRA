@@ -29,10 +29,9 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import {
-  ExternalInquiryThreadIdSchema,
+  InquiryThreadIdSchema,
   type ExternalInquiryPermission,
-  type ExternalInquiryThreadSummary,
-  type InquiryActionMessage,
+  type InquiryThreadSummary,
   type StreamTabId,
 } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
@@ -47,17 +46,11 @@ import {
   getThreadSummary,
   getOpenTurnDraft,
   listThreadsByStatus,
-  markDropped,
   manifestToTranscript,
   readExternalInquiryThread,
-  recordAnswerForOpenTurn,
   recordOpenQuestion,
   type ExternalInquiryThreadManifest,
 } from './externalInquiryStorage';
-import {
-  injectContinuationForAnsweredThread,
-  injectContinuationForDroppedThread,
-} from './inquiryContinuation';
 
 const logger = createChannelTrace('InquiryTool');
 
@@ -81,7 +74,7 @@ const AskSchema = z.strictObject({
         'include all definitions, notation, and problem setup directly, and say what kind of ' +
         'answer you need (proof sketch, calculation, reference, etc.).',
     ),
-  thread_id: ExternalInquiryThreadIdSchema.nullish().describe(
+  thread_id: InquiryThreadIdSchema.nullish().describe(
     'Omit to start a new thread. Pass an existing answered thread_id to ask a follow-up: ' +
       'prior Q/A in that thread is preserved and shown to the user. ' +
       'Passing a thread_id that is still open or dropped will error.',
@@ -114,7 +107,7 @@ const ReadSchema = z.strictObject({
         'Use this when a [inquiry] continuation truncated content you need, ' +
         'or when revisiting an earlier thread.',
     ),
-  thread_id: ExternalInquiryThreadIdSchema.describe('The thread to read.'),
+  thread_id: InquiryThreadIdSchema.describe('The thread to read.'),
 });
 
 const ListSchema = z.strictObject({
@@ -151,106 +144,6 @@ const InquiryInputSchema = z.discriminatedUnion('command', [
 export type InquiryInput = z.infer<typeof InquiryInputSchema>;
 
 // ============================================================================
-// Action handler (called by the host when the panel submits/drops)
-// ============================================================================
-
-export type ExternalInquiryTransition =
-  | {
-      readonly kind: 'answered';
-      readonly threadId: InquiryActionMessage['threadId'];
-      readonly manifest: ExternalInquiryThreadManifest;
-    }
-  | {
-      readonly kind: 'dropped';
-      readonly threadId: InquiryActionMessage['threadId'];
-      readonly manifest: ExternalInquiryThreadManifest;
-    }
-  | {
-      readonly kind: 'stale';
-      readonly threadId: InquiryActionMessage['threadId'];
-    };
-
-/** Persist one terminal inquiry action without reaching into host presentation. */
-export async function persistExternalInquiryAction(
-  payload: InquiryActionMessage,
-): Promise<ExternalInquiryTransition> {
-  if (payload.action === 'submit') {
-    const persisted = await recordAnswerForOpenTurn({
-      threadId: payload.threadId,
-      answer: payload.answer,
-      sessionLinks: payload.sessionLinks ?? undefined,
-    });
-    if (!persisted) {
-      logger.warn(
-        `Inquiry submit ignored: thread ${payload.threadId} has no open turn.`,
-      );
-      return { kind: 'stale', threadId: payload.threadId };
-    }
-    return {
-      kind: 'answered',
-      threadId: payload.threadId,
-      manifest: persisted.manifest,
-    };
-  }
-
-  // drop — only flips status if the thread is still open; see markDropped.
-  if (payload.feedback) {
-    logger.info(`Inquiry ${payload.threadId} dropped with feedback`, {
-      data: payload.feedback,
-    });
-  }
-  const droppedManifest = await markDropped({ threadId: payload.threadId });
-  if (droppedManifest) {
-    return {
-      kind: 'dropped',
-      threadId: payload.threadId,
-      manifest: droppedManifest,
-    };
-  }
-  logger.warn(
-    `Inquiry drop ignored: thread ${payload.threadId} is no longer open ` +
-      `(stale/duplicate drop after submit?). Skipping continuation.`,
-  );
-  return { kind: 'stale', threadId: payload.threadId };
-}
-
-/** Deliver the continuation represented by a completed durable transition. */
-export async function continueExternalInquiryAction(
-  transition: ExternalInquiryTransition,
-  options: { session?: SessionHandle } = {},
-): Promise<void> {
-  switch (transition.kind) {
-    case 'answered':
-      // Use the manifest just written so a concurrent follow-up cannot flip
-      // storage back to `open` before this continuation observes the answer.
-      await injectContinuationForAnsweredThread(
-        transition.threadId,
-        transition.manifest,
-        options.session,
-      );
-      return;
-    case 'dropped':
-      await injectContinuationForDroppedThread(
-        transition.threadId,
-        transition.manifest,
-        options.session,
-      );
-      return;
-    case 'stale':
-      return;
-  }
-}
-
-/** Persist and continue an inquiry action for hosts without progress UI. */
-export async function handleExternalInquiryAction(
-  payload: InquiryActionMessage,
-  options: { session?: SessionHandle } = {},
-): Promise<void> {
-  const transition = await persistExternalInquiryAction(payload);
-  await continueExternalInquiryAction(transition, options);
-}
-
-// ============================================================================
 // Read / list subcommand outputs
 // ============================================================================
 
@@ -259,7 +152,7 @@ export async function handleExternalInquiryAction(
  * executions tool. Best-effort: a mirroring failure must not fail the tool
  * call, but it is logged rather than swallowed.
  */
-async function mirrorThreadToExecution(
+async function mirrorThreadBestEffort(
   executionId: string,
   threadId: string,
 ): Promise<void> {
@@ -307,7 +200,7 @@ function buildReadOutput(manifest: ExternalInquiryThreadManifest): ToolResult {
 }
 
 function buildListOutput(
-  summaries: ExternalInquiryThreadSummary[],
+  summaries: InquiryThreadSummary[],
   filterStatus: string,
   scope: string,
 ): ToolResult {
@@ -413,7 +306,7 @@ export class ExternalInquiryTool extends defineTool({
     const manifest = persisted.manifest;
 
     if (executionId) {
-      await mirrorThreadToExecution(executionId, persisted.threadId);
+      await mirrorThreadBestEffort(executionId, persisted.threadId);
     }
 
     // Register the asking stream without switching the active view: hosts
@@ -500,7 +393,7 @@ export class ExternalInquiryTool extends defineTool({
       );
     }
     if (args.executionId) {
-      await mirrorThreadToExecution(args.executionId, manifest.threadId);
+      await mirrorThreadBestEffort(args.executionId, manifest.threadId);
     }
     return buildReadOutput(manifest);
   }

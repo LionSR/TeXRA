@@ -108,12 +108,27 @@ export function createOpenAIBackgroundTerminalError(
     response.error?.message ??
     response.incomplete_details?.reason ??
     'Background response did not complete successfully.';
-  const wrapped = new Error(
+  const wrapped = wrapResponseError(
     `Background response ${response.id} ended with status ${fallbackStatus}: ${errorDetail}. Retrieve the latest status with client.responses.retrieve("${response.id}").`,
+    response.error,
   ) as Error & { error?: unknown; provider?: string };
   wrapped.provider = provider;
-  if (response.error) {
-    wrapped.error = response.error;
+  return wrapped;
+}
+
+/**
+ * Wrap a failed Responses call in a plain `Error` while preserving the
+ * structured `response.error` (a `{ code, message }` object, not just prose)
+ * on the thrown error, so `isContextWindowError()` can key off `error.code`
+ * instead of message wording that can drift across model generations.
+ */
+export function wrapResponseError(
+  message: string,
+  responseError: unknown,
+): Error & { error?: unknown } {
+  const wrapped = new Error(message) as Error & { error?: unknown };
+  if (responseError) {
+    wrapped.error = responseError;
   }
   return wrapped;
 }

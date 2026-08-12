@@ -23,6 +23,9 @@ import { ProgressEvents } from '../events';
 // Local imports - progress view helpers
 import { buildDetailsSummary } from '../formatters/htmlBuilders';
 
+// Local imports - styles
+import { bannerDetailsWaDetailsStyles } from '../styles/logEntryStyles';
+
 /** Status wa-icon name lookup for latexdiff entries. */
 const LATEXDIFF_STATUS_ICONS: Record<DiffStatus, TeXRAIconName> = {
   success: 'check',
@@ -34,6 +37,7 @@ export class LatexdiffResults extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    bannerDetailsWaDetailsStyles,
     css`
       :host {
         display: block;
@@ -41,8 +45,6 @@ export class LatexdiffResults extends LitElement {
 
       wa-details {
         margin: var(--wa-space-2xs) 0;
-        content-visibility: auto;
-        contain-intrinsic-size: auto 40px;
       }
 
       .latexdiff-content {

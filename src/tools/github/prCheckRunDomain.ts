@@ -9,8 +9,18 @@
  * to its mutable per-subscription state.
  */
 
-import { isPassingConclusion } from './formatPREvent';
 import type { GhCheckRun } from './prTypes';
+
+/** Conclusions GitHub treats as non-blocking (success / advisory / skipped). */
+const PASSING_CONCLUSIONS: ReadonlySet<string> = new Set([
+  'success',
+  'neutral',
+  'skipped',
+]);
+
+export function isPassingConclusion(conclusion: string | null): boolean {
+  return conclusion !== null && PASSING_CONCLUSIONS.has(conclusion);
+}
 
 /** A completed check run with a non-passing conclusion. */
 export function isCheckFailure(r: GhCheckRun): boolean {

@@ -55,15 +55,13 @@ export class AnnotationFetchBudget {
    */
   private refill(nowMs: number): void {
     const elapsedMs = nowMs - this.lastRefillMs;
-    if (elapsedMs <= 0) {
-      this.lastRefillMs = nowMs;
-      return;
+    if (elapsedMs > 0) {
+      const refillRate = this.maxRequestsPerWindow / this.windowMs;
+      this.tokens = Math.min(
+        this.maxRequestsPerWindow,
+        this.tokens + elapsedMs * refillRate,
+      );
     }
-    const refillRate = this.maxRequestsPerWindow / this.windowMs;
-    this.tokens = Math.min(
-      this.maxRequestsPerWindow,
-      this.tokens + elapsedMs * refillRate,
-    );
     this.lastRefillMs = nowMs;
   }
 

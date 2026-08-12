@@ -34,7 +34,7 @@ import {
   formatReviewComment,
   formatSubscriptionError,
 } from './formatPREvent';
-import { prRef, withSince } from './formatUtils';
+import { prRef, withSince } from './githubPaths';
 import {
   ghGet,
   GitHubAuthError,
@@ -433,16 +433,35 @@ export class PRPollingSource extends PollingSourceBase<
     const checksRes = checksOutcome.response;
     const stagedCheckRunsCache = checksOutcome.stagedCache;
 
+    // Issue/review comment lists: seed on the first tick (nothing emitted),
+    // diff + emit on later ticks. consumeCommentList branches on
+    // state.initialized, so one call per resource covers both phases. It runs
+    // before the checks/reviews seeding below, but the resources are
+    // independent and the relative emit order (comments before reviews) is
+    // unchanged from the original inline seed/diff blocks.
+    this.consumeCommentList(
+      commentsRes,
+      (etag) => {
+        state.etags.issueComments = etag;
+      },
+      state.issueComments,
+      (c) =>
+        this.emit(state, formatPRIssueComment(state.slug, pr.pullNumber, c)),
+      () => state.initialized,
+    );
+    this.consumeCommentList(
+      reviewCommentsRes,
+      (etag) => {
+        state.etags.reviewComments = etag;
+      },
+      state.reviewComments,
+      (c) =>
+        this.emit(state, formatReviewComment(state.slug, pr.pullNumber, c)),
+      () => state.initialized,
+    );
+
     // First tick only seeds cursors so we never replay history.
     if (!state.initialized) {
-      if (commentsRes.status === 200) {
-        state.etags.issueComments = commentsRes.etag;
-        state.issueComments.seed(commentsRes.data);
-      }
-      if (reviewCommentsRes.status === 200) {
-        state.etags.reviewComments = reviewCommentsRes.etag;
-        state.reviewComments.seed(reviewCommentsRes.data);
-      }
       if (reviewsRes.status === 200) {
         state.etags.reviews = reviewsRes.etag;
         // Skip PENDING: these are the authenticated user's own drafts
@@ -498,23 +517,8 @@ export class PRPollingSource extends PollingSourceBase<
       return;
     }
 
-    // Diff and emit.
-    if (commentsRes.status === 200) {
-      state.etags.issueComments = commentsRes.etag;
-      state.issueComments.diff(commentsRes.data, (c) => {
-        if (shouldDropBotEvent(c.user)) return;
-        this.emit(state, formatPRIssueComment(state.slug, pr.pullNumber, c));
-      });
-    }
-
-    if (reviewCommentsRes.status === 200) {
-      state.etags.reviewComments = reviewCommentsRes.etag;
-      state.reviewComments.diff(reviewCommentsRes.data, (c) => {
-        if (shouldDropBotEvent(c.user)) return;
-        this.emit(state, formatReviewComment(state.slug, pr.pullNumber, c));
-      });
-    }
-
+    // Comment lists were consumed at the top of the tick (seed first tick,
+    // diff + emit after); only reviews and checks remain here.
     if (reviewsRes.status === 200) {
       state.etags.reviews = reviewsRes.etag;
       // Same reasoning as the seeding branch: ignore PENDING drafts — they
@@ -533,14 +537,15 @@ export class PRPollingSource extends PollingSourceBase<
       // `state.etags` here.
       const runs = checksRes.data.check_runs;
 
-      const headSha = state.currentShaState?.sha;
+      const currentShaState = state.currentShaState;
+      const headSha = currentShaState?.sha;
       if (
+        currentShaState &&
         headSha &&
         runs.length > 0 &&
-        state.currentShaState &&
-        !state.currentShaState.ciStarted
+        !currentShaState.ciStarted
       ) {
-        state.currentShaState.ciStarted = true;
+        currentShaState.ciStarted = true;
         this.emit(
           state,
           formatCIStarted(
@@ -733,10 +738,12 @@ export class PRPollingSource extends PollingSourceBase<
     if (!run) return true;
     const { pr } = state;
     try {
-      const annotations = await this.fetchAnnotations(
+      const annotations = await fetchAnnotationsClient(
         pr.owner,
         pr.repo,
         run.id,
+        this.logger,
+        SharedAnnotationFetchBudget,
         now,
       );
       this.removePendingAnnotationRun(state, run.id);
@@ -809,27 +816,6 @@ export class PRPollingSource extends PollingSourceBase<
         ),
       );
     }
-  }
-
-  /**
-   * Thin delegator over the infrastructure `fetchAnnotations`, supplying this
-   * source's logger and the shared process-wide budget. Kept on the class
-   * (same arity) so internal callers and the annotation tests can drive it.
-   */
-  private fetchAnnotations(
-    owner: string,
-    repo: string,
-    checkRunId: number,
-    now = Date.now(),
-  ): Promise<GhCheckAnnotation[]> {
-    return fetchAnnotationsClient(
-      owner,
-      repo,
-      checkRunId,
-      this.logger,
-      SharedAnnotationFetchBudget,
-      now,
-    );
   }
 }
 

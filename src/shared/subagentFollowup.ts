@@ -187,11 +187,12 @@ function progressDetail(xml: string): string {
   }
 }
 
-function decodedResultResponsePreview(response: string): string {
-  const decoded = response.trim();
-  if (decoded === '') return '';
+/** Truncate an already-decoded result response for display in a status line. */
+function truncatedResultResponsePreview(response: string): string {
+  const trimmed = response.trim();
+  if (trimmed === '') return '';
 
-  const lines = decoded.split('\n');
+  const lines = trimmed.split('\n');
   const lineLimited = lines.length > RESULT_RESPONSE_PREVIEW_LINES;
   let preview = lines.slice(0, RESULT_RESPONSE_PREVIEW_LINES).join('\n');
   const charLimited = preview.length > RESULT_RESPONSE_PREVIEW_CHARS;
@@ -199,7 +200,7 @@ function decodedResultResponsePreview(response: string): string {
     preview = preview.slice(0, RESULT_RESPONSE_PREVIEW_CHARS).trimEnd();
   }
 
-  if (!lineLimited && !charLimited) return decoded;
+  if (!lineLimited && !charLimited) return trimmed;
 
   const extraLines = lines.length - RESULT_RESPONSE_PREVIEW_LINES;
   const hidden = lineLimited
@@ -250,7 +251,7 @@ export function formatWorkflowScriptDeliverySummary(
   return [
     `${marker} ${summary.name} ${status} · ${facts.join(' · ')}`,
     ...(summary.outcome === 'failed' && summary.errorCause
-      ? [decodedResultResponsePreview(summary.errorCause)]
+      ? [truncatedResultResponsePreview(summary.errorCause)]
       : []),
     ...fileLines,
     `  script: ${summary.scriptPath}`,
@@ -351,7 +352,7 @@ export function summarizeSubagentFollowup(text: unknown): string {
     const response = innerTag(trimmed, 'response');
     const head = `✓ ${agent} ${status}${wall ? ` · ${wall}` : ''}`;
     const preview = response
-      ? decodedResultResponsePreview(decodeXmlEntities(response))
+      ? truncatedResultResponsePreview(decodeXmlEntities(response))
       : '';
     return preview ? `${head}\n${preview}` : head;
   }

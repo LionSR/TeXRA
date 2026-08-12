@@ -22,7 +22,7 @@ import type { LeanLanguageServices } from '../leanLanguageServices';
 import type {
   LeanFileCommand,
   LeanProjectCommand,
-  LeanDiagnostic,
+  FetchDiagnosticsResult,
   LspHover,
   LspResult,
   PlainGoal,
@@ -174,27 +174,43 @@ export function createDirectLspLeanAdapter(
   return {
     async fetchDiagnosticsForFile(
       file: string,
-    ): Promise<LeanDiagnostic[] | null> {
+    ): Promise<FetchDiagnosticsResult> {
+      let session: LeanSession;
       try {
-        const session = await getSession(file);
-        return await session.fetchDiagnostics(file);
+        session = await getSession(file);
       } catch (error) {
-        // Return null (LeanDiagnosticsTool surfaces it as a failure result) and
-        // log the cause. The interface contract is `LeanDiagnostic[] | null`;
-        // honoring it keeps a missing/broken `lake` from throwing out of the
-        // JSON-RPC path.
+        // Session start covers both "not a Lake project" and a missing or
+        // broken `lake`/`lean` toolchain — report it as toolchain_unavailable
+        // so the tool can give actionable setup guidance instead of a generic
+        // "could not open file".
+        const message = toErrorMessage(error);
         warn(
           LOG_CHANNEL,
-          `fetchDiagnosticsForFile failed for ${file}: ${toErrorMessage(error)}`,
+          `fetchDiagnosticsForFile: no Lean session for ${file}: ${message}`,
         );
-        return null;
+        return { ok: false, kind: 'toolchain_unavailable', message };
+      }
+
+      try {
+        const diagnostics = await session.fetchDiagnostics(file);
+        return { ok: true, diagnostics };
+      } catch (error) {
+        // Opening/reading the file itself failed (e.g. ENOENT) — the file is
+        // the problem, so the tool keeps its "could not open file" framing.
+        const message = toErrorMessage(error);
+        warn(
+          LOG_CHANNEL,
+          `fetchDiagnosticsForFile: could not read ${file}: ${message}`,
+        );
+        return { ok: false, kind: 'file_missing', message };
       }
     },
 
-    async navigateToFirstError(): Promise<void> {
-      // No editor to navigate in CLI/desktop. The tool result still carries
-      // the diagnostic list so the agent can act on it.
-    },
+    // No navigateToFirstError here: CLI/desktop have no editor to move the
+    // cursor, and the interface declares it an optional host capability so
+    // `lean_diagnostics` skips it instead of pretending navigation happened.
+    // The tool result still carries the diagnostic list for the agent to act
+    // on.
 
     async executeFileCommand(
       command: LeanFileCommand,

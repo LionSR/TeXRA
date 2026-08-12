@@ -1,5 +1,5 @@
 // Local imports - platform
-import { tryGlobalState } from '@platform/platform';
+import type { StateStore } from '@platform/interfaces';
 
 // Local imports - common
 import type {
@@ -36,6 +36,7 @@ export interface MainViewStartupControllerDeps {
   getConfig<T>(key: string, defaultValue: T): T;
   loadOptions(): Promise<MainViewStartupOptions>;
   getAuthStatus(): Promise<MainViewAuthStatus>;
+  globalState: StateStore;
 }
 
 type MainViewStartupMessage = Extract<
@@ -62,7 +63,7 @@ export class MainViewStartupController {
     key: GlobalStateKey,
     legacySettingPath: string,
   ): boolean {
-    if (tryGlobalState()?.get<boolean>(key) === true) return true;
+    if (this.deps.globalState.get<boolean>(key) === true) return true;
     return this.deps.getConfig<boolean>(legacySettingPath, true) === false;
   }
 

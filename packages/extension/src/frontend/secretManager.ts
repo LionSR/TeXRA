@@ -20,23 +20,15 @@ export interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
 }
 
 /**
- * VS Code presentation over the one secrets door, `platform().secrets`. Reads
- * and writes go through the platform port so environment overrides apply on
- * every path; only the quick-pick and label helpers live here.
+ * VS Code presentation over the one secrets door, `platform().secrets`.
+ *
+ * Secret reads and writes go through the platform port directly at call sites
+ * (`platform().secrets.get/set/delete`) so environment overrides apply on
+ * every path; this module holds only the VS Code presentation helpers that
+ * compose that port: the API-provider quick-pick, the usable-key checks, and
+ * the canonical label/key constants re-exported from their owning modules.
  */
 export class SecretManager {
-  public static async get(key: string): Promise<string | undefined> {
-    return platform().secrets.get(key);
-  }
-
-  public static async set(key: string, value: string): Promise<void> {
-    await platform().secrets.set(key, value);
-  }
-
-  public static async delete(key: string): Promise<void> {
-    await platform().secrets.delete(key);
-  }
-
   public static readonly API_PROVIDERS = API_PROVIDERS;
 
   public static readonly GITHUB_TOKEN_KEY = GITHUB_TOKEN_STORAGE_KEY;

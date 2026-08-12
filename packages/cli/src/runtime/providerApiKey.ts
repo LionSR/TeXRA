@@ -22,8 +22,9 @@ const PLACEHOLDER_PATTERNS: readonly RegExp[] = [
 ];
 
 function looksLikePlaceholder(key: string): boolean {
-  if (key.length < 8) return true;
-  return PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(key));
+  return (
+    key.length < 8 || PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(key))
+  );
 }
 
 /** Persist a provider key without exposing it outside the credential store. */

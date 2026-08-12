@@ -7,26 +7,31 @@ import type { ResultMeta } from './resultMeta';
 export type ChildRunReportResult =
   { kind: 'persisted' } | { kind: 'failed'; err: unknown };
 
-export async function persistChildRunReport(
-  executionId: ExecutionId,
-  message: string,
+async function persistChildRunResult(
+  write: () => Promise<void>,
 ): Promise<ChildRunReportResult> {
   try {
-    await getExecutionStore(executionId).writeReport(message);
+    await write();
     return { kind: 'persisted' };
   } catch (err) {
     return { kind: 'failed', err };
   }
 }
 
+export async function persistChildRunReport(
+  executionId: ExecutionId,
+  message: string,
+): Promise<ChildRunReportResult> {
+  return persistChildRunResult(() =>
+    getExecutionStore(executionId).writeReport(message),
+  );
+}
+
 export async function persistChildRunResultMeta(
   executionId: ExecutionId,
   resultMeta: ResultMeta,
 ): Promise<ChildRunReportResult> {
-  try {
-    await getExecutionStore(executionId).writeResultMeta(resultMeta);
-    return { kind: 'persisted' };
-  } catch (err) {
-    return { kind: 'failed', err };
-  }
+  return persistChildRunResult(() =>
+    getExecutionStore(executionId).writeResultMeta(resultMeta),
+  );
 }

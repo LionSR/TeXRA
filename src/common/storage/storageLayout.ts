@@ -13,5 +13,6 @@ export const WORKSPACE_STORAGE_LAYOUT = Object.freeze({
   legacyRuns: 'taskRuns',
   streamData: 'streamData',
   streamLogs: 'streamLogs',
+  streamLogSummaries: 'streamLogSummaries',
   original: 'original',
 } as const);

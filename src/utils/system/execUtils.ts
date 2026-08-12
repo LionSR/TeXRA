@@ -213,6 +213,24 @@ function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
 }
 
 /**
+ * Teardown strategy for {@link executeCommand}.
+ *
+ * - `'process'` spawns a single non-detached process (array command form) and
+ *   leaves abort/timeout signalling to execa's native `cancelSignal` /
+ *   `forceKillAfterDelay`, plus a stream-destroy backstop. No process-group
+ *   semantics: a descendant that inherited stdio is intentionally left alone.
+ * - `'shell'` spawns a detached shell (string command form) and hand-rolls
+ *   SIGTERM/SIGKILL via `signalProcessGroup` on the negative PID so piped
+ *   children and backgrounded jobs are torn down as a unit. Orphan risk on
+ *   hard host kill, and a separate hand-rolled shell timeout, apply here.
+ *
+ * Defaults to `'process'` for array commands and `'shell'` for string
+ * commands, but callers relying on shell teardown should pass `mode: 'shell'`
+ * explicitly so the process-group semantics are visible at the call site.
+ */
+type ExecuteCommandMode = 'process' | 'shell';
+
+/**
  * Execute external command with output handling and workspace path management.
  */
 export async function executeCommand(
@@ -239,10 +257,31 @@ export async function executeCommand(
     stderr?: ExecOutput;
     /** Abort signal used to terminate the subprocess and any shell children. */
     signal?: AbortSignal;
+    /**
+     * Teardown strategy (see {@link ExecuteCommandMode}). Defaults from the
+     * command form: array → `'process'`, string → `'shell'`. Must match the
+     * command form — a mismatch throws rather than silently changing
+     * process-group/abort semantics.
+     */
+    mode?: ExecuteCommandMode;
     /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
     quiet?: boolean;
   } = {},
 ): Promise<ExecResult> {
+  // Make the teardown strategy explicit. Defaulting from the command form
+  // keeps every existing caller's behavior identical; a caller that relies on
+  // shell process-group teardown declares it with `mode: 'shell'` instead of
+  // relying on the string form alone.
+  const mode: ExecuteCommandMode =
+    options.mode ?? (Array.isArray(command) ? 'process' : 'shell');
+  if ((mode === 'shell') === Array.isArray(command)) {
+    throw new Error(
+      `executeCommand mode '${mode}' does not match the ${
+        Array.isArray(command) ? 'array' : 'string'
+      } command form`,
+    );
+  }
+
   // Hoisted so the finally block can clear them on both success and error paths.
   let shellTimeoutId: ReturnType<typeof setTimeout> | undefined;
   let forceKillTimeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -321,7 +360,7 @@ export async function executeCommand(
     };
 
     let shellTimeout: number | undefined;
-    if (Array.isArray(command)) {
+    if (mode === 'process') {
       const [cmd, ...args] = command;
       if (!options.quiet) {
         logger.debug(
@@ -363,7 +402,10 @@ export async function executeCommand(
       // On POSIX, detached creates a process group we can kill as a unit.
       // On Windows, detached opens a new console window so we always skip it.
       const useDetached = (!!shellTimeout || !!options.signal) && !IS_WINDOWS;
-      subprocess = execa(command, {
+      // The mode/form guard above proves `command` is a string here (mode
+      // 'shell' requires the string command form); TypeScript can't propagate
+      // that correlation from the compound guard, so assert it.
+      subprocess = execa(command as string, {
         ...execaNoTimeout,
         shell: true,
         ...(useDetached ? { detached: true } : {}),
@@ -371,7 +413,7 @@ export async function executeCommand(
     }
 
     if (subprocess.pid && options.onPid) options.onPid(subprocess.pid);
-    if (Array.isArray(command)) {
+    if (mode === 'process') {
       // Array-form abort/force-kill is execa's (`cancelSignal` /
       // `forceKillAfterDelay` above), but execa only signals the tracked
       // pid: a descendant that inherited stdio (e.g. `bash -c 'work &

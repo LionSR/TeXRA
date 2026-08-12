@@ -16,8 +16,7 @@ import isWsl from 'is-wsl';
 
 /**
  * Whether we are running inside Windows Subsystem for Linux (WSL).
- * Kept as a function so existing call sites (`isWSL()`) stay unchanged.
+ * A plain constant: `is-wsl` computes its result once at import, so there is
+ * no need for a wrapper function.
  */
-export function isWSL(): boolean {
-  return isWsl;
-}
+export const isWSL: boolean = isWsl;

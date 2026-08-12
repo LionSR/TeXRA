@@ -41,13 +41,17 @@ export interface EmptyStateOptions {
   readonly headingTag?: EmptyStateHeadingTag;
   // Optional eyebrow/kicker label rendered above the title. Used by callers
   // that want a section badge (e.g. "Progress") without forking the helper.
+  // Note: providing a kicker replaces the icon leader — the main `icon` glyph
+  // (and any `iconSurfaceSize` wrapper) is not rendered; the kicker row reuses
+  // only the icon name.
   readonly kicker?: string;
   // Icon used inside the kicker. Defaults to the main `icon` prop so the
   // helper stays minimal when callers want a simple eyebrow.
   readonly kickerIcon?: TeXRAIconName;
   // Wraps the main icon in the shared `.icon-surface` decorative box (same
   // contract as settingsBanner.ts) at the given size, instead of the bare
-  // glyph. Omit for the default bare-icon treatment.
+  // glyph. Omit for the default bare-icon treatment. Inert when `kicker` is
+  // set — the kicker row replaces the icon leader.
   readonly iconSurfaceSize?: 's' | 'm' | 'l';
 }
 
@@ -79,7 +83,10 @@ export function renderEmptyState({
         </span>
       `
     : iconGlyph;
-  const iconLeader = kicker
+  // Either the kicker row (when `kicker` is set, which replaces the main icon)
+  // or the main icon leader (`surfacedIcon`). The substitution is intentional:
+  // a badge-style kicker is the eyebrow treatment, so both are never rendered.
+  const iconOrKicker = kicker
     ? html`
         <div class="empty-state-kicker">
           ${waIcon(kickerIcon ?? icon, {
@@ -93,7 +100,7 @@ export function renderEmptyState({
   // (semantic outline) while keeping interpolated children type-checked.
   return staticHtml`
     <section class=${ifDefined(className)}>
-      ${iconLeader}
+      ${iconOrKicker}
       <${tag} class="empty-state-title">${title}</${tag}>
       ${body ? html`<p class="empty-state-body">${body}</p>` : nothing}
       ${

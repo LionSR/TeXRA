@@ -16,7 +16,7 @@
 import { appSignals } from '@eventBus/AppSignals';
 import * as logger from '@logger/logUtils';
 import { tryGlobalState } from '@platform/platform';
-import { SUPABASE_CUSTOM_DOMAIN } from '../config';
+import { SUPABASE_CONFIG } from '../config';
 import { TierService } from './TierService';
 import { ServerSideKeyService } from './ServerSideKeyService';
 
@@ -62,7 +62,7 @@ export function getServerSideKeyService(): ServerSideKeyService {
     );
   }
 
-  const baseUrl = `https://${SUPABASE_CUSTOM_DOMAIN}`;
+  const baseUrl = SUPABASE_CONFIG.url;
   _instance = new ServerSideKeyService(
     baseUrl,
     new TierService(baseUrl, logger),

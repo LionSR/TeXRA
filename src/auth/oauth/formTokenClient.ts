@@ -10,8 +10,6 @@ import { z } from 'zod';
 
 // Local imports
 import { toErrorMessage } from '@utils/errors/errorMessage';
-
-// Local imports - oauth
 import type { ProviderAuthErrorCtor } from './providerAuthBridge';
 import type { SubscriptionOAuthErrorKind } from './subscriptionOAuthError';
 import type { SubscriptionTokenResponse } from './SubscriptionOAuthCoordinator';

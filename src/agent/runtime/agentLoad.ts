@@ -1,10 +1,6 @@
 import * as path from 'node:path';
 
-import {
-  resolveAgent,
-  type AgentSource,
-  type ResolvedAgent,
-} from '@agent/index';
+import { resolveAgent, type ResolvedAgent } from '@agent/index';
 import {
   AgentPromptSchema,
   AgentDefinitionSchema,
@@ -18,7 +14,11 @@ import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitio
 import { inlineAgentDefinition } from '@agent/index/inlineAgents';
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
-import { agentKey, AgentCategory } from '@shared/schemas/agent';
+import {
+  agentKey,
+  AgentCategory,
+  type AgentSource,
+} from '@shared/schemas/agent';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 import { resolveAgentSettingTools } from './agentSettingTools';

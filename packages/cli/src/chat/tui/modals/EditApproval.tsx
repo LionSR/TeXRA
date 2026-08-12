@@ -19,13 +19,13 @@ import {
 } from './confirmCardRowsBudget';
 import {
   buildHunks,
-  COMPACT_DIFF_DISPLAY_LINES,
   DiffView,
   initialDiffScrollOffset,
   maxDiffScrollOffset,
   statsFromHunks,
   wrappedDiffDisplayLines,
 } from '../render/DiffView';
+import { COMPACT_SCROLLABLE_CONTENT_ROWS } from '../render/scrollBounds';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
@@ -70,7 +70,7 @@ export function editApprovalDiffRowsBudget({
     title,
     minContentWidth: MIN_MODAL_CONTENT_WIDTH,
     defaultRows: DEFAULT_EDIT_DIFF_ROWS,
-    compactMaxRows: COMPACT_DIFF_DISPLAY_LINES,
+    compactMaxRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     spaciousFixedRows: EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE,
     compactFixedRows: EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE,
     extraFixedRows: feedbackRows,
@@ -136,7 +136,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
         feedbackMode: true,
         feedbackValue: value,
         title,
-      }) <= COMPACT_DIFF_DISPLAY_LINES,
+      }) <= COMPACT_SCROLLABLE_CONTENT_ROWS,
     [columns, props.availableRows, title],
   );
   useEffect(() => {
@@ -164,7 +164,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     pageRows: Math.max(1, maxDiffLines - 2),
     resetKey: scrollResetKey,
   });
-  const compactDiffLayout = maxDiffLines <= COMPACT_DIFF_DISPLAY_LINES;
+  const compactDiffLayout = maxDiffLines <= COMPACT_SCROLLABLE_CONTENT_ROWS;
   const compactCard = isCompactRows(
     props.availableRows,
     COMPACT_EDIT_APPROVAL_MAX_ROWS,

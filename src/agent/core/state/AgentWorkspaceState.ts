@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
-import type { ServerToolContentBlock } from '@agent/types/ServerToolTypes';
+import type { ServerToolContentBlock } from '@agent/types/ServerTools';
 import {
   FileLocationSchema,
   PlanSchema,

@@ -22,6 +22,7 @@ import {
 import { commandOnly, withFilesArray } from '../messageFactories';
 import {
   CurrentFileTypeSchema,
+  DocumentFileTypeSchema,
   ExtendedDocumentFileTypeSchema,
   MultipleDocumentFileTypeSchema,
 } from '../fileTypes';
@@ -141,24 +142,12 @@ const FileOperationMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.ADD_OPENED_FILES),
-    fileType: ExtendedDocumentFileTypeSchema,
+    fileType: DocumentFileTypeSchema,
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.ATTACH_DROPPED_FILES),
     paths: z.array(z.string()),
     target: MultipleDocumentFileTypeSchema.nullish(),
-  }),
-  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES).extend({
-    fileType: z.literal('input'),
-  }),
-  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_CONTEXT_FILES).extend({
-    fileType: z.literal('context'),
-  }),
-  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES).extend({
-    fileType: z.literal('media'),
-  }),
-  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES).extend({
-    fileType: z.literal('output'),
   }),
 ] as const;
 

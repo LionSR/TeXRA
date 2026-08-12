@@ -4,14 +4,16 @@
 import { useState } from 'react';
 import { Box, Text, useInput, useWindowSize, type BoxProps } from 'ink';
 
-import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
+import { isEscapeInput } from '@cli/tui/inputKeys';
+import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import {
   KEY_HINT_SEPARATOR,
   KeyHints,
   type KeyHint,
 } from '@cli/tui/ui/KeyHints';
-import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { POINTER } from '@cli/tui/ui/glyphs';
+import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
+import { useLiveNowMs } from '@cli/tui/useLiveNowMs';
 import {
   confirmCardCompactHintLayout,
   confirmCardFeedbackHints,
@@ -21,8 +23,6 @@ import {
   type ConfirmCardRejectionMode,
 } from './ConfirmCardState';
 import { BaseTextInput } from '../input/BaseTextInput';
-import { isEscapeInput } from '../input/inputKeys';
-import { useLiveNowMs } from '../state/useLiveNowMs';
 import type {
   ApprovalBypassKind,
   ApprovalDecision,

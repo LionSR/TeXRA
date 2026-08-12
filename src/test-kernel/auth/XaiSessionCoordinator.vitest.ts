@@ -63,7 +63,7 @@ describe('XaiSessionCoordinator', () => {
 
   it('buildAuthorizeRequest includes pinned redirect, plan, and referrer', () => {
     const coordinator = makeCoordinator({ storage: memoryStorage() });
-    const auth = coordinator.buildAuthorizeRequest();
+    const auth = coordinator.buildAuthorizeRequest(0);
     const url = new URL(auth.url);
     expect(auth.redirectUri).toBe('http://127.0.0.1:56121/callback');
     expect(url.searchParams.get('client_id')).toBe(

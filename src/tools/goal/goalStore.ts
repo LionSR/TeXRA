@@ -1,11 +1,7 @@
 import { Mutex } from 'async-mutex';
 
 import {
-  getRunContextSession,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
-import {
-  tryDefaultSession,
+  resolveEmitSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { platform, tryWorkspaceState } from '@platform/platform';
@@ -44,9 +40,9 @@ function emitGoalStateChanged(
   session?: SessionHandle,
 ): void {
   // Local storage commands can update goals without composing an agent
-  // session. In that case there is no live observer to notify.
-  const owner = session ?? getRunContextSession(tryUseRunContext());
-  const target = owner?.events ? owner : tryDefaultSession();
+  // session. In that case there is no live observer to notify, so the shared
+  // resolveEmitSession (non-throwing) returns undefined and we skip the emit.
+  const target = resolveEmitSession(session);
   if (!target) return;
   target.events.emit({
     scope: 'session',

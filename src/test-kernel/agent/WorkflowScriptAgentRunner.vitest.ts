@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkflowAgentInvocation } from '@agent/workflowScript';
-import type { AgentEntry } from '@agent/index/agentRegistry';
+import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';

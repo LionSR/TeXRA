@@ -55,13 +55,7 @@ export const AGENT_SOURCE = {
 /** Single source of truth for agent source identifiers. */
 export const AgentSourceSchema = z.enum(AGENT_SOURCE);
 
-export type AgentSourceType = z.infer<typeof AgentSourceSchema>;
-
-// Backend-compatible type alias under the plain name "AgentSource". The
-// former value half of the Zod dual-export pattern (`const AgentSource =
-// AgentSourceSchema`) was dropped once every consumer proved type-only;
-// value use sites import `AgentSourceSchema` directly.
-export type AgentSource = AgentSourceType;
+export type AgentSource = z.infer<typeof AgentSourceSchema>;
 
 const AGENT_NAME_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]*$/u;
 

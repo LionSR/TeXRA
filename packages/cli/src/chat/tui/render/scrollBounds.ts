@@ -1,11 +1,20 @@
-import { clamp } from '@utils/core';
 import {
   hiddenRowsText,
   moreRowsText,
   previousRowsText,
   scrollStatusText,
-} from './overflowText';
+} from '@cli/tui/overflowText';
+import { clamp } from '@utils/core';
 import { clipToWidth, textDisplayWidth } from './terminalText';
+
+/**
+ * Below this many content rows, a scrollable region degrades to a single
+ * status/overflow row instead of scrolling (a compact layout). The single
+ * source of truth for the threshold every scroll-bounds caller uses as its
+ * `compactRows` — the modal text body, the external-inquiry question, and the
+ * approval diff all share this one concept.
+ */
+export const COMPACT_SCROLLABLE_CONTENT_ROWS = 3;
 
 interface ScrollBoundedRows<T> {
   readonly hiddenAfter: number;

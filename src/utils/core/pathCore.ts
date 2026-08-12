@@ -29,7 +29,7 @@ export function toPosixPath(relativePath: string): string {
 
 /** Normalize a LaTeX \input path by trimming, converting separators, and resolving `.`/`..` segments. */
 export function normalizeLatexPath(value: string): string {
-  const trimmed = value?.trim();
+  const trimmed = value.trim();
   if (!trimmed) return '';
   return toPosixPath(trimmed);
 }

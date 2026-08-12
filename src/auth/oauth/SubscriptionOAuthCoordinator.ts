@@ -92,11 +92,6 @@ export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
     nowMs: number,
     previous?: S,
   ): S;
-  /**
-   * Optional extra "about to expire" check (e.g. JWT `exp` when expires_in is
-   * missing). Default is the stored `expiresAtMs` window only.
-   */
-  isExpiringSoon?(session: S, nowMs: number, bufferMs: number): boolean;
 }
 
 export interface SubscriptionOAuthCoordinatorInit<
@@ -274,10 +269,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   }
 
   isExpiringSoon(session: S): boolean {
-    const now = this.now();
-    const buffer = this.policy.refreshBufferMs;
-    if (now + buffer >= session.expiresAtMs) return true;
-    return this.policy.isExpiringSoon?.(session, now, buffer) ?? false;
+    return this.now() + this.policy.refreshBufferMs >= session.expiresAtMs;
   }
 
   async getFreshAccessToken(forceRefresh = false): Promise<string> {

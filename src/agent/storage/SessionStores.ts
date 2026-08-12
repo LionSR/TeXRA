@@ -10,6 +10,7 @@ import {
   type ExecutionStreamReference,
 } from '@agent/storage/executionListing';
 import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
+import { throwUnwrapAggregate } from '@agent/storage/storageErrors';
 import { isBackgroundShellStream } from '@agent/runtime/streamTab';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -408,13 +409,10 @@ export class SessionStores {
           async () => {
             const cleanup = await this.deleteAdjacentStreamStates(streams);
             failedAdjacentStreams = cleanup.failed;
-            if (cleanup.failures.length === 1) throw cleanup.failures[0];
-            if (cleanup.failures.length > 1) {
-              throw new AggregateError(
-                cleanup.failures,
-                'Multiple adjacent cleanups failed',
-              );
-            }
+            throwUnwrapAggregate(
+              cleanup.failures,
+              'Multiple adjacent cleanups failed',
+            );
           },
         );
 

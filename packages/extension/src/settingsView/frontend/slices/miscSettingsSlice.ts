@@ -42,7 +42,7 @@ export const goalHandlers = {
 export const agentTeamsHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS]: (data) => {
     customPresets.set(data.customPresets);
-    orchestratorAgents.set(data.orchestratorAgents ?? []);
+    orchestratorAgents.set(data.orchestratorAgents);
   },
 } satisfies Partial<SettingsViewOutboundHandlerRegistry>;
 

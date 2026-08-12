@@ -7,11 +7,13 @@ import {
 import { openCliSlashCommandForm } from '../slashForms';
 import { type SlashCommandContext } from './slashContext';
 
-const YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
+const APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
+export const YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 
 export function applyCliApprovalPolicySelection(
   input: string,
   context: SlashCommandContext,
+  usage: string = APPROVAL_USAGE,
 ): void {
   const normalized = input.trim().toLowerCase();
   if (!normalized || normalized === 'status') {
@@ -21,7 +23,7 @@ export function applyCliApprovalPolicySelection(
 
   const policy = parseTexraApprovalPolicy(normalized);
   if (!policy) {
-    appendLocalAssistantTranscript(YOLO_USAGE);
+    appendLocalAssistantTranscript(usage);
     return;
   }
 

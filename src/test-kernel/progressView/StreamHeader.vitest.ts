@@ -8,7 +8,9 @@ import type { StreamEventDetail } from '@progressView/frontend/events';
 import {
   AgentCategory,
   STREAM_PHASE,
+  createStreamState,
   type StreamTabInfo,
+  type ToolUseStreamState,
 } from '@shared/schemas';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
@@ -30,10 +32,19 @@ function baseStream(overrides: Partial<StreamTabInfo> = {}): StreamTabInfo {
   };
 }
 
+function baseState(
+  overrides: Partial<ToolUseStreamState> = {},
+): ToolUseStreamState {
+  return createStreamState(AgentCategory.ToolUse, {
+    status: STREAM_PHASE.RUNNING,
+    ...overrides,
+  }) as ToolUseStreamState;
+}
+
 function mount(props: Partial<StreamHeader> = {}): Promise<StreamHeader> {
   return mountComponent<StreamHeader>('stream-header', {
     stream: baseStream(),
-    status: STREAM_PHASE.RUNNING,
+    state: baseState(),
     // Buttons default to hidden until the host confirms which commands it
     // supports (`isKnownUnsupported` treats `null` as "unknown, so hide").
     unsupportedCommands: new Set(),
@@ -143,7 +154,9 @@ describe('stream-header', () => {
     });
 
     it('keeps the icon-only stream status accessible and available on hover', async () => {
-      const element = await mount({ status: STREAM_PHASE.FAILED });
+      const element = await mount({
+        state: baseState({ status: STREAM_PHASE.FAILED }),
+      });
       const indicator = element.shadowRoot?.querySelector(
         `#${ELEMENT_IDS.STATUS_INDICATOR}`,
       );
@@ -156,9 +169,11 @@ describe('stream-header', () => {
 
     it('anchors the goal chip tooltip via wa-tooltip[for], not a native title', async () => {
       const element = await mount({
-        goalActive: true,
-        goalStatus: 'active',
-        goalObjective: 'ship the fix',
+        state: baseState({
+          goalActive: true,
+          goalStatus: 'active',
+          goalObjective: 'ship the fix',
+        }),
       });
 
       expectAnchoredTooltip(element, 'goalChip', 'Goal: ship the fix');
@@ -166,7 +181,7 @@ describe('stream-header', () => {
 
     it('anchors the progress badge tooltip via wa-tooltip[for], not a native title', async () => {
       const element = await mount({
-        stage: { kind: 'round', index: 0, total: 2 },
+        state: baseState({ stage: { kind: 'round', index: 0, total: 2 } }),
       });
 
       expectAnchoredTooltip(element, 'progressBadge', 'Round 1 of 2');
@@ -209,22 +224,28 @@ describe('stream-header', () => {
       {
         name: 'renders the phase label when the stream has one',
         props: {
-          stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
+          state: baseState({
+            stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
+          }),
         },
         text: 'Reduce 2/3',
         tooltip: 'Phase 2 of 3: Reduce',
       },
       {
         name: 'renders a dynamically opened phase with no declared position',
-        props: { stage: { kind: 'phase', label: 'Cleanup' } },
+        props: {
+          state: baseState({ stage: { kind: 'phase', label: 'Cleanup' } }),
+        },
         text: 'Cleanup',
         tooltip: 'Phase: Cleanup',
       },
       {
         name: 'keeps the tool-call count alongside the phase',
         props: {
-          stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
-          progress: { toolCallCount: 4 },
+          state: baseState({
+            stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
+            conversationProgress: { toolCallCount: 4 },
+          }),
         },
         text: 'Reduce 2/3, 4 tool calls',
         tooltip: 'Phase 2 of 3: Reduce, Tool calls: 4',

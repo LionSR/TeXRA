@@ -10,8 +10,9 @@ import {
   isEscapeInput,
   isPlainReturnInput,
   type ReturnKeyInput,
-} from '@cli/chat/tui/input/inputKeys';
+} from '@cli/tui/inputKeys';
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export interface AsyncListFormState<T> {
   readonly data: T | undefined;
@@ -28,6 +29,20 @@ export interface AsyncListFormState<T> {
    * mutable in place (e.g. `/tools` re-reading statuses after a toggle).
    */
   readonly setData: (next: T) => void;
+  /**
+   * Re-run the loader and replace the loaded data, keeping the current data
+   * on screen until the next result arrives. Used by forms that must re-fetch
+   * after a mutation (e.g. a roster write). Clears the error on success and
+   * reports failures through {@link error} plus the options' {@link
+   * UseAsyncListFormOptions.onError}.
+   */
+  readonly reload: () => void;
+  /**
+   * Surface a failure that is not a load failure (e.g. a mutation write)
+   * through the same error channel and {@link UseAsyncListFormOptions.onError}
+   * used by load failures.
+   */
+  readonly reportError: (error: unknown) => void;
 }
 
 export interface UseAsyncListFormOptions<T> {
@@ -35,6 +50,11 @@ export interface UseAsyncListFormOptions<T> {
   readonly load: () => Promise<T>;
   /** Close handler invoked when `Esc` is pressed in a non-actionable state. */
   readonly onClose: () => void;
+  /**
+   * Invoked alongside {@link AsyncListFormState.error} whenever a load or a
+   * reported error fails, so the host can log/notify outside the form frame.
+   */
+  readonly onError?: (error: unknown) => void;
   /**
    * Returns true when loaded `data` has nothing to act on (e.g. an empty
    * list), so `Esc` should also close. Forms whose loaded state is always
@@ -101,6 +121,16 @@ export function useAsyncListForm<T>(
   const [pendingInput, setPendingInput] = useState<string | undefined>();
   const clearPendingInput = useCallback(() => setPendingInput(undefined), []);
 
+  const { load, onError } = options;
+
+  const reportError = useCallback(
+    (err: unknown) => {
+      setError(toErrorMessage(err));
+      onError?.(err);
+    },
+    [onError],
+  );
+
   const empty =
     data !== undefined && options.isEmpty ? options.isEmpty(data) : false;
 
@@ -123,7 +153,15 @@ export function useAsyncListForm<T>(
     }
   });
 
-  const { load } = options;
+  const reload = useCallback(() => {
+    setError(undefined);
+    void load()
+      .then((result) => {
+        setData(result);
+      })
+      .catch(reportError);
+  }, [load, reportError]);
+
   useCancellableEffect(
     (isCancelled) => {
       void load()
@@ -134,7 +172,7 @@ export function useAsyncListForm<T>(
         })
         .catch((err: unknown) => {
           if (isCancelled()) return;
-          setError(String(err));
+          reportError(err);
           setLoading(false);
         });
     },
@@ -142,5 +180,14 @@ export function useAsyncListForm<T>(
     [],
   );
 
-  return { data, loading, error, pendingInput, clearPendingInput, setData };
+  return {
+    data,
+    loading,
+    error,
+    pendingInput,
+    clearPendingInput,
+    setData,
+    reload,
+    reportError,
+  };
 }

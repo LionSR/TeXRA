@@ -14,17 +14,17 @@
     {
       "file": "packages/desktop/src/main/platform/electronSecrets.ts",
       "category": "exports",
+      "name": "LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE"
+    },
+    {
+      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
+      "category": "exports",
       "name": "__resetKeychainStateForTests"
     },
     {
       "file": "packages/desktop/src/main/platform/electronSecrets.ts",
       "category": "exports",
       "name": "getSecretStorageMode"
-    },
-    {
-      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
-      "category": "exports",
-      "name": "LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE"
     },
     {
       "file": "packages/desktop/src/main/platform/warningDialog.ts",
@@ -75,6 +75,16 @@
       "file": "packages/trace-viewer/vite.standalone.config.ts",
       "category": "files",
       "name": "packages/trace-viewer/vite.standalone.config.ts"
+    },
+    {
+      "file": "src/common/errors/sdkError/chatgptSubscriptionDetection.ts",
+      "category": "files",
+      "name": "src/common/errors/sdkError/chatgptSubscriptionDetection.ts"
+    },
+    {
+      "file": "src/controllers/modelAccess/chatGptAuthStatus.ts",
+      "category": "files",
+      "name": "src/controllers/modelAccess/chatGptAuthStatus.ts"
     },
     {
       "file": "src/test-kernel/support/setupFakePlatform.ts",

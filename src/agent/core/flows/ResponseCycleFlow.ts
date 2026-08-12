@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { z } from 'zod';
 
 import { BaseNode, Flow } from '@agent/node';
@@ -25,6 +27,7 @@ import type { ToolDefinition } from '@model/ToolDefinition';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { OUTPUT_END_TAG } from '@shared/schemas/output';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 
 import { FlowTransition } from './FlowTransitions';
@@ -107,11 +110,9 @@ class ResponsePrepNode<C> extends BaseNode<
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
-    const { prompt, userVarChannels, runScope, fileService } = this.services;
+    const { prompt, userVarChannels, runScope } = this.services;
     const interrupted = runScope.signal.aborted;
-    const exists = await fileService.pathExists(
-      shared.outputLocation.absolutePath,
-    );
+    const exists = await AbsoluteFS.exists(shared.outputLocation.absolutePath);
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(prompt.systemPrompt, {
@@ -336,7 +337,7 @@ class ResponseProcessNode<C> extends BaseNode<
     prepRes: ProcessPrepResult,
     execRes: ProcessNodeResult,
   ): Promise<string | undefined> {
-    const { round, workspace, logger, fileService } = this.services;
+    const { round, workspace, logger } = this.services;
     const modelHandler = this.services.modelCell.handler;
 
     if (execRes.kind === 'skipped') {
@@ -377,7 +378,8 @@ class ResponseProcessNode<C> extends BaseNode<
 
     if (!shared.outputExists) {
       logger.debug(`Creating new file: ${outputLocation.absolutePath}`);
-      await fileService.writeFile(
+      await AbsoluteFS.ensureDir(path.dirname(outputLocation.absolutePath));
+      await AbsoluteFS.write(
         outputLocation.absolutePath,
         result.processedResponse,
       );
@@ -386,7 +388,8 @@ class ResponseProcessNode<C> extends BaseNode<
       logger.debug(
         `Appending to existing file: ${outputLocation.absolutePath}`,
       );
-      await fileService.appendFile(
+      await AbsoluteFS.ensureDir(path.dirname(outputLocation.absolutePath));
+      await AbsoluteFS.appendFile(
         outputLocation.absolutePath,
         connector + result.processedResponse,
       );

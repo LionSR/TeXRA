@@ -9,10 +9,8 @@ import * as logger from '@logger/logUtils';
 import { tryPlatform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  SubscriptionOAuthError,
-  type SubscriptionOAuthErrorKind,
-} from './subscriptionOAuthError';
+import { SubscriptionOAuthError } from './subscriptionOAuthError';
+import type { ProviderAuthErrorCtor } from './providerAuthBridge';
 import type {
   SubscriptionSessionStatus,
   SubscriptionSessionStorage,
@@ -70,20 +68,6 @@ export interface SessionAccessCoordinator {
   loadSession(): Promise<unknown>;
 }
 
-interface SessionAccessNeedsReauthError {
-  readonly needsReauth: boolean;
-  readonly status?: number;
-}
-
-export interface SessionAccessErrorFactory {
-  new (
-    message: string,
-    kind: SubscriptionOAuthErrorKind,
-    status?: number,
-    options?: ErrorOptions,
-  ): Error & SessionAccessNeedsReauthError;
-}
-
 /**
  * Read signed-in status without throwing. Safe before platform init.
  */
@@ -110,7 +94,7 @@ export async function getSubscriptionSessionStatus(
  */
 export async function isSubscriptionSessionRoutable(
   getCoordinator: () => SessionAccessCoordinator,
-  ErrorType: SessionAccessErrorFactory,
+  ErrorType: ProviderAuthErrorCtor,
   displayName: string,
 ): Promise<boolean> {
   if (!tryPlatform()) return false;

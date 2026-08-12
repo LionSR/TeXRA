@@ -5,19 +5,14 @@
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
-import { setTimeout as sleep } from 'node:timers/promises';
-
 import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import {
-  presentFollowUpResult,
-  submitFollowUp,
-} from '@agent/followUp/ToolUseFollowUp';
 import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
+import { chatAgentSupportsDelegation } from '@cli/runtime/agents';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
@@ -58,11 +53,8 @@ import {
   STREAM_PHASE,
   type ExecutionId,
   type StreamPhase,
-  type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
-import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
-import { escapeText } from '@shared/utils/xmlEscape';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { isActivePhase } from '@shared/streams/streamStatus';
@@ -73,11 +65,10 @@ import {
   type ChatSessionController,
 } from '../chatSessionController';
 import { App } from './App';
-import { handleTuiSlashCommand } from './commands/handleSlashCommand';
+import { createChatSubmitDriver } from './chatSubmitDriver';
 import {
   applyCliModelSelection,
   applyInitialCliAgentSelection,
-  chatAgentSupportsDelegation,
   chatToolUseAgentUsageError,
 } from './commands/handlers/agentModelCommands';
 import {
@@ -89,10 +80,7 @@ import {
   loginFromChat,
   logoutFromChat,
 } from './commands/handlers/loginCommands';
-import {
-  CHAT_API_MODE_MODEL_RECOVERY,
-  type SlashCommandContext,
-} from './commands/handlers/slashContext';
+import { type SlashCommandContext } from './commands/handlers/slashContext';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
@@ -105,11 +93,6 @@ import {
   sessionMeta as sessionMetaSignal,
   streams as streamsSignal,
 } from './state/cliState';
-import { parentStream as parentStreamSignal } from './state/childExecutions';
-import {
-  focusedChildFollowUpRoute,
-  type FocusedChildFollowUpRoute,
-} from './state/focusedChildFollowUp';
 import { subscribeStreamArtifacts } from './state/subscribeStreamArtifacts';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
@@ -117,7 +100,6 @@ import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import {
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
-  appendLocalUserTranscript,
 } from './state/transcript';
 import { installTerminalTitleUpdates } from './terminalTitle';
 import {
@@ -130,7 +112,6 @@ import {
   TuiSession,
 } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
-import type { SkillActivation } from './forms/SkillsListForm';
 
 export interface ChatResult {
   exitCode: number;
@@ -157,61 +138,6 @@ export interface RunChatInit {
     readonly id: ExecutionId;
     readonly resolution: ToolUseResumeData;
   };
-}
-
-export interface PreparedChatInstruction {
-  readonly instruction: string;
-  readonly displayInstruction?: string;
-  readonly reservedSkillActivations: readonly SkillActivation[];
-}
-
-export function takePendingSkillActivations(
-  pendingSkillActivations: Map<string, string>,
-  line: string,
-): PreparedChatInstruction {
-  if (pendingSkillActivations.size === 0) {
-    return { instruction: line, reservedSkillActivations: [] };
-  }
-
-  const entries = [...pendingSkillActivations.entries()].map(
-    ([name, activationPrompt]) => ({ name, activationPrompt }),
-  );
-  for (const { name } of entries) {
-    pendingSkillActivations.delete(name);
-  }
-
-  const activations = entries
-    .map(({ activationPrompt }) => activationPrompt)
-    .join('\n\n');
-  return {
-    instruction: [
-      activations,
-      '<user_request>',
-      escapeText(line),
-      '</user_request>',
-    ].join('\n'),
-    displayInstruction: line,
-    reservedSkillActivations: entries,
-  };
-}
-
-export function restorePendingSkillActivations(
-  pendingSkillActivations: Map<string, string>,
-  activations: readonly SkillActivation[],
-): void {
-  for (const { name, activationPrompt } of activations) {
-    if (!pendingSkillActivations.has(name)) {
-      pendingSkillActivations.set(name, activationPrompt);
-    }
-  }
-}
-
-export function chatTuiFocusedChildFollowUpRoute(): FocusedChildFollowUpRoute {
-  return focusedChildFollowUpRoute({
-    activeStreamId: activeStreamIdSignal.get(),
-    parentStream: parentStreamSignal.get(),
-    streams: streamsSignal.get(),
-  });
 }
 
 const CHAT_STARTUP_MODEL_RECOVERY = {
@@ -422,8 +348,6 @@ export async function runChat(
   const session = new TuiSession();
 
   const followUpQueue = new PQueue({ concurrency: 1 });
-  const pendingSkillActivations = new Map<string, string>();
-  let pendingSkillActivationClearEpoch = 0;
   const rootStreamStatus = (): StreamPhase | undefined =>
     session.streamId
       ? streamsSignal.get().get(session.streamId)?.status
@@ -450,16 +374,6 @@ export async function runChat(
       ? runtimeSession.executions.getToolUseFlowContext(session.streamId)
       : undefined;
     return activeFlow?.modelSwitchDisabledReason(candidateModel);
-  };
-  const activateSkillForNextMessage = (selection: SkillActivation): void => {
-    const wasPending = pendingSkillActivations.has(selection.name);
-    pendingSkillActivations.set(selection.name, selection.activationPrompt);
-    appendLocalAssistantTranscript(
-      [
-        `Skill ${wasPending ? 'refreshed' : 'activated'}: ${selection.name}.`,
-        'It will be applied to your next message.',
-      ].join(' '),
-    );
   };
   const canInterruptActiveRun = (): boolean =>
     chatTuiCanInterruptActiveRun(session);
@@ -494,6 +408,22 @@ export async function runChat(
     }),
   );
 
+  // Session-command engine: slash-command dispatch, follow-up admission, the
+  // stream-id poll loop, queued-follow-up emission, and skill-activation
+  // reservation/restore. Lives outside this mount function so the submission
+  // state machine is testable without mounting Ink.
+  const submitDriver = createChatSubmitDriver({
+    session,
+    chatController,
+    followUpQueue,
+    runtimeSession,
+    initialAgent: agent,
+    initialModel: model,
+    initialModelSource: defaults.modelSource,
+    cwd: context.cwd,
+    getSlashCommandContext: slashCommandContext,
+  });
+
   const interruptActive = (): void => {
     chatController.stop();
   };
@@ -520,8 +450,7 @@ export async function runChat(
     clearApprovals();
     followUpQueue.clear();
     chatController.clearInterruptedRecovery();
-    pendingSkillActivationClearEpoch += 1;
-    pendingSkillActivations.clear();
+    submitDriver.clearPendingSkills();
     session.clearRunState();
     // StreamLogStore entries outlive resetCliState (which only clears the
     // React/signal view). Drop them so transcript projection can't replay
@@ -560,7 +489,7 @@ export async function runChat(
     onLoginSelect: (value, output) => loginFromChat(value, context, output),
     onLogoutSelect: (value, output) => logoutFromChat(value, output),
     onMemorySelect: showCliMemoryPreview,
-    onSkillSelect: activateSkillForNextMessage,
+    onSkillSelect: submitDriver.activateSkill,
     onResumeSelect: chatController.resume,
     workPlanSnapshots: runtimeSession.snapshots,
     getConfigStores: cliSettingsStores,
@@ -569,206 +498,13 @@ export async function runChat(
     },
   });
 
-  const startSession = async (
-    instruction: string,
-    mediaFiles?: readonly string[],
-    displayInstruction?: string,
-  ): Promise<boolean> => {
-    followUpQueue.clear();
-    session.executionId = undefined;
-    let started = false;
-    // Queue the async startup body after the reservation below so a second
-    // submit cannot pass chatTuiCanStartRootRun during model/auth resolution.
-    const pendingStart = Promise.resolve().then(async (): Promise<void> => {
-      try {
-        const meta = sessionMetaSignal.get();
-        const currentAgent = meta.agent || agent;
-        const currentModel = meta.model || model;
-        const selection = await selectCliRunnableModel(currentModel, {
-          fallbackReason: meta.model ? meta.modelSource : defaults.modelSource,
-          apiMode: meta.apiMode,
-          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-            meta.apiMode,
-            CHAT_API_MODE_MODEL_RECOVERY,
-          ),
-        });
-        await setCliHelperModel(selection.model);
-        if (session.stopRequested) {
-          session.markRunCompleted();
-          return;
-        }
-
-        chatController.startRootRun({
-          agent: currentAgent,
-          model: selection.model,
-          instruction,
-          ...(displayInstruction !== undefined ? { displayInstruction } : {}),
-          agentCategory: AgentCategory.ToolUse,
-          workingDirectory: context.cwd,
-          ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-          ...(meta.cliMultiAgentPresetId
-            ? { cliMultiAgentPresetId: meta.cliMultiAgentPresetId }
-            : {}),
-          ...(meta.delegationAgentScope
-            ? { delegationAgentScope: meta.delegationAgentScope }
-            : {}),
-        });
-        started = true;
-      } catch (error: unknown) {
-        if (!session.stopRequested) {
-          appendLocalUserTranscript(displayInstruction ?? instruction);
-          appendLocalErrorTranscript(toErrorMessage(error));
-        }
-        session.runExitCode = session.stopRequested
-          ? CliExitCode.Success
-          : CliExitCode.AgentError;
-        session.markRunCompleted();
-      }
-    });
-    session.markRunPending(pendingStart);
-    await pendingStart;
-    return started;
-  };
-
-  const handleSubmittedLine = async (
-    line: string,
-    mediaFiles?: readonly string[],
-  ): Promise<void> => {
-    if (await handleTuiSlashCommand(line, slashCommandContext())) {
-      return;
-    }
-    await submitChatMessage(line, mediaFiles);
-  };
-
-  const submitChatMessage = async (
-    line: string,
-    mediaFiles?: readonly string[],
-  ): Promise<void> => {
-    const focusedChildRoute = chatTuiFocusedChildFollowUpRoute();
-    if (focusedChildRoute.kind === 'reject') {
-      appendLocalAssistantTranscript(
-        FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
-        focusedChildRoute.streamId,
-      );
-      return;
-    }
-    const childFollowUpTarget =
-      focusedChildRoute.kind === 'accept'
-        ? focusedChildRoute.streamId
-        : undefined;
-    const prepared = takePendingSkillActivations(pendingSkillActivations, line);
-    const skillActivationClearEpoch = pendingSkillActivationClearEpoch;
-    const restoreReservedSkillActivations = (): void => {
-      if (skillActivationClearEpoch !== pendingSkillActivationClearEpoch) {
-        return;
-      }
-      restorePendingSkillActivations(
-        pendingSkillActivations,
-        prepared.reservedSkillActivations,
-      );
-    };
-    if (!childFollowUpTarget) {
-      const interruptedAdmission = chatController.admitInterruptedFollowUp({
-        text: prepared.instruction,
-        mediaFiles,
-        displayText: prepared.displayInstruction,
-      });
-      if (interruptedAdmission.kind === 'accepted') {
-        const resumed = await interruptedAdmission.completion;
-        if (resumed) return;
-        restoreReservedSkillActivations();
-        appendLocalAssistantTranscript(
-          'The interrupted conversation could not be restored. Use /resume to retry it, or /clear to start a new conversation.',
-          interruptedAdmission.streamId,
-        );
-        return;
-      }
-    }
-    if (!childFollowUpTarget && chatTuiCanStartRootRun(session)) {
-      const started = await startSession(
-        prepared.instruction,
-        mediaFiles,
-        prepared.displayInstruction,
-      );
-      if (!started) {
-        restoreReservedSkillActivations();
-      }
-      return;
-    }
-    // PRD success criterion: follow-ups must not be silently dropped when the
-    // user submits before `onStreamResolved` populates `session.streamId`.
-    // p-queue serializes work but doesn't have an "await predicate" primitive,
-    // so the task itself waits for the stream id via a tiny poll loop.
-    void followUpQueue.add(async () => {
-      let delivered = false;
-      let followUpTarget = childFollowUpTarget;
-      const emitQueuedFollowUpsChanged = (streamId: StreamTabId): void => {
-        runtimeSession.events.emit({
-          scope: 'session',
-          event: {
-            type: 'updateQueuedFollowUps',
-            payload: { streamId },
-          },
-        });
-      };
-      try {
-        while (
-          !followUpTarget &&
-          !session.stopRequested &&
-          !session.runCompleted
-        ) {
-          await sleep(25);
-          followUpTarget = session.streamId;
-        }
-        if (!followUpTarget || session.stopRequested) return;
-        const result = await submitFollowUp(followUpTarget, {
-          text: prepared.instruction,
-          mediaFiles,
-          displayText: prepared.displayInstruction,
-        });
-        if (result.status === 'sent') {
-          emitQueuedFollowUpsChanged(followUpTarget);
-          delivered = true;
-        } else if (result.status === 'queued') {
-          emitQueuedFollowUpsChanged(followUpTarget);
-          const presentation = presentFollowUpResult(result);
-          if (presentation.severity !== 'none') {
-            if (presentation.refreshQueuedFollowUps) {
-              emitQueuedFollowUpsChanged(followUpTarget);
-            }
-            appendLocalAssistantTranscript(
-              presentation.message,
-              followUpTarget,
-            );
-          }
-          delivered = result.continuation !== 'resume_failed';
-        }
-        if (result.status === 'no_session' || result.status === 'dropped') {
-          // Child stream ids are keys in parentStream; the root session id is not.
-          if (followUpTarget === session.streamId) {
-            session.stopRequested = true;
-          } else {
-            appendLocalAssistantTranscript(
-              FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
-              followUpTarget,
-            );
-          }
-        }
-      } finally {
-        if (!delivered) {
-          restoreReservedSkillActivations();
-        }
-      }
-    });
-  };
-
   const stdoutColorEnabled = context.stdoutColorEnabled;
   const inkRef: { current?: InkInstance } = {};
   const viewportController = createTuiViewportController(inkRef);
   const ink = render(
     <App
       onSubmit={(line, mediaFiles) =>
-        void handleSubmittedLine(line, mediaFiles)
+        void submitDriver.handleSubmittedLine(line, mediaFiles)
       }
       canInterruptActiveRun={canInterruptActiveRun}
       canInterruptStream={(streamId) =>

@@ -18,6 +18,7 @@ import type {
   CodexTurnState,
   CodexTurnToolInput,
 } from '@shared/schemas/codex';
+import { buildMcpToolName } from '@shared/tools/toolDisplayName';
 import { getBasename } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
 import type {
@@ -127,7 +128,7 @@ export function buildCodexMcpToolLog(item: McpToolCallItem): ToolUseLog {
   };
 
   return {
-    toolName: `mcp:${item.server}/${item.tool}`,
+    toolName: buildMcpToolName(item.server, item.tool),
     input: item.arguments,
     output,
     ...(item.error && {

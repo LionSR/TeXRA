@@ -24,6 +24,7 @@ import {
   GLOBAL_BOOL_FLAGS,
   GLOBAL_VALUE_FLAGS,
   HEADLESS_ONLY_GLOBAL_ARG_NAMES,
+  INTERACTIVE_COMMAND_NAMES,
 } from './globalArgs';
 
 // ---------------------------------------------------------------------------
@@ -485,10 +486,8 @@ async function commandFlagSpecs(
   const commandName = resolved.commandPath.at(-1);
   if (
     resolved.commandPath.length === 2 &&
-    (commandName === 'chat' ||
-      commandName === 'orchestrate' ||
-      commandName === 'setup' ||
-      commandName === 'resume')
+    commandName !== undefined &&
+    INTERACTIVE_COMMAND_NAMES.includes(commandName)
   ) {
     // Keep the existing explicit "interactive command" usage error for these
     // known headless-only global flags instead of downgrading it to "unknown".

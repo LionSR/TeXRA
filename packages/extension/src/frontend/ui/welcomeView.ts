@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import * as vscode from 'vscode';
 
+import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
   ONBOARDING_CHOICE_CHATGPT,
   ONBOARDING_CHOICE_SIGN_IN,
@@ -27,8 +28,8 @@ class WelcomeWebviewProvider implements vscode.WebviewViewProvider {
 function renderWelcomeHtml(): string {
   const openFolder = 'command:workbench.action.files.openFolder';
   const cloneRepo = 'command:git.clone';
-  const createSample = 'command:texra.createSampleProject';
-  const openWalkthrough = 'command:texra.openGettingStarted';
+  const createSample = `command:${EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT}`;
+  const openWalkthrough = `command:${EXTENSION_COMMANDS.OPEN_GETTING_STARTED}`;
   const docs = 'https://texra.ai';
   // CSP nonces must be unpredictable — nanoid is crypto-random.
   const nonce = nanoid();

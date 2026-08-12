@@ -238,7 +238,7 @@ describe('ProgressBackend', () => {
       releaseLease = resolve;
     });
     const waitForRelease = vi
-      .spyOn(backend.state, 'waitForOwnedExecutionRelease')
+      .spyOn(backend.state.stores, 'waitForOwnedExecutionRelease')
       .mockReturnValue(leaseReleased);
     const clearStream = vi.spyOn(backend.state, 'clearStream');
 
@@ -397,7 +397,7 @@ describe('ProgressBackend', () => {
       {} as never,
     );
     const waitForRelease = vi
-      .spyOn(backend.state, 'waitForOwnedExecutionRelease')
+      .spyOn(backend.state.stores, 'waitForOwnedExecutionRelease')
       .mockResolvedValue(undefined);
     stubClearAll(backend);
 
@@ -429,7 +429,7 @@ describe('ProgressBackend', () => {
       {} as never,
     );
     const waitForRelease = vi.spyOn(
-      backend.state,
+      backend.state.stores,
       'waitForOwnedExecutionRelease',
     );
     const clearAll = vi.spyOn(backend.state, 'clearAll');

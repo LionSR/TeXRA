@@ -6,8 +6,8 @@ import { StreamTabIdSchema } from './identifiers';
 import {
   InquiryDraftSchema,
   InquiryTranscriptTurnSchema,
-  ExternalInquirySessionLinksSchema,
-  ExternalInquiryThreadIdSchema,
+  InquirySessionLinksSchema,
+  InquiryThreadIdSchema,
 } from './inquiry';
 import { LineCountSchema } from './lineChanges';
 import { PlanSchema } from './plan';
@@ -112,14 +112,14 @@ export type AgentProposalPermission = z.infer<
 // Shared inquiry fields present in both new and follow-up permissions.
 const CommonExternalInquiryFieldsSchema = z.object({
   question: z.string(),
-  threadId: ExternalInquiryThreadIdSchema,
+  threadId: InquiryThreadIdSchema,
   context: z.string().nullish(),
   suggestSearch: z.boolean().nullish(),
   attachFiles: z.array(z.string()).nullish(),
 });
 
 const ExternalInquiryHydrationFieldsSchema = z.object({
-  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
+  sessionLinks: InquirySessionLinksSchema.nullish(),
   draft: InquiryDraftSchema.nullish(),
   transcript: z.array(InquiryTranscriptTurnSchema).nullish(),
 });

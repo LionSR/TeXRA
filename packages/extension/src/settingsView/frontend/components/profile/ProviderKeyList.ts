@@ -1,6 +1,5 @@
 /** Provider API key statuses with set/remove/get-URL actions and per-provider settings. */
 
-import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles

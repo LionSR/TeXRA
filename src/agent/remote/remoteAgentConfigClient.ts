@@ -3,10 +3,8 @@ import ky, { HTTPError } from 'ky';
 
 import { SUPABASE_CONFIG } from '@auth/config';
 
-import { errorDataToString } from './errorData';
+import { errorDataToString, FETCH_TIMEOUT_MS } from './errorData';
 import { EdgeFunctionResponseSchema } from './types';
-
-const FETCH_TIMEOUT_MS = 30_000;
 
 /** Fetch raw remote-agent YAML from the edge function. */
 export async function fetchRemoteAgentConfigYaml(
@@ -14,8 +12,6 @@ export async function fetchRemoteAgentConfigYaml(
   accessToken: string,
 ): Promise<string> {
   try {
-    // AbortSignal.timeout guards the whole request including the body read; ky's
-    // own `timeout` clears once response headers arrive and wouldn't cover .json().
     const data = await ky
       .post(SUPABASE_CONFIG.edgeFunctionUrl, {
         json: { agentName },
@@ -27,8 +23,6 @@ export async function fetchRemoteAgentConfigYaml(
     return EdgeFunctionResponseSchema.parse(data).config;
   } catch (error) {
     if (error instanceof HTTPError) {
-      // ky v2 populates error.data by consuming the response body;
-      // error.response body methods (.text(), .json()) are not usable after that.
       const errorText = errorDataToString(error.data) ?? 'Unknown error';
       throw new Error(
         mapRemoteAgentConfigHttpError(

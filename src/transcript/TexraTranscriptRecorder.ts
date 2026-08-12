@@ -33,7 +33,7 @@ import type {
   AgentTraceSubscriber,
   StatusEvent,
 } from '@agent/trace';
-import { computeUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
+import { roundedUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import { isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import {
@@ -471,7 +471,7 @@ export function attachTranscriptRecorder(
           return;
 
         case 'context.state': {
-          const utilizationPercent = computeUtilizationPercent(
+          const utilizationPercent = roundedUtilizationPercent(
             event.inputTokens,
             event.contextWindow,
           );

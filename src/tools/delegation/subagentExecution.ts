@@ -10,7 +10,6 @@
 // Local imports
 import { createChannelTrace } from '@agent/trace';
 import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
-import { runWithOwnedExecutionLeaseLaunchGuard } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -22,7 +21,6 @@ import {
 } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import {
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
@@ -36,6 +34,7 @@ import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
+import { startDetachedChildRunLoop } from './detachedChildRun';
 import { executeSubagentForDeliveryInBand } from './inBandSubagentExecution';
 
 // `createNativeSubagentStrategy` is lazy-imported below. The strategy module
@@ -183,8 +182,8 @@ export async function executeSubagent(
       executionId,
       parentExecutionId,
       agentName,
-      orchestratorStreamId,
-      parentSession,
+      parentStreamId: orchestratorStreamId,
+      session: parentSession,
       startedAt,
       workingDirectory,
       approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
@@ -193,23 +192,25 @@ export async function executeSubagent(
       onStreamResolved: inheritChildStreamApprovals,
     };
 
-    await runWithOwnedExecutionLeaseLaunchGuard(executionId, async () => {
-      const { createNativeSubagentStrategy } =
-        await import('./nativeSubagentStrategy.js');
-      const { completion } = startChildRunLoop({
-        childStreamId,
-        parentStreamId: orchestratorStreamId,
-        executionId,
-        agentName,
-        strategy: createNativeSubagentStrategy(strategyParams),
-        recordCost,
-      });
-      void completion.catch((error: unknown) => {
-        createChannelTrace('childRunLoop').error(
-          `Subagent '${agentName}' run loop failed after launch`,
-          { data: error },
-        );
-      });
+    await startDetachedChildRunLoop({
+      executionId,
+      parentStreamId: orchestratorStreamId,
+      childStreamId,
+      agentName,
+      recordCost,
+      buildLaunch: async () => {
+        const { createNativeSubagentStrategy } =
+          await import('./nativeSubagentStrategy.js');
+        return {
+          strategy: createNativeSubagentStrategy(strategyParams),
+          onLoopFailed: (error: unknown): void => {
+            createChannelTrace('childRunLoop').error(
+              `Subagent '${agentName}' run loop failed after launch`,
+              { data: error },
+            );
+          },
+        };
+      },
     });
 
     const meta = options?.approvalMeta;

@@ -18,6 +18,7 @@ import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass
 import {
   PersistedFlowStateError,
   readPersistedFlowRecord,
+  stampCompatibilityKey,
 } from '@agent/node/persistedFlow';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import {
@@ -103,7 +104,6 @@ export async function runReflectionFlow<C = unknown>(
     storageKey,
     parentStage,
     userVarChannels,
-    onRoundFinalized,
     runScope,
   } = input;
   const { streamId, executionId, session: runSession } = runScope;
@@ -205,11 +205,9 @@ export async function runReflectionFlow<C = unknown>(
     }
 
     shared = validated.data;
-    // A keyless legacy record gets the active handler's key stamped here.
-    // Model-based inference for such records lives at the resume-retrieval
-    // boundary (SessionResumeRetrieval), which ran before launch on sanctioned
-    // resumes and already routed handler creation through its verdict.
-    shared.modelHandlerCompatibilityKey ??= compatibilityKey;
+    // A keyless legacy record gets the active handler's key stamped here;
+    // model-based inference for such records lives at SessionResumeRetrieval.
+    shared = stampCompatibilityKey(shared, compatibilityKey);
     // Always sync totalRounds from the current agent config so that changes
     // to the YAML (e.g. rounds: 2 → 1) take effect on resume.
     shared.totalRounds = totalRounds;
@@ -299,7 +297,6 @@ export async function runReflectionFlow<C = unknown>(
 
   const services: ReflectionServices<C> = {
     ...input,
-    onRoundFinalized,
     outputState,
     xmlManager,
     diffManager,

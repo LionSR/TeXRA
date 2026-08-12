@@ -51,6 +51,16 @@ async function initializePersistentSession(
   return result;
 }
 
+function ephemeralSession(
+  session: SessionHandle,
+  reason: string,
+  showPersistentWarning: (message: string) => void,
+): CliTranscriptSession {
+  const warning = ephemeralTranscriptWarning(reason);
+  showPersistentWarning(warning);
+  return { session, canResume: false, warning };
+}
+
 /** Prepare the process session for a noninteractive run before it can start. */
 export async function initializeHeadlessTranscriptSession(
   openPersistentStore: OpenPersistentStore = () => StreamLogStore.open(),
@@ -79,11 +89,11 @@ export async function initializeInteractiveTranscriptSession(
     ) {
       return persistentSession(existing);
     }
-    const warning = ephemeralTranscriptWarning(
+    return ephemeralSession(
+      existing,
       existing.transcripts.mode.reason,
+      policy.showPersistentWarning,
     );
-    policy.showPersistentWarning(warning);
-    return { session: existing, canResume: false, warning };
   }
 
   if (policy.onPersistentOpenFailure === 'fail') {
@@ -95,12 +105,14 @@ export async function initializeInteractiveTranscriptSession(
     return initializePersistentSession(transcripts);
   }
 
-  const warning = ephemeralTranscriptWarning(transcripts.mode.reason);
   const session = initializeDefaultSession({
     transcripts,
     responseTextProcessing: texraResponseTextProcessing,
   });
   await session.waitUntilReady();
-  policy.showPersistentWarning(warning);
-  return { session, canResume: false, warning };
+  return ephemeralSession(
+    session,
+    transcripts.mode.reason,
+    policy.showPersistentWarning,
+  );
 }

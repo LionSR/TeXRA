@@ -49,7 +49,7 @@ export function withWorkspacePathArg(
 export function hasResolvedWorkspacePath(
   options: Pick<WorkspacePathOptions, 'argv'> = {},
 ): boolean {
-  const argv = options.argv ?? process.argv;
+  const argv = options.argv ?? process.argv.slice(1);
   const flag = argv.find((arg) => arg.startsWith(WORKSPACE_PRESENT_ARG));
   return flag?.slice(WORKSPACE_PRESENT_ARG.length) === '1';
 }

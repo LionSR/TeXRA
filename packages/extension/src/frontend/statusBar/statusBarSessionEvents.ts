@@ -18,9 +18,7 @@ export function subscribeStatusBarSessionEvents({
   onStatusChanged,
   onUsageChanged,
 }: StatusBarSessionEventOptions): () => void {
-  const disposeStatus = session.events.subscribeStatus(() => {
-    onStatusChanged();
-  });
+  const disposeStatus = session.events.subscribeStatus(onStatusChanged);
 
   const disposeUsage = session.events.subscribe(
     (sessionEvent) => {

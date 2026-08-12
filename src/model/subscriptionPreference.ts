@@ -30,11 +30,11 @@ export function createSubscriptionPreference(
     enabled: boolean,
   ): Promise<SubscriptionPreferenceUpdate> {
     const host = tryPlatform();
-    const inspection = host?.config.inspect<boolean>(configKey);
+    if (!host) return { effective: false, target: 'global' };
+
+    const inspection = host.config.inspect<boolean>(configKey);
     const target: ConfigTarget =
       inspection?.workspaceValue !== undefined ? 'workspace' : 'global';
-    if (!host) return { effective: false, target };
-
     await host.config.update(configKey, enabled, target);
     return { effective: isPrefer(), target };
   }

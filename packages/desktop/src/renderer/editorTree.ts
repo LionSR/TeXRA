@@ -31,6 +31,19 @@ interface MutableEditorTreeDirectory {
 type MutableEditorTreeNode = MutableEditorTreeDirectory | EditorTreeFile;
 type NamedTreeNode = Pick<EditorTreeNode, 'kind' | 'name'>;
 
+/**
+ * Split a workspace-relative path into its directory/file segments, normalizing
+ * separators and dropping empty and `.` segments, so `./a/b`, `a//b`, `a/b/`,
+ * and `a\b` all parse to `['a', 'b']`. The single path-normalization rule both
+ * tree builders use.
+ */
+function workspacePathSegments(path: string): string[] {
+  return path
+    .replaceAll('\\', '/')
+    .split('/')
+    .filter((segment) => segment.length > 0 && segment !== '.');
+}
+
 function compareTreeNodes(left: NamedTreeNode, right: NamedTreeNode): number {
   if (left.kind !== right.kind) {
     return left.kind === 'directory' ? -1 : 1;
@@ -68,10 +81,7 @@ export function buildEditorTree(
   const root = new Map<string, MutableEditorTreeNode>();
 
   for (const entry of entries) {
-    const segments = entry.path
-      .replaceAll('\\', '/')
-      .split('/')
-      .filter((segment) => segment.length > 0 && segment !== '.');
+    const segments = workspacePathSegments(entry.path);
     if (segments.length === 0) continue;
 
     let siblings = root;
@@ -122,12 +132,14 @@ export function buildEditorDirectoryEntries(
   const nodes: EditorTreeNode[] = [];
 
   for (const entry of entries) {
-    const normalizedPath = entry.path
-      .replaceAll('\\', '/')
-      .replace(/^\.\//, '')
-      .replace(/\/$/, '');
-    const name = normalizedPath.split('/').at(-1);
+    // The stored path is the normalized segments re-joined, so a node keys
+    // identically however its entry arrived ('./dir/name', 'dir//name',
+    // 'dir\name'). buildEditorTree's file nodes store the raw entry path
+    // instead, because reviewPane keys them by the un-normalized displayPath.
+    const segments = workspacePathSegments(entry.path);
+    const name = segments.at(-1);
     if (!name) continue;
+    const normalizedPath = segments.join('/');
     if (entry.isDirectory) {
       nodes.push({
         kind: 'directory',

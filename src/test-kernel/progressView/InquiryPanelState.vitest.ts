@@ -13,7 +13,7 @@ import {
 } from '@progressView/frontend/store';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
-  ExternalInquiryThreadId,
+  InquiryThreadId,
   InquiryThreadUpdatedEvent,
   ProgressViewOutboundHandlerRegistry,
   ProgressViewOutboundMessage,
@@ -33,7 +33,7 @@ function thread(
   status: InquiryThreadUpdatedEvent['status'],
 ): InquiryThreadUpdatedEvent {
   return {
-    threadId: threadId as ExternalInquiryThreadId,
+    threadId: threadId as InquiryThreadId,
     parentStreamId: parentStreamId as StreamTabId | null,
     status,
     lastQuestionPreview: `Question for ${threadId}`,
@@ -96,7 +96,7 @@ describe('inquiry panel frontend state', () => {
   it('replaces stale hydrated summaries and accepts incremental updates', () => {
     const state = createInitialState();
     state.inquiries.set(
-      'ei_stale000000' as ExternalInquiryThreadId,
+      'ei_stale000000' as InquiryThreadId,
       thread('ei_stale000000', 'stream-a', 'open'),
     );
     const getState = seedState(state);
