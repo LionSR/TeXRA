@@ -27,7 +27,10 @@ import type {
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - base class
-import { BaseFeedbackPanel } from './BaseFeedbackPanel';
+import {
+  BaseFeedbackPanel,
+  REDIRECT_FEEDBACK_PROMPT,
+} from './BaseFeedbackPanel';
 
 // Local imports - styles
 import { userQuestionPanelStyles } from './UserQuestionPanel.styles';
@@ -81,7 +84,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
         ${this.renderFeedbackSection(
           'user-question-request__feedback',
           'user-question-request__feedback-input',
-          'What should the agent do instead?',
+          REDIRECT_FEEDBACK_PROMPT,
         )}
       </div>
     `;

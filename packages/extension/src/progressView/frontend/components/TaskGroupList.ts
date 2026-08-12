@@ -9,6 +9,8 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
 import {
+  GETTING_STARTED_ACTION_PRESENTATION,
+  GettingStartedActionSchema,
   MESSAGE_TYPES,
   STREAM_PHASE,
   StreamPhaseSchema,
@@ -578,39 +580,11 @@ export class TaskGroupList extends LitElement {
         body: 'Start an agent from the New tab or Commands.',
         headingTag: 'h3',
         className: 'log-placeholder',
-        actions: [
-          {
-            label: 'Run setup assistant',
-            icon: 'rocket',
-            size: 's',
-            onClick: () => this.handleGettingStartedAction('runSetup'),
-          },
-          {
-            label: 'Create sample project',
-            icon: 'file-circle-plus',
-            size: 's',
-            onClick: () =>
-              this.handleGettingStartedAction('createSampleProject'),
-          },
-          {
-            label: 'Import Overleaf',
-            icon: 'cloud-arrow-down',
-            size: 's',
-            onClick: () => this.handleGettingStartedAction('cloneOverleaf'),
-          },
-          {
-            label: 'Import arXiv',
-            icon: 'download',
-            size: 's',
-            onClick: () => this.handleGettingStartedAction('downloadArxiv'),
-          },
-          {
-            label: 'Open walkthrough',
-            icon: 'book',
-            size: 's',
-            onClick: () => this.handleGettingStartedAction('openWalkthrough'),
-          },
-        ],
+        actions: GettingStartedActionSchema.options.map((action) => ({
+          ...GETTING_STARTED_ACTION_PRESENTATION[action],
+          size: 's' as const,
+          onClick: () => this.handleGettingStartedAction(action),
+        })),
       });
     }
 

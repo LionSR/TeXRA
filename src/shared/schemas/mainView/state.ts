@@ -7,7 +7,10 @@ import { z } from 'zod';
 
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { AgentCategorySchema } from '@shared/schemas/agent';
-import { TEXRA_ICON_CANONICAL_NAMES } from '@shared/wa/iconNames';
+import {
+  TEXRA_ICON_CANONICAL_NAMES,
+  type TeXRAIconName,
+} from '@shared/wa/iconNames';
 import { UIFileFieldsSchema, requiredFileListFields } from '../fileFields';
 import {
   CurrentFileTypeSchema,
@@ -417,6 +420,27 @@ export const GETTING_STARTED_COMMANDS = {
   downloadArxiv: 'texra.downloadArXivSource',
   openWalkthrough: 'texra.openGettingStarted',
 } satisfies Record<GettingStartedAction, string>;
+
+/**
+ * Button label and leading icon for each getting-started action — the
+ * presentation counterpart to {@link GETTING_STARTED_COMMANDS}. The Main view
+ * getting-started banner, the Progress view empty state, and the onboarding
+ * cards all render the same actions, so the words and glyph live here rather
+ * than being re-typed per surface.
+ */
+export const GETTING_STARTED_ACTION_PRESENTATION = {
+  runSetup: { label: 'Run setup assistant', icon: 'rocket' },
+  createSampleProject: {
+    label: 'Create sample project',
+    icon: 'file-circle-plus',
+  },
+  cloneOverleaf: { label: 'Import Overleaf', icon: 'cloud-arrow-down' },
+  downloadArxiv: { label: 'Import arXiv', icon: 'download' },
+  openWalkthrough: { label: 'Open walkthrough', icon: 'book' },
+} as const satisfies Record<
+  GettingStartedAction,
+  { readonly label: string; readonly icon: TeXRAIconName }
+>;
 
 const GettingStartedActionDetailSchema = z.object({
   action: GettingStartedActionSchema,

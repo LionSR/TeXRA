@@ -46,6 +46,7 @@ import {
 } from '@cli/runtime/approval/settleApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
+import { USER_QUESTION_SKIPPED_FEEDBACK } from '@cli/runtime/userQuestionAnswer';
 import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
 import { warn as logWarning } from '@logger/logUtils';
 import {
@@ -468,7 +469,7 @@ async function requestUserQuestionInteraction(
     ? { action: 'submit', answers: decision.userQuestionAnswers }
     : {
         action: 'skip',
-        feedback: decision.userMessage || 'User question skipped by user.',
+        feedback: decision.userMessage || USER_QUESTION_SKIPPED_FEEDBACK,
       };
 }
 
