@@ -271,7 +271,10 @@ export async function runStreamedTurn(params: {
           }
           break;
         case 'result':
-          usage = aggregateClaudeModelUsage(raw.modelUsage);
+          usage =
+            raw.modelUsage == null
+              ? (raw.usage ?? null)
+              : aggregateClaudeModelUsage(raw.modelUsage);
           totalCostUsd = raw.total_cost_usd;
           if (raw.subtype === 'success') {
             if (isNonEmptyString(raw.result)) {
@@ -419,7 +422,7 @@ function startClaudeAgentLoop(params: {
   // turns; it's threaded forward from each turn's result. Seeded from
   // params.resumeSessionId when this launch is a disk-based fallback resume.
   let resumeSessionId: string | undefined = params.resumeSessionId;
-  let forkNextTurn = params.forkSession;
+  let isFirstTurn = true;
   const fallbackSessionId = params.forkSession
     ? undefined
     : params.resumeSessionId;
@@ -445,10 +448,10 @@ function startClaudeAgentLoop(params: {
         additionalDirectories: params.additionalDirectories,
         env: params.env,
         resumeSessionId,
-        forkSession: forkNextTurn,
+        forkSession: isFirstTurn && params.forkSession,
         pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
       });
-      forkNextTurn = forkNextTurn && turn.sessionId == null;
+      isFirstTurn = false;
       if (turn.sessionId) resumeSessionId = turn.sessionId;
       return turn;
     },

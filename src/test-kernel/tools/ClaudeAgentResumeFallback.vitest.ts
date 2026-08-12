@@ -315,6 +315,39 @@ describe('claude_agent tool launch and resume fallback', () => {
     expect(callArgs.options.resume).toBe('stale-session');
   });
 
+  it('preserves legacy usage when a result has no modelUsage', async () => {
+    const childStream = createFakeAgentCliChildStream(childStreamId);
+    const publishUsage = vi.spyOn(childStream.logger, 'usage');
+    mocks.createChildStream.mockReturnValue(childStream);
+    mocks.query.mockReturnValue(
+      (async function* () {
+        yield {
+          type: 'result',
+          subtype: 'error_during_execution',
+          errors: ['failed before the first model call'],
+          usage: { input_tokens: 12, output_tokens: 3 },
+          total_cost_usd: 0,
+        };
+      })(),
+    );
+    const captured = captureStrategy();
+
+    await new ClaudeAgentTool().call({ prompt: 'start Claude' });
+    const turn = await captured.strategy?.launch?.(
+      { notify: () => {}, recordCost: () => {} },
+      new AbortController(),
+    );
+    if (!turn) throw new Error('Expected a Claude turn result');
+    captured.strategy?.publishUsage?.(turn);
+
+    expect(publishUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        usage: expect.objectContaining({ inputTokens: 12, outputTokens: 3 }),
+      }),
+      { recordTranscript: false },
+    );
+  });
+
   it('launches one fallback loop when concurrent calls use the same stale session_id', async () => {
     const envStarted = pDefer<void>();
     const envReady = pDefer<NodeJS.ProcessEnv>();
@@ -501,65 +534,6 @@ describe('claude_agent tool launch and resume fallback', () => {
     expect(ClaudeAgentSessions.lookup('forked-session')).toBeDefined();
     captured.strategy?.releaseSessionOwnership?.();
     ClaudeAgentSessions.release('forked-session');
-  });
-
-  it('keeps forking the source after a failed first turn has no new session id', async () => {
-    ClaudeAgentSessions.register('source-session', {
-      childStreamId,
-      executionId,
-      executions: stubExecutions(),
-      model: 'claude-sonnet-4-6',
-      permissionMode: 'acceptEdits',
-      effort: 'high',
-    });
-    mocks.query
-      .mockImplementationOnce(() =>
-        (async function* () {
-          yield {
-            type: 'result',
-            subtype: 'error_during_execution',
-            errors: ['fork failed before initialization'],
-            modelUsage: {},
-            total_cost_usd: 0,
-          };
-        })(),
-      )
-      .mockImplementationOnce(() =>
-        (async function* () {
-          yield {
-            type: 'result',
-            subtype: 'success',
-            session_id: 'forked-session',
-            result: 'Fork retry succeeded',
-            modelUsage: {},
-            total_cost_usd: 0,
-          };
-        })(),
-      );
-    const captured = captureStrategy();
-
-    await new ClaudeAgentTool().call({
-      prompt: 'try a different proof',
-      session_id: 'source-session',
-      fork_session: true,
-    });
-
-    const ports: ChildRunPorts = { notify: () => {}, recordCost: () => {} };
-    await captured.strategy?.launch?.(ports, new AbortController());
-    await captured.strategy?.runTurn?.(
-      [{ text: 'retry the fork', origin: 'user' }],
-      ports,
-      new AbortController(),
-    );
-
-    expect(mocks.query.mock.calls[0]?.[0]).toMatchObject({
-      options: { resume: 'source-session', forkSession: true },
-    });
-    expect(mocks.query.mock.calls[1]?.[0]).toMatchObject({
-      options: { resume: 'source-session', forkSession: true },
-    });
-    captured.strategy?.releaseSessionOwnership?.();
-    ClaudeAgentSessions.release('source-session');
   });
 
   it('rejects a fork from a live session owned by another stream', async () => {
