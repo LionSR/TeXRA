@@ -121,35 +121,28 @@ export function decodeXmlEntities(text: string): string {
 }
 
 function progressDetail(xml: string): string {
-  switch (attr(xml, 'type')) {
+  const type = attr(xml, 'type') as SubagentProgressUpdate['kind'];
+  switch (type) {
     case 'started':
       return 'started';
     case 'overview': {
-      const calls = attr(xml, 'tool-calls');
+      const calls = attr(xml, 'tool-calls')!;
       const cost = attr(xml, 'cost');
-      const parts: string[] = [];
-      if (calls) parts.push(`${calls} tool call${calls === '1' ? '' : 's'}`);
-      if (cost) parts.push(`$${cost}`);
-      return parts.length > 0 ? parts.join(' · ') : 'working';
+      const toolCalls = `${calls} tool call${calls === '1' ? '' : 's'}`;
+      return cost ? `${toolCalls} · $${cost}` : toolCalls;
     }
     case 'plan': {
       if (attr(xml, 'status') === 'cleared') return 'plan cleared';
       // The producer (`formatSubagentProgress`) attaches the plan objective as
       // `summary`; there is no step count on the wire.
-      const summary = attr(xml, 'summary');
-      return summary ? `plan · ${decodeXmlEntities(summary)}` : 'plan updated';
+      return `plan · ${decodeXmlEntities(attr(xml, 'summary')!)}`;
     }
     case 'todos': {
       const completed = attr(xml, 'completed');
       const active = attr(xml, 'active');
       const pending = attr(xml, 'pending');
-      if (completed || active || pending) {
-        return `todos · ${completed ?? '0'} done, ${active ?? '0'} active, ${pending ?? '0'} pending`;
-      }
-      return 'todos updated';
+      return `todos · ${completed} done, ${active} active, ${pending} pending`;
     }
-    default:
-      return 'working';
   }
 }
 
