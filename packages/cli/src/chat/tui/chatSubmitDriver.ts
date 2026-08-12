@@ -18,7 +18,6 @@ import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
-  type CliNoAvailableModelsRecoveryOptions,
 } from '@cli/runtime/modelAccess';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
@@ -27,6 +26,10 @@ import { escapeText } from '@shared/utils/xmlEscape';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { handleTuiSlashCommand } from './commands/handleSlashCommand';
+import {
+  CHAT_API_MODE_MODEL_RECOVERY,
+  type SlashCommandContext,
+} from './commands/handlers/slashContext';
 import { parentStream as parentStreamSignal } from './state/childExecutions';
 import {
   activeStreamId as activeStreamIdSignal,
@@ -46,9 +49,8 @@ import {
   appendLocalErrorTranscript,
   appendLocalUserTranscript,
 } from './state/transcript';
-import type { SkillActivation } from './forms/SkillsListForm';
-import type { SlashCommandContext } from './commands/handlers/slashContext';
 import type { ChatSessionController } from '../chatSessionController';
+import type { SkillActivation } from './forms/SkillsListForm';
 
 export interface PreparedChatInstruction {
   readonly instruction: string;
@@ -104,11 +106,6 @@ export function chatTuiFocusedChildFollowUpRoute(): FocusedChildFollowUpRoute {
     streams: streamsSignal.get(),
   });
 }
-
-const CHAT_STARTUP_MODEL_RECOVERY = {
-  includedModeAction: 'retry with `texra chat --api-mode included`',
-  personalModeAction: 'retry with `texra chat --api-mode personal`',
-} satisfies CliNoAvailableModelsRecoveryOptions;
 
 export interface ChatSubmitDriverDeps {
   readonly session: TuiSession;
@@ -174,7 +171,9 @@ export function createChatSubmitDriver(
           apiMode: meta.apiMode,
           noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
             meta.apiMode,
-            CHAT_STARTUP_MODEL_RECOVERY,
+            // In-session root starts (not process startup): guide `/api` and
+            // `/login` rather than relaunching `texra chat --api-mode …`.
+            CHAT_API_MODE_MODEL_RECOVERY,
           ),
         });
         await setCliHelperModel(selection.model);

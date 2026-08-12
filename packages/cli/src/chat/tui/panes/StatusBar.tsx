@@ -123,11 +123,15 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // Both periodic reads run on the shared poll registry (`usePollingInterval`)
   // so cadence and cleanup live in one place; the `resetKey` re-fires
   // immediately when the read's inputs change, matching the old effect deps.
-  const subscriptionInFlightRef = useRef(false);
+  // Scope the in-flight guard by read key so a pending lookup for the old
+  // model/preference cannot suppress the reset-triggered re-fire (stale
+  // results are already ignored via resolutionCurrent).
+  const subscriptionInFlightKeyRef = useRef<string | null>(null);
   usePollingInterval(
     () => {
-      if (subscriptionInFlightRef.current) return; // Skip if the previous read has not resolved.
-      subscriptionInFlightRef.current = true;
+      const readKey = `${accessModel}:${codexPreferenceVersion}`;
+      if (subscriptionInFlightKeyRef.current === readKey) return;
+      subscriptionInFlightKeyRef.current = readKey;
       void Promise.all([
         isCodexSubscriptionActive(accessModel),
         isXaiSubscriptionActive(accessModel),
@@ -152,7 +156,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
           }),
         )
         .finally(() => {
-          subscriptionInFlightRef.current = false;
+          if (subscriptionInFlightKeyRef.current === readKey) {
+            subscriptionInFlightKeyRef.current = null;
+          }
         });
     },
     CODEX_SUBSCRIPTION_REFRESH_MS,

@@ -25,10 +25,9 @@ function getNativeTheme(): DesktopThemeKind {
   if (nativeTheme.shouldUseHighContrastColors) {
     return DESKTOP_THEME_KIND.HIGH_CONTRAST;
   }
-  if (nativeTheme.shouldUseDarkColors) {
-    return DESKTOP_THEME_KIND.DARK;
-  }
-  return DESKTOP_THEME_KIND.LIGHT;
+  return nativeTheme.shouldUseDarkColors
+    ? DESKTOP_THEME_KIND.DARK
+    : DESKTOP_THEME_KIND.LIGHT;
 }
 
 export function createDesktopViewStateIpc(

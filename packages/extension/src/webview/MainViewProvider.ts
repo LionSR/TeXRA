@@ -32,13 +32,17 @@ import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessions
 import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
 import { loadMainViewTeamOptions } from '@frontend/agents/teamOptionsLoader';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-
-import { assertKnownOutboundMessage } from '@shared/utils/dispatcher';
-
+import {
+  CommonViewMessageSchema,
+  MainViewMessageSchema,
+  agentKeyOf,
+  AgentCategory,
+} from '@shared/schemas';
 import {
   readOnboardingFlags,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import { assertKnownOutboundMessage } from '@shared/utils/dispatcher';
 import { debounce } from '@utils/core';
 import { watchConfig } from '@utils/config/configUtils';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
@@ -47,12 +51,6 @@ import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import { MainViewMessageHandler } from './MainViewMessageHandler';
 import { VscodeMainViewPersistedStateSchema } from './vscodeMainViewPersistedState';
 import type { ProgressViewProvider } from '../progressView/ProgressViewProvider';
-import {
-  CommonViewMessageSchema,
-  MainViewMessageSchema,
-  agentKeyOf,
-  AgentCategory,
-} from '@shared/schemas';
 
 export class MainViewProvider
   extends BaseWebviewProvider
@@ -79,8 +77,10 @@ export class MainViewProvider
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
-    this.messageHandler = new MainViewMessageHandler(context, () =>
-      this.refreshOnboardingFunnel(),
+    this.messageHandler = new MainViewMessageHandler(
+      context,
+      () => this.refreshOnboardingFunnel(),
+      () => this.flushPendingState(),
     );
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -346,15 +346,14 @@ export class MainViewProvider
     this.postToWebview(webviewView, {
       command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
     });
-
-    this.flushPendingState();
+    // Pending restores wait for WEBVIEW_READY (onWebviewReady → flushPendingState)
+    // so they land after the launcher has installed its message listener.
   }
 
   /**
-   * Sole deliverer of queued restores (see stateRestoreCommand). Runs both when
-   * the webview resolves and whenever the launcher is (re)shown, so a restore
-   * enqueued while another sidebar view is active is still delivered once the
-   * launcher appears — including when it is already the active view.
+   * Sole deliverer of queued restores (see stateRestoreCommand). Called from
+   * WEBVIEW_READY after an HTML (re)load, and from showInSidebar when the
+   * launcher is already active (no reload → no ready re-fire).
    */
   private flushPendingState(): void {
     const webviewView = this.getMainModeView();
@@ -425,8 +424,13 @@ export class MainViewProvider
   }
 
   public async showInSidebar(): Promise<void> {
+    const alreadyMain = getActiveSidebarView() === SIDEBAR_VIEWS.MAIN;
     this.switchMode(SIDEBAR_VIEWS.MAIN);
-    this.flushPendingState();
+    // Already on the launcher → no HTML swap, so WEBVIEW_READY will not re-fire.
+    // Mode switches from progress rely on the ready handshake instead.
+    if (alreadyMain) {
+      this.flushPendingState();
+    }
     await vscode.commands.executeCommand('texra.mainView.focus');
   }
 }

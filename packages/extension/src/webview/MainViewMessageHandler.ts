@@ -14,7 +14,6 @@ import {
 } from '@shared/schemas';
 import { getConfig } from '@utils/config/configUtils';
 
-import type { MainViewInboundHost } from './mainViewInboundContext';
 import { DiffManager } from './managers/DiffManager';
 import { FileManager } from './managers/FileManager';
 import { InstructionManager } from './managers/InstructionManager';
@@ -24,6 +23,7 @@ import { createCommonHandlers } from './slices/commonSlice';
 import { createDocumentHandlers } from './slices/documentSlice';
 import { createOnboardingHandlers } from './slices/onboardingSlice';
 import { createSessionHandlers } from './slices/sessionSlice';
+import type { MainViewInboundHost } from './mainViewInboundContext';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
@@ -36,6 +36,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly refreshOnboardingFunnel?: () => Promise<void>,
+    /**
+     * Invoked as soon as the launcher reports WEBVIEW_READY — the correct
+     * moment to deliver queued STATE_RESTORE messages after an HTML swap.
+     */
+    private readonly onWebviewReady?: () => void,
   ) {
     super('MainView');
     this.recordingManager = new RecordingManager({
@@ -195,6 +200,9 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       return;
     }
     this.logger.debug(this.channel, 'Webview ready signal received');
+    // Flush queued restores only after the launcher document has installed its
+    // message listener. Posting during switchMode's HTML swap can drop them.
+    this.onWebviewReady?.();
     this.postWorkspaceRoots(webviewView);
     webviewView.webview.postMessage(
       this.startupController.getOrchestratorBannerMessage(),
