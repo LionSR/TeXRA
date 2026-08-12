@@ -6,6 +6,16 @@ import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
 import { getExecutionStore } from '@agent/storage';
+import {
+  attachTerminalResultToast,
+  detachSubagentsOnStop,
+  resolveAndResumeStream,
+  resumeQueuedToolUseFromResumeData,
+  resumeToolUseFromResumeData,
+  runAgent,
+  type SessionHandle,
+  type ToolUseResumeData,
+} from '@agent/runtime';
 import type {
   FollowUpQueueInput,
   FollowUpRecoveryLease,
@@ -15,14 +25,6 @@ import {
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
-import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
-import { runAgent } from '@agent/runtime/runAgent';
-import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
-import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { chatAgentSupportsDelegation } from '@cli/runtime/agents';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';

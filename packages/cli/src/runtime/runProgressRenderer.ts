@@ -4,12 +4,12 @@ import path from 'node:path';
 // Local imports
 import { getAgent } from '@agent/index';
 import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   SessionEvent,
   SessionEventHub,
   SessionFact,
-} from '@agent/runtime/SessionEventHub';
+} from '@agent/runtime';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   ActiveChildInfo,
   ConversationProgress,

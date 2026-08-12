@@ -17,6 +17,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
+import { currentSession, runAgent } from '@agent/runtime';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { collectReviewDiff, isPathInChangeSet } from '@agent/review/reviewDiff';
 import {
@@ -28,8 +29,6 @@ import {
   type ReviewIssueReport,
   type ReviewSeverity,
 } from '@agent/review/reviewIssues';
-import { runAgent } from '@agent/runtime/runAgent';
-import { currentSession } from '@agent/runtime/SessionHandle';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import {
   showLoggedErrorMessage,

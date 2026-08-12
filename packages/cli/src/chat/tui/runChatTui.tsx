@@ -9,8 +9,7 @@ import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
 import { getVisibleAgents, loadAgents } from '@agent/index';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import { detachSubagentsOnStop, type ToolUseResumeData } from '@agent/runtime';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { chatAgentSupportsDelegation } from '@cli/runtime/agents';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
