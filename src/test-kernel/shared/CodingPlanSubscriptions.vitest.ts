@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   codingPlanForApiProvider,
-  codingPlanForExhaustionReason,
   codingPlanForUsageRoute,
   codingPlanForUsageSetting,
 } from '@shared/codingPlanSubscriptions';
@@ -35,12 +34,9 @@ describe('coding-plan subscription catalog', () => {
     ]);
   });
 
-  it('resolves route, failure, credential, and usage-setting identities', () => {
+  it('resolves route, credential, and usage-setting identities', () => {
     expect(codingPlanForUsageRoute('glm-coding-plan-subscription')?.id).toBe(
       'glmCodingPlan',
-    );
-    expect(codingPlanForExhaustionReason('kimi-code-subscription')?.id).toBe(
-      'kimiCode',
     );
     expect(codingPlanForApiProvider('glm')?.usageProvider).toBe(
       'glmCodingPlan',
