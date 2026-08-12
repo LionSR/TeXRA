@@ -81,6 +81,7 @@ import {
   readStreamData,
   type StreamData,
 } from './streamSnapshotRead';
+import type { StreamSummaryMeta } from './StreamLogStore';
 
 const log = createLog('StreamSnapshotStore');
 
@@ -407,6 +408,83 @@ export class StreamSnapshotStore {
    *  7), so repeated hydrations of the same old row stay one warning each. */
   private readonly preIdentityWarned = new Set<StreamTabId>();
 
+  /**
+   * `${stream}::${accessor}` pairs already warned about a synchronous read
+   * served from a record with unestablished disk provenance, so a render
+   * loop re-reading the same stream stays one warning per accessor instead
+   * of log spam. Cleared per stream on evict (a re-seeded stream that is
+   * read too early again deserves a fresh warning).
+   */
+  private readonly unseededReadWarned = new Set<string>();
+
+  /**
+   * Mirror of this store's display metadata into the always-resident stream
+   * summaries, so sidebars and all-streams metadata paths never read
+   * sidecars (#9947). Publishing is best-effort presentation fan-out;
+   * this store stays the authority.
+   */
+  private summaryMetaSink:
+    ((stream: StreamTabId, meta: StreamSummaryMeta) => void) | undefined;
+
+  /**
+   * Publish the whole current metadata view of a stream to the summary
+   * mirror. Called after every metadata mutation and after sidecar
+   * hydration, which is also what lazily backfills summaries written before
+   * the mirror existed. `command` is bounded by construction: only a
+   * process run's command line ever rides it — an agent run's full
+   * instruction text never leaves the sidecar/config authority.
+   */
+  private publishSummaryMeta(stream: StreamTabId): void {
+    const sink = this.summaryMetaSink;
+    if (!sink) return;
+    const record = this.records.get(stream);
+    if (!record) return;
+    const config = record.runConfig;
+    sink(stream, {
+      ...(record.runIdentity !== undefined && { identity: record.runIdentity }),
+      ...(record.runExecutionId !== undefined && {
+        executionId: record.runExecutionId,
+      }),
+      ...(record.meta?.parentStreamId !== undefined && {
+        parentStreamId: record.meta.parentStreamId,
+      }),
+      ...(record.userFollowUpSupport !== undefined && {
+        userFollowUpSupport: record.userFollowUpSupport,
+      }),
+      ...(record.description !== undefined && {
+        description: record.description,
+      }),
+      ...(config && {
+        agentCategory: config.agentCategory,
+        ...(config.model !== undefined && { model: config.model }),
+        ...(config.workingDirectory != null && {
+          workingDirectory: config.workingDirectory,
+        }),
+        ...(record.runIdentity?.kind === 'process' &&
+          config.instruction !== undefined && { command: config.instruction }),
+      }),
+    });
+  }
+
+  /**
+   * Loud unhydrated access (#9947): a synchronous accessor about to serve a
+   * record whose disk provenance is unestablished ('unknown' or absent) says
+   * so once per (stream, accessor) instead of silently returning a default
+   * that may be missing this stream's persisted sidecar state.
+   */
+  private warnIfUnseeded(accessor: string, stream: StreamTabId): void {
+    if (this.hasDiskProvenance(stream)) return;
+    const key = `${stream}::${accessor}`;
+    if (this.unseededReadWarned.has(key)) return;
+    this.unseededReadWarned.add(key);
+    log.warn(
+      `${accessor}(${stream}) served a record with unestablished disk ` +
+        `provenance; persisted sidecar state may be missing from the ` +
+        `result. Await preload([stream]) first or read the stream summary ` +
+        `instead (#9947).`,
+    );
+  }
+
   private getOrCreateRecord(stream: StreamTabId): StreamRecord {
     return this.records.getOrCreate(stream);
   }
@@ -458,9 +536,19 @@ export class StreamSnapshotStore {
 
   /**
    * Persist already-migrated durable facts directly from the session event
-   * plane.
+   * plane. `summaryMetaSink` rides the same attachment (the surface stays
+   * one member): it wires the summary registry that mirrors this store's
+   * display metadata, invoked on every metadata mutation and hydration.
    */
-  attachSessionEvents(events: SessionEventHub): () => void {
+  attachSessionEvents(
+    events: SessionEventHub,
+    options?: {
+      summaryMetaSink?: (stream: StreamTabId, meta: StreamSummaryMeta) => void;
+    },
+  ): () => void {
+    if (options?.summaryMetaSink) {
+      this.summaryMetaSink = options.summaryMetaSink;
+    }
     const detachRunEvents = events.subscribe(
       (sessionEvent) => {
         if (sessionEvent.scope !== 'run') return;
@@ -924,18 +1012,22 @@ export class StreamSnapshotStore {
   // array — can never corrupt these in-memory accumulators. A shallow
   // `{ ...map }` spread would share the per-round arrays by reference.
   getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo> {
+    this.warnIfUnseeded('getOutputFiles', stream);
     return cloneRoundIndexed(this.records.get(stream)?.outputFiles);
   }
 
   getMissingOutputs(stream: StreamTabId): RoundIndexed<string> {
+    this.warnIfUnseeded('getMissingOutputs', stream);
     return cloneRoundIndexed(this.records.get(stream)?.missingOutputs);
   }
 
   getCompileFailures(stream: StreamTabId): RoundIndexed<CompileFailure> {
+    this.warnIfUnseeded('getCompileFailures', stream);
     return cloneRoundIndexed(this.records.get(stream)?.compileFailures);
   }
 
   getRunUsage(stream: StreamTabId): Map<string, TokenUsageStats> {
+    this.warnIfUnseeded('getRunUsage', stream);
     return new Map(this.records.get(stream)?.usage ?? []);
   }
 
@@ -944,6 +1036,7 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     options: { workspaceOnly?: boolean } = {},
   ): Set<string> {
+    this.warnIfUnseeded('getKnownFilePaths', stream);
     const paths = new Set<string>();
     const rounds = this.records.get(stream)?.outputFiles;
     if (!rounds) return paths;
@@ -1006,12 +1099,16 @@ export class StreamSnapshotStore {
       this.writeMutexes.delete(key);
       this.dirtyWrites.delete(key);
     }
+    for (const key of [...this.unseededReadWarned]) {
+      if (key.startsWith(`${stream}::`)) this.unseededReadWarned.delete(key);
+    }
   }
 
   evictAll(): void {
     this.records.evictAll();
     this.writeMutexes.clear();
     this.dirtyWrites.clear();
+    this.unseededReadWarned.clear();
     this.deletions.reset();
   }
 
@@ -1139,6 +1236,7 @@ export class StreamSnapshotStore {
   }
 
   getWorkPlan(stream: StreamTabId): WorkPlanSnapshot {
+    this.warnIfUnseeded('getWorkPlan', stream);
     return this.records.get(stream)?.workPlan ?? EMPTY_WORK_PLAN;
   }
 
@@ -1216,6 +1314,7 @@ export class StreamSnapshotStore {
     record.runConfig = config;
     if (executionId) record.runExecutionId = executionId;
     this.queueMetaPatch(stream, executionId ? { executionId } : {});
+    this.publishSummaryMeta(stream);
   }
 
   /**
@@ -1243,6 +1342,7 @@ export class StreamSnapshotStore {
     record.runIdentity = identity;
     record.userFollowUpSupport = userFollowUpSupport;
     this.queueMetaPatch(stream, { executionId });
+    this.publishSummaryMeta(stream);
   }
 
   private setParentStream(
@@ -1250,6 +1350,7 @@ export class StreamSnapshotStore {
     parent: StreamTabId | null | undefined,
   ): void {
     this.queueMetaPatch(child, { parentStreamId: parent ?? undefined });
+    this.publishSummaryMeta(child);
   }
 
   /**
@@ -1261,6 +1362,7 @@ export class StreamSnapshotStore {
   private setDescription(stream: StreamTabId, description: string): void {
     const record = this.getOrCreateRecord(stream);
     record.description = description;
+    this.publishSummaryMeta(stream);
   }
 
   /**
@@ -1269,6 +1371,7 @@ export class StreamSnapshotStore {
    * that execution owner and replacement lifecycle.
    */
   getRunMetadata(stream: StreamTabId): RunMetadata {
+    this.warnIfUnseeded('getRunMetadata', stream);
     const record = this.records.get(stream);
     return Object.freeze({
       executionId: record?.runExecutionId,
@@ -1311,6 +1414,7 @@ export class StreamSnapshotStore {
   }
 
   getParentStreamId(stream: StreamTabId): StreamTabId | undefined {
+    this.warnIfUnseeded('getParentStreamId', stream);
     return this.records.get(stream)?.meta?.parentStreamId;
   }
 
@@ -1347,6 +1451,12 @@ export class StreamSnapshotStore {
   getExecutionIdMap(): ReadonlyMap<StreamTabId, ExecutionId> {
     const map = new Map<StreamTabId, ExecutionId>();
     for (const [stream, record] of this.records) {
+      // Per-record loudness: a resident record without established disk
+      // provenance may be missing its persisted executionId here. Streams
+      // with no record at all are this accessor's contract (callers merge
+      // `readPersistedExecutionId` for those), so only resident-but-unknown
+      // records warrant a warning.
+      this.warnIfUnseeded('getExecutionIdMap', stream);
       const executionId = record.runExecutionId;
       if (executionId) map.set(stream, executionId);
     }
@@ -1870,6 +1980,10 @@ export class StreamSnapshotStore {
     }
     record.diskState = provenance;
     this.writeMergedSidecars(stream, record, sidecarsToWrite);
+    // Every hydration republishes the metadata mirror: the deep-equal gate
+    // downstream makes an unchanged republish free, and this is what lazily
+    // backfills summaries persisted before the mirror existed (#9947).
+    if (this.records.get(stream) === record) this.publishSummaryMeta(stream);
   }
 
   /** Persist sidecars from merged memory after seeding and overlays converge. */

@@ -2013,7 +2013,7 @@ describe('DesktopProgressBridge', () => {
     // the pending tab renders no synced content at all.
     emitRunConfigFact(bridge, {
       streamId: retainedStream,
-      executionId: 'ret001' as ExecutionId,
+      executionId: 'feed01' as ExecutionId,
       config: workflowConfig(),
     });
     bridge.setActiveStream(deletedStream);
