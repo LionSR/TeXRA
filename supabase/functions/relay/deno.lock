@@ -1,18 +1,18 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@hono/hono@4.12.33": "4.12.33",
+    "jsr:@hono/hono@4.13.1": "4.13.1",
     "jsr:@supabase/supabase-js@2.111.0": "2.111.0",
     "npm:@supabase/auth-js@2.111.0": "2.111.0",
     "npm:@supabase/functions-js@2.111.0": "2.111.0",
     "npm:@supabase/postgrest-js@2.111.0": "2.111.0",
     "npm:@supabase/realtime-js@2.111.0": "2.111.0",
     "npm:@supabase/storage-js@2.111.0": "2.111.0",
-    "npm:llm-zoo@1.25.0": "1.25.0"
+    "npm:llm-zoo@1.27.0": "1.27.0"
   },
   "jsr": {
-    "@hono/hono@4.12.33": {
-      "integrity": "0df9fd54840e64fd3c10455aed240ed1dbc8b2773b6d9b825e3a681378d1ba77"
+    "@hono/hono@4.13.1": {
+      "integrity": "36e130f7c3a07d2938d0960c3c726e71ff15becdf999512949bc69884b6afb65"
     },
     "@supabase/supabase-js@2.111.0": {
       "integrity": "92cd1d4c2933f6a62099f7d3b2b91908b70a9d110ee6098e1b2d3db2e6b7ef1b",
@@ -64,8 +64,8 @@
     "iceberg-js@0.8.1": {
       "integrity": "sha512-1dhVQZXhcHje7798IVM+xoo/1ZdVfzOMIc8/rgVSijRK38EDqOJoGula9N/8ZI5RD8QTxNQtK/Gozpr+qUqRRA=="
     },
-    "llm-zoo@1.25.0": {
-      "integrity": "sha512-SA68zVn+25GX2xafX2zi7hmRMFAfRhp2FXJzBGIis4wyqfdgkY50iDfk3S+HEXxX6mp4FamgUNNTZM2kQ7cI8Q=="
+    "llm-zoo@1.27.0": {
+      "integrity": "sha512-hx0SFcdKcqohlwr9styXqxnV4Zzend/RMEtLUrNPeWnQzK0LFjljMsvy6TtWIaWWrBgL3LGk3w2aHAMiJepCLA=="
     },
     "tslib@2.8.1": {
       "integrity": "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="
@@ -73,9 +73,9 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@hono/hono@4.12.33",
+      "jsr:@hono/hono@4.13.1",
       "jsr:@supabase/supabase-js@2.111.0",
-      "npm:llm-zoo@1.25.0"
+      "npm:llm-zoo@1.27.0"
     ]
   }
 }

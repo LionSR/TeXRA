@@ -128,32 +128,59 @@ describe('computeModelListVersion', () => {
     );
   });
 
-  it('is a pure function of the preferred (unfiltered) list, wired to MODEL_LIST_VERSION', () => {
+  it('is wired to the preferred set and current catalogue', () => {
     expect(MODEL_LIST_VERSION).toBe(
       computeModelListVersion(PREFERRED_DEFAULT_MODELS),
     );
   });
 
-  it('never lands in the pre-#7191 hand-bumped range (1-21), so every existing install reconciles exactly once on upgrade', () => {
-    expect(MODEL_LIST_VERSION).toBeGreaterThan(21);
+  it('preserves the established hash for the current preferred set', () => {
+    expect(MODEL_LIST_VERSION).toBe(494_338_219);
   });
 
-  /**
-   * #7216 review: hashing the *resolved* (post-filter) set made the trigger
-   * blind to a status transition between two states that both filter out of
-   * that set -- most importantly deprecated -> retired. A preferred pick that
-   * is merely deprecated is still nominally servable; once the registry marks
-   * it retired, `reconcileEnabledModels`'s unconditional retired-model sweep
-   * needs to strip it from existing users, which only happens if the version
-   * hash actually changes. `gpt54` (deprecated) and `grok4` (retired) both
-   * resolve to the same empty set, so a hash of `resolveDefaultModels(...)`
-   * output would have collapsed them to the same version.
-   */
-  it('distinguishes a deprecated preferred pick from a retired one, even though both resolve to an empty set', () => {
-    expect(resolveDefaultModels(['gpt54'])).toEqual([]);
-    expect(resolveDefaultModels(['grok4'])).toEqual([]);
-    expect(computeModelListVersion(['gpt54'])).not.toBe(
-      computeModelListVersion(['grok4']),
+  it('does not change when a non-preferred catalogue model retires', () => {
+    const activeCatalogue = [
+      ['preferred', {}],
+      ['optional', {}],
+    ] as const;
+    const retiredCatalogue = [
+      ['preferred', {}],
+      ['optional', { retired: true }],
+    ] as const;
+
+    expect(computeModelListVersion(['preferred'], activeCatalogue)).toBe(
+      computeModelListVersion(['preferred'], retiredCatalogue),
     );
+  });
+
+  it('distinguishes deprecated and retired preferred models', () => {
+    expect(
+      computeModelListVersion(
+        ['preferred'],
+        [['preferred', { deprecated: true }]],
+      ),
+    ).not.toBe(
+      computeModelListVersion(
+        ['preferred'],
+        [['preferred', { retired: true }]],
+      ),
+    );
+  });
+
+  it('does not change when an unrelated active catalogue model is added', () => {
+    const before = computeModelListVersion(['preferred'], [['preferred', {}]]);
+    const after = computeModelListVersion(
+      ['preferred'],
+      [
+        ['preferred', {}],
+        ['new-model', {}],
+      ],
+    );
+
+    expect(after).toBe(before);
+  });
+
+  it('never lands in the pre-#7191 hand-bumped range (1-21), so every existing install reconciles exactly once on upgrade', () => {
+    expect(MODEL_LIST_VERSION).toBeGreaterThan(21);
   });
 });

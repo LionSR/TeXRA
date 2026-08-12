@@ -11,8 +11,8 @@
 
 // Local imports
 import {
-  emitToolUseCard,
   endToolUseCard,
+  startToolUseCard,
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
@@ -22,10 +22,11 @@ import type { ToolUseLog } from '@shared/schemas';
 import type { SDKBackgroundTasksChangedMessage } from '@anthropic-ai/claude-agent-sdk';
 
 type BackgroundTasks = SDKBackgroundTasksChangedMessage['tasks'];
+const CLAUDE_BACKGROUND_TASK_TOOL_NAME = 'claude:background_tasks';
 
 function buildBackgroundTaskLog(tasks: BackgroundTasks): ToolUseLog {
   return {
-    toolName: 'claude:background_tasks',
+    toolName: CLAUDE_BACKGROUND_TASK_TOOL_NAME,
     summary: `${tasks.length} Claude background task${tasks.length === 1 ? '' : 's'}`,
     input: { source: 'background_tasks_changed' },
     output: { tasks },
@@ -42,13 +43,20 @@ export class ClaudeBackgroundTaskTracker {
 
   replace(tasks: BackgroundTasks): void {
     if (tasks.length === 0) {
-      this.finish('No Claude background tasks remain', tasks);
+      this.settle(
+        buildBackgroundTaskLog(tasks),
+        'No Claude background tasks remain',
+      );
       return;
     }
 
     const log = buildBackgroundTaskLog(tasks);
     if (!this.active) {
-      const ref = emitToolUseCard(this.logger, log);
+      const ref = startToolUseCard(
+        this.logger,
+        CLAUDE_BACKGROUND_TASK_TOOL_NAME,
+        log.input,
+      );
       endToolUseCard(this.logger, ref, log, 'in_progress');
       this.active = { ref, log };
       return;
@@ -58,11 +66,14 @@ export class ClaudeBackgroundTaskTracker {
   }
 
   /** Close the card because every query starts with an empty background set. */
-  finish(summary = 'Claude session ended', tasks?: BackgroundTasks): void {
+  finish(): void {
     if (!this.active) return;
-    const { status: _status, ...baseLog } = tasks
-      ? buildBackgroundTaskLog(tasks)
-      : this.active.log;
+    this.settle(this.active.log, 'Claude session ended');
+  }
+
+  private settle(log: ToolUseLog, summary: string): void {
+    if (!this.active) return;
+    const { status: _status, ...baseLog } = log;
     endToolUseCard(
       this.logger,
       this.active.ref,
