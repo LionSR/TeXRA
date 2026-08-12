@@ -94,12 +94,14 @@ describe('coding-plan subscription runtime', () => {
     await expect(activeCodingPlanForModel('glm52')).resolves.toBeUndefined();
   });
 
-  it('does not report the GLM plan when included access rejects the model tier', async () => {
+  it('reports the GLM plan when included access does not serve that model tier', async () => {
     await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
     includedAccessAvailable = true;
     relayServesModel = false;
 
-    await expect(activeCodingPlanForModel('glm52')).resolves.toBeUndefined();
+    await expect(activeCodingPlanForModel('glm52')).resolves.toMatchObject({
+      descriptor: { id: 'glmCodingPlan' },
+    });
   });
 
   it('does not classify a custom coding-shaped GLM endpoint as plan usage', async () => {
