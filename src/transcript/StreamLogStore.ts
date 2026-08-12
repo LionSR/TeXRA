@@ -1248,6 +1248,8 @@ export class StreamLogStore {
     // Metadata recorded while a stream was unregistered lands now if the
     // replacement set knows the stream (no-op on read-only opens: the
     // antechamber only fills through recordSummaryMeta, which is writable-only).
+    // Entries absent from the replacement belong to the previous storage root
+    // and are discarded.
     for (const streamId of [...this.pendingSummaryMeta.keys()]) {
       if (this.summaries.has(streamId)) {
         this.adoptPendingSummaryMeta(streamId);

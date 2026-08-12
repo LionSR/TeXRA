@@ -2007,9 +2007,11 @@ export class StreamSnapshotStore {
     }
     record.diskState = provenance;
     this.writeMergedSidecars(stream, record, sidecarsToWrite);
-    // Every hydration republishes the metadata mirror: the deep-equal gate
-    // downstream makes an unchanged republish free, and this is what lazily
-    // backfills summaries persisted before the mirror existed (#9947).
+    // A complete hydration republishes the metadata mirror: the deep-equal
+    // gate downstream makes an unchanged republish free, and this lazily
+    // backfills summaries persisted before the mirror existed (#9947). An
+    // incomplete read preserves a same-execution mirror; after a handoff it
+    // publishes the new execution id with old execution-owned fields cleared.
     if (publishHydratedSummaryMeta && this.records.get(stream) === record) {
       this.publishSummaryMeta(stream);
     }
