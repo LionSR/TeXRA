@@ -1,5 +1,9 @@
+// Third-party imports
+import { ModelProvider } from 'llm-zoo';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+// Local imports
+import { resolveProxyEndpoint } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import {
   activeCodingPlanForModel,
@@ -36,6 +40,41 @@ describe('coding-plan subscription runtime', () => {
       canUseServerSideKeys: async () => relayServesModel,
       shouldUseServerSideKeysSync: () => relayServesModel,
     });
+  });
+
+  it('freezes every runtime catalog entry', () => {
+    expect(Object.isFrozen(codingPlanSubscriptionRuntimes)).toBe(true);
+    expect(codingPlanSubscriptionRuntimes.every(Object.isFrozen)).toBe(true);
+  });
+
+  it('classifies only the resolved official GLM coding endpoint as plan usage', async () => {
+    await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+    await setProviderEndpoint('glm', '');
+
+    expect(
+      resolveProxyEndpoint({
+        route: 'direct',
+        provider: ModelProvider.GLM,
+        useOpenRouter: false,
+      }),
+    ).toMatchObject({ usageRoute: 'glm-coding-plan-subscription' });
+
+    await setProviderEndpoint('glm', 'proxy.test/api/coding/paas/v4');
+    expect(
+      resolveProxyEndpoint({
+        route: 'direct',
+        provider: ModelProvider.GLM,
+        useOpenRouter: false,
+      }),
+    ).toEqual({ baseUrl: 'https://proxy.test/api/coding/paas/v4' });
+
+    expect(
+      resolveProxyEndpoint({
+        route: 'direct',
+        provider: ModelProvider.GLM,
+        useOpenRouter: true,
+      }),
+    ).toEqual({ baseUrl: 'https://openrouter.ai/api/v1' });
   });
 
   afterEach(async () => {
