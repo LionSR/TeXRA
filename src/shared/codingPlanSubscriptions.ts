@@ -13,6 +13,7 @@ interface CodingPlanSubscriptionDescriptor {
   readonly cliProvider: 'glm-code' | 'kimi-code';
   readonly cliAliases: readonly string[];
   readonly apiProvider: 'glm' | 'kimiCode';
+  readonly exclusiveCredential: boolean;
   readonly credentialName: string;
   readonly credentialSetupUrl: string;
   readonly usageProvider: 'glmCodingPlan' | 'kimiCode';
@@ -44,6 +45,7 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     cliProvider: 'kimi-code',
     cliAliases: ['kimi', 'kimicode', 'kimi-code'],
     apiProvider: 'kimiCode',
+    exclusiveCredential: true,
     credentialName: 'Kimi Code',
     credentialSetupUrl: 'https://www.kimi.com/code/console',
     usageProvider: 'kimiCode',
@@ -69,6 +71,7 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     cliProvider: 'glm-code',
     cliAliases: ['glm', 'glmcode', 'glm-code', 'glm-coding', 'glm-coding-plan'],
     apiProvider: 'glm',
+    exclusiveCredential: false,
     credentialName: 'GLM',
     credentialSetupUrl: 'https://open.bigmodel.cn or https://z.ai',
     usageProvider: 'glmCodingPlan',

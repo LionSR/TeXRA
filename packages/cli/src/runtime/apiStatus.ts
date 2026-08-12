@@ -371,7 +371,7 @@ export async function loadCliDetailedAccountStatusLines(options: {
     providers.filter(
       (provider) =>
         !CODING_PLAN_SUBSCRIPTIONS.some(
-          (plan) => plan.apiProvider === provider,
+          (plan) => plan.exclusiveCredential && plan.apiProvider === provider,
         ),
     ),
     'Other API keys',
