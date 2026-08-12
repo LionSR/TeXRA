@@ -506,6 +506,31 @@ describe('StreamLogStore load', () => {
     expect(store.get('alpha')).toBeUndefined();
   });
 
+  it('honors eviction requested while a focused rehydrate is pending', async () => {
+    const readStarted = createDeferred();
+    const readGate = createDeferred();
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: {
+        alpha: summary(100, 100, { hasRunningGroup: false }),
+      },
+      onLogRead: async () => {
+        readStarted.resolve();
+        await readGate.promise;
+      },
+    });
+    const store = await StreamLogStore.open();
+    const loading = store.ensureLoaded('alpha');
+    await readStarted.promise;
+
+    store.requestEviction('alpha');
+    readGate.resolve();
+    await loading;
+
+    expect(store.get('alpha')).toBeUndefined();
+    expect(store.dumpResidency()).toEqual([]);
+  });
+
   it('keeps a requested eviction resident until its sequential write finishes', async () => {
     const storage = mockStorage({
       logs: {},
@@ -1721,6 +1746,19 @@ describe('StreamLogStore save throttle', () => {
     await store.flush();
     expect(store.get('alpha')).toBeUndefined();
     expect(store.dumpResidency()).toEqual([]);
+  });
+
+  it('does not retain eviction state for an unknown stream', async () => {
+    mockStorage({ logs: {}, summaries: {} });
+    const store = await StreamLogStore.open();
+
+    store.requestEviction('unknown');
+    store.ensureStream('unknown');
+
+    expect(store.dumpResidency()[0]).toMatchObject({
+      streamId: 'unknown',
+      releaseRequested: false,
+    });
   });
 
   it('reads cold entries without making the stream resident', async () => {

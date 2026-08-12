@@ -525,9 +525,13 @@ export class StreamLogStore {
     // Ephemeral entries have no durable copy from which they could be restored.
     if (this.mode.kind === 'ephemeral') return;
 
-    const state = this.ensureStreamState(streamId);
+    // An absent record is already non-resident. A later writer re-establishes
+    // release intent when it reserves a known cold stream.
+    const state = this.streams.get(streamId);
+    if (!state) return;
     state.releaseRequested = true;
     state.leases?.delete('focus');
+    if (state.leases?.size === 0) state.leases = undefined;
     this.tryRelease(streamId);
   }
 
@@ -570,6 +574,12 @@ export class StreamLogStore {
       throw new Error('A transcript writer requires a non-empty owner key.');
     }
 
+    const knownColdStream =
+      allowReleased &&
+      this.mode.kind === 'persistent' &&
+      this.summaries.has(streamId) &&
+      this.streams.get(streamId)?.log === undefined;
+
     if (
       !allowReleased &&
       this.mode.kind === 'persistent' &&
@@ -594,6 +604,9 @@ export class StreamLogStore {
     ownership.tokens.add(token);
     const writerState = this.ensureStreamState(streamId);
     writerState.writer = ownership;
+    // A writer that rehydrates an already-evicted stream is its only reason
+    // for residency. Release it again when the writer and flush leases end.
+    if (knownColdStream) writerState.releaseRequested = true;
     this.acquireLease(streamId, 'writer');
     let closed = false;
 
@@ -735,7 +748,7 @@ export class StreamLogStore {
       const state = this.streams.get(streamId);
       if (state) {
         state.pendingLoad = undefined;
-        this.pruneStreamState(streamId);
+        this.tryRelease(streamId);
       }
     }
   }
@@ -1411,13 +1424,12 @@ export class StreamLogStore {
     ) {
       return;
     }
-    // Preserve the terminal/background release intent across a period with no
-    // resident log: a writer may start later and rehydrate the stream.
-    if (!state.log) return;
     state.releaseRequested = false;
-    this.refreshSummary(streamId, state.log);
-    state.log = undefined;
-    this.stateRevision += 1;
+    if (state.log) {
+      this.refreshSummary(streamId, state.log);
+      state.log = undefined;
+      this.stateRevision += 1;
+    }
     this.pruneStreamState(streamId);
   }
 
