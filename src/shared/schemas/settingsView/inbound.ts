@@ -306,6 +306,7 @@ const StateSettingValueSchema = z.union([
   z.record(z.string(), z.string()),
   z.null(),
 ]);
+export type StateSettingValue = z.infer<typeof StateSettingValueSchema>;
 
 const UpdateStateSettingMessageSchema = z.object({
   command: z.literal(CMD.UPDATE_STATE_SETTING),

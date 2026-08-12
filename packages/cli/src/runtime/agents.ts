@@ -13,6 +13,7 @@ import {
   agentName,
   AgentCategory,
 } from '@shared/schemas';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliUsageError } from './cliContext';
@@ -124,6 +125,15 @@ export function resolveCliAgentInCategory(
     pinned.success ? pinned.data : undefined,
   )?.entry;
   return entry?.category === category ? entry : undefined;
+}
+
+/** Whether a CLI tool-use agent's tool list intersects the delegation tool set. */
+export function chatAgentSupportsDelegation(name: string): boolean {
+  return (
+    resolveCliAgentInCategory(name, AgentCategory.ToolUse)?.tools?.some(
+      (toolName) => DELEGATION_TOOLS.has(toolName),
+    ) ?? false
+  );
 }
 
 export function assertCliAgentLaunch(

@@ -64,7 +64,6 @@ const XML_PARSER_OPTIONS = {
 
 /** Human-readable descriptions for document extraction methods */
 const EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
-  named: 'from named document tag',
   simple: 'using fallback method',
   latex_document: 'from legacy <latex_document> tag',
   markdown: 'from markdown code block',

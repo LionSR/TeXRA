@@ -4,7 +4,6 @@ import { ZodError } from 'zod';
 
 // Local imports - common
 import * as logger from '@logger/logUtils';
-import { COMMON_COMMANDS } from '@shared/ipc';
 import {
   UnsupportedCommandError,
   type DispatcherFn,
@@ -137,50 +136,4 @@ export abstract class BaseViewMessageHandler<
     message: unknown,
     webviewView: T,
   ): Promise<void>;
-
-  /**
-   * Helper method for common theme handling
-   */
-  protected async handleTheme(
-    message: { theme?: string },
-    webviewView: T,
-  ): Promise<void> {
-    if (!message?.theme) {
-      this.logger.warn(this.channel, 'Invalid theme message', {
-        data: message,
-      });
-      return;
-    }
-
-    webviewView.webview.postMessage({
-      command: COMMON_COMMANDS.THEME_SET,
-      theme: message.theme,
-    });
-  }
-
-  /**
-   * Helper method for common debug mode handling
-   */
-  protected async handleDebugMode(
-    message: { debugMode?: boolean },
-    webviewView: T,
-  ): Promise<void> {
-    webviewView.webview.postMessage({
-      command: COMMON_COMMANDS.DEBUG_MODE_SET,
-      debugMode: message.debugMode,
-    });
-  }
-
-  /**
-   * Helper method for webview ready state.
-   * Subclasses can override this method to perform custom initialization
-   * when the webview signals it is ready.
-   */
-  protected async handleWebviewReady(
-    _message: unknown,
-    _webviewView: T,
-  ): Promise<void> {
-    this.logger.debug(this.channel, 'Webview ready signal received');
-    // Subclasses can override for custom ready handling
-  }
 }

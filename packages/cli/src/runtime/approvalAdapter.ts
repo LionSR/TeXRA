@@ -15,7 +15,7 @@ import {
   type RetryPermission,
   type UserQuestionAnswers,
 } from '@shared/schemas';
-import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
+import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
@@ -86,8 +86,11 @@ function summarizeApprovalEvent<K extends CliDecisionApprovalEvent>(
       return formatAgentProposalApprovalSummary(data);
     }
     case 'showRetryRequest': {
-      const data = payload as RetryPermission;
-      return `Retry requested for ${data.operation}: ${data.errorMessage ?? 'unknown error'}`;
+      // The prompt surface owns the retry hint: the operator must see the
+      // `/api personal` / coding-plan switch guidance in the prompt they
+      // actually answer, not only in the pre-prompt stderr line.
+      // `formatRetryRequestMessage` is the single retry formatter.
+      return formatRetryRequestMessage(payload as RetryPermission);
     }
     default: {
       const never: never = event;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractWebFetchResultFields } from '@agent/types/ServerToolTypes';
+import { extractWebFetchResultFields } from '@agent/types/ServerTools';
 
 const page = 'x'.repeat(20_001);
 

@@ -3,10 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import * as vscode from 'vscode';
 
-import {
-  ExtensionCategory,
-  getIncludedExtensions,
-} from '@common/files/fileTypeUtils';
+import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import {
   planCurrentFileAsBase,
   planCurrentFileAsEdited,
@@ -30,7 +27,7 @@ import type { MainViewInboundMessage } from '@shared/schemas';
 import {
   isMultipleDocumentFileType,
   type CurrentFileType,
-  type ExtendedDocumentFileType,
+  type DocumentFileType,
 } from '@shared/schemas/fileTypes';
 import { getFileStem } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -62,13 +59,6 @@ type AttachDroppedFilesMessage = MessageFor<
 
 type GetCurrentFileMessage = MessageFor<
   typeof MAIN_VIEW_COMMANDS.GET_CURRENT_FILE
->;
-
-type UpdateFilesMessage = MessageFor<
-  | typeof MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES
-  | typeof MAIN_VIEW_COMMANDS.UPDATE_CONTEXT_FILES
-  | typeof MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES
-  | typeof MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES
 >;
 
 const CHANNEL = 'FileManager';
@@ -253,14 +243,10 @@ export class FileManager extends BaseWebviewManager {
     }
   }
 
-  async handleAddOpenedFiles(
-    fileType: ExtendedDocumentFileType,
-  ): Promise<void> {
+  async handleAddOpenedFiles(fileType: DocumentFileType): Promise<void> {
     const openedFiles = this.getOpenedFiles();
     const allowedExtensions = new Set(
-      getIncludedExtensions(fileType as ExtensionCategory).map(
-        normalizeMainViewFileExtension,
-      ),
+      getIncludedExtensions(fileType).map(normalizeMainViewFileExtension),
     );
 
     const filteredFiles =
@@ -306,16 +292,6 @@ export class FileManager extends BaseWebviewManager {
     }
 
     this.showDroppedFilesResult(plan.attachedCount, plan.rejectedCount);
-  }
-
-  // The webview owns these lists and has already applied the edit locally;
-  // the host only logs it. (This used to echo the list back as SET_*_FILES,
-  // which the webview re-applied as a no-op.)
-  handleUpdateFiles(message: UpdateFilesMessage): void {
-    logger.debug(
-      CHANNEL,
-      `Updating ${message.fileType} with ${message.files?.length ?? 0} files`,
-    );
   }
 
   private postBaseFiles(

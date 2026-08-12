@@ -1,4 +1,3 @@
-// Type imports - third-party
 import type { core } from 'zod';
 
 /** Zod conversion options shared by tool definitions and provider adapters. */

@@ -6,8 +6,7 @@ import { pathToLocation } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { runToolWithCheck } from '@utils/system/toolUtils';
-
-const CHANNEL = 'LaTeXCommands';
+import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 
 const CHINESE_PACKAGES = [
   'xeCJK',
@@ -18,11 +17,6 @@ const CHINESE_PACKAGES = [
   'ctexbook',
 ];
 
-/**
- * Check if a LaTeX file contains Chinese-related packages
- * @param filePath Path to the LaTeX file
- * @returns Promise<boolean> True if the file contains Chinese packages
- */
 async function hasChinesePackages(
   fileLocation: FileLocation,
 ): Promise<boolean> {

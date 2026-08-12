@@ -97,6 +97,12 @@ export const commonViewStyles: CSSResult = css`
     gap: var(--wa-space-2xs);
   }
 
+  /* Single-open disclosure pattern: consumers (ModelSelectionList,
+     ProviderKeyList) keep exactly one item expanded at a time, closing the
+     previous one when a new summary opens. The toggling lives in each
+     component (it's a few lines of state, not worth a shared mixin), but new
+     surfaces should copy the same one-open invariant rather than allowing
+     independent <details>-style toggles. */
   .settings-disclosure {
     overflow: hidden;
     border: var(--border-thin) solid var(--color-border);

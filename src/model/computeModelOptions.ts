@@ -13,7 +13,7 @@ import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import { providerDisplayName } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { coalesceAsync } from '@utils/core';
 import {
@@ -33,8 +33,7 @@ import {
 import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
-  kimiCodeRuntimeConfig,
-  resolveKimiCodeRoute,
+  kimiCodeEffectiveConfig,
 } from './kimiCodeSubscriptionRouting';
 import {
   buildBaseModelOption,
@@ -235,7 +234,7 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
     }
     const directProvider = resolveDirectModelApiKeyProvider(config);
     const modelSource = resolveModelSource(config) ?? config.provider;
-    const providerName = PROVIDER_DISPLAY_NAMES[modelSource] ?? modelSource;
+    const providerName = providerDisplayName(modelSource);
     if (!directProvider) {
       return `Model "${model}" is provided by ${providerName}, which does not use provider API keys. Use a host that supports ${providerName} models or choose another model.`;
     }
@@ -341,19 +340,15 @@ function effectiveKimiCodeConfig(
   ctx: ModelAvailabilityContext,
 ): ModelConfig {
   if (!isKimiSubscriptionEligible(config)) return config;
-  const route = resolveKimiCodeRoute(
-    config,
-    ctx.useOpenRouter,
-    ctx.kimiCodeKeySet,
-    ctx.preferKimiCode,
-    // The relay only owns the model when included access can actually serve
-    // it — mirrors ModelFactory's dispatch facts.
-    ctx.useIncludedAccess && ctx.hasServerAccess,
-  );
-  if (route === 'kimiCode' && !isKimiCodeExclusiveModel(config)) {
-    return kimiCodeRuntimeConfig(config);
-  }
-  return config;
+  // The relay only owns the model when included access can actually serve it
+  // — the same route decision and post-route config synthesis ModelFactory
+  // applies, driven by the pre-resolved context facts.
+  return kimiCodeEffectiveConfig(config, {
+    useOpenRouter: ctx.useOpenRouter,
+    keySet: ctx.kimiCodeKeySet,
+    preferKimiCode: ctx.preferKimiCode,
+    includedAccess: ctx.useIncludedAccess && ctx.hasServerAccess,
+  });
 }
 
 function canUseIncludedAccessForModel(
@@ -626,7 +621,7 @@ async function buildModelOptionData(
       routeLabel = 'Via OpenRouter';
     } else {
       const source = resolveModelSource(config) ?? config.provider;
-      routeLabel = `Via ${PROVIDER_DISPLAY_NAMES[source] ?? source}`;
+      routeLabel = `Via ${providerDisplayName(source)}`;
     }
   }
   return withAvailabilityFields(

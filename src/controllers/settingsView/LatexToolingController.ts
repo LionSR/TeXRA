@@ -6,7 +6,7 @@ import {
   IMAGE_TOOLS,
   SCOOP_INSTALL_COMMAND,
   type OSPlatform,
-} from '@shared/constants/latex';
+} from '@shared/constants/latexToolchain';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type LatexSettingsStatus,

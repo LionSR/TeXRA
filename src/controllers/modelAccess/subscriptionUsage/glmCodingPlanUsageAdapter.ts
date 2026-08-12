@@ -152,9 +152,9 @@ export function parseGlmCodingPlanUsage(
 
   addRemainingWindows(windows, data);
 
+  // No inline default: the service's DEFAULT_PLAN_NAMES owns the fallback.
   return {
-    planName:
-      stringField(data, 'level', 'plan', 'plan_name') ?? 'GLM Coding Plan',
+    planName: stringField(data, 'level', 'plan', 'plan_name'),
     windows: [...windows.values()],
   };
 }

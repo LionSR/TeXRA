@@ -62,18 +62,16 @@ export class ApprovalRequestHandler<
     const id = this.idFor(item);
     this.removeExisting(id, APPROVAL_REPLACED_CAUSE);
 
-    return new Promise<Result>((complete, reject) => {
-      try {
-        this.register(id, {
-          mode: 'interaction',
-          item,
-          cancellationScope: options.cancellationScope,
-          cancellationResult: options.cancellationResult,
-          complete,
-        });
-      } catch (error) {
-        reject(error);
-      }
+    return new Promise<Result>((complete) => {
+      // `register` rethrows a delivery failure, which the promise executor
+      // converts into a rejection automatically.
+      this.register(id, {
+        mode: 'interaction',
+        item,
+        cancellationScope: options.cancellationScope,
+        cancellationResult: options.cancellationResult,
+        complete,
+      });
     });
   }
 

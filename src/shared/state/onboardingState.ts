@@ -10,10 +10,6 @@ import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isNonEmptyString } from '@utils/core';
 
-function getOnboardingDeclined(state: StateStore): boolean {
-  return state.get<boolean>(GlobalStateKey.ONBOARDING_DECLINED, false) === true;
-}
-
 export async function setOnboardingDeclined(
   state: StateStore,
   declined: boolean,
@@ -54,7 +50,8 @@ export function readOnboardingFlags(state: StateStore): {
   firstRunDone: boolean;
 } {
   return {
-    declined: getOnboardingDeclined(state),
+    declined:
+      state.get<boolean>(GlobalStateKey.ONBOARDING_DECLINED, false) === true,
     firstRunDone: getFirstRunDone(state),
   };
 }

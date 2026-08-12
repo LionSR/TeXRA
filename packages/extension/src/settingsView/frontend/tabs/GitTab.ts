@@ -8,6 +8,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import {
   renderSetStatusIcon,
   statusCheckIconStyles,
@@ -41,7 +42,7 @@ import {
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 @customElement('git-tab')
-export class GitTab extends LitElement {
+export class GitTab extends UnsupportedCommandsMixin(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -174,16 +175,6 @@ export class GitTab extends LitElement {
     'none';
   @property({ attribute: false })
   prSubscriptions: readonly PRSubscriptionEntry[] = [];
-
-  /**
-   * Commands the active host's registry declares `unsupported(...)`, sent
-   * once at webview-ready (see `unsupportedCommands` in
-   * `@shared/utils/dispatcher`). `null` before that broadcast arrives —
-   * checked via `isKnownUnsupported`, which treats "not yet known" as
-   * unsupported so a control never flashes visible then hidden.
-   */
-  @property({ attribute: false })
-  unsupportedCommands: ReadonlySet<string> | null = null;
 
   private handleAuthorNameChange(event: Event): void {
     const target = event.target as WaInput | null;

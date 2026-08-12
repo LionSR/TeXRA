@@ -1,4 +1,4 @@
-import { CORE_LATEX_TOOLS } from '@shared/constants/latex';
+import { CORE_LATEX_TOOLS } from '@shared/constants/latexToolchain';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
 // Kept in sync with @shared/constants/latex's CORE_LATEX_TOOLS SSOT: if one

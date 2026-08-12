@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { z, type ZodType } from 'zod';
 
 // Local imports - tools
-import { getNewestTimestamp } from '@tools/github/formatUtils';
+import { getNewestTimestamp } from '@tools/github/githubPaths';
 import {
   DedupedResource,
   PollingSourceBase,

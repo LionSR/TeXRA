@@ -30,6 +30,7 @@ interface TestSourceModules {
   '@desktop/main/desktopDiffHost': typeof import('@desktop/main/desktopDiffHost');
   '@desktop/main/desktopExecutionIpc': typeof import('@desktop/main/desktopExecutionIpc');
   '@desktop/main/desktopFileSelection': typeof import('@desktop/main/desktopFileSelection');
+  '@desktop/main/desktopMenuTemplate': typeof import('@desktop/main/desktopMenuTemplate');
   '@desktop/main/desktopHistoryHandlers': typeof import('@desktop/main/desktopHistoryHandlers');
   '@desktop/main/desktopLogIpc': typeof import('@desktop/main/desktopLogIpc');
   '@desktop/main/desktopNavigationPolicy': typeof import('@desktop/main/desktopNavigationPolicy');

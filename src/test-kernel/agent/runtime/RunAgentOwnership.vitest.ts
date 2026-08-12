@@ -35,6 +35,7 @@ vi.mock('@agent/storage/executionLease', () => ({
 
 vi.mock('@agent/storage/executionLifecycle', () => ({
   clearTerminalExecutionState: mocks.clearTerminalExecutionState,
+  finalizeExecution: mocks.finalizeExecution,
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({

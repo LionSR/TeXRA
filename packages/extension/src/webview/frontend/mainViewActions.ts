@@ -25,8 +25,6 @@ import type {
 import { buildMainViewExecuteMessage } from '@shared/mainView/executionFormState';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 
-// Local imports - utilities
-
 // Local imports - main view
 import {
   SESSION_TYPES,
@@ -156,9 +154,6 @@ export function updateMultiFiles(
   files: string[],
 ): void {
   multiFiles$.set({ ...multiFiles$.get(), [listId]: files });
-
-  const { fileType, updateCommand } = MULTI_FILE_LIST_BY_KEY[listId];
-  postMessage(updateCommand, { fileType, files });
 }
 
 export function updateCheckboxValue(id: string, checked: boolean): void {

@@ -3,7 +3,6 @@ import * as nodePath from 'node:path';
 
 // Local imports
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import {
   teardownDefaultSession,
   tryDefaultSession,
@@ -32,6 +31,7 @@ import {
 } from '@platform/defaults/nodeStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup/platform';
 import { getUseOpenRouter } from '@utils/config/providerConfig';

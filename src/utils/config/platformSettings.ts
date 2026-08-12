@@ -1,9 +1,5 @@
 import { tryPlatform } from '@platform/platform';
-import {
-  readSetting,
-  settingDefault,
-  type SettingsHostKind,
-} from '@shared/config/settingsAccess';
+import { readSetting, settingDefault } from '@shared/config/settingsAccess';
 import { stateSettingByKey } from '@shared/schemas/stateSettings';
 
 /**
@@ -19,14 +15,12 @@ import { stateSettingByKey } from '@shared/schemas/stateSettings';
  *
  * Graceful when the platform isn't initialized yet — returns the schema default
  * instead of throwing — matching the previous `tryWorkspaceState()?.get(...) ??
- * default` sites. `host` only changes the slot for the CLI-divergent git-author
- * keys (`cliStore: 'config'`); every key read through here today is
- * host-uniform, so the default suffices.
+ * default` sites. Reads resolve to the `'extension'` host slot: the CLI-divergent
+ * git-author keys (`cliStore: 'config'`) are read through the CLI's own
+ * `readGitAuthorSettingsFromState`, and no current caller passes a host — the
+ * CLI `settingSlot` branch had no consumer and was removed.
  */
-export function readPlatformSetting<T>(
-  key: string,
-  host: SettingsHostKind = 'extension',
-): T {
+export function readPlatformSetting<T>(key: string): T {
   const entry = stateSettingByKey(key);
   if (!entry) {
     throw new Error(`No state-setting catalog entry for key: ${key}`);
@@ -37,5 +31,6 @@ export function readPlatformSetting<T>(
   }
   // `Platform` structurally supplies the `config`/`workspaceState`/`globalState`
   // slots `readSetting` reads from, so it passes as `SettingsStores` directly.
-  return readSetting(entry, active, host) as T;
+  // `readSetting`'s `host` defaults to `'extension'`.
+  return readSetting(entry, active) as T;
 }

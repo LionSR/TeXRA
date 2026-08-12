@@ -96,7 +96,7 @@ describe('discoverLatestExecutionOutputs', () => {
     ]);
     mocks.findRunDir.mockResolvedValue(runDir);
 
-    const result = await discoverLatestExecutionOutputs(MATCHING_QUERY);
+    const result = await discoverLatestExecutionOutputs(MATCHING_QUERY, 'test');
 
     expect(result?.executionId).toBe('exec-headless');
     expect(
@@ -121,7 +121,7 @@ describe('discoverLatestExecutionOutputs', () => {
     const rounds = { 0: [] };
     mocks.readOutputFiles.mockResolvedValue(rounds);
 
-    const result = await discoverLatestExecutionOutputs(MATCHING_QUERY);
+    const result = await discoverLatestExecutionOutputs(MATCHING_QUERY, 'test');
 
     expect(mocks.readOutputFiles).toHaveBeenCalledWith(
       'polish@earlierModel#exec-registered',
@@ -136,7 +136,7 @@ describe('discoverLatestExecutionOutputs', () => {
     mocks.listExecutions.mockResolvedValue([matchingExecution('exec-empty')]);
     mocks.findRunDir.mockResolvedValue(emptyDir);
 
-    const result = await discoverLatestExecutionOutputs(MATCHING_QUERY);
+    const result = await discoverLatestExecutionOutputs(MATCHING_QUERY, 'test');
 
     expect(result).toBeNull();
   });

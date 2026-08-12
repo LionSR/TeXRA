@@ -116,7 +116,7 @@ export function stopSummaryToggleKeydown(event: Event): void {
 }
 
 /** Build a copy button for banner content. */
-function buildCopyButton(
+export function buildCopyButton(
   title: string,
   options: { hidden?: boolean; content?: string; contentId?: string } = {},
 ): TemplateResult {

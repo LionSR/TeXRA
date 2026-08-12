@@ -8,7 +8,7 @@ import {
   type ToolUseResumeData,
 } from '@agent/runtime/SessionResumeRetrieval';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { registerCommands } from '@commands/_shared/registerCommands';
+import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 
@@ -58,7 +58,7 @@ export function resumeExtensionToolUseFromResumeData(
 export function registerResumeAgentCommand(
   context: vscode.ExtensionContext,
 ): void {
-  registerCommands(context, [
+  registerCommandEntries(context, [
     {
       id: 'texra.resumeAgent',
       handler: async (

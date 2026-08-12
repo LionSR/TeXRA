@@ -4,8 +4,8 @@ import { useInput, useWindowSize } from 'ink';
 
 // Local imports - TUI layout, input, and markdown rendering
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { isEscapeInput } from '@cli/tui/inputKeys';
 import { FormFrame, formFrameWidth } from '../forms/_shared/FormFrame';
-import { isEscapeInput } from '../input/inputKeys';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { Markdown } from '../render/Markdown';
 

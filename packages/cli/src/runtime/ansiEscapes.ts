@@ -8,6 +8,15 @@ const ANSI_C1_STRING_TERMINATOR = String.fromCharCode(0x9c);
 const CSI_FINAL_BYTE_MIN = 0x40; // '@'
 const CSI_FINAL_BYTE_MAX = 0x7e; // '~'
 
+/**
+ * Whether a code point is a CSI final byte. Single owner of the ANSI final-byte
+ * range; `noColorOutput` scans CSI sequences with this rather than re-deriving
+ * the range.
+ */
+export function isCsiFinalByte(code: number): boolean {
+  return code >= CSI_FINAL_BYTE_MIN && code <= CSI_FINAL_BYTE_MAX;
+}
+
 /** An OSC sequence (`ESC ]`) ends with BEL or the two-char ST (`ESC \`). */
 const OSC_STRING_TERMINATOR = `${ANSI_ESCAPE_START}\\`;
 
@@ -18,8 +27,7 @@ function isAnsiIntermediateByte(char: string | undefined): boolean {
 
 function csiEscapeEnd(text: string, start: number): number {
   for (let end = start; end < text.length; end += 1) {
-    const code = text.charCodeAt(end);
-    if (code >= CSI_FINAL_BYTE_MIN && code <= CSI_FINAL_BYTE_MAX) {
+    if (isCsiFinalByte(text.charCodeAt(end))) {
       return end + 1;
     }
   }

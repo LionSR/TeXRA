@@ -173,8 +173,10 @@ export type ErrorContext = z.infer<typeof ErrorContextSchema>;
 export const ErrorLogDataSchema = z.preprocess(
   normalizeLegacyProviderErrorFields,
   ProviderErrorObjectSchema.extend({
-    operation: z.string().optional(),
-    model: z.string().optional(),
+    // Compose the shared operation/model context pair from ErrorContextSchema
+    // so adding a field there propagates to the flattened log-row shape instead
+    // of silently diverging (mirrors the omit-based RetryErrorInfoSchema).
+    ...ErrorContextSchema.shape,
     rawMessage: z.string().optional(),
   }),
 );

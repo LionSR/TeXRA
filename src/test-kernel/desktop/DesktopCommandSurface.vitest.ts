@@ -217,7 +217,7 @@ describe('desktop command surface', () => {
 
   it('wires menu clicks to the catalog-backed dispatcher', async () => {
     const { buildDesktopMenuTemplate } = await loadSourceModule(
-      '@desktop/shared/desktopCommandSurface',
+      '@desktop/main/desktopMenuTemplate',
     );
     const actions = makeDesktopActions();
     const menu = buildDesktopMenuTemplate(actions, 'darwin');

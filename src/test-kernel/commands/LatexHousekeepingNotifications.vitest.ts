@@ -4,7 +4,7 @@ import {
   getIndentTeXNotification,
   getLatexdiffPackNotifications,
 } from '@commands/latex/latexHousekeepingNotifications';
-import type { LatexdiffPackResult } from '@housekeeping';
+import type { LatexdiffPackResult } from '@housekeeping/packLatexdiffvc';
 import type { IndentLatexResult } from '@latex/formatter/indentDirectory';
 
 describe('latex housekeeping command notifications', () => {

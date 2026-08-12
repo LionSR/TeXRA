@@ -35,7 +35,7 @@ export function isSdkErrorMetadata(value: unknown): value is SdkErrorMetadata {
     isString(candidate.provider) &&
     SDK_ERRORS_BY_KIND.has(candidate.kind as SdkErrorKind) &&
     (candidate.statusCode === undefined ||
-      pickStatus(candidate.statusCode) !== undefined) &&
+      isFiniteNumber(candidate.statusCode)) &&
     (candidate.exhaustionReason === undefined ||
       ExhaustionReasonSchema.safeParse(candidate.exhaustionReason).success)
   );

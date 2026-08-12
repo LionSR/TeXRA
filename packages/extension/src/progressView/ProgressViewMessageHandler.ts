@@ -30,12 +30,14 @@ import { loadOptions } from '@frontend/agents/optionsLoader';
 import { RecordingManager } from '@frontend/media/RecordingManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { PromptHost } from '@hosts/uiHosts';
+import { apiKeySecretName } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
 import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@model/codex/codexPreference';
+import { platform } from '@platform/platform';
 import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas';
@@ -577,8 +579,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private createApiKeyRetryController(): ProgressApiKeyRetryController {
     return new ProgressApiKeyRetryController({
       providers: SecretManager.API_PROVIDERS,
-      readKey: (provider) =>
-        SecretManager.get(SecretManager.getApiKeySecretName(provider)),
+      readKey: (provider) => platform().secrets.get(apiKeySecretName(provider)),
       hasUsableKey: (provider) => SecretManager.hasUsableApiKey(provider),
       promptForApiKey: async (provider) => {
         await this.runViewCommand(apiKeyCommands.setApiKey, [provider]);

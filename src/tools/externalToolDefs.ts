@@ -11,9 +11,6 @@
  *   - {@link @controllers/settingsView/ToolDashboardData} — reads everything for the UI
  */
 
-// Third-party imports
-import { z } from 'zod';
-
 // Local imports
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
 import { platform } from '@platform/platform';
@@ -48,7 +45,7 @@ import {
   SYSTEM_PACKAGE_MANAGERS,
   type SystemPackageManager,
 } from '@utils/system/toolUtils';
-import { isGitRepository } from '@utils/system/isGitRepository';
+import { isGitRepository } from '@utils/git/isGitRepository';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -165,11 +162,10 @@ async function probeZoteroBbt(port: number): Promise<boolean> {
   }
 }
 
-const GitHubPRPrerequisitesSchema = z.object({
-  tokenPresent: z.boolean(),
-  inGitRepo: z.boolean(),
-});
-type GitHubPRPrerequisites = z.infer<typeof GitHubPRPrerequisitesSchema>;
+interface GitHubPRPrerequisites {
+  tokenPresent: boolean;
+  inGitRepo: boolean;
+}
 
 async function getGitHubPRPrerequisites(): Promise<GitHubPRPrerequisites> {
   const tokenPresent = (await getGitHubToken()) !== undefined;
@@ -177,12 +173,15 @@ async function getGitHubPRPrerequisites(): Promise<GitHubPRPrerequisites> {
   return { tokenPresent, inGitRepo };
 }
 
-async function resolveGitHubPRPrerequisites(
+function resolveGitHubPRPrerequisites(
   probeResult: unknown,
-): Promise<GitHubPRPrerequisites> {
-  if (probeResult === undefined) return getGitHubPRPrerequisites();
-  const parsed = GitHubPRPrerequisitesSchema.safeParse(probeResult);
-  return parsed.success ? parsed.data : getGitHubPRPrerequisites();
+): GitHubPRPrerequisites | Promise<GitHubPRPrerequisites> {
+  // The probe runs in-process and its result is handed straight back here, so
+  // the shape is structurally guaranteed; only a thrown probe (probeResult
+  // undefined) needs the re-probe fallback.
+  return probeResult === undefined
+    ? getGitHubPRPrerequisites()
+    : (probeResult as GitHubPRPrerequisites);
 }
 
 async function probeTexraCli(): Promise<boolean> {
@@ -191,17 +190,17 @@ async function probeTexraCli(): Promise<boolean> {
   return checkToolInstalled(TEXRA_LOCAL_CLI_CHECK, false);
 }
 
-const Lean4PrerequisitesSchema = z.object({
-  extensionAvailable: z.boolean(),
-  lakeAvailable: z.boolean(),
-});
-type Lean4Prerequisites = z.infer<typeof Lean4PrerequisitesSchema>;
+interface Lean4Prerequisites {
+  extensionAvailable: boolean;
+  lakeAvailable: boolean;
+}
 
 function resolveLean4Prerequisites(probeResult: unknown): Lean4Prerequisites {
-  const parsed = Lean4PrerequisitesSchema.safeParse(probeResult);
-  return parsed.success
-    ? parsed.data
-    : { extensionAvailable: false, lakeAvailable: false };
+  // In-process probe shape is structurally guaranteed; only a missing/absent
+  // probe (probeResult undefined) falls back to the not-detected defaults.
+  return probeResult === undefined
+    ? { extensionAvailable: false, lakeAvailable: false }
+    : (probeResult as Lean4Prerequisites);
 }
 
 /** True when an SDK import failure means the package simply isn't installed. */
@@ -215,7 +214,7 @@ function isMissingPackageError(message: string): boolean {
 
 /** Appended to install hints when running under WSL, where side matters. */
 function wslInstallHint(): string {
-  return isWSL() ? ' (run this inside WSL, not on the Windows side)' : '';
+  return isWSL ? ' (run this inside WSL, not on the Windows side)' : '';
 }
 
 /**

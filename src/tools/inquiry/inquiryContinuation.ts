@@ -18,16 +18,13 @@ import {
   type SubmitFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
 import {
-  getRunContextSession,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
-import {
   defaultSession,
+  resolveEmitSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type {
-  ExternalInquiryThreadId,
-  ExternalInquiryThreadSummary,
+  InquiryThreadId,
+  InquiryThreadSummary,
   InquiryThreadUpdatedEvent,
   InquiryResumeOutcome,
   StreamTabId,
@@ -49,7 +46,7 @@ export type InjectionOutcome = 'sent' | 'queued' | 'resumed' | 'archived';
 const QUESTION_TRUNCATION = 400;
 const ANSWER_TRUNCATION = 2000;
 
-function formatStillOpen(threads: ExternalInquiryThreadSummary[]): string[] {
+function formatStillOpen(threads: InquiryThreadSummary[]): string[] {
   if (!threads.length) return [];
   const lines = ['', 'Still open on this stream:'];
   for (const t of threads) {
@@ -63,10 +60,10 @@ function formatStillOpen(threads: ExternalInquiryThreadSummary[]): string[] {
 
 export function buildContinuationText(params: {
   event: 'answered' | 'dropped';
-  threadId: ExternalInquiryThreadId;
+  threadId: InquiryThreadId;
   question: string;
   answer?: string;
-  stillOpen: ExternalInquiryThreadSummary[];
+  stillOpen: InquiryThreadSummary[];
 }): string {
   const { event, threadId, question, answer, stillOpen } = params;
   const lines: string[] = [];
@@ -110,15 +107,14 @@ export function buildContinuationText(params: {
 }
 
 async function emitInquiryThreadUpdate(
-  threadId: ExternalInquiryThreadId,
+  threadId: InquiryThreadId,
   extra: { resumeOutcome: InquiryResumeOutcome },
   session?: SessionHandle,
 ): Promise<void> {
   const summary = await getThreadSummary(threadId);
   if (!summary) return;
   const payload: InquiryThreadUpdatedEvent = { ...summary, ...extra };
-  const owner = session ?? getRunContextSession(tryUseRunContext());
-  (owner?.events ? owner : defaultSession()).events.emit({
+  (resolveEmitSession(session) ?? defaultSession()).events.emit({
     scope: 'session',
     event: { type: 'inquiryThreadUpdated', payload },
   });
@@ -140,7 +136,7 @@ function mapSubmissionToInquiryOutcome(
 async function deliverContinuation(params: {
   parentStreamId: StreamTabId;
   text: string;
-  threadId: ExternalInquiryThreadId;
+  threadId: InquiryThreadId;
   session?: SessionHandle;
 }): Promise<InjectionOutcome> {
   const result = await submitFollowUp(params.parentStreamId, params.text, {
@@ -179,7 +175,7 @@ async function deliverContinuation(params: {
  */
 async function injectContinuation(
   event: 'answered' | 'dropped',
-  threadId: ExternalInquiryThreadId,
+  threadId: InquiryThreadId,
   manifestHint?: ExternalInquiryThreadManifest,
   session?: SessionHandle,
 ): Promise<InjectionOutcome> {
@@ -224,7 +220,7 @@ async function injectContinuation(
 }
 
 export function injectContinuationForAnsweredThread(
-  threadId: ExternalInquiryThreadId,
+  threadId: InquiryThreadId,
   /**
    * Manifest snapshot from the writer (action handler) — pass it to
    * avoid a re-read race: a concurrent follow-up `ask` from another
@@ -238,7 +234,7 @@ export function injectContinuationForAnsweredThread(
 }
 
 export function injectContinuationForDroppedThread(
-  threadId: ExternalInquiryThreadId,
+  threadId: InquiryThreadId,
   /**
    * Manifest snapshot from `markDropped` — same race-avoidance pattern
    * as the answered path: a concurrent follow-up `ask` on the same

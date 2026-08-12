@@ -290,6 +290,13 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   const glmCodingPlanRateLimitMessage = isGlmCodingPlanRateLimit(rawErrorBody)
     ? describeGlmCodingPlanRateLimit()
     : undefined;
+  // Prefer the actionable subscription-limit message over the raw
+  // `HTTP 429 – The usage limit has been reached`.
+  const subscriptionLimitMessage =
+    chatgptSubscriptionMessage ??
+    kimiCodeSubscriptionMessage ??
+    glmCodingPlanMessage ??
+    glmCodingPlanRateLimitMessage;
   // Priority mirrors the pre-refactor OR order: ChatGPT-subscription and
   // upstream-credit are independently detected first; relay monthly limit
   // (by body or message) is the remaining exhaustion condition. Explicit SDK
@@ -380,14 +387,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     return {
       ...sdkMatch,
       ...classification,
-      // Prefer the actionable subscription-limit message over the raw
-      // `HTTP 429 – The usage limit has been reached`.
-      message:
-        chatgptSubscriptionMessage ??
-        kimiCodeSubscriptionMessage ??
-        glmCodingPlanMessage ??
-        glmCodingPlanRateLimitMessage ??
-        sdkMatch.message,
+      message: subscriptionLimitMessage ?? sdkMatch.message,
       // Credential-exhausted errors keep userRetryable=true so the retry
       // panel surfaces with the "Use your own API key" affordance, but
       // shouldAutoRetry separately suppresses auto-retry for them — a
@@ -416,12 +416,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
 
   return {
     ...classification,
-    message:
-      chatgptSubscriptionMessage ??
-      kimiCodeSubscriptionMessage ??
-      glmCodingPlanMessage ??
-      glmCodingPlanRateLimitMessage ??
-      message,
+    message: subscriptionLimitMessage ?? message,
     statusCode,
     statusText,
     provider,

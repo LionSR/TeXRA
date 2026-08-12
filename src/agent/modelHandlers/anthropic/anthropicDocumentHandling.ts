@@ -124,6 +124,44 @@ interface ReplaceDocumentUploadsResult {
 }
 
 /**
+ * Counts a PDF's pages, degrading to 0 with a caller-supplied warning when
+ * the buffer can't be parsed. An unreadable PDF still uploads; Anthropic
+ * enforces its own page limit server-side, so a missing local count only
+ * costs the token estimate / budget check. The warning is surfaced so the
+ * degraded estimate is attributable.
+ */
+export async function countPdfPagesWithDegrade(
+  buffer: Buffer,
+  onCountFailure: (err: unknown) => void,
+): Promise<number> {
+  try {
+    return await countPdfPagesInBuffer(buffer);
+  } catch (err) {
+    onCountFailure(err);
+    return 0;
+  }
+}
+
+/**
+ * Uploads a buffer as a file to the Anthropic Files API, returning the file
+ * id. Shared by the message-document replacement and tool-attachment upload
+ * pipelines so the upload call (beta header included) lives in exactly one
+ * place instead of drifting across two copies.
+ */
+export async function uploadFileToFilesApi(
+  client: Anthropic,
+  buffer: Buffer,
+  filename: string,
+  mediaType: string,
+): Promise<string> {
+  const uploadedFile = await client.beta.files.upload({
+    file: await toFile(buffer, filename, { type: mediaType }),
+    betas: [FILES_API_BETA],
+  });
+  return uploadedFile.id;
+}
+
+/**
  * Replaces base64 PDF document data with Files API uploads in the message array.
  * Returns whether any uploads occurred and whether file references exist.
  */
@@ -168,33 +206,27 @@ export async function replaceDocumentDataWithUploads(
     try {
       buffer = Buffer.from(base64Data, 'base64');
 
-      // An unreadable PDF still uploads; Anthropic enforces its own page
-      // limit server-side, so a missing local count only costs the token
-      // estimate. Logged so the degraded estimate is attributable.
-      let pageCount = 0;
-      try {
-        pageCount = await countPdfPagesInBuffer(buffer);
-      } catch (err) {
+      const pageCount = await countPdfPagesWithDegrade(buffer, (err) =>
         logger.warn(
           CHANNEL,
           `Unable to count pages in ${sanitizedFilename}; uploading without a page count: ${toErrorMessage(err)}`,
-        );
-      }
+        ),
+      );
 
-      const uploadedFile = await client.beta.files.upload({
-        file: await toFile(buffer, sanitizedFilename, {
-          type: mediaType,
-        }),
-        betas: [FILES_API_BETA],
-      });
+      const fileId = await uploadFileToFilesApi(
+        client,
+        buffer,
+        sanitizedFilename,
+        mediaType,
+      );
 
       uploadedSource = {
         type: 'file',
-        file_id: uploadedFile.id,
+        file_id: fileId,
       } as BetaRequestDocumentBlock['source'];
 
       if (pageCount > 0) {
-        onPageCount(uploadedFile.id, pageCount);
+        onPageCount(fileId, pageCount);
       }
     } finally {
       buffer = wipeBuffer(buffer);

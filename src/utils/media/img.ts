@@ -120,18 +120,16 @@ export async function getBase64EncodedMedia(
 
   const mimeType = getMimeType(absolutePath);
   let tempPath: string | null = null;
-  let pathToRead = absolutePath;
 
   try {
     if (mimeType?.startsWith('image/')) {
       const resizedPath = await resizeImageIfNeeded(absolutePath);
       if (resizedPath !== absolutePath) {
         tempPath = resizedPath;
-        pathToRead = resizedPath;
       }
     }
 
-    const mediaBytes = AbsoluteFS.readBytesSync(pathToRead);
+    const mediaBytes = AbsoluteFS.readBytesSync(tempPath ?? absolutePath);
     if (mediaBytes.length === 0) {
       throw new Error(`File is empty: ${mediaPath}`);
     }

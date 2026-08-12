@@ -43,7 +43,7 @@ export class JsonRpcConnection {
   }
 
   onServerRequest(method: string, handler: ServerRequestHandler): void {
-    this.conn.onRequest(method, (params: unknown) => handler(params));
+    this.conn.onRequest(method, handler);
   }
 
   notify(method: string, params?: unknown): void {

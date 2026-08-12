@@ -29,6 +29,7 @@ import {
   renderTeamOptions,
 } from '@shared/utils/selectTemplates';
 import { getTextareaValue } from '@shared/utils/textarea';
+import { detectBrowserPlatform } from '@shared/commands/accelerators';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - main view
@@ -353,9 +354,7 @@ export class InstructionPanel extends LitElement {
    * (cmd+option+e on macOS, ctrl+alt+e elsewhere).
    */
   private get executeShortcutLabel(): string {
-    const isMac =
-      typeof navigator !== 'undefined' &&
-      /Mac|iPhone|iPod|iPad/.test(navigator.platform || '');
+    const isMac = detectBrowserPlatform() === 'darwin';
     return isMac ? '⌘⌥E' : 'Ctrl+Alt+E';
   }
 
@@ -397,14 +396,14 @@ export class InstructionPanel extends LitElement {
       session.sessionType === SESSION_TYPES.WORKFLOW
         ? {
             id: 'workflowAgent',
-            sessionType: 'workflow',
+            sessionType: SESSION_TYPES.WORKFLOW,
             ariaLabel: 'Workflow agent',
             options: session.agentOptions.workflow,
             value: session.agent.workflow,
           }
         : {
             id: 'toolUseAgent',
-            sessionType: 'toolUse',
+            sessionType: SESSION_TYPES.TOOL_USE,
             ariaLabel: 'Tool-use agent',
             options: session.agentOptions.toolUse,
             value: session.agent.toolUse,
@@ -568,7 +567,7 @@ export class InstructionPanel extends LitElement {
           <wa-radio
             id="sessionTypeToolUse"
             value="toolUse"
-            data-session-type="toolUse"
+            data-session-type=${SESSION_TYPES.TOOL_USE}
             appearance="default"
           >
             Interactive
@@ -576,7 +575,7 @@ export class InstructionPanel extends LitElement {
           <wa-radio
             id="sessionTypeWorkflow"
             value="workflow"
-            data-session-type="workflow"
+            data-session-type=${SESSION_TYPES.WORKFLOW}
             appearance="default"
           >
             Workflow

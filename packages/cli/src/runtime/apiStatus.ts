@@ -6,7 +6,7 @@ import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
 } from '@shared/schemas';
-import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import { providerDisplayName } from '@shared/constants/providers';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
@@ -42,6 +42,14 @@ interface SubscriptionUsageReader {
 
 const SubscriptionUsage = new SubscriptionUsageService();
 
+/** Prefix of the signed-in auth status line — the TUI's launcher compacts the
+ *  auth line by truncating the trailing segments behind this prefix. */
+export const AUTH_SIGNED_IN_LINE_PREFIX = 'auth: signed in';
+
+/** Separator between the segments that make up an auth status line (account,
+ *  tier, usage). The launcher truncates at this to keep the status line short. */
+export const AUTH_STATUS_SEGMENT_SEPARATOR = ' · ';
+
 export function formatRelayUsageStatus(summary: RelayUsageSummary): string {
   const used = formatPercent(summary.usagePercent, 1);
   const remaining = formatPercent(Math.max(0, 100 - summary.usagePercent), 1);
@@ -59,7 +67,7 @@ export function formatCliAuthStatusLine(
     profile.accountLabel,
   );
   if (profile.authenticated && profile.tier) {
-    return `${account} · tier: ${profile.tier}`;
+    return `${account}${AUTH_STATUS_SEGMENT_SEPARATOR}tier: ${profile.tier}`;
   }
   return account;
 }
@@ -117,7 +125,7 @@ export function formatPersonalApiKeysLine(
 ): string | undefined {
   if (personalKeyProviders.length === 0) return undefined;
   const providers = personalKeyProviders
-    .map((provider) => PROVIDER_DISPLAY_NAMES[provider] ?? provider)
+    .map((provider) => providerDisplayName(provider))
     .join(', ');
   return `${label}: ${providers}`;
 }
@@ -206,7 +214,7 @@ export async function loadCliApiStatus(
   if (mode === 'included') {
     const usage = await loadIncludedUsageLine(profile);
     if (usage) {
-      authLine = `${authLine} · ${usage}`;
+      authLine = `${authLine}${AUTH_STATUS_SEGMENT_SEPARATOR}${usage}`;
     }
   }
 

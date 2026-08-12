@@ -1,49 +1,29 @@
 import * as vscode from 'vscode';
 
-import { AUTH_COMMANDS } from '@auth/constants';
 import { getAuthStatus } from '@commands/auth/authCommands';
-import { GlobalStateKey, globalSM } from '@common/state';
 import { BaseViewMessageHandler } from '@common/webview';
 import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
-import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import { RecordingManager } from '@frontend/media/RecordingManager';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { isDebugModeEnabled } from '@logger/logUtils';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchMainViewInbound,
-  GETTING_STARTED_COMMANDS,
   MainViewInboundHandlerRegistry,
 } from '@shared/schemas';
-import {
-  setFirstRunDone,
-  setOnboardingDeclined,
-} from '@shared/state/onboardingState';
 import { getConfig } from '@utils/config/configUtils';
-import {
-  checkCoreDependencies,
-  getToolDocsCommand,
-} from '@utils/system/toolUtils';
-import { getProviderKeyUrl } from '@utils/config/providerConfig';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { DiffManager } from './managers/DiffManager';
-import * as executionHandlers from './managers/executionHandlers';
 import { FileManager } from './managers/FileManager';
 import { InstructionManager } from './managers/InstructionManager';
-
-export interface MainViewOnboardingHooks {
-  /**
-   * Recompute and re-push the onboarding funnel (owned by
-   * MainViewProvider). Called on webview ready and after welcome-card
-   * actions that change the funnel inputs (skip, API-key entry).
-   */
-  refreshOnboardingFunnel(): Promise<void>;
-}
+import { createBannerHandlers } from './slices/bannerSlice';
+import { createChatHandlers } from './slices/chatSlice';
+import { createCommonHandlers } from './slices/commonSlice';
+import { createDocumentHandlers } from './slices/documentSlice';
+import { createOnboardingHandlers } from './slices/onboardingSlice';
+import { createSessionHandlers } from './slices/sessionSlice';
+import type { MainViewInboundHost } from './mainViewInboundContext';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
@@ -55,7 +35,12 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    private readonly onboarding?: MainViewOnboardingHooks,
+    private readonly refreshOnboardingFunnel?: () => Promise<void>,
+    /**
+     * Invoked as soon as the launcher reports WEBVIEW_READY — the correct
+     * moment to deliver queued STATE_RESTORE messages after an HTML swap.
+     */
+    private readonly onWebviewReady?: () => void,
   ) {
     super('MainView');
     this.recordingManager = new RecordingManager({
@@ -82,6 +67,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       getConfig,
       loadOptions,
       getAuthStatus,
+      globalState: context.globalState,
     });
     this.handlerRegistry = this.createHandlerRegistry();
   }
@@ -105,283 +91,39 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     this.diffManager.attachWebview(webviewView);
   }
 
+  /**
+   * Composed inbound registry. Domain slices live in ./slices/ (same shape as
+   * the webview's frontend/slices/) and each own a subset of the inbound
+   * commands; this method only binds them to the host context and spreads them.
+   */
   private createHandlerRegistry(): MainViewInboundHandlerRegistry {
+    const host: MainViewInboundHost = {
+      viewName: this.viewName,
+      channel: this.channel,
+      logger: this.logger,
+      context: this.context,
+      refreshOnboardingFunnel: this.refreshOnboardingFunnel,
+      fileManager: this.fileManager,
+      diffManager: this.diffManager,
+      instructionManager: this.instructionManager,
+      recordingManager: this.recordingManager,
+      runWithActiveView: (fn) => this.runWithActiveView(fn),
+      getActiveView: () => this.getActiveView(),
+      postToActiveView: (message) => this.postToActiveView(message),
+      handleTheme: (m, view) => this.handleTheme(m, view),
+      handleDebugMode: (m, view) => this.handleDebugMode(m, view),
+      handleWebviewReady: () => this.handleWebviewReady(),
+      handleThemeRequest: () => this.handleThemeRequest(),
+      handleDebugModeRequest: () => this.handleDebugModeRequest(),
+      refreshAfterCredentialChange: () => this.refreshAfterCredentialChange(),
+    };
     return {
-      // Common messages
-      [MAIN_VIEW_COMMANDS.THEME_SET]: (m) =>
-        this.runWithActiveView((view) => this.handleTheme(m, view)),
-      [MAIN_VIEW_COMMANDS.DEBUG_MODE_SET]: (m) =>
-        this.runWithActiveView((view) => this.handleDebugMode(m, view)),
-      [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: () => this.handleWebviewReady(),
-      [MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: (m) => {
-        vscode.window.showInformationMessage(m.text);
-        this.logger.debug(this.channel, `Information message: ${m.text}`);
-      },
-      [MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION]: (m) =>
-        showInstructionWithSuppress(m.key, m.text),
-      [MAIN_VIEW_COMMANDS.GET_THEME]: () => this.handleThemeRequest(),
-      [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]: () => this.handleDebugModeRequest(),
-      [COMMON_COMMANDS.SWITCH_VIEW]: async (m) => {
-        if (m.view === 'dashboard') {
-          await safeExecuteCommand('texra.showDashboard', [], this.viewName);
-          return;
-        }
-        if (m.view === 'main') {
-          await safeExecuteCommand('texra.showMainView', [], this.viewName);
-          return;
-        }
-        if (m.openInEditor) {
-          await safeExecuteCommand(
-            'texra.openProgressViewInTab',
-            [],
-            this.viewName,
-          );
-          return;
-        }
-        await safeExecuteCommand(
-          'texra.showProgressView',
-          [{ inPlace: true }],
-          this.viewName,
-        );
-      },
-
-      [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: () =>
-        safeExecuteCommand('texra.showDashboard', [], this.viewName),
-      [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: (m) =>
-        safeExecuteCommand(
-          'texra.showAgents',
-          [m.sessionType === 'toolUse' ? 'toolUse' : undefined],
-          this.viewName,
-        ),
-      [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: () =>
-        safeExecuteCommand('texra.showModels', [], this.viewName),
-      [MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS]: () =>
-        safeExecuteCommand('texra.showMultiAgent', [], this.viewName),
-      [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
-        if (!m.customDirSet) {
-          await safeExecuteCommand('texra.showAgents', [], this.viewName);
-          return;
-        }
-        const dir = await agentDirectories.custom();
-        if (dir) {
-          await vscode.commands.executeCommand(
-            'revealFileInOS',
-            vscode.Uri.file(dir),
-          );
-        }
-      },
-      [MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS]: () =>
-        safeExecuteCommand('texra.openDoc', ['custom-agents'], this.viewName),
-      [MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS]: () =>
-        safeExecuteCommand('texra.openDoc', ['installation'], this.viewName),
-
-      [MAIN_VIEW_COMMANDS.EXECUTE]: (m) => executionHandlers.handleExecute(m),
-      [MAIN_VIEW_COMMANDS.MERGE]: (m) =>
-        executionHandlers.handleFileOperation(m),
-      [MAIN_VIEW_COMMANDS.COMPARE]: (m) =>
-        executionHandlers.handleFileOperation(m),
-      [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: (m) =>
-        executionHandlers.handleFileOperation(m),
-
-      [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: () =>
-        this.fileManager.handleEditedFileSelection(),
-      [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: (m) =>
-        this.fileManager.handleSelectMultipleFiles(m),
-
-      [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: (m) =>
-        this.fileManager.handleRequestEditedFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: (m) =>
-        this.fileManager.handleRequestBaseFile(m),
-
-      [MAIN_VIEW_COMMANDS.GET_CURRENT_FILE]: (m) =>
-        this.fileManager.handleGetCurrentFile(m),
-      [MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES]: () =>
-        this.fileManager.handleRefreshAllFiles(),
-      [MAIN_VIEW_COMMANDS.ADD_OPENED_FILES]: (m) =>
-        this.fileManager.handleAddOpenedFiles(m.fileType),
-      [MAIN_VIEW_COMMANDS.ATTACH_DROPPED_FILES]: (m) =>
-        this.fileManager.handleAttachDroppedFiles(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES]: (m) =>
-        this.fileManager.handleUpdateFiles(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_CONTEXT_FILES]: (m) =>
-        this.fileManager.handleUpdateFiles(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES]: (m) =>
-        this.fileManager.handleUpdateFiles(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES]: (m) =>
-        this.fileManager.handleUpdateFiles(m),
-
-      [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: (m) =>
-        this.instructionManager.handlePolishInstructionText(m),
-      [MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE]: (m) =>
-        this.instructionManager.handleClipboardImage(m),
-
-      [MAIN_VIEW_COMMANDS.START_RECORDING]: () =>
-        this.runWithActiveView((view) => this.recordingManager.start(view)),
-      [MAIN_VIEW_COMMANDS.STOP_RECORDING]: () =>
-        this.runWithActiveView((view) => this.recordingManager.stop(view)),
-
-      [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: async () => {
-        await safeExecuteCommand('texra.setApiKey');
-        // SecretManager has no key-changed event, so the set-key flow's
-        // completion is the explicit refresh point for the onboarding
-        // funnel (welcome card → API-key entry → State 1).
-        await this.onboarding?.refreshOnboardingFunnel();
-      },
-      [MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY]: (m) => {
-        if (!m.provider) return;
-        return safeExecuteCommand(
-          'texra.setApiKey',
-          [m.provider],
-          this.viewName,
-        );
-      },
-      [MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL]: async (m) => {
-        const url = m.provider ? getProviderKeyUrl(m.provider) : undefined;
-        if (url) {
-          await vscode.env.openExternal(vscode.Uri.parse(url));
-        }
-      },
-      [MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE]: async () => {
-        await vscode.env.openExternal(
-          vscode.Uri.parse(
-            'https://texra.ai/guide/installation#setting-up-api-keys',
-          ),
-        );
-      },
-
-      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (m) => this.postToActiveView(m),
-      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: (m) => this.postToActiveView(m),
-      [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (m) =>
-        this.postToActiveView(m),
-      [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: (m) =>
-        this.postToActiveView(m),
-      [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (m) =>
-        this.postToActiveView(m),
-      [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: (m) =>
-        this.postToActiveView(m),
-      [MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE]: (m) => {
-        const docsCommand = getToolDocsCommand(m.tool);
-        if (!docsCommand) return;
-
-        const [command, ...args] = docsCommand.split(',');
-        return safeExecuteCommand(command, args, this.viewName);
-      },
-      [MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES]: async () => {
-        const view = this.getActiveView();
-        if (!view) {
-          return;
-        }
-        const missingTools = await checkCoreDependencies(true);
-        view.webview.postMessage(
-          missingTools.length === 0
-            ? { command: MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER }
-            : {
-                command: MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
-                missingTools: [...missingTools],
-              },
-        );
-      },
-      [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: (m) => this.postToActiveView(m),
-      [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: (m) => this.postToActiveView(m),
-      [MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER]: async () => {
-        try {
-          const authenticated = await vscode.commands.executeCommand<boolean>(
-            AUTH_COMMANDS.SIGN_IN,
-          );
-          if (authenticated) {
-            this.postToActiveView({
-              command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
-            });
-            await this.refreshAfterCredentialChange();
-          }
-        } catch (error) {
-          this.logger.debug(
-            this.channel,
-            `Sign-in from banner failed: ${toErrorMessage(error)}`,
-          );
-        }
-      },
-      [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: async () => {
-        await globalSM.update(GlobalStateKey.LOGIN_BANNER_DISMISSED, true);
-      },
-      [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: async () => {
-        await globalSM.update(
-          GlobalStateKey.ORCHESTRATOR_BANNER_DISMISSED,
-          true,
-        );
-      },
-      [MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION]: async (m) => {
-        await safeExecuteCommand(
-          GETTING_STARTED_COMMANDS[m.action],
-          [],
-          this.viewName,
-        );
-        // runSetup changes the onboarding funnel inputs, so re-derive the
-        // card state once the setup assistant returns.
-        if (m.action === 'runSetup') {
-          await this.onboarding?.refreshOnboardingFunnel();
-        }
-      },
-      [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP]: async () => {
-        // Persist the user-scoped declined flag (same flag the CLI picker
-        // writes), then re-derive so the card disappears and the normal
-        // launcher renders.
-        await setOnboardingDeclined(this.context.globalState, true);
-        await this.onboarding?.refreshOnboardingFunnel();
-      },
-      [MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT]: async () => {
-        await signInWithChatGptSubscription(this.channel);
-        await this.refreshAfterCredentialChange();
-      },
-      [MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP]: async () => {
-        await safeExecuteCommand(
-          GETTING_STARTED_COMMANDS.runSetup,
-          [],
-          this.viewName,
-        );
-        await this.onboarding?.refreshOnboardingFunnel();
-      },
-      [MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED]: () =>
-        safeExecuteCommand(
-          GETTING_STARTED_COMMANDS.openWalkthrough,
-          [],
-          this.viewName,
-        ),
-      [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP]: async () => {
-        await setFirstRunDone(this.context.globalState, true);
-        await this.onboarding?.refreshOnboardingFunnel();
-      },
-
-      [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: (m) =>
-        this.diffManager.postRecentCommits(m.notifyWhenEmpty ?? undefined),
-      [MAIN_VIEW_COMMANDS.REFRESH_COMMITS]: () =>
-        this.diffManager.postRecentCommits(),
-      [MAIN_VIEW_COMMANDS.LATEXDIFF]: (m) =>
-        this.diffManager.handleLatexdiff(m),
-      [MAIN_VIEW_COMMANDS.LATEXDIFFVC]: (m) =>
-        this.diffManager.handleLatexdiffvc(m),
-      [MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC]: (m) =>
-        this.diffManager.handleLatexdiffvcOperation(m),
-      [MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC]: (m) =>
-        this.diffManager.handleLatexdiffvcOperation(m),
-
-      [MAIN_VIEW_COMMANDS.CLEAN_OUTPUT]: (m) =>
-        executionHandlers.handleHousekeeping(m),
-      [MAIN_VIEW_COMMANDS.CLEAN_BUILD]: (m) =>
-        executionHandlers.handleHousekeeping(m),
-      [MAIN_VIEW_COMMANDS.INDENT_TEX]: (m) =>
-        executionHandlers.handleHousekeeping(m),
-      [MAIN_VIEW_COMMANDS.PACK_SINGLE]: (m) =>
-        executionHandlers.handleSingleOperation(m),
-      [MAIN_VIEW_COMMANDS.CLEAN_SINGLE]: (m) =>
-        executionHandlers.handleSingleOperation(m),
-      [MAIN_VIEW_COMMANDS.PACK_MULTIPLE]: (m) =>
-        executionHandlers.handleMultipleOperation(m),
-      [MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE]: (m) =>
-        executionHandlers.handleMultipleOperation(m),
-
-      [MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY]: () =>
-        safeExecuteCommand('texra.showAgentHistory', [], this.viewName),
+      ...createCommonHandlers(host),
+      ...createBannerHandlers(host),
+      ...createSessionHandlers(host),
+      ...createDocumentHandlers(host),
+      ...createChatHandlers(host),
+      ...createOnboardingHandlers(host),
     };
   }
 
@@ -419,8 +161,37 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     await Promise.all([
       vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
       vscode.commands.executeCommand('texra.refreshAllOptions'),
-      this.onboarding?.refreshOnboardingFunnel(),
+      this.refreshOnboardingFunnel?.(),
     ]);
+  }
+
+  /** Push the current theme into the webview on request. */
+  protected async handleTheme(
+    message: { theme?: string },
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    if (!message?.theme) {
+      this.logger.warn(this.channel, 'Invalid theme message', {
+        data: message,
+      });
+      return;
+    }
+
+    webviewView.webview.postMessage({
+      command: COMMON_COMMANDS.THEME_SET,
+      theme: message.theme,
+    });
+  }
+
+  /** Push the current debug mode into the webview on request. */
+  protected async handleDebugMode(
+    message: { debugMode?: boolean },
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    webviewView.webview.postMessage({
+      command: COMMON_COMMANDS.DEBUG_MODE_SET,
+      debugMode: message.debugMode,
+    });
   }
 
   protected async handleWebviewReady(): Promise<void> {
@@ -428,7 +199,10 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     if (!webviewView) {
       return;
     }
-    await super.handleWebviewReady(undefined, webviewView);
+    this.logger.debug(this.channel, 'Webview ready signal received');
+    // Flush queued restores only after the launcher document has installed its
+    // message listener. Posting during switchMode's HTML swap can drop them.
+    this.onWebviewReady?.();
     this.postWorkspaceRoots(webviewView);
     webviewView.webview.postMessage(
       this.startupController.getOrchestratorBannerMessage(),
@@ -454,7 +228,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     // ready — including the replays MainViewProvider.refreshOptionsAndView
     // issues from its credential-changed hooks — so the provider sees the
     // in-session State 0 → 1 transition.
-    await this.onboarding?.refreshOnboardingFunnel();
+    await this.refreshOnboardingFunnel?.();
   }
 
   /** Push the open workspace folders used by the launcher's root picker. */

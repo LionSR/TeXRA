@@ -16,7 +16,10 @@ import type {
   ToolEditPreview,
   ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
-import { VscodeDiffViewHost } from '@frontend/approval/VscodeDiffViewHost';
+import {
+  tabInputFileUri,
+  VscodeDiffViewHost,
+} from '@frontend/approval/VscodeDiffViewHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { DiffSession, DiffViewHost } from '@hosts/uiHosts';
@@ -169,14 +172,8 @@ class VscodeToolEditPreview implements ToolEditPreview {
         return;
       }
       const wasClosed = event.closed.some((tab) => {
-        const input = tab.input;
-        if (input instanceof vscode.TabInputTextDiff) {
-          return input.modified.toString() === proposedUri;
-        }
-        if (input instanceof vscode.TabInputText) {
-          return input.uri.toString() === proposedUri;
-        }
-        return false;
+        const uri = tabInputFileUri(tab);
+        return uri !== null && uri.toString() === proposedUri;
       });
       if (wasClosed) {
         this.tabCloseListener?.dispose();

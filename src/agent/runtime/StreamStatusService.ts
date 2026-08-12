@@ -225,27 +225,17 @@ export class StreamStatusMachine {
     if (this.transition(stream, to, cause, options)) {
       return true;
     }
-    if (current === undefined) {
+    if (current === undefined || current === STREAM_PHASE.WAITING) {
+      const resumeCause =
+        current === undefined
+          ? STREAM_TRANSITION_CAUSE.LIFECYCLE
+          : STREAM_TRANSITION_CAUSE.RESUME;
       return (
-        this.transition(
-          stream,
-          STREAM_PHASE.RUNNING,
-          STREAM_TRANSITION_CAUSE.LIFECYCLE,
-          options,
-        ) && this.transition(stream, to, cause, options)
+        this.transition(stream, STREAM_PHASE.RUNNING, resumeCause, options) &&
+        this.transition(stream, to, cause, options)
       );
     }
-    if (current !== STREAM_PHASE.WAITING) {
-      return false;
-    }
-    return (
-      this.transition(
-        stream,
-        STREAM_PHASE.RUNNING,
-        STREAM_TRANSITION_CAUSE.RESUME,
-        options,
-      ) && this.transition(stream, to, cause, options)
-    );
+    return false;
   }
 
   clearStream(stream: StreamTabId): void {

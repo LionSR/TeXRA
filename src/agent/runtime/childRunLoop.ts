@@ -28,7 +28,10 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
+import {
+  finalizeRunTerminal,
+  type RunTerminalPersistence,
+} from '@agent/runtime/AgentRunLifecycle';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import type {
   AgentExecutionHandle,
@@ -55,10 +58,6 @@ import {
 } from '@shared/schemas';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
-import type {
-  ChildStream,
-  ChildStreamOutcome,
-} from '@tools/delegation/childStream';
 import { aggregateError, formatDuration } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -78,6 +77,46 @@ type TurnUsage = { input_tokens?: number; output_tokens?: number };
 export interface ChildRunPorts {
   notify(update: SubagentProgressUpdate): void;
   recordCost(totalCostUsd: number | undefined): void;
+}
+
+/**
+ * A child run's reported terminal outcome. A report, not a verdict: the
+ * stream phase owns the terminal outcome, so an explicit stop/kill that
+ * already landed CANCELLED outranks a non-zero exit this reports.
+ */
+type ChildRunOutcome =
+  | { kind: 'completed' }
+  | { kind: 'failed'; error?: unknown; errorMessage?: string }
+  | { kind: 'cancelled' };
+
+/**
+ * Presentation/lifecycle port for agent-CLI child streams. The concrete
+ * tool-layer stream satisfies this structurally, but the generic driver
+ * declares the handful of hooks it needs here so it never imports a concrete
+ * tools type. Native strategies have no stream tab of their own and omit it
+ * entirely — `executeAgent`/`resumeToolUseFromResumeData` own handle creation,
+ * tracking, and terminal finalization for every turn via `runFlowWithLifecycle`.
+ */
+interface ChildStreamPort {
+  readonly logger: AgentTrace;
+  /** The child loop is idle and waiting for the next follow-up instruction. */
+  waitForInput(): void;
+  /** The child loop has started processing a turn. */
+  beginTurn(): void;
+  /** The active turn failed; preserve explicit user stops. */
+  failTurn(): void;
+  /**
+   * Complete the child stream lifecycle through the owning execution handle.
+   * Resolves once the shared terminal finalizer has persisted, settled, and
+   * untracked.
+   */
+  finalize(options?: {
+    outcome?: ChildRunOutcome;
+    /** Session stage closed with the derived outcome (the loop's stage). */
+    stage?: Pick<StageHandle, 'end'>;
+    /** Durable execution-state action; background bash owns its richer block. */
+    persistence?: RunTerminalPersistence;
+  }): Promise<void>;
 }
 
 /**
@@ -204,7 +243,7 @@ export interface ChildRunLoopParams<TTurn> {
    * every turn via `runFlowWithLifecycle`, so there is no separate stream tab
    * for this loop to finalize.
    */
-  readonly childStream?: ChildStream;
+  readonly childStream?: ChildStreamPort;
   /**
    * The child's stream id, known deterministically upfront by every caller
    * (agent-CLI: `createChildStream`'s own id; native: `getStreamTabId` — the
@@ -911,7 +950,7 @@ export function startChildRunLoop<TTurn>(
           // CANCELLED still outranks this report, while a failure that
           // already terminalized the phase keeps its diagnosis instead of
           // publishing FAILED with no error facts at all.
-          let loopOutcome: ChildStreamOutcome;
+          let loopOutcome: ChildRunOutcome;
           if (sawTurnFailure) {
             loopOutcome = { kind: 'failed', error: lastTurnErr };
           } else if (loop.isInterrupted()) {

@@ -2,7 +2,7 @@
   "semantics": "Production statements that reach past the published '@shared/schemas' barrel into a leaf module, keyed by specifier, valued by the importing file ('(type-only)' marks an `import type` statement, so a file that splits its value and type imports contributes two distinct entries). 'forced' statements name at least one symbol the barrel does not re-export: they are a report that a leaf module is missing from the published surface, and only a NEW off-surface specifier fails the ratchet. 'gratuitous' statements could have used the barrel verbatim; their per-specifier count may not grow. Classification is computed against src/shared/schemas/index.ts at test time, so widening the barrel reclassifies statements automatically (and requires regenerating this file in the same PR). The leaf-aware published-surface snapshot preserves the exact type/value bindings used by baseline gratuitous imports, so those bindings may not contract even if their importers move. Scan covers repo-root src/ and every packages/*/src directory, excluding src/test-kernel/ and the surface interior src/shared/schemas/.",
   "surface": {
     "@shared/schemas/agent": {
-      "type": ["AgentCategory", "AgentSource", "AgentSourceType", "ByCategory"],
+      "type": ["AgentCategory", "AgentSource", "ByCategory"],
       "value": [
         "AGENT_CATEGORIES",
         "AGENT_SOURCE",
@@ -95,16 +95,12 @@
     },
     "@shared/schemas/commonViewMessages": {
       "type": ["DesktopThemeKind", "StateRestoreMessage", "Theme"],
-      "value": [
-        "CommonViewMessageSchema",
-        "DESKTOP_THEME_KIND",
-        "SetThemeMessageSchema"
-      ]
+      "value": ["CommonViewMessageSchema", "DESKTOP_THEME_KIND"]
     },
     "@shared/schemas/coreSettings": {
       "type": [],
       "value": [
-        "CLI_CORE_SETTING_CONSUMERS",
+        "CLI_CORE_SETTING_PATHS",
         "CoreSettingsShape",
         "DEFAULT_CORE_SETTINGS",
         "getCoreSettingDefault",
@@ -122,7 +118,6 @@
       "type": [
         "CurrentFileType",
         "DocumentFileType",
-        "ExtendedDocumentFileType",
         "MultipleDocumentFileType"
       ],
       "value": [
@@ -180,7 +175,7 @@
     },
     "@shared/schemas/opResults": {
       "type": ["ExecResult", "FileOpResult"],
-      "value": ["mergeRunDirAndWorkspaceResult"]
+      "value": []
     },
     "@shared/schemas/output": {
       "type": ["AcceptCopyMeta", "FileLocation", "OutputFileSummary"],
@@ -395,7 +390,6 @@
       "packages/extension/src/settingsView/frontend/components/profile/AgentSelectionPanel.ts",
       "packages/extension/src/settingsView/SettingsViewProvider.ts (type-only)",
       "packages/extension/src/webview/frontend/slices/catalogSlice.ts",
-      "packages/extension/src/webview/MainViewProvider.ts",
       "src/agent/core/definition/AgentConfig.ts",
       "src/agent/core/definition/AgentDataclass.ts",
       "src/agent/index/AgentDirectoryService.ts (type-only)",
@@ -427,7 +421,7 @@
       "src/model/ToolDefinition.ts",
       "src/shared/constants/workflowOutput.ts",
       "src/telemetry/UsageLogTypes.ts",
-      "src/tools/delegation/delegationAgentAvailability.ts (type-only)",
+      "src/tools/delegation/delegationAvailability.ts (type-only)",
       "src/tools/executionFormatters.ts (type-only)",
       "src/tools/setup/ApplyTeamTool.ts"
     ],
@@ -467,7 +461,7 @@
       "src/agent/utils/userVars.ts (type-only)",
       "src/common/teams/TeamPlan.ts (type-only)",
       "src/controllers/mainView/MainViewExecutionController.ts (type-only)",
-      "src/tools/delegation/delegationAgentAvailability.ts (type-only)",
+      "src/tools/delegation/delegationAvailability.ts (type-only)",
       "src/tools/delegation/proposalFlow.ts (type-only)"
     ],
     "@shared/schemas/agentSkills": [
@@ -484,7 +478,6 @@
     ],
     "@shared/schemas/commonViewMessages": [
       "packages/desktop/src/main/desktopViewStateIpc.ts",
-      "packages/desktop/src/renderer/main.ts",
       "packages/desktop/src/renderer/TexraDiffView.ts",
       "packages/extension/src/webview/frontend/MainApp.ts (type-only)",
       "packages/extension/src/webview/frontend/persistence.ts (type-only)",
@@ -565,13 +558,10 @@
     "@shared/schemas/opResults": [
       "packages/cli/src/runtime/gitOps.ts (type-only)",
       "packages/desktop/src/main/desktopAgentExecution.ts (type-only)",
-      "packages/extension/src/commands/housekeeping/cleanCommands.ts",
-      "packages/extension/src/commands/housekeeping/packCommands.ts",
       "src/housekeeping/clean.ts (type-only)",
       "src/housekeeping/pack.ts (type-only)",
       "src/housekeeping/runDirOps.ts (type-only)",
       "src/latex/latexdiff/diffCommandExecutor.ts (type-only)",
-      "src/tools/delegation/subagentResults.ts (type-only)",
       "src/utils/system/execUtils.ts (type-only)",
       "src/utils/system/toolUtils.ts (type-only)"
     ],
@@ -600,8 +590,7 @@
       "src/controllers/progressView/ProgressViewCommandHandlers.ts (type-only)"
     ],
     "@shared/schemas/prompts": [
-      "src/controllers/approval/ToolEditApprovalController.ts (type-only)",
-      "src/tools/approval/toolEditApproval.ts (type-only)"
+      "src/controllers/approval/ToolEditApprovalController.ts (type-only)"
     ],
     "@shared/schemas/proposalFields": [
       "packages/extension/src/progressView/frontend/components/ProposalRequestPanel.ts",
@@ -634,7 +623,6 @@
       "packages/desktop/src/main/desktopSettingsIpc.ts",
       "packages/desktop/src/main/desktopShellIpc.ts",
       "packages/desktop/src/main/desktopToolingSettingsController.ts (type-only)",
-      "packages/desktop/src/renderer/main.ts",
       "packages/desktop/src/shared/desktopCommandSurface.ts",
       "packages/extension/src/commands/extensionCommandHandlers.ts",
       "packages/extension/src/settingsView/frontend/components/history/historyItemPresentation.ts",
@@ -657,7 +645,6 @@
       "packages/extension/src/settingsView/handlers/githubSubscriptionHandlers.ts",
       "packages/extension/src/settingsView/handlers/historyHandlers.ts",
       "packages/extension/src/settingsView/handlers/latexSettingsHandlers.ts",
-      "packages/extension/src/settingsView/SettingsViewMessageHandler.ts",
       "packages/extension/src/settingsView/SettingsViewProvider.ts (type-only)",
       "src/agent/index/remoteAgentProfileData.ts (type-only)",
       "src/controllers/settingsView/HistoryMessageBuilder.ts",
@@ -681,7 +668,7 @@
     ],
     "@shared/schemas/spendingStatus": [
       "packages/extension/src/settingsView/frontend/components/profile/RelayQuotaMeter.ts",
-      "packages/extension/src/settingsView/frontend/slices/profileSlice.ts (type-only)",
+      "packages/extension/src/settingsView/frontend/slices/profileSlice.ts",
       "packages/extension/src/settingsView/frontend/tabs/AccountTab.ts (type-only)",
       "src/auth/serverKeys/ServerSideKeyService.ts (type-only)",
       "src/auth/serverKeys/TierService.ts"

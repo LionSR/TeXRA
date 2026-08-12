@@ -102,6 +102,29 @@ export function formatStreamStatusLabel(
   return STREAM_STATUS_LABELS[style][key];
 }
 
+/**
+ * One-stop label + display-key derivation for the progress-header style.
+ * `formatStreamStatusLabel(..., { style: 'progressHeader' })` and
+ * `streamStatusDisplayKey` are the same status→vocabulary lookup seen from
+ * two sides (a label and the key that drives icon/state styling), so callers
+ * that need both compute them together instead of double-parsing the status.
+ * A status with no display key (unknown/legacy vocabulary) falls back to the
+ * raw string as the label, matching `formatStreamStatusLabel`.
+ */
+export function progressHeaderStatus(
+  status: string | undefined,
+  substate?: StreamSubstate,
+): {
+  label: string | undefined;
+  displayKey: StreamStatusDisplayKey | undefined;
+} {
+  const displayKey = streamStatusDisplayKey(status, substate);
+  const label = displayKey
+    ? STREAM_STATUS_LABELS.progressHeader[displayKey]
+    : status;
+  return { label, displayKey };
+}
+
 /** Compact round/turn progress label: `r2/3` when the planned total is known
  *  (workflow runs), else `r2`. Zero-based `index` renders one-based. */
 export function formatRoundStageLabel(stage: Readonly<RoundStage>): string;

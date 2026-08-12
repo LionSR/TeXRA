@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn());
 let detachHostInteractions = (): void => {};
 
-vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
+vi.mock('@tools/inquiry/inquiryActions', () => ({
   handleExternalInquiryAction: handleExternalInquiryActionMock,
 }));
 

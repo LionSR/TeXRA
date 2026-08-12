@@ -282,23 +282,34 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       }
     }
 
-    if (issueRes.status === 200) {
-      state.issueComments.diff(issueRes.data, (c) => {
+    // Diff + emit new comments through the shared consumeCommentList (ETag
+    // slot is a no-op here — the repo poller tracks cursors, not ETags), with
+    // the bot filter applied centrally. The per-resource number-parsing gates
+    // stay in the emit closures. The seed phase for these resources lives
+    // inline in the first-tick block above.
+    this.consumeCommentList(
+      issueRes,
+      () => {},
+      state.issueComments,
+      (c) => {
         const number = parseTargetNumberFromIssueUrl(c);
         if (number === undefined) return;
-        if (shouldDropBotEvent(c.user)) return;
         this.emit(state, formatRepoIssueComment(state.slug, number, c));
-      });
-    }
+      },
+      () => state.initialized,
+    );
 
-    if (reviewRes.status === 200) {
-      state.reviewComments.diff(reviewRes.data, (c) => {
+    this.consumeCommentList(
+      reviewRes,
+      () => {},
+      state.reviewComments,
+      (c) => {
         const prNumber = parsePRNumberFromReviewCommentUrl(c.html_url);
         if (prNumber === undefined) return;
-        if (shouldDropBotEvent(c.user)) return;
         this.emit(state, formatRepoReviewComment(state.slug, prNumber, c));
-      });
-    }
+      },
+      () => state.initialized,
+    );
     // Bare APPROVED/DISMISSED reviews without comments aren't surfaced — they
     // live only on /pulls/{n}/reviews, which is per-PR. An orchestrator that
     // needs that fidelity should delegate a worker that calls

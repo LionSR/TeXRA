@@ -7,9 +7,18 @@ import { z } from 'zod';
 const ExecResultSchema = z.strictObject({
   /** Indicates whether the command succeeded */
   success: z.boolean(),
-  /** Standard output from the command, if available */
+  /**
+   * Standard output from the command, if available. Empty or whitespace-only
+   * output is normalized to `null` by execUtils.normalizeOutput, so a clean
+   * `git status --porcelain` yields `null` — consumers distinguish "no
+   * output" from "had output" via `stdout !== null`, never via truthiness of
+   * the string (which would always be true after normalization).
+   */
   stdout: z.string().nullable(),
-  /** Standard error from the command, if available */
+  /**
+   * Standard error from the command, if available. Empty or whitespace-only
+   * stderr is normalized to `null`, matching {@link ExecResult.stdout}.
+   */
   stderr: z.string().nullable(),
   /** True if the command timed out */
   timedOut: z.boolean().optional(),

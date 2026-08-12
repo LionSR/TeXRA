@@ -35,9 +35,8 @@ import {
   toToolEditResult,
 } from '@cli/runtime/approvalAdapter';
 import {
+  classifyCliRetryAction,
   isCliApiSwitchableRetry,
-  isCliChatGptSubscriptionRetry,
-  isCliCodingPlanRetry,
 } from '@cli/runtime/approval/approvalPrompts';
 import {
   denyExternalInquiryIfNoHumanInput,
@@ -72,8 +71,7 @@ import {
   prepareBashApprovalPrompt,
   setBashApprovalSessionBypass,
 } from '@tools/approval/bashApproval';
-import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
-import { filterNotNullish } from '@utils/core';
+import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 import {
   getGLMCodingPlan,
   getPreferKimiCode,
@@ -117,9 +115,12 @@ import {
 function maybeAutoSwitchRetry(
   payload: TuiRetryRequest,
 ): ApprovalDecision | undefined {
-  if (!isCliApiSwitchableRetry(payload)) return undefined;
-  if (isCliChatGptSubscriptionRetry(payload)) return undefined;
-  if (isCliCodingPlanRetry(payload)) return undefined;
+  // Only relay-exhaustion retries auto-switch; ChatGPT-subscription and
+  // coding-plan limits always require an explicit decision (see
+  // classifyCliRetryAction for the canonical precedence).
+  if (classifyCliRetryAction(payload) !== 'switch-to-personal') {
+    return undefined;
+  }
 
   const details = payload.errorDetails;
   // Upstream credit depletion means the stored direct key IS the broken
@@ -546,6 +547,47 @@ async function attemptRollback({
   }
 }
 
+/**
+ * Per-setting rollback config for {@link switchRetryToPersonalCredentials}.
+ * `writeStarted` / `needsRollback` gate each setting; `restore` re-applies the
+ * previous value and verifies it took effect (throwing when it did not).
+ */
+interface RetrySettingRollbackConfig {
+  /** Whether this attempt's write started (its per-setting flag). */
+  readonly writeStarted: boolean;
+  /** Whether the current value is still the one the failed attempt left behind. */
+  readonly needsRollback: () => boolean;
+  /** Restore the previous value and verify it took effect. */
+  readonly restore: () => Promise<void>;
+  readonly restoredInMemory: () => boolean;
+  readonly memoryRestoredContext: string;
+  readonly restoreFailedContext: string;
+}
+
+/**
+ * Roll back every setting whose failed write left an unwelcome value, in
+ * config order. A setting whose write never started, or whose value is already
+ * the previous one, is skipped WITHOUT an await: this runs while the commit
+ * queue still holds its slot, and the extra turns let a newer queued switch
+ * commit ahead of the restores below.
+ */
+async function rollbackChangedSettings(
+  configs: readonly RetrySettingRollbackConfig[],
+): Promise<Error[]> {
+  const failures: Error[] = [];
+  for (const config of configs) {
+    if (!config.writeStarted || !config.needsRollback()) continue;
+    const failure = await attemptRollback({
+      restore: config.restore,
+      restoredInMemory: config.restoredInMemory,
+      memoryRestoredContext: config.memoryRestoredContext,
+      restoreFailedContext: config.restoreFailedContext,
+    });
+    if (failure) failures.push(failure);
+  }
+  return failures;
+}
+
 async function switchRetryToPersonalCredentials(
   decision: ApprovalDecision,
   request: TuiRetryRequest,
@@ -633,114 +675,104 @@ async function switchRetryToPersonalCredentials(
           if (decision.apiMode) patchSessionMeta({ apiMode: decision.apiMode });
           return;
         } catch (error) {
-          // Each guard is evaluated after the previous restore resolved, so a
+          // Each config is evaluated after the previous restore resolved, so a
           // rollback sees the state its predecessor left behind. Skipped
           // attempts must not await: this runs while the commit queue still
           // holds its slot, and the extra turns let a newer queued switch
-          // commit ahead of the restores below.
-          const subscriptionFailure =
-            subscriptionWriteStarted && !isPreferCodexSubscription()
-              ? await attemptRollback({
-                  restore: async () => {
-                    const update = await setCliCodexSubscription(
-                      previousSubscriptionPreference,
-                    );
-                    if (update.effective !== previousSubscriptionPreference) {
-                      throw new Error(
-                        `ChatGPT subscription preference remained ${String(update.effective)}.`,
-                      );
-                    }
-                  },
-                  restoredInMemory: () =>
-                    isPreferCodexSubscription() ===
-                    previousSubscriptionPreference,
-                  memoryRestoredContext:
-                    'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed',
-                  restoreFailedContext:
-                    'Could not restore the ChatGPT subscription preference',
-                })
-              : undefined;
-          const glmCodingPlanFailure =
-            glmCodingPlanWriteStarted && !getGLMCodingPlan()
-              ? await attemptRollback({
-                  restore: async () => {
-                    await setCliGlmCodingPlan(previousGlmCodingPlan);
-                    if (getGLMCodingPlan() !== previousGlmCodingPlan) {
-                      throw new Error(
-                        `GLM Coding Plan remained ${String(getGLMCodingPlan())}.`,
-                      );
-                    }
-                  },
-                  restoredInMemory: () =>
-                    getGLMCodingPlan() === previousGlmCodingPlan,
-                  memoryRestoredContext:
-                    'The previous GLM Coding Plan setting appears restored in memory, but persistence could not be confirmed',
-                  restoreFailedContext:
-                    'Could not restore the GLM Coding Plan setting',
-                })
-              : undefined;
-          const kimiCodeFailure =
-            kimiCodeWriteStarted && !getPreferKimiCode()
-              ? await attemptRollback({
-                  restore: async () => {
-                    await setCliKimiCode(previousKimiCodePreference);
-                    if (getPreferKimiCode() !== previousKimiCodePreference) {
-                      throw new Error(
-                        `Kimi Code preference remained ${String(getPreferKimiCode())}.`,
-                      );
-                    }
-                  },
-                  restoredInMemory: () =>
-                    getPreferKimiCode() === previousKimiCodePreference,
-                  memoryRestoredContext:
-                    'The previous Kimi Code preference appears restored in memory, but persistence could not be confirmed',
-                  restoreFailedContext:
-                    'Could not restore the Kimi Code preference',
-                })
-              : undefined;
-          const apiModeFailure =
-            apiModeWriteStarted && getCliApiMode() === decision.apiMode
-              ? await attemptRollback({
-                  restore: async () => {
-                    await setCliApiMode(previousApiMode);
-                    if (getCliApiMode() !== previousApiMode) {
-                      throw new Error(`API mode remained ${getCliApiMode()}.`);
-                    }
-                  },
-                  restoredInMemory: () => getCliApiMode() === previousApiMode,
-                  memoryRestoredContext:
-                    'The previous API mode appears restored in memory, but persistence could not be confirmed',
-                  restoreFailedContext: 'Could not restore API mode',
-                })
-              : undefined;
-          // After the mode, because restoring included access clears the OpenRouter
-          // toggle: a switch the user never got would otherwise leave their routing
-          // preference silently off.
-          const openRouterFailure =
-            apiModeWriteStarted && previousOpenRouter && !cliOpenRouterEnabled()
-              ? await attemptRollback({
-                  restore: async () => {
-                    await platform().globalState.update(
-                      GlobalStateKey.USE_OPENROUTER,
-                      true,
-                    );
-                    if (!cliOpenRouterEnabled()) {
-                      throw new Error('OpenRouter routing remained disabled.');
-                    }
-                  },
-                  restoredInMemory: () => cliOpenRouterEnabled(),
-                  memoryRestoredContext:
-                    'The previous OpenRouter routing preference appears restored in memory, but persistence could not be confirmed',
-                  restoreFailedContext: 'Could not restore OpenRouter routing',
-                })
-              : undefined;
-          const rollbackFailures = [
-            subscriptionFailure,
-            glmCodingPlanFailure,
-            kimiCodeFailure,
-            apiModeFailure,
-            openRouterFailure,
-          ].filter(filterNotNullish);
+          // commit ahead of the restores below. OpenRouter is restored after
+          // the mode, because restoring included access clears the OpenRouter
+          // toggle: a switch the user never got would otherwise leave their
+          // routing preference silently off.
+          const rollbackFailures = await rollbackChangedSettings([
+            {
+              writeStarted: subscriptionWriteStarted,
+              needsRollback: () => !isPreferCodexSubscription(),
+              restore: async () => {
+                const update = await setCliCodexSubscription(
+                  previousSubscriptionPreference,
+                );
+                if (update.effective !== previousSubscriptionPreference) {
+                  throw new Error(
+                    `ChatGPT subscription preference remained ${String(update.effective)}.`,
+                  );
+                }
+              },
+              restoredInMemory: () =>
+                isPreferCodexSubscription() === previousSubscriptionPreference,
+              memoryRestoredContext:
+                'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed',
+              restoreFailedContext:
+                'Could not restore the ChatGPT subscription preference',
+            },
+            {
+              writeStarted: glmCodingPlanWriteStarted,
+              needsRollback: () => !getGLMCodingPlan(),
+              restore: async () => {
+                await setCliGlmCodingPlan(previousGlmCodingPlan);
+                if (getGLMCodingPlan() !== previousGlmCodingPlan) {
+                  throw new Error(
+                    `GLM Coding Plan remained ${String(getGLMCodingPlan())}.`,
+                  );
+                }
+              },
+              restoredInMemory: () =>
+                getGLMCodingPlan() === previousGlmCodingPlan,
+              memoryRestoredContext:
+                'The previous GLM Coding Plan setting appears restored in memory, but persistence could not be confirmed',
+              restoreFailedContext:
+                'Could not restore the GLM Coding Plan setting',
+            },
+            {
+              writeStarted: kimiCodeWriteStarted,
+              needsRollback: () => !getPreferKimiCode(),
+              restore: async () => {
+                await setCliKimiCode(previousKimiCodePreference);
+                if (getPreferKimiCode() !== previousKimiCodePreference) {
+                  throw new Error(
+                    `Kimi Code preference remained ${String(getPreferKimiCode())}.`,
+                  );
+                }
+              },
+              restoredInMemory: () =>
+                getPreferKimiCode() === previousKimiCodePreference,
+              memoryRestoredContext:
+                'The previous Kimi Code preference appears restored in memory, but persistence could not be confirmed',
+              restoreFailedContext:
+                'Could not restore the Kimi Code preference',
+            },
+            {
+              writeStarted: apiModeWriteStarted,
+              needsRollback: () => getCliApiMode() === decision.apiMode,
+              restore: async () => {
+                await setCliApiMode(previousApiMode);
+                if (getCliApiMode() !== previousApiMode) {
+                  throw new Error(`API mode remained ${getCliApiMode()}.`);
+                }
+              },
+              restoredInMemory: () => getCliApiMode() === previousApiMode,
+              memoryRestoredContext:
+                'The previous API mode appears restored in memory, but persistence could not be confirmed',
+              restoreFailedContext: 'Could not restore API mode',
+            },
+            {
+              writeStarted: apiModeWriteStarted,
+              needsRollback: () =>
+                previousOpenRouter && !cliOpenRouterEnabled(),
+              restore: async () => {
+                await platform().globalState.update(
+                  GlobalStateKey.USE_OPENROUTER,
+                  true,
+                );
+                if (!cliOpenRouterEnabled()) {
+                  throw new Error('OpenRouter routing remained disabled.');
+                }
+              },
+              restoredInMemory: () => cliOpenRouterEnabled(),
+              memoryRestoredContext:
+                'The previous OpenRouter routing preference appears restored in memory, but persistence could not be confirmed',
+              restoreFailedContext: 'Could not restore OpenRouter routing',
+            },
+          ]);
           if (rollbackFailures.length > 0) {
             throw new AggregateError(
               [error, ...rollbackFailures],

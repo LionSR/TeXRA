@@ -1,5 +1,8 @@
 // Third-party imports
 import { z } from 'zod';
+import type { ToolFileAttachment } from '@shared/schemas';
+
+// Local imports
 
 /** Canonical 1-based inclusive line range for tool view_range fields. */
 export const ViewRangeSchema = z
@@ -70,10 +73,11 @@ export interface FileViewOptions {
 }
 
 export interface FileViewResult {
-  [key: string]: unknown;
   status: 'executed';
   output: string;
   summary: string;
+  /** Optional file attachments carried alongside the view (e.g. images extracted from an email message). */
+  files?: ToolFileAttachment[];
 }
 
 /**
@@ -92,9 +96,9 @@ export function formatFileView({
   const rangeProvided = viewRange != null;
   const startLine = Math.max(viewRange?.[0] ?? 1, 1);
   const endLine = Math.min(viewRange?.[1] ?? totalLines, totalLines);
-  const rangeStartIndex = Math.min(startLine - 1, totalLines);
-  const rangeEndIndex = Math.max(endLine, rangeStartIndex);
-  const rangeSize = rangeEndIndex - rangeStartIndex;
+  // Lines in the requested range, clamped to the file bounds and floored at
+  // zero so an empty (start > end) range never reports negative lines.
+  const rangeSize = Math.max(endLine - startLine + 1, 0);
   const truncated = rangeSize > maxLines;
   const visibleEndLine = Math.min(endLine, startLine + maxLines - 1);
   const visibleLines = sliceLineRange(lines, startLine, visibleEndLine);

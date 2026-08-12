@@ -10,8 +10,7 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
-
-const CHANNEL = 'LaTeXCommands';
+import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 
 export const LATEXINDENT_CONFIG_KEY = 'texra.latex.latexindentConfig';
 

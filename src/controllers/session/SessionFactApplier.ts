@@ -112,9 +112,8 @@ export class SessionFactApplier {
       this.renderer.onMissingOutputsChanged(event.streamId),
     updateCompileFailures: (_streamId, event) =>
       this.renderer.onCompileFailuresChanged(event.streamId),
-    goalPaused: (_streamId, event) => {
-      this.renderer.onGoalPaused(event.streamId);
-    },
+    goalPaused: (_streamId, event) =>
+      this.renderer.onGoalPaused(event.streamId),
     'conversation.progress': (streamId, event) =>
       this.handleUpdateConversationProgress({
         streamId,

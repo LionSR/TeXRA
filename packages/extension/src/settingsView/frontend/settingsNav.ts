@@ -12,13 +12,14 @@ import {
   SETTINGS_TAB_GROUPS,
   SETTINGS_TAB_PANEL_BY_NAME,
   type SettingsTabName,
+  type SettingsTabPanelName,
 } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 
 export interface SettingsNavEntry {
   readonly name: SettingsTabName;
   /** `wa-tab-panel` name — the addressing key the nav and e2e selectors share. */
-  readonly panel: string;
+  readonly panel: SettingsTabPanelName;
   readonly icon: TeXRAIconName;
   readonly label: string;
   readonly description: string;

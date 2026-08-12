@@ -11,7 +11,7 @@ import {
   ExecutionLeaseLostError,
   markOwnedExecutionLeaseUndurable,
 } from '@agent/storage/executionLease';
-import { persistTerminalExecution } from '@agent/runtime/persistTerminalExecution';
+import { persistTerminalExecution } from '@agent/storage/terminalPersistence';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -704,7 +704,7 @@ export class ExecutionRegistry {
         agentName: handle.agentName,
         status,
         startedAt: handle.startedAt,
-        elapsed: elapsed ?? null,
+        elapsed,
         childStreamId: handle.childStreamId,
         ...(handle.workflowPhase
           ? { workflowPhase: handle.workflowPhase }

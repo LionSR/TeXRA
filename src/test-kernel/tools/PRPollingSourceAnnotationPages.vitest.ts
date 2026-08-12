@@ -2,6 +2,7 @@
 // (PRPollingSource pagination + AnnotationFetchBudget token bucket).
 
 import { afterEach, describe, expect, it, type Mock, vi } from 'vitest';
+import type { AgentTrace } from '@agent/trace';
 import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
 import type { PRSubscriptionState } from '@tools/github/PRPollingSource';
 import { AnnotationFetchBudget } from '@tools/github/annotationFetchBudget';
@@ -15,16 +16,7 @@ import {
 // PRPollingSourceAnnotationPages
 // ---------------------------------------------------------------------------
 
-interface AnnotationFetchSource {
-  fetchAnnotations(
-    owner: string,
-    repo: string,
-    checkRunId: number,
-    now?: number,
-  ): Promise<GhCheckAnnotation[]>;
-}
-
-interface AnnotationDrainSource extends AnnotationFetchSource {
+interface AnnotationDrainSource {
   drainAnnotationQueues(
     entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
     now?: number,
@@ -38,6 +30,20 @@ interface PRPollingSourceClass {
     remainingRequests?: number,
     nowMs?: number,
   ): void;
+}
+
+type AnnotationFetchFn = (
+  owner: string,
+  repo: string,
+  checkRunId: number,
+  logger: AgentTrace,
+  budget: AnnotationFetchBudget,
+  now?: number,
+) => Promise<GhCheckAnnotation[]>;
+
+/** Minimal logger for driving the infrastructure `fetchAnnotations` directly. */
+function testLogger(): AgentTrace {
+  return { warn: vi.fn() } as unknown as AgentTrace;
 }
 
 function annotation(
@@ -62,16 +68,17 @@ function fullWarningPage(): GhCheckAnnotation[] {
 
 async function createHarness(): Promise<{
   ghGet: Mock;
-  source: AnnotationFetchSource;
+  fetchAnnotations: AnnotationFetchFn;
   PRPollingSource: PRPollingSourceClass;
 }> {
   vi.resetModules();
   const ghGet = vi.fn();
   mockGitHubClient(ghGet);
   const { PRPollingSource } = await import('@tools/github/PRPollingSource');
+  const { fetchAnnotations } = await import('@tools/github/checkRunsClient');
   return {
     ghGet,
-    source: new PRPollingSource() as unknown as AnnotationFetchSource,
+    fetchAnnotations,
     PRPollingSource: PRPollingSource as unknown as PRPollingSourceClass,
   };
 }
@@ -103,7 +110,7 @@ describe('PRPollingSource annotation pagination', () => {
   });
 
   it('fetches later annotation pages before level filtering runs', async () => {
-    const { ghGet, source } = await createHarness();
+    const { ghGet, fetchAnnotations } = await createHarness();
     ghGet
       .mockResolvedValueOnce({ status: 200, data: fullWarningPage() })
       .mockResolvedValueOnce({
@@ -111,7 +118,13 @@ describe('PRPollingSource annotation pagination', () => {
         data: [annotation('failure', 100)],
       });
 
-    const annotations = await source.fetchAnnotations('owner', 'repo', 42);
+    const annotations = await fetchAnnotations(
+      'owner',
+      'repo',
+      42,
+      testLogger(),
+      new AnnotationFetchBudget(2, 60_000),
+    );
 
     expect(annotations).toHaveLength(101);
     expect(annotations.at(-1)?.annotation_level).toBe('failure');
@@ -123,10 +136,16 @@ describe('PRPollingSource annotation pagination', () => {
   });
 
   it('caps annotation pagination for malformed full pages', async () => {
-    const { ghGet, source } = await createHarness();
+    const { ghGet, fetchAnnotations } = await createHarness();
     ghGet.mockResolvedValue({ status: 200, data: fullWarningPage() });
 
-    const annotations = await source.fetchAnnotations('owner', 'repo', 42);
+    const annotations = await fetchAnnotations(
+      'owner',
+      'repo',
+      42,
+      testLogger(),
+      new AnnotationFetchBudget(50, 60_000),
+    );
 
     expect(annotations).toHaveLength(5000);
     expect(ghGet).toHaveBeenCalledTimes(50);
@@ -136,13 +155,18 @@ describe('PRPollingSource annotation pagination', () => {
   });
 
   it('counts annotation budget by endpoint page', async () => {
-    const { ghGet, source, PRPollingSource } = await createHarness();
-    PRPollingSource.resetAnnotationFetchBudgetForTests(1);
+    const { ghGet, fetchAnnotations } = await createHarness();
     ghGet.mockResolvedValue({ status: 200, data: fullWarningPage() });
 
-    await expect(source.fetchAnnotations('owner', 'repo', 42)).rejects.toThrow(
-      'Annotation fetch budget exhausted',
-    );
+    await expect(
+      fetchAnnotations(
+        'owner',
+        'repo',
+        42,
+        testLogger(),
+        new AnnotationFetchBudget(1, 60_000),
+      ),
+    ).rejects.toThrow('Annotation fetch budget exhausted');
 
     expect(ghGet).toHaveBeenCalledTimes(1);
   });

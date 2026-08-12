@@ -39,47 +39,51 @@ export async function checkExpectedOutputs(
     async (): Promise<{ missing: string[] }> => {
       const storageKey = getStorageKey(state);
       const expected = deps.config.outputFiles;
-      if (!expected?.length) {
+      let missing: string[] = [];
+
+      if (expected?.length) {
+        const results = await Promise.all(
+          expected.map(async (file) => ({
+            file,
+            exists: await AbsoluteFS.exists(
+              deps.fileService.createLocation(file).absolutePath,
+            ),
+          })),
+        );
+        missing = results.filter((r) => !r.exists).map((r) => r.file);
+
+        if (missing.length > 0) {
+          const xmlExists = await AbsoluteFS.exists(
+            outputLocation.absolutePath,
+          );
+          reportMissingOutputs(deps.logger, {
+            streamId: deps.streamId,
+            round: currRound,
+            missing,
+            xmlFile: xmlExists ? outputLocation.absolutePath : null,
+          });
+          deps.logger.debug(`Missing expected outputs for round ${currRound}`, {
+            data: missing,
+          });
+        } else {
+          deps.logger.debug(
+            `All expected outputs exist after round ${currRound}`,
+          );
+        }
+      } else {
         debugInternal(
           deps.logger,
           `No expected outputs for round ${currRound} storageKey=${storageKey}`,
         );
-        emitRunFact(deps.logger, 'updateMissingOutputs', {
-          streamId: deps.streamId,
-          filesByRound: { [currRound]: [] },
-        });
-        return { missing: [] };
       }
 
-      const results = await Promise.all(
-        expected.map(async (file) => ({
-          file,
-          exists: await AbsoluteFS.exists(
-            deps.fileService.createLocation(file).absolutePath,
-          ),
-        })),
-      );
-      const missing = results.filter((r) => !r.exists).map((r) => r.file);
-      const xmlExists = await AbsoluteFS.exists(outputLocation.absolutePath);
-
-      if (missing.length > 0) {
-        reportMissingOutputs(deps.logger, {
-          streamId: deps.streamId,
-          round: currRound,
-          missing,
-          xmlFile: xmlExists ? outputLocation.absolutePath : null,
-        });
-        deps.logger.debug(`Missing expected outputs for round ${currRound}`, {
-          data: missing,
-        });
-      } else {
+      // A round with nothing missing reports an empty set so consumers can
+      // distinguish "checked, all present" from "never reported".
+      if (missing.length === 0) {
         emitRunFact(deps.logger, 'updateMissingOutputs', {
           streamId: deps.streamId,
           filesByRound: { [currRound]: [] },
         });
-        deps.logger.debug(
-          `All expected outputs exist after round ${currRound}`,
-        );
       }
 
       return { missing };

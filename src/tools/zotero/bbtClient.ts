@@ -79,7 +79,6 @@ const CslCreatorSchema = z.object({
   name: z.string().nullish(),
   creatorType: z.string().nullish(),
 });
-export type CslCreator = z.infer<typeof CslCreatorSchema>;
 
 /** CSL JSON date format. */
 const CslDateSchema = z.object({
@@ -335,6 +334,13 @@ export async function callZoteroConnector(
           `Zotero Connector request timed out after ${ZOTERO_CONNECTOR_TIMEOUT_MS / 1000}s. ` +
           `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
       };
+    }
+    // TypeError from fetch (ECONNREFUSED → TypeError in native fetch): for a
+    // localhost endpoint this is always a connection failure, so present the
+    // same reachability guidance as checkZoteroRunning and callBetterBibTeX
+    // instead of surfacing a raw 'TypeError: fetch failed'.
+    if (error instanceof TypeError) {
+      return { status: 'error', message: zoteroUnreachableError(port).message };
     }
     return { status: 'error', message: toErrorMessage(error) };
   }

@@ -4,7 +4,7 @@ import {
   showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import type { LatexdiffPackResult } from '@housekeeping';
+import type { LatexdiffPackResult } from '@housekeeping/packLatexdiffvc';
 import type { IndentLatexResult } from '@latex/formatter/indentDirectory';
 
 interface LatexHousekeepingNotification {

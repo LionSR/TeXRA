@@ -1,9 +1,9 @@
 /**
  * Inquiry schemas.
  *
- * The model-facing tool is named `inquiry`. The internal storage and
- * frontend symbols still carry the `ExternalInquiry…` prefix for diff-
- * locality; renaming them is a mechanical follow-up.
+ * The model-facing tool is named `inquiry`; these schemas share its plain
+ * `Inquiry…` vocabulary (the internal storage layer lives in
+ * `src/tools/inquiry/`).
  */
 import { z } from 'zod';
 
@@ -13,20 +13,16 @@ import { StreamTabIdSchema } from './identifiers';
 // Identifiers + session links (canonical home)
 // ============================================================================
 
-export const ExternalInquirySessionLinksSchema = z.array(
-  z.string().trim().min(1),
-);
+export const InquirySessionLinksSchema = z.array(z.string().trim().min(1));
 
 // Keep the 12-hex suffix aligned with hexId12(), the identifier-minting owner
 // used by externalInquiryStorage. The explicit bound rejects truncated or
 // extended identifiers at storage and tool-input boundaries.
-export const ExternalInquiryThreadIdSchema = z
+export const InquiryThreadIdSchema = z
   .string()
   .regex(/^ei_[0-9a-f]{12}$/i, 'Invalid external inquiry thread ID')
   .transform((value) => value.toLowerCase());
-export type ExternalInquiryThreadId = z.infer<
-  typeof ExternalInquiryThreadIdSchema
->;
+export type InquiryThreadId = z.infer<typeof InquiryThreadIdSchema>;
 
 // ============================================================================
 // Status + summary
@@ -35,17 +31,15 @@ export type ExternalInquiryThreadId = z.infer<
 const InquiryThreadStatusSchema = z.enum(['open', 'answered', 'dropped']);
 export type InquiryThreadStatus = z.infer<typeof InquiryThreadStatusSchema>;
 
-const ExternalInquiryThreadSummarySchema = z.object({
-  threadId: ExternalInquiryThreadIdSchema,
+const InquiryThreadSummarySchema = z.object({
+  threadId: InquiryThreadIdSchema,
   parentStreamId: StreamTabIdSchema.nullable(),
   status: InquiryThreadStatusSchema,
   lastQuestionPreview: z.string(),
   lastActivityIso: z.iso.datetime(),
   turnCount: z.int().nonnegative(),
 });
-export type ExternalInquiryThreadSummary = z.infer<
-  typeof ExternalInquiryThreadSummarySchema
->;
+export type InquiryThreadSummary = z.infer<typeof InquiryThreadSummarySchema>;
 
 // ============================================================================
 // Resume outcome — UI badge metadata for inquiryThreadUpdated events
@@ -60,7 +54,7 @@ const InquiryResumeOutcomeSchema = z.enum([
 export type InquiryResumeOutcome = z.infer<typeof InquiryResumeOutcomeSchema>;
 
 export const InquiryThreadUpdatedEventSchema =
-  ExternalInquiryThreadSummarySchema.extend({
+  InquiryThreadSummarySchema.extend({
     resumeOutcome: InquiryResumeOutcomeSchema.nullish(),
   });
 export type InquiryThreadUpdatedEvent = z.infer<
@@ -73,14 +67,14 @@ export type InquiryThreadUpdatedEvent = z.infer<
 
 export const InquirySubmitActionSchema = z.object({
   action: z.literal('submit'),
-  threadId: ExternalInquiryThreadIdSchema,
+  threadId: InquiryThreadIdSchema,
   answer: z.string().min(1),
-  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
+  sessionLinks: InquirySessionLinksSchema.nullish(),
 });
 
 export const InquiryDropActionSchema = z.object({
   action: z.literal('drop'),
-  threadId: ExternalInquiryThreadIdSchema,
+  threadId: InquiryThreadIdSchema,
   feedback: z.string().optional(),
 });
 
@@ -107,6 +101,6 @@ export const InquiryTranscriptTurnSchema = z.object({
   context: z.string().nullish(),
   answer: z.string().nullish(),
   answeredAt: z.string().nullish(),
-  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
+  sessionLinks: InquirySessionLinksSchema.nullish(),
 });
 export type InquiryTranscriptTurn = z.infer<typeof InquiryTranscriptTurnSchema>;

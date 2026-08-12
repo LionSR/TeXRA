@@ -32,11 +32,17 @@ import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessions
 import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
 import { loadMainViewTeamOptions } from '@frontend/agents/teamOptionsLoader';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { agentKeyOf, AgentCategory } from '@shared/schemas/agent';
+import {
+  CommonViewMessageSchema,
+  MainViewMessageSchema,
+  agentKeyOf,
+  AgentCategory,
+} from '@shared/schemas';
 import {
   readOnboardingFlags,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import { assertKnownOutboundMessage } from '@shared/utils/dispatcher';
 import { debounce } from '@utils/core';
 import { watchConfig } from '@utils/config/configUtils';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
@@ -56,6 +62,14 @@ export class MainViewProvider
   private _messageDisposable?: vscode.Disposable;
   private _progressViewProvider?: ProgressViewProvider;
 
+  /**
+   * True only after the current launcher HTML document has posted
+   * WEBVIEW_READY. Mode === MAIN alone is not enough: after a progress→main
+   * HTML swap (or resolveWebviewView) the document is still loading and any
+   * STATE_RESTORE posted now is dropped. Cleared on every main HTML assign.
+   */
+  private mainWebviewReady = false;
+
   /** Last computed funnel state, so credential hooks can detect the
    *  in-session State 0 → 1 transition. Session-scoped by design. */
   private onboardingFunnelState: OnboardingFunnelState | undefined;
@@ -71,9 +85,14 @@ export class MainViewProvider
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
-    this.messageHandler = new MainViewMessageHandler(context, {
-      refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
-    });
+    this.messageHandler = new MainViewMessageHandler(
+      context,
+      () => this.refreshOnboardingFunnel(),
+      () => {
+        this.mainWebviewReady = true;
+        this.flushPendingState();
+      },
+    );
     this.contentProvider = new BundledViewContentProvider(
       context,
       'MainView',
@@ -89,6 +108,23 @@ export class MainViewProvider
     this.setupConfigurationWatcher();
     this.setupWorkspaceWatcher();
     this.setupAuthListener();
+  }
+
+  /**
+   * Sole outbound path to the launcher webview. In dev/test runs the payload
+   * goes through the boundary's outbound schemas first (`assertKnownOutbound
+   * Message`), so a schema drift is caught by CI instead of silently reaching
+   * the webview; production posts the typed payload as-is with no parse cost.
+   */
+  private postToWebview(
+    webviewView: vscode.WebviewView,
+    message: unknown,
+  ): void {
+    assertKnownOutboundMessage(
+      [MainViewMessageSchema, CommonViewMessageSchema],
+      message,
+    );
+    webviewView.webview.postMessage(message);
   }
 
   private setupConfigurationWatcher() {
@@ -140,7 +176,10 @@ export class MainViewProvider
   private async refreshOptionsAndView(): Promise<void> {
     await refresh();
     const view = this.getMainModeView();
-    if (view) {
+    // Only synthesize WEBVIEW_READY when the launcher document is already live.
+    // During a post-swap load window the real ready signal will re-push options
+    // and flush restores; a synthetic ready would drain the queue too early.
+    if (view && this.mainWebviewReady) {
       await this.messageHandler.handleMessage(
         { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY },
         view,
@@ -162,6 +201,11 @@ export class MainViewProvider
    */
   async refreshOnboardingFunnel(): Promise<void> {
     const view = this.getMainModeView();
+    // Mode === MAIN is not enough: after an HTML swap the document has not
+    // installed its listener yet. Posting into that window drops messages, and
+    // selectSetupAgent is edge-triggered so a later WEBVIEW_READY recompute
+    // would not re-emit the selection. Treat mid-load like "no view".
+    const canPost = view != null && this.mainWebviewReady;
 
     // Same usable-credential check the setup command uses: non-blank provider
     // key or server-side key access.
@@ -174,8 +218,8 @@ export class MainViewProvider
     );
     this.onboardingFunnelState = transition.state;
 
-    if (view) {
-      view.webview.postMessage({
+    if (canPost) {
+      this.postToWebview(view, {
         command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
         state: transition.state,
       });
@@ -184,15 +228,15 @@ export class MainViewProvider
     if (transition.clearDeclined) {
       await setOnboardingDeclined(this.context.globalState, false);
     }
-    // An off-view advance consumes the transition (previous latches to
-    // 'setup'), so remember the selection until a view exists to receive it —
-    // otherwise a credential arriving while the panel is hidden would leave
-    // the dropdown on the old agent when the launcher reopens.
-    if (transition.selectSetupAgent && !view) {
+    // An off-view or mid-load advance consumes the transition edge (previous
+    // latches to 'setup'), so remember the selection until a ready launcher
+    // can receive it — otherwise a credential arriving while the panel is
+    // hidden or still loading would leave the dropdown on the old agent.
+    if (transition.selectSetupAgent && !canPost) {
       this.pendingSetupAgentSelection = true;
     }
     if (
-      view &&
+      canPost &&
       (transition.selectSetupAgent ||
         (this.pendingSetupAgentSelection && transition.state === 'setup'))
     ) {
@@ -200,7 +244,7 @@ export class MainViewProvider
       // Resolve the qualified registry key so the dropdown matches by value;
       // the plain name still resolves by label if the registry isn't loaded.
       const entry = getAgent('setup', AgentCategory.ToolUse);
-      view.webview.postMessage({
+      this.postToWebview(view, {
         command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
         agentId: entry ? agentKeyOf(entry) : 'setup',
         sessionType: 'toolUse',
@@ -218,11 +262,11 @@ export class MainViewProvider
 
     await refresh();
     const optionsData = await computeAgentOptionsData();
-    view.webview.postMessage({
+    this.postToWebview(view, {
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       optionsData,
     });
-    view.webview.postMessage({
+    this.postToWebview(view, {
       command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
       optionsData: await loadMainViewTeamOptions(),
     });
@@ -237,7 +281,7 @@ export class MainViewProvider
     if (!view) return;
 
     const optionsDataByCategory = await loadMainViewModelOptions();
-    view.webview.postMessage({
+    this.postToWebview(view, {
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
       optionsDataByCategory,
     });
@@ -290,6 +334,7 @@ export class MainViewProvider
     this.cleanupView();
     this._view = webviewView;
 
+    this.mainWebviewReady = false;
     webviewView.webview.html = this.contentProvider.getHtmlContent(
       webviewView.webview,
     );
@@ -308,6 +353,7 @@ export class MainViewProvider
   protected override cleanupView(): void {
     this._messageDisposable?.dispose();
     this._messageDisposable = undefined;
+    this.mainWebviewReady = false;
     if (getActiveSidebarView() === SIDEBAR_VIEWS.PROGRESS) {
       this._progressViewProvider?.resetSidebarReady();
     }
@@ -316,10 +362,25 @@ export class MainViewProvider
   }
 
   private setupInitialState(webviewView: vscode.WebviewView): void {
-    webviewView.webview.postMessage({
+    // REQUEST_BASE_FILE is inbound-only (no outbound schema), so the
+    // assertion passes it through unchecked.
+    this.postToWebview(webviewView, {
       command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
     });
+    // Pending restores wait for WEBVIEW_READY (onWebviewReady → flushPendingState)
+    // so they land after the launcher has installed its message listener.
+  }
 
+  /**
+   * Sole deliverer of queued restores (see stateRestoreCommand). Called from
+   * WEBVIEW_READY after the launcher document installs its listener, and from
+   * showInSidebar when that document is already ready (no reload → no ready
+   * re-fire). Mode === MAIN alone is not sufficient.
+   */
+  private flushPendingState(): void {
+    if (!this.mainWebviewReady) return;
+    const webviewView = this.getMainModeView();
+    if (!webviewView) return;
     for (
       let pendingData = consumePendingState();
       pendingData;
@@ -332,7 +393,7 @@ export class MainViewProvider
         console.warn('Invalid pending state restore payload', parsed.error);
         continue;
       }
-      webviewView.webview.postMessage({
+      this.postToWebview(webviewView, {
         command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
         state: parsed.data,
         executeImmediately: pendingData.executeImmediately,
@@ -365,6 +426,8 @@ export class MainViewProvider
 
     setActiveSidebarView(mode);
     this._messageDisposable?.dispose();
+    // Any HTML swap invalidates the previous document's ready handshake.
+    this.mainWebviewReady = false;
 
     if (mode === SIDEBAR_VIEWS.PROGRESS) {
       const pvp = this._progressViewProvider!;
@@ -386,7 +449,16 @@ export class MainViewProvider
   }
 
   public async showInSidebar(): Promise<void> {
+    const alreadyMain = getActiveSidebarView() === SIDEBAR_VIEWS.MAIN;
     this.switchMode(SIDEBAR_VIEWS.MAIN);
+    // Flush only when the current launcher document has already reported ready.
+    // Mode switches from progress (and any mid-load window) wait for
+    // WEBVIEW_READY so STATE_RESTORE is not posted into an unloading document.
+    // flushPendingState also guards on mainWebviewReady; the check here avoids
+    // a no-op call during the load window after an HTML swap.
+    if (alreadyMain && this.mainWebviewReady) {
+      this.flushPendingState();
+    }
     await vscode.commands.executeCommand('texra.mainView.focus');
   }
 }

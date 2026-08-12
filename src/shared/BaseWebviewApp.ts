@@ -13,8 +13,7 @@ import {
   CommonViewMessageSchema,
   type StateRestoreMessage,
 } from '@shared/schemas/commonViewMessages';
-import { setWaColorScheme } from '@shared/wa/waColorScheme';
-import { themeIsDark } from '@shared/wa/hostTheme';
+import { setWaColorScheme, themeIsDark } from '@shared/wa/waColorScheme';
 import type { ZodError } from 'zod';
 
 interface CommonMessageContext {
@@ -53,8 +52,8 @@ function handleCommonMessage(
       return true;
     case COMMON_COMMANDS.WEBVIEW_READY:
       return true;
-    case COMMON_COMMANDS.SWITCH_VIEW:
-      return false;
+    // Every other common command falls through to `default`: unknown commands
+    // (including SWITCH_VIEW) are passed to the subclass's handleMessage.
     default:
       return false;
   }

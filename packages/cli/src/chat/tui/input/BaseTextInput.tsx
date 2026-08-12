@@ -8,6 +8,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, useInput, usePaste } from 'ink';
 import pTimeout from 'p-timeout';
 
+import {
+  isPlainReturnInput,
+  isCtrlInput,
+  isEscapeInput,
+  isTextInputNewlineInput,
+  isUnhandledControlInput,
+  metaChordInput,
+} from '@cli/tui/inputKeys';
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
 import {
   applyTerminalInputChunk,
@@ -20,14 +28,6 @@ import {
   type TextInputChunkEdit,
 } from './textInputEditing';
 import { matchTextInputBinding } from './textInputBindings';
-import {
-  isPlainReturnInput,
-  isCtrlInput,
-  isEscapeInput,
-  isTextInputNewlineInput,
-  isUnhandledControlInput,
-  metaChordInput,
-} from './inputKeys';
 import { ImagePasteQueue, type ImagePasteAttempt } from './imagePasteQueue';
 import { useActiveDraft } from './activeDraft';
 import { textDisplayWidth } from '../render/terminalText';
@@ -81,7 +81,10 @@ export interface BaseTextInputProps {
     value: string,
     cursor: number,
   ) => boolean;
-  /** Apply an edit when Escape is received before normal text handling. */
+  /** Apply an edit on two entry points: when Escape is received before normal
+   *  text handling, and when the `/` escape-slash sequence (palette
+   *  accept) is received at the start of an input chunk — the chunk's remaining
+   *  input is then routed through `applyTerminalInputChunk`. */
   readonly escapeEdit?: CursorEdit;
   /** Render the value as bullets (secret entry, e.g. an API key). Display-only:
    *  the captured value, edits, and paste are unaffected. */

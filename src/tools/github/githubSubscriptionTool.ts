@@ -35,7 +35,7 @@ import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,
   type GitHubCheckAnnotationLevel,
 } from './checkAnnotationLevels';
-import { issueRef, prRef } from './formatUtils';
+import { issueRef, prRef } from './githubPaths';
 import { getGitHubToken } from './githubAuth';
 import { ghGet } from './githubClient';
 import {

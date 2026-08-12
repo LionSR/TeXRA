@@ -62,6 +62,26 @@ export interface DesktopWorkspaceIpc extends DesktopMessageHandler {
   disposeRendererResources(): void;
 }
 
+/** The single workspace-boundary error every containment path reports. */
+const WORKSPACE_BOUNDARY_ERROR =
+  'Only files inside the workspace folder can be opened.';
+
+/**
+ * Enforces that a canonical target lies within the canonical workspace root,
+ * returning the target on success. Both inputs must already be canonicalized
+ * (the write path synthesizes its target from a canonical parent plus
+ * basename), so a symlink or `..` traversal cannot escape the project.
+ */
+function assertWithinWorkspace(
+  canonicalRoot: string,
+  canonicalTarget: string,
+): string {
+  if (!isPathWithin(canonicalRoot, canonicalTarget)) {
+    throw new Error(WORKSPACE_BOUNDARY_ERROR);
+  }
+  return canonicalTarget;
+}
+
 /** Lexical workspace containment check: rejects `..` traversal, or throws. */
 function locateWorkspaceTarget(inputPath: string): {
   absolutePath: string;
@@ -69,7 +89,7 @@ function locateWorkspaceTarget(inputPath: string): {
 } {
   const located = WorkspaceFS.locatePath(inputPath);
   if (located.kind !== 'workspace') {
-    throw new Error('Only files inside the workspace folder can be opened.');
+    throw new Error(WORKSPACE_BOUNDARY_ERROR);
   }
 
   const root = WorkspaceFS.getPath();
@@ -91,10 +111,7 @@ async function resolveWorkspacePath(inputPath: string): Promise<string> {
     platform().fs.realPath(root),
     platform().fs.realPath(absolutePath),
   ]);
-  if (!isPathWithin(canonicalRoot, canonicalTarget)) {
-    throw new Error('Only files inside the workspace folder can be opened.');
-  }
-  return canonicalTarget;
+  return assertWithinWorkspace(canonicalRoot, canonicalTarget);
 }
 
 /**
@@ -137,10 +154,7 @@ async function resolveWorkspaceWritePath(inputPath: string): Promise<string> {
     throw error;
   }
   const canonicalTarget = join(canonicalParent, basename(absolutePath));
-  if (!isPathWithin(canonicalRoot, canonicalTarget)) {
-    throw new Error('Only files inside the workspace folder can be opened.');
-  }
-  return canonicalTarget;
+  return assertWithinWorkspace(canonicalRoot, canonicalTarget);
 }
 
 export function createDesktopWorkspaceIpc(

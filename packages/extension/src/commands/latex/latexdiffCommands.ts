@@ -5,8 +5,8 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { registerCommands } from '@commands/_shared/registerCommands';
-import { workspaceSM, WorkspaceStateKey } from '@common/state';
+import { registerCommandEntries } from '@commands/_shared/registerCommands';
+import { workspaceSM } from '@common/state';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import {
   showLoggedErrorMessage,
@@ -17,14 +17,14 @@ import {
   runPackLatexdiffvc,
   runPackLatexdiffvcMultiple,
   type LatexdiffPackResult,
-} from '@housekeeping';
+} from '@housekeeping/packLatexdiffvc';
 import type { LaTeXdiffResult } from '@latex/latexdiff';
 import type { RunLatexdiffCommandConfig } from '@latex/latexdiff/types';
 import {
   normalizeRunLatexdiffOutputsByRound,
   runLatexdiffForExecution,
 } from '@latex/latexdiff/runLatexdiff';
-import { CHANNEL, LaTeXdiffService } from '@latex/latexdiff/service';
+import { CHANNEL, latexdiffService } from '@latex/latexdiff/service';
 import {
   DEFAULT_MATH_MARKUP,
   MATH_MARKUP_OPTIONS,
@@ -33,7 +33,8 @@ import {
 } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { checkToolInstalled } from '@utils/system/toolUtils';
@@ -163,7 +164,7 @@ function reportLatexdiff(
 export function registerLatexdiffCommands(
   context: vscode.ExtensionContext,
 ): void {
-  registerCommands(context, [
+  registerCommandEntries(context, [
     { id: 'texra.latexdiff', handler: handleLatexdiff },
     { id: 'texra.latexdiffvc', handler: handleLatexdiffvc },
     { id: 'texra.packLatexdiffvc', handler: handlePackLatexdiffvc },
@@ -208,7 +209,7 @@ async function handleLatexdiff(
   await withLatexdiffTool('latexdiff', 'Error creating LaTeX diff', () => {
     const fileToUseLocation = pathToLocation(fileToUse);
     return runDiffAndOpen(fileToUseLocation, 'latexdiff', (mathMarkup) =>
-      LaTeXdiffService.runDiff(
+      latexdiffService.runDiff(
         fileToUseLocation,
         pathToLocation(editedFile),
         '_diff',
@@ -228,7 +229,7 @@ async function handleLatexdiffvc(
   await withLatexdiffTool('latexdiff-vc', 'Error creating LaTeX diff', () => {
     const fileToUseLocation = pathToLocation(fileToUse);
     return runDiffAndOpen(fileToUseLocation, 'latexdiff-vc', (mathMarkup) =>
-      LaTeXdiffService.runDiffVc(fileToUseLocation, commitHash, mathMarkup),
+      latexdiffService.runDiffVc(fileToUseLocation, commitHash, mathMarkup),
     );
   });
 }
@@ -322,7 +323,7 @@ async function handleRunLatexdiff(
         `Command called with config: ${JSON.stringify(config)}`,
       );
 
-      const { agent, model, inputFile, outputFiles } = config;
+      const { agent, model, inputFile } = config;
 
       if (!agent || !model || !inputFile) {
         await showLoggedMessage(
@@ -349,8 +350,6 @@ async function handleRunLatexdiff(
         `Between-round diffs enabled: ${generateBetweenRoundDiffs}`,
       );
 
-      const runId = config.runId ?? undefined;
-
       const outputsByRound = normalizeRunLatexdiffOutputsByRound(
         config.outputsByRound,
       );
@@ -367,14 +366,11 @@ async function handleRunLatexdiff(
             message: 'Preparing LaTeX diffs...',
           });
           return runLatexdiffForExecution({
-            agent,
-            model,
-            inputFile,
-            outputFiles,
-            runId,
+            ...config,
             outputsByRound,
             mathMarkup,
             generateBetweenRoundDiffs,
+            latexdiff: { channel: CHANNEL, service: latexdiffService },
             progress,
           });
         },

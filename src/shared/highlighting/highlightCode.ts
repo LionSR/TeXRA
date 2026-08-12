@@ -19,8 +19,11 @@ export function highlightCode(code: string, lang: string): string {
       const safeLang = lang.replaceAll(/[^a-zA-Z0-9_-]/g, '');
       // Return full <pre> so markdown-it uses it as-is (detects leading <pre)
       return `<pre class="hljs"><code class="language-${safeLang}">${highlighted}</code></pre>`;
-    } catch {
-      // Fall through to plain text
+    } catch (error) {
+      // Fall through to plain text, but surface genuine highlight failures so
+      // a throwing renderer is not indistinguishable from an unknown-language
+      // case.
+      console.warn(`highlight.js failed for language "${lang}":`, error);
     }
   }
   // Return empty string — markdown-it will escape and wrap in its own <pre><code>

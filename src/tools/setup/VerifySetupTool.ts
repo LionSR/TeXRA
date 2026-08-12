@@ -2,15 +2,14 @@
 import { z } from 'zod';
 
 // Local imports
-import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
-import { getSetupAuthStatus, getSetupPlatform, setupSecrets } from './platform';
-import { locateTool, missingCoreTools, PROBED_CORE_TOOLS } from './toolProbing';
+import { getSetupPlatform, setupSecrets } from './platform';
+import { collectCoreSetupStatus, locateTool } from './toolProbing';
 
 const VerifySetupInputSchema = z.strictObject({
   tool: z
@@ -73,19 +72,12 @@ export class VerifySetupTool extends defineTool({
 
     // Authentication verifies a configured relay token and primes the shared
     // status cache. Credential readiness must read that settled state.
-    const auth = await getSetupAuthStatus().catch(() => ({
-      authenticated: false as const,
-    }));
-    const [coreStatuses, hasUsableCredential] = await Promise.all([
-      Promise.all(PROBED_CORE_TOOLS.map((name) => locateTool(name))),
+    const [core, hasUsableCredential] = await Promise.all([
+      collectCoreSetupStatus(platform),
       setupSecrets.anyUsableCredentialExists(),
     ]);
 
-    const missingCore = missingCoreTools(coreStatuses);
-
-    const latexWorkshopInstalled = platform.extensions?.isInstalled(
-      LATEX_WORKSHOP_EXT_ID,
-    );
+    const { auth, missingCore, latexWorkshopInstalled } = core;
 
     const lines: string[] = [];
     if (missingCore.length === 0) {

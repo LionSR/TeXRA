@@ -10,9 +10,9 @@ import {
   type StreamContextValue,
 } from '../streamContexts';
 import { conversationContentStyles } from './ConversationContent.styles';
-import { renderStreamHeader } from './streamHeaderView';
 
 import './LogList';
+import './StreamHeader';
 
 @customElement('process-stream-content')
 export class ProcessStreamContent extends LitElement {
@@ -85,11 +85,11 @@ export class ProcessStreamContent extends LitElement {
     const command = (streamInfo.command ?? streamInfo.description ?? '').trim();
 
     return html`
-      ${renderStreamHeader(
-        streamInfo,
-        streamState,
-        this.streamContext.unsupportedCommands,
-      )}
+      <stream-header
+        .stream=${streamInfo}
+        .state=${streamState}
+        .unsupportedCommands=${this.streamContext.unsupportedCommands}
+      ></stream-header>
       <div class="conversation-content">
         ${
           command

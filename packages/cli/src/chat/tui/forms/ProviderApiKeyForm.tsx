@@ -6,7 +6,7 @@ import {
   type ApiKeyStatus,
   type ApiProvider,
 } from '@model/apiProviders';
-import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import { providerDisplayName } from '@shared/constants/providers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { ApiKeyEntryForm } from './ApiKeyEntryForm';
@@ -36,7 +36,7 @@ function providerApiKeyStatusLabel(
 export function buildProviderApiKeyItems(view: ProviderApiKeyStatusView) {
   return API_PROVIDERS.map((provider) => ({
     value: provider,
-    label: PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+    label: providerDisplayName(provider),
     description: providerApiKeyStatusLabel(view.statuses?.[provider], view),
   }));
 }
@@ -47,7 +47,7 @@ function configuredProviderApiKeySummary(
   const configured = API_PROVIDERS.filter((provider) => {
     const status = statuses[provider];
     return status === 'set' || status === 'env';
-  }).map((provider) => PROVIDER_DISPLAY_NAMES[provider] ?? provider);
+  }).map((provider) => providerDisplayName(provider));
   return configured.length > 0
     ? `Configured: ${configured.join(', ')}`
     : 'No provider keys set';
@@ -94,7 +94,7 @@ export function ProviderApiKeyForm(
             ? buildProviderApiKeyItems(props.statusView)
             : API_PROVIDERS.map((provider) => ({
                 value: provider,
-                label: PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+                label: providerDisplayName(provider),
               }))
         }
         description={

@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import * as logger from '@logger/logUtils';
-import { EXCLUDED_DIRS } from '@shared/constants/latex';
+import { EXCLUDED_DIRS } from '@shared/constants/latexTiming';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
@@ -10,8 +10,7 @@ import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 
 import { resolveLatexFormatter } from './texFormatter';
-
-const CHANNEL = 'LaTeXCommands';
+import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 
 export type IndentLatexResult =
   | {

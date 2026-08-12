@@ -43,7 +43,7 @@ export function renderSettingsBanner(
           <div class="settings-banner-title">${options.title}</div>
           <div class="settings-banner-description">${options.description}</div>
           ${
-            options.detail === undefined
+            options.detail == null || options.detail === nothing
               ? nothing
               : html`<div class="settings-banner-detail">
                   ${options.detail}
@@ -51,7 +51,7 @@ export function renderSettingsBanner(
           }
         </div>
         ${
-          options.actions === undefined
+          options.actions == null || options.actions === nothing
             ? nothing
             : html`<div class="settings-banner-actions">
                 ${options.actions}

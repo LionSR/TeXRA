@@ -1,6 +1,5 @@
 import type { SessionState } from '@controllers/session/SessionState';
 import type { StreamTabInfo } from '@shared/schemas';
-import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 import { peekWorktreeInfo, resolveWorktreeInfo } from '@utils/git/worktreeInfo';
 import { buildStreamTabInfo } from './streamTabInfo';
 
@@ -45,8 +44,7 @@ export function buildStreamInfo(
 
 /** Build metadata objects for all streams in the given state, newest first. */
 export function buildStreamInfos(state: StreamInfoListSource): StreamTabInfo[] {
-  return state
-    .selectableStreamNames()
-    .map((id) => buildStreamInfo(state, id))
-    .sort(compareByNewestCreationTime);
+  // selectableStreamNames() already returns newest-first, so the mapped
+  // tab infos inherit that order without re-sorting.
+  return state.selectableStreamNames().map((id) => buildStreamInfo(state, id));
 }

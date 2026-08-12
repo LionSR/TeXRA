@@ -34,6 +34,28 @@ export interface RoundSummary {
   stage?: StageHandle;
 }
 
+/**
+ * Constructs a round summary with no file info — the double-fault fallback
+ * used when summarizing has itself thrown. Built here rather than as a bare
+ * literal at the call site so a new {@link RoundSummary} field is surfaced
+ * by the factory instead of silently omitted.
+ */
+export function blankRoundSummary(options: {
+  storageKey: StorageKey;
+  currRound: number;
+  outputFile: FileLocation;
+  endTurn: boolean;
+}): RoundSummary {
+  return {
+    storageKey: options.storageKey,
+    currRound: options.currRound,
+    fileInfos: [],
+    filesToOpen: [],
+    outputFile: options.outputFile,
+    endTurn: options.endTurn,
+  };
+}
+
 export async function summarizeRound(
   state: OutputState,
   deps: OutputDependencies,

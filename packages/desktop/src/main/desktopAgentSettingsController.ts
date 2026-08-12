@@ -1,11 +1,11 @@
 import path from 'node:path';
 
-import { getAgent } from '@agent/index';
+import { type AgentRosterController, getAgent } from '@agent/index';
+import type { AgentEntry } from '@agent/index/agentEntry';
 import type {
   computeAgentOptionsData,
   loadAgents,
   refresh,
-  AgentEntry,
 } from '@agent/index/agentRegistry';
 import {
   AGENT_TEMPLATE_FILES,
@@ -124,6 +124,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private readonly catalogController;
   private readonly directoryController;
   private readonly visibilityController;
+  private readonly roster: AgentRosterController;
   private readonly registry: DefaultDesktopAgentSettingsControllerOptions['registry'];
   private readonly directory: DefaultDesktopAgentSettingsControllerOptions['directory'];
   private readonly renderer: DefaultDesktopAgentSettingsControllerOptions['renderer'];
@@ -166,6 +167,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     this.catalogController = controllers.catalog;
     this.directoryController = controllers.directory;
     this.visibilityController = controllers.visibility;
+    this.roster = controllers.roster;
     this.fileController = controllers.fileController;
     this.remotePromptController = controllers.remotePromptController;
     this.agentActions = createSettingsAgentActions({
@@ -304,7 +306,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private async updateAgentEnabled(
     message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED>,
   ): Promise<void> {
-    await this.visibilityController.setAgentEnabled({
+    await this.roster.setAgentEnabled({
       category: message.category,
       source: message.agentSource,
       name: message.agentName,

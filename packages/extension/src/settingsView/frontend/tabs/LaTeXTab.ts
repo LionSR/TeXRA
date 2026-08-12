@@ -53,13 +53,15 @@ import {
   REGEX_REPLACEMENT_CATEGORIES,
   type NonRegexReplacementCategory,
   type RegexReplacementCategory,
+} from '@shared/constants/replacementCategories';
+import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_FIELD_TO_KEY,
   LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
   LATEX_CONFIG_RANGES,
-} from '@shared/constants/latex';
+} from '@shared/constants/latexConfig';
 
-// Local imports - shared constants
+// Local imports - LaTeX toolchain (install guides + commands)
 import {
   PDFLATEX_INSTALL_GUIDE,
   LATEXDIFF_INSTALL_GUIDE,
@@ -71,7 +73,7 @@ import {
   SCOOP_INSTALL_COMMAND,
   type InstallCommand,
   type OSPlatform,
-} from '@shared/constants/latex';
+} from '@shared/constants/latexToolchain';
 
 // Local imports - shared utilities
 import { clampOptional, filterNotNullish } from '@utils/core';
@@ -730,25 +732,31 @@ export class LaTeXTab extends LitElement {
     field: 'customReplacements' | 'customReplacementsRegex',
     source: string,
   ): void {
+    let parsed: unknown;
     try {
-      const parsed: unknown = JSON.parse(source);
-      const result = CoreSettingsShape.latex
-        .unwrap()
-        .shape[field].safeParse(parsed);
-      if (!result.success) {
-        throw new Error('Enter a JSON object with string values.');
-      }
-      this.replacementJsonErrors = {
-        ...this.replacementJsonErrors,
-        [field]: undefined,
-      };
-      this.dispatchSetConfigValue(field, result.data);
+      parsed = JSON.parse(source);
     } catch (error) {
       this.replacementJsonErrors = {
         ...this.replacementJsonErrors,
         [field]: error instanceof Error ? error.message : 'Invalid JSON.',
       };
+      return;
     }
+    const result = CoreSettingsShape.latex
+      .unwrap()
+      .shape[field].safeParse(parsed);
+    if (!result.success) {
+      this.replacementJsonErrors = {
+        ...this.replacementJsonErrors,
+        [field]: 'Enter a JSON object with string values.',
+      };
+      return;
+    }
+    this.replacementJsonErrors = {
+      ...this.replacementJsonErrors,
+      [field]: undefined,
+    };
+    this.dispatchSetConfigValue(field, result.data);
   }
 
   private dispatchSetConfigValue<F extends LatexConfigField>(

@@ -17,7 +17,10 @@ export function playCompletionSound(): void {
       osc.stop();
       ctx.close();
     }, 150);
-  } catch {
-    // Ignore errors (e.g., autoplay restrictions)
+  } catch (error) {
+    // Autoplay restrictions and audio-device absence are expected and not
+    // fatal, but surface the cause so a regressing AudioContext path is not
+    // invisible.
+    console.warn('Failed to play completion sound:', error);
   }
 }

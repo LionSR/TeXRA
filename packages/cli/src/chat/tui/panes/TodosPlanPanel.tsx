@@ -3,6 +3,7 @@
 
 import { Box, Text } from 'ink';
 
+import { hiddenRowsText } from '@cli/tui/overflowText';
 import { COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { TODO_ACTIVE, TODO_DONE, TODO_PENDING } from '@cli/tui/ui/glyphs';
 import {
@@ -19,7 +20,6 @@ import {
   activeStreamId as activeStreamIdSignal,
   streams as streamsSignal,
 } from '../state/cliState';
-import { hiddenRowsText } from '../render/overflowText';
 import { useSignal } from '../state/useSignal';
 
 // Marker glyph + color per todo status; statuses absent here (e.g. PENDING)

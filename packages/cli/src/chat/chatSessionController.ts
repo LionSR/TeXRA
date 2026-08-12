@@ -23,6 +23,7 @@ import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
+import { chatAgentSupportsDelegation } from '@cli/runtime/agents';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from '@cli/runtime/approval/settleApprovals';
@@ -52,7 +53,6 @@ import { StreamSnapshotStore } from '@transcript';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { chatAgentSupportsDelegation } from './tui/commands/handlers/agentModelCommands';
 import { clearApprovals } from './tui/state/approvalQueue';
 import {
   focusStream,

@@ -16,14 +16,13 @@
 
 import { appSignals } from '@eventBus/AppSignals';
 import type { Disposable } from '@platform/interfaces';
-import { shouldDropBotEvent } from './botFilter';
 import {
   formatIssueClosed,
   formatIssueComment,
   formatIssueReopened,
   formatIssueSubscriptionError,
 } from './formatIssueEvent';
-import { issueRef, withSince } from './formatUtils';
+import { issueRef, withSince } from './githubPaths';
 import { ghGet } from './githubClient';
 import {
   type BasePollSubscriptionState,
@@ -166,7 +165,8 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     // advanced only after a successful parse, so a skip re-fetches next tick
     // (no If-None-Match) and lastSuccessAt still advances → no 24 h detach. A
     // bad single element triggers a whole-array skip instead of a mid-loop
-    // TypeError throw. The first tick only seeds so we never replay history.
+    // TypeError throw. The first tick only seeds so we never replay history
+    // (handled by the shared consumeCommentList choreography).
     if (commentsRes.status === 200) {
       const parsedComments = this.validateOrSkip(
         commentsRes,
@@ -174,18 +174,19 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
         `Skipping comments tick for ${state.slug}#${issue.issueNumber}: malformed comments payload`,
       );
       if (!parsedComments) return;
-      state.etags.comments = commentsRes.etag;
-      if (state.initialized) {
-        state.comments.diff(parsedComments.data, (c) => {
-          if (shouldDropBotEvent(c.user)) return;
+      this.consumeCommentList(
+        parsedComments,
+        (etag) => {
+          state.etags.comments = etag;
+        },
+        state.comments,
+        (c) =>
           this.emit(
             state,
             formatIssueComment(state.slug, issue.issueNumber, c),
-          );
-        });
-      } else {
-        state.comments.seed(parsedComments.data);
-      }
+          ),
+        () => state.initialized,
+      );
     }
 
     state.initialized = true;

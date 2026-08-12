@@ -36,8 +36,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { stringifyWithLanguage } from '../parseUtils';
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { ICON_BY_LEVEL } from '../constants';
-import { registerCopyContent } from '../contentStore';
-import { stopSummaryToggleKeydown } from '../htmlBuilders';
+import { buildCopyButton } from '../htmlBuilders';
 import type { FormatResult } from '../baseLogFormatter';
 
 /** Level-decorated icon shared by the progress-status and default formatters. */
@@ -139,10 +138,6 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
   const detailText = detailLines.join('\n');
   const hasDetails = Boolean(detailText);
   const rawContent = detailText || summaryText;
-  const copyId = registerCopyContent(
-    rawContent,
-    id ? `error:${id}` : undefined,
-  );
 
   // Build modular template parts to avoid overly long single-line templates
   // prettier-ignore
@@ -151,8 +146,14 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
   const contentTemplate = html`<div class="banner-content log-entry-content banner-content--error">${detailTemplate}</div>`;
   // prettier-ignore
   const labelSpan = html`<span class="label" title=${tooltipTimestamp}>[${timeDisplay}] ${summaryText}</span>`;
+  // The copy button is shared markup (buildCopyButton); the label span is
+  // built here because its title carries the formatted timestamp.
   // prettier-ignore
-  const copyButton = html`<wa-button class="action-icon-button banner-content-copy" appearance="plain" variant="neutral" size="s" type="button" title="Copy error details" aria-label="Copy error details" data-default-title="Copy error details" data-success-title="Copied!" data-copy-id=${copyId} data-copy-type="banner" ?hidden=${!hasDetails} @keydown=${stopSummaryToggleKeydown}>${waIcon('copy')}</wa-button>`;
+  const copyButton = buildCopyButton('Copy error details', {
+    hidden: !hasDetails,
+    content: rawContent,
+    contentId: id ? `error:${id}` : undefined,
+  });
   // Toggle chevron now comes from <wa-details>'s built-in disclosure icon
   // (::part(icon)); banner-details--no-toggle hides that part when there's
   // nothing to expand, replacing the old inline visibility:hidden style.

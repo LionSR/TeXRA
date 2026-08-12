@@ -112,7 +112,7 @@ export class LatexDiffManager {
     }
   }
 
-  async handleLatexdiffofOutput(
+  async handleLatexdiffOfOutput(
     currRound: number,
     mapping: RoundFileMapping,
     stage?: StageHandle,

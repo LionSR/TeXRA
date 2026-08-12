@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 /**
- * A single command-to-handler binding for {@link registerCommands}.
+ * A single command-to-handler binding for {@link registerCommandEntries}.
  *
  * The handler keeps VS Code's native `registerCommand` signature
  * (`(...args: any[]) => any`) so value-returning handlers — whose results
@@ -24,7 +24,7 @@ interface CommandEntry {
  * verbatim — no wrapping — so return values, argument lists, and each
  * handler's own error handling are preserved exactly.
  */
-export function registerCommands(
+export function registerCommandEntries(
   context: vscode.ExtensionContext,
   entries: readonly CommandEntry[],
 ): void {

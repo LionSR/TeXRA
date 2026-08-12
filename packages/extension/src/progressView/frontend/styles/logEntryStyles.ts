@@ -514,3 +514,17 @@ export const logEntryStyles = css`
     word-break: inherit;
   }
 `;
+
+/**
+ * Shared collapsing rules for the custom-element banner panels
+ * (`<context-management>`, `<latexdiff-results>`). These run inside the
+ * component shadow root, so the class-scoped `.banner-details` rule in this
+ * sheet cannot reach them; each panel loads this block alongside its own
+ * `wa-details` margin.
+ */
+export const bannerDetailsWaDetailsStyles = css`
+  wa-details {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 40px;
+  }
+`;

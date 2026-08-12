@@ -12,6 +12,18 @@ import { REVEAL_TIMEOUT_MS } from '@tools/approval/toolEditApproval';
 
 import { raceWithTimeout } from '../vscode/raceWithTimeout';
 
+/**
+ * The file URI a tab input surfaces, or null when the tab shows no single
+ * file. Shared by the diff-view and tool-edit-approval hosts, which both watch
+ * and close tabs that reference files.
+ */
+export function tabInputFileUri(tab: vscode.Tab): vscode.Uri | null {
+  const input = tab.input;
+  if (input instanceof vscode.TabInputText) return input.uri;
+  if (input instanceof vscode.TabInputTextDiff) return input.modified;
+  return null;
+}
+
 export class VscodeDiffViewHost implements DiffViewHost {
   async openDiff(
     original: DiffSource,
@@ -48,11 +60,11 @@ export class VscodeDiffViewHost implements DiffViewHost {
             input.modified.toString() === proposedUri
           );
         }
-        if (input instanceof vscode.TabInputText) {
-          const uri = input.uri.toString();
-          return uri === originalUri || uri === proposedUri;
-        }
-        return false;
+        const uri = tabInputFileUri(tab);
+        return (
+          uri !== null &&
+          (uri.toString() === originalUri || uri.toString() === proposedUri)
+        );
       });
 
     if (tabsToClose.length > 0) {

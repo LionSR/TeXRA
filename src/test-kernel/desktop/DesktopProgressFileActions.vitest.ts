@@ -159,7 +159,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       1: [outputInfo(absolutePath('run', 'r1', 'main.tex'))],
     };
 
-    await actions.runLatexdiffForRun(
+    await actions.diffAcceptedFilePair(
       absolutePath('workspace', 'main.tex'),
       absolutePath('run', 'r1', 'main.tex'),
       {
@@ -191,7 +191,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
     const { actions, openBuildDisplay, runLatexdiffForExecution, runDiff } =
       await loadFileActions({ outcome });
 
-    await actions.runLatexdiffForRun(
+    await actions.diffAcceptedFilePair(
       absolutePath('workspace', 'main.tex'),
       absolutePath('workspace', 'main_orchestrator_r1_gpt.tex'),
       {
@@ -228,7 +228,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
         fallbackResult: { success: true, diffFileName: 'fallback_diff.tex' },
       });
 
-    await actions.runLatexdiffForRun(
+    await actions.diffAcceptedFilePair(
       absolutePath('workspace', 'base.tex'),
       absolutePath('run', 'r1', 'main.tex'),
       {
@@ -259,7 +259,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       outcome,
     });
 
-    await actions.runLatexdiffForRun(
+    await actions.diffAcceptedFilePair(
       absolutePath('workspace', 'main.tex'),
       absolutePath('run', 'r2', 'main.tex'),
       {
@@ -287,7 +287,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       fallbackResult: { success: true, diffFileName: 'fallback_diff.tex' },
     });
 
-    await actions.runLatexdiffForRun(
+    await actions.diffAcceptedFilePair(
       absolutePath('workspace', 'base.tex'),
       absolutePath('run', 'r1', 'main.tex'),
       {
@@ -312,7 +312,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       fallbackResult: { success: true, diffFileName: 'fallback_diff.tex' },
     });
 
-    await actions.runLatexdiffForRun(
+    await actions.diffAcceptedFilePair(
       absolutePath('workspace', 'base.tex'),
       absolutePath('run', 'r1', 'main.tex'),
       {
@@ -339,7 +339,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       },
     });
 
-    await actions.runLatexdiffForRun(
+    await actions.diffAcceptedFilePair(
       absolutePath('workspace', 'a.tex'),
       absolutePath('workspace', 'a_r1.tex'),
       {

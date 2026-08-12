@@ -19,7 +19,7 @@ import {
 import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
-} from '@shared/constants/latex';
+} from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   checkToolInstalled,

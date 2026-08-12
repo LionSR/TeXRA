@@ -1,10 +1,12 @@
 /** Profile handlers: UPDATE_PROFILE. */
 
+import { z } from 'zod';
+
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
-import type {
-  SpendingStatus,
-  SpendingStatusError,
+import {
+  SpendingStatusErrorSchema,
+  SpendingStatusSchema,
 } from '@shared/schemas/spendingStatus';
 
 import {
@@ -20,31 +22,22 @@ import {
   userEmail,
 } from '../settingsState';
 
-function spendingStatusEqual(
-  a: SpendingStatus | null,
-  b: SpendingStatus | null,
+/**
+ * Value-equality over an object schema's fields. The two spending-status
+ * shapes are flat `z.object` contracts (see `spendingStatus.ts`), so a
+ * hand-enumerated per-field `&&` chain is just the schema's key list written
+ * twice — iterate `schema.shape` instead so adding a field to the schema
+ * automatically joins the comparison.
+ */
+function equalBySchema<T extends z.ZodObject<z.ZodRawShape>>(
+  schema: T,
+  a: z.infer<T> | null,
+  b: z.infer<T> | null,
 ): boolean {
   if (a === b) return true;
   if (a === null || b === null) return false;
-  return (
-    a.currentSpend === b.currentSpend &&
-    a.limit === b.limit &&
-    a.remaining === b.remaining &&
-    a.percentUsed === b.percentUsed
-  );
-}
-
-function spendingStatusErrorEqual(
-  a: SpendingStatusError | null,
-  b: SpendingStatusError | null,
-): boolean {
-  if (a === b) return true;
-  if (a === null || b === null) return false;
-  return (
-    a.spendCheckFailed === b.spendCheckFailed &&
-    a.failureReason === b.failureReason &&
-    a.limit === b.limit
-  );
+  const keys = Object.keys(schema.shape) as (keyof z.infer<T>)[];
+  return keys.every((key) => a[key] === b[key]);
 }
 
 export const profileHandlers = {
@@ -56,14 +49,20 @@ export const profileHandlers = {
     // Skip the signal update when the snapshot is value-equal so the Lit
     // re-render isn't triggered on every UPDATE_PROFILE just because the
     // JSON parse produced a fresh object reference.
-    if (!spendingStatusEqual(spendingStatus.get(), newSpend)) {
+    if (!equalBySchema(SpendingStatusSchema, spendingStatus.get(), newSpend)) {
       spendingStatus.set(newSpend);
     }
     // Fields declared with `.prefault()` in UpdateProfileMessageSchema are
     // guaranteed present by the validating dispatcher — no fallback needed.
     sessionProblem.set(data.sessionProblem);
     const newSpendError = data.spendingStatusError ?? null;
-    if (!spendingStatusErrorEqual(spendingStatusError.get(), newSpendError)) {
+    if (
+      !equalBySchema(
+        SpendingStatusErrorSchema,
+        spendingStatusError.get(),
+        newSpendError,
+      )
+    ) {
       spendingStatusError.set(newSpendError);
     }
     quotaAutoSwitched.set(data.quotaAutoSwitched);

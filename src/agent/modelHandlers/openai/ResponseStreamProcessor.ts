@@ -12,7 +12,7 @@ import {
   buildOpenAIWebSearchResult,
   hasOpenAIWebSearchData,
   type WebSearchResult,
-} from '@agent/types/ServerToolTypes';
+} from '@agent/types/ServerTools';
 import type {
   Response,
   ResponseFunctionWebSearch,

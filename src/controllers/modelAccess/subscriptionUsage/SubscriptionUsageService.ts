@@ -5,7 +5,7 @@ import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
 } from '@shared/schemas';
-import { getGLMUseChina } from '@utils/config/providerConfig';
+import { useChinaRegion } from '@utils/config/providerConfig';
 
 import {
   fetchChatGptUsage,
@@ -32,7 +32,7 @@ const PROVIDER_NAMES: Record<SubscriptionUsageProvider, string> = {
   glmCodingPlan: 'GLM',
 };
 
-const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
+export const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
   chatgpt: 'ChatGPT Coding Plan',
   kimiCode: 'Kimi Code',
   glmCodingPlan: 'GLM Coding Plan',
@@ -78,7 +78,7 @@ const DEFAULT_CREDENTIALS: SubscriptionUsageCredentials = Object.freeze({
   loadApiKey(provider: 'kimiCode' | 'glm'): Promise<string | undefined> {
     return lookupApiKey(platform().secrets, provider);
   },
-  useGlmChina: getGLMUseChina,
+  useGlmChina: () => useChinaRegion('glm'),
 });
 
 /**

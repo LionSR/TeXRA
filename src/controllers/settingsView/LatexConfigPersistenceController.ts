@@ -7,7 +7,7 @@ import {
   LATEX_FIELD_TO_KEY,
   LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
   type LatexConfigField,
-} from '@shared/constants/latex';
+} from '@shared/constants/latexConfig';
 
 // Local imports - shared schemas
 import {

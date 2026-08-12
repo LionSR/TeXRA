@@ -7,6 +7,7 @@ import {
 } from '@controllers/mainView/MainViewStartupController';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import type { StateStore } from '@platform/interfaces';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -25,6 +26,7 @@ export interface DesktopMainViewStartupOptions {
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
   loadOptions?: () => Promise<MainViewStartupOptions>;
   onAsyncError?: (error: unknown) => void;
+  globalState: StateStore;
 }
 
 export function createDesktopMainViewStartup({
@@ -32,6 +34,7 @@ export function createDesktopMainViewStartup({
   getAuthStatus,
   loadOptions,
   onAsyncError,
+  globalState,
 }: DesktopMainViewStartupOptions): DesktopMessageHandler {
   const startupController = new MainViewStartupController({
     getConfig,
@@ -52,6 +55,7 @@ export function createDesktopMainViewStartup({
       };
     },
     getAuthStatus: getAuthStatus ?? defaultGetAuthStatus,
+    globalState,
   });
 
   async function postStartupMessages(): Promise<void> {

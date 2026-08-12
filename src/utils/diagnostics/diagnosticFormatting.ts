@@ -10,11 +10,17 @@ import { groupBy } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 /**
+ * Severity levels, matching `vscode.DiagnosticSeverity` values
+ * (Error=0, Warning=1, Information=2, Hint=3).
+ */
+export type DiagnosticSeverity = 0 | 1 | 2 | 3;
+
+/**
  * Minimal diagnostic shape required by the formatting functions.
  * Compatible with `vscode.Diagnostic` and `LeanDiagnostic`.
  */
 export interface GenericDiagnostic {
-  severity: number;
+  severity: DiagnosticSeverity;
   message: string;
   range: {
     start: { line: number; character: number };
@@ -44,7 +50,7 @@ const SEVERITY_HINT = 3;
  * deliberately share one.
  */
 const SEVERITY_CONFIG: Record<
-  number,
+  DiagnosticSeverity,
   { label: string; countKey: keyof SeverityCounts; sectionTitle: string }
 > = {
   [SEVERITY_ERROR]: {

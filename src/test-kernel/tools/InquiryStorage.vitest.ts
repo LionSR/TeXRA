@@ -6,7 +6,7 @@ import * as logUtils from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import {
   ExternalInquiryPermissionSchema,
-  type ExternalInquiryThreadId,
+  type InquiryThreadId,
   type StreamTabId,
 } from '@shared/schemas';
 import { ToolError } from '@shared/schemas/toolResult';
@@ -151,11 +151,11 @@ describe('InquiryStorage', () => {
   it.each([
     {
       name: 'rejects re-dispatch on an open thread',
-      retire: async (_threadId: ExternalInquiryThreadId) => {},
+      retire: async (_threadId: InquiryThreadId) => {},
     },
     {
       name: 'rejects ask on a dropped thread',
-      retire: async (threadId: ExternalInquiryThreadId) => {
+      retire: async (threadId: InquiryThreadId) => {
         await markDropped({ threadId });
       },
     },
@@ -351,7 +351,7 @@ describe('InquiryStorage', () => {
     // not-found instead of silently overwriting the on-disk file.
     await expect(
       recordOpenQuestion({
-        threadId: 'ei_aabbccdd0033' as ExternalInquiryThreadId,
+        threadId: 'ei_aabbccdd0033' as InquiryThreadId,
         parentStreamId: STREAM_A,
         question: 'Q?',
       }),

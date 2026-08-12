@@ -24,7 +24,6 @@ import type {
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import type {
   FunctionTool,
-  WebSearchTool,
   Tool as OpenAIResponseTool,
 } from 'openai/resources/responses/responses';
 
@@ -487,8 +486,7 @@ export function toOpenAIResponseTools(
       supportsNativeWebSearch &&
       !d.forceFunctionCall
     ) {
-      const webSearchTool: WebSearchTool = { type: 'web_search' };
-      tools.push(webSearchTool);
+      tools.push({ type: 'web_search' });
       continue;
     }
 

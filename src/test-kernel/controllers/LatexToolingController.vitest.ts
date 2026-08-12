@@ -8,7 +8,7 @@ import {
 import {
   HOMEBREW_INSTALL_COMMAND,
   type OSPlatform,
-} from '@shared/constants/latex';
+} from '@shared/constants/latexToolchain';
 import { DEFAULT_LATEX_SETTINGS_STATUS } from '@shared/schemas/settingsViewMessages';
 
 const INSTALLED_TOOLS = {

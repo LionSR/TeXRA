@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 // Local imports
-import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
+import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { executed } from '@tools/core/result';
 import { detectPackageManager } from '@utils/system/toolUtils';
@@ -16,11 +16,10 @@ import { extendEnvPath, safeHomedir } from '@utils/system/platformPaths';
 import { defineTool } from '../core/define';
 import {
   getChatGptSubscriptionStatus,
-  getSetupAuthStatus,
   getSetupPlatform,
   setupSecrets,
 } from './platform';
-import { locateTool, missingCoreTools, PROBED_CORE_TOOLS } from './toolProbing';
+import { collectCoreSetupStatus, locateTool } from './toolProbing';
 
 const ProbeEnvironmentInputSchema = z
   .strictObject({})
@@ -54,21 +53,15 @@ export class ProbeEnvironmentTool extends defineTool({
     const homedir = safeHomedir() ?? '<unresolved>';
     const extendedPath = extendEnvPath();
     const pm = detectPackageManager();
-    // Authentication verifies a configured relay token and primes the shared
-    // status cache. Credential readiness must read that settled state.
-    const auth = await getSetupAuthStatus().catch(() => ({
-      authenticated: false as const,
-    }));
-
     const [
-      coreTools,
+      core,
       optionalTools,
       apiKeys,
       credentialReadiness,
       githubToken,
       chatGptStatus,
     ] = await Promise.all([
-      Promise.all(PROBED_CORE_TOOLS.map((name) => locateTool(name))),
+      collectCoreSetupStatus(platform),
       Promise.all(OPTIONAL_TOOLS.map((name) => locateTool(name))),
       Promise.all(
         setupSecrets.providers.map(async (provider) => {
@@ -89,11 +82,7 @@ export class ProbeEnvironmentTool extends defineTool({
       })),
     ]);
 
-    const missingCore = missingCoreTools(coreTools);
-
-    const latexWorkshopInstalled = platform.extensions?.isInstalled(
-      LATEX_WORKSHOP_EXT_ID,
-    );
+    const { auth, coreTools, missingCore, latexWorkshopInstalled } = core;
 
     const summary = {
       host: platform.host,
