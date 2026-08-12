@@ -1,13 +1,13 @@
-import { defaultSession } from '@agent/runtime/SessionHandle';
-import type {
-  HostAgentProposalRequest,
-  HostApprovalBypassStateUpdate,
-  HostInteractions,
-  HostRetryRequest,
-  HostUserQuestionRequest,
-  RetryResult,
-  UserQuestionSettlement,
-} from '@agent/runtime/HostInteractions';
+import {
+  defaultSession,
+  type HostAgentProposalRequest,
+  type HostApprovalBypassStateUpdate,
+  type HostInteractions,
+  type HostRetryRequest,
+  type HostUserQuestionRequest,
+  type RetryResult,
+  type UserQuestionSettlement,
+} from '@agent/runtime';
 import {
   type AgentProposalPermission,
   type ApprovalDecision,

@@ -2,7 +2,7 @@ import {
   initializeDefaultSession,
   tryDefaultSession,
   type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+} from '@agent/runtime';
 import { createSessionStores } from '@controllers/session/sessionStores';
 import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';

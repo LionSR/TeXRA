@@ -13,7 +13,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Shared schemas and dispatchers
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { globalSM, workspaceSM } from '@common/state';

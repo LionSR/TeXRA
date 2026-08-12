@@ -6,27 +6,27 @@ import type { AgentTrace } from '@agent/trace';
 import { computeAgentOptionsData, getAgent } from '@agent/index';
 import { createChannelTrace } from '@agent/trace';
 import type { SessionStores } from '@agent/storage';
+import {
+  detachSubagentsOnStop,
+  dispatchPresentationEvent,
+  polishTextWithAI,
+  trackTerminalResultPresentation,
+  type PresentationEventHandlers,
+  type RuntimePresentationEvent,
+  type RuntimePresentationEventPayloads,
+  type SessionHandle,
+  type SessionHostInteractions,
+} from '@agent/runtime';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   validateExecutionRequest,
   type ExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { polishTextWithAI } from '@agent/runtime/textEnhancement';
 import {
   presentFollowUpResult,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import {
-  dispatchPresentationEvent,
-  type PresentationEventHandlers,
-  type RuntimePresentationEvent,
-  type RuntimePresentationEventPayloads,
-} from '@agent/runtime/runtimePresentationEvents';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
@@ -834,7 +834,6 @@ export class DesktopProgressBridge {
         },
         file: {
           openFile: (file, line) => this.options.host.openPath(file, line),
-          openFileCompile: (file) => this.openFileCompile(file),
         },
         approval: {
           approvePendingDelegatedWork: (stream, initiatingProposalId) =>
@@ -995,13 +994,6 @@ export class DesktopProgressBridge {
           await this.reportRecordingError(toErrorMessage(error));
           this.postRecordingStatus({ status: 'stopped' });
         }
-      },
-      // Settings navigation
-      openMemoryView: () => {
-        this.showSettings(SETTINGS_TAB.MEMORY);
-      },
-      openProfile: () => {
-        this.showSettings();
       },
       // Pop-out-to-editor is a VS Code editor-tab concept; the desktop app is
       // a single window.
@@ -1233,10 +1225,6 @@ export class DesktopProgressBridge {
         });
       });
     return Promise.resolve();
-  }
-
-  openFileCompile(filePath: string): Promise<void> {
-    return this.fileActions.openFileCompile(filePath);
   }
 
   /**

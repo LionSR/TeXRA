@@ -26,6 +26,7 @@ const RESIDENCY_SITE_ALLOWLIST = new Set([
   'packages/extension/src/progressView/ProgressViewProvider.ts',
   'src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts',
   'src/agent/runtime/executeAgent.ts',
+  'src/controllers/progressView/backend/ProgressBackend.ts',
   'src/controllers/session/SessionFactApplier.ts',
   'src/transcript/StreamLogStore.ts',
 ]);

@@ -2,8 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession, detachSubagentsOnStop } from '@agent/runtime';
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import type { StreamTabId } from '@shared/schemas';
 

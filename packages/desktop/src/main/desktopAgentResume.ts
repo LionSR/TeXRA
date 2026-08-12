@@ -1,10 +1,12 @@
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
+import {
+  resolveAndResumeStream,
+  resumeQueuedToolUseFromResumeData,
+  trackTerminalResultPresentation,
+  type SessionHandle,
+} from '@agent/runtime';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
-import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
-import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
