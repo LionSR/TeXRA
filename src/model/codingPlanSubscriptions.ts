@@ -28,7 +28,7 @@ export interface CodingPlanSubscriptionRuntime {
 }
 
 /** Whether GLM requests use the coding-plan endpoint rather than another route. */
-function isGlmCodingPlanRouteActive(config: {
+export function isGlmCodingPlanRouteActive(config: {
   readonly baseUrl?: string | null;
 }): boolean {
   return (

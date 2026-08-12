@@ -12,6 +12,7 @@ import {
 import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { setProviderEndpoint } from '@utils/config/providerConfig';
 
 describe('coding-plan subscription runtime', () => {
   let relayServesModel = false;
@@ -35,7 +36,10 @@ describe('coding-plan subscription runtime', () => {
     });
   });
 
-  afterEach(() => setIncludedModelAccess(null));
+  afterEach(async () => {
+    setIncludedModelAccess(null);
+    await setProviderEndpoint('glm', '');
+  });
 
   it('does not report the GLM plan when included access serves the model', async () => {
     await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
@@ -44,6 +48,13 @@ describe('coding-plan subscription runtime', () => {
     });
 
     relayServesModel = true;
+
+    await expect(activeCodingPlanForModel('glm52')).resolves.toBeUndefined();
+  });
+
+  it('does not classify a custom coding-shaped GLM endpoint as plan usage', async () => {
+    await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+    await setProviderEndpoint('glm', 'proxy.test/api/coding/paas/v4');
 
     await expect(activeCodingPlanForModel('glm52')).resolves.toBeUndefined();
   });

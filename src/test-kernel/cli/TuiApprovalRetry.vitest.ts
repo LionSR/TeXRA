@@ -388,6 +388,12 @@ beforeEach(() => {
     if (id === 'kimiCode') mocks.preferKimiCode = enabled;
     if (id === 'glmCodingPlan') mocks.glmCodingPlan = enabled;
   });
+  mocks.setPreferKimiCode.mockImplementation(async (enabled) => {
+    mocks.preferKimiCode = enabled;
+  });
+  mocks.setGLMCodingPlan.mockImplementation(async (enabled) => {
+    mocks.glmCodingPlan = enabled;
+  });
 });
 
 afterEach(() => {
@@ -402,6 +408,8 @@ afterEach(() => {
   mocks.setCliApiMode.mockReset();
   mocks.setCliCodexSubscription.mockReset();
   mocks.setCliCodingPlanSubscription.mockReset();
+  mocks.setPreferKimiCode.mockReset();
+  mocks.setGLMCodingPlan.mockReset();
   mocks.updateGlobalState.mockReset();
 });
 
@@ -808,6 +816,39 @@ describe('TUI retry approvals', () => {
       'kimiCode',
       false,
     );
+  });
+
+  it('restores Kimi without overwriting a newer OpenRouter choice', async () => {
+    mocks.preferKimiCode = true;
+    mocks.hasUsableApiKey.mockImplementation(
+      async (_secrets, provider: ApiProvider) => provider === 'moonshot',
+    );
+    mocks.setCliCodingPlanSubscription.mockImplementationOnce(async () => {
+      mocks.preferKimiCode = false;
+      mocks.openRouter = true;
+      throw new Error('Kimi preference write failed');
+    });
+
+    const { interactions } = tui();
+    const result = interactions.requestRetry?.(
+      kimiCodeSubscriptionRetry('kimi-rollback'),
+    );
+    await waitForApproval('retry', { streamId: 'kimi-rollback' });
+    decideRetry({
+      accepted: true,
+      apiMode: 'personal',
+      disableCodingPlan: 'kimiCode',
+    });
+
+    await expect(result).resolves.toEqual({
+      action: 'deny',
+      reason: expect.stringContaining('Kimi preference write failed'),
+    });
+    expect(mocks.preferKimiCode).toBe(true);
+    expect(mocks.openRouter).toBe(true);
+    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true, undefined, {
+      preserveOpenRouter: true,
+    });
   });
 
   it('does not offer or apply the subscription switch without an OpenAI API key', async () => {
