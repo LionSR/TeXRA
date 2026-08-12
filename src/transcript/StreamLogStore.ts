@@ -9,6 +9,7 @@ import * as log from '@logger/logUtils';
 import {
   AgentCategorySchema,
   END_GROUP_STATUS,
+  ExecutionIdSchema,
   RUN_OUTCOME,
   RunIdentitySchema,
   STREAM_LOG_ENTRY_TYPES,
@@ -65,7 +66,7 @@ type StreamLogListener = (streamId: StreamTabId, delta: StreamLogDelta) => void;
  */
 const StreamSummaryMetaSchema = z.object({
   identity: RunIdentitySchema.optional(),
-  executionId: z.string().min(1).optional(),
+  executionId: ExecutionIdSchema.optional(),
   parentStreamId: z.string().min(1).optional(),
   userFollowUpSupport: UserFollowUpSupportSchema.optional(),
   agentCategory: AgentCategorySchema.optional(),
@@ -1245,7 +1246,11 @@ export class StreamLogStore {
     // replacement set knows the stream (no-op on read-only opens: the
     // antechamber only fills through recordSummaryMeta, which is writable-only).
     for (const streamId of [...this.pendingSummaryMeta.keys()]) {
-      if (this.summaries.has(streamId)) this.adoptPendingSummaryMeta(streamId);
+      if (this.summaries.has(streamId)) {
+        this.adoptPendingSummaryMeta(streamId);
+      } else {
+        this.pendingSummaryMeta.delete(streamId);
+      }
     }
     this.writeTombstones.clear();
     this.clearing = false;

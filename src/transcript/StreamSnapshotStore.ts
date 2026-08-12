@@ -130,6 +130,7 @@ type OutputFilesPatch = Map<number, OutputFileInfo[] | null>;
 type UsageUpdateResult =
   TokenUsageStats | undefined | Promise<TokenUsageStats | undefined>;
 interface HydratedRunState {
+  authorityReadComplete: boolean;
   config?: AgentConfig;
   identity?: RunIdentity;
   userFollowUpSupport?: UserFollowUpSupport;
@@ -1811,6 +1812,7 @@ export class StreamSnapshotStore {
     let identity: RunIdentity | undefined;
     let userFollowUpSupport: UserFollowUpSupport | undefined;
     let description: string | undefined;
+    let authorityReadComplete = true;
 
     if (executionId) {
       let config: AgentConfig | null = null;
@@ -1835,16 +1837,28 @@ export class StreamSnapshotStore {
         description = execMeta?.description;
         config = execConfig;
       } catch (error) {
+        authorityReadComplete = false;
         log.warn(`Could not read execution record for stream ${stream}.`, {
           data: { stream, executionId, error },
         });
       }
       if (config) {
-        return { config, identity, userFollowUpSupport, description };
+        return {
+          authorityReadComplete,
+          config,
+          identity,
+          userFollowUpSupport,
+          description,
+        };
       }
     }
 
-    return { identity, userFollowUpSupport, description };
+    return {
+      authorityReadComplete,
+      identity,
+      userFollowUpSupport,
+      description,
+    };
   }
 
   /** Seed the in-memory accumulators for one stream. */
@@ -1858,6 +1872,7 @@ export class StreamSnapshotStore {
     const metaOverlay = record.metaOverlay ? record.meta : undefined;
     const usageOverlayToReplay = new Map(record.overlays.usage);
     const sidecarsToWrite = new Set<OverlaySidecarKey>();
+    let summaryMetaComplete = true;
 
     record.outputFiles = data.outputFiles;
     record.missingOutputs = data.missingOutputs;
@@ -1906,6 +1921,7 @@ export class StreamSnapshotStore {
       const pendingLiveWrite = metaOverlay !== undefined;
       const configBeforeHydration = record.runConfig;
       const hydrated = await this.hydrateRunStateFromMeta(stream, meta);
+      summaryMetaComplete = hydrated.authorityReadComplete;
       if (this.streamVersion(stream) !== version) return;
       // Re-checked after the await: a `run.start` for another execution can
       // land during it, and this seed's pair belongs to the run it read.
@@ -1983,7 +1999,9 @@ export class StreamSnapshotStore {
     // Every hydration republishes the metadata mirror: the deep-equal gate
     // downstream makes an unchanged republish free, and this is what lazily
     // backfills summaries persisted before the mirror existed (#9947).
-    if (this.records.get(stream) === record) this.publishSummaryMeta(stream);
+    if (summaryMetaComplete && this.records.get(stream) === record) {
+      this.publishSummaryMeta(stream);
+    }
   }
 
   /** Persist sidecars from merged memory after seeding and overlays converge. */

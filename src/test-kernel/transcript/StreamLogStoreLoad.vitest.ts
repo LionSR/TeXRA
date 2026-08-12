@@ -1834,7 +1834,7 @@ describe('StreamLogStore summary metadata mirror', () => {
 
   const META = {
     identity: { kind: 'agent' as const, agent: 'polish' },
-    executionId: 'exec-1',
+    executionId: 'a77e77',
     parentStreamId: 'parent-stream',
     description: 'Polish the draft',
     model: 'deepseekproT',
@@ -1918,6 +1918,16 @@ describe('StreamLogStore summary metadata mirror', () => {
     expect(reloaded).toBe(true);
   });
 
+  it('drops metadata awaiting a stream that is absent after reload', async () => {
+    mockStorage({ logs: {}, summaries: {} });
+    const store = await StreamLogStore.open();
+    store.recordSummaryMeta('old-root-stream', META);
+
+    await store.reload({ discardPendingWrites: true });
+
+    expect(store.getSummaryMeta('old-root-stream')).toBeUndefined();
+  });
+
   it('discards a stale-shaped summary cache loudly and rebuilds from the log', async () => {
     const storage = mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 200)] },
@@ -1938,6 +1948,24 @@ describe('StreamLogStore summary metadata mirror', () => {
       'StreamLogStore',
       expect.stringContaining('stale-shaped summary cache'),
     );
+  });
+
+  it('discards a summary whose execution id violates the canonical schema', async () => {
+    const storage = mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: {
+        alpha: {
+          ...summary(200, 200),
+          meta: { ...META, executionId: 'not-an-id' },
+        },
+      },
+    });
+    vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+
+    const store = await StreamLogStore.open();
+
+    expect(storage.fullLogReads()).toBe(1);
+    expect(store.getSummaryMeta('alpha')).toBeUndefined();
   });
 
   it('holds metadata for an unregistered stream without minting a tab and lands it on registration', async () => {

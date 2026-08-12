@@ -2742,4 +2742,34 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
     await store.preload([STREAM]);
     expect(seen.at(-1)?.meta).toMatchObject({ executionId: 'a77e77' });
   });
+
+  it('preserves mirrored metadata when execution hydration is incomplete', async () => {
+    vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const executionId = 'a77e77' as ExecutionId;
+    await writeMetaFile(STREAM, { executionId });
+    vi.spyOn(getExecutionStore(executionId), 'readMeta').mockRejectedValueOnce(
+      new Error('transient execution read failure'),
+    );
+    let mirroredMeta: Record<string, unknown> = {
+      executionId,
+      identity: { kind: 'agent', agent: 'search' },
+      description: 'Existing summary metadata',
+      model: 'deepseekproT',
+    };
+    const store = new StreamSnapshotStore();
+    store.attachSessionEvents(new SessionEventHub(), {
+      summaryMetaSink: (_stream, meta) => {
+        mirroredMeta = meta;
+      },
+    });
+
+    await store.load([STREAM]);
+
+    expect(mirroredMeta).toEqual({
+      executionId,
+      identity: { kind: 'agent', agent: 'search' },
+      description: 'Existing summary metadata',
+      model: 'deepseekproT',
+    });
+  });
 });
