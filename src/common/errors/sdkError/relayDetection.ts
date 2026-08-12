@@ -19,6 +19,8 @@ const ERROR_TYPE_OR_CODE_TO_STATUS: Record<string, number> = {
   not_found_error: StatusCodes.NOT_FOUND, // 404
   request_too_large: StatusCodes.REQUEST_TOO_LONG, // 413
   rate_limit_error: StatusCodes.TOO_MANY_REQUESTS, // 429
+  service_unavailable_error: StatusCodes.SERVICE_UNAVAILABLE, // 503
+  server_is_overloaded: StatusCodes.SERVICE_UNAVAILABLE, // 503
   api_error: StatusCodes.INTERNAL_SERVER_ERROR, // 500
   server_error: StatusCodes.INTERNAL_SERVER_ERROR, // 500
   timeout_error: StatusCodes.REQUEST_TIMEOUT, // 408

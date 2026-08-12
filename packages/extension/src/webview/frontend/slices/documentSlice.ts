@@ -88,13 +88,6 @@ export const documentHandlers = {
     }
   },
 
-  [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (message) => {
-    singleFiles$.set({
-      ...singleFiles$.get(),
-      editedFile: message.filePath,
-    });
-  },
-
   [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: handleSetMultipleFiles,
   [MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES]: handleSetMultipleFiles,
   [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: handleSetMultipleFiles,

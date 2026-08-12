@@ -1,5 +1,5 @@
 /**
- * Polymorphic execution handles.
+ * Live agent execution handle and terminal settlement.
  *
  * A handle owns one run's identity, its live control surfaces (interrupt,
  * tool-use flow, execution lease), and its exactly-once terminal settlement.
@@ -25,14 +25,6 @@ import { onAbort } from '@utils/core';
 export interface ExecutionStatusInfo {
   status: StreamPhase | 'unknown';
   elapsed: string | null;
-}
-
-export interface ExecutionHandle {
-  readonly executionId: string;
-  readonly parentStreamId: StreamTabId;
-  readonly category: AgentCategory;
-  readonly agentName: string;
-  readonly startedAt: number;
 }
 
 /**
@@ -123,7 +115,7 @@ export type LiveToolUseFlowContext = {
  * When `parentStreamId` differs from `childStreamId`, the handle represents
  * a subagent whose parent is an orchestrator.
  */
-export class AgentExecutionHandle implements ExecutionHandle {
+export class AgentExecutionHandle {
   readonly startedAt = Date.now();
   private _parentStreamId: StreamTabId;
   private interruptHandler?: ExecutionInterruptHandler;
@@ -388,14 +380,11 @@ export type AgentRunHandle = Pick<
 
 /**
  * True when the handle is a child of parentStreamId (not the parent itself).
- * Only an `AgentExecutionHandle` can be one, so callers that need the child's
- * agent-run members narrow through this predicate rather than re-testing
- * `instanceof` alongside it.
  */
 export function isChildExecution(
-  handle: ExecutionHandle,
+  handle: AgentExecutionHandle,
   parentStreamId: StreamTabId,
-): handle is AgentExecutionHandle {
+): boolean {
   if (handle.parentStreamId !== parentStreamId) return false;
-  return handle instanceof AgentExecutionHandle && handle.isChildExecution;
+  return handle.isChildExecution;
 }
