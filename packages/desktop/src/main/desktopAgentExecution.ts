@@ -834,7 +834,6 @@ export class DesktopProgressBridge {
         },
         file: {
           openFile: (file, line) => this.options.host.openPath(file, line),
-          openFileCompile: (file) => this.openFileCompile(file),
         },
         approval: {
           approvePendingDelegatedWork: (stream, initiatingProposalId) =>
@@ -995,13 +994,6 @@ export class DesktopProgressBridge {
           await this.reportRecordingError(toErrorMessage(error));
           this.postRecordingStatus({ status: 'stopped' });
         }
-      },
-      // Settings navigation
-      openMemoryView: () => {
-        this.showSettings(SETTINGS_TAB.MEMORY);
-      },
-      openProfile: () => {
-        this.showSettings();
       },
       // Pop-out-to-editor is a VS Code editor-tab concept; the desktop app is
       // a single window.
@@ -1233,10 +1225,6 @@ export class DesktopProgressBridge {
         });
       });
     return Promise.resolve();
-  }
-
-  openFileCompile(filePath: string): Promise<void> {
-    return this.fileActions.openFileCompile(filePath);
   }
 
   /**
