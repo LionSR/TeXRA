@@ -1,12 +1,15 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - types
+// Local imports
 import {
   NormalizedUsageSchema,
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
+import * as logger from '@logger/logUtils';
 import { TokenCountSchema } from '@shared/schemas';
+
+const CHANNEL = 'RunUsageAccumulator';
 
 /**
  * Schema for run usage totals. Internal only.
@@ -81,16 +84,23 @@ export type RunUsageAccumulatorJSON = z.output<
  * Each snapshot is parsed tolerantly (`.catch`): the old preprocess only ever
  * read the last element's `usage`, so a malformed earlier snapshot must not
  * fail the whole arm (which would drop the latest valid usage on resume). A
- * malformed `usage` degrades to `null` rather than rejecting the payload.
+ * malformed `usage` degrades to `null` rather than rejecting the payload, but
+ * the degradation is logged so a corrupted legacy record doesn't vanish
+ * silently.
  */
 const LegacyRunUsageAccumulatorSchema = z
   .object({
     totals: RunUsageTotalsSchema.prefault({}),
     latestUsage: NormalizedUsageSchema.nullish(),
     normalizedSnapshots: z.array(
-      z
-        .object({ usage: NormalizedUsageSchema.nullish() })
-        .catch({ usage: null }),
+      z.object({ usage: NormalizedUsageSchema.nullish() }).catch((ctx) => {
+        logger.warn(
+          CHANNEL,
+          'Malformed legacy normalizedSnapshots entry, discarding its usage',
+          { data: ctx.issues },
+        );
+        return { usage: null };
+      }),
     ),
   })
   .transform((legacy): RunUsageAccumulatorJSON => ({
