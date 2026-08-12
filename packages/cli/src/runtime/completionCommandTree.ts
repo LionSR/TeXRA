@@ -12,7 +12,6 @@ export interface CompletionCommand {
   readonly description: string;
   readonly subcommands: readonly string[];
   readonly flags: readonly CompletionFlag[];
-  readonly positionals: readonly string[];
 }
 
 export interface CompletionFlag {
@@ -157,21 +156,15 @@ export async function collectCommands(
     commandSubcommands(command),
   ]);
   const flags: CompletionFlag[] = [];
-  const positionals: string[] = [];
   for (const [name, arg] of Object.entries(args)) {
-    if (arg.type === 'positional') {
-      positionals.push(name);
-    } else {
-      const flag = flagFromArg(name, arg);
-      if (flag !== undefined) flags.push(flag);
-    }
+    const flag = flagFromArg(name, arg);
+    if (flag !== undefined) flags.push(flag);
   }
   const current: CompletionCommand = {
     path,
     description: meta.description ?? '',
     subcommands: Object.keys(subcommands),
     flags,
-    positionals,
   };
   const children = await Promise.all(
     Object.entries(subcommands).map(([name, child]) =>

@@ -83,7 +83,6 @@ describe('OpenAI Responses API', () => {
     ]);
 
     expectSingleNode(nodes, 'tool-call', { name: 'run' });
-    // Object arguments should be serialised.
     expect(JSON.parse(nodesOfKind(nodes, 'tool-call')[0].input)).toEqual({
       x: 1,
       y: 2,
@@ -161,7 +160,6 @@ describe('OpenAI Responses API', () => {
 
     const results = nodesOfKind(nodes, 'tool-result');
     expect(results).toHaveLength(1);
-    // Object output should be JSON-stringified.
     expect(() => JSON.parse(results[0].text)).not.toThrow();
   });
 
@@ -252,7 +250,6 @@ describe('Google GenAI', () => {
       },
     ]);
 
-    // No visible nodes should be produced.
     expect(nodes).toHaveLength(0);
   });
 
@@ -611,7 +608,6 @@ describe('OpenAI Chat Completions', () => {
       { role: 'system', content: 'You are a helpful assistant.' },
     ]);
 
-    // System messages should produce no nodes.
     expect(nodes).toHaveLength(0);
   });
 });
@@ -676,7 +672,6 @@ describe('Edge cases', () => {
       { role: 'assistant', content: [{ type: 'text', text: '   ' }] },
     ]);
 
-    // Whitespace-only text should be filtered out.
     expect(nodesOfKind(nodes, 'assistant-text')).toHaveLength(0);
   });
 

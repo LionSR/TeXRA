@@ -483,7 +483,7 @@ function buildWorkflowScriptSections(
   }
 
   if (Object.hasOwn(input, 'args')) {
-    const args = input.args === undefined ? null : input.args;
+    const args = input.args ?? null;
     sections.push(
       buildToolSection('Args:', JSON.stringify(args, null, 2), {
         language: 'json',

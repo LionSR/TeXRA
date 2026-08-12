@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { RestoreRunConfigInputSchema } from '@controllers/mainView/MainViewStateRestoreController';
 import { AgentCategory } from '@shared/schemas';

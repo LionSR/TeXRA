@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - shared tools
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 
 describe('deriveToolInputPreview', () => {

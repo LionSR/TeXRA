@@ -1,4 +1,3 @@
-// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createHelperModelKit = vi.hoisted(() => vi.fn());

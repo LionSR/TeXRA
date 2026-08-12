@@ -34,10 +34,6 @@ async function waitFor(
   throw new Error(`Timed out waiting for ${description}`);
 }
 
-function waitForFile(filePath: string): Promise<void> {
-  return waitFor(filePath, () => existsSync(filePath));
-}
-
 // Signal delivery to a whole process group, and the kernel reaping the members,
 // is not instant — and gets markedly slower when the suite is saturating every
 // core. The budget is generous (~10s) because it exists to catch a genuinely
@@ -114,7 +110,7 @@ describe('executeCommand', () => {
       env: { PID_FILE: pidFile },
     });
 
-    await waitForFile(pidFile);
+    await waitFor(pidFile, () => existsSync(pidFile));
     const childPid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
     assert.ok(Number.isInteger(childPid) && childPid > 0);
     return { promise, childPid };

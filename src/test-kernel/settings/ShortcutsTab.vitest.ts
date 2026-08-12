@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - shortcut contract
 import {
   installDesktopShortcutService,
   keyboardEventToAccelerator,
@@ -9,7 +7,6 @@ import {
   type DesktopShortcutService,
 } from '@shared/commands/shortcutPreferences';
 
-// Local imports - test DOM
 import {
   mountComponent,
   useLitComponentTestDom,

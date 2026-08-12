@@ -116,7 +116,7 @@ function buildReadyReport(
   return buildReport(
     {
       authProfile,
-      modelAccessList: async () => availableModels as never,
+      modelAccessList: async () => availableModels,
       latexToolchain: async () => allInstalledLatexProbe,
     },
     reportContext,

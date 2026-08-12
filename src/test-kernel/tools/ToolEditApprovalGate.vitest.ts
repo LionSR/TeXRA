@@ -104,7 +104,6 @@ describe('Tool edit approval gating', () => {
 
   it('write_file reports the content adjusted during approval', async () => {
     const tool = new WriteFileTool();
-
     const write = stubWorkspaceFile({ exists: true, content: 'old content' });
     testApprovalHandler = async () => ({
       accepted: true,
@@ -122,7 +121,6 @@ describe('Tool edit approval gating', () => {
 
   it('write_file rejects when user denies approval', async () => {
     const tool = new WriteFileTool();
-
     const write = stubWorkspaceFile({ exists: true, content: 'base' });
 
     testApprovalHandler = async () => ({
@@ -146,7 +144,6 @@ describe('Tool edit approval gating', () => {
 
   it('write_file skips approval when disabled via config', async () => {
     await installPlatform({ 'texra.toolUse.requireEditApproval': false });
-
     const tool = new WriteFileTool();
     const write = stubWorkspaceFile({ exists: false, content: '' });
 

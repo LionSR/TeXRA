@@ -309,58 +309,46 @@ describe('CLI agents command', () => {
     });
   });
 
-  it('uses the CLI agent resolver for agent details', async () => {
-    const localAgent = { ...LEAN_AGENT, tools: ['lean_diagnostics'] };
-    mocks.resolveCliAgent.mockResolvedValue(localAgent);
+  it.each([
+    {
+      name: 'uses the CLI agent resolver for agent details',
+      agent: { ...LEAN_AGENT, tools: ['lean_diagnostics'] },
+      args: 'lean',
+      textContain: 'source: builtInToolUse',
+    },
+    {
+      name: 'renders workflow round counts in agent details',
+      agent: { ...POLISH_AGENT, rounds: 2 },
+      args: 'polish',
+      textContain: 'rounds: 2',
+    },
+    {
+      name: 'renders the agent returned by the resolver regardless of source',
+      agent: {
+        name: 'lean',
+        source: 'remote',
+        path: '',
+        category: AgentCategory.ToolUse,
+        description: 'Relay-served Lean assistant.',
+        tools: ['delegate_agent', 'lean_diagnostics'],
+        visibility: ['public'],
+      },
+      args: 'lean',
+      textContain: 'source: remote',
+    },
+  ])('$name', async ({ agent, args, textContain }) => {
+    mocks.resolveCliAgent.mockResolvedValue(agent);
 
-    const exitCode = await showAgent(cliContext(), 'lean');
+    const exitCode = await showAgent(cliContext(), args);
 
     expect(exitCode).toBe(0);
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledTimes(1);
     expect(mocks.getAgent).not.toHaveBeenCalled();
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith('lean');
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(args);
     expect(mocks.emitCliResult).toHaveBeenCalledWith(expect.anything(), {
-      json: localAgent,
-      ndjson: { kind: 'agent', agent: localAgent },
-      text: expect.stringContaining('source: builtInToolUse'),
-    });
-  });
-
-  it('renders workflow round counts in agent details', async () => {
-    const workflowAgent = { ...POLISH_AGENT, rounds: 2 };
-    mocks.resolveCliAgent.mockResolvedValue(workflowAgent);
-
-    const exitCode = await showAgent(cliContext(), 'polish');
-
-    expect(exitCode).toBe(0);
-    expect(mocks.emitCliResult).toHaveBeenCalledWith(expect.anything(), {
-      json: workflowAgent,
-      ndjson: { kind: 'agent', agent: workflowAgent },
-      text: expect.stringContaining('rounds: 2'),
-    });
-  });
-
-  it('renders the agent returned by the resolver regardless of source', async () => {
-    const remoteAgent = {
-      name: 'lean',
-      source: 'remote',
-      path: '',
-      category: AgentCategory.ToolUse,
-      description: 'Relay-served Lean assistant.',
-      tools: ['delegate_agent', 'lean_diagnostics'],
-      visibility: ['public'],
-    };
-    mocks.resolveCliAgent.mockResolvedValue(remoteAgent);
-
-    const exitCode = await showAgent(cliContext(), 'lean');
-
-    expect(exitCode).toBe(0);
-    expect(mocks.getAgent).not.toHaveBeenCalled();
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith('lean');
-    expect(mocks.emitCliResult).toHaveBeenCalledWith(expect.anything(), {
-      json: remoteAgent,
-      ndjson: { kind: 'agent', agent: remoteAgent },
-      text: expect.stringContaining('source: remote'),
+      json: agent,
+      ndjson: { kind: 'agent', agent },
+      text: expect.stringContaining(textContain),
     });
   });
 

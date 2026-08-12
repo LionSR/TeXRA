@@ -8,12 +8,21 @@ import { describe, it, afterEach, vi } from 'vitest';
 import * as texcountModule from '@latex/texcount';
 import { TexcountTool } from '@tools/texcount/TexcountTool';
 
+const tool = new TexcountTool();
+
 type TexcountCall = {
   files: string[];
   options?: texcountModule.TexcountOptions;
 };
 
-// Spies getTeXCount to a fixed output and records each call's files/options.
+function stubTexcount(output: string | null, errors: string[] = []): void {
+  vi.spyOn(texcountModule, 'getTeXCount').mockImplementation(async () => ({
+    output,
+    errors,
+  }));
+}
+
+// Spies getTeXCount and records each call's files/options.
 function captureTexcountCalls(output: string): TexcountCall[] {
   const calls: TexcountCall[] = [];
   vi.spyOn(texcountModule, 'getTeXCount').mockImplementation(
@@ -33,7 +42,6 @@ describe('TexcountTool', () => {
   it('returns raw texcount output for single file input', async () => {
     const calls = captureTexcountCalls('Words in text: 42');
 
-    const tool = new TexcountTool();
     const result = await tool.call({ files: 'main.tex' });
 
     assert.strictEqual(result.summary, 'Analyzed: 1 file');
@@ -44,12 +52,8 @@ describe('TexcountTool', () => {
   });
 
   it('formats output when stats format requested', async () => {
-    vi.spyOn(texcountModule, 'getTeXCount').mockImplementation(async () => ({
-      output: 'Words in text: 100',
-      errors: [],
-    }));
+    stubTexcount('Words in text: 100');
 
-    const tool = new TexcountTool();
     const result = await tool.call({
       files: ['chapter1.tex', 'chapter2.tex'],
       format: 'stats',
@@ -61,12 +65,8 @@ describe('TexcountTool', () => {
   });
 
   it('returns error result when texcount output is missing', async () => {
-    vi.spyOn(texcountModule, 'getTeXCount').mockImplementation(async () => ({
-      output: null,
-      errors: ['File missing.tex does not exist.'],
-    }));
+    stubTexcount(null, ['File missing.tex does not exist.']);
 
-    const tool = new TexcountTool();
     const result = await tool.call({ files: ['missing.tex'], mode: 'sum' });
 
     assert.strictEqual(result.status, 'error');
@@ -76,7 +76,6 @@ describe('TexcountTool', () => {
   it('passes selected mode to texcount implementation', async () => {
     const calls = captureTexcountCalls('Words in text: 21');
 
-    const tool = new TexcountTool();
     const result = await tool.call({
       files: ['file1.tex', 'file2.tex'],
       mode: 'sum',

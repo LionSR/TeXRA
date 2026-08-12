@@ -45,7 +45,7 @@ describe('ModelCell', () => {
     const cell = new ModelCell(launch, 'deepseekT');
     // A run's services bag is built by spreading the launch context, which is
     // why a bare handler field had to be re-assigned on every copy.
-    const services = { ...{ modelCell: cell }, extra: true };
+    const services = { modelCell: cell, extra: true };
 
     cell.swap(next, 'sonnet46T');
 

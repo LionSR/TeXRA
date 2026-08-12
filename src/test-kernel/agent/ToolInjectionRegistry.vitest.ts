@@ -1,18 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import {
-  ToolInjectionRegistry,
-  type ConditionalToolInjection,
-} from '@agent/runtime/toolInjection';
+import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 
 describe('tool-injection registry', () => {
-  let registry: ToolInjectionRegistry;
-
-  beforeEach(() => {
-    registry = new ToolInjectionRegistry();
-  });
-
   it('registers injections and returns them in insertion order', () => {
+    const registry = new ToolInjectionRegistry();
     registry.register({ toolName: 'memory', shouldInject: () => true });
     registry.register({ toolName: 'plan', shouldInject: () => false });
 
@@ -21,6 +13,7 @@ describe('tool-injection registry', () => {
   });
 
   it('rejects duplicate `toolName` registrations', () => {
+    const registry = new ToolInjectionRegistry();
     registry.register({ toolName: 'memory', shouldInject: () => true });
     expect(() =>
       registry.register({ toolName: 'memory', shouldInject: () => false }),
@@ -28,6 +21,7 @@ describe('tool-injection registry', () => {
   });
 
   it('predicates are re-evaluated on each call (not captured at registration)', () => {
+    const registry = new ToolInjectionRegistry();
     let enabled = false;
     registry.register({
       toolName: 'memory',
@@ -40,11 +34,12 @@ describe('tool-injection registry', () => {
   });
 
   it('keeps injections scoped to each registry instance', () => {
+    const registry = new ToolInjectionRegistry();
     const other = new ToolInjectionRegistry();
-    const injection: ConditionalToolInjection = {
+    const injection = {
       toolName: 'memory',
       shouldInject: () => true,
-    };
+    } as const;
 
     registry.register(injection);
 

@@ -19,16 +19,18 @@ function result(over: Partial<ResultEvent>): ResultEvent {
 
 describe('terminalResultToast (SDK Step 7d PR 7)', () => {
   it('maps missing-api-key to an actionable instruction', () => {
-    const toast = terminalResultToast(
-      result({ error: { kind: 'missing-api-key' } }),
-    );
-    expect(toast?.type).toBe('instruction');
-    if (toast?.type !== 'instruction') throw new Error('expected instruction');
-    expect(toast.payload.key).toBe('missingApiKey');
-    expect(toast.payload.actions).toEqual([
-      INSTRUCTION_ACTION.SET_API_KEY,
-      INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE,
-    ]);
+    expect(
+      terminalResultToast(result({ error: { kind: 'missing-api-key' } })),
+    ).toMatchObject({
+      type: 'instruction',
+      payload: {
+        key: 'missingApiKey',
+        actions: [
+          INSTRUCTION_ACTION.SET_API_KEY,
+          INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE,
+        ],
+      },
+    });
   });
 
   it('maps disk-full and unexpected to error toasts carrying the message', () => {

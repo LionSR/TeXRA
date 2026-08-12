@@ -1,11 +1,8 @@
-// Standard library imports
 import { strict as assert } from 'node:assert';
 
-// Third-party imports
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { describe, it, vi } from 'vitest';
 
-// Local imports - shared provider registry
 import { SERVER_SIDE_PROVIDER_IDS } from '@shared/constants/providers';
 
 // A retired model whose provider is not in RELAY_PROVIDERS (e.g. 'meta') is
@@ -30,7 +27,6 @@ vi.mock('llm-zoo', async (importOriginal) => {
   };
 });
 
-// Local imports - Supabase relay
 import {
   FREE_TIER,
   FREE_TIER_SUGGESTED_MODEL,

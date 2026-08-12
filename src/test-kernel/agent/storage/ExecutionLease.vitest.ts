@@ -570,7 +570,6 @@ describe('cross-process execution leases', () => {
     await writeExecution(failedId);
     const fs = platform().fs;
     const originalDelete = fs.delete.bind(fs);
-    // Restored by the afterEach vi.restoreAllMocks().
     vi.spyOn(fs, 'delete').mockImplementation((target, options) => {
       if (target.includes(path.join('executions', failedId))) {
         return Promise.reject(new Error('permission denied'));

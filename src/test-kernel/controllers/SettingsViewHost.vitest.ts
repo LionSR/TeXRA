@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
@@ -57,7 +57,7 @@ describe('SettingsViewHost', () => {
     const modelSelection = createModelSelectionController();
     const globalState = new FakeStateStore();
     const messages: unknown[] = [];
-    let modelRefreshes = 0;
+    const beforeModelSelectionMessage = vi.fn();
     const host = new SettingsViewHost({
       state: {
         workspaceState: new FakeStateStore(),
@@ -70,9 +70,7 @@ describe('SettingsViewHost', () => {
       respond: (message) => {
         messages.push(message);
       },
-      beforeModelSelectionMessage: () => {
-        modelRefreshes += 1;
-      },
+      beforeModelSelectionMessage,
       controllers: {
         modelSelection: modelSelection.controller,
       },
@@ -104,6 +102,6 @@ describe('SettingsViewHost', () => {
       helperModel: 'sonnet46T',
     });
     expect(modelSelection.state.enabledModels).toEqual(['sonnet46T']);
-    expect(modelRefreshes).toBe(2);
+    expect(beforeModelSelectionMessage).toHaveBeenCalledTimes(2);
   });
 });

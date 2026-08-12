@@ -14,7 +14,11 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
-import { SwitchViewMessageSchema, ThemeSchema } from '../commonViewMessages';
+import {
+  SetDebugModeMessageSchema,
+  SetThemeMessageSchema,
+  SwitchViewMessageSchema,
+} from '../commonViewMessages';
 import { commandOnly, withFilesArray } from '../messageFactories';
 import {
   CurrentFileTypeSchema,
@@ -32,14 +36,8 @@ const CommonMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.GET_THEME),
   commandOnly(MAIN_VIEW_COMMANDS.GET_DEBUG_MODE),
   SwitchViewMessageSchema,
-  z.object({
-    command: z.literal(MAIN_VIEW_COMMANDS.THEME_SET),
-    theme: ThemeSchema,
-  }),
-  z.object({
-    command: z.literal(MAIN_VIEW_COMMANDS.DEBUG_MODE_SET),
-    debugMode: z.boolean(),
-  }),
+  SetThemeMessageSchema,
+  SetDebugModeMessageSchema,
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE),
     text: z.string().min(1),

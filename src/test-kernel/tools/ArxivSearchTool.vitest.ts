@@ -25,13 +25,7 @@ describe('ArxivSearchTool', () => {
   });
 
   it('builds keyword queries for multi-word input', async () => {
-    const captured: {
-      query?: string;
-      start?: number;
-      maxResults?: number;
-      sortBy?: string;
-      sortOrder?: string;
-    } = {};
+    const captured: Record<string, unknown> = {};
 
     vi.spyOn(rateLimiter, 'waitForRateLimit').mockResolvedValue(undefined);
 

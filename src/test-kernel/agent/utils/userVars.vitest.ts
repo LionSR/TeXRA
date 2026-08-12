@@ -1,7 +1,5 @@
-// Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { noopTrace } from '@agent/trace';
 import {
   AgentConfigSchema,
@@ -193,10 +191,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
   });
 });
 
-// Folded from OutputFilesPrompt.vitest.ts (R7: one suite per module). This
-// describe is a pure-function test (resolveOutputFiles takes plain data in,
-// plain data out) and does not touch platform state, so it is safe to run in
-// any position relative to the platform-dependent describes above/below.
+// Pure function: resolveOutputFiles takes plain data in, plain data out.
 describe('output file prompt variables', () => {
   it.each([
     {
@@ -242,12 +237,8 @@ describe('output file prompt variables', () => {
   });
 });
 
-// Folded from UserVarsMissingFiles.vitest.ts (R7: one suite per module).
-// This describe replaces the whole global platform singleton in its own
-// beforeEach (a from-scratch createFakePlatform, not the fakeConfig-backed
-// platform the describes above rely on) and never restores it — it MUST stay
-// the last describe in this file, or it would silently swap the platform out
-// from under any suite that runs after it.
+// Replaces the whole global platform in its own beforeEach and never restores
+// it — MUST stay the last describe in this file.
 function buildVars(
   agentConfig: ReturnType<typeof AgentConfigSchema.parse>,
 ): ReturnType<typeof buildUserVars> {

@@ -23,13 +23,6 @@ type GoogleHandlerWithCache = {
   googleClient: GoogleGenAI | null;
 };
 
-function setCachedClient(
-  handler: ModelHandlerGoogleInteractions,
-  client: GoogleGenAI,
-): void {
-  (handler as unknown as GoogleHandlerWithCache).googleClient = client;
-}
-
 class GoogleInteractionsRefreshProbe extends ModelHandlerGoogleInteractions {
   readonly replacement = {} as GoogleGenAI;
   cacheSeenByGetClient: GoogleGenAI | null | undefined;
@@ -47,7 +40,8 @@ describe('Google client refresh', () => {
     const handler = new GoogleInteractionsRefreshProbe(
       buildTestModelConfig(GOOGLE_TEST_CONFIG),
     );
-    setCachedClient(handler, {} as GoogleGenAI);
+    (handler as unknown as GoogleHandlerWithCache).googleClient =
+      {} as GoogleGenAI;
 
     await expect(handler.refreshClient()).resolves.toBe(handler.replacement);
     expect(handler.cacheSeenByGetClient).toBeNull();

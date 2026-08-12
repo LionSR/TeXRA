@@ -1,10 +1,7 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
@@ -21,8 +18,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { clearStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
-
-// Local file imports
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
@@ -54,7 +49,7 @@ function setupResultCase(): {
 
   const n = counter++;
   const ctx = createTestLaunchContext({
-    executionId: `a${n.toString(16).padStart(5, '0')}` as ExecutionId,
+    executionId: `exec:result-${n}` as ExecutionId,
     streamId: `stream:result-${n}` as StreamTabId,
     logger,
   });

@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
 

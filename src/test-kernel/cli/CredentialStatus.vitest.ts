@@ -47,9 +47,9 @@ describe('CLI credential status', () => {
       new Error('provider keys must not be checked'),
     );
 
-    await expect(hasCliCredentialForApiMode(undefined)).resolves.toBe(true);
-    await expect(hasCliCredentialForApiMode('included')).resolves.toBe(true);
-    await expect(hasCliCredentialForApiMode('personal')).resolves.toBe(true);
+    for (const apiMode of [undefined, 'included', 'personal'] as const) {
+      await expect(hasCliCredentialForApiMode(apiMode)).resolves.toBe(true);
+    }
     expect(mocks.getCliAuthProfile).not.toHaveBeenCalled();
     expect(mocks.lookupApiKey).not.toHaveBeenCalled();
   });
@@ -65,7 +65,6 @@ describe('CLI credential status', () => {
 
   it('is true when a provider key resolves even though signed out', async () => {
     mocks.getCliAuthProfile.mockResolvedValue({ authenticated: false });
-    mocks.lookupApiKey.mockResolvedValue(undefined);
     mocks.lookupApiKey.mockResolvedValueOnce('sk-test');
     await expect(hasCliCredentialForApiMode(undefined)).resolves.toBe(true);
   });
@@ -83,14 +82,12 @@ describe('CLI credential status', () => {
     mocks.getCliAuthProfile.mockRejectedValue(
       new Error('relay sign-in must not be checked'),
     );
-    mocks.lookupApiKey.mockResolvedValue(undefined);
     await expect(hasCliCredentialForApiMode('personal')).resolves.toBe(false);
     expect(mocks.getCliAuthProfile).not.toHaveBeenCalled();
     expect(mocks.lookupApiKey).toHaveBeenCalled();
   });
 
   it('counts provider keys as personal API-key credentials', async () => {
-    mocks.lookupApiKey.mockResolvedValue(undefined);
     mocks.lookupApiKey.mockResolvedValueOnce('sk-test');
     await expect(hasCliCredentialForApiMode('personal')).resolves.toBe(true);
   });
@@ -106,13 +103,11 @@ describe('CLI credential status', () => {
       credentialSource: 'relayToken',
       note: 'The server rejected this relay token.',
     });
-    mocks.lookupApiKey.mockResolvedValue(undefined);
     await expect(hasCliCredentialForApiMode(undefined)).resolves.toBe(false);
   });
 
   it('treats an auth-check failure as not signed in', async () => {
     mocks.getCliAuthProfile.mockRejectedValue(new Error('offline'));
-    mocks.lookupApiKey.mockResolvedValue(undefined);
     await expect(hasCliCredentialForApiMode(undefined)).resolves.toBe(false);
   });
 });

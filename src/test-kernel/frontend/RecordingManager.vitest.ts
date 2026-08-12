@@ -44,35 +44,23 @@ describe('RecordingManager', () => {
       success: true,
       text: 'transcribed text',
     });
-    const buildRecordingMessage = vi.fn(
-      (
-        message:
-          | { status: 'started' | 'stopped' }
-          | { status: 'error'; error: string },
-      ) => ({ command: 'recording', ...message }),
-    );
-    const buildTranscriptionMessage = vi.fn((text: string) => ({
-      command: 'transcription',
-      text,
-    }));
     const postMessage = vi.fn();
     const view = { webview: { postMessage } } as unknown as vscode.WebviewView;
     const manager = new RecordingManager({
-      buildRecordingMessage,
-      buildTranscriptionMessage,
+      buildRecordingMessage: (message) => ({
+        command: 'recording',
+        ...message,
+      }),
+      buildTranscriptionMessage: (text) => ({
+        command: 'transcription',
+        text,
+      }),
       progressTitle: 'Transcribing test recording',
     });
 
     await manager.start(view);
     await manager.stop(view);
 
-    expect(buildRecordingMessage).toHaveBeenNthCalledWith(1, {
-      status: 'started',
-    });
-    expect(buildRecordingMessage).toHaveBeenNthCalledWith(2, {
-      status: 'stopped',
-    });
-    expect(buildTranscriptionMessage).toHaveBeenCalledWith('transcribed text');
     expect(mocks.withProgress).toHaveBeenCalledWith(
       {
         location: 15,

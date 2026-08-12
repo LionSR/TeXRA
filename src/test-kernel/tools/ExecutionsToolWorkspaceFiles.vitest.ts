@@ -135,15 +135,6 @@ async function writeSidecarTodos(
   return streamId;
 }
 
-/** Mocks the storage reads for a completed, non-subagent toolUse execution. */
-function mockCompletedExecution(streamId?: StreamTabId): void {
-  mocks.readMeta.mockResolvedValue({
-    ...toolUseMeta,
-    ...(streamId ? { streamId } : {}),
-  });
-  mocks.readConfig.mockResolvedValue(config);
-}
-
 describe('ExecutionsTool', () => {
   setupPlatform(() => createTempDirPlatform('texra-executions-', tempDirs));
 
@@ -424,7 +415,8 @@ describe('ExecutionsTool', () => {
             activeForm: 'Reading the sidecar work plan',
           },
         ]);
-        mockCompletedExecution(streamId);
+        mocks.readMeta.mockResolvedValue({ ...toolUseMeta, streamId });
+        mocks.readConfig.mockResolvedValue(config);
         const result = await new ExecutionsTool().call({ path: toolPath });
 
         expect(result.output).toContain('Read the sidecar work plan');

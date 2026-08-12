@@ -18,10 +18,9 @@ const StateSchema = z.object({
 });
 
 describe('PersistedState loading', () => {
-  const set = vi.fn();
   const storage = {
     get: vi.fn(),
-    set,
+    set: vi.fn(),
     delete: vi.fn(),
   };
 
@@ -42,7 +41,7 @@ describe('PersistedState loading', () => {
     const state = new PersistedState(storage, 'viewPrefs', StateSchema);
 
     expect(state.getState()).toEqual({ density: 'comfortable' });
-    expect(set).not.toHaveBeenCalled();
+    expect(storage.set).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -52,7 +51,7 @@ describe('PersistedState loading', () => {
     const state = new PersistedState(storage, 'viewPrefs', StateSchema);
 
     expect(state.getState()).toEqual({ density: 'comfortable' });
-    expect(set).toHaveBeenCalledWith('viewPrefs', {
+    expect(storage.set).toHaveBeenCalledWith('viewPrefs', {
       density: 'comfortable',
     });
     expect(warn).toHaveBeenCalledOnce();

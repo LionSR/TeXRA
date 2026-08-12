@@ -51,7 +51,7 @@ export class SecretManager {
 
   public static async anyApiKeyExists(): Promise<boolean> {
     const keyChecks = await Promise.all(
-      this.API_PROVIDERS.map((provider) => this.apiKeyExists(provider)),
+      this.API_PROVIDERS.map((provider) => this.hasUsableApiKey(provider)),
     );
     return (
       keyChecks.some(Boolean) ||
@@ -59,15 +59,7 @@ export class SecretManager {
     );
   }
 
-  private static async apiKeyExists(provider: ApiProvider): Promise<boolean> {
-    return resolvedHasUsableApiKey(platform().secrets, provider);
-  }
-
-  /**
-   * Same check as the private `apiKeyExists` above (both delegate to
-   * `@model/apiProviders`'s `hasUsableApiKey`); exposed publicly under this
-   * name for launch-readiness call sites that want the "usable" framing.
-   */
+  /** Usable-key check, delegated to `@model/apiProviders`'s `hasUsableApiKey`. */
   public static async hasUsableApiKey(provider: ApiProvider): Promise<boolean> {
     return resolvedHasUsableApiKey(platform().secrets, provider);
   }
@@ -78,7 +70,7 @@ export class SecretManager {
     return Promise.all(
       this.API_PROVIDERS.map(async (provider) => ({
         label: provider,
-        description: (await this.apiKeyExists(provider))
+        description: (await this.hasUsableApiKey(provider))
           ? 'key set'
           : 'not set',
         provider,

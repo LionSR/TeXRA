@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  getMainWebview: vi.fn(async () => undefined),
+  getMainWebview: vi.fn(),
   safeExecuteCommand: vi.fn(),
 }));
 vi.mock('@frontend/system/commandUtils', () => ({

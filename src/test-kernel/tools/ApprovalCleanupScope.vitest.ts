@@ -197,9 +197,8 @@ describe('session-owned approval state (#8144)', () => {
       });
 
       expect(isBashApprovalBypassedForStream(streamId, sessionA)).toBe(true);
-      // The same stream identifier in a sibling session stays gated.
       expect(isBashApprovalBypassedForStream(streamId, sessionB)).toBe(false);
-      // And the process default session is untouched as well.
+      // The no-session call reads the process default session, untouched here.
       expect(isBashApprovalBypassedForStream(streamId)).toBe(false);
     } finally {
       sessionA.dispose();

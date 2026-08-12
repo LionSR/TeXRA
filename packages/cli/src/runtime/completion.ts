@@ -10,7 +10,6 @@ import { fishCompletion } from './completionFish';
 import { zshCompletion } from './completionZsh';
 
 export { CLI_COMPLETION_SHELLS, parseCompletionShell };
-export type { CliCompletionShell };
 
 export async function generateCompletionScript(
   rootCommand: AnyCommand,

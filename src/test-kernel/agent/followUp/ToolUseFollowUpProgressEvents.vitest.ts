@@ -1,10 +1,7 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { LiveToolUseFlowContext } from '@agent/runtime/ExecutionHandle';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
@@ -25,7 +22,6 @@ import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { listenForFollowUp } from '@tools/executions/waitCoordination';
 
-// Local file imports
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
 const streamId = 'stream:follow-up' as StreamTabId;
@@ -96,7 +92,7 @@ describe('tool-use follow-up progress events', () => {
   }
 
   it('publishes sent follow-up events through the owning session fact hub', async () => {
-    const { events } = createRecordingHost();
+    const run = createRecordingHost();
     const session = trackSession();
     const recorded = recordSessionEvents(session.events);
     const appendFollowUp = vi.fn();
@@ -115,7 +111,7 @@ describe('tool-use follow-up progress events', () => {
       displayText: undefined,
     });
     expect(recorded.events).toEqual([followUpSentEvent(streamId)]);
-    expect(events).toEqual([]);
+    expect(run.events).toEqual([]);
   });
 
   it('prefers an explicit session over the active run context when notifying follow-up sent', () => {

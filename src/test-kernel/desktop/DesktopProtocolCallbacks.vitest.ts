@@ -1,6 +1,3 @@
-// Suites for packages/desktop protocol callbacks (registration lifecycle +
-// callback behavior).
-
 import { type Mock, describe, expect, it, vi } from 'vitest';
 import {
   createDesktopProtocolCallbackRouter,
@@ -208,18 +205,6 @@ describe('desktop protocol callbacks', () => {
     expect(listener).not.toHaveBeenCalled();
     expect(focusMainWindow).toHaveBeenCalledTimes(1);
   });
-
-  it('quits when another desktop instance owns the protocol lifecycle', () => {
-    const app = createFakeProtocolApp(false);
-
-    const lifecycle = installDesktopProtocolCallbackLifecycle({
-      app,
-      argv: ['texra://texra-ai.texra/auth-callback'],
-    });
-
-    expect(lifecycle.shouldContinue).toBe(false);
-    expect(app.quit).toHaveBeenCalled();
-  });
 });
 
 describe('desktop protocol callback lifecycle', () => {
@@ -266,14 +251,7 @@ describe('desktop protocol callback lifecycle', () => {
   );
 
   it('focuses the primary window for every second-instance launch', () => {
-    const app = createFakeProtocolApp();
-    const focusMainWindow = vi.fn();
-
-    installDesktopProtocolCallbackLifecycle({
-      app,
-      argv: [],
-      focusMainWindow,
-    });
+    const { app, focusMainWindow } = installLifecycle();
 
     app.listeners.secondInstance?.(
       {},

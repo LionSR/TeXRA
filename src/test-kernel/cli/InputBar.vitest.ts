@@ -49,15 +49,6 @@ async function flushPromiseQueue(): Promise<void> {
   await Promise.resolve();
 }
 
-function fakeHistory(entries: readonly string[]): InputHistory {
-  return {
-    push: async () => undefined,
-    reverseFind: () => undefined,
-    at: (index) => entries[index],
-    length: () => entries.length,
-  };
-}
-
 function latestRenderedFrame(stdout: InkRenderHandles['stdout']): string {
   return stripAnsi(stdout.writes.findLast((write) => write.length > 0) ?? '');
 }
@@ -90,7 +81,12 @@ describe('InputBar history arrow boundaries', () => {
 
   it('clamps at the oldest entry and restores the draft at the newest boundary', async () => {
     const { ink, React } = await loadInk();
-    const history = fakeHistory(['first command', 'second command']);
+    const history: InputHistory = {
+      push: async () => undefined,
+      reverseFind: () => undefined,
+      at: (index) => ['first command', 'second command'][index],
+      length: () => 2,
+    };
     const { instance, stdin, stdout } = renderInteractive(
       ink,
       React.createElement(InputBar, { onSubmit: vi.fn(), history }),

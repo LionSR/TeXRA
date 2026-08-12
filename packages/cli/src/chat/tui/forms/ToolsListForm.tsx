@@ -9,6 +9,9 @@ import {
   type CliToolStatusRecord,
 } from '@cli/runtime/tools';
 import { toolStatusLabel } from '@shared/tools/toolStatusLabels';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+import { setTransientNotice } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
 
 export interface ToolsListFormProps {
@@ -70,7 +73,10 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
         if (!tool || tool.enabled == null) return;
         void setCliToolEnabled(id, !tool.enabled)
           .then(() => readCliToolStatuses())
-          .then(setTools);
+          .then(setTools)
+          .catch((error: unknown) => {
+            setTransientNotice(toErrorMessage(error));
+          });
       }}
       onCancel={props.onClose}
     />

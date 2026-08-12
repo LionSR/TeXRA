@@ -161,10 +161,10 @@ function parentRunContext(
   });
 }
 
-/** The shared delegation call used by nearly every case (agent name varies). */
-function callDelegateReview(agent = 'review') {
+/** The shared delegation call used by nearly every case. */
+function callDelegateReview() {
   return new DelegateAgentTool().call({
-    agent,
+    agent: 'review',
     model: null,
     instruction: 'Check the proof.',
     memories: [],
@@ -401,10 +401,6 @@ describe('headless delegation', () => {
     ]);
     mocks.isProposalBypassed.mockReturnValue(true);
     mocks.isApprovalBypassedForStream.mockReturnValue(false);
-    mocks.registerExecution.mockResolvedValue(undefined);
-    mocks.releaseOwnedExecutionLease.mockResolvedValue(undefined);
-    mocks.writeReport.mockResolvedValue(undefined);
-    mocks.writeResultMeta.mockResolvedValue(undefined);
     const memoryStores = new Map<
       ExecutionId,
       ReturnType<typeof memoryExecutionStore>

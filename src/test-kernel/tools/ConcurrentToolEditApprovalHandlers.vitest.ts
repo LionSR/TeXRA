@@ -2,7 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';

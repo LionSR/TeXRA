@@ -42,6 +42,16 @@ function buildGpt5Config(overrides: Partial<ModelConfig> = {}): ModelConfig {
 // installed provider the three hosts actually install — the handler itself only
 // asks whether the route is capped.
 describe('ModelHandler.getEffectiveReasoningEffort tier caps', () => {
+  function effectiveReasoningEffort(
+    handler: ModelHandlerOpenRouterNative,
+  ): ReasoningEffort | null {
+    return (
+      handler as unknown as {
+        getEffectiveReasoningEffort(): ReasoningEffort | null;
+      }
+    ).getEffectiveReasoningEffort();
+  }
+
   function stubServerSideKeys(
     tier: string | null,
     useServerSideKeys = true,
@@ -85,17 +95,14 @@ describe('ModelHandler.getEffectiveReasoningEffort tier caps', () => {
   ])('$name', ({ tier, expected }) => {
     stubServerSideKeys(tier);
     const handler = new ModelHandlerOpenRouterNative(buildGpt5Config());
-    assert.equal((handler as any).getEffectiveReasoningEffort(), expected);
+    assert.equal(effectiveReasoningEffort(handler), expected);
   });
 
   it('does not cap when not using server-side keys (free tier, own key)', () => {
     stubServerSideKeys(FREE_TIER, false);
 
     const handler = new ModelHandlerOpenRouterNative(buildGpt5Config());
-    assert.equal(
-      (handler as any).getEffectiveReasoningEffort(),
-      ReasoningEffort.XHIGH,
-    );
+    assert.equal(effectiveReasoningEffort(handler), ReasoningEffort.XHIGH);
   });
 
   it('does not cap non-GPT-5 models even on free tier with server-side keys', () => {
@@ -106,9 +113,6 @@ describe('ModelHandler.getEffectiveReasoningEffort tier caps', () => {
         shortName: 'claude-sonnet-4-6',
       }),
     );
-    assert.equal(
-      (handler as any).getEffectiveReasoningEffort(),
-      ReasoningEffort.XHIGH,
-    );
+    assert.equal(effectiveReasoningEffort(handler), ReasoningEffort.XHIGH);
   });
 });

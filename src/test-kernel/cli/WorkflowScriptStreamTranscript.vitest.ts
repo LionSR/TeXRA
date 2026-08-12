@@ -121,6 +121,14 @@ function transcriptEntry(id: string): StreamLogEntry | undefined {
     .find((entry) => entry.id === id);
 }
 
+function streamSlice() {
+  return streams.get().get(STREAM_ID);
+}
+
+function streamEntries(): readonly ConversationEntry[] {
+  return streamSlice()?.entries ?? [];
+}
+
 function expectOutputOrder(output: string, markers: readonly string[]): void {
   for (const [index, marker] of markers.entries()) {
     if (index === 0) continue;
@@ -190,7 +198,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     }
     syncStreamLog(STREAM_ID);
 
-    const plannedEntries = streams.get().get(STREAM_ID)?.entries ?? [];
+    const plannedEntries = streamEntries();
     expect(plannedEntries).toMatchObject([
       {
         id: 'core-task',
@@ -221,7 +229,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
     syncStreamLog(STREAM_ID);
 
-    const updatedEntries = streams.get().get(STREAM_ID)?.entries ?? [];
+    const updatedEntries = streamEntries();
     expect(updatedEntries).toMatchObject([
       {
         id: 'core-task',
@@ -264,7 +272,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     // end-of-stream projection used by the controller.
     syncStreamLog(STREAM_ID, { forceFinal: true });
 
-    expect(streams.get().get(STREAM_ID)?.entries.at(0)).toMatchObject({
+    expect(streamEntries().at(0)).toMatchObject({
       finalized: false,
       text: 'Running: Audit cancellation',
       task: { status: 'running' },
@@ -284,7 +292,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
     syncStreamLog(STREAM_ID);
 
-    const settledEntries = streams.get().get(STREAM_ID)?.entries ?? [];
+    const settledEntries = streamEntries();
     expect(settledEntries).toHaveLength(1);
     expect(settledEntries).toMatchObject([
       {
@@ -335,7 +343,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
     syncStreamLog(STREAM_ID, { forceFinal: true });
 
-    expect(streams.get().get(STREAM_ID)?.entries.at(0)).toMatchObject({
+    expect(streamEntries().at(0)).toMatchObject({
       finalized: false,
       text: 'Planned: Audit later',
       task: { status: 'planned' },
@@ -355,7 +363,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
     syncStreamLog(STREAM_ID);
 
-    const settledEntries = streams.get().get(STREAM_ID)?.entries ?? [];
+    const settledEntries = streamEntries();
     expect(settledEntries).toHaveLength(1);
     expect(settledEntries).toMatchObject([
       {
@@ -449,10 +457,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       'Skipped: Audit after cancellation',
     );
 
-    const syntheticEntry = streams
-      .get()
-      .get(STREAM_ID)
-      ?.entries.find((entry) => entry.synthetic);
+    const syntheticEntry = streamEntries().find((entry) => entry.synthetic);
     expect(syntheticEntry).toBeDefined();
     expect(transcriptEntry(response.id)).toMatchObject({
       settlementSeqNo: 2,
@@ -597,7 +602,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     syncStreamLog(STREAM_ID);
     incrementalItems = appendItems(incrementalItems);
 
-    const settledSlice = streams.get().get(STREAM_ID);
+    const settledSlice = streamSlice();
     expect(settledSlice?.entries.findLast((entry) => entry.finalized)?.id).toBe(
       'audit-phase',
     );
@@ -844,7 +849,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     const coldItems = appendItems();
     expect(entryTexts(incrementalItems)).toEqual(['Round work completed']);
     expect(entryTexts(coldItems)).toEqual(entryTexts(incrementalItems));
-    expect(streams.get().get(STREAM_ID)?.taskGroups).toMatchObject([
+    expect(streamSlice()?.taskGroups).toMatchObject([
       {
         id: 'round-one',
         name: 'Round one',
@@ -871,10 +876,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
     syncStreamLog(STREAM_ID);
     expect(
-      streams
-        .get()
-        .get(STREAM_ID)
-        ?.entries.find((entry) => entry.id === 'introduction-task')?.text,
+      streamEntries().find((entry) => entry.id === 'introduction-task')?.text,
     ).toBe('Planned: Draft introduction');
 
     const phase = runTrace.trace.openStage('Draft sections', {
@@ -910,7 +912,7 @@ describe('CLI workflow-script child-stream transcript', () => {
 
     syncStreamLog(STREAM_ID);
 
-    const entries = streams.get().get(STREAM_ID)?.entries ?? [];
+    const entries = streamEntries();
     const texts = entries.map((entry) => entry.text);
     // The phase group row and the task's current state both surface.
     expect(texts).toContain('Draft sections');
@@ -937,7 +939,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
     syncStreamLog(STREAM_ID);
 
-    const finalized = streams.get().get(STREAM_ID)?.entries ?? [];
+    const finalized = streamEntries();
     expect(
       splitTranscriptEntries(finalized, STREAM_PHASE.COMPLETED).pending,
     ).toEqual([]);

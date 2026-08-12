@@ -2,13 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { formatShortDateTime } from '@shared/utils/string';
 
-/**
- * History (HistoryItemElement) and Memory (MemoryItem) list items both show
- * an absolute "last touched" timestamp in their meta strip. The empty-states
- * consolidation converged both onto this one shaped formatter so the two
- * tabs render matching timestamp text instead of a bare `toLocaleString()`
- * on one side and a prefixed `Intl.DateTimeFormat` on the other.
- */
+// Shared "last touched" timestamp formatter for History and Memory list items.
 describe('formatShortDateTime', () => {
   const sample = new Date('2026-07-11T15:45:00.000Z');
 

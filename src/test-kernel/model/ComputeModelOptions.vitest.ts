@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import {
-  CODEX_SESSION_SECRET_KEY,
-  resetCodexCoordinator,
-  type CodexSession,
-} from '@auth/codex';
+import { CODEX_SESSION_SECRET_KEY, resetCodexCoordinator } from '@auth/codex';
 import {
   ServerSideKeyService,
   setServerSideKeyService,
@@ -80,17 +76,15 @@ function createModelOptionsAccess(
   };
 }
 
-function codexSession(): CodexSession {
-  return {
-    accessToken: 'access-token',
-    refreshToken: 'refresh-token',
-    expiresAtMs: Date.now() + 60_000,
-    accountId: 'account-id',
-  };
-}
-
 function codexSessionSecrets(): Record<string, string> {
-  return { [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()) };
+  return {
+    [CODEX_SESSION_SECRET_KEY]: JSON.stringify({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresAtMs: Date.now() + 60_000,
+      accountId: 'account-id',
+    }),
+  };
 }
 
 function initSubscriptionPlatform(

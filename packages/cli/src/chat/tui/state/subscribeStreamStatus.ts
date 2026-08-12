@@ -28,7 +28,7 @@ export function subscribeStreamStatus(): () => void {
     const recognized = setStreamStatusInCliState({
       streamId: change.streamId,
       status: change.phase,
-      ...(change.substate ? { substate: change.substate } : {}),
+      substate: change.substate,
     });
     if (recognized) {
       syncStreamLog(

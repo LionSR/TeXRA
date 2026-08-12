@@ -9,10 +9,7 @@
 import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 
-import {
-  type AgentConfig,
-  AgentConfigSchema,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   isAgentRunRecord,
   RunRecordSchema,

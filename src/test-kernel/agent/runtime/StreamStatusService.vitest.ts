@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports
 import { TraceEmitter, type StatusEvent } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -18,12 +16,7 @@ import {
 } from '@shared/streams/streamStatus';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 
-// Local file imports
-import {
-  recordSessionEvents,
-  runEventsOfType,
-  sessionFactsOfType,
-} from '../progressTestUtils';
+import { recordSessionEvents, sessionFactsOfType } from '../progressTestUtils';
 
 /** Fresh registry + recording host, keyed to a per-test stream id. */
 function setupMachine(streamId: string): {

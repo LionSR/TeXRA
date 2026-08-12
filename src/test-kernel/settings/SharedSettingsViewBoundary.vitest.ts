@@ -1,8 +1,5 @@
-// Standard library imports
 import { strict as assert } from 'node:assert';
 import { readFile } from 'node:fs/promises';
-
-// Third-party imports
 import { describe, it } from 'vitest';
 
 import { sourceFilesUnder, toRepoPath } from '../support/repoScan';

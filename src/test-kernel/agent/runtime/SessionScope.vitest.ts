@@ -1,10 +1,7 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { MESSAGE_TYPES, type Plan, type StreamTabId } from '@shared/schemas';
@@ -12,8 +9,6 @@ import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { cleanupAllApprovals } from '@tools/approval';
 import { createRunTrace, StreamLogStore } from '@transcript';
-
-// Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
 const plan: Plan = { objective: 'Scope session-owned state.' };

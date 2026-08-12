@@ -286,11 +286,7 @@ describe('completedRunArchive facade', () => {
         instruction: 'Fix the lemma.',
       }),
     );
-    await store.writeMeta({
-      timestamp: '2026-07-07T00:00:00.000Z',
-      streamId,
-      identity: { kind: 'agent', agent: 'orchestrator' },
-    });
+    await stampStreamId(executionId, streamId);
 
     const conversationResult = await readCompletedRunConversation(executionId);
     expect(conversationResult.source).toBe('streamLog');

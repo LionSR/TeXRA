@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   clearStoreCache,
@@ -66,7 +66,6 @@ async function persistCompletedChild(
 }
 
 describe('resolveChildRunOutput', () => {
-  beforeEach(() => clearStoreCache());
   afterEach(() => clearStoreCache());
 
   it('resolves a declared regular output of a completed direct child', async () => {

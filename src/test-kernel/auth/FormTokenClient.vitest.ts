@@ -118,19 +118,19 @@ describe('oauthTokenErrorKind', () => {
 });
 
 describe('decodeJwtClaimsWithSchema', () => {
+  const schema = z.object({ email: z.string() });
+
   it('decodes a well-formed JWT payload through the schema', () => {
     const payload = Buffer.from(JSON.stringify({ email: 'a@b.com' })).toString(
       'base64url',
     );
     const token = `h.${payload}.s`;
-    const schema = z.object({ email: z.string() });
     expect(decodeJwtClaimsWithSchema(token, schema, { email: '' })).toEqual({
       email: 'a@b.com',
     });
   });
 
   it('returns empty on malformed tokens', () => {
-    const schema = z.object({ email: z.string() });
     expect(
       decodeJwtClaimsWithSchema('not-a-jwt', schema, { email: '' }),
     ).toEqual({ email: '' });

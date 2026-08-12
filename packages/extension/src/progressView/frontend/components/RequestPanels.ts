@@ -145,7 +145,7 @@ const PANEL_MARKER_SELECTOR = '[data-request-panel]';
 function renderPanel(
   section: SectionConfig,
   permission: PermissionState,
-  armed = false,
+  armed: boolean,
 ): TemplateResult {
   // `armed` marks the panel the y/n accelerators will act on. Sections render
   // in a fixed kind order while the accelerators target the newest request,

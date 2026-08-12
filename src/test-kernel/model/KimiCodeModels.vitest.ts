@@ -1,11 +1,8 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
-// Local imports - agent runtime
 import { modelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 
-// Local imports - model
 import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,

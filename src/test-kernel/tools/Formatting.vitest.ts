@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports
 import { formatFileView } from '@tools/formatting';
 
 describe('formatFileView', () => {

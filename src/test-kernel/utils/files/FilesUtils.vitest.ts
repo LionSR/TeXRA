@@ -90,8 +90,7 @@ describe('BaseFS stat predicates', () => {
 describe('WorkspaceFS.delete', () => {
   it('is idempotent when the file does not exist', async () => {
     await assert.doesNotReject(
-      async () =>
-        await WorkspaceFS.delete('this-file-does-not-exist-12345.txt'),
+      () => WorkspaceFS.delete('this-file-does-not-exist-12345.txt'),
       'delete() should not throw when file does not exist',
     );
   });
@@ -156,11 +155,8 @@ describe('WorkspaceFS.toAbsolute', () => {
 
   it('resolves relative paths against the workspace', () => {
     const resolved = WorkspaceFS.toAbsolute('relative/path/file.txt');
-    assert.strictEqual(path.isAbsolute(resolved), true);
-    assert.strictEqual(
-      resolved.endsWith(path.join('relative', 'path', 'file.txt')),
-      true,
-    );
+    assert.ok(path.isAbsolute(resolved));
+    assert.ok(resolved.endsWith(path.join('relative', 'path', 'file.txt')));
   });
 });
 
@@ -195,13 +191,7 @@ describe('AbsoluteFS.write', () => {
 
     await assert.rejects(
       () => AbsoluteFS.write(location.absolutePath, 'content'),
-      (error: unknown) => {
-        assert.strictEqual(error, loopError);
-        assert.strictEqual((error as NodeJS.ErrnoException).code, 'ELOOP');
-        assert.strictEqual((error as NodeJS.ErrnoException).path, expectedPath);
-        assert.strictEqual((error as Error).cause, cause);
-        return true;
-      },
+      (error: unknown) => error === loopError,
     );
 
     expect(writeFile).toHaveBeenCalledOnce();
@@ -227,16 +217,12 @@ describe('RelativeFS JSON helpers', () => {
   setupPlatform({}, { fs: nodeFilesystem });
 
   beforeEach(async () => {
-    await fs
-      .rm(BASE_DIR, { recursive: true, force: true })
-      .catch(() => undefined);
+    await fs.rm(BASE_DIR, { recursive: true, force: true });
     await fs.mkdir(BASE_DIR, { recursive: true });
   });
 
   afterAll(async () => {
-    await fs
-      .rm(BASE_DIR, { recursive: true, force: true })
-      .catch(() => undefined);
+    await fs.rm(BASE_DIR, { recursive: true, force: true });
   });
 
   it('readJson round trip preserves written JSON data', async () => {

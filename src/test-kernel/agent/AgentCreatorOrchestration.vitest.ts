@@ -93,7 +93,7 @@ describe('agent creator orchestration', () => {
   it('creates a workflow agent and preserves registration side-effect order', async () => {
     const events: string[] = [];
     const ui = createUi(events);
-    vi.spyOn(AbsoluteFS, 'write').mockImplementation(async () => {
+    vi.mocked(AbsoluteFS.write).mockImplementation(async () => {
       events.push('write');
     });
 

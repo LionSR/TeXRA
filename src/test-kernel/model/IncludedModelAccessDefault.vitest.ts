@@ -8,14 +8,11 @@
  * `ServerSideKeyService` itself defaults the preference on.
  */
 
-// Node imports
 import { strict as assert } from 'node:assert';
 
-// Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import type {
   ModelCredentialSelection,

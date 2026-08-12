@@ -47,15 +47,10 @@ const GROK_LOGIN_TARGETS = new Set(['grok', 'xai', 'supergrok']);
 export function parseCliLogoutTarget(
   input: string,
 ): CliLogoutTarget | undefined {
-  switch (input.trim().toLowerCase()) {
-    case 'chatgpt':
-    case 'codex':
-    case 'subscription':
-      return 'chatgpt';
-    case 'grok':
-    case 'xai':
-    case 'supergrok':
-      return 'grok';
+  const normalized = input.trim().toLowerCase();
+  if (CHATGPT_LOGIN_TARGETS.has(normalized)) return 'chatgpt';
+  if (GROK_LOGIN_TARGETS.has(normalized)) return 'grok';
+  switch (normalized) {
     case 'texra':
     case 'researcher':
       return 'texra';

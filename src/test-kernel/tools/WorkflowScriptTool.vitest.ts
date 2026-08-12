@@ -13,7 +13,6 @@ import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteract
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
 import {
-  EXECUTION_STATUS,
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,

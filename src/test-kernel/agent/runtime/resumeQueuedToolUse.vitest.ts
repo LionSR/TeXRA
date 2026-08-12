@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
 import type { StreamTabId } from '@shared/schemas';
 import { RUN_OUTCOME } from '@shared/schemas';
@@ -53,7 +54,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
   beforeEach(() => {
     resumeToolUseFromResumeDataMock.mockReset();
     resumeToolUseFromResumeDataMock.mockImplementation(
-      async (_resume: unknown, options: any) => {
+      async (_resume: unknown, options: ResumeToolUseFromResumeDataOptions) => {
         options.onFollowUpConsumed?.();
         return completed;
       },
@@ -80,9 +81,10 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
       }),
     ).resolves.toBe(true);
 
-    const options = resumeToolUseFromResumeDataMock.mock.calls[0]?.[1];
+    const options = resumeToolUseFromResumeDataMock.mock
+      .calls[0]?.[1] as ResumeToolUseFromResumeDataOptions;
     expect(options.tools).toBe(tools);
-    expect(options.drainedFollowUps.map((item: any) => item.text)).toEqual([
+    expect(options.drainedFollowUps?.map((item) => item.text)).toEqual([
       'first',
       'second',
     ]);

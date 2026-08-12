@@ -1,7 +1,5 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - test support
 import { loadSourceModule } from './loadSourceModule.ts';
 
 function rendererWindow(platform: string): Window {

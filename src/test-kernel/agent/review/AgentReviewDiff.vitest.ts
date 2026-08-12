@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import {
@@ -19,7 +19,6 @@ import { executeCommand } from '@utils/system/execUtils';
 
 setupPlatform({ workspacePath: process.cwd() }, { fs: nodeFilesystem });
 
-/** Runs `run` against a plain (non-git) temp directory, then removes it. */
 async function withPlainDir(
   run: (dir: string) => Promise<void>,
 ): Promise<void> {
@@ -67,7 +66,6 @@ describe('collectReviewDiff (real git repository)', () => {
   });
 
   afterEach(async () => {
-    vi.restoreAllMocks();
     await rm(repo, { recursive: true, force: true });
   });
 
@@ -78,13 +76,15 @@ describe('collectReviewDiff (real git repository)', () => {
     });
   }
 
-  /** Runs `collectReviewDiff` against the fixture repo and unwraps a success. */
   async function collectDiffOrFail(
     options: Partial<CollectReviewDiffOptions> = {},
   ) {
     const result = await collectDiff(options);
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error('expected collectReviewDiff to succeed');
+    if (!result.ok) {
+      throw new Error(
+        `expected collectReviewDiff to succeed: ${result.reason}`,
+      );
+    }
     return result.value;
   }
 

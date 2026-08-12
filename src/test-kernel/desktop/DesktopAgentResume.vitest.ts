@@ -72,17 +72,6 @@ function completedResult(): ResultEvent {
   };
 }
 
-function completedRunSummary() {
-  return {
-    executionId,
-    streamId: stream,
-    category: 'workflow' as const,
-    outcome: RUN_OUTCOME.COMPLETED,
-    outputs: [],
-    compileFailures: [],
-  };
-}
-
 /** runAgent fails after lifecycle startup, publishing one failed result. */
 function failAfterLifecycle(
   session: SessionHandle,
@@ -115,19 +104,15 @@ function attachResultPresenter(session: SessionHandle): {
   };
 }
 
-function createSnapshots(): StreamSnapshotStore {
-  const snapshots = new StreamSnapshotStore();
-  snapshotFacts(snapshots).setRunConfig(stream, config, executionId);
-  return snapshots;
-}
-
 /** Harness disposal is idempotent so tests can shut it down mid-test. */
 function createResumeHarness(): {
   owner: DesktopProcessResumeOwner;
   session: SessionHandle;
   dispose(): void;
 } {
-  const session = createTestSession({ snapshots: createSnapshots() });
+  const snapshots = new StreamSnapshotStore();
+  snapshotFacts(snapshots).setRunConfig(stream, config, executionId);
+  const session = createTestSession({ snapshots });
   session.transcripts.ensureStream(stream);
   const owner = new DesktopProcessResumeOwner();
   const detach = owner.attach({ session });
@@ -175,7 +160,14 @@ describe('desktop process resume owner', () => {
   beforeEach(() => {
     retrieveSessionResumeData.mockReset();
     resumeToolUseFromResumeData.mockReset();
-    runAgent.mockReset().mockResolvedValue(completedRunSummary());
+    runAgent.mockReset().mockResolvedValue({
+      executionId,
+      streamId: stream,
+      category: 'workflow',
+      outcome: RUN_OUTCOME.COMPLETED,
+      outputs: [],
+      compileFailures: [],
+    });
   });
 
   it('resumes while no BrowserWindow presentation exists', async () => {
@@ -336,7 +328,14 @@ describe('desktop process resume owner', () => {
       if ((await options.canAcquireResumeLease?.()) === false) {
         throw new ResumeAdmissionCancelledError(executionId);
       }
-      return completedRunSummary();
+      return {
+        executionId,
+        streamId: stream,
+        category: 'workflow',
+        outcome: RUN_OUTCOME.COMPLETED,
+        outputs: [],
+        compileFailures: [],
+      };
     });
 
     await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);

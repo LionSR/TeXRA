@@ -1,16 +1,12 @@
-// Third-party imports
 import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - agent model handlers
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
-
-// Type imports
-import type Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
+import type Anthropic from '@anthropic-ai/sdk';
 
 const EXTENDED_CACHE_TTL_BETA = 'extended-cache-ttl-2025-04-11';
 
@@ -36,8 +32,7 @@ function createHandler(): ModelHandlerAnthropic {
   );
 
   handler.setLogger(spiedTrace());
-  (handler as { getStreamingConfig: () => boolean }).getStreamingConfig = () =>
-    false;
+  handler.getStreamingConfig = () => false;
   return handler;
 }
 

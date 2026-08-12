@@ -52,11 +52,9 @@ export function validateAgentYamlContent(
   } else {
     data = AgentDefinitionSchema.parse(content);
   }
-  const rootName = typeof data.name === 'string' ? data.name.trim() : '';
-
-  if (!rootName) {
-    throw new Error('name is empty');
-  }
+  // `name` is validated by AgentNameSchema on both parse paths (trim + min 1),
+  // so the returned name is guaranteed non-empty and trimmed.
+  const rootName = data.name;
 
   if (!data.inherits) {
     AgentSettingSchema.parse(resolveAgentSettingTools(data.settings, CHANNEL));
