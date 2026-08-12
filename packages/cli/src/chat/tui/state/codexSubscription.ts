@@ -32,24 +32,6 @@ export async function setCliCodexSubscription(
   return update;
 }
 
-/**
- * Flip the "Prefer Kimi Code" preference and refresh the TUI views. Shared by
- * the retry "switch to your own Moonshot API key" path so the
- * persist-then-refresh sequence lives in one place.
- */
-export async function setCliKimiCode(enabled: boolean): Promise<void> {
-  await setCliCodingPlanSubscription('kimiCode', enabled);
-}
-
-/**
- * Flip the GLM Coding Plan toggle and refresh the TUI views. Shared by the
- * retry "switch to the regular GLM endpoint" path so the persist-then-refresh
- * sequence lives in one place.
- */
-export async function setCliGlmCodingPlan(enabled: boolean): Promise<void> {
-  await setCliCodingPlanSubscription('glmCodingPlan', enabled);
-}
-
 /** Flip any catalogued coding-plan preference and refresh the TUI views. */
 export async function setCliCodingPlanSubscription(
   id: CodingPlanSubscriptionId,
