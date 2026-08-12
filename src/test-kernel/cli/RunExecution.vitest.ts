@@ -157,6 +157,8 @@ function loadRunExecution(): Promise<
 }
 
 type LeaseOptions = {
+  beforeLeaseRelease?: () => Promise<boolean | void>;
+  onRun?: () => void;
   onExecutionLeaseAcquired?: (
     scope: (operation: () => unknown) => unknown,
     executionId: ExecutionId,
@@ -797,13 +799,17 @@ describe('executeCliRequest', () => {
     async ({ options }) => {
       const { platform, executeCliRequest } = await installFakePlatform();
       const { flushSpy } = await spyOnTranscriptFlush();
+      const { defaultSession } = await import('@agent/runtime/SessionHandle');
+      const killSpy = vi.spyOn(defaultSession().executions, 'kill');
       mocks.releaseExecutionLeaseAfterArtifacts.mockImplementationOnce(
         async (session, executionId) => session.flushArtifacts(executionId),
       );
       const runWithOwnership = vi.fn((operation: () => unknown) => operation());
       let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
+      let publishRun: LeaseOptions['onRun'];
       const hangingRun = stubHangingRun((options) => {
         publishLeaseScope = options.onExecutionLeaseAcquired;
+        publishRun = options.onRun;
       });
 
       const run = executeCliRequest(baseRequest(), cliContext(), options);
@@ -812,7 +818,9 @@ describe('executeCliRequest', () => {
       await Promise.resolve();
       expect(mocks.finalizeExecution).not.toHaveBeenCalled();
       publishLeaseScope?.(runWithOwnership, 'exec-1' as ExecutionId);
+      publishRun?.();
       await Promise.resolve();
+      expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1');
       expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
 
       mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
@@ -838,6 +846,32 @@ describe('executeCliRequest', () => {
       expect(mocks.finalizeExecution).toHaveBeenCalledOnce();
     },
   );
+
+  it('forwards a failed shutdown drain to the runtime release hook', async () => {
+    const { platform, executeCliRequest } = await installFakePlatform();
+    const drainError = new Error('snapshot drain failed');
+    mocks.releaseExecutionLeaseAfterArtifacts.mockRejectedValueOnce(drainError);
+    const runWithOwnership = vi.fn((operation: () => unknown) => operation());
+    let leaseOptions: LeaseOptions | undefined;
+    const hangingRun = stubHangingRun((options) => {
+      leaseOptions = options;
+    });
+
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+    });
+    await vi.waitFor(() => expect(leaseOptions).toBeDefined());
+    leaseOptions?.onExecutionLeaseAcquired?.(
+      runWithOwnership,
+      'exec-1' as ExecutionId,
+    );
+    const shutdown = platform.lifecycle.runShutdown();
+
+    await expect(leaseOptions?.beforeLeaseRelease?.()).rejects.toBe(drainError);
+    hangingRun.resolve(COMPLETED_RUN);
+    await shutdown;
+    await run;
+  });
 
   it('does not finalize shutdown through a captured lease that is already lost', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();

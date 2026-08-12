@@ -4,7 +4,10 @@ import {
   trackTerminalResultPresentation,
   type RunAgentOptions,
 } from '@agent/runtime';
-import type { OwnedExecutionLeaseScope } from '@agent/storage/executionLease';
+import {
+  ExecutionLeaseLostError,
+  type OwnedExecutionLeaseScope,
+} from '@agent/storage/executionLease';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import {
   validateExecutionRequest,
@@ -238,6 +241,7 @@ export async function executeCliRequest(
     : () => undefined;
   let ownedExecutionId: ExecutionId | undefined;
   let shutdownInterrupted = false;
+  let shutdownArtifactFailure: unknown;
   let shutdownFinalizationFailureReported = false;
   const reportFinalizationFailure = (error: unknown): void => {
     session.interactions.emit('requestShowError', {
@@ -279,12 +283,15 @@ export async function executeCliRequest(
           await releaseCliExecutionLeaseAfterArtifacts(session, executionId);
         });
         return true;
-      } catch {
+      } catch (error) {
         // The runtime's ordinary artifact drain owns failure reporting and
         // aggregation with any primary run error. A host-side drain failure
         // may already have abandoned the lease; returning false asks the
         // runtime to make its best effort without letting this memoized hook
         // replace the primary error when the CLI awaits it again on shutdown.
+        if (!(error instanceof ExecutionLeaseLostError)) {
+          shutdownArtifactFailure = error;
+        }
         return false;
       }
     })();
@@ -294,6 +301,9 @@ export async function executeCliRequest(
     SHUTDOWN_PHASE.BEFORE,
     async () => {
       shutdownInterrupted = true;
+      if (ownedExecutionId) {
+        session.executions.kill(ownedExecutionId);
+      }
       // Earlier shutdown handlers interrupt the live agent sessions. Wait for
       // runAgent to finish unwinding before the final drain releases ownership,
       // so no transcript or checkpoint writer can race the lease release.
@@ -308,10 +318,25 @@ export async function executeCliRequest(
         registerExecution: options.registerExecution,
         openWorkflowOutput: options.openWorkflowOutput,
         modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-        beforeLeaseRelease: finalizeShutdownStatus,
+        beforeLeaseRelease: async () => {
+          const handled = await finalizeShutdownStatus();
+          if (shutdownArtifactFailure !== undefined) {
+            const error = shutdownArtifactFailure;
+            shutdownArtifactFailure = undefined;
+            throw error;
+          }
+          return handled;
+        },
         onExecutionLeaseAcquired: (runWithOwnership, executionId) => {
           ownedExecutionId = executionId;
           settleLeaseScope(runWithOwnership);
+        },
+        onRun: () => {
+          // Acquisition precedes registry tracking. If shutdown landed in
+          // between, interrupt as soon as the canonical handle becomes live.
+          if (shutdownInterrupted && ownedExecutionId) {
+            session.executions.kill(ownedExecutionId);
+          }
         },
         stopAfterCycle: options.stopAfterCycle,
         approvalPromptsUnavailable: cliApprovalPromptsUnavailable(
