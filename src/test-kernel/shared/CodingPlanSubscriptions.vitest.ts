@@ -11,6 +11,15 @@ import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 describe('coding-plan subscription catalog', () => {
+  it('is deeply immutable', () => {
+    expect(Object.isFrozen(CODING_PLAN_SUBSCRIPTIONS)).toBe(true);
+    for (const plan of CODING_PLAN_SUBSCRIPTIONS) {
+      expect(Object.isFrozen(plan)).toBe(true);
+      expect(Object.isFrozen(plan.cliAliases)).toBe(true);
+      expect(Object.isFrozen(plan.usageVariantSettingKeys)).toBe(true);
+    }
+  });
+
   it('keeps every provider identity unique and visible to usage hosts', () => {
     const unique = <T>(values: readonly T[]): number => new Set(values).size;
 

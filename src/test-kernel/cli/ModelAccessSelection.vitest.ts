@@ -279,7 +279,7 @@ describe('CLI model access routes', () => {
     ).toBe('kimi-code');
   });
 
-  it('describes a prospective Kimi Code route only for personal access', () => {
+  it('describes a prospective exclusive Kimi Code route in either mode', () => {
     expect(
       resolveCliModelAccessRoute({
         apiMode: 'personal',
@@ -287,14 +287,13 @@ describe('CLI model access routes', () => {
         kimiCodeActive: true,
       }),
     ).toBe('kimi-code');
-    // Under included access the relay owns eligible models.
     expect(
       resolveCliModelAccessRoute({
         apiMode: 'included',
         subscriptionActive: false,
         kimiCodeActive: true,
       }),
-    ).toBe('included');
+    ).toBe('kimi-code');
   });
 
   it('reports an active GLM plan after included access falls back', () => {
