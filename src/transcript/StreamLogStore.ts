@@ -528,7 +528,7 @@ export class StreamLogStore {
   ): Promise<TranscriptWriter> {
     const writer = this.createWriter(streamId, ownerKey, true);
     try {
-      await this.ensureLoaded(streamId);
+      await this.hydrateStream(streamId, 'writer');
       return writer;
     } catch (error) {
       writer.close();
@@ -623,13 +623,18 @@ export class StreamLogStore {
    * resident or when the stream is unknown.
    */
   async ensureLoaded(streamId: StreamTabId): Promise<void> {
+    await this.hydrateStream(streamId, 'focus');
+  }
+
+  private async hydrateStream(
+    streamId: StreamTabId,
+    reason: 'focus' | 'writer',
+  ): Promise<void> {
     if (this.mode.kind === 'ephemeral') return;
 
-    // A direct read reactivates the stream. A writer-reserved load instead
-    // preserves an earlier eviction request until that writer closes.
     const reserved = this.streams.get(streamId);
     if (!reserved && !this.summaries.has(streamId)) return;
-    if (reserved?.writer === undefined) {
+    if (reason === 'focus') {
       this.acquireLease(streamId, 'focus');
       this.releaseRequests.delete(streamId);
     }
@@ -1376,6 +1381,7 @@ export class StreamLogStore {
     state.leases?.delete(reason);
     if (state.leases?.size === 0) state.leases = undefined;
     this.tryRelease(streamId);
+    this.pruneStreamState(streamId);
   }
 
   private tryRelease(streamId: StreamTabId): void {

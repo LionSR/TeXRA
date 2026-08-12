@@ -506,6 +506,33 @@ describe('StreamLogStore load', () => {
     expect(store.get('alpha')).toBeUndefined();
   });
 
+  it('keeps a writer-owned rehydrate resident when focus clears eviction', async () => {
+    const readStarted = createDeferred();
+    const readGate = createDeferred();
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: {
+        alpha: summary(100, 100, { hasRunningGroup: false }),
+      },
+      onLogRead: async () => {
+        readStarted.resolve();
+        await readGate.promise;
+      },
+    });
+    const store = await StreamLogStore.open();
+    store.requestEviction('alpha');
+    const writerPromise = store.loadAndAcquireWriter('alpha', 'late-writer');
+    await readStarted.promise;
+
+    const focus = store.ensureLoaded('alpha');
+    readGate.resolve();
+    const writer = await writerPromise;
+    await focus;
+    writer.close();
+
+    expect(store.get('alpha')?.size).toBe(1);
+  });
+
   it('honors eviction requested while a focused rehydrate is pending', async () => {
     const readStarted = createDeferred();
     const readGate = createDeferred();
@@ -1760,6 +1787,19 @@ describe('StreamLogStore save throttle', () => {
   it('does not retain eviction state for an unknown stream', async () => {
     mockStorage({ logs: {}, summaries: {} });
     const store = await StreamLogStore.open();
+
+    store.requestEviction('unknown');
+    store.ensureStream('unknown');
+    await store.flush();
+
+    expect(store.get('unknown')).toBeDefined();
+  });
+
+  it('prunes an empty stream after its final writer closes', async () => {
+    mockStorage({ logs: {}, summaries: {} });
+    const store = await StreamLogStore.open();
+    const writer = store.acquireWriter('unknown', 'empty-writer');
+    writer.close();
 
     store.requestEviction('unknown');
     store.ensureStream('unknown');
