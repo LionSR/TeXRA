@@ -68,6 +68,8 @@ export interface HelperModelCompletion {
   systemPrompt?: string;
   /** Sampling temperature (defaults to 0 for deterministic helper calls). */
   temperature?: number;
+  /** Cancel this auxiliary request and its bounded retries. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -81,8 +83,9 @@ export interface HelperModelCompletion {
  */
 export async function runHelperModelCompletion(
   kit: HelperModelKit,
-  { userPrompt, systemPrompt, temperature = 0 }: HelperModelCompletion,
+  { userPrompt, systemPrompt, temperature = 0, signal }: HelperModelCompletion,
 ): Promise<string> {
+  signal?.throwIfAborted();
   const messages = await kit.handler.initializeMessages(
     '',
     userPrompt,
@@ -91,13 +94,16 @@ export async function runHelperModelCompletion(
   );
   // Helper calls execute outside ModelInvocationNode, so they need their own
   // bounded retry policy now that generation clients disable SDK retries.
-  const result = await auxiliaryRetry(() =>
-    kit.handler.createResponse({
-      client: kit.client,
-      messages,
-      temperature,
-      systemPrompt,
-    }),
+  const result = await auxiliaryRetry(
+    () =>
+      kit.handler.createResponse({
+        client: kit.client,
+        messages,
+        temperature,
+        systemPrompt,
+        signal,
+      }),
+    signal,
   );
   return kit.handler.extractResponse(result.response, '').text;
 }

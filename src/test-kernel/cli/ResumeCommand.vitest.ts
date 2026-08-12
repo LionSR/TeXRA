@@ -277,6 +277,20 @@ describe('runResumeExecution', () => {
     }
   });
 
+  it('identifies lease inspection failures separately from session loading', async () => {
+    const executionLease = await import('@agent/storage/executionLease');
+    vi.spyOn(executionLease, 'inspectExecutionLease').mockRejectedValueOnce(
+      new Error('lease disk offline'),
+    );
+
+    await expect(run(cliContext())).resolves.toBe(1);
+
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      `Could not check whether execution ${EXECUTION_ID} is active: lease disk offline`,
+    );
+    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
+  });
+
   it('reports empty retrieval as not resumable', async () => {
     mocks.retrieveSessionResumeData.mockResolvedValue(null);
 

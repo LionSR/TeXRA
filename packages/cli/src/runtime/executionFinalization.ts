@@ -1,3 +1,7 @@
+import {
+  releaseExecutionLeaseAfterArtifacts,
+  type SessionHandle,
+} from '@agent/runtime';
 import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
 import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
 import type { RunOutcome } from '@shared/schemas';
@@ -57,4 +61,17 @@ export async function finalizeCliExecution(
 
   const message = finalizationFailureMessage(result, executionId, outcome);
   reportFailure(new Error(message, { cause: result.error }));
+}
+
+/**
+ * Drain a CLI session's artifacts before releasing its execution lease.
+ * This host-local seam lets CLI lifecycle tests replace the release operation
+ * without mocking the public agent-runtime barrel, which would replace every
+ * runtime export consumed by the same test module.
+ */
+export function releaseCliExecutionLeaseAfterArtifacts(
+  session: SessionHandle,
+  executionId: FinalizeExecutionInput['executionId'],
+): Promise<void> {
+  return releaseExecutionLeaseAfterArtifacts(session, executionId);
 }
