@@ -82,8 +82,7 @@ export class SessionStores {
   private readonly listExecutionStreamReferences: ListExecutionStreamReferencesFn;
   private readonly goalEntries: GoalEntryStore | undefined;
   private readonly onCanonicalStreamDeleted:
-    | ((stream: StreamTabId) => void | Promise<void>)
-    | undefined;
+    ((stream: StreamTabId) => void | Promise<void>) | undefined;
   private readonly onChildrenDetached:
     | ((
         parent: StreamTabId,

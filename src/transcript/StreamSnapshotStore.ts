@@ -127,9 +127,7 @@ function isSnapshotRunFact(event: AgentEvent): event is SnapshotRunFact {
 
 type OutputFilesPatch = Map<number, OutputFileInfo[] | null>;
 type UsageUpdateResult =
-  | TokenUsageStats
-  | undefined
-  | Promise<TokenUsageStats | undefined>;
+  TokenUsageStats | undefined | Promise<TokenUsageStats | undefined>;
 interface HydratedRunState {
   config?: AgentConfig;
   identity?: RunIdentity;

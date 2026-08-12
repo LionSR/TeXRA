@@ -98,10 +98,7 @@ export const PersistedFlowRecordEnvelopeSchema = z
   .pipe(PersistedFlowRecordObjectSchema);
 
 export type PersistedFlowStateErrorReason =
-  | 'read-failed'
-  | 'unsupported-record'
-  | 'missing-shared'
-  | 'invalid-shared';
+  'read-failed' | 'unsupported-record' | 'missing-shared' | 'invalid-shared';
 
 /** Persisted flow state cannot be read or resumed safely. */
 export class PersistedFlowStateError extends Error {
@@ -254,8 +251,7 @@ export class PersistedFlow<
    * Errors are swallowed — the authoritative flow blob is already written.
    */
   private projection:
-    | ((shared: S, kv: ExecutionKVStore) => Promise<void>)
-    | null = null;
+    ((shared: S, kv: ExecutionKVStore) => Promise<void>) | null = null;
 
   /**
    * Create a new PersistedFlow.

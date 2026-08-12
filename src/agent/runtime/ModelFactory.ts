@@ -63,8 +63,7 @@ const MODEL_HANDLER_COMPATIBILITY_PROPERTY =
 
 type ModelHandlerCompatibilityTagged = object & {
   readonly [MODEL_HANDLER_COMPATIBILITY_PROPERTY]?:
-    | ModelHandlerCompatibilityKey
-    | undefined;
+    ModelHandlerCompatibilityKey | undefined;
 };
 
 // Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.

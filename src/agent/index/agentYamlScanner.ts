@@ -180,8 +180,7 @@ function scanYaml(
     const rawSettings = settingsBlock.value;
     const rawPrompts = promptsBlock.value;
     const defaultOutputFiles = rawSettings.defaultOutputFiles as
-      | string[]
-      | undefined;
+      string[] | undefined;
 
     const tools = extractToolNames(rawSettings.tools as unknown[] | undefined);
 

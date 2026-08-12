@@ -231,8 +231,7 @@ export type FinalizeExecutionResult =
       readonly status: 'failed';
       readonly error: unknown;
       readonly stage:
-        | 'terminal-status'
-        | 'terminal-status-and-flow-record-delete';
+        'terminal-status' | 'terminal-status-and-flow-record-delete';
       readonly outcomePersisted: false;
     }
   | {
