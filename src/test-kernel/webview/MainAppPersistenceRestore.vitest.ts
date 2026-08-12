@@ -182,10 +182,12 @@ describe('MainApp persistence and restore characterization', () => {
   // singleton before the HOST_BRIDGE_API_KEY mock above is wired up.
   let persistence: typeof import('@webview/frontend/persistence');
   let setInstruction: typeof import('@webview/frontend/mainViewActions').setInstruction;
+  let setBaseFile: typeof import('@webview/frontend/mainViewActions').setBaseFile;
 
   beforeAll(async () => {
     persistence = await import('@webview/frontend/persistence');
-    ({ setInstruction } = await import('@webview/frontend/mainViewActions'));
+    ({ setBaseFile, setInstruction } =
+      await import('@webview/frontend/mainViewActions'));
   });
 
   beforeEach(() => {
@@ -289,10 +291,7 @@ describe('MainApp persistence and restore characterization', () => {
 
     // A subsequent change persists the per-mode instructions and the
     // forced-empty output state (never the stale seed values).
-    dispatchHostMessage({
-      command: MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED,
-      filePath: 'other_polish.tex',
-    });
+    setBaseFile('other.tex');
     await element.updateComplete;
     const blob = lastPersistedBlob();
     expect(blob.instruction.workflow).toBe('persisted workflow instruction');
@@ -300,7 +299,7 @@ describe('MainApp persistence and restore characterization', () => {
     expect(blob.outputFiles).toEqual([]);
     expect(blob).not.toHaveProperty('outputFilesActive');
     expect(blob.latexdiffsVisible).toBe(true);
-    expect(blob.editedFile).toBe('other_polish.tex');
+    expect(blob.editedFile).toBe('main_polish.tex');
   });
 
   it('renders file controls without a redundant heading or disclosure', async () => {
@@ -571,10 +570,7 @@ describe('MainApp persistence and restore characterization', () => {
         await Promise.resolve();
         expect(storageWrites).toHaveLength(0);
 
-        dispatchHostMessage({
-          command: MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED,
-          filePath: 'other_polish.tex',
-        });
+        setBaseFile('other.tex');
         await Promise.resolve();
 
         expect(storageWrites).toHaveLength(1);
