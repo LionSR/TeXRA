@@ -536,6 +536,45 @@ describe('claude_agent tool launch and resume fallback', () => {
     ClaudeAgentSessions.release('forked-session');
   });
 
+  it('fails a fork that succeeds without returning a new session id', async () => {
+    ClaudeAgentSessions.register('source-session', {
+      childStreamId,
+      executionId,
+      executions: stubExecutions(),
+      model: 'claude-sonnet-4-6',
+      permissionMode: 'acceptEdits',
+      effort: 'high',
+    });
+    mocks.query.mockImplementation(() =>
+      (async function* () {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          result: 'Fork turn without an id',
+          modelUsage: {},
+          total_cost_usd: 0,
+        };
+      })(),
+    );
+    const captured = captureStrategy();
+
+    const result = await new ClaudeAgentTool().call({
+      prompt: 'try a different proof',
+      session_id: 'source-session',
+      fork_session: true,
+    });
+
+    expect(result.status).toBe('executed');
+    const ports: ChildRunPorts = { notify: () => {}, recordCost: () => {} };
+    await expect(
+      captured.strategy?.launch?.(ports, new AbortController()),
+    ).rejects.toThrow('Claude Code fork completed without a new session id');
+    expect(mocks.query).toHaveBeenCalledOnce();
+    expect(mocks.query.mock.calls[0]?.[0]).toMatchObject({
+      options: { resume: 'source-session', forkSession: true },
+    });
+  });
+
   it('rejects a fork from a live session owned by another stream', async () => {
     const sourceExecutionId = 'source-execution' as ExecutionId;
     const sourceOwner = 'stream:other-owner' as StreamTabId;

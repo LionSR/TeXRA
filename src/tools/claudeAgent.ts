@@ -301,6 +301,10 @@ export async function runStreamedTurn(params: {
     backgroundTasks.finish();
   }
 
+  if (params.forkSession && !isError && !sessionId) {
+    throw new Error('Claude Code fork completed without a new session id');
+  }
+
   return {
     finalResponse: responseParts.join('\n\n'),
     usage,
