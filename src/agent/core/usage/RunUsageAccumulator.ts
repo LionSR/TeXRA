@@ -7,8 +7,6 @@ import {
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
 import * as logger from '@logger/logUtils';
-
-// Local imports - types
 import { TokenCountSchema } from '@shared/schemas';
 
 const CHANNEL = 'RunUsageAccumulator';
