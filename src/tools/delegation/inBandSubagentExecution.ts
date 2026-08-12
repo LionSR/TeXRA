@@ -540,16 +540,10 @@ async function executeInBand(
           );
           throw error;
         }
-        const resultMeta =
-          (await strategy.buildResultMeta?.(
-            flowResult,
-            false,
-            built.wallTimeMs,
-          )) ?? built.resultMeta;
         await persistChildRunDeliveryBestEffort(
           executionId,
           delivery,
-          resultMeta,
+          built.resultMeta,
           (kind, error) => logPersistenceFailure(kind, executionId, error),
         );
       }
