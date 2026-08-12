@@ -82,7 +82,10 @@ describe('runAgent execution ownership', () => {
     vi.clearAllMocks();
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.acquireResumedExecutionLease.mockResolvedValue('acquired');
-    mocks.clearTerminalExecutionState.mockResolvedValue(undefined);
+    mocks.clearTerminalExecutionState.mockResolvedValue({
+      previousOutcome: undefined,
+      streamId: 'assistant#run-agent-owner',
+    });
     mocks.completeOwnedExecutionLease.mockResolvedValue(undefined);
     mocks.renewOwnedExecutionLease.mockResolvedValue(undefined);
     flushArtifacts.mockResolvedValue(undefined);
@@ -136,6 +139,10 @@ describe('runAgent execution ownership', () => {
     const order: string[] = [];
     mocks.clearTerminalExecutionState.mockImplementationOnce(async () => {
       order.push('clear');
+      return {
+        previousOutcome: undefined,
+        streamId: 'assistant#run-agent-owner',
+      };
     });
     mocks.executeAgent.mockImplementationOnce(async () => {
       order.push('execute');
@@ -146,6 +153,13 @@ describe('runAgent execution ownership', () => {
 
     expect(mocks.clearTerminalExecutionState).toHaveBeenCalledWith(
       EXECUTION_ID,
+    );
+    expect(mocks.executeAgent).toHaveBeenCalledWith(
+      CONFIG,
+      EXECUTION_ID,
+      expect.objectContaining({
+        streamTabIdOverride: 'assistant#run-agent-owner',
+      }),
     );
     expect(order).toEqual(['clear', 'execute']);
   });
@@ -207,6 +221,26 @@ describe('runAgent execution ownership', () => {
     await expect(launch({ registerExecution: true })).rejects.toBe(launchError);
 
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.completeOwnedExecutionLease).toHaveBeenCalledWith(
+      EXECUTION_ID,
+    );
+  });
+
+  it('restores a cancelled outcome when resume fails before lifecycle startup', async () => {
+    const launchError = new Error('resume launch failed');
+    mocks.clearTerminalExecutionState.mockResolvedValueOnce({
+      previousOutcome: RUN_OUTCOME.CANCELLED,
+      streamId: 'assistant#run-agent-owner',
+    });
+    mocks.executeAgent.mockRejectedValueOnce(launchError);
+
+    await expect(launch()).rejects.toBe(launchError);
+
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: EXECUTION_ID,
+      outcome: RUN_OUTCOME.CANCELLED,
+      flowRecord: 'preserve',
+    });
     expect(mocks.completeOwnedExecutionLease).toHaveBeenCalledWith(
       EXECUTION_ID,
     );

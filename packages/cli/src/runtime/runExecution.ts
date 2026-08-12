@@ -1,9 +1,11 @@
 import {
   attachTerminalResultToast,
   runAgent,
+  trackTerminalResultPresentation,
   type RunAgentOptions,
 } from '@agent/runtime';
 import {
+  completeOwnedExecutionLease,
   ExecutionLeaseLostError,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
@@ -197,6 +199,7 @@ export async function executeCliRequest(
   const { session } = await initializeHeadlessTranscriptSession();
   session.setApprovalPolicy(runContext.approvalPolicy);
   const presentationHost = createCliRuntimeHost(runContext);
+  let failurePresented = false;
   const renderWorkflowPlainProgress =
     runContext.outputFormat === 'text' && runContext.renderRunProgress === true;
   const detachRunProgressRenderer = presentationHost.attachRunProgressRenderer(
@@ -205,7 +208,10 @@ export async function executeCliRequest(
   const detachHostInteractions = session.useHostInteractions(
     createHeadlessCliHostInteractions(runContext, {
       beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
-      emit: (event, payload) => presentationHost.emit(event, payload),
+      emit: (event, payload) => {
+        if (event === 'requestShowError') failurePresented = true;
+        presentationHost.emit(event, payload);
+      },
       setApprovalBypassState: (update) =>
         presentationHost.emitApprovalBypassState(update),
     }),
@@ -217,6 +223,10 @@ export async function executeCliRequest(
     session,
     session.interactions,
   );
+  const terminalResult = trackTerminalResultPresentation(
+    session,
+    (event) => event.executionId === request.executionId,
+  );
   const detachSessionProgressProjection =
     runContext.outputFormat === 'ndjson'
       ? attachCliSessionProgressProjection(session.events)
@@ -227,9 +237,7 @@ export async function executeCliRequest(
         writeLine: writeTextStderr,
       })
     : () => undefined;
-  const ownedExecutionId = options.registerExecution
-    ? request.executionId
-    : undefined;
+  let ownedExecutionId: ExecutionId | undefined;
   let shutdownInterrupted = false;
   let shutdownFinalizationFailureReported = false;
   const reportFinalizationFailure = (error: unknown): void => {
@@ -252,31 +260,34 @@ export async function executeCliRequest(
   );
   let shutdownStatusFinalized: Promise<void> | undefined;
   const finalizeShutdownStatus = (): Promise<void> => {
-    if (!shutdownInterrupted || !ownedExecutionId) return Promise.resolve();
+    if (!shutdownInterrupted) return Promise.resolve();
     shutdownStatusFinalized ??= (async () => {
       const runWithOwnership = await leaseScopeReady;
-      if (!runWithOwnership) return;
+      const executionId = ownedExecutionId;
+      if (!runWithOwnership || !executionId) return;
       try {
-        await runWithOwnership(() =>
-          finalizeCliExecution(
-            ownedExecutionId,
+        await runWithOwnership(async () => {
+          await finalizeCliExecution(
+            executionId,
             RUN_OUTCOME.CANCELLED,
             'preserve',
             reportShutdownFinalizationFailure,
-          ),
-        );
+          );
+          await completeOwnedExecutionLease(executionId);
+        });
       } catch (error) {
         if (!(error instanceof ExecutionLeaseLostError)) throw error;
       }
     })();
     return shutdownStatusFinalized;
   };
-  const disposeShutdownStatus = ownedExecutionId
-    ? tryPlatform()?.lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, async () => {
-        shutdownInterrupted = true;
-        await finalizeShutdownStatus();
-      })
-    : undefined;
+  const disposeShutdownStatus = tryPlatform()?.lifecycle.onShutdown(
+    SHUTDOWN_PHASE.BEFORE,
+    async () => {
+      shutdownInterrupted = true;
+      await finalizeShutdownStatus();
+    },
+  );
   const invoke = async (): Promise<ExecuteAgentResult> => {
     try {
       return await runAgent(request, {
@@ -286,7 +297,8 @@ export async function executeCliRequest(
         openWorkflowOutput: options.openWorkflowOutput,
         modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
         beforeLeaseRelease: finalizeShutdownStatus,
-        onExecutionLeaseAcquired: (runWithOwnership) => {
+        onExecutionLeaseAcquired: (runWithOwnership, executionId) => {
+          ownedExecutionId = executionId;
           settleLeaseScope(runWithOwnership);
         },
         stopAfterCycle: options.stopAfterCycle,
@@ -316,6 +328,7 @@ export async function executeCliRequest(
     if (!presentationAttached) return;
     presentationAttached = false;
     detachResultToast();
+    terminalResult.dispose();
     detachRunProgressRenderer();
     detachSessionProgressProjection();
     detachWorkflowPlainOutput();
@@ -333,6 +346,14 @@ export async function executeCliRequest(
     if (!(err instanceof AgentError)) {
       throw err;
     }
+    // A failure before lifecycle startup has no `result` event. Preserve the
+    // ordinary toast path when it ran, and provide the missing direct fallback
+    // while the presentation host is still attached.
+    if (!failurePresented && !terminalResult.isHandled()) {
+      session.interactions.emit('requestShowError', {
+        message: toErrorMessage(err),
+      });
+    }
   } finally {
     disposeShutdownStatus?.dispose();
     let finalizationCompleted = false;
@@ -348,10 +369,6 @@ export async function executeCliRequest(
   }
 
   if (!runResult.ok) {
-    // The message was already presented once via the run's `result` event
-    // (attachTerminalResultToast → requestShowError); nothing more to print
-    // here. Reuse the same outcome-to-exit-code mapping the non-throw failure path
-    // uses below, so approval-denied stays distinct from a generic failure.
     return {
       ok: false,
       exitCode: runOutcomeExitCode(RUN_OUTCOME.FAILED),
