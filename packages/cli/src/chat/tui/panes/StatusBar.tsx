@@ -14,7 +14,6 @@ import {
   isCodexSubscriptionActive,
   isXaiSubscriptionActive,
 } from '@model/providerCapabilities';
-import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
 import type {
   SpendingStatus,
   SubscriptionUsageProvider,
@@ -44,6 +43,7 @@ import { useSignal } from '../state/useSignal';
 import {
   buildStatusBarDisplay,
   statusBarStreamTarget,
+  subscriptionUsageProviderForStatus,
 } from './statusBarDisplay';
 
 const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
@@ -199,16 +199,11 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     RELAY_QUOTA_REFRESH_MS,
   );
 
-  const completedCodingPlan = codingPlanForUsageRoute(
-    statusSlice?.usage?.usageRoute,
-  );
-  const subscriptionUsageProvider: SubscriptionUsageProvider | undefined =
-    statusSlice?.usage?.usageRoute === 'chatgpt-subscription'
-      ? 'chatgpt'
-      : (completedCodingPlan?.usageProvider ??
-        (modelAccess === 'chatgpt'
-          ? 'chatgpt'
-          : resolution?.codingPlanUsageProvider));
+  const subscriptionUsageProvider = subscriptionUsageProviderForStatus({
+    usageRoute: statusSlice?.usage?.usageRoute,
+    modelAccess,
+    prospectiveCodingPlan: resolution?.codingPlanUsageProvider,
+  });
   const [subscriptionQuotaRead, setSubscriptionQuotaRead] = useState<{
     readonly provider: SubscriptionUsageProvider;
     readonly snapshot: SubscriptionUsageSnapshot;
