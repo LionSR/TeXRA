@@ -1,4 +1,4 @@
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime';
 import type { StreamTabId } from '@shared/schemas';
 import {
   activeStreamId,

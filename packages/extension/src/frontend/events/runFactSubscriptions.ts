@@ -1,5 +1,5 @@
 // Local imports
-import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import type { SessionEventHub } from '@agent/runtime';
 import type { AddOutputFilesPayload } from '@shared/schemas';
 
 export function subscribeAddOutputFilesRunFact(
