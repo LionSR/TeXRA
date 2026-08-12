@@ -571,16 +571,15 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     const linkedTask = content?.querySelector<HTMLElement>(
       '[data-log-id="agent-a"]',
     );
-    expect(linkedTask?.getAttribute('role')).toBe('button');
-    expect(linkedTask?.getAttribute('tabindex')).toBe('0');
-    linkedTask?.click();
-    linkedTask?.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    expect(linkedTask?.tagName).toBe('BUTTON');
+    expect(linkedTask?.getAttribute('type')).toBe('button');
+    expect(linkedTask?.getAttribute('aria-label')).toBe(
+      'Open Review manuscript run',
     );
-    expect(switchedTo).toEqual([
-      'reviewer@claude-opus-4#child-1',
-      'reviewer@claude-opus-4#child-1',
-    ]);
+    expect(linkedTask?.hasAttribute('role')).toBe(false);
+    expect(linkedTask?.hasAttribute('tabindex')).toBe(false);
+    linkedTask?.click();
+    expect(switchedTo).toEqual(['reviewer@claude-opus-4#child-1']);
   });
 
   it('omits the (i/n) suffix when a phase group carries no counts', async () => {

@@ -80,6 +80,10 @@ export const logEntryStyles = css`
 
   .workflow-task--linked {
     cursor: pointer;
+    width: 100%;
+    color: inherit;
+    font: inherit;
+    text-align: inherit;
   }
 
   /* Hover only. Focus keeps the shared 2px ring from focusRingStyles: the
