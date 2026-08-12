@@ -143,7 +143,7 @@ function subscriptionPreference(
 }
 
 function expectedAccessStatus(overrides: Record<string, unknown>) {
-  return {
+  const status = {
     preferences: {
       chatGpt: 'off',
       grok: 'off',
@@ -158,6 +158,19 @@ function expectedAccessStatus(overrides: Record<string, unknown>) {
     glmKeySet: false,
     personalKeyProviders: [],
     ...overrides,
+  };
+  return {
+    ...status,
+    codingPlans: {
+      glmCodingPlan: {
+        preferred: status.preferences.glmCode === 'on',
+        keySet: status.glmKeySet === true,
+      },
+      kimiCode: {
+        preferred: status.preferences.kimiCode === 'on',
+        keySet: status.kimiCodeKeySet === true,
+      },
+    },
   };
 }
 
@@ -266,7 +279,7 @@ describe('CLI model access routes', () => {
     ).toBe('kimi-code');
   });
 
-  it('describes a prospective Kimi Code route only for personal access', () => {
+  it('describes a prospective exclusive Kimi Code route in either mode', () => {
     expect(
       resolveCliModelAccessRoute({
         apiMode: 'personal',
@@ -274,14 +287,23 @@ describe('CLI model access routes', () => {
         kimiCodeActive: true,
       }),
     ).toBe('kimi-code');
-    // Under included access the relay owns eligible models.
     expect(
       resolveCliModelAccessRoute({
         apiMode: 'included',
         subscriptionActive: false,
         kimiCodeActive: true,
       }),
-    ).toBe('included');
+    ).toBe('kimi-code');
+  });
+
+  it('reports an active GLM plan after included access falls back', () => {
+    expect(
+      resolveCliModelAccessRoute({
+        apiMode: 'included',
+        subscriptionActive: false,
+        glmCodingPlanActive: true,
+      }),
+    ).toBe('glm-code');
   });
 
   it('formats the shared access routes for detailed and compact surfaces', () => {
@@ -440,14 +462,7 @@ describe('CLI model access routes', () => {
     );
 
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      'texra.kimiCode.prefer',
-      true,
-    );
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      'texra.useOpenRouter',
-      false,
-    );
+    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true);
     expect(mocks.setCliApiMode).not.toHaveBeenCalled();
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result).toEqual({
@@ -700,10 +715,7 @@ describe('CLI model access routes', () => {
       subscriptionPreference('kimi-code', 'off'),
       { writeProgress: vi.fn() },
     );
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      'texra.kimiCode.prefer',
-      false,
-    );
+    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(false);
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
     expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
 
@@ -771,10 +783,7 @@ describe('CLI model access routes', () => {
     await updateCliModelAccess(context, selection.value);
 
     expect(mocks.apiKeyExists).not.toHaveBeenCalled();
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      'texra.kimiCode.prefer',
-      false,
-    );
+    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(false);
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
   });
 });

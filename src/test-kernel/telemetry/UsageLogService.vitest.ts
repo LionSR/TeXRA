@@ -419,6 +419,7 @@ describe('UsageLogService', () => {
       ['relay', 'relay'],
       ['chatgpt-subscription', 'chatgpt-subscription'],
       ['kimi-code-subscription', 'kimi-code-subscription'],
+      ['glm-coding-plan-subscription', 'glm-coding-plan-subscription'],
     ] as const)(
       'still sends %s usage while the setting is off',
       async (_label, usageRoute) => {
