@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Narrow multi-agent approvals show every active decision** — delegation
+  prompts keep the chat-wide agent-work action visible at 60 columns instead
+  of leaving its key undiscoverable.
 - **Interrupted workflows resume immediately and remain visible in history** —
   stopping a workflow releases its execution promptly, preserves its cancelled
   state if a relaunch fails, and reports workflow checkpoints as resumable.
