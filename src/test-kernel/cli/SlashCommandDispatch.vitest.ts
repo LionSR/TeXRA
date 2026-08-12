@@ -936,6 +936,45 @@ describe('handleTuiSlashCommand', () => {
     expect(statusText).toContain('active background tasks: 2');
   });
 
+  it('counts delegated work owned by a focused intermediate parent', async () => {
+    registerBuiltinSlashCommands();
+    const session = createSession();
+    const rootStreamId = 'stream-root' as StreamTabId;
+    const parentStreamId = 'stream-parent' as StreamTabId;
+    const rootSiblingIds = [
+      'stream-root-sibling-1',
+      'stream-root-sibling-2',
+    ] as StreamTabId[];
+    const grandchildId = 'stream-grandchild' as StreamTabId;
+    activeStreamId.set(parentStreamId);
+    for (const streamId of [parentStreamId, ...rootSiblingIds, grandchildId]) {
+      setStreamStatusInCliState({
+        streamId,
+        status: STREAM_PHASE.RUNNING,
+      });
+    }
+    const rosterRow = (childStreamId: StreamTabId, index: number) => ({
+      executionId: `nested-exec-${index}`,
+      identity: { kind: 'agent' as const, agent: `reviewer-${index}` },
+      agentName: `reviewer-${index}`,
+      status: STREAM_PHASE.RUNNING,
+      startedAt: index + 1,
+      elapsed: '1s',
+      childStreamId,
+    });
+    projectChildRoster(
+      rootStreamId,
+      [parentStreamId, ...rootSiblingIds].map(rosterRow),
+    );
+    projectChildRoster(parentStreamId, [rosterRow(grandchildId, 3)]);
+
+    await handleTuiSlashCommand('/status', createContext(session));
+
+    const statusText = lastEntryText(rootStreamId);
+    expect(statusText).toContain('active background tasks: 1');
+    expect(statusText).not.toContain('active background tasks: 3');
+  });
+
   it('reports the access route that produced the focused stream usage', async () => {
     registerBuiltinSlashCommands();
     const overview = vi.spyOn(apiStatus, 'loadCliModelAccessOverview');

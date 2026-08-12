@@ -98,12 +98,26 @@ export async function showCliSessionStatus(
   const activeStreamId = activeStreamIdSignal.get();
   const streamSlices = streams.get();
   const slice = activeStreamId ? streamSlices.get(activeStreamId) : undefined;
-  const workflowStreamId = activeStreamId
-    ? activeStreamParentOrSelfId({
-        activeStreamId,
-        parentStream: parentStream.get(),
-      })
-    : undefined;
+  const directActiveChildren = activeStreamId
+    ? activeSubagentsFor(activeStreamId, childStreamEntries.get(), streamSlices)
+    : [];
+  const workflowStreamId =
+    activeStreamId && directActiveChildren.length === 0
+      ? activeStreamParentOrSelfId({
+          activeStreamId,
+          parentStream: parentStream.get(),
+        })
+      : activeStreamId;
+  let activeChildSessions = directActiveChildren.length;
+  if (workflowStreamId !== activeStreamId) {
+    activeChildSessions = workflowStreamId
+      ? activeSubagentsFor(
+          workflowStreamId,
+          childStreamEntries.get(),
+          streamSlices,
+        ).length
+      : 0;
+  }
   // Use root-session access facts only before any stream exists.
   const model = slice?.model ?? (meta.model || context.initialModel);
   const subscriptionActive = await isCodexSubscriptionActive(model);
@@ -125,13 +139,7 @@ export async function showCliSessionStatus(
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
       substate: slice?.substate,
-      activeChildSessions: workflowStreamId
-        ? activeSubagentsFor(
-            workflowStreamId,
-            childStreamEntries.get(),
-            streamSlices,
-          ).length
-        : 0,
+      activeChildSessions,
       goal: activeStreamId ? GoalStore.getForStream(activeStreamId) : undefined,
       // Only surface the resume id once a stream exists — never next to
       // a "not started" status.
