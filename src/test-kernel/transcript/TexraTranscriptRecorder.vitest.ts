@@ -667,7 +667,7 @@ describe('attachTranscriptRecorder active skills', () => {
     writer.close();
     await store.flush();
 
-    const reopened = await StreamLogStore.openReadOnly();
+    const reopened = await StreamLogStore.openReadOnlyForStream(streamId);
     await reopened.ensureLoaded(streamId);
     const persisted = reopened
       .get(streamId)

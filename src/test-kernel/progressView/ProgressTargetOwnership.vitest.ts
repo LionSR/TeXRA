@@ -2,7 +2,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type * as vscode from 'vscode';
-
 const mocks = vi.hoisted(() => ({
   createWebviewPanel: vi.fn(),
   executeCommand: vi.fn(async () => undefined),

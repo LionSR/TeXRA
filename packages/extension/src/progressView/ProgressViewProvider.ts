@@ -289,7 +289,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   }
 
   public syncFullView(): void {
-    this.syncRenderedStreams({ syncActiveStream: true });
+    void this.syncRenderedStreams({ syncActiveStream: true });
   }
 
   /**
@@ -301,11 +301,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     syncActiveStream,
   }: {
     syncActiveStream: boolean;
-  }): void {
+  }): Promise<void> {
     const target = this.target;
-    if (!target?.ready) return;
+    if (!target?.ready) return Promise.resolve();
 
-    if (!this.getActiveWebview()) return;
+    if (!this.getActiveWebview()) return Promise.resolve();
 
     const theme =
       vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
@@ -314,7 +314,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
     this.webviewUpdater.setPlacement(target.placement);
 
-    void this.backend.syncRenderedStreams({ syncActiveStream, theme });
+    return this.backend.syncRenderedStreams({ syncActiveStream, theme });
   }
 
   public async markWebviewReady(
