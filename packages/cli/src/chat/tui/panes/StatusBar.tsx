@@ -49,8 +49,6 @@ import {
 const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
 const RELAY_QUOTA_REFRESH_MS = 10_000;
 const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;
-const SubscriptionUsage = new SubscriptionUsageService();
-
 interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
   readonly childListFocused?: boolean;
@@ -67,6 +65,7 @@ interface StatusBarProps {
 }
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
+  const subscriptionUsage = useMemo(() => new SubscriptionUsageService(), []);
   const activeStreamId = useSignal(activeStreamIdSignal);
   const streams = useSignal(streamsSignal);
   const parentStream = useSignal(parentStreamSignal);
@@ -217,7 +216,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
         return;
       }
       const provider = subscriptionUsageProvider;
-      void SubscriptionUsage.getUsage(provider)
+      void subscriptionUsage
+        .getUsage(provider)
         .then((snapshot) => {
           if (desiredUsageProviderRef.current !== provider) return;
           setSubscriptionQuotaRead({

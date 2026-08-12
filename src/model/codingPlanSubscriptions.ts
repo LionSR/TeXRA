@@ -82,10 +82,12 @@ const RUNTIME_BY_ID = {
 
 /** Runtime catalog consumed by retry policy and host route presentation. */
 export const codingPlanSubscriptionRuntimes = Object.freeze(
-  CODING_PLAN_SUBSCRIPTIONS.map((descriptor) => ({
-    descriptor,
-    ...RUNTIME_BY_ID[descriptor.id],
-  })),
+  CODING_PLAN_SUBSCRIPTIONS.map((descriptor) =>
+    Object.freeze({
+      descriptor,
+      ...RUNTIME_BY_ID[descriptor.id],
+    }),
+  ),
 );
 
 /** Resolve the coding plan currently serving a model, if any. */
