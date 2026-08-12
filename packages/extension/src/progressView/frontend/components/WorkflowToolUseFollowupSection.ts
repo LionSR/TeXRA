@@ -7,6 +7,7 @@ import {
   type TemplateResult,
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -23,10 +24,7 @@ import {
 } from '@shared/schemas';
 import { designTokens, commonViewStyles, selectStyles } from '@shared/styles';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
-import {
-  isKnownUnsupported,
-  UnsupportedCommandsMixin,
-} from '@shared/utils/dispatcher';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
   readSelectValue,
   renderAgentOptions,
@@ -38,7 +36,9 @@ import { ProgressEvents } from '../events';
 import type { FollowupOptionsState } from '../store';
 
 @customElement('workflow-tool-use-followup-section')
-export class WorkflowToolUseFollowupSection extends UnsupportedCommandsMixin(LitElement) {
+export class WorkflowToolUseFollowupSection extends UnsupportedCommandsMixin(
+  LitElement,
+) {
   static override styles = [
     designTokens,
     commonViewStyles,

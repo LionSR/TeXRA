@@ -33,7 +33,10 @@ function getRelativePathPreservingSymlinks(
   if (!path.isAbsolute(wsRelative)) {
     // If root is the workspace root, the workspace-relative path is the answer.
     const workspaceRoot = WorkspaceFS.getPath();
-    if (workspaceRoot && path.normalize(root) === path.normalize(workspaceRoot)) {
+    if (
+      workspaceRoot &&
+      path.normalize(root) === path.normalize(workspaceRoot)
+    ) {
       return wsRelative;
     }
 

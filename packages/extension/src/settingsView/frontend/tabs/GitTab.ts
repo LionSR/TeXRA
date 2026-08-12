@@ -3,6 +3,7 @@
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -24,10 +25,7 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import type { PRSubscriptionEntry } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - shared utils
-import {
-  isKnownUnsupported,
-  UnsupportedCommandsMixin,
-} from '@shared/utils/dispatcher';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 
 // Local imports - shared constants
 import {

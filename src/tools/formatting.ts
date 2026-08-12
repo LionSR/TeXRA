@@ -1,8 +1,8 @@
 // Third-party imports
 import { z } from 'zod';
+import type { ToolFileAttachment } from '@shared/schemas';
 
 // Local imports
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 /** Canonical 1-based inclusive line range for tool view_range fields. */
 export const ViewRangeSchema = z

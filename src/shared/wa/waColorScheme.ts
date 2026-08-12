@@ -1,3 +1,4 @@
+import type { Theme } from '@shared/schemas';
 /**
  * Apply Web Awesome's native color-scheme classes (wa-light / wa-dark) onto
  * the document root, mirroring the host theme.
@@ -18,8 +19,6 @@
  * body-class list (`THEME_CLASSES`) live here, and `hostTheme.ts` imports them
  * rather than re-encoding a parallel copy.
  */
-
-import type { Theme } from '@shared/schemas/commonViewMessages';
 
 /** The host theme kinds we recognize. Single source for the `vscode-*` /
  *  `texra-*` class names and the kind→darkness mapping. */
@@ -46,8 +45,9 @@ export function themeIsDark(theme: Theme): boolean {
   return theme === 'dark' || theme === 'high-contrast';
 }
 
-const DARK_BODY_CLASSES: readonly string[] = THEME_KINDS.filter(themeIsDark)
-  .flatMap((kind) => [`vscode-${kind}`, `texra-${kind}`]);
+const DARK_BODY_CLASSES: readonly string[] = THEME_KINDS.filter(
+  themeIsDark,
+).flatMap((kind) => [`vscode-${kind}`, `texra-${kind}`]);
 
 const LIGHT_BODY_CLASSES: readonly string[] = [
   ...THEME_KINDS.filter((kind) => !themeIsDark(kind)).flatMap((kind) => [

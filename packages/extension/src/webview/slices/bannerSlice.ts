@@ -19,9 +19,7 @@ import {
 
 import type { MainViewInboundHost } from '../mainViewInboundContext';
 
-export function createBannerHandlers(
-  host: MainViewInboundHost,
-) {
+export function createBannerHandlers(host: MainViewInboundHost) {
   return {
     [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (m) => host.postToActiveView(m),
     [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: (m) => host.postToActiveView(m),
@@ -79,10 +77,7 @@ export function createBannerHandlers(
       await globalSM.update(GlobalStateKey.LOGIN_BANNER_DISMISSED, true);
     },
     [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: async () => {
-      await globalSM.update(
-        GlobalStateKey.ORCHESTRATOR_BANNER_DISMISSED,
-        true,
-      );
+      await globalSM.update(GlobalStateKey.ORCHESTRATOR_BANNER_DISMISSED, true);
     },
   } satisfies Partial<MainViewInboundHandlerRegistry>;
 }

@@ -817,7 +817,6 @@ export class PRPollingSource extends PollingSourceBase<
       );
     }
   }
-
 }
 
 /** Process-wide singleton. */

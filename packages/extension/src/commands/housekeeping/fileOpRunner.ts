@@ -1,9 +1,10 @@
 // Local imports
-import type { ExecutionId } from '@shared/schemas';
 import {
   mergeRunDirAndWorkspaceResult,
+  type ExecutionId,
   type FileOpResult,
-} from '@shared/schemas/opResults';
+} from '@shared/schemas';
+
 import { emitClearMissingOutputs } from './streamEventUtils';
 
 /** Fields the toolbar/config-driven file-operation commands share. */

@@ -5,6 +5,7 @@ import { consume } from '@lit/context';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -26,10 +27,7 @@ import {
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
-import {
-  isKnownUnsupported,
-  UnsupportedCommandsMixin,
-} from '@shared/utils/dispatcher';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -559,8 +557,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         variant="neutral"
         size="s"
       >
-        ${waIcon('chart-line')}
-        ${renderProgressBadgeContent(progress, stage)}
+        ${waIcon('chart-line')} ${renderProgressBadgeContent(progress, stage)}
       </wa-tag>
       ${
         progressTitle

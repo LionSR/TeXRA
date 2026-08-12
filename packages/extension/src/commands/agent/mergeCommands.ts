@@ -9,7 +9,9 @@ import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 const CHANNEL = 'MergeCommands';
 
 export function registerMergeCommands(context: vscode.ExtensionContext): void {
-  registerCommandEntries(context, [{ id: 'texra.merge', handler: handleMerge }]);
+  registerCommandEntries(context, [
+    { id: 'texra.merge', handler: handleMerge },
+  ]);
 }
 
 async function handleMerge(

@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 
-import { resolveAgent } from '@agent/index/agentRegistry';
-import type { ResolvedAgent } from '@agent/index/agentEntry';
+import { resolveAgent, type ResolvedAgent } from '@agent/index';
 import {
   AgentPromptSchema,
   AgentDefinitionSchema,

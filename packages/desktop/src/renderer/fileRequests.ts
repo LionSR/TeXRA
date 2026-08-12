@@ -73,7 +73,10 @@ export function requestFileRead(path: string): Promise<string> {
   });
 }
 
-export function requestFileWrite(path: string, contents: string): Promise<void> {
+export function requestFileWrite(
+  path: string,
+  contents: string,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
     pendingFileRequests.set(requestId, {

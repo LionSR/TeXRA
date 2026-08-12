@@ -32,10 +32,7 @@ export function logCompactionEvent({
       tokensBefore,
       tokensAfter,
       contextWindow,
-      utilizationBefore: roundedUtilizationPercent(
-        tokensBefore,
-        contextWindow,
-      ),
+      utilizationBefore: roundedUtilizationPercent(tokensBefore, contextWindow),
       utilizationAfter: roundedUtilizationPercent(tokensAfter, contextWindow),
       details,
     },

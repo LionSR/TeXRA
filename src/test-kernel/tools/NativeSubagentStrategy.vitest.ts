@@ -178,9 +178,7 @@ describe('NativeSubagentStrategy', () => {
     const strategy = createNativeSubagentStrategy(params);
 
     // Before any turn ran, falls back to the static orchestrator stream.
-    expect(strategy.resolveDeliveryTarget?.()).toBe(
-      params.parentStreamId,
-    );
+    expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
 
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
       options.onRun?.({
@@ -196,26 +194,21 @@ describe('NativeSubagentStrategy', () => {
       params.executionId,
       expect.objectContaining({ enforceCategory: true }),
     );
-    expect(strategy.resolveDeliveryTarget?.()).toBe(
-      params.parentStreamId,
-    );
+    expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
 
     // Detach: the same handle object's deliveryTargetStreamId flips to
     // undefined (AgentExecutionHandle.detach) — the strategy must track the
     // LIVE handle, not a stale copy, so it observes this without a new turn.
     const liveHandle = {
       childStreamId: CHILD_STREAM_ID,
-      deliveryTargetStreamId: params.parentStreamId as
-        StreamTabId | undefined,
+      deliveryTargetStreamId: params.parentStreamId as StreamTabId | undefined,
     };
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
       options.onRun?.(liveHandle);
       return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
     });
     await strategy.launch(fakePorts(), new AbortController());
-    expect(strategy.resolveDeliveryTarget?.()).toBe(
-      params.parentStreamId,
-    );
+    expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
     liveHandle.deliveryTargetStreamId = undefined;
     expect(strategy.resolveDeliveryTarget?.()).toBeUndefined();
   });

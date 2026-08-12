@@ -5,10 +5,11 @@ import * as vscode from 'vscode';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runPackSingle, runPackMultiple } from '@housekeeping/pack';
 import { runPackRunDir } from '@housekeeping/runDirOps';
-import { type FileOpResult } from '@shared/schemas/opResults';
+
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { type PackConfig } from './fileOpSchemas';
 import { runFileOp } from './fileOpRunner';
+import type { FileOpResult } from '@shared/schemas';
 
 const CHANNEL = 'packCommands';
 

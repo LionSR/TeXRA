@@ -117,8 +117,7 @@ interface SettingsProfileHostDeps {
 }
 
 export interface SettingsProfileControllerDeps
-  extends SettingsProfileProviderDeps,
-    SettingsProfileHostDeps {}
+  extends SettingsProfileProviderDeps, SettingsProfileHostDeps {}
 
 /**
  * Returns a fresh object per call rather than a shared exported literal, so

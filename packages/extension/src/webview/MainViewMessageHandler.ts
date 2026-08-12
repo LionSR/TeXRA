@@ -8,7 +8,10 @@ import { RecordingManager } from '@frontend/media/RecordingManager';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { isDebugModeEnabled } from '@logger/logUtils';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { dispatchMainViewInbound, MainViewInboundHandlerRegistry } from '@shared/schemas';
+import {
+  dispatchMainViewInbound,
+  MainViewInboundHandlerRegistry,
+} from '@shared/schemas';
 import { getConfig } from '@utils/config/configUtils';
 
 import type { MainViewInboundHost } from './mainViewInboundContext';

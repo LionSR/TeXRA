@@ -52,9 +52,22 @@ const channelTraceMocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
+// terminalPersistence deep-imports finalizeExecution from executionLifecycle
+// (not the `@agent/storage` barrel), so the spy lives on that leaf module.
+// Mocking both the barrel and the leaf with the same `vi.fn` whose
+// implementation points at `importOriginal`'s barrel export recurses through
+// the re-export and blows the stack.
+vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
+  storageMocks.finalizeExecution.mockImplementation(actual.finalizeExecution);
+  return {
+    ...actual,
+    finalizeExecution: storageMocks.finalizeExecution,
+  };
+});
 vi.mock('@agent/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/storage')>();
-  storageMocks.finalizeExecution.mockImplementation(actual.finalizeExecution);
   return {
     ...actual,
     finalizeExecution: storageMocks.finalizeExecution,

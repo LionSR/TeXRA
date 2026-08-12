@@ -12,6 +12,7 @@ import {
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -32,10 +33,7 @@ import {
   type AgentSource,
 } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
-import {
-  isKnownUnsupported,
-  UnsupportedCommandsMixin,
-} from '@shared/utils/dispatcher';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { pluralize } from '@utils/text/stringUtils';
 import { agentSelectionPanelStyles } from './AgentSelectionPanel.styles';
 

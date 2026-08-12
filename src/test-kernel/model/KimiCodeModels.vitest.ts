@@ -69,7 +69,11 @@ describe('Kimi Code routing', () => {
 
   it('uses the shared Kimi handler', () => {
     expect(
-      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimiCoding, false, false),
+      resolveModelHandlerCompatibilityKey(
+        MODEL_CONFIGS.kimiCoding,
+        false,
+        false,
+      ),
     ).toBe('ModelHandlerKimi');
   });
 
@@ -83,9 +87,9 @@ describe('Kimi Code routing', () => {
     expect(
       resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, false, false),
     ).toBe('ModelHandlerKimi');
-    expect(resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, true, false)).toBe(
-      'ModelHandlerOpenRouterNative',
-    );
+    expect(
+      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, true, false),
+    ).toBe('ModelHandlerOpenRouterNative');
   });
 
   it('never sends managed-service credentials through the TeXRA relay', () => {

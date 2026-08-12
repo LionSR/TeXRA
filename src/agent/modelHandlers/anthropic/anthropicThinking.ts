@@ -51,18 +51,81 @@ interface AnthropicRequestTraits {
 const ANTHROPIC_REQUEST_TRAITS: ReadonlyArray<
   readonly [prefix: string, traits: AnthropicRequestTraits]
 > = [
-  [OPUS_46_FULLNAME, { compactionEligible: true, summarizedDisplay: false, temperatureExcluded: true }],
-  [OPUS_47_FULLNAME, { compactionEligible: true, summarizedDisplay: true, temperatureExcluded: true }],
-  [OPUS_48_FULLNAME, { compactionEligible: true, summarizedDisplay: true, temperatureExcluded: true }],
-  [OPUS_5_FULLNAME, { compactionEligible: true, summarizedDisplay: true, temperatureExcluded: true }],
-  [SONNET_46_FULLNAME, { compactionEligible: true, summarizedDisplay: false, temperatureExcluded: true }],
-  [SONNET_5_FULLNAME, { compactionEligible: true, summarizedDisplay: true, temperatureExcluded: true }],
-  [HAIKU_4_FULLNAME, { compactionEligible: false, summarizedDisplay: false, temperatureExcluded: true }],
+  [
+    OPUS_46_FULLNAME,
+    {
+      compactionEligible: true,
+      summarizedDisplay: false,
+      temperatureExcluded: true,
+    },
+  ],
+  [
+    OPUS_47_FULLNAME,
+    {
+      compactionEligible: true,
+      summarizedDisplay: true,
+      temperatureExcluded: true,
+    },
+  ],
+  [
+    OPUS_48_FULLNAME,
+    {
+      compactionEligible: true,
+      summarizedDisplay: true,
+      temperatureExcluded: true,
+    },
+  ],
+  [
+    OPUS_5_FULLNAME,
+    {
+      compactionEligible: true,
+      summarizedDisplay: true,
+      temperatureExcluded: true,
+    },
+  ],
+  [
+    SONNET_46_FULLNAME,
+    {
+      compactionEligible: true,
+      summarizedDisplay: false,
+      temperatureExcluded: true,
+    },
+  ],
+  [
+    SONNET_5_FULLNAME,
+    {
+      compactionEligible: true,
+      summarizedDisplay: true,
+      temperatureExcluded: true,
+    },
+  ],
+  [
+    HAIKU_4_FULLNAME,
+    {
+      compactionEligible: false,
+      summarizedDisplay: false,
+      temperatureExcluded: true,
+    },
+  ],
   // Mythos-class entries match the whole family: their API default is display
   // 'omitted', so a new family member falling through to DEFAULT_REQUEST_TRAITS
   // would silently lose all visible reasoning output.
-  [MYTHOS_FAMILY_PREFIX, { compactionEligible: true, summarizedDisplay: true, temperatureExcluded: true }],
-  [FABLE_FAMILY_PREFIX, { compactionEligible: true, summarizedDisplay: true, temperatureExcluded: true }],
+  [
+    MYTHOS_FAMILY_PREFIX,
+    {
+      compactionEligible: true,
+      summarizedDisplay: true,
+      temperatureExcluded: true,
+    },
+  ],
+  [
+    FABLE_FAMILY_PREFIX,
+    {
+      compactionEligible: true,
+      summarizedDisplay: true,
+      temperatureExcluded: true,
+    },
+  ],
 ];
 
 const DEFAULT_REQUEST_TRAITS: AnthropicRequestTraits = {

@@ -1,8 +1,5 @@
 import { tryPlatform } from '@platform/platform';
-import {
-  readSetting,
-  settingDefault,
-} from '@shared/config/settingsAccess';
+import { readSetting, settingDefault } from '@shared/config/settingsAccess';
 import { stateSettingByKey } from '@shared/schemas/stateSettings';
 
 /**

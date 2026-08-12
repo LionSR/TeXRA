@@ -6,7 +6,11 @@ import { Box, Text } from 'ink';
 import { structuredPatch, type StructuredPatchHunk } from 'diff';
 
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
-import { hiddenRowsText, moreRowsText, previousRowsText } from '@cli/tui/overflowText';
+import {
+  hiddenRowsText,
+  moreRowsText,
+  previousRowsText,
+} from '@cli/tui/overflowText';
 import { clampModalWidth } from '@cli/tui/ui/theme';
 import { clamp, isObject } from '@utils/core';
 

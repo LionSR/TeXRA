@@ -53,12 +53,17 @@ import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
 import '@webview/frontend';
 import { hostBridge, postMessage } from '@shared/hostBridge';
-import type { StreamTabId } from '@shared/schemas';
+import {
+  SETTINGS_TAB,
+  type StreamTabId,
+  type DesktopThemeKind,
+} from '@shared/schemas';
+
 import { Signal } from '@shared/signals';
 import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
-import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
+
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
-import { type DesktopThemeKind } from '@shared/schemas/commonViewMessages';
+
 import { applyHostBodyTheme } from '@shared/wa/hostTheme';
 import {
   renderIconActionButton,
@@ -132,7 +137,11 @@ import { createPdfOverlay } from './pdfOverlay';
 import { createReviewPane } from './reviewPane';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import { createLogsPane } from './logsPane';
-import { requestFileRead, requestFileWrite, requestFiles } from './fileRequests';
+import {
+  requestFileRead,
+  requestFileWrite,
+  requestFiles,
+} from './fileRequests';
 import { createMessageRoutes } from './messageRoutes';
 
 const appRoot = document.querySelector<HTMLElement>('#app')!;

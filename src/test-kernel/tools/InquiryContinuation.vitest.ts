@@ -8,10 +8,8 @@ import type {
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 
 const STREAM = 'stream:test' as StreamTabId;
-const THREAD: InquiryThreadId =
-  'ei_aabbccdd0011' as InquiryThreadId;
-const OTHER_THREAD: InquiryThreadId =
-  'ei_ffff00001122' as InquiryThreadId;
+const THREAD: InquiryThreadId = 'ei_aabbccdd0011' as InquiryThreadId;
+const OTHER_THREAD: InquiryThreadId = 'ei_ffff00001122' as InquiryThreadId;
 
 function makeSummary(
   partial: Partial<InquiryThreadSummary>,

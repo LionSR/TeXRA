@@ -21,7 +21,7 @@ type SettingsAgentVisibilityState = Pick<
   'getEnabledAgentKeys' | 'setEnabledAgentKeys'
 > & {
   getAgents(category: AgentCategory): SettingsAgentVisibilityEntry[];
-}
+};
 
 export interface SettingsAgentVisibilityControllerDeps {
   state: SettingsAgentVisibilityState;

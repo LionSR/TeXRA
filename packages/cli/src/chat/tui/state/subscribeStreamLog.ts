@@ -62,6 +62,10 @@ import {
   type FoldContext,
 } from './transcriptFold';
 
+// Re-export the fold primitive tests (and any other subscribeStreamLog
+// consumers) still import from this module after the fold extraction.
+export { finalizeSettledPrefix };
+
 // Coalesce bursts into a single render without visibly delaying the
 // first paint. 200ms looks like a hang on short replies (an entire reply
 // can land before the first sync fires); one animation frame is enough

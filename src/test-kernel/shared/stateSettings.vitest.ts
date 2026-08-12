@@ -584,7 +584,9 @@ describe('core settings host split', () => {
         `CLI consumer lives inside the extension host: ${consumer}`,
       );
     }
-    for (const consumer of Object.keys(EXTENSION_ONLY_CORE_SETTING_READER_FILES)) {
+    for (const consumer of Object.keys(
+      EXTENSION_ONLY_CORE_SETTING_READER_FILES,
+    )) {
       assert.ok(
         existsSync(resolve(REPO_ROOT, consumer)),
         `extension consumer does not exist: ${consumer}`,

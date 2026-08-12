@@ -9,9 +9,7 @@ import type { StateStore } from '@platform/interfaces';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-function createStateStore(
-  values: Record<string, unknown> = {},
-): StateStore {
+function createStateStore(values: Record<string, unknown> = {}): StateStore {
   return {
     get: <T>(key: string, defaultValue?: T) =>
       (values[key] as T | undefined) ?? (defaultValue as T),

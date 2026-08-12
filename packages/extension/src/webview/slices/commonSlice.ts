@@ -13,9 +13,7 @@ import type { MainViewInboundHandlerRegistry } from '@shared/schemas';
 
 import type { MainViewInboundHost } from '../mainViewInboundContext';
 
-export function createCommonHandlers(
-  host: MainViewInboundHost,
-) {
+export function createCommonHandlers(host: MainViewInboundHost) {
   return {
     [MAIN_VIEW_COMMANDS.THEME_SET]: (m) =>
       host.runWithActiveView((view) => host.handleTheme(m, view)),

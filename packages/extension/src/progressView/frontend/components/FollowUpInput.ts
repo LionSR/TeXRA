@@ -8,6 +8,7 @@ import {
 } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { consume } from '@lit/context';
 
 // Local imports
@@ -21,10 +22,7 @@ import {
   readFileAsBase64,
   type ExtractedClipboardImage,
 } from '@shared/utils/clipboardImages';
-import {
-  isKnownUnsupported,
-  UnsupportedCommandsMixin,
-} from '@shared/utils/dispatcher';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { filterNotNullish } from '@utils/core';
 import { generatePastedImageName } from '@utils/files/pastedImageName';
@@ -63,7 +61,11 @@ function hostHasDesktopViewAttribute(start: Element): boolean {
 
 @customElement('follow-up-input')
 export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
-  static override styles = [designTokens, commonViewStyles, followUpInputStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    followUpInputStyles,
+  ];
 
   /**
    * Read-only trace-viewer export: a finished, archived run has nothing to

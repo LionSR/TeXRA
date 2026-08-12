@@ -50,10 +50,11 @@ describe('retained finished children', () => {
     return {
       executionId: id,
       childStreamId: `${id}-stream` as StreamTabId,
+      identity: { kind: 'agent', agent: `agent-${id}` },
       agentName: `agent-${id}`,
       status: STREAM_PHASE.RUNNING,
       ...overrides,
-    } as ActiveChildInfo;
+    };
   }
 
   function seedParent(backend: ProgressBackend): void {

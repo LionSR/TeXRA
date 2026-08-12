@@ -32,10 +32,9 @@ import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessions
 import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
 import { loadMainViewTeamOptions } from '@frontend/agents/teamOptionsLoader';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { CommonViewMessageSchema } from '@shared/schemas/commonViewMessages';
-import { MainViewMessageSchema } from '@shared/schemas/mainView/outbound';
+
 import { assertKnownOutboundMessage } from '@shared/utils/dispatcher';
-import { agentKeyOf, AgentCategory } from '@shared/schemas/agent';
+
 import {
   readOnboardingFlags,
   setOnboardingDeclined,
@@ -48,6 +47,12 @@ import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import { MainViewMessageHandler } from './MainViewMessageHandler';
 import { VscodeMainViewPersistedStateSchema } from './vscodeMainViewPersistedState';
 import type { ProgressViewProvider } from '../progressView/ProgressViewProvider';
+import {
+  CommonViewMessageSchema,
+  MainViewMessageSchema,
+  agentKeyOf,
+  AgentCategory,
+} from '@shared/schemas';
 
 export class MainViewProvider
   extends BaseWebviewProvider
@@ -74,9 +79,8 @@ export class MainViewProvider
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
-    this.messageHandler = new MainViewMessageHandler(
-      context,
-      () => this.refreshOnboardingFunnel(),
+    this.messageHandler = new MainViewMessageHandler(context, () =>
+      this.refreshOnboardingFunnel(),
     );
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -101,7 +105,10 @@ export class MainViewProvider
    * Message`), so a schema drift is caught by CI instead of silently reaching
    * the webview; production posts the typed payload as-is with no parse cost.
    */
-  private postToWebview(webviewView: vscode.WebviewView, message: unknown): void {
+  private postToWebview(
+    webviewView: vscode.WebviewView,
+    message: unknown,
+  ): void {
     assertKnownOutboundMessage(
       [MainViewMessageSchema, CommonViewMessageSchema],
       message,

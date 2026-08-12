@@ -68,17 +68,19 @@ import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
-import type { SubscriptionUsageProvider } from '@shared/schemas/subscriptionUsage';
+import {
+  dispatchSettingsViewInbound,
+  SETTINGS_VIEW_CMD,
+  type SubscriptionUsageProvider,
+  type SettingsViewInboundHandlerRegistry,
+  type SettingsMessageFor,
+} from '@shared/schemas';
+
 import {
   applyStateSettingUpdate,
   postStateSettingSnapshot as dispatchStateSettingSnapshot,
 } from '@shared/settingsView/handlers/stateSettingWrite';
-import {
-  dispatchSettingsViewInbound,
-  type SettingsViewInboundHandlerRegistry,
-  type SettingsMessageFor,
-  SETTINGS_VIEW_CMD,
-} from '@shared/schemas/settingsViewMessages';
+
 import { unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildApprovalSettingsMessage } from '@shared/settingsView/handlers/approvalHandlers';
 import { buildAgentSkillsSettingsMessage } from '@shared/settingsView/handlers/agentSkillsHandlers';
@@ -209,7 +211,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         ),
     );
     this.latexHandlers = new LatexSettingsHandlers(ctx);
-    this.memoryHandlers = new MemoryHandlers(ctx, this.settingsHost, this.viewName);
+    this.memoryHandlers = new MemoryHandlers(
+      ctx,
+      this.settingsHost,
+      this.viewName,
+    );
     this.historyHandlers = new HistoryHandlers(ctx);
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx);
     this.chatgptHandlers = new SubscriptionHandlers(

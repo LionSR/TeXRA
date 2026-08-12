@@ -1,6 +1,6 @@
 // Shared imports
 import { create } from 'mutative';
-import type { GoalState, GoalStatus } from '@shared/schemas/goal';
+
 import {
   isToolUseState,
   isWorkflowState,
@@ -10,6 +10,8 @@ import {
   type TokenUsageStats,
   type ToolUseStreamState,
   type WorkflowStreamState,
+  type GoalState,
+  type GoalStatus,
 } from '@shared/schemas';
 
 // Local imports

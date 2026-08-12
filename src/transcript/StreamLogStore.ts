@@ -34,7 +34,8 @@ import {
 
 const SAVE_MAX_WAIT_MS = 300;
 export const STREAM_LOGS_DIR = WORKSPACE_STORAGE_LAYOUT.streamLogs;
-export const STREAM_LOG_SUMMARIES_DIR = WORKSPACE_STORAGE_LAYOUT.streamLogSummaries;
+export const STREAM_LOG_SUMMARIES_DIR =
+  WORKSPACE_STORAGE_LAYOUT.streamLogSummaries;
 const STREAM_LOG_LOAD_CONCURRENCY = 8;
 const LOG_TAG = 'StreamLogStore';
 

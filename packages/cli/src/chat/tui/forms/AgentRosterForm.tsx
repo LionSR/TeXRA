@@ -126,11 +126,12 @@ export function AgentRosterForm(
   props: AgentRosterFormProps,
 ): React.JSX.Element | null {
   const [mode, setMode] = useState<AgentRosterFormMode>('overview');
-  const { data, error, reload, reportError } = useAsyncListForm<AgentRosterData>({
-    load: loadRosterData,
-    onClose: props.onClose,
-    onError: props.onError,
-  });
+  const { data, error, reload, reportError } =
+    useAsyncListForm<AgentRosterData>({
+      load: loadRosterData,
+      onClose: props.onClose,
+      onError: props.onError,
+    });
 
   const write = (action: () => Promise<void>, nextMode = mode): void => {
     void action()

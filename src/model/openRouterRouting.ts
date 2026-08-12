@@ -37,8 +37,8 @@ interface OpenRouterRoutingConfig {
  * endpoint stay paired and it always bypasses OpenRouter and the
  * included-access relay.
  */
-export type ModelRoutingConfig =
-  OpenRouterRoutingConfig & KimiSubscriptionModelFields;
+export type ModelRoutingConfig = OpenRouterRoutingConfig &
+  KimiSubscriptionModelFields;
 
 /** Whether a registry entry owns an atomic managed-service route. */
 export function hasManagedDirectRoute(

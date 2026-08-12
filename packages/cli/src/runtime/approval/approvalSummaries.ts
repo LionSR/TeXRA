@@ -12,10 +12,7 @@ import {
 } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
-import {
-  cliRetryActionHint,
-  classifyCliRetryAction,
-} from './approvalPrompts';
+import { cliRetryActionHint, classifyCliRetryAction } from './approvalPrompts';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
 const TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS = 12_000;

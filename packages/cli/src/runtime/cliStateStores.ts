@@ -22,7 +22,9 @@ export interface CliStateStoresInit {
 export async function openCliGlobalStateStore(
   storage: StorageProvider,
 ): Promise<StateStore> {
-  return JsonStore.open(path.join(storage.getGlobalStoragePath(), 'state.json'));
+  return JsonStore.open(
+    path.join(storage.getGlobalStoragePath(), 'state.json'),
+  );
 }
 
 export async function createCliStateStores(

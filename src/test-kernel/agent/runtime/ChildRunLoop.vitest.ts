@@ -29,6 +29,13 @@ vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
   finalizeExecution: mocks.finalizeExecution,
 }));
+// terminalPersistence deep-imports finalizeExecution from executionLifecycle.
+vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@agent/storage/executionLifecycle')
+  >()),
+  finalizeExecution: mocks.finalizeExecution,
+}));
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),

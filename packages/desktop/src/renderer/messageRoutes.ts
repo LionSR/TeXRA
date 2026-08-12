@@ -5,8 +5,11 @@
 // renderer state through them.
 
 import type { ZodType } from 'zod';
-import { SetThemeMessageSchema, type DesktopThemeKind } from '@shared/schemas/commonViewMessages';
-import { DesktopSetLogMessageSchema, type DesktopSetLogMessage } from '../shared/desktopLogMessages';
+
+import {
+  DesktopSetLogMessageSchema,
+  type DesktopSetLogMessage,
+} from '../shared/desktopLogMessages';
 import {
   DesktopOpenWorkbenchMessageSchema,
   DesktopSaveFileMessageSchema,
@@ -45,6 +48,7 @@ import {
 } from '../shared/desktopWorkspaceMessages';
 import type { WorkbenchKind } from '../shared/desktopTaskShell';
 import { takePendingFileRequest } from './fileRequests';
+import { SetThemeMessageSchema, type DesktopThemeKind } from '@shared/schemas';
 
 /** Callbacks and live state reads the routes need from the renderer. */
 export interface DesktopMessageRouteHandlers {

@@ -34,8 +34,9 @@ export function toPlatformAccelerator(
  * navigator.platform values (`iPhone`/`iPod`/`iPad`).
  */
 export function detectBrowserPlatform(
-  platform: string =
-    typeof navigator !== 'undefined' ? navigator.platform ?? '' : '',
+  platform: string = typeof navigator !== 'undefined'
+    ? (navigator.platform ?? '')
+    : '',
 ): NodeJS.Platform {
   if (/Mac|iPhone|iPod|iPad/.test(platform)) return 'darwin';
   if (platform.toLowerCase().includes('win')) return 'win32';

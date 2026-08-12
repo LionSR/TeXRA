@@ -99,9 +99,9 @@ describe('Copilot model handler routing', () => {
   });
 
   it('takes precedence over the global OpenRouter route', () => {
-    expect(resolveModelHandlerCompatibilityKey(copilotConfig, true, false)).toBe(
-      'ModelHandlerVscodeLm',
-    );
+    expect(
+      resolveModelHandlerCompatibilityKey(copilotConfig, true, false),
+    ).toBe('ModelHandlerVscodeLm');
   });
 
   it('fails clearly when the host language-model port is unavailable', async () => {
@@ -184,9 +184,9 @@ describe('Copilot route preference on a canonical base model', () => {
   it('keeps the ordinary provider route without the preference', async () => {
     await installCopilotRoute();
 
-    expect(resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.gemini36f, false)).toBe(
-      'ModelHandlerGoogleInteractions',
-    );
+    expect(
+      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.gemini36f, false),
+    ).toBe('ModelHandlerGoogleInteractions');
   });
 
   it('scopes a direct retry override without changing concurrent route selection', async () => {
@@ -195,9 +195,9 @@ describe('Copilot route preference on a canonical base model', () => {
     });
 
     const config = MODEL_CONFIGS.gemini36f;
-    expect(resolveModelHandlerCompatibilityKey(config, false, false, 'direct')).toBe(
-      'ModelHandlerGoogleInteractions',
-    );
+    expect(
+      resolveModelHandlerCompatibilityKey(config, false, false, 'direct'),
+    ).toBe('ModelHandlerGoogleInteractions');
     expect(resolveModelHandlerCompatibilityKey(config, false, false)).toBe(
       'ModelHandlerVscodeLm',
     );

@@ -13,10 +13,7 @@ import { Box, Text, useInput } from 'ink';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 // Local imports - shared utilities
-import {
-  isEscapeInput,
-  isPlainReturnInput,
-} from '@cli/tui/inputKeys';
+import { isEscapeInput, isPlainReturnInput } from '@cli/tui/inputKeys';
 import { selectVisibleInlineOverflowText } from '@cli/tui/overflowText';
 import { clamp, clampIndex } from '@utils/core';
 

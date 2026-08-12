@@ -12,11 +12,11 @@ import {
 } from 'lit';
 import { customElement, property, queryAll, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 
 // Local imports - shared
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import { designTokens, commonViewStyles, historyStyles } from '@shared/styles';
-import { UnsupportedCommandsMixin } from '@shared/utils/dispatcher';
 import { renderEmptyState } from '@shared/wa/emptyState';
 
 // Side-effect imports - register WA icon component

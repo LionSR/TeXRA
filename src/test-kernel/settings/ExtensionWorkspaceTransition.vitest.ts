@@ -121,7 +121,7 @@ vi.mock('@progressView/ProgressViewMessageHandler', () => ({
   ProgressViewMessageHandler: class {},
 }));
 vi.mock('@eventBus/AppSignals', () => ({
-  appSignals: { on: () => () => {} },
+  appSignals: { on: () => () => {}, emit: vi.fn() },
 }));
 
 const { WorkspaceStorageProvider } =

@@ -56,9 +56,7 @@ import { getCopyContent, getProposalInput } from '../formatters/contentStore';
 import type { TaskGroupList } from './TaskGroupList';
 
 const LogListStateSchema = z.object({
-  groupToggleStates: z
-    .array(z.tuple([z.string(), z.boolean()]))
-    .prefault([]),
+  groupToggleStates: z.array(z.tuple([z.string(), z.boolean()])).prefault([]),
 });
 
 /** Cached per-stream data and DOM state */

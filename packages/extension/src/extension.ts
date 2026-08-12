@@ -161,8 +161,9 @@ export async function activate(context: vscode.ExtensionContext) {
         EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT,
         () => createSampleProjectWithoutWorkspace(context.extensionPath),
       ),
-      vscode.commands.registerCommand(EXTENSION_COMMANDS.OPEN_GETTING_STARTED, () =>
-        openGettingStarted(context.extension.id),
+      vscode.commands.registerCommand(
+        EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
+        () => openGettingStarted(context.extension.id),
       ),
     );
     return;
@@ -762,7 +763,9 @@ export async function activate(context: vscode.ExtensionContext) {
     // walkthrough alongside for the rest of the onboarding tips.
     void vscode.commands
       .executeCommand('texra.showMainView')
-      .then(() => vscode.commands.executeCommand(EXTENSION_COMMANDS.OPEN_GETTING_STARTED))
+      .then(() =>
+        vscode.commands.executeCommand(EXTENSION_COMMANDS.OPEN_GETTING_STARTED),
+      )
       .then(() => context.globalState.update(welcomeKey, true));
   }
 }

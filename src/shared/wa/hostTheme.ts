@@ -10,11 +10,7 @@
 // here rather than re-encoding a parallel copy.
 
 import type { Theme } from '@shared/schemas/commonViewMessages';
-import {
-  setWaColorScheme,
-  THEME_CLASSES,
-  themeIsDark,
-} from './waColorScheme';
+import { setWaColorScheme, THEME_CLASSES, themeIsDark } from './waColorScheme';
 
 /**
  * Apply Electron-renderer-style host theme classes:

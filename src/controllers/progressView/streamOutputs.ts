@@ -1,4 +1,8 @@
-import type { OutputFileInfo, RoundIndexed, StreamTabId } from '@shared/schemas';
+import type {
+  OutputFileInfo,
+  RoundIndexed,
+  StreamTabId,
+} from '@shared/schemas';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 
 /**

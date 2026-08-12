@@ -13,9 +13,7 @@ import { StreamTabIdSchema } from './identifiers';
 // Identifiers + session links (canonical home)
 // ============================================================================
 
-export const InquirySessionLinksSchema = z.array(
-  z.string().trim().min(1),
-);
+export const InquirySessionLinksSchema = z.array(z.string().trim().min(1));
 
 // Keep the 12-hex suffix aligned with hexId12(), the identifier-minting owner
 // used by externalInquiryStorage. The explicit bound rejects truncated or
@@ -24,9 +22,7 @@ export const InquiryThreadIdSchema = z
   .string()
   .regex(/^ei_[0-9a-f]{12}$/i, 'Invalid external inquiry thread ID')
   .transform((value) => value.toLowerCase());
-export type InquiryThreadId = z.infer<
-  typeof InquiryThreadIdSchema
->;
+export type InquiryThreadId = z.infer<typeof InquiryThreadIdSchema>;
 
 // ============================================================================
 // Status + summary
@@ -43,9 +39,7 @@ const InquiryThreadSummarySchema = z.object({
   lastActivityIso: z.iso.datetime(),
   turnCount: z.int().nonnegative(),
 });
-export type InquiryThreadSummary = z.infer<
-  typeof InquiryThreadSummarySchema
->;
+export type InquiryThreadSummary = z.infer<typeof InquiryThreadSummarySchema>;
 
 // ============================================================================
 // Resume outcome — UI badge metadata for inquiryThreadUpdated events

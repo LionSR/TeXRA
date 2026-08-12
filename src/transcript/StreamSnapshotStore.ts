@@ -53,8 +53,9 @@ import {
   type TokenUsageStats,
   type UserFollowUpSupport,
   type WorkPlanSnapshot,
+  formatZodIssuesMessage,
 } from '@shared/schemas';
-import { formatZodIssuesMessage } from '@shared/schemas/toolResult';
+
 import { mapToRecord, throwAggregated } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';

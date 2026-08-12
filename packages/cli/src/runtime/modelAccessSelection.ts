@@ -75,8 +75,8 @@ export async function readCliModelAccessStatus(
     kimiCode: getPreferKimiCode() ? 'on' : 'off',
     glmCode: getGLMCodingPlan() ? 'on' : 'off',
   } as const;
-  const personalKeyProviders = configuredProviders.map(
-    (provider) => providerDisplayName(provider),
+  const personalKeyProviders = configuredProviders.map((provider) =>
+    providerDisplayName(provider),
   );
   return {
     apiFallback: apiMode,

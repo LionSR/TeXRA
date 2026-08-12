@@ -59,7 +59,9 @@ async function getActiveLatexEditor(
 ): Promise<ActiveFileGuardResult> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
-    await vscode.window.showWarningMessage(GUARD_FAILURE_MESSAGES.noEditor.user);
+    await vscode.window.showWarningMessage(
+      GUARD_FAILURE_MESSAGES.noEditor.user,
+    );
     return { status: 'noEditor' };
   }
 

@@ -4,6 +4,7 @@ import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, queryAll } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import Mark from 'mark.js';
 
 // Local imports - shared
@@ -13,10 +14,7 @@ import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import { commonViewStyles, designTokens, historyStyles } from '@shared/styles';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { markdownStyles } from '@shared/styles/markdownStyles';
-import {
-  isKnownUnsupported,
-  UnsupportedCommandsMixin,
-} from '@shared/utils/dispatcher';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
   renderIconActionButton,
   type IconActionButtonOptions,

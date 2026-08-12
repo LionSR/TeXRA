@@ -5,7 +5,10 @@ import { describe, expect, it } from 'vitest';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS } from '@latex/latexdiff/diffCommandExecutor';
 import { MATH_MARKUP_OPTIONS } from '@latex/latexdiff/mathMarkup';
-import { CORE_LATEX_TOOLS, IMAGE_TOOLS } from '@shared/constants/latexToolchain';
+import {
+  CORE_LATEX_TOOLS,
+  IMAGE_TOOLS,
+} from '@shared/constants/latexToolchain';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 import { STATUS_DISPLAY, STATUS_ICONS } from '@shared/schemas/todoDisplay';
 import { TODO_STATUS } from '@shared/schemas/todo';

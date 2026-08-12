@@ -74,9 +74,7 @@ export const followUpInputStyles: CSSResult = css`
     box-sizing: border-box;
     line-height: var(--line-height-relaxed);
     height: auto;
-    --textarea-min-height: calc(
-      2lh + var(--wa-space-xs) + var(--wa-space-3xs)
-    );
+    --textarea-min-height: calc(2lh + var(--wa-space-xs) + var(--wa-space-3xs));
     --textarea-max-height: clamp(var(--textarea-min-height), 32vh, 240px);
   }
 

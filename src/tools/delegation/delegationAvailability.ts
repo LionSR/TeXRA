@@ -24,7 +24,10 @@
  */
 
 // Local imports
-import { findAgentByIdentifier, resolveDelegationScopeAgents } from '@agent/index/agentRegistry';
+import {
+  findAgentByIdentifier,
+  resolveDelegationScopeAgents,
+} from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import type { ToolDefinition } from '@model/ToolDefinition';

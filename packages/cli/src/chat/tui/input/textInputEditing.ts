@@ -6,7 +6,6 @@ import {
 } from '@cli/tui/inputKeys';
 import { clamp } from '@utils/core';
 
-
 export interface TextEdit {
   readonly value: string;
   readonly cursor: number;

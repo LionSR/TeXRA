@@ -1,5 +1,9 @@
 // Local imports
-import { CORE_LATEX_TOOLS, IMAGE_TOOLS, LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
+import {
+  CORE_LATEX_TOOLS,
+  IMAGE_TOOLS,
+  LATEX_WORKSHOP_EXT_ID,
+} from '@shared/constants/latexToolchain';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { BinaryResolver } from '@utils/system/binaryResolver';
 

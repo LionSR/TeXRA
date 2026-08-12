@@ -18,9 +18,7 @@ import { getProviderKeyUrl } from '@utils/config/providerConfig';
 
 import type { MainViewInboundHost } from '../mainViewInboundContext';
 
-export function createOnboardingHandlers(
-  host: MainViewInboundHost,
-) {
+export function createOnboardingHandlers(host: MainViewInboundHost) {
   return {
     [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: async () => {
       await safeExecuteCommand('texra.setApiKey');

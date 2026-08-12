@@ -233,7 +233,10 @@ export function logContextManagementFromResponse(
       tokensAfter: totalInputTokens,
       contextWindow,
       utilizationBefore: roundedUtilizationPercent(tokensBefore, contextWindow),
-      utilizationAfter: roundedUtilizationPercent(totalInputTokens, contextWindow),
+      utilizationAfter: roundedUtilizationPercent(
+        totalInputTokens,
+        contextWindow,
+      ),
       details,
       summary: outcome.summary,
     },

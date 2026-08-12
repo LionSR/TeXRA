@@ -10,6 +10,7 @@ import {
   type TemplateResult,
 } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -26,10 +27,7 @@ import type {
   AgentSelectionItem,
   NumberSetting,
 } from '@shared/schemas/settingsViewMessages';
-import {
-  isKnownUnsupported,
-  UnsupportedCommandsMixin,
-} from '@shared/utils/dispatcher';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
   renderIconActionButton,
   renderLabeledActionButton,

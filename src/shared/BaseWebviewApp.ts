@@ -13,10 +13,7 @@ import {
   CommonViewMessageSchema,
   type StateRestoreMessage,
 } from '@shared/schemas/commonViewMessages';
-import {
-  setWaColorScheme,
-  themeIsDark,
-} from '@shared/wa/waColorScheme';
+import { setWaColorScheme, themeIsDark } from '@shared/wa/waColorScheme';
 import type { ZodError } from 'zod';
 
 interface CommonMessageContext {

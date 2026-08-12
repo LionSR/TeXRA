@@ -10,13 +10,10 @@ import type { MainViewInboundHandlerRegistry } from '@shared/schemas';
 import * as executionHandlers from '../managers/executionHandlers';
 import type { MainViewInboundHost } from '../mainViewInboundContext';
 
-export function createSessionHandlers(
-  host: MainViewInboundHost,
-) {
+export function createSessionHandlers(host: MainViewInboundHost) {
   return {
     [MAIN_VIEW_COMMANDS.EXECUTE]: (m) => executionHandlers.handleExecute(m),
-    [MAIN_VIEW_COMMANDS.MERGE]: (m) =>
-      executionHandlers.handleFileOperation(m),
+    [MAIN_VIEW_COMMANDS.MERGE]: (m) => executionHandlers.handleFileOperation(m),
     [MAIN_VIEW_COMMANDS.COMPARE]: (m) =>
       executionHandlers.handleFileOperation(m),
     [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: (m) =>

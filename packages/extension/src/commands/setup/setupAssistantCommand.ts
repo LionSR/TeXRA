@@ -135,7 +135,9 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
       await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
       break;
     case 'walkthrough':
-      await vscode.commands.executeCommand(EXTENSION_COMMANDS.OPEN_GETTING_STARTED);
+      await vscode.commands.executeCommand(
+        EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
+      );
       return false;
   }
 

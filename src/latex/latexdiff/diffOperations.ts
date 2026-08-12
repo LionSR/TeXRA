@@ -113,13 +113,8 @@ export async function runLatexdiffFromMetadata(params: {
   latexdiff: LatexdiffRuntime;
   progress: DiffProgressReporter;
 }): Promise<DiffRunOutcome> {
-  const {
-    rounds,
-    mathMarkup,
-    generateBetweenRoundDiffs,
-    latexdiff,
-    progress,
-  } = params;
+  const { rounds, mathMarkup, generateBetweenRoundDiffs, latexdiff, progress } =
+    params;
 
   const workspaceCwd = WorkspaceFS.getPath();
   const immediateResults: DiffRunResult[] = [];

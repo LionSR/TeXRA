@@ -5,7 +5,13 @@
  */
 
 // Third-party imports
-import { html, LitElement, nothing, type PropertyValues, type TemplateResult } from 'lit';
+import {
+  html,
+  LitElement,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { consume } from '@lit/context';
 import { state } from 'lit/decorators.js';
 
@@ -59,7 +65,9 @@ export abstract class BaseStreamContent extends LitElement {
     if (this.filteredPermissions.length === 0) return nothing;
     return html`
       <div class="conversation-column conversation-approval-dock">
-        <request-panels .permissions=${this.filteredPermissions}></request-panels>
+        <request-panels
+          .permissions=${this.filteredPermissions}
+        ></request-panels>
       </div>
     `;
   }

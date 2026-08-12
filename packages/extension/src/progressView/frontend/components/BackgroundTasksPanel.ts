@@ -402,9 +402,7 @@ export class BackgroundTasksPanel extends LitElement {
     if (items.length === 0) return nothing;
 
     const content = html`
-      <div class="section-content">
-        ${repeat(items, key, renderItem)}
-      </div>
+      <div class="section-content">${repeat(items, key, renderItem)}</div>
     `;
     if (!withHeader) return content;
 

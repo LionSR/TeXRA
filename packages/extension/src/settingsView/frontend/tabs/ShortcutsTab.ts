@@ -132,7 +132,10 @@ export class ShortcutsTab extends LitElement {
       return;
     }
 
-    const accelerator = keyboardEventToAccelerator(event, detectBrowserPlatform());
+    const accelerator = keyboardEventToAccelerator(
+      event,
+      detectBrowserPlatform(),
+    );
     if (!accelerator) {
       this.feedback =
         'Include Command, Control, or Alt (or use a function key).';
@@ -291,7 +294,6 @@ export class ShortcutsTab extends LitElement {
     `;
   }
 }
-
 
 declare global {
   interface HTMLElementTagNameMap {

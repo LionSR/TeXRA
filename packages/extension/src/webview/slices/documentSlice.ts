@@ -8,9 +8,7 @@ import type { MainViewInboundHandlerRegistry } from '@shared/schemas';
 
 import type { MainViewInboundHost } from '../mainViewInboundContext';
 
-export function createDocumentHandlers(
-  host: MainViewInboundHost,
-) {
+export function createDocumentHandlers(host: MainViewInboundHost) {
   return {
     [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: () =>
       host.fileManager.handleEditedFileSelection(),
@@ -35,8 +33,7 @@ export function createDocumentHandlers(
       host.diffManager.postRecentCommits(m.notifyWhenEmpty ?? undefined),
     [MAIN_VIEW_COMMANDS.REFRESH_COMMITS]: () =>
       host.diffManager.postRecentCommits(),
-    [MAIN_VIEW_COMMANDS.LATEXDIFF]: (m) =>
-      host.diffManager.handleLatexdiff(m),
+    [MAIN_VIEW_COMMANDS.LATEXDIFF]: (m) => host.diffManager.handleLatexdiff(m),
     [MAIN_VIEW_COMMANDS.LATEXDIFFVC]: (m) =>
       host.diffManager.handleLatexdiffvc(m),
     [MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC]: (m) =>

@@ -27,7 +27,11 @@ import {
   exchangeAuthorizationCode as defaultExchange,
   refreshTokens as defaultRefresh,
 } from './xaiOAuthClient';
-import { XaiAuthError, XaiSessionSchema, type XaiSession } from './xaiSessionTypes';
+import {
+  XaiAuthError,
+  XaiSessionSchema,
+  type XaiSession,
+} from './xaiSessionTypes';
 
 export type XaiSessionStorage = SubscriptionSessionStorage;
 export type XaiOAuthClient = SubscriptionOAuthClient;

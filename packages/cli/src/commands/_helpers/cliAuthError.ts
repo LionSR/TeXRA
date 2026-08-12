@@ -7,8 +7,7 @@ import { writeErrorStderr } from '@cli/runtime/logSinks';
  * to stderr.
  */
 export type CliAuthResult<T> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false };
+  { readonly ok: true; readonly value: T } | { readonly ok: false };
 
 /**
  * Run one scoped network/auth call, mapping failures to the CLI's

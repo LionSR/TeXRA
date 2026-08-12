@@ -113,9 +113,7 @@ export function classifyCliRetryAction(
 }
 
 /** The switch hint line for a retry action, or undefined for 'none'. */
-export function cliRetryActionHint(
-  action: CliRetryAction,
-): string | undefined {
+export function cliRetryActionHint(action: CliRetryAction): string | undefined {
   switch (action) {
     case 'disable-chatgpt':
       return CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT;

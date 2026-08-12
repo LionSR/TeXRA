@@ -24,7 +24,7 @@ export function formatSavedKeySummary(
   provider: ApiProvider,
   selection: CliModelAccessSelectionResult,
 ): string {
-  return `Saved your ${
-    providerDisplayName(provider)
-  } API key. ${describeSavedKeyLocation(provider)} ${selection.message}`;
+  return `Saved your ${providerDisplayName(
+    provider,
+  )} API key. ${describeSavedKeyLocation(provider)} ${selection.message}`;
 }

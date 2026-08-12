@@ -78,7 +78,10 @@ export async function extractBibliographyContext(
     }
   }
 
-  const citationKeys = collectCommaSeparatedMatches(uncommented, CITATION_PATTERN);
+  const citationKeys = collectCommaSeparatedMatches(
+    uncommented,
+    CITATION_PATTERN,
+  );
 
   return {
     bibliographyFiles: existing,

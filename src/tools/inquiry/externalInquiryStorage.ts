@@ -156,10 +156,7 @@ function threadManifestPath(threadId: InquiryThreadId): string {
   return path.join(threadDir(threadId), 'manifest.json');
 }
 
-function threadTurnDir(
-  threadId: InquiryThreadId,
-  turnIndex: number,
-): string {
+function threadTurnDir(threadId: InquiryThreadId, turnIndex: number): string {
   return path.join(threadDir(threadId), turnDir(turnIndex));
 }
 
@@ -372,8 +369,7 @@ export async function recordOpenQuestion(params: {
   suggestSearch?: boolean;
   attachFiles?: string[];
 }): Promise<PersistedOpenTurn> {
-  const threadId =
-    params.threadId ?? (`ei_${hexId12()}` as InquiryThreadId);
+  const threadId = params.threadId ?? (`ei_${hexId12()}` as InquiryThreadId);
 
   return threadMutex.runExclusive(threadId, async () => {
     const existing = await readThreadManifest(threadId);

@@ -30,11 +30,16 @@ const DYNAMIC_POSITIONAL_COMPLETIONS: readonly (readonly [string, string])[] =
 // A dynamic-value flag emits one generic `complete` line regardless of which
 // command carries it, so a flag added to DYNAMIC_VALUE_FLAG_SOURCES completes
 // in fish without manual special-casing.
-function dynamicFlagValueLines(commands: readonly CompletionCommand[]): string[] {
+function dynamicFlagValueLines(
+  commands: readonly CompletionCommand[],
+): string[] {
   const flagsByName = new Map<string, CompletionFlag>();
   for (const command of commands) {
     for (const flag of command.flags) {
-      if (flag.name in DYNAMIC_VALUE_FLAG_SOURCES && !flagsByName.has(flag.name)) {
+      if (
+        flag.name in DYNAMIC_VALUE_FLAG_SOURCES &&
+        !flagsByName.has(flag.name)
+      ) {
         flagsByName.set(flag.name, flag);
       }
     }
@@ -45,7 +50,10 @@ function dynamicFlagValueLines(commands: readonly CompletionCommand[]): string[]
       const flag = flagsByName.get(name)!;
       const base = [`-l ${flag.name}`];
       for (const alias of flag.aliases) base.push(`-s ${alias}`);
-      base.push('-r', `-a '${dynamicListSource(DYNAMIC_VALUE_FLAG_SOURCES[name])}'`);
+      base.push(
+        '-r',
+        `-a '${dynamicListSource(DYNAMIC_VALUE_FLAG_SOURCES[name])}'`,
+      );
       return fishCompleteLine(base);
     });
 }

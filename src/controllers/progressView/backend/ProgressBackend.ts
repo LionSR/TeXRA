@@ -334,9 +334,9 @@ export class ProgressBackend {
     // without the single-delete guards, so in-flight reserved-segment streams
     // are still stopped before clearAll() exactly as before the shared core.
     await Promise.all(
-      this.state.streamLogs.keys().map((stream) =>
-        this.prepareStreamDeletionCore(stream),
-      ),
+      this.state.streamLogs
+        .keys()
+        .map((stream) => this.prepareStreamDeletionCore(stream)),
     );
   }
 

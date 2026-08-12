@@ -86,8 +86,9 @@ export function withLegacyUsageRoute<S extends { usageRoute?: UsageRoute }>(
     );
 }
 
-export const TokenUsageStatsSchema =
-  withLegacyUsageRoute<TokenUsageStats>(TokenUsageStatsBaseSchema);
+export const TokenUsageStatsSchema = withLegacyUsageRoute<TokenUsageStats>(
+  TokenUsageStatsBaseSchema,
+);
 
 type EmptyUsageStats = Required<Omit<TokenUsageStats, 'usageRoute'>> &
   Pick<TokenUsageStats, 'usageRoute'>;

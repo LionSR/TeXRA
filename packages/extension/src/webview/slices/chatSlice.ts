@@ -8,9 +8,7 @@ import type { MainViewInboundHandlerRegistry } from '@shared/schemas';
 
 import type { MainViewInboundHost } from '../mainViewInboundContext';
 
-export function createChatHandlers(
-  host: MainViewInboundHost,
-) {
+export function createChatHandlers(host: MainViewInboundHost) {
   return {
     [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: (m) =>
       host.instructionManager.handlePolishInstructionText(m),

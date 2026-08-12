@@ -76,7 +76,9 @@ export async function resolveNativeAgentRun(
   stream: StreamTabId,
   showInfo: (message: string) => void | PromiseLike<unknown>,
   action: string,
-): Promise<(RunMetadata & { config: NonNullable<RunMetadata['config']> }) | null> {
+): Promise<
+  (RunMetadata & { config: NonNullable<RunMetadata['config']> }) | null
+> {
   const metadata = getRunMetadata(stream);
   if (!isNativeAgentRun(metadata.identity)) {
     await reportNonNativeRunRefusal(showInfo, action);

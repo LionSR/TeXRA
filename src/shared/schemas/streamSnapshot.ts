@@ -91,8 +91,9 @@ export const StreamSnapshotSchema = SharedBackendOwnedFieldsSchema.extend({
   // Round-keyed records match the on-disk JSON: string keys → arrays. Value
   // schemas shared with the live WorkflowStreamStateSchema (see
   // RoundKeyedOutputSidecarValueSchemas) so the two can't drift.
-  outputFilesByRound:
-    RoundKeyedOutputSidecarValueSchemas.outputFiles.prefault({}),
+  outputFilesByRound: RoundKeyedOutputSidecarValueSchemas.outputFiles.prefault(
+    {},
+  ),
   missingOutputsByRound:
     RoundKeyedOutputSidecarValueSchemas.missingOutputs.prefault({}),
   compileFailuresByRound:

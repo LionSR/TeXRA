@@ -11,7 +11,7 @@
 // Local imports - shared webview
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { StateSettingValue } from '@shared/schemas/settingsViewMessages';
+
 import {
   settingEnumChoices,
   stateSettingByKey,
@@ -23,6 +23,7 @@ import { renderSettingsToggleRow } from '@shared/wa/settingsSection';
 import type { TemplateResult } from 'lit';
 
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
+import type { StateSettingValue } from '@shared/schemas';
 
 /**
  * The value shapes the `UPDATE_STATE_SETTING` boundary accepts — imported

@@ -11,10 +11,7 @@ import './ApproveSplitButton';
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
 // Local imports - progress view events
-import type {
-  ApprovalDecision,
-  ApprovalPermissionKind,
-} from '../events';
+import type { ApprovalDecision, ApprovalPermissionKind } from '../events';
 
 export abstract class BaseApprovalPanel<
   K extends ApprovalPermissionKind,

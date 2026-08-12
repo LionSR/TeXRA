@@ -446,8 +446,7 @@ export class StreamTabs extends LitElement {
     );
     const childCount = children.length;
     const showChildren = !options.compact && childCount > 0;
-    const expanded =
-      showChildren && this.expandedParents.has(stream.name);
+    const expanded = showChildren && this.expandedParents.has(stream.name);
     const streamState = this.streamStates.get(stream.name);
 
     return html`

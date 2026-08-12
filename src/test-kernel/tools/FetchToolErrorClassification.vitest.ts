@@ -22,10 +22,7 @@ const MESSAGES = {
  */
 describe('toFetchToolError', () => {
   it('labels a genuine fetch network failure (TypeError) as a network error', () => {
-    const err = toFetchToolError(
-      new TypeError('fetch failed'),
-      MESSAGES,
-    );
+    const err = toFetchToolError(new TypeError('fetch failed'), MESSAGES);
     expect(err).toBeInstanceOf(ToolError);
     expect(err.message).toBe('Network error: fetch failed');
   });
@@ -44,12 +41,13 @@ describe('toFetchToolError', () => {
   });
 
   it('keeps timeout and HTTP classifications distinct', () => {
-    expect(toFetchToolError(new TimeoutError(), MESSAGES).message).toBe(
+    const request = new Request('https://example.com');
+    expect(toFetchToolError(new TimeoutError(request), MESSAGES).message).toBe(
       'timed out',
     );
 
     const response = new Response('', { status: 503 });
-    const httpError = new HTTPError(response, 'GET', 'https://example.com');
+    const httpError = new HTTPError(response, request, {});
     expect(toFetchToolError(httpError, MESSAGES).message).toBe('HTTP 503');
   });
 });

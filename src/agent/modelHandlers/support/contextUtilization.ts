@@ -1,7 +1,10 @@
 import { roundTo } from '@utils/core';
 
 /** Raw percentage of the context window consumed by `tokens`. */
-function computeUtilizationPercent(tokens: number, contextWindow: number): number {
+function computeUtilizationPercent(
+  tokens: number,
+  contextWindow: number,
+): number {
   return (tokens / contextWindow) * 100;
 }
 
