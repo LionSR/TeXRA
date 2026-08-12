@@ -137,6 +137,16 @@ interface HydratedRunState {
   description?: string;
 }
 
+function withoutSummaryMetaFields(
+  meta: StreamSummaryMeta | undefined,
+  fields: readonly (keyof StreamSummaryMeta)[],
+): StreamSummaryMeta | undefined {
+  if (!meta) return undefined;
+  const remaining = { ...meta };
+  for (const field of fields) delete remaining[field];
+  return Object.keys(remaining).length > 0 ? remaining : undefined;
+}
+
 /**
  * The five execution-scoped facts owned by one run record and replaced or
  * hydrated together when a stream changes execution.
@@ -330,6 +340,8 @@ interface StreamRecord {
    * retired early with the run-classification consolidation).
    */
   description: string | undefined;
+  /** Same-execution mirror fields retained across a transient authority read. */
+  summaryMetaHydrationFallback: StreamSummaryMeta | undefined;
 
   // -- Lazy seeding: a stream's existing disk data is read into memory BEFORE
   // the first mutation so an accumulate/merge can't overwrite unloaded disk
@@ -376,6 +388,7 @@ export class StreamSnapshotStore {
     userFollowUpSupport: undefined,
     runConfig: undefined,
     description: undefined,
+    summaryMetaHydrationFallback: undefined,
     diskState: 'unknown',
     seedChain: undefined,
     seedRefreshGeneration: 0,
@@ -444,6 +457,7 @@ export class StreamSnapshotStore {
     if (!record) return;
     const config = record.runConfig;
     sink(stream, {
+      ...record.summaryMetaHydrationFallback,
       ...(record.runIdentity !== undefined && { identity: record.runIdentity }),
       ...(record.runExecutionId !== undefined && {
         executionId: record.runExecutionId,
@@ -1319,7 +1333,12 @@ export class StreamSnapshotStore {
       record.runIdentity = undefined;
       record.userFollowUpSupport = undefined;
       record.description = undefined;
+      record.summaryMetaHydrationFallback = undefined;
     }
+    record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
+      record.summaryMetaHydrationFallback,
+      ['agentCategory', 'model', 'workingDirectory', 'command'],
+    );
     record.runConfig = config;
     if (executionId) record.runExecutionId = executionId;
     this.queueMetaPatch(stream, executionId ? { executionId } : {});
@@ -1346,7 +1365,12 @@ export class StreamSnapshotStore {
     if (previous && previous !== executionId) {
       record.runConfig = undefined;
       record.description = undefined;
+      record.summaryMetaHydrationFallback = undefined;
     }
+    record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
+      record.summaryMetaHydrationFallback,
+      ['identity', 'userFollowUpSupport'],
+    );
     record.runExecutionId = executionId;
     record.runIdentity = identity;
     record.userFollowUpSupport = userFollowUpSupport;
@@ -1371,6 +1395,10 @@ export class StreamSnapshotStore {
   private setDescription(stream: StreamTabId, description: string): void {
     const record = this.getOrCreateRecord(stream);
     record.description = description;
+    record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
+      record.summaryMetaHydrationFallback,
+      ['description'],
+    );
     this.publishSummaryMeta(stream);
   }
 
@@ -1924,6 +1952,7 @@ export class StreamSnapshotStore {
       // from (#9590 Stage 6); when identity changes hands, drop it with the
       // pair and invalidate any authority read already in flight.
       record.description = undefined;
+      record.summaryMetaHydrationFallback = undefined;
     }
     if (meta) {
       const pendingLiveWrite = metaOverlay !== undefined;
@@ -1931,6 +1960,17 @@ export class StreamSnapshotStore {
       const hydrated = await this.hydrateRunStateFromMeta(stream, meta);
       const mirroredExecutionId =
         this.summaryMetaSource?.(stream)?.executionId ?? previousExecutionId;
+      if (
+        !hydrated.authorityReadComplete &&
+        mirroredExecutionId === executionId
+      ) {
+        record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
+          this.summaryMetaSource?.(stream),
+          ['executionId', 'parentStreamId'],
+        );
+      } else {
+        record.summaryMetaHydrationFallback = undefined;
+      }
       publishHydratedSummaryMeta =
         hydrated.authorityReadComplete || mirroredExecutionId !== executionId;
       if (this.streamVersion(stream) !== version) return;

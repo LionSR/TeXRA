@@ -2765,9 +2765,11 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
     });
 
     await store.load([STREAM]);
+    snapshotFacts(store).setParentStream(STREAM, OTHER_STREAM);
 
     expect(mirroredMeta).toEqual({
       executionId,
+      parentStreamId: OTHER_STREAM,
       identity: { kind: 'agent', agent: 'search' },
       description: 'Existing summary metadata',
       model: 'deepseekproT',
