@@ -274,11 +274,68 @@ describe('ProgressBackend', () => {
     await backend.deleteStream(second);
 
     expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(second);
-    expect(lifecycle.activateStream).toHaveBeenCalledWith(first);
+    expect(backend.state.activeStream).toBe(first);
     expect(messages).toContainEqual({
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
       stream: second,
     });
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: first,
+    });
+  });
+
+  it('keeps the fallback selected when its transcript fails to load', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, messages, reportTranscriptLoadError } = target;
+    const fallback = 'fallback-stream' as StreamTabId;
+    const active = 'active-stream' as StreamTabId;
+    const loadError = new Error('transcript unavailable');
+
+    backend.state.streamLogs.ensureStream(fallback);
+    backend.state.streamLogs.ensureStream(active);
+    backend.state.switchActiveStream(active);
+    vi.spyOn(backend.state.streamLogs, 'ensureLoaded').mockRejectedValueOnce(
+      loadError,
+    );
+
+    await backend.deleteStream(active);
+
+    expect(backend.state.activeStream).toBe(fallback);
+    expect(reportTranscriptLoadError).toHaveBeenCalledWith(loadError, fallback);
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: fallback,
+    });
+  });
+
+  it('reports the stream whose full refresh fails after selection changes', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, reportTranscriptLoadError } = target;
+    const refreshing = 'refreshing-stream' as StreamTabId;
+    const selected = 'new-selection' as StreamTabId;
+    const loadError = new Error('read failed');
+    let rejectRefresh!: (error: Error) => void;
+
+    backend.state.streamLogs.ensureStream(refreshing);
+    backend.state.streamLogs.ensureStream(selected);
+    backend.state.switchActiveStream(refreshing);
+    vi.spyOn(backend.state.streamLogs, 'ensureLoaded').mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectRefresh = reject;
+        }),
+    );
+
+    const refresh = backend.syncRenderedStreams({ syncActiveStream: true });
+    backend.state.switchActiveStream(selected);
+    rejectRefresh(loadError);
+    await refresh;
+
+    expect(reportTranscriptLoadError).toHaveBeenCalledWith(
+      loadError,
+      refreshing,
+    );
   });
 
   it('releases the tab left behind when deletion rotates the selection', async () => {
@@ -314,11 +371,12 @@ describe('ProgressBackend', () => {
 
     backend.state.streamLogs.ensureStream(only);
     backend.state.switchActiveStream(only);
+    const activateStream = vi.spyOn(backend, 'activateStream');
 
     await backend.deleteStream(only);
 
     expect(backend.state.activeStream).toBe('');
-    expect(lifecycle.activateStream).not.toHaveBeenCalled();
+    expect(activateStream).not.toHaveBeenCalled();
     // No stream was activated, so only the stream list is resent.
     expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
       syncActiveStream: false,
@@ -327,7 +385,7 @@ describe('ProgressBackend', () => {
 
   it('preserves a stream switch during active-stream deletion', async () => {
     const target = createIsolatedRecordingBackend();
-    const { backend, lifecycle } = target;
+    const { backend, messages } = target;
     const active = 'active-stream' as StreamTabId;
     const fallback = 'fallback-stream' as StreamTabId;
     const selected = 'selected-during-delete' as StreamTabId;
@@ -346,6 +404,10 @@ describe('ProgressBackend', () => {
     for (const stream of [active, fallback, selected]) {
       backend.state.streamLogs.ensureStream(stream);
     }
+    backend.state.updateStreamMetadata(selected, {
+      agentCategory: AgentCategory.ToolUse,
+    });
+    backend.state.getOrCreateStreamState(selected, AgentCategory.ToolUse);
     backend.state.switchActiveStream(active);
 
     const deletion = backend.deleteStream(active);
@@ -354,7 +416,18 @@ describe('ProgressBackend', () => {
     await deletion;
 
     expect(backend.state.activeStream).toBe(selected);
-    expect(lifecycle.activateStream).toHaveBeenCalledWith(selected);
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+        action: 'render',
+        stream: selected,
+        activeState: expect.any(Object),
+      }),
+    );
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: selected,
+    });
   });
 
   it('cleans every stream and emits one bulk deletion', async () => {
@@ -480,6 +553,7 @@ describe('ProgressBackend', () => {
         session,
         sendMessage: vi.fn(),
         hasTarget: () => true,
+        reportTranscriptLoadError: vi.fn(),
         approvals: createApprovalOptions(),
         lifecycle,
       }),
@@ -505,6 +579,7 @@ describe('ProgressBackend', () => {
         storage: new FakeStateStore(),
         sendMessage: sent,
         hasTarget: () => hasTarget,
+        reportTranscriptLoadError: vi.fn(),
         approvals: createApprovalOptions(),
         lifecycle: createLifecycleOptions(),
       }),
@@ -536,6 +611,7 @@ describe('ProgressBackend', () => {
         storage: new FakeStateStore(),
         sendMessage: sent,
         hasTarget: () => true,
+        reportTranscriptLoadError: vi.fn(),
         approvals: createApprovalOptions(),
         lifecycle: createLifecycleOptions(),
       }),

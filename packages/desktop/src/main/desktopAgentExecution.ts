@@ -272,6 +272,8 @@ export class DesktopProgressBridge {
         getProgressStreamControls(stream, this.session),
       getUnsupportedCommands: () =>
         unsupportedCommands(this.progressViewInboundHandlers),
+      reportTranscriptLoadError: (error, stream) =>
+        this.reportTranscriptLoadError(error, stream),
       approvals: {
         // The desktop renderer is always attached (no sidebar/editor re-target).
         canSend: () => true,
@@ -326,10 +328,8 @@ export class DesktopProgressBridge {
           this.workflowFileActions.clearAllBackups();
         },
         rebuildRenderedStreams: ({ syncActiveStream }) => {
-          const activeStream = this.updateStreamMetadata();
-          if (syncActiveStream) this.syncStreamContent(activeStream);
+          void this.syncRenderedStreams(syncActiveStream);
         },
-        activateStream: () => this.syncFullView(),
         notifyDeletionRetained: (activeCount, failedCount) =>
           this.options.host.showInfoMessage(
             failedCount === 0
@@ -1067,15 +1067,12 @@ export class DesktopProgressBridge {
     dispatchPresentationEvent(this.presentationEventHandlers, event, payload);
   }
 
-  private updateStreamMetadata(): StreamTabId | '' {
-    return this.backend.webviewUpdater.sendStreamMetadata(
-      this.state,
-      this.session.status.getAllStreamStates(),
-    );
+  private syncFullView(): void {
+    void this.syncRenderedStreams(true);
   }
 
-  private syncFullView(): void {
-    this.syncStreamContent(this.updateStreamMetadata());
+  private async syncRenderedStreams(syncActiveStream: boolean): Promise<void> {
+    await this.backend.syncRenderedStreams({ syncActiveStream });
   }
 
   /** Send canonical state and replay pending prompts after attachment. */
@@ -1084,14 +1081,8 @@ export class DesktopProgressBridge {
     await replayApprovalRequestHandlers(this.backend.approvalHandlers);
   }
 
-  private setActiveStream(streamId: StreamTabId): void {
-    if (!this.streamLogs.has(streamId)) {
-      return;
-    }
-    this.state.switchActiveStream(streamId);
-    this.updateStreamMetadata();
-    this.backend.webviewUpdater.setActiveStream(streamId);
-    this.syncStreamContent(streamId);
+  private async setActiveStream(streamId: StreamTabId): Promise<void> {
+    await this.backend.activateStream(streamId);
   }
 
   /**
@@ -1113,32 +1104,23 @@ export class DesktopProgressBridge {
     if (!this.streamLogs.has(streamId)) {
       return 'missing';
     }
-    this.setActiveStream(streamId);
+    await this.setActiveStream(streamId);
     return 'revealed';
   }
 
-  private syncStreamContent(streamId: StreamTabId | ''): void {
-    if (!streamId) {
-      this.backend.syncStreamContent('');
-      return;
-    }
-
-    void this.streamLogs
-      .ensureLoaded(streamId)
-      .then(() => {
-        if (this.state.activeStream !== streamId) return;
-        this.backend.syncStreamContent(streamId, {
-          includeActiveState: true,
-        });
-      })
-      .catch((error: unknown) => {
-        this.logger.error(`Failed to load desktop transcript ${streamId}`, {
-          data: toLogData(error),
-        });
-        void this.options.host.showErrorMessage(
-          `Transcript load failed: ${toErrorMessage(error)}`,
-        );
-      });
+  private reportTranscriptLoadError(
+    error: unknown,
+    streamId?: StreamTabId | '',
+  ): void {
+    this.logger.error(
+      `Failed to load desktop transcript${streamId ? ` ${streamId}` : ''}`,
+      {
+        data: toLogData(error),
+      },
+    );
+    void this.options.host.showErrorMessage(
+      `Transcript load failed: ${toErrorMessage(error)}`,
+    );
   }
 
   private async runLatexdiffFile(

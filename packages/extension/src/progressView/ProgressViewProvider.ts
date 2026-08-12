@@ -110,6 +110,8 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       getStreamControls: getProgressStreamControls,
       getUnsupportedCommands: () =>
         this.messageHandler.getUnsupportedCommands(),
+      reportTranscriptLoadError: (error, stream) =>
+        this.reportTranscriptLoadError(error, stream),
       approvals: {
         canSend: () => this.canSendToWebview(),
         logger: this.logger,
@@ -139,7 +141,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
         cleanupDeletedStreams: (options) =>
           this.messageHandler.cleanupDeletedStreams(options),
         rebuildRenderedStreams: (options) => this.syncRenderedStreams(options),
-        activateStream: (stream) => this.setActiveStream(stream),
         notifyDeletionRetained: async (activeCount, failedCount) => {
           await vscode.window.showInformationMessage(
             failedCount === 0
@@ -314,40 +315,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
     this.webviewUpdater.setPlacement(target.placement);
 
-    const activeStream = this.webviewUpdater.sendStreamMetadata(
-      this.state,
-      this.state.streamStatus.getAllStreamStates(),
-      theme,
-    );
-    if (!syncActiveStream) return;
-
-    // Skip content sync when streams exist but filter excludes all of them
-    const hasStreams = this.state.streamLogs.keys().length > 0;
-    if (activeStream || !hasStreams) {
-      // If the active stream's entries were released (e.g. filter change
-      // moved active to a previously-evicted stream), rehydrate before
-      // syncing so the webview doesn't render an empty log. Fall back to
-      // an immediate sync when the log is already resident.
-      if (activeStream && !this.state.streamLogs.get(activeStream)) {
-        void this.state.streamLogs
-          .ensureLoaded(activeStream)
-          .then(() => {
-            if (this.state.activeStream !== activeStream) return;
-            this.backend.syncStreamContent(activeStream);
-          })
-          .catch((error: unknown) => {
-            this.logger.error(
-              `Failed to load transcript ${activeStream} for display`,
-              { data: error },
-            );
-            void vscode.window.showErrorMessage(
-              'TeXRA could not read this transcript. Select the run again to retry.',
-            );
-          });
-      } else {
-        this.backend.syncStreamContent(activeStream);
-      }
-    }
+    void this.backend.syncRenderedStreams({ syncActiveStream, theme });
   }
 
   public async markWebviewReady(
@@ -393,27 +361,20 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   }
 
   public async setActiveStream(streamId: StreamTabId): Promise<void> {
-    // The switch also catches the "terminal-while-active" case: a stream that
-    // reached a non-in-flight status while it was the visible tab never
-    // triggered release (the setStreamStatus guard excludes the active
-    // stream). Now that the user has moved on, it's eligible.
-    this.state.switchActiveStream(streamId);
+    await this.backend.activateStream(streamId);
+  }
 
-    if (!this.canSendToWebview()) return;
-
-    // Rehydrate entries released by the status-change eviction so the
-    // newly-active tab shows its full log instead of an empty view.
-    if (streamId) await this.state.streamLogs.ensureLoaded(streamId);
-
-    // Another setActiveStream may have run while we awaited rehydration;
-    // let the newer call own the webview sync so we don't overwrite it.
-    if (this.state.activeStream !== streamId) return;
-
-    this.webviewUpdater.setActiveStream(streamId);
-    // Hydrate content (logs, todos, follow-ups, instruction, bypass state) + active-state metadata
-    this.backend.syncStreamContent(streamId, {
-      includeActiveState: true,
-    });
+  private reportTranscriptLoadError(
+    error: unknown,
+    streamId?: StreamTabId | '',
+  ): void {
+    this.logger.error(
+      `Failed to load transcript for display${streamId ? ` ${streamId}` : ''}`,
+      { data: error },
+    );
+    void vscode.window.showErrorMessage(
+      'TeXRA could not read this transcript. Select the run again to retry.',
+    );
   }
 
   public async revealStream(
