@@ -909,7 +909,7 @@ describe('executeCliRequest', () => {
         await new Promise<void>((_resolve, reject) => {
           options.launchSignal?.addEventListener(
             'abort',
-            () => reject(new AgentError('launch aborted')),
+            () => reject(new DOMException('Launch interrupted.', 'AbortError')),
             { once: true },
           );
         });
@@ -923,7 +923,10 @@ describe('executeCliRequest', () => {
     await vi.waitFor(() => expect(launchSignal).toBeDefined());
 
     await platform.lifecycle.runShutdown();
-    await expect(run).rejects.toThrow('launch aborted');
+    await expect(run).resolves.toEqual({
+      ok: false,
+      exitCode: CliExitCode.Interrupted,
+    });
     expect(launchSignal?.aborted).toBe(true);
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
