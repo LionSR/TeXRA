@@ -1983,8 +1983,8 @@ describe('CLI transcript state', () => {
       [
         'Waiting for the child.',
         '<subagent-progress id="abc" agent="prover" type="todos" completed="1" active="1" pending="0">',
-        '  ✓ check',
-        '  ◉ prove',
+        '  ● check',
+        '  ◐ prove',
         '</subagent-progress>',
       ].join('\n'),
     );
