@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import { applyCliGitAuthorConfig } from '@cli/runtime/gitAuthor';
-import { setKimiCodePreference } from '@cli/runtime/kimiCodePreference';
 import {
   loadProviderApiKeyStatuses,
   saveProviderApiKey,
@@ -16,6 +15,7 @@ import {
 } from '@shared/config/settingsAccess';
 import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { setPreferKimiCode } from '@utils/config/providerConfig';
 
 import { refreshSubscriptionPreferenceViews } from '../state/codexSubscription';
 import { AgentRosterForm } from './AgentRosterForm';
@@ -78,7 +78,7 @@ export function createCliConfigFormProps(
       if (entry.key === GlobalStateKey.KIMI_CODE_PREFER) {
         // The runtime owner carries the OpenRouter mutual exclusion, so the
         // form and `/api kimi-code` cannot drift.
-        await setKimiCodePreference(value === true, stores);
+        await setPreferKimiCode(value === true, stores.globalState);
       } else {
         await writeSetting(entry, value, stores, 'cli');
       }

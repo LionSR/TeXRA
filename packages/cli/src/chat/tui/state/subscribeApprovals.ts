@@ -55,6 +55,7 @@ import {
   invalidateApiKeyCache,
   isApiProvider,
 } from '@model/apiProviders';
+import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import {
@@ -73,18 +74,14 @@ import {
   setBashApprovalSessionBypass,
 } from '@tools/approval/bashApproval';
 import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
-import {
-  getGLMCodingPlan,
-  getPreferKimiCode,
-} from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { notify } from '../notifications/terminalNotifier';
 import { patchSessionMeta, patchStream } from './cliState';
 import {
+  refreshSubscriptionPreferenceViews,
+  setCliCodingPlanSubscription,
   setCliCodexSubscription,
-  setCliGlmCodingPlan,
-  setCliKimiCode,
 } from './codexSubscription';
 import {
   approveQueuedDelegatedWorkForStream,
@@ -423,7 +420,8 @@ async function requestRetryInteraction(
     }
     if (
       decision.apiMode !== undefined ||
-      decision.disableChatGptSubscription === true
+      decision.disableChatGptSubscription === true ||
+      decision.disableCodingPlan !== undefined
     ) {
       await switchRetryToPersonalCredentials(decision, promptRequest, {
         prepareRetry: options?.prepareRetry,
@@ -637,12 +635,17 @@ async function switchRetryToPersonalCredentials(
         const previousApiMode = getCliApiMode();
         const previousOpenRouter = cliOpenRouterEnabled();
         const previousSubscriptionPreference = isPreferCodexSubscription();
-        const previousGlmCodingPlan = getGLMCodingPlan();
-        const previousKimiCodePreference = getPreferKimiCode();
+        const previousCodingPlans = new Map(
+          codingPlanSubscriptionRuntimes.map((runtime) => [
+            runtime.descriptor.id,
+            runtime.getEnabled(),
+          ]),
+        );
         let apiModeWriteStarted = false;
         let subscriptionWriteStarted = false;
-        let glmCodingPlanWriteStarted = false;
-        let kimiCodeWriteStarted = false;
+        const codingPlanWrites = new Set<
+          (typeof codingPlanSubscriptionRuntimes)[number]['descriptor']['id']
+        >();
         try {
           if (decision.apiMode) {
             const apiMode = decision.apiMode;
@@ -663,14 +666,13 @@ async function switchRetryToPersonalCredentials(
             }
             signal.throwIfAborted();
           }
-          if (decision.disableGlmCodingPlan) {
-            glmCodingPlanWriteStarted = true;
-            await runRetryTask(() => setCliGlmCodingPlan(false), signal);
-            signal.throwIfAborted();
-          }
-          if (decision.disableKimiCode) {
-            kimiCodeWriteStarted = true;
-            await runRetryTask(() => setCliKimiCode(false), signal);
+          const codingPlanId = decision.disableCodingPlan;
+          if (codingPlanId) {
+            codingPlanWrites.add(codingPlanId);
+            await runRetryTask(
+              () => setCliCodingPlanSubscription(codingPlanId, false),
+              signal,
+            );
             signal.throwIfAborted();
           }
           if (decision.apiMode) patchSessionMeta({ apiMode: decision.apiMode });
@@ -684,6 +686,7 @@ async function switchRetryToPersonalCredentials(
           // the mode, because restoring included access clears the OpenRouter
           // toggle: a switch the user never got would otherwise leave their
           // routing preference silently off.
+          let openRouterToPreserve = previousOpenRouter;
           const rollbackFailures = await rollbackChangedSettings([
             {
               writeStarted: subscriptionWriteStarted,
@@ -705,46 +708,34 @@ async function switchRetryToPersonalCredentials(
               restoreFailedContext:
                 'Could not restore the ChatGPT subscription preference',
             },
-            {
-              writeStarted: glmCodingPlanWriteStarted,
-              needsRollback: () => !getGLMCodingPlan(),
-              restore: async () => {
-                await setCliGlmCodingPlan(previousGlmCodingPlan);
-                if (getGLMCodingPlan() !== previousGlmCodingPlan) {
-                  throw new Error(
-                    `GLM Coding Plan remained ${String(getGLMCodingPlan())}.`,
-                  );
-                }
-              },
-              restoredInMemory: () =>
-                getGLMCodingPlan() === previousGlmCodingPlan,
-              memoryRestoredContext:
-                'The previous GLM Coding Plan setting appears restored in memory, but persistence could not be confirmed',
-              restoreFailedContext:
-                'Could not restore the GLM Coding Plan setting',
-            },
-            {
-              writeStarted: kimiCodeWriteStarted,
-              needsRollback: () => !getPreferKimiCode(),
-              restore: async () => {
-                await setCliKimiCode(previousKimiCodePreference);
-                if (getPreferKimiCode() !== previousKimiCodePreference) {
-                  throw new Error(
-                    `Kimi Code preference remained ${String(getPreferKimiCode())}.`,
-                  );
-                }
-              },
-              restoredInMemory: () =>
-                getPreferKimiCode() === previousKimiCodePreference,
-              memoryRestoredContext:
-                'The previous Kimi Code preference appears restored in memory, but persistence could not be confirmed',
-              restoreFailedContext:
-                'Could not restore the Kimi Code preference',
-            },
+            ...codingPlanSubscriptionRuntimes.map((runtime) => {
+              const id = runtime.descriptor.id;
+              const previous = previousCodingPlans.get(id) ?? false;
+              return {
+                writeStarted: codingPlanWrites.has(id),
+                needsRollback: () => runtime.getEnabled() !== previous,
+                restore: async () => {
+                  await runtime.restoreEnabled(previous);
+                  refreshSubscriptionPreferenceViews();
+                  if (runtime.getEnabled() !== previous) {
+                    throw new Error(
+                      `${runtime.descriptor.displayName} remained ${String(runtime.getEnabled())}.`,
+                    );
+                  }
+                },
+                restoredInMemory: () => runtime.getEnabled() === previous,
+                memoryRestoredContext: `The previous ${runtime.descriptor.displayName} setting appears restored in memory, but persistence could not be confirmed`,
+                restoreFailedContext: `Could not restore the ${runtime.descriptor.displayName} setting`,
+              };
+            }),
             {
               writeStarted: apiModeWriteStarted,
               needsRollback: () => getCliApiMode() === decision.apiMode,
               restore: async () => {
+                // A newer OpenRouter choice may have landed after this retry
+                // changed modes. Restoring included mode clears that choice,
+                // so carry its current value into the final route restore.
+                openRouterToPreserve = cliOpenRouterEnabled();
                 await setCliApiMode(previousApiMode);
                 if (getCliApiMode() !== previousApiMode) {
                   throw new Error(`API mode remained ${getCliApiMode()}.`);
@@ -758,7 +749,7 @@ async function switchRetryToPersonalCredentials(
             {
               writeStarted: apiModeWriteStarted,
               needsRollback: () =>
-                previousOpenRouter && !cliOpenRouterEnabled(),
+                openRouterToPreserve && !cliOpenRouterEnabled(),
               restore: async () => {
                 await platform().globalState.update(
                   GlobalStateKey.USE_OPENROUTER,
