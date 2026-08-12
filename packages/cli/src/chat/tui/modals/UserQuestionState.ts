@@ -1,8 +1,7 @@
+import { USER_QUESTION_SKIPPED_FEEDBACK } from '@cli/runtime/userQuestionAnswer';
 import type { UserQuestionAnswers, UserQuestionPrompt } from '@shared/schemas';
 
 import type { ApprovalDecision } from '../state/approvalQueue';
-
-export const USER_QUESTION_SKIPPED_FEEDBACK = 'User question skipped by user.';
 
 export function updateUserQuestionAnswers(
   answers: UserQuestionAnswers,

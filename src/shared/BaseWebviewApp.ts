@@ -127,6 +127,26 @@ export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
   }
 
   /**
+   * Dispatcher `onError` reporter: names the command the raw message claimed
+   * so a validation failure points at one command instead of the whole union.
+   * `appLabel` is the bracketed app tag (e.g. `[ProgressApp]`).
+   */
+  protected logMessageSchemaError(
+    appLabel: string,
+    raw: unknown,
+    error: unknown,
+  ): void {
+    const command =
+      raw && typeof raw === 'object' && 'command' in raw
+        ? String((raw as { command: unknown }).command)
+        : 'unknown';
+    this.logSchemaError(
+      `${appLabel} Message validation failed for command "${command}".`,
+      error,
+    );
+  }
+
+  /**
    * Handle theme updates from the extension host.
    *
    * Mirrors the theme kind onto `<html>` as `wa-light` / `wa-dark` so Web

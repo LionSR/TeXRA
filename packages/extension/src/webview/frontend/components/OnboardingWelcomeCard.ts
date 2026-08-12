@@ -5,6 +5,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { GETTING_STARTED_ACTION_PRESENTATION } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   ONBOARDING_CARD_TITLE,
@@ -15,6 +16,9 @@ import {
 } from '@shared/copy/onboarding';
 
 import { MainViewEvents } from '../events';
+
+const { openWalkthrough: OPEN_WALKTHROUGH } =
+  GETTING_STARTED_ACTION_PRESENTATION;
 
 /**
  * State 0 welcome card (PRD: agent-native onboarding) — a port of the CLI
@@ -344,7 +348,8 @@ export class OnboardingWelcomeCard extends LitElement {
               size="s"
               @click=${this.handleOpenGettingStarted}
             >
-              ${waIcon('book', { slot: 'start' })} Open walkthrough
+              ${waIcon(OPEN_WALKTHROUGH.icon, { slot: 'start' })}
+              ${OPEN_WALKTHROUGH.label}
             </wa-button>
             <wa-button
               id="onboardingSkipButton"

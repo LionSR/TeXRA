@@ -49,7 +49,10 @@ import {
   isInquiryDraftResolved,
   setInquiryDraft,
 } from '../slices/inquiryDraftState';
-import { BaseFeedbackPanel } from './BaseFeedbackPanel';
+import {
+  BaseFeedbackPanel,
+  REDIRECT_FEEDBACK_PROMPT,
+} from './BaseFeedbackPanel';
 import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
 import type { PermissionState } from '../permissionState';
 
@@ -245,7 +248,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
           ${this.renderFeedbackSection(
             'external-inquiry-request__feedback',
             'external-inquiry-request__feedback-input',
-            'What should the agent do instead?',
+            REDIRECT_FEEDBACK_PROMPT,
           )}
         </div>
         ${this.renderActions()}

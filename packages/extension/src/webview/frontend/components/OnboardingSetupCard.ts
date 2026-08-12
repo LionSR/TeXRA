@@ -5,10 +5,14 @@ import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { GETTING_STARTED_ACTION_PRESENTATION } from '@shared/schemas';
 import { ONBOARDING_SETUP_HANDOFF } from '@shared/copy/onboarding';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { MainViewEvents } from '../events';
+
+const { runSetup: RUN_SETUP, openWalkthrough: OPEN_WALKTHROUGH } =
+  GETTING_STARTED_ACTION_PRESENTATION;
 
 /**
  * State 1 onboarding handoff: a credential exists, but the first setup run has
@@ -77,7 +81,7 @@ export class OnboardingSetupCard extends LitElement {
             size="s"
             @click=${this.handleRunSetup}
           >
-            ${waIcon('rocket', { slot: 'start' })} Run setup assistant
+            ${waIcon(RUN_SETUP.icon, { slot: 'start' })} ${RUN_SETUP.label}
           </wa-button>
           <wa-button
             id="onboardingOpenWalkthroughButton"
@@ -85,7 +89,8 @@ export class OnboardingSetupCard extends LitElement {
             size="s"
             @click=${this.handleOpenGettingStarted}
           >
-            ${waIcon('book', { slot: 'start' })} Open walkthrough
+            ${waIcon(OPEN_WALKTHROUGH.icon, { slot: 'start' })}
+            ${OPEN_WALKTHROUGH.label}
           </wa-button>
           <wa-button
             id="onboardingSkipSetupButton"

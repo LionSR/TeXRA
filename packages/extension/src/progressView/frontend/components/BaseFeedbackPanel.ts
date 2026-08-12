@@ -16,6 +16,12 @@ import { BaseRequestPanel } from './BaseRequestPanel';
 // Local imports - progress view events
 import type { FeedbackPermissionKind } from '../events';
 
+/**
+ * Rejection prompt for panels that ask the agent a question rather than review
+ * its work — rejecting redirects the agent instead of revising a proposal.
+ */
+export const REDIRECT_FEEDBACK_PROMPT = 'What should the agent do instead?';
+
 export abstract class BaseFeedbackPanel<
   K extends FeedbackPermissionKind = FeedbackPermissionKind,
 > extends BaseRequestPanel<K> {

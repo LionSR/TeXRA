@@ -1,5 +1,11 @@
 import type { UserQuestionPrompt } from '@shared/schemas';
 
+/**
+ * Feedback the agent receives when a user question ends with no answers —
+ * one wording for both the TUI modal and the headless prompt adapter.
+ */
+export const USER_QUESTION_SKIPPED_FEEDBACK = 'User question skipped by user.';
+
 export function parseUserQuestionAnswer(
   raw: string,
   question: UserQuestionPrompt,

@@ -82,7 +82,6 @@ export abstract class BaseApprovalPanel<
     leadingActions?: TemplateResult | typeof nothing;
     middleActions?: TemplateResult | typeof nothing;
     trailingActions?: TemplateResult | typeof nothing;
-    feedbackPlaceholder?: string;
     trailing?: TemplateResult | typeof nothing;
   }): TemplateResult {
     const { prefix } = options;
@@ -104,7 +103,6 @@ export abstract class BaseApprovalPanel<
         ${this.renderFeedbackSection(
           `${prefix}__feedback`,
           `${prefix}__feedback-input`,
-          options.feedbackPlaceholder,
         )}
         ${options.trailing ?? nothing}
       </div>

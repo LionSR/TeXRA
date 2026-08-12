@@ -13,7 +13,7 @@ import { KeyHints } from '@cli/tui/ui/KeyHints';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-import { ConfirmCard } from './ConfirmCard';
+import { ConfirmCard, CONFIRM_CARD_FEEDBACK_PLACEHOLDER } from './ConfirmCard';
 import {
   confirmCardContentRowsBudget,
   confirmCardFeedbackRows,
@@ -33,7 +33,6 @@ const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
 const EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
 export const COMPACT_EDIT_APPROVAL_MAX_ROWS = 9;
 const DEFAULT_EDIT_DIFF_ROWS = 30;
-const EDIT_APPROVAL_FEEDBACK_PLACEHOLDER = 'Feedback to send with rejection';
 
 export interface EditApprovalProps {
   readonly availableRows?: number;
@@ -44,7 +43,7 @@ export interface EditApprovalProps {
 export function editApprovalDiffRowsBudget({
   availableRows,
   columns,
-  feedbackPlaceholder = EDIT_APPROVAL_FEEDBACK_PLACEHOLDER,
+  feedbackPlaceholder = CONFIRM_CARD_FEEDBACK_PLACEHOLDER,
   feedbackMode,
   feedbackValue = '',
   title,
@@ -177,7 +176,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       title={title}
       rejectionMode="feedback"
       alwaysAllow={{ kind: 'toolEdit', label: 'approve edits for session' }}
-      feedbackPlaceholder={EDIT_APPROVAL_FEEDBACK_PLACEHOLDER}
+      feedbackPlaceholder={CONFIRM_CARD_FEEDBACK_PLACEHOLDER}
       compact={compactCard}
       onFeedbackModeChange={handleFeedbackModeChange}
       onFeedbackValueChange={setFeedbackValue}

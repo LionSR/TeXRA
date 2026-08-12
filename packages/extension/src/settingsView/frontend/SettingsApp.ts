@@ -207,14 +207,7 @@ export class SettingsApp extends SettingsAppBase {
 
   protected override handleMessage(raw: unknown): void {
     dispatchSettingsViewOutbound(raw, this.messageHandlers, (error) => {
-      const command =
-        raw && typeof raw === 'object' && 'command' in raw
-          ? String((raw as { command: unknown }).command)
-          : 'unknown';
-      this.logSchemaError(
-        `[SettingsApp] Message validation failed for command "${command}".`,
-        error,
-      );
+      this.logMessageSchemaError('[SettingsApp]', raw, error);
     });
   }
 
