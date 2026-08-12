@@ -5,7 +5,6 @@ export const COMMON_COMMANDS = {
   DEBUG_MODE_SET: 'setDebugMode',
   STATE_RESTORE: 'restoreState',
   WEBVIEW_READY: 'webviewReady',
-  ERROR: 'error',
   SWITCH_VIEW: 'switchView',
 } as const;
 
@@ -21,7 +20,6 @@ export const MAIN_VIEW_COMMANDS = {
   SETTINGS_OPEN: 'openSettings',
 
   // File selection cases (single-file pickers; multi pickers go through SELECT_MULTIPLE_FILES)
-  SELECT_EDITED_FILE: 'selectEditedFile',
 
   // File selected cases (single-file response messages)
   EDITED_FILE_SELECTED: 'editedFileSelected',
@@ -48,7 +46,6 @@ export const MAIN_VIEW_COMMANDS = {
   START_RECORDING: 'startRecording',
   STOP_RECORDING: 'stopRecording',
   RECORDING_STOPPED: 'recordingStopped',
-  SHOW_AGENT_HISTORY: 'showAgentHistory',
   OPEN_AGENT_SETTINGS: 'openAgentSettings',
   OPEN_MODEL_SETTINGS: 'openModelSettings',
   OPEN_MULTI_AGENT_SETTINGS: 'openMultiAgentSettings',
@@ -61,7 +58,6 @@ export const MAIN_VIEW_COMMANDS = {
   HIDE_API_KEY_BANNER: 'hideApiKeyBanner',
   OPEN_AGENT_DIRECTORY: 'openAgentDirectory',
   OPEN_AGENT_DOCS: 'openAgentDocs',
-  OPEN_INSTALLATION_DOCS: 'openInstallationDocs',
   OPEN_INSTALL_GUIDE: 'openInstallGuide',
   RECHECK_DEPENDENCIES: 'recheckDependencies',
   SHOW_AGENT_CONFIG_BANNER: 'showAgentConfigBanner',
@@ -183,7 +179,6 @@ export const PROGRESS_VIEW_COMMANDS = {
   START_RECORDING: 'startRecording',
   STOP_RECORDING: 'stopRecording',
   UPDATE_RECORDING: 'updateRecording',
-  SHOW_INFORMATION_MESSAGE: 'showInformationMessage',
   OPEN_TASK_STORAGE: 'openTaskStorage',
   RUN_COMPILE_FIXER: 'runCompileFixer',
   TOOL_EDIT_APPROVAL_ACTION: 'toolEditApprovalAction',
@@ -199,18 +194,13 @@ export const PROGRESS_VIEW_COMMANDS = {
   ENABLE_SUPER_YOLO_BYPASS: 'enableSuperYoloBypass',
   GOAL_ACTIVE_UPDATED: 'goalActiveUpdated',
 
-  OPEN_MEMORY_VIEW: 'openMemoryView',
-
   OPEN_FILE: 'openFile',
-  OPEN_FILE_COMPILE: 'openFileCompile',
   COMPARE_ORIGINAL: 'compareOriginal',
   COMPARE_PREVIOUS: 'comparePrevious',
   ACCEPT_FILE: 'acceptFile',
   MERGE_FILE: 'mergeFile',
   LATEXDIFF_FILE: 'latexdiffFile',
   OPEN_LABEL: 'openLabel',
-
-  OPEN_PROFILE: 'openProfile',
 
   GETTING_STARTED_ACTION: 'progressGettingStartedAction',
 
