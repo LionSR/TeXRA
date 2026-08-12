@@ -1,5 +1,5 @@
 import { createChannelTrace } from '@agent/trace';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime';
 import { createSessionStores } from '@controllers/session/sessionStores';
 import { toLogData } from './desktopLogUtils.js';
 

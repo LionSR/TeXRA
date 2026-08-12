@@ -9,7 +9,7 @@ import PQueue from 'p-queue';
 import {
   tryDefaultSession,
   type WorkspaceStorageTransitionHooks,
-} from '@agent/runtime/SessionHandle';
+} from '@agent/runtime';
 
 // Local imports - common
 import { isFileNotFoundError } from '@common/errors';

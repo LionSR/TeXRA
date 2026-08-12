@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 
-import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
-import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
+import {
+  selectAutoOpenFinalOutput,
+  type WorkflowFlowResult,
+} from '@agent/runtime';
 import { createLog } from '@logger/logUtils';
 
 const log = createLog('FinalOutputOpener');
