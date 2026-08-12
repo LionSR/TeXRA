@@ -2653,3 +2653,93 @@ describe('StreamSnapshotStore', () => {
     );
   });
 });
+
+describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
+  setupPlatform(() => createTempDirPlatform('texra-snapshot-', tempDirs));
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await cleanupTempDirs(tempDirs);
+  });
+
+  function unseededWarnings(warnSpy: {
+    mock: { calls: unknown[][] };
+  }): string[] {
+    return warnSpy.mock.calls
+      .map(([, message]) => String(message))
+      .filter((message) => message.includes('unestablished disk provenance'));
+  }
+
+  it('warns once per accessor and stream while still serving the default', async () => {
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const store = new StreamSnapshotStore();
+
+    // The loud default: callers still get the empty shape, but the read is
+    // reported instead of silently degrading.
+    expect(store.getRunMetadata(STREAM).executionId).toBeUndefined();
+    expect(store.getOutputFiles(STREAM)).toEqual({});
+    expect(store.getWorkPlan(STREAM).todos).toEqual([]);
+    // Repeats do not spam.
+    store.getRunMetadata(STREAM);
+    store.getOutputFiles(STREAM);
+    // A different stream warns separately.
+    store.getRunMetadata(OTHER_STREAM);
+
+    const warnings = unseededWarnings(warnSpy);
+    expect(warnings).toHaveLength(4);
+    expect(warnings[0]).toContain('getRunMetadata');
+    expect(warnings[0]).toContain(STREAM);
+    expect(warnings[1]).toContain('getOutputFiles');
+    expect(warnings[2]).toContain('getWorkPlan');
+    expect(warnings[3]).toContain(OTHER_STREAM);
+  });
+
+  it('stays quiet once disk provenance is established', async () => {
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    store.getRunMetadata(STREAM);
+    store.getOutputFiles(STREAM);
+    store.getWorkPlan(STREAM);
+    store.getParentStreamId(STREAM);
+
+    expect(unseededWarnings(warnSpy)).toHaveLength(0);
+  });
+
+  it('publishes whole metadata objects to the summary sink on run facts and hydration', async () => {
+    vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const store = new StreamSnapshotStore();
+    const seen: { stream: string; meta: Record<string, unknown> }[] = [];
+    store.attachSessionEvents(new SessionEventHub(), {
+      summaryMetaSink: (stream, meta) => seen.push({ stream, meta }),
+    });
+
+    snapshotFacts(store).setRunStart({
+      streamId: STREAM,
+      executionId: 'a77e77' as ExecutionId,
+      identity: { kind: 'agent', agent: 'search' },
+    });
+    snapshotFacts(store).setRunConfig(
+      STREAM,
+      toolUseConfig('search', 'deepseekproT'),
+      'a77e77' as ExecutionId,
+    );
+
+    const last = seen.at(-1);
+    expect(last?.stream).toBe(STREAM);
+    expect(last?.meta).toMatchObject({
+      identity: { kind: 'agent', agent: 'search' },
+      executionId: 'a77e77',
+      agentCategory: AgentCategory.ToolUse,
+      model: 'deepseekproT',
+    });
+
+    // Hydration republishes (the lazy backfill path for legacy summaries):
+    // settle the queued sidecar writes, then refresh from disk.
+    await store.flush();
+    seen.length = 0;
+    await store.preload([STREAM]);
+    expect(seen.at(-1)?.meta).toMatchObject({ executionId: 'a77e77' });
+  });
+});

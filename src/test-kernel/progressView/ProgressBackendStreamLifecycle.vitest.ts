@@ -309,6 +309,41 @@ describe('ProgressBackend', () => {
     });
   });
 
+  it('waits for both active-stream hydrations before syncing partial state', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, messages, reportTranscriptLoadError } = target;
+    const stream = 'hydration-race' as StreamTabId;
+    const sidecarError = new Error('sidecar unavailable');
+    let finishTranscriptLoad!: () => void;
+
+    backend.state.streamLogs.ensureStream(stream);
+    vi.spyOn(backend.state.streamLogs, 'ensureLoaded').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishTranscriptLoad = resolve;
+        }),
+    );
+    vi.spyOn(backend.state.snapshots, 'preload').mockRejectedValueOnce(
+      sidecarError,
+    );
+
+    const activation = backend.activateStream(stream);
+    await Promise.resolve();
+    expect(reportTranscriptLoadError).not.toHaveBeenCalled();
+
+    finishTranscriptLoad();
+    await activation;
+
+    expect(reportTranscriptLoadError).toHaveBeenCalledWith(
+      sidecarError,
+      stream,
+    );
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: stream,
+    });
+  });
+
   it('reports the stream whose full refresh fails after selection changes', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend, reportTranscriptLoadError } = target;
