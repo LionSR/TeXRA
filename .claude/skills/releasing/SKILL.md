@@ -45,10 +45,10 @@ Releases. No local `vsce` / `ovsx` / `npm publish` invocation and no OTP.
    `true`.
 
 5. **`llm-zoo` pin.** If the release changes `llm-zoo`, also update the exact
-   pin in `supabase/functions/relay/deno.json` and refresh
-   `supabase/functions/relay/deno.lock`. This is called out in the
-   `version-bump.yml` PR body but is easy to miss, since it isn't part of the
-   automated bump.
+   pins in `supabase/functions/relay/deno.json` and
+   `supabase/functions/log-usage/deno.json`, then refresh both adjacent
+   `deno.lock` files. This is called out in the `version-bump.yml` PR body but
+   is easy to miss, since it isn't part of the automated bump.
 
 ## Gotchas
 
