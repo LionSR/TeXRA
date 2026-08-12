@@ -6,7 +6,6 @@ import {
   type TeamPreset,
 } from '@common/teams/TeamPlan';
 import {
-  commitTeamRoster,
   resolveTeamRoster,
   type TeamRosterCatalog,
   type TeamRosterPresetResolution,
@@ -46,7 +45,7 @@ export interface SettingsAgentCatalogState {
     category: AgentCategory,
     enabledKeys: string[],
   ): Promise<void>;
-  setTeamRoster?(preset: AgentModePreset): Promise<void>;
+  setTeamRoster(preset: AgentModePreset): Promise<void>;
   getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getVisibleAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getCustomPresetsRaw(): unknown;
@@ -150,15 +149,8 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
     };
   }
 
-  async commitPresetResolution(
-    preset: AgentModePreset,
-    resolution: TeamRosterResolution,
-  ): Promise<void> {
-    if (this.deps.state.setTeamRoster) {
-      await this.deps.state.setTeamRoster(preset);
-      return;
-    }
-    await commitTeamRoster(this.deps.state, resolution);
+  async commitPreset(preset: AgentModePreset): Promise<void> {
+    await this.deps.state.setTeamRoster(preset);
   }
 
   async saveCurrentPreset(name: string): Promise<AgentModePreset> {
