@@ -8,7 +8,7 @@ import type { UsageRoute } from './schemas/usage';
  * `@model/codingPlanSubscriptions`; keeping this part dependency-free lets all
  * hosts, including browser webviews, render the same provider catalog.
  */
-export interface CodingPlanSubscriptionDescriptor {
+interface CodingPlanSubscriptionDescriptor {
   readonly id: 'glmCodingPlan' | 'kimiCode';
   readonly cliProvider: 'glm-code' | 'kimi-code';
   readonly cliAliases: readonly string[];
@@ -27,7 +27,6 @@ export interface CodingPlanSubscriptionDescriptor {
   readonly modelFamily: string;
   readonly retryFallbackName: string;
   readonly retrySourceName: string;
-  readonly disablesOpenRouterWhenEnabled: boolean;
   readonly usageVariantSettingKeys: readonly string[];
   readonly sectionId: string;
   readonly description: string;
@@ -40,33 +39,6 @@ export interface CodingPlanSubscriptionDescriptor {
 
 /** Canonical catalog of coding-plan providers supported by every host. */
 export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
-  Object.freeze({
-    id: 'glmCodingPlan',
-    cliProvider: 'glm-code',
-    cliAliases: ['glm', 'glmcode', 'glm-code', 'glm-coding', 'glm-coding-plan'],
-    apiProvider: 'glm',
-    credentialName: 'GLM',
-    credentialSetupUrl: 'https://open.bigmodel.cn or https://z.ai',
-    usageProvider: 'glmCodingPlan',
-    usageRoute: 'glm-coding-plan-subscription',
-    exhaustionReason: 'glm-coding-plan',
-    displayName: 'GLM Coding Plan',
-    preferenceLabel: 'Prefer GLM Coding Plan',
-    modelFamily: 'GLM models',
-    retryFallbackName: 'the regular GLM endpoint',
-    retrySourceName: 'GLM Coding Plan',
-    disablesOpenRouterWhenEnabled: false,
-    usageVariantSettingKeys: [GlobalStateKey.GLM_USE_CHINA],
-    sectionId: 'glm-coding-plan-subscription',
-    description:
-      'Use a GLM Coding Plan subscription for GLM models via the coding endpoint.',
-    consoleUrl: 'https://z.ai/subscribe',
-    keyLabel: '1. Get a subscription key',
-    keyHelp: 'Subscribe and create an API key in the Z.AI console.',
-    toggleLabel: '3. Enable the Coding Plan',
-    toggleHelp:
-      'Turn on "GLM Coding Plan" on the GLM row so requests route through the coding endpoint with your plan\u2019s monthly quota.',
-  }),
   Object.freeze({
     id: 'kimiCode',
     cliProvider: 'kimi-code',
@@ -82,7 +54,6 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     modelFamily: 'Kimi models',
     retryFallbackName: 'your own Moonshot API keys',
     retrySourceName: 'Kimi Code subscription',
-    disablesOpenRouterWhenEnabled: true,
     usageVariantSettingKeys: [],
     sectionId: 'kimi-code-subscription',
     description: 'Use a Kimi Code membership for the kimi-for-coding models.',
@@ -92,6 +63,32 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     toggleLabel: '3. Optional: prefer Kimi Code',
     toggleHelp:
       'Enable "Prefer Kimi Code" on the same row so K3 also uses your Kimi Code subscription; the kimi-for-coding models always do.',
+  }),
+  Object.freeze({
+    id: 'glmCodingPlan',
+    cliProvider: 'glm-code',
+    cliAliases: ['glm', 'glmcode', 'glm-code', 'glm-coding', 'glm-coding-plan'],
+    apiProvider: 'glm',
+    credentialName: 'GLM',
+    credentialSetupUrl: 'https://open.bigmodel.cn or https://z.ai',
+    usageProvider: 'glmCodingPlan',
+    usageRoute: 'glm-coding-plan-subscription',
+    exhaustionReason: 'glm-coding-plan',
+    displayName: 'GLM Coding Plan',
+    preferenceLabel: 'Prefer GLM Coding Plan',
+    modelFamily: 'GLM models',
+    retryFallbackName: 'the regular GLM endpoint',
+    retrySourceName: 'GLM Coding Plan',
+    usageVariantSettingKeys: [GlobalStateKey.GLM_USE_CHINA],
+    sectionId: 'glm-coding-plan-subscription',
+    description:
+      'Use a GLM Coding Plan subscription for GLM models via the coding endpoint.',
+    consoleUrl: 'https://z.ai/subscribe',
+    keyLabel: '1. Get a subscription key',
+    keyHelp: 'Subscribe and create an API key in the Z.AI console.',
+    toggleLabel: '3. Enable the Coding Plan',
+    toggleHelp:
+      'Turn on "GLM Coding Plan" on the GLM row so requests route through the coding endpoint with your plan\u2019s monthly quota.',
   }),
 ] as const satisfies readonly CodingPlanSubscriptionDescriptor[]);
 
