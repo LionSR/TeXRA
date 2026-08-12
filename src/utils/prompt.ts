@@ -114,7 +114,9 @@ let promptEnvironmentPromise: Promise<import('nunjucks').Environment> | null =
 function promptEnvironment(): Promise<import('nunjucks').Environment> {
   promptEnvironmentPromise ??= import('nunjucks').then(
     ({ default: nunjucks }) =>
-      new nunjucks.Environment(undefined, { autoescape: false }),
+      new nunjucks.Environment(new nunjucks.FileSystemLoader('.'), {
+        autoescape: false,
+      }),
   );
   return promptEnvironmentPromise;
 }
