@@ -284,11 +284,10 @@ export async function executeCliRequest(
         });
         return true;
       } catch (error) {
-        // The runtime's ordinary artifact drain owns failure reporting and
-        // aggregation with any primary run error. A host-side drain failure
-        // may already have abandoned the lease; returning false asks the
-        // runtime to make its best effort without letting this memoized hook
-        // replace the primary error when the CLI awaits it again on shutdown.
+        // Record the original drain failure for the one-shot runtime adapter
+        // below, which rethrows it into runAgent's artifact aggregate. This
+        // memoized operation itself resolves false so the outer shutdown await
+        // cannot rethrow the same error over the primary run failure.
         if (!(error instanceof ExecutionLeaseLostError)) {
           shutdownArtifactFailure = error;
         }
