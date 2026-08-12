@@ -212,26 +212,17 @@ export class MultiAgentTab extends LitElement {
     });
   }
 
-  private isOrchestratorAgent(name: string): boolean {
-    // Prefer the capability-based list (catches roots like `engineer` that
-    // don't carry "orchestrator" in their name); keep the name heuristic as a
-    // fallback for presets referencing agents the registry hasn't loaded.
-    return (
-      this.orchestratorAgents.includes(name) ||
-      name.toLowerCase().includes('orchestrator')
-    );
-  }
-
   private renderPresetCard(
     preset: AgentModePreset,
     deletable: boolean,
   ): TemplateResult {
     const allAgents = [...preset.agents.toolUse, ...preset.agents.workflow];
+    const orchestratorNames = new Set(this.orchestratorAgents);
     const orchestratorAgents = allAgents.filter((name) =>
-      this.isOrchestratorAgent(name),
+      orchestratorNames.has(name),
     );
     const teammateAgents = allAgents.filter(
-      (name) => !this.isOrchestratorAgent(name),
+      (name) => !orchestratorNames.has(name),
     );
     const isActive = this.activePresetId === preset.id;
     return html`
@@ -239,6 +230,7 @@ export class MultiAgentTab extends LitElement {
         class=${classMap({ 'preset-card': true, active: isActive })}
         role="button"
         tabindex="0"
+        aria-label="Apply ${preset.name} team"
         @click=${() => this.handlePresetClick(preset)}
         @keydown=${(e: KeyboardEvent) => this.handlePresetKey(e, preset)}
         title="Apply ${preset.name} team"
