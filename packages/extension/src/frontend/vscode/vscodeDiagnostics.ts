@@ -7,11 +7,11 @@
 
 import * as vscode from 'vscode';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 
 import { raceWithTimeout } from './raceWithTimeout';
 
-const CHANNEL = 'VscodeDiagnostics';
+const log = createLog('VscodeDiagnostics');
 
 /**
  * Wait for diagnostics to change for a specific file.
@@ -39,6 +39,6 @@ export async function waitForDiagnosticsChange(
   );
 
   if (raced.timedOut) {
-    logger.debug(CHANNEL, `Timed out waiting for diagnostics: ${uri.fsPath}`);
+    log.debug(`Timed out waiting for diagnostics: ${uri.fsPath}`);
   }
 }

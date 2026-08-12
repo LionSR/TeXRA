@@ -5,7 +5,7 @@ import {
   flowKey,
   type FlowRecord,
 } from '@agent/node/persistedFlow';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import {
   ExecutionMetaCoreSchema,
   RUN_OUTCOME,
@@ -17,7 +17,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { getExecutionStore } from './ExecutionKVStore';
 
-const CHANNEL = 'Resumability';
+const log = createLog('Resumability');
 
 const ResumableSharedSchema = z.record(z.string(), z.unknown());
 const ResumableFlowRecordSchema = PersistedFlowRecordEnvelopeSchema.refine(
@@ -87,8 +87,7 @@ export async function deriveResumability(
   try {
     rawMeta = await store.read('meta');
   } catch (error) {
-    logger.debug(
-      CHANNEL,
+    log.debug(
       `Failed to read execution metadata for ${executionId}: ${toErrorMessage(
         error,
       )}`,
@@ -103,8 +102,7 @@ export async function deriveResumability(
   if (rawMeta != null) {
     const metaResult = ExecutionMetaCoreSchema.safeParse(rawMeta);
     if (!metaResult.success) {
-      logger.debug(
-        CHANNEL,
+      log.debug(
         `Invalid execution metadata for ${executionId}: ${toErrorMessage(
           metaResult.error,
         )}`,
@@ -129,8 +127,7 @@ export async function deriveResumability(
   try {
     rawFlowRecord = await store.read(flowKey(executionId));
   } catch (error) {
-    logger.debug(
-      CHANNEL,
+    log.debug(
       `Failed to read flow record for ${executionId}: ${toErrorMessage(error)}`,
     );
     return {

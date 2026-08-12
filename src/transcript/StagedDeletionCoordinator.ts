@@ -30,7 +30,7 @@ import pMap from 'p-map';
 
 // Local imports - shared infrastructure
 import { isFileNotFoundError } from '@common/errors';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -46,7 +46,7 @@ import {
 } from './streamDataPaths';
 
 /** Logged under the store's channel: this is one of its internals. */
-const CHANNEL = 'StreamSnapshotStore';
+const log = createLog('StreamSnapshotStore');
 
 /** Bounded fan-out for reconciling many streams' staged directories, so a
  *  crash-recovery sweep does not open a file handle per stream. */
@@ -160,8 +160,7 @@ export class StagedDeletionCoordinator {
           }
         })
         .catch((err: unknown) =>
-          logger.warn(
-            CHANNEL,
+          log.warn(
             `Failed to persist ${key}.json for stream ${stream}; sidecar remains buffered.`,
             { data: err },
           ),
@@ -248,11 +247,9 @@ export class StagedDeletionCoordinator {
           decodeStreamId(encoded),
         );
         if (!parsedStream.success) {
-          logger.warn(
-            CHANNEL,
-            `Ignoring invalid staged snapshot directory ${encoded}`,
-            { data: parsedStream.error },
-          );
+          log.warn(`Ignoring invalid staged snapshot directory ${encoded}`, {
+            data: parsedStream.error,
+          });
           return;
         }
         const stream = parsedStream.data;
@@ -529,8 +526,7 @@ export class StagedDeletionCoordinator {
               try {
                 await StorageFS.delete(stagedDir, { recursive: true });
               } catch (error) {
-                logger.warn(
-                  CHANNEL,
+                log.warn(
                   `Stream ${stream} was deleted, but staged snapshot cleanup was incomplete.`,
                   { data: error },
                 );

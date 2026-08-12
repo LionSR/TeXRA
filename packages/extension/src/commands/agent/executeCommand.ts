@@ -7,10 +7,10 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { runAgent } from '@agent/runtime/runAgent';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 
-const CHANNEL = 'ExecuteCommand';
+const log = createLog('ExecuteCommand');
 
 interface WrappedExecuteInput {
   config: unknown;
@@ -62,7 +62,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
   } catch (error) {
     if (error instanceof ZodError) {
       const message = `Invalid agent configuration. ${z.prettifyError(error)}`;
-      logger.warn(CHANNEL, message, { data: error });
+      log.warn(message, { data: error });
       void vscode.window.showErrorMessage(message);
       return;
     }

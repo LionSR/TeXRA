@@ -9,7 +9,7 @@ import { LRUCache } from 'lru-cache';
 import which from 'which';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { normalizeFilePath, unique } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { hasExtension } from '@utils/core/pathCore';
@@ -20,7 +20,7 @@ export const IS_WINDOWS = process.platform === 'win32';
 // Common LaTeX tool names used across the system
 const TEX_TOOLS = ['latexdiff', 'latexindent', 'latexmk'] as const;
 
-const CHANNEL = 'platformPaths';
+const log = createLog('platformPaths');
 
 // Cache for extra directories to avoid repeated glob operations
 let cachedExtraDirs: string[] | null = null;
@@ -296,7 +296,7 @@ export function findToolInCommonPaths(tool: string): string | null {
 function findToolInCommonPathsUncached(tool: string): string | null {
   // Basic security validation
   if (!isPathSafe(tool)) {
-    logger.warn(CHANNEL, `Unsafe tool name rejected: ${tool}`);
+    log.warn(`Unsafe tool name rejected: ${tool}`);
     return null;
   }
   const candidates = [tool];

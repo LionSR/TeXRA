@@ -8,12 +8,12 @@ import {
   type FileListConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 import { getFilesRecursively } from './listing';
 
-const CHANNEL = 'FileLister';
+const log = createLog('FileLister');
 
 export class FileLister {
   public static initialize(context: vscode.ExtensionContext): void {
@@ -48,7 +48,7 @@ export class FileLister {
 
   private async listFiles(config: FileListConfig): Promise<string[]> {
     if (!this.workspacePath) {
-      logger.warn(CHANNEL, 'No workspace folder found');
+      log.warn('No workspace folder found');
       return [];
     }
     return getFilesRecursively(this.workspacePath, config);

@@ -1,6 +1,6 @@
 // Pure viewport math for bounded pending transcript panes.
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -11,7 +11,7 @@ import { isRenderableTranscriptEntry } from './transcriptEntries';
 import type { ConversationEntry } from '../state/cliState';
 
 const FAILED_ENTRY_ESTIMATE_ROWS = 1;
-const CHANNEL = 'transcriptViewport';
+const log = createLog('transcriptViewport');
 /** Entry ids already reported, so a persistently-throwing entry is logged once
  *  instead of once per stream-sync tick (the estimate path runs per frame). */
 const brokenEntryIdsReported = new Set<string>();
@@ -29,8 +29,7 @@ function estimateEntryRows(
   } catch (error) {
     if (!brokenEntryIdsReported.has(entry.id)) {
       brokenEntryIdsReported.add(entry.id);
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Failed to estimate rows for ${entry.role} entry ${entry.id}; assuming ${FAILED_ENTRY_ESTIMATE_ROWS}: ${toErrorMessage(error)}`,
       );
     }

@@ -12,7 +12,7 @@ import {
 import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
 import { throwUnwrapAggregate } from '@agent/storage/storageErrors';
 import { isBackgroundShellStream } from '@agent/runtime/streamTab';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 import type { StagedStreamSnapshotDeletion } from '@transcript/StagedDeletionCoordinator';
@@ -20,7 +20,7 @@ import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 import { unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const CHANNEL = 'SessionStores';
+const log = createLog('SessionStores');
 
 type DeleteExecutionFn = (
   executionId: ExecutionId,
@@ -190,8 +190,7 @@ export class SessionStores {
     try {
       await this.onCanonicalStreamDeleted(stream);
     } catch (error) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Stream ${stream} was deleted, but canonical session cleanup was incomplete: ${toErrorMessage(error)}`,
         { data: error },
       );
@@ -206,8 +205,7 @@ export class SessionStores {
     try {
       await this.onChildrenDetached(stream, children);
     } catch (error) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Stream ${stream} was deleted, but child-detachment projection was incomplete: ${toErrorMessage(error)}`,
         { data: error },
       );
@@ -240,8 +238,7 @@ export class SessionStores {
       try {
         await this.deleteAdjacentStreamState(stream);
       } catch (error) {
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Stream ${stream} was retained because cleanup was incomplete: ${toErrorMessage(error)}`,
           { data: error },
         );
@@ -257,15 +254,13 @@ export class SessionStores {
       case 'completed':
         return outcome.result.status === 'active' ? 'active' : 'deleted';
       case 'streams-deleted':
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Stream ${stream} was deleted, but execution ${executionId} cleanup was incomplete: ${toErrorMessage(outcome.error)}`,
           { data: outcome.error },
         );
         return 'deleted';
       case 'retained':
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Stream ${stream} was retained because cleanup was incomplete: ${toErrorMessage(outcome.error)}`,
           { data: outcome.error },
         );
@@ -322,7 +317,7 @@ export class SessionStores {
       reconciliation.pendingCleanup.length > 0 ||
       reconciliation.discarded.length > 0
     ) {
-      logger.info(CHANNEL, 'Reconciled interrupted stream deletions', {
+      log.info('Reconciled interrupted stream deletions', {
         data: reconciliation,
       });
     }
@@ -355,8 +350,7 @@ export class SessionStores {
     const retainUnreadable = (stream: StreamTabId, error: unknown): void => {
       // Per-stream isolation: one unreadable ownership record retains that
       // stream instead of failing the whole bulk deletion before it starts.
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Stream ${stream} was retained because its execution ownership could not be read: ${toErrorMessage(error)}`,
         { data: error },
       );
@@ -392,8 +386,7 @@ export class SessionStores {
           await this.deleteAdjacentStreamState(stream);
           if (canonicalStreams.has(stream)) await this.notifyDeleted(stream);
         } catch (error) {
-          logger.warn(
-            CHANNEL,
+          log.warn(
             `Failed to delete stream ${stream}: ${toErrorMessage(error)}`,
             { data: error },
           );
@@ -425,16 +418,14 @@ export class SessionStores {
           return;
         }
         if (outcome.kind === 'streams-deleted') {
-          logger.warn(
-            CHANNEL,
+          log.warn(
             `Streams for execution ${executionId} were deleted, but execution cleanup was incomplete: ${toErrorMessage(outcome.error)}`,
             { data: outcome.error },
           );
           await this.notifyCanonicalDeletions(streams, canonicalStreams);
           return;
         }
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Failed to delete streams for execution ${executionId}: ${toErrorMessage(outcome.error)}`,
           { data: outcome.error },
         );
@@ -470,8 +461,7 @@ export class SessionStores {
       new Set(this.streamLogs.keys()),
     );
     if (orphans.streams.length > 0 || orphans.executionIds.length > 0) {
-      logger.info(
-        CHANNEL,
+      log.info(
         `Removed ${orphans.streams.length} orphaned stream sidecar(s) and ${orphans.executionIds.length} execution dir(s).`,
         { data: orphans },
       );
@@ -514,22 +504,17 @@ export class SessionStores {
         else retained.push(stream);
       } catch (error) {
         retained.push(stream);
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Failed to sweep leftover background shell ${stream}: ${toErrorMessage(error)}`,
           { data: error },
         );
       }
     }
     if (swept.length > 0) {
-      logger.info(
-        CHANNEL,
-        `Swept ${swept.length} leftover background-shell stream(s).`,
-      );
+      log.info(`Swept ${swept.length} leftover background-shell stream(s).`);
     }
     if (retained.length > 0) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `${retained.length} leftover background-shell stream(s) could not be swept and stay listed.`,
         { data: { retained } },
       );
@@ -550,8 +535,7 @@ export class SessionStores {
     liveStreams: ReadonlySet<StreamTabId>,
   ): Promise<{ streams: StreamTabId[]; executionIds: ExecutionId[] }> {
     if (this.streamLogs.mode.kind !== 'persistent') {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Skipped the orphaned-stream sweep: the transcript index is ${this.streamLogs.mode.kind} and cannot say which persisted streams are still live.`,
       );
       return { streams: [], executionIds: [] };
@@ -580,16 +564,14 @@ export class SessionStores {
             );
             if (outcome.kind === 'streams-deleted') {
               sweptStreams.push(stream);
-              logger.warn(
-                CHANNEL,
+              log.warn(
                 `Orphaned stream ${stream} was removed, but execution ${executionId} cleanup was incomplete.`,
                 { data: outcome.error },
               );
               return;
             }
             if (outcome.kind === 'retained') {
-              logger.warn(
-                CHANNEL,
+              log.warn(
                 `Skipping orphaned execution cleanup for ${executionId}; startup will continue.`,
                 { data: outcome.error },
               );
@@ -604,8 +586,7 @@ export class SessionStores {
           }
           sweptStreams.push(stream);
         } catch (error) {
-          logger.warn(
-            CHANNEL,
+          log.warn(
             `Skipping orphaned stream cleanup for ${stream}; startup will continue.`,
             { data: error },
           );
@@ -630,8 +611,7 @@ export class SessionStores {
     try {
       references = await this.listExecutionStreamReferences();
     } catch (error) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Skipping execution-side orphan cleanup; startup will continue: ${toErrorMessage(error)}`,
         { data: error },
       );
@@ -655,8 +635,7 @@ export class SessionStores {
         });
         if (result?.status === 'deleted') swept.push(executionId);
       } catch (error) {
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Skipping orphaned execution cleanup for ${executionId}; startup will continue.`,
           { data: error },
         );
@@ -693,8 +672,7 @@ export class SessionStores {
     ]);
     for (const result of cleanup) {
       if (result.status === 'fulfilled') continue;
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Stream ${stream} was deleted, but auxiliary cleanup was incomplete: ${toErrorMessage(result.reason)}`,
         { data: result.reason },
       );
@@ -758,8 +736,7 @@ export class SessionStores {
     ]);
     for (const result of cleanup) {
       if (result.status === 'fulfilled') continue;
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Streams were deleted, but auxiliary cleanup was incomplete: ${toErrorMessage(result.reason)}`,
         { data: result.reason },
       );

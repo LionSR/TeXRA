@@ -2,7 +2,7 @@
 import { toJSONSchema } from 'zod';
 
 // Local imports - agent
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 
 // Type imports
 import type { ToolDefinition } from '@model/ToolDefinition';
@@ -31,7 +31,7 @@ import type {
 // Shared Tool Conversion Utilities
 // ============================================================================
 
-const CHANNEL = 'toolConversion';
+const log = createLog('toolConversion');
 
 type JSONSchemaObject = Record<string, unknown>;
 
@@ -401,8 +401,7 @@ function toObjectParametersSchema(
   if (!schema) return EMPTY_TOOL_PARAMETERS_SCHEMA;
   if (schema.type === 'object') return schema;
   if (schema.type !== undefined) {
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `${provider} tool parameters must be object schemas; received type "${String(schema.type)}". Falling back to an empty object schema.`,
     );
     return EMPTY_TOOL_PARAMETERS_SCHEMA;

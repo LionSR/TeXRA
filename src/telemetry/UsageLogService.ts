@@ -5,7 +5,7 @@ import pTimeout from 'p-timeout';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { UsageRoute } from '@shared/schemas';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
@@ -19,7 +19,7 @@ import type {
   UsageLogResponse,
 } from './UsageLogTypes';
 
-const CHANNEL = 'UsageLogService';
+const log = createLog('UsageLogService');
 
 const USAGE_LOG_ENDPOINT = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/log-usage`;
 const MAX_QUEUE_SIZE = 1000;
@@ -123,8 +123,7 @@ function isTelemetryEnabledBySetting(): boolean {
     (value) => typeof value !== 'boolean',
   );
   if (malformed !== undefined) {
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof malformed}); treating optional usage logging as disabled`,
     );
     return false;
@@ -179,14 +178,12 @@ class UsageLogServiceImpl {
     this.startFlushTimer();
 
     if (isTelemetryDisabledByEnv()) {
-      logger.info(
-        CHANNEL,
+      log.info(
         `Optional usage logging is disabled by the environment (${TELEMETRY_OPT_OUT_ENV_VARS.join(' / ')}); only plan-accounting rounds are reported`,
       );
     }
 
-    logger.debug(
-      CHANNEL,
+    log.debug(
       `UsageLogService initialized (batchSize=${this.config.batchSize}, flushIntervalMs=${this.config.flushIntervalMs}, enabled=${this.config.enabled})`,
     );
   }
@@ -198,7 +195,7 @@ class UsageLogServiceImpl {
     if (!isPlanAccounting(entry) && !isTelemetryEnabledBySetting()) return;
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
-      logger.warn(CHANNEL, 'Queue full, dropping oldest entry');
+      log.warn('Queue full, dropping oldest entry');
       this.queue.shift();
     }
 
@@ -208,10 +205,7 @@ class UsageLogServiceImpl {
       extensionVersion: this.extensionVersion,
       editorType: this.editorType,
     });
-    logger.debug(
-      CHANNEL,
-      `Queued usage entry (queue size: ${this.queue.length})`,
-    );
+    log.debug(`Queued usage entry (queue size: ${this.queue.length})`);
 
     if (this.queue.length >= this.config.batchSize) {
       void this.flush();
@@ -252,7 +246,7 @@ class UsageLogServiceImpl {
     try {
       const token = await SupabaseClient.getRelayAccessToken();
       if (!token) {
-        logger.debug(CHANNEL, 'Skipping flush - user not authenticated');
+        log.debug('Skipping flush - user not authenticated');
         return USAGE_LOG_FLUSH_OUTCOME.PENDING;
       }
 
@@ -279,8 +273,7 @@ class UsageLogServiceImpl {
         const kept = batch.entries.filter(isPlanAccounting);
         const dropped = batch.entries.length - kept.length;
         if (dropped > 0) {
-          logger.debug(
-            CHANNEL,
+          log.debug(
             `Usage logging is disabled; dropped ${dropped} optional ${dropped === 1 ? 'entry' : 'entries'} without sending`,
           );
         }
@@ -292,8 +285,7 @@ class UsageLogServiceImpl {
         batch = { ...batch, entries: kept };
       }
 
-      logger.debug(
-        CHANNEL,
+      log.debug(
         `Flushing ${batch.entries.length} entries (batch: ${batch.batchId})`,
       );
 
@@ -306,8 +298,7 @@ class UsageLogServiceImpl {
         }
         throw new Error(message);
       }
-      logger.debug(
-        CHANNEL,
+      log.debug(
         `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
       );
       return USAGE_LOG_FLUSH_OUTCOME.ACCEPTED;
@@ -316,8 +307,7 @@ class UsageLogServiceImpl {
       if (batch) this.retryBatch = batch;
       const requeuedMessage =
         requeued > 0 ? `; requeued ${requeued} entries` : '';
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Failed to send usage batch${requeuedMessage}: ${toErrorMessage(error)}`,
       );
       return USAGE_LOG_FLUSH_OUTCOME.PENDING;
@@ -325,8 +315,7 @@ class UsageLogServiceImpl {
   }
 
   private reportPermanentRejection(batch: UsageLogBatch, reason: string): void {
-    logger.error(
-      CHANNEL,
+    log.error(
       `Usage batch ${batch.batchId} was permanently rejected; discarded ${batch.entries.length} entries so later batches can continue`,
       {
         data: {
@@ -401,13 +390,13 @@ class UsageLogServiceImpl {
     await pTimeout(this.waitForFlushQuiescence(), {
       milliseconds: DISPOSE_WARNING_TIMEOUT_MS,
       fallback: () => {
-        logger.warn(CHANNEL, 'Dispose timeout waiting for in-flight flush');
+        log.warn('Dispose timeout waiting for in-flight flush');
       },
     });
 
     await this.flush();
 
-    logger.debug(CHANNEL, 'UsageLogService disposed');
+    log.debug('UsageLogService disposed');
   }
 }
 

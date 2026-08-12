@@ -9,7 +9,7 @@ import { gfm } from 'turndown-plugin-gfm';
 import { execa } from 'execa';
 
 // Local imports - common
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - utils
@@ -39,7 +39,7 @@ function detectInputFormat(text: string): OutputFormat {
   return OutputFormat.MARKDOWN;
 }
 
-const CHANNEL = 'xmlConversion';
+const log = createLog('xmlConversion');
 
 /**
  * Cached pandoc availability check.
@@ -162,7 +162,7 @@ async function convertWithPandoc(text: string): Promise<string | null> {
     });
     return normalizePandocReferences(stdout);
   } catch (err) {
-    logger.error(CHANNEL, `Pandoc conversion failed: ${toErrorMessage(err)}`);
+    log.error(`Pandoc conversion failed: ${toErrorMessage(err)}`);
     return null;
   }
 }
