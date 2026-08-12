@@ -288,9 +288,8 @@ export async function initCliPlatform(
 
     // Reconcile the persisted enabled-models list against the current curated
     // defaults, as the extension and desktop hosts do at startup. The list
-    // lives in shared `~/.texra` state and the reconciliation is a no-op
-    // unless MODEL_LIST_VERSION changed, so a CLI-only user would otherwise
-    // keep retired models and never see new defaults until another host ran.
+    // lives in shared `~/.texra` state. Preferred defaults reconcile when
+    // MODEL_LIST_VERSION changes; retired entries are swept on every startup.
     try {
       const { added, removed } = await refreshModelListStateIfNeeded(
         stateStores.globalState,

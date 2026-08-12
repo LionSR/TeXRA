@@ -232,12 +232,8 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
     if (reason === 'openrouter-missing-key') {
       return `Model "${model}" requires an OpenRouter API key.`;
     }
-    const directProvider = resolveDirectModelApiKeyProvider(config);
     const modelSource = resolveModelSource(config) ?? config.provider;
     const providerName = providerDisplayName(modelSource);
-    if (!directProvider) {
-      return `Model "${model}" is provided by ${providerName}, which does not use provider API keys. Use a host that supports ${providerName} models or choose another model.`;
-    }
     const nextStep = allowsModelRelay(config)
       ? `Provide it, or enable ${INCLUDED_ACCESS.inline}.`
       : 'Provide it to continue.';
