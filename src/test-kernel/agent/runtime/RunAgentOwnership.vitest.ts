@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   clearTerminalExecutionState: vi.fn(),
   executeAgent: vi.fn(),
   finalizeExecution: vi.fn(),
-  getPersistedExecutionStreamId: vi.fn(),
   markOwnedExecutionLeaseUndurable: vi.fn(),
   registerExecution: vi.fn(),
   completeOwnedExecutionLease: vi.fn(),
@@ -37,7 +36,6 @@ vi.mock('@agent/storage/executionLease', () => ({
 vi.mock('@agent/storage/executionLifecycle', () => ({
   clearTerminalExecutionState: mocks.clearTerminalExecutionState,
   finalizeExecution: mocks.finalizeExecution,
-  getPersistedExecutionStreamId: mocks.getPersistedExecutionStreamId,
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({
@@ -84,14 +82,14 @@ describe('runAgent execution ownership', () => {
     vi.clearAllMocks();
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.acquireResumedExecutionLease.mockResolvedValue('acquired');
-    mocks.clearTerminalExecutionState.mockResolvedValue(undefined);
+    mocks.clearTerminalExecutionState.mockResolvedValue({
+      previousOutcome: undefined,
+      streamId: 'assistant#run-agent-owner',
+    });
     mocks.completeOwnedExecutionLease.mockResolvedValue(undefined);
     mocks.renewOwnedExecutionLease.mockResolvedValue(undefined);
     flushArtifacts.mockResolvedValue(undefined);
     mocks.finalizeExecution.mockResolvedValue(FINALIZE_RESULT);
-    mocks.getPersistedExecutionStreamId.mockResolvedValue(
-      'assistant#run-agent-owner',
-    );
     mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
   });
 
@@ -141,6 +139,10 @@ describe('runAgent execution ownership', () => {
     const order: string[] = [];
     mocks.clearTerminalExecutionState.mockImplementationOnce(async () => {
       order.push('clear');
+      return {
+        previousOutcome: undefined,
+        streamId: 'assistant#run-agent-owner',
+      };
     });
     mocks.executeAgent.mockImplementationOnce(async () => {
       order.push('execute');
@@ -226,9 +228,10 @@ describe('runAgent execution ownership', () => {
 
   it('restores a cancelled outcome when resume fails before lifecycle startup', async () => {
     const launchError = new Error('resume launch failed');
-    mocks.clearTerminalExecutionState.mockResolvedValueOnce(
-      RUN_OUTCOME.CANCELLED,
-    );
+    mocks.clearTerminalExecutionState.mockResolvedValueOnce({
+      previousOutcome: RUN_OUTCOME.CANCELLED,
+      streamId: 'assistant#run-agent-owner',
+    });
     mocks.executeAgent.mockRejectedValueOnce(launchError);
 
     await expect(launch()).rejects.toBe(launchError);

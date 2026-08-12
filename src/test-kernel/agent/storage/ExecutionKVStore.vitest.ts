@@ -211,14 +211,16 @@ describe('ExecutionKVStore meta read shims', () => {
     await getExecutionStore(id).write('meta', {
       timestamp: '2026-07-04T00:00:00.000Z',
       outcome: RUN_OUTCOME.CANCELLED,
+      streamId: 'assistant#resume-boundary',
     });
     await expect(getExecutionStore(id).readResultMeta()).resolves.toMatchObject(
       { result: { outcome: RUN_OUTCOME.CANCELLED } },
     );
 
-    await expect(clearTerminalExecutionState(id)).resolves.toBe(
-      RUN_OUTCOME.CANCELLED,
-    );
+    await expect(clearTerminalExecutionState(id)).resolves.toEqual({
+      previousOutcome: RUN_OUTCOME.CANCELLED,
+      streamId: 'assistant#resume-boundary',
+    });
     await getExecutionStore(id).writeResultMeta(
       interimResultMeta('Interim result from the resumed turn.'),
     );
@@ -229,13 +231,17 @@ describe('ExecutionKVStore meta read shims', () => {
     await expect(getExecutionStore(id).readMeta()).resolves.toEqual({
       schemaVersion: EXECUTION_META_SCHEMA_VERSION,
       timestamp: '2026-07-04T00:00:00.000Z',
+      streamId: 'assistant#resume-boundary',
     });
   });
 
   it('leaves an execution with no persisted metadata untouched at the resume boundary', async () => {
     const id = 'terminal-outcome-resume-no-meta' as ExecutionId;
 
-    await expect(clearTerminalExecutionState(id)).resolves.toBeUndefined();
+    await expect(clearTerminalExecutionState(id)).resolves.toEqual({
+      previousOutcome: undefined,
+      streamId: undefined,
+    });
 
     await expect(getExecutionStore(id).readMeta()).resolves.toBeNull();
   });

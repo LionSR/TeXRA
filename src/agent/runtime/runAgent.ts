@@ -1,8 +1,5 @@
 import { registerExecution } from '@agent/storage';
-import {
-  clearTerminalExecutionState,
-  getPersistedExecutionStreamId,
-} from '@agent/storage/executionLifecycle';
+import { clearTerminalExecutionState } from '@agent/storage/executionLifecycle';
 import {
   abandonOwnedExecutionLease,
   acquireResumedExecutionLease,
@@ -149,9 +146,9 @@ export async function runAgent(
         // previous run persisted; drop them before this run writes anything a
         // reader would project them onto.
         if (!shouldRegister) {
-          resumedStreamId = await getPersistedExecutionStreamId(executionId);
-          previousTerminalOutcome =
-            await clearTerminalExecutionState(executionId);
+          const cleared = await clearTerminalExecutionState(executionId);
+          resumedStreamId = cleared.streamId;
+          previousTerminalOutcome = cleared.previousOutcome;
         }
         const result = await executeAgent(config, executionId, {
           ...executeAgentOptions,
