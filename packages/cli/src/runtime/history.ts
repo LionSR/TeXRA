@@ -6,7 +6,6 @@ import pMap from 'p-map';
 import {
   deleteAllExecutions,
   deleteExecution,
-  deriveResumability,
   getExecutionStore,
   isUserVisibleExecution,
   listExecutions,
@@ -35,7 +34,7 @@ import {
   readCompletedRunConversation,
 } from '@transcript';
 
-import { readCliToolUseResumeDataForListing } from './toolUseResumeData';
+import { readCliResumeDataForListing } from './toolUseResumeData';
 import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
@@ -152,7 +151,6 @@ export async function readCliHistoryDetails(
     conversationResult,
     persistedWorkspaceFilePaths,
     generatedFiles,
-    resumability,
   ] = await Promise.all([
     store.readMeta(),
     store.readConfig(),
@@ -162,15 +160,13 @@ export async function readCliHistoryDetails(
     readCompletedRunConversation(id),
     store.readWorkspaceFiles(),
     listGeneratedFiles(id),
-    deriveResumability(id),
   ]);
   const conversation = conversationResult.conversation;
   const hasTranscriptEvidence =
     hasCompletedRunConversationEvidence(conversationResult);
-  const resumeData =
-    resumability.resumable && config
-      ? await readCliToolUseResumeDataForListing(id, config)
-      : null;
+  const resumeData = config
+    ? await readCliResumeDataForListing(id, config)
+    : null;
   const conversationPreview = createConversationPreview(conversation);
   const fullConversation = options.includeFullConversation
     ? createConversationTranscript(conversation)
@@ -214,7 +210,8 @@ export async function readCliHistoryDetails(
       : {}),
     files,
     hasFlowRecord: resumeData !== null,
-    currentModel: resumeData?.agentConfig.model,
+    currentModel:
+      resumeData?.type === 'toolUse' ? resumeData.agentConfig.model : undefined,
   };
 }
 
@@ -497,15 +494,15 @@ async function toCliHistoryEntry(
 ): Promise<CliHistoryEntry> {
   const config = entry.record;
   const inputBasename = firstInputBasename(config);
-  const resumability = await deriveResumability(entry.id);
-  const resumeData = resumability.resumable
-    ? await readCliToolUseResumeDataForListing(entry.id, config)
-    : null;
+  const resumeData = await readCliResumeDataForListing(entry.id, config);
   return {
     id: entry.id,
     timestamp: entry.timestamp,
     agent: config.agent,
-    model: resumeData?.agentConfig.model ?? config.model,
+    model:
+      resumeData?.type === 'toolUse'
+        ? resumeData.agentConfig.model
+        : config.model,
     status: resolveHistoryRunStatus({
       resumable: resumeData !== null,
       outcome: entry.outcome,
