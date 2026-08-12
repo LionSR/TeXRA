@@ -6,6 +6,7 @@
  */
 
 // Local imports
+import { findAgentByIdentifier } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
@@ -61,11 +62,10 @@ export function requireVisibleAgent(
   name: string,
   scope?: AgentDelegationScope,
 ): AgentEntry {
-  const agent = getDelegationAgent(category, name, scope);
+  const agents = getDelegationAgents(category, scope);
+  const agent = findAgentByIdentifier(agents, name);
   if (agent) return agent;
-  const available = getDelegationAgents(category, scope)
-    .map((a) => a.name)
-    .join(', ');
+  const available = agents.map((candidate) => candidate.name).join(', ');
   throw new Error(
     `Unknown ${category} agent '${name}'. Available: ${available}`,
   );
@@ -80,18 +80,20 @@ export function requireWorkflowOrToolUseAgent(
   name: string,
   scope?: AgentDelegationScope,
 ): { agent: AgentEntry; category: AgentCategory } {
-  let firstError: unknown;
+  const availableByCategory: string[] = [];
   for (const category of [
     AgentCategory.Workflow,
     AgentCategory.ToolUse,
   ] as const) {
-    try {
-      return { agent: requireVisibleAgent(category, name, scope), category };
-    } catch (error) {
-      firstError ??= error;
-    }
+    const agents = getDelegationAgents(category, scope);
+    const agent = findAgentByIdentifier(agents, name);
+    if (agent) return { agent, category };
+    const names = agents.map((candidate) => candidate.name).join(', ');
+    availableByCategory.push(`${category}: ${names || 'none'}`);
   }
-  throw firstError;
+  throw new Error(
+    `Unknown workflow or toolUse agent '${name}'. Available: ${availableByCategory.join('; ')}`,
+  );
 }
 
 /** Build a concise summary of proposal parameters for rejection echo. */
