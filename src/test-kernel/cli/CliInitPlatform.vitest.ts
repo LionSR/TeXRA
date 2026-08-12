@@ -97,6 +97,12 @@ vi.mock('@cli/runtime/supabaseAuth', () => ({
 
 vi.mock('@logger/logUtils', () => ({
   createChannelWriter: vi.fn(() => vi.fn()),
+  createLog: vi.fn(() => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  })),
   debug: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),

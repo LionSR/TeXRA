@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports
 import { currentSession } from '@agent/runtime/SessionHandle';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
 import {
@@ -21,7 +21,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { defineTool, toToolParameters } from './core/define';
 
-const CHANNEL = 'DiagnosticsTool';
+const log = createLog('DiagnosticsTool');
 
 const DiagnosticsPathSchema = z
   .string()
@@ -161,8 +161,7 @@ export class DiagnosticsTool extends defineTool({
       };
     } catch (error) {
       const detail = toErrorMessage(error);
-      logger.error(
-        CHANNEL,
+      log.error(
         `Failed to collect diagnostics for ${diagnosticsPath}: ${detail}`,
       );
       throw new ToolError(`Failed to collect diagnostics: ${detail}`);
@@ -200,7 +199,7 @@ export class DiagnosticsTool extends defineTool({
       return executed(summary, summary);
     } catch (error) {
       const detail = toErrorMessage(error);
-      logger.error(CHANNEL, `Failed to add criticism: ${detail}`);
+      log.error(`Failed to add criticism: ${detail}`);
       throw new ToolError(`Failed to add criticism: ${detail}`);
     }
   }

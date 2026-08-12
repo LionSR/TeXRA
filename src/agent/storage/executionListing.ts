@@ -13,7 +13,7 @@ import {
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
 import { isFileNotFoundError } from '@common/errors';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type {
   ExecutionId,
@@ -32,7 +32,7 @@ import {
   runWithInactiveExecutionLease,
 } from './executionLease';
 
-const CHANNEL = 'ExecutionListing';
+const log = createLog('ExecutionListing');
 const EXECUTION_ID_PATTERN = /^[0-9a-f][-0-9a-f]*$/i;
 const EXECUTION_STORAGE_CONCURRENCY = 32;
 
@@ -153,8 +153,7 @@ export async function listExecutionStreamReferences(): Promise<
         if (!meta?.streamId) return null;
         return { executionId, streamId: meta.streamId };
       } catch (error) {
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Skipping execution ${executionId} with unreadable metadata during orphan cleanup: ${toErrorMessage(error)}`,
           { data: error },
         );
@@ -217,10 +216,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
         }
         return { ...base, kind: 'run', identity, record };
       } catch (error) {
-        logger.warn(
-          CHANNEL,
-          `Skipping corrupt execution ${id}: ${toErrorMessage(error)}`,
-        );
+        log.warn(`Skipping corrupt execution ${id}: ${toErrorMessage(error)}`);
         return null;
       }
     },
@@ -230,8 +226,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
   // One warning per listing pass, not one per row — a directory full of old
   // rows must degrade loudly, not spam.
   if (preIdentityIds.length > 0) {
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `${preIdentityIds.length} pre-identity execution row(s) listed as incomplete (e.g. ${preIdentityIds[0]}): reader retired per #9590 Stage 7`,
     );
   }

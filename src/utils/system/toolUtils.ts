@@ -6,7 +6,7 @@ import { execa } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
 // Local imports
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { ExecResult } from '@shared/schemas/opResults';
 import {
@@ -31,7 +31,7 @@ import { IS_WINDOWS, extendEnvPath } from './platformPaths';
 import { BinaryResolver } from './binaryResolver';
 import { executeCommand, executeCommandSync } from './execUtils';
 
-const CHANNEL = 'toolUtils';
+const log = createLog('toolUtils');
 
 interface ToolConfig {
   command?: string | string[]; // Optional - defaults to "${toolName} --version"
@@ -46,10 +46,7 @@ async function reportMissingTool(
   try {
     await platform().toolMissingHandler?.(message, openDocsCommand);
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Failed to report missing tool: ${toErrorMessage(err)}`,
-    );
+    log.error(`Failed to report missing tool: ${toErrorMessage(err)}`);
   }
 }
 
@@ -161,8 +158,7 @@ async function tryExeca(
   try {
     return await execa(cmd, args, { env, reject: false, timeout: 5000 });
   } catch (execErr) {
-    logger.info(
-      CHANNEL,
+    log.info(
       `Exception executing ${label}'${cmd}': ${toErrorMessage(execErr)}`,
     );
     return null;
@@ -198,15 +194,11 @@ async function executeWithFallback(
   args: string[],
   execEnv: NodeJS.ProcessEnv,
 ): Promise<boolean> {
-  logger.debug(
-    CHANNEL,
-    `Checking tool '${cmd}' with args [${args.join(', ')}]`,
-  );
+  log.debug(`Checking tool '${cmd}' with args [${args.join(', ')}]`);
 
   let result = await tryExeca(cmd, args, '', execEnv);
   if (!result) return false;
-  logger.debug(
-    CHANNEL,
+  log.debug(
     `Initial check for '${cmd}': exitCode=${result.exitCode}, ` +
       `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
       `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
@@ -215,19 +207,17 @@ async function executeWithFallback(
   // Accept if exit code is 0, OR if we got version-like output
   // (some tools return non-zero for --version but still output version info)
   if (result.exitCode === 0 || hasVersionOutput(result)) {
-    logger.debug(CHANNEL, `Tool '${cmd}' detected successfully`);
+    log.debug(`Tool '${cmd}' detected successfully`);
     return true;
   }
 
   const fallback = BinaryResolver.resolveOptionalCommand(cmd, args);
-  logger.debug(
-    CHANNEL,
+  log.debug(
     `Fallback search for '${cmd}': ${fallback?.resolvedPath ?? 'not found'}`,
   );
 
   if (fallback) {
-    logger.debug(
-      CHANNEL,
+    log.debug(
       `Running fallback '${fallback.command}' with args [${fallback.args.join(', ')}]`,
     );
     result = await tryExeca(
@@ -237,8 +227,7 @@ async function executeWithFallback(
       execEnv,
     );
     if (!result) return false;
-    logger.debug(
-      CHANNEL,
+    log.debug(
       `Fallback result: exitCode=${result.exitCode}, ` +
         `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
         `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
@@ -250,8 +239,7 @@ async function executeWithFallback(
   }
 
   // Log at info level so it shows in output channel by default
-  logger.info(
-    CHANNEL,
+  log.info(
     `Tool '${cmd}' not detected. Last result: exitCode=${result.exitCode}, ` +
       `stdout=${result.stdout?.slice(0, 200) || '(empty)'}, ` +
       `stderr=${result.stderr?.slice(0, 200) || '(empty)'}`,
@@ -298,8 +286,7 @@ export async function checkToolInstalled(
     const execEnv = { ...process.env, PATH: extendedPath };
 
     // Log PATH info once (not per-command)
-    logger.debug(
-      CHANNEL,
+    log.debug(
       `PATH contains ${extendedPath.split(path.delimiter).length} entries, ` +
         `includes /usr/bin: ${extendedPath.includes('/usr/bin')}`,
     );
@@ -335,8 +322,7 @@ export async function checkToolInstalled(
   } catch (err) {
     // The user-facing message is always the tool's own install guidance, so
     // log the underlying cause instead of dropping it.
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Tool check for '${toolName ?? 'custom config'}' failed: ${toErrorMessage(err)}`,
     );
     if (showError) {
@@ -450,10 +436,7 @@ export async function checkCoreDependencies(
   } catch (error) {
     // If checking fails, assume all tools are missing to prompt user to check
     // This is safer than silently ignoring the error
-    logger.error(
-      CHANNEL,
-      `Failed to check core dependencies: ${toErrorMessage(error)}`,
-    );
+    log.error(`Failed to check core dependencies: ${toErrorMessage(error)}`);
     return ['latexindent', 'perl', 'gs', 'gm/magick'];
   }
 }
@@ -485,7 +468,7 @@ export function detectPackageManager(): SystemPackageManager | null {
     if (hasPackageManager(name)) return name;
   }
 
-  logger.debug(CHANNEL, 'No package manager detected');
+  log.debug('No package manager detected');
   return null;
 }
 
@@ -506,8 +489,7 @@ export function hasPackageManager(name: SystemPackageManager): boolean {
 
   const available = executeCommandSync([name, '--version']).success;
   packageManagerAvailability.set(name, available);
-  logger.debug(
-    CHANNEL,
+  log.debug(
     available
       ? `Package manager detected: ${name}`
       : `Package manager not found: ${name}`,

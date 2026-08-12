@@ -6,7 +6,7 @@ import { Buffer } from 'node:buffer';
 import { toFile } from '@anthropic-ai/sdk';
 
 // Local imports
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
@@ -23,7 +23,7 @@ import type {
 } from '@anthropic-ai/sdk/resources/messages';
 import type { BetaRequestDocumentBlock } from '@anthropic-ai/sdk/resources/beta/messages';
 
-const CHANNEL = 'AnthropicDocuments';
+const log = createLog('AnthropicDocuments');
 
 /**
  * Extracts all document blocks from a content block array, including those
@@ -207,8 +207,7 @@ export async function replaceDocumentDataWithUploads(
       buffer = Buffer.from(base64Data, 'base64');
 
       const pageCount = await countPdfPagesWithDegrade(buffer, (err) =>
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Unable to count pages in ${sanitizedFilename}; uploading without a page count: ${toErrorMessage(err)}`,
         ),
       );

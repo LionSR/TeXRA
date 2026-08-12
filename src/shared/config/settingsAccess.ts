@@ -1,5 +1,5 @@
 // Local imports
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type {
   ConfigProvider,
   ConfigTarget,
@@ -11,7 +11,7 @@ import type {
 } from '@shared/schemas/stateSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const CHANNEL = 'settingsAccess';
+const log = createLog('settingsAccess');
 
 /**
  * Host-aware read/write for {@link StateSettingEntry} rows.
@@ -75,8 +75,7 @@ export function readSetting(
   if (result.success) {
     return result.data;
   }
-  logger.warn(
-    CHANNEL,
+  log.warn(
     `Ignoring invalid persisted value for setting "${entry.key}": ${toErrorMessage(result.error)}`,
   );
   return settingDefault(entry);

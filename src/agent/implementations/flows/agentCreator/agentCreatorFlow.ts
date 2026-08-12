@@ -15,7 +15,7 @@ import {
 } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { buildUserVarPassthrough } from '@agent/utils/userVars';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { AgentCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -23,7 +23,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
 
-const CHANNEL = 'AgentCreator';
+const log = createLog('AgentCreator');
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -344,10 +344,7 @@ async function generateAgentYaml(
           throw new Error(`Generated YAML was invalid: ${lastValidationError}`);
         }
 
-        logger.info(
-          CHANNEL,
-          `AI generation succeeded for ${blueprint.category} agent`,
-        );
+        log.info(`AI generation succeeded for ${blueprint.category} agent`);
         return candidate;
       },
       {
@@ -358,10 +355,7 @@ async function generateAgentYaml(
       },
     );
   } catch (error) {
-    logger.warn(
-      CHANNEL,
-      `AI generation failed, using template: ${toErrorMessage(error)}`,
-    );
+    log.warn(`AI generation failed, using template: ${toErrorMessage(error)}`);
     // Route through the shared renderer so both the Settings "new from
     // template" flow and this fallback produce byte-identical output for
     // matching inputs.

@@ -5,7 +5,7 @@
  * using the diff-match-patch library.
  */
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { OutputFileInfo, FileLocation } from '@shared/schemas';
 import type { DiffStats } from '@shared/schemas/lineChanges';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -22,7 +22,7 @@ import { traceFileLineage } from './lineageMapping';
 import { ensureRoundData, type OutputState } from './outputState';
 import type { RoundFileMapping } from './types';
 
-const CHANNEL = 'OutputDiffStats';
+const log = createLog('OutputDiffStats');
 
 // ============================================================================
 // Helpers
@@ -47,10 +47,7 @@ async function computeDiffStats(
     // Preserve diff-match-patch's omitted-argument default: checkLines=true.
     return diffLineChanges(baseContent, outContent, { checkLines: true });
   } catch (err) {
-    logger.debug(
-      CHANNEL,
-      `Failed to compute diff stats: ${toErrorMessage(err)}`,
-    );
+    log.debug(`Failed to compute diff stats: ${toErrorMessage(err)}`);
     return {};
   }
 }

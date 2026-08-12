@@ -3,9 +3,9 @@
  */
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 
-const CHANNEL = 'ReplacementEngine';
+const log = createLog('ReplacementEngine');
 
 /**
  * Applies LaTeX quotes formatting to a LaTeX document.
@@ -24,7 +24,7 @@ export function applyLatexQuotesFormatting(text: string): string {
     return text;
   }
 
-  logger.debug(CHANNEL, 'Starting LaTeX quotes formatting');
+  log.debug('Starting LaTeX quotes formatting');
 
   // Extract document content (everything between \begin{document} and \end{document})
   const documentRegex = /\\begin\{document\}([\s\S]*?)\\end\{document\}/g;
@@ -53,7 +53,7 @@ export function applyLatexQuotesFormatting(text: string): string {
         },
       );
 
-      logger.debug(CHANNEL, `Removed ${tikzCounter} tikzpicture environments`);
+      log.debug(`Removed ${tikzCounter} tikzpicture environments`);
 
       // Process quotes in the remaining content
       let replacementCount = 0;
@@ -61,16 +61,12 @@ export function applyLatexQuotesFormatting(text: string): string {
         /(?<!\\"|\{)"([^"]{3,16})"(?!\})/g,
         (_match, quotedText) => {
           replacementCount++;
-          logger.debug(
-            CHANNEL,
-            `Converting quote: "${quotedText}" → \`\`${quotedText}''`,
-          );
+          log.debug(`Converting quote: "${quotedText}" → \`\`${quotedText}''`);
           return `\`\`${quotedText}''`;
         },
       );
 
-      logger.debug(
-        CHANNEL,
+      log.debug(
         `Made ${replacementCount} quote replacements in document #${documentCount}`,
       );
       totalReplacements += replacementCount;
@@ -85,8 +81,7 @@ export function applyLatexQuotesFormatting(text: string): string {
     },
   );
 
-  logger.debug(
-    CHANNEL,
+  log.debug(
     `Finished LaTeX quotes formatting: processed ${documentCount} document blocks, made ${totalReplacements} replacements`,
   );
 

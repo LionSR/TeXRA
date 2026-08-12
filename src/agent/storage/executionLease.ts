@@ -8,13 +8,13 @@ import { z } from 'zod';
 
 import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files/storageFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const CHANNEL = 'ExecutionLease';
+const log = createLog('ExecutionLease');
 /** A host that misses eight heartbeats is no longer considered live. */
 export const EXECUTION_LEASE_STALE_MS = 120_000;
 const EXECUTION_LEASE_HEARTBEAT_MS = 15_000;
@@ -311,7 +311,7 @@ function forgetOwnedLease(
         try {
           listener();
         } catch (error) {
-          logger.warn(CHANNEL, 'Execution lease-loss listener failed', {
+          log.warn('Execution lease-loss listener failed', {
             data: { executionId: lease.executionId, error },
           });
         }
@@ -387,8 +387,7 @@ function handleHeartbeatFailure(
   if (ownershipUnprovable) {
     forgetOwnedLease(lease, { notifyLoss: true });
   }
-  logger.warn(
-    CHANNEL,
+  log.warn(
     `Failed to heartbeat execution ${lease.executionId}: ${toErrorMessage(error)}`,
     {
       data: {
@@ -721,8 +720,7 @@ export async function completeOwnedExecutionLease(
   try {
     await releaseOwnedExecutionLease(executionId);
   } catch (error) {
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Failed to release execution ${executionId}; its lease will expire after the stale horizon: ${toErrorMessage(error)}`,
       { data: error },
     );
