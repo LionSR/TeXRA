@@ -16,10 +16,11 @@ import {
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
 import { AgentError } from '@common/errors';
+import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { tryPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
-import { generateExecutionId } from '@utils/core';
+import { aggregateError, generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { warnApprovalDenied } from './approval/approvalPrompts';
@@ -323,15 +324,16 @@ export async function executeCliRequest(
       // not prevent signal termination indefinitely; on timeout, leave the
       // lease intact for stale-owner recovery rather than releasing it early.
       const grace = new AbortController();
+      const graceExpired = sleep(CLI_RUN_SHUTDOWN_GRACE_MS, undefined, {
+        signal: grace.signal,
+      }).catch((error: unknown) => {
+        if (!grace.signal.aborted) throw error;
+      });
       try {
-        await Promise.race([
-          shutdownFinalizationDone,
-          sleep(CLI_RUN_SHUTDOWN_GRACE_MS, undefined, {
-            signal: grace.signal,
-          }),
-        ]);
+        await Promise.race([shutdownFinalizationDone, graceExpired]);
       } finally {
         grace.abort();
+        await graceExpired;
       }
     },
   );
@@ -392,6 +394,7 @@ export async function executeCliRequest(
     | { readonly ok: true; readonly result: ExecuteAgentResult }
     | { readonly ok: false } = { ok: false };
   let primaryRunFailure: { readonly error: unknown } | undefined;
+  let shutdownLaunchAborted = false;
   let presentationAttached = true;
   const detachPresentation = async (): Promise<void> => {
     if (!presentationAttached) return;
@@ -412,7 +415,9 @@ export async function executeCliRequest(
     // exit code here; anything else (e.g. registerExecution disk I/O,
     // workspaceState.update failures) is unexpected and must keep
     // propagating to bin/texra.ts's crash handler.
-    if (!(err instanceof AgentError)) {
+    if (shutdownRequested && isUserAbort(err)) {
+      shutdownLaunchAborted = true;
+    } else if (!(err instanceof AgentError)) {
       primaryRunFailure = { error: err };
     } else if (!failurePresented && !terminalResult.isHandled()) {
       // A failure before lifecycle startup has no `result` event. Preserve the
@@ -444,15 +449,12 @@ export async function executeCliRequest(
     }
   }
   if (cleanupFailures.length > 0) {
-    const cleanupFailure =
-      cleanupFailures.length === 1
-        ? cleanupFailures[0]
-        : new AggregateError(
-            cleanupFailures,
-            'CLI execution cleanup encountered multiple failures',
-          );
+    const cleanupFailure = aggregateError(
+      cleanupFailures,
+      'CLI execution cleanup encountered multiple failures',
+    );
     if (primaryRunFailure) {
-      throw new AggregateError(
+      throw aggregateError(
         [primaryRunFailure.error, cleanupFailure],
         'CLI execution failed and its final artifacts could not be persisted',
       );
@@ -466,7 +468,9 @@ export async function executeCliRequest(
   if (!runResult.ok) {
     return {
       ok: false,
-      exitCode: runOutcomeExitCode(RUN_OUTCOME.FAILED),
+      exitCode: shutdownLaunchAborted
+        ? CliExitCode.Interrupted
+        : runOutcomeExitCode(RUN_OUTCOME.FAILED),
     };
   }
 
