@@ -56,7 +56,6 @@ export interface SettingsAgentCatalogState {
 
 export interface SettingsAgentCatalogControllerDeps {
   state: SettingsAgentCatalogState;
-  builtInOrchestratorAgentNames?: readonly string[];
   now?: () => number;
 }
 
@@ -84,7 +83,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
   }
 
   getOrchestratorAgentNames(): string[] {
-    const names = new Set(this.deps.builtInOrchestratorAgentNames ?? []);
+    const names = new Set<string>(BUILTIN_TEAM_ROOT_AGENT_NAMES);
     for (const agent of this.deps.state.getAgents('toolUse')) {
       if (hasDelegationTool(agent.tools)) names.add(agent.name);
     }
@@ -243,10 +242,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
     toolUseAgents: readonly string[],
     catalogAgents: readonly SettingsAgentCatalogEntry[],
   ): SettingsAgentCatalogEntry[] {
-    const knownBuiltInRoots = new Set([
-      ...BUILTIN_TEAM_ROOT_AGENT_NAMES,
-      ...(this.deps.builtInOrchestratorAgentNames ?? []),
-    ]);
+    const knownBuiltInRoots = new Set([...BUILTIN_TEAM_ROOT_AGENT_NAMES]);
     return [...knownBuiltInRoots]
       .filter(
         (name) =>
