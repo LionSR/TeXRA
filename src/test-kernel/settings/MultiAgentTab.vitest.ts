@@ -65,13 +65,16 @@ describe('multi-agent-tab preset card keyboard activation', () => {
       .map(([, payload]) => (payload as { presetId: string }).presetId);
   }
 
-  it('exposes role=button and tabindex=0 on every preset card', async () => {
+  it('exposes concise keyboard controls for every preset card', async () => {
     const element = await mount();
     const cards = element.shadowRoot?.querySelectorAll('.preset-card') ?? [];
     expect(cards.length).toBe(AGENT_MODE_PRESETS.length);
-    for (const card of cards) {
+    for (const [index, card] of [...cards].entries()) {
       expect(card.getAttribute('role')).toBe('button');
       expect(card.getAttribute('tabindex')).toBe('0');
+      expect(card.getAttribute('aria-label')).toBe(
+        `Apply ${AGENT_MODE_PRESETS[index]!.name} team`,
+      );
     }
   });
 
@@ -103,5 +106,27 @@ describe('multi-agent-tab preset card keyboard activation', () => {
     dispatchKey(deleteButton!, 'Enter');
 
     expect(appliedPresetIds()).toHaveLength(0);
+  });
+
+  it('uses the backend capability list as the only orchestrator authority', async () => {
+    const element = await mount({
+      customPresets: [
+        {
+          ...CUSTOM_PRESET,
+          agents: { workflow: [], toolUse: ['named-orchestrator'] },
+        },
+      ],
+      orchestratorAgents: [],
+    });
+
+    const customCard = element.shadowRoot
+      ?.querySelectorAll('.preset-card')
+      .item(AGENT_MODE_PRESETS.length);
+    expect(
+      customCard?.querySelectorAll('.preset-agent-badge--orchestrator'),
+    ).toHaveLength(0);
+    expect(
+      customCard?.querySelector('.preset-card-agents')?.textContent,
+    ).toContain('named-orchestrator');
   });
 });
