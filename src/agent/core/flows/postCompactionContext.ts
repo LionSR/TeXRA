@@ -28,7 +28,8 @@ export function formatPostCompactionContext(
   const hasChildren = subagents.length > 0;
   const todos = workPlan?.todos ?? [];
   const hasTodos = todos.length > 0;
-  const hasPlan = workPlan?.plan != null || workPlan?.planSummary != null;
+  const hasPlan =
+    workPlan?.plan?.objective != null || workPlan?.planSummary != null;
 
   if (!hasChildren && !hasTodos && !hasPlan) {
     return null;

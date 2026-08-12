@@ -8,13 +8,13 @@ export const MANY_IMAGE_MAX_DIMENSION = 2000;
 
 /** Returns true if buffer is an image exceeding the many-image dimension limit. */
 export function isOversizedImage(buffer: Buffer | Uint8Array): boolean {
-  let width: number;
-  let height: number;
   try {
-    ({ width, height } = imageSize(buffer));
+    const { width, height } = imageSize(buffer);
+    return (
+      width > MANY_IMAGE_MAX_DIMENSION || height > MANY_IMAGE_MAX_DIMENSION
+    );
   } catch {
     // Unrecognized or truncated image data — nothing to measure.
     return false;
   }
-  return width > MANY_IMAGE_MAX_DIMENSION || height > MANY_IMAGE_MAX_DIMENSION;
 }

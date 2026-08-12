@@ -8,7 +8,6 @@
  * Host-neutral: uses simple-git for git operations; no vscode.
  */
 
-// Node imports
 // Third-party imports
 import simpleGit, { type SimpleGit } from 'simple-git';
 

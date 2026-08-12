@@ -453,13 +453,17 @@ async function processProtocolCallback(
   }
 
   return runAuthCommit(async () => {
-    if (!ownsAttempt()) return false;
-
-    await coordinator.storeSession(result.session);
-    if (!ownsAttempt()) {
+    // The attempt can be invalidated at any await boundary (a newer sign-in
+    // or a timeout). Once it is, the session must not be kept.
+    const stillOwned = async (): Promise<boolean> => {
+      if (ownsAttempt()) return true;
       await coordinator.clearSession();
       return false;
-    }
+    };
+
+    if (!ownsAttempt()) return false;
+    await coordinator.storeSession(result.session);
+    if (!(await stillOwned())) return false;
 
     clearDesktopServerSideKeyCaches(log);
     try {
@@ -469,20 +473,14 @@ async function processProtocolCallback(
     } catch (error) {
       log.warn(`Desktop sign-in notification failed: ${toErrorMessage(error)}`);
     }
-    if (!ownsAttempt()) {
-      await coordinator.clearSession();
-      return false;
-    }
+    if (!(await stillOwned())) return false;
+
     try {
       await host.onSessionChanged();
     } catch (error) {
       log.warn(`Desktop auth surface refresh failed: ${toErrorMessage(error)}`);
     }
-    if (!ownsAttempt()) {
-      await coordinator.clearSession();
-      return false;
-    }
-    return true;
+    return stillOwned();
   });
 }
 

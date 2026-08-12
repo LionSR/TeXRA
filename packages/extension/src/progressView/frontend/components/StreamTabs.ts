@@ -450,10 +450,9 @@ export class StreamTabs extends LitElement {
       },
     );
     const childCount = children.length;
+    const showChildren = !options.compact && childCount > 0;
     const expanded =
-      !options.compact &&
-      childCount > 0 &&
-      this.expandedParents.has(stream.name);
+      showChildren && this.expandedParents.has(stream.name);
     const streamState = this.streamStates.get(stream.name);
 
     return html`
@@ -469,7 +468,7 @@ export class StreamTabs extends LitElement {
         ?expanded=${expanded}
       ></stream-tab>
       ${
-        !options.compact && childCount > 0
+        showChildren
           ? html`<div class="child-streams" ?hidden=${!expanded}>
               ${repeat(
                 children,

@@ -15,6 +15,7 @@ import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { ensureError } from '@utils/errors/errorMessage';
 
+import { workspaceFromSnapshot } from '../helpers';
 import type {
   ReflectionFlowShared,
   RoundContext,
@@ -47,13 +48,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
       );
     }
 
-    // shared.workspaceSnapshot was produced by this same node's own
-    // toSnapshot() last round (or by the flow's one-time resume hydration in
-    // runReflectionFlow) — never raw persisted/legacy data — so re-deriving
-    // it here uses the canonical-only path (see AgentWorkspaceState.fromCanonicalSnapshot).
-    const workspace = AgentWorkspaceState.fromCanonicalSnapshot(
-      shared.workspaceSnapshot,
-    );
+    const workspace = workspaceFromSnapshot(shared.workspaceSnapshot);
     const run = shared.runStateSnapshot;
     const round = context.stateRoundSnapshot;
 

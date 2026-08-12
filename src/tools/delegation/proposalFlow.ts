@@ -140,7 +140,7 @@ export function proposalResultToToolResult(
   }
 }
 
-export interface DelegationProposalDecision {
+interface DelegationProposalDecision {
   readonly result: ProposalResult;
   /** True only when the stream's proposal-bypass policy supplied approval. */
   readonly autoApproved: boolean;

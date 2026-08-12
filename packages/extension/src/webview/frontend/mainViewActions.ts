@@ -25,8 +25,6 @@ import type {
 import { buildMainViewExecuteMessage } from '@shared/mainView/executionFormState';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 
-// Local imports - utilities
-
 // Local imports - main view
 import {
   SESSION_TYPES,

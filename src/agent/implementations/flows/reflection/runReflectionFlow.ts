@@ -103,7 +103,6 @@ export async function runReflectionFlow<C = unknown>(
     storageKey,
     parentStage,
     userVarChannels,
-    onRoundFinalized,
     runScope,
   } = input;
   const { streamId, executionId, session: runSession } = runScope;
@@ -299,7 +298,6 @@ export async function runReflectionFlow<C = unknown>(
 
   const services: ReflectionServices<C> = {
     ...input,
-    onRoundFinalized,
     outputState,
     xmlManager,
     diffManager,

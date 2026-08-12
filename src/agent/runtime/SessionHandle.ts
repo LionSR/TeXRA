@@ -234,9 +234,7 @@ export class SessionHandle {
       this.transcripts.mode.kind === 'persistent' &&
       init.restartRepair !== 'deferred'
     ) {
-      this.restartRepairPromise = this.enqueueRestartRepair(() =>
-        this.repairStoresAfterRestart(this.storageGeneration),
-      );
+      this.restartRepairPromise = this.ensureRestartRepair();
       // Construction cannot be awaited. Hosts observe the same promise
       // through waitUntilReady(); this branch only prevents a rejection from
       // becoming unhandled before the host reaches that boundary.
@@ -264,12 +262,7 @@ export class SessionHandle {
     ) {
       return Promise.resolve();
     }
-    if (!this.restartRepairPromise) {
-      this.restartRepairPromise = this.enqueueRestartRepair(() =>
-        this.repairStoresAfterRestart(this.storageGeneration),
-      );
-    }
-    return this.restartRepairPromise.then(() => undefined);
+    return this.ensureRestartRepair().then(() => undefined);
   }
 
   /**
@@ -380,6 +373,19 @@ export class SessionHandle {
   private enqueueRestartRepair<T>(work: () => Promise<T>): Promise<T> {
     // `add` widens to `T | void` for abort/timeout options; neither is used.
     return this.restartRepairQueue.add(work) as Promise<T>;
+  }
+
+  /**
+   * Start the restart-repair pass for the current storage generation, or reuse
+   * the in-flight one. Shared by the constructor and {@link waitUntilReady}.
+   */
+  private ensureRestartRepair(): Promise<unknown> {
+    if (!this.restartRepairPromise) {
+      this.restartRepairPromise = this.enqueueRestartRepair(() =>
+        this.repairStoresAfterRestart(this.storageGeneration),
+      );
+    }
+    return this.restartRepairPromise;
   }
 
   private async repairStoresAfterRestart(

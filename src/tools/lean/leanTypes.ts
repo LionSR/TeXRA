@@ -171,25 +171,16 @@ export interface LeanDiagnostic extends GenericDiagnostic {
 // Helpers
 
 /** Extract text value from hover contents (handles all LSP content formats) */
-export function extractHoverText(
-  contents: LspHover['contents'],
-): string | null {
+export function extractHoverText(contents: LspHover['contents']): string {
   if (typeof contents === 'string') {
     return contents;
   }
 
   if (Array.isArray(contents)) {
-    const texts = contents.flatMap((item) => {
-      if (typeof item === 'string') return item;
-      if ('value' in item) return item.value;
-      return [];
-    });
-    return texts.join('\n\n');
+    return contents
+      .map((item) => (typeof item === 'string' ? item : item.value))
+      .join('\n\n');
   }
 
-  if ('value' in contents) {
-    return contents.value;
-  }
-
-  return null;
+  return contents.value;
 }

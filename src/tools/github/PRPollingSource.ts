@@ -533,14 +533,15 @@ export class PRPollingSource extends PollingSourceBase<
       // `state.etags` here.
       const runs = checksRes.data.check_runs;
 
-      const headSha = state.currentShaState?.sha;
+      const currentShaState = state.currentShaState;
+      const headSha = currentShaState?.sha;
       if (
+        currentShaState &&
         headSha &&
         runs.length > 0 &&
-        state.currentShaState &&
-        !state.currentShaState.ciStarted
+        !currentShaState.ciStarted
       ) {
-        state.currentShaState.ciStarted = true;
+        currentShaState.ciStarted = true;
         this.emit(
           state,
           formatCIStarted(

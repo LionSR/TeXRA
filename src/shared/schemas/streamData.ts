@@ -138,8 +138,7 @@ export function parseUsageData(raw: unknown): ParsedUsageData {
       rawKind = typeof raw;
     }
     console.warn(
-      `[streamData] usageStats.json is not a per-run object (got ` +
-        `${rawKind}); ` +
+      `[streamData] usageStats.json is not a per-run object (got ${rawKind}); ` +
         'ignoring for this read instead of silently zeroing usage.',
     );
     return { usage, unparsedRuns };

@@ -5,9 +5,8 @@ import { isoDateOnly } from '@utils/text/stringUtils';
 
 /**
  * Minimal fields these generators read. `ChatExportInput` satisfies this
- * structurally; the trace-viewer HTML export (built from a `TraceDocument`,
- * not a `ChatExportInput`) passes an ad-hoc object of the same shape instead
- * of constructing a whole `ChatExportInput` just for a filename.
+ * structurally, so callers pass either the full input or an ad-hoc object of
+ * the same shape without building a whole `ChatExportInput` for a filename.
  */
 export interface ExportFilenameInput {
   readonly timestamp: string;

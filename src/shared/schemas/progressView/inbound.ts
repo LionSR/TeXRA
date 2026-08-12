@@ -13,8 +13,9 @@ import {
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 import {
+  SetDebugModeMessageSchema,
+  SetThemeMessageSchema,
   SwitchViewMessageSchema,
-  ThemeSchema,
   WebviewReadyMessageSchema,
 } from '../commonViewMessages';
 import { commandOnly } from '../messageFactories';
@@ -47,16 +48,6 @@ function fileWithBaseCommand<T extends string>(command: T) {
     base: z.string().min(1).optional(),
   });
 }
-
-const ThemeSetMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.THEME_SET),
-  theme: ThemeSchema,
-});
-
-const DebugModeSetMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET),
-  debugMode: z.boolean(),
-});
 
 const FollowupConfigSchema = StreamScopedBaseSchema.extend({
   agent: TrimmedStringSchema,
@@ -293,8 +284,8 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
   [
     WebviewReadyMessageSchema,
     SwitchViewMessageSchema,
-    ThemeSetMessageSchema,
-    DebugModeSetMessageSchema,
+    SetThemeMessageSchema,
+    SetDebugModeMessageSchema,
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM),
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
     commandOnly(PROGRESS_VIEW_COMMANDS.DELETE_ALL),

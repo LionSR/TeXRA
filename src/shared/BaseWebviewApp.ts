@@ -53,8 +53,8 @@ function handleCommonMessage(
       return true;
     case COMMON_COMMANDS.WEBVIEW_READY:
       return true;
-    case COMMON_COMMANDS.SWITCH_VIEW:
-      return false;
+    // Every other common command falls through to `default`: unknown commands
+    // (including SWITCH_VIEW) are passed to the subclass's handleMessage.
     default:
       return false;
   }

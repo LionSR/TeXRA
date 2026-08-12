@@ -38,10 +38,7 @@ function watcherMatches(
   if (watcherKey instanceof RegExp) {
     return watcherKey.test(changedKey);
   }
-  if (Array.isArray(watcherKey)) {
-    return watcherKey.some((item) => keyMatchesChange(item, changedKey));
-  }
-  return false;
+  return watcherKey.some((item) => keyMatchesChange(item, changedKey));
 }
 
 export function createWatcherRegistry(): {

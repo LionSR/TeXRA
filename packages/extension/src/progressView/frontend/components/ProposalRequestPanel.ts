@@ -276,10 +276,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
   ): TemplateResult | typeof nothing {
     const workingDirectory = data.workingDirectory;
     if (!workingDirectory) return nothing;
-    return html`<div
-        id="proposal-working-directory"
-        class="workflow-proposal__working-directory"
-      >
+    return html`<div id="proposal-working-directory">
         <span class="workflow-proposal__file-label">Working directory:</span>
         <span
           class="workflow-proposal__file-name workflow-proposal__file-name--readonly workflow-proposal__file-name--wrap"

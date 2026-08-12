@@ -261,21 +261,13 @@ export function createDesktopSettingsIpc(
         options.session.setApprovalPolicy(policy),
     });
     if (result.kind === 'ignored') return;
-    if (result.kind === 'rejected') {
+    if (result.kind === 'rejected' || result.kind === 'failed') {
       options.ui.onError(result.error);
+      const label = result.entry.title ?? result.entry.key;
+      const prefix =
+        result.kind === 'rejected' ? 'Invalid value for' : 'Failed to update';
       await options.ui.showErrorMessage(
-        formatError(
-          `Invalid value for "${result.entry.title ?? result.entry.key}"`,
-          result.error,
-        ),
-      );
-    } else if (result.kind === 'failed') {
-      options.ui.onError(result.error);
-      await options.ui.showErrorMessage(
-        formatError(
-          `Failed to update "${result.entry.title ?? result.entry.key}"`,
-          result.error,
-        ),
+        formatError(`${prefix} "${label}"`, result.error),
       );
     }
     await postStateSettingSnapshot(
@@ -365,7 +357,7 @@ export function createDesktopSettingsIpc(
     getMemoryData: () => settingsHost.sendMemoryData(),
     getMemoryPreview: (message) =>
       settingsHost.sendMemoryPreview(message, { onError }),
-    openMemoryFile: (message) => openMemoryFile(message),
+    openMemoryFile,
     openMemoryFolder: () => openMemoryFolder(),
     deleteMemory: (message) => settingsHost.deleteMemory(message),
     setMemoryEnabled: (message) =>
@@ -376,7 +368,7 @@ export function createDesktopSettingsIpc(
       settingsHost.setMemoryPinned(message.storagePath, false),
     ...options.historySettingsController.handlers,
     ...options.credentialSettingsController.profileHandlers,
-    setModelEnabled: (message) => updateModelEnabled(message),
+    setModelEnabled: updateModelEnabled,
     setPolishModel: (message) => settingsHost.setHelperModel(message.modelName),
     setModelReasoningLevel: (message) =>
       settingsHost.setReasoningLevel(message),
@@ -388,14 +380,14 @@ export function createDesktopSettingsIpc(
     // Mirrors the extension's `GitHubSubscriptionHandlers`. The token store and
     // the subscription registry are host-agnostic (`@tools/github`); only the
     // secret prompt, the browser hand-off, and the stream reveal differ here.
-    getGitHubTokenStatus: () => postGitHubTokenStatus(),
+    getGitHubTokenStatus: postGitHubTokenStatus,
     setGitHubToken: () => setGitHubToken(),
     removeGitHubToken: () => removeGitHubToken(),
     openGitHubTokenUrl: async () => {
       await options.ui.openExternal?.(GITHUB_TOKEN_CREATE_URL);
     },
-    getPRSubscriptions: () => postGitHubSubscriptions(),
-    unsubscribePR: (message) => unsubscribeGitHub(message),
+    getPRSubscriptions: postGitHubSubscriptions,
+    unsubscribePR: unsubscribeGitHub,
     openPRSubscriptionStream: (message) => revealStream(message.streamId),
     ...options.credentialSettingsController.chatGptHandlers,
     ...options.credentialSettingsController.grokHandlers,

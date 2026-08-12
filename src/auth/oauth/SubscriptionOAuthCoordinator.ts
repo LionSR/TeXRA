@@ -8,6 +8,7 @@
  */
 // Third-party imports
 import PQueue from 'p-queue';
+import type { z } from 'zod';
 
 // Local imports
 import { safeParseJson } from '@common/parsing/safeParseJson';
@@ -20,7 +21,6 @@ import {
   type ProviderAuthErrorCtor,
 } from './providerAuthBridge';
 import { SubscriptionOAuthError } from './subscriptionOAuthError';
-import type { z } from 'zod';
 
 /** Secret-backed persistence for one session bundle. */
 export interface SubscriptionSessionStorage {

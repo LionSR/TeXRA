@@ -131,8 +131,8 @@ export async function loginWithOAuthLoopback<S>(
       reject(new Error(message));
     };
 
-    const ignoreCallback = (res: http.ServerResponse, statusCode = 400) => {
-      respondHtml(res, ERROR_HTML, statusCode);
+    const ignoreCallback = (res: http.ServerResponse) => {
+      respondHtml(res, ERROR_HTML, 400);
     };
 
     server.on('request', (req, res) => {

@@ -19,7 +19,10 @@ const CASE_CONNECTORS: Record<string, string> = {
   C: '\n',
 };
 
-const DEFAULT_RESULT: ConnectionResult = { connector: ' ', choice: 'B' };
+const DEFAULT_RESULT: ConnectionResult = {
+  connector: CASE_CONNECTORS.B,
+  choice: 'B',
+};
 
 function buildPrompt(str1: string, str2: string): string {
   return (

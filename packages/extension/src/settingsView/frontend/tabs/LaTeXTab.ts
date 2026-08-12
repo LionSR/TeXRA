@@ -730,25 +730,31 @@ export class LaTeXTab extends LitElement {
     field: 'customReplacements' | 'customReplacementsRegex',
     source: string,
   ): void {
+    let parsed: unknown;
     try {
-      const parsed: unknown = JSON.parse(source);
-      const result = CoreSettingsShape.latex
-        .unwrap()
-        .shape[field].safeParse(parsed);
-      if (!result.success) {
-        throw new Error('Enter a JSON object with string values.');
-      }
-      this.replacementJsonErrors = {
-        ...this.replacementJsonErrors,
-        [field]: undefined,
-      };
-      this.dispatchSetConfigValue(field, result.data);
+      parsed = JSON.parse(source);
     } catch (error) {
       this.replacementJsonErrors = {
         ...this.replacementJsonErrors,
         [field]: error instanceof Error ? error.message : 'Invalid JSON.',
       };
+      return;
     }
+    const result = CoreSettingsShape.latex
+      .unwrap()
+      .shape[field].safeParse(parsed);
+    if (!result.success) {
+      this.replacementJsonErrors = {
+        ...this.replacementJsonErrors,
+        [field]: 'Enter a JSON object with string values.',
+      };
+      return;
+    }
+    this.replacementJsonErrors = {
+      ...this.replacementJsonErrors,
+      [field]: undefined,
+    };
+    this.dispatchSetConfigValue(field, result.data);
   }
 
   private dispatchSetConfigValue<F extends LatexConfigField>(

@@ -12,7 +12,7 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { ThemeSchema } from '../commonViewMessages';
+import { SetThemeMessageSchema } from '../commonViewMessages';
 import { GoalStateSchema, GoalStatusSchema } from '../goal';
 import { AgentCategory } from '../agent';
 
@@ -361,16 +361,6 @@ const GoalActiveUpdatedMessageSchema = StreamScopedBaseSchema.extend({
   objective: z.string().optional(),
 });
 
-// `theme` reuses the canonical `ThemeSchema` (`commonViewMessages.ts`) rather
-// than a locally re-declared enum: the desktop theme kind includes
-// `'high-contrast'` (see `DESKTOP_THEME_KIND`), which
-// `COMMON_COMMANDS.THEME_SET` messages already carry for both mainView and
-// progressView, and outbound sends are validated against this schema.
-const ProgressSetThemeMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.THEME_SET),
-  theme: ThemeSchema,
-});
-
 const ProgressDeleteStreamMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
 });
@@ -413,7 +403,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     SyncInquiryThreadsMessageSchema,
     UpdateInquiryThreadMessageSchema,
     SetPlacementMessageSchema,
-    ProgressSetThemeMessageSchema,
+    SetThemeMessageSchema,
     ProgressDeleteStreamMessageSchema,
     ProgressDeleteAllMessageSchema,
   ],

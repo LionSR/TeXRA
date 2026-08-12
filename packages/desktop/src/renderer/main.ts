@@ -68,7 +68,6 @@ import {
   renderLabeledActionButton,
 } from '@shared/wa/actionButtons';
 import { renderEmptyState } from '@shared/wa/emptyState';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import {

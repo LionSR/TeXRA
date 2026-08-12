@@ -47,8 +47,9 @@ export function createDesktopPreviewHost(
     } catch (error) {
       if (isFileNotFoundError(error)) {
         await fail(`File not found: ${filePath}`);
+      } else {
+        await fail(`Cannot access file ${filePath}: ${toErrorMessage(error)}`);
       }
-      await fail(`Cannot access file ${filePath}: ${toErrorMessage(error)}`);
     }
   }
 

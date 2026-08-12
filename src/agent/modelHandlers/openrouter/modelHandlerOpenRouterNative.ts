@@ -67,7 +67,7 @@ import {
 import { ModelHandler } from '../ModelHandler';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 
-// Third-party imports
+// Third-party type imports
 import type {
   ChatResult,
   ChatStreamChunk,
@@ -551,7 +551,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       (msg.toolCalls && msg.toolCalls.length > 0)
     ) {
       this.logger.debug('Received tool call without message content');
-    } else if (!msg.content) {
+    } else {
       this.logger.error('content is empty');
     }
 

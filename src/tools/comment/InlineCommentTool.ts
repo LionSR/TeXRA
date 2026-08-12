@@ -115,7 +115,7 @@ export const InlineCommentInputSchema = z.strictObject({
     ),
 });
 
-export type InlineCommentInput = z.infer<typeof InlineCommentInputSchema>;
+type InlineCommentInput = z.infer<typeof InlineCommentInputSchema>;
 
 /** Render a thread for the agent: a header line plus each comment indented. */
 function formatThread(thread: InlineCommentThreadView): string {

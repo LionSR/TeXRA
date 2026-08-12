@@ -22,19 +22,23 @@ import { initializeGoalPrompts } from '@agent/goal/promptLoader';
 import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
-import { defaultSkillSources } from '@skills/skillSources';
-import type { SkillSourceOptions } from '@skills/skillSources';
+import {
+  defaultSkillSources,
+  type SkillSourceOptions,
+} from '@skills/skillSources';
 import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 // Local file imports
-import { JsonConfigProvider } from './jsonConfigProvider';
+import {
+  JsonConfigProvider,
+  type JsonConfigProviderOptions,
+} from './jsonConfigProvider';
 import { nodeFileLocks } from './fileLocks';
 import { nodeFilesystem } from './nodeFilesystem';
 import { createNodeWorkspace } from './nodeWorkspace';
 import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '../languageModel';
 import { platform } from '../platform';
-import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 import type {
   AgentDirectoriesPort,
   AgentResumePort,

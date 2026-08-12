@@ -6,12 +6,7 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 
 const DEFAULT_CHANNEL = 'commandUtils';
 
-/**
- * Execute a VS Code command and handle any errors.
- * @param command Command identifier
- * @param args Arguments to pass to the command
- * @param channel Channel for logging errors (defaults to 'commandUtils')
- */
+/** Execute a VS Code command and handle any errors. */
 export async function safeExecuteCommand<T>(
   command: string,
   args: unknown[] = [],
@@ -29,10 +24,7 @@ export async function safeExecuteCommand<T>(
   }
 }
 
-/**
- * Get the main webview view instance.
- * @param channel Channel for logging errors (defaults to 'commandUtils')
- */
+/** Get the main webview view instance. */
 export async function getMainWebview(
   channel: string = DEFAULT_CHANNEL,
 ): Promise<vscode.WebviewView | undefined> {

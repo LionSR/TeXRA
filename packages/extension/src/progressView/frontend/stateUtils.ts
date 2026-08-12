@@ -12,7 +12,7 @@ import {
 } from '@shared/schemas';
 
 // Local imports
-import { appState, setStreamStateForId } from './progressState';
+import { setStreamStateForId } from './progressState';
 import type { PermissionState } from './permissionState';
 
 /**

@@ -457,21 +457,15 @@ function getAssistantToolCalls(
     return [];
   }
 
-  try {
-    const candidate = message.tool_calls as ChatCompletionMessageToolCall[];
-    assertToolCallsAreChatCompletionFunctionToolCalls(candidate);
-    return candidate;
-  } catch {
-    const functionToolCalls: ChatCompletionMessageFunctionToolCall[] = [];
-    for (const toolCall of message.tool_calls) {
-      const candidate: ChatCompletionMessageToolCall[] = [toolCall];
-      try {
-        assertToolCallsAreChatCompletionFunctionToolCalls(candidate);
-        functionToolCalls.push(candidate[0]);
-      } catch {
-        // Skip non-function or malformed entries while preserving valid calls.
-      }
+  const functionToolCalls: ChatCompletionMessageFunctionToolCall[] = [];
+  for (const toolCall of message.tool_calls) {
+    const candidate: ChatCompletionMessageToolCall[] = [toolCall];
+    try {
+      assertToolCallsAreChatCompletionFunctionToolCalls(candidate);
+      functionToolCalls.push(candidate[0]);
+    } catch {
+      // Skip non-function or malformed entries while preserving valid calls.
     }
-    return functionToolCalls;
   }
+  return functionToolCalls;
 }

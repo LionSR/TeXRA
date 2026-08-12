@@ -6,17 +6,14 @@ export function subscribeAddOutputFilesRunFact(
   events: SessionEventHub,
   listener: (payload: AddOutputFilesPayload) => void,
 ): () => void {
-  return events.subscribe(
-    (sessionEvent) => {
-      if (sessionEvent.scope !== 'run') return;
-      const { event } = sessionEvent;
-      if (event.type !== 'addOutputFiles') return;
+  return events.subscribeRunFacts(
+    ({ event }) => {
       listener({
         streamId: event.streamId,
         ...(event.executionId ? { executionId: event.executionId } : {}),
         filesByRound: event.filesByRound,
       });
     },
-    { scope: 'run', types: ['addOutputFiles'] },
+    { types: ['addOutputFiles'] },
   );
 }

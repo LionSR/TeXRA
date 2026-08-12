@@ -1,3 +1,5 @@
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+
 /** Extension ID for the LaTeX Workshop VS Code extension. */
 export const LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
 
@@ -495,8 +497,6 @@ export function getInstallGuide(guide: Guide, platform: string): string {
 //   - the native LaTeX settings handlers and tab UI
 // so changing a default or range here propagates everywhere with no rot.
 //
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-
 /** Numeric range for a setting (used by Zod schemas and UI inputs). */
 export interface NumericRange {
   readonly min: number;

@@ -83,10 +83,7 @@ export async function listRemoteAgents(): Promise<RemoteAgentListItem[]> {
     const token = await SupabaseClient.getAccessToken();
     if (!token) return [];
 
-    const { data, error } = await fetchRemoteAgentListRows(
-      token,
-      REMOTE_AGENT_LIST_COLUMNS,
-    );
+    const { data, error } = await fetchRemoteAgentListRows(token);
 
     if (error) {
       logger.debug(CHANNEL, `Failed to list remote agents: ${error.message}`);
@@ -105,10 +102,9 @@ export async function listRemoteAgents(): Promise<RemoteAgentListItem[]> {
 
 async function fetchRemoteAgentListRows(
   accessToken: string,
-  columns: string,
 ): Promise<RemoteAgentListQueryResult> {
   const url = new URL('/rest/v1/remote_agents', SUPABASE_CONFIG.url);
-  url.searchParams.set('select', columns);
+  url.searchParams.set('select', REMOTE_AGENT_LIST_COLUMNS);
   url.searchParams.set('order', 'name.asc');
 
   try {

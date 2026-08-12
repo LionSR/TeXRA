@@ -27,7 +27,7 @@ const logger = createChannelTrace('TodoWriteTool');
 
 /**
  * Schema for the todo_write tool input.
- * Uses TodoItemSchema from eventBus/schemas as single source of truth.
+ * Uses TodoItemSchema from shared schemas as the single source of truth.
  */
 const TodoWriteInputSchema = z.strictObject({
   /** The complete updated todo list */

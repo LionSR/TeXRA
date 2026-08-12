@@ -349,8 +349,6 @@ async function handleRunLatexdiff(
         `Between-round diffs enabled: ${generateBetweenRoundDiffs}`,
       );
 
-      const runId = config.runId ?? undefined;
-
       const outputsByRound = normalizeRunLatexdiffOutputsByRound(
         config.outputsByRound,
       );
@@ -371,7 +369,7 @@ async function handleRunLatexdiff(
             model,
             inputFile,
             outputFiles,
-            runId,
+            runId: config.runId,
             outputsByRound,
             mathMarkup,
             generateBetweenRoundDiffs,

@@ -18,11 +18,6 @@ const CHINESE_PACKAGES = [
   'ctexbook',
 ];
 
-/**
- * Check if a LaTeX file contains Chinese-related packages
- * @param filePath Path to the LaTeX file
- * @returns Promise<boolean> True if the file contains Chinese packages
- */
 async function hasChinesePackages(
   fileLocation: FileLocation,
 ): Promise<boolean> {

@@ -148,7 +148,7 @@ export class HistoryList extends LitElement {
     }
   }
 
-  protected updated(changedProps: Map<string, unknown>): void {
+  protected updated(changedProps: PropertyValues<this>): void {
     // Apply search after DOM update so candidate items are rendered.
     if (
       this.searchTerm &&

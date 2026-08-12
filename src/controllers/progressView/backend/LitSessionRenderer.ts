@@ -17,6 +17,7 @@ import type {
   StreamSubstate,
   StreamTabId,
   TodoItem,
+  TokenUsageStats,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import {
@@ -224,7 +225,7 @@ export class LitSessionRenderer implements SessionRendererPort {
   onRunUsageChanged(
     streamId: StreamTabId,
     storageKey: string,
-    usage: Parameters<SessionRendererPort['onRunUsageChanged']>[2],
+    usage: TokenUsageStats,
   ): void {
     // Prefer the snapshot store's normalized per-key value when present (fills
     // cache/reasoning zeros); fall back to the event payload.

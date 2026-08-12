@@ -18,7 +18,6 @@ import {
   codingPlanRetryHint,
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
-  isCliCodingPlanRetry,
 } from './approvalPrompts';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';

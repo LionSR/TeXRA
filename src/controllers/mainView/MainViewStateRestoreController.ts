@@ -53,12 +53,8 @@ export const RestoreRunConfigInputSchema = z.preprocess(
 export function buildMainViewState(
   agentConfig: AgentConfig,
 ): MainViewPersistedState {
-  const isToolUse = agentConfig.agentCategory === AgentCategory.ToolUse;
   const toolConfig = agentConfig.toolConfig ?? {};
-
-  const agentCategory = isToolUse
-    ? AgentCategory.ToolUse
-    : AgentCategory.Workflow;
+  const agentCategory = agentConfig.agentCategory ?? AgentCategory.Workflow;
 
   // Resolve agent name to full key (e.g., "criticize" -> "builtIn:criticize").
   // This ensures the frontend receives the exact key used in dropdown options.
@@ -68,7 +64,8 @@ export function buildMainViewState(
   // to apply prefault defaults for any missing fields.
   // Note: UIFileFieldsSchema uses catch('') for nullable fields from AgentConfig.
   return MainViewPersistedStateSchema.parse({
-    sessionType: isToolUse ? 'toolUse' : 'workflow',
+    sessionType:
+      agentCategory === AgentCategory.ToolUse ? 'toolUse' : 'workflow',
     agent: { [agentCategory]: resolvedAgent },
     model: agentConfig.model,
     instruction: { [agentCategory]: agentConfig.instruction },

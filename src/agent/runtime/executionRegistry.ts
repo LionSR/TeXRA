@@ -704,7 +704,7 @@ export class ExecutionRegistry {
         agentName: handle.agentName,
         status,
         startedAt: handle.startedAt,
-        elapsed: elapsed ?? null,
+        elapsed,
         childStreamId: handle.childStreamId,
         ...(handle.workflowPhase
           ? { workflowPhase: handle.workflowPhase }

@@ -220,7 +220,7 @@ export class TextEditorTool extends defineTool({
 
     switch (command) {
       case 'view':
-        return this.view(filePath, displayPath, input.view_range ?? undefined);
+        return this.view(filePath, displayPath, input.view_range);
       case 'create':
         logger.info(CHANNEL, `create: ${displayPath}`);
         return this.create(filePath, displayPath, input.file_text);

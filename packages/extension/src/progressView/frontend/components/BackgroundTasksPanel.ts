@@ -542,13 +542,12 @@ function streamStatusBadgeVariant(
 ): 'neutral' | 'brand' | 'success' | 'danger' {
   switch (status) {
     case STREAM_PHASE.RUNNING:
+    case STREAM_PHASE.COMPLETED:
       return 'success';
     case STREAM_PHASE.WAITING:
       return 'brand';
     case STREAM_PHASE.FAILED:
       return 'danger';
-    case STREAM_PHASE.COMPLETED:
-      return 'success';
     case STREAM_PHASE.CANCELLED:
     default:
       return 'neutral';

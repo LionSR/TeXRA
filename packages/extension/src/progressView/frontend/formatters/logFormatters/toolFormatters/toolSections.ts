@@ -515,17 +515,17 @@ function buildMcpSections(ctx: ToolSectionContext): TemplateResult[] {
   const sections: TemplateResult[] = [];
   let renderedMcpOutput = false;
 
-  if (input != null) {
-    const { text: inputValue, language: inputLanguage } =
-      stringifyWithLanguage(input);
-    if (inputValue) {
-      sections.push(
-        buildToolSection('Arguments:', inputValue, {
-          toolName,
-          language: inputLanguage,
-        }),
-      );
-    }
+  // stringifyWithLanguage collapses null/undefined to an empty text, so the
+  // `if (inputValue)` below is the only guard needed.
+  const { text: inputValue, language: inputLanguage } =
+    stringifyWithLanguage(input);
+  if (inputValue) {
+    sections.push(
+      buildToolSection('Arguments:', inputValue, {
+        toolName,
+        language: inputLanguage,
+      }),
+    );
   }
 
   const mcpOutput: CodexMcpToolOutput | null =

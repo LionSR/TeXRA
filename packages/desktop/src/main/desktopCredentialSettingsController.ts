@@ -424,7 +424,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     invalidateModelOptionsCache();
     let usageProvider: 'kimiCode' | 'glmCodingPlan' | undefined;
     if (provider === 'kimiCode') usageProvider = 'kimiCode';
-    if (provider === 'glm') usageProvider = 'glmCodingPlan';
+    else if (provider === 'glm') usageProvider = 'glmCodingPlan';
     if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
     await this.postProfileData();
     await this.postModelSelectionData();

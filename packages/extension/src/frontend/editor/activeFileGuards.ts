@@ -65,12 +65,7 @@ async function getActiveLatexEditor(
   };
 }
 
-/**
- * Log guard failure with standardized messages.
- * @param channel - Logger channel name
- * @param action - Description of the action being performed (e.g., "indent LaTeX document")
- * @param reason - Reason for guard failure
- */
+/** Log guard failure with standardized messages. */
 function logGuardFailure(
   channel: string,
   action: string,

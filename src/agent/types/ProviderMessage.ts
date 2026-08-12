@@ -1,15 +1,13 @@
 // Third-party imports
 import { z } from 'zod';
-
-// Local imports
-import type { LanguageModelMessage } from '@platform/languageModel';
-
-// Third-party imports
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import type { Content, Interactions } from '@google/genai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 import type { ChatMessages as OpenRouterMessage } from '@openrouter/sdk/models';
+
+// Local imports
+import type { LanguageModelMessage } from '@platform/languageModel';
 
 /**
  * Message formats supported by the provider SDKs and host language-model port.

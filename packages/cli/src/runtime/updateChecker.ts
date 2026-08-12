@@ -106,11 +106,10 @@ export function buildUpdateCommand(method: InstallMethod): {
   const target = `${CLI_PACKAGE_NAME}@latest`;
   switch (method) {
     case 'pnpm':
-      return { command: 'pnpm', args: ['add', '-g', target] };
+    case 'bun':
+      return { command: method, args: ['add', '-g', target] };
     case 'yarn':
       return { command: 'yarn', args: ['global', 'add', target] };
-    case 'bun':
-      return { command: 'bun', args: ['add', '-g', target] };
     case 'brew':
       // Brew prompts are gated on the locally-known formula version, then the
       // tap is refreshed immediately before upgrade. Run via the shell chain

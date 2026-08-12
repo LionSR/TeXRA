@@ -7,14 +7,7 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 
 const NEVER_REMIND = 'Never remind again';
 
-/**
- * Show an instruction message that can be permanently dismissed.
- *
- * @param key Unique key for the instruction
- * @param message Message to display to the user
- * @param actions Optional action buttons with callbacks
- * @param showSuppress Whether to show the "Never remind again" option
- */
+/** Show an instruction message that can be permanently dismissed. */
 export async function showInstructionWithSuppress(
   key: string,
   message: string,

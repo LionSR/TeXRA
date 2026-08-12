@@ -35,11 +35,9 @@ export function persistRemoteAgentMeta(
 
 /** Load persisted remote agent metadata from globalState. */
 function getPersistedRemoteAgentMeta(): RemoteAgentMetaCache {
-  return (
-    platform().globalState.get<RemoteAgentMetaCache>(
-      GlobalStateKey.REMOTE_AGENT_META_CACHE,
-      {},
-    ) ?? {}
+  return platform().globalState.get<RemoteAgentMetaCache>(
+    GlobalStateKey.REMOTE_AGENT_META_CACHE,
+    {},
   );
 }
 

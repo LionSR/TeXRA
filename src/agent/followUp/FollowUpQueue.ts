@@ -26,13 +26,8 @@ export interface FollowUpQueueInput {
   readonly deliveryId?: string;
 }
 
-interface FollowUpQueueItem {
-  readonly text: string;
-  readonly displayText?: string;
+interface FollowUpQueueItem extends Omit<FollowUpQueueInput, 'origin'> {
   readonly origin: FollowUpQueueItemOrigin;
-  /** Media file paths (e.g. pasted images) attached to this user follow-up. */
-  readonly mediaFiles?: readonly string[];
-  readonly deliveryId?: string;
 }
 
 /** A queued follow-up surfaced in a drained batch; same shape as the stored item. */

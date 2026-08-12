@@ -48,7 +48,7 @@ export async function renderCliPrompt<T>(
       resolved = value;
     }),
     {
-      ...(options.interactive ? { interactive: true } : {}),
+      interactive: options.interactive,
       stdout: tuiOutputStreamForColor(
         options.stdout,
         options.colorEnabled ?? true,

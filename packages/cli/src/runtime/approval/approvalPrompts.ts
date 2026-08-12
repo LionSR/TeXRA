@@ -144,13 +144,18 @@ export function cliRetryApiSwitchDecision(
       apiMode: 'personal',
     };
   }
-  if (payload.errorDetails?.exhaustionReason === 'glm-coding-plan') {
-    return { accepted: true, disableGlmCodingPlan: true, apiMode: 'personal' };
+  switch (payload.errorDetails?.exhaustionReason) {
+    case 'glm-coding-plan':
+      return {
+        accepted: true,
+        disableGlmCodingPlan: true,
+        apiMode: 'personal',
+      };
+    case 'kimi-code-subscription':
+      return { accepted: true, disableKimiCode: true, apiMode: 'personal' };
+    default:
+      return { accepted: true, apiMode: 'personal' };
   }
-  if (isCliCodingPlanRetry(payload)) {
-    return { accepted: true, disableKimiCode: true, apiMode: 'personal' };
-  }
-  return { accepted: true, apiMode: 'personal' };
 }
 
 export function appendCliApiSwitchHint(

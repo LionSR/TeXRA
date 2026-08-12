@@ -15,7 +15,7 @@ import {
 
 export const memoryHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY]: (data) => {
-    memoryItems.set(data.items ?? []);
+    memoryItems.set(data.items);
   },
 
   [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED]: (data) => {
