@@ -1,7 +1,5 @@
 import * as path from 'node:path';
 
-import nunjucks from 'nunjucks';
-
 import { createLog } from '@logger/logUtils';
 import { filterNotNull } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -110,10 +108,16 @@ async function resolveValue(value: unknown): Promise<unknown> {
   return Object.fromEntries(entries);
 }
 
-// One environment for every prompt render, as in polishModel.ts: configuring
-// nunjucks builds a filesystem loader, and renderString compiles its template
-// per call regardless, so a per-call environment was pure setup cost.
-const promptEnv = nunjucks.configure({ autoescape: false });
+let promptEnvironmentPromise: Promise<import('nunjucks').Environment> | null =
+  null;
+
+function promptEnvironment(): Promise<import('nunjucks').Environment> {
+  promptEnvironmentPromise ??= import('nunjucks').then(
+    ({ default: nunjucks }) =>
+      new nunjucks.Environment(undefined, { autoescape: false }),
+  );
+  return promptEnvironmentPromise;
+}
 
 /**
  * Render a prompt string using nunjucks templating
@@ -125,8 +129,11 @@ export async function renderPrompt(
   prompt: string,
   variables: Record<string, unknown>,
 ): Promise<string> {
-  const resolvedVariables = await resolveValue(variables);
-  return promptEnv.renderString(
+  const [environment, resolvedVariables] = await Promise.all([
+    promptEnvironment(),
+    resolveValue(variables),
+  ]);
+  return environment.renderString(
     prompt,
     resolvedVariables as Record<string, unknown>,
   );
