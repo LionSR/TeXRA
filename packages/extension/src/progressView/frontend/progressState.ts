@@ -109,7 +109,9 @@ const followupOptions$ = select(appState, (s) => s.followupOptionsByStream);
 // Derived computeds: only re-evaluate when selector inputs propagate.
 // ---------------------------------------------------------------------------
 
-export const streams$ = new Signal.Computed(() => [...streamById$.get().values()]);
+export const streams$ = new Signal.Computed(() => [
+  ...streamById$.get().values(),
+]);
 
 /** Top-level streams: the tab list, with child streams excluded. */
 export const topLevelStreams$ = new Signal.Computed(() =>
