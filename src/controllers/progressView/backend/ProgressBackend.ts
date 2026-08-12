@@ -327,7 +327,6 @@ export class ProgressBackend {
     this.webviewBridge.clearStream(stream);
 
     let shouldActivateStream = false;
-    let notifyActivation = true;
     const activeAfterClear = this.state.activeStream;
     const remainingStreams = this.state.selectableStreamNames();
     const hasVisibleActive =
@@ -337,9 +336,6 @@ export class ProgressBackend {
         this.state.rotateActiveStream(remainingStreams) !== '';
     } else if (wasActive && hasVisibleActive) {
       shouldActivateStream = true;
-      // A newer activation won while deletion awaited storage. Its fact
-      // already focused the renderer; only refresh its content here.
-      notifyActivation = false;
     }
 
     this.postMessage({
@@ -349,13 +345,10 @@ export class ProgressBackend {
 
     const nextActive = this.state.activeStream;
     if (shouldActivateStream && nextActive) {
-      if (notifyActivation) {
-        await this.activateStream(nextActive);
-      } else {
-        await this.syncActiveStream(nextActive, {
-          notifyActivation: false,
-        });
-      }
+      // DELETE_STREAM clears the frontend selection when the deleted tab was
+      // active. Reassert the surviving selection even when a concurrent
+      // activation already selected it while storage deletion was pending.
+      await this.activateStream(nextActive);
     } else {
       // The deleted stream was not the active one, so only the stream list
       // changed; the active stream's content is still on screen and correct.

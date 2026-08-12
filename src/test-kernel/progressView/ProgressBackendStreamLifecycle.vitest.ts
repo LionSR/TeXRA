@@ -279,6 +279,10 @@ describe('ProgressBackend', () => {
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
       stream: second,
     });
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: first,
+    });
   });
 
   it('releases the tab left behind when deletion rotates the selection', async () => {
@@ -367,12 +371,10 @@ describe('ProgressBackend', () => {
         activeState: expect.any(Object),
       }),
     );
-    expect(
-      messages.filter(
-        (message) =>
-          message.command === PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-      ),
-    ).toHaveLength(0);
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: selected,
+    });
   });
 
   it('cleans every stream and emits one bulk deletion', async () => {
