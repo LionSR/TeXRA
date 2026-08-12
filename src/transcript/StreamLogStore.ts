@@ -1172,6 +1172,10 @@ export class StreamLogStore {
   }
 
   private async executeReload(discardPendingWrites: boolean): Promise<void> {
+    // Sample before the first await: run facts may arrive while pending writes
+    // drain or the replacement adapters prepare, and the reload must not fold
+    // those new-root facts into the state it is about to replace.
+    const revision = this.stateRevision;
     if (discardPendingWrites) {
       this.saveThrottle.cancel();
       // Invalidate and drain any in-flight batch before the adapters
@@ -1198,7 +1202,6 @@ export class StreamLogStore {
     this.summaryCacheMaintenanceEnabled = true;
     if (this.mode.kind === 'persistent') await this.prepareSummaryCache();
 
-    const revision = this.stateRevision;
     const summaries = await this.readPersistentSummaries();
     if (revision !== this.stateRevision || this.pendingLoads().length > 0) {
       throw new Error(

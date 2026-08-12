@@ -1908,7 +1908,6 @@ export class StreamSnapshotStore {
     const metaOverlay = record.metaOverlay ? record.meta : undefined;
     const usageOverlayToReplay = new Map(record.overlays.usage);
     const sidecarsToWrite = new Set<OverlaySidecarKey>();
-    let publishHydratedSummaryMeta = true;
 
     record.outputFiles = data.outputFiles;
     record.missingOutputs = data.missingOutputs;
@@ -1958,21 +1957,20 @@ export class StreamSnapshotStore {
       const pendingLiveWrite = metaOverlay !== undefined;
       const configBeforeHydration = record.runConfig;
       const hydrated = await this.hydrateRunStateFromMeta(stream, meta);
+      const mirroredMeta = this.summaryMetaSource?.(stream);
       const mirroredExecutionId =
-        this.summaryMetaSource?.(stream)?.executionId ?? previousExecutionId;
+        mirroredMeta?.executionId ?? previousExecutionId;
       if (
         !hydrated.authorityReadComplete &&
         mirroredExecutionId === executionId
       ) {
         record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
-          this.summaryMetaSource?.(stream),
+          mirroredMeta,
           ['executionId', 'parentStreamId'],
         );
       } else {
         record.summaryMetaHydrationFallback = undefined;
       }
-      publishHydratedSummaryMeta =
-        hydrated.authorityReadComplete || mirroredExecutionId !== executionId;
       if (this.streamVersion(stream) !== version) return;
       // Re-checked after the await: a `run.start` for another execution can
       // land during it, and this seed's pair belongs to the run it read.
@@ -2047,12 +2045,12 @@ export class StreamSnapshotStore {
     }
     record.diskState = provenance;
     this.writeMergedSidecars(stream, record, sidecarsToWrite);
-    // A complete hydration republishes the metadata mirror: the deep-equal
-    // gate downstream makes an unchanged republish free, and this lazily
-    // backfills summaries persisted before the mirror existed (#9947). An
-    // incomplete read preserves a same-execution mirror; after a handoff it
-    // publishes the new execution id with old execution-owned fields cleared.
-    if (publishHydratedSummaryMeta && this.records.get(stream) === record) {
+    // Hydration republishes the metadata mirror: the deep-equal gate makes an
+    // unchanged projection free, and this lazily backfills old summaries
+    // (#9947). After an incomplete read, the fallback preserves fields owned
+    // by the same execution while current sidecar fields still refresh; after
+    // a handoff, only facts belonging to the new execution are published.
+    if (this.records.get(stream) === record) {
       this.publishSummaryMeta(stream);
     }
   }

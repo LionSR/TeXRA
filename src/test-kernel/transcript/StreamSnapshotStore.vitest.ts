@@ -2746,12 +2746,16 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
   it('preserves mirrored metadata when execution hydration is incomplete', async () => {
     vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     const executionId = 'a77e77' as ExecutionId;
-    await writeMetaFile(STREAM, { executionId });
+    await writeMetaFile(STREAM, {
+      executionId,
+      parentStreamId: OTHER_STREAM,
+    });
     vi.spyOn(getExecutionStore(executionId), 'readMeta').mockRejectedValueOnce(
       new Error('transient execution read failure'),
     );
     let mirroredMeta: Record<string, unknown> = {
       executionId,
+      parentStreamId: 'previous-parent',
       identity: { kind: 'agent', agent: 'search' },
       description: 'Existing summary metadata',
       model: 'deepseekproT',
@@ -2765,7 +2769,6 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
     });
 
     await store.load([STREAM]);
-    snapshotFacts(store).setParentStream(STREAM, OTHER_STREAM);
 
     expect(mirroredMeta).toEqual({
       executionId,
