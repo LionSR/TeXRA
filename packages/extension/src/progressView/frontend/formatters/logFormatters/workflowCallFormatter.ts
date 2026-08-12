@@ -57,40 +57,46 @@ export function formatWorkflowCallTemplate(
       ProgressEvents.streamSwitch({ streamId: call.childStreamId }),
     );
   };
-  const handleKeydown = (event: KeyboardEvent): void => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    openChildStream(event);
-  };
-
-  return html`
-    <div
-      class=${`workflow-task workflow-task--${call.status}${
-        hasChildStream ? ' workflow-task--linked' : ''
-      }`}
-      data-log-id=${message.id}
-      data-group-id=${message.groupId ?? ''}
-      role=${hasChildStream ? 'button' : nothing}
-      tabindex=${hasChildStream ? '0' : nothing}
-      @click=${hasChildStream ? openChildStream : nothing}
-      @keydown=${hasChildStream ? handleKeydown : nothing}
+  const content = html`
+    <span class="workflow-task-icon">${statusIcon(call)}</span>
+    <span class="workflow-task-body">
+      <span class="workflow-task-title">${call.label}</span>
+      ${terminalMetadata(call)}
+      ${
+        detail
+          ? html`<span
+              class=${`workflow-task-detail workflow-task-detail--${detail.kind}`}
+              >${detail.text}</span
+            >`
+          : nothing
+      }
+    </span>
+    <span class="workflow-task-status"
+      >${WORKFLOW_TASK_STATUS_LABEL[call.status]}</span
     >
-      <span class="workflow-task-icon">${statusIcon(call)}</span>
-      <span class="workflow-task-body">
-        <span class="workflow-task-title">${call.label}</span>
-        ${terminalMetadata(call)}
-        ${
-          detail
-            ? html`<span
-                class=${`workflow-task-detail workflow-task-detail--${detail.kind}`}
-                >${detail.text}</span
-              >`
-            : nothing
-        }
-      </span>
-      <span class="workflow-task-status"
-        >${WORKFLOW_TASK_STATUS_LABEL[call.status]}</span
-      >
-    </div>
   `;
+  const className = `workflow-task workflow-task--${call.status}${
+    hasChildStream ? ' workflow-task--linked' : ''
+  }`;
+  const groupId = message.groupId ?? '';
+
+  if (hasChildStream) {
+    return html`<button
+      type="button"
+      class=${className}
+      data-log-id=${message.id}
+      data-group-id=${groupId}
+      aria-label=${`Open ${call.label} run`}
+      @click=${openChildStream}
+    >
+      ${content}
+    </button>`;
+  }
+  return html`<div
+    class=${className}
+    data-log-id=${message.id}
+    data-group-id=${groupId}
+  >
+    ${content}
+  </div>`;
 }
