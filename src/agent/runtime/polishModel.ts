@@ -52,5 +52,10 @@ export async function renderPolishPrompt(
     loadPromptTemplate(),
     import('nunjucks'),
   ]);
-  return nunjucks.renderString(template, { FILE_CONTEXT: fileContext }) + text;
+  const environment = new nunjucks.Environment(undefined, {
+    autoescape: false,
+  });
+  return (
+    environment.renderString(template, { FILE_CONTEXT: fileContext }) + text
+  );
 }
