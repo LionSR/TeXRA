@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from 'node:timers/promises';
+
 import {
   attachTerminalResultToast,
   runAgent,
@@ -40,6 +42,8 @@ import {
 import { CLI_UNAVAILABLE_TOOLS } from './unavailableTools';
 import { attachWorkflowPlainOutput } from './workflowPlainOutput';
 import type { CliContext } from './cliContext';
+
+const CLI_RUN_SHUTDOWN_GRACE_MS = 5_000;
 
 interface CliExecuteOptions {
   /** Forwarded to `runAgent`. */
@@ -240,7 +244,10 @@ export async function executeCliRequest(
       })
     : () => undefined;
   let ownedExecutionId: ExecutionId | undefined;
+  const launchAbortController = new AbortController();
+  let shutdownRequested = false;
   let shutdownInterrupted = false;
+  let runLifecycleStarted = false;
   let shutdownArtifactFailure: unknown;
   let shutdownFinalizationFailureReported = false;
   const reportFinalizationFailure = (error: unknown): void => {
@@ -299,14 +306,33 @@ export async function executeCliRequest(
   const disposeShutdownStatus = tryPlatform()?.lifecycle.onShutdown(
     SHUTDOWN_PHASE.BEFORE,
     async () => {
-      shutdownInterrupted = true;
-      if (ownedExecutionId) {
-        session.executions.kill(ownedExecutionId);
-      }
+      shutdownRequested = true;
+      launchAbortController.abort();
+      const interruptionAccepted = ownedExecutionId
+        ? session.executions.kill(ownedExecutionId)
+        : false;
+      // Before lifecycle registration, the launch signal is the cancellation
+      // authority. Afterwards, only an accepted registry stop may replace the
+      // run's own terminal verdict with CANCELLED.
+      shutdownInterrupted =
+        !runLifecycleStarted || interruptionAccepted || shutdownInterrupted;
       // Earlier shutdown handlers interrupt the live agent sessions. Wait for
       // runAgent to finish unwinding before the final drain releases ownership,
-      // so no transcript or checkpoint writer can race the lease release.
-      await shutdownFinalizationDone;
+      // so no transcript or checkpoint writer can race the lease release. A
+      // provider or filesystem operation outside our abortable boundaries must
+      // not prevent signal termination indefinitely; on timeout, leave the
+      // lease intact for stale-owner recovery rather than releasing it early.
+      const grace = new AbortController();
+      try {
+        await Promise.race([
+          shutdownFinalizationDone,
+          sleep(CLI_RUN_SHUTDOWN_GRACE_MS, undefined, {
+            signal: grace.signal,
+          }),
+        ]);
+      } finally {
+        grace.abort();
+      }
     },
   );
   const invoke = async (): Promise<ExecuteAgentResult> => {
@@ -317,6 +343,7 @@ export async function executeCliRequest(
         registerExecution: options.registerExecution,
         openWorkflowOutput: options.openWorkflowOutput,
         modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+        launchSignal: launchAbortController.signal,
         beforeLeaseRelease: async () => {
           const handled = await finalizeShutdownStatus();
           if (shutdownArtifactFailure !== undefined) {
@@ -329,12 +356,17 @@ export async function executeCliRequest(
         onExecutionLeaseAcquired: (runWithOwnership, executionId) => {
           ownedExecutionId = executionId;
           settleLeaseScope(runWithOwnership);
+          if (shutdownRequested && !runLifecycleStarted) {
+            shutdownInterrupted = true;
+          }
         },
         onRun: () => {
+          runLifecycleStarted = true;
           // Acquisition precedes registry tracking. If shutdown landed in
           // between, interrupt as soon as the canonical handle becomes live.
-          if (shutdownInterrupted && ownedExecutionId) {
-            session.executions.kill(ownedExecutionId);
+          if (shutdownRequested && ownedExecutionId) {
+            shutdownInterrupted =
+              session.executions.kill(ownedExecutionId) || shutdownInterrupted;
           }
         },
         stopAfterCycle: options.stopAfterCycle,

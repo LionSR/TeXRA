@@ -159,6 +159,7 @@ function loadRunExecution(): Promise<
 type LeaseOptions = {
   beforeLeaseRelease?: () => Promise<boolean | void>;
   onRun?: () => void;
+  launchSignal?: AbortSignal;
   onExecutionLeaseAcquired?: (
     scope: (operation: () => unknown) => unknown,
     executionId: ExecutionId,
@@ -875,6 +876,61 @@ describe('executeCliRequest', () => {
     hangingRun.resolve(COMPLETED_RUN);
     await shutdown;
     await run;
+  });
+
+  it('cancels launch preparation when shutdown precedes run registration', async () => {
+    const { platform, executeCliRequest } = await installFakePlatform();
+    let launchSignal: AbortSignal | undefined;
+    mocks.runAgent.mockImplementationOnce(
+      async (_request: unknown, options: LeaseOptions) => {
+        launchSignal = options.launchSignal;
+        await new Promise<void>((_resolve, reject) => {
+          options.launchSignal?.addEventListener(
+            'abort',
+            () => reject(new AgentError('launch aborted')),
+            { once: true },
+          );
+        });
+        return COMPLETED_RUN;
+      },
+    );
+
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+    });
+    await vi.waitFor(() => expect(launchSignal).toBeDefined());
+
+    await platform.lifecycle.runShutdown();
+    await expect(run).rejects.toThrow('launch aborted');
+    expect(launchSignal?.aborted).toBe(true);
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+  });
+
+  it('preserves a terminal outcome when shutdown cannot interrupt the finished run', async () => {
+    const { platform, executeCliRequest } = await installFakePlatform();
+    const { defaultSession } = await import('@agent/runtime/SessionHandle');
+    vi.spyOn(defaultSession().executions, 'kill').mockReturnValue(false);
+    let leaseOptions: LeaseOptions | undefined;
+    const hangingRun = stubHangingRun((options) => {
+      leaseOptions = options;
+    });
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+    });
+    await vi.waitFor(() => expect(leaseOptions).toBeDefined());
+    leaseOptions?.onExecutionLeaseAcquired?.(
+      (operation: () => unknown) => operation(),
+      'exec-1' as ExecutionId,
+    );
+    leaseOptions?.onRun?.();
+
+    const shutdown = platform.lifecycle.runShutdown();
+    hangingRun.resolve(COMPLETED_RUN);
+    await shutdown;
+    await run;
+
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
   });
 
   it('does not finalize shutdown through a captured lease that is already lost', async () => {

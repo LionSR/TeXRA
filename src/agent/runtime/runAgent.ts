@@ -47,6 +47,7 @@ export interface RunAgentOptions extends Pick<
   | 'onRun'
   | 'onStreamResolved'
   | 'onIdle'
+  | 'launchSignal'
 > {
   openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
   /**
