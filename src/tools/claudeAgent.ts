@@ -5,7 +5,9 @@
  * session_id, a new Claude Code session is started and the result is delivered
  * as a follow-up to the parent stream. With a session_id, the prompt is
  * enqueued as a follow-up instruction to an existing session via the SDK's
- * `resume:` option (or via streaming-input on the live session). Each turn's
+ * `resume:` option (or via streaming-input on the live session). With
+ * fork_session, it instead starts a new session from the selected session's
+ * state. Each turn's
  * result is delivered back to the parent's follow-up queue, so the
  * orchestrator sees responses uniformly whether it or the user drove the turn.
  *
@@ -53,6 +55,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
+import { ClaudeBackgroundTaskTracker } from './claudeAgentBackgroundTasks';
 import {
   importClaudeAgentSdk,
   findClaudeBinaryPath,
@@ -69,16 +72,21 @@ import {
   formatChildRunError,
 } from './delegation/deliveryEnvelope';
 import {
+  aggregateClaudeModelUsage,
   buildClaudeToolUseLog,
   buildClaudeUsageStats,
   CLAUDE_AGENT_NAME,
   modelSupportsAdaptiveThinking,
-  type ClaudeMessageBlock,
   type ClaudeTurnUsage,
 } from './claudeAgentShared';
 
 // Third-party type imports (import/order places these after local imports)
-import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  Options as ClaudeAgentSdkOptions,
+  SDKAssistantMessage,
+  SDKMessage,
+  SDKUserMessage,
+} from '@anthropic-ai/claude-agent-sdk';
 
 let _configModule: typeof import('./claudeAgentConfig.js') | null = null;
 async function getClaudeAgentConfig(): Promise<
@@ -91,33 +99,44 @@ async function getClaudeAgentConfig(): Promise<
 // Schema
 // ============================================================================
 
-const ClaudeAgentInputSchema = z.strictObject({
-  prompt: z
-    .string()
-    .describe(
-      'Instruction for the Claude Code agent. For a new session, describe the task. For a resume (session_id set), describe the follow-up.',
+const ClaudeAgentInputSchema = z
+  .strictObject({
+    prompt: z
+      .string()
+      .describe(
+        'Instruction for the Claude Code agent. For a new session, describe the task. For a resume (session_id set), describe the follow-up.',
+      ),
+    // A subset of the SDK's `PermissionMode`: 'dontAsk' and 'auto' are internal
+    // to the SDK and never offered here.
+    permission_mode: ClaudeAgentPermissionModeSchema.nullish().describe(
+      'Permission behavior for the agent: acceptEdits auto-applies file edits, plan keeps the agent read-only (defaults to user-configured mode, typically acceptEdits).',
     ),
-  // A subset of the SDK's `PermissionMode`: 'dontAsk' and 'auto' are internal
-  // to the SDK and never offered here.
-  permission_mode: ClaudeAgentPermissionModeSchema.nullish().describe(
-    'Permission behavior for the agent: acceptEdits auto-applies file edits, plan keeps the agent read-only (defaults to user-configured mode, typically acceptEdits).',
-  ),
-  model: z
-    .string()
-    .nullish()
-    .describe(
-      "Claude model to use (e.g. 'claude-sonnet-5', 'claude-fable-5', 'claude-opus-5'). Defaults to user-configured model.",
+    model: z
+      .string()
+      .nullish()
+      .describe(
+        "Claude model to use (e.g. 'claude-sonnet-5', 'claude-fable-5', 'claude-opus-5'). Defaults to user-configured model.",
+      ),
+    effort: ClaudeAgentEffortSchema.nullish().describe(
+      'Reasoning depth hint passed to the SDK (defaults to user-configured effort, typically high).',
     ),
-  effort: ClaudeAgentEffortSchema.nullish().describe(
-    'Reasoning depth hint passed to the SDK (defaults to user-configured effort, typically high).',
-  ),
-  session_id: z
-    .string()
-    .nullish()
-    .describe(
-      'Resume an existing Claude Code session with a follow-up instruction. The prompt is enqueued as the next turn; if the session is currently processing, the prompt waits in its queue.',
-    ),
-});
+    session_id: z
+      .string()
+      .nullish()
+      .describe(
+        'Resume an existing Claude Code session with a follow-up instruction. The prompt is enqueued as the next turn; if the session is currently processing, the prompt waits in its queue.',
+      ),
+    fork_session: z
+      .boolean()
+      .nullish()
+      .describe(
+        'When true, branch from session_id into a new Claude session and leave the original session unchanged. Defaults to false.',
+      ),
+  })
+  .refine((input) => input.fork_session !== true || input.session_id != null, {
+    message: 'fork_session requires session_id',
+    path: ['fork_session'],
+  });
 
 export type ClaudeAgentInput = z.infer<typeof ClaudeAgentInputSchema>;
 
@@ -174,43 +193,6 @@ type ClaudeToolLogRef = ToolUseCardRef & {
 };
 
 // ============================================================================
-// SDK type aliases — we keep these loose to avoid pulling the SDK's full type
-// surface (which depends on a private @anthropic-ai/sdk MessageParam shape)
-// into VS Code-free zones.
-// ============================================================================
-
-interface SdkSystemMessage {
-  type: 'system';
-  subtype?: string;
-  session_id?: string;
-}
-
-interface SdkAssistantMessage {
-  type: 'assistant';
-  session_id?: string;
-  message?: { content?: ClaudeMessageBlock[] };
-}
-
-interface SdkUserMessage {
-  type: 'user';
-  session_id?: string;
-  message?: { content?: ClaudeMessageBlock[] };
-}
-
-interface SdkResultMessage {
-  type: 'result';
-  subtype?: string;
-  session_id?: string;
-  result?: string;
-  is_error?: boolean;
-  total_cost_usd?: number;
-  usage?: TurnResult['usage'];
-}
-
-type SdkMessage =
-  SdkSystemMessage | SdkAssistantMessage | SdkUserMessage | SdkResultMessage;
-
-// ============================================================================
 // Streamed turn — drains the SDK's async generator into log entries + a
 // TurnResult for follow-up delivery.
 // ============================================================================
@@ -226,6 +208,7 @@ export async function runStreamedTurn(params: {
   additionalDirectories: string[] | undefined;
   env: NodeJS.ProcessEnv;
   resumeSessionId: string | undefined;
+  forkSession?: boolean;
   pathToClaudeCodeExecutable: string | undefined;
 }): Promise<TurnResult> {
   const { logger, prompt } = params;
@@ -253,6 +236,7 @@ export async function runStreamedTurn(params: {
     sdkOptions.additionalDirectories = params.additionalDirectories;
   }
   if (params.resumeSessionId) sdkOptions.resume = params.resumeSessionId;
+  if (params.forkSession) sdkOptions.forkSession = true;
   if (params.pathToClaudeCodeExecutable) {
     sdkOptions.pathToClaudeCodeExecutable = params.pathToClaudeCodeExecutable;
   }
@@ -260,49 +244,57 @@ export async function runStreamedTurn(params: {
   const stream = query({ prompt, options: sdkOptions });
   const responseParts: string[] = [];
   const toolLogRefs = new Map<string, ClaudeToolLogRef>();
+  const backgroundTasks = new ClaudeBackgroundTaskTracker(logger);
   let usage: TurnResult['usage'] = null;
   let sessionId: string | undefined;
   let totalCostUsd: number | undefined;
   let isError = false;
   let errorMessage: string | undefined;
 
-  for await (const raw of stream as AsyncIterable<SdkMessage>) {
-    if (raw.session_id) sessionId = raw.session_id;
+  try {
+    for await (const raw of stream as AsyncIterable<SDKMessage>) {
+      if ('session_id' in raw && raw.session_id) sessionId = raw.session_id;
 
-    switch (raw.type) {
-      case 'assistant':
-        if (raw.message?.content) {
+      switch (raw.type) {
+        case 'assistant':
           handleAssistantBlocks(
             raw.message.content,
             logger,
             toolLogRefs,
             responseParts,
           );
-        }
-        break;
-      case 'user':
-        if (raw.message?.content) {
-          handleToolResults(raw.message.content, logger, toolLogRefs);
-        }
-        break;
-      case 'result':
-        usage = raw.usage ?? null;
-        totalCostUsd = raw.total_cost_usd;
-        if (raw.subtype === 'success') {
-          if (isNonEmptyString(raw.result)) {
-            responseParts.push(raw.result);
+          break;
+        case 'user':
+          if (Array.isArray(raw.message.content)) {
+            handleToolResults(raw.message.content, logger, toolLogRefs);
           }
-        } else {
-          isError = true;
-          errorMessage = raw.result ?? raw.subtype ?? 'Claude Code error';
-        }
-        break;
-      case 'system':
-        if (raw.subtype === 'init' && raw.session_id) {
-          logger.info(`Claude session ${raw.session_id} started`);
-        }
-        break;
+          break;
+        case 'result':
+          usage = aggregateClaudeModelUsage(raw.modelUsage);
+          totalCostUsd = raw.total_cost_usd;
+          if (raw.subtype === 'success') {
+            if (isNonEmptyString(raw.result)) {
+              responseParts.push(raw.result);
+            }
+          } else {
+            isError = true;
+            errorMessage = raw.errors.join('\n') || raw.subtype;
+          }
+          break;
+        case 'system':
+          switch (raw.subtype) {
+            case 'init':
+              logger.info(`Claude session ${raw.session_id} started`);
+              break;
+            case 'background_tasks_changed':
+              backgroundTasks.replace(raw.tasks);
+              break;
+          }
+          break;
+      }
     }
+  } finally {
+    backgroundTasks.finish();
   }
 
   return {
@@ -316,7 +308,7 @@ export async function runStreamedTurn(params: {
 }
 
 function handleAssistantBlocks(
-  blocks: ClaudeMessageBlock[],
+  blocks: SDKAssistantMessage['message']['content'],
   logger: AgentTrace,
   refs: Map<string, ClaudeToolLogRef>,
   responseParts: string[],
@@ -352,7 +344,7 @@ function handleAssistantBlocks(
 }
 
 function handleToolResults(
-  blocks: ClaudeMessageBlock[],
+  blocks: Exclude<SDKUserMessage['message']['content'], string>,
   logger: AgentTrace,
   refs: Map<string, ClaudeToolLogRef>,
 ): void {
@@ -407,6 +399,7 @@ function startClaudeAgentLoop(params: {
   additionalDirectories: string[] | undefined;
   env: NodeJS.ProcessEnv;
   pathToClaudeCodeExecutable: string | undefined;
+  forkSession: boolean;
   /**
    * Set when this launch is the disk-based fallback for a session_id the
    * in-memory registry no longer knows about (extension reload or crash). The
@@ -424,7 +417,10 @@ function startClaudeAgentLoop(params: {
   // turns; it's threaded forward from each turn's result. Seeded from
   // params.resumeSessionId when this launch is a disk-based fallback resume.
   let resumeSessionId: string | undefined = params.resumeSessionId;
-  const fallbackSessionId = params.resumeSessionId;
+  let forkNextTurn = params.forkSession;
+  const fallbackSessionId = params.forkSession
+    ? undefined
+    : params.resumeSessionId;
 
   startAgentCliLoop({
     childStream,
@@ -447,8 +443,10 @@ function startClaudeAgentLoop(params: {
         additionalDirectories: params.additionalDirectories,
         env: params.env,
         resumeSessionId,
+        forkSession: forkNextTurn,
         pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
       });
+      forkNextTurn = false;
       if (turn.sessionId) resumeSessionId = turn.sessionId;
       return turn;
     },
@@ -498,7 +496,8 @@ export class ClaudeAgentTool extends defineTool({
     'Requires the Claude Code CLI (auto-installed with @anthropic-ai/claude-agent-sdk, or via `npm install -g @anthropic-ai/claude-code`). ' +
     'Auth: ANTHROPIC_API_KEY (via TeXRA Settings → API Keys or env var), CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`), or `claude login` OAuth session. ' +
     'Always async: returns immediately with an execution ID; each turn is delivered back as a follow-up message (including the session_id). ' +
-    'Pass session_id on a later call to send a follow-up to an existing session, like delegate_agent(execution_id=…).',
+    'Pass session_id on a later call to send a follow-up to an existing session, like delegate_agent(execution_id=…). ' +
+    'Set fork_session to branch from that session while leaving the original unchanged.',
   schema: ClaudeAgentInputSchema,
 }) {
   protected async execute(input: ClaudeAgentInput): Promise<ToolResult> {
@@ -512,7 +511,12 @@ export class ClaudeAgentTool extends defineTool({
       agentName: CLAUDE_AGENT_NAME,
       approvalLabel: `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
       store: ClaudeAgentSessions,
-      resumeId: input.session_id ?? undefined,
+      // A fork always launches a distinct TeXRA child. Queueing onto the
+      // source session would mutate the original instead of branching it.
+      resumeId:
+        input.fork_session === true
+          ? undefined
+          : (input.session_id ?? undefined),
       prompt: input.prompt,
       labels: {
         notActiveLabel: 'Claude Code CLI session',
@@ -582,6 +586,7 @@ async function launchClaudeAgentSession(
         env,
         pathToClaudeCodeExecutable,
         resumeSessionId: input.session_id ?? undefined,
+        forkSession: input.fork_session === true,
         releaseFallbackClaim,
       }),
     summary: `Launched Claude Code CLI: ${preview}`,

@@ -9,7 +9,7 @@ import type {
 } from '@shared/schemas';
 import { truncateSummary } from '@utils/text/stringUtils';
 
-import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk';
+import type { EffortLevel, ModelUsage } from '@anthropic-ai/claude-agent-sdk';
 
 const LOG_CHANNEL = 'claudeAgent';
 
@@ -52,30 +52,34 @@ export function modelSupportsAdaptiveThinking(model: string): boolean {
 
 const SUMMARY_MAX_LENGTH = 60;
 
-/**
- * Subset of the SDK's `SDKAssistantMessage.message` content blocks we need to
- * log, hand-declared as a discriminated union (rather than importing the
- * private MessageParam shape from `@anthropic-ai/sdk` into VS Code-free
- * zones). Narrowing on `type` gives each variant only its own fields, so a
- * caller can't accidentally read e.g. `tool_use_id` off a `text` block.
- */
-export type ClaudeMessageBlock =
-  | { type: 'text'; text?: string }
-  | { type: 'thinking'; thinking?: string }
-  | { type: 'tool_use'; id?: string; name?: string; input?: unknown }
-  | {
-      type: 'tool_result';
-      tool_use_id?: string;
-      content?: unknown;
-      is_error?: boolean;
-    };
-
 /** Raw per-turn usage as reported by the Claude Agent SDK (snake_case, all optional). */
 export interface ClaudeTurnUsage {
   input_tokens?: number;
   output_tokens?: number;
   cache_read_input_tokens?: number;
   cache_creation_input_tokens?: number;
+  cost_usd?: number;
+}
+
+/** Collapse the SDK's authoritative per-model totals into one turn summary. */
+export function aggregateClaudeModelUsage(
+  modelUsage: Readonly<Record<string, ModelUsage>>,
+): ClaudeTurnUsage {
+  const usage: Required<ClaudeTurnUsage> = {
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_read_input_tokens: 0,
+    cache_creation_input_tokens: 0,
+    cost_usd: 0,
+  };
+  for (const model of Object.values(modelUsage)) {
+    usage.input_tokens += model.inputTokens;
+    usage.output_tokens += model.outputTokens;
+    usage.cache_read_input_tokens += model.cacheReadInputTokens;
+    usage.cache_creation_input_tokens += model.cacheCreationInputTokens;
+    usage.cost_usd += model.costUSD;
+  }
+  return usage;
 }
 
 /** Format a usage object into TeXRA's TokenUsageStats. */
@@ -83,7 +87,7 @@ export function buildClaudeUsageStats(usage: ClaudeTurnUsage): TokenUsageStats {
   return {
     inputTokens: usage.input_tokens ?? 0,
     outputTokens: usage.output_tokens ?? 0,
-    cost: 0,
+    cost: usage.cost_usd ?? 0,
     ...(usage.cache_read_input_tokens != null &&
       usage.cache_read_input_tokens > 0 && {
         cacheReadInputTokens: usage.cache_read_input_tokens,
@@ -187,11 +191,33 @@ function describeToolInput(toolName: string, input: unknown): string {
     case 'WebSearch':
       if (typeof record.query === 'string') return `WebSearch ${record.query}`;
       break;
-    case 'TodoWrite':
-      return 'TodoWrite';
+    case 'TaskCreate':
+      if (typeof record.subject === 'string') {
+        return `Create task: ${record.subject}`;
+      }
+      break;
+    case 'TaskUpdate': {
+      let task: string | undefined;
+      if (typeof record.subject === 'string') task = record.subject;
+      else if (typeof record.taskId === 'string') task = record.taskId;
+      if (task) {
+        return typeof record.status === 'string'
+          ? `Update task: ${task} → ${record.status}`
+          : `Update task: ${task}`;
+      }
+      break;
+    }
+    case 'TaskGet':
+      if (typeof record.taskId === 'string') {
+        return `Get task: ${record.taskId}`;
+      }
+      break;
+    case 'TaskList':
+      return 'List tasks';
+    case 'Agent':
     case 'Task':
       if (typeof record.description === 'string') {
-        return `Task ${record.description}`;
+        return `Agent ${record.description}`;
       }
       break;
   }

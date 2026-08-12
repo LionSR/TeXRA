@@ -16,4 +16,16 @@ describe('ClaudeAgentTool schema', () => {
     expect(modelDescription).toContain('claude-opus-5');
     expect(modelDescription).not.toContain('claude-opus-4-8');
   });
+
+  it('requires a source session when session forking is requested', async () => {
+    const result = await new ClaudeAgentTool().call({
+      prompt: 'branch this conversation',
+      fork_session: true,
+    });
+
+    expect(result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining('fork_session requires session_id'),
+    });
+  });
 });
