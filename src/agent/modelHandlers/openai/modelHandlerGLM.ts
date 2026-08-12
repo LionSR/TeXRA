@@ -1,12 +1,8 @@
 // Local imports - agent
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { clampReasoningEffortToHighOrMax } from '@agent/modelHandlers/support/reasoningEffort';
-// Local imports - configuration
-import {
-  getGLMCodingPlan,
-  getProviderEndpoint,
-  getUseOpenRouter,
-} from '@utils/config/providerConfig';
+// Local imports - model routing
+import { isGlmCodingPlanRouteActive } from '@model/codingPlanSubscriptions';
 
 // Local file imports
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
@@ -31,11 +27,7 @@ export class ModelHandlerGLM extends ReasoningModelHandlerOpenAI {
   /** Classify successful coding-endpoint requests as subscription usage. */
   override getLastCredentialUsageRoute(): NormalizedUsage['usageRoute'] {
     const route = super.getLastCredentialUsageRoute();
-    return route === 'api-key' &&
-      getGLMCodingPlan() &&
-      !getUseOpenRouter() &&
-      !this.config.baseUrl &&
-      !getProviderEndpoint('glm')
+    return route === 'api-key' && isGlmCodingPlanRouteActive(this.config)
       ? 'glm-coding-plan-subscription'
       : route;
   }
