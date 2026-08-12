@@ -220,6 +220,7 @@ export class SessionHandle {
     this.detachSnapshotEvents = this.snapshots.attachSessionEvents(events, {
       summaryMetaSink: (stream, meta) =>
         transcripts.recordSummaryMeta(stream, meta),
+      summaryMetaSource: (stream) => transcripts.getSummaryMeta(stream),
     });
     this.interactions = interactions;
     this.approvals = approvals;

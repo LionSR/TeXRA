@@ -1834,7 +1834,7 @@ describe('StreamLogStore summary metadata mirror', () => {
 
   const META = {
     identity: { kind: 'agent' as const, agent: 'polish' },
-    executionId: 'exec-1',
+    executionId: 'a77e77',
     parentStreamId: 'parent-stream',
     description: 'Polish the draft',
     model: 'deepseekproT',
@@ -1918,6 +1918,67 @@ describe('StreamLogStore summary metadata mirror', () => {
     expect(reloaded).toBe(true);
   });
 
+  it('drops metadata awaiting a stream that is absent after reload', async () => {
+    mockStorage({ logs: {}, summaries: {} });
+    const store = await StreamLogStore.open();
+    store.recordSummaryMeta('old-root-stream', META);
+
+    await store.reload({ discardPendingWrites: true });
+
+    expect(store.getSummaryMeta('old-root-stream')).toBeUndefined();
+  });
+
+  it('preserves metadata recorded while reload reads are in flight', async () => {
+    const reloadReadStarted = createDeferred();
+    const releaseReloadRead = createDeferred();
+    let reads = 0;
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: {},
+      onLogRead: async () => {
+        reads += 1;
+        if (reads === 2) {
+          reloadReadStarted.resolve();
+          await releaseReloadRead.promise;
+        }
+      },
+    });
+    const store = await StreamLogStore.open();
+
+    const reload = store.reload({ discardPendingWrites: true });
+    await reloadReadStarted.promise;
+    store.recordSummaryMeta('new-run', META);
+    releaseReloadRead.resolve();
+
+    await expect(reload).rejects.toThrow('state changed during reload');
+    expect(store.getSummaryMeta('new-run')).toEqual(META);
+  });
+
+  it('preserves metadata recorded while reload flushes pending writes', async () => {
+    const summaryWriteStarted = createDeferred();
+    const releaseSummaryWrite = createDeferred();
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: { alpha: summary(200, 200) },
+      onSummaryWrite: async (streamId) => {
+        if (streamId !== 'alpha') return;
+        summaryWriteStarted.resolve();
+        await releaseSummaryWrite.promise;
+      },
+    });
+    const store = await StreamLogStore.open();
+    await store.ensureLoaded('alpha');
+    appendTranscriptEntry(store, 'alpha', logEntry('alpha', 2, 300));
+
+    const reload = store.reload();
+    await summaryWriteStarted.promise;
+    store.recordSummaryMeta('new-run', META);
+    releaseSummaryWrite.resolve();
+
+    await expect(reload).rejects.toThrow('state changed during reload');
+    expect(store.getSummaryMeta('new-run')).toEqual(META);
+  });
+
   it('discards a stale-shaped summary cache loudly and rebuilds from the log', async () => {
     const storage = mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 200)] },
@@ -1938,6 +1999,24 @@ describe('StreamLogStore summary metadata mirror', () => {
       'StreamLogStore',
       expect.stringContaining('stale-shaped summary cache'),
     );
+  });
+
+  it('discards a summary whose execution id violates the canonical schema', async () => {
+    const storage = mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: {
+        alpha: {
+          ...summary(200, 200),
+          meta: { ...META, executionId: 'not-an-id' },
+        },
+      },
+    });
+    vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+
+    const store = await StreamLogStore.open();
+
+    expect(storage.fullLogReads()).toBe(1);
+    expect(store.getSummaryMeta('alpha')).toBeUndefined();
   });
 
   it('holds metadata for an unregistered stream without minting a tab and lands it on registration', async () => {
