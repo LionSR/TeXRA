@@ -102,6 +102,8 @@ function assertAgentCliSessionOwnedByCaller(
   callerStreamId: StreamTabId | undefined,
   labels: AgentCliResumeLabels,
 ): void {
+  // Without a live session id and caller there is no ownership claim to check;
+  // a missing in-memory fork source continues through the disk-backed fallback.
   if (!stored || !id || !callerStreamId) return;
 
   const handle = stored.executions.getHandle(stored.executionId);
