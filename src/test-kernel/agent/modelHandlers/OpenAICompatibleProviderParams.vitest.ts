@@ -178,7 +178,51 @@ class KimiUsageRouteProbe extends ModelHandlerKimi {
   }
 }
 
+class GlmUsageRouteProbe extends ModelHandlerGLM {
+  tagCodingPlanClient<Candidate extends object>(client: Candidate): Candidate {
+    this.rememberClientCredentialRoute(client, 'api-key', 'test-glm-key');
+    return this.rememberClientUsageRoute(
+      client,
+      'glm-coding-plan-subscription',
+    );
+  }
+}
+
 describe('OpenAI-compatible provider request params', () => {
+  it('keeps GLM coding-plan attribution and pricing on the request client', async () => {
+    const handler = configureHandler(
+      new GlmUsageRouteProbe(
+        buildTestModelConfig(
+          { provider: ModelProvider.GLM },
+          { inputPrice: 2, outputPrice: 4 },
+        ),
+      ),
+    );
+    const { client } = createClientStub();
+
+    await handler.createResponse({
+      client: handler.tagCodingPlanClient(client) as any,
+      messages: SINGLE_TURN,
+      temperature: 0,
+    });
+
+    assert.equal(
+      handler.getLastCredentialUsageRoute(),
+      'glm-coding-plan-subscription',
+    );
+    assert.equal(
+      handler.normalizeUsage(
+        {
+          prompt_tokens: 1_000_000,
+          completion_tokens: 1_000_000,
+          total_tokens: 2_000_000,
+        },
+        10,
+      ).cost,
+      0,
+    );
+  });
+
   it('records coding-endpoint Kimi requests as subscription usage', async () => {
     const handler = configureKimiHandler(
       new KimiUsageRouteProbe(

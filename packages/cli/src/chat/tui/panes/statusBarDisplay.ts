@@ -16,17 +16,20 @@ import { STATUS_BAR_HORIZONTAL_PADDING } from '@cli/tui/ui/theme';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
 import {
   spendingQuotaRemainingPercent,
   spendingQuotaState,
   type SpendingStatus,
   type SubscriptionUsageSnapshot,
+  type SubscriptionUsageProvider,
   type StreamPhase,
   type StreamStage,
   type StreamSubstate,
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
+import type { UsageRoute } from '@shared/schemas/usage';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import {
   FOREGROUND_OWNERSHIP,
@@ -66,6 +69,23 @@ import type { ApprovalQueueStatusKind } from '../state/approvalQueue';
 type StatusBarColor =
   typeof COLOR_HINT | typeof COLOR_WARNING | typeof COLOR_ERROR | 'dim';
 type CtrlCAction = 'exit' | 'stop' | 'stop root';
+
+/** Choose the quota owner, preferring the route of completed usage. */
+export function subscriptionUsageProviderForStatus({
+  usageRoute,
+  modelAccess,
+  prospectiveCodingPlan,
+}: {
+  readonly usageRoute: UsageRoute | undefined;
+  readonly modelAccess: CliModelAccessRoute;
+  readonly prospectiveCodingPlan?: SubscriptionUsageProvider;
+}): SubscriptionUsageProvider | undefined {
+  if (usageRoute === 'chatgpt-subscription') return 'chatgpt';
+  const completedCodingPlan = codingPlanForUsageRoute(usageRoute);
+  if (completedCodingPlan) return completedCodingPlan.usageProvider;
+  if (usageRoute !== undefined) return undefined;
+  return modelAccess === 'chatgpt' ? 'chatgpt' : prospectiveCodingPlan;
+}
 
 interface StatusBarSegment {
   readonly text: string;

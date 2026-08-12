@@ -4,6 +4,7 @@ import {
   buildStatusBarDisplay,
   ctrlCActionForFocus,
   statusBarStreamTarget,
+  subscriptionUsageProviderForStatus,
   type StatusBarDisplayInput,
 } from '@cli/chat/tui/panes/statusBarDisplay';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
@@ -113,6 +114,23 @@ function heavyUsage(usageRoute: UsageRoute): TokenUsage {
 }
 
 describe('CLI StatusBar display model', () => {
+  it('does not show prospective plan quota after completed API-key usage', () => {
+    expect(
+      subscriptionUsageProviderForStatus({
+        usageRoute: 'api-key',
+        modelAccess: 'personal',
+        prospectiveCodingPlan: 'glmCodingPlan',
+      }),
+    ).toBeUndefined();
+    expect(
+      subscriptionUsageProviderForStatus({
+        usageRoute: undefined,
+        modelAccess: 'personal',
+        prospectiveCodingPlan: 'glmCodingPlan',
+      }),
+    ).toBe('glmCodingPlan');
+  });
+
   it('uses clear compact labels for API access mode', () => {
     // The session header and the status bar share one mapper, so neither can
     // print the raw enum value ('included' / 'personal') the way they once did.
