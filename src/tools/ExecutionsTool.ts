@@ -24,10 +24,7 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import {
-  AgentExecutionHandle,
-  type ExecutionHandle,
-} from '@agent/runtime/ExecutionHandle';
+import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
   getRunContextExecutionId,
@@ -178,11 +175,9 @@ const EXECUTION_PATH_LIST = EXECUTION_PATH_CATALOG.map(
 
 function getRunningTodos(
   session: SessionHandle,
-  handle: ExecutionHandle,
+  handle: AgentExecutionHandle,
 ): TodoEntry[] {
-  return handle instanceof AgentExecutionHandle
-    ? session.snapshots.getWorkPlan(handle.childStreamId).todos
-    : [];
+  return session.snapshots.getWorkPlan(handle.childStreamId).todos;
 }
 
 /**
@@ -894,10 +889,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
 
     // Scope: can only kill your own children. Deny if no context.
-    if (
-      !(target instanceof AgentExecutionHandle) ||
-      !target.isOwnedBy(callerStreamId)
-    ) {
+    if (!target.isOwnedBy(callerStreamId)) {
       throw new ToolError(
         `Cannot kill execution ${executionId}: not a child of this session.`,
       );
@@ -1137,10 +1129,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     const transcripts = currentSession().transcripts;
     // The stream is the one stamped on execution metadata at registration.
-    const streamId =
-      handle instanceof AgentExecutionHandle
-        ? handle.childStreamId
-        : meta?.streamId;
+    const streamId = handle?.childStreamId ?? meta?.streamId;
     // Resident while the command runs (an open writer refuses eviction); a
     // released stream rehydrates from disk, and an ephemeral store no-ops.
     if (streamId) await transcripts.ensureLoaded(streamId);

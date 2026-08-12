@@ -27,14 +27,6 @@ export interface ExecutionStatusInfo {
   elapsed: string | null;
 }
 
-export interface ExecutionHandle {
-  readonly executionId: string;
-  readonly parentStreamId: StreamTabId;
-  readonly category: AgentCategory;
-  readonly agentName: string;
-  readonly startedAt: number;
-}
-
 /**
  * The run's immutable birth facts, the same values `run.start` publishes and
  * `registerExecution` persists. `category` is the launch-time in-memory
@@ -123,7 +115,7 @@ export type LiveToolUseFlowContext = {
  * When `parentStreamId` differs from `childStreamId`, the handle represents
  * a subagent whose parent is an orchestrator.
  */
-export class AgentExecutionHandle implements ExecutionHandle {
+export class AgentExecutionHandle {
   readonly startedAt = Date.now();
   private _parentStreamId: StreamTabId;
   private interruptHandler?: ExecutionInterruptHandler;
@@ -393,9 +385,9 @@ export type AgentRunHandle = Pick<
  * `instanceof` alongside it.
  */
 export function isChildExecution(
-  handle: ExecutionHandle,
+  handle: AgentExecutionHandle,
   parentStreamId: StreamTabId,
-): handle is AgentExecutionHandle {
+): boolean {
   if (handle.parentStreamId !== parentStreamId) return false;
-  return handle instanceof AgentExecutionHandle && handle.isChildExecution;
+  return handle.isChildExecution;
 }
