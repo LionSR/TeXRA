@@ -4,7 +4,7 @@
 // channels.
 
 // Third-party imports
-import { afterEach } from 'vitest';
+import { afterEach, vi } from 'vitest';
 
 // Local imports
 import { getExecutionStore } from '@agent/storage';
@@ -81,6 +81,7 @@ export function createRecordingBackend(): {
         return true;
       },
       hasTarget: () => true,
+      reportTranscriptLoadError: vi.fn(),
       approvals: createApprovalOptions(),
       lifecycle: createLifecycleOptions(),
     }),
@@ -96,8 +97,10 @@ export function createIsolatedRecordingBackend(
   messages: ProgressViewOutboundMessage[];
   session: SessionHandle;
   lifecycle: ProgressBackendOptions['lifecycle'];
+  reportTranscriptLoadError: ReturnType<typeof vi.fn>;
 } {
   const messages: ProgressViewOutboundMessage[] = [];
+  const reportTranscriptLoadError = vi.fn();
   track(session);
   const backend = track(
     new ProgressBackend({
@@ -108,11 +111,12 @@ export function createIsolatedRecordingBackend(
         return true;
       },
       hasTarget: () => true,
+      reportTranscriptLoadError,
       approvals: createApprovalOptions(),
       lifecycle,
     }),
   );
-  return { backend, lifecycle, messages, session };
+  return { backend, lifecycle, messages, reportTranscriptLoadError, session };
 }
 
 export async function createPersistentRecordingBackend(): Promise<

@@ -761,6 +761,13 @@ function lastStreamSync(messages: unknown[]): ProgressMessage | undefined {
   );
 }
 
+function lastContentSync(messages: unknown[]): ProgressMessage | undefined {
+  return progressMessages(
+    messages,
+    PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+  ).at(-1);
+}
+
 function expectPermissionResolved(
   messages: unknown[],
   kind: PermissionKind,
@@ -1673,8 +1680,8 @@ describe('DesktopProgressBridge', () => {
       activeStream: 'goal-owning-stream',
       command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
     });
-    expect(lastStreamSync(messages)).toMatchObject({
-      activeStream: 'goal-owning-stream',
+    expect(lastContentSync(messages)).toMatchObject({
+      stream: 'goal-owning-stream',
     });
   });
 
@@ -1712,7 +1719,7 @@ describe('DesktopProgressBridge', () => {
 
     await bridge.revealStream(streamId);
 
-    expect(lastStreamSync(messages)).toMatchObject({ activeStream: streamId });
+    expect(lastContentSync(messages)).toMatchObject({ stream: streamId });
   });
 
   it('reveals a goal-owned stream after persistent opening completes', async () => {
@@ -1775,7 +1782,7 @@ describe('DesktopProgressBridge', () => {
         messages.map((message) => (message as ProgressMessage).command),
       ).toEqual([
         PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
-        PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+        PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
         PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
         PROGRESS_VIEW_COMMANDS.LOG_DELTA,
       ]),
@@ -1785,7 +1792,7 @@ describe('DesktopProgressBridge', () => {
       stream: 'second',
     });
     expect(messages[1]).toMatchObject({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       activeStream: 'first',
     });
     expect(messages[2]).toMatchObject({
@@ -1924,8 +1931,12 @@ describe('DesktopProgressBridge', () => {
         activeStream: 'third',
         command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       },
+      {
+        activeStream: 'third',
+        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      },
     ]);
-    expect(lastStreamSync(messages)).toMatchObject({ activeStream: 'third' });
+    expect(lastContentSync(messages)).toMatchObject({ stream: 'third' });
   });
 
   it('falls back if a deleted stream is reactivated during deletion', async () => {
@@ -3204,8 +3215,7 @@ describe('DesktopProgressBridge', () => {
       const { bridgeB } = await owner.reopen(messagesB);
 
       try {
-        // Activate the stream to trigger UPDATE_STREAMS delivery
-        bridgeB.revealStream(streamId);
+        await bridgeB.revealStream(streamId);
         await vi.waitFor(() => {
           const approvalShows = progressMessages(
             messagesB,
@@ -3217,16 +3227,8 @@ describe('DesktopProgressBridge', () => {
                 'plan-requested-while-headless',
           );
           expect(approvalShows).toHaveLength(1);
-          expect(
-            progressMessages(
-              messagesB,
-              PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-            ).at(-1),
-          ).toMatchObject({
-            activeStream: streamId,
-            streams: expect.arrayContaining([
-              expect.objectContaining({ name: streamId }),
-            ]),
+          expect(lastContentSync(messagesB)).toMatchObject({
+            stream: streamId,
           });
         });
         expect(
@@ -3959,7 +3961,8 @@ describe('DesktopProgressBridge', () => {
           1: [outputFile],
         });
 
-        bridgeB.setActiveStream(childStreamId);
+        await bridgeB.completeWebviewReady();
+        await bridgeB.setActiveStream(childStreamId);
         const childMessages = (command: string, idKey: string) =>
           progressMessages(messagesB, command).filter(
             (message) =>
@@ -3975,7 +3978,6 @@ describe('DesktopProgressBridge', () => {
           ).toHaveLength(1);
         });
         expect(lastStreamSync(messagesB)).toMatchObject({
-          activeStream: childStreamId,
           streams: expect.arrayContaining([
             expect.objectContaining({
               name: childStreamId,
