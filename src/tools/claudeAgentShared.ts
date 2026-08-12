@@ -63,8 +63,11 @@ export interface ClaudeTurnUsage {
 
 /** Collapse the SDK's authoritative per-model totals into one turn summary. */
 export function aggregateClaudeModelUsage(
-  modelUsage: Readonly<Record<string, ModelUsage>>,
-): ClaudeTurnUsage {
+  modelUsage: Readonly<Record<string, ModelUsage>> | undefined,
+): ClaudeTurnUsage | null {
+  const models = Object.values(modelUsage ?? {});
+  if (models.length === 0) return null;
+
   const usage: Required<ClaudeTurnUsage> = {
     input_tokens: 0,
     output_tokens: 0,
@@ -72,7 +75,7 @@ export function aggregateClaudeModelUsage(
     cache_creation_input_tokens: 0,
     cost_usd: 0,
   };
-  for (const model of Object.values(modelUsage)) {
+  for (const model of models) {
     usage.input_tokens += model.inputTokens;
     usage.output_tokens += model.outputTokens;
     usage.cache_read_input_tokens += model.cacheReadInputTokens;

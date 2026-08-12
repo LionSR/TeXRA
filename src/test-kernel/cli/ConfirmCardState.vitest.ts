@@ -118,6 +118,24 @@ describe('CLI confirm-card key handling', () => {
     expect(compactRendered.length).toBeLessThanOrEqual(80);
   });
 
+  it('uses the same note-free default for immediate rejection keys', () => {
+    expect(confirmCardKeyHints({ rejectionMode: 'immediate' })).toEqual([
+      { key: 'y', action: 'approve' },
+      { key: 'n', action: 'reject' },
+      { key: 'Esc', action: 'reject' },
+    ]);
+  });
+
+  it('preserves the immediate rejection label in the narrow fallback', () => {
+    expect(
+      confirmCardKeyHintsForWidth({
+        rejectionMode: 'immediate',
+        rejectLabel: 'dismiss',
+        maxColumns: 1,
+      }),
+    ).toEqual([{ key: 'Esc', action: 'dismiss' }]);
+  });
+
   it('shows submit/back hints while collecting rejection feedback', () => {
     expect(confirmCardFeedbackHints()).toEqual([
       { key: 'Enter', action: 'send note' },

@@ -12,7 +12,7 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import {
   startChildRunLoop,
@@ -97,6 +97,18 @@ export interface AgentCliResumeLabels {
   queuedLabel: string;
 }
 
+function requireCallerOwnership(
+  id: string,
+  callerStreamId: StreamTabId | undefined,
+  handle: AgentExecutionHandle | undefined,
+  labels: AgentCliResumeLabels,
+): void {
+  if (!callerStreamId || !handle || handle.isOwnedBy(callerStreamId)) return;
+  throw new ToolError(
+    `${labels.notActiveLabel} '${id}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
+  );
+}
+
 async function queueAgentCliFollowUp(
   stored: ResumableAgentCliSession,
   params: {
@@ -111,11 +123,7 @@ async function queueAgentCliFollowUp(
   // accept follow-ups from its former orchestrator. A missing handle falls
   // through to submitFollowUp's no-session outcome below.
   const handle = stored.executions.getHandle(stored.executionId);
-  if (callerStreamId && handle && !handle.isOwnedBy(callerStreamId)) {
-    throw new ToolError(
-      `${labels.notActiveLabel} '${id}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
-    );
-  }
+  requireCallerOwnership(id, callerStreamId, handle, labels);
 
   const result = await submitFollowUp(stored.childStreamId, prompt, {
     session: currentSession(),
@@ -348,15 +356,8 @@ export function dispatchAgentCliTool(params: {
     const callerStreamId = getRunContextStreamId(runContext);
     const source = sourceId ? store.lookup(sourceId) : undefined;
     const sourceHandle = source?.executions.getHandle(source.executionId);
-    if (
-      sourceId &&
-      callerStreamId &&
-      sourceHandle instanceof AgentExecutionHandle &&
-      !sourceHandle.isOwnedBy(callerStreamId)
-    ) {
-      throw new ToolError(
-        `${labels.notActiveLabel} '${sourceId}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
-      );
+    if (sourceId) {
+      requireCallerOwnership(sourceId, callerStreamId, sourceHandle, labels);
     }
     return resumeOrLaunchAgentCliSession(store, {
       id: resumeId,

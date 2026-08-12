@@ -66,6 +66,10 @@ import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
+  codingPlanForApiProvider,
+  codingPlanForUsageSetting,
+} from '@shared/codingPlanSubscriptions';
+import {
   dispatchSettingsViewInbound,
   SETTINGS_VIEW_CMD,
   type SubscriptionUsageProvider,
@@ -73,7 +77,6 @@ import {
   type SettingsMessageFor,
 } from '@shared/schemas';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
 
 import {
@@ -909,9 +912,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
    */
   public async refreshAfterProviderKeyChange(provider: string): Promise<void> {
     invalidateApiKeyCache();
-    let usageProvider: 'kimiCode' | 'glmCodingPlan' | undefined;
-    if (provider === 'kimiCode') usageProvider = 'kimiCode';
-    if (provider === 'glm') usageProvider = 'glmCodingPlan';
+    const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
     const mainView = await getMainWebview(this.viewName);
     if (mainView) {
       const anyKeyExists = await SecretManager.anyApiKeyExists();
@@ -1022,7 +1023,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    const glmRegionChanged = data.key === GlobalStateKey.GLM_USE_CHINA;
+    const usageVariantChanged =
+      codingPlanForUsageSetting(data.key) !== undefined;
     await this.withActiveWebview(async (w) => {
       await Promise.all([
         this.sendProfileData(w),
@@ -1030,7 +1032,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         result.affectsModelAvailability
           ? this.sendModelSelectionData(w)
           : Promise.resolve(),
-        glmRegionChanged
+        usageVariantChanged
           ? sendSubscriptionUsage(w, this.subscriptionUsage)
           : Promise.resolve(),
       ]);

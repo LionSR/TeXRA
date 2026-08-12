@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import pMap from 'p-map';
 import PQueue from 'p-queue';
 import { z } from 'zod';
@@ -6,10 +7,14 @@ import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { KVStore } from '@common/storage/KVStore';
 import * as log from '@logger/logUtils';
 import {
+  AgentCategorySchema,
   END_GROUP_STATUS,
+  ExecutionIdSchema,
   RUN_OUTCOME,
+  RunIdentitySchema,
   STREAM_LOG_ENTRY_TYPES,
   StreamLogEntrySchema,
+  UserFollowUpSupportSchema,
   type RunOutcome,
   type StreamLogEntry,
   type StreamTabId,
@@ -49,18 +54,45 @@ function createSummaryKv(): KVStore {
 
 type StreamLogListener = (streamId: StreamTabId, delta: StreamLogDelta) => void;
 
+/**
+ * Snapshot-owned display metadata mirrored into the always-resident summary,
+ * so sidebars and all-streams metadata paths never read the per-stream
+ * sidecar files (#9947, PRD 2026-08-11). `StreamSnapshotStore` is the
+ * authority and publishes a whole replacement object on every metadata
+ * mutation and on every sidecar hydration (which lazily backfills legacy
+ * summaries written before this field existed). Bounded scalars only:
+ * `command` carries a process run's command line, never an agent run's
+ * full instruction text.
+ */
+const StreamSummaryMetaSchema = z.object({
+  identity: RunIdentitySchema.optional(),
+  executionId: ExecutionIdSchema.optional(),
+  parentStreamId: z.string().min(1).optional(),
+  userFollowUpSupport: UserFollowUpSupportSchema.optional(),
+  agentCategory: AgentCategorySchema.optional(),
+  description: z.string().optional(),
+  model: z.string().optional(),
+  workingDirectory: z.string().optional(),
+  command: z.string().optional(),
+});
+export type StreamSummaryMeta = z.infer<typeof StreamSummaryMetaSchema>;
+
 // No per-field `.catch()`: this schema covers the crash-recovery flags
 // (`hasRunningGroup`, `hasRunningStreamingText`, `hasNonterminalWorkflowCall`)
 // that `hasSomethingRunning()` gates orphan recovery on. A `.catch()` here
 // would silently turn a malformed field into `undefined` (recovery skipped)
 // instead of failing the whole `safeParse`, which routes through the
-// existing "ignore cache, rebuild from stream log" fallback in `readSummary`.
+// "ignore cache, rebuild from stream log" fallback in `readSummary` — the
+// derived-tier discard+rebuild contract (#9434): a stale-shaped summary is
+// discarded and rebuilt from the authoritative stream log (its `meta` block
+// is rebuilt lazily by the snapshot store's next publish), never migrated.
 const StreamLogSummarySchema = z.object({
   firstTimestamp: z.number().finite().optional(),
   lastTimestamp: z.number().finite().optional(),
   hasRunningGroup: z.boolean().optional(),
   hasRunningStreamingText: z.boolean().optional(),
   hasNonterminalWorkflowCall: z.boolean().optional(),
+  meta: StreamSummaryMetaSchema.optional(),
 });
 type StreamLogSummary = z.infer<typeof StreamLogSummarySchema>;
 
@@ -268,6 +300,17 @@ export class StreamLogStore {
   private readonly summaries = new Map<StreamTabId, StreamLogSummary>();
 
   /**
+   * Antechamber for snapshot metadata recorded before its stream is
+   * registered (run facts project ahead of `ensureStream`). Never listed —
+   * `has()`/`keys()` stay `summaries`-based — and adopted into the summary
+   * at registration; dropped with the stream otherwise.
+   */
+  private readonly pendingSummaryMeta = new Map<
+    StreamTabId,
+    StreamSummaryMeta
+  >();
+
+  /**
    * Max-wait throttle for the persistence path: the first dirty mutation in a
    * window starts the timer and later mutations join it without resetting it
    * (`scheduleSave`'s `pending` guard), so sustained sub-window appends still
@@ -355,19 +398,13 @@ export class StreamLogStore {
     return store;
   }
 
-  /** Open persisted transcripts for reading without creating or writing files. */
-  static async openReadOnly(): Promise<StreamLogStore> {
-    const store = new StreamLogStore({ kind: 'read-only' });
-    store.replaceSummaries(await store.readPersistentSummaries());
-    return store;
-  }
-
   /**
    * Open persisted transcripts for reading ONE known stream, seeding only
-   * that stream's summary. {@link openReadOnly} scans the entire streamLogs
-   * directory (`listKeys` + a summary read and mtime stats per persisted
-   * stream); archive consumers that already know which stream they need
-   * (via the execution→stream mapping) use this to pay O(1) instead.
+   * that stream's summary — `listKeys` plus a summary read and mtime stats
+   * for just that stream, so archive consumers that already know which
+   * stream they need (via the execution→stream mapping) pay O(1) instead of
+   * a whole-directory scan. (The scan-all `openReadOnly` variant was deleted
+   * with #9947's surface-neutral rework: it had no production caller.)
    * An unknown `streamId` yields a store that simply has no such stream, so
    * `ensureLoaded` no-ops and `get` returns `undefined` exactly as with a
    * full open that did not find the stream.
@@ -467,6 +504,65 @@ export class StreamLogStore {
       .map(([streamId]) => streamId);
   }
 
+  /**
+   * The snapshot-owned display metadata mirrored into this stream's summary,
+   * or `undefined` for a stream whose summary predates the mirror (legacy
+   * rows backfill lazily on their next sidecar hydration). Metadata recorded
+   * ahead of stream registration is served from the antechamber, so a run
+   * fact that projects before `ensureStream` is never invisible.
+   */
+  getSummaryMeta(streamId: StreamTabId): StreamSummaryMeta | undefined {
+    return (
+      this.summaries.get(streamId)?.meta ??
+      this.pendingSummaryMeta.get(streamId)
+    );
+  }
+
+  /**
+   * Record the snapshot store's current metadata for a stream in its
+   * always-resident summary (memory now, summary cache asynchronously).
+   * Whole-object replacement — the publisher owns field lifecycles — and a
+   * deep-equal no-op gate, so the startup hydration sweep republishing
+   * unchanged metadata for every stream costs no writes. A stream this store
+   * does not know yet holds its metadata in `pendingSummaryMeta`: `summaries`
+   * is the tab registry and registering here would mint a phantom stream, but
+   * run facts legitimately project ahead of registration, so the metadata
+   * waits in the antechamber and lands when `ensureStream` (or the first
+   * append) registers the stream.
+   */
+  recordSummaryMeta(streamId: StreamTabId, meta: StreamSummaryMeta): void {
+    this.assertWritableStore('record stream summary metadata');
+    const summary = this.summaries.get(streamId);
+    if (!summary) {
+      if (isDeepStrictEqual(this.pendingSummaryMeta.get(streamId), meta))
+        return;
+      this.pendingSummaryMeta.set(streamId, meta);
+      this.stateRevision += 1;
+      return;
+    }
+    this.pendingSummaryMeta.delete(streamId);
+    if (isDeepStrictEqual(summary.meta, meta)) return;
+    summary.meta = meta;
+    this.stateRevision += 1;
+    // Share the transcript queue so flush/reload drains this write before a
+    // storage-root change. Re-read at execution time, and let a dirty
+    // transcript's own write carry the metadata: persisting its newer
+    // log-derived summary fields before the authoritative log would make a
+    // crash-time cache look more durable than it is.
+    void this.writeQueue.add(async () => {
+      if (this.dirtyIds.has(streamId)) return;
+      const current = this.summaries.get(streamId);
+      if (current) await this.maintainSummaryCache(streamId, { ...current });
+    });
+  }
+
+  /** Land metadata recorded before this stream existed in the registry. */
+  private adoptPendingSummaryMeta(streamId: StreamTabId): void {
+    const pending = this.pendingSummaryMeta.get(streamId);
+    if (pending === undefined) return;
+    this.recordSummaryMeta(streamId, pending);
+  }
+
   ensureStream(streamId: StreamTabId): void {
     this.assertWritableStore('ensure a transcript stream');
     // No-op if the stream is already known — either resident (`log`) or
@@ -480,6 +576,7 @@ export class StreamLogStore {
       return;
     this.ensureStreamState(streamId).log = new StreamLog();
     this.summaries.set(streamId, {});
+    this.adoptPendingSummaryMeta(streamId);
     this.stateRevision += 1;
     if (this.mode.kind === 'persistent') {
       this.markDirty(streamId);
@@ -748,7 +845,10 @@ export class StreamLogStore {
     if (!logInstance) {
       logInstance = new StreamLog();
       state.log = logInstance;
-      if (!this.summaries.has(streamId)) this.summaries.set(streamId, {});
+      if (!this.summaries.has(streamId)) {
+        this.summaries.set(streamId, {});
+        this.adoptPendingSummaryMeta(streamId);
+      }
     }
     const appended = settled
       ? logInstance.appendSettled(entry)
@@ -1072,6 +1172,10 @@ export class StreamLogStore {
   }
 
   private async executeReload(discardPendingWrites: boolean): Promise<void> {
+    // Sample before the first await: run facts may arrive while pending writes
+    // drain or the replacement adapters prepare, and the reload must not fold
+    // those new-root facts into the state it is about to replace.
+    const revision = this.stateRevision;
     if (discardPendingWrites) {
       this.saveThrottle.cancel();
       // Invalidate and drain any in-flight batch before the adapters
@@ -1098,7 +1202,6 @@ export class StreamLogStore {
     this.summaryCacheMaintenanceEnabled = true;
     if (this.mode.kind === 'persistent') await this.prepareSummaryCache();
 
-    const revision = this.stateRevision;
     const summaries = await this.readPersistentSummaries();
     if (revision !== this.stateRevision || this.pendingLoads().length > 0) {
       throw new Error(
@@ -1144,6 +1247,18 @@ export class StreamLogStore {
     this.summaries.clear();
     for (const [streamId, summary] of summaries) {
       this.summaries.set(streamId, summary);
+    }
+    // Metadata recorded while a stream was unregistered lands now if the
+    // replacement set knows the stream (no-op on read-only opens: the
+    // antechamber only fills through recordSummaryMeta, which is writable-only).
+    // Entries absent from the replacement belong to the previous storage root
+    // and are discarded.
+    for (const streamId of [...this.pendingSummaryMeta.keys()]) {
+      if (this.summaries.has(streamId)) {
+        this.adoptPendingSummaryMeta(streamId);
+      } else {
+        this.pendingSummaryMeta.delete(streamId);
+      }
     }
     this.writeTombstones.clear();
     this.clearing = false;
@@ -1228,8 +1343,23 @@ export class StreamLogStore {
   }
 
   private parsePersistedSummary(value: unknown): StreamLogSummary | undefined {
+    // A missing cache file (KVStore's quiet-missing `undefined`) is an
+    // ordinary rebuild, not a stale shape — nothing to warn about.
+    if (value === undefined) return undefined;
     const result = StreamLogSummarySchema.safeParse(value);
-    if (!result.success) return undefined;
+    if (!result.success) {
+      // Derived tier (#9434): discard the stale-shaped cache loudly and
+      // rebuild from the authoritative stream log — never migrate in place.
+      log.warn(
+        LOG_TAG,
+        `Discarding a stale-shaped summary cache entry; rebuilding from the stream log: ${result.error.issues
+          .map(
+            (issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`,
+          )
+          .join('; ')}`,
+      );
+      return undefined;
+    }
     if (
       result.data.firstTimestamp === undefined &&
       result.data.lastTimestamp === undefined
@@ -1252,7 +1382,14 @@ export class StreamLogStore {
       return;
     }
 
-    await this.maintainSummaryCache(streamId, toSummary(logInstance));
+    // Carry the snapshot-owned `meta` block forward: `toSummary` only knows
+    // log-derived fields, and persisting it bare would strip the metadata
+    // mirror `recordSummaryMeta` last wrote for this stream.
+    const meta = this.summaries.get(streamId)?.meta;
+    await this.maintainSummaryCache(streamId, {
+      ...toSummary(logInstance),
+      ...(meta !== undefined && { meta }),
+    });
     if (this.shouldSkipWrite(streamId, expectedGeneration)) {
       await this.kv.delete(streamId);
       await this.deleteSummaryCache(streamId);
@@ -1281,6 +1418,7 @@ export class StreamLogStore {
     this.dirtyIds.delete(streamId);
     this.releaseRequests.delete(streamId);
     this.summaries.delete(streamId);
+    this.pendingSummaryMeta.delete(streamId);
   }
 
   private forgetAllStreamState(): void {
@@ -1291,6 +1429,7 @@ export class StreamLogStore {
     this.dirtyIds.clear();
     this.releaseRequests.clear();
     this.summaries.clear();
+    this.pendingSummaryMeta.clear();
   }
 
   private assertWritableStore(operation: string): void {
