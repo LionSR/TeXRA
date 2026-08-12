@@ -167,4 +167,18 @@ describe('CLI history status formatting', () => {
       'Flow record: present',
     );
   });
+
+  it('does not mark category-invalid workflow checkpoints as resumable', async () => {
+    const id = 'workflow-with-retired-state' as ExecutionId;
+    await seedFlowRecord(id, WORKFLOW_CONFIG, 'correct', {
+      currentRound: 1,
+      totalRounds: 2,
+      messages: [],
+    });
+
+    const details = await readCliHistoryDetails(id);
+
+    expect(details?.hasFlowRecord).toBe(false);
+    expect(details?.status).toBe('unknown');
+  });
 });
