@@ -128,6 +128,13 @@ describe('CLI StatusBar display model', () => {
         modelAccess: 'personal',
         prospectiveCodingPlan: 'glmCodingPlan',
       }),
+    ).toBeUndefined();
+    expect(
+      subscriptionUsageProviderForStatus({
+        usageRoute: undefined,
+        modelAccess: 'glm-code',
+        prospectiveCodingPlan: 'glmCodingPlan',
+      }),
     ).toBe('glmCodingPlan');
   });
 

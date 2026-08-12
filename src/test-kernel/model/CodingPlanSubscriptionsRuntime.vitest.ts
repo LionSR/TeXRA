@@ -4,11 +4,13 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import {
   activeCodingPlanForModel,
   codingPlanSubscriptionRuntimes,
+  isGlmCodingPlanRouteActive,
 } from '@model/codingPlanSubscriptions';
 import {
   includedModelAccess,
   setIncludedModelAccess,
 } from '@model/includedModelAccess';
+import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -57,6 +59,19 @@ describe('coding-plan subscription runtime', () => {
     await setProviderEndpoint('glm', 'proxy.test/api/coding/paas/v4');
 
     await expect(activeCodingPlanForModel('glm52')).resolves.toBeUndefined();
+  });
+
+  it('keeps a forced-direct GLM model on the plan when OpenRouter is enabled', async () => {
+    await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, true);
+    const config = await resolveRuntimeModelConfig('glm52');
+
+    expect(config).toBeDefined();
+    expect(
+      isGlmCodingPlanRouteActive({
+        ...config!,
+        forceDirectProvider: true,
+      }),
+    ).toBe(true);
   });
 
   it('restores Kimi preference without overwriting newer OpenRouter state', async () => {

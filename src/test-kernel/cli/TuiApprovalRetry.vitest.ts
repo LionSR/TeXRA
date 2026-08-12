@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   setCliApiMode: vi.fn(),
   setCliCodexSubscription: vi.fn(),
   setCliCodingPlanSubscription: vi.fn(),
+  refreshSubscriptionPreferenceViews: vi.fn(),
   setPreferKimiCode: vi.fn(),
   setGLMCodingPlan: vi.fn(),
   updateGlobalState: vi.fn(),
@@ -65,6 +66,7 @@ vi.mock('@cli/runtime/apiAccessMode', async (importActual) => {
 });
 
 vi.mock('@cli/chat/tui/state/codexSubscription', () => ({
+  refreshSubscriptionPreferenceViews: mocks.refreshSubscriptionPreferenceViews,
   setCliCodexSubscription: mocks.setCliCodexSubscription,
   setCliCodingPlanSubscription: mocks.setCliCodingPlanSubscription,
 }));
@@ -408,6 +410,7 @@ afterEach(() => {
   mocks.setCliApiMode.mockReset();
   mocks.setCliCodexSubscription.mockReset();
   mocks.setCliCodingPlanSubscription.mockReset();
+  mocks.refreshSubscriptionPreferenceViews.mockReset();
   mocks.setPreferKimiCode.mockReset();
   mocks.setGLMCodingPlan.mockReset();
   mocks.updateGlobalState.mockReset();
@@ -849,6 +852,7 @@ describe('TUI retry approvals', () => {
     expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true, undefined, {
       preserveOpenRouter: true,
     });
+    expect(mocks.refreshSubscriptionPreferenceViews).toHaveBeenCalledOnce();
   });
 
   it('does not offer or apply the subscription switch without an OpenAI API key', async () => {

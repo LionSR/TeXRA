@@ -16,7 +16,10 @@ import { STATUS_BAR_HORIZONTAL_PADDING } from '@cli/tui/ui/theme';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
+import {
+  codingPlanForUsageRoute,
+  CODING_PLAN_SUBSCRIPTIONS,
+} from '@shared/codingPlanSubscriptions';
 import {
   spendingQuotaRemainingPercent,
   spendingQuotaState,
@@ -84,7 +87,12 @@ export function subscriptionUsageProviderForStatus({
   const completedCodingPlan = codingPlanForUsageRoute(usageRoute);
   if (completedCodingPlan) return completedCodingPlan.usageProvider;
   if (usageRoute !== undefined) return undefined;
-  return modelAccess === 'chatgpt' ? 'chatgpt' : prospectiveCodingPlan;
+  if (modelAccess === 'chatgpt') return 'chatgpt';
+  return CODING_PLAN_SUBSCRIPTIONS.find(
+    (plan) =>
+      plan.usageProvider === prospectiveCodingPlan &&
+      plan.cliProvider === modelAccess,
+  )?.usageProvider;
 }
 
 interface StatusBarSegment {
