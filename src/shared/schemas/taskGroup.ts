@@ -51,7 +51,9 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
  * still-disjoint legacy `EndGroupStatus` vocabulary does. The shared
  * projection maps a legacy value UP to the native value it corresponds to;
  * a value in neither vocabulary still falls back to `undefined` here, same
- * as any other field.
+ * as any other field. A malformed `attemptId` likewise leaves the phase in
+ * durable scrollback but excludes it from the attempt-scoped live dashboard;
+ * presentation tolerance must not make one bad field reject the whole row.
  */
 export const GroupLogPayloadSchema = z.looseObject({
   status: z
