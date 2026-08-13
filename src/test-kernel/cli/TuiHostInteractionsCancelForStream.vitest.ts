@@ -112,7 +112,10 @@ describe('createTuiHostInteractions', () => {
 
     interactions.cancel({ streamId: 'stream-a' });
 
-    await expect(planResult).resolves.toEqual({ action: 'reject' });
+    await expect(planResult).resolves.toEqual({
+      action: 'reject',
+      cause: 'Session interrupted.',
+    });
 
     // stream-b's request was never touched and now becomes the foreground
     // modal instead of being left permanently pending.
@@ -164,7 +167,10 @@ describe('createTuiHostInteractions', () => {
 
     interactions.cancel({ streamId: 'stream-a' });
 
-    await expect(proposalResult).resolves.toEqual({ action: 'reject' });
+    await expect(proposalResult).resolves.toEqual({
+      action: 'reject',
+      cause: 'Session interrupted.',
+    });
     expect(currentApproval.get()).toBeUndefined();
   });
 

@@ -9,6 +9,7 @@ import {
   type RetryResult,
   type UserQuestionSettlement,
 } from '@agent/runtime';
+import { warn as logWarning } from '@logger/logUtils';
 import {
   type AgentProposalPermission,
   type ApprovalDecision,
@@ -21,6 +22,7 @@ import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   settleExecutable,
   settleHumanInputDenial,
@@ -152,9 +154,22 @@ async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
  *  the approve branch. A rejection without a user message omits `feedback`
  *  rather than sending an explicit `undefined`. */
 export function toApprovalSettlement(
-  decision: ApprovalDecision,
-): { action: 'approve' } | { action: 'reject'; feedback?: string } {
+  decision: ApprovalDecision & {
+    readonly rejectionCause?: string;
+    readonly rejectionReason?: string;
+  },
+):
+  | { action: 'approve' }
+  | { action: 'reject'; feedback?: string }
+  | { action: 'reject'; reason: string }
+  | { action: 'reject'; cause: string | undefined } {
   if (decision.accepted) return { action: 'approve' };
+  if (decision.rejectionCause !== undefined) {
+    return { action: 'reject', cause: decision.rejectionCause };
+  }
+  if (decision.rejectionReason !== undefined) {
+    return { action: 'reject', reason: decision.rejectionReason };
+  }
   return {
     action: 'reject',
     ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
@@ -197,7 +212,7 @@ async function askHeadlessUserQuestion(
 ): Promise<UserQuestionSettlement> {
   const denial = settleHumanInputDenial(context);
   if (denial != null) {
-    return { action: 'reject', feedback: denial.userMessage };
+    return { action: 'reject', reason: denial.userMessage };
   }
 
   const answers: UserQuestionAnswers = {};
@@ -218,10 +233,14 @@ async function askHeadlessUserQuestion(
       const parsed = parseUserQuestionAnswer(answer, question);
       if (parsed != null) answers[question.question] = parsed;
     }
-  } catch {
+  } catch (error) {
+    logWarning(
+      'cli.approval',
+      `The CLI user-question prompt failed: ${toErrorMessage(error)}`,
+    );
     return {
       action: 'reject',
-      feedback: 'CLI user question prompt failed.',
+      cause: 'CLI user question prompt failed.',
     };
   }
 
@@ -254,22 +273,32 @@ export function createHeadlessCliHostInteractions(
       return toBashApprovalSettlement(decision);
     },
     async requestPlanApproval(request) {
-      const { decision } = await decideApprovalEvent(
+      const { decision, prompted } = await decideApprovalEvent(
         'showPlanApproval',
         request,
         context,
         hooks,
       );
-      return toApprovalSettlement(decision);
+      return toApprovalSettlement({
+        ...decision,
+        ...(!prompted && !decision.accepted && decision.userMessage
+          ? { rejectionReason: decision.userMessage, userMessage: undefined }
+          : {}),
+      });
     },
     async requestAgentProposal(request: HostAgentProposalRequest) {
-      const { decision } = await decideApprovalEvent(
+      const { decision, prompted } = await decideApprovalEvent(
         'showAgentProposal',
         request,
         context,
         hooks,
       );
-      return toApprovalSettlement(decision);
+      return toApprovalSettlement({
+        ...decision,
+        ...(!prompted && !decision.accepted && decision.userMessage
+          ? { rejectionReason: decision.userMessage, userMessage: undefined }
+          : {}),
+      });
     },
     async requestRetry(request: HostRetryRequest) {
       const payload: RetryPermission = {

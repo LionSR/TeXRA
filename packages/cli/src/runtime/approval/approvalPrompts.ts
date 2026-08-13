@@ -2,6 +2,7 @@ import PQueue from 'p-queue';
 
 import { defaultSession } from '@agent/runtime';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkError/relayDetection';
+import { warn as logWarning } from '@logger/logUtils';
 import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
@@ -15,6 +16,7 @@ import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscriptionId,
 } from '@shared/codingPlanSubscriptions';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion, writeTextStderr } from '../logSinks';
@@ -317,7 +319,11 @@ export async function askApproval(
         userMessage: parsed.accepted ? undefined : feedback,
       };
     });
-  } catch {
+  } catch (error) {
+    logWarning(
+      'cli.approval',
+      `The CLI approval prompt failed: ${toErrorMessage(error)}`,
+    );
     return {
       accepted: false,
       rejectionCause: 'CLI approval prompt failed.',

@@ -122,6 +122,22 @@ export function proposalResultToToolResult(
   switch (result.action) {
     case 'reject': {
       const feedback = result.feedback?.trim();
+      const reason = result.reason?.trim();
+      const cause = result.cause?.trim();
+      if ('cause' in result) {
+        const detail = cause ? `\n${cause}` : '';
+        return errorResult(
+          `Delegation approval for '${agentName}' was cancelled.\nYour delegation was: ${echo}${detail}`,
+          { summary: `Delegation approval cancelled for '${agentName}'` },
+        );
+      }
+      if ('reason' in result) {
+        const detail = reason ? `\n${reason}` : '';
+        return errorResult(
+          `Delegation to '${agentName}' was denied.\nYour delegation was: ${echo}${detail}`,
+          { summary: `Delegation denied for '${agentName}'` },
+        );
+      }
       const feedbackLine = feedback
         ? `\nUser feedback: ${feedback}`
         : `\n${DEFAULT_DELEGATION_REJECTION_FEEDBACK}`;
