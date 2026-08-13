@@ -720,7 +720,7 @@ export class DesktopProgressBridge {
       },
       workflowFileActions: {
         state: {
-          getActiveStream: () => this.state.activeStream,
+          getActiveStream: () => this.backend.presentation.activeStream,
           getRunMetadata: (stream) => this.getRunMetadata(stream),
           getOutputFiles: (stream) =>
             this.state.snapshots.getOutputFiles(stream),
@@ -788,7 +788,8 @@ export class DesktopProgressBridge {
       },
       commands: {
         lifecycle: {
-          setActiveStream: (stream) => this.setActiveStream(stream),
+          setActiveStream: (stream, requestId) =>
+            this.setActiveStream(stream, requestId),
           deleteStream: (stream) => this.backend.deleteStream(stream),
           deleteAllStreams: () => this.backend.deleteAllStreams(),
           stopStream: (stream) => this.backend.stopStream(stream),
@@ -1048,8 +1049,11 @@ export class DesktopProgressBridge {
     await replayApprovalRequestHandlers(this.backend.approvalHandlers);
   }
 
-  private async setActiveStream(streamId: StreamTabId): Promise<void> {
-    await this.backend.activateStream(streamId);
+  private async setActiveStream(
+    streamId: StreamTabId | '',
+    requestId?: string,
+  ): Promise<void> {
+    await this.backend.activateStream(streamId, requestId);
   }
 
   /**
@@ -1057,7 +1061,11 @@ export class DesktopProgressBridge {
    * `getProgressStreamLabel`.
    */
   getStreamLabel(streamId: StreamTabId): string | undefined {
-    return buildStreamInfo(this.state, streamId).label;
+    return buildStreamInfo(
+      this.state,
+      streamId,
+      this.backend.presentation.activeStream,
+    ).label;
   }
 
   /**
@@ -1106,7 +1114,7 @@ export class DesktopProgressBridge {
   private getActiveLatexdiffRunContext(
     editedFile: string,
   ): DesktopLatexdiffRunContext | undefined {
-    const stream = this.state.activeStream;
+    const stream = this.backend.presentation.activeStream;
     if (!stream) return undefined;
 
     // Round keys are non-negative integers BY CONSTRUCTION: every write path

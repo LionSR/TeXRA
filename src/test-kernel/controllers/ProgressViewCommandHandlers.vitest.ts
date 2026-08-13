@@ -186,7 +186,11 @@ describe('createProgressViewCommandHandlers', () => {
     const handlers = createProgressViewCommandHandlers(actions);
 
     expectDispatched(
-      { command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, stream: 'stream-a' },
+      {
+        command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
+        stream: 'stream-a',
+        requestId: 'request-a',
+      },
       handlers,
     );
     expectDispatched(
@@ -199,7 +203,10 @@ describe('createProgressViewCommandHandlers', () => {
       handlers,
     );
 
-    expect(actions.lifecycle.setActiveStream).toHaveBeenCalledWith('stream-a');
+    expect(actions.lifecycle.setActiveStream).toHaveBeenCalledWith(
+      'stream-a',
+      'request-a',
+    );
     expect(actions.lifecycle.deleteStream).toHaveBeenCalledWith('stream-b');
     expect(actions.lifecycle.deleteAllStreams).toHaveBeenCalledWith();
     expect(actions.lifecycle.stopStream).toHaveBeenCalledWith('stream-c');

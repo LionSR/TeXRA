@@ -114,11 +114,13 @@ describe('desktop Progress IPC', () => {
       ipc.handleMessage({
         command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
         stream: 'run-1',
+        requestId: 'request-1',
       }),
     ).toBe(true);
     expect(switchStream).toHaveBeenCalledWith({
       command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
       stream: 'run-1',
+      requestId: 'request-1',
     });
   });
 
@@ -136,6 +138,7 @@ describe('desktop Progress IPC', () => {
       ipc.handleMessage({
         command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
         stream: 'run-1',
+        requestId: 'request-2',
       }),
     ).toBe(true);
     await Promise.resolve();
@@ -144,6 +147,7 @@ describe('desktop Progress IPC', () => {
     expect(switchStream).toHaveBeenCalledWith({
       command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
       stream: 'run-1',
+      requestId: 'request-2',
     });
   });
 
@@ -198,6 +202,7 @@ describe('desktop Progress IPC', () => {
       ipc.handleMessage({
         command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
         stream: 'run-1',
+        requestId: 'request-3',
       }),
     ).toBe(true);
     await Promise.resolve();

@@ -92,7 +92,10 @@ interface ProgressViewFollowUpSubmission {
 }
 
 export interface ProgressViewLifecycleCommandActions {
-  setActiveStream(stream: StreamTabId): Promise<void> | void;
+  setActiveStream(
+    stream: StreamTabId | '',
+    requestId: string,
+  ): Promise<void> | void;
   deleteStream(stream: StreamTabId): Promise<void> | void;
   deleteAllStreams(): Promise<void> | void;
   stopStream(stream: StreamTabId): Promise<void> | void;
@@ -223,7 +226,7 @@ export function createProgressViewCommandHandlers(
 
   return {
     [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
-      lifecycle.setActiveStream(data.stream),
+      lifecycle.setActiveStream(data.stream, data.requestId),
     [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (data) =>
       lifecycle.deleteStream(data.stream),
     [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => lifecycle.deleteAllStreams(),

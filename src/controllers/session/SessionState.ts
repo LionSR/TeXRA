@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
@@ -14,7 +12,6 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { createSessionStores } from '@controllers/session/sessionStores';
-import type { StateStore } from '@platform/interfaces';
 import {
   type ActiveChildInfo,
   type ConversationProgress,
@@ -26,13 +23,7 @@ import {
   type UserFollowUpSupport,
   AgentCategory,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  PersistedState,
-  createBackendStorage,
-} from '@shared/state/PersistedState';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
-import { isActivePhase } from '@shared/streams/streamStatus';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 
 /**
@@ -82,16 +73,6 @@ interface StreamSessionState {
   provisionalCreationTimestamp: number;
 }
 
-/** Active stream identifier, or empty string when no stream is selected. */
-export type ActiveStreamId = StreamTabId | '';
-
-/** Schema for consolidated session presentation preferences. */
-const SessionPrefsSchema = z.object({
-  activeStream: z.string().prefault('') as z.ZodType<ActiveStreamId>,
-});
-
-type SessionPrefs = z.infer<typeof SessionPrefsSchema>;
-
 /**
  * Backend-owned ephemeral counters, updated during streaming.
  */
@@ -112,11 +93,11 @@ export interface StreamExecutionState {
 export type StreamBadgeSnapshot = Pick<StreamExecutionState, 'subagents'>;
 
 /**
- * Host-neutral session presentation state.
+ * Host-neutral session state.
  *
  * Coordinates two persistence stores — `streamLogs` (transcript) and
  * `snapshots` (all per-stream sidecar: output files, usage, todos, plan, and
- * meta) — plus ephemeral in-memory execution state and preferences. Workflow
+ * meta) — plus ephemeral in-memory execution state. Workflow
  * instructions live in the log stream (new runs write them directly; legacy
  * runs are backfilled there during load), not in separate progress-view state.
  */
@@ -129,9 +110,6 @@ export class SessionState {
   /** Atomic lifecycle owner across streamLogs, streamData, and executions. */
   readonly stores: SessionStores;
 
-  // -- Preferences ------------------------------------------------------------
-  private readonly _prefs: PersistedState<SessionPrefs>;
-
   // -- Ephemeral state (session-only, not persisted) --------------------------
   private readonly _streamStates = new Map<StreamTabId, StreamExecutionState>();
   private readonly _sessionState = new Map<StreamTabId, StreamSessionState>();
@@ -143,71 +121,16 @@ export class SessionState {
   private readonly session: SessionHandle;
 
   constructor(
-    storage: StateStore,
     session: SessionHandle = defaultSession(),
     stores?: SessionStores,
   ) {
     this.logger = createChannelTrace('SessionState');
     this.session = session;
     this.streamStatus = session.status;
-    this._prefs = new PersistedState(
-      createBackendStorage(storage),
-      WorkspaceStateKey.PROGRESS_VIEW_PREFS,
-      SessionPrefsSchema,
-    );
     this.streamLogs = session.transcripts;
     this.followUps = session.followUps;
     this.snapshots = session.snapshots;
     this.stores = stores ?? createSessionStores(session);
-  }
-
-  // -- Preferences ------------------------------------------------------------
-
-  get activeStream(): ActiveStreamId {
-    return this._prefs.get('activeStream');
-  }
-
-  /**
-   * Compute which stream should be active given available streams (pure query).
-   */
-  private pickValidActiveStream(availableStreams: StreamTabId[]): StreamTabId {
-    const current = this._prefs.get('activeStream');
-    if (availableStreams.includes(current)) {
-      return current;
-    }
-    return availableStreams[0] || current;
-  }
-
-  /**
-   * Release a previously-active stream's entries if its status is not
-   * in-flight. `SessionFactApplier.setStreamStatus` intentionally skips
-   * eviction for the active tab, so the switch below closes the loop on the
-   * stream being moved away from.
-   */
-  private releasePreviousActive(streamId: StreamTabId): void {
-    if (!isActivePhase(this.streamStatus.get(streamId))) {
-      this.streamLogs.requestEviction(streamId);
-    }
-  }
-
-  /**
-   * The single writer of the active tab: moves the selection to `next` and
-   * releases the tab left behind. There is no `activeStream` setter, so no
-   * switching path can forget the release above. `evictPrevious: false` is
-   * for hosts whose visible focus is not this active stream (the CLI TUI
-   * keys focus off its own signal), where the release would evict the wrong
-   * stream's transcript.
-   */
-  switchActiveStream(
-    next: ActiveStreamId,
-    options?: { evictPrevious?: boolean },
-  ): void {
-    const previous = this._prefs.get('activeStream');
-    if (previous === next) return;
-    this._prefs.update({ activeStream: next });
-    if (previous && options?.evictPrevious !== false) {
-      this.releasePreviousActive(previous);
-    }
   }
 
   /**
@@ -225,21 +148,6 @@ export class SessionState {
       }))
       .sort(compareByNewestCreationTime)
       .map((entry) => entry.name);
-  }
-
-  /**
-   * Re-select the active tab from the tabs currently offered, and switch to
-   * it. When nothing is selectable the tab is cleared rather than picked:
-   * `pickValidActiveStream`'s `[] || current` fallback would otherwise sticky
-   * on a stream the caller no longer shows.
-   */
-  rotateActiveStream(selectableStreams: StreamTabId[]): ActiveStreamId {
-    const next =
-      selectableStreams.length === 0
-        ? ''
-        : this.pickValidActiveStream(selectableStreams);
-    this.switchActiveStream(next);
-    return next;
   }
 
   // -- Ephemeral session state ------------------------------------------------
@@ -471,10 +379,6 @@ export class SessionState {
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
 
-    // Update active stream *after* deletion so keys() no longer includes it.
-    if (this._prefs.get('activeStream') === stream) {
-      this._prefs.update({ activeStream: this.topmostStreamTab() });
-    }
     return 'deleted';
   }
 
@@ -497,11 +401,6 @@ export class SessionState {
       this.streamStatus.clearStream(stream);
       this._sessionState.delete(stream);
       this._streamStates.delete(stream);
-    }
-    if (retainedStreams.size === 0) {
-      this._prefs.reset();
-    } else if (!retainedStreams.has(this._prefs.get('activeStream'))) {
-      this._prefs.update({ activeStream: this.topmostStreamTab() });
     }
     return deletion;
   }
@@ -531,14 +430,11 @@ export class SessionState {
 
     this.logger.info('[Persistence] Managers loaded');
 
-    this.validateActiveStream();
-
     this.logger.info('[Persistence] State load complete');
   }
 
   /** Drop workspace-scoped caches before loading a replacement storage root. */
   resetAfterStorageRootChange(): void {
-    this._prefs.reload();
     this._sessionState.clear();
     this._streamStates.clear();
   }
@@ -552,27 +448,4 @@ export class SessionState {
   }
 
   // -- Private helpers --------------------------------------------------------
-
-  /**
-   * The topmost (newest) visible stream tab, or '' when none exist.
-   *
-   * `streamLogs.keys()` is ascending by creation time (load() sorts by
-   * `firstTimestamp` ASC, session additions are appended), but the sidebar
-   * renders newest-first, so `.at(-1)` matches the topmost visible tab rather
-   * than the oldest one at the bottom.
-   */
-  private topmostStreamTab(): ActiveStreamId {
-    return this.streamLogs.keys().at(-1) ?? '';
-  }
-
-  /** Validate activeStream against available streams after load */
-  private validateActiveStream(): void {
-    const savedActiveStream = this._prefs.get('activeStream');
-    if (!savedActiveStream || !this.streamLogs.has(savedActiveStream)) {
-      const fallback = this.topmostStreamTab();
-      if (fallback !== savedActiveStream) {
-        this._prefs.update({ activeStream: fallback });
-      }
-    }
-  }
 }
