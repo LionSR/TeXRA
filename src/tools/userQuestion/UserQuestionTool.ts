@@ -66,6 +66,20 @@ The tool returns a JSON object whose keys are the original question texts and wh
     const result = await session.interactions.askUserQuestion(permission);
 
     if (result.action !== 'submit') {
+      if ('cause' in result) {
+        return executed(
+          result.cause
+            ? `The user question was cancelled: ${result.cause}`
+            : 'The user question was cancelled.',
+        );
+      }
+      if ('reason' in result) {
+        return executed(
+          result.reason
+            ? `The user question was denied: ${result.reason}`
+            : 'The user question was denied.',
+        );
+      }
       return executed(
         result.feedback
           ? `The user declined to answer: ${result.feedback}`

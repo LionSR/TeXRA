@@ -493,7 +493,7 @@ describe('createDesktopHostInteractions', () => {
     });
     await expect(planPromise).resolves.toEqual({
       action: 'reject',
-      feedback: SESSION_DISPOSED_CAUSE,
+      cause: SESSION_DISPOSED_CAUSE,
     });
     expect(handlers.transport.bash.dismiss).toHaveBeenCalled();
     expect(handlers.transport.planApproval.dismiss).toHaveBeenCalled();

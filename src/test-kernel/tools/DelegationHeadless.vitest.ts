@@ -11,7 +11,10 @@ import {
 } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
+import type {
+  HostInteractions,
+  ProposalResult,
+} from '@agent/runtime/HostInteractions';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
 import {
@@ -176,11 +179,7 @@ function callDelegateReview() {
 /** The same delegation routed through the host's proposal port, with the host
  *  fake answering `decision`. The session owns the fake port, so it is created
  *  and disposed per case. */
-async function delegateWithProposalDecision(
-  decision:
-    | { readonly action: 'reject' }
-    | { readonly action: 'approve'; readonly model: string },
-) {
+async function delegateWithProposalDecision(decision: ProposalResult) {
   mocks.isProposalBypassed.mockReturnValue(false);
   const session = createTestSession();
   session.useHostInteractions({
@@ -1123,6 +1122,18 @@ describe('headless delegation', () => {
       'Do not retry the same or equivalent delegation',
     );
     expect(result.error).toContain('continue directly with available context');
+    expect(mocks.executeAgent).not.toHaveBeenCalled();
+  });
+
+  it('does not attribute proposal cancellation to the user', async () => {
+    const result = await delegateWithProposalDecision({
+      action: 'reject',
+      cause: 'CLI approval prompt failed.',
+    });
+
+    expect(result.summary).toBe("Delegation approval cancelled for 'review'");
+    expect(result.error).toContain('CLI approval prompt failed.');
+    expect(result.error).not.toContain('User feedback:');
     expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 

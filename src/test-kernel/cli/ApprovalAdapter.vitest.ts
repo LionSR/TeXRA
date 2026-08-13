@@ -269,7 +269,22 @@ describe('approval prompt hooks', () => {
 
     expect(result).toEqual({
       action: 'reject',
-      feedback: 'Denied by TeXRA approval policy.',
+      reason: 'Denied by TeXRA approval policy.',
+    });
+  });
+
+  it('preserves a failed proposal prompt as an automatic cancellation', async () => {
+    const result = await createHeadlessCliHostInteractions(
+      context({
+        approvalPrompt: async () => {
+          throw new Error('terminal input closed');
+        },
+      }),
+    ).requestAgentProposal?.(proposal);
+
+    expect(result).toEqual({
+      action: 'reject',
+      cause: 'CLI approval prompt failed.',
     });
   });
 
