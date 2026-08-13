@@ -240,7 +240,7 @@ function workflowTaskMetadata(
     cost = usage?.cost;
   }
   const parts = [
-    model,
+    model ? getRuntimeModelLabel(model) : undefined,
     elapsed,
     usage && usage.outputTokens > 0
       ? `${TOKENS_GENERATED}${formatCompactTokenCount(usage.outputTokens)}`

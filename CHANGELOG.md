@@ -25,6 +25,8 @@ All notable changes to this project will be documented in this file.
   input is hidden.
 - **Session views show recognizable model names** — headers, `/status`, and
   background-task rows use catalog labels instead of internal model IDs.
+- **Workflow task rows show recognizable model names** — focused workflow
+  dashboards use catalog labels instead of internal model IDs.
 
 ### Shared (all surfaces)
 

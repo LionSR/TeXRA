@@ -1035,6 +1035,17 @@ describe('CLI child list display model', () => {
           },
           true,
         ),
+        workflowTaskEntry(
+          'task-labelled',
+          'Finished: Labelled model',
+          {
+            id: 'labelled-model',
+            label: 'Labelled model',
+            status: 'completed',
+            model: 'deepseekT',
+          },
+          true,
+        ),
         workflowTaskEntry('task-missing', 'Running: Missing', {
           id: 'missing',
           label: 'Missing',
@@ -1107,11 +1118,11 @@ describe('CLI child list display model', () => {
 
     expect(wideOutput.match(/Map \(1\/2\) · 0\/1/g)).toHaveLength(1);
     expect(wideOutput).toContain('Synthesis · 0/1');
-    expect(wideOutput).toContain('Unphased · 2/6');
+    expect(wideOutput).toContain('Unphased · 3/7');
     expect(wideOutput).toContain('Synthesize · Planned');
     expect(narrowOutput.match(/Map \(1\/2\) · 0\/1/g)).toHaveLength(1);
     expect(narrowOutput).toContain('Synthesis · 0/1');
-    expect(narrowOutput).toContain('Unphased · 2/6');
+    expect(narrowOutput).toContain('Unphased · 3/7');
     expect(narrowOutput).toContain('Loose · Planned');
 
     const reusedLine = narrowOutput
@@ -1127,6 +1138,11 @@ describe('CLI child list display model', () => {
     expect(reusedTerminalLine).toContain('$0.500');
     expect(reusedTerminalLine).not.toContain('ambiguous-model');
     expect(reusedTerminalLine).not.toContain('↓999');
+    const labelledModelLine = narrowOutput
+      .split('\n')
+      .find((line) => line.includes('Labelled model · Finished'));
+    expect(labelledModelLine).toContain('DeepSeek V4 Flash (Thinking)');
+    expect(labelledModelLine).not.toContain('deepseekT');
     const missingLine = narrowOutput
       .split('\n')
       .find((line) => line.includes('Missing · Running'));
