@@ -8,11 +8,10 @@ import {
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import {
-  formatWorkflowCallLine,
-  formatWorkflowPhaseHeading,
-} from '@shared/copy/workflowCall';
+import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import { assertNever } from '@utils/core';
+
+import { formatCliWorkflowCallLine } from './workflowCallText';
 
 const WORKFLOW_PLAIN_EVENT_TYPES = [
   'run.start',
@@ -53,7 +52,7 @@ function createWorkflowStreamProjection(
     options.writeLine(line);
   };
   const writeCall = (logId: string, call: WorkflowCallProgress): void => {
-    const line = formatWorkflowCallLine(call);
+    const line = formatCliWorkflowCallLine(call);
     if (lastCallLines.get(logId) === line) return;
     lastCallLines.set(logId, line);
     write(line);
