@@ -528,8 +528,19 @@ export interface SubagentListProps {
     action: WorkflowControlAction,
   ) => void;
   readonly onSelectionChange?: (value: ChildListValue) => void;
-  /** Pending approval kinds per stream id (see `pendingApprovalSummaries`,
-   *  root bucket already folded onto the root stream id by the caller). */
+  /**
+   * Pending approval kinds per stream id (see `pendingApprovalSummaries`; the
+   * caller folds session-wide / stream-less approvals onto the root stream id
+   * via `groupPendingApprovalsByRow`).
+   *
+   * When `dashboard` is present, the dashboard replaces the session list and
+   * renders only per-task rows keyed by each task's child stream id. There is
+   * no root row, so the root-folded session-wide bucket (plan, proposal,
+   * stream-less retry, …) is not rendered by the dashboard — it remains
+   * visible only through the global approval count. This pane is therefore
+   * intentionally scoped to per-task agent approvals while a dashboard is
+   * displayed.
+   */
   readonly pendingApprovals?: ReadonlyMap<
     string,
     readonly PendingApprovalKind[]
