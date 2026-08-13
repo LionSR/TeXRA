@@ -69,7 +69,13 @@ export type ToolEditApprovalResult =
     }
   | {
       readonly accepted: false;
-      readonly userMessage?: string;
+      readonly feedback?: string;
+      readonly reason?: never;
+    }
+  | {
+      readonly accepted: false;
+      readonly reason: string;
+      readonly feedback?: never;
     };
 
 const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
@@ -268,7 +274,7 @@ export async function requestToolEditApproval(
     context?.onApprovalPolicyDenial?.();
     return {
       accepted: false,
-      userMessage: texraApprovalDenialMessage(decision),
+      reason: texraApprovalDenialMessage(decision),
     };
   }
 
@@ -385,15 +391,24 @@ export function appendApprovalDiffNote(
     : baseOutput;
 }
 
+export interface ToolEditRejectionProvenance {
+  readonly feedback?: string;
+  readonly reason?: string;
+}
+
 export function buildApprovalRejectedResult(
   path: string,
   sourceTool: string,
-  userMessage?: string,
+  rejection: ToolEditRejectionProvenance,
 ): ToolResult {
-  const baseMessage = `User rejected ${sourceTool} for ${path}.`;
-  const feedback = userMessage?.trim();
-  return errorResult(baseMessage, {
-    summary: baseMessage,
+  const feedback = rejection.feedback?.trim();
+  const reason = rejection.reason?.trim();
+  const summary = reason
+    ? `Tool edit denied: ${sourceTool} for ${path}.`
+    : `User rejected ${sourceTool} for ${path}.`;
+  const error = reason ? `${summary}\n\n${reason}` : summary;
+  return errorResult(error, {
+    summary,
     ...(feedback && { userInstruction: feedback }),
   });
 }
@@ -432,11 +447,7 @@ export async function requestAndWriteApprovedEdit(request: {
 
   if (!approval.accepted) {
     return {
-      rejected: buildApprovalRejectedResult(
-        displayPath,
-        sourceTool,
-        approval.userMessage,
-      ),
+      rejected: buildApprovalRejectedResult(displayPath, sourceTool, approval),
     };
   }
 

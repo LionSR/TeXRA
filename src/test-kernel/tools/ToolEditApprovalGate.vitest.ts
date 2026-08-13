@@ -125,7 +125,7 @@ describe('Tool edit approval gating', () => {
 
     testApprovalHandler = async () => ({
       accepted: false,
-      userMessage: 'Rejected by user',
+      feedback: 'Rejected by user',
     });
 
     const result = await tool.call({
@@ -173,10 +173,8 @@ describe('Tool edit approval gating', () => {
     assert.strictEqual(approvalRequests.length, 0);
     assert.strictEqual(write.mock.calls.length, 0);
     assert.strictEqual(result.status, 'error');
-    assert.strictEqual(
-      result.userInstruction,
-      'Denied by TeXRA approval policy.',
-    );
+    assert.strictEqual(result.userInstruction, undefined);
+    assert.match(result.error ?? '', /Denied by TeXRA approval policy\./);
     assert.strictEqual(policyDenials, 1);
   });
 

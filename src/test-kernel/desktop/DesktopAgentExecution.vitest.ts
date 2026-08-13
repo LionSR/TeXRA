@@ -3029,7 +3029,7 @@ describe('DesktopProgressBridge', () => {
 
         await expect(approvalPromise).resolves.toMatchObject({
           accepted: false,
-          userMessage: 'Not this edit.',
+          feedback: 'Not this edit.',
         });
       } finally {
         bridgeB.dispose();

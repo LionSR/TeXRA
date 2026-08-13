@@ -192,7 +192,8 @@ Parameters map directly to subagent-result delivery attributes:
     let rejected = 0;
     let unchanged = 0;
     let firstRejectedPath: string | undefined;
-    const rejectionMessages: string[] = [];
+    const rejectionFeedback: string[] = [];
+    const rejectionReasons: string[] = [];
 
     let totalStripped = 0;
 
@@ -216,7 +217,8 @@ Parameters map directly to subagent-result delivery attributes:
       if (!approval.accepted) {
         rejected++;
         firstRejectedPath ??= entry.original;
-        if (approval.userMessage) rejectionMessages.push(approval.userMessage);
+        if (approval.feedback) rejectionFeedback.push(approval.feedback);
+        if (approval.reason) rejectionReasons.push(approval.reason);
         results.push(`rejected: ${entry.original}${mappingNote}`);
         continue;
       }
@@ -272,7 +274,10 @@ Parameters map directly to subagent-result delivery attributes:
       return buildApprovalRejectedResult(
         firstRejectedPath ?? prepared[0].original,
         'accept_run_files',
-        rejectionMessages.join('\n'),
+        {
+          feedback: rejectionFeedback.join('\n') || undefined,
+          reason: rejectionReasons.join('\n') || undefined,
+        },
       );
     }
 
