@@ -510,9 +510,10 @@ export async function executeCliRequest(
       // ordinary toast path when it ran, and provide the missing direct fallback
       // while the presentation host is still attached. A launch failure that
       // already presented itself via a targeted notification (e.g. the
-      // agent-not-found banner or model-not-recognized instruction) is marked
-      // -- this CLI-local `failurePresented` flag only tracks `requestShowError`,
-      // so it would otherwise re-surface those failures a second time here.
+      // model-not-recognized instruction) is marked -- this CLI-local
+      // `failurePresented` flag only tracks `requestShowError`, so it would
+      // otherwise re-surface that failure a second time here. Agent-not-found
+      // remains unmarked because its banner is a no-op on CLI hosts.
       session.interactions.emit('requestShowError', {
         message: toErrorMessage(err),
       });
