@@ -54,7 +54,7 @@ const InquiryTurnBaseShape = {
    * reader after 2026-11-13, when those open inquiries are outside the
    * repository's three-month compatibility window.
    */
-  parentGenerationId: z.string().min(1).optional(),
+  parentGenerationId: z.uuid().optional(),
   question: z.string(),
   context: z.string().nullish(),
   questionRelativePath: z.string().min(1),

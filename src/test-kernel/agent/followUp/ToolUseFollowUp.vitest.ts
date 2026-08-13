@@ -276,6 +276,37 @@ describe('submitFollowUp', () => {
     expect(session.followUps.getAll(streamId)).toEqual(['final child result']);
   });
 
+  it('trusts a matching retained generation after the parent completes', async () => {
+    const streamId = id('stream:retained-child-generation');
+    const generationId = 'a98f8f0a-b61a-4913-a88e-a934da14d4e5';
+    const session = fakeSession({
+      kind: 'queue',
+      reason: 'children_running',
+    });
+    const parent = session.followUps.claimLive(streamId, 'flow', generationId)!;
+    session.followUps.release(parent, 'recoverable');
+    const deriveSpy = vi.spyOn(resumability, 'deriveResumability');
+    const tryResumeStream = mockTryResume();
+
+    await expect(
+      submitFollowUp(
+        streamId,
+        { text: 'retained child result', origin: 'subagent_result' },
+        {
+          session,
+          resumePort: { tryResumeStream },
+          mode: 'child_delivery',
+          expectedGenerationId: generationId,
+        },
+      ),
+    ).resolves.toMatchObject({ status: 'queued', continuation: 'resumed' });
+
+    expect(deriveSpy).not.toHaveBeenCalled();
+    expect(session.followUps.getAll(streamId)).toEqual([
+      'retained child result',
+    ]);
+  });
+
   it('does not let child delivery reopen a terminal parent queue', async () => {
     const streamId = id('stream:terminal-child-delivery');
     const session = fakeSession({
@@ -409,6 +440,37 @@ describe('submitFollowUp', () => {
         expectedGenerationId: generationId,
       }),
     ).resolves.toMatchObject({ status: 'queued' });
+    expect(provisional.generationId).toBe(generationId);
+  });
+
+  it('rebinds a released provisional recovery before durable admission', async () => {
+    const streamId = id('stream:released-provisional-recovery');
+    const session = fakeSession({ kind: 'queue', reason: 'waiting' });
+    const executionId = 'persisted-execution';
+    const generationId = '51c54412-e977-48ab-8304-53007cc0bb7a';
+    vi.spyOn(session.snapshots, 'getRunMetadata').mockReturnValue({
+      executionId,
+    } as never);
+    vi.spyOn(resumability, 'deriveResumability').mockResolvedValue({
+      resumable: true,
+      cause: resumability.RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
+      flowRecord: {
+        flowName: 'texra',
+        shared: { continuationGenerationId: generationId },
+        createdAt: '2026-08-13T12:00:00.000Z',
+        nodes: [],
+      },
+    });
+    const provisional = session.followUps.claimRecovery(streamId, true)!;
+    session.followUps.release(provisional, 'recoverable');
+
+    await expect(
+      submitFollowUp(streamId, 'answer after failed recovery', {
+        session,
+        resumePort: { tryResumeStream: mockTryResume() },
+        expectedGenerationId: generationId,
+      }),
+    ).resolves.toMatchObject({ status: 'queued', continuation: 'resumed' });
     expect(provisional.generationId).toBe(generationId);
   });
 });
