@@ -398,6 +398,48 @@ describe('CLI child list interaction', () => {
     }
   });
 
+  it('marks only the workflow task whose child awaits approval', async () => {
+    const { ink, React } = await loadInk();
+    const otherChild = 'other-child' as StreamTabId;
+    const rootSlice = workflowRootSlice([
+      ...[
+        { id: 'inspect', childStreamId: child },
+        { id: 'summarize', childStreamId: otherChild },
+      ].map(({ id, childStreamId }) => ({
+        id: `task-${id}`,
+        role: 'workflowTask' as const,
+        text: `Running: ${id}`,
+        finalized: false,
+        task: {
+          id,
+          label: id,
+          status: 'running' as const,
+          childStreamId,
+        },
+      })),
+    ]);
+
+    const output = await renderOutputAtTerminalSize(
+      ink,
+      React.createElement(SubagentList, {
+        dashboard: workflowDashboardModel(rootSlice, 100),
+        maxRows: 6,
+        pendingApprovals: new Map([[child, ['bash'] as const]]),
+        streams: new Map([
+          [root, rootSlice],
+          [child, emptySlice(child)],
+          [otherChild, emptySlice(otherChild)],
+        ]),
+      }),
+      100,
+      { until: (frame) => frame.includes('inspect · Running · bash') },
+    );
+
+    expect(output).toContain('inspect · Running · bash');
+    expect(output).toContain('summarize · Running');
+    expect(output).not.toContain('summarize · Running · bash');
+  });
+
   it('keeps detail and controls inert when workflow tasks reuse a child id', async () => {
     const { ink, React } = await loadInk();
     const onFocusStream = vi.fn();
