@@ -654,6 +654,46 @@ describe('CLI workflow run command', () => {
     });
   });
 
+  it('presents the lifecycle verdict when cancellation lands during output finalization', async () => {
+    const provisional = workflowExecution('exec-output-interrupted');
+    if (!provisional.ok) throw new Error('Expected a workflow result.');
+    mocks.executeCliConfig.mockImplementationOnce(
+      async (
+        _config: unknown,
+        _context: unknown,
+        options: {
+          readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
+        },
+      ) => {
+        await options.openWorkflowOutput?.(provisional.result);
+        return {
+          ...provisional,
+          result: {
+            ...provisional.result,
+            outcome: RUN_OUTCOME.CANCELLED,
+          },
+        };
+      },
+    );
+
+    const exitCode = await runWorkflow();
+
+    expect(exitCode).toBe(CliExitCode.Interrupted);
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+      expectedResultMeta({
+        outcome: RUN_OUTCOME.CANCELLED,
+        outputs: [],
+        compileFailures: [],
+      }),
+    );
+    expect(mocks.emitCliResult).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        json: expect.objectContaining({ outcome: RUN_OUTCOME.CANCELLED }),
+      }),
+    );
+  });
+
   it('prints the recovery command when cancelled output resolution fails', async () => {
     mockWorkflowExecution(
       workflowExecution('exec-interrupted-copy', {

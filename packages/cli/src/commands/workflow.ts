@@ -224,27 +224,11 @@ export async function executeCliWorkflowConfig(
           runContext,
           { expectedOutputFiles: options.expectedOutputFiles },
         );
-        await persistWorkflowResultMeta(
-          result.executionId,
-          buildCliWorkflowResultMeta(result, {
-            outcome: result.outcome,
-            copiedOutput: workflowResult.copiedOutput,
-            copiedOutputs: workflowResult.copiedOutputs,
-          }),
-        );
       } catch (error) {
         workflowOutputError = error;
-        const outputOutcome =
-          result.outcome === RUN_OUTCOME.CANCELLED
-            ? result.outcome
-            : RUN_OUTCOME.FAILED;
-        await persistWorkflowResultMeta(
-          result.executionId,
-          buildCliWorkflowResultMeta(result, {
-            outcome: outputOutcome,
-          }),
-        );
-        return outputOutcome;
+        return result.outcome === RUN_OUTCOME.CANCELLED
+          ? result.outcome
+          : RUN_OUTCOME.FAILED;
       }
     },
   });
@@ -252,6 +236,12 @@ export async function executeCliWorkflowConfig(
 
   const { result } = execution;
   if (workflowOutputError !== undefined) {
+    await persistWorkflowResultMeta(
+      result.executionId,
+      buildCliWorkflowResultMeta(result, {
+        outcome: result.outcome,
+      }),
+    );
     writeErrorStderr(workflowOutputError);
     if (result.outcome === RUN_OUTCOME.CANCELLED) {
       if (execution.outcomePersisted) writeResumeHint(result.executionId);
@@ -262,6 +252,19 @@ export async function executeCliWorkflowConfig(
   if (!workflowResult) {
     throw new Error('Workflow output was not finalized before lease release.');
   }
+
+  // Output copying occurs while the run is still interruptible. Rebuild its
+  // envelope from the lifecycle-resolved verdict so a signal that lands during
+  // the copy cannot leave a completed presentation beside a cancelled run.
+  workflowResult = { ...workflowResult, outcome: result.outcome };
+  await persistWorkflowResultMeta(
+    result.executionId,
+    buildCliWorkflowResultMeta(result, {
+      outcome: result.outcome,
+      copiedOutput: workflowResult.copiedOutput,
+      copiedOutputs: workflowResult.copiedOutputs,
+    }),
+  );
 
   emitCliResult(runContext, {
     json: workflowResult,
