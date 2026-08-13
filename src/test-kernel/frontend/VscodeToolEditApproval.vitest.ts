@@ -337,7 +337,7 @@ describe('VS Code tool edit approval', () => {
 
     await expect(approval).resolves.toMatchObject({
       accepted: false,
-      userMessage: 'Run ended.',
+      reason: 'Run ended.',
     });
     expect(interactions.shown).toEqual([]);
   });
@@ -386,7 +386,7 @@ describe('VS Code tool edit approval', () => {
 
     await expect(approval).resolves.toMatchObject({
       accepted: false,
-      userMessage: 'Stream resources released.',
+      reason: 'Stream resources released.',
     });
     expect(interactions.resolved).toEqual([{ requestId }]);
   });
