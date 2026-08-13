@@ -256,4 +256,17 @@ describe('BashTool error feedback', () => {
     expect(rejected.error).not.toContain('Do not retry');
     expect(rejected.userInstruction).toBeUndefined();
   });
+
+  it('does not present an automatic cancellation as user feedback', async () => {
+    vi.mocked(requestBashApproval).mockResolvedValueOnce({
+      action: 'reject',
+      cause: 'Session disposed.',
+    });
+    const rejected = await new BashTool().call({ command: 'echo rejected' });
+
+    expect(rejected.error).toContain('Command approval cancelled');
+    expect(rejected.error).toContain('Session disposed.');
+    expect(rejected.error).not.toContain('User rejected command');
+    expect(rejected.userInstruction).toBeUndefined();
+  });
 });
