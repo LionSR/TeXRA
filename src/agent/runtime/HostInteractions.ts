@@ -459,7 +459,7 @@ export class SessionHostInteractions implements HostInteractions {
       request.streamId as StreamTabId | null | undefined,
       (interactions) =>
         interactions.requestToolEditApproval?.(request, options),
-      (cause) => ({ accepted: false, reason: cause }),
+      (cause) => ({ accepted: false, cause }),
     );
   }
 

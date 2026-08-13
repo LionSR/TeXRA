@@ -278,7 +278,7 @@ export class ToolEditApprovalController {
       }
       const rejection: ToolEditApprovalResult = {
         accepted: false,
-        reason: selector.cause,
+        cause: selector.cause,
       };
       if (state.phase === 'initializing') {
         state.resolution ??= rejection;
