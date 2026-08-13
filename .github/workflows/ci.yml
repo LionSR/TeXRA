@@ -147,6 +147,9 @@ jobs:
       - name: Check tsconfig paths are in sync with the root
         run: pnpm run check:tsconfig-paths
 
+      - name: Check remote-agents SQL is in sync
+        run: pnpm run check:remote-agents
+
   guidance-refs:
     name: guidance references
     # Deliberately ungated: this is the one check that must run on BOTH sides
