@@ -544,7 +544,7 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'coordinator main.tex · 0s\n' +
-        'coordinator main.tex · subagents: reviewer +2 · 0s\n',
+        'coordinator main.tex · subagents: reviewer — reviewing chapter.tex +2 · 0s\n',
     );
   });
 
@@ -621,6 +621,62 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'polish paper.tex · 0s\npolish paper.tex · subagent: review · 0s\n',
+    );
+  });
+
+  it('joins a child description emitted before the active roster', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(
+      renderer,
+      'child-stream',
+      'Check multiplier signs and resonance counterexamples',
+    );
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — Check multiplier signs and resonance counterexa… · 0s\n',
+    );
+  });
+
+  it('adds a description that arrives after the child becomes active', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleStreamDescription(
+      renderer,
+      'child-stream',
+      'Verify by constraint elimination and energy balance',
+    );
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review · 0s\n' +
+        'orchestrator · subagent: review — Verify by constraint elimination and energy bal… · 0s\n',
+    );
+  });
+
+  it('forgets a child description when that child becomes terminal', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'First review task');
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.COMPLETED);
+    handleActiveSubagents(renderer, 'root-stream', []);
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — First review task · 0s\n' +
+        'orchestrator · 0s\n' +
+        'orchestrator · subagent: review · 0s\n',
     );
   });
 
