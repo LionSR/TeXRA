@@ -13,6 +13,7 @@ import {
 import { platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
+import { KeyedMutex } from '@utils/core';
 import type { FollowUpQueueInput } from './FollowUpQueue';
 
 export type SubmitFollowUpResult =
@@ -75,6 +76,7 @@ export function presentFollowUpResult(
 }
 
 const logger = createChannelTrace('ToolUseFollowUp');
+const submissionMutex = new KeyedMutex<StreamTabId>();
 const PersistedContinuationGenerationSchema = z.looseObject({
   continuationGenerationId: z.uuid(),
 });
@@ -163,7 +165,7 @@ export function notifyFollowUpSent(
  * The resume port is invoked before this function's first await, allowing its
  * synchronous recovery claim to serialize concurrent submissions.
  */
-export async function submitFollowUp(
+async function submitFollowUpUnlocked(
   streamId: StreamTabId,
   followUp: FollowUpQueueInput | string,
   options: SubmitFollowUpOptions = {},
@@ -264,4 +266,15 @@ export async function submitFollowUp(
     reason,
     continuation: resumed ? 'resumed' : 'resume_failed',
   };
+}
+
+/** Serialize persisted lookup and admission in producer invocation order. */
+export function submitFollowUp(
+  streamId: StreamTabId,
+  followUp: FollowUpQueueInput | string,
+  options: SubmitFollowUpOptions = {},
+): Promise<SubmitFollowUpResult> {
+  return submissionMutex.runExclusive(streamId, () =>
+    submitFollowUpUnlocked(streamId, followUp, options),
+  );
 }
