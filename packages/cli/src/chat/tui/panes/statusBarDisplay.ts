@@ -821,13 +821,6 @@ function childListBindingsText(
           escBinding,
           ctrlCBinding,
         ]),
-      statusBarBindingRow([
-        selectBinding,
-        enterBinding,
-        tabBinding,
-        escBinding,
-        ctrlCBinding,
-      ]),
       statusBarBindingRow([enterBinding, escBinding, ctrlCBinding]),
       ctrlCBinding,
     ],
