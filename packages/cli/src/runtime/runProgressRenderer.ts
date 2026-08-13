@@ -319,6 +319,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
   private deleteChildDescription(streamId: StreamTabId): void {
     if (!this.childDescriptions.delete(streamId)) return;
+    if (this.rootStreamTerminal) return;
     if (
       !this.activeChildren.some((child) => child.childStreamId === streamId)
     ) {
