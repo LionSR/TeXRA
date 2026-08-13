@@ -130,10 +130,6 @@ export function writeTextStderr(text: string): void {
   writeRaw('stderr', `${text}\n`);
 }
 
-export function writeTextStdoutAndWait(text: string): Promise<void> {
-  return writeRawAndWait('stdout', `${text}\n`);
-}
-
 export function writeTextStderrAndWait(text: string): Promise<void> {
   return writeRawAndWait('stderr', `${text}\n`);
 }

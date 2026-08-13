@@ -30,6 +30,10 @@ All notable changes to this project will be documented in this file.
   labels instead of internal model IDs.
 - **Workflow dashboards identify blocked tasks** — a task waiting for approval
   now shows the pending approval kind on its own row.
+- **Interrupted headless agent runs show how to resume** — stopping a tool-use
+  agent or multi-agent team now prints a command that preserves its workspace,
+  approval policy, and skill sources while reopening the interactive session
+  required for continuation.
 
 ### Shared (all surfaces)
 
