@@ -247,6 +247,66 @@ describe('workflow dashboard model', () => {
     expect(model.groups[0]?.tasks).toStrictEqual([current]);
   });
 
+  it('drops tasks and phases absent from the latest attempt', () => {
+    const prior = workflowRoot(
+      ['Draft', 'Verify'],
+      [
+        { id: 'draft', phase: 'Draft' },
+        { id: 'verification', phase: 'Verify' },
+      ],
+    );
+    const current = workflowRoot(
+      ['Verify'],
+      [{ id: 'verification', phase: 'Verify' }],
+    );
+    const priorEntries = prior.entries.map((entry) => ({
+      ...entry,
+      ...(entry.role === 'workflowTask'
+        ? { task: { ...entry.task, attemptId: 'prior' } }
+        : {}),
+    }));
+    const currentEntries = current.entries.map((entry) => ({
+      ...entry,
+      id: `current-${entry.id}`,
+      ...(entry.role === 'workflowTask'
+        ? { task: { ...entry.task, attemptId: 'current' } }
+        : {}),
+    }));
+
+    const model = workflowDashboardModel(
+      { ...prior, entries: [...priorEntries, ...currentEntries] },
+      WIDE_COLUMNS,
+    );
+
+    expect(model.tasks.map((entry) => entry.task.id)).toStrictEqual([
+      'verification',
+    ]);
+    expect(model.groups.map((group) => group.label)).toStrictEqual(['Verify']);
+  });
+
+  it('uses the latest heading facts when a rerun retains a phase label', () => {
+    const root = workflowRoot(
+      ['Verify'],
+      [{ id: 'verification', phase: 'Verify' }],
+    );
+    const currentHeading = {
+      id: 'phase-verify-current',
+      role: 'phase' as const,
+      text: 'Verify',
+      finalized: true,
+      phaseLabel: 'Verify',
+      phaseIndex: 2,
+      phaseTotal: 3,
+    };
+
+    const model = workflowDashboardModel(
+      { ...root, entries: [...root.entries, currentHeading] },
+      WIDE_COLUMNS,
+    );
+
+    expect(model.groups[0]?.heading).toBe(currentHeading);
+  });
+
   it('renders exactly the narrow row values the reducer reconciles against', async () => {
     const model = workflowDashboardModel(TWO_PHASE_ROOT, NARROW_COLUMNS);
     const visited = await navigateList(

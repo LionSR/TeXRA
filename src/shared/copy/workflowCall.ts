@@ -9,16 +9,22 @@ import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 /**
  * Select the current state of each logical workflow call.
  *
- * Durable script reruns append a fresh progress record for the same logical
- * call id so the earlier attempt remains available in transcript history.
- * Live projections must collapse those records at their boundary rather than
- * count prior attempts as additional tasks.
+ * Durable script reruns append progress under a fresh attempt id so the
+ * earlier attempt remains available in transcript history. Current writers
+ * stamp every call; older persisted transcripts without that fact fall back
+ * to their latest record per logical id.
  */
 export function latestWorkflowCallsById(
   calls: readonly WorkflowCallProgress[],
 ): WorkflowCallProgress[] {
+  const currentAttemptId = calls.findLast(
+    (call) => call.attemptId !== undefined,
+  )?.attemptId;
+  const candidates = currentAttemptId
+    ? calls.filter((call) => call.attemptId === currentAttemptId)
+    : calls;
   const seen = new Set<string>();
-  return calls
+  return candidates
     .toReversed()
     .filter((call) => {
       if (seen.has(call.id)) return false;

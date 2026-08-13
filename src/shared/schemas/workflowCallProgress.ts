@@ -30,6 +30,11 @@ const WorkflowCallTerminalMetadataSchema = z.strictObject({
 
 const WorkflowCallProgressBaseSchema = WorkflowCallIdentitySchema.extend({
   /**
+   * Physical workflow-script projection attempt. All progress records from one
+   * run share this id; older persisted transcripts may omit it.
+   */
+  attemptId: z.string().min(1).optional(),
+  /**
    * Live child stream that executes this call. Absent for planned, cached, and
    * not-yet-launched calls.
    */
