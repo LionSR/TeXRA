@@ -213,6 +213,7 @@ export async function runMultiAgentPreset(
           approvalContext: runContext,
           workingDirectory: runContext.cwd,
         }),
+        displayInstruction: instruction,
         workingDirectory: runContext.cwd,
         agentCategory: AgentCategory.ToolUse,
         cliMultiAgentPresetId: plan.preset.id,
