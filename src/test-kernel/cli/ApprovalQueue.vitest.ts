@@ -27,7 +27,7 @@ import type { StreamTabId } from '@shared/schemas';
 
 const INTERRUPTED = {
   accepted: false,
-  userMessage: 'Session interrupted.',
+  rejectionCause: 'Session interrupted.',
 };
 
 function bashPayload(streamId: string): ApprovalPayload {

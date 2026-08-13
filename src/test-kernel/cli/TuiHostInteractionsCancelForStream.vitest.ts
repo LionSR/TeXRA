@@ -76,9 +76,6 @@ const proposal: AgentProposal = {
   memories: [],
 };
 
-/** Result a per-stream cancel produces for every approval it settles. */
-const INTERRUPTED = { action: 'reject', feedback: 'Session interrupted.' };
-
 afterEach(() => {
   clearApprovals();
 });
@@ -115,7 +112,7 @@ describe('createTuiHostInteractions', () => {
 
     interactions.cancel({ streamId: 'stream-a' });
 
-    await expect(planResult).resolves.toEqual(INTERRUPTED);
+    await expect(planResult).resolves.toEqual({ action: 'reject' });
 
     // stream-b's request was never touched and now becomes the foreground
     // modal instead of being left permanently pending.
@@ -167,7 +164,7 @@ describe('createTuiHostInteractions', () => {
 
     interactions.cancel({ streamId: 'stream-a' });
 
-    await expect(proposalResult).resolves.toEqual(INTERRUPTED);
+    await expect(proposalResult).resolves.toEqual({ action: 'reject' });
     expect(currentApproval.get()).toBeUndefined();
   });
 
@@ -182,7 +179,30 @@ describe('createTuiHostInteractions', () => {
 
     interactions.cancel({ streamId: 'stream-a' });
 
-    await expect(bashResult).resolves.toEqual(INTERRUPTED);
+    await expect(bashResult).resolves.toEqual({
+      action: 'reject',
+      cause: 'Session interrupted.',
+    });
+    expect(currentApproval.get()).toBeUndefined();
+  });
+
+  it('keeps queued tool-edit cancellation separate from user feedback', async () => {
+    const interactions = tuiInteractions();
+    const editResult = interactions.requestToolEditApproval?.({
+      path: '/work/paper.tex',
+      originalContent: 'old',
+      proposedContent: 'new',
+      sourceTool: 'edit',
+      streamId: 'stream-a',
+    });
+
+    await waitForApproval('toolEdit', { streamId: 'stream-a' });
+    interactions.cancel({ streamId: 'stream-a' });
+
+    await expect(editResult).resolves.toEqual({
+      accepted: false,
+      cause: 'Session interrupted.',
+    });
     expect(currentApproval.get()).toBeUndefined();
   });
 
