@@ -289,6 +289,7 @@ describe('CLI child list display model', () => {
           phase: 'Verify',
           status: 'failed',
           error: 'Invalid first attempt.',
+          attemptId: 'prior',
         }),
         phaseEntry('phase-verify-current', 'Verify', {
           phaseIndex: 1,
@@ -299,6 +300,7 @@ describe('CLI child list display model', () => {
           label: 'Verify',
           phase: 'Verify',
           status: 'running',
+          attemptId: 'current',
         }),
       ],
     });

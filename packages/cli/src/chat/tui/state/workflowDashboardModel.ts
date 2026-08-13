@@ -108,14 +108,35 @@ export function workflowDashboardModel(
       };
       byPhase.set(phase, group);
       groups.push(group);
-    } else if (entry.role === 'phase' && group.heading === undefined) {
-      group.heading = entry;
+    } else if (entry.role === 'phase') {
+      // A rerun may retain the same phase label with revised index/total data.
+      // Keep the stable first-appearance row identity, but display the latest
+      // heading facts just as the status band does. A GROUP_END row can omit
+      // counts, so retain them from the preceding heading in that one case.
+      const priorHeading = group.heading;
+      group.heading =
+        entry.phaseIndex === undefined || entry.phaseTotal === undefined
+          ? {
+              ...entry,
+              ...(priorHeading?.phaseIndex !== undefined
+                ? { phaseIndex: priorHeading.phaseIndex }
+                : {}),
+              ...(priorHeading?.phaseTotal !== undefined
+                ? { phaseTotal: priorHeading.phaseTotal }
+                : {}),
+            }
+          : entry;
     }
     if (entry.role === 'workflowTask') {
       group.tasks.push(entry);
       tasks.push(entry);
     }
   }
+
+  // Phase transcript rows are durable history. If the current attempt moved
+  // or removed every task from an earlier phase, that phase has no
+  // live dashboard row even though its transcript heading remains auditable.
+  const currentGroups = groups.filter((group) => group.tasks.length > 0);
 
   const childTaskIndex = new Map<StreamTabId, WorkflowTaskEntry | null>();
   for (const entry of tasks) {
@@ -131,17 +152,17 @@ export function workflowDashboardModel(
   const wide = columns >= WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS;
   return {
     root,
-    groups,
+    groups: currentGroups,
     tasks,
     childTaskIndex,
     taskByValue: new Map(
       tasks.map((entry) => [workflowTaskListValue(entry.id), entry]),
     ),
-    groupByValue: new Map(groups.map((group) => [group.value, group])),
+    groupByValue: new Map(currentGroups.map((group) => [group.value, group])),
     // Narrow rows render phase headers as disabled separators, so they are not
     // reachable row values there.
     listValues: wide
-      ? [...groups.map((group) => group.value), ...taskValues]
+      ? [...currentGroups.map((group) => group.value), ...taskValues]
       : taskValues,
     wide,
   };

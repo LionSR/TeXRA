@@ -290,7 +290,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     trace.emit({
       type: 'workflow.call',
       logId: projected.logId,
-      call: { ...call, phase },
+      call: { ...call, phase, attemptId: projectionId },
       stageId: phase === undefined ? parentStageId : phaseStageIdFor(phase),
     });
   };
