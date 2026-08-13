@@ -36,7 +36,10 @@ import {
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
-import { formatMultiAgentRunInstruction } from './_helpers/runInstructions';
+import {
+  formatCliRunFileInstruction,
+  formatMultiAgentRunInstruction,
+} from './_helpers/runInstructions';
 import { emitCliResult } from './_helpers/output';
 import {
   AGENT_RUN_GLOBAL_ARGS,
@@ -201,6 +204,9 @@ export async function runMultiAgentPreset(
         );
       }
 
+      const displayInstruction =
+        instruction ||
+        formatCliRunFileInstruction({ inputFiles, contextFiles });
       const config: AgentConfigPayload = {
         agent: rootAgent.name,
         model,
@@ -213,7 +219,7 @@ export async function runMultiAgentPreset(
           approvalContext: runContext,
           workingDirectory: runContext.cwd,
         }),
-        displayInstruction: instruction,
+        displayInstruction,
         workingDirectory: runContext.cwd,
         agentCategory: AgentCategory.ToolUse,
         cliMultiAgentPresetId: plan.preset.id,
