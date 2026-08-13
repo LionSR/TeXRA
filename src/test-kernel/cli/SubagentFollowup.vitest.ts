@@ -128,6 +128,29 @@ describe('summarizeSubagentFollowup', () => {
     ).toBe('⟳ review · todos · 1 done, 1 active, 1 pending');
   });
 
+  it.each([
+    '<subagent-progress agent="a" />',
+    '<subagent-progress agent="a" type="bogus" />',
+    '<subagent-progress agent="a" type="overview" />',
+    '<subagent-progress agent="a" type="plan" status="updated" />',
+    '<subagent-progress agent="a" type="todos" completed="1" active="0" />',
+  ])('preserves a non-canonical progress block: %s', (xml) => {
+    expect(summarizeSubagentFollowup(xml)).toBe(xml);
+  });
+
+  it.each([
+    [
+      '<subagent-progress agent="a" type="plan" status="cleared" />',
+      '⟳ a · plan cleared',
+    ],
+    [
+      '<subagent-progress agent="a" type="plan" status="updated" summary="Build the proof" />',
+      '⟳ a · plan · Build the proof',
+    ],
+  ])('summarizes a canonical plan progress block', (xml, expected) => {
+    expect(summarizeSubagentFollowup(xml)).toBe(expected);
+  });
+
   it('summarizes embedded subagent blocks inside assistant text', () => {
     const text = [
       'before',
