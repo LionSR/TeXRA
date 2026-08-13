@@ -72,6 +72,16 @@
       "name": "packages/trace-viewer/vite.standalone.config.ts"
     },
     {
+      "file": "src/common/errors/sdkError/chatgptSubscriptionDetection.ts",
+      "category": "files",
+      "name": "src/common/errors/sdkError/chatgptSubscriptionDetection.ts"
+    },
+    {
+      "file": "src/controllers/modelAccess/chatGptAuthStatus.ts",
+      "category": "files",
+      "name": "src/controllers/modelAccess/chatGptAuthStatus.ts"
+    },
+    {
       "file": "src/test-kernel/support/setupFakePlatform.ts",
       "category": "files",
       "name": "src/test-kernel/support/setupFakePlatform.ts"

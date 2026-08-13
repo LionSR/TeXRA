@@ -17,7 +17,7 @@ import {
 // `probe_environment`/`verify_setup`. Do not re-list tool names here.
 const LATEX_PROBE_TOOLS = [...CORE_LATEX_TOOLS, ...IMAGE_TOOLS] as const;
 
-export type LatexProbeTool = (typeof LATEX_PROBE_TOOLS)[number];
+type LatexProbeTool = (typeof LATEX_PROBE_TOOLS)[number];
 
 export type LatexPathTool = Exclude<LatexProbeTool, 'perl'>;
 

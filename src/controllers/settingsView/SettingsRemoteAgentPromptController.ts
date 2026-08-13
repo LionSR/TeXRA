@@ -1,14 +1,14 @@
 // Local imports - auth
 import { ULTRA_TIER, type UserTier } from '@auth/config';
 
-export type SettingsRemoteAgentPromptResult =
+type SettingsRemoteAgentPromptResult =
   | { ok: true; config: string }
   | {
       ok: false;
       message: string;
     };
 
-export interface SettingsRemoteAgentPromptControllerDeps {
+interface SettingsRemoteAgentPromptControllerDeps {
   getUserTier(): Promise<UserTier>;
   getAccessToken(): Promise<string | null>;
   fetchPromptConfig(agentName: string, accessToken: string): Promise<string>;

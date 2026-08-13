@@ -32,7 +32,7 @@ export interface CopilotModelRoute {
   readonly effectiveConfig: ModelConfig;
 }
 
-export interface RuntimeModelDirectFallback {
+interface RuntimeModelDirectFallback {
   readonly model: string;
   readonly provider: ApiProvider;
   readonly chatGptSubscriptionEligible: boolean;
@@ -132,12 +132,12 @@ async function discoverCopilotRoutes(): Promise<
   return entries;
 }
 
-export interface RefreshRuntimeModelRegistryOptions {
+interface RefreshRuntimeModelRegistryOptions {
   /** Re-query the adapter even when the current catalogue is marked fresh. */
   forceDiscovery?: boolean;
 }
 
-export type RefreshRuntimeModelRegistryResult = 'current' | 'superseded';
+type RefreshRuntimeModelRegistryResult = 'current' | 'superseded';
 
 /** Refresh editor-supplied routes after the native model/access cache changes. */
 export async function refreshRuntimeModelRegistry(
@@ -284,7 +284,7 @@ export function getRuntimeModelDirectFallback(
     : undefined;
 }
 
-export type RuntimeModelAccessRequestResult =
+type RuntimeModelAccessRequestResult =
   'already-allowed' | 'requested' | 'unavailable';
 
 /**

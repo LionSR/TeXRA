@@ -14,13 +14,13 @@ import {
 } from '@tools/memory/memoryFileSystem';
 import { StorageFS } from '@utils/files/storageFS';
 
-export interface SettingsMemoryControllerDeps {
+interface SettingsMemoryControllerDeps {
   prompt: Pick<PromptHost, 'confirm' | 'warning'>;
   isMemoryEnabled(): boolean;
   setMemoryEnabled(enabled: boolean): Promise<void>;
 }
 
-export type SettingsMemoryMessage =
+type SettingsMemoryMessage =
   | {
       command: typeof SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY;
       items: MemoryViewItem[];

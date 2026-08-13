@@ -23,7 +23,7 @@ type SettingsAgentVisibilityState = Pick<
   getAgents(category: AgentCategory): SettingsAgentVisibilityEntry[];
 };
 
-export interface SettingsAgentVisibilityControllerDeps {
+interface SettingsAgentVisibilityControllerDeps {
   state: SettingsAgentVisibilityState;
 }
 

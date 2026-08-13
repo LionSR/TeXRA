@@ -16,23 +16,23 @@ interface SettingsAgentDirectoryState {
   ): SettingsAgentDirectoryEntry | null;
 }
 
-export interface SettingsAgentDirectoryControllerDeps {
+interface SettingsAgentDirectoryControllerDeps {
   state: SettingsAgentDirectoryState;
 }
 
-export interface SettingsCustomAgentDirStatus {
+interface SettingsCustomAgentDirStatus {
   path: string;
   isDefault: boolean;
 }
 
-export type SettingsOpenAgentYamlResult =
+type SettingsOpenAgentYamlResult =
   | { ok: true; path: string }
   | { ok: false; reason: 'missingAgent' | 'missingPath' };
 
-export type SettingsRevealAgentFileResult =
+type SettingsRevealAgentFileResult =
   { ok: true; path: string } | { ok: false; reason: 'missingFile' };
 
-export type SettingsOpenAgentFolderResult =
+type SettingsOpenAgentFolderResult =
   { ok: true; path: string } | { ok: false; reason: 'missingLocalDirectory' };
 
 export class SettingsAgentDirectoryController {

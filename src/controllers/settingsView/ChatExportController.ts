@@ -42,11 +42,11 @@ import { StorageFS } from '@utils/files/storageFS';
 export type ExportInputStatus =
   'ok' | 'config_missing' | 'conversation_missing';
 
-export type ExportInputResult =
+type ExportInputResult =
   | { readonly status: 'ok'; readonly exportInput: ChatExportInput }
   | { readonly status: Exclude<ExportInputStatus, 'ok'> };
 
-export interface ChatExportResult {
+interface ChatExportResult {
   /** Storage-relative path to the exported file. */
   readonly storagePath: string;
   /** Absolute filesystem path to the exported file. */
@@ -71,7 +71,7 @@ export type HtmlExportOutcome =
 // Controller
 // ============================================================
 
-export interface ChatExportControllerDeps {
+interface ChatExportControllerDeps {
   /**
    * LaTeX document preamble prepended to `.tex` exports. Host-supplied because
    * the template lives under the extension's `resources/` tree.
