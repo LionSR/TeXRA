@@ -493,6 +493,12 @@ describe('childRunLoop E2E fixtures', () => {
       startLoop(ids, createTerminalStrategy('Retry attempt')).completion,
     ).resolves.toBeUndefined();
     expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(2);
+    const deliveryIds = mocks.deliverChildRunFollowUp.mock.calls.map(
+      ([delivery]) => delivery.followUp.deliveryId,
+    );
+    expect(deliveryIds[0]).toBeDefined();
+    expect(deliveryIds[1]).toBeDefined();
+    expect(deliveryIds[1]).not.toBe(deliveryIds[0]);
     expect(session.followUps.hasLiveOwner(ids.childStreamId)).toBe(false);
   });
 
