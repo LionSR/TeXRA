@@ -134,6 +134,7 @@ describe('summarizeSubagentFollowup', () => {
     '<subagent-progress agent="a" type="overview" />',
     '<subagent-progress agent="a" type="plan" status="updated" />',
     '<subagent-progress agent="a" type="todos" completed="1" active="0" />',
+    '<subagent-progress agent="a" tool-type="started" />',
   ])('preserves a non-canonical progress block: %s', (xml) => {
     expect(summarizeSubagentFollowup(xml)).toBe(xml);
   });
