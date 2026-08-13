@@ -1,6 +1,6 @@
 ---
 created: 2026-08-04
-updated: 2026-08-12
+updated: 2026-08-13
 ---
 
 # PRD: xAI Responses API and `previous_response_id` for Grok
@@ -12,7 +12,7 @@ updated: 2026-08-12
 
 - xAI docs: [Generate text (Responses preferred)](https://docs.x.ai/developers/model-capabilities/text/generate-text), [Comparison vs Chat Completions](https://docs.x.ai/developers/model-capabilities/text/comparison), [REST inference](https://docs.x.ai/developers/rest-api-reference/inference/chat)
 - TeXRA OpenAI Responses proposal: `docs/proposals/2025-06-04-openai-responses-api.md`
-- Experimental SuperGrok OAuth (separate): `docs/proposals/2026-08-04-xai-grok-oauth-subscription.md`, PR [#9709](https://github.com/LionSR/TeXRA/pull/9709)
+- Landed experimental SuperGrok OAuth route (separate concern): `docs/proposals/2026-08-04-xai-grok-oauth-subscription.md`, PR [#9709](https://github.com/LionSR/TeXRA/pull/9709)
 - Difficulty notes: session audit 2026-08-04 (`ModelHandlerOpenAIResponse` ~2.9k lines; Codex already multi-backend via capability profiles)
 
 ## 1. Summary
@@ -39,16 +39,16 @@ This PRD sequences a **setting-gated** migration for direct `api.x.ai` Grok mode
 
 ### Non-goals (this PRD)
 
-| Out of scope                                                       | Why                                                            |
-| ------------------------------------------------------------------ | -------------------------------------------------------------- |
-| SuperGrok OAuth product                                            | Separate PR #9709; Responses only needs a Bearer on `api.x.ai` |
-| xAI server tools (`web_search`, `x_search`, `code_interpreter`, …) | Product surface + pricing; follow-up                           |
-| `search_parameters` on Chat Completions                            | Completions-only live search; not required for chaining        |
-| Imagine / Voice / Batch / deferred                                 | Different APIs                                                 |
-| Full catalog (4.20, build-0.1) or long-context pricing accuracy    | llm-zoo / billing follow-up                                    |
-| OpenRouter Responses                                               | OpenRouter stays Chat Completions                              |
-| Rewriting a second Responses handler from scratch                  | Reuse `ModelHandlerOpenAIResponse` + profile                   |
-| Forcing `store: false` + encrypted thinking as default             | xAI default is store true; encrypted path is fallback research |
+| Out of scope                                                       | Why                                                                                  |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| SuperGrok OAuth product                                            | Landed separately in #9709; Responses only needs its Bearer credential on `api.x.ai` |
+| xAI server tools (`web_search`, `x_search`, `code_interpreter`, …) | Product surface + pricing; follow-up                                                 |
+| `search_parameters` on Chat Completions                            | Completions-only live search; not required for chaining                              |
+| Imagine / Voice / Batch / deferred                                 | Different APIs                                                                       |
+| Full catalog (4.20, build-0.1) or long-context pricing accuracy    | llm-zoo / billing follow-up                                                          |
+| OpenRouter Responses                                               | OpenRouter stays Chat Completions                                                    |
+| Rewriting a second Responses handler from scratch                  | Reuse `ModelHandlerOpenAIResponse` + profile                                         |
+| Forcing `store: false` + encrypted thinking as default             | xAI default is store true; encrypted path is fallback research                       |
 
 ## 3. Current state (TeXRA)
 
@@ -59,7 +59,7 @@ This PRD sequences a **setting-gated** migration for direct `api.x.ai` Grok mode
 | Factory                 | `ModelProvider.XAI` → `ModelHandlerXAI` only                    |
 | `shouldUseResponsesAPI` | **OpenAI only**                                                 |
 | Chain                   | None for xAI; OpenAI uses `ServerChainState`                    |
-| Auth                    | API key / server key / OpenRouter; SuperGrok OAuth on #9709     |
+| Auth                    | API key / server key / OpenRouter / SuperGrok OAuth Bearer      |
 | Catalog                 | `grok-4.5`, `grok-4.3`, retired older; no build/4.20            |
 
 OpenAI Responses already provides:
@@ -79,7 +79,7 @@ OpenAI Responses already provides:
 4. **Default `store: true`** for xAI (docs default). Rely on `previous_response_id` for continuity; do not invent a second history system.
 5. **OpenRouter keeps Completions** for xAI models.
 6. **Do not enable xAI native server tools in MVP** even if the Responses tools array supports them later.
-7. **Do not merge this work into #9709** (OAuth) or #9708 (TypeScript 7). Independent PR after those land or in parallel only if conflict cost is low.
+7. **Keep this work separate from #9709** (OAuth) and #9708 (TypeScript 7). Both have landed; Responses routing belongs in an independent PR.
 8. **Naming:** internal types may stay `OpenAIResponse*` historically; product copy says “xAI Responses” / “Grok response chaining.” No user-facing “OpenAI API” label for Grok.
 
 ## 5. Proposed design
@@ -99,7 +99,7 @@ createModelHandler(config):
 Optional thin subclass responsibilities only:
 
 - `validateReasoningEffort` → `low | medium | high` (+ document `none` for 4.3 if required)
-- SuperGrok / subscription credential route (same as chat `ModelHandlerXAI` after #9709)
+- SuperGrok / subscription credential route (reuse the Bearer route already present in chat `ModelHandlerXAI`)
 - Force-disable WebSocket / background regardless of GPT name gates
 
 ### 5.2 Capability profile (xAI direct Responses)
@@ -141,7 +141,7 @@ Use the existing `openAIResponses` profile knobs (name is historical):
 ### 5.5 Host / product surface
 
 - Settings: e.g. `texra.model.useXaiResponsesAPI` (or a single “prefer Responses where supported” later — **not** in MVP)
-- No new user-facing subscription UI (that is #9709)
+- No new user-facing subscription UI (that product surface landed in #9709)
 - Usage route remains `xai` / `xai-subscription` as today; chaining does not change billing product identity
 
 ## 6. Implementation stages (when started)
@@ -179,33 +179,33 @@ Core chaining is protocol-shaped. Risk is **live compatibility**, not missing Te
 3. Invalid previous id does not stuck the session; conversation continues via full resend.
 4. No WebSocket or background Responses requests leave the client for xAI.
 5. OpenRouter + Grok still uses Completions.
-6. SuperGrok OAuth (if merged) can authenticate Responses the same as Completions (Bearer on `api.x.ai`).
+6. The landed SuperGrok OAuth route can authenticate Responses the same as Completions (Bearer on `api.x.ai`).
 7. No xAI server-tool types appear in the tools array in MVP.
 8. Docs: short note under model/provider docs or proposal cross-link; experimental banner if default remains off.
 
-## 9. Explicit non-consolidation with open PRs
+## 9. Explicit non-consolidation with landed PRs
 
-| Open PR                                                                     | Relationship                                                                                 |
-| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| [#9709](https://github.com/LionSR/TeXRA/pull/9709) Grok OAuth               | **Auth only.** Do not add Responses routing here. After merge, Responses reuses Bearer path. |
-| [#9708](https://github.com/LionSR/TeXRA/pull/9708) TypeScript 7             | **Toolchain only.** No product overlap; do not combine.                                      |
-| [#9706](https://github.com/LionSR/TeXRA/pull/9706) Agent SDK readiness docs | **Docs only.** May cross-link; no code merge.                                                |
+| Landed PR                                                                   | Relationship                                                                         |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [#9709](https://github.com/LionSR/TeXRA/pull/9709) Grok OAuth               | **Auth only.** Responses routing remains separate and reuses the landed Bearer path. |
+| [#9708](https://github.com/LionSR/TeXRA/pull/9708) TypeScript 7             | **Toolchain only.** No product overlap with Responses routing.                       |
+| [#9706](https://github.com/LionSR/TeXRA/pull/9706) Agent SDK readiness docs | **Docs only.** It may be cross-linked but introduces no Responses implementation.    |
 
 See §10 for consolidation advice among current workstreams (not code from this PRD).
 
 ## 10. Related consolidation opportunities (current work — not this PRD)
 
-### Do **not** merge these open PRs into each other
+### Why these workstreams remain separate
 
-They have disjoint risk domains: OAuth/secrets, compiler/toolchain, pure docs. Combining them only increases review surface and rollback cost.
+They have disjoint risk domains: OAuth/secrets, compiler/toolchain, and pure docs. Their landed implementations remain independent of the proposed Responses routing.
 
-### Already done well in #9709
+### Landed in #9709
 
 - Shared `src/auth/oauth/` (PKCE, loopback, coordinator)
 - Shared `subscriptionPreference` / `subscriptionLogin` helpers
 - Thin `@auth/xai` vs `@auth/codex` policy adapters
 
-### Residual duals **inside** #9709 (optional follow-up **after** merge, not a reason to block)
+### Residual duals from #9709 (optional follow-up, not a reason to block)
 
 | Dual                                                            | Size            | Worth consolidating?                                                                                              |
 | --------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -216,10 +216,10 @@ They have disjoint risk domains: OAuth/secrets, compiler/toolchain, pure docs. C
 
 **Rule:** do not invent a third generic “any OAuth provider” framework for two providers. Consolidate only when the third copy appears or review friction is real.
 
-### Separate small PRs (good candidates, not into #9709)
+### Separate small follow-up PRs
 
 1. **llm-zoo / catalog:** grok-4.3 vision flag; setup default `grok45` not retired `grok4`; optional build/4.20 entries.
-2. **Pricing fidelity:** cacheDiscountFactor + long-context ≥200k (or use `cost_in_usd_ticks` when present).
+2. **Pricing fidelity:** cache discount plus model-specific long-context thresholds and rates (or use `cost_in_usd_ticks` when present).
 3. **Chat Completions hygiene (pre-Responses):** send `prompt_cache_key` / sticky conv id; prefer `max_completion_tokens` for XAI.
 4. **This PRD’s Stage 0 spike** as a throwaway branch or issue notes — no product flag required.
 
@@ -243,7 +243,7 @@ Items 1–3 help Completions **and** make Responses land cleaner; none require w
 
 - `src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts` — Responses handler
 - `src/agent/modelHandlers/support/ServerChainState.ts` — chain anchor
-- `src/agent/modelHandlers/openai/modelHandlerXAI.ts` — current Completions + (on #9709) subscription Bearer
+- `src/agent/modelHandlers/openai/modelHandlerXAI.ts` — current Completions + subscription Bearer
 - `src/agent/runtime/ModelFactory.ts` — `shouldUseResponsesAPI`
 - `src/model/providerCapabilities.ts` — `OpenAIResponseProviderCapabilities` / Codex profile
 - `src/agent/modelHandlers/support/ProxyConfigResolver.ts` — `https://api.x.ai/v1`
@@ -279,12 +279,14 @@ catalog changes made — recon only**, per the §2 non-goals.
    non-goal in §2 ("long-context pricing accuracy | llm-zoo / billing
    follow-up"); still open, now with a concrete billing mechanism to model
    against once a rate source exists.
-4. **§11 open question 3 (does `/responses/compact` exist) is answered:
+4. **The endpoint-existence part of §11 open question 3 is answered:
    yes.** `POST /v1/responses/compact` is documented and generally
    available. It takes the same `input` shape as `/v1/responses` and returns
    a `response.compaction` object carrying an opaque `encrypted_content`
    blob to replay verbatim as the head of the next request. Responses-only —
-   unreachable from TeXRA until this PRD's routing lands.
+   unreachable from TeXRA until this PRD's routing lands. Whether this endpoint
+   is compatible with TeXRA's existing OpenAI compact client path remains open
+   and requires a live compatibility check.
 5. Prompt-cache accounting itself is already correct at the _rate_ level:
    Chat Completions' `usage.prompt_tokens_details.cached_tokens` is exactly
    what `src/agent/modelHandlers/openai/openAIUsage.ts` already reads for
