@@ -83,9 +83,18 @@ async function restorePersistedGeneration(
   streamId: StreamTabId,
   session: SessionHandle,
 ): Promise<boolean> {
-  const executionId =
-    session.snapshots.getRunMetadata(streamId).executionId ??
-    (await session.snapshots.readPersistedExecutionId(streamId));
+  let executionId = session.snapshots.getRunMetadata(streamId).executionId;
+  if (!executionId) {
+    try {
+      executionId = await session.snapshots.readPersistedExecutionId(streamId);
+    } catch (error) {
+      logger.warn(
+        `Cannot restore continuation generation for ${streamId}: persisted execution mapping is unreadable.`,
+        { data: { streamId, cause: 'unreadable_execution_mapping', error } },
+      );
+      return false;
+    }
+  }
   if (!executionId) {
     logger.warn(
       `Cannot restore continuation generation for ${streamId}: no persisted execution id.`,

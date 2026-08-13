@@ -124,7 +124,7 @@ describe('external inquiry continuation session routing', () => {
     );
   });
 
-  it('archives legacy inquiry answers without a parent generation fence', async () => {
+  it('delivers legacy inquiry answers without a parent generation fence', async () => {
     const manifest = answeredManifest();
     const turns = manifest.turns.map(
       ({ parentGenerationId: _, ...turn }) => turn,
@@ -135,8 +135,12 @@ describe('external inquiry continuation session routing', () => {
       turns,
     });
 
-    expect(outcome).toBe('archived');
-    expect(submitFollowUpMock).not.toHaveBeenCalled();
+    expect(outcome).toBe('sent');
+    expect(submitFollowUpMock).toHaveBeenCalledWith(
+      STREAM,
+      expect.any(String),
+      { session: undefined },
+    );
   });
 
   it('emits inquiry thread updates through the explicit session hub', async () => {

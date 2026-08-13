@@ -1024,6 +1024,7 @@ export function startChildRunLoop<TTurn>(
         );
       } finally {
         try {
+          await turnStateWrites.onIdle();
           await releaseExecutionLeaseAfterArtifacts(runSession, executionId);
         } catch (error) {
           logger.warn('Failed to persist final child-run artifacts', {
