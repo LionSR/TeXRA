@@ -107,6 +107,12 @@ export interface ChildRecord extends ChildRecordData {
 const TurnRefSchema = z.object({
   token: z.string(),
   deliveryId: z.string(),
+  /**
+   * Queue generation that owns this turn. Optional only for turn-state records
+   * written before #10145 (introduced 2026-08-13); remove the omission reader
+   * after 2026-11-13 once that three-month compatibility window has elapsed.
+   */
+  generationId: z.string().min(1).optional(),
 });
 export type ChildTurnRef = z.infer<typeof TurnRefSchema>;
 
