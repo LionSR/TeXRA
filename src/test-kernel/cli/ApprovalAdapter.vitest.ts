@@ -500,7 +500,7 @@ describe('buildToolEditApprovalContent', () => {
 
     expect(result).toMatchObject({
       accepted: false,
-      userMessage: 'proof misses the p = 5 case',
+      feedback: 'proof misses the p = 5 case',
     });
   });
 
@@ -528,7 +528,7 @@ describe('buildToolEditApprovalContent', () => {
     expect(summaries[1]).toBe('');
     expect(result).toMatchObject({
       accepted: false,
-      userMessage: 'use the workspace-local file path',
+      feedback: 'use the workspace-local file path',
     });
   });
 

@@ -60,7 +60,10 @@ export function toToolEditResult(
 ): ToolEditApprovalResult {
   return decision.accepted
     ? { accepted: true, appliedContent: proposedContent }
-    : { accepted: false, userMessage: decision.userMessage };
+    : {
+        accepted: false,
+        ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
+      };
 }
 
 async function decideToolEdit(
