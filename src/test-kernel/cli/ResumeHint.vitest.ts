@@ -204,6 +204,17 @@ describe('formatResumeHint', () => {
       expected: 'texra-local resume root --output-format ndjson',
     },
     {
+      name: 'preserves headless mode and custom skill sources',
+      commandName: 'texra-local',
+      options: {
+        print: true,
+        includeInteropSkills: true,
+        skillSourcePaths: ['/tmp/shared skills', './local-skills'],
+      },
+      expected:
+        "texra-local resume root --print --include-interop --source '/tmp/shared skills' --source ./local-skills",
+    },
+    {
       name: 'includes both cwd and approval policy when both are needed',
       commandName: 'texra-local',
       options: {

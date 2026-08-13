@@ -1,3 +1,6 @@
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+
 import { resolveAndResumeStream } from '@agent/runtime';
 import { getExecutionStore } from '@agent/storage';
 import { inspectExecutionLease } from '@agent/storage/executionLease';
@@ -41,6 +44,29 @@ function leaseInspectionFailureMessage(
 
 function activeExecutionMessage(id: ExecutionId): string {
   return `Execution ${id} is active in TeXRA.`;
+}
+
+async function workflowRecoveryInputsAreDurable(
+  config: Parameters<typeof executeCliWorkflowConfig>[0],
+  fallbackCwd: string,
+): Promise<boolean> {
+  const workingDirectory = config.workingDirectory || fallbackCwd;
+  const paths = [...(config.inputFiles ?? []), ...(config.contextFiles ?? [])];
+  return (
+    await Promise.all(
+      paths.map(async (inputPath) => {
+        const absolutePath = path.isAbsolute(inputPath)
+          ? inputPath
+          : path.resolve(workingDirectory, inputPath);
+        try {
+          await fs.access(absolutePath);
+          return true;
+        } catch {
+          return false;
+        }
+      }),
+    )
+  ).every(Boolean);
 }
 
 /**
@@ -162,6 +188,10 @@ export async function runResumeExecution(
           outputDir,
           expectedOutputFiles:
             workflowConfig.cliExpectedOutputFiles ?? undefined,
+          recoveryInputIsDurable: await workflowRecoveryInputsAreDurable(
+            workflowConfig,
+            context.cwd,
+          ),
           categoryMismatchMessage: `Execution ${id} resolved to a non workflow run.`,
         },
       );

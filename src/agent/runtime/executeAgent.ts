@@ -470,6 +470,7 @@ export async function executeAgent(
               );
             }
             const result = await runReflectionAgent(ctx, setting);
+            if (result.error) return result;
             const outputOutcome = await options.openWorkflowOutput?.(result);
             return outputOutcome === undefined
               ? result

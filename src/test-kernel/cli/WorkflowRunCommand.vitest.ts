@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => {
     resolveCliLaunchAgent: vi.fn(),
     selectCliRunModel: vi.fn(),
     writeErrorStderr: vi.fn(),
+    deriveResumability: vi.fn(),
     writeResultMeta: vi.fn(),
     writeTextStderr: vi.fn(),
     writeTextStderrAndWait: vi.fn(async () => undefined),
@@ -40,6 +41,7 @@ vi.mock('@agent/storage', async (importOriginal) => {
     getExecutionStore: vi.fn((executionId: ExecutionId) =>
       createFakeKv(executionId, { writeResultMeta: mocks.writeResultMeta }),
     ),
+    deriveResumability: mocks.deriveResumability,
     finalizeExecution: mocks.finalizeExecution,
   };
 });
@@ -132,6 +134,9 @@ function expectedRecoveryHint(
       processCwd: process.cwd(),
       approvalPolicy: context.approvalPolicy,
       outputFormat: context.outputFormat,
+      print: context.mode === 'headless',
+      includeInteropSkills: context.skillSourceOptions.includeInterop,
+      skillSourcePaths: context.skillSourceOptions.additionalPaths,
     },
   )}`;
 }
@@ -278,6 +283,16 @@ describe('CLI workflow run command', () => {
       async (_context: CliContext, model: string | undefined) =>
         model ?? 'deepseekT',
     );
+    mocks.deriveResumability.mockResolvedValue({
+      resumable: true,
+      cause: 'interrupted-with-flow',
+      flowRecord: {
+        flowName: 'texra',
+        shared: {},
+        createdAt: '2026-08-13T00:00:00.000Z',
+        nodes: [],
+      },
+    });
     mocks.withExpandedRunInputs.mockImplementation(
       async (
         _inputSpecs: readonly string[],
@@ -884,6 +899,7 @@ describe('CLI workflow run command', () => {
           processCwd: undefined,
           approvalPolicy: context.approvalPolicy,
           outputFormat: context.outputFormat,
+          print: true,
         },
       )}`,
     );

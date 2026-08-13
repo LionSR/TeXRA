@@ -1,6 +1,11 @@
 import * as path from 'node:path';
 
-import { buildCliWorkflowResultMeta, getExecutionStore } from '@agent/storage';
+import {
+  buildCliWorkflowResultMeta,
+  deriveResumability,
+  getExecutionStore,
+  type ResumabilityDecision,
+} from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -187,6 +192,24 @@ export async function executeCliWorkflowConfig(
   let resumeHintWritten = false;
   const recoveryProcessCwd = tryReadCliCwd();
   const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
+  const canAdvertiseInterruptedExecution = (
+    resumability: Extract<ResumabilityDecision, { resumable: true }>,
+  ): boolean => {
+    const shared = resumability.flowRecord.shared;
+    const lastError =
+      typeof shared === 'object' && shared !== null
+        ? (shared as Record<string, unknown>).lastError
+        : undefined;
+    return lastError == null;
+  };
+  const hasViableRecovery = async (
+    executionId: ExecutionId,
+  ): Promise<boolean> => {
+    const resumability = await deriveResumability(executionId);
+    return (
+      resumability.resumable && canAdvertiseInterruptedExecution(resumability)
+    );
+  };
   const writeResumeHint = (
     executionId: ExecutionId,
     waitForWrite = false,
@@ -211,14 +234,7 @@ export async function executeCliWorkflowConfig(
     onInterruptedExecutionFinalized: recoveryInputIsDurable
       ? (executionId) => writeResumeHint(executionId, true)
       : undefined,
-    canAdvertiseInterruptedExecution: ({ flowRecord }) => {
-      const shared = flowRecord.shared;
-      const lastError =
-        typeof shared === 'object' && shared !== null
-          ? (shared as Record<string, unknown>).lastError
-          : undefined;
-      return lastError == null;
-    },
+    canAdvertiseInterruptedExecution,
     expectedCategory: AgentCategory.Workflow,
     categoryMismatchMessage: options.categoryMismatchMessage,
     openWorkflowOutput: async (result) => {
@@ -250,7 +266,12 @@ export async function executeCliWorkflowConfig(
     );
     writeErrorStderr(workflowOutputError);
     if (result.outcome === RUN_OUTCOME.CANCELLED) {
-      if (execution.outcomePersisted) writeResumeHint(result.executionId);
+      if (
+        execution.outcomePersisted &&
+        (await hasViableRecovery(result.executionId))
+      ) {
+        writeResumeHint(result.executionId);
+      }
       return CliExitCode.Interrupted;
     }
     return CliExitCode.AgentError;
@@ -279,7 +300,12 @@ export async function executeCliWorkflowConfig(
   });
 
   if (result.outcome === RUN_OUTCOME.CANCELLED) {
-    if (execution.outcomePersisted) writeResumeHint(result.executionId);
+    if (
+      execution.outcomePersisted &&
+      (await hasViableRecovery(result.executionId))
+    ) {
+      writeResumeHint(result.executionId);
+    }
   }
 
   return runOutcomeExitCode(result.outcome);
@@ -296,6 +322,9 @@ function formatWorkflowResumeHint(
     processCwd,
     approvalPolicy: context.approvalPolicy,
     outputFormat: context.outputFormat,
+    print: context.mode === 'headless',
+    includeInteropSkills: context.skillSourceOptions.includeInterop,
+    skillSourcePaths: context.skillSourceOptions.additionalPaths,
   });
   return `Resume this workflow with: ${resumeCommand}`;
 }

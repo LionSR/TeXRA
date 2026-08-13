@@ -46,6 +46,10 @@ export interface ResumeCommandOptions {
   readonly processCwd?: string;
   readonly approvalPolicy?: TexraApprovalPolicy;
   readonly outputFormat?: CliOutputFormat;
+  /** Preserve an effective non-interactive launch when pasted into a TTY. */
+  readonly print?: boolean;
+  readonly includeInteropSkills?: boolean;
+  readonly skillSourcePaths?: readonly string[];
 }
 
 const DEFAULT_RESUME_COMMAND_NAME = 'texra';
@@ -66,7 +70,13 @@ export function formatResumeCommand(
     options.outputFormat && options.outputFormat !== 'text'
       ? ` --output-format ${options.outputFormat}`
       : '';
-  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}${cwdArg}${policyFlag}${outputFormatFlag}`;
+  const printFlag = options.print === true ? ' --print' : '';
+  const interopFlag =
+    options.includeInteropSkills === true ? ' --include-interop' : '';
+  const sourceFlags = (options.skillSourcePaths ?? [])
+    .map((source) => ` --source ${quote([source])}`)
+    .join('');
+  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${interopFlag}${sourceFlags}`;
 }
 
 function formatInteger(value: number): string {
