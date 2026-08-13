@@ -161,7 +161,7 @@ describe('submitFollowUp', () => {
     expect(session.followUps.getAll(streamId)).toEqual(['child progress']);
   });
 
-  it('claims one recovery synchronously and orders repeated submissions once', async () => {
+  it('claims one recovery and orders repeated submissions once', async () => {
     const streamId = id('stream:recovery');
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });
     const barrier = deferred<boolean>();
@@ -184,75 +184,16 @@ describe('submitFollowUp', () => {
       resumePort: { tryResumeStream },
     });
 
-    await vi.waitFor(() => expect(tryResumeStream).toHaveBeenCalledOnce());
-    expect(claimed).toHaveLength(1);
-    expect(session.followUps.getAll(streamId)).toEqual(['one']);
-
-    barrier.resolve(true);
-    await expect(first).resolves.toMatchObject({ continuation: 'resumed' });
+    await vi.waitFor(() => {
+      expect(tryResumeStream).toHaveBeenCalledTimes(1);
+      expect(claimed).toHaveLength(1);
+    });
     await expect(second).resolves.toMatchObject({ continuation: 'recovering' });
     await expect(third).resolves.toMatchObject({ continuation: 'recovering' });
     expect(session.followUps.getAll(streamId)).toEqual(['one', 'two', 'three']);
-  });
 
-  it('serializes persisted generation lookup with later admission', async () => {
-    const streamId = id('stream:serialized-generation-lookup');
-    const session = fakeSession({ kind: 'queue', reason: 'waiting' });
-    const generationId = '44efef92-dde5-41cf-b7fd-f183fe6ef1bb';
-    vi.spyOn(session.snapshots, 'getRunMetadata').mockReturnValue({
-      executionId: 'persisted-execution',
-    } as never);
-    const lookup =
-      deferred<Awaited<ReturnType<typeof resumability.deriveResumability>>>();
-    const deriveSpy = vi
-      .spyOn(resumability, 'deriveResumability')
-      .mockReturnValue(lookup.promise);
-    const tryResumeStream = mockTryResume();
-
-    const fenced = submitFollowUp(streamId, 'inquiry answer', {
-      session,
-      resumePort: { tryResumeStream },
-      expectedGenerationId: generationId,
-    });
-    const ordinary = submitFollowUp(streamId, 'later follow-up', {
-      session,
-      resumePort: { tryResumeStream },
-    });
-    await vi.waitFor(() => expect(deriveSpy).toHaveBeenCalledOnce());
-    expect(tryResumeStream).not.toHaveBeenCalled();
-
-    lookup.resolve({
-      resumable: true,
-      cause: resumability.RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
-      flowRecord: {
-        flowName: 'texra',
-        shared: { continuationGenerationId: generationId },
-        createdAt: '2026-08-13T12:00:00.000Z',
-        nodes: [],
-      },
-    });
-    await expect(fenced).resolves.toMatchObject({ continuation: 'resumed' });
-    await expect(ordinary).resolves.toMatchObject({ status: 'queued' });
-    expect(session.followUps.getAll(streamId)).toEqual([
-      'inquiry answer',
-      'later follow-up',
-    ]);
-  });
-
-  it('fails closed when the persisted execution mapping is unreadable', async () => {
-    const streamId = id('stream:unreadable-execution-mapping');
-    const session = fakeSession({ kind: 'queue', reason: 'waiting' });
-    vi.spyOn(session.snapshots, 'readPersistedExecutionId').mockRejectedValue(
-      new Error('sidecar unreadable'),
-    );
-
-    await expect(
-      submitFollowUp(streamId, 'inquiry answer', {
-        session,
-        expectedGenerationId: '409fba68-03da-4ab0-8fa1-206a6f539ea7',
-      }),
-    ).resolves.toEqual({ status: 'dropped' });
-    expect(session.followUps.getAll(streamId)).toEqual([]);
+    barrier.resolve(true);
+    await expect(first).resolves.toMatchObject({ continuation: 'resumed' });
   });
 
   it('starts recovery after the child generation releases', async () => {
@@ -475,6 +416,86 @@ describe('submitFollowUp', () => {
       continuation: 'resumed',
     });
     expect(session.followUps.currentGenerationId(streamId)).toBe(generationId);
+  });
+
+  it('serializes durable generation lookup before later ordinary admission', async () => {
+    const streamId = id('stream:serialized-generation-lookup');
+    const session = fakeSession({ kind: 'queue', reason: 'waiting' });
+    const executionId = 'persisted-execution';
+    const generationId = '5038fe96-7113-449a-82a9-3e58f292d1ba';
+    vi.spyOn(session.snapshots, 'getRunMetadata').mockReturnValue({
+      executionId,
+    } as never);
+    const lookup =
+      deferred<Awaited<ReturnType<typeof resumability.deriveResumability>>>();
+    const deriveResumability = vi
+      .spyOn(resumability, 'deriveResumability')
+      .mockReturnValueOnce(lookup.promise);
+    const resumeBarrier = deferred<boolean>();
+    const tryResumeStream = vi.fn(() => resumeBarrier.promise);
+
+    const first = submitFollowUp(streamId, 'durable inquiry', {
+      session,
+      resumePort: { tryResumeStream },
+      expectedGenerationId: generationId,
+    });
+    const second = submitFollowUp(streamId, 'ordinary follow-up', {
+      session,
+      resumePort: { tryResumeStream },
+    });
+
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledOnce());
+    expect(tryResumeStream).not.toHaveBeenCalled();
+    expect(session.followUps.getAll(streamId)).toEqual([]);
+
+    lookup.resolve({
+      resumable: true,
+      cause: resumability.RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
+      flowRecord: {
+        flowName: 'texra',
+        shared: { continuationGenerationId: generationId },
+        createdAt: '2026-08-13T12:00:00.000Z',
+        nodes: [],
+      },
+    });
+
+    await vi.waitFor(() =>
+      expect(session.followUps.getAll(streamId)).toEqual([
+        'durable inquiry',
+        'ordinary follow-up',
+      ]),
+    );
+    await expect(second).resolves.toMatchObject({
+      status: 'queued',
+      continuation: 'recovering',
+    });
+    expect(tryResumeStream).toHaveBeenCalledOnce();
+
+    resumeBarrier.resolve(true);
+    await expect(first).resolves.toMatchObject({
+      status: 'queued',
+      continuation: 'resumed',
+    });
+  });
+
+  it('fails closed when the persisted execution identity cannot be read', async () => {
+    const streamId = id('stream:unreadable-persisted-execution');
+    const session = fakeSession({ kind: 'queue', reason: 'waiting' });
+    vi.spyOn(
+      session.snapshots,
+      'readPersistedExecutionId',
+    ).mockRejectedValueOnce(new Error('execution mapping unreadable'));
+    const tryResumeStream = mockTryResume();
+
+    await expect(
+      submitFollowUp(streamId, 'durable inquiry', {
+        session,
+        resumePort: { tryResumeStream },
+        expectedGenerationId: 'b7f001b0-02e7-4135-967f-5f43d7bb1aa5',
+      }),
+    ).resolves.toEqual({ status: 'dropped' });
+    expect(tryResumeStream).not.toHaveBeenCalled();
+    expect(session.followUps.getAll(streamId)).toEqual([]);
   });
 
   it('rebinds a provisional recovery before admitting a durable producer', async () => {

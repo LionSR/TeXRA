@@ -4,6 +4,7 @@ import { LRUCache } from 'lru-cache';
 import { createChannelTrace } from '@agent/trace';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { KeyedMutex } from '@utils/core/keyedMutex';
 import {
   createBoundedIdSet,
   type BoundedIdSet,
@@ -86,6 +87,7 @@ export class ToolUseFollowUpQueue {
   static readonly TERMINAL_CAP = 500;
   static readonly DELIVERY_ID_CAP = 1000;
   private readonly entries = new Map<StreamTabId, QueueEntry>();
+  private readonly submissionMutex = new KeyedMutex<StreamTabId>();
   private readonly terminal = new LRUCache<StreamTabId, true>({
     max: ToolUseFollowUpQueue.TERMINAL_CAP,
   });
@@ -98,6 +100,14 @@ export class ToolUseFollowUpQueue {
     return () => {
       this.releaseObservers.delete(observer);
     };
+  }
+
+  /** Serialize routing and admission for one stream within this session. */
+  runSubmissionExclusive<Result>(
+    streamId: StreamTabId,
+    operation: () => Promise<Result>,
+  ): Promise<Result> {
+    return this.submissionMutex.runExclusive(streamId, operation);
   }
 
   /** Claim a live flow/child consumer. A competing owner is rejected. */

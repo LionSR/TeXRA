@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   runWithOwnedExecutionLease: vi.fn(
     (_executionId: ExecutionId, operation: () => unknown) => operation(),
   ),
+  releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
   leaseLossListener: undefined as (() => void) | undefined,
 }));
 
@@ -489,29 +490,41 @@ describe('childRunLoop E2E fixtures', () => {
     expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
   });
 
-  it('drains pending turn-state writes before releasing a retryable execution', async () => {
-    const { childStreamId, executionId } = loopIds('turn-state-release');
-    const stateWrite = pDefer<void>();
-    vi.spyOn(getExecutionStore(executionId), 'writeTurnState')
-      .mockImplementationOnce(() => stateWrite.promise)
-      .mockResolvedValue(undefined);
+  it('drains accepted-turn attribution before releasing the execution lease', async () => {
+    const { childStreamId, executionId } = loopIds('turn-state-drain');
     const { strategy, rejectTurn } = createFakeStrategy();
+    const writeBarrier = pDefer<void>();
+    const writeStarted = pDefer<void>();
+    const store = getExecutionStore(executionId);
+    const writeTurnState = vi
+      .spyOn(store, 'writeTurnState')
+      .mockImplementationOnce(async () => {
+        writeStarted.resolve();
+        await writeBarrier.promise;
+      });
 
-    const handle = startLoop({ childStreamId, executionId }, strategy);
-    await vi.waitFor(() =>
-      expect(getExecutionStore(executionId).writeTurnState).toHaveBeenCalled(),
-    );
-    mocks.leaseLossListener?.();
-    await rejectTurn(1, createAbortError());
-    await Promise.resolve();
-    expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
+    try {
+      const handle = startLoop({ childStreamId, executionId }, strategy);
+      await writeStarted.promise;
+      mocks.leaseLossListener?.();
+      await rejectTurn(1, createAbortError());
 
-    stateWrite.resolve();
-    await handle.completion;
-    expect(mocks.releaseExecutionLeaseAfterArtifacts).toHaveBeenCalledWith(
-      session,
-      executionId,
-    );
+      await vi.waitFor(() =>
+        expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
+      );
+      expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
+
+      writeBarrier.resolve();
+      await handle.completion;
+      expect(writeTurnState).toHaveBeenCalledOnce();
+      expect(mocks.releaseExecutionLeaseAfterArtifacts).toHaveBeenCalledWith(
+        session,
+        executionId,
+      );
+    } finally {
+      writeBarrier.resolve();
+      writeTurnState.mockRestore();
+    }
   });
 
   it('persists without parent delivery in persist-only mode', async () => {
