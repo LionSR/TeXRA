@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { StreamTabId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 const stream = (value: string) => value as StreamTabId;
 
@@ -150,8 +150,9 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
   it('starts a new child generation for an authorized retry', () => {
     const queues = new ToolUseFollowUpQueue();
-    const id = stream('stream:retried-child');
-    const first = queues.claimChildRun(id)!;
+    const executionId = 'retry-execution' as ExecutionId;
+    const id = stream(`stream#${executionId}`);
+    const first = queues.claimChildRun(id, executionId)!;
     queues.release(first, 'terminal');
 
     expect(queues.claimLive(id, 'flow')).toBeUndefined();
@@ -159,7 +160,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
       kind: 'unavailable',
     });
 
-    const retry = queues.claimChildRun(id);
+    const retry = queues.claimChildRun(id, executionId);
     expect(retry).toBeDefined();
     expect(retry?.kind).toBe('child');
     expect(retry?.generationId).not.toBe(first.generationId);
@@ -180,6 +181,19 @@ describe('ToolUseFollowUpQueue ownership', () => {
       ),
     ).toEqual({ kind: 'live' });
     expect(queues.hasLiveOwner(id)).toBe(true);
+  });
+
+  it('does not reopen a terminal stream for an unrelated execution', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const executionId = 'owned-execution' as ExecutionId;
+    const id = stream(`stream#${executionId}`);
+    const first = queues.claimChildRun(id, executionId)!;
+    queues.release(first, 'terminal');
+
+    expect(() =>
+      queues.claimChildRun(id, 'unrelated-execution' as ExecutionId),
+    ).toThrow('does not belong to execution');
+    expect(queues.claimLive(id, 'flow')).toBeUndefined();
   });
 
   it('deletion invalidates a live generation and rejects late input', () => {

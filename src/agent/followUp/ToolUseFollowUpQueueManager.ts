@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { LRUCache } from 'lru-cache';
 import { createChannelTrace } from '@agent/trace';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import type { StreamTabId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
   createBoundedIdSet,
   type BoundedIdSet,
@@ -114,7 +114,15 @@ export class ToolUseFollowUpQueue {
    * own the execution lease; producers and ordinary live flows cannot cross
    * this boundary, so late delivery remains rejected.
    */
-  claimChildRun(streamId: StreamTabId): FollowUpConsumerLease | undefined {
+  claimChildRun(
+    streamId: StreamTabId,
+    executionId: ExecutionId,
+  ): FollowUpConsumerLease | undefined {
+    if (!streamId.endsWith(`#${executionId}`)) {
+      throw new Error(
+        `Child stream ${streamId} does not belong to execution ${executionId}.`,
+      );
+    }
     const retained = this.entries.get(streamId);
     if (retained) return this.claim(retained, streamId, 'child');
 

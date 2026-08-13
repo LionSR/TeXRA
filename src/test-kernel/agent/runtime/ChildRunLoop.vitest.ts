@@ -117,9 +117,11 @@ function loopIds(label: string): {
   childStreamId: StreamTabId;
   executionId: ExecutionId;
 } {
+  const nonce = Math.random().toString(36).slice(2);
+  const executionId = `exec-${label}-${nonce}` as ExecutionId;
   return {
-    childStreamId: uniqueStreamId(label),
-    executionId: `exec-${label}` as ExecutionId,
+    childStreamId: `${label}#${executionId}` as StreamTabId,
+    executionId,
   };
 }
 
@@ -505,21 +507,41 @@ describe('childRunLoop E2E fixtures', () => {
 
   it('reuses a terminal child stream for a separately authorized retry', async () => {
     const ids = loopIds('terminal-retry');
+    const parentLease = session.followUps.claimLive(PARENT_STREAM_ID, 'flow')!;
+    const admissions: string[] = [];
+    mocks.deliverChildRunFollowUp.mockImplementation(async (delivery) => {
+      const admission = delivery.session.followUps.submit(
+        delivery.targetStreamId,
+        delivery.followUp,
+        'live_owner',
+        delivery.expectedGenerationId,
+      );
+      admissions.push(admission.kind);
+      return admission.kind === 'duplicate' || admission.kind === 'unavailable'
+        ? { kind: 'dropped' as const }
+        : { kind: 'delivered' as const };
+    });
 
-    await startLoop(ids, createTerminalStrategy('First attempt')).completion;
-    expect(session.followUps.hasLiveOwner(ids.childStreamId)).toBe(false);
+    try {
+      await startLoop(ids, createTerminalStrategy('First attempt')).completion;
+      expect(session.followUps.hasLiveOwner(ids.childStreamId)).toBe(false);
 
-    await expect(
-      startLoop(ids, createTerminalStrategy('Retry attempt')).completion,
-    ).resolves.toBeUndefined();
-    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(2);
-    const deliveryIds = mocks.deliverChildRunFollowUp.mock.calls.map(
-      ([delivery]) => delivery.followUp.deliveryId,
-    );
-    expect(deliveryIds[0]).toBeDefined();
-    expect(deliveryIds[1]).toBeDefined();
-    expect(deliveryIds[1]).not.toBe(deliveryIds[0]);
-    expect(session.followUps.hasLiveOwner(ids.childStreamId)).toBe(false);
+      await expect(
+        startLoop(ids, createTerminalStrategy('Retry attempt')).completion,
+      ).resolves.toBeUndefined();
+      expect(admissions).toEqual(['live_flow', 'live_flow']);
+      const delivered = session.followUps.drainItems(parentLease);
+      expect(delivered.map((item) => item.text)).toEqual([
+        'delivered:done',
+        'delivered:done',
+      ]);
+      expect(delivered[0]?.deliveryId).toBeDefined();
+      expect(delivered[1]?.deliveryId).toBeDefined();
+      expect(delivered[1]?.deliveryId).not.toBe(delivered[0]?.deliveryId);
+      expect(session.followUps.hasLiveOwner(ids.childStreamId)).toBe(false);
+    } finally {
+      session.followUps.release(parentLease, 'recoverable');
+    }
   });
 
   it('releases session ownership before delivering a failed turn', async () => {
