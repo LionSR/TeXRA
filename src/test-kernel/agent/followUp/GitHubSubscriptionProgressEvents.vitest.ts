@@ -240,6 +240,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
     const streamId = 'stream-a' as StreamTabId;
     const source = new RegistryTestSource();
     const session = createTestSession();
+    const lease = session.followUps.claimLive(streamId, 'flow')!;
     const registry = new StreamSubscriptionRegistry<string, string>({
       name: 'test subscriptions',
       source,
@@ -261,10 +262,55 @@ describe('GitHub subscription app signals and follow-ups', () => {
       expect(submitFollowUpMock).toHaveBeenCalledWith(
         streamId,
         'new github event',
-        { session, mode: 'live_notification' },
+        {
+          session,
+          mode: 'live_notification',
+          expectedGenerationId: lease.generationId,
+        },
       );
     } finally {
       session.dispose();
+    }
+  });
+
+  it('refreshes the generation fence when an existing binding changes sessions', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const source = new RegistryTestSource();
+    const firstSession = createTestSession();
+    firstSession.followUps.claimLive(streamId, 'flow');
+    const secondSession = createTestSession();
+    const secondLease = secondSession.followUps.claimLive(streamId, 'flow')!;
+    const registry = new StreamSubscriptionRegistry<string, string>({
+      name: 'test subscriptions',
+      source,
+      keyOf: (input) => input,
+      bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
+    });
+
+    try {
+      withRunContext(
+        createRunContext({ streamId, session: firstSession }),
+        () => registry.bind(streamId, 'owner/repo'),
+      );
+      withRunContext(
+        createRunContext({ streamId, session: secondSession }),
+        () => registry.bind(streamId, 'owner/repo'),
+      );
+
+      source.emit('owner/repo', 'new github event');
+
+      expect(submitFollowUpMock).toHaveBeenCalledWith(
+        streamId,
+        'new github event',
+        {
+          session: secondSession,
+          mode: 'live_notification',
+          expectedGenerationId: secondLease.generationId,
+        },
+      );
+    } finally {
+      firstSession.dispose();
+      secondSession.dispose();
     }
   });
 

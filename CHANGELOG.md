@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Completed workflow tasks can be retried without restarting chat** — a new
+  workflow attempt may reuse its saved task identity after the previous
+  attempt has delivered its result.
 - **CLI tables preserve long mathematical expressions** — narrow columns wrap
   LaTeX formulas and other indivisible values instead of replacing their tails
   with an ellipsis.

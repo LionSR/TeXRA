@@ -80,14 +80,6 @@ export function upsertTaskGroupFromStreamLog(
     return false;
   }
 
-  // A missing payload is valid for legacy lifecycle rows. A present malformed
-  // payload is not: in particular, erasing corrupted attempt ownership would
-  // turn a phase row into an apparently unowned generic group.
-  const parsedPayload = GroupLogPayloadSchema.safeParse(
-    entry.data === undefined ? {} : entry.data,
-  );
-  if (!parsedPayload.success) return true;
-  const payload = parsedPayload.data;
   const cachedIndex = taskGroupIndex.get(entry.id);
   const groupIndex =
     cachedIndex !== undefined && taskGroups[cachedIndex]?.id === entry.id
@@ -97,6 +89,28 @@ export function upsertTaskGroupFromStreamLog(
   if (groupIndex >= 0 && groupIndex !== cachedIndex) {
     taskGroupIndex.set(entry.id, groupIndex);
   }
+
+  // A missing payload is valid for legacy lifecycle rows. A present malformed
+  // payload is not: in particular, erasing corrupted attempt ownership would
+  // turn a phase row into an apparently unowned generic group.
+  const parsedPayload = GroupLogPayloadSchema.safeParse(
+    entry.data === undefined ? {} : entry.data,
+  );
+  if (!parsedPayload.success) {
+    // A malformed terminal row cannot safely settle the projected group, but
+    // retaining its valid start would leave the UI claiming that work is
+    // still running forever. Omit that presentation row without inventing a
+    // session outcome or accepting the corrupt ownership metadata.
+    if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END && groupIndex >= 0) {
+      taskGroups.splice(groupIndex, 1);
+      taskGroupIndex.delete(entry.id);
+      for (const [index, group] of taskGroups.entries()) {
+        if (index >= groupIndex) taskGroupIndex.set(group.id, index);
+      }
+    }
+    return true;
+  }
+  const payload = parsedPayload.data;
 
   if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START) {
     // GROUP_START only carries the native status vocabulary because the run
