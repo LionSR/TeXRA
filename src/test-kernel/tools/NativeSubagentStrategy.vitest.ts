@@ -92,7 +92,7 @@ import { createNativeSubagentStrategy } from '@tools/delegation/nativeSubagentSt
 
 const ownedSessions = new Set<SessionHandle>();
 
-const CHILD_STREAM_ID = 'child-stream' as StreamTabId;
+const CHILD_STREAM_ID = 'child-stream#exec-1' as StreamTabId;
 
 function fakePorts() {
   return { notify: vi.fn(), recordCost: vi.fn() };
@@ -244,7 +244,7 @@ describe('NativeSubagentStrategy', () => {
     const progress = { message: 'Reading proof' };
 
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onStreamResolved?.('child-stream');
+      options.onStreamResolved?.(CHILD_STREAM_ID);
       options.onProgress?.(progress);
       return toolUseTurnResult('completed', params.executionId, {
         totalCostUsd: 0.17,
@@ -264,7 +264,7 @@ describe('NativeSubagentStrategy', () => {
         workflowPhase: 'review',
       }),
     );
-    expect(params.onStreamResolved).toHaveBeenCalledWith('child-stream');
+    expect(params.onStreamResolved).toHaveBeenCalledWith(CHILD_STREAM_ID);
     expect(ports.notify).toHaveBeenCalledWith(progress);
     expect(ports.recordCost).toHaveBeenCalledWith(0.17);
   });
@@ -280,7 +280,7 @@ describe('NativeSubagentStrategy', () => {
     );
 
     const { completion } = startChildRunLoop({
-      childStreamId: 'child-stream',
+      childStreamId: CHILD_STREAM_ID,
       parentStreamId: params.parentStreamId,
       executionId: params.executionId,
       agentName: params.agentName,
@@ -570,7 +570,8 @@ describe('NativeSubagentStrategy', () => {
 
   it('keeps a second child follow-up available after two resumed WAITING turns', async () => {
     const session = defaultSession();
-    const childStreamId = 'native-follow-up-loop-child' as StreamTabId;
+    const childStreamId =
+      'native-follow-up-loop-child#native-follow-up-loop-exec' as StreamTabId;
     const parentStreamId = 'native-follow-up-loop-parent' as StreamTabId;
     const executionId = 'native-follow-up-loop-exec' as ExecutionId;
     const interactions = { emit: vi.fn() } as never;
@@ -777,7 +778,8 @@ describe('NativeSubagentStrategy', () => {
 
   it('never reaches runTurn for a workflow child — the loop breaks on the first terminal turn', async () => {
     const session = defaultSession();
-    const childStreamId = 'native-workflow-loop-child' as StreamTabId;
+    const childStreamId =
+      'native-workflow-loop-child#native-workflow-loop-exec' as StreamTabId;
     const parentStreamId = 'native-workflow-loop-parent' as StreamTabId;
     const executionId = 'native-workflow-loop-exec' as ExecutionId;
     const interactions = { emit: vi.fn() } as never;
