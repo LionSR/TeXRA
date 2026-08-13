@@ -204,6 +204,34 @@ describe('accept_run_files progress events', () => {
     expect(result.error).not.toContain('cancelled');
   });
 
+  it('preserves mixed policy-denial and cancellation details', async () => {
+    const tool = new AcceptRunFilesTool();
+
+    setRunStorageEntries({
+      [`executions/${executionId}/first.tex`]: FileType.File,
+      [`executions/${executionId}/second.tex`]: FileType.File,
+    });
+    stubWorkspaceFiles(false, '');
+    vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
+    testApprovalHandler = async (request) =>
+      request.path === 'first.tex'
+        ? { accepted: false, reason: 'Denied by approval policy.' }
+        : { accepted: false, cause: 'Session disposed.' };
+
+    const result = await runAccept(tool, [
+      { path: 'first.tex', original: 'first.tex' },
+      { path: 'second.tex', original: 'second.tex' },
+    ]);
+
+    expect(result.status).toBe('error');
+    expect(result.summary).toBe(
+      'Tool edit approval cancelled: accept_run_files for first.tex.',
+    );
+    expect(result.error).toContain('Denied by approval policy.');
+    expect(result.error).toContain('Session disposed.');
+    expect(result.userInstruction).toBeUndefined();
+  });
+
   it('does not require a runtime host to publish accepted workspace files', async () => {
     const tool = new AcceptRunFilesTool();
     const { written, dispose } = recordWrittenFiles();
