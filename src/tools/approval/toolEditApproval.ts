@@ -422,8 +422,11 @@ export function buildApprovalRejectedResult(
   if (isAutomaticCancellation) {
     summary = `Tool edit approval cancelled: ${sourceTool} for ${path}.`;
   }
-  const detail = cause || reason;
-  const error = detail ? `${summary}\n\n${detail}` : summary;
+  const details = [reason, cause].filter(
+    (detail): detail is string => detail !== undefined && detail.length > 0,
+  );
+  const error =
+    details.length > 0 ? `${summary}\n\n${details.join('\n')}` : summary;
   return errorResult(error, {
     summary,
     ...(feedback && { userInstruction: feedback }),
