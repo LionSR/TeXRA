@@ -254,6 +254,19 @@ function handleStreamDescription(
   });
 }
 
+function handleRemoveStream(
+  renderer: TestRunProgressRenderer,
+  streamId: string,
+): void {
+  renderer.handleSessionEvent({
+    scope: 'session',
+    event: {
+      type: 'removeStream',
+      payload: { streamId: streamId as StreamTabId },
+    },
+  });
+}
+
 function handleActiveSubagents(
   renderer: TestRunProgressRenderer,
   parentStreamId: string,
@@ -675,6 +688,25 @@ describe('CLI run progress renderer', () => {
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
         'orchestrator · subagent: review — First review task · 0s\n' +
+        'orchestrator · 0s\n' +
+        'orchestrator · subagent: review · 0s\n',
+    );
+  });
+
+  it('forgets a child description when that child stream is removed', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'Removed review task');
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleRemoveStream(renderer, 'child-stream');
+    handleActiveSubagents(renderer, 'root-stream', []);
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — Removed review task · 0s\n' +
         'orchestrator · 0s\n' +
         'orchestrator · subagent: review · 0s\n',
     );
