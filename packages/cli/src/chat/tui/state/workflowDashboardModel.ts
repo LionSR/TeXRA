@@ -151,6 +151,8 @@ export function workflowDashboardModel(
 
   const taskValues = tasks.map((entry) => workflowTaskListValue(entry.id));
   const wide = columns >= WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS;
+  const narrowListValues =
+    taskValues.length > 0 ? taskValues : groups.map((group) => group.value);
   return {
     root,
     groups,
@@ -160,11 +162,12 @@ export function workflowDashboardModel(
       tasks.map((entry) => [workflowTaskListValue(entry.id), entry]),
     ),
     groupByValue: new Map(groups.map((group) => [group.value, group])),
-    // Narrow rows render phase headers as disabled separators, so they are not
-    // reachable row values there.
+    // Narrow rows normally expose task values while phase headers act as
+    // separators. A phase-only dashboard still needs one value so the panel
+    // can be focused and rendered before its first task arrives.
     listValues: wide
       ? [...groups.map((group) => group.value), ...taskValues]
-      : taskValues,
+      : narrowListValues,
     wide,
   };
 }
