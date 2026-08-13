@@ -932,11 +932,12 @@ describe('CLI conversation transcript', () => {
       sessionHeaderIdentityLine({
         ...SESSION_META,
         agent: 'orchestrator',
+        model: 'gpt56-',
         teamName: 'Physicist',
       }),
-    ).toBe('team: Physicist · root: orchestrator · model: deepseekT');
+    ).toBe('team: Physicist · root: orchestrator · model: GPT-5.6 Terra');
     expect(sessionHeaderIdentityLine(SESSION_META)).toBe(
-      'agent: research · model: deepseekT',
+      'agent: research · model: DeepSeek V4 Flash (Thinking)',
     );
   });
 
@@ -1005,7 +1006,7 @@ describe('CLI conversation transcript', () => {
         streamId: CHILD,
         streams,
       }),
-    ).toBe('subagent: search · parent: main · model: kimi26T');
+    ).toBe('subagent: search · parent: main · model: Kimi K2.6 (Thinking)');
 
     expect(
       appendStaticTranscriptItems({
@@ -1018,7 +1019,8 @@ describe('CLI conversation transcript', () => {
       })[0],
     ).toMatchObject({
       kind: 'header',
-      identityLine: 'subagent: search · parent: main · model: kimi26T',
+      identityLine:
+        'subagent: search · parent: main · model: Kimi K2.6 (Thinking)',
     });
   });
 

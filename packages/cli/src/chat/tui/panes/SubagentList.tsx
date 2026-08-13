@@ -18,6 +18,7 @@ import {
   TOKENS_GENERATED,
 } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
+import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import {
   WORKFLOW_TASK_STATUS_LABEL,
   isTerminalWorkflowCallProgress,
@@ -137,10 +138,11 @@ function SessionRow({
   // can each resolve a different model); the list-root row is the conversation
   // itself, whose model already rides the status bar. A background bash stream
   // inherits its parent's configuration, but the shell does not use a model.
-  const modelLabel =
+  const model =
     !isListRoot && session.slice?.identity?.kind !== 'process'
       ? session.slice?.model
       : undefined;
+  const modelLabel = model ? getRuntimeModelLabel(model) : undefined;
   // The right-aligned `elapsed · ↓tokens` column is pushed to the terminal edge
   // so the figures line up across rows. Non-shrinking: the summary segment
   // yields first; rows drop the column entirely on narrow terminals (see

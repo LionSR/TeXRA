@@ -11,6 +11,7 @@ import { Box, Static, Text } from 'ink';
 
 import { shortCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
+import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { safeHomedir } from '@utils/system/platformPaths';
@@ -82,7 +83,7 @@ export function sessionHeaderIdentityLine(
     context.streamId && parentStream?.get(context.streamId);
   if (context.streamId && parentStreamId && parentStream && context.streams) {
     const slice = context.streams.get(context.streamId);
-    const model = slice?.model || meta.model || '—';
+    const model = getRuntimeModelLabel(slice?.model || meta.model || '—');
     const view = streamViewForId({
       activeStreamId: context.streamId,
       childStreamEntries: context.childStreamEntries ?? new Map(),
@@ -96,7 +97,7 @@ export function sessionHeaderIdentityLine(
         : 'subagent';
     return `${streamKind}: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;
   }
-  const model = meta.model || '—';
+  const model = getRuntimeModelLabel(meta.model || '—');
   const agent = meta.agent || 'chat';
   if (meta.teamName) {
     return `team: ${meta.teamName} · root: ${agent} · model: ${model}`;

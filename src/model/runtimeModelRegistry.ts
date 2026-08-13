@@ -214,6 +214,11 @@ export function getRuntimeModelConfig(model: string): ModelConfig | undefined {
   return MODEL_CONFIGS[normalizePersistedCopilotModelId(model)];
 }
 
+/** Resolve a persisted model id to its user-facing registry label. */
+export function getRuntimeModelLabel(model: string): string {
+  return getRuntimeModelConfig(model)?.label ?? model;
+}
+
 /** All static model entries owned by TeXRA and llm-zoo. */
 export function staticModelConfigEntries(): readonly (readonly [
   string,
