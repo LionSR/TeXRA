@@ -399,7 +399,7 @@ export function appendApprovalDiffNote(
     : baseOutput;
 }
 
-export interface ToolEditRejectionProvenance {
+interface ToolEditRejectionProvenance {
   readonly feedback?: string;
   readonly reason?: string;
   readonly cause?: string;
