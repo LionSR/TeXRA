@@ -19,12 +19,14 @@ export function latestWorkflowAttemptId(
  * Durable script reruns append progress under a fresh attempt id so the
  * earlier attempt remains available in transcript history. Current writers
  * stamp every call; older persisted transcripts without that fact fall back
- * to their latest record per logical id.
+ * to their latest record per logical id. A `null` declared attempt means a
+ * durable boundary was present but invalid, so inference must remain disabled.
  */
 export function latestWorkflowCallsById(
   calls: readonly WorkflowCallProgress[],
-  declaredAttemptId?: string,
+  declaredAttemptId?: string | null,
 ): WorkflowCallProgress[] {
+  if (declaredAttemptId === null) return [];
   const currentAttemptId =
     declaredAttemptId ??
     latestWorkflowAttemptId(calls.map((call) => call.attemptId));
