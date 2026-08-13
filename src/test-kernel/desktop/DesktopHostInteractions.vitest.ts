@@ -356,7 +356,7 @@ describe('createDesktopHostInteractions', () => {
     expectStreamRegistered(sessionEvents, 'stream-a' as StreamTabId);
   });
 
-  it('forwards a cancellation cause as bash reject feedback', async () => {
+  it('forwards a bash cancellation cause without user provenance', async () => {
     const handlers = createHandlers();
     const { interactions, toolEditApprovals } =
       await createInteractions(handlers);
@@ -373,7 +373,7 @@ describe('createDesktopHostInteractions', () => {
 
     await expect(resultPromise).resolves.toEqual({
       action: 'reject',
-      feedback: 'Stream resources released.',
+      cause: 'Stream resources released.',
     });
     expect(handlers.transport.bash.dismiss).toHaveBeenCalled();
     expect(toolEditApprovals.cancel).toHaveBeenCalledWith({
@@ -400,7 +400,7 @@ describe('createDesktopHostInteractions', () => {
 
     await expect(result).resolves.toEqual({
       action: 'reject',
-      feedback: 'Stopped during presentation.',
+      cause: 'Stopped during presentation.',
     });
   });
 
@@ -489,11 +489,11 @@ describe('createDesktopHostInteractions', () => {
 
     await expect(bashPromise).resolves.toEqual({
       action: 'reject',
-      feedback: SESSION_DISPOSED_CAUSE,
+      cause: SESSION_DISPOSED_CAUSE,
     });
     await expect(planPromise).resolves.toEqual({
       action: 'reject',
-      feedback: SESSION_DISPOSED_CAUSE,
+      cause: SESSION_DISPOSED_CAUSE,
     });
     expect(handlers.transport.bash.dismiss).toHaveBeenCalled();
     expect(handlers.transport.planApproval.dismiss).toHaveBeenCalled();

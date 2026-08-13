@@ -220,7 +220,7 @@ export class ToolEditApprovalController {
       case 'reject':
         this.settle(payload.requestId, {
           accepted: false,
-          userMessage: payload.feedback?.trim() || undefined,
+          feedback: payload.feedback?.trim() || undefined,
         });
         return;
       case 'openDiff':
@@ -278,7 +278,7 @@ export class ToolEditApprovalController {
       }
       const rejection: ToolEditApprovalResult = {
         accepted: false,
-        userMessage: selector.cause,
+        cause: selector.cause,
       };
       if (state.phase === 'initializing') {
         state.resolution ??= rejection;

@@ -745,7 +745,7 @@ function completedRootResult(executionId: ExecutionId): ResultEvent {
  * stream's resources are released (delete, delete-all, headless cleanup). */
 const STREAM_RELEASED_REJECTION = {
   action: 'reject',
-  feedback: 'Stream resources released.',
+  cause: 'Stream resources released.',
 } as const;
 
 function activateStream(bridge: TestableBridge, streamId: string): void {
@@ -3029,7 +3029,7 @@ describe('DesktopProgressBridge', () => {
 
         await expect(approvalPromise).resolves.toMatchObject({
           accepted: false,
-          userMessage: 'Not this edit.',
+          feedback: 'Not this edit.',
         });
       } finally {
         bridgeB.dispose();

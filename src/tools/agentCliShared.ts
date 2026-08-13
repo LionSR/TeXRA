@@ -303,7 +303,7 @@ async function withAgentCliApproval(
 
   const approval = await requestBashApproval({ command: approvalLabel });
   if (approval.action !== 'approve') {
-    return buildBashApprovalRejectedResult(approvalLabel, approval.feedback);
+    return buildBashApprovalRejectedResult(approvalLabel, approval);
   }
 
   contexts?.callContext?.hooks?.onExecutionReady?.();

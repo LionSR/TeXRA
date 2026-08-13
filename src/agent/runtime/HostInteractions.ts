@@ -93,9 +93,21 @@ export interface HostRetryInteractionOptions extends HostInteractionOptions {
 }
 
 export type PlanApprovalResult =
-  | { action: 'approve'; feedback?: never }
-  | { action: 'approve_and_goal'; feedback?: never }
-  | { action: 'reject'; feedback?: string };
+  | { action: 'approve'; feedback?: never; reason?: never; cause?: never }
+  | {
+      action: 'approve_and_goal';
+      feedback?: never;
+      reason?: never;
+      cause?: never;
+    }
+  | { action: 'reject'; feedback?: string; reason?: never; cause?: never }
+  | { action: 'reject'; reason: string; feedback?: never; cause?: never }
+  | {
+      action: 'reject';
+      cause: string | undefined;
+      feedback?: never;
+      reason?: never;
+    };
 
 export type ProposalResult =
   | {
@@ -103,10 +115,30 @@ export type ProposalResult =
       model?: string;
       agent?: string;
       feedback?: never;
+      reason?: never;
+      cause?: never;
     }
   | {
       action: 'reject';
       feedback?: string;
+      reason?: never;
+      cause?: never;
+      model?: never;
+      agent?: never;
+    }
+  | {
+      action: 'reject';
+      reason: string;
+      feedback?: never;
+      cause?: never;
+      model?: never;
+      agent?: never;
+    }
+  | {
+      action: 'reject';
+      cause: string | undefined;
+      feedback?: never;
+      reason?: never;
       model?: never;
       agent?: never;
     }
@@ -115,6 +147,8 @@ export type ProposalResult =
       model?: never;
       agent?: never;
       feedback?: never;
+      reason?: never;
+      cause?: never;
     };
 
 export type RetrySettlement =
@@ -180,42 +214,77 @@ export interface HostExternalInquiryHandle {
 
 export type BashSettlement =
   | { readonly action: 'approve'; readonly feedback?: never }
-  | { readonly action: 'reject'; readonly feedback?: string };
+  | {
+      readonly action: 'reject';
+      readonly feedback?: string;
+      readonly reason?: never;
+      readonly cause?: never;
+    }
+  | {
+      readonly action: 'reject';
+      readonly reason: string;
+      readonly feedback?: never;
+      readonly cause?: never;
+    }
+  | {
+      readonly action: 'reject';
+      readonly cause: string | undefined;
+      readonly feedback?: never;
+      readonly reason?: never;
+    };
 
 export type UserQuestionSettlement =
   | {
       readonly action: 'submit';
       readonly answers: UserQuestionAnswers;
       readonly feedback?: never;
+      readonly reason?: never;
+      readonly cause?: never;
     }
   | {
       readonly action: 'reject' | 'skip';
       readonly feedback?: string;
       readonly answers?: never;
+      readonly reason?: never;
+      readonly cause?: never;
+    }
+  | {
+      readonly action: 'reject';
+      readonly reason: string;
+      readonly feedback?: never;
+      readonly answers?: never;
+      readonly cause?: never;
+    }
+  | {
+      readonly action: 'reject';
+      readonly cause: string | undefined;
+      readonly feedback?: never;
+      readonly answers?: never;
+      readonly reason?: never;
     };
 
 export type SettledInteractionKind = keyof HostInteractionResultByKind;
 
 type CancellationResultFactories = {
   [K in SettledInteractionKind]: (
-    feedback?: string,
+    cause?: string,
   ) => HostInteractionResultByKind[K];
 };
 
 const cancellationResultFactories: CancellationResultFactories = {
-  bash: (feedback) => ({ action: 'reject', feedback: feedback?.trim() }),
-  planApproval: (feedback) => ({ action: 'reject', feedback }),
-  proposal: (feedback) => ({ action: 'reject', feedback }),
+  bash: (cause) => ({ action: 'reject', cause: cause?.trim() }),
+  planApproval: (cause) => ({ action: 'reject', cause }),
+  proposal: (cause) => ({ action: 'reject', cause }),
   retry: () => ({ action: 'cancel' }),
-  userQuestion: (feedback) => ({ action: 'reject', feedback }),
+  userQuestion: (cause) => ({ action: 'reject', cause }),
 };
 
 /** Typed cancellation result shared by every presenting host. */
 export function cancellationResultFor<K extends SettledInteractionKind>(
   kind: K,
-  feedback?: string,
+  cause?: string,
 ): HostInteractionResultByKind[K] {
-  return cancellationResultFactories[kind](feedback);
+  return cancellationResultFactories[kind](cause);
 }
 
 export interface HostApprovalBypassStateUpdate {
@@ -442,7 +511,7 @@ export class SessionHostInteractions implements HostInteractions {
       request.streamId as StreamTabId | null | undefined,
       (interactions) =>
         interactions.requestToolEditApproval?.(request, options),
-      (cause) => ({ accepted: false, userMessage: cause }),
+      (cause) => ({ accepted: false, cause }),
     );
   }
 

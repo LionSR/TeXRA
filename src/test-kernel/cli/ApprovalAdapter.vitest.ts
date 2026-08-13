@@ -269,7 +269,22 @@ describe('approval prompt hooks', () => {
 
     expect(result).toEqual({
       action: 'reject',
-      feedback: 'Denied by TeXRA approval policy.',
+      reason: 'Denied by TeXRA approval policy.',
+    });
+  });
+
+  it('preserves a failed proposal prompt as an automatic cancellation', async () => {
+    const result = await createHeadlessCliHostInteractions(
+      context({
+        approvalPrompt: async () => {
+          throw new Error('terminal input closed');
+        },
+      }),
+    ).requestAgentProposal?.(proposal);
+
+    expect(result).toEqual({
+      action: 'reject',
+      cause: 'CLI approval prompt failed.',
     });
   });
 
@@ -500,7 +515,55 @@ describe('buildToolEditApprovalContent', () => {
 
     expect(result).toMatchObject({
       accepted: false,
-      userMessage: 'proof misses the p = 5 case',
+      feedback: 'proof misses the p = 5 case',
+    });
+  });
+
+  it('does not synthesize feedback for a note-free rejection', async () => {
+    useCliHostInteractions(
+      context({
+        approvalPrompt: async () => '',
+      }),
+    );
+
+    const result = await requestNewProofEdit();
+
+    expect(result).toEqual({ accepted: false });
+  });
+
+  it('preserves a failed edit prompt as an automatic cancellation', async () => {
+    useCliHostInteractions(
+      context({
+        approvalPrompt: async () => {
+          throw new Error('terminal input closed');
+        },
+      }),
+    );
+
+    const result = await requestNewProofEdit();
+
+    expect(result).toEqual({
+      accepted: false,
+      cause: 'CLI approval prompt failed.',
+    });
+  });
+
+  it('preserves a failed Bash prompt as an automatic cancellation', async () => {
+    useCliHostInteractions(
+      context({
+        approvalPrompt: async () => {
+          throw new Error('terminal input closed');
+        },
+      }),
+    );
+
+    const result = await defaultSession().interactions.requestBashApproval({
+      command: 'latexmk paper.tex',
+    });
+
+    expect(result).toEqual({
+      action: 'reject',
+      cause: 'CLI approval prompt failed.',
     });
   });
 
@@ -528,7 +591,7 @@ describe('buildToolEditApprovalContent', () => {
     expect(summaries[1]).toBe('');
     expect(result).toMatchObject({
       accepted: false,
-      userMessage: 'use the workspace-local file path',
+      feedback: 'use the workspace-local file path',
     });
   });
 

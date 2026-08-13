@@ -179,6 +179,79 @@ describe('accept_run_files progress events', () => {
     dispose();
   });
 
+  it('reports an all-file user rejection without calling it a cancellation', async () => {
+    const tool = new AcceptRunFilesTool();
+
+    setRunStorageEntries({
+      [`executions/${executionId}/output.tex`]: FileType.File,
+    });
+    stubWorkspaceFiles(false, '');
+    vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
+    testApprovalHandler = async () => ({
+      accepted: false,
+      feedback: 'keep the original normalization',
+    });
+
+    const result = await runAccept(tool, [
+      { path: 'output.tex', original: 'paper.tex' },
+    ]);
+
+    expect(result.status).toBe('error');
+    expect(result.summary).toBe(
+      'User rejected accept_run_files for paper.tex.',
+    );
+    expect(result.userInstruction).toBe('keep the original normalization');
+    expect(result.error).not.toContain('cancelled');
+  });
+
+  it('preserves a cause-free cancellation while aggregating rejections', async () => {
+    const tool = new AcceptRunFilesTool();
+
+    setRunStorageEntries({
+      [`executions/${executionId}/output.tex`]: FileType.File,
+    });
+    stubWorkspaceFiles(false, '');
+    vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
+    testApprovalHandler = async () => ({ accepted: false, cause: undefined });
+
+    const result = await runAccept(tool, [
+      { path: 'output.tex', original: 'paper.tex' },
+    ]);
+
+    expect(result.summary).toBe(
+      'Tool edit approval cancelled: accept_run_files for paper.tex.',
+    );
+    expect(result.userInstruction).toBeUndefined();
+  });
+
+  it('preserves mixed policy-denial and cancellation details', async () => {
+    const tool = new AcceptRunFilesTool();
+
+    setRunStorageEntries({
+      [`executions/${executionId}/first.tex`]: FileType.File,
+      [`executions/${executionId}/second.tex`]: FileType.File,
+    });
+    stubWorkspaceFiles(false, '');
+    vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
+    testApprovalHandler = async (request) =>
+      request.path === 'first.tex'
+        ? { accepted: false, reason: 'Denied by approval policy.' }
+        : { accepted: false, cause: 'Session disposed.' };
+
+    const result = await runAccept(tool, [
+      { path: 'first.tex', original: 'first.tex' },
+      { path: 'second.tex', original: 'second.tex' },
+    ]);
+
+    expect(result.status).toBe('error');
+    expect(result.summary).toBe(
+      'Tool edit approval cancelled: accept_run_files for multiple files.',
+    );
+    expect(result.error).toContain('Denied by approval policy.');
+    expect(result.error).toContain('Session disposed.');
+    expect(result.userInstruction).toBeUndefined();
+  });
+
   it('does not require a runtime host to publish accepted workspace files', async () => {
     const tool = new AcceptRunFilesTool();
     const { written, dispose } = recordWrittenFiles();

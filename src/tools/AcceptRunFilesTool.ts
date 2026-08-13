@@ -192,7 +192,15 @@ Parameters map directly to subagent-result delivery attributes:
     let rejected = 0;
     let unchanged = 0;
     let firstRejectedPath: string | undefined;
-    const rejectionMessages: string[] = [];
+    const rejectionFeedback: string[] = [];
+    const rejectionReasons: string[] = [];
+    const rejectionCauses: string[] = [];
+    let firstUserRejectionPath: string | undefined;
+    let firstPolicyDenialPath: string | undefined;
+    let firstCancellationPath: string | undefined;
+    let sawUserRejection = false;
+    let sawPolicyDenial = false;
+    let sawCancellation = false;
 
     let totalStripped = 0;
 
@@ -216,7 +224,19 @@ Parameters map directly to subagent-result delivery attributes:
       if (!approval.accepted) {
         rejected++;
         firstRejectedPath ??= entry.original;
-        if (approval.userMessage) rejectionMessages.push(approval.userMessage);
+        if ('cause' in approval) {
+          sawCancellation = true;
+          firstCancellationPath ??= entry.original;
+          if (approval.cause) rejectionCauses.push(approval.cause);
+        } else if ('reason' in approval) {
+          sawPolicyDenial = true;
+          firstPolicyDenialPath ??= entry.original;
+          if (approval.reason) rejectionReasons.push(approval.reason);
+        } else {
+          sawUserRejection = true;
+          firstUserRejectionPath ??= entry.original;
+          if (approval.feedback) rejectionFeedback.push(approval.feedback);
+        }
         results.push(`rejected: ${entry.original}${mappingNote}`);
         continue;
       }
@@ -269,11 +289,28 @@ Parameters map directly to subagent-result delivery attributes:
 
     // All changed files rejected → return rejection result
     if (rejected === changed && acceptedEntries.length === 0) {
-      return buildApprovalRejectedResult(
-        firstRejectedPath ?? prepared[0].original,
-        'accept_run_files',
-        rejectionMessages.join('\n'),
-      );
+      const provenanceKindCount = [
+        sawUserRejection,
+        sawPolicyDenial,
+        sawCancellation,
+      ].filter(Boolean).length;
+      const summaryPath =
+        provenanceKindCount > 1
+          ? 'multiple files'
+          : (firstCancellationPath ??
+            firstPolicyDenialPath ??
+            firstUserRejectionPath ??
+            firstRejectedPath ??
+            prepared[0].original);
+      return buildApprovalRejectedResult(summaryPath, 'accept_run_files', {
+        ...(rejectionFeedback.length > 0
+          ? { feedback: rejectionFeedback.join('\n') }
+          : {}),
+        ...(sawPolicyDenial ? { reason: rejectionReasons.join('\n') } : {}),
+        ...(sawCancellation
+          ? { cause: rejectionCauses.join('\n') || undefined }
+          : {}),
+      });
     }
 
     // Phase 3: Clean up diff files from workspace for accepted files

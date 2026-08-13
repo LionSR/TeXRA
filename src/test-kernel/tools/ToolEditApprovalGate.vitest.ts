@@ -99,7 +99,11 @@ describe('Tool edit approval gating', () => {
     assert.strictEqual(request?.proposedContent, 'new content');
     assert.strictEqual(request?.sourceTool, 'write_file');
     assert.strictEqual(write.mock.lastCall?.[1], 'new content');
-    assert.strictEqual(result.output, 'written');
+    assert.strictEqual(
+      result.output,
+      'written\n\nReplaced 1 lines with 1 lines.',
+    );
+    assert.strictEqual(result.userInstruction, undefined);
   });
 
   it('write_file reports the content adjusted during approval', async () => {
@@ -125,7 +129,7 @@ describe('Tool edit approval gating', () => {
 
     testApprovalHandler = async () => ({
       accepted: false,
-      userMessage: 'Rejected by user',
+      feedback: 'Rejected by user',
     });
 
     const result = await tool.call({
@@ -140,6 +144,44 @@ describe('Tool edit approval gating', () => {
       'User rejected write_file for summary.txt.',
     );
     assert.strictEqual(result.userInstruction, 'Rejected by user');
+  });
+
+  it('does not present an automatic cancellation as user feedback', async () => {
+    const tool = new WriteFileTool();
+    const write = stubWorkspaceFile({ exists: true, content: 'base' });
+    testApprovalHandler = async () => ({
+      accepted: false,
+      cause: 'Session disposed.',
+    });
+
+    const result = await tool.call({
+      path: 'summary.txt',
+      content: 'new content',
+    });
+
+    assert.strictEqual(write.mock.calls.length, 0);
+    assert.match(result.error ?? '', /Tool edit approval cancelled/);
+    assert.match(result.error ?? '', /Session disposed\./);
+    assert.strictEqual(result.userInstruction, undefined);
+  });
+
+  it('preserves an automatic cancellation without a cause', async () => {
+    const tool = new WriteFileTool();
+    const write = stubWorkspaceFile({ exists: true, content: 'base' });
+    testApprovalHandler = async () => ({
+      accepted: false,
+      cause: undefined,
+    });
+
+    const result = await tool.call({
+      path: 'summary.txt',
+      content: 'new content',
+    });
+
+    assert.strictEqual(write.mock.calls.length, 0);
+    assert.match(result.error ?? '', /Tool edit approval cancelled/);
+    assert.doesNotMatch(result.error ?? '', /User rejected/);
+    assert.strictEqual(result.userInstruction, undefined);
   });
 
   it('write_file skips approval when disabled via config', async () => {
@@ -173,10 +215,8 @@ describe('Tool edit approval gating', () => {
     assert.strictEqual(approvalRequests.length, 0);
     assert.strictEqual(write.mock.calls.length, 0);
     assert.strictEqual(result.status, 'error');
-    assert.strictEqual(
-      result.userInstruction,
-      'Denied by TeXRA approval policy.',
-    );
+    assert.strictEqual(result.userInstruction, undefined);
+    assert.match(result.error ?? '', /Denied by TeXRA approval policy\./);
     assert.strictEqual(policyDenials, 1);
   });
 

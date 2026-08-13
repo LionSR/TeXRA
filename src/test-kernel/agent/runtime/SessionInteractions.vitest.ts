@@ -781,12 +781,12 @@ describe('session.interactions request bookkeeping', () => {
 
     await expect(pending).resolves.toEqual({
       action: 'reject',
-      feedback: 'Run ended.',
+      cause: 'Run ended.',
     });
     session.dispose();
   });
 
-  it('preserves user-question feedback while unattached', async () => {
+  it('preserves user-question cancellation cause while unattached', async () => {
     const session = createTestSession();
     const pending = session.interactions.askUserQuestion({
       requestId: 'question:cancel-unattached',
@@ -807,7 +807,7 @@ describe('session.interactions request bookkeeping', () => {
 
     await expect(pending).resolves.toEqual({
       action: 'reject',
-      feedback: 'No stream owns this question.',
+      cause: 'No stream owns this question.',
     });
     session.dispose();
   });
@@ -820,7 +820,7 @@ describe('session.interactions request bookkeeping', () => {
 
     await expect(pending).resolves.toEqual({
       action: 'reject',
-      feedback: SESSION_DISPOSED_CAUSE,
+      cause: SESSION_DISPOSED_CAUSE,
     });
   });
 
@@ -838,7 +838,7 @@ describe('session.interactions request bookkeeping', () => {
 
     await expect(pending).resolves.toEqual({
       action: 'reject',
-      feedback: SESSION_DISPOSED_CAUSE,
+      cause: SESSION_DISPOSED_CAUSE,
     });
     expect(pendingCounts).toEqual([1, 0]);
   });
@@ -855,7 +855,7 @@ describe('session.interactions request bookkeeping', () => {
 
     await expect(pending).resolves.toEqual({
       action: 'reject',
-      feedback: SESSION_DISPOSED_CAUSE,
+      cause: SESSION_DISPOSED_CAUSE,
     });
   });
 

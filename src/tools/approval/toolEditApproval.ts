@@ -69,7 +69,21 @@ export type ToolEditApprovalResult =
     }
   | {
       readonly accepted: false;
-      readonly userMessage?: string;
+      readonly feedback?: string;
+      readonly reason?: never;
+      readonly cause?: never;
+    }
+  | {
+      readonly accepted: false;
+      readonly reason: string;
+      readonly feedback?: never;
+      readonly cause?: never;
+    }
+  | {
+      readonly accepted: false;
+      readonly cause: string | undefined;
+      readonly feedback?: never;
+      readonly reason?: never;
     };
 
 const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
@@ -268,7 +282,7 @@ export async function requestToolEditApproval(
     context?.onApprovalPolicyDenial?.();
     return {
       accepted: false,
-      userMessage: texraApprovalDenialMessage(decision),
+      reason: texraApprovalDenialMessage(decision),
     };
   }
 
@@ -385,15 +399,36 @@ export function appendApprovalDiffNote(
     : baseOutput;
 }
 
+interface ToolEditRejectionProvenance {
+  readonly feedback?: string;
+  readonly reason?: string;
+  readonly cause?: string;
+}
+
 export function buildApprovalRejectedResult(
   path: string,
   sourceTool: string,
-  userMessage?: string,
+  rejection: ToolEditRejectionProvenance,
 ): ToolResult {
-  const baseMessage = `User rejected ${sourceTool} for ${path}.`;
-  const feedback = userMessage?.trim();
-  return errorResult(baseMessage, {
-    summary: baseMessage,
+  const feedback = rejection.feedback?.trim();
+  const isPolicyDenial = rejection.reason !== undefined;
+  const isAutomaticCancellation = 'cause' in rejection;
+  const reason = rejection.reason?.trim();
+  const cause = rejection.cause?.trim();
+  let summary = `User rejected ${sourceTool} for ${path}.`;
+  if (isPolicyDenial) {
+    summary = `Tool edit denied: ${sourceTool} for ${path}.`;
+  }
+  if (isAutomaticCancellation) {
+    summary = `Tool edit approval cancelled: ${sourceTool} for ${path}.`;
+  }
+  const details = [reason, cause].filter(
+    (detail): detail is string => detail !== undefined && detail.length > 0,
+  );
+  const error =
+    details.length > 0 ? `${summary}\n\n${details.join('\n')}` : summary;
+  return errorResult(error, {
+    summary,
     ...(feedback && { userInstruction: feedback }),
   });
 }
@@ -432,11 +467,7 @@ export async function requestAndWriteApprovedEdit(request: {
 
   if (!approval.accepted) {
     return {
-      rejected: buildApprovalRejectedResult(
-        displayPath,
-        sourceTool,
-        approval.userMessage,
-      ),
+      rejected: buildApprovalRejectedResult(displayPath, sourceTool, approval),
     };
   }
 
