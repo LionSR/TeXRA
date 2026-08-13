@@ -99,7 +99,7 @@ describe('requestBashApproval queueing', () => {
 
       expect(result).toEqual({
         action: 'reject',
-        feedback: 'Denied by TeXRA approval policy.',
+        reason: 'Denied by TeXRA approval policy.',
       });
       expect(policyDenials).toBe(1);
       expect(prompts).toBe(0);

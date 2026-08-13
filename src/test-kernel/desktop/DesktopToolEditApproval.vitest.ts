@@ -424,7 +424,7 @@ describe('desktop tool edit approval', () => {
       });
       await expect(resultPromise).resolves.toMatchObject({
         accepted: false,
-        userMessage: 'not yet',
+        feedback: 'not yet',
       });
       await vi.waitFor(async () => {
         await expect(pathExists(opened[0])).resolves.toBe(false);
@@ -712,7 +712,7 @@ describe('desktop tool edit approval', () => {
 
       await expect(resultPromise).resolves.toMatchObject({
         accepted: false,
-        userMessage: 'Owning execution ended.',
+        cause: 'Owning execution ended.',
       });
       expect(interactions.shownToolEditPermissions).toEqual([]);
       expect(interactions.resolvedToolEditPermissions).toEqual([]);
@@ -737,7 +737,7 @@ describe('desktop tool edit approval', () => {
 
       await expect(resultPromise).resolves.toMatchObject({
         accepted: false,
-        userMessage: SESSION_DISPOSED_CAUSE,
+        cause: SESSION_DISPOSED_CAUSE,
       });
       expect(interactions.shownToolEditPermissions).toEqual([]);
       expect(interactions.resolvedToolEditPermissions).toEqual([]);
@@ -788,7 +788,7 @@ describe('desktop tool edit approval', () => {
 
       await expect(cancelledPromise).resolves.toMatchObject({
         accepted: false,
-        userMessage: 'Owning execution ended.',
+        cause: 'Owning execution ended.',
       });
       expect(resolved).toEqual([{ requestId: cancelledRequest.requestId }]);
 
@@ -799,7 +799,7 @@ describe('desktop tool edit approval', () => {
       });
       await expect(retainedPromise).resolves.toMatchObject({
         accepted: false,
-        userMessage: 'Retained request resolved normally.',
+        feedback: 'Retained request resolved normally.',
       });
       await waitForEmptyDir(tempRoot);
     },
@@ -839,7 +839,7 @@ describe('desktop tool edit approval', () => {
 
       await expect(resultPromise).resolves.toMatchObject({
         accepted: false,
-        userMessage: 'Stream resources released.',
+        cause: 'Stream resources released.',
       });
       expect(resolved).toEqual([{ requestId: shown[0].requestId }]);
       await waitForEmptyDir(tempRoot);

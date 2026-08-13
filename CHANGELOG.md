@@ -60,6 +60,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Command rejections preserve the user's actual instructions** — rejecting a
+  shell-backed action without a note no longer presents generated retry
+  guidance to the agent as though the user had written it.
 - **Read-only completion checks stay focused** — end-of-session review no
   longer asks to inspect project plans, Git history, or pull requests when the
   current task and its delegated results already contain the evidence needed.

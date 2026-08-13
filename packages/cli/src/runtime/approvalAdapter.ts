@@ -1,5 +1,6 @@
 import {
   defaultSession,
+  type BashSettlement,
   type HostAgentProposalRequest,
   type HostApprovalBypassStateUpdate,
   type HostInteractions,
@@ -8,6 +9,7 @@ import {
   type RetryResult,
   type UserQuestionSettlement,
 } from '@agent/runtime';
+import { warn as logWarning } from '@logger/logUtils';
 import {
   type AgentProposalPermission,
   type ApprovalDecision,
@@ -20,6 +22,7 @@ import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   settleExecutable,
   settleHumanInputDenial,
@@ -27,6 +30,7 @@ import {
 } from './approval/settleApprovals';
 import {
   type CliApprovalContent,
+  type CliApprovalDecision,
   type CliApprovalPromptHooks,
   type CliDecisionApprovalEvent,
   type CliDecisionApprovalPayloads,
@@ -55,12 +59,19 @@ interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
 }
 
 export function toToolEditResult(
-  decision: ApprovalDecision,
+  decision: CliApprovalDecision,
   proposedContent: string,
 ): ToolEditApprovalResult {
-  return decision.accepted
-    ? { accepted: true, appliedContent: proposedContent }
-    : { accepted: false, userMessage: decision.userMessage };
+  if (decision.accepted) {
+    return { accepted: true, appliedContent: proposedContent };
+  }
+  if (decision.rejectionCause !== undefined) {
+    return { accepted: false, cause: decision.rejectionCause };
+  }
+  return {
+    accepted: false,
+    ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
+  };
 }
 
 async function decideToolEdit(
@@ -143,13 +154,36 @@ async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
  *  the approve branch. A rejection without a user message omits `feedback`
  *  rather than sending an explicit `undefined`. */
 export function toApprovalSettlement(
-  decision: ApprovalDecision,
-): { action: 'approve' } | { action: 'reject'; feedback?: string } {
+  decision: ApprovalDecision & {
+    readonly rejectionCause?: string;
+    readonly rejectionReason?: string;
+  },
+):
+  | { action: 'approve' }
+  | { action: 'reject'; feedback?: string }
+  | { action: 'reject'; reason: string }
+  | { action: 'reject'; cause: string | undefined } {
   if (decision.accepted) return { action: 'approve' };
+  if (decision.rejectionCause !== undefined) {
+    return { action: 'reject', cause: decision.rejectionCause };
+  }
+  if (decision.rejectionReason !== undefined) {
+    return { action: 'reject', reason: decision.rejectionReason };
+  }
   return {
     action: 'reject',
     ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
   };
+}
+
+/** Preserve a CLI host failure as a Bash cancellation, not user feedback. */
+export function toBashApprovalSettlement(
+  decision: CliApprovalDecision,
+): BashSettlement {
+  if (decision.rejectionCause !== undefined) {
+    return { action: 'reject', cause: decision.rejectionCause };
+  }
+  return toApprovalSettlement(decision);
 }
 
 function toRetryResult(
@@ -178,7 +212,7 @@ async function askHeadlessUserQuestion(
 ): Promise<UserQuestionSettlement> {
   const denial = settleHumanInputDenial(context);
   if (denial != null) {
-    return { action: 'reject', feedback: denial.userMessage };
+    return { action: 'reject', reason: denial.userMessage };
   }
 
   const answers: UserQuestionAnswers = {};
@@ -199,10 +233,14 @@ async function askHeadlessUserQuestion(
       const parsed = parseUserQuestionAnswer(answer, question);
       if (parsed != null) answers[question.question] = parsed;
     }
-  } catch {
+  } catch (error) {
+    logWarning(
+      'cli.approval',
+      `The CLI user-question prompt failed: ${toErrorMessage(error)}`,
+    );
     return {
       action: 'reject',
-      feedback: 'CLI user question prompt failed.',
+      cause: 'CLI user question prompt failed.',
     };
   }
 
@@ -232,25 +270,41 @@ export function createHeadlessCliHostInteractions(
         { summary: formatBashApprovalSummary(request) },
         hooks,
       );
-      return toApprovalSettlement(decision);
+      return toBashApprovalSettlement(decision);
     },
     async requestPlanApproval(request) {
-      const { decision } = await decideApprovalEvent(
+      const { decision, prompted } = await decideApprovalEvent(
         'showPlanApproval',
         request,
         context,
         hooks,
       );
-      return toApprovalSettlement(decision);
+      return toApprovalSettlement({
+        ...decision,
+        ...(!prompted && !decision.accepted
+          ? {
+              rejectionReason: decision.userMessage ?? '',
+              userMessage: undefined,
+            }
+          : {}),
+      });
     },
     async requestAgentProposal(request: HostAgentProposalRequest) {
-      const { decision } = await decideApprovalEvent(
+      const { decision, prompted } = await decideApprovalEvent(
         'showAgentProposal',
         request,
         context,
         hooks,
       );
-      return toApprovalSettlement(decision);
+      return toApprovalSettlement({
+        ...decision,
+        ...(!prompted && !decision.accepted
+          ? {
+              rejectionReason: decision.userMessage ?? '',
+              userMessage: undefined,
+            }
+          : {}),
+      });
     },
     async requestRetry(request: HostRetryRequest) {
       const payload: RetryPermission = {

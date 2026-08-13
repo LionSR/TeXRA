@@ -78,7 +78,7 @@ async function expectRunEndedRejection(
 ): Promise<void> {
   await expect(pending).resolves.toEqual({
     action: 'reject',
-    feedback: 'Run ended.',
+    cause: 'Run ended.',
   });
 }
 
@@ -205,10 +205,10 @@ describe('run lifecycle host-interaction cancel', () => {
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
     // The interrupt-time cancel wins; the lifecycle's second cancel matches no
-    // pending request and cannot overwrite the settled feedback.
+    // pending request and cannot overwrite the settled cause.
     await expect(pending).resolves.toEqual({
       action: 'reject',
-      feedback: 'Run interrupted.',
+      cause: 'Run interrupted.',
     });
     session.dispose();
   });

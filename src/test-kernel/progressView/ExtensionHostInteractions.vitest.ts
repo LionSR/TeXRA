@@ -425,7 +425,7 @@ describe('createExtensionHostInteractions', () => {
     expect(toolEditApprovals.cancel).toHaveBeenCalledWith(selector);
   });
 
-  it('forwards a cancellation cause as bash reject feedback', async () => {
+  it('forwards a bash cancellation cause without user provenance', async () => {
     const { handlers, interactions } = createInteractions({
       session: createTestSession(),
     });
@@ -442,7 +442,7 @@ describe('createExtensionHostInteractions', () => {
 
     await expect(resultPromise).resolves.toEqual({
       action: 'reject',
-      feedback: 'Stream resources released.',
+      cause: 'Stream resources released.',
     });
     expect(handlers.transport.bash.dismiss).toHaveBeenCalled();
   });
@@ -558,11 +558,10 @@ describe('createExtensionHostInteractions', () => {
       cause: 'No stream owns this question.',
     });
 
-    // Cancellation forwards `cause` as agent-visible feedback, matching how
-    // a live UI rejection settles (see the desktop host, which does the same).
+    // Cancellation remains distinct from a live UI rejection with feedback.
     await expect(resultPromise).resolves.toEqual({
       action: 'reject',
-      feedback: 'No stream owns this question.',
+      cause: 'No stream owns this question.',
     });
     expect(handlers.transport.userQuestion.dismiss).toHaveBeenCalledWith(
       'question-a',

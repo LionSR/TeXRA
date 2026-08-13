@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   apiKeyExistsUncached: vi.fn(),
   apiMode: 'included' as 'included' | 'personal',
   hasUsableApiKey: vi.fn(),
+  handleExternalInquiryAction: vi.fn(),
   invalidateApiKeyCache: vi.fn(),
   preferSubscription: true,
   preferKimiCode: false,
@@ -30,6 +31,10 @@ const mocks = vi.hoisted(() => ({
   setPreferKimiCode: vi.fn(),
   setGLMCodingPlan: vi.fn(),
   updateGlobalState: vi.fn(),
+}));
+
+vi.mock('@tools/inquiry/inquiryActions', () => ({
+  handleExternalInquiryAction: mocks.handleExternalInquiryAction,
 }));
 
 // Injection point for a pre-modal preparation failure: the retry copy is read
@@ -405,6 +410,7 @@ afterEach(() => {
   mocks.retryCopyFailure = undefined;
   mocks.apiKeyExistsUncached.mockReset();
   mocks.hasUsableApiKey.mockReset();
+  mocks.handleExternalInquiryAction.mockReset();
   mocks.invalidateApiKeyCache.mockReset();
   mocks.notify.mockReset();
   mocks.setCliApiMode.mockReset();
@@ -417,6 +423,34 @@ afterEach(() => {
 });
 
 describe('TUI retry approvals', () => {
+  it('preserves the lifecycle cause when an external inquiry is interrupted', async () => {
+    const { interactions } = tui();
+    await interactions.openExternalInquiry?.({
+      requestId: 'inquiry-interrupted',
+      allowBypass: false,
+      streamId: 'inquiry-stream',
+      mode: 'new',
+      question: 'Which external fact should be checked?',
+      threadId: 'thread-interrupted',
+      sessionLinks: null,
+      draft: null,
+      transcript: null,
+    });
+    await waitForApproval('externalInquiry', {
+      threadId: 'thread-interrupted',
+    });
+
+    clearApprovals();
+
+    await vi.waitFor(() =>
+      expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith({
+        action: 'drop',
+        threadId: 'thread-interrupted',
+        feedback: 'Session interrupted.',
+      }),
+    );
+  });
+
   it('reports an automatic yolo retry rejection as a policy denial', async () => {
     const { interactions } = tui(host(), {
       approvalPolicy: 'yolo',

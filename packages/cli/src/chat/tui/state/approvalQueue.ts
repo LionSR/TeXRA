@@ -60,6 +60,10 @@ export type ApprovalPayload =
  * docs/proposals/2026-05-31-tui-extension-sharing.md (Rung 1).
  */
 export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
+  /** Queue or prompt lifecycle failure, never text entered by the user. */
+  readonly rejectionCause?: string;
+  /** Automatic policy denial, never text entered by the user. */
+  readonly rejectionReason?: string;
   /** Session bypass to activate before accepting this approval. */
   readonly bypass?: ApprovalBypassKind;
   /** Credential mode to apply before accepting this approval. */
@@ -184,7 +188,7 @@ export const pendingApprovalSummaries: Signal.Computed<
 
 const INTERRUPT: ApprovalDecision = {
   accepted: false,
-  userMessage: 'Session interrupted.',
+  rejectionCause: 'Session interrupted.',
 };
 
 /** The entry the modal shows: the first one waiting for a user decision. */

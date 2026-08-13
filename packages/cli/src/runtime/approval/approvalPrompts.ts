@@ -2,6 +2,7 @@ import PQueue from 'p-queue';
 
 import { defaultSession } from '@agent/runtime';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkError/relayDetection';
+import { warn as logWarning } from '@logger/logUtils';
 import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
@@ -15,6 +16,7 @@ import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscriptionId,
 } from '@shared/codingPlanSubscriptions';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion, writeTextStderr } from '../logSinks';
@@ -48,6 +50,11 @@ const CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT =
 export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
 }
+
+/** CLI-local extension that keeps host failures separate from user text. */
+export type CliApprovalDecision = ApprovalDecision & {
+  readonly rejectionCause?: string;
+};
 
 export interface CliApprovalContent {
   readonly summary: string;
@@ -271,7 +278,7 @@ export async function askApproval(
   context: CliContext,
   content: CliApprovalContent,
   hooks: CliApprovalPromptHooks = {},
-): Promise<ApprovalDecision> {
+): Promise<CliApprovalDecision> {
   const getDetails = content.details;
   try {
     return await cliPromptQueue(context).add(async () => {
@@ -309,12 +316,17 @@ export async function askApproval(
 
       return {
         accepted: parsed.accepted,
-        userMessage: parsed.accepted
-          ? undefined
-          : feedback || 'Rejected from CLI approval prompt.',
+        userMessage: parsed.accepted ? undefined : feedback,
       };
     });
-  } catch {
-    return { accepted: false, userMessage: 'CLI approval prompt failed.' };
+  } catch (error) {
+    logWarning(
+      'cli.approval',
+      `The CLI approval prompt failed: ${toErrorMessage(error)}`,
+    );
+    return {
+      accepted: false,
+      rejectionCause: 'CLI approval prompt failed.',
+    };
   }
 }

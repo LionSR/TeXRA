@@ -32,6 +32,7 @@ import {
 import { getCliApiMode, setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   toApprovalSettlement,
+  toBashApprovalSettlement,
   toToolEditResult,
 } from '@cli/runtime/approvalAdapter';
 import {
@@ -258,10 +259,14 @@ async function decidePresentedApproval<
       ApprovalPayload,
       { kind: K }
     >);
-  } catch {
+  } catch (error) {
+    logWarning(
+      'cli.tui',
+      `The approval prompt failed: ${toErrorMessage(error)}`,
+    );
     return {
       accepted: false,
-      userMessage: 'CLI approval prompt failed.',
+      rejectionCause: 'CLI approval prompt failed.',
     };
   }
 }
@@ -272,6 +277,12 @@ async function decideWithPolicy<K extends 'planApproval' | 'proposal', P>(
   payload: P,
 ): Promise<ApprovalDecision> {
   const policy = settleExecutable(context);
+  if (policy && !policy.accepted) {
+    return {
+      accepted: false,
+      rejectionReason: policy.userMessage ?? '',
+    };
+  }
   return policy ?? decidePresentedApproval(kind, payload);
 }
 
@@ -283,7 +294,7 @@ async function requestBashInteraction(
   if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
     setBashApprovalSessionBypass(request.streamId, true);
   }
-  return toApprovalSettlement(decision);
+  return toBashApprovalSettlement(decision);
 }
 
 async function requestPlanInteraction(
@@ -459,10 +470,13 @@ async function requestUserQuestionInteraction(
 ): Promise<UserQuestionSettlement> {
   const denial = settleHumanInputDenial(context);
   if (denial != null) {
-    return { action: 'reject', feedback: denial.userMessage };
+    return { action: 'reject', reason: denial.userMessage };
   }
 
   const decision = await enqueueTuiApproval({ kind: 'userQuestion', payload });
+  if (decision.rejectionCause !== undefined) {
+    return { action: 'reject', cause: decision.rejectionCause };
+  }
   return decision.accepted && decision.userQuestionAnswers
     ? { action: 'submit', answers: decision.userQuestionAnswers }
     : {
@@ -802,7 +816,10 @@ function handleExternalInquiry(
       void handleExternalInquiryAction({
         action: 'drop',
         threadId,
-        feedback: decision.userMessage || 'No answer provided.',
+        feedback:
+          decision.rejectionCause ??
+          decision.userMessage ??
+          'No answer provided.',
       });
     },
   );

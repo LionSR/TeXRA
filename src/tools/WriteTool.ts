@@ -53,13 +53,13 @@ export class WriteFileTool extends defineTool({
         const originalLineCount = countLines(originalContent);
         const newLineCount = countLines(appliedContent);
         const action = exists ? 'Overwrote' : 'Created';
+        const replacementNote =
+          exists && originalLineCount > 0
+            ? `Replaced ${originalLineCount} lines with ${newLineCount} lines.`
+            : undefined;
         return {
           summary: `${action} ${displayPath} (${newLineCount} lines)`,
-          output: 'written',
-          userInstruction:
-            exists && originalLineCount > 0
-              ? `Replaced ${originalLineCount} lines with ${newLineCount} lines.`
-              : undefined,
+          output: replacementNote ? `written\n\n${replacementNote}` : 'written',
         };
       },
     });
