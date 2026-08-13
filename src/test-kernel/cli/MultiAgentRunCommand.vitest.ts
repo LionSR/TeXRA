@@ -309,6 +309,9 @@ describe('CLI multi-agent run command', () => {
       expect.any(Function),
     );
     const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
+    expect(config?.displayInstruction).toBe(
+      'Inspect the proof without editing files.',
+    );
     expect(config?.instruction).toContain('Primary user input files:');
     expect(config?.instruction).toContain('- "problem.tex"');
     expect(config?.instruction).toContain(
@@ -525,6 +528,68 @@ describe('CLI multi-agent run command', () => {
     expect(config?.instruction).toContain(
       'Prove that every odd square is congruent to 1 modulo 8.',
     );
+  });
+
+  it('shows attached inputs instead of orchestration guidance without an instruction', async () => {
+    mockExpandedRunInputs({
+      inputFiles: ['problem.tex'],
+      contextFiles: ['reference.tex'],
+    });
+    const exitCode = await runPreset({
+      inputFiles: [' problem.tex '],
+      contextFiles: [' reference.tex '],
+      instruction: '',
+    });
+
+    expect(exitCode).toBe(0);
+    const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
+    expect(config?.displayInstruction).toContain('Attached input files:');
+    expect(config?.displayInstruction).toContain('- "problem.tex"');
+    expect(config?.displayInstruction).toContain(
+      '\n\nAttached read-only context files:\n- "reference.tex"',
+    );
+    expect(config?.displayInstruction).not.toContain(
+      'Run the "Mathematician" multi-agent team preset.',
+    );
+    expect(config?.displayInstruction).not.toContain(
+      'Read and use them before delegating work.',
+    );
+    expect(config?.instruction).toContain(
+      'Run the "Mathematician" multi-agent team preset.',
+    );
+  });
+
+  it('uses a stable display label for a file-only stdin launch', async () => {
+    mocks.withExpandedRunInputs.mockImplementationOnce(
+      async (
+        _inputSpecs: readonly string[],
+        _contextSpecs: readonly string[],
+        _cwd: string,
+        _options: unknown,
+        run: (inputs: {
+          readonly inputFiles: string[];
+          readonly contextFiles: string[];
+          readonly hasMaterializedStdinInput: boolean;
+        }) => Promise<unknown>,
+      ) =>
+        run({
+          inputFiles: ['.texra-tmp/texra-stdin-123/stdin.tex'],
+          contextFiles: [],
+          hasMaterializedStdinInput: true,
+        }),
+    );
+
+    const exitCode = await runPreset({ inputFiles: [' - '], instruction: '' });
+
+    expect(exitCode).toBe(0);
+    const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
+    expect(config?.displayInstruction).toBe(
+      'Attached input files:\n- Standard input',
+    );
+    expect(config?.displayInstruction).not.toContain('texra-stdin-123');
+    expect(config?.inputFiles).toEqual([
+      '.texra-tmp/texra-stdin-123/stdin.tex',
+    ]);
   });
 
   it('allows instruction-file-only team runs without input files', async () => {
