@@ -210,7 +210,15 @@ function mockWorkflowExecution(
       readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
     },
   ) => {
-    if (result.ok) await options.openWorkflowOutput?.(result.result);
+    if (result.ok) {
+      const outputOutcome = await options.openWorkflowOutput?.(result.result);
+      if (outputOutcome !== undefined) {
+        return {
+          ...result,
+          result: { ...result.result, outcome: outputOutcome },
+        };
+      }
+    }
     return result;
   };
   if (once) mocks.executeCliConfig.mockImplementationOnce(implementation);
@@ -581,14 +589,10 @@ describe('CLI workflow run command', () => {
         compileFailures: [],
       }),
     );
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
-      executionId: 'exec-copy-fail',
-      outcome: 'failed',
-      flowRecord: 'delete',
-    });
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
 
-  it('keeps a copy error primary when execution finalization also fails', async () => {
+  it('leaves failed output finalization to the live run lifecycle', async () => {
     mockWorkflowExecution(
       workflowExecution('exec-copy-fail', {
         outputs: [
@@ -597,20 +601,11 @@ describe('CLI workflow run command', () => {
       }),
       true,
     );
-    mocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'failed',
-      error: new Error('terminal metadata disk full'),
-      stage: 'terminal-status',
-      terminalStatusPersisted: false,
-    });
-
     await expect(runWorkflow({ output: 'polished.tex' })).resolves.toBe(
       CliExitCode.AgentError,
     );
 
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Warning: Failed to persist failed status for execution exec-copy-fail: terminal metadata disk full',
-    );
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
     expect(mocks.writeErrorStderr).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ code: 'ENOENT' }),
     );

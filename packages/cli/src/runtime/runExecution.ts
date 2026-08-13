@@ -374,7 +374,10 @@ export async function executeCliRequest(
       // be possible. Once durable resumability and lease availability have
       // been established, however, keep shutdown alive until the promised
       // recovery notice has been flushed.
-      if (resumableCheckpointPresent) {
+      if (
+        resumableCheckpointPresent &&
+        options.onInterruptedExecutionFinalized
+      ) {
         await shutdownFinalizationDone;
         return;
       }

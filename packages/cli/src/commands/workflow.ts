@@ -12,7 +12,6 @@ import {
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { finalizeCliExecution } from '../runtime/executionFinalization';
 import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
@@ -164,9 +163,10 @@ export async function runWorkflowAgent(
 /**
  * Execute a workflow config headless and surface its outputs: run through the
  * shared CLI execution skeleton, copy `--output`/`--output-dir` artifacts,
- * persist the result metadata, emit the result in the requested format, and
- * map the outcome to an exit code. Shared by `texra run` (fresh runs) and
- * `texra resume` (workflow continuation under the persisted execution id).
+ * persist the result metadata, report an output failure back to the live run
+ * lifecycle, emit the result in the requested format, and map the outcome to
+ * an exit code. Shared by `texra run` (fresh runs) and `texra resume`
+ * (workflow continuation under the persisted execution id).
  */
 export async function executeCliWorkflowConfig(
   config: AgentConfigPayload,
@@ -234,24 +234,17 @@ export async function executeCliWorkflowConfig(
         );
       } catch (error) {
         workflowOutputError = error;
+        const outputOutcome =
+          result.outcome === RUN_OUTCOME.CANCELLED
+            ? result.outcome
+            : RUN_OUTCOME.FAILED;
         await persistWorkflowResultMeta(
           result.executionId,
           buildCliWorkflowResultMeta(result, {
-            outcome:
-              result.outcome === RUN_OUTCOME.CANCELLED
-                ? result.outcome
-                : RUN_OUTCOME.FAILED,
+            outcome: outputOutcome,
           }),
         );
-        if (result.outcome !== RUN_OUTCOME.CANCELLED) {
-          await finalizeCliExecution(
-            result.executionId,
-            RUN_OUTCOME.FAILED,
-            'delete',
-            (finalizationError) =>
-              writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
-          );
-        }
+        return outputOutcome;
       }
     },
   });

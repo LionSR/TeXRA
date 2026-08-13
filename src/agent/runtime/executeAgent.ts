@@ -30,6 +30,7 @@ import {
   type ExecutionId,
   type SubagentProgressUpdate,
   type UserFollowUpSupport,
+  type RunOutcome,
   AgentCategory,
 } from '@shared/schemas';
 import {
@@ -324,8 +325,11 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * Finalize a workflow's host-owned output while its run handle and durable
    * checkpoint are still live. A stop during this operation can therefore
    * preserve the checkpoint instead of interrupting an already-terminal run.
+   * Return an outcome when output finalization changes the run's verdict.
    */
-  openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
+  openWorkflowOutput?: (
+    result: WorkflowFlowResult,
+  ) => Promise<RunOutcome | void>;
   /** Cancel launch preparation before the per-run handle is available. */
   launchSignal?: AbortSignal;
   /** Registration-stamped stream identity for a resumed workflow launch. */
@@ -466,8 +470,10 @@ export async function executeAgent(
               );
             }
             const result = await runReflectionAgent(ctx, setting);
-            await options.openWorkflowOutput?.(result);
-            return result;
+            const outputOutcome = await options.openWorkflowOutput?.(result);
+            return outputOutcome === undefined
+              ? result
+              : { ...result, outcome: outputOutcome };
           },
           buildLifecycleOptions(options, isSubagent),
         );
