@@ -183,6 +183,51 @@ describe('ToolUseFollowUpQueue ownership', () => {
     expect(queues.hasLiveOwner(id)).toBe(true);
   });
 
+  it('reconstitutes a persisted producer generation only for recovery', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:persisted-recovery');
+
+    const submission = queues.submit(
+      id,
+      { text: 'answer after reload' },
+      'recoverable',
+      'persisted-generation',
+    );
+
+    expect(submission.kind).toBe('recovery');
+    expect(
+      submission.kind === 'recovery'
+        ? submission.lease.generationId
+        : undefined,
+    ).toBe('persisted-generation');
+
+    const activeOnly = new ToolUseFollowUpQueue();
+    expect(
+      activeOnly.submit(
+        id,
+        { text: 'unowned live notification' },
+        'live_owner',
+        'persisted-generation',
+      ),
+    ).toEqual({ kind: 'not_owned' });
+  });
+
+  it('rejects a persisted producer after a new live generation exists', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:new-live-generation');
+    const live = queues.claimLive(id, 'flow')!;
+
+    expect(
+      queues.submit(
+        id,
+        { text: 'answer from prior process' },
+        'recoverable',
+        'persisted-generation',
+      ),
+    ).toEqual({ kind: 'unavailable' });
+    expect(queues.drainItems(live)).toEqual([]);
+  });
+
   it('does not reopen a terminal stream for an unrelated execution', () => {
     const queues = new ToolUseFollowUpQueue();
     const executionId = 'owned-execution' as ExecutionId;
