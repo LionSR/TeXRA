@@ -6,6 +6,7 @@ import {
   trackTerminalResultPresentation,
   type RunAgentOptions,
 } from '@agent/runtime';
+import { deriveResumability } from '@agent/storage';
 import {
   ExecutionLeaseLostError,
   type OwnedExecutionLeaseScope,
@@ -302,7 +303,10 @@ export async function executeCliRequest(
           );
           await releaseCliExecutionLeaseAfterArtifacts(session, executionId);
         });
-        if (terminalStatusPersisted) {
+        const resumability = terminalStatusPersisted
+          ? await deriveResumability(executionId)
+          : undefined;
+        if (resumability?.resumable) {
           await options.onInterruptedExecutionFinalized?.(executionId);
         }
         return true;

@@ -272,7 +272,7 @@ describe('runResumeExecution', () => {
       new CliUsageError('--output-dir must refer to a directory.'),
     );
 
-    await expect(run(cliContext())).resolves.toBe(CliExitCode.AgentError);
+    await expect(run(cliContext())).resolves.toBe(CliExitCode.Usage);
 
     expect(mocks.assertOutputFileAvailable).toHaveBeenCalledWith(
       undefined,
@@ -283,8 +283,8 @@ describe('runResumeExecution', () => {
       expect.any(String),
     );
     expect(mocks.executeCliWorkflowConfig).not.toHaveBeenCalled();
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      expect.stringContaining('--output-dir must refer to a directory.'),
+    expect(mocks.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
+      '--output-dir must refer to a directory.',
     );
   });
 

@@ -129,6 +129,7 @@ export async function runResumeExecution(
 
   let exitCode: number = CliExitCode.Usage;
   let failed = false;
+  let failureExitCode: CliExitCode = CliExitCode.AgentError;
   const resumed = await resolveAndResumeStream(streamId, {
     interactions: session.interactions,
     streamStatus: session.status,
@@ -170,9 +171,14 @@ export async function runResumeExecution(
     },
     reportFailure: (_streamId, error) => {
       failed = true;
-      writeTextStderr(loadFailureMessage(id, error));
+      if (error instanceof CliUsageError) {
+        failureExitCode = CliExitCode.Usage;
+        writeTextStderr(error.message);
+      } else {
+        writeTextStderr(loadFailureMessage(id, error));
+      }
     },
   });
-  if (failed) return CliExitCode.AgentError;
+  if (failed) return failureExitCode;
   return resumed ? exitCode : CliExitCode.Usage;
 }

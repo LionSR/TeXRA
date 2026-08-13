@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   disposeHostInteractions: vi.fn(),
   prepareInteractivePrompt: vi.fn(),
   readCliRunOutcomeState: vi.fn(),
+  deriveResumability: vi.fn(),
   releaseExecutionLeaseAfterArtifacts: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
@@ -93,6 +94,7 @@ vi.mock('@cli/runtime/executionFinalization', async (importOriginal) => ({
 
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
+  deriveResumability: mocks.deriveResumability,
   finalizeExecution: mocks.finalizeExecution,
 }));
 
@@ -219,6 +221,10 @@ function stubRunExecutionDeps(): void {
   mocks.readCliRunOutcomeState.mockResolvedValue({
     outcome: 'completed',
     outcomePersisted: true,
+  });
+  mocks.deriveResumability.mockResolvedValue({
+    resumable: true,
+    cause: 'interrupted-with-flow',
   });
   mocks.releaseExecutionLeaseAfterArtifacts.mockResolvedValue(undefined);
   mocks.finalizeExecution.mockResolvedValue({
@@ -907,6 +913,45 @@ describe('executeCliRequest', () => {
       expect(mocks.finalizeExecution).toHaveBeenCalledOnce();
     },
   );
+
+  it('does not advertise signal recovery before a flow checkpoint exists', async () => {
+    const { platform, executeCliRequest } = await installFakePlatform();
+    mocks.deriveResumability.mockResolvedValueOnce({
+      resumable: false,
+      cause: 'missing-flow',
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    const onInterruptedExecutionFinalized = vi.fn();
+    let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
+    let publishRun: LeaseOptions['onRun'];
+    const hangingRun = stubHangingRun((options) => {
+      publishLeaseScope = options.onExecutionLeaseAcquired;
+      publishRun = options.onRun;
+    });
+
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+      onInterruptedExecutionFinalized,
+    });
+    await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
+    const shutdown = platform.lifecycle.runShutdown();
+    publishLeaseScope?.(
+      (operation: () => unknown) => operation(),
+      'exec-1' as ExecutionId,
+    );
+    publishRun?.();
+    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+      outcome: 'cancelled',
+      outcomePersisted: true,
+    });
+    hangingRun.resolve(COMPLETED_RUN);
+
+    await shutdown;
+    await run;
+
+    expect(mocks.deriveResumability).toHaveBeenCalledExactlyOnceWith('exec-1');
+    expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
+  });
 
   it('forwards a failed shutdown drain to the runtime release hook', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();

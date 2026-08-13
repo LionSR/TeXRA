@@ -909,14 +909,15 @@ describe('CLI root argument routing', () => {
   });
 
   it('preserves whitespace in stored workflow output and workspace paths', () => {
+    const workingDirectory = path.join(path.sep, 'tmp', 'project ');
     expect(
       resumeWorkflowOutputFile(
         storedConfig({
-          workingDirectory: '/tmp/project ',
+          workingDirectory,
           cliOutputFile: ' output.tex ',
         }),
       ),
-    ).toBe(path.join('/tmp/project ', ' output.tex '));
+    ).toBe(path.join(workingDirectory, ' output.tex '));
   });
 
   it('keeps legacy resume output paths relative when no stored working directory exists', () => {
