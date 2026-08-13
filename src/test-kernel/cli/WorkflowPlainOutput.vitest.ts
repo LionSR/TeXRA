@@ -52,6 +52,7 @@ function readTask(
       phase: 'Map',
       status,
       ...(childStreamId ? { childStreamId } : {}),
+      ...(status === 'completed' ? { model: 'gpt56-' } : {}),
     },
   };
 }
@@ -148,7 +149,7 @@ describe('attachWorkflowPlainOutput', () => {
       'Planned: Read the argument',
       'Running: Read the argument',
       'Found two boundary cases.',
-      'Finished: Read the argument',
+      'Finished: Read the argument · GPT-5.6 Terra',
       'Finished: proof-workflow',
     ]);
     expect(beforeWrite).toHaveBeenCalledTimes(lines.length);
