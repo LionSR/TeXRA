@@ -17,6 +17,9 @@ All notable changes to this project will be documented in this file.
 - **Interrupted multi-agent chats can be resumed immediately** — leaving a
   cancelled team session no longer leaves its printed resume command
   temporarily unavailable.
+- **Workflow approvals identify the blocked task** — the workflow dashboard
+  marks the task waiting for command or edit approval, so parallel tasks no
+  longer have to be inspected one by one.
 
 ### Shared (all surfaces)
 

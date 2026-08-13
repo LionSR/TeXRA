@@ -162,8 +162,11 @@ import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
 const STREAM_ID = 'harness-stream-1';
+const HARNESS_WORKFLOW_AGENT_STREAM_ID =
+  'correct@harness-model#harness-workflow-agent-a' as StreamTabId;
 const SHOW_WORKFLOW_TIMELINE = process.env.HARNESS_WORKFLOW_TIMELINE === '1';
 const SHOW_WORKFLOW_RUNNING = process.env.HARNESS_WORKFLOW_RUNNING === '1';
+const SHOW_WORKFLOW_DASHBOARD = process.env.HARNESS_WORKFLOW_DASHBOARD === '1';
 const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_WORKFLOW_SCRIPT_DISABLED =
   process.env.HARNESS_WORKFLOW_SCRIPT_DISABLED === '1';
@@ -229,6 +232,8 @@ const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS =
   process.env.HARNESS_BASH_APPROVAL_AFTER_CHILD_FOCUS === '1';
+const BASH_APPROVAL_WORKFLOW_AGENT =
+  process.env.HARNESS_BASH_APPROVAL_WORKFLOW_AGENT === '1';
 const EXTERNAL_INQUIRY_QUESTION =
   process.env.HARNESS_EXTERNAL_INQUIRY_QUESTION ??
   [
@@ -985,7 +990,9 @@ function makeBashApprovalPayload(index = 1) {
     command: BASH_APPROVAL_COMMAND,
     cwd: HARNESS_CWD,
     allowBypass: true,
-    streamId: STREAM_ID,
+    streamId: BASH_APPROVAL_WORKFLOW_AGENT
+      ? HARNESS_WORKFLOW_AGENT_STREAM_ID
+      : STREAM_ID,
   };
 }
 
@@ -1362,8 +1369,7 @@ function seedWorkflowTimeline(): void {
 function seedRunningWorkflow(): void {
   const executionId = 'aaaa0002f10e' as ExecutionId;
   const childStreamId = 'workflow-script#aaaa0002f10e' as StreamTabId;
-  const firstAgentStreamId =
-    'correct@harness-model#harness-workflow-agent-a' as StreamTabId;
+  const firstAgentStreamId = HARNESS_WORKFLOW_AGENT_STREAM_ID;
   const secondAgentStreamId =
     'correct@harness-model#harness-workflow-agent-b' as StreamTabId;
 
@@ -1381,6 +1387,15 @@ function seedRunningWorkflow(): void {
   ]);
   emitChildEventOrderEdge(childStreamId, STREAM_ID);
   transitionChildEventOrderRunning(childStreamId);
+  if (SHOW_WORKFLOW_DASHBOARD) {
+    patchStream(childStreamId, (slice) => ({
+      ...slice,
+      identity: {
+        kind: 'multiAgentWorkflow',
+        workflowName: 'live-workflow-validation',
+      },
+    }));
+  }
 
   const runTrace = createRunTrace(childStreamId, defaultSession().transcripts);
   const runStage = runTrace.trace.openStage(
@@ -1405,6 +1420,7 @@ function seedRunningWorkflow(): void {
       label: 'Proofread paper A',
       phase: 'Proofread',
       status: 'running',
+      childStreamId: firstAgentStreamId,
     },
     stageId: phaseStage.id,
   });
@@ -1416,6 +1432,7 @@ function seedRunningWorkflow(): void {
       label: 'Proofread paper B',
       phase: 'Proofread',
       status: 'running',
+      childStreamId: secondAgentStreamId,
     },
     stageId: phaseStage.id,
   });

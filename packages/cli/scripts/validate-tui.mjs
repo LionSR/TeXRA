@@ -214,6 +214,28 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'workflow-grandchild-approval-attribution',
+    frame: 'viewport',
+    rows: 30,
+    cols: 100,
+    env: {
+      HARNESS_ENTRIES: '0',
+      HARNESS_WORKFLOW_RUNNING: '1',
+      HARNESS_WORKFLOW_DASHBOARD: '1',
+      HARNESS_BASH_APPROVAL: '1',
+      HARNESS_BASH_APPROVAL_AFTER_CHILD_FOCUS: '1',
+      HARNESS_BASH_APPROVAL_WORKFLOW_AGENT: '1',
+    },
+    bootExpect: '1 approval',
+    keys: ['\t'],
+    expect: [
+      'Proofread paper A · Running · bash',
+      'Proofread paper B · Running',
+      '1 approval',
+    ],
+    unexpect: ['Proofread paper B · Running · bash', 'ERROR'],
+  },
+  {
     name: 'process-child-composer-hidden',
     frame: 'viewport',
     rows: 24,
