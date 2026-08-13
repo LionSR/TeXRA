@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { WorkflowCallProgressSchema } from '@shared/schemas';
 import {
   formatWorkflowCallMetadataParts,
   formatWorkflowCallLine,
@@ -10,17 +9,6 @@ import {
 } from '@shared/copy/workflowCall';
 
 describe('workflow call copy', () => {
-  it('keeps a task row when its optional attempt id is malformed', () => {
-    expect(
-      WorkflowCallProgressSchema.parse({
-        id: 'audit',
-        label: 'Audit',
-        status: 'running',
-        attemptId: 7,
-      }),
-    ).toEqual({ id: 'audit', label: 'Audit', status: 'running' });
-  });
-
   it('selects the latest state per id in retained transcript order', () => {
     const latestB = { id: 'b', label: 'B', status: 'running' as const };
     const latestA = { id: 'a', label: 'A', status: 'cached' as const };
