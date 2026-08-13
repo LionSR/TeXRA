@@ -821,15 +821,23 @@ function applyChangedLogEntry(
   ctx: FoldContext,
 ): void {
   const messageType = entry.messageType ?? '';
+  const markerCandidate =
+    typeof entry.data === 'object' &&
+    entry.data !== null &&
+    'kind' in entry.data &&
+    entry.data.kind === 'workflowAttempt';
   if (
     messageType === MESSAGE_TYPES.INTERNAL &&
+    markerCandidate &&
     entry.seqNo >= state.workflowAttemptSeqNo
   ) {
     const marker = WorkflowAttemptMarkerSchema.safeParse(entry.data);
-    if (marker.success) {
-      state.workflowAttemptId = marker.data.attemptId;
-      state.workflowAttemptSeqNo = entry.seqNo;
-    }
+    // A malformed declared boundary must supersede the preceding attempt.
+    // Retaining its identifier would project prior-run rows as current.
+    state.workflowAttemptId = marker.success
+      ? marker.data.attemptId
+      : undefined;
+    state.workflowAttemptSeqNo = entry.seqNo;
   }
   const wOO = state.workflowOperationalOnly;
   // Detached child runs surface their full log output (phase group rows and
