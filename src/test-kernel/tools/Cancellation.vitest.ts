@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError } from '@shared/schemas';
 import { abandonOnAbort } from '@tools/citation/rateLimiter';
 
 const neverSettles = new Promise<never>(() => {});
