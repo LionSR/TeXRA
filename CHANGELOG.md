@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Delegation approvals distinguish one task from chat-wide access** — proposal
+  cards now state that `y` approves only the visible task, while `a` also
+  approves later agent tasks, file edits, and commands in the chat.
 - **Direct approval prompts reveal complete proposals and edits** — when a
   compact preview hides instruction or diff lines, press `v` to inspect the
   full content before approving or rejecting it.
