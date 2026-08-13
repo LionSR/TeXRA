@@ -47,6 +47,9 @@ All notable changes to this project will be documented in this file.
 - **Read-only completion checks stay focused** — end-of-session review no
   longer asks to inspect project plans, Git history, or pull requests when the
   current task and its delegated results already contain the evidence needed.
+- **Tool-use chats no longer show misleading round jumps** — internal model
+  and tool calls no longer appear as skipped user-visible rounds after a chat
+  continues or resumes.
 - **Concurrent app starts refresh bundled agents safely** — simultaneous TeXRA
   processes sharing one data directory no longer fail while updating built-in
   agent definitions.
