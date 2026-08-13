@@ -359,6 +359,25 @@ describe('CLI child list display model', () => {
     expect(workflowRunStatusSummary(slice)).toBeUndefined();
   });
 
+  it('does not infer status after a malformed declared attempt boundary', () => {
+    const slice = workflowAgentSlice('invalid-rerun', {
+      workflowAttemptBoundaryDeclared: true,
+      workflowAttemptId: undefined,
+      entries: [
+        phaseEntry('phase-old', 'Verify', { attemptId: 'prior' }),
+        workflowTaskEntry('task-old', 'Finished: Verify', {
+          id: 'verification',
+          label: 'Verify',
+          phase: 'Verify',
+          status: 'completed',
+          attemptId: 'prior',
+        }),
+      ],
+    });
+
+    expect(workflowRunStatusSummary(slice)).toBeUndefined();
+  });
+
   it('tallys failures across the whole run, not just the current phase', () => {
     // A failure in an earlier phase must persist in the band after the run
     // advances, unlike the current-phase done/total. The whole-run tally keeps
