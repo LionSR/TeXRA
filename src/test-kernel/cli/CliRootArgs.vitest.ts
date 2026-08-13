@@ -950,12 +950,12 @@ describe('CLI root argument routing', () => {
     ).toBeUndefined();
   });
 
-  it('restores a relative CLI output directory against the stored workspace', () => {
-    expect(
+  it('rejects a non-absolute stored CLI output directory', () => {
+    expect(() =>
       resumeWorkflowOutputDirectory(
         storedConfig({ cliOutputDirectory: 'out/polished' }),
       ),
-    ).toBe(path.join('/tmp/project', 'out/polished'));
+    ).toThrow('Stored workflow output directory is not absolute: out/polished');
   });
 
   it('reports successful stopped workflows with missing requested outputs as failed copies', async () => {

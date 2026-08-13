@@ -126,9 +126,8 @@ export async function runWorkflowAgent(
         inputFiles,
         contextFiles,
         outputFiles: [],
-        // Registration normalizes the generic execution workspace. Persist
-        // CLI destinations absolutely so resumption does not need that path
-        // to reconstruct where completed artifacts belong.
+        // Persist CLI destinations absolutely so resumption has one path
+        // representation and never reconstructs output locations.
         cliOutputFile: absoluteOutputDestination(init.output, runContext.cwd),
         cliOutputDirectory: absoluteOutputDestination(
           init.outputDir,

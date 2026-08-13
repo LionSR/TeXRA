@@ -37,8 +37,14 @@ import {
 const log = createLog('ExecutionLifecycle');
 
 function pinExecutionWorkingDirectory(record: RunRecord): RunRecord {
-  const workingDirectory =
-    record.workingDirectory?.trim() || WorkspaceFS.getPath()?.trim();
+  const explicitWorkingDirectory = record.workingDirectory;
+  const workspacePath = WorkspaceFS.getPath();
+  let workingDirectory: string | undefined;
+  if (explicitWorkingDirectory?.trim()) {
+    workingDirectory = explicitWorkingDirectory;
+  } else if (workspacePath?.trim()) {
+    workingDirectory = workspacePath;
+  }
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 

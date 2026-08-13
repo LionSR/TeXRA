@@ -285,6 +285,10 @@ export async function executeCliRequest(
   const shutdownFinalizationDone = new Promise<void>((resolve) => {
     settleShutdownFinalization = resolve;
   });
+  let settleRecoveryNoticeStarted: () => void = () => undefined;
+  const recoveryNoticeStarted = new Promise<void>((resolve) => {
+    settleRecoveryNoticeStarted = resolve;
+  });
   let shutdownStatusFinalized: Promise<boolean> | undefined;
   const finalizeShutdownStatus = (): Promise<boolean> => {
     if (!shutdownInterrupted) return Promise.resolve(false);
@@ -321,6 +325,7 @@ export async function executeCliRequest(
           resumability?.resumable &&
           (lease?.status === 'missing' || lease?.status === 'stale')
         ) {
+          settleRecoveryNoticeStarted();
           await options.onInterruptedExecutionFinalized?.(executionId);
         }
         return true;
@@ -353,18 +358,11 @@ export async function executeCliRequest(
       // Earlier shutdown handlers interrupt the live agent sessions. Wait for
       // runAgent to finish unwinding before the final drain releases ownership,
       // so no transcript or checkpoint writer can race the lease release.
-      // A workflow recovery command is only truthful after the run has
-      // finished its output work, persisted CANCELLED, drained artifacts,
-      // and released ownership. Keep signal shutdown alive for that contract;
-      // commands without a recovery callback retain the bounded grace period.
-      if (options.onInterruptedExecutionFinalized) {
-        await shutdownFinalizationDone;
-        return;
-      }
-      // Without a recovery promise, a provider or filesystem operation outside
-      // our abortable boundaries must not prevent termination indefinitely. On
-      // timeout, keep the lease for stale-owner recovery rather than releasing
-      // it while a writer may still be active.
+      // A provider or filesystem operation outside our abortable boundaries
+      // must not prevent termination indefinitely before recovery is known to
+      // be possible. Once durable resumability and lease availability have
+      // been established, however, keep shutdown alive until the promised
+      // recovery notice has been flushed.
       const grace = new AbortController();
       const graceExpired = sleep(CLI_RUN_SHUTDOWN_GRACE_MS, undefined, {
         signal: grace.signal,
@@ -372,7 +370,16 @@ export async function executeCliRequest(
         if (!grace.signal.aborted) throw error;
       });
       try {
-        await Promise.race([shutdownFinalizationDone, graceExpired]);
+        const first = await Promise.race([
+          shutdownFinalizationDone.then(() => 'finalized' as const),
+          graceExpired.then(() => 'expired' as const),
+          ...(options.onInterruptedExecutionFinalized
+            ? [recoveryNoticeStarted.then(() => 'recovery-started' as const)]
+            : []),
+        ]);
+        if (first === 'recovery-started') {
+          await shutdownFinalizationDone;
+        }
       } finally {
         grace.abort();
         await graceExpired;

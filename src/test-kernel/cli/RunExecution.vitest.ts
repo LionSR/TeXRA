@@ -956,6 +956,33 @@ describe('executeCliRequest', () => {
     expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
   });
 
+  it('keeps pre-checkpoint shutdown bounded when recovery is not yet possible', async () => {
+    const { platform, executeCliRequest } = await installFakePlatform();
+    const onInterruptedExecutionFinalized = vi.fn();
+    let leaseOptions: LeaseOptions | undefined;
+    const hangingRun = stubHangingRun((options) => {
+      leaseOptions = options;
+    });
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+      onInterruptedExecutionFinalized,
+    });
+    await vi.waitFor(() => expect(leaseOptions).toBeDefined());
+
+    vi.useFakeTimers();
+    try {
+      const shutdown = platform.lifecycle.runShutdown();
+      await vi.advanceTimersByTimeAsync(5_000);
+      await shutdown;
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
+    hangingRun.resolve(COMPLETED_RUN);
+    await run;
+  });
+
   it.each([
     {
       label: 'a fresh lease remains',

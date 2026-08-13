@@ -204,12 +204,13 @@ describe('runResumeExecution', () => {
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
-  it('restores workflow outputs against the unmodified persisted workspace', async () => {
+  it('restores an absolute persisted workflow output directory', async () => {
     const workingDirectory = path.join(path.sep, 'tmp', 'paper ');
+    const outputDirectory = path.join(workingDirectory, 'out');
     const workflowConfig = AgentConfigSchema.parse({
       ...WORKFLOW_CONFIG,
       workingDirectory,
-      cliOutputDirectory: 'out',
+      cliOutputDirectory: outputDirectory,
       cliExpectedOutputFiles: ['paper.tex', 'appendix.tex'],
     });
     mocks.readConfig.mockResolvedValue(workflowConfig);
@@ -225,7 +226,7 @@ describe('runResumeExecution', () => {
       workflowConfig,
       expect.any(Object),
       expect.objectContaining({
-        outputDir: path.join(workingDirectory, 'out'),
+        outputDir: outputDirectory,
         expectedOutputFiles: ['paper.tex', 'appendix.tex'],
       }),
     );
@@ -233,10 +234,11 @@ describe('runResumeExecution', () => {
 
   it('preserves whitespace in a persisted workflow output directory', async () => {
     const workingDirectory = path.join(path.sep, 'tmp', 'paper');
+    const outputDirectory = path.join(workingDirectory, ' out ');
     const workflowConfig = AgentConfigSchema.parse({
       ...WORKFLOW_CONFIG,
       workingDirectory,
-      cliOutputDirectory: ' out ',
+      cliOutputDirectory: outputDirectory,
     });
     mocks.readConfig.mockResolvedValue(workflowConfig);
     mocks.retrieveSessionResumeData.mockResolvedValue({
@@ -251,16 +253,17 @@ describe('runResumeExecution', () => {
       workflowConfig,
       expect.any(Object),
       expect.objectContaining({
-        outputDir: path.join(workingDirectory, ' out '),
+        outputDir: outputDirectory,
       }),
     );
   });
 
   it('validates a restored output directory before resuming the workflow', async () => {
+    const workingDirectory = path.join(path.sep, 'tmp', 'paper');
     const workflowConfig = AgentConfigSchema.parse({
       ...WORKFLOW_CONFIG,
-      workingDirectory: path.join(path.sep, 'tmp', 'paper'),
-      cliOutputDirectory: 'out',
+      workingDirectory,
+      cliOutputDirectory: path.join(workingDirectory, 'out'),
     });
     mocks.readConfig.mockResolvedValue(workflowConfig);
     mocks.retrieveSessionResumeData.mockResolvedValue({

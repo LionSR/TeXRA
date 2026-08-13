@@ -376,10 +376,10 @@ export function resumeWorkflowOutputDirectory(
 
   const outputDirectory = config.cliOutputDirectory;
   if (outputDirectory == null || outputDirectory.length === 0) return undefined;
-  if (path.isAbsolute(outputDirectory)) return outputDirectory;
-
-  const workingDirectory = config.workingDirectory;
-  return workingDirectory
-    ? path.join(workingDirectory, outputDirectory)
-    : outputDirectory;
+  if (!path.isAbsolute(outputDirectory)) {
+    throw new CliUsageError(
+      `Stored workflow output directory is not absolute: ${outputDirectory}`,
+    );
+  }
+  return outputDirectory;
 }
