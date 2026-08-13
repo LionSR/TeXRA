@@ -1127,11 +1127,11 @@ export abstract class ModelHandler<
    * Rebuild a client for an explicit route without publishing settings.
    *
    * This is a deliberate override seam, not a redundant alias for
-   * {@link getClient}: handlers that cache a client across calls (for example
-   * `modelHandlerGoogleInteractions`) invalidate that cache here before
-   * rebuilding, so a credential rotation actually produces a fresh client
-   * instead of returning the cached one. Handlers without a cache keep the
-   * base pass-through default.
+   * {@link getClient}. `ModelHandlerGoogleInteractions` caches its SDK client
+   * across calls; its override clears that cache here so `refreshClient`
+   * never reuses a cached instance, even when the resolved credential matches
+   * the cached one. Handlers without a cache keep the base pass-through
+   * default.
    */
   async refreshClient(
     selection: ModelCredentialSelection = 'configured',
