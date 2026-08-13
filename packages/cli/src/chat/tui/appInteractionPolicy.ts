@@ -283,9 +283,14 @@ export function groupPendingApprovalsByRow(
 /** Row key that owns stream-less approvals on the currently visible surface. */
 export function visibleApprovalRootStreamId(
   sessionRootStreamId: StreamTabId | undefined,
+  childListRootStreamId: StreamTabId | undefined,
   workflowDashboardRootStreamId: StreamTabId | undefined,
 ): StreamTabId | undefined {
-  return workflowDashboardRootStreamId ?? sessionRootStreamId;
+  return (
+    workflowDashboardRootStreamId ??
+    childListRootStreamId ??
+    sessionRootStreamId
+  );
 }
 
 // A workflow-script grandchild `agent()` call is the only interactively
