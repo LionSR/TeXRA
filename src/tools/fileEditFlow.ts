@@ -219,7 +219,6 @@ interface AppliedFileEdit {
 interface FileEditPresentation {
   summary: string;
   output: string;
-  userInstruction?: string;
 }
 
 interface ApprovedFileEditRequest {
@@ -291,8 +290,5 @@ export async function applyApprovedFileEdit({
         }),
       },
     ],
-    ...(presentation.userInstruction && {
-      userInstruction: presentation.userInstruction,
-    }),
   };
 }
