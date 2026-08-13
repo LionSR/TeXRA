@@ -13,7 +13,7 @@ import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import type { StreamTabId } from '@shared/schemas';
-import type { ToolResult } from '@shared/schemas/toolResult';
+import type { ToolResult } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import { delay } from '@utils/core';
