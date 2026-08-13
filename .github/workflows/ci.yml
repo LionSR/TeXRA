@@ -173,6 +173,9 @@ jobs:
       - name: Check guidance file references resolve
         run: node scripts/check-guidance-refs.mjs
 
+      - name: Check browser-safe utils counts resolve
+        run: node scripts/check-browser-safe-utils.mjs
+
   test:
     # Keep the pre-existing `linux` / `windows` labels rather than the raw
     # runner image: these strings are the check names branch protection pins.

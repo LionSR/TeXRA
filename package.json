@@ -50,6 +50,7 @@
     "check:dead-code": "knip --no-progress --include files,exports,types,duplicates",
     "check:dead-code-ratchet": "node scripts/check-dead-code-ratchet.mjs",
     "check:guidance-refs": "node scripts/check-guidance-refs.mjs",
+    "check:browser-safe-utils": "node scripts/check-browser-safe-utils.mjs",
     "texra-local:build": "corepack pnpm --filter @texra-ai/cli run prepare:trace-viewer-assets && corepack pnpm --filter @texra-ai/cli run bundle && corepack pnpm --filter @texra-ai/cli run copy:resources && corepack pnpm --filter @texra-ai/cli run copy:docs",
     "texra-local:link": "node scripts/link-texra-local.mjs",
     "check:desktop-installers": "node scripts/verify-desktop-installer-artifacts.mjs",
