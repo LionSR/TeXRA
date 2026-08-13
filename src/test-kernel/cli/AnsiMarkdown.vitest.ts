@@ -327,6 +327,29 @@ describe('renderAnsiMarkdown', () => {
     plainLinesWithinWidth(renderAnsiMarkdown(md, { width: 40 }), 40);
   });
 
+  it('preserves long unbroken LaTeX cells in width-constrained tables', () => {
+    const heading = '$\\operatorname{eig}(\\rho_{\\mathcal A_\\gamma}^{T_B})$';
+    const spectrum = '$\\{-\\tfrac12,\\tfrac12,\\tfrac12,\\tfrac12\\}$';
+    const md = [
+      `| $\\gamma$ | $\\operatorname{eig}(\\rho_{\\mathcal A_\\gamma})$ | ${heading} |`,
+      '|---|---|---|',
+      `| $0$ | $\\{0,0,0,1\\}$ | ${spectrum} |`,
+    ].join('\n');
+    const lines = plainLinesWithinWidth(
+      renderAnsiMarkdown(md, { width: 100 }),
+      100,
+    );
+    const thirdColumn = lines
+      .filter((line) => line.startsWith('│'))
+      .map((line) => line.split('│')[3] ?? '')
+      .join('')
+      .replaceAll(/\s/gu, '');
+
+    expect(thirdColumn).toContain(heading.replaceAll(/\s/gu, ''));
+    expect(thirdColumn).toContain(spectrum);
+    expect(lines.join('\n')).not.toContain('…');
+  });
+
   it('sizes a small table to its content instead of stretching to full width', () => {
     const md = '| n | digits |\n|---|---|\n| 447 | 993.3 |';
     const plain = renderPlain(md, { width: 80 });
