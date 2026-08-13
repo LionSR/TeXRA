@@ -71,7 +71,8 @@ export type FollowUpSubmission =
  *
  * Lifecycle is explicit: an owned entry is `live` or `recovering`, an unowned
  * persisted cursor is `recoverable`, and terminal stream ids are retained in a
- * bounded tombstone cache. Terminal entries cannot be reopened.
+ * bounded tombstone cache. Delivery and ordinary live claims cannot reopen a
+ * terminal entry; a newly authorized child run may begin a new generation.
  */
 export class ToolUseFollowUpQueue {
   static readonly TERMINAL_CAP = 500;
@@ -99,6 +100,20 @@ export class ToolUseFollowUpQueue {
     if (this.terminal.has(streamId)) return undefined;
     const entry = this.entries.get(streamId) ?? this.createEntry(streamId);
     return this.claim(entry, streamId, kind);
+  }
+
+  /**
+   * Begin a separately authorized child run, replacing a terminal generation
+   * when the deterministic child stream ID is reused. The caller must already
+   * own the execution lease; producers and ordinary live flows cannot cross
+   * this boundary, so late delivery remains rejected.
+   */
+  claimChildRun(streamId: StreamTabId): FollowUpConsumerLease | undefined {
+    const retained = this.entries.get(streamId);
+    if (retained) return this.claim(retained, streamId, 'child');
+
+    this.terminal.delete(streamId);
+    return this.claim(this.createEntry(streamId), streamId, 'child');
   }
 
   /** Claim persisted recovery before any asynchronous resume preparation. */

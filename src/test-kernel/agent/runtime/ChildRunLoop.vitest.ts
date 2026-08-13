@@ -315,7 +315,7 @@ describe('childRunLoop E2E fixtures', () => {
     );
     const interruptHandle = vi.spyOn(handle, 'interrupt');
     const registerLoop = vi
-      .spyOn(session.followUps, 'claimLive')
+      .spyOn(session.followUps, 'claimChildRun')
       .mockImplementationOnce(() => {
         throw new Error('loop registration failed');
       });
@@ -481,6 +481,19 @@ describe('childRunLoop E2E fixtures', () => {
       'delivered:saved',
     );
     expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
+  });
+
+  it('reuses a terminal child stream for a separately authorized retry', async () => {
+    const ids = loopIds('terminal-retry');
+
+    await startLoop(ids, createTerminalStrategy('First attempt')).completion;
+    expect(session.followUps.hasLiveOwner(ids.childStreamId)).toBe(false);
+
+    await expect(
+      startLoop(ids, createTerminalStrategy('Retry attempt')).completion,
+    ).resolves.toBeUndefined();
+    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(2);
+    expect(session.followUps.hasLiveOwner(ids.childStreamId)).toBe(false);
   });
 
   it('releases session ownership before delivering a failed turn', async () => {

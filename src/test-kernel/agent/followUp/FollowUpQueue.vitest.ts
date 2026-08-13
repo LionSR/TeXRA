@@ -148,6 +148,23 @@ describe('ToolUseFollowUpQueue ownership', () => {
     });
   });
 
+  it('starts a new child generation for an authorized retry', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:retried-child');
+    const first = queues.claimChildRun(id)!;
+    queues.release(first, 'terminal');
+
+    expect(queues.claimLive(id, 'flow')).toBeUndefined();
+    expect(queues.submit(id, { text: 'late' }, 'live_owner')).toEqual({
+      kind: 'unavailable',
+    });
+
+    const retry = queues.claimChildRun(id);
+    expect(retry).toBeDefined();
+    expect(retry?.kind).toBe('child');
+    expect(queues.hasLiveOwner(id)).toBe(true);
+  });
+
   it('deletion invalidates a live generation and rejects late input', () => {
     const queues = new ToolUseFollowUpQueue();
     const id = stream('stream:deleted');
