@@ -100,19 +100,7 @@ async function handleShowAgentConfigBanner(
   payload: ShowAgentConfigBannerPayload,
 ): Promise<void> {
   const view = await getMainWebview(CHANNEL);
-  if (!view) {
-    // The interactive banner (with its "Open/Set directory" action) only
-    // renders inside the Main-mode webview. When the sidebar is showing a
-    // different view (e.g. Progress, during a resume), postMessage would
-    // silently go nowhere -- fall back to a plain toast so callers that mark
-    // this event as "presented" (see `hasErrorPresentedMarker`) don't leave
-    // the user with no visible failure at all.
-    void vscode.window.showErrorMessage(
-      `Could not find agent "${payload.agentName}". Check your custom agent directory setting.`,
-    );
-    return;
-  }
-  view.webview.postMessage({
+  view?.webview.postMessage({
     command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
     agentName: payload.agentName,
     customDirSet: true,
