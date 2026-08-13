@@ -2,13 +2,12 @@ import { Box, Text } from 'ink';
 
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
-import { summarizeFollowupMessage } from '@shared/subagentFollowup';
-import { pluralize } from '@utils/text/stringUtils';
-
 import {
   textDisplayWidth,
   truncateSummaryToWidth,
-} from '../render/terminalText';
+} from '@cli/runtime/terminalText';
+import { summarizeFollowupMessage } from '@shared/subagentFollowup';
+import { pluralize } from '@utils/text/stringUtils';
 
 const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;
 

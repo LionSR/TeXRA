@@ -21,6 +21,7 @@ import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
 } from '@cli/tui/ui/theme';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 import type { ExternalInquiryPermission } from '@shared/schemas';
 import { clamp } from '@utils/core';
 
@@ -32,7 +33,6 @@ import {
   scrollBoundedRows,
   type ScrollableDisplayLine,
 } from '../render/scrollBounds';
-import { textDisplayWidth } from '../render/terminalText';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface ExternalInquiryProps {

@@ -27,6 +27,14 @@ describe('desktop log redaction', () => {
     expect(redacted).toContain('[path]/main.tex');
   });
 
+  it('redacts complete quoted secret assignments', () => {
+    const redacted = redactSecrets(
+      `PASSWORD="correct horse" API_TOKEN='battery staple'`,
+    );
+
+    expect(redacted).toBe('PASSWORD=[redacted] API_TOKEN=[redacted]');
+  });
+
   it('redacts representative API key shapes for every configurable provider', () => {
     for (const provider of API_KEY_PROVIDER_IDS) {
       for (const sample of PROVIDER_KEY_REDACTION_RULES[provider].examples) {

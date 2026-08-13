@@ -17,6 +17,7 @@ import {
 } from '@cli/runtime/runProgressRenderer';
 import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 import type { CliContext } from '@cli/runtime/cliContext';
 import {
   STREAM_PHASE,
@@ -226,6 +227,7 @@ function handleStreamStatus(
   renderer: TestRunProgressRenderer,
   streamId: string,
   status: StreamPhase,
+  previousStatus: StreamPhase = STREAM_PHASE.RUNNING,
 ): void {
   // Status reaches the renderer on the session-fact rail only.
   renderer.handleSessionEvent({
@@ -234,8 +236,21 @@ function handleStreamStatus(
       type: 'status',
       streamId: streamId as StreamTabId,
       phase: status,
-      previousPhase: STREAM_PHASE.RUNNING,
+      previousPhase: previousStatus,
       cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    },
+  });
+}
+
+function handleFollowUpSent(
+  renderer: TestRunProgressRenderer,
+  streamId: string,
+): void {
+  renderer.handleSessionEvent({
+    scope: 'session',
+    event: {
+      type: 'followUpSent',
+      payload: { streamId: streamId as StreamTabId },
     },
   });
 }
@@ -250,6 +265,19 @@ function handleStreamDescription(
     event: {
       type: 'updateStreamDescription',
       payload: { streamId: streamId as StreamTabId, description },
+    },
+  });
+}
+
+function handleRemoveStream(
+  renderer: TestRunProgressRenderer,
+  streamId: string,
+): void {
+  renderer.handleSessionEvent({
+    scope: 'session',
+    event: {
+      type: 'removeStream',
+      payload: { streamId: streamId as StreamTabId },
     },
   });
 }
@@ -544,7 +572,7 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'coordinator main.tex · 0s\n' +
-        'coordinator main.tex · subagents: reviewer +2 · 0s\n',
+        'coordinator main.tex · subagents: reviewer — reviewing chapter.tex +2 · 0s\n',
     );
   });
 
@@ -624,6 +652,267 @@ describe('CLI run progress renderer', () => {
     );
   });
 
+  it('joins a child description emitted before the active roster', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(
+      renderer,
+      'child-stream',
+      'Check multiplier\nsigns\tand \x1b[2Jresonance counterexamples',
+    );
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — Check multiplier signs and resonance counterexa… · 0s\n',
+    );
+  });
+
+  it('adds a description that arrives after the child becomes active', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleStreamDescription(
+      renderer,
+      'child-stream',
+      'Verify by constraint elimination and energy balance',
+    );
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review · 0s\n' +
+        'orchestrator · subagent: review — Verify by constraint elimination and energy bal… · 0s\n',
+    );
+  });
+
+  it('redacts secrets from child descriptions', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(
+      renderer,
+      'child-stream',
+      'Run PASSWORD="correct horse" now',
+    );
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — Run PASSWORD=[redacted] now · 0s\n',
+    );
+  });
+
+  it('drops the previous task when a waiting child begins a follow-up turn', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'Initial review task');
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleFollowUpSent(renderer, 'child-stream');
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — Initial review task · 0s\n' +
+        'orchestrator · subagent: review · 0s\n',
+    );
+
+    // The status subscriber may repaint the roster before this renderer sees
+    // WAITING -> RUNNING. That repaint must not recover the previous label.
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.WAITING);
+    handleStreamStatus(
+      renderer,
+      'child-stream',
+      STREAM_PHASE.RUNNING,
+      STREAM_PHASE.WAITING,
+    );
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — Initial review task · 0s\n' +
+        'orchestrator · subagent: review · 0s\n',
+    );
+  });
+
+  it('keeps the current task across a same-turn manual retry', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'Current review task');
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.WAITING);
+    handleStreamStatus(
+      renderer,
+      'child-stream',
+      STREAM_PHASE.RUNNING,
+      STREAM_PHASE.WAITING,
+    );
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — Current review task · 0s\n',
+    );
+  });
+
+  it('prefers a running child over an earlier waiting child', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'waiting-child', 'Idle review task');
+    handleStreamDescription(renderer, 'running-child', 'Active review task');
+    handleActiveSubagents(renderer, 'root-stream', [
+      subagentChild({
+        childStreamId: 'waiting-child',
+        status: STREAM_PHASE.WAITING,
+      }),
+      subagentChild({
+        executionId: 'child-2',
+        childStreamId: 'running-child',
+        status: STREAM_PHASE.RUNNING,
+      }),
+    ]);
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagents: review — Active review task +1 · 0s\n',
+    );
+  });
+
+  it('fits the delegated task within an ANSI terminal row', () => {
+    const output = outputBuffer();
+    const renderer = ansiRenderer(output, { columns: 80 });
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'A'.repeat(100));
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+
+    const renderedLines = output.text.split('\r\x1b[2K').filter(Boolean);
+    expect(renderedLines).toHaveLength(2);
+    expect(renderedLines.at(-1)).toContain('subagent: review — ');
+    expect(renderedLines.every((line) => textDisplayWidth(line) <= 80)).toBe(
+      true,
+    );
+  });
+
+  it('recalculates the delegated task width after a terminal resize', () => {
+    let columns = 100;
+    const output = outputBuffer();
+    const renderer = ansiRenderer(output, { getColumns: () => columns });
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'A'.repeat(100));
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+
+    columns = 60;
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+
+    const renderedLines = output.text.split('\r\x1b[2K').filter(Boolean);
+    expect(renderedLines).toHaveLength(3);
+    expect(textDisplayWidth(renderedLines.at(-1) ?? '')).toBeLessThanOrEqual(
+      60,
+    );
+  });
+
+  it('forgets a child description when that child becomes terminal', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'First review task');
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.COMPLETED);
+    handleActiveSubagents(renderer, 'root-stream', []);
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — First review task · 0s\n' +
+        'orchestrator · subagent: review · 0s\n' +
+        'orchestrator · 0s\n' +
+        'orchestrator · subagent: review · 0s\n',
+    );
+  });
+
+  it('ignores a description that arrives after the child becomes terminal', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'First review task');
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.COMPLETED);
+    handleStreamDescription(renderer, 'child-stream', 'Late generated label');
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — First review task · 0s\n' +
+        'orchestrator · subagent: review · 0s\n',
+    );
+  });
+
+  it('accepts a description for a new incarnation of a closed child ID', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'First review task');
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.COMPLETED);
+    handleRunConfig(renderer, { streamId: 'child-stream', agent: 'review' });
+    handleStreamDescription(renderer, 'child-stream', 'Relaunched review task');
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — First review task · 0s\n' +
+        'orchestrator · subagent: review · 0s\n' +
+        'orchestrator · subagent: review — Relaunched review task · 0s\n',
+    );
+  });
+
+  it('keeps the task description when an active child switches models', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'Current review task');
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleRunConfig(renderer, { streamId: 'child-stream', agent: 'review' });
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — Current review task · 0s\n',
+    );
+  });
+
+  it('forgets a child description when that child stream is removed', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'Removed review task');
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleRemoveStream(renderer, 'child-stream');
+    handleActiveSubagents(renderer, 'root-stream', []);
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — Removed review task · 0s\n' +
+        'orchestrator · subagent: review · 0s\n' +
+        'orchestrator · 0s\n' +
+        'orchestrator · subagent: review · 0s\n',
+    );
+  });
+
   it('shows completed terminal stream stops with the shared cli wording', () => {
     let now = 0;
     const output = outputBuffer();
@@ -667,6 +956,23 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'orchestrator · 0s\norchestrator · stopped · 0s\n',
+    );
+  });
+
+  it('does not repaint a child after the root stream is terminal', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output, { minIntervalMs: 0 });
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'Late review task');
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.CANCELLED);
+    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.CANCELLED);
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — Late review task · 0s\n' +
+        'orchestrator · stopped · 0s\n',
     );
   });
 

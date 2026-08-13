@@ -6,9 +6,8 @@ import {
 } from '@cli/tui/ui/KeyHints';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { APPROVAL_PULSE_FRAMES } from '@cli/tui/ui/glyphs';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
-
-import { textDisplayWidth } from '../render/terminalText';
 
 export type ConfirmCardKeyAction =
   'approve' | 'reject' | 'approveAlways' | 'feedback' | 'ignore';

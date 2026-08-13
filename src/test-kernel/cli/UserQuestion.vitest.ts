@@ -9,7 +9,7 @@ import {
   userQuestionFreeTextSuggestionLine,
   userQuestionPromptRowsBudget,
 } from '@cli/chat/tui/modals/UserQuestion';
-import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 
 describe('CLI user question modal', () => {
   it('budgets prompt and choices inside compact foreground rows', () => {

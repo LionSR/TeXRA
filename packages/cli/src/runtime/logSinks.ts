@@ -126,6 +126,11 @@ export function writeRawStderr(text: string): void {
   writeRaw('stderr', text);
 }
 
+/** Return the current stderr width without exposing the process stream. */
+export function getStderrColumns(): number | undefined {
+  return process.stderr.columns;
+}
+
 export function writeTextStderr(text: string): void {
   writeRaw('stderr', `${text}\n`);
 }

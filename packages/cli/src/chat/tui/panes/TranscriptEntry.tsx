@@ -6,11 +6,11 @@
 import { memo } from 'react';
 import { Box, Text } from 'ink';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
+import { fillRows } from '@cli/runtime/terminalText';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 // Local imports - CLI TUI rendering
 import { Markdown } from '../render/Markdown';
-import { fillRows } from '../render/terminalText';
 import { ToolUseRow } from './ToolUseRow';
 import {
   COMPACTION_ACTIVITY_STATUS_STYLE,

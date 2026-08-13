@@ -6,8 +6,8 @@
 import { memo } from 'react';
 import { Text } from 'ink';
 
+import { fillRows } from '@cli/runtime/terminalText';
 import { renderAnsiMarkdown } from './ansiMarkdown';
-import { fillRows } from './terminalText';
 
 export interface MarkdownProps {
   readonly content: string;
