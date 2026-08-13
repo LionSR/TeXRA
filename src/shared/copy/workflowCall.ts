@@ -23,8 +23,9 @@ export function latestWorkflowAttemptId(
  */
 export function latestWorkflowCallsById(
   calls: readonly WorkflowCallProgress[],
-  declaredAttemptId?: string,
+  declaredAttemptId?: string | null,
 ): WorkflowCallProgress[] {
+  if (declaredAttemptId === null) return [];
   const currentAttemptId =
     declaredAttemptId ??
     latestWorkflowAttemptId(calls.map((call) => call.attemptId));

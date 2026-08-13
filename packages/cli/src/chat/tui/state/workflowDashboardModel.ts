@@ -89,6 +89,7 @@ export function workflowDashboardModel(
   const currentAttemptId = currentWorkflowAttemptId(
     root.workflowAttemptId,
     root.entries,
+    root.workflowAttemptBoundaryDeclared,
   );
   const currentCalls = new Set(
     latestWorkflowCallsById(
@@ -105,7 +106,7 @@ export function workflowDashboardModel(
     if (
       entry.role === 'phase' &&
       currentAttemptId !== undefined &&
-      entry.attemptId !== currentAttemptId
+      (currentAttemptId === null || entry.attemptId !== currentAttemptId)
     ) {
       continue;
     }
