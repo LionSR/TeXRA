@@ -141,7 +141,9 @@ export type ConversationEntry = ConversationEntryOrigin &
 export function currentWorkflowAttemptId(
   declaredAttemptId: string | undefined,
   entries: readonly ConversationEntry[],
-): string | undefined {
+  boundaryDeclared: boolean,
+): string | null | undefined {
+  if (boundaryDeclared) return declaredAttemptId ?? null;
   return (
     declaredAttemptId ??
     latestWorkflowAttemptId(
@@ -235,6 +237,7 @@ export interface TranscriptFoldState {
   liveActivityEntry?: StreamLogEntry;
   /** Latest durable workflow-attempt marker and its source order. */
   workflowAttemptId?: string;
+  workflowAttemptBoundaryDeclared: boolean;
   workflowAttemptSeqNo: number;
   /** Synthetic rows reconciled into `items`, in slice order, by identity. */
   synthetics: readonly ConversationEntry[];
@@ -311,6 +314,8 @@ export interface StreamSlice {
   readonly taskGroups: readonly TaskGroup[];
   /** Latest physical workflow attempt declared by the durable stream. */
   readonly workflowAttemptId?: string | undefined;
+  /** Whether the stream declared an attempt boundary, valid or malformed. */
+  readonly workflowAttemptBoundaryDeclared: boolean;
   readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
   /** Epoch ms when this stream last entered `RUNNING`; cleared on any other
@@ -387,6 +392,7 @@ export function emptySlice(streamId: StreamTabId): StreamSlice {
     compileFailuresByRound: {},
     taskGroups: [],
     workflowAttemptId: undefined,
+    workflowAttemptBoundaryDeclared: false,
     thinkingActive: false,
     compactingActive: false,
     usage: undefined,
