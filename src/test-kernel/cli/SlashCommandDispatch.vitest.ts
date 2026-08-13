@@ -903,6 +903,45 @@ describe('handleTuiSlashCommand', () => {
     expect(statusText).toContain('active background tasks: 1');
   });
 
+  it('does not count retained idle children as active background tasks', async () => {
+    registerBuiltinSlashCommands();
+    const session = createSession();
+    const rootStreamId = 'stream-root' as StreamTabId;
+    const childStreamIds = [
+      'stream-child-1',
+      'stream-child-2',
+    ] as StreamTabId[];
+    activeStreamId.set(rootStreamId);
+    setStreamStatusInCliState({
+      streamId: rootStreamId,
+      status: STREAM_PHASE.WAITING,
+    });
+    for (const [index, childStreamId] of childStreamIds.entries()) {
+      setStreamStatusInCliState({
+        streamId: childStreamId,
+        status: index === 0 ? STREAM_PHASE.WAITING : STREAM_PHASE.COMPLETED,
+      });
+    }
+    projectChildRoster(
+      rootStreamId,
+      childStreamIds.map((childStreamId, index) => ({
+        executionId: `child-exec-${index}`,
+        identity: { kind: 'agent' as const, agent: `critic-${index}` },
+        agentName: `critic-${index}`,
+        status: index === 0 ? STREAM_PHASE.WAITING : STREAM_PHASE.COMPLETED,
+        startedAt: index + 1,
+        elapsed: '1s',
+        childStreamId,
+      })),
+    );
+
+    await handleTuiSlashCommand('/status', createContext(session));
+
+    expect(lastEntryText(rootStreamId)).not.toContain(
+      'active background tasks:',
+    );
+  });
+
   it('reports the owning workflow count while a background task is focused', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
@@ -934,6 +973,51 @@ describe('handleTuiSlashCommand', () => {
     const statusText = lastEntryText(rootStreamId);
     expect(statusText).toContain('status: running');
     expect(statusText).toContain('active background tasks: 2');
+  });
+
+  it('filters idle siblings from the owning workflow count', async () => {
+    registerBuiltinSlashCommands();
+    const session = createSession();
+    const rootStreamId = 'stream-root' as StreamTabId;
+    const focusedChildId = 'stream-focused-child' as StreamTabId;
+    const runningSiblingId = 'stream-running-sibling' as StreamTabId;
+    const idleSiblingId = 'stream-idle-sibling' as StreamTabId;
+    activeStreamId.set(focusedChildId);
+    setStreamStatusInCliState({
+      streamId: focusedChildId,
+      status: STREAM_PHASE.WAITING,
+    });
+    setStreamStatusInCliState({
+      streamId: runningSiblingId,
+      status: STREAM_PHASE.RUNNING,
+    });
+    setStreamStatusInCliState({
+      streamId: idleSiblingId,
+      status: STREAM_PHASE.WAITING,
+    });
+    projectChildRoster(
+      rootStreamId,
+      [focusedChildId, runningSiblingId, idleSiblingId].map(
+        (childStreamId, index) => ({
+          executionId: `child-exec-${index}`,
+          identity: { kind: 'agent' as const, agent: `critic-${index}` },
+          agentName: `critic-${index}`,
+          status:
+            childStreamId === runningSiblingId
+              ? STREAM_PHASE.RUNNING
+              : STREAM_PHASE.WAITING,
+          startedAt: index + 1,
+          elapsed: '1s',
+          childStreamId,
+        }),
+      ),
+    );
+
+    await handleTuiSlashCommand('/status', createContext(session));
+
+    const statusText = lastEntryText(rootStreamId);
+    expect(statusText).toContain('active background tasks: 1');
+    expect(statusText).not.toContain('active background tasks: 3');
   });
 
   it('counts delegated work owned by a focused intermediate parent', async () => {
