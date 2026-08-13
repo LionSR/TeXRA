@@ -1,6 +1,10 @@
 // Node imports
 import path from 'node:path';
 
+// Third-party imports
+import cliTruncate from 'cli-truncate';
+import stringWidth from 'string-width';
+
 // Local imports
 import { getAgent } from '@agent/index';
 import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
@@ -10,6 +14,7 @@ import type {
   SessionFact,
 } from '@agent/runtime';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { redactSecrets } from '@logger/redaction';
 import type {
   ActiveChildInfo,
   ConversationProgress,
@@ -25,7 +30,7 @@ import {
   formatStreamStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
 import { assertNever } from '@utils/core';
-import { pluralize, truncateSummary } from '@utils/text/stringUtils';
+import { collapseWhitespace, pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
 import { safeTerminalText } from './terminalText';
@@ -61,7 +66,6 @@ interface RenderState {
   agent?: string;
   inputLabel?: string;
   phase?: string;
-  activeSubagents?: string;
 }
 
 export interface RunProgressRenderer {
@@ -81,6 +85,8 @@ export interface RunProgressRendererInit {
   readonly nowMs?: () => number;
   readonly minIntervalMs?: number;
   readonly heartbeatIntervalMs?: number;
+  /** Width of the stderr terminal used for the single ANSI live row. */
+  readonly terminalColumns?: number;
   readonly setInterval?: typeof setInterval;
   readonly clearInterval?: typeof clearInterval;
 }
@@ -95,6 +101,7 @@ export function createRunProgressRenderer(
   context: CliContext,
   init: RunProgressRendererInit = {
     colorEnabled: context.stderrColorEnabled,
+    terminalColumns: process.stderr.columns,
   },
 ): RunProgressRenderer | undefined {
   if (context.renderRunProgress !== true) return undefined;
@@ -130,6 +137,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private readonly nowMs: () => number;
   private readonly minIntervalMs: number;
   private readonly heartbeatIntervalMs: number;
+  private readonly terminalColumns: number | undefined;
   private readonly setInterval: typeof setInterval;
   private readonly clearInterval: typeof clearInterval;
   private readonly ansi: boolean;
@@ -140,7 +148,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private rootStreamStatus: StreamPhase | undefined;
   private activeChildren: readonly ActiveChildInfo[] = [];
   private readonly childDescriptions = new Map<StreamTabId, string>();
-  private readonly waitingChildStreamIds = new Set<StreamTabId>();
   private readonly closedChildStreamIds = new Set<StreamTabId>();
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -154,6 +161,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.nowMs = init.nowMs ?? Date.now;
     this.minIntervalMs = init.minIntervalMs ?? 100;
     this.heartbeatIntervalMs = init.heartbeatIntervalMs ?? 1000;
+    this.terminalColumns = normalizeTerminalColumns(init.terminalColumns);
     this.setInterval = init.setInterval ?? setInterval;
     this.clearInterval = init.clearInterval ?? clearInterval;
     this.ansi = init.colorEnabled;
@@ -209,7 +217,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         return;
       case 'removeStream':
         this.closedChildStreamIds.add(event.payload.streamId);
-        this.waitingChildStreamIds.delete(event.payload.streamId);
         this.deleteChildDescription(event.payload.streamId);
         return;
     }
@@ -254,6 +261,14 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private applyRunConfig(streamId: StreamTabId, config: AgentConfig): boolean {
+    if (this.rootStreamId !== undefined && !this.isRootStream(streamId)) {
+      // A fresh run.config is the incarnation boundary for deterministic child
+      // stream IDs. It precedes the new description fact, so release the prior
+      // attempt's tombstone here rather than guessing from status transitions.
+      this.closedChildStreamIds.delete(streamId);
+      this.childDescriptions.delete(streamId);
+      return false;
+    }
     if (!this.claimRootStream(streamId)) return false;
 
     this.state.agent = config.agent;
@@ -298,26 +313,12 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (!this.claimRootStream(parentStreamId)) return;
 
     this.activeChildren = children;
-    this.state.activeSubagents = formatActiveChildren(
-      children,
-      this.childDescriptions,
-    );
   }
 
   private applyStatus(streamId: StreamTabId, status: StreamPhase): void {
     if (!this.isRootStream(streamId)) {
       if (isTerminalOutcomePhase(status)) {
         this.closedChildStreamIds.add(streamId);
-        this.waitingChildStreamIds.delete(streamId);
-        this.deleteChildDescription(streamId);
-      } else if (status === STREAM_PHASE.WAITING) {
-        this.waitingChildStreamIds.add(streamId);
-      } else if (
-        status === STREAM_PHASE.RUNNING &&
-        this.waitingChildStreamIds.delete(streamId)
-      ) {
-        // A resumed child is processing a new instruction. Keep the agent-name
-        // fallback until the runtime publishes a description for this turn.
         this.deleteChildDescription(streamId);
       }
       return;
@@ -326,9 +327,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
     this.rootStreamStatus = status;
     this.state.phase = formatStreamStatusLabel(status, { style: 'cli' });
-    if (this.rootStreamTerminal) {
-      this.state.activeSubagents = undefined;
-    }
     this.updateHeartbeat();
     this.render(true);
   }
@@ -341,10 +339,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     ) {
       return;
     }
-    this.state.activeSubagents = formatActiveChildren(
-      this.activeChildren,
-      this.childDescriptions,
-    );
     this.updateHeartbeat();
     this.render(true);
   }
@@ -361,10 +355,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       ) {
         return;
       }
-      this.state.activeSubagents = formatActiveChildren(
-        this.activeChildren,
-        this.childDescriptions,
-      );
       this.updateHeartbeat();
       this.render(true);
       return;
@@ -442,12 +432,35 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       parts.push(`${this.state.plannedRounds} rounds`);
     }
 
-    if (this.state.activeSubagents) parts.push(this.state.activeSubagents);
-    if (this.state.toolCallCount != null && !this.state.activeSubagents) {
+    const elapsed = formatElapsed(now - this.startedAt);
+    const activeSubagents = this.rootStreamTerminal
+      ? undefined
+      : this.formatActiveSubagents(parts, elapsed);
+    if (activeSubagents) parts.push(activeSubagents);
+    if (this.state.toolCallCount != null && !activeSubagents) {
       parts.push(`tools: ${this.state.toolCallCount}`);
     }
-    parts.push(formatElapsed(now - this.startedAt));
+    parts.push(elapsed);
     return parts.join(' · ');
+  }
+
+  private formatActiveSubagents(
+    leadingParts: readonly string[],
+    elapsed: string,
+  ): string | undefined {
+    const base = formatActiveChildren(this.activeChildren, undefined, 0);
+    if (!base) return undefined;
+
+    const baseLine = [...leadingParts, base, elapsed].join(' · ');
+    const availableColumns =
+      this.terminalColumns == null
+        ? ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH
+        : Math.max(0, this.terminalColumns - 1 - stringWidth(baseLine) - 3);
+    return formatActiveChildren(
+      this.activeChildren,
+      this.childDescriptions,
+      Math.min(ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH, availableColumns),
+    );
   }
 }
 
@@ -461,23 +474,34 @@ function formatInputLabel(files: readonly string[]): string | undefined {
 
 function formatActiveChildren(
   children: readonly ActiveChildInfo[],
-  descriptions: ReadonlyMap<StreamTabId, string>,
+  descriptions: ReadonlyMap<StreamTabId, string> | undefined,
+  maxDescriptionColumns: number,
 ): string | undefined {
   const namedChildren = children.filter((child) => Boolean(child.agentName));
-  const first = namedChildren[0];
+  const first =
+    namedChildren.find((child) => child.status === STREAM_PHASE.RUNNING) ??
+    namedChildren[0];
   if (!first) return undefined;
 
   const label = pluralize(namedChildren.length, 'subagent');
   const suffix =
     namedChildren.length > 1 ? ` +${namedChildren.length - 1}` : '';
-  const description = descriptions.get(first.childStreamId);
-  const task = description
-    ? ` — ${truncateSummary(
-        safeTerminalText(description),
-        ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH,
-      )}`
+  const description = descriptions?.get(first.childStreamId);
+  const summary = description
+    ? cliTruncate(
+        collapseWhitespace(redactSecrets(safeTerminalText(description))),
+        maxDescriptionColumns,
+      )
     : '';
+  const task = summary ? ` — ${summary}` : '';
   return `${label}: ${first.agentName}${task}${suffix}`;
+}
+
+function normalizeTerminalColumns(
+  columns: number | undefined,
+): number | undefined {
+  if (columns == null || !Number.isFinite(columns)) return undefined;
+  return Math.max(0, Math.floor(columns));
 }
 
 function isMultiRound(rounds: number | undefined): rounds is number {
