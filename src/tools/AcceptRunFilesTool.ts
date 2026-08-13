@@ -277,9 +277,15 @@ Parameters map directly to subagent-result delivery attributes:
         firstRejectedPath ?? prepared[0].original,
         'accept_run_files',
         {
-          feedback: rejectionFeedback.join('\n') || undefined,
-          reason: rejectionReasons.join('\n') || undefined,
-          cause: rejectionCauses.join('\n') || undefined,
+          ...(rejectionFeedback.length > 0
+            ? { feedback: rejectionFeedback.join('\n') }
+            : {}),
+          ...(rejectionReasons.length > 0
+            ? { reason: rejectionReasons.join('\n') }
+            : {}),
+          ...(rejectionCauses.length > 0
+            ? { cause: rejectionCauses.join('\n') }
+            : {}),
         },
       );
     }

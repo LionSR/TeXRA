@@ -1,5 +1,6 @@
 import {
   defaultSession,
+  type BashSettlement,
   type HostAgentProposalRequest,
   type HostApprovalBypassStateUpdate,
   type HostInteractions,
@@ -27,6 +28,7 @@ import {
 } from './approval/settleApprovals';
 import {
   type CliApprovalContent,
+  type CliApprovalDecision,
   type CliApprovalPromptHooks,
   type CliDecisionApprovalEvent,
   type CliDecisionApprovalPayloads,
@@ -55,15 +57,19 @@ interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
 }
 
 export function toToolEditResult(
-  decision: ApprovalDecision,
+  decision: CliApprovalDecision,
   proposedContent: string,
 ): ToolEditApprovalResult {
-  return decision.accepted
-    ? { accepted: true, appliedContent: proposedContent }
-    : {
-        accepted: false,
-        ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
-      };
+  if (decision.accepted) {
+    return { accepted: true, appliedContent: proposedContent };
+  }
+  if (decision.rejectionCause !== undefined) {
+    return { accepted: false, cause: decision.rejectionCause };
+  }
+  return {
+    accepted: false,
+    ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
+  };
 }
 
 async function decideToolEdit(
@@ -155,6 +161,16 @@ export function toApprovalSettlement(
   };
 }
 
+/** Preserve a CLI host failure as a Bash cancellation, not user feedback. */
+export function toBashApprovalSettlement(
+  decision: CliApprovalDecision,
+): BashSettlement {
+  if (decision.rejectionCause !== undefined) {
+    return { action: 'reject', cause: decision.rejectionCause };
+  }
+  return toApprovalSettlement(decision);
+}
+
 function toRetryResult(
   decision: ApprovalDecision,
   humanInputAvailable: boolean,
@@ -235,7 +251,7 @@ export function createHeadlessCliHostInteractions(
         { summary: formatBashApprovalSummary(request) },
         hooks,
       );
-      return toApprovalSettlement(decision);
+      return toBashApprovalSettlement(decision);
     },
     async requestPlanApproval(request) {
       const { decision } = await decideApprovalEvent(

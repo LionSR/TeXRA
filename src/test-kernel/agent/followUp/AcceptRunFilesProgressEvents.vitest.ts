@@ -179,6 +179,31 @@ describe('accept_run_files progress events', () => {
     dispose();
   });
 
+  it('reports an all-file user rejection without calling it a cancellation', async () => {
+    const tool = new AcceptRunFilesTool();
+
+    setRunStorageEntries({
+      [`executions/${executionId}/output.tex`]: FileType.File,
+    });
+    stubWorkspaceFiles(false, '');
+    vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
+    testApprovalHandler = async () => ({
+      accepted: false,
+      feedback: 'keep the original normalization',
+    });
+
+    const result = await runAccept(tool, [
+      { path: 'output.tex', original: 'paper.tex' },
+    ]);
+
+    expect(result.status).toBe('error');
+    expect(result.summary).toBe(
+      'User rejected accept_run_files for paper.tex.',
+    );
+    expect(result.userInstruction).toBe('keep the original normalization');
+    expect(result.error).not.toContain('cancelled');
+  });
+
   it('does not require a runtime host to publish accepted workspace files', async () => {
     const tool = new AcceptRunFilesTool();
     const { written, dispose } = recordWrittenFiles();

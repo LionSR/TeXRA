@@ -504,6 +504,54 @@ describe('buildToolEditApprovalContent', () => {
     });
   });
 
+  it('does not synthesize feedback for a note-free rejection', async () => {
+    useCliHostInteractions(
+      context({
+        approvalPrompt: async () => '',
+      }),
+    );
+
+    const result = await requestNewProofEdit();
+
+    expect(result).toEqual({ accepted: false });
+  });
+
+  it('preserves a failed edit prompt as an automatic cancellation', async () => {
+    useCliHostInteractions(
+      context({
+        approvalPrompt: async () => {
+          throw new Error('terminal input closed');
+        },
+      }),
+    );
+
+    const result = await requestNewProofEdit();
+
+    expect(result).toEqual({
+      accepted: false,
+      cause: 'CLI approval prompt failed.',
+    });
+  });
+
+  it('preserves a failed Bash prompt as an automatic cancellation', async () => {
+    useCliHostInteractions(
+      context({
+        approvalPrompt: async () => {
+          throw new Error('terminal input closed');
+        },
+      }),
+    );
+
+    const result = await defaultSession().interactions.requestBashApproval({
+      command: 'latexmk paper.tex',
+    });
+
+    expect(result).toEqual({
+      action: 'reject',
+      cause: 'CLI approval prompt failed.',
+    });
+  });
+
   it('prompts for rejection feedback after an explicit no', async () => {
     const prompts: string[] = [];
     const summaries: string[] = [];
