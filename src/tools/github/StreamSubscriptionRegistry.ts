@@ -100,6 +100,8 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     const existing = bound.get(key);
     if (existing) {
       existing.session = session;
+      existing.expectedGenerationId =
+        session.followUps.currentGenerationId(streamId);
       this.opts.source.updateSubscription?.(input, existing.onEvent);
       return false;
     }
