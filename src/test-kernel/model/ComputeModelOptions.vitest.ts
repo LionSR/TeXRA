@@ -15,6 +15,10 @@ import {
   type ModelOptionsServerAccess,
 } from '@model/computeModelOptions';
 import {
+  resolveDirectModelApiKeyProvider,
+  shouldRouteModelThroughOpenRouter,
+} from '@model/openRouterRouting';
+import {
   CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
   isCodexSubscriptionEligible,
 } from '@model/providerCapabilities';
@@ -99,6 +103,20 @@ function initSubscriptionPlatform(
     secrets,
   });
 }
+
+describe('model catalogue direct-route key ownership', () => {
+  it('assigns every servable direct route to an API-key provider', () => {
+    for (const [modelId, config] of Object.entries(MODEL_CONFIGS)) {
+      if (config.retired) continue;
+      if (shouldRouteModelThroughOpenRouter(config, false)) continue;
+
+      expect(
+        resolveDirectModelApiKeyProvider(config),
+        `${modelId} (${config.provider}) is servable without OpenRouter but has no direct API-key owner`,
+      ).toBeDefined();
+    }
+  });
+});
 
 describe('computeModelOptionsData relay quota state', () => {
   setupPlatform({
