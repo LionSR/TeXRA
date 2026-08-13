@@ -235,6 +235,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         parentId: parentStageId,
         index,
         total,
+        attemptId: projectionId,
       }),
       failed: false,
     };
@@ -290,7 +291,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     trace.emit({
       type: 'workflow.call',
       logId: projected.logId,
-      call: { ...call, phase },
+      call: { ...call, phase, attemptId: projectionId },
       stageId: phase === undefined ? parentStageId : phaseStageIdFor(phase),
     });
   };
@@ -359,8 +360,8 @@ export async function runPersistedWorkflowScriptWithProgress(
             ? { childStreamId: event.childStreamId }
             : {}),
         };
-        // Cached replays perform no live attempt, so they carry neither
-        // attempt metadata nor cost.
+        // Cached replays belong to the current projection attempt, but perform
+        // no live agent call and therefore carry no duration or cost metadata.
         if (event.outcome === 'cached') {
           emitCall({ ...identity, status: 'cached' });
           onActivity?.(`Using saved result: ${event.label}`);
@@ -415,6 +416,11 @@ export async function runPersistedWorkflowScriptWithProgress(
       }
     }
   };
+
+  // The physical attempt exists even when parsing or initial persistence fails
+  // before the engine can emit a plan, phase, or call. Publish its boundary
+  // first so live projections never infer the current run from optional work.
+  trace.emit({ type: 'workflow.attempt', attemptId: projectionId });
 
   try {
     const result = await runPersistedWorkflowScript({

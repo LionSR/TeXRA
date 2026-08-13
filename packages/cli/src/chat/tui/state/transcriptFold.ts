@@ -24,6 +24,7 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   TOOL_USE_STATUS,
+  WorkflowAttemptMarkerSchema,
   WorkflowCallProgressSchema,
   isPlainAgentIdentity,
   isTerminalWorkflowCallProgress,
@@ -196,23 +197,24 @@ export function logEntryStreamIsRunning(entry: StreamLogEntry): boolean {
  */
 function phaseGroupData(
   entry: StreamLogEntry,
-): { index?: number; total?: number } | null {
+): { index?: number; total?: number; attemptId?: string } | null {
   if (
     entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START &&
     entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END
   ) {
     return null;
   }
-  // Same tolerant parse `updateTaskGroups` (progress-view logSlice) uses for
-  // the identical group-log payload: per-field `.catch(undefined)` so a
-  // malformed `index`/`total` drops just that field, not the whole header.
-  const { kind, index, total } = GroupLogPayloadSchema.catch({}).parse(
-    entry.data,
-  );
+  // Same parse `updateTaskGroups` uses for the identical group-log payload:
+  // display fields recover independently, while malformed attempt ownership
+  // rejects the payload and therefore cannot masquerade as a legacy omission.
+  const payload = GroupLogPayloadSchema.safeParse(entry.data);
+  if (!payload.success) return null;
+  const { kind, index, total, attemptId } = payload.data;
   if (kind !== 'phase') return null;
   return {
     ...(index !== undefined ? { index } : {}),
     ...(total !== undefined ? { total } : {}),
+    ...(attemptId !== undefined ? { attemptId } : {}),
   };
 }
 
@@ -346,6 +348,9 @@ function renderLogEntryFresh(
       phaseLabel,
       ...(phaseIndex !== undefined ? { phaseIndex } : {}),
       ...(phaseTotal !== undefined ? { phaseTotal } : {}),
+      ...(phaseData.attemptId !== undefined
+        ? { attemptId: phaseData.attemptId }
+        : {}),
     };
     return next;
   }
@@ -570,6 +575,7 @@ export function createTranscriptFoldState(): TranscriptFoldState {
     finalizedFrontier: 0,
     latestUserPos: -1,
     latestResponsePos: -1,
+    workflowAttemptSeqNo: -1,
     fullLogChild: false,
     workflowOperationalOnly: false,
     projectLifecycleToTaskGroups: false,
@@ -587,6 +593,8 @@ export function resetTranscriptFoldState(state: TranscriptFoldState): void {
   state.finalizedFrontier = 0;
   state.latestUserPos = -1;
   state.latestResponsePos = -1;
+  state.workflowAttemptId = undefined;
+  state.workflowAttemptSeqNo = -1;
   state.activeSkillsEntry = undefined;
   state.activeSkillsParsedFor = undefined;
   state.activeSkills = [];
@@ -813,6 +821,24 @@ function applyChangedLogEntry(
   ctx: FoldContext,
 ): void {
   const messageType = entry.messageType ?? '';
+  const markerCandidate =
+    typeof entry.data === 'object' &&
+    entry.data !== null &&
+    'kind' in entry.data &&
+    entry.data.kind === 'workflowAttempt';
+  if (
+    messageType === MESSAGE_TYPES.INTERNAL &&
+    markerCandidate &&
+    entry.seqNo >= state.workflowAttemptSeqNo
+  ) {
+    const marker = WorkflowAttemptMarkerSchema.safeParse(entry.data);
+    // A malformed declared boundary must supersede the preceding attempt.
+    // Retaining its identifier would project prior-run rows as current.
+    state.workflowAttemptId = marker.success
+      ? marker.data.attemptId
+      : undefined;
+    state.workflowAttemptSeqNo = entry.seqNo;
+  }
   const wOO = state.workflowOperationalOnly;
   // Detached child runs surface their full log output (phase group rows and
   // plain log lines, both `DEFAULT`) when focused, unlike the root/subagent

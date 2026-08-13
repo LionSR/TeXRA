@@ -47,6 +47,7 @@ import {
   type LogLevel,
   type MessageType,
   type ToolUseLog,
+  type WorkflowAttemptMarker,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
@@ -153,7 +154,7 @@ interface StreamSinkState {
 
 type StageMetadata = Pick<
   Extract<AgentEvent, { type: 'stage.start' }>,
-  'kind' | 'index' | 'total'
+  'kind' | 'index' | 'total' | 'attemptId'
 >;
 
 /**
@@ -311,6 +312,9 @@ export function attachTranscriptRecorder(
             ...(event.kind !== undefined ? { kind: event.kind } : {}),
             ...(event.index !== undefined ? { index: event.index } : {}),
             ...(event.total !== undefined ? { total: event.total } : {}),
+            ...(event.attemptId !== undefined
+              ? { attemptId: event.attemptId }
+              : {}),
           } satisfies StageMetadata;
           stageMetadata.set(event.id, metadata);
           // A new round starts fresh: whatever MODEL_RESPONSE stream the
@@ -399,6 +403,24 @@ export function attachTranscriptRecorder(
             writer.settle(event.logId, patch);
             activeToolEntries.delete(event.logId);
           }
+          return;
+        }
+
+        case 'workflow.attempt': {
+          const marker = {
+            kind: 'workflowAttempt',
+            attemptId: event.attemptId,
+          } satisfies WorkflowAttemptMarker;
+          writer.appendSettled({
+            id: `workflow-attempt-${event.attemptId}`,
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: 'info',
+            timestamp: Date.now(),
+            groupId: event.stageId,
+            messageType: MESSAGE_TYPES.INTERNAL,
+            data: marker,
+            verbose: false,
+          });
           return;
         }
 

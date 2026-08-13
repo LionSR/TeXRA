@@ -46,6 +46,30 @@ function entry(
 }
 
 describe('task-group StreamLog projection', () => {
+  it('distinguishes absent attempt identity from malformed ownership', () => {
+    const taskGroups = projectTaskGroupsFromStreamLog([
+      entry('valid-phase', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
+        text: 'Explore',
+        data: { kind: 'phase' },
+      }),
+      entry('invalid-phase', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
+        text: 'Stale phase',
+        data: { kind: 'phase', attemptId: '' },
+      }),
+    ]);
+
+    expect(taskGroups).toMatchObject([
+      {
+        id: 'valid-phase',
+        name: 'Explore',
+        kind: 'phase',
+      },
+    ]);
+    expect(taskGroups.some((group) => group.id === 'invalid-phase')).toBe(
+      false,
+    );
+  });
+
   it('projects group metadata and completes groups in source order', () => {
     const taskGroups = projectTaskGroupsFromStreamLog([
       entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {

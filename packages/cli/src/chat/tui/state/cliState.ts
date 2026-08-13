@@ -30,6 +30,7 @@ import {
   type UserFollowUpSupport,
   type WorkflowCallProgress,
 } from '@shared/schemas';
+import { latestWorkflowAttemptId } from '@shared/copy/workflowCall';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import type {
   CompactionActivityBlock,
@@ -123,6 +124,8 @@ export type ConversationEntry = ConversationEntryOrigin &
         readonly phaseIndex?: number;
         /** Total phase count for the run, when the emitter provides it. */
         readonly phaseTotal?: number;
+        /** Physical workflow attempt that emitted this phase. */
+        readonly attemptId?: string;
       })
     | (ConversationEntryBase & {
         readonly role: 'tool';
@@ -133,6 +136,23 @@ export type ConversationEntry = ConversationEntryOrigin &
         readonly images: readonly LoadedImage[];
       })
   );
+
+/** Resolve the current workflow attempt from session state, with a legacy transcript fallback. */
+export function currentWorkflowAttemptId(
+  declaredAttemptId: string | undefined,
+  entries: readonly ConversationEntry[],
+): string | undefined {
+  return (
+    declaredAttemptId ??
+    latestWorkflowAttemptId(
+      entries.map((entry) => {
+        if (entry.role === 'workflowTask') return entry.task.attemptId;
+        if (entry.role === 'phase') return entry.attemptId;
+        return undefined;
+      }),
+    )
+  );
+}
 
 /**
  * One transcript-projection candidate: a rendered row plus the ordering key
@@ -213,6 +233,9 @@ export interface TranscriptFoldState {
   activeSkills: readonly ActiveSkillSummary[];
   /** Highest-seq live-activity entry (drives the thinking indicator). */
   liveActivityEntry?: StreamLogEntry;
+  /** Latest durable workflow-attempt marker and its source order. */
+  workflowAttemptId?: string;
+  workflowAttemptSeqNo: number;
   /** Synthetic rows reconciled into `items`, in slice order, by identity. */
   synthetics: readonly ConversationEntry[];
   /** Incremental task-group / compaction memos. Unlike the fold fields above
@@ -286,6 +309,8 @@ export interface StreamSlice {
   readonly compileFailuresByRound: RoundIndexed<CompileFailure>;
   /** Run/round/phase lifecycle projected from the canonical StreamLog. */
   readonly taskGroups: readonly TaskGroup[];
+  /** Latest physical workflow attempt declared by the durable stream. */
+  readonly workflowAttemptId?: string | undefined;
   readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
   /** Epoch ms when this stream last entered `RUNNING`; cleared on any other
@@ -361,6 +386,7 @@ export function emptySlice(streamId: StreamTabId): StreamSlice {
     missingOutputsByRound: {},
     compileFailuresByRound: {},
     taskGroups: [],
+    workflowAttemptId: undefined,
     thinkingActive: false,
     compactingActive: false,
     usage: undefined,

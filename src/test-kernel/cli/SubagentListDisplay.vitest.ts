@@ -88,6 +88,7 @@ function phaseEntry(
     readonly finalized?: boolean;
     readonly phaseIndex?: number;
     readonly phaseTotal?: number;
+    readonly attemptId?: string;
   } = {},
 ): ConversationEntry {
   return {
@@ -274,6 +275,88 @@ describe('CLI child list display model', () => {
     expect(
       workflowRunStatusSummary(slice)?.map((segment) => segment.tone),
     ).toEqual(['muted', 'muted', 'warning']);
+  });
+
+  it('uses the latest logical task state when a workflow is rerun', () => {
+    const slice = workflowAgentSlice('rerun', {
+      entries: [
+        phaseEntry('phase-verify-old', 'Verify', {
+          phaseIndex: 1,
+          phaseTotal: 2,
+          attemptId: 'prior',
+        }),
+        workflowTaskEntry('task-verify-old', 'Failed: Verify', {
+          id: 'verification',
+          label: 'Verify',
+          phase: 'Verify',
+          status: 'failed',
+          error: 'Invalid first attempt.',
+          attemptId: 'prior',
+        }),
+        phaseEntry('phase-verify-current', 'Verify', {
+          phaseIndex: 1,
+          phaseTotal: 2,
+          attemptId: 'current',
+        }),
+        workflowTaskEntry('task-verify-current', 'Running: Verify', {
+          id: 'verification',
+          label: 'Verify',
+          phase: 'Verify',
+          status: 'running',
+          attemptId: 'current',
+        }),
+      ],
+    });
+
+    expect(
+      workflowRunStatusSummary(slice)?.map((segment) => segment.text),
+    ).toEqual(['Verify (2/2)', '0/1 done']);
+  });
+
+  it('does not combine a prior phase heading with a phase-less rerun', () => {
+    const slice = workflowAgentSlice('phase-removed', {
+      entries: [
+        phaseEntry('phase-old', 'Verify', {
+          phaseIndex: 1,
+          phaseTotal: 2,
+          attemptId: 'prior',
+        }),
+        workflowTaskEntry('task-old', 'Failed: Verify', {
+          id: 'verification',
+          label: 'Verify',
+          phase: 'Verify',
+          status: 'failed',
+          error: 'Old failure.',
+          attemptId: 'prior',
+        }),
+        workflowTaskEntry('task-current', 'Running: Direct check', {
+          id: 'direct-check',
+          label: 'Direct check',
+          status: 'running',
+          attemptId: 'current',
+        }),
+      ],
+    });
+
+    expect(workflowRunStatusSummary(slice)).toBeUndefined();
+  });
+
+  it('clears the prior status when a new attempt has not emitted work', () => {
+    const slice = workflowAgentSlice('empty-rerun', {
+      workflowAttemptId: 'current',
+      entries: [
+        phaseEntry('phase-old', 'Verify', { attemptId: 'prior' }),
+        workflowTaskEntry('task-old', 'Finished: Verify', {
+          id: 'verification',
+          label: 'Verify',
+          phase: 'Verify',
+          status: 'completed',
+          attemptId: 'prior',
+        }),
+      ],
+    });
+
+    expect(workflowRunStatusSummary(slice)).toBeUndefined();
   });
 
   it('tallys failures across the whole run, not just the current phase', () => {

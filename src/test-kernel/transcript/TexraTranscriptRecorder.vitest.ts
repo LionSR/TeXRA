@@ -49,6 +49,24 @@ function dataOf(entry: StreamLogEntry | undefined): Record<string, unknown> {
 }
 
 describe('attachTranscriptRecorder StreamPhase-native group rows (issue #7993)', () => {
+  it('persists a workflow attempt before it has tasks or phases', () => {
+    const { trace, rows } = attachRecorder();
+
+    trace.emit({ type: 'workflow.attempt', attemptId: 'attempt-empty' });
+
+    expect(rows()).toContainEqual(
+      expect.objectContaining({
+        id: 'workflow-attempt-attempt-empty',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        messageType: MESSAGE_TYPES.INTERNAL,
+        data: {
+          kind: 'workflowAttempt',
+          attemptId: 'attempt-empty',
+        },
+      }),
+    );
+  });
+
   it("writes GROUP_START's data.status as StreamPhase.RUNNING", () => {
     const { trace, row } = attachRecorder();
 
@@ -58,6 +76,20 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (issue #7993)',
 
     expect(startEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_START);
     expect(dataOf(startEntry).status).toBe(STREAM_PHASE.RUNNING);
+  });
+
+  it('retains workflow attempt identity when a phase settles', () => {
+    const { trace, row } = attachRecorder();
+
+    const stage = trace.openStage('Verify', {
+      kind: 'phase',
+      attemptId: 'attempt-current',
+    });
+    expect(dataOf(row(stage.id)).attemptId).toBe('attempt-current');
+
+    stage.end();
+
+    expect(dataOf(row(stage.id)).attemptId).toBe('attempt-current');
   });
 
   it('defaults GROUP_END to the literal RunOutcome.COMPLETED, not a folded EndGroupStatus', () => {
