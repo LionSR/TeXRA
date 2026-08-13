@@ -49,7 +49,7 @@ const InquiryTurnBaseShape = {
   turnIndex: z.int().positive(),
   timestamp: z.string().min(1),
   /** Fences a delayed answer to the continuation that dispatched this turn. */
-  parentGenerationId: z.string().nullish(),
+  parentGenerationId: z.string().min(1).nullish(),
   question: z.string(),
   context: z.string().nullish(),
   questionRelativePath: z.string().min(1),
