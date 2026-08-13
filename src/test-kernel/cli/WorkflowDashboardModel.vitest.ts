@@ -369,6 +369,11 @@ describe('workflow dashboard model', () => {
       heading: currentPhase,
       tasks: [],
     });
+    const narrowModel = workflowDashboardModel(
+      { ...root, entries: [...entries, currentPhase] },
+      60,
+    );
+    expect(narrowModel.listValues).toEqual([narrowModel.groups[0]?.value]);
     const { ink, React } = await loadInk();
     const { instance, stdout } = renderInteractive(
       ink,
