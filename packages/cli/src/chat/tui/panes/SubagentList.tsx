@@ -255,14 +255,17 @@ function WorkflowTaskRow({
   entry,
   focused,
   nowMs,
+  pendingKinds,
 }: {
   readonly child: StreamSlice | undefined;
   readonly entry: WorkflowTaskEntry;
   readonly focused: boolean;
   readonly nowMs: number;
+  readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
 }): React.JSX.Element {
   const style = WORKFLOW_TASK_STATUS_STYLE[entry.task.status];
   const metadata = workflowTaskMetadata(entry.task, child, nowMs);
+  const approvalSuffix = pendingApprovalRowSuffix(pendingKinds);
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
@@ -274,6 +277,11 @@ function WorkflowTaskRow({
           {entry.task.label} · {WORKFLOW_TASK_STATUS_LABEL[entry.task.status]}
         </Text>
       </Box>
+      {approvalSuffix ? (
+        <Box flexShrink={0}>
+          <Text>{` · ${approvalSuffix}`}</Text>
+        </Box>
+      ) : null}
       {metadata ? (
         <Box minWidth={0} flexShrink={2}>
           <Text dimColor wrap="truncate-end">{`  ${metadata}`}</Text>
@@ -291,6 +299,7 @@ function WorkflowDashboard({
   onCancel,
   onFocusStream,
   onSelectionChange,
+  pendingApprovals,
   selectedValue,
   streams,
 }: {
@@ -301,6 +310,8 @@ function WorkflowDashboard({
   readonly onCancel: () => void;
   readonly onFocusStream: ((streamId: StreamTabId) => void) | undefined;
   readonly onSelectionChange: ((value: ChildListValue) => void) | undefined;
+  readonly pendingApprovals:
+    ReadonlyMap<string, readonly PendingApprovalKind[]> | undefined;
   readonly selectedValue: ChildListValue | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): React.JSX.Element | null {
@@ -382,6 +393,11 @@ function WorkflowDashboard({
         entry={entry}
         focused={state.focused}
         nowMs={nowMs}
+        pendingKinds={
+          childStreamId === undefined
+            ? undefined
+            : pendingApprovals?.get(childStreamId)
+        }
       />
     );
   };
@@ -597,6 +613,7 @@ export function SubagentList(
         onCancel={props.onCancel ?? (() => undefined)}
         onFocusStream={props.onFocusStream}
         onSelectionChange={props.onSelectionChange}
+        pendingApprovals={props.pendingApprovals}
         selectedValue={props.selectedValue}
         streams={props.streams ?? new Map()}
       />

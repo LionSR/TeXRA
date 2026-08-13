@@ -176,6 +176,7 @@ const SCENARIOS = [
     cols: 100,
     env: {
       HARNESS_ENTRIES: '0',
+      HARNESS_BASH_APPROVAL: '1',
       HARNESS_WORKFLOW_RUNNING: '1',
     },
     bootExpect: 'Tab sessions',
@@ -185,11 +186,13 @@ const SCENARIOS = [
       'Proofread (1/1) · 0/2 done',
       'Running: Proofread paper A',
       'Running: Proofread paper B',
-      'live-workflow-validation running',
+      'Proofread paper A · Running · bash',
+      'Proofread paper B · Running',
+      '1 approval',
       'Proofread (1/1)',
-      'correct running',
       '2 agents',
     ],
+    unexpect: ['Proofread paper B · Running · bash'],
   },
   {
     name: 'workflow-running-composer-hidden',
