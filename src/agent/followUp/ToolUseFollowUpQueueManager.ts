@@ -174,8 +174,7 @@ export class ToolUseFollowUpQueue {
     let entry = this.entries.get(streamId);
     if (
       expectedGenerationId !== undefined &&
-      entry !== undefined &&
-      entry.generationId !== expectedGenerationId
+      entry?.generationId !== expectedGenerationId
     ) {
       return { kind: 'unavailable' };
     }
@@ -185,13 +184,7 @@ export class ToolUseFollowUpQueue {
       if (!entry && admission === 'existing_recoverable') {
         return { kind: 'unavailable' };
       }
-      // A durable producer (for example an external inquiry answer) may
-      // outlive this process. The execution registry has already authorized
-      // persisted recovery before this admission reaches the queue, so a
-      // missing in-memory entry may reconstitute the producer's generation.
-      // Existing entries never adopt it: a live retry owns a new generation
-      // and rejects a delayed producer from the prior attempt above.
-      entry ??= this.createEntry(streamId, expectedGenerationId);
+      entry ??= this.createEntry(streamId);
       if (!entry.owner) entry.lifecycle = 'recoverable';
     }
 
@@ -316,13 +309,10 @@ export class ToolUseFollowUpQueue {
     return this.entries.get(streamId)?.generationId;
   }
 
-  private createEntry(
-    streamId: StreamTabId,
-    generationId: string = randomUUID(),
-  ): QueueEntry {
+  private createEntry(streamId: StreamTabId): QueueEntry {
     const entry: QueueEntry = {
       queue: new FollowUpQueue(),
-      generationId,
+      generationId: randomUUID(),
       admittedDeliveryIds: createBoundedIdSet(
         ToolUseFollowUpQueue.DELIVERY_ID_CAP,
       ),
