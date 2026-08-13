@@ -18,12 +18,10 @@ import {
   type SubmitFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
 import {
-  currentSession,
   defaultSession,
   resolveEmitSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import type {
   InquiryThreadId,
   InquiryThreadSummary,
@@ -156,40 +154,8 @@ async function deliverContinuation(params: {
     );
     return 'archived';
   }
-  const ownerSession = params.session ?? currentSession();
-  const liveGeneration = ownerSession.followUps.currentGenerationId(
-    params.parentStreamId,
-  );
-  if (liveGeneration === undefined) {
-    const executionId = ownerSession.snapshots.getRunMetadata(
-      params.parentStreamId,
-    ).executionId;
-    const turnState = executionId
-      ? await getExecutionStore(executionId).readTurnState()
-      : null;
-    const persistedGeneration =
-      turnState?.activeTurn?.generationId ??
-      turnState?.lastCompletedTurn?.generationId;
-    if (
-      persistedGeneration !== params.parentGenerationId ||
-      !ownerSession.followUps.restorePersistedGeneration(
-        params.parentStreamId,
-        persistedGeneration,
-      )
-    ) {
-      logger.warn(
-        `Inquiry continuation for ${params.threadId}: the persisted parent generation does not match.`,
-      );
-      await emitInquiryThreadUpdate(
-        params.threadId,
-        { resumeOutcome: 'parent_finished' },
-        ownerSession,
-      );
-      return 'archived';
-    }
-  }
   const result = await submitFollowUp(params.parentStreamId, params.text, {
-    session: ownerSession,
+    session: params.session,
     expectedGenerationId: params.parentGenerationId,
   });
 
