@@ -615,6 +615,33 @@ describe('Lean orchestrator agent prompt', () => {
   });
 });
 
+describe('progress-check agent prompts', () => {
+  const progressCheck = loadAgentYaml<ToolUseAgentYaml>(
+    'prompts/agents/remote/progressCheck.yaml',
+  );
+  const orchestrator = loadAgentYaml<ToolUseAgentYaml>(
+    'prompts/agents/remote/orchestrator.yaml',
+  );
+
+  it('keeps self-contained read-only reviews on the narrow evidence path', () => {
+    expect(progressCheck.prompts.systemPrompt).toContain(
+      'This narrow path takes precedence even when the session is part of a standing project goal.',
+    );
+    expect(progressCheck.prompts.systemPrompt).toContain(
+      'On the narrow path, evaluate only signals stated in the named execution reports.',
+    );
+    expect(progressCheck.prompts.systemPrompt).toContain(
+      'On the narrow path, evaluate only the named reports and explicitly named files.',
+    );
+  });
+
+  it('gives progressCheck the request and execution records needed for the gate', () => {
+    expect(orchestrator.prompts.systemPrompt).toContain(
+      'Include the latest user request and the relevant execution IDs in the delegated instruction.',
+    );
+  });
+});
+
 describe('review agent prompt', () => {
   const agent = loadAgentYaml<ToolUseAgentYaml>(
     'packages/extension/resources/tool_use_agents/review.yaml',
