@@ -437,6 +437,8 @@ export function syncStreamLog(
       slice.thinkingActive === thinkingActive &&
       slice.compactingActive === compactingActive &&
       slice.workflowAttemptId === state.workflowAttemptId &&
+      slice.workflowAttemptBoundaryDeclared ===
+        state.workflowAttemptBoundaryDeclared &&
       isDeepStrictEqual(slice.activeSkills, activeSkills) &&
       slice.taskGroups === taskGroups
     ) {
@@ -451,6 +453,7 @@ export function syncStreamLog(
       thinkingActive,
       compactingActive,
       workflowAttemptId: state.workflowAttemptId,
+      workflowAttemptBoundaryDeclared: state.workflowAttemptBoundaryDeclared,
       taskGroups,
     };
   });
