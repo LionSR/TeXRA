@@ -243,6 +243,28 @@ describe('ToolUseFollowUpQueue ownership', () => {
     ).toThrow('does not belong to execution');
     expect(queues.claimLive(id, 'flow')).toBeUndefined();
   });
+
+  it('restores only the authoritative persisted generation', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:persisted-authority');
+
+    expect(
+      queues.restorePersistedGeneration(id, 'authoritative-generation'),
+    ).toBe(true);
+    expect(queues.currentGenerationId(id)).toBe('authoritative-generation');
+    expect(
+      queues.restorePersistedGeneration(id, 'stale-producer-generation'),
+    ).toBe(false);
+    expect(
+      queues.submit(
+        id,
+        { text: 'stale answer' },
+        'recoverable',
+        'stale-producer-generation',
+      ),
+    ).toEqual({ kind: 'unavailable' });
+  });
+
   it('deletion invalidates a live generation and rejects late input', () => {
     const queues = new ToolUseFollowUpQueue();
     const id = stream('stream:deleted');

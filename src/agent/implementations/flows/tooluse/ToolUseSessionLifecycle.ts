@@ -18,8 +18,13 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
   constructor(
     private readonly streamTabId: StreamTabId,
     private readonly queue: ToolUseFollowUpQueue,
+    continuationGenerationId: string,
   ) {
-    const lease = queue.claimLive(streamTabId, 'flow');
+    const lease = queue.claimLive(
+      streamTabId,
+      'flow',
+      continuationGenerationId,
+    );
     if (lease) {
       this.lease = lease;
       this.followUps = queue.queue(lease);
