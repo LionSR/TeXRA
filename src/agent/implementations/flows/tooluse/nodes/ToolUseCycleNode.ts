@@ -128,14 +128,14 @@ export class ToolUseCycleNode<C> extends Node<
       kind: 'session',
     });
 
-    let roundOutcome: RunOutcome = RUN_OUTCOME.FAILED;
+    let sessionOutcome: RunOutcome = RUN_OUTCOME.FAILED;
     try {
       await sessionStage.within(() => flow.run(roundShared));
 
       const lastError = roundShared.shouldStop
         ? roundShared.lastError
         : undefined;
-      roundOutcome = deriveRunOutcome({
+      sessionOutcome = deriveRunOutcome({
         failed: lastError !== undefined,
         cancelled: roundShared.shouldStop && !roundShared.endTurn,
       });
@@ -147,7 +147,7 @@ export class ToolUseCycleNode<C> extends Node<
           response: roundShared.latestAssistantText,
         };
       }
-      if (roundOutcome === RUN_OUTCOME.CANCELLED) {
+      if (sessionOutcome === RUN_OUTCOME.CANCELLED) {
         return {
           outcome: 'cancelled',
           response: roundShared.latestAssistantText,
@@ -171,7 +171,7 @@ export class ToolUseCycleNode<C> extends Node<
       }
       throw error;
     } finally {
-      sessionStage.end(roundOutcome);
+      sessionStage.end(sessionOutcome);
       if (roundShared.currentUserInstruction !== undefined) {
         prepRes.userChannels.transient[USER_VAR_INSTRUCTION] =
           roundShared.currentUserInstruction;

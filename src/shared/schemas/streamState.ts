@@ -67,7 +67,7 @@ export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
 const RoundStageSchema = z.object({
   /** Zero-based round/turn index. */
   index: z.int().nonnegative(),
-  /** Planned total, when known. Workflow runs set this; tool-use turns may not. */
+  /** Planned total, when known. Reflection workflows set this. */
   total: z.int().positive().optional(),
 });
 
@@ -75,10 +75,10 @@ export type RoundStage = z.infer<typeof RoundStageSchema>;
 
 // Phase Stage (ephemeral phase label from typed stage.start metadata)
 //
-// A workflow-script run advances through named phases instead of numbered
-// rounds, so it fills this slot where a tool-use run fills `roundStage`. Both
-// are projected from the same `stage.start` fact, discriminated by its `kind`,
-// and a stream that opens phases never opens rounds.
+// A workflow-script run advances through named phases instead of the numbered
+// rounds used by reflection workflows. Both are projected from the same
+// `stage.start` fact, discriminated by its `kind`, and a stream that opens
+// phases never opens rounds.
 
 const PhaseStageSchema = z.object({
   /** Phase title, free-form text from the workflow script. */
@@ -93,9 +93,9 @@ const PhaseStageSchema = z.object({
 export type PhaseStage = z.infer<typeof PhaseStageSchema>;
 
 /**
- * The one discriminated run-progress slot: a tool-use run advances through
- * numbered rounds, a workflow-script run through named phases — never both —
- * so state and wire carry one `stage` field rather than two
+ * The one discriminated run-progress slot: a reflection workflow advances
+ * through numbered rounds, a workflow-script run through named phases — never
+ * both — so state and wire carry one `stage` field rather than two
  * independently-optional ones every reader has to fall back between. The arms
  * extend the payload schemas above, so projecting to either is a `kind` strip.
  */
