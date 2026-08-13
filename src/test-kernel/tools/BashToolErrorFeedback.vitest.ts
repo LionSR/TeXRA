@@ -188,5 +188,85 @@ describe('BashTool error feedback', () => {
     const rejected = await new BashTool().call({ command: 'echo rejected' });
     expect(rejected.status).toBe('error');
     expect(rejected.error).toContain('User rejected command');
+    expect(rejected.userInstruction).toBe('No thanks.');
+  });
+
+  it('does not present generated rejection guidance as user feedback', async () => {
+    vi.mocked(requestBashApproval).mockResolvedValueOnce({ action: 'reject' });
+    const rejected = await new BashTool().call({ command: 'echo rejected' });
+
+    expect(rejected.status).toBe('error');
+    expect(rejected.error).toContain('Do not retry');
+    expect(rejected.userInstruction).toBeUndefined();
+
+    const { attachments, sanitizedResult } = extractToolAttachments(rejected);
+    const messages = await createHandler().createToolUseFollowUpMessages(
+      undefined,
+      createBashCall(),
+      sanitizedResult,
+      attachments,
+      AgentWorkspaceState.create(),
+    );
+    const toolResult = messages.find(
+      (message) => message.type === 'function_call_output',
+    );
+
+    expect(toolResult?.output).toContain('Do not retry');
+    expect(toolResult?.output).not.toContain('User feedback:');
+  });
+
+  it('does not present an approval-policy denial as user feedback', async () => {
+    vi.mocked(requestBashApproval).mockResolvedValueOnce({
+      action: 'reject',
+      reason: 'Denied by TeXRA approval policy.',
+    });
+    const rejected = await new BashTool().call({ command: 'echo rejected' });
+
+    expect(rejected.status).toBe('error');
+    expect(rejected.error).toContain('Command denied');
+    expect(rejected.error).toContain('Denied by TeXRA approval policy.');
+    expect(rejected.error).not.toContain('User rejected command');
+    expect(rejected.userInstruction).toBeUndefined();
+
+    const { attachments, sanitizedResult } = extractToolAttachments(rejected);
+    const messages = await createHandler().createToolUseFollowUpMessages(
+      undefined,
+      createBashCall(),
+      sanitizedResult,
+      attachments,
+      AgentWorkspaceState.create(),
+    );
+    const toolResult = messages.find(
+      (message) => message.type === 'function_call_output',
+    );
+
+    expect(toolResult?.output).toContain('Denied by TeXRA approval policy.');
+    expect(toolResult?.output).not.toContain('User feedback:');
+  });
+
+  it('preserves policy-denial provenance when its reason is blank', async () => {
+    vi.mocked(requestBashApproval).mockResolvedValueOnce({
+      action: 'reject',
+      reason: '   ',
+    });
+    const rejected = await new BashTool().call({ command: 'echo rejected' });
+
+    expect(rejected.error).toContain('Command denied');
+    expect(rejected.error).not.toContain('User rejected command');
+    expect(rejected.error).not.toContain('Do not retry');
+    expect(rejected.userInstruction).toBeUndefined();
+  });
+
+  it('does not present an automatic cancellation as user feedback', async () => {
+    vi.mocked(requestBashApproval).mockResolvedValueOnce({
+      action: 'reject',
+      cause: 'Session disposed.',
+    });
+    const rejected = await new BashTool().call({ command: 'echo rejected' });
+
+    expect(rejected.error).toContain('Command approval cancelled');
+    expect(rejected.error).toContain('Session disposed.');
+    expect(rejected.error).not.toContain('User rejected command');
+    expect(rejected.userInstruction).toBeUndefined();
   });
 });

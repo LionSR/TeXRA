@@ -54,9 +54,21 @@ it("returns each interaction kind's exact cancellation result", () => {
   ).toEqualTypeOf<UserQuestionSettlement>();
 });
 
-it('normalizes bash cancellation feedback like an explicit rejection', () => {
+it('keeps cancellation causes distinct from user feedback', () => {
   expect(cancellationResultFor('bash', '  reason  ')).toEqual({
     action: 'reject',
-    feedback: 'reason',
+    cause: 'reason',
+  });
+  expect(cancellationResultFor('planApproval', 'Run ended.')).toEqual({
+    action: 'reject',
+    cause: 'Run ended.',
+  });
+  expect(cancellationResultFor('proposal', 'Run ended.')).toEqual({
+    action: 'reject',
+    cause: 'Run ended.',
+  });
+  expect(cancellationResultFor('userQuestion', 'Run ended.')).toEqual({
+    action: 'reject',
+    cause: 'Run ended.',
   });
 });
