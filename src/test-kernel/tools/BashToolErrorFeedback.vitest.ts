@@ -243,4 +243,17 @@ describe('BashTool error feedback', () => {
     expect(toolResult?.output).toContain('Denied by TeXRA approval policy.');
     expect(toolResult?.output).not.toContain('User feedback:');
   });
+
+  it('preserves policy-denial provenance when its reason is blank', async () => {
+    vi.mocked(requestBashApproval).mockResolvedValueOnce({
+      action: 'reject',
+      reason: '   ',
+    });
+    const rejected = await new BashTool().call({ command: 'echo rejected' });
+
+    expect(rejected.error).toContain('Command denied');
+    expect(rejected.error).not.toContain('User rejected command');
+    expect(rejected.error).not.toContain('Do not retry');
+    expect(rejected.userInstruction).toBeUndefined();
+  });
 });
