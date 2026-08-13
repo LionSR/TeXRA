@@ -183,7 +183,9 @@ export function workflowDashboardPanelItemCount(
   model: WorkflowDashboardModel | undefined,
   selectedValue: ChildListValue | undefined,
 ): number {
-  if (!model || model.tasks.length === 0) return 0;
+  if (!model || (model.groups.length === 0 && model.tasks.length === 0)) {
+    return 0;
+  }
   if (!model.wide) {
     return 1 + model.groups.length + model.tasks.length;
   }
