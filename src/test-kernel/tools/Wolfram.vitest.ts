@@ -82,13 +82,15 @@ describe('WolframTool approval', () => {
       name: 'does not execute wolframscript when approval is rejected',
       feedback: 'Use the requested node check instead.',
       expectedInstruction: 'Use the requested node check instead.',
+      expectedGuidance: false,
     },
     {
       name: 'tells the model not to retry after rejection without feedback',
       feedback: undefined,
-      expectedInstruction: expect.stringContaining('Do not retry'),
+      expectedInstruction: undefined,
+      expectedGuidance: true,
     },
-  ])('$name', async ({ feedback, expectedInstruction }) => {
+  ])('$name', async ({ feedback, expectedInstruction, expectedGuidance }) => {
     const execute = vi.spyOn(wolframScriptUtils, 'executeWolframCode');
 
     const { explicit, result, show } = await dispatchWolfram(
@@ -102,10 +104,11 @@ describe('WolframTool approval', () => {
       }),
     ).toBe(true);
 
-    await expect(result).resolves.toMatchObject({
-      status: 'error',
-      userInstruction: expectedInstruction,
-    });
+    const rejection = await result;
+    expect(rejection.status).toBe('error');
+    if (rejection.status !== 'error') throw new Error('Expected rejection');
+    expect(rejection.userInstruction).toBe(expectedInstruction);
+    expect(rejection.error.includes('Do not retry')).toBe(expectedGuidance);
     expect(execute).not.toHaveBeenCalled();
   });
 });

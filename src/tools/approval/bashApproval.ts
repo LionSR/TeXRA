@@ -39,7 +39,7 @@ const BashApprovalRequestSchema = z.object({
 });
 type BashApprovalRequest = z.infer<typeof BashApprovalRequestSchema>;
 
-const DEFAULT_BASH_REJECTION_INSTRUCTION =
+const DEFAULT_BASH_REJECTION_GUIDANCE =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
   'Continue without running it, use a non-shell method, or explain what approval would be needed.';
 
@@ -113,7 +113,7 @@ export async function requestBashApproval(
     context?.onApprovalPolicyDenial?.();
     return {
       action: 'reject',
-      feedback: texraApprovalDenialMessage(decision),
+      reason: texraApprovalDenialMessage(decision),
     };
   }
 
@@ -132,13 +132,18 @@ export async function requestBashApproval(
 
 export function buildBashApprovalRejectedResult(
   command: string,
-  rejectionFeedback?: string,
+  rejection: Extract<BashSettlement, { action: 'reject' }>,
 ): ToolResult {
   const preview = truncateWithEllipsis(command, 60);
-  const message = `User rejected command: ${preview}`;
-  const feedback = rejectionFeedback?.trim();
-  return errorResult(message, {
+  const feedback = rejection.feedback?.trim();
+  const reason = rejection.reason?.trim();
+  const message = reason
+    ? `Command denied: ${preview}`
+    : `User rejected command: ${preview}`;
+  const guidance = reason || DEFAULT_BASH_REJECTION_GUIDANCE;
+  const error = feedback ? message : `${message}\n\n${guidance}`;
+  return errorResult(error, {
     summary: message,
-    userInstruction: feedback || DEFAULT_BASH_REJECTION_INSTRUCTION,
+    ...(feedback && { userInstruction: feedback }),
   });
 }
