@@ -24,6 +24,7 @@ import {
 
 const STREAM_A = 'stream:a' as StreamTabId;
 const STREAM_B = 'stream:b' as StreamTabId;
+const GENERATION_A = 'f9de9269-9198-4103-a248-6a3bd78bd4eb';
 
 /**
  * Capture per-channel log lines. The storage module logs through a channel
@@ -120,7 +121,7 @@ describe('InquiryStorage', () => {
   it('opens, answers, and resolves a thread end-to-end', async () => {
     const opened = await recordOpenQuestion({
       parentStreamId: STREAM_A,
-      parentGenerationId: 'generation-a',
+      parentGenerationId: GENERATION_A,
       question: 'What is the Sobolev constant?',
       suggestSearch: false,
     });
@@ -128,7 +129,7 @@ describe('InquiryStorage', () => {
     expect(opened.manifest.status).toBe('open');
     expect(opened.manifest.parentStreamId).toBe(STREAM_A);
     expect(opened.manifest.turns).toHaveLength(1);
-    expect(opened.turn.parentGenerationId).toBe('generation-a');
+    expect(opened.turn.parentGenerationId).toBe(GENERATION_A);
     expect(opened.turn.suggestSearch).toBe(false);
 
     const open = await listThreadsByStatus({ status: 'open', scope: 'all' });
@@ -141,7 +142,7 @@ describe('InquiryStorage', () => {
     });
     expect(answered).not.toBeNull();
     expect(answered!.manifest.status).toBe('answered');
-    expect(answered!.turn.parentGenerationId).toBe('generation-a');
+    expect(answered!.turn.parentGenerationId).toBe(GENERATION_A);
     expect(answered!.turn.answer).toBe('C = (n(n-2))^{-1} * ω_n^{2/n}');
 
     const stillOpen = await listThreadsByStatus({
@@ -434,7 +435,10 @@ describe('InquiryStorage', () => {
     );
   });
 
-  it('rejects an explicit null inquiry generation as corrupt', async () => {
+  it.each([
+    { label: 'null', value: null },
+    { label: 'a non-UUID string', value: 'generation-a' },
+  ])('rejects $label inquiry generation as corrupt', async ({ value }) => {
     await expectUnreadableManifest(
       'ei_aabbccdd0088',
       JSON.stringify({
@@ -449,7 +453,7 @@ describe('InquiryStorage', () => {
             kind: 'open',
             turnIndex: 1,
             timestamp: '2026-08-13T12:00:00.000Z',
-            parentGenerationId: null,
+            parentGenerationId: value,
             question: 'Is the estimate uniform?',
             questionRelativePath: 't1/question.txt',
           },

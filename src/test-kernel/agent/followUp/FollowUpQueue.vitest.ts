@@ -281,6 +281,19 @@ describe('ToolUseFollowUpQueue ownership', () => {
     ]);
   });
 
+  it('rebinds a released provisional recovery queue from persisted state', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:released-provisional-recovery');
+    const recovery = queues.claimRecovery(id, true)!;
+    queues.release(recovery, 'recoverable');
+
+    expect(queues.restorePersistedGeneration(id, 'persisted-generation')).toBe(
+      true,
+    );
+    expect(recovery.generationId).toBe('persisted-generation');
+    expect(queues.currentGenerationId(id)).toBe('persisted-generation');
+  });
+
   it('deletion invalidates a live generation and rejects late input', () => {
     const queues = new ToolUseFollowUpQueue();
     const id = stream('stream:deleted');

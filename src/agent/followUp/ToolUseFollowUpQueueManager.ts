@@ -27,6 +27,8 @@ interface QueueEntry {
   readonly queue: FollowUpQueue;
   /** Stable identity of this continuation generation across recovery claims. */
   generationId: string;
+  /** True until persisted flow state or a resumed flow confirms the identity. */
+  generationProvisional: boolean;
   /**
    * Delivery ids already admitted for this stream (#9531). In-memory,
    * transport-level replay suppression only — NOT crash-safe exactly-once: a
@@ -121,9 +123,13 @@ export class ToolUseFollowUpQueue {
     if (this.terminal.has(streamId)) return false;
     const entry = this.entries.get(streamId);
     if (entry) {
-      if (entry.generationId === generationId) return true;
-      if (entry.owner?.kind !== 'recovery') return false;
+      if (entry.generationId === generationId) {
+        entry.generationProvisional = false;
+        return true;
+      }
+      if (!entry.generationProvisional) return false;
       entry.generationId = generationId;
+      entry.generationProvisional = false;
       return true;
     }
     this.createEntry(streamId, generationId);
@@ -160,7 +166,9 @@ export class ToolUseFollowUpQueue {
     if (this.terminal.has(streamId)) return undefined;
     const entry =
       this.entries.get(streamId) ??
-      (createIfMissing ? this.createEntry(streamId) : undefined);
+      (createIfMissing
+        ? this.createEntry(streamId, undefined, true)
+        : undefined);
     if (!entry || entry.lifecycle !== 'recoverable' || entry.owner) {
       return undefined;
     }
@@ -206,7 +214,7 @@ export class ToolUseFollowUpQueue {
       if (!entry && admission === 'existing_recoverable') {
         return { kind: 'unavailable' };
       }
-      entry ??= this.createEntry(streamId);
+      entry ??= this.createEntry(streamId, undefined, true);
       if (!entry.owner) entry.lifecycle = 'recoverable';
     }
 
@@ -270,9 +278,12 @@ export class ToolUseFollowUpQueue {
       return undefined;
     }
     if (entry.generationId !== generationId) {
-      if (owner.kind !== 'recovery') return undefined;
+      if (owner.kind !== 'recovery' || !entry.generationProvisional) {
+        return undefined;
+      }
       entry.generationId = generationId;
     }
+    entry.generationProvisional = false;
     return entry.queue;
   }
 
@@ -354,10 +365,12 @@ export class ToolUseFollowUpQueue {
   private createEntry(
     streamId: StreamTabId,
     generationId: string = randomUUID(),
+    generationProvisional = false,
   ): QueueEntry {
     const entry: QueueEntry = {
       queue: new FollowUpQueue(),
       generationId,
+      generationProvisional,
       admittedDeliveryIds: createBoundedIdSet(
         ToolUseFollowUpQueue.DELIVERY_ID_CAP,
       ),
