@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **CLI tables preserve long mathematical expressions** — narrow columns wrap
+  LaTeX formulas and other indivisible values instead of replacing their tails
+  with an ellipsis.
 - **Delegation approvals distinguish one task from chat-wide access** — proposal
   cards now state that `y` approves only the visible task, while `a` also
   approves later agent tasks, file edits, and commands in the chat.
