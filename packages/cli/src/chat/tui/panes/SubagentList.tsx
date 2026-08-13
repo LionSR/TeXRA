@@ -383,11 +383,15 @@ function WorkflowDashboard({
   const sessionApprovalSuffix = pendingApprovalRowSuffix(
     pendingApprovals?.get(model.root.streamId),
   );
+  const approvalOnlyDashboard =
+    tasks.length === 0 &&
+    groups.length === 0 &&
+    sessionApprovalSuffix !== undefined;
   if (
     (tasks.length === 0 &&
       groups.length === 0 &&
       sessionApprovalSuffix === undefined) ||
-    (contentRows !== undefined && contentRows <= 0)
+    (contentRows !== undefined && contentRows <= 0 && !approvalOnlyDashboard)
   ) {
     return null;
   }

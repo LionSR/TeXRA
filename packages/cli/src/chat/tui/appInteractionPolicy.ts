@@ -284,13 +284,8 @@ export function groupPendingApprovalsByRow(
 export function visibleApprovalRootStreamId(
   sessionRootStreamId: StreamTabId | undefined,
   childListRootStreamId: StreamTabId | undefined,
-  workflowDashboardRootStreamId: StreamTabId | undefined,
 ): StreamTabId | undefined {
-  return (
-    workflowDashboardRootStreamId ??
-    childListRootStreamId ??
-    sessionRootStreamId
-  );
+  return childListRootStreamId ?? sessionRootStreamId;
 }
 
 // A workflow-script grandchild `agent()` call is the only interactively

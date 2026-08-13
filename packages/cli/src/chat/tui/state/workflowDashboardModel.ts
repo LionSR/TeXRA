@@ -180,9 +180,11 @@ export function workflowDashboardModel(
 export function workflowDashboardPanelItemCount(
   model: WorkflowDashboardModel | undefined,
   selectedValue: ChildListValue | undefined,
+  rootHasApproval: boolean,
 ): number {
-  if (!model || (model.groups.length === 0 && model.tasks.length === 0)) {
-    return 0;
+  if (!model) return 0;
+  if (model.groups.length === 0 && model.tasks.length === 0) {
+    return rootHasApproval ? 1 : 0;
   }
   if (!model.wide) {
     return 1 + model.groups.length + model.tasks.length;

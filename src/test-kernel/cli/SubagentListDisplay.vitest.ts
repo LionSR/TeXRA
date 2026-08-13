@@ -156,15 +156,24 @@ describe('CLI child list display model', () => {
     const narrow = workflowDashboardModel(root, 99);
 
     expect(
-      workflowDashboardPanelItemCount(wide, workflowPhaseListValue('phase-a')),
+      workflowDashboardPanelItemCount(
+        wide,
+        workflowPhaseListValue('phase-a'),
+        false,
+      ),
     ).toBe(3);
     expect(
-      workflowDashboardPanelItemCount(wide, workflowTaskListValue('task-b-1')),
+      workflowDashboardPanelItemCount(
+        wide,
+        workflowTaskListValue('task-b-1'),
+        false,
+      ),
     ).toBe(6);
     expect(
       workflowDashboardPanelItemCount(
         narrow,
         workflowPhaseListValue('phase-a'),
+        false,
       ),
     ).toBe(10);
     // No workflow root, no reserved rows.
@@ -172,8 +181,16 @@ describe('CLI child list display model', () => {
       workflowDashboardPanelItemCount(
         undefined,
         workflowPhaseListValue('phase-a'),
+        false,
       ),
     ).toBe(0);
+
+    const empty = workflowDashboardModel(
+      workflowAgentSlice('empty-dashboard', { entries: [] }),
+      100,
+    );
+    expect(workflowDashboardPanelItemCount(empty, undefined, false)).toBe(0);
+    expect(workflowDashboardPanelItemCount(empty, undefined, true)).toBe(1);
   });
 
   it('omits static input and context counts from the live workflow band', () => {
