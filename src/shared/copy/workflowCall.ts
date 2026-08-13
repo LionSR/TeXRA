@@ -6,6 +6,13 @@ import {
 import { filterNotNullish } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
+/** Latest physical workflow attempt named by an append-ordered projection. */
+export function latestWorkflowAttemptId(
+  attemptIds: readonly (string | undefined)[],
+): string | undefined {
+  return attemptIds.findLast((attemptId) => attemptId !== undefined);
+}
+
 /**
  * Select the current state of each logical workflow call.
  *
@@ -17,9 +24,9 @@ import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 export function latestWorkflowCallsById(
   calls: readonly WorkflowCallProgress[],
 ): WorkflowCallProgress[] {
-  const currentAttemptId = calls.findLast(
-    (call) => call.attemptId !== undefined,
-  )?.attemptId;
+  const currentAttemptId = latestWorkflowAttemptId(
+    calls.map((call) => call.attemptId),
+  );
   const candidates = currentAttemptId
     ? calls.filter((call) => call.attemptId === currentAttemptId)
     : calls;

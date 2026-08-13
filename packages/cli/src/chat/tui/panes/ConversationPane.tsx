@@ -7,6 +7,7 @@ import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { AgentCategory } from '@shared/schemas';
 import {
   formatWorkflowPhaseHeading,
+  latestWorkflowAttemptId,
   latestWorkflowCallsById,
   workflowCallFailureTally,
   workflowPhaseCallProgress,
@@ -157,11 +158,25 @@ export function workflowRunStatusSummary(
   slice: StreamSlice | undefined,
 ): readonly WorkflowStatusSegment[] | undefined {
   if (slice?.category !== AgentCategory.Workflow) return undefined;
-  const phase = slice.entries.findLast((entry) => entry.role === 'phase');
+  const currentAttemptId = latestWorkflowAttemptId(
+    slice.entries.map((entry) => {
+      if (entry.role === 'workflowTask') return entry.task.attemptId;
+      if (entry.role === 'phase') return entry.attemptId;
+      return undefined;
+    }),
+  );
+  const phase = slice.entries.findLast(
+    (entry): entry is Extract<ConversationEntry, { readonly role: 'phase' }> =>
+      entry.role === 'phase' &&
+      (currentAttemptId === undefined || entry.attemptId === currentAttemptId),
+  );
   const currentCalls = latestWorkflowCallsById(
     slice.entries.flatMap((entry) =>
       entry.role === 'workflowTask' ? [entry.task] : [],
     ),
+  ).filter(
+    (call) =>
+      currentAttemptId === undefined || call.attemptId === currentAttemptId,
   );
   const { done, total } = workflowPhaseCallProgress(
     phase ? currentCalls.filter((call) => call.phase === phase.phaseLabel) : [],

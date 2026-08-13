@@ -259,19 +259,26 @@ describe('workflow dashboard model', () => {
       ['Verify'],
       [{ id: 'verification', phase: 'Verify' }],
     );
-    const priorEntries = prior.entries.map((entry) => ({
-      ...entry,
-      ...(entry.role === 'workflowTask'
-        ? { task: { ...entry.task, attemptId: 'prior' } }
-        : {}),
-    }));
-    const currentEntries = current.entries.map((entry) => ({
-      ...entry,
-      id: `current-${entry.id}`,
-      ...(entry.role === 'workflowTask'
-        ? { task: { ...entry.task, attemptId: 'current' } }
-        : {}),
-    }));
+    const priorEntries = prior.entries.map((entry) => {
+      if (entry.role === 'workflowTask') {
+        return { ...entry, task: { ...entry.task, attemptId: 'prior' } };
+      }
+      if (entry.role === 'phase') return { ...entry, attemptId: 'prior' };
+      return entry;
+    });
+    const currentEntries = current.entries.map((entry) => {
+      if (entry.role === 'workflowTask') {
+        return {
+          ...entry,
+          id: `current-${entry.id}`,
+          task: { ...entry.task, attemptId: 'current' },
+        };
+      }
+      if (entry.role === 'phase') {
+        return { ...entry, id: `current-${entry.id}`, attemptId: 'current' };
+      }
+      return { ...entry, id: `current-${entry.id}` };
+    });
 
     const model = workflowDashboardModel(
       { ...prior, entries: [...priorEntries, ...currentEntries] },
@@ -297,6 +304,7 @@ describe('workflow dashboard model', () => {
       phaseLabel: 'Verify',
       phaseIndex: 2,
       phaseTotal: 3,
+      attemptId: 'current',
     };
 
     const model = workflowDashboardModel(
@@ -304,7 +312,63 @@ describe('workflow dashboard model', () => {
       WIDE_COLUMNS,
     );
 
-    expect(model.groups[0]?.heading).toBe(currentHeading);
+    expect(model.groups[0]?.heading).toStrictEqual(currentHeading);
+  });
+
+  it('fills only the heading count omitted by the latest phase row', () => {
+    const root = workflowRoot(
+      ['Verify'],
+      [{ id: 'verification', phase: 'Verify' }],
+    );
+    const currentHeading = {
+      id: 'phase-verify-partial',
+      role: 'phase' as const,
+      text: 'Verify',
+      finalized: true,
+      phaseLabel: 'Verify',
+      phaseIndex: 2,
+    };
+
+    const model = workflowDashboardModel(
+      { ...root, entries: [...root.entries, currentHeading] },
+      WIDE_COLUMNS,
+    );
+
+    expect(model.groups[0]?.heading).toMatchObject({
+      phaseIndex: 2,
+      phaseTotal: 1,
+    });
+  });
+
+  it('keeps a current empty dynamic phase while dropping prior attempts', () => {
+    const root = workflowRoot(['Prior'], [{ id: 'old', phase: 'Prior' }]);
+    const entries = root.entries.map((entry) => {
+      if (entry.role === 'workflowTask') {
+        return { ...entry, task: { ...entry.task, attemptId: 'prior' } };
+      }
+      if (entry.role === 'phase') return { ...entry, attemptId: 'prior' };
+      return entry;
+    });
+    const currentPhase = {
+      id: 'phase-current',
+      role: 'phase' as const,
+      text: 'Explore',
+      finalized: true,
+      phaseLabel: 'Explore',
+      attemptId: 'current',
+    };
+
+    const model = workflowDashboardModel(
+      { ...root, entries: [...entries, currentPhase] },
+      WIDE_COLUMNS,
+    );
+
+    expect(model.groups).toHaveLength(1);
+    expect(model.groups[0]).toMatchObject({
+      label: 'Explore',
+      heading: currentPhase,
+      tasks: [],
+    });
   });
 
   it('renders exactly the narrow row values the reducer reconciles against', async () => {

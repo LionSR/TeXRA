@@ -196,7 +196,7 @@ export function logEntryStreamIsRunning(entry: StreamLogEntry): boolean {
  */
 function phaseGroupData(
   entry: StreamLogEntry,
-): { index?: number; total?: number } | null {
+): { index?: number; total?: number; attemptId?: string } | null {
   if (
     entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START &&
     entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END
@@ -206,13 +206,14 @@ function phaseGroupData(
   // Same tolerant parse `updateTaskGroups` (progress-view logSlice) uses for
   // the identical group-log payload: per-field `.catch(undefined)` so a
   // malformed `index`/`total` drops just that field, not the whole header.
-  const { kind, index, total } = GroupLogPayloadSchema.catch({}).parse(
-    entry.data,
-  );
+  const { kind, index, total, attemptId } = GroupLogPayloadSchema.catch(
+    {},
+  ).parse(entry.data);
   if (kind !== 'phase') return null;
   return {
     ...(index !== undefined ? { index } : {}),
     ...(total !== undefined ? { total } : {}),
+    ...(attemptId !== undefined ? { attemptId } : {}),
   };
 }
 
@@ -346,6 +347,9 @@ function renderLogEntryFresh(
       phaseLabel,
       ...(phaseIndex !== undefined ? { phaseIndex } : {}),
       ...(phaseTotal !== undefined ? { phaseTotal } : {}),
+      ...(phaseData.attemptId !== undefined
+        ? { attemptId: phaseData.attemptId }
+        : {}),
     };
     return next;
   }
