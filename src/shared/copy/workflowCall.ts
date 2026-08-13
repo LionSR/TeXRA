@@ -6,6 +6,42 @@ import {
 import { filterNotNullish } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
+/** Latest physical workflow attempt named by an append-ordered projection. */
+export function latestWorkflowAttemptId(
+  attemptIds: readonly (string | undefined)[],
+): string | undefined {
+  return attemptIds.findLast((attemptId) => attemptId !== undefined);
+}
+
+/**
+ * Select the current state of each logical workflow call.
+ *
+ * Durable script reruns append progress under a fresh attempt id so the
+ * earlier attempt remains available in transcript history. Current writers
+ * stamp every call; older persisted transcripts without that fact fall back
+ * to their latest record per logical id.
+ */
+export function latestWorkflowCallsById(
+  calls: readonly WorkflowCallProgress[],
+  declaredAttemptId?: string,
+): WorkflowCallProgress[] {
+  const currentAttemptId =
+    declaredAttemptId ??
+    latestWorkflowAttemptId(calls.map((call) => call.attemptId));
+  const candidates = currentAttemptId
+    ? calls.filter((call) => call.attemptId === currentAttemptId)
+    : calls;
+  const seen = new Set<string>();
+  return candidates
+    .toReversed()
+    .filter((call) => {
+      if (seen.has(call.id)) return false;
+      seen.add(call.id);
+      return true;
+    })
+    .toReversed();
+}
+
 /**
  * Canonical metadata copy for terminal workflow-call progress on every host.
  */

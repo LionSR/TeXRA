@@ -99,6 +99,25 @@ function latestWorkflowCallEvents(
 beforeEach(() => clearStoreCache());
 
 describe('workflow-script progress bridge', () => {
+  it('announces an attempt before script parsing can fail', async () => {
+    const { trace, events } = recordingTrace();
+
+    await expect(
+      runScript(trace, 'invalid-script', 'not valid js'),
+    ).rejects.toThrow();
+
+    expect(events[0]).toMatchObject({
+      type: 'workflow.attempt',
+      attemptId: expect.any(String),
+    });
+    expect(
+      events.some(
+        (event) =>
+          event.type === 'workflow.call' || event.type === 'stage.start',
+      ),
+    ).toBe(false);
+  });
+
   it('keeps planned call cards in their phase stage across incremental updates', async () => {
     const { trace, events } = recordingTrace();
     const parent = trace.openStage('Parent');
@@ -137,16 +156,19 @@ return await agent('Inspect', { id: 'inspect' })`,
     expect(planned).toMatchObject({
       type: 'workflow.call',
       stageId: phaseId,
+      call: { attemptId: expect.any(String) },
     });
     expect(running).toMatchObject({
       type: 'workflow.call',
       logId: planned?.logId,
       stageId: phaseId,
+      call: { attemptId: planned?.call.attemptId },
     });
     expect(completed).toMatchObject({
       type: 'workflow.call',
       logId: planned?.logId,
       stageId: phaseId,
+      call: { attemptId: planned?.call.attemptId },
     });
     expect(events).toContainEqual(
       expect.objectContaining({
@@ -156,6 +178,7 @@ return await agent('Inspect', { id: 'inspect' })`,
         kind: 'phase',
         index: 0,
         total: 2,
+        attemptId: planned?.call.attemptId,
       }),
     );
     expect(events.some((event) => event.type === 'child.activity')).toBe(false);

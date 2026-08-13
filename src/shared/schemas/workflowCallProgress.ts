@@ -22,6 +22,13 @@ export const WorkflowCallIdentitySchema = z.strictObject({
 });
 export type WorkflowCallIdentity = z.infer<typeof WorkflowCallIdentitySchema>;
 
+/** Durable boundary between physical runs appended to one workflow stream. */
+export const WorkflowAttemptMarkerSchema = z.strictObject({
+  kind: z.literal('workflowAttempt'),
+  attemptId: z.string().min(1),
+});
+export type WorkflowAttemptMarker = z.infer<typeof WorkflowAttemptMarkerSchema>;
+
 const WorkflowCallTerminalMetadataSchema = z.strictObject({
   model: z.string().min(1).optional(),
   durationMs: z.number().nonnegative().optional(),
@@ -29,6 +36,13 @@ const WorkflowCallTerminalMetadataSchema = z.strictObject({
 });
 
 const WorkflowCallProgressBaseSchema = WorkflowCallIdentitySchema.extend({
+  /**
+   * Physical workflow-script projection attempt. All progress records from one
+   * run share this id; older persisted transcripts may omit it. A malformed
+   * present value must fail parsing: treating corrupted attempt ownership as
+   * absent could mix a prior run's task into the current live projection.
+   */
+  attemptId: z.string().min(1).optional(),
   /**
    * Live child stream that executes this call. Absent for planned, cached, and
    * not-yet-launched calls.

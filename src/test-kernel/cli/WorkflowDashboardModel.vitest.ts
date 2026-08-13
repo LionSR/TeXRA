@@ -221,6 +221,225 @@ describe('workflow dashboard model', () => {
     ).toBeUndefined();
   });
 
+  it('shows only the latest row for a logical task after a rerun', () => {
+    const root = workflowRoot(
+      ['Verify'],
+      [{ id: 'verification', phase: 'Verify' }],
+    );
+    const original = root.entries.find(
+      (entry) => entry.role === 'workflowTask',
+    );
+    expect(original?.role).toBe('workflowTask');
+    if (original?.role !== 'workflowTask') return;
+    const current = {
+      ...original,
+      id: 'task-verification-current',
+      text: 'Running: verification again',
+      task: { ...original.task },
+    };
+
+    const model = workflowDashboardModel(
+      { ...root, entries: [...root.entries, current] },
+      WIDE_COLUMNS,
+    );
+
+    expect(model.tasks).toStrictEqual([current]);
+    expect(model.groups[0]?.tasks).toStrictEqual([current]);
+  });
+
+  it('drops tasks and phases absent from the latest attempt', () => {
+    const prior = workflowRoot(
+      ['Draft', 'Verify'],
+      [
+        { id: 'draft', phase: 'Draft' },
+        { id: 'verification', phase: 'Verify' },
+      ],
+    );
+    const current = workflowRoot(
+      ['Verify'],
+      [{ id: 'verification', phase: 'Verify' }],
+    );
+    const priorEntries = prior.entries.map((entry) => {
+      if (entry.role === 'workflowTask') {
+        return { ...entry, task: { ...entry.task, attemptId: 'prior' } };
+      }
+      if (entry.role === 'phase') return { ...entry, attemptId: 'prior' };
+      return entry;
+    });
+    const currentEntries = current.entries.map((entry) => {
+      if (entry.role === 'workflowTask') {
+        return {
+          ...entry,
+          id: `current-${entry.id}`,
+          task: { ...entry.task, attemptId: 'current' },
+        };
+      }
+      if (entry.role === 'phase') {
+        return { ...entry, id: `current-${entry.id}`, attemptId: 'current' };
+      }
+      return { ...entry, id: `current-${entry.id}` };
+    });
+
+    const model = workflowDashboardModel(
+      { ...prior, entries: [...priorEntries, ...currentEntries] },
+      WIDE_COLUMNS,
+    );
+
+    expect(model.tasks.map((entry) => entry.task.id)).toStrictEqual([
+      'verification',
+    ]);
+    expect(model.groups.map((group) => group.label)).toStrictEqual(['Verify']);
+  });
+
+  it('uses the latest heading facts when a rerun retains a phase label', () => {
+    const root = workflowRoot(
+      ['Verify'],
+      [{ id: 'verification', phase: 'Verify' }],
+    );
+    const currentHeading = {
+      id: 'phase-verify-current',
+      role: 'phase' as const,
+      text: 'Verify',
+      finalized: true,
+      phaseLabel: 'Verify',
+      phaseIndex: 2,
+      phaseTotal: 3,
+      attemptId: 'current',
+    };
+
+    const model = workflowDashboardModel(
+      { ...root, entries: [...root.entries, currentHeading] },
+      WIDE_COLUMNS,
+    );
+
+    expect(model.groups[0]?.heading).toStrictEqual(currentHeading);
+  });
+
+  it('fills only the heading count omitted by the latest phase row', () => {
+    const root = workflowRoot(
+      ['Verify'],
+      [{ id: 'verification', phase: 'Verify' }],
+    );
+    const currentHeading = {
+      id: 'phase-verify-partial',
+      role: 'phase' as const,
+      text: 'Verify',
+      finalized: true,
+      phaseLabel: 'Verify',
+      phaseIndex: 2,
+    };
+
+    const model = workflowDashboardModel(
+      { ...root, entries: [...root.entries, currentHeading] },
+      WIDE_COLUMNS,
+    );
+
+    expect(model.groups[0]?.heading).toMatchObject({
+      phaseIndex: 2,
+      phaseTotal: 1,
+    });
+  });
+
+  it('renders a current empty dynamic phase while dropping prior attempts', async () => {
+    const root = workflowRoot(['Prior'], [{ id: 'old', phase: 'Prior' }]);
+    const entries = root.entries.map((entry) => {
+      if (entry.role === 'workflowTask') {
+        return { ...entry, task: { ...entry.task, attemptId: 'prior' } };
+      }
+      if (entry.role === 'phase') return { ...entry, attemptId: 'prior' };
+      return entry;
+    });
+    const currentPhase = {
+      id: 'phase-current',
+      role: 'phase' as const,
+      text: 'Explore',
+      finalized: true,
+      phaseLabel: 'Explore',
+      attemptId: 'current',
+    };
+
+    const model = workflowDashboardModel(
+      { ...root, entries: [...entries, currentPhase] },
+      WIDE_COLUMNS,
+    );
+
+    expect(model.groups).toHaveLength(1);
+    expect(model.groups[0]).toMatchObject({
+      label: 'Explore',
+      heading: currentPhase,
+      tasks: [],
+    });
+    const narrowModel = workflowDashboardModel(
+      { ...root, entries: [...entries, currentPhase] },
+      NARROW_COLUMNS,
+    );
+    expect(narrowModel.listValues).toStrictEqual([
+      narrowModel.groups[0]?.value,
+    ]);
+    const { ink, React } = await loadInk();
+    const { instance, stdout } = renderInteractive(
+      ink,
+      React.createElement(SubagentList, {
+        dashboard: model,
+        keyboardActive: false,
+        listRootStreamId: ROOT,
+        maxRows: 5,
+        selectedValue: model.groups[0]?.value,
+        sessions: [],
+        streams: new Map([[ROOT, root]]),
+      }),
+      { columns: WIDE_COLUMNS },
+    );
+    try {
+      await waitFor(() => stdout.output.includes('Explore · 0/0'));
+      expect(stdout.output).toContain('workflow · 0/0 done');
+    } finally {
+      instance.unmount();
+    }
+
+    const { instance: narrowInstance, stdout: narrowStdout } =
+      renderInteractive(
+        ink,
+        React.createElement(SubagentList, {
+          dashboard: narrowModel,
+          keyboardActive: true,
+          listRootStreamId: ROOT,
+          maxRows: 5,
+          selectedValue: narrowModel.groups[0]?.value,
+          sessions: [],
+          streams: new Map([[ROOT, root]]),
+        }),
+        { columns: NARROW_COLUMNS },
+      );
+    try {
+      await waitFor(() => narrowStdout.output.includes('› ◆ Explore'));
+    } finally {
+      narrowInstance.unmount();
+    }
+  });
+
+  it('drops the prior dashboard at the next attempt boundary', () => {
+    const prior = workflowRoot(
+      ['Verify'],
+      [{ id: 'verification', phase: 'Verify' }],
+    );
+    const entries = prior.entries.map((entry) => {
+      if (entry.role === 'workflowTask') {
+        return { ...entry, task: { ...entry.task, attemptId: 'prior' } };
+      }
+      if (entry.role === 'phase') return { ...entry, attemptId: 'prior' };
+      return entry;
+    });
+
+    const model = workflowDashboardModel(
+      { ...prior, workflowAttemptId: 'current', entries },
+      WIDE_COLUMNS,
+    );
+
+    expect(model.groups).toStrictEqual([]);
+    expect(model.tasks).toStrictEqual([]);
+  });
+
   it('renders exactly the narrow row values the reducer reconciles against', async () => {
     const model = workflowDashboardModel(TWO_PHASE_ROOT, NARROW_COLUMNS);
     const visited = await navigateList(

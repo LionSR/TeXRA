@@ -7,6 +7,7 @@ import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { AgentCategory } from '@shared/schemas';
 import {
   formatWorkflowPhaseHeading,
+  latestWorkflowCallsById,
   workflowCallFailureTally,
   workflowPhaseCallProgress,
 } from '@shared/copy/workflowCall';
@@ -14,6 +15,7 @@ import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import {
   activeStreamId as activeStreamIdSignal,
+  currentWorkflowAttemptId,
   streams as streamsSignal,
   type ConversationEntry,
   type StreamSlice,
@@ -156,15 +158,23 @@ export function workflowRunStatusSummary(
   slice: StreamSlice | undefined,
 ): readonly WorkflowStatusSegment[] | undefined {
   if (slice?.category !== AgentCategory.Workflow) return undefined;
-  const phase = slice.entries.findLast((entry) => entry.role === 'phase');
+  const currentAttemptId = currentWorkflowAttemptId(
+    slice.workflowAttemptId,
+    slice.entries,
+  );
+  const phase = slice.entries.findLast(
+    (entry): entry is Extract<ConversationEntry, { readonly role: 'phase' }> =>
+      entry.role === 'phase' &&
+      (currentAttemptId === undefined || entry.attemptId === currentAttemptId),
+  );
+  const currentCalls = latestWorkflowCallsById(
+    slice.entries.flatMap((entry) =>
+      entry.role === 'workflowTask' ? [entry.task] : [],
+    ),
+    currentAttemptId,
+  );
   const { done, total } = workflowPhaseCallProgress(
-    phase
-      ? slice.entries.flatMap((entry) =>
-          entry.role === 'workflowTask' && entry.task.phase === phase.phaseLabel
-            ? [entry.task]
-            : [],
-        )
-      : [],
+    phase ? currentCalls.filter((call) => call.phase === phase.phaseLabel) : [],
   );
   const segments: WorkflowStatusSegment[] = [];
   if (phase) {
@@ -178,11 +188,7 @@ export function workflowRunStatusSummary(
   // is whole-run, so a failure persists after the run advances past its phase
   // (unlike the current-phase done/total).
   if (segments.length > 0) {
-    const { failed } = workflowCallFailureTally(
-      slice.entries.flatMap((entry) =>
-        entry.role === 'workflowTask' ? [entry.task] : [],
-      ),
-    );
+    const { failed } = workflowCallFailureTally(currentCalls);
     if (failed > 0) {
       segments.push({ text: `${failed} failed`, tone: 'warning' });
     }

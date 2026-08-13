@@ -51,7 +51,9 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
  * still-disjoint legacy `EndGroupStatus` vocabulary does. The shared
  * projection maps a legacy value UP to the native value it corresponds to;
  * a value in neither vocabulary still falls back to `undefined` here, same
- * as any other field.
+ * as any other display field. `attemptId` is different: it owns physical-run
+ * identity, so genuine absence remains valid for older rows while a malformed
+ * present value rejects the payload instead of becoming a legacy omission.
  */
 export const GroupLogPayloadSchema = z.looseObject({
   status: z
@@ -61,6 +63,7 @@ export const GroupLogPayloadSchema = z.looseObject({
   kind: StageKindSchema.optional().catch(undefined),
   index: taskGroupIndexField.optional().catch(undefined),
   total: taskGroupTotalField.optional().catch(undefined),
+  attemptId: z.string().min(1).optional(),
   name: z.string().optional().catch(undefined),
   endTime: taskGroupEndTimeField.optional().catch(undefined),
 });

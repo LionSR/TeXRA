@@ -9,6 +9,7 @@
 
 // Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
+import { latestWorkflowCallsById } from '@shared/copy/workflowCall';
 
 // Local imports - TUI presentation constants
 import { WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS } from '../panes/SubagentListDisplay';
@@ -19,7 +20,7 @@ import {
   workflowTaskListValue,
   type ChildListValue,
 } from './childListSelection';
-import type { StreamSlice } from './cliState';
+import { currentWorkflowAttemptId, type StreamSlice } from './cliState';
 
 export type WorkflowTaskEntry = Extract<
   StreamSlice['entries'][number],
@@ -85,8 +86,29 @@ export function workflowDashboardModel(
   const groups: MutableWorkflowPhaseGroup[] = [];
   const byPhase = new Map<string | undefined, MutableWorkflowPhaseGroup>();
   const tasks: WorkflowTaskEntry[] = [];
+  const currentAttemptId = currentWorkflowAttemptId(
+    root.workflowAttemptId,
+    root.entries,
+  );
+  const currentCalls = new Set(
+    latestWorkflowCallsById(
+      root.entries.flatMap((entry) =>
+        entry.role === 'workflowTask' ? [entry.task] : [],
+      ),
+      currentAttemptId,
+    ),
+  );
   for (const entry of root.entries) {
     if (entry.role !== 'phase' && entry.role !== 'workflowTask') continue;
+    if (entry.role === 'workflowTask' && !currentCalls.has(entry.task))
+      continue;
+    if (
+      entry.role === 'phase' &&
+      currentAttemptId !== undefined &&
+      entry.attemptId !== currentAttemptId
+    ) {
+      continue;
+    }
     const phase = entry.role === 'phase' ? entry.phaseLabel : entry.task.phase;
     let group = byPhase.get(phase);
     if (!group) {
@@ -98,8 +120,18 @@ export function workflowDashboardModel(
       };
       byPhase.set(phase, group);
       groups.push(group);
-    } else if (entry.role === 'phase' && group.heading === undefined) {
-      group.heading = entry;
+    } else if (entry.role === 'phase') {
+      // A rerun may retain the same phase label with revised index/total data.
+      // Keep the stable first-appearance row identity, but display the latest
+      // heading facts just as the status band does. A GROUP_END row can omit
+      // counts, so retain them from the preceding heading in that one case.
+      const phaseIndex = entry.phaseIndex ?? group.heading?.phaseIndex;
+      const phaseTotal = entry.phaseTotal ?? group.heading?.phaseTotal;
+      group.heading = {
+        ...entry,
+        ...(phaseIndex !== undefined ? { phaseIndex } : {}),
+        ...(phaseTotal !== undefined ? { phaseTotal } : {}),
+      };
     }
     if (entry.role === 'workflowTask') {
       group.tasks.push(entry);
@@ -118,6 +150,11 @@ export function workflowDashboardModel(
   }
 
   const taskValues = tasks.map((entry) => workflowTaskListValue(entry.id));
+  const narrowValues = groups.flatMap((group) =>
+    group.tasks.length === 0
+      ? [group.value]
+      : group.tasks.map((entry) => workflowTaskListValue(entry.id)),
+  );
   const wide = columns >= WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS;
   return {
     root,
@@ -128,11 +165,11 @@ export function workflowDashboardModel(
       tasks.map((entry) => [workflowTaskListValue(entry.id), entry]),
     ),
     groupByValue: new Map(groups.map((group) => [group.value, group])),
-    // Narrow rows render phase headers as disabled separators, so they are not
-    // reachable row values there.
+    // Narrow phase headers with tasks are disabled separators. An empty phase
+    // is itself selectable so a phase-only dashboard remains keyboard-reachable.
     listValues: wide
       ? [...groups.map((group) => group.value), ...taskValues]
-      : taskValues,
+      : narrowValues,
     wide,
   };
 }
@@ -143,7 +180,9 @@ export function workflowDashboardPanelItemCount(
   model: WorkflowDashboardModel | undefined,
   selectedValue: ChildListValue | undefined,
 ): number {
-  if (!model || model.tasks.length === 0) return 0;
+  if (!model || (model.groups.length === 0 && model.tasks.length === 0)) {
+    return 0;
+  }
   if (!model.wide) {
     return 1 + model.groups.length + model.tasks.length;
   }
