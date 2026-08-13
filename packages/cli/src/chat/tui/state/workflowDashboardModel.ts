@@ -9,6 +9,7 @@
 
 // Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
+import { latestWorkflowCallsById } from '@shared/copy/workflowCall';
 
 // Local imports - TUI presentation constants
 import { WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS } from '../panes/SubagentListDisplay';
@@ -85,8 +86,17 @@ export function workflowDashboardModel(
   const groups: MutableWorkflowPhaseGroup[] = [];
   const byPhase = new Map<string | undefined, MutableWorkflowPhaseGroup>();
   const tasks: WorkflowTaskEntry[] = [];
+  const currentCalls = new Set(
+    latestWorkflowCallsById(
+      root.entries.flatMap((entry) =>
+        entry.role === 'workflowTask' ? [entry.task] : [],
+      ),
+    ),
+  );
   for (const entry of root.entries) {
     if (entry.role !== 'phase' && entry.role !== 'workflowTask') continue;
+    if (entry.role === 'workflowTask' && !currentCalls.has(entry.task))
+      continue;
     const phase = entry.role === 'phase' ? entry.phaseLabel : entry.task.phase;
     let group = byPhase.get(phase);
     if (!group) {

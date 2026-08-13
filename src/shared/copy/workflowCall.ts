@@ -7,6 +7,28 @@ import { filterNotNullish } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 /**
+ * Select the current state of each logical workflow call.
+ *
+ * Durable script reruns append a fresh progress record for the same logical
+ * call id so the earlier attempt remains available in transcript history.
+ * Live projections must collapse those records at their boundary rather than
+ * count prior attempts as additional tasks.
+ */
+export function latestWorkflowCallsById(
+  calls: readonly WorkflowCallProgress[],
+): WorkflowCallProgress[] {
+  const seen = new Set<string>();
+  return calls
+    .toReversed()
+    .filter((call) => {
+      if (seen.has(call.id)) return false;
+      seen.add(call.id);
+      return true;
+    })
+    .toReversed();
+}
+
+/**
  * Canonical metadata copy for terminal workflow-call progress on every host.
  */
 export function formatWorkflowCallMetadataParts(
