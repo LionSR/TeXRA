@@ -697,13 +697,13 @@ describe('CLI run progress renderer', () => {
     handleStreamDescription(
       renderer,
       'child-stream',
-      'Run API_TOKEN=supersecretvalue now',
+      'Run PASSWORD="correct horse" now',
     );
     handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — Run API_TOKEN=[redacted] now · 0s\n',
+        'orchestrator · subagent: review — Run PASSWORD=[redacted] now · 0s\n',
     );
   });
 
