@@ -33,6 +33,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ steps.detect.outputs.code }}
+      remote_agent_docs: ${{ steps.detect.outputs.remote_agent_docs }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -49,6 +50,7 @@ jobs:
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "Event '${{ github.event_name }}' -> full validation."
             echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "remote_agent_docs=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           base='${{ github.event.pull_request.base.sha }}'
@@ -56,11 +58,15 @@ jobs:
           files="$(git diff --name-only "$base...$head")"
           echo "Changed files in this PR:"
           printf '%s\n' "$files"
-          # A file counts as "code" unless it lives under docs/ (outside
-          # docs/supabase/, whose remote-agents config and generated SQL must
-          # still pass the drift check) or is a *.md file.
-          if printf '%s\n' "$files" | grep -vE '\.md$' | grep -vE '^docs/' | grep -q . \
-            || printf '%s\n' "$files" | grep -qE '^docs/supabase/'; then
+          if printf '%s\n' "$files" | grep -qE '^docs/supabase/(SYNC_REMOTE_AGENTS\.sql|remote-agents\.config\.json)$'; then
+            echo "remote_agent_docs=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "remote_agent_docs=false" >> "$GITHUB_OUTPUT"
+          fi
+          # A file counts as "code" unless it lives under docs/ or is a *.md
+          # file. Remote-agent docs keep this classification: their separate
+          # drift job must not suppress the public docs build.
+          if printf '%s\n' "$files" | grep -vE '\.md$' | grep -vE '^docs/' | grep -q .; then
             echo "Non-docs changes detected -> full validation."
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
@@ -149,6 +155,34 @@ jobs:
 
       - name: Check tsconfig paths are in sync with the root
         run: pnpm run check:tsconfig-paths
+
+      - name: Check remote-agents SQL is in sync
+        run: pnpm run check:remote-agents
+
+  remote-agent-docs:
+    name: remote-agents SQL sync
+    needs: changes
+    if: needs.changes.outputs.code != 'true' && needs.changes.outputs.remote_agent_docs == 'true' && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Check remote-agents SQL is in sync
         run: pnpm run check:remote-agents
@@ -437,6 +471,7 @@ jobs:
     needs:
       - changes
       - checks
+      - remote-agent-docs
       - guidance-refs
       - test
       - build
@@ -470,6 +505,7 @@ jobs:
           fi
           for result in \
             'checks:${{ needs.checks.result }}' \
+            'remote-agent-docs:${{ needs.remote-agent-docs.result }}' \
             'test:${{ needs.test.result }}' \
             'build:${{ needs.build.result }}' \
             'webview-smoke:${{ needs.webview-smoke.result }}' \
