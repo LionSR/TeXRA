@@ -28,6 +28,34 @@ import {
 
 const logger = createChannelTrace('InquiryTool');
 
+type InquirySubmitAction = Extract<
+  InquiryActionMessage,
+  { readonly action: 'submit' }
+>;
+type InquiryDropBase = Omit<
+  Extract<InquiryActionMessage, { readonly action: 'drop' }>,
+  'feedback'
+>;
+type InquiryDropAction = InquiryDropBase &
+  (
+    | {
+        readonly feedback?: string;
+        readonly reason?: never;
+        readonly cause?: never;
+      }
+    | {
+        readonly feedback?: never;
+        readonly reason: string;
+        readonly cause?: never;
+      }
+    | {
+        readonly feedback?: never;
+        readonly reason?: never;
+        readonly cause: string;
+      }
+  );
+type ExternalInquiryAction = InquirySubmitAction | InquiryDropAction;
+
 export type ExternalInquiryTransition =
   | {
       readonly kind: 'answered';
@@ -46,7 +74,7 @@ export type ExternalInquiryTransition =
 
 /** Persist one terminal inquiry action without reaching into host presentation. */
 export async function persistExternalInquiryAction(
-  payload: InquiryActionMessage,
+  payload: ExternalInquiryAction,
 ): Promise<ExternalInquiryTransition> {
   if (payload.action === 'submit') {
     const persisted = await recordAnswerForOpenTurn({
@@ -71,6 +99,14 @@ export async function persistExternalInquiryAction(
   if (payload.feedback) {
     logger.info(`Inquiry ${payload.threadId} dropped with feedback`, {
       data: payload.feedback,
+    });
+  } else if (payload.reason) {
+    logger.info(`Inquiry ${payload.threadId} denied`, {
+      data: payload.reason,
+    });
+  } else if (payload.cause) {
+    logger.info(`Inquiry ${payload.threadId} cancelled`, {
+      data: payload.cause,
     });
   }
   const droppedManifest = await markDropped({ threadId: payload.threadId });
@@ -117,7 +153,7 @@ export async function continueExternalInquiryAction(
 
 /** Persist and continue an inquiry action for hosts without progress UI. */
 export async function handleExternalInquiryAction(
-  payload: InquiryActionMessage,
+  payload: ExternalInquiryAction,
   options: { session?: SessionHandle } = {},
 ): Promise<void> {
   const transition = await persistExternalInquiryAction(payload);

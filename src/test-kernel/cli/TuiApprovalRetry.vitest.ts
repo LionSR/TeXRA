@@ -446,7 +446,7 @@ describe('TUI retry approvals', () => {
       expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith({
         action: 'drop',
         threadId: 'thread-interrupted',
-        feedback: 'Session interrupted.',
+        cause: 'Session interrupted.',
       }),
     );
   });
