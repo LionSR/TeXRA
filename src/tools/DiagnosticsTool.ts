@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
 import type { ToolDefinition } from '@model/ToolDefinition';
-import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
+import { type ToolResult, ToolError } from '@shared/schemas';
 import {
   currentToolRoot,
   resolveWorkspaceRelativePath,

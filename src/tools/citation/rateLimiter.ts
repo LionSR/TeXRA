@@ -3,7 +3,7 @@ import pThrottle from 'p-throttle';
 
 // Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError } from '@shared/schemas';
 import { wrapApiCall } from '@tools/utils';
 
 const limiters = new Map<

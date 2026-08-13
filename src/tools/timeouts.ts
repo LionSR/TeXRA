@@ -10,7 +10,7 @@ import isNetworkError from 'is-network-error';
 import { HTTPError, TimeoutError } from 'ky';
 import pRetry, { AbortError, type Options as PRetryOptions } from 'p-retry';
 
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError } from '@shared/schemas';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 

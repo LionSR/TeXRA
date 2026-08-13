@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ToolError, type ToolFileAttachment } from '@shared/schemas/toolResult';
+import { ToolError, type ToolFileAttachment } from '@shared/schemas';
 import { buildFileAttachment } from '@tools/attachments';
 import { formatToolOutput } from '@tools/formatting';
 import {

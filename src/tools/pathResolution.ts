@@ -6,7 +6,7 @@ import {
   getRunContextWorkingDirectory,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { normalizeFilePath } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';

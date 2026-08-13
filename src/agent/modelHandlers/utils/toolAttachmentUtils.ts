@@ -1,8 +1,5 @@
 // Local imports - tools (single source of truth for file/attachment schemas)
-import {
-  type ToolFileAttachment,
-  type ToolResult,
-} from '@shared/schemas/toolResult';
+import { type ToolFileAttachment, type ToolResult } from '@shared/schemas';
 
 // Local imports - utils
 import { isNonEmptyString } from '@utils/core';

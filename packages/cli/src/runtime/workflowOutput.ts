@@ -3,7 +3,6 @@ import * as path from 'node:path';
 
 import type { AgentEntry } from '@agent/index';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import {
   finalWorkflowOutput,
@@ -13,6 +12,7 @@ import {
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import type { OutputFileSummary } from '@shared/schemas/output';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
+import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
 import { getRunDir } from '@utils/files/runStorageFs';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since these paths come from getSafeDocumentRelativePath /

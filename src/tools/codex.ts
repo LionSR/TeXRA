@@ -29,7 +29,7 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
-import { MESSAGE_TYPES } from '@shared/schemas';
+import { MESSAGE_TYPES, ToolError, type ToolResult } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type {
   StreamTabId,
@@ -38,7 +38,6 @@ import type {
   ToolUseLog,
   ToolUseStatus,
 } from '@shared/schemas';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds } from '@utils/core';

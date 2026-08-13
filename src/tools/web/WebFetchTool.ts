@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 // Local imports - core
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { ToolError, ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, ToolResult } from '@shared/schemas';
 import {
   joinAbortSignal,
   retryTransientFetch,

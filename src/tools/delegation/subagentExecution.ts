@@ -27,7 +27,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import type { ToolResult } from '@shared/schemas/toolResult';
+import type { ToolResult } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import { generateExecutionId } from '@utils/core';

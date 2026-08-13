@@ -8,7 +8,7 @@ import { z } from 'zod';
 // Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { ToolError, ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, ToolResult } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
 import {

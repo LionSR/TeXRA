@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas';
 
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';

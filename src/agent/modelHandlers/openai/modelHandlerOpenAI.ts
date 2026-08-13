@@ -31,11 +31,12 @@ import {
 import { buildErrorLogData } from '@common/errors/sdkError/providerErrorFormat';
 import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 import type { ToolDefinition } from '@model/ToolDefinition';
-import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
+  FileLocation,
+  MediaAttachmentKind,
   ToolFileAttachment,
   ToolResult,
-} from '@shared/schemas/toolResult';
+} from '@shared/schemas';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { isNonEmptyString } from '@utils/core';
 import { extractMimeSubtype } from '@utils/text/stringUtils';

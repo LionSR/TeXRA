@@ -2,8 +2,8 @@
 import { z } from 'zod';
 
 // Local imports
+import { ToolError, type ToolResult } from '@shared/schemas';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
 import { executed } from '@tools/core/result';

@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type { ToolFileAttachment } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 

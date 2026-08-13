@@ -77,12 +77,13 @@ import {
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
-import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
-import { MESSAGE_TYPES, AgentCategory } from '@shared/schemas';
 import type {
+  FileLocation,
+  MediaAttachmentKind,
   ToolFileAttachment,
   ToolResult,
-} from '@shared/schemas/toolResult';
+} from '@shared/schemas';
+import { MESSAGE_TYPES, AgentCategory } from '@shared/schemas';
 import { OUTPUT_END_TAG } from '@shared/schemas/output';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from '@shared/constants/contextManagement';

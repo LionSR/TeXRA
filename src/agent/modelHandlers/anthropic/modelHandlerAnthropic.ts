@@ -48,11 +48,9 @@ import type {
   FileLocation,
   MediaAttachmentKind,
   StreamDiagnostics,
-} from '@shared/schemas';
-import type {
   ToolFileAttachment,
   ToolResult,
-} from '@shared/schemas/toolResult';
+} from '@shared/schemas';
 import { joinNonEmpty } from '@utils/text/stringUtils';
 import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
 import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';

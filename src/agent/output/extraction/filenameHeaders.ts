@@ -11,11 +11,11 @@ import * as path from 'node:path';
 
 import escapeRegExp from 'escape-string-regexp';
 
+import { getBasename, normalizeFilePath } from '@utils/core';
 import {
   getExtractedDocOutputFileName,
   getSafeDocumentRelativePath,
-} from '@agent/utils/outputFileUtils';
-import { getBasename, normalizeFilePath } from '@utils/core';
+} from '@utils/files/outputFileUtils';
 
 import {
   isClosingMarkdownFence,

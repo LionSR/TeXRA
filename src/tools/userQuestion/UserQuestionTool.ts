@@ -11,7 +11,7 @@ import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
 } from '@shared/schemas';
-import type { ToolResult } from '@shared/schemas/toolResult';
+import type { ToolResult } from '@shared/schemas';
 import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
