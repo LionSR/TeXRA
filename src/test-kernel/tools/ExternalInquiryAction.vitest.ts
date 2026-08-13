@@ -29,9 +29,17 @@ const traceMocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
-vi.mock('@agent/trace', () => ({
-  createChannelTrace: () => traceMocks,
-}));
+vi.mock('@agent/trace', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agent/trace')>();
+  return {
+    ...actual,
+    createChannelTrace: () => ({
+      ...actual.noopTrace,
+      info: traceMocks.info,
+      warn: traceMocks.warn,
+    }),
+  };
+});
 
 vi.mock('@tools/inquiry/externalInquiryStorage', () => storageMocks);
 
