@@ -453,7 +453,11 @@ function WorkflowDashboard({
         {failed > 0 ? (
           // A pending approval needs action, so this tally yields before the
           // fixed approval suffix when the two cannot both fit.
-          <Text bold color={COLOR_WARNING}>{` · ${failed} failed`}</Text>
+          <Box minWidth={0} flexShrink={2}>
+            <Text bold color={COLOR_WARNING} wrap="truncate-end">
+              {` · ${failed} failed`}
+            </Text>
+          </Box>
         ) : null}
         {sessionApprovalSuffix ? (
           <Box flexShrink={0}>
