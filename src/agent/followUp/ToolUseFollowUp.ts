@@ -13,8 +13,8 @@ import {
 import { platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
-import { KeyedMutex } from '@utils/core';
 import type { FollowUpQueueInput } from './FollowUpQueue';
+import type { FollowUpRecoveryLease } from './ToolUseFollowUpQueueManager';
 
 export type SubmitFollowUpResult =
   | { status: 'sent' }
@@ -76,7 +76,6 @@ export function presentFollowUpResult(
 }
 
 const logger = createChannelTrace('ToolUseFollowUp');
-const submissionMutex = new KeyedMutex<StreamTabId>();
 const PersistedContinuationGenerationSchema = z.looseObject({
   continuationGenerationId: z.uuid(),
 });
@@ -85,17 +84,23 @@ async function restorePersistedGeneration(
   streamId: StreamTabId,
   session: SessionHandle,
 ): Promise<boolean> {
-  let executionId = session.snapshots.getRunMetadata(streamId).executionId;
-  if (!executionId) {
-    try {
-      executionId = await session.snapshots.readPersistedExecutionId(streamId);
-    } catch (error) {
-      logger.warn(
-        `Cannot restore continuation generation for ${streamId}: persisted execution mapping is unreadable.`,
-        { data: { streamId, cause: 'unreadable_execution_mapping', error } },
-      );
-      return false;
-    }
+  let executionId: string | undefined;
+  try {
+    executionId =
+      session.snapshots.getRunMetadata(streamId).executionId ??
+      (await session.snapshots.readPersistedExecutionId(streamId));
+  } catch (error) {
+    logger.warn(
+      `Cannot restore continuation generation for ${streamId}: persisted execution identity is unreadable.`,
+      {
+        data: {
+          streamId,
+          cause: 'execution_id_read_failed',
+          error,
+        },
+      },
+    );
+    return false;
   }
   if (!executionId) {
     logger.warn(
@@ -161,16 +166,22 @@ export function notifyFollowUpSent(
 /**
  * Submit visible input or an automatic notification through the stream's sole
  * continuation boundary. Routing, enqueue, live-owner detection, and persisted
- * recovery dispatch are one operation; callers never perform a separate wake.
- * The resume port is invoked before this function's first await, allowing its
- * synchronous recovery claim to serialize concurrent submissions.
+ * recovery admission are serialized by the session-owned per-stream lock;
+ * callers never perform a separate wake. A resumed model turn completes after
+ * that lock is released, so it cannot block later input from joining its queue.
  */
-async function submitFollowUpUnlocked(
+interface PendingResume {
+  readonly resume: Promise<boolean>;
+  readonly recovery: FollowUpRecoveryLease;
+  readonly reason: ToolUseFollowUpQueueReason;
+}
+
+async function submitFollowUpSerialized(
   streamId: StreamTabId,
   followUp: FollowUpQueueInput | string,
-  options: SubmitFollowUpOptions = {},
-): Promise<SubmitFollowUpResult> {
-  const ownerSession = options.session ?? currentSession();
+  options: SubmitFollowUpOptions,
+  ownerSession: SessionHandle,
+): Promise<SubmitFollowUpResult | PendingResume> {
   const target = ownerSession.executions.getToolUseFollowUpTarget(streamId);
   const item = typeof followUp === 'string' ? { text: followUp } : followUp;
 
@@ -259,22 +270,28 @@ async function submitFollowUpUnlocked(
     streamId,
     recovery,
   );
-  const resumed = await resume;
-  if (!resumed) ownerSession.followUps.release(recovery, 'recoverable');
-  return {
-    status: 'queued',
-    reason,
-    continuation: resumed ? 'resumed' : 'resume_failed',
-  };
+  return { resume, recovery, reason };
 }
 
-/** Serialize persisted lookup and admission in producer invocation order. */
-export function submitFollowUp(
+export async function submitFollowUp(
   streamId: StreamTabId,
   followUp: FollowUpQueueInput | string,
   options: SubmitFollowUpOptions = {},
 ): Promise<SubmitFollowUpResult> {
-  return submissionMutex.runExclusive(streamId, () =>
-    submitFollowUpUnlocked(streamId, followUp, options),
+  const ownerSession = options.session ?? currentSession();
+  const dispatch = await ownerSession.followUps.runSubmissionExclusive(
+    streamId,
+    () => submitFollowUpSerialized(streamId, followUp, options, ownerSession),
   );
+  if (!('resume' in dispatch)) return dispatch;
+
+  const resumed = await dispatch.resume;
+  if (!resumed) {
+    ownerSession.followUps.release(dispatch.recovery, 'recoverable');
+  }
+  return {
+    status: 'queued',
+    reason: dispatch.reason,
+    continuation: resumed ? 'resumed' : 'resume_failed',
+  };
 }
