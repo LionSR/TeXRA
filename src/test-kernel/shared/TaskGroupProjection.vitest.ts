@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   LOG_LEVELS,
-  GroupLogPayloadSchema,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
@@ -48,12 +47,27 @@ function entry(
 
 describe('task-group StreamLog projection', () => {
   it('distinguishes absent attempt identity from malformed ownership', () => {
-    expect(GroupLogPayloadSchema.safeParse({ kind: 'phase' }).success).toBe(
-      true,
+    const taskGroups = projectTaskGroupsFromStreamLog([
+      entry('valid-phase', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
+        text: 'Explore',
+        data: { kind: 'phase' },
+      }),
+      entry('invalid-phase', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
+        text: 'Stale phase',
+        data: { kind: 'phase', attemptId: '' },
+      }),
+    ]);
+
+    expect(taskGroups).toMatchObject([
+      {
+        id: 'valid-phase',
+        name: 'Explore',
+        kind: 'phase',
+      },
+    ]);
+    expect(taskGroups.some((group) => group.id === 'invalid-phase')).toBe(
+      false,
     );
-    expect(
-      GroupLogPayloadSchema.safeParse({ kind: 'phase', attemptId: 7 }).success,
-    ).toBe(false);
   });
 
   it('projects group metadata and completes groups in source order', () => {
