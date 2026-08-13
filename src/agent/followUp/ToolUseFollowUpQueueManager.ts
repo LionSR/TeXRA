@@ -26,7 +26,7 @@ export type FollowUpConsumerKind = 'flow' | 'child' | 'recovery';
 interface QueueEntry {
   readonly queue: FollowUpQueue;
   /** Stable identity of this continuation generation across recovery claims. */
-  readonly generationId: string;
+  generationId: string;
   /**
    * Delivery ids already admitted for this stream (#9531). In-memory,
    * transport-level replay suppression only — NOT crash-safe exactly-once: a
@@ -249,12 +249,27 @@ export class ToolUseFollowUpQueue {
     return owner?.kind === 'flow' || owner?.kind === 'child';
   }
 
-  /** Inner child/recovery flows borrow the queue their outer owner consumes. */
-  externallyOwnedQueue(streamId: StreamTabId): FollowUpQueue | undefined {
+  /**
+   * Inner child/recovery flows borrow the queue their outer owner consumes.
+   * A recovery created before persisted state was read has a provisional
+   * generation; the resumed flow is the authority that rebinds it. Child
+   * ownership is already authoritative and must match exactly.
+   */
+  externallyOwnedQueue(
+    streamId: StreamTabId,
+    generationId: string,
+  ): FollowUpQueue | undefined {
     const entry = this.entries.get(streamId);
-    return entry?.owner?.kind === 'child' || entry?.owner?.kind === 'recovery'
-      ? entry.queue
-      : undefined;
+    const owner = entry?.owner;
+    if (!entry || (owner?.kind !== 'child' && owner?.kind !== 'recovery')) {
+      return undefined;
+    }
+    if (entry.generationId !== generationId) {
+      if (owner.kind !== 'recovery') return undefined;
+      entry.generationId = generationId;
+      Object.assign(owner, { generationId });
+    }
+    return entry.queue;
   }
 
   queue(lease: FollowUpConsumerLease): FollowUpQueue {
@@ -324,6 +339,12 @@ export class ToolUseFollowUpQueue {
   /** Generation fence for detached producers bound to the current stream. */
   currentGenerationId(streamId: StreamTabId): string | undefined {
     return this.entries.get(streamId)?.generationId;
+  }
+
+  /** Generation authority supplied by an outer child loop to its inner flow. */
+  currentChildGenerationId(streamId: StreamTabId): string | undefined {
+    const entry = this.entries.get(streamId);
+    return entry?.owner?.kind === 'child' ? entry.generationId : undefined;
   }
 
   private createEntry(

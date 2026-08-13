@@ -32,7 +32,10 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
     }
     // A native child loop owns continuation across all of its turns. Its inner
     // one-cycle flow uses that queue without becoming a second consumer.
-    const childQueue = queue.externallyOwnedQueue(streamTabId);
+    const childQueue = queue.externallyOwnedQueue(
+      streamTabId,
+      continuationGenerationId,
+    );
     if (!childQueue) {
       throw new Error(
         `Follow-up continuation already has an owner for stream ${streamTabId}.`,
