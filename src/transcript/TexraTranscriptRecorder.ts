@@ -202,8 +202,8 @@ export function attachTranscriptRecorder(
   // instead of appending a duplicate row. Set on `stream.start` for a
   // MODEL_RESPONSE stream, consumed (and cleared) by `response.finalized`, and
   // reset when the invocation proceeds to tool execution. A single tool-use
-  // round stage can contain several model invocations, so the outer round
-  // stage is too coarse to be the only reset boundary.
+  // session stage can contain several model invocations, so the outer stage is
+  // too coarse to be the only reset boundary.
   let pendingModelResponseId: string | undefined;
 
   const flushStream = (state: StreamSinkState, id: string): void => {
