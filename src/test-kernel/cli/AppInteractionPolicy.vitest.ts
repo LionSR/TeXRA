@@ -112,14 +112,18 @@ function foregroundInput(
 describe('app interaction policy', () => {
   it('folds stream-less approvals onto the root of the visible surface', () => {
     const sessionRoot = 'session-root' as StreamTabId;
+    const scopedListRoot = 'scoped-list-root' as StreamTabId;
     const workflowRoot = 'workflow-root' as StreamTabId;
 
-    expect(visibleApprovalRootStreamId(sessionRoot, undefined)).toBe(
+    expect(visibleApprovalRootStreamId(sessionRoot, undefined, undefined)).toBe(
       sessionRoot,
     );
-    expect(visibleApprovalRootStreamId(sessionRoot, workflowRoot)).toBe(
-      workflowRoot,
-    );
+    expect(
+      visibleApprovalRootStreamId(sessionRoot, scopedListRoot, undefined),
+    ).toBe(scopedListRoot);
+    expect(
+      visibleApprovalRootStreamId(sessionRoot, scopedListRoot, workflowRoot),
+    ).toBe(workflowRoot);
   });
 
   it.each([
