@@ -60,7 +60,7 @@ describe('retained finished children', () => {
   function seedParent(backend: ProgressBackend): void {
     backend.state.streamLogs.ensureStream(PARENT);
     backend.state.getOrCreateStreamState(PARENT, AgentCategory.Workflow);
-    backend.state.switchActiveStream(PARENT);
+    backend.presentation.select(PARENT);
   }
 
   function parentRoster(backend: ProgressBackend): ActiveChildInfo[] {
@@ -105,7 +105,7 @@ describe('retained finished children', () => {
     const other = 'other-stream' as StreamTabId;
     backend.state.streamLogs.ensureStream(other);
     backend.state.getOrCreateStreamState(other, AgentCategory.ToolUse);
-    backend.state.switchActiveStream(other);
+    backend.presentation.select(other);
     messages.length = 0;
 
     applyRoster(backend, PARENT, []);
@@ -242,13 +242,18 @@ describe('retained finished children', () => {
     // frontend's other writer of `subagents`; it must overlay the stale row
     // with the authoritative status-machine outcome.
     backend.webviewUpdater.sendStreamMetadata(
-      backend.state,
-      backend.state.streamStatus.getAllStreamStates(),
+      backend.projections.streamRoster(
+        backend.presentation.activeStream,
+        backend.state.streamStatus.getAllStreamStates(),
+      ),
+      backend.presentation.activeStream,
     );
     backend.webviewUpdater.updateStreamMetadata(
-      backend.state,
-      PARENT,
-      backend.state.streamStatus.getAllStreamStates(),
+      backend.projections.streamMetadata(
+        PARENT,
+        backend.state.streamStatus.getAllStreamStates(),
+        backend.presentation.activeStream,
+      ),
     );
 
     const rosters = messages.flatMap((message) => {

@@ -136,6 +136,12 @@ interface StreamWriterOwnership {
 
 type TranscriptResidencyLeaseReason = 'writer' | 'focus' | 'flush';
 
+/** Exact presentation ownership of one resident transcript. */
+export interface TranscriptPresentationLease {
+  readonly streamId: StreamTabId;
+  close(): void;
+}
+
 /**
  * Every per-stream field that shares the resident stream lifecycle, keyed by
  * stream id in ONE map (`streams`, a {@link ResidentStreamRegistry}) instead
@@ -162,6 +168,8 @@ interface StreamState {
   log?: StreamLog;
   /** Reasons that currently require the heavy transcript to stay resident. */
   leases?: Set<TranscriptResidencyLeaseReason>;
+  /** Exact presentation capabilities currently retaining this transcript. */
+  presentationLeases?: Set<symbol>;
   /**
    * Membership flag: this stream's rehydrate read from disk failed. While set,
    * saves skip it so we never overwrite the authoritative disk copy with a
@@ -360,6 +368,8 @@ export class StreamLogStore {
       (s) =>
         s.log === undefined &&
         (s.leases === undefined || s.leases.size === 0) &&
+        (s.presentationLeases === undefined ||
+          s.presentationLeases.size === 0) &&
         !s.loadFailed &&
         s.pendingLoad === undefined &&
         s.writer === undefined,
@@ -715,17 +725,64 @@ export class StreamLogStore {
     };
   }
 
+  async ensureLoaded(
+    streamId: StreamTabId,
+    options: { retainForPresentation: true },
+  ): Promise<TranscriptPresentationLease>;
+  async ensureLoaded(streamId: StreamTabId): Promise<void>;
   /**
    * Async reload entries from disk if they were released. No-op when already
-   * resident or when the stream is unknown.
+   * resident or when the stream is unknown. A presentation may request an
+   * exact lease so closing an obsolete selection cannot release a newer one.
    */
-  async ensureLoaded(streamId: StreamTabId): Promise<void> {
-    await this.hydrateStream(streamId, 'focus');
+  async ensureLoaded(
+    streamId: StreamTabId,
+    options?: { retainForPresentation: true },
+  ): Promise<void | TranscriptPresentationLease> {
+    if (!options?.retainForPresentation) {
+      await this.hydrateStream(streamId, 'focus');
+      return;
+    }
+    if (
+      this.mode.kind === 'ephemeral' ||
+      (this.streams.get(streamId) === undefined &&
+        !this.summaries.has(streamId))
+    ) {
+      return { streamId, close: () => undefined };
+    }
+
+    const token = Symbol(streamId);
+    const state = this.ensureStreamState(streamId);
+    state.presentationLeases ??= new Set();
+    state.presentationLeases.add(token);
+    let closed = false;
+    const close = (): void => {
+      if (closed) return;
+      closed = true;
+      const current = this.streams.get(streamId);
+      current?.presentationLeases?.delete(token);
+      if (current?.presentationLeases?.size === 0) {
+        current.presentationLeases = undefined;
+      }
+      // A presentation lease makes a historical transcript resident. Once
+      // the final exact owner leaves, request eviction even when no lifecycle
+      // status event previously did so.
+      this.requestEviction(streamId);
+      this.pruneStreamState(streamId);
+    };
+
+    try {
+      await this.hydrateStream(streamId, 'presentation');
+      return { streamId, close };
+    } catch (error) {
+      close();
+      throw error;
+    }
   }
 
   private async hydrateStream(
     streamId: StreamTabId,
-    reason: 'focus' | 'writer',
+    reason: 'focus' | 'presentation' | 'writer',
   ): Promise<void> {
     if (this.mode.kind === 'ephemeral') return;
 
@@ -1530,6 +1587,7 @@ export class StreamLogStore {
       !state ||
       !this.releaseRequests.has(streamId) ||
       (state.leases?.size ?? 0) > 0 ||
+      (state.presentationLeases?.size ?? 0) > 0 ||
       this.dirtyIds.has(streamId) ||
       state.pendingLoad
     ) {

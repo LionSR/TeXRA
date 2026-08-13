@@ -12,12 +12,6 @@ import {
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local imports - progress view
-import {
-  deleteStreamState,
-  detachChildStreamTabs,
-  firstStreamId,
-} from './store';
-import { deleteFollowUpInputTransientState } from './followUpInputState';
 import { addResolvedProposalId, removePrompt } from './slices/permissionSlice';
 import { updateToolUseState } from './stateUtils';
 import { clearInquiryDraft } from './slices/inquiryDraftState';
@@ -37,36 +31,44 @@ import { appState, setStreamStateForId } from './progressState';
 export function handleStreamSwitch(
   event: CustomEvent<StreamEventDetail>,
 ): void {
-  const streamId = event.detail.streamId;
-  // Optimistic: highlight tab immediately
+  requestStreamSwitch(event.detail.streamId);
+}
+
+/** Record reversible tab feedback, then ask the backend to hydrate it. */
+export function requestStreamSwitch(streamId: StreamTabId): void {
+  const requestId = crypto.randomUUID();
   appState.set(
     create(appState.get(), (draft) => {
-      draft.activeStreamId = streamId;
+      draft.pendingStreamSelection = { requestId, streamId };
     }),
   );
-  postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, { stream: streamId });
+  postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, {
+    stream: streamId,
+    requestId,
+  });
+}
+
+/** Cancel transient tab intent and ask the backend to confirm no selection. */
+export function requestStreamDeselection(): void {
+  const requestId = crypto.randomUUID();
+  appState.set(
+    create(appState.get(), (draft) => {
+      draft.activeStreamId = null;
+      draft.pendingStreamSelection = null;
+    }),
+  );
+  postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, {
+    stream: '',
+    requestId,
+  });
 }
 
 export function handleStreamDelete(
   event: CustomEvent<StreamEventDetail>,
 ): void {
-  const streamId = event.detail.streamId;
-  deleteFollowUpInputTransientState(streamId);
-
-  // Optimistic removal: apply delete locally before notifying backend
-  appState.set(
-    create(appState.get(), (draft) => {
-      deleteStreamState(draft, streamId);
-      draft.streamById.delete(streamId);
-      detachChildStreamTabs(draft, streamId);
-      if (draft.activeStreamId === streamId) {
-        draft.activeStreamId = firstStreamId(draft.streamById);
-      }
-    }),
-  );
-
-  // Fire-and-forget to backend
-  postMessage(PROGRESS_VIEW_COMMANDS.DELETE_STREAM, { stream: streamId });
+  postMessage(PROGRESS_VIEW_COMMANDS.DELETE_STREAM, {
+    stream: event.detail.streamId,
+  });
 }
 
 export function handleToolbarCommand(

@@ -18,12 +18,10 @@ const SCAN_ROOTS = [
   'src',
 ] as const;
 
-/** Focus/runtime sites allowed to make a transcript resident. */
-const RESIDENCY_SITE_ALLOWLIST = new Set([
+/** Runtime sites allowed to perform ordinary transcript hydration. */
+const HYDRATION_SITE_ALLOWLIST = new Set([
   'packages/cli/src/chat/chatSessionController.ts',
   'packages/cli/src/chat/tui/state/subscribeStreamLog.ts',
-  'packages/desktop/src/main/desktopAgentExecution.ts',
-  'packages/extension/src/progressView/ProgressViewProvider.ts',
   'src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts',
   'src/agent/runtime/executeAgent.ts',
   'src/controllers/progressView/backend/ProgressBackend.ts',
@@ -31,10 +29,16 @@ const RESIDENCY_SITE_ALLOWLIST = new Set([
   'src/transcript/StreamLogStore.ts',
 ]);
 
+/** The progress coordinator is the sole production presentation lease owner. */
+const PRESENTATION_LEASE_SITE_ALLOWLIST = new Set([
+  'src/controllers/progressView/backend/ProgressBackend.ts',
+  'src/transcript/StreamLogStore.ts',
+]);
+
 describe('transcript residency lease sites', () => {
   it('keeps transcript hydration at the closed focus/runtime boundary', () => {
     const offenders = SCAN_ROOTS.flatMap(productionFilesUnder)
-      .filter((file) => !RESIDENCY_SITE_ALLOWLIST.has(file))
+      .filter((file) => !HYDRATION_SITE_ALLOWLIST.has(file))
       .filter((file) =>
         /\.ensureLoaded\s*\(/.test(
           stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
@@ -48,5 +52,18 @@ describe('transcript residency lease sites', () => {
         ? undefined
         : 'Use zero-residency readEntries() for one-shot reads; extend the allowlist only for a new focus/runtime owner.',
     ).toEqual([]);
+  });
+
+  it('keeps exact presentation residency at the progress coordinator boundary', () => {
+    const offenders = SCAN_ROOTS.flatMap(productionFilesUnder)
+      .filter((file) => !PRESENTATION_LEASE_SITE_ALLOWLIST.has(file))
+      .filter((file) =>
+        /retainForPresentation\s*:\s*true/.test(
+          stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
+        ),
+      )
+      .toSorted();
+
+    expect(offenders).toEqual([]);
   });
 });

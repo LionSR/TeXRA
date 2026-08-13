@@ -1,16 +1,13 @@
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
+import type { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
+import { ProgressStreamProjectionBuilder } from '@controllers/progressView/backend/ProgressStreamProjectionBuilder';
 import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
-import {
-  getDefaultProgressStreamControls,
-  type GetProgressStreamControls,
-} from '@controllers/progressView/progressStreamControls';
-import type { SessionRendererPort } from '@controllers/session/SessionRendererPort';
-import {
-  SessionState,
-  type ActiveStreamId,
-  type StreamBadgeSnapshot,
-} from '@controllers/session/SessionState';
+import type {
+  PresentedStreamId,
+  SessionRendererPort,
+} from '@controllers/session/SessionRendererPort';
+import type { StreamBadgeSnapshot } from '@controllers/session/SessionState';
 import type {
   ConversationProgress,
   GoalStatus,
@@ -23,20 +20,16 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
-import {
-  createFlushableDebounce,
-  mapToRecord,
-  type FlushableDebounce,
-} from '@utils/core';
+import type { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
+import { createFlushableDebounce, type FlushableDebounce } from '@utils/core';
 
 /** Throttle interval for conversation progress webview pushes (ms). */
 const PROGRESS_THROTTLE_MS = 500;
 
 /**
- * Lit/progress-view renderer over {@link SessionState}: owns postMessage push
- * policy (`sendIfActive`, conversation-progress debounce, phase-vs-round stage
- * delivery, bridge cursor sync, controls packing).
+ * Lit/progress-view delivery policy over immutable stream projections.
+ * Owns active-only delivery, conversation-progress debounce, phase-vs-round
+ * stage delivery, and bridge cursor synchronization.
  */
 export class LitSessionRenderer implements SessionRendererPort {
   private readonly progressDebounce: FlushableDebounce =
@@ -50,10 +43,12 @@ export class LitSessionRenderer implements SessionRendererPort {
   >();
 
   constructor(
-    private readonly state: SessionState,
+    private readonly projections: ProgressStreamProjectionBuilder,
+    private readonly snapshots: StreamSnapshotStore,
+    private readonly followUps: ToolUseFollowUpQueue,
     private readonly webviewUpdater: WebviewUpdater,
     private readonly webviewBridge: WebviewBridge,
-    private readonly getStreamControls: GetProgressStreamControls = getDefaultProgressStreamControls,
+    private readonly getActiveStream: () => PresentedStreamId = () => '',
   ) {}
 
   isAvailable(): boolean {
@@ -74,14 +69,16 @@ export class LitSessionRenderer implements SessionRendererPort {
     streamId: StreamTabId,
     options?: {
       streamStates?: Map<StreamTabId, StreamPhaseState>;
-      activeStream?: ActiveStreamId;
+      activeStream?: PresentedStreamId;
     },
   ): void {
     if (!this.webviewUpdater.isAvailable()) return;
     this.webviewUpdater.updateStreamMetadata(
-      this.state,
-      streamId,
-      options?.streamStates,
+      this.projections.streamMetadata(
+        streamId,
+        options?.streamStates,
+        options?.activeStream ?? this.getActiveStream(),
+      ),
       { activeStream: options?.activeStream },
     );
   }
@@ -102,7 +99,7 @@ export class LitSessionRenderer implements SessionRendererPort {
     );
   }
 
-  onActiveStreamChanged(streamId: ActiveStreamId): void {
+  onActiveStreamChanged(streamId: PresentedStreamId): void {
     this.webviewUpdater.setActiveStream(streamId);
   }
 
@@ -117,9 +114,11 @@ export class LitSessionRenderer implements SessionRendererPort {
     // Parent edge rides `StreamTabInfo.parentStreamId` on the metadata wire.
     if (!this.webviewUpdater.isAvailable()) return;
     this.webviewUpdater.updateStreamMetadata(
-      this.state,
-      childStreamId,
-      this.state.streamStatus.getAllStreamStates(),
+      this.projections.streamMetadata(
+        childStreamId,
+        undefined,
+        this.getActiveStream(),
+      ),
     );
   }
 
@@ -143,9 +142,11 @@ export class LitSessionRenderer implements SessionRendererPort {
       // cost nothing.
       if (!this.webviewUpdater.isAvailable()) return;
       this.webviewUpdater.updateStreamMetadata(
-        this.state,
-        streamId,
-        this.state.streamStatus.getAllStreamStates(),
+        this.projections.streamMetadata(
+          streamId,
+          undefined,
+          this.getActiveStream(),
+        ),
       );
       return;
     }
@@ -168,7 +169,7 @@ export class LitSessionRenderer implements SessionRendererPort {
 
   onFilesChanged(streamId: StreamTabId): void {
     this.sendIfActive(streamId, () => {
-      const rounds = this.state.snapshots.getOutputFiles(streamId);
+      const rounds = this.snapshots.getOutputFiles(streamId);
       this.webviewUpdater.updateFiles(streamId, {
         rounds: Object.keys(rounds).length ? rounds : undefined,
       });
@@ -184,7 +185,7 @@ export class LitSessionRenderer implements SessionRendererPort {
         this.webviewUpdater.updateMissingOutputs(streamId, { reset: true });
         return;
       }
-      const rounds = this.state.snapshots.getMissingOutputs(streamId);
+      const rounds = this.snapshots.getMissingOutputs(streamId);
       this.webviewUpdater.updateMissingOutputs(streamId, {
         rounds: Object.keys(rounds).length ? rounds : undefined,
       });
@@ -193,7 +194,7 @@ export class LitSessionRenderer implements SessionRendererPort {
 
   onCompileFailuresChanged(streamId: StreamTabId): void {
     this.sendIfActive(streamId, () => {
-      const rounds = this.state.snapshots.getCompileFailures(streamId);
+      const rounds = this.snapshots.getCompileFailures(streamId);
       this.webviewUpdater.updateCompileFailures(streamId, {
         rounds: Object.keys(rounds).length ? rounds : undefined,
         reset: true,
@@ -209,7 +210,7 @@ export class LitSessionRenderer implements SessionRendererPort {
     // Prefer the snapshot store's normalized per-key value when present (fills
     // cache/reasoning zeros); fall back to the event payload.
     const nextUsage =
-      this.state.snapshots.getRunUsage(streamId).get(storageKey) ?? usage;
+      this.snapshots.getRunUsage(streamId).get(storageKey) ?? usage;
     this.sendIfActive(streamId, () =>
       this.webviewUpdater.updateRunUsage(streamId, storageKey, nextUsage),
     );
@@ -228,7 +229,7 @@ export class LitSessionRenderer implements SessionRendererPort {
 
   onQueuedFollowUpsChanged(streamId: StreamTabId): void {
     this.sendIfActive(streamId, () => {
-      const messages = this.state.followUps.getAll(streamId);
+      const messages = this.followUps.getAll(streamId);
       this.webviewUpdater.updateQueuedFollowUps(streamId, messages);
     });
   }
@@ -250,7 +251,7 @@ export class LitSessionRenderer implements SessionRendererPort {
   }
 
   syncStreamContent(
-    stream: ActiveStreamId,
+    stream: PresentedStreamId,
     options: {
       includeActiveState?: boolean;
     } = {},
@@ -266,74 +267,17 @@ export class LitSessionRenderer implements SessionRendererPort {
 
     this.webviewBridge.syncStream(stream);
 
-    const existingState = this.state.getStreamState(stream);
-    const category =
-      this.state.getStreamMetadata(stream).agentCategory ??
-      existingState?.category;
-    // A stream whose category has not resolved yet has nothing to render —
-    // it stays pending until run.config or the snapshot seed supplies one.
-    if (category === undefined) return;
-
-    const executionState = includeActiveState
-      ? this.state.getOrCreateStreamState(stream, category)
-      : undefined;
-    const activeState = executionState
-      ? {
-          conversationProgress: executionState.conversationProgress,
-          stage: executionState.stage ?? null,
-          badges: { subagents: executionState.subagents },
-        }
-      : undefined;
-
-    const shared = {
-      action: 'render' as const,
+    const projection = this.projections.streamContent(
       stream,
-      runUsage: mapToRecord(this.state.snapshots.getRunUsage(stream)),
-      ...(activeState ? { activeState } : {}),
-    };
-
-    if (category === AgentCategory.Workflow) {
-      this.webviewUpdater.sendSyncStreamContent({
-        ...shared,
-        category,
-        outputs: {
-          files: this.state.snapshots.getOutputFiles(stream),
-          missing: this.state.snapshots.getMissingOutputs(stream),
-          compileFailures: this.state.snapshots.getCompileFailures(stream),
-        },
-      });
-      return;
-    }
-
-    const { todos, plan } = this.state.snapshots.getWorkPlan(stream);
-    const controls = this.getStreamControls(stream);
-    this.webviewUpdater.sendSyncStreamContent({
-      ...shared,
-      category,
-      workPlan: {
-        todos,
-        plan,
-        queuedFollowUps: this.state.followUps.getAll(stream),
-      },
-      controls: {
-        bashBypass: controls.bashBypass,
-        toolEditBypass: controls.toolEditBypass,
-        superYoloBypass: controls.superYoloBypass,
-        goal: controls.goalActive
-          ? {
-              active: true,
-              status: controls.goalStatus,
-              objective: controls.goalObjective,
-            }
-          : { active: false },
-      },
-    });
+      includeActiveState,
+    );
+    if (projection) this.webviewUpdater.sendSyncStreamContent(projection);
   }
 
   /** Send to webview only if streamId is the active stream. */
   private sendIfActive(streamId: string, send: () => void): void {
     if (
-      streamId === this.state.activeStream &&
+      streamId === this.getActiveStream() &&
       this.webviewUpdater.isAvailable()
     ) {
       send();
@@ -341,7 +285,7 @@ export class LitSessionRenderer implements SessionRendererPort {
   }
 
   private flushProgressUpdates(): void {
-    const { activeStream } = this.state;
+    const activeStream = this.getActiveStream();
     const progress = activeStream
       ? this.pendingProgressUpdates.get(activeStream)
       : undefined;

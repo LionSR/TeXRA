@@ -68,16 +68,12 @@ describe('compareByNewestCreationTime', () => {
 });
 
 describe('buildStreamInfo git probe gating', () => {
-  function stateWith(overrides: {
-    activeStream?: string;
-    inFlight?: string[];
-  }): StreamInfoSource {
+  function stateWith(overrides: { inFlight?: string[] }): StreamInfoSource {
     return {
       getStreamMetadata: () => ({
         creationTimestamp: 1,
         config: { instruction: '', workingDirectory: '/wt' },
       }),
-      activeStream: overrides.activeStream ?? '',
       streamStatus: {
         isInFlight: (id: string) => overrides.inFlight?.includes(id) ?? false,
       },
@@ -90,13 +86,10 @@ describe('buildStreamInfo git probe gating', () => {
   });
 
   it('probes git for in-flight streams and the selected tab', () => {
-    const source = stateWith({
-      activeStream: 'selected#1',
-      inFlight: ['running#1'],
-    });
+    const source = stateWith({ inFlight: ['running#1'] });
 
     buildStreamInfo(source, 'running#1');
-    buildStreamInfo(source, 'selected#1');
+    buildStreamInfo(source, 'selected#1', 'selected#1');
 
     expect(vi.mocked(resolveWorktreeInfo).mock.calls).toEqual([
       ['/wt'],

@@ -388,10 +388,12 @@ describe('desktop main-view IPC', () => {
     sendFromRenderer({
       command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
       stream: 'run-1',
+      requestId: 'request-1',
     });
     expect(progress.handleMessage).toHaveBeenCalledWith({
       command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
       stream: 'run-1',
+      requestId: 'request-1',
     });
   });
 

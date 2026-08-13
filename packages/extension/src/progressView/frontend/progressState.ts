@@ -102,6 +102,14 @@ export const streamById$ = select(appState, (s) => s.streamById);
 export const streamStates$ = select(appState, (s) => s.streamStates);
 const streamLogs$ = select(appState, (s) => s.streamLogs);
 export const activeStreamId$ = select(appState, (s) => s.activeStreamId);
+const pendingStreamSelection$ = select(
+  appState,
+  (s) => s.pendingStreamSelection,
+);
+/** Pending selection drives only tab feedback; content uses confirmed state. */
+export const displayedActiveStreamId$ = new Signal.Computed(
+  () => pendingStreamSelection$.get()?.streamId ?? activeStreamId$.get(),
+);
 const inquiries$ = select(appState, (s) => s.inquiries);
 const followupOptions$ = select(appState, (s) => s.followupOptionsByStream);
 

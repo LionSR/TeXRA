@@ -16,7 +16,11 @@ export async function revealProgressStream(
 export function getProgressStreamLabel(
   streamId: StreamTabId,
 ): string | undefined {
-  const state = ProgressViewProvider.getInstance()?.state;
-  if (!state) return undefined;
-  return buildStreamInfo(state, streamId).label;
+  const provider = ProgressViewProvider.getInstance();
+  if (!provider) return undefined;
+  return buildStreamInfo(
+    provider.state,
+    streamId,
+    provider.backend.presentation.activeStream,
+  ).label;
 }

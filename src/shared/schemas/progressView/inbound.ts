@@ -23,6 +23,7 @@ import {
   InquiryDropActionSchema,
   InquirySubmitActionSchema,
 } from '../inquiry';
+import { StreamTabIdSchema } from '../identifiers';
 import { AgentProposalSchema, UserQuestionAnswersSchema } from '../prompts';
 import { StreamScopedBaseSchema, streamScopedCommand } from './data';
 import { GettingStartedActionSchema } from '../mainView/state';
@@ -32,6 +33,12 @@ const TrimmedStringSchema = z
   .string()
   .transform((s) => s.trim())
   .pipe(z.string().min(1));
+
+const SwitchStreamMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM),
+  stream: z.union([StreamTabIdSchema, z.literal('')]),
+  requestId: z.string().min(1),
+});
 
 /** File action carrying the output file and an optional diff base. */
 function fileWithBaseCommand<T extends string>(command: T) {
@@ -267,7 +274,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
   [
     WebviewReadyMessageSchema,
     SwitchViewMessageSchema,
-    streamScopedCommand(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM),
+    SwitchStreamMessageSchema,
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
     commandOnly(PROGRESS_VIEW_COMMANDS.DELETE_ALL),
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.STOP_STREAM),

@@ -141,6 +141,8 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   UPDATE_STREAM_STATUS: 'updateStreamStatus',
   SET_ACTIVE_STREAM: 'setActiveStream',
+  SETTLE_STREAM_SELECTION: 'settleStreamSelection',
+  RELEASE_STREAM_CONTENT: 'releaseStreamContent',
   UPDATE_CONVERSATION_PROGRESS: 'updateConversationProgress',
   UPDATE_STAGE: 'updateStage',
   UPDATE_STREAM_BADGES: 'updateStreamBadges',

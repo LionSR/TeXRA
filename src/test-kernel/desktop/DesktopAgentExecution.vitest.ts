@@ -1931,10 +1931,6 @@ describe('DesktopProgressBridge', () => {
         activeStream: 'third',
         command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       },
-      {
-        activeStream: 'third',
-        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-      },
     ]);
     expect(lastContentSync(messages)).toMatchObject({ stream: 'third' });
   });
@@ -1960,8 +1956,12 @@ describe('DesktopProgressBridge', () => {
         activeStream: 'second',
         command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       },
+      {
+        activeStream: 'first',
+        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      },
     ]);
-    expect(lastStreamSync(messages)).toMatchObject({ activeStream: 'first' });
+    expect(lastContentSync(messages)).toMatchObject({ stream: 'first' });
   });
 
   it('emits delete-all cleanup before syncing an empty stream list', async () => {
@@ -2022,7 +2022,9 @@ describe('DesktopProgressBridge', () => {
     await deleteAllStreamsViaInbound(bridge);
     await settleProgressEvents();
 
-    expect(lastStreamSync(messages)).toMatchObject({
+    expect(lastStreamSync(messages)).toMatchObject({ activeStream: '' });
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       activeStream: retainedStream,
     });
     expect(

@@ -9,12 +9,11 @@ import type {
   SessionHandle,
 } from '@agent/runtime';
 import { SessionFactApplier } from '@controllers/session/SessionFactApplier';
-import type { SessionRendererPort } from '@controllers/session/SessionRendererPort';
-import {
-  SessionState,
-  type ActiveStreamId,
-} from '@controllers/session/SessionState';
-import { MemoryStateStore } from '@platform/defaults/memoryState';
+import type {
+  PresentedStreamId,
+  SessionRendererPort,
+} from '@controllers/session/SessionRendererPort';
+import { SessionState } from '@controllers/session/SessionState';
 import {
   sumUsageStats,
   type ConversationProgress,
@@ -48,10 +47,9 @@ import type { StreamArtifactReader } from './subscribeStreamArtifacts';
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
 
-/** Extract a stream id from a session fact for per-stream generation capture.
- *  The only fact types that trigger renderer callbacks after an async suspend
- *  are `setActiveStream` and `setParentStream`; other facts are handled
- *  synchronously and the exact id is a best-effort hint. */
+/** Extract a stream id for defensive per-dispatch generation capture.
+ *  Current session-fact application is synchronous; the exact id keeps each
+ *  callback tied to the CLI state generation that dispatched it. */
 function getSessionFactStreamId(fact: SessionFact): StreamTabId | undefined {
   switch (fact.type) {
     case 'status':
@@ -67,12 +65,10 @@ function getSessionFactStreamId(fact: SessionFact): StreamTabId | undefined {
 
 class TuiSessionRenderer implements SessionRendererPort {
   /**
-   * Generation snapshots captured per-stream at dispatch time, so a callback
-   * can detect that `resetCliState` ran between its dispatch and its
-   * invocation (the applier suspends in `handleSetActiveStream` while
-   * `streamLogs.ensureLoaded` is pending; the old single-field design let a
-   * second dispatch overwrite the captured generation, so the first callback
-   * could not tell a reset had happened).
+   * Defensive per-stream generation snapshots captured at dispatch time.
+   * Session facts are currently applied synchronously, but retaining the
+   * guard prevents a future asynchronous renderer callback from crossing a
+   * `resetCliState` boundary or borrowing another stream's snapshot.
    */
   private dispatchGenerations = new Map<StreamTabId, number>();
 
@@ -180,7 +176,7 @@ class TuiSessionRenderer implements SessionRendererPort {
     });
   }
 
-  onActiveStreamChanged(streamId: ActiveStreamId): void {
+  onActiveStreamChanged(streamId: PresentedStreamId): void {
     if (streamId && this.isStaleDispatch(streamId)) return;
     if (!streamId) {
       activeStreamId.set(undefined);
@@ -315,7 +311,7 @@ class TuiSessionRenderer implements SessionRendererPort {
   }
 
   syncStreamContent(
-    _stream: ActiveStreamId,
+    _stream: PresentedStreamId,
     _options?: { includeActiveState?: boolean },
   ): void {}
 }
@@ -332,13 +328,10 @@ export function attachSessionSignalsAdapter({
   session,
   snapshots,
 }: AttachSessionSignalsAdapterInit): () => void {
-  const state = new SessionState(new MemoryStateStore(), session);
+  const state = new SessionState(session);
   const renderer = new TuiSessionRenderer(state, snapshots, session);
   const applier = new SessionFactApplier(state, renderer, {
-    hasPendingPermissions: () => false,
     deleteStream: removeStream,
-    // CLI focus is the `activeStreamId` signal, not `SessionState.activeStream`.
-    evictOnStreamSwitch: false,
   });
   let generation = getCliStateGeneration();
   const detachResetHook = registerCliStateResetHook(() => {
@@ -348,13 +341,21 @@ export function attachSessionSignalsAdapter({
     if (generation !== getCliStateGeneration()) {
       return;
     }
-    // Status stays on `subscribeStreamStatus`: the shared applier's
-    // eviction keys off `SessionState.activeStream`, which is not the CLI
-    // focus id, and the old TUI ignored status facts here.
+    // Status stays on `subscribeStreamStatus`: the CLI owns its focus
+    // reaction there, while the shared applier only updates session facts and
+    // requests lease-aware eviction. The old TUI ignored status facts here.
     if (fact.type === 'status') return;
     const sessionStreamId = getSessionFactStreamId(fact);
     if (sessionStreamId) renderer.captureDispatchGeneration(sessionStreamId);
     applier.handleSessionFact(fact);
+    if (fact.type === 'setActiveStream') {
+      const streamId = fact.payload.streamId;
+      if (!streamId) {
+        renderer.onActiveStreamChanged('');
+      } else if (fact.payload.suppressViewSwitch !== true) {
+        renderer.onActiveStreamChanged(streamId);
+      }
+    }
   });
   const detachRunFacts = events.subscribeRunFacts(
     (runFact) => {

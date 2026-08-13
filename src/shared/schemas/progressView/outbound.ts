@@ -82,6 +82,18 @@ const SetActiveStreamMessageSchema = z.object({
   activeStream: z.union([StreamTabIdSchema, z.literal('')]),
 });
 
+const SettleStreamSelectionMessageSchema = z.strictObject({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SETTLE_STREAM_SELECTION),
+  requestId: z.string().min(1),
+  status: z.enum(['accepted', 'rejected', 'superseded']),
+  activeStream: z.union([StreamTabIdSchema, z.literal('')]),
+});
+
+const ReleaseStreamContentMessageSchema = z.strictObject({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.RELEASE_STREAM_CONTENT),
+  stream: StreamTabIdSchema,
+});
+
 const UpdateConversationProgressMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS),
   progress: ConversationProgressSchema,
@@ -390,6 +402,8 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateStreamsMessageSchema,
     UpdateStreamMetadataMessageSchema,
     SetActiveStreamMessageSchema,
+    SettleStreamSelectionMessageSchema,
+    ReleaseStreamContentMessageSchema,
     UpdateConversationProgressMessageSchema,
     UpdateStageMessageSchema,
     UpdateStreamBadgesMessageSchema,

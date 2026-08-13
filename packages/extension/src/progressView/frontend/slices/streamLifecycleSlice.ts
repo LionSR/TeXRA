@@ -20,6 +20,7 @@ import {
   deleteStreamState,
   detachChildStreamTabs,
   ensureStreamState,
+  releaseStreamContent,
   type ProgressState,
 } from '../store';
 import {
@@ -160,6 +161,10 @@ export const streamLifecycleHandlers = {
     appState.set(
       create(updated, (draft) => {
         draft.activeStreamId = nextActiveStreamId;
+        // A full roster is authoritative recovery after attachment or a
+        // transport interruption. Any unacknowledged visual intent is stale;
+        // a later activation message can still apply the backend's result.
+        draft.pendingStreamSelection = null;
       }),
     );
   },
@@ -170,10 +175,34 @@ export const streamLifecycleHandlers = {
       data.activeStream,
       prev.streamById,
     );
-    if (nextActiveStreamId === prev.activeStreamId) return;
+    if (
+      nextActiveStreamId === prev.activeStreamId &&
+      prev.pendingStreamSelection === null
+    )
+      return;
     appState.set(
       create(prev, (draft) => {
         draft.activeStreamId = nextActiveStreamId;
+        draft.pendingStreamSelection = null;
+      }),
+    );
+  },
+
+  [PROGRESS_VIEW_COMMANDS.SETTLE_STREAM_SELECTION]: (data) => {
+    const prev = appState.get();
+    if (prev.pendingStreamSelection?.requestId !== data.requestId) return;
+    appState.set(
+      create(prev, (draft) => {
+        draft.activeStreamId = data.activeStream || null;
+        draft.pendingStreamSelection = null;
+      }),
+    );
+  },
+
+  [PROGRESS_VIEW_COMMANDS.RELEASE_STREAM_CONTENT]: (data) => {
+    appState.set(
+      create(appState.get(), (draft) => {
+        releaseStreamContent(draft, data.stream);
       }),
     );
   },
@@ -199,6 +228,9 @@ export const streamLifecycleHandlers = {
         detachChildStreamTabs(draft, streamId);
         if (draft.activeStreamId === streamId) {
           draft.activeStreamId = null;
+        }
+        if (draft.pendingStreamSelection?.streamId === streamId) {
+          draft.pendingStreamSelection = null;
         }
       }),
     );
@@ -228,6 +260,7 @@ export const streamLifecycleHandlers = {
         draft.streamLogs = new Map();
         draft.followupOptionsByStream = new Map();
         draft.activeStreamId = null;
+        draft.pendingStreamSelection = null;
       }),
     );
   },
