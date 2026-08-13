@@ -32,11 +32,13 @@ import {
 import { getCliApiMode, setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   toApprovalSettlement,
+  toBashApprovalSettlement,
   toToolEditResult,
 } from '@cli/runtime/approvalAdapter';
 import {
   classifyCliRetryAction,
   isCliApiSwitchableRetry,
+  type CliApprovalDecision,
 } from '@cli/runtime/approval/approvalPrompts';
 import {
   denyExternalInquiryIfNoHumanInput,
@@ -252,7 +254,7 @@ function prepareRetryClient(
 async function decidePresentedApproval<
   K extends 'bash' | 'toolEdit' | 'planApproval' | 'proposal',
   P,
->(kind: K, payload: P): Promise<ApprovalDecision> {
+>(kind: K, payload: P): Promise<ApprovalDecision & CliApprovalDecision> {
   try {
     return await enqueueTuiApproval({ kind, payload } as Extract<
       ApprovalPayload,
@@ -261,7 +263,7 @@ async function decidePresentedApproval<
   } catch {
     return {
       accepted: false,
-      userMessage: 'CLI approval prompt failed.',
+      rejectionCause: 'CLI approval prompt failed.',
     };
   }
 }
@@ -283,7 +285,7 @@ async function requestBashInteraction(
   if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
     setBashApprovalSessionBypass(request.streamId, true);
   }
-  return toApprovalSettlement(decision);
+  return toBashApprovalSettlement(decision);
 }
 
 async function requestPlanInteraction(
