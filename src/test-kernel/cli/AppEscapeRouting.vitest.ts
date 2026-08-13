@@ -8,6 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { App, type AppProps } from '@cli/chat/tui/App';
 import { ESC_META_CHORD_INTERRUPT_DELAY_MS } from '@cli/chat/tui/appInteractionPolicy';
+import {
+  clearApprovals,
+  enqueueApproval,
+} from '@cli/chat/tui/state/approvalQueue';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
@@ -178,7 +182,10 @@ function fakeHistory(entries: readonly string[]): InputHistory {
 }
 
 beforeEach(() => resetCliState());
-afterEach(() => resetCliState());
+afterEach(() => {
+  clearApprovals();
+  resetCliState();
+});
 
 describe('App foreground Escape ownership', () => {
   it('lets a foreground information pane own Escape before child back', async () => {
@@ -1130,6 +1137,54 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => stdout.output.includes('latest prompt'));
 
       expect(stdout.output).not.toContain('Choosing a session');
+    } finally {
+      instance.unmount();
+    }
+  });
+});
+
+describe('App workflow dashboard ownership', () => {
+  it('allocates an approval-only dashboard before workflow rows exist', async () => {
+    seedRootStream();
+    patchStream(ROOT, (slice) => ({
+      ...slice,
+      agent: 'Starting workflow',
+      category: AgentCategory.Workflow,
+      identity: {
+        kind: 'multiAgentWorkflow',
+        workflowName: 'starting-workflow',
+      },
+      entries: [],
+    }));
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-other',
+        mode: 'followUp',
+        question: 'Wait outside the active stream.',
+        threadId: 'ei_000000000001',
+        allowBypass: false,
+        streamId: 'other-stream',
+      },
+    });
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-session',
+        mode: 'followUp',
+        question: 'Verify the workflow before it emits rows.',
+        threadId: 'ei_000000000002',
+        allowBypass: false,
+        streamId: '',
+      },
+    });
+    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
+
+    try {
+      stdin.write('\t');
+      await waitFor(() =>
+        stdout.output.includes('Starting workflow · 0/0 done · inquiry'),
+      );
     } finally {
       instance.unmount();
     }
