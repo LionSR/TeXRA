@@ -575,4 +575,109 @@ describe('stream meta frontend state', () => {
 
     expect(getState().activeStreamId).toBeNull();
   });
+
+  it('settles only the latest pending stream selection', () => {
+    const first = 'stream-a' as StreamTabId;
+    const second = 'stream-b' as StreamTabId;
+    const state = createInitialState();
+    registerStream(state, first);
+    registerStream(state, second);
+    state.activeStreamId = first;
+    state.pendingStreamSelection = {
+      requestId: 'request-new',
+      streamId: second,
+    };
+    const getState = seedState(state);
+
+    dispatch(streamLifecycleHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.SETTLE_STREAM_SELECTION,
+      requestId: 'request-stale',
+      status: 'superseded',
+      activeStream: first,
+    });
+    expect(getState().pendingStreamSelection?.streamId).toBe(second);
+
+    dispatch(streamLifecycleHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.SETTLE_STREAM_SELECTION,
+      requestId: 'request-new',
+      status: 'accepted',
+      activeStream: second,
+    });
+    expect(getState().activeStreamId).toBe(second);
+    expect(getState().pendingStreamSelection).toBeNull();
+  });
+
+  it('clears transient selection intent on an authoritative roster refresh', () => {
+    const first = 'stream-a' as StreamTabId;
+    const second = 'stream-b' as StreamTabId;
+    const state = createInitialState();
+    registerStream(state, first);
+    registerStream(state, second);
+    state.activeStreamId = first;
+    state.pendingStreamSelection = {
+      requestId: 'unacknowledged-request',
+      streamId: second,
+    };
+    const getState = seedState(state);
+
+    dispatch(streamLifecycleHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+      streams: [...state.streamById.values()],
+      streamStates: {},
+      activeStream: first,
+    });
+
+    expect(getState().activeStreamId).toBe(first);
+    expect(getState().pendingStreamSelection).toBeNull();
+  });
+
+  it('releases reloadable content while retaining lightweight state and drafts', () => {
+    const stream = 'tool-stream' as StreamTabId;
+    const state = createInitialState();
+    registerStream(state, stream, { agentCategory: AgentCategory.ToolUse });
+    state.streamStates.set(
+      stream,
+      createStreamState(AgentCategory.ToolUse, {
+        status: STREAM_PHASE.WAITING,
+        runUsage: {
+          run: { inputTokens: 50, outputTokens: 25, cost: 0.01 },
+        },
+        todos: [
+          {
+            content: 'Retain the draft',
+            status: 'pending',
+            activeForm: 'Retaining the draft',
+          },
+        ],
+        ui: {
+          followUpText: 'unsent observation',
+          polishedText: null,
+          polishRevision: 0,
+          transcribedText: null,
+          recording: false,
+          shouldFocusFollowUp: false,
+        },
+      }),
+    );
+    state.followupOptionsByStream.set(stream, {
+      toolUseAgentsData: [{ label: 'Search', value: 'search' }],
+    });
+    const getState = seedState(state);
+
+    dispatch(streamLifecycleHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.RELEASE_STREAM_CONTENT,
+      stream,
+    });
+
+    const released = getState().streamStates.get(stream);
+    expect(released).toMatchObject({
+      status: STREAM_PHASE.WAITING,
+      runUsage: {},
+      todos: [],
+      ui: { followUpText: 'unsent observation' },
+    });
+    expect(getState().followupOptionsByStream.get(stream)).toEqual({
+      toolUseAgentsData: [{ label: 'Search', value: 'search' }],
+    });
+  });
 });

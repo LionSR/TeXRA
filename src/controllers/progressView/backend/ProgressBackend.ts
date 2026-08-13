@@ -14,12 +14,15 @@ import {
 } from '@controllers/progressView/backend/WebviewBridge';
 import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import { LitSessionRenderer } from '@controllers/progressView/backend/LitSessionRenderer';
+import { ProgressPresentationState } from '@controllers/progressView/backend/ProgressPresentationState';
+import { ProgressStreamProjectionBuilder } from '@controllers/progressView/backend/ProgressStreamProjectionBuilder';
 import type { GetProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import {
   SessionFactApplier,
   type SessionRunFactEvent,
 } from '@controllers/session/SessionFactApplier';
 import { SessionState } from '@controllers/session/SessionState';
+import type { PresentedStreamId } from '@controllers/session/SessionRendererPort';
 import {
   buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,
@@ -28,10 +31,15 @@ import {
 } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
-import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
+import type {
+  ProgressViewOutboundMessage,
+  SetActiveStreamPayload,
+  StreamTabId,
+} from '@shared/schemas';
 import { STREAM_PHASE } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
+import type { TranscriptPresentationLease } from '@transcript/StreamLogStore';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 
 const log = createLog('ProgressBackend');
@@ -90,8 +98,10 @@ export interface ProgressBackendOptions {
  */
 export class ProgressBackend {
   readonly state: SessionState;
+  readonly presentation: ProgressPresentationState;
   readonly webviewUpdater: WebviewUpdater;
   readonly webviewBridge: WebviewBridge;
+  readonly projections: ProgressStreamProjectionBuilder;
   readonly approvalHandlers: ApprovalRequestHandlerSet;
   readonly setApprovalBypassState: (
     update: HostApprovalBypassStateUpdate,
@@ -103,10 +113,15 @@ export class ProgressBackend {
   private readonly reportTranscriptLoadError: ProgressBackendOptions['reportTranscriptLoadError'];
   private readonly postMessage: (message: ProgressViewOutboundMessage) => void;
   private readonly stateOwnership: 'backend' | 'session';
+  private readonly hasPendingPermissions: (streamId: string) => boolean;
   private readonly storageOperationQueue = new PQueue({ concurrency: 1 });
   private readonly detachEventListeners: Array<() => void> = [];
   private storageGeneration = 0;
   private presentationReloadPending = false;
+  private activationGeneration = 0;
+  private latestActivationTarget: PresentedStreamId = '';
+  private readonly inFlightActivationGenerations = new Set<number>();
+  private transcriptPresentationLease?: TranscriptPresentationLease;
   private disposed = false;
 
   constructor(options: ProgressBackendOptions) {
@@ -128,20 +143,21 @@ export class ProgressBackend {
         },
       );
     };
-    this.state = new SessionState(
-      options.storage,
-      this.session,
-      options.stores,
-    );
+    this.state = new SessionState(this.session, options.stores);
+    this.presentation = new ProgressPresentationState(options.storage);
     this.webviewUpdater = new WebviewUpdater(
       this.postMessage,
       options.hasTarget,
       options.getUnsupportedCommands,
     );
+    this.projections = new ProgressStreamProjectionBuilder(
+      this.state,
+      options.getStreamControls,
+    );
     this.webviewBridge = new WebviewBridge(
       this.state.streamLogs,
       options.sendMessage,
-      () => this.state.activeStream || null,
+      () => this.presentation.activeStream || null,
     );
 
     this.approvalHandlers = buildApprovalRequestHandlerSet({
@@ -153,14 +169,16 @@ export class ProgressBackend {
       webviewUpdater: this.webviewUpdater,
       canSend: options.approvals.canSend,
     });
+    this.hasPendingPermissions = ui.hasPendingPermissions;
     this.litRenderer = new LitSessionRenderer(
-      this.state,
+      this.projections,
+      this.state.snapshots,
+      this.state.followUps,
       this.webviewUpdater,
       this.webviewBridge,
-      options.getStreamControls,
+      () => this.presentation.activeStream,
     );
     this.factApplier = new SessionFactApplier(this.state, this.litRenderer, {
-      hasPendingPermissions: ui.hasPendingPermissions,
       deleteStream: (stream) => this.deleteStream(stream),
     });
     this.setApprovalBypassState = ui.setApprovalBypassState;
@@ -179,71 +197,222 @@ export class ProgressBackend {
     syncActiveStream: boolean;
     theme?: 'dark' | 'light';
   }): Promise<void> {
-    const activeStream = this.webviewUpdater.sendStreamMetadata(
-      this.state,
-      this.state.streamStatus.getAllStreamStates(),
+    const selectableStreams = this.state.selectableStreamNames();
+    const activeStream = this.presentation.activeStream;
+    const desiredStream = this.presentation.choose(selectableStreams);
+    const rosterActiveStream = selectableStreams.includes(activeStream)
+      ? activeStream
+      : '';
+    const pendingSelectableActivation =
+      this.inFlightActivationGenerations.has(this.activationGeneration) &&
+      this.latestActivationTarget !== '' &&
+      selectableStreams.includes(this.latestActivationTarget);
+    let projectedStream = options.syncActiveStream
+      ? desiredStream
+      : rosterActiveStream;
+    if (options.syncActiveStream && pendingSelectableActivation) {
+      projectedStream = this.latestActivationTarget;
+    }
+    this.webviewUpdater.sendStreamMetadata(
+      this.projections.streamRoster(
+        projectedStream,
+        this.state.streamStatus.getAllStreamStates(),
+      ),
+      rosterActiveStream,
       options.theme,
     );
     if (!options.syncActiveStream) return;
+    if (pendingSelectableActivation) {
+      // A structural refresh must not supersede a newer user selection that
+      // the backend has already accepted and is still hydrating.
+      return;
+    }
 
-    const hasStreams = this.state.streamLogs.keys().length > 0;
-    if (!activeStream && hasStreams) return;
     try {
-      await this.syncActiveStream(activeStream, {
-        notifyActivation: false,
+      await this.hydrateAndCommitSelection(desiredStream, {
+        notifyActivation: activeStream !== desiredStream,
       });
     } catch (error) {
-      this.reportTranscriptLoadError(error, activeStream);
+      this.reportTranscriptLoadError(error, desiredStream);
     }
   }
 
   /** Select and render one existing stream without rebuilding the tab list. */
-  async activateStream(stream: StreamTabId): Promise<void> {
-    if (!this.state.streamLogs.has(stream)) return;
-    this.state.switchActiveStream(stream);
+  async activateStream(
+    stream: PresentedStreamId,
+    requestId?: string,
+  ): Promise<void> {
+    if (stream && !this.state.streamLogs.has(stream)) {
+      // A newer rejected request still supersedes every older hydration. Its
+      // visual intent is settled back to the confirmed selection below.
+      this.activationGeneration += 1;
+      this.latestActivationTarget = stream;
+      if (requestId) {
+        this.webviewUpdater.settleStreamSelection(
+          requestId,
+          'rejected',
+          this.presentation.activeStream,
+        );
+      }
+      return;
+    }
     try {
-      await this.syncActiveStream(stream, {
+      const committed = await this.hydrateAndCommitSelection(stream, {
         notifyActivation: true,
       });
+      if (!committed) await this.recoverFromFailedActivation(stream);
+      if (requestId) {
+        this.webviewUpdater.settleStreamSelection(
+          requestId,
+          committed ? 'accepted' : 'superseded',
+          this.presentation.activeStream,
+        );
+      }
     } catch (error) {
       this.reportTranscriptLoadError(error, stream);
+      await this.recoverFromFailedActivation(stream);
+      if (requestId) {
+        this.webviewUpdater.settleStreamSelection(
+          requestId,
+          'rejected',
+          this.presentation.activeStream,
+        );
+      }
     }
   }
 
-  private async syncActiveStream(
+  /**
+   * If deletion removed the confirmed stream while a replacement was loading,
+   * recover from that replacement's failure with one different survivor. A
+   * newer activation or explicit deselection always remains authoritative.
+   */
+  private async recoverFromFailedActivation(
+    failedStream: StreamTabId,
+  ): Promise<void> {
+    if (
+      this.presentation.activeStream !== '' ||
+      this.latestActivationTarget !== failedStream ||
+      this.inFlightActivationGenerations.has(this.activationGeneration)
+    ) {
+      return;
+    }
+    const fallback = this.presentation.choose(
+      this.state
+        .selectableStreamNames()
+        .filter((stream) => stream !== failedStream),
+    );
+    if (!fallback) return;
+
+    try {
+      // This is deliberately one-shot. A failed fallback is reported but does
+      // not recurse through the roster or retry a known failed target.
+      await this.hydrateAndCommitSelection(fallback, {
+        notifyActivation: true,
+      });
+    } catch (error) {
+      this.reportTranscriptLoadError(error, fallback);
+    }
+  }
+
+  private async hydrateAndCommitSelection(
     stream: StreamTabId | '',
     options: {
       notifyActivation: boolean;
     },
-  ): Promise<void> {
-    if (!this.litRenderer.isAvailable()) return;
-    let hydrationError: unknown;
-    if (stream) {
-      const hydration = await Promise.allSettled([
-        this.state.streamLogs.ensureLoaded(stream),
-        this.state.snapshots.preload([stream]),
-      ]);
-      const failures = hydration.filter(
-        (result): result is PromiseRejectedResult =>
-          result.status === 'rejected',
-      );
-      if (failures.length === 1) {
-        hydrationError = failures[0].reason;
-      } else if (failures.length > 1) {
-        hydrationError = new AggregateError(
-          failures.map((failure) => failure.reason),
-          `Failed to hydrate stream ${stream}`,
-        );
+  ): Promise<boolean> {
+    const generation = ++this.activationGeneration;
+    this.latestActivationTarget = stream;
+    if (!stream) {
+      const previousStream = this.presentation.activeStream;
+      this.presentation.select('');
+      this.releasePresentationLeases();
+      if (this.litRenderer.isAvailable()) {
+        this.litRenderer.onActiveStreamChanged('');
+        this.litRenderer.syncStreamContent('', { includeActiveState: true });
+        if (previousStream) {
+          this.webviewUpdater.releaseStreamContent(previousStream);
+        }
       }
+      return true;
     }
-    if (this.state.activeStream !== stream) {
-      if (hydrationError !== undefined) throw hydrationError;
-      return;
+    if (!this.litRenderer.isAvailable()) {
+      this.presentation.select(stream);
+      this.releasePresentationLeases();
+      return true;
     }
+
+    const leasePromise = this.state.streamLogs.ensureLoaded(stream, {
+      retainForPresentation: true,
+    });
+    this.inFlightActivationGenerations.add(generation);
+    const hydration = await Promise.allSettled([
+      leasePromise,
+      this.state.snapshots.preload([stream]),
+    ]);
+    this.inFlightActivationGenerations.delete(generation);
+    const transcriptLeaseResult = hydration[0];
+    const snapshotLeaseResult = hydration[1];
+    const failures = hydration.filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    if (generation !== this.activationGeneration) {
+      if (transcriptLeaseResult.status === 'fulfilled')
+        transcriptLeaseResult.value.close();
+      return false;
+    }
+    if (!this.state.streamLogs.has(stream)) {
+      if (transcriptLeaseResult.status === 'fulfilled')
+        transcriptLeaseResult.value.close();
+      return false;
+    }
+    if (failures.length > 0) {
+      if (transcriptLeaseResult.status === 'fulfilled')
+        transcriptLeaseResult.value.close();
+      if (failures.length === 1) throw failures[0].reason;
+      throw new AggregateError(
+        failures.map((failure) => failure.reason),
+        `Failed to hydrate stream ${stream}`,
+      );
+    }
+    if (transcriptLeaseResult.status !== 'fulfilled')
+      throw transcriptLeaseResult.reason;
+    if (snapshotLeaseResult.status !== 'fulfilled')
+      throw snapshotLeaseResult.reason;
+
+    const previousStream = this.presentation.activeStream;
+    const previousTranscriptLease = this.transcriptPresentationLease;
+    this.transcriptPresentationLease = transcriptLeaseResult.value;
+    this.presentation.select(stream);
     if (options.notifyActivation)
       this.litRenderer.onActiveStreamChanged(stream);
     this.litRenderer.syncStreamContent(stream, { includeActiveState: true });
-    if (hydrationError !== undefined) throw hydrationError;
+    if (previousStream && previousStream !== stream) {
+      this.webviewUpdater.releaseStreamContent(previousStream);
+    }
+    if (previousTranscriptLease !== transcriptLeaseResult.value)
+      previousTranscriptLease?.close();
+    return true;
+  }
+
+  private releasePresentationLeases(): void {
+    const transcriptLease = this.transcriptPresentationLease;
+    this.transcriptPresentationLease = undefined;
+    transcriptLease?.close();
+  }
+
+  /** Apply presentation policy carried beside a stream attachment fact. */
+  private handleStreamPresentationRequest(
+    payload: SetActiveStreamPayload,
+  ): void {
+    const stream = payload.streamId;
+    if (!stream) {
+      void this.hydrateAndCommitSelection('', { notifyActivation: true });
+      return;
+    }
+    if (payload.suppressViewSwitch === true) return;
+    const current = this.presentation.activeStream;
+    if (current && this.hasPendingPermissions(current)) return;
+    void this.activateStream(stream);
   }
 
   /**
@@ -274,6 +443,10 @@ export class ProgressBackend {
     ...args: Parameters<SessionFactApplier['handleSessionFact']>
   ): void {
     this.factApplier.handleSessionFact(...args);
+    const [fact] = args;
+    if (fact.type === 'setActiveStream') {
+      this.handleStreamPresentationRequest(fact.payload);
+    }
   }
 
   /** Inject a run fact (tests / rare host seeds). Prefer the hub in production. */
@@ -288,13 +461,14 @@ export class ProgressBackend {
   }
 
   async deleteStream(stream: StreamTabId): Promise<void> {
-    const wasActive = this.state.activeStream === stream;
+    const wasActive = this.presentation.activeStream === stream;
+    const activationGeneration = this.activationGeneration;
     const storageGeneration = this.storageGeneration;
     const retained = await this.enqueuePreparedStorageOperation(
       () => this.prepareStreamDeletion(stream),
       () =>
         storageGeneration === this.storageGeneration
-          ? this.deleteStreamNow(stream, wasActive)
+          ? this.deleteStreamNow(stream, wasActive, activationGeneration)
           : Promise.resolve(undefined),
     );
     if (retained) {
@@ -343,6 +517,7 @@ export class ProgressBackend {
   private async deleteStreamNow(
     stream: StreamTabId,
     wasActive: boolean,
+    activationGenerationAtStart: number,
   ): Promise<'active' | 'failed' | undefined> {
     if (!canUseStreamDataDir(stream)) return undefined;
 
@@ -355,31 +530,44 @@ export class ProgressBackend {
 
     this.lifecycle.cleanupDeletedStream(stream);
     this.webviewBridge.clearStream(stream);
+    const selectionWasDeleted = this.presentation.activeStream === stream;
+    if (selectionWasDeleted) {
+      this.presentation.select('');
+      this.releasePresentationLeases();
+    }
 
-    let shouldActivateStream = false;
-    const activeAfterClear = this.state.activeStream;
     const remainingStreams = this.state.selectableStreamNames();
+    const activeAfterClear = this.presentation.activeStream;
     const hasVisibleActive =
       activeAfterClear !== '' && remainingStreams.includes(activeAfterClear);
-    if (activeAfterClear === stream || (wasActive && !hasVisibleActive)) {
-      shouldActivateStream =
-        this.state.rotateActiveStream(remainingStreams) !== '';
-    } else if (wasActive && hasVisibleActive) {
-      shouldActivateStream = true;
-    }
+    const newerActivationPending =
+      activationGenerationAtStart !== this.activationGeneration;
+    const newerIntentControlsSelection =
+      newerActivationPending &&
+      (this.latestActivationTarget === '' ||
+        (this.latestActivationTarget !== stream &&
+          this.state.streamLogs.has(this.latestActivationTarget)));
+    // A concurrent switch to a surviving stream still needs reassertion after
+    // DELETE_STREAM. A concurrent explicit deselection is presentation intent
+    // and must remain empty rather than being replaced by a fallback.
+    const shouldActivateStream =
+      (selectionWasDeleted && !newerIntentControlsSelection) ||
+      (wasActive && hasVisibleActive && !newerIntentControlsSelection);
 
     this.postMessage({
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
       stream,
     });
 
-    const nextActive = this.state.activeStream;
+    const nextActive = hasVisibleActive
+      ? activeAfterClear
+      : this.presentation.choose(remainingStreams);
     if (shouldActivateStream && nextActive) {
       // DELETE_STREAM clears the frontend selection when the deleted tab was
       // active. Reassert the surviving selection even when a concurrent
       // activation already selected it while storage deletion was pending.
       await this.activateStream(nextActive);
-    } else {
+    } else if (!newerActivationPending) {
       // The deleted stream was not the active one, so only the stream list
       // changed; the active stream's content is still on screen and correct.
       await this.lifecycle.rebuildRenderedStreams({ syncActiveStream: false });
@@ -388,6 +576,7 @@ export class ProgressBackend {
   }
 
   async deleteAllStreams(): Promise<void> {
+    const activationGeneration = this.activationGeneration;
     const storageGeneration = this.storageGeneration;
     const outcome = await this.enqueuePreparedStorageOperation(
       () => this.prepareAllStreamDeletions(),
@@ -397,8 +586,12 @@ export class ProgressBackend {
           : Promise.resolve(undefined),
     );
     if (!outcome) return;
+    const newerIntentControlsSelection =
+      activationGeneration !== this.activationGeneration &&
+      (this.latestActivationTarget === '' ||
+        this.state.streamLogs.has(this.latestActivationTarget));
     await this.lifecycle.rebuildRenderedStreams({
-      syncActiveStream: !outcome.allDeleted,
+      syncActiveStream: !outcome.allDeleted && !newerIntentControlsSelection,
     });
     if (!outcome.allDeleted) {
       await this.lifecycle.notifyDeletionRetained(
@@ -433,6 +626,15 @@ export class ProgressBackend {
       this.webviewBridge.clearStream(stream);
     }
     const allDeleted = retainedStreams.size === 0;
+    if (allDeleted) {
+      this.presentation.reset();
+      this.releasePresentationLeases();
+    } else if (!retainedStreams.has(this.presentation.activeStream)) {
+      // The rebuild below chooses the ordered fallback, hydrates transcript
+      // and sidecar state, then persists it. Do not confirm before hydration.
+      this.presentation.select('');
+      this.releasePresentationLeases();
+    }
     this.lifecycle.cleanupDeletedStreams({ allDeleted });
     if (allDeleted) {
       this.postMessage({ command: PROGRESS_VIEW_COMMANDS.DELETE_ALL });
@@ -478,6 +680,8 @@ export class ProgressBackend {
       }
       if (!this.presentationReloadPending) return;
       this.state.resetAfterStorageRootChange();
+      this.presentation.reload();
+      this.releasePresentationLeases();
       this.webviewBridge.clearAll();
       try {
         await this.loadPresentationState();
@@ -548,6 +752,9 @@ export class ProgressBackend {
         (sessionEvent) => {
           if (sessionEvent.scope !== 'session') return;
           this.factApplier.handleSessionFact(sessionEvent.event);
+          if (sessionEvent.event.type === 'setActiveStream') {
+            this.handleStreamPresentationRequest(sessionEvent.event.payload);
+          }
         },
         { scope: 'session' },
       ),
@@ -572,6 +779,8 @@ export class ProgressBackend {
     this.disposed = true;
     for (const detach of this.detachEventListeners.splice(0)) detach();
     this.factApplier.dispose();
+    this.activationGeneration += 1;
+    this.releasePresentationLeases();
     this.webviewBridge.dispose();
   }
 }

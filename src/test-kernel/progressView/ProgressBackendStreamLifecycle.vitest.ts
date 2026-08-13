@@ -91,7 +91,7 @@ describe('ProgressBackend', () => {
     );
   });
 
-  it('handles session facts through its local subscription', () => {
+  it('handles session facts through its local subscription', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend } = target;
     backend.setupEventListeners();
@@ -102,7 +102,9 @@ describe('ProgressBackend', () => {
       agentCategory: AgentCategory.Workflow,
     });
 
-    expect(backend.state.activeStream).toBe(streamId);
+    await vi.waitFor(() =>
+      expect(backend.presentation.activeStream).toBe(streamId),
+    );
     expect(backend.state.streamLogs.has(streamId)).toBe(true);
   });
 
@@ -132,13 +134,17 @@ describe('ProgressBackend', () => {
     const { backend, messages } = target;
     backend.setupEventListeners();
 
-    backend.state.switchActiveStream('previous-stream');
+    backend.presentation.select('previous-stream');
     emitActiveStream(target, { streamId: null });
 
-    await vi.waitFor(() => expect(backend.state.activeStream).toBe(''));
+    await vi.waitFor(() => expect(backend.presentation.activeStream).toBe(''));
     expect(messages).toContainEqual({
       command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       activeStream: '',
+    });
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.RELEASE_STREAM_CONTENT,
+      stream: 'previous-stream',
     });
   });
 
@@ -269,12 +275,12 @@ describe('ProgressBackend', () => {
 
     backend.state.streamLogs.ensureStream(first);
     backend.state.streamLogs.ensureStream(second);
-    backend.state.switchActiveStream(second);
+    backend.presentation.select(second);
 
     await backend.deleteStream(second);
 
     expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(second);
-    expect(backend.state.activeStream).toBe(first);
+    expect(backend.presentation.activeStream).toBe(first);
     expect(messages).toContainEqual({
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
       stream: second,
@@ -285,7 +291,7 @@ describe('ProgressBackend', () => {
     });
   });
 
-  it('keeps the fallback selected when its transcript fails to load', async () => {
+  it('does not select a fallback whose transcript fails to load', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend, messages, reportTranscriptLoadError } = target;
     const fallback = 'fallback-stream' as StreamTabId;
@@ -294,16 +300,16 @@ describe('ProgressBackend', () => {
 
     backend.state.streamLogs.ensureStream(fallback);
     backend.state.streamLogs.ensureStream(active);
-    backend.state.switchActiveStream(active);
+    backend.presentation.select(active);
     vi.spyOn(backend.state.streamLogs, 'ensureLoaded').mockRejectedValueOnce(
       loadError,
     );
 
     await backend.deleteStream(active);
 
-    expect(backend.state.activeStream).toBe(fallback);
+    expect(backend.presentation.activeStream).toBe('');
     expect(reportTranscriptLoadError).toHaveBeenCalledWith(loadError, fallback);
-    expect(messages).toContainEqual({
+    expect(messages).not.toContainEqual({
       command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       activeStream: fallback,
     });
@@ -314,37 +320,206 @@ describe('ProgressBackend', () => {
     const { backend, messages, reportTranscriptLoadError } = target;
     const stream = 'hydration-race' as StreamTabId;
     const sidecarError = new Error('sidecar unavailable');
-    let finishTranscriptLoad!: () => void;
+    let rejectSidecarLoad!: () => void;
 
     backend.state.streamLogs.ensureStream(stream);
-    vi.spyOn(backend.state.streamLogs, 'ensureLoaded').mockImplementationOnce(
+    vi.spyOn(backend.state.snapshots, 'preload').mockImplementationOnce(
       () =>
-        new Promise<void>((resolve) => {
-          finishTranscriptLoad = resolve;
+        new Promise<void>((_resolve, reject) => {
+          rejectSidecarLoad = () => reject(sidecarError);
         }),
-    );
-    vi.spyOn(backend.state.snapshots, 'preload').mockRejectedValueOnce(
-      sidecarError,
     );
 
     const activation = backend.activateStream(stream);
     await Promise.resolve();
     expect(reportTranscriptLoadError).not.toHaveBeenCalled();
 
-    finishTranscriptLoad();
+    rejectSidecarLoad();
     await activation;
 
     expect(reportTranscriptLoadError).toHaveBeenCalledWith(
       sidecarError,
       stream,
     );
+    expect(messages).not.toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: stream,
+    });
+  });
+
+  it('selects the newest available stream on an authoritative fresh sync', async () => {
+    const { backend, messages } = createIsolatedRecordingBackend();
+    const stream = 'fresh-sync-stream' as StreamTabId;
+
+    backend.state.streamLogs.ensureStream(stream);
+    await backend.syncRenderedStreams({ syncActiveStream: true });
+
+    expect(backend.presentation.activeStream).toBe(stream);
     expect(messages).toContainEqual({
       command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       activeStream: stream,
     });
   });
 
-  it('reports the stream whose full refresh fails after selection changes', async () => {
+  it('does not commit a stream deleted while its hydration is pending', async () => {
+    const { backend, messages } = createIsolatedRecordingBackend();
+    const stream = 'deleted-during-hydration' as StreamTabId;
+    let finishPreload!: () => void;
+
+    backend.state.streamLogs.ensureStream(stream);
+    vi.spyOn(backend.state.snapshots, 'preload').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPreload = resolve;
+        }),
+    );
+
+    const activation = backend.activateStream(stream, 'deleted-request');
+    await vi.waitFor(() => expect(finishPreload).toBeTypeOf('function'));
+    await backend.deleteStream(stream);
+    finishPreload();
+    await activation;
+
+    expect(backend.presentation.activeStream).toBe('');
+    expect(messages).not.toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: stream,
+    });
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SETTLE_STREAM_SELECTION,
+      requestId: 'deleted-request',
+      status: 'superseded',
+      activeStream: '',
+    });
+  });
+
+  it('invalidates older hydration when a newer selection is rejected', async () => {
+    const { backend, messages } = createIsolatedRecordingBackend();
+    const confirmed = 'confirmed-before-rejection' as StreamTabId;
+    const older = 'older-pending-selection' as StreamTabId;
+    let finishOlderPreload!: () => void;
+
+    backend.state.streamLogs.ensureStream(confirmed);
+    backend.state.streamLogs.ensureStream(older);
+    backend.presentation.select(confirmed);
+    vi.spyOn(backend.state.snapshots, 'preload').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishOlderPreload = resolve;
+        }),
+    );
+
+    const olderActivation = backend.activateStream(older);
+    await vi.waitFor(() => expect(finishOlderPreload).toBeTypeOf('function'));
+    await backend.activateStream(
+      'already-deleted-selection' as StreamTabId,
+      'newer-rejected-request',
+    );
+    finishOlderPreload();
+    await olderActivation;
+
+    expect(backend.presentation.activeStream).toBe(confirmed);
+    expect(messages).not.toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: older,
+    });
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SETTLE_STREAM_SELECTION,
+      requestId: 'newer-rejected-request',
+      status: 'rejected',
+      activeStream: confirmed,
+    });
+  });
+
+  it('lets explicit deselection supersede older hydration', async () => {
+    const { backend, messages } = createIsolatedRecordingBackend();
+    const stream = 'pending-before-deselection' as StreamTabId;
+    let finishPreload!: () => void;
+
+    backend.state.streamLogs.ensureStream(stream);
+    vi.spyOn(backend.state.snapshots, 'preload').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPreload = resolve;
+        }),
+    );
+
+    const activation = backend.activateStream(stream);
+    await vi.waitFor(() => expect(finishPreload).toBeTypeOf('function'));
+    await backend.activateStream('', 'deselection-request');
+    finishPreload();
+    await activation;
+
+    expect(backend.presentation.activeStream).toBe('');
+    expect(messages).not.toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: stream,
+    });
+  });
+
+  it('rejects a failed UI selection without changing the confirmed stream', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, messages, reportTranscriptLoadError } = target;
+    const confirmed = 'confirmed-stream' as StreamTabId;
+    const requested = 'requested-stream' as StreamTabId;
+    const requestId = 'selection-request-1';
+    const loadError = new Error('requested transcript unavailable');
+
+    backend.state.streamLogs.ensureStream(confirmed);
+    backend.state.streamLogs.ensureStream(requested);
+    backend.presentation.select(confirmed);
+    vi.spyOn(backend.state.streamLogs, 'ensureLoaded').mockRejectedValueOnce(
+      loadError,
+    );
+
+    await backend.activateStream(requested, requestId);
+
+    expect(backend.presentation.activeStream).toBe(confirmed);
+    expect(reportTranscriptLoadError).toHaveBeenCalledWith(
+      loadError,
+      requested,
+    );
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SETTLE_STREAM_SELECTION,
+      requestId,
+      status: 'rejected',
+      activeStream: confirmed,
+    });
+    expect(messages).not.toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: requested,
+    });
+  });
+
+  it('releases inactive frontend content only after the new selection commits', async () => {
+    const { backend, messages } = createIsolatedRecordingBackend();
+    const previous = 'previous-stream' as StreamTabId;
+    const selected = 'selected-stream' as StreamTabId;
+
+    backend.state.streamLogs.ensureStream(previous);
+    backend.state.streamLogs.ensureStream(selected);
+    await backend.activateStream(previous);
+    messages.length = 0;
+
+    await backend.activateStream(selected, 'selection-request-2');
+
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: selected,
+    });
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.RELEASE_STREAM_CONTENT,
+      stream: previous,
+    });
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SETTLE_STREAM_SELECTION,
+      requestId: 'selection-request-2',
+      status: 'accepted',
+      activeStream: selected,
+    });
+  });
+
+  it('ignores a stale refresh failure after a newer selection commits', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend, reportTranscriptLoadError } = target;
     const refreshing = 'refreshing-stream' as StreamTabId;
@@ -354,23 +529,71 @@ describe('ProgressBackend', () => {
 
     backend.state.streamLogs.ensureStream(refreshing);
     backend.state.streamLogs.ensureStream(selected);
-    backend.state.switchActiveStream(refreshing);
+    backend.presentation.select(refreshing);
     vi.spyOn(backend.state.streamLogs, 'ensureLoaded').mockImplementationOnce(
       () =>
-        new Promise<void>((_resolve, reject) => {
+        new Promise((_resolve, reject) => {
           rejectRefresh = reject;
         }),
     );
 
     const refresh = backend.syncRenderedStreams({ syncActiveStream: true });
-    backend.state.switchActiveStream(selected);
+    await backend.activateStream(selected);
     rejectRefresh(loadError);
     await refresh;
 
-    expect(reportTranscriptLoadError).toHaveBeenCalledWith(
-      loadError,
-      refreshing,
+    expect(backend.presentation.activeStream).toBe(selected);
+    expect(reportTranscriptLoadError).not.toHaveBeenCalled();
+  });
+
+  it('preserves an in-flight switch across an authoritative refresh', async () => {
+    const { backend, messages } = createIsolatedRecordingBackend();
+    const confirmed = 'confirmed-before-refresh' as StreamTabId;
+    const requested = 'pending-across-refresh' as StreamTabId;
+    let finishPreload!: () => void;
+
+    backend.state.streamLogs.ensureStream(confirmed);
+    backend.state.streamLogs.ensureStream(requested);
+    backend.presentation.select(confirmed);
+    vi.spyOn(backend.state.snapshots, 'preload').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPreload = resolve;
+        }),
     );
+
+    const activation = backend.activateStream(requested, 'refresh-request');
+    await vi.waitFor(() => expect(finishPreload).toBeTypeOf('function'));
+    await backend.syncRenderedStreams({ syncActiveStream: true });
+    finishPreload();
+    await activation;
+
+    expect(backend.presentation.activeStream).toBe(requested);
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: requested,
+    });
+  });
+
+  it('projects the stream being hydrated without confirming it early', async () => {
+    const { backend, messages } = createIsolatedRecordingBackend();
+    const stream = 'fresh-projected-stream' as StreamTabId;
+    backend.state.streamLogs.ensureStream(stream);
+    const streamRoster = vi.spyOn(backend.projections, 'streamRoster');
+
+    await backend.syncRenderedStreams({ syncActiveStream: true });
+
+    expect(streamRoster).toHaveBeenCalledWith(stream, expect.any(Map));
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+        activeStream: '',
+      }),
+    );
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: stream,
+    });
   });
 
   it('releases the tab left behind when deletion rotates the selection', async () => {
@@ -385,14 +608,14 @@ describe('ProgressBackend', () => {
 
     backend.state.streamLogs.ensureStream(older);
     backend.state.streamLogs.ensureStream(active);
-    backend.state.switchActiveStream(active);
+    backend.presentation.select(active);
     requestEviction.mockClear();
 
     await backend.deleteStream(older);
 
     // `active` stays selected, so nothing is released; deleting the
     // non-selected tab only refreshes the list.
-    expect(backend.state.activeStream).toBe(active);
+    expect(backend.presentation.activeStream).toBe(active);
     expect(requestEviction).not.toHaveBeenCalled();
     expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
       syncActiveStream: false,
@@ -405,12 +628,12 @@ describe('ProgressBackend', () => {
     const only = 'only-stream' as StreamTabId;
 
     backend.state.streamLogs.ensureStream(only);
-    backend.state.switchActiveStream(only);
+    backend.presentation.select(only);
     const activateStream = vi.spyOn(backend, 'activateStream');
 
     await backend.deleteStream(only);
 
-    expect(backend.state.activeStream).toBe('');
+    expect(backend.presentation.activeStream).toBe('');
     expect(activateStream).not.toHaveBeenCalled();
     // No stream was activated, so only the stream list is resent.
     expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
@@ -443,14 +666,14 @@ describe('ProgressBackend', () => {
       agentCategory: AgentCategory.ToolUse,
     });
     backend.state.getOrCreateStreamState(selected, AgentCategory.ToolUse);
-    backend.state.switchActiveStream(active);
+    backend.presentation.select(active);
 
     const deletion = backend.deleteStream(active);
-    backend.state.switchActiveStream(selected);
+    backend.presentation.select(selected);
     releaseClear();
     await deletion;
 
-    expect(backend.state.activeStream).toBe(selected);
+    expect(backend.presentation.activeStream).toBe(selected);
     expect(messages).toContainEqual(
       expect.objectContaining({
         command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
@@ -462,6 +685,245 @@ describe('ProgressBackend', () => {
     expect(messages).toContainEqual({
       command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       activeStream: selected,
+    });
+  });
+
+  it('recovers when an inactive stream becomes selected during deletion', async () => {
+    const { backend, messages } = createIsolatedRecordingBackend();
+    const fallback = 'surviving-fallback' as StreamTabId;
+    const deleting = 'selected-while-deleting' as StreamTabId;
+    const clearStream = backend.state.clearStream.bind(backend.state);
+    let releaseClear!: () => void;
+    const clearGate = new Promise<void>((resolve) => {
+      releaseClear = resolve;
+    });
+    vi.spyOn(backend.state, 'clearStream').mockImplementation(
+      async (stream) => {
+        await clearGate;
+        return clearStream(stream);
+      },
+    );
+
+    backend.state.streamLogs.ensureStream(fallback);
+    backend.state.streamLogs.ensureStream(deleting);
+    backend.presentation.select(fallback);
+
+    const deletion = backend.deleteStream(deleting);
+    await vi.waitFor(() =>
+      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting),
+    );
+    await backend.activateStream(deleting);
+    releaseClear();
+    await deletion;
+
+    expect(backend.presentation.activeStream).toBe(fallback);
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: fallback,
+    });
+  });
+
+  it('preserves explicit deselection during active-stream deletion', async () => {
+    const { backend, messages } = createIsolatedRecordingBackend();
+    const deleting = 'active-delete-in-progress' as StreamTabId;
+    const fallback = 'launcher-must-not-replace' as StreamTabId;
+    const clearStream = backend.state.clearStream.bind(backend.state);
+    let releaseClear!: () => void;
+    const clearGate = new Promise<void>((resolve) => {
+      releaseClear = resolve;
+    });
+    vi.spyOn(backend.state, 'clearStream').mockImplementation(
+      async (stream) => {
+        await clearGate;
+        return clearStream(stream);
+      },
+    );
+
+    backend.state.streamLogs.ensureStream(fallback);
+    backend.state.streamLogs.ensureStream(deleting);
+    backend.presentation.select(deleting);
+
+    const deletion = backend.deleteStream(deleting);
+    await vi.waitFor(() =>
+      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting),
+    );
+    backend.presentation.select('');
+    releaseClear();
+    await deletion;
+
+    expect(backend.presentation.activeStream).toBe('');
+    expect(messages).not.toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: fallback,
+    });
+  });
+
+  it('preserves a newer pending switch during active-stream deletion', async () => {
+    const { backend, messages } = createIsolatedRecordingBackend();
+    const deleting = 'active-being-deleted' as StreamTabId;
+    const fallback = 'older-roster-fallback' as StreamTabId;
+    const requested = 'newer-pending-switch' as StreamTabId;
+    const clearStream = backend.state.clearStream.bind(backend.state);
+    let releaseClear!: () => void;
+    let finishRequestedPreload!: () => void;
+    const clearGate = new Promise<void>((resolve) => {
+      releaseClear = resolve;
+    });
+    vi.spyOn(backend.state, 'clearStream').mockImplementation(
+      async (stream) => {
+        await clearGate;
+        return clearStream(stream);
+      },
+    );
+    vi.spyOn(backend.state.snapshots, 'preload').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRequestedPreload = resolve;
+        }),
+    );
+
+    for (const stream of [fallback, requested, deleting]) {
+      backend.state.streamLogs.ensureStream(stream);
+    }
+    backend.presentation.select(deleting);
+
+    const deletion = backend.deleteStream(deleting);
+    await vi.waitFor(() =>
+      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting),
+    );
+    const activation = backend.activateStream(requested, 'pending-request');
+    await vi.waitFor(() =>
+      expect(finishRequestedPreload).toBeTypeOf('function'),
+    );
+    releaseClear();
+    await deletion;
+    finishRequestedPreload();
+    await activation;
+
+    expect(backend.presentation.activeStream).toBe(requested);
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: requested,
+    });
+    expect(messages).not.toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: fallback,
+    });
+  });
+
+  it('recovers once when a pending replacement fails after deletion', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, messages, reportTranscriptLoadError } = target;
+    const deleting = 'active-before-failed-switch' as StreamTabId;
+    const requested = 'failed-pending-switch' as StreamTabId;
+    const fallback = 'recovery-survivor' as StreamTabId;
+    const loadError = new Error('replacement hydration failed');
+    let rejectRequestedPreload!: (error: Error) => void;
+    let releaseClear!: () => void;
+    const clearGate = new Promise<void>((resolve) => {
+      releaseClear = resolve;
+    });
+    const clearStream = backend.state.clearStream.bind(backend.state);
+    vi.spyOn(backend.state, 'clearStream').mockImplementation(
+      async (stream) => {
+        await clearGate;
+        return clearStream(stream);
+      },
+    );
+
+    for (const stream of [fallback, requested, deleting]) {
+      backend.state.streamLogs.ensureStream(stream);
+    }
+    backend.presentation.select(deleting);
+    vi.spyOn(backend.state.snapshots, 'preload').mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectRequestedPreload = reject;
+        }),
+    );
+
+    const deletion = backend.deleteStream(deleting);
+    await vi.waitFor(() =>
+      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting),
+    );
+    const activation = backend.activateStream(requested, 'failed-request');
+    await vi.waitFor(() =>
+      expect(rejectRequestedPreload).toBeTypeOf('function'),
+    );
+    releaseClear();
+    await deletion;
+    rejectRequestedPreload(loadError);
+    await activation;
+
+    expect(reportTranscriptLoadError).toHaveBeenCalledWith(
+      loadError,
+      requested,
+    );
+    expect(backend.presentation.activeStream).toBe(fallback);
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: fallback,
+    });
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SETTLE_STREAM_SELECTION,
+      requestId: 'failed-request',
+      status: 'rejected',
+      activeStream: fallback,
+    });
+  });
+
+  it('preserves the newest of two switches during active-stream deletion', async () => {
+    const { backend, messages } = createIsolatedRecordingBackend();
+    const deleting = 'active-before-two-switches' as StreamTabId;
+    const committed = 'first-concurrent-switch' as StreamTabId;
+    const requested = 'second-pending-switch' as StreamTabId;
+    const clearStream = backend.state.clearStream.bind(backend.state);
+    let releaseClear!: () => void;
+    let finishRequestedPreload!: () => void;
+    const clearGate = new Promise<void>((resolve) => {
+      releaseClear = resolve;
+    });
+    vi.spyOn(backend.state, 'clearStream').mockImplementation(
+      async (stream) => {
+        await clearGate;
+        return clearStream(stream);
+      },
+    );
+
+    for (const stream of [committed, requested, deleting]) {
+      backend.state.streamLogs.ensureStream(stream);
+    }
+    backend.presentation.select(deleting);
+
+    const deletion = backend.deleteStream(deleting);
+    await vi.waitFor(() =>
+      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting),
+    );
+    await backend.activateStream(committed);
+    vi.spyOn(backend.state.snapshots, 'preload').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRequestedPreload = resolve;
+        }),
+    );
+    const activation = backend.activateStream(requested, 'newest-request');
+    await vi.waitFor(() =>
+      expect(finishRequestedPreload).toBeTypeOf('function'),
+    );
+    releaseClear();
+    await deletion;
+    finishRequestedPreload();
+    await activation;
+
+    expect(backend.presentation.activeStream).toBe(requested);
+    expect(
+      messages.findLast(
+        (message) =>
+          message.command === PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      ),
+    ).toEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: requested,
     });
   });
 
@@ -487,6 +949,62 @@ describe('ProgressBackend', () => {
       syncActiveStream: false,
     });
     expect(lifecycle.notifyDeletionRetained).not.toHaveBeenCalled();
+  });
+
+  it('defers a retained bulk fallback until the rebuild hydrates it', async () => {
+    const { backend, lifecycle } = createIsolatedRecordingBackend();
+    const first = 'retained-first' as StreamTabId;
+    const second = 'retained-second' as StreamTabId;
+    backend.state.streamLogs.ensureStream(first);
+    backend.state.streamLogs.ensureStream(second);
+    backend.presentation.select('deleted-selection');
+    stubClearAll(backend, new Set([first, second]));
+
+    await backend.deleteAllStreams();
+
+    expect(backend.presentation.activeStream).toBe('');
+    expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
+      syncActiveStream: true,
+    });
+  });
+
+  it('preserves a pending switch to a stream retained by bulk deletion', async () => {
+    const { backend, lifecycle } = createIsolatedRecordingBackend();
+    const deleting = 'bulk-active-delete' as StreamTabId;
+    const requested = 'bulk-retained-request' as StreamTabId;
+    let finishClear!: () => void;
+    let finishPreload!: () => void;
+    const clearGate = new Promise<void>((resolve) => {
+      finishClear = resolve;
+    });
+
+    backend.state.streamLogs.ensureStream(deleting);
+    backend.state.streamLogs.ensureStream(requested);
+    backend.presentation.select(deleting);
+    vi.spyOn(backend.state, 'clearAll').mockImplementation(async () => {
+      await clearGate;
+      return { active: new Set([requested]), failed: new Set() };
+    });
+
+    const deletion = backend.deleteAllStreams();
+    await vi.waitFor(() => expect(backend.state.clearAll).toHaveBeenCalled());
+    vi.spyOn(backend.state.snapshots, 'preload').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPreload = resolve;
+        }),
+    );
+    const activation = backend.activateStream(requested, 'bulk-request');
+    await vi.waitFor(() => expect(finishPreload).toBeTypeOf('function'));
+    finishClear();
+    await deletion;
+    finishPreload();
+    await activation;
+
+    expect(backend.presentation.activeStream).toBe(requested);
+    expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
+      syncActiveStream: false,
+    });
   });
 
   it('stops locally owned streams before bulk cleanup', async () => {
@@ -685,7 +1203,7 @@ describe('ProgressBackend', () => {
     });
     await Promise.resolve();
 
-    expect(backend.state.activeStream).toBe('');
+    expect(backend.presentation.activeStream).toBe('');
     expect(messages).toEqual([]);
   });
 
@@ -703,7 +1221,7 @@ describe('ProgressBackend', () => {
     });
     await Promise.resolve();
 
-    expect(backend.state.activeStream).toBe('');
+    expect(backend.presentation.activeStream).toBe('');
     expect(messages).toEqual([]);
   });
 });

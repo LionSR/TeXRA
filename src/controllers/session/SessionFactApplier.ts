@@ -9,7 +9,6 @@ import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import type { SessionRendererPort } from '@controllers/session/SessionRendererPort';
 import {
   SessionState,
-  type ActiveStreamId,
   type StreamExecutionState,
 } from '@controllers/session/SessionState';
 import { withEventErrorHandling } from '@controllers/session/eventErrorHandling';
@@ -53,15 +52,7 @@ type RunFactHandlers = {
 };
 
 export type SessionFactApplierOptions = {
-  hasPendingPermissions: (streamId: string) => boolean;
   deleteStream: (stream: StreamTabId) => void | Promise<void>;
-  /**
-   * Set false to skip evicting the stream left behind on an active-stream
-   * switch. The CLI TUI needs this: its focus id is a CLI signal, not
-   * `SessionState.activeStream`, so switch-time eviction would key off the
-   * wrong stream. Defaults to evicting (Lit progress view behavior).
-   */
-  evictOnStreamSwitch?: boolean;
 };
 
 /**
@@ -69,9 +60,10 @@ export type SessionFactApplierOptions = {
  * a {@link SessionRendererPort}. Push policy (active-only, debounce, bridge)
  * lives in the host renderer.
  *
- * Attachment vs focus are separate deliveries: metadata (no `activeStream`)
- * registers a stream with the host; `onActiveStreamChanged` focuses. Do not
- * use `streamLogs.has` as a proxy for "host already has this tab" — the
+ * Attachment and focus are separate operations. This applier registers
+ * session facts; a host presentation decides whether an attachment should
+ * become its focused stream. Do not use `streamLogs.has` as a proxy for
+ * "host already has this tab" — the
  * transcript store outlives a renderer session (and can be warm from disk
  * before this host's in-memory tab map exists).
  */
@@ -164,7 +156,6 @@ export class SessionFactApplier {
     streamId: StreamTabId,
     options?: {
       streamStates?: Map<StreamTabId, StreamPhaseState>;
-      activeStream?: ActiveStreamId;
     },
   ): void {
     this.registeredWithRenderer.add(streamId);
@@ -255,16 +246,9 @@ export class SessionFactApplier {
     this.renderer.onParentStreamChanged(childStreamId, parentStreamId ?? null);
   }
 
-  private async handleSetActiveStream(
-    payload: SetActiveStreamPayload,
-  ): Promise<void> {
+  private handleSetActiveStream(payload: SetActiveStreamPayload): void {
     const { streamId, isRemote } = payload;
-    const evictPrevious = this.options.evictOnStreamSwitch !== false;
-    if (!streamId) {
-      this.state.switchActiveStream('', { evictPrevious });
-      this.renderer.onActiveStreamChanged('');
-      return;
-    }
+    if (!streamId) return;
 
     this.state.streamLogs.ensureStream(streamId);
     // Only pass fields the event actually knows; omitted fields retain the
@@ -287,65 +271,16 @@ export class SessionFactApplier {
     if (agentCategory) {
       this.state.getOrCreateStreamState(streamId, agentCategory);
     }
-    // Don't switch away from the current stream if it has pending permissions
-    // (retry, tool-edit, bash approval, or agent proposal) — the user needs to
-    // interact with the approval panel before losing sight of it.
-    // Background child streams (bash, codex) pass `suppressViewSwitch` so the
-    // tab appears without auto-switching the active view.
-    const currentStream = this.state.activeStream;
-    const shouldSwitch =
-      payload.suppressViewSwitch !== true &&
-      (!currentStream || !this.options.hasPendingPermissions(currentStream));
-    if (shouldSwitch) {
-      // The switch also releases the previously-active stream if it reached a
-      // terminal status while visible — setStreamStatus skips release for the
-      // active stream, so this is our only chance.
-      this.state.switchActiveStream(streamId, { evictPrevious });
-    }
-
     if (!this.renderer.isAvailable()) return;
 
-    // First delivery to *this* renderer (not `streamLogs.has`): register
-    // before rehydrate so signal hosts can mint a tab synchronously. Never
-    // pass `activeStream` here — flipping the visible tab before
-    // `ensureLoaded` races a newer activation that wins during the await.
+    // Register the attachment with this renderer. Transcript hydration and
+    // focus policy belong to the host presentation, not the session fact.
     const firstHostDelivery = !this.registeredWithRenderer.has(streamId);
     if (firstHostDelivery) {
       this.pushStreamMetadata(streamId, {
         streamStates: this.state.streamStatus.getAllStreamStates(),
       });
     }
-
-    // Rehydrate a potentially-evicted stream before syncing content, so the
-    // webview doesn't get an empty log. All synchronous state mutations are
-    // already done above; the await here only gates host delivery.
-    await this.state.streamLogs.ensureLoaded(streamId);
-
-    // A newer handleSetActiveStream may have resolved during our await and
-    // already taken over the active tab; skip delivery so we don't overwrite
-    // its content with stale data.
-    if (shouldSwitch && this.state.activeStream !== streamId) return;
-
-    // First host sighting: full metadata (optional `activeStream` for Lit).
-    // Later switches: cheap active-stream notify only. Always notify
-    // `onActiveStreamChanged` on switch so signal hosts that ignore
-    // metadata's `activeStream` option still focus.
-    if (firstHostDelivery) {
-      this.pushStreamMetadata(streamId, {
-        streamStates: this.state.streamStatus.getAllStreamStates(),
-        activeStream: shouldSwitch ? this.state.activeStream : undefined,
-      });
-    }
-    if (shouldSwitch) {
-      this.renderer.onActiveStreamChanged(streamId);
-    }
-    // Always sync content for the new stream so badges reach the webview —
-    // even when we suppress the view switch. (The parent edge itself rides
-    // `StreamTabInfo.parentStreamId` in the stream-metadata update.)
-    // includeActiveState is only relevant when this IS the active stream.
-    this.renderer.syncStreamContent(streamId, {
-      includeActiveState: shouldSwitch && !firstHostDelivery,
-    });
   }
 
   private handleGoalStateChanged(streamId: StreamTabId): void {
@@ -485,8 +420,9 @@ export class SessionFactApplier {
     // rehydrate can never overwrite a later phase.
     const rosterParents = this.state.recordChildPhase(streamId, status);
 
-    // Active phases keep the full log resident for runtime writes. Inactive,
-    // unfocused streams release heavy entries and rehydrate on demand.
+    // Active phases keep the full log resident for runtime writes. Terminal
+    // lifecycle requests release unconditionally; exact presentation and
+    // writer leases decide whether the store can satisfy it yet.
     if (isActivePhase(status)) {
       const requiresPersistentRehydrate =
         this.state.streamLogs.mode.kind === 'persistent' &&
@@ -501,7 +437,7 @@ export class SessionFactApplier {
     // any active-phase rehydrate and before inactive unfocused eviction —
     // summaries keep timestamps across release, but not the resident log head.
     const logHead = this.state.streamLogs.get(streamId)?.head ?? 0;
-    if (!isActivePhase(status) && streamId !== this.state.activeStream) {
+    if (!isActivePhase(status)) {
       this.state.streamLogs.requestEviction(streamId);
     }
 
@@ -532,20 +468,12 @@ export class SessionFactApplier {
     }
 
     if (isNewStream) {
-      if (!this.state.activeStream) {
-        this.state.switchActiveStream(streamId);
-      }
-      const activeStream =
-        !this.state.activeStream || this.state.activeStream === streamId
-          ? this.state.activeStream
-          : undefined;
       this.pushStreamMetadata(streamId, {
         streamStates: this.buildStreamStatesForRefresh(
           streamId,
           status,
           substate,
         ),
-        activeStream,
       });
     } else if (isNewRunningTransition) {
       this.pushStreamMetadata(streamId, {

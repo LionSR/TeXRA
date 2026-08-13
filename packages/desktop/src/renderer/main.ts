@@ -19,7 +19,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/popover/popover.js';
 import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
-import { create as mutate } from 'mutative';
 import '@progressView/frontend';
 import './TexraDiffView';
 import type { StreamTabs } from '@progressView/frontend/components/StreamTabs';
@@ -36,6 +35,8 @@ import {
   handleStreamSwitch,
   handleToolbarCommand,
   runCompileFixer,
+  requestStreamDeselection,
+  requestStreamSwitch,
   sendFollowupCommand,
 } from '@progressView/frontend/eventHandlers';
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
@@ -43,6 +44,7 @@ import {
   activeStreamId$,
   appState,
   childStreamsByParent$,
+  displayedActiveStreamId$,
   hasAnyStreams$,
   pendingApprovalIds$,
   streamStates$,
@@ -1109,7 +1111,7 @@ function rerenderShell(): void {
       activeWorkbenchTab(shellState, 'bottom')?.kind === 'logs',
   );
   railTabs.streams = topLevelStreams$.get();
-  railTabs.activeStreamId = activeStreamId$.get();
+  railTabs.activeStreamId = displayedActiveStreamId$.get();
   railTabs.streamStates = streamStates$.get();
   railTabs.pendingApprovalStreamIds = pendingApprovalIds$.get();
   railTabs.childStreamsByParent = childStreamsByParent$.get();
@@ -1191,6 +1193,7 @@ function installShellSignalWatcher(): void {
   // re-render on a microtask so multiple synchronous signal writes batch.
   const shellDeps = new Signal.Computed(() => {
     activeStreamId$.get();
+    displayedActiveStreamId$.get();
     hasAnyStreams$.get();
     topLevelStreams$.get();
     streamStates$.get();
@@ -1327,21 +1330,12 @@ function openCommandPalette(): void {
 
 function switchToStream(streamId: StreamTabId): void {
   if (!appState.get().streamById.has(streamId)) return;
-  appState.set(
-    mutate(appState.get(), (draft) => {
-      draft.activeStreamId = streamId;
-    }),
-  );
-  postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, { stream: streamId });
+  requestStreamSwitch(streamId);
 }
 
 // Clear the active stream so the center pane swaps back to <main-app>.
 function returnToLauncher(): void {
-  appState.set(
-    mutate(appState.get(), (draft) => {
-      draft.activeStreamId = null;
-    }),
-  );
+  requestStreamDeselection();
 }
 
 const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {

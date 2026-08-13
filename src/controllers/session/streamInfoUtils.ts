@@ -1,12 +1,12 @@
 import type { SessionState } from '@controllers/session/SessionState';
-import type { StreamTabInfo } from '@shared/schemas';
+import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
 import { peekWorktreeInfo, resolveWorktreeInfo } from '@utils/git/worktreeInfo';
 import { buildStreamTabInfo } from './streamTabInfo';
 
 /** The state a single tab info is built from. */
 export type StreamInfoSource = Pick<
   SessionState,
-  'getStreamMetadata' | 'activeStream' | 'streamStatus'
+  'getStreamMetadata' | 'streamStatus'
 >;
 
 /** The state the full tab list is built from. */
@@ -17,6 +17,7 @@ export type StreamInfoListSource = StreamInfoSource &
 export function buildStreamInfo(
   state: StreamInfoSource,
   id: string,
+  activeStream?: StreamTabId | '',
 ): StreamTabInfo {
   const metadata = state.getStreamMetadata(id);
   const workingDirectory = metadata.config?.workingDirectory;
@@ -27,7 +28,7 @@ export function buildStreamInfo(
     // LRU holds 32 entries, so probing every historical stream on a metadata
     // rebuild thrashes the cache and spawns git per stream (#9959). Terminal
     // streams render their last-known value from the peek above, or nothing.
-    if (id === state.activeStream || state.streamStatus.isInFlight(id)) {
+    if (id === activeStream || state.streamStatus.isInFlight(id)) {
       // Fire-and-forget; the resolver owns TTL/in-flight de-duplication.
       void resolveWorktreeInfo(workingDirectory).catch(() => {
         /* best-effort chip enrichment */
@@ -43,8 +44,13 @@ export function buildStreamInfo(
 }
 
 /** Build metadata objects for all streams in the given state, newest first. */
-export function buildStreamInfos(state: StreamInfoListSource): StreamTabInfo[] {
+export function buildStreamInfos(
+  state: StreamInfoListSource,
+  activeStream?: StreamTabId | '',
+): StreamTabInfo[] {
   // selectableStreamNames() already returns newest-first, so the mapped
   // tab infos inherit that order without re-sorting.
-  return state.selectableStreamNames().map((id) => buildStreamInfo(state, id));
+  return state
+    .selectableStreamNames()
+    .map((id) => buildStreamInfo(state, id, activeStream));
 }

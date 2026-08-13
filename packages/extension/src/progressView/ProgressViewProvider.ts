@@ -359,8 +359,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     );
   }
 
-  public async setActiveStream(streamId: StreamTabId): Promise<void> {
-    await this.backend.activateStream(streamId);
+  public async setActiveStream(
+    streamId: StreamTabId | '',
+    requestId?: string,
+  ): Promise<void> {
+    await this.backend.activateStream(streamId, requestId);
   }
 
   private reportTranscriptLoadError(

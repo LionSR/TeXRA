@@ -1,15 +1,9 @@
-import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
-import {
-  buildStreamInfo,
-  buildStreamInfos,
-  type StreamInfoListSource,
-  type StreamInfoSource,
-} from '@controllers/session/streamInfoUtils';
 import type {
-  ActiveStreamId,
-  SessionState,
-  StreamBadgeSnapshot,
-} from '@controllers/session/SessionState';
+  ProjectedStreamMetadata,
+  ProjectedStreamRoster,
+} from '@controllers/progressView/backend/ProgressStreamProjectionBuilder';
+import type { StreamBadgeSnapshot } from '@controllers/session/SessionState';
+import type { PresentedStreamId } from '@controllers/session/SessionRendererPort';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
@@ -22,28 +16,16 @@ import type {
   ProgressViewPlacement,
   ProgressViewOutboundMessage,
   RoundIndexed,
-  StreamMetadata,
   StreamPhase,
   StreamStage,
   StreamSubstate,
   StreamTabId,
-  StreamTabInfo,
   Plan,
   TodoItem,
   SyncStreamContentPayload,
   TokenUsageStats,
 } from '@shared/schemas';
-import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import type { GoalStatus } from '@shared/schemas/goal';
-
-/** The state one stream's wire metadata is projected from. */
-type StreamMetadataSource = StreamInfoSource &
-  Pick<SessionState, 'getStreamState' | 'streamLogs'>;
-
-/** The state a full stream-tabs refresh is projected from. */
-type StreamListMetadataSource = StreamMetadataSource &
-  StreamInfoListSource &
-  Pick<SessionState, 'rotateActiveStream'>;
 /**
  * Manages webview updates for the progress view.
  * Provides a clean interface for updating different parts of the webview
@@ -74,22 +56,12 @@ export class WebviewUpdater {
   }
 
   updateStreamMetadata(
-    state: StreamMetadataSource,
-    streamId: StreamTabId,
-    streamStates?: Map<StreamTabId, StreamPhaseState>,
-    options?: { activeStream?: ActiveStreamId },
+    projection: ProjectedStreamMetadata,
+    options?: { activeStream?: PresentedStreamId },
   ): void {
-    const streamInfo = buildStreamInfo(state, streamId);
-    const streamState = this.buildStreamMetadataForStream(
-      state,
-      streamInfo,
-      streamStates,
-    );
-
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-      streamInfo,
-      streamState,
+      ...projection,
       activeStream: options?.activeStream,
     });
   }
@@ -240,10 +212,30 @@ export class WebviewUpdater {
     });
   }
 
-  setActiveStream(activeStream: ActiveStreamId): void {
+  setActiveStream(activeStream: PresentedStreamId): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       activeStream,
+    });
+  }
+
+  settleStreamSelection(
+    requestId: string,
+    status: 'accepted' | 'rejected' | 'superseded',
+    activeStream: PresentedStreamId,
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.SETTLE_STREAM_SELECTION,
+      requestId,
+      status,
+      activeStream,
+    });
+  }
+
+  releaseStreamContent(stream: StreamTabId): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.RELEASE_STREAM_CONTENT,
+      stream,
     });
   }
 
@@ -322,81 +314,36 @@ export class WebviewUpdater {
 
   /**
    * Update stream metadata and theme for the webview.
-   * Returns the active stream after applying the update.
-   *
-   * Note: This method computes valid active stream via SessionState
-   * (single source of truth) and explicitly persists if changed.
-   *
    * Use this for structural updates (initial sync, stream add/remove).
    * For incremental updates, prefer targeted messages like:
    * setActiveStream(), updateConversationProgress(), updateStreamBadges(),
    * updateStreamStatus().
    */
   sendStreamMetadata(
-    state: StreamListMetadataSource,
-    streamStates?: Map<StreamTabId, StreamPhaseState>,
+    projection: ProjectedStreamRoster,
+    activeStream: PresentedStreamId,
     theme?: 'dark' | 'light',
-  ): ActiveStreamId {
-    const streams = buildStreamInfos(state);
-
-    // The previously-active stream may have finished while visible —
-    // setStreamStatus skipped release for the active tab, so the rotation
-    // below is what releases the completed log.
-    const activeStream = state.rotateActiveStream(
-      streams.map((info) => info.name),
-    );
-
+  ): void {
     if (!this.isAvailable()) {
-      return activeStream;
+      return;
     }
 
     if (theme) this.setTheme(theme);
-
-    // Send lightweight metadata — only backend-owned fields the frontend merges.
-    const streamMetadata: Record<StreamTabId, StreamMetadata> = {};
-    for (const streamInfo of streams) {
-      streamMetadata[streamInfo.name] = this.buildStreamMetadataForStream(
-        state,
-        streamInfo,
-        streamStates,
-      );
-    }
 
     // Full stream-tabs refresh, carrying the per-stream metadata patch.
     const unsupportedCommands = this.getUnsupportedCommands?.();
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-      streams,
+      streams: projection.streams,
       activeStream,
       unsupportedCommands: unsupportedCommands
         ? [...unsupportedCommands]
         : undefined,
-      streamStates: streamMetadata,
+      streamStates: projection.streamStates,
     });
-
-    return activeStream;
   }
 
   isAvailable(): boolean {
     return this.hasTarget();
-  }
-
-  private buildStreamMetadataForStream(
-    state: StreamMetadataSource,
-    streamInfo: StreamTabInfo,
-    streamStates?: Map<StreamTabId, StreamPhaseState>,
-  ): StreamMetadata {
-    const current = state.getStreamState(streamInfo.name);
-    const streamState = streamStates?.get(streamInfo.name);
-    return buildStreamMetadata({
-      category: streamInfo.agentCategory,
-      status: streamState?.phase,
-      substate: streamState?.substate,
-      userFollowUpSupport: streamInfo.userFollowUpSupport,
-      lastTimestamp: state.streamLogs.getTimestampRange(streamInfo.name).last,
-      conversationProgress: current?.conversationProgress,
-      stage: current?.stage,
-      subagents: current?.subagents,
-    });
   }
 }
