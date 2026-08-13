@@ -153,7 +153,7 @@ interface StreamSinkState {
 
 type StageMetadata = Pick<
   Extract<AgentEvent, { type: 'stage.start' }>,
-  'kind' | 'index' | 'total'
+  'kind' | 'index' | 'total' | 'attemptId'
 >;
 
 /**
@@ -311,6 +311,9 @@ export function attachTranscriptRecorder(
             ...(event.kind !== undefined ? { kind: event.kind } : {}),
             ...(event.index !== undefined ? { index: event.index } : {}),
             ...(event.total !== undefined ? { total: event.total } : {}),
+            ...(event.attemptId !== undefined
+              ? { attemptId: event.attemptId }
+              : {}),
           } satisfies StageMetadata;
           stageMetadata.set(event.id, metadata);
           // A new round starts fresh: whatever MODEL_RESPONSE stream the

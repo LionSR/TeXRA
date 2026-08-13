@@ -61,6 +61,7 @@ export const GroupLogPayloadSchema = z.looseObject({
   kind: StageKindSchema.optional().catch(undefined),
   index: taskGroupIndexField.optional().catch(undefined),
   total: taskGroupTotalField.optional().catch(undefined),
+  attemptId: z.string().min(1).optional().catch(undefined),
   name: z.string().optional().catch(undefined),
   endTime: taskGroupEndTimeField.optional().catch(undefined),
 });
