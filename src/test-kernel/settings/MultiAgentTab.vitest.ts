@@ -19,7 +19,6 @@ import {
 
 // Local file imports
 import {
-  dispatchKey,
   mountComponent,
   useLitComponentTestDom,
 } from './litComponentTestUtils';
@@ -39,14 +38,7 @@ const CUSTOM_PRESET: AgentModePreset = {
   },
 };
 
-/**
- * Regression coverage for the a11y-clickables audit: the team-preset card
- * was a plain `<div @click>` with no role/tabindex/keydown, so keyboard
- * users could never select a team even though `.preset-card:focus-visible`
- * already shipped an outline. Mirrors GoalTab.ts's `.goal-row` and
- * AgentSelectionPanel.ts's `.agent-list-item` keyboard-activation pattern.
- */
-describe('multi-agent-tab preset card keyboard activation', () => {
+describe('multi-agent-tab preset cards', () => {
   useLitComponentTestDom(
     () => import('@settingsView/frontend/tabs/MultiAgentTab'),
   );
@@ -65,43 +57,37 @@ describe('multi-agent-tab preset card keyboard activation', () => {
       .map(([, payload]) => (payload as { presetId: string }).presetId);
   }
 
-  it('exposes concise keyboard controls for every preset card', async () => {
+  it('exposes a concise native button for every preset card', async () => {
     const element = await mount();
     const cards = element.shadowRoot?.querySelectorAll('.preset-card') ?? [];
     expect(cards.length).toBe(AGENT_MODE_PRESETS.length);
     for (const [index, card] of [...cards].entries()) {
-      expect(card.getAttribute('role')).toBe('button');
-      expect(card.getAttribute('tabindex')).toBe('0');
-      expect(card.getAttribute('aria-label')).toBe(
+      const applyButton = card.querySelector('.preset-apply-btn');
+      expect(applyButton?.tagName).toBe('BUTTON');
+      expect(applyButton?.getAttribute('aria-label')).toBe(
         `Apply ${AGENT_MODE_PRESETS[index]!.name} team`,
       );
-      expect(card.getAttribute('aria-pressed')).toBe('false');
+      expect(applyButton?.getAttribute('aria-pressed')).toBe('false');
     }
   });
 
-  it('applies the preset on Enter and Space, not on other keys', async () => {
+  it('applies the preset from its button', async () => {
     const element = await mount();
+    const applyButton =
+      element.shadowRoot?.querySelector<HTMLButtonElement>('.preset-apply-btn');
 
-    const firstCard = element.shadowRoot?.querySelector('.preset-card');
-    expect(firstCard).toBeInstanceOf(HTMLElement);
+    applyButton?.click();
 
-    dispatchKey(firstCard!, 'a');
-    expect(appliedPresetIds()).toHaveLength(0);
-
-    dispatchKey(firstCard!, 'Enter');
-    dispatchKey(firstCard!, ' ');
-
-    expect(appliedPresetIds()).toEqual([
-      AGENT_MODE_PRESETS[0]!.id,
-      AGENT_MODE_PRESETS[0]!.id,
-    ]);
+    expect(appliedPresetIds()).toEqual([AGENT_MODE_PRESETS[0]!.id]);
   });
 
   it('does not claim a team is active before the host confirms it', async () => {
     const element = await mount();
     const firstCard = element.shadowRoot?.querySelector('.preset-card');
+    const applyButton =
+      firstCard?.querySelector<HTMLButtonElement>('.preset-apply-btn');
 
-    firstCard?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    applyButton?.click();
     await element.updateComplete;
 
     expect(appliedPresetIds()).toEqual([AGENT_MODE_PRESETS[0]!.id]);
@@ -113,22 +99,31 @@ describe('multi-agent-tab preset card keyboard activation', () => {
     const activePresetId = AGENT_MODE_PRESETS[0]!.id;
     const element = await mount({ activePresetId });
     const firstCard = element.shadowRoot?.querySelector('.preset-card');
+    const applyButton = firstCard?.querySelector('.preset-apply-btn');
 
     expect(firstCard?.classList.contains('active')).toBe(true);
-    expect(firstCard?.getAttribute('aria-pressed')).toBe('true');
+    expect(applyButton?.getAttribute('aria-pressed')).toBe('true');
     expect(firstCard?.querySelector('.preset-active-badge')).not.toBeNull();
   });
 
-  it('does not apply the preset when Enter/Space bubbles from the delete button', async () => {
+  it('keeps the custom-team delete button outside the apply button', async () => {
     const element = await mount({ customPresets: [CUSTOM_PRESET] });
-
+    const customCard = element.shadowRoot
+      ?.querySelectorAll('.preset-card')
+      .item(AGENT_MODE_PRESETS.length);
+    const applyButton = customCard?.querySelector('.preset-apply-btn');
     const deleteButton =
-      element.shadowRoot?.querySelector('.preset-delete-btn');
+      customCard?.querySelector<HTMLElement>('.preset-delete-btn');
     expect(deleteButton).toBeInstanceOf(HTMLElement);
+    expect(applyButton?.contains(deleteButton ?? null)).toBe(false);
 
-    dispatchKey(deleteButton!, 'Enter');
+    deleteButton?.click();
 
     expect(appliedPresetIds()).toHaveLength(0);
+    expect(mocks.postMessage).toHaveBeenCalledWith(
+      SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
+      { presetId: CUSTOM_PRESET.id },
+    );
   });
 
   it('uses the backend capability list as the only orchestrator authority', async () => {
