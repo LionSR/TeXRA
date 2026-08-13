@@ -44,7 +44,7 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import type { ExecResult } from '@shared/schemas/opResults';
-import type { ToolResult } from '@shared/schemas/toolResult';
+import type { ToolResult } from '@shared/schemas';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
