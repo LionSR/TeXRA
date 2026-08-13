@@ -150,6 +150,9 @@ describe('CLI agents run command', () => {
     expect(config?.inputFiles).toEqual(['problem.md']);
     expect(config?.contextFiles).toEqual(['notes.md']);
     expect(config?.displayInstruction).toBe('Assess the proof concisely.');
+    expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
+      recoveryInputIsDurable: true,
+    });
     expect(config?.instruction).toContain('Primary user input files:');
     expect(config?.instruction).toContain('- "problem.md"');
     expect(config?.instruction).toContain('Read-only context files:');
@@ -179,6 +182,40 @@ describe('CLI agents run command', () => {
       result: emission.json,
     });
     expect(emission?.text).toBe('Correct.');
+  });
+
+  it('marks materialized stdin as unavailable for recovery advertising', async () => {
+    mocks.withExpandedRunInputs.mockImplementationOnce(
+      async (
+        _inputSpecs: readonly string[],
+        _contextSpecs: readonly string[],
+        _cwd: string,
+        _options: unknown,
+        run: (inputs: {
+          readonly inputFiles: string[];
+          readonly contextFiles: string[];
+          readonly hasMaterializedStdinInput: boolean;
+        }) => Promise<unknown>,
+      ) =>
+        run({
+          inputFiles: ['.texra-tmp/stdin.tex'],
+          contextFiles: [],
+          hasMaterializedStdinInput: true,
+        }),
+    );
+    const { runToolUseAgent } = await import('@cli/commands/agentsRun');
+
+    await runToolUseAgent(cliContext(), {
+      agent: 'chat',
+      inputFiles: ['-'],
+      contextFiles: [],
+      model: 'gpt54',
+      instruction: 'Assess the proof.',
+    });
+
+    expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
+      recoveryInputIsDurable: false,
+    });
   });
 
   it('publishes the canonical outcome for a shutdown cancellation', async () => {
