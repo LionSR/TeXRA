@@ -49,6 +49,11 @@ export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
 }
 
+/** CLI-local extension that keeps host failures separate from user text. */
+export type CliApprovalDecision = ApprovalDecision & {
+  readonly rejectionCause?: string;
+};
+
 export interface CliApprovalContent {
   readonly summary: string;
   /** Complete content behind a bounded summary, shown only on request. */
@@ -271,7 +276,7 @@ export async function askApproval(
   context: CliContext,
   content: CliApprovalContent,
   hooks: CliApprovalPromptHooks = {},
-): Promise<ApprovalDecision> {
+): Promise<CliApprovalDecision> {
   const getDetails = content.details;
   try {
     return await cliPromptQueue(context).add(async () => {
@@ -309,12 +314,13 @@ export async function askApproval(
 
       return {
         accepted: parsed.accepted,
-        userMessage: parsed.accepted
-          ? undefined
-          : feedback || 'Rejected from CLI approval prompt.',
+        userMessage: parsed.accepted ? undefined : feedback,
       };
     });
   } catch {
-    return { accepted: false, userMessage: 'CLI approval prompt failed.' };
+    return {
+      accepted: false,
+      rejectionCause: 'CLI approval prompt failed.',
+    };
   }
 }
