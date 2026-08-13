@@ -53,6 +53,7 @@ import {
   STREAM_PHASE,
   type ExecutionId,
   type Plan,
+  type StreamPhase,
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
@@ -907,11 +908,22 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands();
     const session = createSession();
     const rootStreamId = 'stream-root' as StreamTabId;
+    const parentStreamId = 'stream-parent' as StreamTabId;
+    const rootSiblingIds = [
+      'stream-root-sibling-1',
+      'stream-root-sibling-2',
+    ] as StreamTabId[];
     const runningChildId = 'stream-child-running' as StreamTabId;
     const waitingChildId = 'stream-child-waiting' as StreamTabId;
-    activeStreamId.set(rootStreamId);
+    activeStreamId.set(parentStreamId);
+    for (const streamId of rootSiblingIds) {
+      setStreamStatusInCliState({
+        streamId,
+        status: STREAM_PHASE.RUNNING,
+      });
+    }
     setStreamStatusInCliState({
-      streamId: rootStreamId,
+      streamId: parentStreamId,
       status: STREAM_PHASE.WAITING,
     });
     setStreamStatusInCliState({
@@ -922,26 +934,35 @@ describe('handleTuiSlashCommand', () => {
       streamId: waitingChildId,
       status: STREAM_PHASE.WAITING,
     });
-    projectChildRoster(
-      rootStreamId,
-      [runningChildId, waitingChildId].map((childStreamId, index) => ({
-        executionId: `child-exec-${index}`,
-        identity: { kind: 'agent' as const, agent: `critic-${index}` },
-        agentName: `critic-${index}`,
-        status:
-          childStreamId === runningChildId
-            ? STREAM_PHASE.RUNNING
-            : STREAM_PHASE.WAITING,
-        startedAt: index + 1,
-        elapsed: '1s',
-        childStreamId,
-      })),
-    );
+    const rosterRow = (
+      childStreamId: StreamTabId,
+      index: number,
+      status: StreamPhase,
+    ) => ({
+      executionId: `child-exec-${index}`,
+      identity: { kind: 'agent' as const, agent: `critic-${index}` },
+      agentName: `critic-${index}`,
+      status,
+      startedAt: index + 1,
+      elapsed: '1s',
+      childStreamId,
+    });
+    projectChildRoster(rootStreamId, [
+      rosterRow(parentStreamId, 0, STREAM_PHASE.WAITING),
+      ...rootSiblingIds.map((streamId, index) =>
+        rosterRow(streamId, index + 1, STREAM_PHASE.RUNNING),
+      ),
+    ]);
+    projectChildRoster(parentStreamId, [
+      rosterRow(runningChildId, 3, STREAM_PHASE.RUNNING),
+      rosterRow(waitingChildId, 4, STREAM_PHASE.WAITING),
+    ]);
 
     await handleTuiSlashCommand('/status', createContext(session));
 
     const statusText = lastEntryText(rootStreamId);
     expect(statusText).toContain('active background tasks: 1');
+    expect(statusText).not.toContain('active background tasks: 2');
   });
 
   it('does not count retained idle children as active background tasks', async () => {
