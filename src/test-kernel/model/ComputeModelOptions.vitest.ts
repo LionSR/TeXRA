@@ -15,15 +15,16 @@ import {
   type ModelOptionsServerAccess,
 } from '@model/computeModelOptions';
 import {
+  resolveDirectModelApiKeyProvider,
+  shouldRouteModelThroughOpenRouter,
+} from '@model/openRouterRouting';
+import {
   CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
   isCodexSubscriptionEligible,
 } from '@model/providerCapabilities';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import type { ModelOptionData } from '@shared/schemas';
-import {
-  API_KEY_PROVIDER_IDS,
-  FAST_FIRST_RESPONSE_HINT,
-} from '@shared/constants/providers';
+import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
@@ -102,6 +103,20 @@ function initSubscriptionPlatform(
     secrets,
   });
 }
+
+describe('model catalogue direct-route key ownership', () => {
+  it('assigns every servable direct route to an API-key provider', () => {
+    for (const [modelId, config] of Object.entries(MODEL_CONFIGS)) {
+      if (config.retired) continue;
+      if (shouldRouteModelThroughOpenRouter(config, false)) continue;
+
+      expect(
+        resolveDirectModelApiKeyProvider(config),
+        `${modelId} (${config.provider}) is servable without OpenRouter but has no direct API-key owner`,
+      ).toBeDefined();
+    }
+  });
+});
 
 describe('computeModelOptionsData relay quota state', () => {
   setupPlatform({
@@ -282,16 +297,6 @@ describe('computeModelOptionsData relay quota state', () => {
     expect(reason).toBe(
       'Model "haiku3" is retired and no longer available from its provider. Choose an active model.',
     );
-  });
-
-  it('keeps every active catalogue provider in the API-key registry', () => {
-    const apiKeyProviders = new Set<string>(API_KEY_PROVIDER_IDS);
-
-    for (const config of Object.values(MODEL_CONFIGS)) {
-      if (!config.retired && !config.deprecated) {
-        expect(apiKeyProviders).toContain(config.provider);
-      }
-    }
   });
 
   it('honors the catalogue retirement of the legacy Copilot model', async () => {
