@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 import { createChannelTrace } from '@agent/trace';
-import { deriveResumability } from '@agent/storage';
+import { deriveResumability } from '@agent/storage/resumability';
 import { type ToolUseFollowUpQueueReason } from '@agent/runtime/executionRegistry';
 import {
   currentSession,
