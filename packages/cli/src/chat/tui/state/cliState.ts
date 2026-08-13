@@ -141,7 +141,7 @@ export type ConversationEntry = ConversationEntryOrigin &
 export function currentWorkflowAttemptId(
   declaredAttemptId: string | undefined,
   entries: readonly ConversationEntry[],
-  boundaryDeclared = false,
+  boundaryDeclared: boolean,
 ): string | null | undefined {
   if (boundaryDeclared) return declaredAttemptId ?? null;
   return (
