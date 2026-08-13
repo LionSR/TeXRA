@@ -1094,6 +1094,10 @@ describe('CLI child list display model', () => {
     const props: SubagentListProps = {
       listRootStreamId: run,
       maxRows: 15,
+      pendingApprovals: new Map([
+        [shared, ['bash'] as const],
+        [fallback, ['toolEdit'] as const],
+      ]),
       sessions: [],
       streams,
     };
@@ -1138,6 +1142,7 @@ describe('CLI child list display model', () => {
     expect(reusedTerminalLine).toContain('$0.500');
     expect(reusedTerminalLine).not.toContain('ambiguous-model');
     expect(reusedTerminalLine).not.toContain('↓999');
+    expect(reusedTerminalLine).not.toContain('bash');
     const labelledModelLine = narrowOutput
       .split('\n')
       .find((line) => line.includes('Labelled model · Finished'));
@@ -1152,9 +1157,51 @@ describe('CLI child list display model', () => {
       .split('\n')
       .find((line) => line.includes('Fallback · Finished'));
     expect(fallbackLine).toContain('fallback-model');
+    expect(fallbackLine).toContain('edit');
     expect(fallbackLine).toContain('↓321');
     expect(fallbackLine).toContain('$0.007');
     expect(fallbackLine).not.toContain('5s');
+  });
+
+  it('keeps a task approval visible when its label truncates', async () => {
+    const run = 'approval-run' as StreamTabId;
+    const child = 'approval-child' as StreamTabId;
+    const rootSlice = workflowAgentSlice(run, {
+      agent: 'workflow',
+      identity: {
+        kind: 'multiAgentWorkflow',
+        workflowName: 'workflow',
+      },
+      status: STREAM_PHASE.RUNNING,
+      entries: [
+        workflowTaskEntry('task', 'Running: Long task', {
+          id: 'task',
+          label: 'Check every intermediate lemma in the manuscript',
+          status: 'running',
+          childStreamId: child,
+        }),
+      ],
+    });
+    const output = await renderSubagentList(
+      {
+        dashboard: workflowDashboardModel(rootSlice, 36),
+        maxRows: 4,
+        pendingApprovals: new Map([[child, ['bash']]]),
+        selectedValue: workflowTaskListValue('task'),
+        streams: new Map([
+          [run, rootSlice],
+          [child, workflowAgentSlice(child, {})],
+        ]),
+      },
+      36,
+      { until: (frame) => frame.includes('bash') },
+    );
+
+    expect(output).toContain(' · bash');
+    expect(output).not.toContain('manuscript');
+    expect(
+      output.split('\n').every((line) => textDisplayWidth(line) <= 36),
+    ).toBe(true);
   });
 
   // The right-aligned metadata column is the one row element `SubagentList`
