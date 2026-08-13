@@ -182,7 +182,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Check remote-agents SQL is in sync
         run: pnpm run check:remote-agents
@@ -526,5 +526,12 @@ jobs:
              [ '${{ needs.checks.result }}' = 'skipped' ] && \
              [ '${{ needs.docs-check.result }}' != 'success' ]; then
             echo 'Docs-only PR but docs build did not succeed: ${{ needs.docs-check.result }}'
+            exit 1
+          fi
+          if [ '${{ github.event_name }}' = 'pull_request' ] && \
+             [ '${{ needs.changes.outputs.code }}' != 'true' ] && \
+             [ '${{ needs.changes.outputs.remote_agent_docs }}' = 'true' ] && \
+             [ '${{ needs.remote-agent-docs.result }}' != 'success' ]; then
+            echo 'Remote-agent docs changed but SQL sync did not succeed: ${{ needs.remote-agent-docs.result }}'
             exit 1
           fi
