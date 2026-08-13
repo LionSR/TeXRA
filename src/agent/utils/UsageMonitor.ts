@@ -198,9 +198,9 @@ export class UsageMonitor {
         },
         {
           recordTranscript: agentCategory === AgentCategory.Workflow,
-          // The round stage's AsyncLocalStorage scope already stamps the active
-          // round id (r0/r1...) onto emitted events; fall back to storageKey for
-          // any usage logged outside a round stage.
+          // The ambient stage's AsyncLocalStorage scope stamps its structural
+          // id onto emitted events; fall back to storageKey when usage is
+          // logged outside a stage.
           stageId: logger.activeStageId() ?? storageKey,
         },
       );
