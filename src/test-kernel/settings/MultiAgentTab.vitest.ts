@@ -75,6 +75,7 @@ describe('multi-agent-tab preset card keyboard activation', () => {
       expect(card.getAttribute('aria-label')).toBe(
         `Apply ${AGENT_MODE_PRESETS[index]!.name} team`,
       );
+      expect(card.getAttribute('aria-pressed')).toBe('false');
     }
   });
 
@@ -94,6 +95,28 @@ describe('multi-agent-tab preset card keyboard activation', () => {
       AGENT_MODE_PRESETS[0]!.id,
       AGENT_MODE_PRESETS[0]!.id,
     ]);
+  });
+
+  it('does not claim a team is active before the host confirms it', async () => {
+    const element = await mount();
+    const firstCard = element.shadowRoot?.querySelector('.preset-card');
+
+    firstCard?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await element.updateComplete;
+
+    expect(appliedPresetIds()).toEqual([AGENT_MODE_PRESETS[0]!.id]);
+    expect(firstCard?.classList.contains('active')).toBe(false);
+    expect(firstCard?.querySelector('.preset-active-badge')).toBeNull();
+  });
+
+  it('exposes the team confirmed by the host as active', async () => {
+    const activePresetId = AGENT_MODE_PRESETS[0]!.id;
+    const element = await mount({ activePresetId });
+    const firstCard = element.shadowRoot?.querySelector('.preset-card');
+
+    expect(firstCard?.classList.contains('active')).toBe(true);
+    expect(firstCard?.getAttribute('aria-pressed')).toBe('true');
+    expect(firstCard?.querySelector('.preset-active-badge')).not.toBeNull();
   });
 
   it('does not apply the preset when Enter/Space bubbles from the delete button', async () => {

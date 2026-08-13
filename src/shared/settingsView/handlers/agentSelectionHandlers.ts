@@ -50,6 +50,7 @@ export async function buildCustomAgentDirMessage(
 export interface AgentModePresetsPorts {
   getCustomPresets(): AgentModePreset[];
   getOrchestratorAgentNames(): string[];
+  getActiveTeamId(): string | null;
 }
 
 export function buildAgentModePresetsMessage(
@@ -59,5 +60,6 @@ export function buildAgentModePresetsMessage(
     command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
     customPresets: ports.getCustomPresets(),
     orchestratorAgents: ports.getOrchestratorAgentNames(),
+    activePresetId: ports.getActiveTeamId(),
   };
 }

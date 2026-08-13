@@ -106,6 +106,7 @@ function createHandlerFixture(options: HandlerFixtureOptions = {}) {
 
   const notifications: string[] = [];
   const modalPrompts: string[] = [];
+  const webviewMessages: unknown[] = [];
   host.showInformationMessage.mockImplementation(
     async (message: string, ...rest: unknown[]) => {
       // The modal team-availability prompt passes options plus button labels;
@@ -127,7 +128,13 @@ function createHandlerFixture(options: HandlerFixtureOptions = {}) {
       channel: 'TeXRA',
       logger: { warn: () => {}, error: () => {}, debug: () => {} },
       extensionContext: {} as never,
-      withActiveWebview: async () => {},
+      withActiveWebview: async (callback) =>
+        callback({
+          postMessage: async (message: unknown) => {
+            webviewMessages.push(message);
+            return true;
+          },
+        } as never),
     },
     refreshAfterAgentMutation,
   );
@@ -138,6 +145,7 @@ function createHandlerFixture(options: HandlerFixtureOptions = {}) {
     modalPrompts,
     notifications,
     refreshAfterAgentMutation,
+    webviewMessages,
     workspaceState,
   };
 }
@@ -169,6 +177,7 @@ describe('extension settings AgentHandlers', () => {
       handlers,
       notifications,
       refreshAfterAgentMutation,
+      webviewMessages,
       workspaceState,
     } = createHandlerFixture({
       catalog: physicistCatalog(),
@@ -183,6 +192,12 @@ describe('extension settings AgentHandlers', () => {
     expect(refreshAfterAgentMutation).toHaveBeenCalledWith(
       'orchestrator',
       true,
+    );
+    expect(webviewMessages).toContainEqual(
+      expect.objectContaining({
+        command: 'updateAgentModePresets',
+        activePresetId: 'physicist',
+      }),
     );
     expect(notifications).toEqual([
       'Applied "Physicist" with 7 members still unavailable',
@@ -261,8 +276,12 @@ describe('extension settings AgentHandlers', () => {
 
   it('does not write roster state when team preflight is cancelled', async () => {
     const workspaceState = new FakeStateStore(REMOTE_TEAM_STATE);
-    const { handlers, modalPrompts, refreshAfterAgentMutation } =
-      createHandlerFixture({ workspaceState, modalChoice: undefined });
+    const {
+      handlers,
+      modalPrompts,
+      refreshAfterAgentMutation,
+      webviewMessages,
+    } = createHandlerFixture({ workspaceState, modalChoice: undefined });
     const update = vi.spyOn(workspaceState, 'update');
 
     await applyPreset(handlers, 'remote-team');
@@ -270,6 +289,7 @@ describe('extension settings AgentHandlers', () => {
     expect(modalPrompts).toHaveLength(1);
     expect(registry.refreshAgents).not.toHaveBeenCalled();
     expect(refreshAfterAgentMutation).not.toHaveBeenCalled();
+    expect(webviewMessages).toEqual([]);
     expect(
       update.mock.calls.some(
         ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION,

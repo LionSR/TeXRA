@@ -325,6 +325,12 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(postedCommands(posted)).toContain(
       SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
     );
+    expect(posted).toContainEqual(
+      expect.objectContaining({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+        activePresetId: 'physicist',
+      }),
+    );
     // The fixture catalog is missing the preset's hosted members, so the
     // notification must say the team is only partially applied.
     expect(infoMessages).toEqual([
@@ -369,7 +375,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       ];
     });
     const update = vi.spyOn(workspaceState, 'update');
-    const { controller } = createControllerFixture({
+    const { controller, posted } = createControllerFixture({
       workspaceState,
       catalog,
       canAccessRemoteCatalog: async () => false,
@@ -401,7 +407,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     const workspaceState = customTeamState(remoteTeamPreset());
     const update = vi.spyOn(workspaceState, 'update');
     const refreshAgents = vi.fn(async () => undefined);
-    const { controller } = createControllerFixture({
+    const { controller, posted } = createControllerFixture({
       workspaceState,
       chooseTeamAvailability: async () => 'cancel',
       refreshAgents,
@@ -411,6 +417,9 @@ describe('DefaultDesktopAgentSettingsController', () => {
     await applyAgentPreset(controller, 'remote-team');
 
     expect(refreshAgents).not.toHaveBeenCalled();
+    expect(postedCommands(posted)).not.toContain(
+      SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+    );
     expect(
       update.mock.calls.some(
         ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION,

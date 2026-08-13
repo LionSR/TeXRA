@@ -334,6 +334,8 @@ const UpdateAgentModePresetsMessageSchema = z.object({
    * instead of guessing from the agent's name.
    */
   orchestratorAgents: z.array(z.string()).prefault([]),
+  /** Effective team selection owned by the workspace roster. */
+  activePresetId: z.string().nullable(),
 });
 export type UpdateAgentModePresetsMessage = z.infer<
   typeof UpdateAgentModePresetsMessageSchema

@@ -74,12 +74,14 @@ describe('settingsView notification message builders', () => {
     const message = buildAgentModePresetsMessage({
       getCustomPresets: () => [],
       getOrchestratorAgentNames: () => ['orchestrator-agent'],
+      getActiveTeamId: () => 'paper-team',
     });
 
     expect(message).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
       customPresets: [],
       orchestratorAgents: ['orchestrator-agent'],
+      activePresetId: 'paper-team',
     });
   });
 

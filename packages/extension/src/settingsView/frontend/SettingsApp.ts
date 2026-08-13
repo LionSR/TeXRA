@@ -58,6 +58,7 @@ import './components/profile/ProviderKeyModal';
 // Local imports - module-scope settings state + composed message handlers
 import { settingsViewHandlers } from './messageDispatcher';
 import {
+  activePresetId,
   agentSubTab,
   agentSkillsEnabled,
   allowOrchestratorKill,
@@ -433,6 +434,7 @@ export class SettingsApp extends SettingsAppBase {
       case 'multi-agent':
         return html`
           <multi-agent-tab
+            .activePresetId=${activePresetId.get()}
             .customPresets=${customPresets.get()}
             .orchestratorAgents=${orchestratorAgents.get()}
             .allowOrchestratorKill=${allowOrchestratorKill.get()}

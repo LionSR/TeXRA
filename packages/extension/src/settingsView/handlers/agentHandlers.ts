@@ -299,6 +299,7 @@ export class AgentHandlers {
         getCustomPresets: () => this.catalogController.getCustomPresets(),
         getOrchestratorAgentNames: () =>
           this.catalogController.getOrchestratorAgentNames(),
+        getActiveTeamId: () => this.roster.getActiveTeamId(),
       }),
     );
   }
@@ -358,13 +359,18 @@ export class AgentHandlers {
           return;
         }
 
-        await this.refreshAfterAgentMutation(
-          this.catalogController.getPresetToolUseRoot(
-            result.preset.agents.toolUse,
-            result.preset.id,
+        await Promise.all([
+          this.refreshAfterAgentMutation(
+            this.catalogController.getPresetToolUseRoot(
+              result.preset.agents.toolUse,
+              result.preset.id,
+            ),
+            true,
           ),
-          true,
-        );
+          this.ctx.withActiveWebview((webview) =>
+            this.sendAgentModePresets(webview),
+          ),
+        ]);
 
         const unresolvedCount = result.resolution.unresolvedNames.length;
         void vscode.window.showInformationMessage(
