@@ -65,11 +65,11 @@ const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
 
 export type SettingsProfileConfigValue = boolean | number;
 
-export type ProviderSettingUpdateResult =
+type ProviderSettingUpdateResult =
   | { kind: 'updated'; affectsModelAvailability: boolean }
   | { kind: 'rejected'; key: string };
 
-export type ApiAccessModeUpdate =
+type ApiAccessModeUpdate =
   | {
       readonly kind: 'updated';
       readonly mode: ApiAccessMode;
@@ -83,7 +83,7 @@ export type ApiAccessModeUpdate =
  * {@link getSharedProviderProfileDefaults} rather than a `Partial` of the full
  * deps, so the shared fragment is a complete, self-typed object.
  */
-export interface SettingsProfileProviderDeps {
+interface SettingsProfileProviderDeps {
   readonly providerIds: readonly string[];
   readonly providerSettings: Record<string, readonly ProviderSettingDef[]>;
   readonly providerDisplayNames: Record<string, string>;
@@ -116,7 +116,7 @@ interface SettingsProfileHostDeps {
   refreshSpendingStatus(): Promise<SpendingStatus | null>;
 }
 
-export interface SettingsProfileControllerDeps
+interface SettingsProfileControllerDeps
   extends SettingsProfileProviderDeps, SettingsProfileHostDeps {}
 
 /**

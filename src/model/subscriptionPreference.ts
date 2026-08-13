@@ -13,7 +13,7 @@ export interface SubscriptionPreferenceUpdate {
   readonly target: ConfigTarget;
 }
 
-export interface SubscriptionPreference {
+interface SubscriptionPreference {
   isPrefer(): boolean;
   setPrefer(enabled: boolean): Promise<SubscriptionPreferenceUpdate>;
 }

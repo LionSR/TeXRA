@@ -58,7 +58,7 @@ export interface SettingsModelSelectionControllerDeps {
   ) => Promise<ModelOptionData[]>;
 }
 
-export interface SettingsModelSelectionData {
+interface SettingsModelSelectionData {
   models: ModelSelectionItem[];
   helperModel: string;
   preferShortModelNames: boolean;
