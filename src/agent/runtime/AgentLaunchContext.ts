@@ -36,6 +36,10 @@ import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError } from '@common/errors';
+import {
+  attachErrorPresented,
+  hasErrorPresentedMarker,
+} from '@common/errors/sdkError/errorMetadata';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { normalizeRunId } from '@common/constants/runIds';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
@@ -168,6 +172,13 @@ export async function getAgentPath(
     { agentName: agentIdentifier },
     { replayWhenAttached: true },
   );
+  // Deliberately NOT marked via `attachErrorPresented`: `showAgentConfigBanner`
+  // is a documented no-op on both CLI presentation hosts (no persistent
+  // sidebar to render it in), so treating this as "presented" would leave CLI
+  // users with no visible failure at all once the generic `requestShowError`
+  // fallback is gated on the marker. The double-surface on hosts that DO
+  // render the banner (extension, desktop) stays open pending a banner
+  // presentation that reports whether it actually reached the user.
   throw new AgentError(`Could not find agent: ${agentIdentifier}`);
 }
 
@@ -188,7 +199,9 @@ async function validateModelExists(
     },
     { replayWhenAttached: true },
   );
-  throw new AgentError(`Model ${modelName} is not registered`);
+  const err = new AgentError(`Model ${modelName} is not registered`);
+  attachErrorPresented(err);
+  throw err;
 }
 
 async function inferLaunchModelHandlerCompatibilityKey(
@@ -616,7 +629,11 @@ export async function buildAgentLaunchContext(
         runTrace,
       });
     });
-    if (!input.suppressErrorNotification && !(err instanceof ZodError)) {
+    if (
+      !input.suppressErrorNotification &&
+      !(err instanceof ZodError) &&
+      !hasErrorPresentedMarker(err)
+    ) {
       interactions.emit(
         'requestShowError',
         { message: toErrorMessage(err) },

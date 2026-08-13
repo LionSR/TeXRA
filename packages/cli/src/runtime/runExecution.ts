@@ -22,6 +22,7 @@ import {
 } from '@agent/core/state/executionRequests';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
+import { hasErrorPresentedMarker } from '@common/errors/sdkError/errorMetadata';
 import { tryPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
@@ -500,10 +501,19 @@ export async function executeCliRequest(
       shutdownLaunchAborted = true;
     } else if (!(err instanceof AgentError)) {
       primaryRunFailure = { error: err };
-    } else if (!failurePresented && !terminalResult.isHandled()) {
+    } else if (
+      !failurePresented &&
+      !terminalResult.isHandled() &&
+      !hasErrorPresentedMarker(err)
+    ) {
       // A failure before lifecycle startup has no `result` event. Preserve the
       // ordinary toast path when it ran, and provide the missing direct fallback
-      // while the presentation host is still attached.
+      // while the presentation host is still attached. A launch failure that
+      // already presented itself via a targeted notification (e.g. the
+      // model-not-recognized instruction) is marked -- this CLI-local
+      // `failurePresented` flag only tracks `requestShowError`, so it would
+      // otherwise re-surface that failure a second time here. Agent-not-found
+      // remains unmarked because its banner is a no-op on CLI hosts.
       session.interactions.emit('requestShowError', {
         message: toErrorMessage(err),
       });
