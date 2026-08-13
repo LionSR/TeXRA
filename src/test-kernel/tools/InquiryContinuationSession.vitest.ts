@@ -2,6 +2,8 @@ import '@test/support/defaultSessionTestSetup';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ChildTurnState } from '@agent/storage/ExecutionKVStore';
+
 const submitFollowUpMock = vi.hoisted(() =>
   vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({
     status: 'sent' as const,
@@ -10,10 +12,22 @@ const submitFollowUpMock = vi.hoisted(() =>
 const getThreadSummaryMock = vi.hoisted(() => vi.fn());
 const listThreadsByStatusMock = vi.hoisted(() => vi.fn(async () => []));
 const readExternalInquiryThreadMock = vi.hoisted(() => vi.fn());
+const readTurnStateMock = vi.hoisted(() =>
+  vi.fn<() => Promise<ChildTurnState | null>>(async () => null),
+);
 
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   submitFollowUp: submitFollowUpMock,
 }));
+
+vi.mock('@agent/storage/ExecutionKVStore', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@agent/storage/ExecutionKVStore')>();
+  return {
+    ...original,
+    getExecutionStore: () => ({ readTurnState: readTurnStateMock }),
+  };
+});
 
 vi.mock('@platform/platform', () => ({
   platform: () => ({
@@ -29,7 +43,12 @@ vi.mock('@tools/inquiry/externalInquiryStorage', () => ({
 
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type { InquiryThreadId, StreamTabId } from '@shared/schemas';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import type {
+  ExecutionId,
+  InquiryThreadId,
+  StreamTabId,
+} from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   injectContinuationForAnsweredThread,
@@ -39,6 +58,32 @@ import type { ExternalInquiryThreadManifest } from '@tools/inquiry/externalInqui
 
 const THREAD = 'ei_aabbccdd0011' as InquiryThreadId;
 const STREAM = 'stream:desktop-parent' as StreamTabId;
+const EXECUTION = 'inquiry-parent-execution' as ExecutionId;
+
+function restoreGeneration(session: SessionHandle): void {
+  expect(
+    session.followUps.restorePersistedGeneration(STREAM, 'generation-a'),
+  ).toBe(true);
+}
+
+function sessionStub(tag?: string): SessionHandle {
+  return {
+    ...(tag ? { tag } : {}),
+    followUps: {
+      currentGenerationId: () => 'generation-a',
+    },
+  } as unknown as SessionHandle;
+}
+
+function reloadedSession(): SessionHandle {
+  return {
+    followUps: new ToolUseFollowUpQueue(),
+    snapshots: {
+      getRunMetadata: () => ({ executionId: EXECUTION }),
+    },
+    events: defaultSession().events,
+  } as unknown as SessionHandle;
+}
 
 /** Collects the session facts emitted on a hub until detached. */
 function captureFacts(session: SessionHandle): {
@@ -89,10 +134,12 @@ describe('external inquiry continuation session routing', () => {
     });
     listThreadsByStatusMock.mockClear();
     readExternalInquiryThreadMock.mockClear();
+    readTurnStateMock.mockReset().mockResolvedValue(null);
+    restoreGeneration(defaultSession());
   });
 
   it('passes the host-provided session through to sendFollowUp', async () => {
-    const session = { tag: 'desktop-session' } as unknown as SessionHandle;
+    const session = sessionStub('desktop-session');
 
     const outcome: InjectionOutcome = await injectContinuationForAnsweredThread(
       THREAD,
@@ -123,8 +170,43 @@ describe('external inquiry continuation session routing', () => {
     expect(submitFollowUpMock).not.toHaveBeenCalled();
   });
 
+  it('restores a matching generation from authoritative turn state after reload', async () => {
+    const session = reloadedSession();
+    readTurnStateMock.mockResolvedValueOnce({
+      lastCompletedTurn: {
+        token: 'current-turn',
+        deliveryId: 'current-delivery',
+        generationId: 'generation-a',
+      },
+    });
+
+    await expect(
+      injectContinuationForAnsweredThread(THREAD, answeredManifest(), session),
+    ).resolves.toBe('sent');
+    expect(session.followUps.currentGenerationId(STREAM)).toBe('generation-a');
+    expect(submitFollowUpMock).toHaveBeenCalledOnce();
+  });
+
+  it('rejects an older inquiry when a newer retry owns persisted turn state', async () => {
+    const session = reloadedSession();
+    readTurnStateMock.mockResolvedValueOnce({
+      lastCompletedTurn: {
+        token: 'retry-turn',
+        deliveryId: 'retry-delivery',
+        generationId: 'generation-b',
+      },
+    });
+
+    await expect(
+      injectContinuationForAnsweredThread(THREAD, answeredManifest(), session),
+    ).resolves.toBe('archived');
+    expect(session.followUps.currentGenerationId(STREAM)).toBeUndefined();
+    expect(submitFollowUpMock).not.toHaveBeenCalled();
+  });
+
   it('emits inquiry thread updates through the explicit session hub', async () => {
     const session = createTestSession();
+    restoreGeneration(session);
     const explicit = captureFacts(session);
     const fallback = captureFacts(defaultSession());
 
@@ -162,6 +244,7 @@ describe('external inquiry continuation session routing', () => {
 
   it("emits inquiry thread updates through the active run's session when no explicit session is provided", async () => {
     const session = createTestSession();
+    restoreGeneration(session);
     const run = captureFacts(session);
     const fallback = captureFacts(defaultSession());
 
@@ -207,7 +290,7 @@ describe('external inquiry continuation session routing', () => {
           injectContinuationForAnsweredThread(
             THREAD,
             answeredManifest(),
-            {} as SessionHandle,
+            sessionStub(),
           ),
       );
 
@@ -253,7 +336,7 @@ describe('external inquiry continuation session routing', () => {
   it.each([
     {
       name: 'threads the provided session to the wake decision',
-      session: { tag: 'desktop-session' } as unknown as SessionHandle,
+      session: sessionStub('desktop-session'),
     },
     {
       name: 'passes an undefined session when none was provided',

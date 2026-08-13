@@ -309,10 +309,30 @@ export class ToolUseFollowUpQueue {
     return this.entries.get(streamId)?.generationId;
   }
 
-  private createEntry(streamId: StreamTabId): QueueEntry {
+  /**
+   * Restore a missing recoverable queue from authoritative persisted turn
+   * state. The durable producer's claimed generation is not authority: its
+   * caller must first read the execution-owned turn record and pass that
+   * independently verified value here.
+   */
+  restorePersistedGeneration(
+    streamId: StreamTabId,
+    generationId: string,
+  ): boolean {
+    if (this.terminal.has(streamId)) return false;
+    const entry = this.entries.get(streamId);
+    if (entry) return entry.generationId === generationId;
+    this.createEntry(streamId, generationId);
+    return true;
+  }
+
+  private createEntry(
+    streamId: StreamTabId,
+    generationId: string = randomUUID(),
+  ): QueueEntry {
     const entry: QueueEntry = {
       queue: new FollowUpQueue(),
-      generationId: randomUUID(),
+      generationId,
       admittedDeliveryIds: createBoundedIdSet(
         ToolUseFollowUpQueue.DELIVERY_ID_CAP,
       ),
