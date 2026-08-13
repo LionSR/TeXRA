@@ -505,6 +505,7 @@ describe('childRunLoop E2E fixtures', () => {
 
   it('reuses a terminal child stream for a separately authorized retry', async () => {
     const ids = loopIds('terminal-retry');
+    const parentLease = session.followUps.claimLive(PARENT_STREAM_ID, 'flow')!;
 
     await startLoop(ids, createTerminalStrategy('First attempt')).completion;
     expect(session.followUps.hasLiveOwner(ids.childStreamId)).toBe(false);
@@ -519,6 +520,24 @@ describe('childRunLoop E2E fixtures', () => {
     expect(deliveryIds[0]).toBeDefined();
     expect(deliveryIds[1]).toBeDefined();
     expect(deliveryIds[1]).not.toBe(deliveryIds[0]);
+    for (const [index, deliveryId] of deliveryIds.entries()) {
+      expect(
+        session.followUps.submit(
+          PARENT_STREAM_ID,
+          {
+            text: `attempt ${index + 1}`,
+            origin: 'subagent_result',
+            deliveryId,
+          },
+          'live_owner',
+          parentLease.generationId,
+        ),
+      ).toEqual({ kind: 'live_flow' });
+    }
+    expect(
+      session.followUps.drainItems(parentLease).map((item) => item.text),
+    ).toEqual(['attempt 1', 'attempt 2']);
+    session.followUps.release(parentLease, 'recoverable');
     expect(session.followUps.hasLiveOwner(ids.childStreamId)).toBe(false);
   });
 
