@@ -160,7 +160,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private rootStreamStatus: StreamPhase | undefined;
   private activeChildren: readonly ActiveChildInfo[] = [];
   private readonly childDescriptions = new Map<StreamTabId, string>();
-  private readonly pendingFollowUpChildStreamIds = new Set<StreamTabId>();
   private readonly closedChildStreamIds = new Set<StreamTabId>();
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -210,7 +209,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private handleSessionFact(event: SessionFact): void {
     switch (event.type) {
       case 'status':
-        this.applyStatus(event.streamId, event.phase, event.previousPhase);
+        this.applyStatus(event.streamId, event.phase);
         return;
       case 'updateStreamDescription':
         if (!this.rootStreamTerminal) {
@@ -230,13 +229,15 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       case 'followUpSent':
         if (this.rootStreamTerminal) return;
         if (!this.isRootStream(event.payload.streamId)) {
-          this.pendingFollowUpChildStreamIds.add(event.payload.streamId);
+          // The session fact is the first authoritative boundary between child
+          // turns. Clear before a status-driven roster repaint can reuse the
+          // previous turn's task label.
+          this.deleteChildDescription(event.payload.streamId);
         }
         return;
       case 'removeStream':
         if (this.rootStreamTerminal) return;
         this.closedChildStreamIds.add(event.payload.streamId);
-        this.pendingFollowUpChildStreamIds.delete(event.payload.streamId);
         this.deleteChildDescription(event.payload.streamId);
         return;
     }
@@ -254,7 +255,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
           // run.config is the boundary emitted immediately before its new
           // description, so reopen the ID without accepting late old facts.
           this.closedChildStreamIds.delete(event.streamId);
-          this.pendingFollowUpChildStreamIds.delete(event.streamId);
           this.childDescriptions.delete(event.streamId);
           return;
         }
@@ -336,24 +336,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.activeChildren = children;
   }
 
-  private applyStatus(
-    streamId: StreamTabId,
-    status: StreamPhase,
-    previousStatus: StreamPhase | undefined,
-  ): void {
+  private applyStatus(streamId: StreamTabId, status: StreamPhase): void {
     if (!this.isRootStream(streamId)) {
       if (this.rootStreamTerminal) return;
       if (isTerminalOutcomePhase(status)) {
         this.closedChildStreamIds.add(streamId);
-        this.pendingFollowUpChildStreamIds.delete(streamId);
-        this.deleteChildDescription(streamId);
-      } else if (
-        status === STREAM_PHASE.RUNNING &&
-        previousStatus === STREAM_PHASE.WAITING &&
-        this.pendingFollowUpChildStreamIds.delete(streamId)
-      ) {
-        // A resumed child is processing a new instruction. Keep the agent-name
-        // fallback until the runtime publishes a description for this turn.
         this.deleteChildDescription(streamId);
       }
       return;
@@ -366,7 +353,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       this.activeChildren = [];
       this.childDescriptions.clear();
       this.closedChildStreamIds.clear();
-      this.pendingFollowUpChildStreamIds.clear();
     }
     this.updateHeartbeat();
     this.render(true);
