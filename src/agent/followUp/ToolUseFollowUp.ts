@@ -89,6 +89,9 @@ async function restorePersistedGeneration(
   if (!executionId) {
     logger.warn(
       `Cannot restore continuation generation for ${streamId}: no persisted execution id.`,
+      {
+        data: { streamId, cause: 'missing_execution_id' },
+      },
     );
     return false;
   }
@@ -96,6 +99,9 @@ async function restorePersistedGeneration(
   if (!resumability.resumable) {
     logger.warn(
       `Cannot restore continuation generation for ${streamId}: ${resumability.cause}.`,
+      {
+        data: { streamId, executionId, cause: resumability.cause },
+      },
     );
     return false;
   }
@@ -105,7 +111,14 @@ async function restorePersistedGeneration(
   if (!parsed.success) {
     logger.warn(
       `Cannot restore continuation generation for ${streamId}: persisted flow state is invalid.`,
-      { data: parsed.error },
+      {
+        data: {
+          streamId,
+          executionId,
+          cause: 'invalid_generation',
+          error: parsed.error,
+        },
+      },
     );
     return false;
   }
@@ -116,6 +129,9 @@ async function restorePersistedGeneration(
   if (!restored) {
     logger.warn(
       `Cannot restore continuation generation for ${streamId}: the retained queue belongs to another generation.`,
+      {
+        data: { streamId, executionId, cause: 'generation_mismatch' },
+      },
     );
   }
   return restored;
