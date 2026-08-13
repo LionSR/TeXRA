@@ -33,17 +33,15 @@ const EXPECTED_REACHABLE = [
   '@utils/text/diff',
   '@utils/text/stringUtils',
 ];
-const EXPECTED_TOTAL = 61;
-
-/** Recursive list of `*.ts` files under a directory. */
-function listTsFiles(dir) {
+/** Recursive list of TypeScript source files under a directory. */
+function listSourceFiles(dir) {
   const results = [];
   const walk = (current) => {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const full = join(current, entry.name);
       if (entry.isDirectory()) {
         walk(full);
-      } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+      } else if (entry.isFile() && /\.tsx?$/.test(entry.name)) {
         results.push(full);
       }
     }
@@ -121,8 +119,28 @@ function scanFile(file) {
   return utilsSpecifiers(readFileSync(file, 'utf8'));
 }
 
+/** Extract the documented total and non-reachable counts from guidance prose. */
+function documentedCounts() {
+  const agents = readFileSync(join(rootDir, 'AGENTS.md'), 'utf8');
+  const claude = readFileSync(join(rootDir, 'CLAUDE.md'), 'utf8');
+  const total = agents.match(
+    /There are (\d+) TypeScript modules under `src\/utils\/`/,
+  )?.[1];
+  const other = claude.match(
+    /The other (\d+)\s+TypeScript modules are not browser-reachable/,
+  )?.[1];
+  if (total == null || other == null) {
+    console.error(
+      'Could not locate the documented src/utils counts in AGENTS.md / CLAUDE.md.',
+    );
+    process.exit(1);
+  }
+  return { total: Number(total), other: Number(other) };
+}
+
 function main() {
-  const total = listTsFiles(utilsDir).length;
+  const total = listSourceFiles(utilsDir).length;
+  const documented = documentedCounts();
 
   const reachable = new Set();
   const queue = [];
@@ -131,7 +149,7 @@ function main() {
       console.error(`Frontend directory missing: ${relative(rootDir, dir)}`);
       process.exit(1);
     }
-    for (const file of listTsFiles(dir)) {
+    for (const file of listSourceFiles(dir)) {
       for (const specifier of scanFile(file)) queue.push(specifier);
     }
   }
@@ -146,15 +164,27 @@ function main() {
 
   const reachableSorted = [...reachable].toSorted((a, b) => a.localeCompare(b));
   const errors = [];
-  if (total !== EXPECTED_TOTAL) {
+  if (total !== documented.total) {
     errors.push(
-      `src/utils total drifted: documented ${EXPECTED_TOTAL}, actual ${total}`,
+      `src/utils total drifted: documented ${documented.total}, actual ${total}`,
+    );
+  }
+  if (total - reachable.size !== documented.other) {
+    errors.push(
+      `src/utils non-reachable count drifted: documented ${documented.other}, actual ${total - reachable.size}`,
     );
   }
   if (JSON.stringify(reachableSorted) !== JSON.stringify(EXPECTED_REACHABLE)) {
     errors.push(
       `browser-reachable @utils set drifted:\n  documented: ${EXPECTED_REACHABLE.join(', ')}\n  actual:     ${reachableSorted.join(', ')}`,
     );
+  }
+  for (const specifier of EXPECTED_REACHABLE) {
+    for (const doc of ['AGENTS.md', 'CLAUDE.md']) {
+      if (!readFileSync(join(rootDir, doc), 'utf8').includes(specifier)) {
+        errors.push(`${specifier} is missing from ${doc}`);
+      }
+    }
   }
 
   if (errors.length > 0) {
