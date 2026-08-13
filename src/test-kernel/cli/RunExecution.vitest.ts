@@ -960,45 +960,67 @@ describe('executeCliRequest', () => {
     expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
   });
 
-  it('does not advertise signal recovery while a fresh lease remains', async () => {
-    const { platform, executeCliRequest } = await installFakePlatform();
-    mocks.inspectExecutionLease.mockResolvedValueOnce({
-      status: 'foreign',
-      heartbeatAt: Date.now(),
-    });
-    const onInterruptedExecutionFinalized = vi.fn();
-    let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
-    let publishRun: LeaseOptions['onRun'];
-    const hangingRun = stubHangingRun((options) => {
-      publishLeaseScope = options.onExecutionLeaseAcquired;
-      publishRun = options.onRun;
-    });
+  it.each([
+    {
+      label: 'a fresh lease remains',
+      inspection: { status: 'foreign' as const, heartbeatAt: 1 },
+    },
+    {
+      label: 'lease inspection fails',
+      inspection: new Error('lease read failed'),
+    },
+  ])(
+    'does not advertise signal recovery when $label',
+    async ({ inspection }) => {
+      const { platform, executeCliRequest } = await installFakePlatform();
+      if (inspection instanceof Error) {
+        mocks.inspectExecutionLease.mockRejectedValueOnce(inspection);
+      } else {
+        mocks.inspectExecutionLease.mockResolvedValueOnce(inspection);
+      }
+      const onInterruptedExecutionFinalized = vi.fn();
+      let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
+      let publishRun: LeaseOptions['onRun'];
+      const hangingRun = stubHangingRun((options) => {
+        publishLeaseScope = options.onExecutionLeaseAcquired;
+        publishRun = options.onRun;
+      });
 
-    const run = executeCliRequest(baseRequest(), cliContext(), {
-      registerExecution: true,
-      onInterruptedExecutionFinalized,
-    });
-    await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
-    const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.(
-      (operation: () => unknown) => operation(),
-      'exec-1' as ExecutionId,
-    );
-    publishRun?.();
-    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
-      outcome: 'cancelled',
-      outcomePersisted: true,
-    });
-    hangingRun.resolve(COMPLETED_RUN);
+      const run = executeCliRequest(baseRequest(), cliContext(), {
+        registerExecution: true,
+        onInterruptedExecutionFinalized,
+      });
+      await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
+      const shutdown = platform.lifecycle.runShutdown();
+      publishLeaseScope?.(
+        (operation: () => unknown) => operation(),
+        'exec-1' as ExecutionId,
+      );
+      publishRun?.();
+      mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+        outcome: 'cancelled',
+        outcomePersisted: true,
+      });
+      hangingRun.resolve(COMPLETED_RUN);
 
-    await shutdown;
-    await run;
+      await shutdown;
+      await expect(run).resolves.toEqual({
+        ok: true,
+        outcomePersisted: true,
+        result: {
+          category: 'toolUse',
+          executionId: 'exec-1',
+          outcome: 'cancelled',
+          streamId: 'stream-1',
+        },
+      });
 
-    expect(mocks.inspectExecutionLease).toHaveBeenCalledExactlyOnceWith(
-      'exec-1',
-    );
-    expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
-  });
+      expect(mocks.inspectExecutionLease).toHaveBeenCalledExactlyOnceWith(
+        'exec-1',
+      );
+      expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
+    },
+  );
 
   it('forwards a failed shutdown drain to the runtime release hook', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();

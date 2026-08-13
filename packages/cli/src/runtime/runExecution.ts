@@ -307,9 +307,17 @@ export async function executeCliRequest(
         const resumability = terminalStatusPersisted
           ? await deriveResumability(executionId)
           : undefined;
-        const lease = resumability?.resumable
-          ? await inspectExecutionLease(executionId)
-          : undefined;
+        let lease:
+          Awaited<ReturnType<typeof inspectExecutionLease>> | undefined;
+        if (resumability?.resumable) {
+          try {
+            lease = await inspectExecutionLease(executionId);
+          } catch {
+            // Lease inspection only decides whether the optional recovery
+            // notice is immediately usable. Failure suppresses that notice;
+            // it does not invalidate the durable cancellation above.
+          }
+        }
         if (
           resumability?.resumable &&
           (lease?.status === 'missing' || lease?.status === 'stale')

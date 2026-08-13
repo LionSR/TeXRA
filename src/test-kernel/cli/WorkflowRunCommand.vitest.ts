@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     executeCliConfig: vi.fn(),
     emitCliResult: vi.fn(),
     finalizeExecution: vi.fn(),
+    isMaterializedStdinWorkflowInputPath: vi.fn(() => false),
     withExpandedRunInputs: vi.fn(),
     initLocalCliPlatform: vi.fn(),
     resolveCliLaunchAgent: vi.fn(),
@@ -99,7 +100,8 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
     );
     return specs.has('-') && specs.size > 1;
   }),
-  isMaterializedStdinWorkflowInputPath: vi.fn(() => false),
+  isMaterializedStdinWorkflowInputPath:
+    mocks.isMaterializedStdinWorkflowInputPath,
   STDIN_WORKFLOW_INPUT_BASENAME: 'stdin.tex',
 }));
 
@@ -690,6 +692,32 @@ describe('CLI workflow run command', () => {
 
     await expect(runWorkflow()).resolves.toBe(CliExitCode.Interrupted);
 
+    expect(mocks.writeTextStdout).not.toHaveBeenCalled();
+    expect(mocks.writeTextStderr).not.toHaveBeenCalled();
+  });
+
+  it('does not advertise resume for temporary materialized stdin', async () => {
+    const root = path.join(path.sep, 'tmp', 'workspace');
+    const stdinPath = path.join(root, 'texra-stdin-123-abc123', 'stdin.tex');
+    mocks.withExpandedRunInputs.mockImplementationOnce(
+      async (_inputs, _contexts, _cwd, _options, run) =>
+        run({ inputFiles: [stdinPath], contextFiles: [] }),
+    );
+    mocks.isMaterializedStdinWorkflowInputPath.mockReturnValueOnce(true);
+    mockWorkflowExecution(
+      workflowExecution('exec-stdin-interrupted', {
+        outcome: RUN_OUTCOME.CANCELLED,
+      }),
+      true,
+    );
+
+    await expect(
+      runWorkflow({ inputFiles: ['-'] }, cliContext({ cwd: root })),
+    ).resolves.toBe(CliExitCode.Interrupted);
+
+    expect(
+      mocks.executeCliConfig.mock.calls[0]?.[2].onInterruptedExecutionFinalized,
+    ).toBeUndefined();
     expect(mocks.writeTextStdout).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).not.toHaveBeenCalled();
   });

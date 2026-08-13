@@ -45,6 +45,7 @@ import {
 import { runOutcomeExitCode } from '../runtime/terminalStatus';
 import {
   hasMixedStdinWorkflowInputSpecs,
+  isMaterializedStdinWorkflowInputPath,
   withExpandedRunInputs,
 } from '../runtime/workflowInputs';
 import {
@@ -175,10 +176,15 @@ export async function executeCliWorkflowConfig(
   let workflowResult: CliWorkflowRunResult | undefined;
   let workflowOutputError: unknown;
   let resumeHintWritten = false;
+  const recoveryInputIsDurable = [
+    ...(config.inputFiles ?? []),
+    ...(config.contextFiles ?? []),
+  ].every((inputPath) => !isMaterializedStdinWorkflowInputPath(inputPath));
   const writeResumeHint = (
     executionId: ExecutionId,
     waitForWrite = false,
   ): Promise<void> | undefined => {
+    if (!recoveryInputIsDurable) return;
     if (resumeHintWritten) return;
     resumeHintWritten = true;
     const hint = formatWorkflowResumeHint(
@@ -194,8 +200,9 @@ export async function executeCliWorkflowConfig(
     registerExecution: options.registerExecution,
     executionId: options.executionId,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-    onInterruptedExecutionFinalized: (executionId) =>
-      writeResumeHint(executionId, true),
+    onInterruptedExecutionFinalized: recoveryInputIsDurable
+      ? (executionId) => writeResumeHint(executionId, true)
+      : undefined,
     expectedCategory: AgentCategory.Workflow,
     categoryMismatchMessage: options.categoryMismatchMessage,
     openWorkflowOutput: async (result) => {
