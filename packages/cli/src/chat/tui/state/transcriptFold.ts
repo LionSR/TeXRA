@@ -14,6 +14,7 @@
 
 import { appendCliApiSwitchHint } from '@cli/runtime/approval/approvalPrompts';
 import { safeTerminalText } from '@cli/runtime/terminalText';
+import { formatCliWorkflowCallLine } from '@cli/runtime/workflowCallText';
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { redactSecrets } from '@logger/redaction';
 import {
@@ -34,7 +35,6 @@ import {
   summarizeFollowupMessage,
 } from '@shared/subagentFollowup';
 import { normalizeToolUseData } from '@shared/toolUse';
-import { formatWorkflowCallLine } from '@shared/copy/workflowCall';
 import {
   applyCompactionActivityEntries,
   COMPACTION_ACTIVITY_LABEL,
@@ -319,7 +319,7 @@ function renderLogEntryFresh(
       ...baseLogEntryFields(
         entry,
         'workflowTask',
-        formatWorkflowCallLine(call),
+        formatCliWorkflowCallLine(call),
       ),
       finalized: entry.settlementSeqNo !== undefined,
       task: call,

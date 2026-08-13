@@ -234,8 +234,8 @@ describe('CLI workflow-script child-stream transcript', () => {
       {
         id: 'core-task',
         finalized: true,
-        task: { status: 'completed' },
-        text: 'Finished: Audit core · deepseekT',
+        task: { status: 'completed', model: 'deepseekT' },
+        text: 'Finished: Audit core · DeepSeek V4 Flash (Thinking)',
       },
       {
         id: 'extension-task',
@@ -247,7 +247,7 @@ describe('CLI workflow-script child-stream transcript', () => {
 
     const updatedItems = appendItems(plannedItems);
     expect(entryTexts(updatedItems)).toEqual([
-      'Finished: Audit core · deepseekT',
+      'Finished: Audit core · DeepSeek V4 Flash (Thinking)',
     ]);
   });
 
@@ -917,7 +917,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     // The phase group row and the task's current state both surface.
     expect(texts).toContain('Draft sections');
     expect(texts).toContain(
-      'Finished: Draft introduction · deepseekT · 12s · $0.002',
+      'Finished: Draft introduction · DeepSeek V4 Flash (Thinking) · 12s · $0.002',
     );
     expect(
       entries.filter((entry) => entry.id === 'introduction-task'),
@@ -981,6 +981,6 @@ describe('CLI workflow-script child-stream transcript', () => {
     // the call row carries its own per-status marker.
     expect(output).toContain('◆ Draft sections');
     expect(output).toContain('☑ Finished: Draft introduction');
-    expect(output).toContain('deepseekT · 12s · $0.002');
+    expect(output).toContain('DeepSeek V4 Flash (Thinking) · 12s · $0.002');
   });
 });
