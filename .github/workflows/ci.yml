@@ -58,6 +58,8 @@ jobs:
           files="$(git diff --name-only "$base...$head")"
           echo "Changed files in this PR:"
           printf '%s\n' "$files"
+          # Keep these docs-side paths synchronized with configPath and
+          # defaultOutputPath in scripts/sync-remote-agents.mjs.
           if printf '%s\n' "$files" | grep -qE '^docs/supabase/(SYNC_REMOTE_AGENTS\.sql|remote-agents\.config\.json)$'; then
             echo "remote_agent_docs=true" >> "$GITHUB_OUTPUT"
           else

@@ -19,6 +19,8 @@ import YAML from 'yaml';
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(scriptDir, '..');
 const remoteAgentsDir = resolve(rootDir, 'prompts/agents/remote');
+// Keep these docs-side paths synchronized with the remote_agent_docs detector
+// in .github/workflows/ci.yml so docs-only changes still run this drift check.
 const configPath = resolve(rootDir, 'docs/supabase/remote-agents.config.json');
 const defaultOutputPath = 'docs/supabase/SYNC_REMOTE_AGENTS.sql';
 
