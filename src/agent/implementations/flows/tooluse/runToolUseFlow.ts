@@ -1,4 +1,5 @@
 // Node imports
+import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
 // Local imports
@@ -180,12 +181,17 @@ export async function runToolUseFlow<C = unknown>(
   const runContext = useLaunchRunContext();
   const { runScope } = runContext;
   const { streamId, executionId, session: runSession, signal } = runScope;
+  const continuationGenerationId =
+    runSession.followUps.currentChildGenerationId(streamId) ??
+    input.resume?.shared.continuationGenerationId ??
+    randomUUID();
   // Capture the run's scope at setup. The interrupt closure below fires from
   // the host thread outside the ALS, so it must use this captured session
   // handle instead of asking for an ambient current session later.
   const sessionLifecycle = new ToolUseSessionLifecycle(
     streamId,
     runSession.followUps,
+    continuationGenerationId,
   );
   const baseRegistry = toolRegistry ?? getDefaultToolRegistry();
   const { tools: resolvedTools } = await resolveAgentTools({
@@ -430,6 +436,7 @@ export async function runToolUseFlow<C = unknown>(
 
   let shared: ToolUseRunShared = {
     messages: [],
+    continuationGenerationId,
     modelId: services.modelCell.modelId,
     modelHandlerCompatibilityKey: compatibilityKey,
     shouldSkipCycle: false,
@@ -498,6 +505,16 @@ export async function runToolUseFlow<C = unknown>(
       // (SessionResumeRetrieval); this path stamps the active handler's key.
       let migratedData = migrationResult.data;
       let shouldWriteShared = migrationResult.migrated;
+      if (migratedData.continuationGenerationId !== continuationGenerationId) {
+        logger.debug(
+          'Rebound leftover tool-use flow state to the fresh continuation generation.',
+        );
+        migratedData = {
+          ...migratedData,
+          continuationGenerationId,
+        };
+        shouldWriteShared = true;
+      }
       const backfilled = stampCompatibilityKey(migratedData, compatibilityKey);
       if (backfilled !== migratedData) {
         logger.debug(

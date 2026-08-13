@@ -387,15 +387,17 @@ async function attemptTurn<TTurn>(
 /**
  * Mint the logical identity of one accepted child turn (#9531): a stable turn
  * token plus the delivery id the turn's single parent delivery is admitted
- * under. Deterministic per execution and turn index — execution-owned, no
- * global registry — so a producer replaying the same logical delivery always
- * presents the same id, and distinct turns can never share one.
+ * under. Stable within one child-run attempt and distinct across attempts,
+ * even when a workflow deliberately reuses its execution ID. A producer
+ * replaying the same accepted turn therefore presents the same id, while a
+ * later workflow run cannot collide with its prior delivery.
  */
 function mintChildTurnRef(
   executionId: ExecutionId,
+  generationId: string,
   turnIndex: number,
 ): ChildTurnRef {
-  const token = `${executionId}:turn:${turnIndex}`;
+  const token = `${executionId}:generation:${generationId}:turn:${turnIndex}`;
   return { token, deliveryId: `${token}:delivery` };
 }
 
@@ -497,6 +499,7 @@ function resolveDeliveryTarget<TTurn>(
 interface PendingChildDelivery {
   readonly targetStreamId: StreamTabId;
   readonly followUp: FollowUpQueueInput;
+  readonly expectedGenerationId?: string;
 }
 
 /**
@@ -518,6 +521,8 @@ async function deliverTurn<TTurn>(params: {
   wallTimeMs: number;
   isError: boolean;
   prepareParentDelivery?: () => boolean;
+  /** Parent continuation generation captured before this producer started. */
+  parentDeliveryGenerationId?: string;
   /** Serializes turn-state writes against the acceptance write (#9531). */
   turnStateWrites: PQueue;
 }): Promise<PendingChildDelivery | undefined> {
@@ -532,6 +537,7 @@ async function deliverTurn<TTurn>(params: {
     wallTimeMs,
     isError,
     prepareParentDelivery,
+    parentDeliveryGenerationId,
   } = params;
   const delivered = turn != null && !isError;
   const msg = await (delivered
@@ -587,6 +593,9 @@ async function deliverTurn<TTurn>(params: {
   if (prepareParentDelivery?.() === false) return undefined;
   return {
     targetStreamId,
+    ...(parentDeliveryGenerationId !== undefined
+      ? { expectedGenerationId: parentDeliveryGenerationId }
+      : {}),
     followUp: {
       text: msg,
       origin: 'subagent_result',
@@ -610,6 +619,9 @@ async function submitPendingDelivery(
     targetStreamId: pending.targetStreamId,
     followUp: pending.followUp,
     session,
+    ...(pending.expectedGenerationId !== undefined
+      ? { expectedGenerationId: pending.expectedGenerationId }
+      : {}),
   });
   if (delivery.kind !== 'delivered') {
     logger.warn(
@@ -653,8 +665,12 @@ export function startChildRunLoop<TTurn>(
   // The code below is synchronous until the scoped loop task is spawned, so a
   // lost generation fails before any queue, listener, stage, or loop exists.
   runWithOwnedExecutionLease(executionId, () => undefined);
-
   const runSession = currentSession();
+  // Parent delivery belongs to the continuation generation under which this
+  // producer started. A terminal retry may reuse the same stream ID, but late
+  // progress or results from this child must not enter the replacement queue.
+  const parentDeliveryGenerationId =
+    runSession.followUps.currentGenerationId(parentStreamId);
   const releaseChildActivation = childStream
     ? () => undefined
     : runSession.executions.reserveChildActivation({
@@ -692,7 +708,10 @@ export function startChildRunLoop<TTurn>(
       });
       loop.interrupt();
     });
-    queueLease = runSession.followUps.claimLive(childStreamId, 'child');
+    // Revalidate at the state transition itself: setup hooks above may run
+    // arbitrary synchronous code after the early fail-fast lease check.
+    runWithOwnedExecutionLease(executionId, () => undefined);
+    queueLease = runSession.followUps.claimChildRun(childStreamId, executionId);
     if (!queueLease) {
       throw new Error(
         `Follow-up continuation already has an owner for child ${childStreamId}.`,
@@ -731,6 +750,8 @@ export function startChildRunLoop<TTurn>(
     );
   }
 
+  const childRunGenerationId = queueLease.generationId;
+
   let bestCostUsd: number | undefined;
   const ports: ChildRunPorts = {
     notify: (update) => {
@@ -743,6 +764,9 @@ export function startChildRunLoop<TTurn>(
         followUp: { text: msg, origin: 'subagent_result' },
         session: runSession,
         mode: 'live_notification',
+        ...(parentDeliveryGenerationId !== undefined
+          ? { expectedGenerationId: parentDeliveryGenerationId }
+          : {}),
       });
     },
     recordCost: (totalCostUsd) => {
@@ -776,7 +800,11 @@ export function startChildRunLoop<TTurn>(
     try {
       while (!loop.isInterrupted()) {
         turnIndex += 1;
-        const turnRef = mintChildTurnRef(executionId, turnIndex);
+        const turnRef = mintChildTurnRef(
+          executionId,
+          childRunGenerationId,
+          turnIndex,
+        );
         emitTurnDiagnostic(logger, 'turn.accepted', {
           executionId,
           turnRef,
@@ -823,6 +851,7 @@ export function startChildRunLoop<TTurn>(
           strategy,
           executionId,
           parentStreamId,
+          parentDeliveryGenerationId,
           logger,
           turn,
           turnRef,
@@ -889,6 +918,10 @@ export function startChildRunLoop<TTurn>(
         childStream?.beginTurn();
       }
     } finally {
+      // A retry may reuse this execution ID as soon as its lease is released.
+      // Drain the prior attempt's queued attribution writes first so an old
+      // acceptance record cannot land after the retry's newer turn state.
+      await turnStateWrites.onIdle();
       detachLoopInterrupt?.();
       emitTurnDiagnostic(logger, 'loop.terminated', {
         executionId,

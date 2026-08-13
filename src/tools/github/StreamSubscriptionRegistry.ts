@@ -65,6 +65,8 @@ interface BoundSubscription {
    * ExecutionSubscriptionBinder.
    */
   session: SessionHandle;
+  /** Continuation generation in which this detached producer was bound. */
+  expectedGenerationId: string | undefined;
 }
 
 export class StreamSubscriptionRegistry<K extends string, Input> {
@@ -98,6 +100,8 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     const existing = bound.get(key);
     if (existing) {
       existing.session = session;
+      existing.expectedGenerationId =
+        session.followUps.currentGenerationId(streamId);
       this.opts.source.updateSubscription?.(input, existing.onEvent);
       return false;
     }
@@ -108,11 +112,15 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       disposable: { dispose: () => {} },
       onEvent: () => {},
       session,
+      expectedGenerationId: session.followUps.currentGenerationId(streamId),
     };
     subscription.onEvent = (text: string) => {
       void submitFollowUp(streamId, text, {
         session: subscription.session,
         mode: 'live_notification',
+        ...(subscription.expectedGenerationId !== undefined
+          ? { expectedGenerationId: subscription.expectedGenerationId }
+          : {}),
       })
         .then((result) => {
           if (result.status === 'sent' || result.status === 'queued') {

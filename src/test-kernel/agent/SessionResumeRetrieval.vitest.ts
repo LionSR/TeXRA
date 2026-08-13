@@ -423,8 +423,10 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('preserves structured output at the persisted shared-state boundary', () => {
+    const continuationGenerationId = '6f2051ec-5169-4fb5-9830-47aba9df665a';
     const result = migrateSharedState({
       messages: [],
+      continuationGenerationId,
       shouldSkipCycle: false,
       stateSlices: null,
       structured: { title: 'Durable result' },
@@ -433,6 +435,7 @@ describe('retrieveSessionResumeData', () => {
     expect(result).toEqual({
       success: true,
       data: expect.objectContaining({
+        continuationGenerationId,
         structured: { title: 'Durable result' },
       }),
       migrated: false,
@@ -455,8 +458,10 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('keeps a persisted model id over the MODEL variable', () => {
+    const continuationGenerationId = '8439c273-d7f7-442a-9930-e63e941263d8';
     const result = migrateSharedState({
       messages: [],
+      continuationGenerationId,
       modelId: 'gpt55',
       shouldSkipCycle: false,
       stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt54' }),
@@ -464,7 +469,27 @@ describe('retrieveSessionResumeData', () => {
 
     expect(result).toMatchObject({
       success: true,
-      data: { modelId: 'gpt55' },
+      data: { continuationGenerationId, modelId: 'gpt55' },
+      migrated: false,
+    });
+  });
+
+  it('backfills a durable continuation generation once', () => {
+    const first = migrateSharedState({
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    });
+    expect(first).toMatchObject({
+      success: true,
+      data: { continuationGenerationId: expect.any(String) },
+      migrated: true,
+    });
+    if (!first.success) throw first.error;
+
+    expect(migrateSharedState(first.data)).toEqual({
+      success: true,
+      data: first.data,
       migrated: false,
     });
   });
@@ -1571,6 +1596,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       executionId,
       {
         messages: [{ role: 'user', content: 'Continue.' }],
+        continuationGenerationId: '73375bdf-a9db-4d64-a702-3928784bf0e5',
         modelId: 'gpt54',
         modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
         shouldSkipCycle: false,

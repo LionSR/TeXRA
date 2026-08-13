@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
   deliverChildRunFollowUp: vi.fn(),
+  releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
   runWithOwnedExecutionLease: vi.fn(
     (_executionId: ExecutionId, operation: () => unknown) => operation(),
   ),
@@ -54,7 +55,8 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
 }));
 
 vi.mock('@agent/runtime/executionOwnership', () => ({
-  releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
+  releaseExecutionLeaseAfterArtifacts:
+    mocks.releaseExecutionLeaseAfterArtifacts,
 }));
 
 vi.mock('@agent/storage/childRunPersistence', () => ({
@@ -67,6 +69,7 @@ vi.mock('@agent/followUp/childRunDelivery', () => ({
 }));
 
 import type { WorkflowJournalEntry } from '@agent/workflowScript';
+import { getExecutionStore } from '@agent/storage';
 import {
   startChildRunLoop,
   type ChildRunLoopHandle,
@@ -117,9 +120,11 @@ function loopIds(label: string): {
   childStreamId: StreamTabId;
   executionId: ExecutionId;
 } {
+  const nonce = Math.random().toString(36).slice(2);
+  const executionId = `exec-${label}-${nonce}` as ExecutionId;
   return {
-    childStreamId: uniqueStreamId(label),
-    executionId: `exec-${label}` as ExecutionId,
+    childStreamId: `${label}#${executionId}` as StreamTabId,
+    executionId,
   };
 }
 
@@ -302,6 +307,26 @@ describe('childRunLoop E2E fixtures', () => {
     expect(callCount()).toBe(0);
   });
 
+  it('revalidates the lease when claiming a new queue generation', () => {
+    const { childStreamId, executionId } = loopIds('lost-during-setup');
+    const { strategy, callCount } = createFakeStrategy();
+    const claimChildRun = vi.spyOn(session.followUps, 'claimChildRun');
+    mocks.runWithOwnedExecutionLease
+      .mockImplementationOnce((_id, operation) => operation())
+      .mockImplementationOnce(() => {
+        throw new Error('lease generation lost during setup');
+      });
+
+    expect(() => startLoop({ childStreamId, executionId }, strategy)).toThrow(
+      'lease generation lost during setup',
+    );
+
+    expect(claimChildRun).not.toHaveBeenCalled();
+    expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false);
+    expect(mocks.leaseLossListener).toBeUndefined();
+    expect(callCount()).toBe(0);
+  });
+
   it('unwinds provider ownership and loop resources when synchronous setup fails', () => {
     const { childStreamId, executionId } = loopIds('setup-failure');
     const registry = new AgentCliSessionRegistry('test_session_id');
@@ -315,7 +340,7 @@ describe('childRunLoop E2E fixtures', () => {
     );
     const interruptHandle = vi.spyOn(handle, 'interrupt');
     const registerLoop = vi
-      .spyOn(session.followUps, 'claimLive')
+      .spyOn(session.followUps, 'claimChildRun')
       .mockImplementationOnce(() => {
         throw new Error('loop registration failed');
       });
@@ -454,7 +479,7 @@ describe('childRunLoop E2E fixtures', () => {
     const { strategy, rejectTurn } = createFakeStrategy();
 
     startLoop({ childStreamId, executionId }, strategy);
-    expect(mocks.runWithOwnedExecutionLease).toHaveBeenCalledTimes(2);
+    expect(mocks.runWithOwnedExecutionLease).toHaveBeenCalledTimes(3);
     await vi.waitFor(() => expect(mocks.leaseLossListener).toBeDefined());
 
     mocks.leaseLossListener?.();
@@ -462,6 +487,43 @@ describe('childRunLoop E2E fixtures', () => {
 
     await waitForLoopEnd(childStreamId);
     expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
+  });
+
+  it('drains accepted-turn attribution before releasing the execution lease', async () => {
+    const { childStreamId, executionId } = loopIds('turn-state-drain');
+    const { strategy, rejectTurn } = createFakeStrategy();
+    const writeBarrier = pDefer<void>();
+    const writeStarted = pDefer<void>();
+    const store = getExecutionStore(executionId);
+    const writeTurnState = vi
+      .spyOn(store, 'writeTurnState')
+      .mockImplementationOnce(async () => {
+        writeStarted.resolve();
+        await writeBarrier.promise;
+      });
+
+    try {
+      const handle = startLoop({ childStreamId, executionId }, strategy);
+      await writeStarted.promise;
+      mocks.leaseLossListener?.();
+      await rejectTurn(1, createAbortError());
+
+      await vi.waitFor(() =>
+        expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
+      );
+      expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
+
+      writeBarrier.resolve();
+      await handle.completion;
+      expect(writeTurnState).toHaveBeenCalledOnce();
+      expect(mocks.releaseExecutionLeaseAfterArtifacts).toHaveBeenCalledWith(
+        session,
+        executionId,
+      );
+    } finally {
+      writeBarrier.resolve();
+      writeTurnState.mockRestore();
+    }
   });
 
   it('persists without parent delivery in persist-only mode', async () => {
@@ -481,6 +543,45 @@ describe('childRunLoop E2E fixtures', () => {
       'delivered:saved',
     );
     expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
+  });
+
+  it('reuses a terminal child stream for a separately authorized retry', async () => {
+    const ids = loopIds('terminal-retry');
+    const parentLease = session.followUps.claimLive(PARENT_STREAM_ID, 'flow')!;
+    const admissions: string[] = [];
+    mocks.deliverChildRunFollowUp.mockImplementation(async (delivery) => {
+      const admission = delivery.session.followUps.submit(
+        delivery.targetStreamId,
+        delivery.followUp,
+        'live_owner',
+        delivery.expectedGenerationId,
+      );
+      admissions.push(admission.kind);
+      return admission.kind === 'duplicate' || admission.kind === 'unavailable'
+        ? { kind: 'dropped' as const }
+        : { kind: 'delivered' as const };
+    });
+
+    try {
+      await startLoop(ids, createTerminalStrategy('First attempt')).completion;
+      expect(session.followUps.hasLiveOwner(ids.childStreamId)).toBe(false);
+
+      await expect(
+        startLoop(ids, createTerminalStrategy('Retry attempt')).completion,
+      ).resolves.toBeUndefined();
+      expect(admissions).toEqual(['live_flow', 'live_flow']);
+      const delivered = session.followUps.drainItems(parentLease);
+      expect(delivered.map((item) => item.text)).toEqual([
+        'delivered:done',
+        'delivered:done',
+      ]);
+      expect(delivered[0]?.deliveryId).toBeDefined();
+      expect(delivered[1]?.deliveryId).toBeDefined();
+      expect(delivered[1]?.deliveryId).not.toBe(delivered[0]?.deliveryId);
+      expect(session.followUps.hasLiveOwner(ids.childStreamId)).toBe(false);
+    } finally {
+      session.followUps.release(parentLease, 'recoverable');
+    }
   });
 
   it('releases session ownership before delivering a failed turn', async () => {
@@ -594,6 +695,25 @@ describe('childRunLoop E2E fixtures', () => {
       );
     });
     await waitForLoopEnd(childStreamId);
+  });
+
+  it('fences parent deliveries to the continuation generation that launched the child', async () => {
+    const parentLease = session.followUps.claimLive(PARENT_STREAM_ID, 'flow')!;
+    const { childStreamId, executionId } = loopIds('parent-generation-fence');
+    const strategy = createTerminalStrategy('Parent generation fence');
+
+    startLoop({ childStreamId, executionId }, strategy);
+
+    await vi.waitFor(() => {
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetStreamId: PARENT_STREAM_ID,
+          expectedGenerationId: parentLease.generationId,
+        }),
+      );
+    });
+    await waitForLoopEnd(childStreamId);
+    session.followUps.release(parentLease, 'terminal');
   });
 
   it('late result after parent stop: a turn that resolves after interruption is persisted but not delivered', async () => {

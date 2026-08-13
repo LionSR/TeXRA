@@ -18,8 +18,13 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
   constructor(
     private readonly streamTabId: StreamTabId,
     private readonly queue: ToolUseFollowUpQueue,
+    continuationGenerationId: string,
   ) {
-    const lease = queue.claimLive(streamTabId, 'flow');
+    const lease = queue.claimLive(
+      streamTabId,
+      'flow',
+      continuationGenerationId,
+    );
     if (lease) {
       this.lease = lease;
       this.followUps = queue.queue(lease);
@@ -27,7 +32,10 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
     }
     // A native child loop owns continuation across all of its turns. Its inner
     // one-cycle flow uses that queue without becoming a second consumer.
-    const childQueue = queue.externallyOwnedQueue(streamTabId);
+    const childQueue = queue.externallyOwnedQueue(
+      streamTabId,
+      continuationGenerationId,
+    );
     if (!childQueue) {
       throw new Error(
         `Follow-up continuation already has an owner for stream ${streamTabId}.`,
