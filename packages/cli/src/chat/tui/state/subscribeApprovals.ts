@@ -280,7 +280,7 @@ async function decideWithPolicy<K extends 'planApproval' | 'proposal', P>(
   if (policy && !policy.accepted) {
     return {
       accepted: false,
-      rejectionReason: policy.userMessage,
+      rejectionReason: policy.userMessage ?? '',
     };
   }
   return policy ?? decidePresentedApproval(kind, payload);
