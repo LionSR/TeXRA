@@ -309,6 +309,9 @@ describe('CLI multi-agent run command', () => {
       expect.any(Function),
     );
     const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
+    expect(config?.displayInstruction).toBe(
+      'Inspect the proof without editing files.',
+    );
     expect(config?.instruction).toContain('Primary user input files:');
     expect(config?.instruction).toContain('- "problem.tex"');
     expect(config?.instruction).toContain(
