@@ -80,7 +80,6 @@ export class PrepareContextNode<C = unknown> extends Node<
     context: RoundContext,
   ): Promise<string | undefined> {
     shared.context = context;
-    delete shared.compileFailureContext;
     return FlowTransition.DEFAULT;
   }
 }

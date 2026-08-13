@@ -22,6 +22,7 @@ import {
 } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import { ReflectionFlowStateCanonicalSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import { RoundPersistedFlow } from '@agent/implementations/flows/reflection/RoundPersistedFlow';
+import { PrepareContextNode } from '@agent/implementations/flows/reflection/nodes/PrepareContextNode';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import {
@@ -272,5 +273,18 @@ describe('runReflectionFlow persisted-state recovery', () => {
     await failed.run();
 
     expect(restartSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps repair context available while an unfinished round is resumable', async () => {
+    const node = new PrepareContextNode();
+    const shared = reflectionFlowShared({
+      currentRound: 1,
+      compileFailureContext: 'Compilation failed in round 0.',
+    });
+    const context = shared.context!;
+
+    await node.post(shared, {} as never, context);
+
+    expect(shared.compileFailureContext).toBe('Compilation failed in round 0.');
   });
 });
