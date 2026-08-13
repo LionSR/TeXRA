@@ -444,7 +444,7 @@ describe('CLI workflow run command', () => {
       expect(config).toMatchObject({
         inputFiles: ['paper.tex'],
         outputFiles: [],
-        cliOutputFile: 'polished.tex',
+        cliOutputFile: path.join(root, 'polished.tex'),
         cliOutputDirectory: undefined,
         cliExpectedOutputFiles: undefined,
       });
@@ -489,10 +489,11 @@ describe('CLI workflow run command', () => {
 
   it('persists copied output-dir paths for history details', async () => {
     await withTempRoot(async (root) => {
-      const generated = await writeGeneratedOutput(root);
+      const workspace = path.join(root, 'workspace ');
+      const generated = await writeGeneratedOutput(workspace);
       const outputSummary = runOutputSummary(
         generated,
-        path.join(root, 'paper.tex'),
+        path.join(workspace, 'paper.tex'),
       );
       mockWorkflowExecution(
         workflowExecution('exec-output-dir', { outputs: [outputSummary] }),
@@ -501,21 +502,21 @@ describe('CLI workflow run command', () => {
 
       const exitCode = await runWorkflow(
         { outputDir: 'out' },
-        cliContext({ cwd: root }),
+        cliContext({ cwd: workspace }),
       );
 
       expect(exitCode).toBe(0);
       expect(mocks.executeCliConfig.mock.calls[0]?.[0]).toMatchObject({
         cliOutputFile: undefined,
-        cliOutputDirectory: 'out',
+        cliOutputDirectory: path.join(workspace, 'out'),
         cliExpectedOutputFiles: ['paper.tex'],
       });
       await expect(
-        fs.readFile(path.join(root, 'out', 'paper.tex'), 'utf8'),
+        fs.readFile(path.join(workspace, 'out', 'paper.tex'), 'utf8'),
       ).resolves.toBe('polished');
       expect(mocks.writeResultMeta).toHaveBeenCalledWith(
         expectedResultMeta({
-          copiedOutputs: [path.join(root, 'out', 'paper.tex')],
+          copiedOutputs: [path.join(workspace, 'out', 'paper.tex')],
           outcome: RUN_OUTCOME.COMPLETED,
           outputs: [outputSummary],
           compileFailures: [],

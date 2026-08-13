@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { buildCliWorkflowResultMeta, getExecutionStore } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
@@ -57,6 +59,16 @@ import {
 const MULTI_INPUT_OUTPUT_MESSAGE =
   'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.';
 
+function absoluteOutputDestination(
+  destination: string | undefined,
+  cwd: string,
+): string | undefined {
+  if (destination == null || destination.length === 0) return undefined;
+  return path.isAbsolute(destination)
+    ? destination
+    : path.join(cwd, destination);
+}
+
 interface WorkflowRunInit {
   readonly agent: string;
   readonly inputFiles: string[];
@@ -113,8 +125,14 @@ export async function runWorkflowAgent(
         inputFiles,
         contextFiles,
         outputFiles: [],
-        cliOutputFile: init.output,
-        cliOutputDirectory: init.outputDir,
+        // Registration normalizes the generic execution workspace. Persist
+        // CLI destinations absolutely so resumption does not need that path
+        // to reconstruct where completed artifacts belong.
+        cliOutputFile: absoluteOutputDestination(init.output, runContext.cwd),
+        cliOutputDirectory: absoluteOutputDestination(
+          init.outputDir,
+          runContext.cwd,
+        ),
         cliExpectedOutputFiles: expectedOutputFiles
           ? [...expectedOutputFiles]
           : undefined,
