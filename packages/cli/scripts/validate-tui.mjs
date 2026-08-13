@@ -211,6 +211,10 @@ const SCENARIOS = [
       'must not reach workflow',
       'Harness received: must not reach workflow',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
+      '/status details',
+      '/model models',
+      '/api api',
+      'Ctrl-J newline',
     ],
   },
   {
@@ -229,6 +233,10 @@ const SCENARIOS = [
       'must not reach bash',
       'Harness received: must not reach bash',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
+      '/status details',
+      '/model models',
+      '/api api',
+      'Ctrl-J newline',
     ],
   },
   {

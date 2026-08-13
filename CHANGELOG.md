@@ -20,6 +20,9 @@ All notable changes to this project will be documented in this file.
 - **Interrupted multi-agent chats can be resumed immediately** — leaving a
   cancelled team session no longer leaves its printed resume command
   temporarily unavailable.
+- **Workflow footers show only usable controls** — focused workflows and
+  background processes no longer advertise slash commands while their chat
+  input is hidden.
 
 ### Shared (all surfaces)
 

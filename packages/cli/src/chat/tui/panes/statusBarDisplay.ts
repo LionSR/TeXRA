@@ -183,6 +183,8 @@ interface StatusBarChildListInput {
 
 interface StatusBarShortcutsInput {
   readonly agentSelectionAvailable?: boolean;
+  /** True when slash commands and text entry are actionable in this view. */
+  readonly chatInputAvailable: boolean;
   /** True when bare Escape can focus the active stream's immediate parent. */
   readonly parentNavigationAvailable?: boolean;
   /** True when the persistent child list has a session row. */
@@ -653,6 +655,7 @@ function firstRowThatFits(
 function statusBarBindingsText(
   {
     agentSelectionAvailable = false,
+    chatInputAvailable,
     childNavigationAvailable = false,
     parentNavigationAvailable = false,
     streamFocusAvailable = false,
@@ -678,19 +681,28 @@ function statusBarBindingsText(
   const fullOutput = transcriptAvailable
     ? keyHintText({ key: 'Ctrl-T', action: 'transcript' })
     : undefined;
-  const agent = agentSelectionAvailable
-    ? keyHintText({ key: '/agent', action: 'agents' })
+  const agent =
+    chatInputAvailable && agentSelectionAvailable
+      ? keyHintText({ key: '/agent', action: 'agents' })
+      : undefined;
+  const status = chatInputAvailable
+    ? keyHintText({ key: '/status', action: 'details' })
     : undefined;
-  const status = keyHintText({ key: '/status', action: 'details' });
-  const model = keyHintText({ key: '/model', action: 'models' });
-  const api = keyHintText({ key: '/api', action: 'api' });
-  const newline = keyHintText({
-    key: shiftEnterNewline ? 'Shift-Enter' : 'Ctrl-J',
-    action: 'newline',
-  });
+  const model = chatInputAvailable
+    ? keyHintText({ key: '/model', action: 'models' })
+    : undefined;
+  const api = chatInputAvailable
+    ? keyHintText({ key: '/api', action: 'api' })
+    : undefined;
+  const newline = chatInputAvailable
+    ? keyHintText({
+        key: shiftEnterNewline ? 'Shift-Enter' : 'Ctrl-J',
+        action: 'newline',
+      })
+    : undefined;
   const ctrlC = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   const setupControlsOnly =
-    agentSelectionAvailable && !childNavigationAvailable;
+    chatInputAvailable && agentSelectionAvailable && !childNavigationAvailable;
   const candidates = [
     // Child navigation only applies when the current tree has a visible row;
     // unrelated or not-yet-attached streams do not make Tab actionable.

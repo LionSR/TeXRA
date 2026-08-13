@@ -60,6 +60,7 @@ function statusInput(
     foreground: { ...foreground },
     childList: { ...childList },
     shortcuts: {
+      chatInputAvailable: true,
       childNavigationAvailable: false,
       streamFocusAvailable: false,
       modifierLabel: 'Alt',
@@ -544,6 +545,26 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Ctrl-C stop');
     expect(display.bindings).not.toContain('Option-p tasks');
     expect(display.bindings).not.toContain('Option-s subagents');
+  });
+
+  it('does not advertise composer controls when chat input is unavailable', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        ctrlCAction: 'stop root',
+        shortcuts: {
+          agentSelectionAvailable: true,
+          chatInputAvailable: false,
+          childNavigationAvailable: true,
+          parentNavigationAvailable: true,
+          transcriptAvailable: true,
+        },
+      }),
+    );
+
+    expect(display.bindings).toBe(
+      'Esc back · Tab sessions · Ctrl-T transcript · Ctrl-C stop root',
+    );
   });
 
   it('keeps child navigation grouped with stream focus', () => {
