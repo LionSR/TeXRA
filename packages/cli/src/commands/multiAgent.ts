@@ -72,9 +72,10 @@ function formatAttachedFileList(
   if (files.length === 0) return undefined;
   return [
     title,
-    ...files.map((file) =>
-      file === '-' ? '- Standard input' : `- ${JSON.stringify(file)}`,
-    ),
+    ...files.map((file) => {
+      const spec = file.trim();
+      return spec === '-' ? '- Standard input' : `- ${JSON.stringify(spec)}`;
+    }),
   ].join('\n');
 }
 
