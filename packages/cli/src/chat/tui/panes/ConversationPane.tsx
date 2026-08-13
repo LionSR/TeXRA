@@ -7,8 +7,8 @@ import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { AgentCategory } from '@shared/schemas';
 import {
   formatWorkflowPhaseHeading,
-  latestWorkflowAttemptId,
   latestWorkflowCallsById,
+  latestWorkflowEntryAttemptId,
   workflowCallFailureTally,
   workflowPhaseCallProgress,
 } from '@shared/copy/workflowCall';
@@ -159,14 +159,7 @@ export function workflowRunStatusSummary(
 ): readonly WorkflowStatusSegment[] | undefined {
   if (slice?.category !== AgentCategory.Workflow) return undefined;
   const currentAttemptId =
-    slice.workflowAttemptId ??
-    latestWorkflowAttemptId(
-      slice.entries.map((entry) => {
-        if (entry.role === 'workflowTask') return entry.task.attemptId;
-        if (entry.role === 'phase') return entry.attemptId;
-        return undefined;
-      }),
-    );
+    slice.workflowAttemptId ?? latestWorkflowEntryAttemptId(slice.entries);
   const phase = slice.entries.findLast(
     (entry): entry is Extract<ConversationEntry, { readonly role: 'phase' }> =>
       entry.role === 'phase' &&
