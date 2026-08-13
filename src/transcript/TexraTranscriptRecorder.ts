@@ -317,9 +317,13 @@ export function attachTranscriptRecorder(
               : {}),
           } satisfies StageMetadata;
           stageMetadata.set(event.id, metadata);
-          // A new round starts fresh: whatever MODEL_RESPONSE stream the
-          // previous round may have opened is no longer this round's to reuse.
-          if (event.kind === 'round') pendingModelResponseId = undefined;
+          // A new model-turn boundary starts fresh: whatever MODEL_RESPONSE
+          // stream the previous turn may have opened is no longer this turn's
+          // to reuse. Tool-use turns are session stages containing several
+          // inner model/tool rounds, while other flows expose round stages.
+          if (event.kind === 'round' || event.kind === 'session') {
+            pendingModelResponseId = undefined;
+          }
           writer.appendSettled({
             id: event.id,
             type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
