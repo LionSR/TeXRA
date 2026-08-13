@@ -174,6 +174,12 @@ describe('formatResumeHint', () => {
       expected: 'texra-local resume root',
     },
     {
+      name: 'preserves whitespace in a stored workspace path',
+      commandName: 'texra-local',
+      options: { cwd: '/tmp/paper ', processCwd: '/tmp/launcher' },
+      expected: "texra-local resume root --cwd '/tmp/paper '",
+    },
+    {
       name: 'omits the default approval policy',
       commandName: 'texra-local',
       options: { approvalPolicy: 'ask' },
@@ -190,6 +196,23 @@ describe('formatResumeHint', () => {
       commandName: undefined,
       options: { approvalPolicy: 'yolo' },
       expected: 'texra resume root --approval-policy yolo',
+    },
+    {
+      name: 'preserves a non-default output format',
+      commandName: 'texra-local',
+      options: { outputFormat: 'ndjson' },
+      expected: 'texra-local resume root --output-format ndjson',
+    },
+    {
+      name: 'preserves headless mode and custom skill sources',
+      commandName: 'texra-local',
+      options: {
+        print: true,
+        includeInteropSkills: true,
+        skillSourcePaths: ['/tmp/shared skills', './local-skills'],
+      },
+      expected:
+        "texra-local resume root --print --include-interop --source '/tmp/shared skills' --source ./local-skills",
     },
     {
       name: 'includes both cwd and approval policy when both are needed',

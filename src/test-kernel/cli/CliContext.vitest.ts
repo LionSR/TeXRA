@@ -301,6 +301,16 @@ describe('CLI --cwd validation', () => {
     );
   });
 
+  it('preserves whitespace in an explicit workspace path', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'texra-cli-cwd-root-'));
+    const workspace = join(root, 'workspace ');
+    await mkdir(workspace);
+
+    await expect(resolveCliCwd(workspace)).resolves.toBe(
+      canonicalizeWorkspacePath(workspace),
+    );
+  });
+
   it('rejects a --cwd path that does not exist', async () => {
     const missing = join(tmpdir(), 'texra-cli-cwd-missing-' + Date.now());
 

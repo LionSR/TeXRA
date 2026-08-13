@@ -1,4 +1,11 @@
-import { buildCliWorkflowResultMeta, getExecutionStore } from '@agent/storage';
+import * as path from 'node:path';
+
+import {
+  buildCliWorkflowResultMeta,
+  deriveResumability,
+  getExecutionStore,
+  type ResumabilityDecision,
+} from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -6,10 +13,10 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CliUsageError,
   readCliStdinText,
+  readCliCwd,
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { finalizeCliExecution } from '../runtime/executionFinalization';
 import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
@@ -22,7 +29,12 @@ import {
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { emitCliResult } from './_helpers/output';
+import {
+  cliProgressWriter,
+  emitCliResult,
+  writeCliProgressAndWait,
+} from './_helpers/output';
+import { formatResumeCommand } from '../chat/tui/state/resumeHint';
 import {
   AGENT_RUN_GLOBAL_ARGS,
   collectCommonAgentRunFlags,
@@ -50,6 +62,25 @@ import {
 
 const MULTI_INPUT_OUTPUT_MESSAGE =
   'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.';
+
+function absoluteOutputDestination(
+  destination: string | undefined,
+  cwd: string,
+): string | undefined {
+  if (destination == null || destination.length === 0) return undefined;
+  return path.isAbsolute(destination)
+    ? destination
+    : path.join(cwd, destination);
+}
+
+/** Read the launch directory without making recovery depend on its lifetime. */
+function tryReadCliCwd(): string | undefined {
+  try {
+    return readCliCwd();
+  } catch {
+    return undefined;
+  }
+}
 
 interface WorkflowRunInit {
   readonly agent: string;
@@ -91,20 +122,32 @@ export async function runWorkflowAgent(
     init.contextFiles,
     context.cwd,
     { readStdinText: readCliStdinText },
-    async ({ inputFiles, contextFiles }) => {
+    async ({ inputFiles, contextFiles, hasMaterializedStdinInput }) => {
       if (init.output && inputFiles.length > 1) {
         throw new CliUsageError(MULTI_INPUT_OUTPUT_MESSAGE);
       }
 
       const model = await selectCliRunModel(context, init.model, 'run');
       const runContext = buildHeadlessRunContext(context);
+      const expectedOutputFiles = init.outputDir
+        ? expectedOutputFilesForOutputDir(agent, inputFiles)
+        : undefined;
       const config: AgentConfigPayload = {
         agent: init.agent,
         model,
         inputFiles,
         contextFiles,
         outputFiles: [],
-        cliOutputFile: init.output,
+        // Persist CLI destinations absolutely so resumption has one path
+        // representation and never reconstructs output locations.
+        cliOutputFile: absoluteOutputDestination(init.output, runContext.cwd),
+        cliOutputDirectory: absoluteOutputDestination(
+          init.outputDir,
+          runContext.cwd,
+        ),
+        cliExpectedOutputFiles: expectedOutputFiles
+          ? [...expectedOutputFiles]
+          : undefined,
         instruction,
         workingDirectory: runContext.cwd,
         agentCategory: AgentCategory.Workflow,
@@ -115,9 +158,8 @@ export async function runWorkflowAgent(
         categoryMismatchMessage: `Agent "${init.agent}" resolved to a non workflow run.`,
         output: init.output,
         outputDir: init.outputDir,
-        expectedOutputFiles: init.outputDir
-          ? expectedOutputFilesForOutputDir(agent, inputFiles)
-          : undefined,
+        expectedOutputFiles,
+        recoveryInputIsDurable: hasMaterializedStdinInput !== true,
       });
     },
   );
@@ -126,9 +168,10 @@ export async function runWorkflowAgent(
 /**
  * Execute a workflow config headless and surface its outputs: run through the
  * shared CLI execution skeleton, copy `--output`/`--output-dir` artifacts,
- * persist the result metadata, emit the result in the requested format, and
- * map the outcome to an exit code. Shared by `texra run` (fresh runs) and
- * `texra resume` (workflow continuation under the persisted execution id).
+ * persist the result metadata, report an output failure back to the live run
+ * lifecycle, emit the result in the requested format, and map the outcome to
+ * an exit code. Shared by `texra run` (fresh runs) and `texra resume`
+ * (workflow continuation under the persisted execution id).
  */
 export async function executeCliWorkflowConfig(
   config: AgentConfigPayload,
@@ -139,17 +182,59 @@ export async function executeCliWorkflowConfig(
     readonly output?: string;
     readonly outputDir?: string;
     readonly expectedOutputFiles?: readonly string[];
+    readonly recoveryInputIsDurable?: boolean;
     readonly executionId?: ExecutionId;
     readonly modelHandlerCompatibilityKey?: CliConfigExecuteOptions['modelHandlerCompatibilityKey'];
   },
 ): Promise<number> {
   let workflowResult: CliWorkflowRunResult | undefined;
   let workflowOutputError: unknown;
+  let resumeHintWritten = false;
+  const recoveryProcessCwd = tryReadCliCwd();
+  const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
+  const canAdvertiseInterruptedExecution = (
+    resumability: Extract<ResumabilityDecision, { resumable: true }>,
+  ): boolean => {
+    const shared = resumability.flowRecord.shared;
+    const lastError =
+      typeof shared === 'object' && shared !== null
+        ? (shared as Record<string, unknown>).lastError
+        : undefined;
+    return lastError == null;
+  };
+  const hasViableRecovery = async (
+    executionId: ExecutionId,
+  ): Promise<boolean> => {
+    const resumability = await deriveResumability(executionId);
+    return (
+      resumability.resumable && canAdvertiseInterruptedExecution(resumability)
+    );
+  };
+  const writeResumeHint = (
+    executionId: ExecutionId,
+    waitForWrite = false,
+  ): Promise<void> | undefined => {
+    if (!recoveryInputIsDurable) return;
+    if (resumeHintWritten) return;
+    resumeHintWritten = true;
+    const hint = formatWorkflowResumeHint(
+      runContext,
+      executionId,
+      config.workingDirectory || runContext.cwd,
+      recoveryProcessCwd,
+    );
+    if (waitForWrite) return writeCliProgressAndWait(runContext, hint);
+    cliProgressWriter(runContext)(hint);
+  };
   const execution = await executeCliConfig(config, runContext, {
     enforceCategory: true,
     registerExecution: options.registerExecution,
     executionId: options.executionId,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+    onInterruptedExecutionFinalized: recoveryInputIsDurable
+      ? (executionId) => writeResumeHint(executionId, true)
+      : undefined,
+    canAdvertiseInterruptedExecution,
     expectedCategory: AgentCategory.Workflow,
     categoryMismatchMessage: options.categoryMismatchMessage,
     openWorkflowOutput: async (result) => {
@@ -161,34 +246,11 @@ export async function executeCliWorkflowConfig(
           runContext,
           { expectedOutputFiles: options.expectedOutputFiles },
         );
-        await persistWorkflowResultMeta(
-          result.executionId,
-          buildCliWorkflowResultMeta(result, {
-            outcome: result.outcome,
-            copiedOutput: workflowResult.copiedOutput,
-            copiedOutputs: workflowResult.copiedOutputs,
-          }),
-        );
       } catch (error) {
         workflowOutputError = error;
-        await persistWorkflowResultMeta(
-          result.executionId,
-          buildCliWorkflowResultMeta(result, {
-            outcome:
-              result.outcome === RUN_OUTCOME.CANCELLED
-                ? result.outcome
-                : RUN_OUTCOME.FAILED,
-          }),
-        );
-        if (result.outcome !== RUN_OUTCOME.CANCELLED) {
-          await finalizeCliExecution(
-            result.executionId,
-            RUN_OUTCOME.FAILED,
-            'delete',
-            (finalizationError) =>
-              writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
-          );
-        }
+        return result.outcome === RUN_OUTCOME.CANCELLED
+          ? result.outcome
+          : RUN_OUTCOME.FAILED;
       }
     },
   });
@@ -196,14 +258,40 @@ export async function executeCliWorkflowConfig(
 
   const { result } = execution;
   if (workflowOutputError !== undefined) {
+    await persistWorkflowResultMeta(
+      result.executionId,
+      buildCliWorkflowResultMeta(result, {
+        outcome: result.outcome,
+      }),
+    );
     writeErrorStderr(workflowOutputError);
-    return result.outcome === RUN_OUTCOME.CANCELLED
-      ? CliExitCode.Interrupted
-      : CliExitCode.AgentError;
+    if (result.outcome === RUN_OUTCOME.CANCELLED) {
+      if (
+        execution.outcomePersisted &&
+        (await hasViableRecovery(result.executionId))
+      ) {
+        writeResumeHint(result.executionId);
+      }
+      return CliExitCode.Interrupted;
+    }
+    return CliExitCode.AgentError;
   }
   if (!workflowResult) {
     throw new Error('Workflow output was not finalized before lease release.');
   }
+
+  // Output copying occurs while the run is still interruptible. Rebuild its
+  // envelope from the lifecycle-resolved verdict so a signal that lands during
+  // the copy cannot leave a completed presentation beside a cancelled run.
+  workflowResult = { ...workflowResult, outcome: result.outcome };
+  await persistWorkflowResultMeta(
+    result.executionId,
+    buildCliWorkflowResultMeta(result, {
+      outcome: result.outcome,
+      copiedOutput: workflowResult.copiedOutput,
+      copiedOutputs: workflowResult.copiedOutputs,
+    }),
+  );
 
   emitCliResult(runContext, {
     json: workflowResult,
@@ -211,7 +299,34 @@ export async function executeCliWorkflowConfig(
     text: formatWorkflowTextResult(workflowResult),
   });
 
+  if (result.outcome === RUN_OUTCOME.CANCELLED) {
+    if (
+      execution.outcomePersisted &&
+      (await hasViableRecovery(result.executionId))
+    ) {
+      writeResumeHint(result.executionId);
+    }
+  }
+
   return runOutcomeExitCode(result.outcome);
+}
+
+function formatWorkflowResumeHint(
+  context: CliContext,
+  executionId: string,
+  workingDirectory: string,
+  processCwd: string | undefined,
+): string {
+  const resumeCommand = formatResumeCommand(context.commandName, executionId, {
+    cwd: workingDirectory,
+    processCwd,
+    approvalPolicy: context.approvalPolicy,
+    outputFormat: context.outputFormat,
+    print: context.mode === 'headless',
+    includeInteropSkills: context.skillSourceOptions.includeInterop,
+    skillSourcePaths: context.skillSourceOptions.additionalPaths,
+  });
+  return `Resume this workflow with: ${resumeCommand}`;
 }
 
 async function persistWorkflowResultMeta(

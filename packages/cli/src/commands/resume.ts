@@ -7,20 +7,20 @@ import { runResumeExecution } from './resumeExecution';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
+import { AGENT_RUN_GLOBAL_ARGS } from './_helpers/globalArgs';
 
 // Resume is dual-mode, so it takes the full global flag set: a tool-use
 // session reopens the interactive chat (headless callers are rejected with
 // guidance once the stored category is known), while a workflow run resumes
-// headless and honors `--print`/`--output-format`/`--no-input` like
-// `texra run`.
+// headless and honors the run-time skill sources together with
+// `--print`/`--output-format`/`--no-input`, like `texra run`.
 export const resumeCommand = defineCommand({
   meta: {
     name: 'resume',
     description: 'Continue (resume) a stored tool-use or workflow session',
   },
   args: {
-    ...GLOBAL_ARGS,
+    ...AGENT_RUN_GLOBAL_ARGS,
     id: {
       type: 'positional',
       required: true,
@@ -34,7 +34,7 @@ export const resumeCommand = defineCommand({
       setExitCode(CliExitCode.Usage);
       return;
     }
-    const context = await contextFromArgs(ctx.args);
+    const context = await contextFromArgs(ctx.args, ctx.rawArgs);
     setExitCode(await runResumeExecution(context, id));
   },
 });

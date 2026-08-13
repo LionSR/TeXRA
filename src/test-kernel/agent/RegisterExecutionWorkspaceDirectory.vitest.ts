@@ -109,6 +109,27 @@ describe('execution lifecycle', () => {
     });
   });
 
+  it('preserves an explicit working directory verbatim', async () => {
+    const executionId = 'workspace-whitespace' as ExecutionId;
+    const workingDirectory = '/workspace/paper ';
+
+    await registerExecution(
+      executionId,
+      { ...baseConfig, workingDirectory },
+      'chat',
+      {
+        streamId: 'chat@deepseekT#workspace-whitespace' as StreamTabId,
+        identity: { kind: 'agent', agent: 'chat' },
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      },
+    );
+
+    expect(mocks.writeRunRecord).toHaveBeenCalledWith({
+      ...baseConfig,
+      workingDirectory,
+    });
+  });
+
   it.each([
     {
       name: 'fresh registration fails',

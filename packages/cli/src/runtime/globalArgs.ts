@@ -48,7 +48,7 @@ export function pickGlobalArgs(
   return {
     print: args.print === true,
     quiet: args.quiet === true,
-    cwd: isNonEmptyString(args.cwd) ? args.cwd.trim() : undefined,
+    cwd: isNonEmptyString(args.cwd) ? args.cwd : undefined,
     outputFormat: args['output-format'],
     approvalPolicy: args['approval-policy'],
     apiMode: isNonEmptyString(args['api-mode'])

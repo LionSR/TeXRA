@@ -40,6 +40,7 @@ import {
 import {
   resolveWorkflowOutput,
   resumeWorkflowOutputFile,
+  resumeWorkflowOutputDirectory,
 } from '@cli/runtime/workflowOutput';
 import {
   isCliSupportedModelId,
@@ -896,15 +897,30 @@ describe('CLI root argument routing', () => {
     ).toBe('/tmp/elsewhere/paper.polished.tex');
   });
 
-  it('resolves relative CLI output targets against the stored working directory', () => {
-    expect(
+  it('rejects relative stored CLI output targets', () => {
+    expect(() =>
       resumeWorkflowOutputFile(
         storedConfig({
           cliOutputFile: 'out/paper.polished.tex',
           outputFiles: ['paper.polished.tex'],
         }),
       ),
-    ).toBe(path.join('/tmp/project', 'out/paper.polished.tex'));
+    ).toThrow(
+      'Stored workflow output file is not absolute: out/paper.polished.tex',
+    );
+  });
+
+  it('preserves whitespace in stored workflow output and workspace paths', () => {
+    const workingDirectory = path.join(path.sep, 'tmp', 'project ');
+    const outputFile = path.join(workingDirectory, ' output.tex ');
+    expect(
+      resumeWorkflowOutputFile(
+        storedConfig({
+          workingDirectory,
+          cliOutputFile: outputFile,
+        }),
+      ),
+    ).toBe(outputFile);
   });
 
   it('keeps legacy resume output paths relative when no stored working directory exists', () => {
@@ -935,6 +951,14 @@ describe('CLI root argument routing', () => {
         }),
       ),
     ).toBeUndefined();
+  });
+
+  it('rejects a non-absolute stored CLI output directory', () => {
+    expect(() =>
+      resumeWorkflowOutputDirectory(
+        storedConfig({ cliOutputDirectory: 'out/polished' }),
+      ),
+    ).toThrow('Stored workflow output directory is not absolute: out/polished');
   });
 
   it('reports successful stopped workflows with missing requested outputs as failed copies', async () => {
@@ -1011,6 +1035,10 @@ describe('CLI root argument routing', () => {
 });
 
 describe('CLI global color/input flags', () => {
+  it('preserves whitespace in the explicit workspace argument', () => {
+    expect(pickGlobalArgs({ cwd: ' workspace ' }).cwd).toBe(' workspace ');
+  });
+
   it('maps CLI color and no-input flags to canonical knobs', () => {
     expect(pickGlobalArgs({ color: false, 'no-input': true })).toMatchObject({
       noColor: true,
