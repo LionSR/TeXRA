@@ -635,6 +635,25 @@ describe('childRunLoop E2E fixtures', () => {
     await waitForLoopEnd(childStreamId);
   });
 
+  it('fences parent deliveries to the continuation generation that launched the child', async () => {
+    const parentLease = session.followUps.claimLive(PARENT_STREAM_ID, 'flow')!;
+    const { childStreamId, executionId } = loopIds('parent-generation-fence');
+    const strategy = createTerminalStrategy('Parent generation fence');
+
+    startLoop({ childStreamId, executionId }, strategy);
+
+    await vi.waitFor(() => {
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetStreamId: PARENT_STREAM_ID,
+          expectedGenerationId: parentLease.generationId,
+        }),
+      );
+    });
+    await waitForLoopEnd(childStreamId);
+    session.followUps.release(parentLease, 'terminal');
+  });
+
   it('late result after parent stop: a turn that resolves after interruption is persisted but not delivered', async () => {
     const { childStreamId, executionId } = loopIds('late-result');
     const { strategy, resolveTurn } = createFakeStrategy();

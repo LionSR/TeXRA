@@ -74,6 +74,7 @@ async function deliverResumeWakeFailure(
   session: SessionHandle,
   executionId: string,
   err: unknown,
+  expectedGenerationId?: string,
 ): Promise<void> {
   logger.warn(
     LOG_CHANNEL,
@@ -84,6 +85,7 @@ async function deliverResumeWakeFailure(
     targetStreamId: handle.parentStreamId,
     followUp: { text: msg, origin: 'subagent_result' },
     session,
+    ...(expectedGenerationId !== undefined ? { expectedGenerationId } : {}),
   });
   if (delivery.kind !== 'delivered') {
     logger.warn(
@@ -308,6 +310,9 @@ Git worktree support: resolved from the active workspace at runtime.`,
     }
 
     const framedInstruction = formatFollowUpInstruction(instruction);
+    const parentDeliveryGenerationId = session.followUps.currentGenerationId(
+      handle.parentStreamId,
+    );
     const result = await submitFollowUp(
       handle.childStreamId,
       framedInstruction,
@@ -326,6 +331,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
         new Error(
           'The subagent follow-up could not be delivered to a live or recovered continuation.',
         ),
+        parentDeliveryGenerationId,
       );
     }
 
