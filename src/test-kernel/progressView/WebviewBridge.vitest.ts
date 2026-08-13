@@ -172,6 +172,34 @@ describe('WebviewBridge', () => {
     expect(store.get(ACTIVE)?.getRange(0)[0]?.data).toEqual(
       expect.objectContaining({ model: 'gpt56-' }),
     );
+
+    sendMessage.mockClear();
+    appendTranscriptEntry(store, ACTIVE, {
+      id: 'workflow-call-2',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 200,
+      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+      text: 'Review',
+      data: {
+        id: 'call-2',
+        label: 'Review',
+        status: 'completed',
+        model: 'gpt56-',
+      },
+    });
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      logDeltaMessage(ACTIVE, {
+        entries: [
+          expect.objectContaining({
+            id: 'workflow-call-2',
+            data: expect.objectContaining({ model: 'GPT-5.6 Terra' }),
+          }),
+        ],
+      }),
+    );
   });
 
   it('projects workflow-call model labels on in-place terminal updates', async () => {
