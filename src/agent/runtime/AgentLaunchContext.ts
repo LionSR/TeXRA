@@ -37,8 +37,8 @@ import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError } from '@common/errors';
 import {
-  isErrorPresented,
-  markErrorPresented,
+  attachErrorPresented,
+  hasErrorPresentedMarker,
 } from '@common/errors/sdkError/errorMetadata';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -173,7 +173,7 @@ export async function getAgentPath(
     { replayWhenAttached: true },
   );
   const err = new AgentError(`Could not find agent: ${agentIdentifier}`);
-  markErrorPresented(err);
+  attachErrorPresented(err);
   throw err;
 }
 
@@ -195,7 +195,7 @@ async function validateModelExists(
     { replayWhenAttached: true },
   );
   const err = new AgentError(`Model ${modelName} is not registered`);
-  markErrorPresented(err);
+  attachErrorPresented(err);
   throw err;
 }
 
@@ -627,7 +627,7 @@ export async function buildAgentLaunchContext(
     if (
       !input.suppressErrorNotification &&
       !(err instanceof ZodError) &&
-      !isErrorPresented(err)
+      !hasErrorPresentedMarker(err)
     ) {
       interactions.emit(
         'requestShowError',

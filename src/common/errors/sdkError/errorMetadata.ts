@@ -115,8 +115,8 @@ const errorPresentedMarker = createErrorMarker('errorPresented');
  *  (e.g. agent-not-found, model-not-recognized), so a later generic handler
  *  on the same call stack does not show a second, redundant notification for
  *  the same failure. */
-export const markErrorPresented = errorPresentedMarker.attach;
-export const isErrorPresented = errorPresentedMarker.has;
+export const attachErrorPresented = errorPresentedMarker.attach;
+export const hasErrorPresentedMarker = errorPresentedMarker.has;
 
 export const providerErrorMetadata =
   createErrorMetadata<ProviderError>('providerError');
