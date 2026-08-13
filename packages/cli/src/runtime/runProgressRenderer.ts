@@ -404,13 +404,13 @@ function formatActiveChildren(
   names: readonly (string | undefined)[],
 ): string | undefined {
   const namedChildren = names.filter((name): name is string => Boolean(name));
-  const first = namedChildren[0];
-  if (!first) return undefined;
+  if (namedChildren.length === 0) return undefined;
 
   const label = pluralize(namedChildren.length, 'subagent');
-  const suffix =
-    namedChildren.length > 1 ? ` +${namedChildren.length - 1}` : '';
-  return `${label}: ${first}${suffix}`;
+  const visibleNames = namedChildren.slice(0, 2);
+  const remainingCount = namedChildren.length - visibleNames.length;
+  const suffix = remainingCount > 0 ? ` +${remainingCount}` : '';
+  return `${label}: ${visibleNames.join(', ')}${suffix}`;
 }
 
 function isMultiRound(rounds: number | undefined): rounds is number {
