@@ -398,7 +398,7 @@ function mintChildTurnRef(
   turnIndex: number,
 ): ChildTurnRef {
   const token = `${executionId}:generation:${generationId}:turn:${turnIndex}`;
-  return { token, deliveryId: `${token}:delivery`, generationId };
+  return { token, deliveryId: `${token}:delivery` };
 }
 
 /**

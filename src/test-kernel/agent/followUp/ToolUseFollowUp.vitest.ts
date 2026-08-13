@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, type Mock } from 'vitest';
 
-import * as agentStorage from '@agent/storage';
+import * as resumability from '@agent/storage/resumability';
 import {
   presentFollowUpResult,
   submitFollowUp,
@@ -356,9 +356,9 @@ describe('submitFollowUp', () => {
     vi.spyOn(session.snapshots, 'getRunMetadata').mockReturnValue({
       executionId,
     } as never);
-    vi.spyOn(agentStorage, 'deriveResumability').mockResolvedValue({
+    vi.spyOn(resumability, 'deriveResumability').mockResolvedValue({
       resumable: true,
-      cause: agentStorage.RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
+      cause: resumability.RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
       flowRecord: {
         flowName: 'texra',
         shared: { continuationGenerationId: generationId },
