@@ -451,12 +451,14 @@ function WorkflowDashboard({
           </Text>
         </Box>
         {failed > 0 ? (
+          // A pending approval needs action, so this tally yields before the
+          // fixed approval suffix when the two cannot both fit.
           <Text bold color={COLOR_WARNING}>{` · ${failed} failed`}</Text>
         ) : null}
         {sessionApprovalSuffix ? (
           <Box flexShrink={0}>
             <Text bold color={COLOR_WARNING}>
-              {` · waiting: ${sessionApprovalSuffix}`}
+              {` · ${sessionApprovalSuffix}`}
             </Text>
           </Box>
         ) : null}

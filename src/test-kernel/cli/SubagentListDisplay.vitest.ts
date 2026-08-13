@@ -1325,11 +1325,11 @@ describe('CLI child list display model', () => {
     });
     const output = await renderSubagentList(
       {
-        dashboard: workflowDashboardModel(rootSlice, 36),
-        maxRows: 4,
+        dashboard: workflowDashboardModel(rootSlice, 18),
+        maxRows: 5,
         pendingApprovals: groupPendingApprovalsByRow(
           [
-            { streamKey: '', kind: 'bash' },
+            { streamKey: '', kind: 'externalInquiry' },
             { streamKey: sessionRoot, kind: 'planApproval' },
             { streamKey: child, kind: 'toolEdit' },
           ],
@@ -1341,14 +1341,14 @@ describe('CLI child list display model', () => {
           [child, workflowAgentSlice(child, {})],
         ]),
       },
-      36,
+      18,
     );
 
-    expect(output).toContain('waiting: bash');
-    expect(output).toContain('Check · Running · edit');
+    expect(output).toContain(' · inquiry');
+    expect(output).toContain('edit');
     expect(output).not.toContain('plan');
     expect(
-      output.split('\n').every((line) => textDisplayWidth(line) <= 36),
+      output.split('\n').every((line) => textDisplayWidth(line) <= 18),
     ).toBe(true);
   });
 
