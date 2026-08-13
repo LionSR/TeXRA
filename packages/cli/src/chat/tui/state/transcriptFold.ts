@@ -24,6 +24,7 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   TOOL_USE_STATUS,
+  WorkflowAttemptMarkerSchema,
   WorkflowCallProgressSchema,
   isPlainAgentIdentity,
   isTerminalWorkflowCallProgress,
@@ -574,6 +575,7 @@ export function createTranscriptFoldState(): TranscriptFoldState {
     finalizedFrontier: 0,
     latestUserPos: -1,
     latestResponsePos: -1,
+    workflowAttemptSeqNo: -1,
     fullLogChild: false,
     workflowOperationalOnly: false,
     projectLifecycleToTaskGroups: false,
@@ -591,6 +593,8 @@ export function resetTranscriptFoldState(state: TranscriptFoldState): void {
   state.finalizedFrontier = 0;
   state.latestUserPos = -1;
   state.latestResponsePos = -1;
+  state.workflowAttemptId = undefined;
+  state.workflowAttemptSeqNo = -1;
   state.activeSkillsEntry = undefined;
   state.activeSkillsParsedFor = undefined;
   state.activeSkills = [];
@@ -817,6 +821,16 @@ function applyChangedLogEntry(
   ctx: FoldContext,
 ): void {
   const messageType = entry.messageType ?? '';
+  if (
+    messageType === MESSAGE_TYPES.INTERNAL &&
+    entry.seqNo >= state.workflowAttemptSeqNo
+  ) {
+    const marker = WorkflowAttemptMarkerSchema.safeParse(entry.data);
+    if (marker.success) {
+      state.workflowAttemptId = marker.data.attemptId;
+      state.workflowAttemptSeqNo = entry.seqNo;
+    }
+  }
   const wOO = state.workflowOperationalOnly;
   // Detached child runs surface their full log output (phase group rows and
   // plain log lines, both `DEFAULT`) when focused, unlike the root/subagent

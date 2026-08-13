@@ -23,10 +23,11 @@ export function latestWorkflowAttemptId(
  */
 export function latestWorkflowCallsById(
   calls: readonly WorkflowCallProgress[],
+  declaredAttemptId?: string,
 ): WorkflowCallProgress[] {
-  const currentAttemptId = latestWorkflowAttemptId(
-    calls.map((call) => call.attemptId),
-  );
+  const currentAttemptId =
+    declaredAttemptId ??
+    latestWorkflowAttemptId(calls.map((call) => call.attemptId));
   const candidates = currentAttemptId
     ? calls.filter((call) => call.attemptId === currentAttemptId)
     : calls;

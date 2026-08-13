@@ -47,6 +47,7 @@ import {
   type LogLevel,
   type MessageType,
   type ToolUseLog,
+  type WorkflowAttemptMarker,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
@@ -402,6 +403,24 @@ export function attachTranscriptRecorder(
             writer.settle(event.logId, patch);
             activeToolEntries.delete(event.logId);
           }
+          return;
+        }
+
+        case 'workflow.attempt': {
+          const marker = {
+            kind: 'workflowAttempt',
+            attemptId: event.attemptId,
+          } satisfies WorkflowAttemptMarker;
+          writer.appendSettled({
+            id: `workflow-attempt-${event.attemptId}`,
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: 'info',
+            timestamp: Date.now(),
+            groupId: event.stageId,
+            messageType: MESSAGE_TYPES.INTERNAL,
+            data: marker,
+            verbose: false,
+          });
           return;
         }
 
