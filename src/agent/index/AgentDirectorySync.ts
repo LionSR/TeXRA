@@ -1,10 +1,10 @@
 import * as path from 'node:path';
 
+import pRetry from 'p-retry';
 import { z } from 'zod';
 
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { platform } from '@platform/platform';
-import { KeyedMutex } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
@@ -15,6 +15,11 @@ import {
 
 const SYNC_MARKER_FILE = '.bundled-agent-sync.json';
 const RECENT_EXTERNAL_SYNC_MS = 5 * 60 * 1000;
+const LOCK_RETRY_TIMEOUT_MS = 30_000;
+
+function isLockContentionError(error: unknown): boolean {
+  return (error as { code?: string })?.code === 'ELOCKED';
+}
 
 const AgentDirectorySyncMarkerSchema = z.object({
   completedAt: z.number().nonnegative(),
@@ -89,15 +94,42 @@ export class GlobalStorageAgentDirectoryStorage implements AgentDirectoryStorage
 }
 
 export class BundledAgentDirectorySync {
-  private static readonly reconcileByStorageRoot = new KeyedMutex<string>();
-
   constructor(private readonly options: BundledAgentDirectorySyncOptions) {}
 
-  reconcile(currentVersion: string | undefined): Promise<boolean> {
-    return BundledAgentDirectorySync.reconcileByStorageRoot.runExclusive(
-      this.options.storage.fullPath(''),
-      () => this.reconcileUnlocked(currentVersion),
-    );
+  async reconcile(currentVersion: string | undefined): Promise<boolean> {
+    let operationStarted = false;
+
+    try {
+      return await pRetry(
+        () =>
+          platform().fileLocks.runExclusive(
+            this.options.storage.fullPath(SYNC_MARKER_FILE),
+            () => {
+              operationStarted = true;
+              return this.reconcileUnlocked(currentVersion);
+            },
+          ),
+        {
+          retries: 20,
+          minTimeout: 100,
+          maxTimeout: 1_000,
+          randomize: true,
+          maxRetryTime: LOCK_RETRY_TIMEOUT_MS,
+          shouldRetry: ({ error }) =>
+            !operationStarted && isLockContentionError(error),
+        },
+      );
+    } catch (error) {
+      // A live or stale owner must not make startup fail. If ownership remains
+      // unavailable, leave the shared cache untouched and try again next run.
+      if (!operationStarted && isLockContentionError(error)) {
+        this.options.logger.warn(
+          'Skipping bundled agent refresh because another process still owns the sync lock',
+        );
+        return false;
+      }
+      throw error;
+    }
   }
 
   private async reconcileUnlocked(
