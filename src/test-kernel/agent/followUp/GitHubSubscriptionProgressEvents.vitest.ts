@@ -273,6 +273,47 @@ describe('GitHub subscription app signals and follow-ups', () => {
     }
   });
 
+  it('refreshes the generation fence when an existing binding changes sessions', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const source = new RegistryTestSource();
+    const firstSession = createTestSession();
+    firstSession.followUps.claimLive(streamId, 'flow');
+    const secondSession = createTestSession();
+    const secondLease = secondSession.followUps.claimLive(streamId, 'flow')!;
+    const registry = new StreamSubscriptionRegistry<string, string>({
+      name: 'test subscriptions',
+      source,
+      keyOf: (input) => input,
+      bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
+    });
+
+    try {
+      withRunContext(
+        createRunContext({ streamId, session: firstSession }),
+        () => registry.bind(streamId, 'owner/repo'),
+      );
+      withRunContext(
+        createRunContext({ streamId, session: secondSession }),
+        () => registry.bind(streamId, 'owner/repo'),
+      );
+
+      source.emit('owner/repo', 'new github event');
+
+      expect(submitFollowUpMock).toHaveBeenCalledWith(
+        streamId,
+        'new github event',
+        {
+          session: secondSession,
+          mode: 'live_notification',
+          expectedGenerationId: secondLease.generationId,
+        },
+      );
+    } finally {
+      firstSession.dispose();
+      secondSession.dispose();
+    }
+  });
+
   it('warns instead of leaking an unhandled rejection when delivery fails', async () => {
     const streamId = 'stream-a' as StreamTabId;
     const source = new RegistryTestSource();
