@@ -697,6 +697,9 @@ export function startChildRunLoop<TTurn>(
       });
       loop.interrupt();
     });
+    // Revalidate at the state transition itself: setup hooks above may run
+    // arbitrary synchronous code after the early fail-fast lease check.
+    runWithOwnedExecutionLease(executionId, () => undefined);
     queueLease = runSession.followUps.claimChildRun(childStreamId);
     if (!queueLease) {
       throw new Error(
