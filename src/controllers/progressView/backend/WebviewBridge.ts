@@ -31,12 +31,14 @@ function projectWorkflowCallEntry(entry: StreamLogEntry): StreamLogEntry {
   ) {
     return entry;
   }
-  const call = WorkflowCallProgressSchema.safeParse(entry.data);
+  const data = entry.data;
+  if (typeof data !== 'object' || data === null) return entry;
+  const call = WorkflowCallProgressSchema.safeParse(data);
   if (!call.success) return entry;
   if (!('model' in call.data) || call.data.model === undefined) return entry;
   const model = getRuntimeModelLabel(call.data.model);
   if (model === call.data.model) return entry;
-  return { ...entry, data: { ...call.data, model } };
+  return { ...entry, data: { ...data, model } };
 }
 
 export type ProgressViewMessageSender = (
