@@ -21,7 +21,6 @@ const mocks = vi.hoisted(() => ({
   runWithOwnedExecutionLease: vi.fn(
     (_executionId: ExecutionId, operation: () => unknown) => operation(),
   ),
-  releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
   leaseLossListener: undefined as (() => void) | undefined,
 }));
 
