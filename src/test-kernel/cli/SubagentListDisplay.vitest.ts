@@ -1306,6 +1306,45 @@ describe('CLI child list display model', () => {
     ).toBe(true);
   });
 
+  it('keeps session-wide approvals visible in a workflow dashboard', async () => {
+    const run = 'approval-run' as StreamTabId;
+    const child = 'approval-child' as StreamTabId;
+    const rootSlice = workflowAgentSlice(run, {
+      agent: 'A workflow with a deliberately long name',
+      status: STREAM_PHASE.RUNNING,
+      entries: [
+        workflowTaskEntry('task', 'Running: Check', {
+          id: 'task',
+          label: 'Check',
+          status: 'running',
+          childStreamId: child,
+        }),
+      ],
+    });
+    const output = await renderSubagentList(
+      {
+        dashboard: workflowDashboardModel(rootSlice, 36),
+        maxRows: 4,
+        pendingApprovals: new Map([
+          [run, ['planApproval', 'proposal']],
+          [child, ['bash']],
+        ]),
+        selectedValue: workflowTaskListValue('task'),
+        streams: new Map([
+          [run, rootSlice],
+          [child, workflowAgentSlice(child, {})],
+        ]),
+      },
+      36,
+    );
+
+    expect(output).toContain('waiting: plan +1');
+    expect(output).toContain('Check · Running · bash');
+    expect(
+      output.split('\n').every((line) => textDisplayWidth(line) <= 36),
+    ).toBe(true);
+  });
+
   // The right-aligned metadata column is the one row element `SubagentList`
   // drops purely on terminal width (`CHILD_ROW_METADATA_MIN_COLUMNS`), so it is
   // what proves a width test drives the width it names: through

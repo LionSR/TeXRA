@@ -388,6 +388,9 @@ function WorkflowDashboard({
   }
   const heading = `${model.root.agent ?? 'Workflow'} · ${done}/${total} done`;
   const { failed } = workflowCallFailureTally(calls);
+  const sessionApprovalSuffix = pendingApprovalRowSuffix(
+    pendingApprovals?.get(model.root.streamId),
+  );
   const renderTask = (
     item: SelectItem<ChildListValue>,
     state: { readonly focused: boolean },
@@ -441,12 +444,23 @@ function WorkflowDashboard({
       paddingX={1}
       width={columns}
     >
-      <Text bold wrap="truncate-end">
-        {heading}
+      <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
+        <Box minWidth={0} flexShrink={1}>
+          <Text bold wrap="truncate-end">
+            {heading}
+          </Text>
+        </Box>
         {failed > 0 ? (
           <Text bold color={COLOR_WARNING}>{` · ${failed} failed`}</Text>
         ) : null}
-      </Text>
+        {sessionApprovalSuffix ? (
+          <Box flexShrink={0}>
+            <Text bold color={COLOR_WARNING}>
+              {` · waiting: ${sessionApprovalSuffix}`}
+            </Text>
+          </Box>
+        ) : null}
+      </Box>
       {wide ? (
         <Box flexDirection="row" height={contentRows} minWidth={0}>
           <Box flexDirection="column" width="32%" paddingRight={1}>
@@ -533,13 +547,11 @@ export interface SubagentListProps {
    * caller folds session-wide / stream-less approvals onto the root stream id
    * via `groupPendingApprovalsByRow`).
    *
-   * When `dashboard` is present, the dashboard replaces the session list and
-   * renders only per-task rows keyed by each task's child stream id. There is
-   * no root row, so the root-folded session-wide bucket (plan, proposal,
-   * stream-less retry, …) is not rendered by the dashboard — it remains
-   * visible only through the global approval count. This pane is therefore
-   * intentionally scoped to per-task agent approvals while a dashboard is
-   * displayed.
+   * When `dashboard` is present, per-task buckets render on their task rows and
+   * the root-folded session-wide bucket (plan, proposal, stream-less retry,
+   * …) renders in the dashboard heading. The queue remains the authority for
+   * approval identity and order; this map only projects that state onto the
+   * rows which present it.
    */
   readonly pendingApprovals?: ReadonlyMap<
     string,
