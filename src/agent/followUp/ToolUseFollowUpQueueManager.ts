@@ -102,10 +102,27 @@ export class ToolUseFollowUpQueue {
   claimLive(
     streamId: StreamTabId,
     kind: Exclude<FollowUpConsumerKind, 'recovery'>,
+    generationId?: string,
   ): FollowUpConsumerLease | undefined {
     if (this.terminal.has(streamId)) return undefined;
-    const entry = this.entries.get(streamId) ?? this.createEntry(streamId);
+    const entry =
+      this.entries.get(streamId) ?? this.createEntry(streamId, generationId);
+    if (generationId !== undefined && entry.generationId !== generationId) {
+      return undefined;
+    }
     return this.claim(entry, streamId, kind);
+  }
+
+  /** Restore a generation read from the stream's authoritative flow record. */
+  restorePersistedGeneration(
+    streamId: StreamTabId,
+    generationId: string,
+  ): boolean {
+    if (this.terminal.has(streamId)) return false;
+    const entry = this.entries.get(streamId);
+    if (entry) return entry.generationId === generationId;
+    this.createEntry(streamId, generationId);
+    return true;
   }
 
   /**
@@ -307,23 +324,6 @@ export class ToolUseFollowUpQueue {
   /** Generation fence for detached producers bound to the current stream. */
   currentGenerationId(streamId: StreamTabId): string | undefined {
     return this.entries.get(streamId)?.generationId;
-  }
-
-  /**
-   * Restore a missing recoverable queue from authoritative persisted turn
-   * state. The durable producer's claimed generation is not authority: its
-   * caller must first read the execution-owned turn record and pass that
-   * independently verified value here.
-   */
-  restorePersistedGeneration(
-    streamId: StreamTabId,
-    generationId: string,
-  ): boolean {
-    if (this.terminal.has(streamId)) return false;
-    const entry = this.entries.get(streamId);
-    if (entry) return entry.generationId === generationId;
-    this.createEntry(streamId, generationId);
-    return true;
   }
 
   private createEntry(

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, type Mock } from 'vitest';
 
+import * as agentStorage from '@agent/storage';
 import {
   presentFollowUpResult,
   submitFollowUp,
@@ -27,6 +28,10 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
     executions: { getToolUseFollowUpTarget: () => target },
     followUps: new ToolUseFollowUpQueue(),
     events: { emit: vi.fn() },
+    snapshots: {
+      getRunMetadata: () => ({}),
+      readPersistedExecutionId: vi.fn(async () => undefined),
+    },
   } as unknown as SessionHandle;
 }
 
@@ -341,6 +346,39 @@ describe('submitFollowUp', () => {
       }),
     ).resolves.toEqual({ status: 'dropped' });
     expect(tryResumeStream).not.toHaveBeenCalled();
+  });
+
+  it('restores the persisted generation before admitting a durable producer', async () => {
+    const streamId = id('stream:persisted-generation');
+    const session = fakeSession({ kind: 'queue', reason: 'waiting' });
+    const executionId = 'persisted-execution';
+    const generationId = 'e63883b0-0fe0-48c7-9888-a2daeaab30a5';
+    vi.spyOn(session.snapshots, 'getRunMetadata').mockReturnValue({
+      executionId,
+    } as never);
+    vi.spyOn(agentStorage, 'deriveResumability').mockResolvedValue({
+      resumable: true,
+      cause: agentStorage.RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
+      flowRecord: {
+        flowName: 'texra',
+        shared: { continuationGenerationId: generationId },
+        createdAt: '2026-08-13T12:00:00.000Z',
+        nodes: [],
+      },
+    });
+    const tryResumeStream = mockTryResume();
+
+    await expect(
+      submitFollowUp(streamId, 'answer after reload', {
+        session,
+        resumePort: { tryResumeStream },
+        expectedGenerationId: generationId,
+      }),
+    ).resolves.toMatchObject({
+      status: 'queued',
+      continuation: 'resumed',
+    });
+    expect(session.followUps.currentGenerationId(streamId)).toBe(generationId);
   });
 });
 

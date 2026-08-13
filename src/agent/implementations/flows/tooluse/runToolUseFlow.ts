@@ -1,4 +1,5 @@
 // Node imports
+import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
 // Local imports
@@ -180,12 +181,15 @@ export async function runToolUseFlow<C = unknown>(
   const runContext = useLaunchRunContext();
   const { runScope } = runContext;
   const { streamId, executionId, session: runSession, signal } = runScope;
+  const continuationGenerationId =
+    input.resume?.shared.continuationGenerationId ?? randomUUID();
   // Capture the run's scope at setup. The interrupt closure below fires from
   // the host thread outside the ALS, so it must use this captured session
   // handle instead of asking for an ambient current session later.
   const sessionLifecycle = new ToolUseSessionLifecycle(
     streamId,
     runSession.followUps,
+    continuationGenerationId,
   );
   const baseRegistry = toolRegistry ?? getDefaultToolRegistry();
   const { tools: resolvedTools } = await resolveAgentTools({
@@ -430,6 +434,7 @@ export async function runToolUseFlow<C = unknown>(
 
   let shared: ToolUseRunShared = {
     messages: [],
+    continuationGenerationId,
     modelId: services.modelCell.modelId,
     modelHandlerCompatibilityKey: compatibilityKey,
     shouldSkipCycle: false,

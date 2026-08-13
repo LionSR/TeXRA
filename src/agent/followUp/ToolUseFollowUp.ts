@@ -1,5 +1,8 @@
 /** Tool-use follow-up routing and continuation ownership. */
+import { z } from 'zod';
+
 import { createChannelTrace } from '@agent/trace';
+import { deriveResumability } from '@agent/storage';
 import { type ToolUseFollowUpQueueReason } from '@agent/runtime/executionRegistry';
 import {
   currentSession,
@@ -72,6 +75,31 @@ export function presentFollowUpResult(
 }
 
 const logger = createChannelTrace('ToolUseFollowUp');
+const PersistedContinuationGenerationSchema = z.looseObject({
+  continuationGenerationId: z.uuid(),
+});
+
+async function restorePersistedGeneration(
+  streamId: StreamTabId,
+  session: SessionHandle,
+): Promise<boolean> {
+  const executionId =
+    session.snapshots.getRunMetadata(streamId).executionId ??
+    (await session.snapshots.readPersistedExecutionId(streamId));
+  if (!executionId) return false;
+  const resumability = await deriveResumability(executionId);
+  if (!resumability.resumable) return false;
+  const parsed = PersistedContinuationGenerationSchema.safeParse(
+    resumability.flowRecord.shared,
+  );
+  return (
+    parsed.success &&
+    session.followUps.restorePersistedGeneration(
+      streamId,
+      parsed.data.continuationGenerationId,
+    )
+  );
+}
 
 export function notifyFollowUpSent(
   streamId: StreamTabId,
@@ -149,6 +177,14 @@ export async function submitFollowUp(
     admission = 'live_owner';
   } else if (target.kind === 'no_session') {
     admission = 'existing_recoverable';
+  }
+  if (
+    admission === 'recoverable' &&
+    options.expectedGenerationId !== undefined &&
+    ownerSession.followUps.currentGenerationId(streamId) === undefined
+  ) {
+    const restored = await restorePersistedGeneration(streamId, ownerSession);
+    if (!restored) return { status: 'dropped' };
   }
   const submission = ownerSession.followUps.submit(
     streamId,
