@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError } from '@shared/schemas';
 import {
   findOccurrenceLineNumbers,
   replaceAllLiteral,

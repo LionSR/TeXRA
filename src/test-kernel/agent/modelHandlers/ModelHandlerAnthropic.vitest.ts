@@ -38,7 +38,7 @@ import {
 import * as serverKeysModule from '@auth/serverKeys';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { AgentCategory } from '@shared/schemas';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type { ToolFileAttachment } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { pathToLocation } from '@utils/files/fileLocation';
