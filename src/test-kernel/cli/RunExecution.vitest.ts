@@ -97,10 +97,6 @@ vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
   deriveResumability: mocks.deriveResumability,
   finalizeExecution: mocks.finalizeExecution,
-}));
-
-vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
   inspectExecutionLease: mocks.inspectExecutionLease,
 }));
 

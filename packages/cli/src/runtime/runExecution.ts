@@ -6,10 +6,9 @@ import {
   trackTerminalResultPresentation,
   type RunAgentOptions,
 } from '@agent/runtime';
-import { deriveResumability } from '@agent/storage';
+import { deriveResumability, inspectExecutionLease } from '@agent/storage';
 import {
   ExecutionLeaseLostError,
-  inspectExecutionLease,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
