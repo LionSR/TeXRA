@@ -3,7 +3,7 @@ import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 const REDACTED = '[redacted]';
 
 const SECRET_ASSIGNMENT_PATTERN =
-  /\b([A-Z0-9_]*(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD)[A-Z0-9_]*)\s*[:=]\s*([^\s,;]+)/gi;
+  /\b([A-Z0-9_]*(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD)[A-Z0-9_]*)\s*[:=]\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;]+)/gi;
 const JSON_STRING_PROPERTY_PATTERN =
   /("((?:[^"\\]|\\.)*)"\s*:\s*)"(?:[^"\\]|\\.)*"/g;
 const SECRET_FIELD_NAME_PATTERN = /API[_-]?KEY|TOKEN|SECRET|PASSWORD/i;
