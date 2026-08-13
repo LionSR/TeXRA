@@ -162,6 +162,8 @@ import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
 const STREAM_ID = 'harness-stream-1';
+const RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID =
+  'correct@harness-model#harness-workflow-agent-a' as StreamTabId;
 const SHOW_WORKFLOW_TIMELINE = process.env.HARNESS_WORKFLOW_TIMELINE === '1';
 const SHOW_WORKFLOW_RUNNING = process.env.HARNESS_WORKFLOW_RUNNING === '1';
 const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
@@ -985,7 +987,9 @@ function makeBashApprovalPayload(index = 1) {
     command: BASH_APPROVAL_COMMAND,
     cwd: HARNESS_CWD,
     allowBypass: true,
-    streamId: STREAM_ID,
+    streamId: SHOW_WORKFLOW_RUNNING
+      ? RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID
+      : STREAM_ID,
   };
 }
 
@@ -1362,8 +1366,7 @@ function seedWorkflowTimeline(): void {
 function seedRunningWorkflow(): void {
   const executionId = 'aaaa0002f10e' as ExecutionId;
   const childStreamId = 'workflow-script#aaaa0002f10e' as StreamTabId;
-  const firstAgentStreamId =
-    'correct@harness-model#harness-workflow-agent-a' as StreamTabId;
+  const firstAgentStreamId = RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID;
   const secondAgentStreamId =
     'correct@harness-model#harness-workflow-agent-b' as StreamTabId;
 
@@ -1405,6 +1408,7 @@ function seedRunningWorkflow(): void {
       label: 'Proofread paper A',
       phase: 'Proofread',
       status: 'running',
+      childStreamId: firstAgentStreamId,
     },
     stageId: phaseStage.id,
   });
@@ -1416,6 +1420,7 @@ function seedRunningWorkflow(): void {
       label: 'Proofread paper B',
       phase: 'Proofread',
       status: 'running',
+      childStreamId: secondAgentStreamId,
     },
     stageId: phaseStage.id,
   });
@@ -1448,6 +1453,13 @@ function seedRunningWorkflow(): void {
     transitionChildEventOrderRunning(child.childStreamId);
   }
   emitChildEventOrderRoster(childStreamId, workflowChildren);
+  patchStream(childStreamId, (slice) => ({
+    ...slice,
+    identity: {
+      kind: 'multiAgentWorkflow',
+      workflowName: 'live-workflow-validation',
+    },
+  }));
 
   HARNESS_DISPOSERS.push(() => {
     phaseStage.end('cancelled');
