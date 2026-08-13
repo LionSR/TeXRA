@@ -425,7 +425,7 @@ describe('createExtensionHostInteractions', () => {
     expect(toolEditApprovals.cancel).toHaveBeenCalledWith(selector);
   });
 
-  it('forwards a cancellation cause as bash reject feedback', async () => {
+  it('forwards a bash cancellation cause without user provenance', async () => {
     const { handlers, interactions } = createInteractions({
       session: createTestSession(),
     });
@@ -442,7 +442,7 @@ describe('createExtensionHostInteractions', () => {
 
     await expect(resultPromise).resolves.toEqual({
       action: 'reject',
-      feedback: 'Stream resources released.',
+      cause: 'Stream resources released.',
     });
     expect(handlers.transport.bash.dismiss).toHaveBeenCalled();
   });
