@@ -120,29 +120,43 @@ export function decodeXmlEntities(text: string): string {
     .replaceAll('&amp;', '&');
 }
 
-function progressDetail(xml: string): string {
-  const type = attr(xml, 'type') as SubagentProgressUpdate['kind'];
+function progressDetail(xml: string): string | undefined {
+  const type = attr(xml, 'type');
   switch (type) {
     case 'started':
       return 'started';
     case 'overview': {
-      const calls = attr(xml, 'tool-calls')!;
+      const calls = attr(xml, 'tool-calls');
+      if (calls === undefined) return undefined;
       const cost = attr(xml, 'cost');
       const toolCalls = `${calls} tool call${calls === '1' ? '' : 's'}`;
       return cost ? `${toolCalls} · $${cost}` : toolCalls;
     }
     case 'plan': {
-      if (attr(xml, 'status') === 'cleared') return 'plan cleared';
+      const status = attr(xml, 'status');
+      if (status === 'cleared') return 'plan cleared';
       // The producer (`formatSubagentProgress`) attaches the plan objective as
       // `summary`; there is no step count on the wire.
-      return `plan · ${decodeXmlEntities(attr(xml, 'summary')!)}`;
+      const summary = attr(xml, 'summary');
+      return status === 'updated' && summary !== undefined
+        ? `plan · ${decodeXmlEntities(summary)}`
+        : undefined;
     }
     case 'todos': {
       const completed = attr(xml, 'completed');
       const active = attr(xml, 'active');
       const pending = attr(xml, 'pending');
+      if (
+        completed === undefined ||
+        active === undefined ||
+        pending === undefined
+      ) {
+        return undefined;
+      }
       return `todos · ${completed} done, ${active} active, ${pending} pending`;
     }
+    default:
+      return undefined;
   }
 }
 
@@ -288,7 +302,8 @@ export function summarizeSubagentFollowup(text: unknown): string {
 
   if (tag === DELIVERY_TAG.subagentProgress) {
     const agent = attr(trimmed, 'agent') ?? 'subagent';
-    return `⟳ ${agent} · ${progressDetail(trimmed)}`;
+    const detail = progressDetail(trimmed);
+    return detail === undefined ? normalized : `⟳ ${agent} · ${detail}`;
   }
 
   if (
