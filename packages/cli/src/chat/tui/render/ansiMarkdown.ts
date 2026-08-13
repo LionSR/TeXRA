@@ -140,17 +140,17 @@ function tableColWidths(
 }
 
 // cli-table3 truncates a word that is wider than its cell, replacing the
-// omitted suffix with an ellipsis. That is harmless for prose but destructive
-// for indivisible mathematical notation such as a LaTeX expression. Opt only
-// those cells into hard wrapping; ordinary cells retain word-boundary wrapping.
-function tableCell(content: string, colWidth: number | undefined): Table.Cell {
-  if (
-    colWidth !== undefined &&
-    content
-      .split(/\s/u)
-      .some((word) => textDisplayWidth(word) > colWidth - TABLE_CELL_PADDING)
-  ) {
-    return { content, wrapOnWordBoundary: false };
+// omitted suffix with an ellipsis. Pre-wrap only affected cells with TeXRA's
+// ANSI- and display-width-aware wrapper; ordinary cells retain cli-table3's
+// word-boundary wrapping.
+function tableCell(content: string, colWidth: number | undefined): string {
+  if (colWidth !== undefined) {
+    const contentWidth = colWidth - TABLE_CELL_PADDING;
+    if (
+      content.split(/\s/u).some((word) => textDisplayWidth(word) > contentWidth)
+    ) {
+      return wrapAnsiToWidth(content, contentWidth);
+    }
   }
   return content;
 }
@@ -170,9 +170,7 @@ function renderAnsiTable(
     .map(style.bold)
     .map((cell, col) => tableCell(cell, colWidths?.[col]));
   const table = new Table({
-    // cli-table3 accepts CellOptions in headers at runtime, although its
-    // declaration unnecessarily narrows this field to strings.
-    head: styledHead as string[],
+    head: styledHead,
     colWidths,
     colAligns: Array.from({ length: numCols }, (_, i) => aligns[i] ?? 'left'),
     wordWrap: true,
