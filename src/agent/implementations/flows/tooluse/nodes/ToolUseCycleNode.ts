@@ -120,22 +120,22 @@ export class ToolUseCycleNode<C> extends Node<
       },
     });
 
-    const roundStage = this.services.logger.openStage(
-      `r${roundShared.roundIndex}`,
-      {
-        kind: 'round',
-        index: roundShared.roundIndex,
-      },
-    );
+    // This outer cycle is one session turn that may contain many model/tool
+    // rounds. Keep it as a structural stage; only the inner invocations advance
+    // runState.totalRounds, so classifying this span as round progress leaves a
+    // stale badge that jumps by the hidden invocation count on the next turn.
+    const sessionStage = this.services.logger.openStage('Tool-use turn', {
+      kind: 'session',
+    });
 
-    let roundOutcome: RunOutcome = RUN_OUTCOME.FAILED;
+    let sessionOutcome: RunOutcome = RUN_OUTCOME.FAILED;
     try {
-      await roundStage.within(() => flow.run(roundShared));
+      await sessionStage.within(() => flow.run(roundShared));
 
       const lastError = roundShared.shouldStop
         ? roundShared.lastError
         : undefined;
-      roundOutcome = deriveRunOutcome({
+      sessionOutcome = deriveRunOutcome({
         failed: lastError !== undefined,
         cancelled: roundShared.shouldStop && !roundShared.endTurn,
       });
@@ -147,7 +147,7 @@ export class ToolUseCycleNode<C> extends Node<
           response: roundShared.latestAssistantText,
         };
       }
-      if (roundOutcome === RUN_OUTCOME.CANCELLED) {
+      if (sessionOutcome === RUN_OUTCOME.CANCELLED) {
         return {
           outcome: 'cancelled',
           response: roundShared.latestAssistantText,
@@ -171,7 +171,7 @@ export class ToolUseCycleNode<C> extends Node<
       }
       throw error;
     } finally {
-      roundStage.end(roundOutcome);
+      sessionStage.end(sessionOutcome);
       if (roundShared.currentUserInstruction !== undefined) {
         prepRes.userChannels.transient[USER_VAR_INSTRUCTION] =
           roundShared.currentUserInstruction;
