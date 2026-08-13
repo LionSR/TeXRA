@@ -199,9 +199,11 @@ export async function executeCliWorkflowConfig(
   const { result } = execution;
   if (workflowOutputError !== undefined) {
     writeErrorStderr(workflowOutputError);
-    return result.outcome === RUN_OUTCOME.CANCELLED
-      ? CliExitCode.Interrupted
-      : CliExitCode.AgentError;
+    if (result.outcome === RUN_OUTCOME.CANCELLED) {
+      writeWorkflowResumeHint(runContext, result.executionId);
+      return CliExitCode.Interrupted;
+    }
+    return CliExitCode.AgentError;
   }
   if (!workflowResult) {
     throw new Error('Workflow output was not finalized before lease release.');
@@ -214,21 +216,22 @@ export async function executeCliWorkflowConfig(
   });
 
   if (result.outcome === RUN_OUTCOME.CANCELLED) {
-    const resumeCommand = formatResumeCommand(
-      runContext.commandName,
-      result.executionId,
-      {
-        cwd: runContext.cwd,
-        processCwd: readCliCwd(),
-        approvalPolicy: runContext.approvalPolicy,
-      },
-    );
-    cliProgressWriter(runContext)(
-      `Resume this workflow with: ${resumeCommand}`,
-    );
+    writeWorkflowResumeHint(runContext, result.executionId);
   }
 
   return runOutcomeExitCode(result.outcome);
+}
+
+function writeWorkflowResumeHint(
+  context: CliContext,
+  executionId: string,
+): void {
+  const resumeCommand = formatResumeCommand(context.commandName, executionId, {
+    cwd: context.cwd,
+    processCwd: readCliCwd(),
+    approvalPolicy: context.approvalPolicy,
+  });
+  cliProgressWriter(context)(`Resume this workflow with: ${resumeCommand}`);
 }
 
 async function persistWorkflowResultMeta(

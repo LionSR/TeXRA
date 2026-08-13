@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { runWorkflowAgent } from '@cli/commands/workflow';
+import { formatResumeCommand } from '@cli/chat/tui/state/resumeHint';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type {
   CliConfigExecuteOptions,
@@ -611,12 +612,42 @@ describe('CLI workflow run command', () => {
         }),
       );
       expect(mocks.writeTextStdout).toHaveBeenCalledExactlyOnceWith(
-        `Resume this workflow with: texra-local resume exec-interrupted --cwd ${root} --approval-policy never`,
+        `Resume this workflow with: ${formatResumeCommand(
+          'texra-local',
+          'exec-interrupted',
+          {
+            cwd: root,
+            processCwd: process.cwd(),
+            approvalPolicy: 'never',
+          },
+        )}`,
       );
       expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.writeTextStdout.mock.invocationCallOrder[0],
       );
     });
+  });
+
+  it('prints the recovery command when cancelled output resolution fails', async () => {
+    mockWorkflowExecution(
+      workflowExecution('exec-interrupted-copy', {
+        outcome: RUN_OUTCOME.CANCELLED,
+        outputs: [
+          runOutputSummary('/missing/run/r1/paper.tex', '/workspace/paper.tex'),
+        ],
+      }),
+      true,
+    );
+
+    const exitCode = await runWorkflow({ output: 'polished.tex' });
+
+    expect(exitCode).toBe(CliExitCode.Interrupted);
+    expect(mocks.writeErrorStderr).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ code: 'ENOENT' }),
+    );
+    expect(mocks.writeTextStdout).toHaveBeenCalledExactlyOnceWith(
+      'Resume this workflow with: texra resume exec-interrupted-copy --cwd /tmp/project --approval-policy never',
+    );
   });
 
   it('does not print a recovery command for completed workflows', async () => {
