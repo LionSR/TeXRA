@@ -13,23 +13,6 @@ export function latestWorkflowAttemptId(
   return attemptIds.findLast((attemptId) => attemptId !== undefined);
 }
 
-interface WorkflowAttemptProjectionEntry {
-  readonly role: string;
-  readonly attemptId?: string;
-  readonly task?: { readonly attemptId?: string };
-}
-
-/** Latest workflow attempt named by phase or task entries in transcript order. */
-export function latestWorkflowEntryAttemptId(
-  entries: readonly WorkflowAttemptProjectionEntry[],
-): string | undefined {
-  return latestWorkflowAttemptId(
-    entries.map((entry) =>
-      entry.role === 'workflowTask' ? entry.task?.attemptId : entry.attemptId,
-    ),
-  );
-}
-
 /**
  * Select the current state of each logical workflow call.
  *

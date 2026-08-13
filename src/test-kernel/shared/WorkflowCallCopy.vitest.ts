@@ -3,23 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   formatWorkflowCallMetadataParts,
   formatWorkflowCallLine,
-  latestWorkflowEntryAttemptId,
   latestWorkflowCallsById,
   workflowCallFailureTally,
   workflowPhaseCallProgress,
 } from '@shared/copy/workflowCall';
 
 describe('workflow call copy', () => {
-  it('selects the latest attempt from phase and task transcript entries', () => {
-    expect(
-      latestWorkflowEntryAttemptId([
-        { role: 'phase', attemptId: 'prior' },
-        { role: 'workflowTask', task: { attemptId: 'current' } },
-        { role: 'assistant' },
-      ]),
-    ).toBe('current');
-  });
-
   it('selects the latest state per id in retained transcript order', () => {
     const latestB = { id: 'b', label: 'B', status: 'running' as const };
     const latestA = { id: 'a', label: 'A', status: 'cached' as const };

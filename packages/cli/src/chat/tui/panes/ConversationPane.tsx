@@ -8,7 +8,6 @@ import { AgentCategory } from '@shared/schemas';
 import {
   formatWorkflowPhaseHeading,
   latestWorkflowCallsById,
-  latestWorkflowEntryAttemptId,
   workflowCallFailureTally,
   workflowPhaseCallProgress,
 } from '@shared/copy/workflowCall';
@@ -16,6 +15,7 @@ import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import {
   activeStreamId as activeStreamIdSignal,
+  currentWorkflowAttemptId,
   streams as streamsSignal,
   type ConversationEntry,
   type StreamSlice,
@@ -158,8 +158,10 @@ export function workflowRunStatusSummary(
   slice: StreamSlice | undefined,
 ): readonly WorkflowStatusSegment[] | undefined {
   if (slice?.category !== AgentCategory.Workflow) return undefined;
-  const currentAttemptId =
-    slice.workflowAttemptId ?? latestWorkflowEntryAttemptId(slice.entries);
+  const currentAttemptId = currentWorkflowAttemptId(
+    slice.workflowAttemptId,
+    slice.entries,
+  );
   const phase = slice.entries.findLast(
     (entry): entry is Extract<ConversationEntry, { readonly role: 'phase' }> =>
       entry.role === 'phase' &&

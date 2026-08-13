@@ -9,10 +9,7 @@
 
 // Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
-import {
-  latestWorkflowCallsById,
-  latestWorkflowEntryAttemptId,
-} from '@shared/copy/workflowCall';
+import { latestWorkflowCallsById } from '@shared/copy/workflowCall';
 
 // Local imports - TUI presentation constants
 import { WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS } from '../panes/SubagentListDisplay';
@@ -23,7 +20,7 @@ import {
   workflowTaskListValue,
   type ChildListValue,
 } from './childListSelection';
-import type { StreamSlice } from './cliState';
+import { currentWorkflowAttemptId, type StreamSlice } from './cliState';
 
 export type WorkflowTaskEntry = Extract<
   StreamSlice['entries'][number],
@@ -89,8 +86,10 @@ export function workflowDashboardModel(
   const groups: MutableWorkflowPhaseGroup[] = [];
   const byPhase = new Map<string | undefined, MutableWorkflowPhaseGroup>();
   const tasks: WorkflowTaskEntry[] = [];
-  const currentAttemptId =
-    root.workflowAttemptId ?? latestWorkflowEntryAttemptId(root.entries);
+  const currentAttemptId = currentWorkflowAttemptId(
+    root.workflowAttemptId,
+    root.entries,
+  );
   const currentCalls = new Set(
     latestWorkflowCallsById(
       root.entries.flatMap((entry) =>
