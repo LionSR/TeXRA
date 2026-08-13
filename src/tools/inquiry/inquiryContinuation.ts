@@ -138,12 +138,16 @@ function mapSubmissionToInquiryOutcome(
 
 async function deliverContinuation(params: {
   parentStreamId: StreamTabId;
+  parentGenerationId?: string | null;
   text: string;
   threadId: InquiryThreadId;
   session?: SessionHandle;
 }): Promise<InjectionOutcome> {
   const result = await submitFollowUp(params.parentStreamId, params.text, {
     session: params.session,
+    ...(params.parentGenerationId != null
+      ? { expectedGenerationId: params.parentGenerationId }
+      : {}),
   });
 
   if (result.status === 'no_session') {
@@ -216,6 +220,7 @@ async function injectContinuation(
 
   return deliverContinuation({
     parentStreamId: manifest.parentStreamId,
+    parentGenerationId: lastTurn?.parentGenerationId,
     text,
     threadId,
     session,
