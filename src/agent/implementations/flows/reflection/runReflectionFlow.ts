@@ -315,9 +315,17 @@ export async function runReflectionFlow<C = unknown>(
     // once had that conversation imported into the transcript sidecar here;
     // the importer was retired per #9590 Stage 7, so such a session's
     // pre-resume turns stay out of the durable transcript.
-    // Persist the synced totalRounds into the flow record so that
-    // stepWithResult() picks up the current config, not the stale one.
-    await pf.setShared(shared);
+    // A cancelled response leaves the current round terminal with
+    // continueRounds=false and no failure. A fresh resume signal should retry
+    // that unfinished round from its first node; completed earlier rounds stay
+    // in shared.roundOutputs. Failures retain their terminal cursor and error.
+    if (!shared.continueRounds && !shared.lastError) {
+      await pf.restartCurrentRound(shared);
+    } else {
+      // Persist the synced totalRounds into the flow record so that
+      // stepWithResult() picks up the current config, not the stale one.
+      await pf.setShared(shared);
+    }
   }
 
   const outcome = await pf.run(shared);

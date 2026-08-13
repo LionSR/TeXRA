@@ -21,6 +21,7 @@ import {
   type RunReflectionFlowInput,
 } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import { ReflectionFlowStateCanonicalSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
+import { RoundPersistedFlow } from '@agent/implementations/flows/reflection/RoundPersistedFlow';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import {
@@ -231,5 +232,45 @@ describe('runReflectionFlow persisted-state recovery', () => {
     const shared = ReflectionFlowStateCanonicalSchema.parse(stored?.shared);
     expect(shared.workspaceSnapshot.workPlan.todos).toEqual([todo]);
     expect(Object.hasOwn(shared.workspaceSnapshot, 'todos')).toBe(false);
+  });
+
+  it('restarts a persisted cancellation but preserves a persisted failure', async () => {
+    const restartSpy = vi.spyOn(
+      RoundPersistedFlow.prototype,
+      'restartCurrentRound',
+    );
+    const cancelled = recoveryCase('cancelled-round');
+    await cancelled.store.write(
+      cancelled.key,
+      flowRecord(
+        reflectionFlowShared({
+          totalRounds: 1,
+          context: null,
+          continueRounds: false,
+        }),
+      ),
+    );
+
+    await cancelled.run();
+
+    expect(restartSpy).toHaveBeenCalledOnce();
+
+    restartSpy.mockClear();
+    const failed = recoveryCase('failed-round');
+    await failed.store.write(
+      failed.key,
+      flowRecord(
+        reflectionFlowShared({
+          totalRounds: 1,
+          context: null,
+          continueRounds: false,
+          lastError: { message: 'model failed', userRetryable: true },
+        }),
+      ),
+    );
+
+    await failed.run();
+
+    expect(restartSpy).not.toHaveBeenCalled();
   });
 });

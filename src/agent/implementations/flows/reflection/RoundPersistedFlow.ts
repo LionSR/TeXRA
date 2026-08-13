@@ -173,6 +173,12 @@ export class RoundPersistedFlow<
     return outcome;
   }
 
+  /** Restart the current round after a persisted cancellation. */
+  async restartCurrentRound(shared: S): Promise<void> {
+    shared.continueRounds = true;
+    await this.resetNodeHistory(shared);
+  }
+
   /**
    * Execute all nodes in the current round, checking for interruption
    * between each step. Returns the final shared state.

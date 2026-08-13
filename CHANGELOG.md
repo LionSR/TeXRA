@@ -17,6 +17,8 @@ All notable changes to this project will be documented in this file.
 - **Interrupted multi-agent chats can be resumed immediately** — leaving a
   cancelled team session no longer leaves its printed resume command
   temporarily unavailable.
+- **Cancelled reflection workflows resume their unfinished round** — resuming
+  no longer stops immediately with another interruption.
 
 ### Shared (all surfaces)
 

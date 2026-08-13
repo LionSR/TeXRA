@@ -86,6 +86,10 @@ function makeFlow() {
   });
 }
 
+function makeFlowWithKv(kv: ReturnType<typeof createFakeKv>) {
+  return new RoundPersistedFlow<FakeShared>(new FakeRoundNode(), kv);
+}
+
 function initialShared(overrides: Partial<FakeShared>): FakeShared {
   return {
     currentRound: 0,
@@ -141,6 +145,26 @@ describe('RoundPersistedFlow bounded compile-repair round (#7077)', () => {
     // Exactly one repair round (2) — no round 3, even though round 2 also failed.
     expect(shared.roundsRun).toEqual([0, 1, 2]);
     expect(shared.compileRepairRoundGranted).toBe(true);
+  });
+});
+
+describe('RoundPersistedFlow cancelled-round recovery (#10098)', () => {
+  it('restarts the terminal current-round cursor without advancing the round', async () => {
+    const kv = createFakeKv();
+    const initialFlow = makeFlowWithKv(kv);
+    const shared = initialShared({ totalRounds: 1 });
+    await initialFlow.run(shared);
+    const cancelledShared = (await initialFlow.getShared())!;
+    cancelledShared.continueRounds = false;
+    await initialFlow.setShared(cancelledShared);
+
+    const resumedFlow = makeFlowWithKv(kv);
+    await resumedFlow.restartCurrentRound(cancelledShared);
+    await expect(resumedFlow.run(cancelledShared)).resolves.toBe(
+      RUN_OUTCOME.COMPLETED,
+    );
+
+    expect((await resumedFlow.getShared())?.roundsRun).toEqual([0, 0]);
   });
 });
 
