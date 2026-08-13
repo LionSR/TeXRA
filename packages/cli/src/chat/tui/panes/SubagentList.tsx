@@ -18,6 +18,7 @@ import {
   TOKENS_GENERATED,
 } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
+import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
 import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import {
   WORKFLOW_TASK_STATUS_LABEL,
@@ -41,7 +42,6 @@ import {
 } from '@utils/text/stringUtils';
 
 // Local imports - TUI rendering
-import { truncateSummaryToWidth } from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
 import { WORKFLOW_TASK_STATUS_STYLE } from './transcriptEntryLayout';
 

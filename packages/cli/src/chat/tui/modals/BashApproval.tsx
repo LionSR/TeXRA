@@ -6,6 +6,7 @@ import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
 } from '@cli/tui/ui/theme';
+import { truncateToWidth } from '@cli/runtime/terminalText';
 import type { BashPermission } from '@shared/schemas';
 
 import { ConfirmCard } from './ConfirmCard';
@@ -13,7 +14,6 @@ import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
-import { truncateToWidth } from '../render/terminalText';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface BashApprovalProps {

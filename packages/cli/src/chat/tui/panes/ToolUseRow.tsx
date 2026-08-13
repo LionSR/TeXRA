@@ -6,11 +6,11 @@ import { memo } from 'react';
 import { Box, Text } from 'ink';
 
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
+import { clipToWidth } from '@cli/runtime/terminalText';
 import { type NormalizedToolUse } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import { DiffView } from '../render/DiffView';
-import { clipToWidth } from '../render/terminalText';
 import {
   toolUseMarginBottomRows,
   toolUseStyledLines,

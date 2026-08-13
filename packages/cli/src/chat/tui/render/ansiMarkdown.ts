@@ -16,6 +16,7 @@ import MarkdownIt, { type RendererRule, type Token } from 'markdown-it';
 import pico from 'picocolors';
 
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 import {
   createMarkdownProcessor,
   type MarkdownProcessorRenderEnv,
@@ -26,7 +27,6 @@ import {
   type MarkdownItInstance,
 } from '@shared/markdown/createMarkdownRenderer';
 import { normalizeKnownHtmlForCliMarkdown } from './htmlMarkdownNormalize';
-import { textDisplayWidth } from './terminalText';
 
 /** SGR open/close codes wrapped through String.fromCharCode so the ESC byte
  *  is never a literal in source (pre-commit hooks have been known to mangle

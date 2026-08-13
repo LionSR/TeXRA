@@ -17,6 +17,7 @@ import {
   metaChordInput,
 } from '@cli/tui/inputKeys';
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 import {
   applyTerminalInputChunk,
   clampCursor,
@@ -30,7 +31,6 @@ import {
 import { matchTextInputBinding } from './textInputBindings';
 import { ImagePasteQueue, type ImagePasteAttempt } from './imagePasteQueue';
 import { useActiveDraft } from './activeDraft';
-import { textDisplayWidth } from '../render/terminalText';
 
 const IMAGE_PASTE_TIMEOUT_MS = 15_000;
 
