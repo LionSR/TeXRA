@@ -23,6 +23,8 @@ All notable changes to this project will be documented in this file.
 - **Workflow footers show only usable controls** — focused workflows and
   background processes no longer advertise slash commands while their chat
   input is hidden.
+- **Session views show recognizable model names** — headers, `/status`, and
+  background-task rows use catalog labels instead of internal model IDs.
 
 ### Shared (all surfaces)
 

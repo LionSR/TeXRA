@@ -716,7 +716,7 @@ describe('CLI child list display model', () => {
     });
     expect(output.match(/bash running/g)).toHaveLength(2);
     expect(output).not.toContain('gemini35f');
-    expect(output).toContain('bash running · gpt56');
+    expect(output).toContain('bash running · GPT-5.6 Sol');
     expect(output).toContain('5 tool calls');
     expect(output).toContain('↓40k');
   });

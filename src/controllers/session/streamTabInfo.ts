@@ -1,7 +1,7 @@
 import { isRemoteAgent } from '@agent/index/agentRegistry';
 import { getStreamTabDisplayName } from '@agent/runtime/streamTab';
 import type { SessionStreamMetadata } from '@controllers/session/SessionState';
-import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
 import { runIdentityName } from '@shared/schemas';
 import { getCleanAgentName } from '@shared/schemas/agent';
@@ -79,9 +79,7 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
     userFollowUpSupport: metadata.userFollowUpSupport,
     agentCategory: metadata.agentCategory,
     model,
-    modelLabel: model
-      ? (getRuntimeModelConfig(model)?.label ?? model)
-      : undefined,
+    modelLabel: model ? getRuntimeModelLabel(model) : undefined,
     command,
     isRemote,
     creationTimestamp: metadata.creationTimestamp,

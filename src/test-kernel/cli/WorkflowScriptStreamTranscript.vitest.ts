@@ -972,7 +972,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
     expect(staticItems.at(0)).toMatchObject({
       identityLine:
-        'workflow script: draft-sections · parent: main · model: deepseekT',
+        'workflow script: draft-sections · parent: main · model: DeepSeek V4 Flash (Thinking)',
       kind: 'header',
     });
 

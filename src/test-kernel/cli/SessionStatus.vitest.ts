@@ -194,10 +194,11 @@ describe('CLI session status formatter', () => {
 
   it('reports ChatGPT as the selected model access', () => {
     const status = sessionStatus({
-      model: 'gpt55',
+      model: 'gpt56-',
       modelAccess: 'chatgpt',
     });
 
+    expect(status).toContain('model: GPT-5.6 Terra');
     expect(status).toContain(
       ['model access: ChatGPT subscription', 'approval: ask'].join('\n'),
     );
