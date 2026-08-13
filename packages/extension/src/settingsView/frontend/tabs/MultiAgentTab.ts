@@ -67,6 +67,22 @@ export class MultiAgentTab extends LitElement {
         border-color: var(--wa-color-focus);
       }
 
+      .preset-apply-btn {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        padding: 0;
+        border: 0;
+        border-radius: inherit;
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .preset-apply-btn:focus-visible {
+        outline: var(--focus-ring-width) solid var(--wa-color-focus);
+        outline-offset: var(--focus-ring-offset);
+      }
+
       .preset-card.active {
         background-color: var(--wa-color-brand-fill-quiet);
         color: var(--wa-color-list-active-fg);
@@ -191,21 +207,7 @@ export class MultiAgentTab extends LitElement {
     });
   }
 
-  private handlePresetKey(event: KeyboardEvent, preset: AgentModePreset): void {
-    if (event.key === 'Enter' || event.key === ' ') {
-      // Ignore Enter/Space that bubbled up from the nested delete button —
-      // that control owns its own click/keydown activation and must not
-      // also apply the preset it's being deleted from.
-      if ((event.target as HTMLElement | null)?.closest('.preset-delete-btn')) {
-        return;
-      }
-      event.preventDefault();
-      this.handlePresetClick(preset);
-    }
-  }
-
-  private handleDeletePreset(event: Event, preset: AgentModePreset): void {
-    event.stopPropagation();
+  private handleDeletePreset(preset: AgentModePreset): void {
     postMessage(SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET, {
       presetId: preset.id,
     });
@@ -225,16 +227,15 @@ export class MultiAgentTab extends LitElement {
     );
     const isActive = this.activePresetId === preset.id;
     return html`
-      <div
-        class=${classMap({ 'preset-card': true, active: isActive })}
-        role="button"
-        tabindex="0"
-        aria-label="Apply ${preset.name} team"
-        aria-pressed=${isActive ? 'true' : 'false'}
-        @click=${() => this.handlePresetClick(preset)}
-        @keydown=${(e: KeyboardEvent) => this.handlePresetKey(e, preset)}
-        title="Apply ${preset.name} team"
-      >
+      <div class=${classMap({ 'preset-card': true, active: isActive })}>
+        <button
+          class="preset-apply-btn"
+          type="button"
+          aria-label="Apply ${preset.name} team"
+          aria-pressed=${isActive ? 'true' : 'false'}
+          @click=${() => this.handlePresetClick(preset)}
+          title="Apply ${preset.name} team"
+        ></button>
         <div class="preset-card-header">
           ${waIcon(preset.icon, { className: 'preset-card-icon' })}
           <span class="preset-card-name">${preset.name}</span>
@@ -290,7 +291,7 @@ export class MultiAgentTab extends LitElement {
                 icon: 'trash',
                 label: 'Delete team',
                 className: 'preset-delete-btn',
-                onClick: (e) => this.handleDeletePreset(e, preset),
+                onClick: () => this.handleDeletePreset(preset),
               })
             : nothing
         }
