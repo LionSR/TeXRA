@@ -4,8 +4,8 @@ import {
   previousRowsText,
   scrollStatusText,
 } from '@cli/tui/overflowText';
+import { clipToWidth, textDisplayWidth } from '@cli/runtime/terminalText';
 import { clamp } from '@utils/core';
-import { clipToWidth, textDisplayWidth } from './terminalText';
 
 /**
  * Below this many content rows, a scrollable region degrades to a single
