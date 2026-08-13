@@ -576,6 +576,7 @@ export function createTranscriptFoldState(): TranscriptFoldState {
     latestUserPos: -1,
     latestResponsePos: -1,
     workflowAttemptSeqNo: -1,
+    workflowAttemptBoundaryDeclared: false,
     fullLogChild: false,
     workflowOperationalOnly: false,
     projectLifecycleToTaskGroups: false,
@@ -594,6 +595,7 @@ export function resetTranscriptFoldState(state: TranscriptFoldState): void {
   state.latestUserPos = -1;
   state.latestResponsePos = -1;
   state.workflowAttemptId = undefined;
+  state.workflowAttemptBoundaryDeclared = false;
   state.workflowAttemptSeqNo = -1;
   state.activeSkillsEntry = undefined;
   state.activeSkillsParsedFor = undefined;
@@ -837,6 +839,7 @@ function applyChangedLogEntry(
     state.workflowAttemptId = marker.success
       ? marker.data.attemptId
       : undefined;
+    state.workflowAttemptBoundaryDeclared = true;
     state.workflowAttemptSeqNo = entry.seqNo;
   }
   const wOO = state.workflowOperationalOnly;

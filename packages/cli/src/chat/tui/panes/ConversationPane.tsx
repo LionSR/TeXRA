@@ -161,11 +161,13 @@ export function workflowRunStatusSummary(
   const currentAttemptId = currentWorkflowAttemptId(
     slice.workflowAttemptId,
     slice.entries,
+    slice.workflowAttemptBoundaryDeclared,
   );
   const phase = slice.entries.findLast(
     (entry): entry is Extract<ConversationEntry, { readonly role: 'phase' }> =>
       entry.role === 'phase' &&
-      (currentAttemptId === undefined || entry.attemptId === currentAttemptId),
+      (currentAttemptId === undefined ||
+        (currentAttemptId !== null && entry.attemptId === currentAttemptId)),
   );
   const currentCalls = latestWorkflowCallsById(
     slice.entries.flatMap((entry) =>
