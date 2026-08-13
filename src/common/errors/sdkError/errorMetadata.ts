@@ -109,6 +109,19 @@ const manualRetryOnlyErrorMarker = createErrorMarker('manualRetryOnlyError');
 export const attachManualRetryOnlyError = manualRetryOnlyErrorMarker.attach;
 export const hasManualRetryOnlyErrorMarker = manualRetryOnlyErrorMarker.has;
 
+const errorPresentedMarker = createErrorMarker('errorPresented');
+
+/** Marks that a targeted, actionable notification was requested for this
+ *  error at its throw site (e.g. model-not-recognized), so a later generic
+ *  handler on the same call stack does not show a second, redundant
+ *  notification for the same failure. This records that presentation was
+ *  *requested*, not that it was necessarily *delivered* -- only attach it at
+ *  a throw site whose targeted event is known to reach every host that can
+ *  observe the marker, or a host with a no-op/best-effort handler for that
+ *  event will leave the user with no visible failure at all. */
+export const attachErrorPresented = errorPresentedMarker.attach;
+export const hasErrorPresentedMarker = errorPresentedMarker.has;
+
 export const providerErrorMetadata =
   createErrorMetadata<ProviderError>('providerError');
 
