@@ -361,6 +361,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.state.phase = formatStreamStatusLabel(status, { style: 'cli' });
     if (this.rootStreamTerminal) {
       this.activeChildren = [];
+      this.childDescriptions.clear();
+      this.closedChildStreamIds.clear();
+      this.pendingFollowUpChildStreamIds.clear();
     }
     this.updateHeartbeat();
     this.render(true);
@@ -487,7 +490,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
           this.activeChildren,
           this.childDescriptions,
           descriptionColumns,
-        ) ?? nameOnlySubagents,
+        )!,
       );
     }
     if (this.state.toolCallCount != null && !nameOnlySubagents) {
