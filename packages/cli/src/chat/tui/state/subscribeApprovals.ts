@@ -470,7 +470,7 @@ async function requestUserQuestionInteraction(
 ): Promise<UserQuestionSettlement> {
   const denial = settleHumanInputDenial(context);
   if (denial != null) {
-    return { action: 'reject', reason: denial.userMessage };
+    return { action: 'reject', reason: denial.reason };
   }
 
   const decision = await enqueueTuiApproval({ kind: 'userQuestion', payload });
@@ -813,13 +813,25 @@ function handleExternalInquiry(
         });
         return;
       }
+      if (decision.rejectionCause !== undefined) {
+        void handleExternalInquiryAction({
+          action: 'drop',
+          threadId,
+          cause: decision.rejectionCause,
+        });
+        return;
+      }
+      if (decision.userMessage) {
+        void handleExternalInquiryAction({
+          action: 'drop',
+          threadId,
+          feedback: decision.userMessage,
+        });
+        return;
+      }
       void handleExternalInquiryAction({
         action: 'drop',
         threadId,
-        feedback:
-          decision.rejectionCause ??
-          decision.userMessage ??
-          'No answer provided.',
       });
     },
   );
