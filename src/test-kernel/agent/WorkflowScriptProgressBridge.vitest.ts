@@ -137,16 +137,19 @@ return await agent('Inspect', { id: 'inspect' })`,
     expect(planned).toMatchObject({
       type: 'workflow.call',
       stageId: phaseId,
+      call: { attemptId: expect.any(String) },
     });
     expect(running).toMatchObject({
       type: 'workflow.call',
       logId: planned?.logId,
       stageId: phaseId,
+      call: { attemptId: planned?.call.attemptId },
     });
     expect(completed).toMatchObject({
       type: 'workflow.call',
       logId: planned?.logId,
       stageId: phaseId,
+      call: { attemptId: planned?.call.attemptId },
     });
     expect(events).toContainEqual(
       expect.objectContaining({
