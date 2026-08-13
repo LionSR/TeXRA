@@ -46,6 +46,14 @@ All notable changes to this project will be documented in this file.
 - **Headless team progress identifies delegated tasks** — direct multi-agent
   runs show what the active child is checking, not only its generic agent name.
 
+### Extension (VS Code) and Desktop
+
+#### Bug Fixes
+
+- **Delegation approvals state their full run-wide scope** — approval controls
+  no longer imply that later automatic approvals are limited to tasks requested
+  by one agent.
+
 ### Shared (all surfaces)
 
 #### Bug Fixes
