@@ -172,9 +172,14 @@ export async function getAgentPath(
     { agentName: agentIdentifier },
     { replayWhenAttached: true },
   );
-  const err = new AgentError(`Could not find agent: ${agentIdentifier}`);
-  attachErrorPresented(err);
-  throw err;
+  // Deliberately NOT marked via `attachErrorPresented`: `showAgentConfigBanner`
+  // is a documented no-op on both CLI presentation hosts (no persistent
+  // sidebar to render it in), so treating this as "presented" would leave CLI
+  // users with no visible failure at all once the generic `requestShowError`
+  // fallback is gated on the marker. The double-surface on hosts that DO
+  // render the banner (extension, desktop) stays open pending a banner
+  // presentation that reports whether it actually reached the user.
+  throw new AgentError(`Could not find agent: ${agentIdentifier}`);
 }
 
 async function validateModelExists(

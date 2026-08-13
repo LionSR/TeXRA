@@ -80,7 +80,12 @@ describe('AgentLaunchContext', () => {
     ]);
   });
 
-  it('does not double-surface a missing-agent failure via the generic error toast', async () => {
+  it('still falls back to the generic error toast for a missing-agent failure', async () => {
+    // Deliberately NOT deduplicated (unlike model-not-recognized below):
+    // `showAgentConfigBanner` is a documented no-op on both CLI presentation
+    // hosts, so marking this failure as "presented" would leave CLI users
+    // with no visible error at all. See the comment at `getAgentPath`'s
+    // throw site.
     const recording = createRecordingHost();
     const session = createTestSession({ interactions: recording.host });
 
@@ -95,14 +100,50 @@ describe('AgentLaunchContext', () => {
       session.dispose();
     }
 
-    // Only the targeted banner should fire; the generic `requestShowError`
-    // catch-all must not repeat a failure the banner already presented.
+    expect(
+      recording.events.filter((event) => event.event === 'requestShowError'),
+    ).toHaveLength(1);
+    expect(
+      recording.events.filter(
+        (event) => event.event === 'showAgentConfigBanner',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('does not double-surface a model-not-recognized failure via the generic error toast', async () => {
+    const recording = createRecordingHost();
+    const session = createTestSession({ interactions: recording.host });
+
+    mocks.resolve.mockReturnValueOnce({
+      entry: { path: '/agents/chat.yaml' },
+    });
+    mocks.load.mockResolvedValueOnce([
+      { agentCategory: AgentCategory.ToolUse },
+      {},
+    ]);
+
+    try {
+      await expect(
+        buildAgentLaunchContext({
+          config: AgentConfigSchema.parse({
+            agent: 'chat',
+            model: '__unregistered_model_for_launch_context_test__',
+          }),
+          session,
+        }),
+      ).rejects.toThrow('is not registered');
+    } finally {
+      session.dispose();
+    }
+
+    // Only the targeted instruction should fire; the generic `requestShowError`
+    // catch-all must not repeat a failure the instruction already presented.
     expect(
       recording.events.filter((event) => event.event === 'requestShowError'),
     ).toEqual([]);
     expect(
       recording.events.filter(
-        (event) => event.event === 'showAgentConfigBanner',
+        (event) => event.event === 'requestShowInstruction',
       ),
     ).toHaveLength(1);
   });
