@@ -41,10 +41,10 @@ import {
   RUN_OUTCOME,
   STREAM_PHASE,
   type StreamTabId,
+  type ToolResult,
   AgentCategory,
 } from '@shared/schemas';
 import type { ExecResult } from '@shared/schemas/opResults';
-import type { ToolResult } from '@shared/schemas';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
