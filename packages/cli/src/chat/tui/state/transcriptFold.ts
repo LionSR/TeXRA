@@ -16,6 +16,7 @@ import { appendCliApiSwitchHint } from '@cli/runtime/approval/approvalPrompts';
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { redactSecrets } from '@logger/redaction';
+import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import {
   ErrorLogDataSchema,
   FileListEntrySchema,
@@ -315,11 +316,17 @@ function renderLogEntryFresh(
     const parsed = WorkflowCallProgressSchema.safeParse(entry.data);
     if (!parsed.success) return null;
     const call = parsed.data;
+    const displayCall =
+      isTerminalWorkflowCallProgress(call) &&
+      'model' in call &&
+      call.model !== undefined
+        ? { ...call, model: getRuntimeModelLabel(call.model) }
+        : call;
     const next: ConversationEntry = {
       ...baseLogEntryFields(
         entry,
         'workflowTask',
-        formatWorkflowCallLine(call),
+        formatWorkflowCallLine(displayCall),
       ),
       finalized: entry.settlementSeqNo !== undefined,
       task: call,
