@@ -2,6 +2,7 @@ import {
   formatCliModelAccessRoute,
   type CliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
+import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { StreamSubstate } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
@@ -89,7 +90,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
   return [
     ...(input.teamName ? [`team: ${input.teamName}`] : []),
     `agent: ${input.agent}`,
-    `model: ${input.model}`,
+    `model: ${getRuntimeModelLabel(input.model)}`,
     `model access: ${formatCliModelAccessRoute(input.modelAccess)}`,
     `approval: ${input.approval}`,
     ...(bypassLabels.length > 0
