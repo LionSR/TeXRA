@@ -745,7 +745,7 @@ function completedRootResult(executionId: ExecutionId): ResultEvent {
  * stream's resources are released (delete, delete-all, headless cleanup). */
 const STREAM_RELEASED_REJECTION = {
   action: 'reject',
-  feedback: 'Stream resources released.',
+  cause: 'Stream resources released.',
 } as const;
 
 const BASH_STREAM_RELEASED_REJECTION = {
