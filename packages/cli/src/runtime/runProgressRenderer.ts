@@ -25,7 +25,7 @@ import {
   formatStreamStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
 import { assertNever } from '@utils/core';
-import { pluralize } from '@utils/text/stringUtils';
+import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { writeRawStderr } from './logSinks';
@@ -51,6 +51,7 @@ type RunProgressRunFactEvent = Extract<
 // Carriage return + erase-line (CSI 2K): rewind to column 0 and clear the row
 // so the single live status line can be repainted in place.
 const CLEAR_LINE = '\r\x1b[2K';
+const ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH = 48;
 
 interface RenderState {
   round?: number;
@@ -136,6 +137,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private liveLine = false;
   private rootStreamId: StreamTabId | undefined;
   private rootStreamStatus: StreamPhase | undefined;
+  private activeChildren: readonly ActiveChildInfo[] = [];
+  private readonly childDescriptions = new Map<StreamTabId, string>();
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
   /** Derived from the one status field, never mirrored into a second flag. */
@@ -200,7 +203,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       case 'followUpSent':
       case 'setActiveStream':
       case 'setParentStream':
+        return;
       case 'removeStream':
+        this.childDescriptions.delete(event.payload.streamId);
         return;
     }
     assertNever(event, 'Unhandled run-progress renderer session fact');
@@ -287,13 +292,20 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   ): void {
     if (!this.claimRootStream(parentStreamId)) return;
 
+    this.activeChildren = children;
     this.state.activeSubagents = formatActiveChildren(
-      children.map((child) => child.agentName),
+      children,
+      this.childDescriptions,
     );
   }
 
   private applyStatus(streamId: StreamTabId, status: StreamPhase): void {
-    if (!this.isRootStream(streamId)) return;
+    if (!this.isRootStream(streamId)) {
+      if (isTerminalOutcomePhase(status)) {
+        this.childDescriptions.delete(streamId);
+      }
+      return;
+    }
     if (this.rootStreamStatus === status) return;
 
     this.rootStreamStatus = status;
@@ -309,7 +321,21 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     streamId: StreamTabId,
     description: string,
   ): void {
-    if (!this.isRootStream(streamId)) return;
+    if (!this.isRootStream(streamId)) {
+      this.childDescriptions.set(streamId, description);
+      if (
+        !this.activeChildren.some((child) => child.childStreamId === streamId)
+      ) {
+        return;
+      }
+      this.state.activeSubagents = formatActiveChildren(
+        this.activeChildren,
+        this.childDescriptions,
+      );
+      this.updateHeartbeat();
+      this.render(true);
+      return;
+    }
 
     this.state.phase = description;
     this.updateHeartbeat();
@@ -401,16 +427,21 @@ function formatInputLabel(files: readonly string[]): string | undefined {
 }
 
 function formatActiveChildren(
-  names: readonly (string | undefined)[],
+  children: readonly ActiveChildInfo[],
+  descriptions: ReadonlyMap<StreamTabId, string>,
 ): string | undefined {
-  const namedChildren = names.filter((name): name is string => Boolean(name));
+  const namedChildren = children.filter((child) => Boolean(child.agentName));
   const first = namedChildren[0];
   if (!first) return undefined;
 
   const label = pluralize(namedChildren.length, 'subagent');
   const suffix =
     namedChildren.length > 1 ? ` +${namedChildren.length - 1}` : '';
-  return `${label}: ${first}${suffix}`;
+  const description = descriptions.get(first.childStreamId);
+  const task = description
+    ? ` — ${truncateWithEllipsis(description, ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH)}`
+    : '';
+  return `${label}: ${first.agentName}${task}${suffix}`;
 }
 
 function isMultiRound(rounds: number | undefined): rounds is number {
