@@ -22,6 +22,13 @@ export const WorkflowCallIdentitySchema = z.strictObject({
 });
 export type WorkflowCallIdentity = z.infer<typeof WorkflowCallIdentitySchema>;
 
+/** Durable boundary between physical runs appended to one workflow stream. */
+export const WorkflowAttemptMarkerSchema = z.strictObject({
+  kind: z.literal('workflowAttempt'),
+  attemptId: z.string().min(1),
+});
+export type WorkflowAttemptMarker = z.infer<typeof WorkflowAttemptMarkerSchema>;
+
 const WorkflowCallTerminalMetadataSchema = z.strictObject({
   model: z.string().min(1).optional(),
   durationMs: z.number().nonnegative().optional(),

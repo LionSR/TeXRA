@@ -215,6 +215,9 @@ export interface TranscriptFoldState {
   activeSkills: readonly ActiveSkillSummary[];
   /** Highest-seq live-activity entry (drives the thinking indicator). */
   liveActivityEntry?: StreamLogEntry;
+  /** Latest durable workflow-attempt marker and its source order. */
+  workflowAttemptId?: string;
+  workflowAttemptSeqNo: number;
   /** Synthetic rows reconciled into `items`, in slice order, by identity. */
   synthetics: readonly ConversationEntry[];
   /** Incremental task-group / compaction memos. Unlike the fold fields above
@@ -288,6 +291,8 @@ export interface StreamSlice {
   readonly compileFailuresByRound: RoundIndexed<CompileFailure>;
   /** Run/round/phase lifecycle projected from the canonical StreamLog. */
   readonly taskGroups: readonly TaskGroup[];
+  /** Latest physical workflow attempt declared by the durable stream. */
+  readonly workflowAttemptId?: string | undefined;
   readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
   /** Epoch ms when this stream last entered `RUNNING`; cleared on any other
@@ -363,6 +368,7 @@ export function emptySlice(streamId: StreamTabId): StreamSlice {
     missingOutputsByRound: {},
     compileFailuresByRound: {},
     taskGroups: [],
+    workflowAttemptId: undefined,
     thinkingActive: false,
     compactingActive: false,
     usage: undefined,

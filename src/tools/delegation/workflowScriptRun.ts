@@ -417,6 +417,11 @@ export async function runPersistedWorkflowScriptWithProgress(
     }
   };
 
+  // The physical attempt exists even when parsing or initial persistence fails
+  // before the engine can emit a plan, phase, or call. Publish its boundary
+  // first so live projections never infer the current run from optional work.
+  trace.emit({ type: 'workflow.attempt', attemptId: projectionId });
+
   try {
     const result = await runPersistedWorkflowScript({
       ...runOptions,

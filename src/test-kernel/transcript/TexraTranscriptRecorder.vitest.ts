@@ -49,6 +49,24 @@ function dataOf(entry: StreamLogEntry | undefined): Record<string, unknown> {
 }
 
 describe('attachTranscriptRecorder StreamPhase-native group rows (issue #7993)', () => {
+  it('persists a workflow attempt before it has tasks or phases', () => {
+    const { trace, rows } = attachRecorder();
+
+    trace.emit({ type: 'workflow.attempt', attemptId: 'attempt-empty' });
+
+    expect(rows()).toContainEqual(
+      expect.objectContaining({
+        id: 'workflow-attempt-attempt-empty',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        messageType: MESSAGE_TYPES.INTERNAL,
+        data: {
+          kind: 'workflowAttempt',
+          attemptId: 'attempt-empty',
+        },
+      }),
+    );
+  });
+
   it("writes GROUP_START's data.status as StreamPhase.RUNNING", () => {
     const { trace, row } = attachRecorder();
 
