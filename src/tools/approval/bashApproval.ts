@@ -137,11 +137,19 @@ export function buildBashApprovalRejectedResult(
   const preview = truncateWithEllipsis(command, 60);
   const feedback = rejection.feedback?.trim();
   const isPolicyDenial = rejection.reason != null;
+  const isAutomaticCancellation = 'cause' in rejection;
   const reason = rejection.reason?.trim();
-  const message = isPolicyDenial
-    ? `Command denied: ${preview}`
-    : `User rejected command: ${preview}`;
-  const guidance = isPolicyDenial ? reason : DEFAULT_BASH_REJECTION_GUIDANCE;
+  const cause = rejection.cause?.trim();
+  let message = `User rejected command: ${preview}`;
+  let guidance: string | undefined = DEFAULT_BASH_REJECTION_GUIDANCE;
+  if (isPolicyDenial) {
+    message = `Command denied: ${preview}`;
+    guidance = reason;
+  }
+  if (isAutomaticCancellation) {
+    message = `Command approval cancelled: ${preview}`;
+    guidance = cause;
+  }
   const error = feedback || !guidance ? message : `${message}\n\n${guidance}`;
   return errorResult(error, {
     summary: message,
