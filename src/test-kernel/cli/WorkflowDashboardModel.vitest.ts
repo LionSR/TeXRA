@@ -371,9 +371,11 @@ describe('workflow dashboard model', () => {
     });
     const narrowModel = workflowDashboardModel(
       { ...root, entries: [...entries, currentPhase] },
-      60,
+      NARROW_COLUMNS,
     );
-    expect(narrowModel.listValues).toEqual([narrowModel.groups[0]?.value]);
+    expect(narrowModel.listValues).toStrictEqual([
+      narrowModel.groups[0]?.value,
+    ]);
     const { ink, React } = await loadInk();
     const { instance, stdout } = renderInteractive(
       ink,
@@ -393,6 +395,26 @@ describe('workflow dashboard model', () => {
       expect(stdout.output).toContain('workflow · 0/0 done');
     } finally {
       instance.unmount();
+    }
+
+    const { instance: narrowInstance, stdout: narrowStdout } =
+      renderInteractive(
+        ink,
+        React.createElement(SubagentList, {
+          dashboard: narrowModel,
+          keyboardActive: true,
+          listRootStreamId: ROOT,
+          maxRows: 5,
+          selectedValue: narrowModel.groups[0]?.value,
+          sessions: [],
+          streams: new Map([[ROOT, root]]),
+        }),
+        { columns: NARROW_COLUMNS },
+      );
+    try {
+      await waitFor(() => narrowStdout.output.includes('› ◆ Explore'));
+    } finally {
+      narrowInstance.unmount();
     }
   });
 
