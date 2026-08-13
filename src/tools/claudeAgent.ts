@@ -303,7 +303,7 @@ export async function runStreamedTurn(params: {
     backgroundTasks.finish();
   }
 
-  if (params.forkSession && succeeded && !sessionId) {
+  if (params.forkSession && succeeded && !isError && !sessionId) {
     isError = true;
     errorMessage =
       'Claude SDK fork success result is missing session_id; refusing to resume the source session.';

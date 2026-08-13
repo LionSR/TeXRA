@@ -555,17 +555,56 @@ describe('claude_agent tool launch and resume fallback', () => {
       session_id: 'source-session',
       fork_session: true,
     });
-    const turn = await captured.strategy?.launch?.(
+    const turn = (await captured.strategy?.launch?.(
       { notify: () => {}, recordCost: () => {} },
       new AbortController(),
-    );
+    )) as
+      | { isError: boolean; sessionId?: string; errorMessage?: string }
+      | undefined;
 
-    expect(turn).toMatchObject({
-      isError: true,
-      sessionId: undefined,
-      errorMessage: expect.stringContaining('missing session_id'),
-    });
+    expect(turn?.isError).toBe(true);
+    expect(turn?.sessionId).toBeUndefined();
+    expect(turn?.errorMessage).toContain('missing session_id');
+    expect(captured.strategy?.isTurnError?.(turn)).toBe(true);
     expect(mocks.query).toHaveBeenCalledOnce();
+  });
+
+  it('preserves a provider error after an earlier fork success result', async () => {
+    mocks.query.mockReturnValue(
+      (async function* () {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          result: 'Intermediate success without a session id.',
+          modelUsage: {},
+          total_cost_usd: 0,
+        };
+        yield {
+          type: 'result',
+          subtype: 'error_during_execution',
+          errors: ['provider failed after success'],
+          modelUsage: {},
+          total_cost_usd: 0,
+        };
+      })(),
+    );
+    const captured = captureStrategy();
+
+    await new ClaudeAgentTool().call({
+      prompt: 'try a different proof',
+      session_id: 'source-session',
+      fork_session: true,
+    });
+    const turn = (await captured.strategy?.launch?.(
+      { notify: () => {}, recordCost: () => {} },
+      new AbortController(),
+    )) as
+      | { isError: boolean; sessionId?: string; errorMessage?: string }
+      | undefined;
+
+    expect(turn?.isError).toBe(true);
+    expect(turn?.sessionId).toBeUndefined();
+    expect(turn?.errorMessage).toBe('provider failed after success');
   });
 
   it('rejects a fork from a live session owned by another stream', async () => {
