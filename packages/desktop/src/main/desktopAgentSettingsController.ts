@@ -299,6 +299,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         getCustomPresets: () => this.catalogController.getCustomPresets(),
         getOrchestratorAgentNames: () =>
           this.catalogController.getOrchestratorAgentNames(),
+        getActiveTeamId: () => this.roster.getActiveTeamId(),
       }),
     );
   }
@@ -492,6 +493,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       );
       return;
     }
+    this.postAgentModePresets();
     await Promise.all([
       this.postAgentSelectionData(),
       this.postMainAgentAndTeamOptionsData(

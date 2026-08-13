@@ -175,6 +175,12 @@ export class AgentRosterController<
     return this.resolveSelection(this.getSelection()).effectiveSelection;
   }
 
+  /** The effective team selected for this workspace, if the roster uses one. */
+  getActiveTeamId(): string | null {
+    const selection = this.getEffectiveSelection();
+    return selection.kind === 'team' ? selection.teamId : null;
+  }
+
   getVisibleAgents(category: AgentCategory): Entry[] {
     const resolved = this.resolveSelection(this.getSelection());
     return this.visibleAgents(

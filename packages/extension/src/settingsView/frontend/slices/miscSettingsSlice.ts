@@ -9,6 +9,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import {
+  activePresetId,
   agentSkillsEnabled,
   allowOrchestratorKill,
   customPresets,
@@ -43,6 +44,7 @@ export const agentTeamsHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS]: (data) => {
     customPresets.set(data.customPresets);
     orchestratorAgents.set(data.orchestratorAgents);
+    activePresetId.set(data.activePresetId);
   },
 } satisfies Partial<SettingsViewOutboundHandlerRegistry>;
 

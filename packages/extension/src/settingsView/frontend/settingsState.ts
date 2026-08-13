@@ -182,6 +182,7 @@ export const agentSubTab = trackedSignal<AgentCategory | undefined>(
 // ---------------------------------------------------------------------------
 export const customPresets = trackedSignal<AgentModePreset[]>(() => []);
 export const orchestratorAgents = trackedSignal<string[]>(() => []);
+export const activePresetId = trackedSignal<string | null>(() => null);
 
 // ---------------------------------------------------------------------------
 // Multi-agent coordination state

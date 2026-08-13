@@ -2,7 +2,7 @@
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
@@ -183,10 +183,9 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
   /** Agent names that carry delegation tools, computed backend-side from the registry. */
   @property({ attribute: false }) orchestratorAgents: string[] = [];
-  @state() private activePresetId: string | null = null;
+  @property({ attribute: false }) activePresetId: string | null = null;
 
   private handlePresetClick(preset: AgentModePreset): void {
-    this.activePresetId = preset.id;
     postMessage(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET, {
       presetId: preset.id,
     });
@@ -231,6 +230,7 @@ export class MultiAgentTab extends LitElement {
         role="button"
         tabindex="0"
         aria-label="Apply ${preset.name} team"
+        aria-pressed=${isActive ? 'true' : 'false'}
         @click=${() => this.handlePresetClick(preset)}
         @keydown=${(e: KeyboardEvent) => this.handlePresetKey(e, preset)}
         title="Apply ${preset.name} team"
