@@ -204,12 +204,12 @@ function phaseGroupData(
   ) {
     return null;
   }
-  // Same tolerant parse `updateTaskGroups` (progress-view logSlice) uses for
-  // the identical group-log payload: per-field `.catch(undefined)` so a
-  // malformed `index`/`total` drops just that field, not the whole header.
-  const { kind, index, total, attemptId } = GroupLogPayloadSchema.catch(
-    {},
-  ).parse(entry.data);
+  // Same parse `updateTaskGroups` uses for the identical group-log payload:
+  // display fields recover independently, while malformed attempt ownership
+  // rejects the payload and therefore cannot masquerade as a legacy omission.
+  const payload = GroupLogPayloadSchema.safeParse(entry.data);
+  if (!payload.success) return null;
+  const { kind, index, total, attemptId } = payload.data;
   if (kind !== 'phase') return null;
   return {
     ...(index !== undefined ? { index } : {}),
