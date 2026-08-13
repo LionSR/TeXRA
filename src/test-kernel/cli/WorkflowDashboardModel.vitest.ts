@@ -391,6 +391,28 @@ describe('workflow dashboard model', () => {
     }
   });
 
+  it('drops the prior dashboard at the next attempt boundary', () => {
+    const prior = workflowRoot(
+      ['Verify'],
+      [{ id: 'verification', phase: 'Verify' }],
+    );
+    const entries = prior.entries.map((entry) => {
+      if (entry.role === 'workflowTask') {
+        return { ...entry, task: { ...entry.task, attemptId: 'prior' } };
+      }
+      if (entry.role === 'phase') return { ...entry, attemptId: 'prior' };
+      return entry;
+    });
+
+    const model = workflowDashboardModel(
+      { ...prior, workflowAttemptId: 'current', entries },
+      WIDE_COLUMNS,
+    );
+
+    expect(model.groups).toStrictEqual([]);
+    expect(model.tasks).toStrictEqual([]);
+  });
+
   it('renders exactly the narrow row values the reducer reconciles against', async () => {
     const model = workflowDashboardModel(TWO_PHASE_ROOT, NARROW_COLUMNS);
     const visited = await navigateList(

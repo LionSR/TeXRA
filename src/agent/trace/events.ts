@@ -146,6 +146,12 @@ interface WorkflowCallEvent extends StageStamp {
   readonly call: WorkflowCallProgress;
 }
 
+/** A physical workflow-script projection began, before any optional work. */
+interface WorkflowAttemptEvent extends StageStamp {
+  readonly type: 'workflow.attempt';
+  readonly attemptId: string;
+}
+
 /** Exact raw skill catalog accepted for this run's initial prompt. */
 interface ActiveSkillsEvent extends StageStamp {
   readonly type: 'skills.snapshot';
@@ -368,6 +374,7 @@ export type AgentEvent =
   | StageEndEvent
   | ToolStartEvent
   | ToolEndEvent
+  | WorkflowAttemptEvent
   | WorkflowCallEvent
   | ActiveSkillsEvent
   | UsageEvent

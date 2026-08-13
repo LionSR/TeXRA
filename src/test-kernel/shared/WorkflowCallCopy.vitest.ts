@@ -46,6 +46,22 @@ describe('workflow call copy', () => {
     ).toStrictEqual([currentB]);
   });
 
+  it('honors an explicit attempt before it emits any calls', () => {
+    expect(
+      latestWorkflowCallsById(
+        [
+          {
+            id: 'old',
+            label: 'Old task',
+            status: 'completed',
+            attemptId: 'prior',
+          },
+        ],
+        'current',
+      ),
+    ).toStrictEqual([]);
+  });
+
   it('uses one terminal metadata representation across hosts', () => {
     expect(
       formatWorkflowCallMetadataParts({

@@ -89,21 +89,21 @@ export function workflowDashboardModel(
   const groups: MutableWorkflowPhaseGroup[] = [];
   const byPhase = new Map<string | undefined, MutableWorkflowPhaseGroup>();
   const tasks: WorkflowTaskEntry[] = [];
-  const currentAttemptId = latestWorkflowAttemptId(
-    root.entries.map((entry) => {
-      if (entry.role === 'workflowTask') return entry.task.attemptId;
-      if (entry.role === 'phase') return entry.attemptId;
-      return undefined;
-    }),
-  );
+  const currentAttemptId =
+    root.workflowAttemptId ??
+    latestWorkflowAttemptId(
+      root.entries.map((entry) => {
+        if (entry.role === 'workflowTask') return entry.task.attemptId;
+        if (entry.role === 'phase') return entry.attemptId;
+        return undefined;
+      }),
+    );
   const currentCalls = new Set(
     latestWorkflowCallsById(
       root.entries.flatMap((entry) =>
         entry.role === 'workflowTask' ? [entry.task] : [],
       ),
-    ).filter(
-      (call) =>
-        currentAttemptId === undefined || call.attemptId === currentAttemptId,
+      currentAttemptId,
     ),
   );
   for (const entry of root.entries) {
