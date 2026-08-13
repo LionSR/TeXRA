@@ -42,11 +42,12 @@ import {
 } from '@common/errors/sdkError/errorPatterns';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { composeLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
-import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
+  FileLocation,
+  MediaAttachmentKind,
   ToolFileAttachment,
   ToolResult,
-} from '@shared/schemas/toolResult';
+} from '@shared/schemas';
 import { filterNotNull, generateShortId, isNonEmptyString } from '@utils/core';
 import { getShortDisplayPath } from '@utils/files/fileLocation';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';

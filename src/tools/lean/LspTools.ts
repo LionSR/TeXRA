@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';

@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Local imports - tools
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
-import type { ToolResult } from '@shared/schemas/toolResult';
+import type { ToolResult } from '@shared/schemas';
 import {
   applyApprovedFileEdit,
   resolveWritableTarget,

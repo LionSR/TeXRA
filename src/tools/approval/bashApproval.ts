@@ -24,8 +24,8 @@ import {
   isTexraApprovalDenied,
   texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
+import { type ToolResult } from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
-import { type ToolResult } from '@shared/schemas/toolResult';
 import { requireInteractions } from '@tools/contextHelpers';
 import { errorResult } from '@tools/core/result';
 import { generateShortId } from '@utils/core';

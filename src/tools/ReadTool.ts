@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas';
 import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
 import { formatFileView } from '@tools/formatting';
 import {

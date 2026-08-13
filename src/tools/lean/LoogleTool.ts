@@ -10,7 +10,7 @@ import { z } from 'zod';
 
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import * as logger from '@logger/logUtils';
-import { ToolResult } from '@shared/schemas/toolResult';
+import { ToolResult } from '@shared/schemas';
 import {
   isTimeoutError,
   joinAbortSignal,

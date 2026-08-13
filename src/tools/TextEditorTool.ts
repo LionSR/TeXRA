@@ -14,7 +14,7 @@ import {
 import { isTexFile } from '@common/files/fileTypeUtils';
 import { createLog } from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
-import { ToolResult, ToolError } from '@shared/schemas/toolResult';
+import { ToolResult, ToolError } from '@shared/schemas';
 import {
   applyApprovedFileEdit,
   loadEditableFile,

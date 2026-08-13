@@ -8,17 +8,17 @@ import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { EXTERNAL_INQUIRY_THREADS_DIR } from '@platform/defaults/globalStorage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
+  InquiryDraftSchema,
   InquirySessionLinksSchema,
   InquiryThreadIdSchema,
-  InquiryDraftSchema,
-  type InquiryTranscriptTurn,
   StreamTabIdSchema,
-  type InquiryThreadId,
-  type InquiryThreadSummary,
+  ToolError,
   type InquiryDraft,
+  type InquiryThreadId,
   type InquiryThreadStatus,
+  type InquiryThreadSummary,
+  type InquiryTranscriptTurn,
 } from '@shared/schemas';
-import { ToolError } from '@shared/schemas/toolResult';
 import {
   isObject,
   KeyedMutex,

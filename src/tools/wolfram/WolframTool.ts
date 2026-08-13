@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
-import { ToolResult, ToolError } from '@shared/schemas/toolResult';
+import { ToolResult, ToolError } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import {
   buildBashApprovalRejectedResult,

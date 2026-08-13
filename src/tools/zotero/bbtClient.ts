@@ -18,7 +18,7 @@ import { z } from 'zod';
 
 // Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError } from '@shared/schemas';
 import { isTimeoutError, joinAbortSignal } from '@tools/timeouts';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';

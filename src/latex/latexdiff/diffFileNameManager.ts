@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import {
   extractLastRoundMatch,
   extractLastRoundModelMatch,
-} from '@agent/utils/mergeFileUtils';
+} from '@latex/mergeFileUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { COMMIT_HASH_HEX_RANGE } from '@utils/git/commitHashPattern';

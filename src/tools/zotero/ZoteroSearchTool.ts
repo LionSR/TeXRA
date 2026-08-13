@@ -9,7 +9,7 @@
 import { z } from 'zod';
 
 // Local imports - core
-import type { ToolResult } from '@shared/schemas/toolResult';
+import type { ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';

@@ -23,7 +23,7 @@ import pTimeout from 'p-timeout';
 
 // Local imports
 import { createLog } from '@logger/logUtils';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { CROSSREF_CONSTANTS, CrossrefClient } from '@tools/citation/constants';
 import { defineTool } from '@tools/core/define';

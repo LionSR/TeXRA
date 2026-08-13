@@ -9,7 +9,7 @@ import {
   isApiProvider,
 } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas';
 
 // Local file imports
 import { executed } from '@tools/core/result';

@@ -6,7 +6,7 @@
 import { z } from 'zod';
 
 // Local imports
-import type { ToolResult } from '@shared/schemas/toolResult';
+import type { ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';

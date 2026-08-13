@@ -8,7 +8,7 @@ import {
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import type { FileLocation } from '@shared/schemas';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   currentToolRoot,
   resolveWorkspaceRelativePath,

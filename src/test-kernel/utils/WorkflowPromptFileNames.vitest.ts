@@ -2,16 +2,16 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import {
-  getExtractedDocOutputFileName,
-  getSafeDocumentRelativePath,
-} from '@agent/utils/outputFileUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   getListOfFiles,
   getPromptFileName,
   getXmlFormatFromReadableFiles,
 } from '@utils/prompt';
+import {
+  getExtractedDocOutputFileName,
+  getSafeDocumentRelativePath,
+} from '@utils/files/outputFileUtils';
 
 describe('workflow prompt file names', () => {
   setupPlatform({

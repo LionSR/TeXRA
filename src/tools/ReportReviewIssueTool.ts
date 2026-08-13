@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { REVIEW_SEVERITIES } from '@agent/review/reviewIssues';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
-import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
+import { type ToolResult, ToolError } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
