@@ -31,6 +31,9 @@ All notable changes to this project will be documented in this file.
 - **Workflow task progress shows recognizable model names** — focused
   dashboards, interactive transcripts, and headless progress use catalog
   labels instead of internal model IDs.
+- **Workflow reruns show current task progress** — retrying a saved workflow no
+  longer counts completed or failed task states from earlier attempts in the
+  live dashboard.
 - **Workflow dashboards identify blocked tasks** — a task waiting for approval
   now shows the pending approval kind on its own row.
 - **Interrupted headless agent runs show how to resume** — stopping a tool-use

@@ -276,6 +276,38 @@ describe('CLI child list display model', () => {
     ).toEqual(['muted', 'muted', 'warning']);
   });
 
+  it('uses the latest logical task state when a workflow is rerun', () => {
+    const slice = workflowAgentSlice('rerun', {
+      entries: [
+        phaseEntry('phase-verify-old', 'Verify', {
+          phaseIndex: 1,
+          phaseTotal: 2,
+        }),
+        workflowTaskEntry('task-verify-old', 'Failed: Verify', {
+          id: 'verification',
+          label: 'Verify',
+          phase: 'Verify',
+          status: 'failed',
+          error: 'Invalid first attempt.',
+        }),
+        phaseEntry('phase-verify-current', 'Verify', {
+          phaseIndex: 1,
+          phaseTotal: 2,
+        }),
+        workflowTaskEntry('task-verify-current', 'Running: Verify', {
+          id: 'verification',
+          label: 'Verify',
+          phase: 'Verify',
+          status: 'running',
+        }),
+      ],
+    });
+
+    expect(
+      workflowRunStatusSummary(slice)?.map((segment) => segment.text),
+    ).toEqual(['Verify (2/2)', '0/1 done']);
+  });
+
   it('tallys failures across the whole run, not just the current phase', () => {
     // A failure in an earlier phase must persist in the band after the run
     // advances, unlike the current-phase done/total. The whole-run tally keeps

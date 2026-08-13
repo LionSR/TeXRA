@@ -7,6 +7,7 @@ import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { AgentCategory } from '@shared/schemas';
 import {
   formatWorkflowPhaseHeading,
+  latestWorkflowCallsById,
   workflowCallFailureTally,
   workflowPhaseCallProgress,
 } from '@shared/copy/workflowCall';
@@ -157,14 +158,13 @@ export function workflowRunStatusSummary(
 ): readonly WorkflowStatusSegment[] | undefined {
   if (slice?.category !== AgentCategory.Workflow) return undefined;
   const phase = slice.entries.findLast((entry) => entry.role === 'phase');
+  const currentCalls = latestWorkflowCallsById(
+    slice.entries.flatMap((entry) =>
+      entry.role === 'workflowTask' ? [entry.task] : [],
+    ),
+  );
   const { done, total } = workflowPhaseCallProgress(
-    phase
-      ? slice.entries.flatMap((entry) =>
-          entry.role === 'workflowTask' && entry.task.phase === phase.phaseLabel
-            ? [entry.task]
-            : [],
-        )
-      : [],
+    phase ? currentCalls.filter((call) => call.phase === phase.phaseLabel) : [],
   );
   const segments: WorkflowStatusSegment[] = [];
   if (phase) {
@@ -178,11 +178,7 @@ export function workflowRunStatusSummary(
   // is whole-run, so a failure persists after the run advances past its phase
   // (unlike the current-phase done/total).
   if (segments.length > 0) {
-    const { failed } = workflowCallFailureTally(
-      slice.entries.flatMap((entry) =>
-        entry.role === 'workflowTask' ? [entry.task] : [],
-      ),
-    );
+    const { failed } = workflowCallFailureTally(currentCalls);
     if (failed > 0) {
       segments.push({ text: `${failed} failed`, tone: 'warning' });
     }
