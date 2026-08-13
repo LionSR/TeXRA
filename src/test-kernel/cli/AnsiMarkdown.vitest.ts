@@ -327,6 +327,47 @@ describe('renderAnsiMarkdown', () => {
     plainLinesWithinWidth(renderAnsiMarkdown(md, { width: 40 }), 40);
   });
 
+  it('wraps ordinary prose table cells at word boundaries', () => {
+    const md = '| Words |\n|---|\n| alpha beta gamma delta |';
+    const cells = renderPlain(md, { width: 16 })
+      .split('\n')
+      .filter((line) => line.startsWith('│'))
+      .map((line) => line.split('│')[1]?.trim());
+
+    expect(cells).toContain('alpha beta');
+    expect(cells).toContain('gamma delta');
+  });
+
+  it('preserves long unbroken LaTeX cells in width-constrained tables', () => {
+    const heading = '$\\operatorname{eig}(\\rho_{\\mathcal{A}_\\gamma}^{T_B})$';
+    const spectrum = '$\\{-\\tfrac12,\\tfrac12,\\tfrac12,\\tfrac12\\}$';
+    const fullwidth = '量'.repeat(20);
+    const md = [
+      `| $\\gamma$ | $\\operatorname{eig}(\\rho_{\\mathcal A_\\gamma})$ | ${heading} |`,
+      '|---|---|---|',
+      `| $0$ | $\\{0,0,0,1\\}$ | ${spectrum} |`,
+      `| $1$ | channel | ${fullwidth} |`,
+    ].join('\n');
+    const rendered = renderAnsiMarkdown(md, {
+      width: 100,
+      colorEnabled: true,
+    });
+    const lines = plainLinesWithinWidth(rendered, 100);
+    const thirdColumn = lines
+      .filter((line) => line.startsWith('│'))
+      .map((line) => line.split('│')[3] ?? '')
+      .join('')
+      .replaceAll(/\s/gu, '');
+
+    expect(thirdColumn).toContain(heading.replaceAll(/\s/gu, ''));
+    expect(thirdColumn).toContain(spectrum);
+    expect(thirdColumn).toContain(fullwidth);
+    expect(lines.join('\n')).not.toContain('…');
+    expect(
+      rendered.replaceAll(new RegExp(`${ESC}\\[[0-9;]*m`, 'gu'), ''),
+    ).not.toContain(ESC);
+  });
+
   it('sizes a small table to its content instead of stretching to full width', () => {
     const md = '| n | digits |\n|---|---|\n| 447 | 993.3 |';
     const plain = renderPlain(md, { width: 80 });

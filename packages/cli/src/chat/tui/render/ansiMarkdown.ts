@@ -139,6 +139,22 @@ function tableColWidths(
   return widths;
 }
 
+// cli-table3 truncates a word that is wider than its cell, replacing the
+// omitted suffix with an ellipsis. Pre-wrap only affected cells with TeXRA's
+// ANSI- and display-width-aware wrapper; ordinary cells retain cli-table3's
+// word-boundary wrapping.
+function tableCell(content: string, colWidth: number | undefined): string {
+  if (colWidth !== undefined) {
+    const contentWidth = colWidth - TABLE_CELL_PADDING;
+    if (
+      content.split(/\s/u).some((word) => textDisplayWidth(word) > contentWidth)
+    ) {
+      return wrapAnsiToWidth(content, contentWidth);
+    }
+  }
+  return content;
+}
+
 // Lay out a parsed markdown table through cli-table3 (borders, per-cell word
 // wrap, column widths) rather than hand-rolling alignment math.
 function renderAnsiTable(
@@ -149,16 +165,22 @@ function renderAnsiTable(
   style: AnsiMarkdownStyle,
 ): string {
   const numCols = Math.max(head.length, ...rows.map((row) => row.length), 1);
+  const colWidths = tableColWidths(head, rows, numCols, width);
+  const styledHead = head
+    .map(style.bold)
+    .map((cell, col) => tableCell(cell, colWidths?.[col]));
   const table = new Table({
-    head: head.map(style.bold),
-    colWidths: tableColWidths(head, rows, numCols, width),
+    head: styledHead,
+    colWidths,
     colAligns: Array.from({ length: numCols }, (_, i) => aligns[i] ?? 'left'),
     wordWrap: true,
     // No cli-table3 colorizing — cell content already carries its own ANSI and
     // the border stays the terminal's default foreground.
     style: { head: [], border: [] },
   });
-  for (const row of rows) table.push([...row]);
+  for (const row of rows) {
+    table.push(row.map((cell, col) => tableCell(cell, colWidths?.[col])));
+  }
   return table.toString();
 }
 
