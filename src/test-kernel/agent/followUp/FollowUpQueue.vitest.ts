@@ -265,6 +265,22 @@ describe('ToolUseFollowUpQueue ownership', () => {
     ).toEqual({ kind: 'unavailable' });
   });
 
+  it('rebinds a provisional recovery queue before the resumed flow borrows it', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:recovery-before-resume');
+    const recovery = queues.claimRecovery(id, true)!;
+    queues.submit(id, { text: 'continue' }, 'live_owner');
+
+    expect(
+      queues.externallyOwnedQueue(id, 'persisted-generation'),
+    ).toBeDefined();
+    expect(recovery.generationId).toBe('persisted-generation');
+    expect(queues.currentGenerationId(id)).toBe('persisted-generation');
+    expect(queues.drainItems(recovery).map((item) => item.text)).toEqual([
+      'continue',
+    ]);
+  });
+
   it('deletion invalidates a live generation and rejects late input', () => {
     const queues = new ToolUseFollowUpQueue();
     const id = stream('stream:deleted');

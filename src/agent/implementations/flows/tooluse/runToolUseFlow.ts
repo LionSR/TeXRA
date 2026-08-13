@@ -182,7 +182,9 @@ export async function runToolUseFlow<C = unknown>(
   const { runScope } = runContext;
   const { streamId, executionId, session: runSession, signal } = runScope;
   const continuationGenerationId =
-    input.resume?.shared.continuationGenerationId ?? randomUUID();
+    runSession.followUps.currentChildGenerationId(streamId) ??
+    input.resume?.shared.continuationGenerationId ??
+    randomUUID();
   // Capture the run's scope at setup. The interrupt closure below fires from
   // the host thread outside the ALS, so it must use this captured session
   // handle instead of asking for an ambient current session later.
