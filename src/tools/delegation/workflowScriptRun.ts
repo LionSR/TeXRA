@@ -360,8 +360,8 @@ export async function runPersistedWorkflowScriptWithProgress(
             ? { childStreamId: event.childStreamId }
             : {}),
         };
-        // Cached replays perform no live attempt, so they carry neither
-        // attempt metadata nor cost.
+        // Cached replays belong to the current projection attempt, but perform
+        // no live agent call and therefore carry no duration or cost metadata.
         if (event.outcome === 'cached') {
           emitCall({ ...identity, status: 'cached' });
           onActivity?.(`Using saved result: ${event.label}`);
