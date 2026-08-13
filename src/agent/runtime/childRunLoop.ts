@@ -711,7 +711,7 @@ export function startChildRunLoop<TTurn>(
     // Revalidate at the state transition itself: setup hooks above may run
     // arbitrary synchronous code after the early fail-fast lease check.
     runWithOwnedExecutionLease(executionId, () => undefined);
-    queueLease = runSession.followUps.claimChildRun(childStreamId);
+    queueLease = runSession.followUps.claimChildRun(childStreamId, executionId);
     if (!queueLease) {
       throw new Error(
         `Follow-up continuation already has an owner for child ${childStreamId}.`,
