@@ -188,7 +188,7 @@ const SCENARIOS = [
       'live-workflow-validation running',
       'Proofread (1/1)',
       'correct running',
-      '2 subagents',
+      '2 agents',
     ],
   },
   {
@@ -224,7 +224,7 @@ const SCENARIOS = [
     },
     bootExpect: 'Esc back',
     keys: ['must not reach bash', '\r'],
-    expect: ['1 running session', 'Esc back'],
+    expect: ['1 active', 'Esc back'],
     unexpect: [
       'must not reach bash',
       'Harness received: must not reach bash',
@@ -423,18 +423,18 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'root-print-full-tool-output',
+    name: 'root-transcript-reader-full-tool-output',
     cols: 80,
     env: { HARNESS_ENTRIES: '0', HARNESS_LONG_TOOL_OUTPUT: '1' },
     keys: [DC4],
     frame: 'scrollback',
     expect: [
-      '[Full output: main]',
+      'Transcript: main',
       'tool-output-line-10 hidden-middle',
       'wide-column-F',
       'tool-output-line-18',
     ],
-    unexpect: ['PgUp/PgDn page', 'Esc close'],
+    expectPatterns: [/PgUp\/PgDn page.*Esc close/],
   },
   {
     name: 'orchestrate-launcher',
@@ -826,7 +826,7 @@ const SCENARIOS = [
       'Show signed-in accounts and active',
       '/models',
       'Enable or disable models in pickers',
-      '… 13 more',
+      '… 14 more',
     ],
     unexpect: [
       '/ap  Switch',
@@ -1161,7 +1161,7 @@ const SCENARIOS = [
       'ChatGPT preference:',
       'Kimi Code preference:',
       'Otherwise:',
-      'TeXRA:',
+      'Researcher Access:',
       'Your own API keys',
       'Included access',
     ],
@@ -1400,9 +1400,8 @@ const SCENARIOS = [
     expect: [
       '/api',
       'Your own API keys',
-      'Included access',
       '↑/↓ navigate',
-      '1-5/Enter select',
+      '1-6/Enter select',
       'Esc close',
     ],
     unexpect: ['ServerSideKeyService not initialized'],
@@ -1412,7 +1411,7 @@ const SCENARIOS = [
     rows: 12,
     cols: 80,
     env: { HARNESS_ENTRIES: '4' },
-    keys: ['/api', '\r', '41'],
+    keys: ['/api', '\r', '51'],
     frame: 'viewport',
     expect: ['API fallback set to included.'],
     unexpect: ['ServerSideKeyService not initialized'],
@@ -1557,7 +1556,7 @@ const SCENARIOS = [
       'Sign out of one account or all accounts',
       '/approval',
       'Switch approval policy',
-      '… 9 more',
+      '… 10 more',
       'Esc close',
     ],
   },
@@ -2472,7 +2471,7 @@ const SCENARIOS = [
       'leanSolver sub-workflow',
       // Right-aligned metadata column: generated tokens for a child with usage.
       '↓40k',
-      '3 sub',
+      '3 agents',
       'Tab input',
     ],
     unexpect: ['Option-p tasks', 'Option-s subagents'],
@@ -2505,21 +2504,21 @@ const SCENARIOS = [
     // Steps: A, S(running), R_P+, E_P+.
     checkpoints: [
       {
-        unexpect: ['Tab sessions', '1 sub', 'orderChecker'],
+        unexpect: ['Tab sessions', '1 agent', 'orderChecker'],
       },
       {
-        unexpect: ['Tab sessions', '1 sub', 'orderChecker'],
+        unexpect: ['Tab sessions', '1 agent', 'orderChecker'],
       },
       {
-        expect: ['Tab sessions', '1 sub'],
+        expect: ['Tab sessions', '1 agent'],
         unexpect: ['orderChecker'],
       },
       {
-        expect: ['Tab sessions', '1 sub'],
+        expect: ['Tab sessions', '1 agent'],
         unexpect: ['orderChecker'],
       },
     ],
-    expect: ['1 sub', 'Tab sessions'],
+    expect: ['1 agent', 'Tab sessions'],
     unexpect: ['orderChecker'],
   },
   {
@@ -2536,23 +2535,23 @@ const SCENARIOS = [
       {
         // Active via the roster's retained-parent fallback, before the
         // child's own StreamSlice exists — not yet focusable.
-        expect: ['1 sub'],
+        expect: ['1 agent'],
         unexpect: ['Tab sessions', 'orderChecker'],
       },
       {
-        expect: ['Tab sessions', '1 sub'],
+        expect: ['Tab sessions', '1 agent'],
         unexpect: ['orderChecker'],
       },
       {
-        expect: ['Tab sessions', '1 sub'],
+        expect: ['Tab sessions', '1 agent'],
         unexpect: ['orderChecker'],
       },
       {
-        expect: ['Tab sessions', '1 sub'],
+        expect: ['Tab sessions', '1 agent'],
         unexpect: ['orderChecker'],
       },
     ],
-    expect: ['1 sub', 'Tab sessions'],
+    expect: ['1 agent', 'Tab sessions'],
     unexpect: ['orderChecker'],
   },
   {
@@ -2571,7 +2570,7 @@ const SCENARIOS = [
         expect: ['◆'],
         unexpect: [
           'Tab sessions',
-          '1 sub',
+          '1 agent',
           'orderChecker',
           'harness-child-eve',
         ],
@@ -2580,18 +2579,18 @@ const SCENARIOS = [
         // Attachment creates the slice and makes the existing edge focusable;
         // the running marker still waits for the next status fact.
         expect: ['Tab sessions'],
-        unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
+        unexpect: ['1 agent', 'orderChecker', 'harness-child-eve'],
       },
       {
         expect: ['Tab sessions'],
-        unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
+        unexpect: ['1 agent', 'orderChecker', 'harness-child-eve'],
       },
       {
-        expect: ['Tab sessions', '1 sub'],
+        expect: ['Tab sessions', '1 agent'],
         unexpect: ['orderChecker'],
       },
     ],
-    expect: ['1 sub', 'Tab sessions'],
+    expect: ['1 agent', 'Tab sessions'],
     unexpect: ['orderChecker'],
   },
   {
@@ -2608,7 +2607,7 @@ const SCENARIOS = [
       {
         unexpect: [
           'Tab sessions',
-          '1 sub',
+          '1 agent',
           'orderChecker',
           'harness-child-eve',
         ],
@@ -2618,21 +2617,21 @@ const SCENARIOS = [
         // registered but still absent from the root's session list.
         unexpect: [
           'Tab sessions',
-          '1 sub',
+          '1 agent',
           'orderChecker',
           'harness-child-eve',
         ],
       },
       {
         expect: ['Tab sessions'],
-        unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
+        unexpect: ['1 agent', 'orderChecker', 'harness-child-eve'],
       },
       {
-        expect: ['Tab sessions', '1 sub'],
+        expect: ['Tab sessions', '1 agent'],
         unexpect: ['orderChecker'],
       },
     ],
-    expect: ['1 sub', 'Tab sessions'],
+    expect: ['1 agent', 'Tab sessions'],
     unexpect: ['orderChecker'],
   },
   // The remaining four orderings correct old ambiguous transients (promotion,
@@ -2649,21 +2648,21 @@ const SCENARIOS = [
     // Steps: A, S(running), R_P+, E_P+, E0 (promote to top-level), R_P+ (late,
     // stale roster from the former parent).
     checkpoints: [
-      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
-      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
-      { expect: ['Tab sessions', '1 sub'], unexpect: ['orderChecker'] },
-      { expect: ['Tab sessions', '1 sub'], unexpect: ['orderChecker'] },
+      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
+      { expect: ['Tab sessions', '1 agent'], unexpect: ['orderChecker'] },
+      { expect: ['Tab sessions', '1 agent'], unexpect: ['orderChecker'] },
       {
         // Promoted to top-level: no longer active under root. The historical
         // relationship still contributes to the retained subagent count, but
         // the unified root session list omits the unrelated row.
-        expect: ['1 sub', 'Tab sessions'],
+        expect: ['1 agent', 'Tab sessions'],
         unexpect: ['orderChecker'],
       },
       {
         // A stale roster resend from the former parent must not resurrect
         // the edge or active membership; only retained history remains.
-        expect: ['1 sub', 'Tab sessions'],
+        expect: ['1 agent', 'Tab sessions'],
         unexpect: ['orderChecker'],
       },
     ],
@@ -2682,26 +2681,26 @@ const SCENARIOS = [
     // (root), R_P+ (root), R_other+ (late, stale — from the child's former,
     // never-displayed parent).
     checkpoints: [
-      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
-      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
       // Facts scoped to the never-displayed former parent must not leak into
       // root's own view at any point.
-      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
-      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
-      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
-      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
       {
         expect: ['Tab sessions'],
-        unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
+        unexpect: ['1 agent', 'orderChecker', 'harness-child-eve'],
       },
       {
-        expect: ['Tab sessions', '1 sub'],
+        expect: ['Tab sessions', '1 agent'],
         unexpect: ['orderChecker'],
       },
       {
         // A late, stale roster from the child's former parent must not erase
         // active membership under the new (root) parent.
-        expect: ['Tab sessions', '1 sub'],
+        expect: ['Tab sessions', '1 agent'],
         unexpect: ['orderChecker'],
       },
     ],
@@ -2722,19 +2721,19 @@ const SCENARIOS = [
     // that late facts naming a removed parent don't resurrect it anywhere or
     // wedge the TUI.
     checkpoints: [
-      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
-      { unexpect: ['1 sub', 'orderChecker'] },
-      { unexpect: ['1 sub', 'orderChecker'] },
-      { unexpect: ['1 sub', 'orderChecker'] },
-      { unexpect: ['1 sub', 'orderChecker'] },
-      { unexpect: ['1 sub', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
+      { unexpect: ['1 agent', 'orderChecker'] },
+      { unexpect: ['1 agent', 'orderChecker'] },
+      { unexpect: ['1 agent', 'orderChecker'] },
+      { unexpect: ['1 agent', 'orderChecker'] },
+      { unexpect: ['1 agent', 'orderChecker'] },
     ],
     // Prove the TUI is still interactive after the removal + late facts:
     // nothing under the removed parent is reachable from root. Opening and
     // confirming the root row must leave the frame and exit path intact.
     keys: ['\t', DOWN, '\r'],
     expect: ['◆ — API keys'],
-    unexpect: ['1 sub', 'orderChecker'],
+    unexpect: ['1 agent', 'orderChecker'],
     expectExit: true,
   },
   {
@@ -2747,33 +2746,33 @@ const SCENARIOS = [
     // Steps: A, S(running), R_P+, E_P+, R_P- (roster omission), S(terminal),
     // X(child), R_P+ (late), E_P+ (late), A (late), late resume attempt.
     checkpoints: [
-      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
-      { unexpect: ['Tab sessions', '1 sub', 'orderChecker'] },
-      { expect: ['Tab sessions', '1 sub'], unexpect: ['orderChecker'] },
-      { expect: ['Tab sessions', '1 sub'], unexpect: ['orderChecker'] },
+      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
+      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
+      { expect: ['Tab sessions', '1 agent'], unexpect: ['orderChecker'] },
+      { expect: ['Tab sessions', '1 agent'], unexpect: ['orderChecker'] },
       {
         // Untrack (roster omission) arrives before the terminal status: the
         // retained/historical relationship survives in the compact count.
-        expect: ['Tab sessions', '1 sub'],
+        expect: ['Tab sessions', '1 agent'],
         unexpect: ['orderChecker'],
       },
       {
-        expect: ['Tab sessions', '1 sub'],
+        expect: ['Tab sessions', '1 agent'],
         unexpect: ['orderChecker'],
       },
       {
         // Removal scrubs every trace, including the retained/historical row.
-        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
+        unexpect: ['orderChecker', '1 agent', 'Tab sessions'],
       },
       {
-        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
+        unexpect: ['orderChecker', '1 agent', 'Tab sessions'],
       },
       {
-        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
+        unexpect: ['orderChecker', '1 agent', 'Tab sessions'],
       },
       {
         // A late re-attachment attempt for the removed id must stay ignored.
-        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
+        unexpect: ['orderChecker', '1 agent', 'Tab sessions'],
       },
       {
         // A late resume-transition attempt is the one status fact that would
@@ -2781,7 +2780,7 @@ const SCENARIOS = [
         // transition is a same-value no-op the status machine drops before
         // it gets there) — it must still stay suppressed by the removal
         // tombstone.
-        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
+        unexpect: ['orderChecker', '1 agent', 'Tab sessions'],
       },
     ],
     // Prove the TUI is still interactive after the removal + late facts:
@@ -2789,7 +2788,7 @@ const SCENARIOS = [
     // the frame and exit path intact.
     keys: ['\t', DOWN, '\r'],
     expect: ['◆ — API keys'],
-    unexpect: ['orderChecker', '1 sub'],
+    unexpect: ['orderChecker', '1 agent'],
     expectExit: true,
   },
   {
@@ -2807,7 +2806,7 @@ const SCENARIOS = [
       'strategy running',
       'leanSolver idle',
       'reviewer error',
-      '3 sub',
+      '3 agents',
       'Tab input',
     ],
     unexpect: ['reviewer running'],
@@ -2825,7 +2824,7 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab sessions',
     keys: ['\t'],
-    expect: ['+3 sessions', '3 sub', 'Tab input', 'Ctrl-C stop'],
+    expect: ['3 agents', '2 active', 'Tab sessions', 'Ctrl-C stop'],
   },
   {
     name: 'subagents-with-todos-narrow-status',
@@ -2840,13 +2839,13 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab sessions',
     keys: ['\t'],
-    expect: ['+3 sessions', 'Enter focus', 'Esc input', 'Ctrl-C stop'],
+    expect: ['3 agents', '2 active', 'Tab sessions', 'Ctrl-C stop'],
     unexpect: ['Option-p tasks'],
   },
   {
     name: 'subagents-narrow-navigation',
     frame: 'viewport',
-    rows: 14,
+    rows: 20,
     cols: 27,
     env: {
       HARNESS_ENTRIES: '4',
@@ -2857,7 +2856,7 @@ const SCENARIOS = [
     // the child count no longer fits; Tab then expands and focuses the list.
     bootExpect: 'Tab sessions',
     keys: ['\t'],
-    expect: ['+3 sessions'],
+    expect: ['Choosing a session', 'strategy runni'],
     expectCollapsed: ['Choosing a session'],
     unexpect: ['signal read during notification phase', 'ERROR'],
   },
@@ -2911,21 +2910,6 @@ const SCENARIOS = [
       'signal read during notification phase',
       'ERROR',
     ],
-  },
-  {
-    name: 'subagent-list-resize-selection',
-    frame: 'viewport',
-    cols: 120,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN],
-    resizes: [{ cols: 44, rows: 7 }],
-    expect: ['leanSolver…', '+3 sessions'],
-    maxOccurrences: [{ text: 'leanSolver idle', max: 1 }],
   },
   {
     name: 'subagent-list-remembers-selection',
@@ -2990,7 +2974,7 @@ const SCENARIOS = [
     name: 'subagent-focused-bounded-live-tail',
     frame: 'scrollback',
     cols: 120,
-    rows: 14,
+    rows: 24,
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -2999,6 +2983,7 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, '\r'],
+    resizes: [{ cols: 120, rows: 14 }],
     expect: ['strategy detail line 15', 'strategy detail line 18'],
     unexpect: [
       'strategy detail line 01',
@@ -3022,7 +3007,7 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, '\r', '\t'],
-    expect: ['1 subagent', 'localChecker running'],
+    expect: ['1 agent', 'localChecker running'],
     unexpect: [
       'leanSolver',
       'reviewer',
@@ -3031,10 +3016,10 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'subagent-print-full-history',
-    frame: 'scrollback',
+    name: 'subagent-transcript-reader-full-history',
+    frame: 'viewport',
     cols: 120,
-    rows: 14,
+    rows: 30,
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -3042,15 +3027,15 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, 'v'],
+    keys: ['\t', DOWN, DOWN, DOWN, '\r', DC4],
     expect: [
-      '[Full output: strategy]',
-      'Please handle the harness-child-strategy sub-workflow.',
+      'Transcript: strategy',
       'strategy detail line 01',
-    ],
-    unexpect: [
       'PgUp/PgDn page',
       'Esc close',
+    ],
+    unexpect: [
+      'entry-1 chat history line',
       'signal read during notification phase',
       'ERROR',
     ],
@@ -3079,7 +3064,7 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'subagent-list-print-keeps-selection',
+    name: 'subagent-transcript-reader-return-root',
     frame: 'viewport',
     cols: 120,
     env: {
@@ -3088,52 +3073,16 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, 'v'],
-    expect: [
-      '›   ● strategy running',
-      'Choosing a session',
-      'v full output',
-      'Esc input',
-    ],
-    unexpect: [
-      'Task details',
-      'signal read during notification phase',
-      'ERROR',
-    ],
-  },
-  {
-    name: 'subagent-focus-return-root-scrollback-deduped',
-    frame: 'scrollback',
-    cols: 120,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, 'v', '\r', '\t', UP, UP, UP, '\r'],
+    keys: ['\t', DOWN, DOWN, DOWN, '\r', DC4, ESC, '\t', UP, UP, UP, '\r'],
     expect: [
       'entry-1 chat history line',
       'entry-4 chat history line',
-      '[Full output: strategy]',
-      'strategy is checking the harness-child-strategy details',
-      '3 subagents',
+      '3 agents',
       'Tab sessions',
     ],
     maxOccurrences: [
       { text: 'entry-1 chat history line', max: 1 },
       { text: 'entry-4 chat history line', max: 1 },
-      { text: '[Full output: strategy]', max: 1 },
-    ],
-    ordered: [
-      {
-        before: 'assistant reply 3 - confirming receipt of entry 3',
-        after: '[Full output: strategy]',
-      },
-      {
-        before: '[Full output: strategy]',
-        after: 'entry-4 chat history line',
-      },
     ],
   },
   {
@@ -3368,15 +3317,15 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: [{ input: ESC, delayMs: 700 }, DOWN],
+    keys: [{ input: ESC, delayMs: 700 }, '\t', DOWN],
     frame: 'viewport',
     expect: [
       'Harness focused interrupt requested for harness-stream-1.',
-      '› ✓ ● main stopped',
+      '✓ ● main stopped',
       'strategy running',
       'leanSolver idle',
       'reviewer running',
-      '3 sub',
+      '3 agents',
       'Choosing a session',
     ],
     unexpect: ['Harness interrupt requested.'],
@@ -3396,7 +3345,7 @@ const SCENARIOS = [
       'strategy running',
       'leanSolver idle',
       'reviewer running',
-      '3 subagents',
+      '3 agents',
       'Choosing a session',
       'Ctrl-C stop',
     ],
@@ -3425,7 +3374,7 @@ const SCENARIOS = [
       'root draft after child back',
     ],
     frame: 'viewport',
-    expect: ['root draft after child back', '3 subagents', 'Ctrl-C stop'],
+    expect: ['root draft after child back', '3 agents', 'Ctrl-C stop'],
     unexpect: [
       'Choosing a session',
       'Harness interrupt requested.',
@@ -3445,7 +3394,7 @@ const SCENARIOS = [
     bootExpect: 'Run command?',
     keys: [{ input: ESC, delayMs: 700 }],
     frame: 'viewport',
-    expect: ['3 subagents', 'Tab sessions', 'Ctrl-C stop'],
+    expect: ['3 agents', 'Tab sessions', 'Ctrl-C stop'],
     unexpect: [
       'Run command?',
       'Harness focused interrupt requested',
@@ -3497,7 +3446,7 @@ const SCENARIOS = [
     expect: [
       'Harness interrupt requested.',
       '◆ stopped API keys',
-      '3 subagents',
+      '3 agents',
       'Tab sessions',
       'Ctrl-C exit',
     ],
