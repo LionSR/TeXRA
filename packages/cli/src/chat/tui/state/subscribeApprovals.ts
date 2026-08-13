@@ -38,7 +38,6 @@ import {
 import {
   classifyCliRetryAction,
   isCliApiSwitchableRetry,
-  type CliApprovalDecision,
 } from '@cli/runtime/approval/approvalPrompts';
 import {
   denyExternalInquiryIfNoHumanInput,
@@ -254,7 +253,7 @@ function prepareRetryClient(
 async function decidePresentedApproval<
   K extends 'bash' | 'toolEdit' | 'planApproval' | 'proposal',
   P,
->(kind: K, payload: P): Promise<ApprovalDecision & CliApprovalDecision> {
+>(kind: K, payload: P): Promise<ApprovalDecision> {
   try {
     return await enqueueTuiApproval({ kind, payload } as Extract<
       ApprovalPayload,
