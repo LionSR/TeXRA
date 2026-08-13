@@ -56,8 +56,11 @@ jobs:
           files="$(git diff --name-only "$base...$head")"
           echo "Changed files in this PR:"
           printf '%s\n' "$files"
-          # A file counts as "code" unless it lives under docs/ or is a *.md file.
-          if printf '%s\n' "$files" | grep -vE '^docs/|\.md$' | grep -q .; then
+          # A file counts as "code" unless it lives under docs/ (outside
+          # docs/supabase/, whose remote-agents config and generated SQL must
+          # still pass the drift check) or is a *.md file.
+          if printf '%s\n' "$files" | grep -vE '\.md$' | grep -vE '^docs/' | grep -q . \
+            || printf '%s\n' "$files" | grep -qE '^docs/supabase/'; then
             echo "Non-docs changes detected -> full validation."
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
