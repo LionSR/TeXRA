@@ -15,9 +15,9 @@ describe('delegated-work approval copy', () => {
         'Press y to approve only this task. Press a to approve delegated tasks, file edits, and commands for this chat. Other prompts still ask.',
       progressViewAction: 'Approve agent work for this run',
       progressViewExplanation:
-        'Approves this request, queued and later agent tasks requested by this agent, and queued and later file edits and shell commands in this run. Plans, retries, external inquiries, and user questions still require a decision.',
+        'Approves this request, queued and later agent tasks, and queued and later file edits and shell commands in this run. Plans, retries, external inquiries, and user questions still require a decision.',
       progressViewToggle:
-        'Auto-approve later agent tasks requested by this agent, plus later file edits and shell commands in this run',
+        'Auto-approve later agent tasks, file edits, and shell commands in this run',
       progressViewEditAction:
         'Approve and later auto-approve file edits in this run',
       progressViewCommandAction:
