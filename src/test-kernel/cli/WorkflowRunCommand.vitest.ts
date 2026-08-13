@@ -769,7 +769,7 @@ describe('CLI workflow run command', () => {
     mockWorkflowExecution(execution, true);
     const stableWorkspace = path.join(path.sep, 'tmp', 'stable-workspace');
     const context = cliContext({ cwd: stableWorkspace });
-    const cwdSpy = vi.spyOn(process, 'cwd').mockImplementationOnce(() => {
+    const cwdSpy = vi.spyOn(process, 'cwd').mockImplementation(() => {
       throw new Error('launch directory was deleted');
     });
     const { executeCliWorkflowConfig } = await import('@cli/commands/workflow');
@@ -784,9 +784,9 @@ describe('CLI workflow run command', () => {
       context,
       { categoryMismatchMessage: 'unexpected category' },
     );
-    cwdSpy.mockRestore();
-
     await expect(result).resolves.toBe(CliExitCode.Interrupted);
+    expect(cwdSpy).toHaveBeenCalledOnce();
+    cwdSpy.mockRestore();
     expect(mocks.writeTextStdout).toHaveBeenCalledExactlyOnceWith(
       `Resume this workflow with: ${formatResumeCommand(
         context.commandName,

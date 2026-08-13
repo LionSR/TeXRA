@@ -35,6 +35,7 @@ vi.mock('@agent/core/flows/ResponseCycleFlow', () => ({
 }));
 
 import { ResponseCycleNode } from '@agent/implementations/flows/reflection/nodes/ResponseCycleNode';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
 import type { AgentFileLocation } from '@shared/schemas';
 import { reflectionFlowShared, testRunScope } from './progressTestUtils';
@@ -123,6 +124,21 @@ describe('ResponseCycleNode outcome classification', () => {
     expect(result).toMatchObject({
       outcome: 'completed',
       endTurn: true,
+    });
+  });
+
+  it('keeps the response cursor resumable when interruption cancels the cycle', async () => {
+    flowState.shouldStop = true;
+    const { node, shared, prep, result } = await runNode({
+      signal: AbortSignal.abort(),
+    });
+
+    await expect(node.post(shared, prep, result)).resolves.toBe(
+      FlowTransition.WAITING,
+    );
+    expect(shared).toMatchObject({
+      continueRounds: false,
+      lastError: undefined,
     });
   });
 

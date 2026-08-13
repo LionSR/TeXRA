@@ -355,6 +355,17 @@ export async function executeCliRequest(
       // run's own terminal verdict with CANCELLED.
       shutdownInterrupted =
         !runLifecycleStarted || interruptionAccepted || shutdownInterrupted;
+      let resumableCheckpointPresent = false;
+      if (shutdownInterrupted && ownedExecutionId) {
+        try {
+          resumableCheckpointPresent = (
+            await deriveResumability(ownedExecutionId)
+          ).resumable;
+        } catch {
+          // The ordinary bounded shutdown path below remains authoritative
+          // when checkpoint inspection itself is unavailable.
+        }
+      }
       // Earlier shutdown handlers interrupt the live agent sessions. Wait for
       // runAgent to finish unwinding before the final drain releases ownership,
       // so no transcript or checkpoint writer can race the lease release.
@@ -363,6 +374,10 @@ export async function executeCliRequest(
       // be possible. Once durable resumability and lease availability have
       // been established, however, keep shutdown alive until the promised
       // recovery notice has been flushed.
+      if (resumableCheckpointPresent) {
+        await shutdownFinalizationDone;
+        return;
+      }
       const grace = new AbortController();
       const graceExpired = sleep(CLI_RUN_SHUTDOWN_GRACE_MS, undefined, {
         signal: grace.signal,
