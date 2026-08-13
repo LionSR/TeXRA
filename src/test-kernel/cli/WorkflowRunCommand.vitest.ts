@@ -20,7 +20,6 @@ const mocks = vi.hoisted(() => {
     executeCliConfig: vi.fn(),
     emitCliResult: vi.fn(),
     finalizeExecution: vi.fn(),
-    isMaterializedStdinWorkflowInputPath: vi.fn(() => false),
     withExpandedRunInputs: vi.fn(),
     initLocalCliPlatform: vi.fn(),
     resolveCliLaunchAgent: vi.fn(),
@@ -100,8 +99,7 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
     );
     return specs.has('-') && specs.size > 1;
   }),
-  isMaterializedStdinWorkflowInputPath:
-    mocks.isMaterializedStdinWorkflowInputPath,
+  isMaterializedStdinWorkflowInputPath: vi.fn(() => false),
   STDIN_WORKFLOW_INPUT_BASENAME: 'stdin.tex',
 }));
 
@@ -289,6 +287,7 @@ describe('CLI workflow run command', () => {
         run: (inputs: {
           readonly inputFiles: string[];
           readonly contextFiles: string[];
+          readonly hasMaterializedStdinInput?: boolean;
         }) => Promise<unknown>,
       ) => run({ inputFiles: ['paper.tex'], contextFiles: [] }),
     );
@@ -737,9 +736,12 @@ describe('CLI workflow run command', () => {
     const stdinPath = path.join(root, 'texra-stdin-123-abc123', 'stdin.tex');
     mocks.withExpandedRunInputs.mockImplementationOnce(
       async (_inputs, _contexts, _cwd, _options, run) =>
-        run({ inputFiles: [stdinPath], contextFiles: [] }),
+        run({
+          inputFiles: [stdinPath],
+          contextFiles: [],
+          hasMaterializedStdinInput: true,
+        }),
     );
-    mocks.isMaterializedStdinWorkflowInputPath.mockReturnValueOnce(true);
     mockWorkflowExecution(
       workflowExecution('exec-stdin-interrupted', {
         outcome: RUN_OUTCOME.CANCELLED,
@@ -756,6 +758,57 @@ describe('CLI workflow run command', () => {
     ).toBeUndefined();
     expect(mocks.writeTextStdout).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).not.toHaveBeenCalled();
+  });
+
+  it('keeps recovery for a durable file whose name resembles stdin materialization', async () => {
+    const lookalike = path.join(
+      path.sep,
+      'tmp',
+      'workspace',
+      'texra-stdin-123-abc123',
+      'stdin.tex',
+    );
+    mocks.withExpandedRunInputs.mockImplementationOnce(
+      async (_inputs, _contexts, _cwd, _options, run) =>
+        run({
+          inputFiles: [lookalike],
+          contextFiles: [],
+          hasMaterializedStdinInput: false,
+        }),
+    );
+    mockWorkflowExecution(
+      workflowExecution('exec-stdin-lookalike', {
+        outcome: RUN_OUTCOME.CANCELLED,
+      }),
+      true,
+    );
+
+    await expect(runWorkflow()).resolves.toBe(CliExitCode.Interrupted);
+
+    expect(
+      mocks.executeCliConfig.mock.calls[0]?.[2].onInterruptedExecutionFinalized,
+    ).toBeTypeOf('function');
+    expect(mocks.writeTextStdout).toHaveBeenCalledOnce();
+  });
+
+  it('rejects recovery advertising for a checkpoint carrying a flow failure', async () => {
+    await runWorkflow();
+    const canAdvertise =
+      mocks.executeCliConfig.mock.calls[0]?.[2]
+        .canAdvertiseInterruptedExecution;
+
+    expect(
+      canAdvertise?.({
+        resumable: true,
+        cause: 'interrupted-with-flow',
+        flowRecord: {
+          flowName: 'texra',
+          shared: { lastError: { message: 'provider failed' } },
+          createdAt: '2026-08-13T00:00:00.000Z',
+          nodes: [],
+        },
+      }),
+    ).toBe(false);
   });
 
   it('prints the durable shutdown hint once with the persisted workspace', async () => {

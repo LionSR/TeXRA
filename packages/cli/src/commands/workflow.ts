@@ -44,7 +44,6 @@ import {
 import { runOutcomeExitCode } from '../runtime/terminalStatus';
 import {
   hasMixedStdinWorkflowInputSpecs,
-  isMaterializedStdinWorkflowInputPath,
   withExpandedRunInputs,
 } from '../runtime/workflowInputs';
 import {
@@ -118,7 +117,7 @@ export async function runWorkflowAgent(
     init.contextFiles,
     context.cwd,
     { readStdinText: readCliStdinText },
-    async ({ inputFiles, contextFiles }) => {
+    async ({ inputFiles, contextFiles, hasMaterializedStdinInput }) => {
       if (init.output && inputFiles.length > 1) {
         throw new CliUsageError(MULTI_INPUT_OUTPUT_MESSAGE);
       }
@@ -155,6 +154,7 @@ export async function runWorkflowAgent(
         output: init.output,
         outputDir: init.outputDir,
         expectedOutputFiles,
+        recoveryInputIsDurable: hasMaterializedStdinInput !== true,
       });
     },
   );
@@ -177,6 +177,7 @@ export async function executeCliWorkflowConfig(
     readonly output?: string;
     readonly outputDir?: string;
     readonly expectedOutputFiles?: readonly string[];
+    readonly recoveryInputIsDurable?: boolean;
     readonly executionId?: ExecutionId;
     readonly modelHandlerCompatibilityKey?: CliConfigExecuteOptions['modelHandlerCompatibilityKey'];
   },
@@ -185,10 +186,7 @@ export async function executeCliWorkflowConfig(
   let workflowOutputError: unknown;
   let resumeHintWritten = false;
   const recoveryProcessCwd = tryReadCliCwd();
-  const recoveryInputIsDurable = [
-    ...(config.inputFiles ?? []),
-    ...(config.contextFiles ?? []),
-  ].every((inputPath) => !isMaterializedStdinWorkflowInputPath(inputPath));
+  const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
   const writeResumeHint = (
     executionId: ExecutionId,
     waitForWrite = false,
@@ -213,6 +211,14 @@ export async function executeCliWorkflowConfig(
     onInterruptedExecutionFinalized: recoveryInputIsDurable
       ? (executionId) => writeResumeHint(executionId, true)
       : undefined,
+    canAdvertiseInterruptedExecution: ({ flowRecord }) => {
+      const shared = flowRecord.shared;
+      const lastError =
+        typeof shared === 'object' && shared !== null
+          ? (shared as Record<string, unknown>).lastError
+          : undefined;
+      return lastError == null;
+    },
     expectedCategory: AgentCategory.Workflow,
     categoryMismatchMessage: options.categoryMismatchMessage,
     openWorkflowOutput: async (result) => {

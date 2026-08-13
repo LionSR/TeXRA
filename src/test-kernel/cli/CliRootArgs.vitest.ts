@@ -897,27 +897,30 @@ describe('CLI root argument routing', () => {
     ).toBe('/tmp/elsewhere/paper.polished.tex');
   });
 
-  it('resolves relative CLI output targets against the stored working directory', () => {
-    expect(
+  it('rejects relative stored CLI output targets', () => {
+    expect(() =>
       resumeWorkflowOutputFile(
         storedConfig({
           cliOutputFile: 'out/paper.polished.tex',
           outputFiles: ['paper.polished.tex'],
         }),
       ),
-    ).toBe(path.join('/tmp/project', 'out/paper.polished.tex'));
+    ).toThrow(
+      'Stored workflow output file is not absolute: out/paper.polished.tex',
+    );
   });
 
   it('preserves whitespace in stored workflow output and workspace paths', () => {
     const workingDirectory = path.join(path.sep, 'tmp', 'project ');
+    const outputFile = path.join(workingDirectory, ' output.tex ');
     expect(
       resumeWorkflowOutputFile(
         storedConfig({
           workingDirectory,
-          cliOutputFile: ' output.tex ',
+          cliOutputFile: outputFile,
         }),
       ),
-    ).toBe(path.join(workingDirectory, ' output.tex '));
+    ).toBe(outputFile);
   });
 
   it('keeps legacy resume output paths relative when no stored working directory exists', () => {

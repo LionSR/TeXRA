@@ -6,7 +6,11 @@ import {
   trackTerminalResultPresentation,
   type RunAgentOptions,
 } from '@agent/runtime';
-import { deriveResumability, inspectExecutionLease } from '@agent/storage';
+import {
+  deriveResumability,
+  inspectExecutionLease,
+  type ResumabilityDecision,
+} from '@agent/storage';
 import {
   ExecutionLeaseLostError,
   type OwnedExecutionLeaseScope,
@@ -63,6 +67,10 @@ interface CliExecuteOptions {
   readonly onInterruptedExecutionFinalized?: (
     executionId: ExecutionId,
   ) => void | Promise<void>;
+  /** Refine generic flow resumability for the launched workflow's state. */
+  readonly canAdvertiseInterruptedExecution?: (
+    resumability: Extract<ResumabilityDecision, { resumable: true }>,
+  ) => boolean;
   /** Wrap the run (e.g. multi-agent preset visibility) without leaking the
    *  runtime-host lifecycle into the caller. */
   readonly wrap?: (
@@ -310,9 +318,13 @@ export async function executeCliRequest(
         const resumability = terminalStatusPersisted
           ? await deriveResumability(executionId)
           : undefined;
+        const canAdvertiseRecovery =
+          resumability?.resumable === true &&
+          options.onInterruptedExecutionFinalized !== undefined &&
+          (options.canAdvertiseInterruptedExecution?.(resumability) ?? true);
         let lease:
           Awaited<ReturnType<typeof inspectExecutionLease>> | undefined;
-        if (resumability?.resumable) {
+        if (canAdvertiseRecovery) {
           try {
             lease = await inspectExecutionLease(executionId);
           } catch {
@@ -322,11 +334,11 @@ export async function executeCliRequest(
           }
         }
         if (
-          resumability?.resumable &&
+          canAdvertiseRecovery &&
           (lease?.status === 'missing' || lease?.status === 'stale')
         ) {
           settleRecoveryNoticeStarted();
-          await options.onInterruptedExecutionFinalized?.(executionId);
+          await options.onInterruptedExecutionFinalized(executionId);
         }
         return true;
       } catch (error) {
@@ -355,12 +367,12 @@ export async function executeCliRequest(
       // run's own terminal verdict with CANCELLED.
       shutdownInterrupted =
         !runLifecycleStarted || interruptionAccepted || shutdownInterrupted;
-      let resumableCheckpointPresent = false;
+      let resumableCheckpoint:
+        Extract<ResumabilityDecision, { resumable: true }> | undefined;
       if (shutdownInterrupted && ownedExecutionId) {
         try {
-          resumableCheckpointPresent = (
-            await deriveResumability(ownedExecutionId)
-          ).resumable;
+          const resumability = await deriveResumability(ownedExecutionId);
+          if (resumability.resumable) resumableCheckpoint = resumability;
         } catch {
           // The ordinary bounded shutdown path below remains authoritative
           // when checkpoint inspection itself is unavailable.
@@ -375,7 +387,9 @@ export async function executeCliRequest(
       // been established, however, keep shutdown alive until the promised
       // recovery notice has been flushed.
       if (
-        resumableCheckpointPresent &&
+        resumableCheckpoint &&
+        (options.canAdvertiseInterruptedExecution?.(resumableCheckpoint) ??
+          true) &&
         options.onInterruptedExecutionFinalized
       ) {
         await shutdownFinalizationDone;
