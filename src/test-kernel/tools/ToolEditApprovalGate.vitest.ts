@@ -165,6 +165,25 @@ describe('Tool edit approval gating', () => {
     assert.strictEqual(result.userInstruction, undefined);
   });
 
+  it('preserves an automatic cancellation without a cause', async () => {
+    const tool = new WriteFileTool();
+    const write = stubWorkspaceFile({ exists: true, content: 'base' });
+    testApprovalHandler = async () => ({
+      accepted: false,
+      cause: undefined,
+    });
+
+    const result = await tool.call({
+      path: 'summary.txt',
+      content: 'new content',
+    });
+
+    assert.strictEqual(write.mock.calls.length, 0);
+    assert.match(result.error ?? '', /Tool edit approval cancelled/);
+    assert.doesNotMatch(result.error ?? '', /User rejected/);
+    assert.strictEqual(result.userInstruction, undefined);
+  });
+
   it('write_file skips approval when disabled via config', async () => {
     await installPlatform({ 'texra.toolUse.requireEditApproval': false });
     const tool = new WriteFileTool();
