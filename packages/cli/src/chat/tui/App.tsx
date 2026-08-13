@@ -312,11 +312,7 @@ export function App(props: AppProps): React.JSX.Element {
     () =>
       groupPendingApprovalsByRow(
         pendingSummaries,
-        visibleApprovalRootStreamId(
-          rootStreamId,
-          childListTarget.streamId,
-          workflowDashboard?.root.streamId,
-        ),
+        visibleApprovalRootStreamId(rootStreamId, childListTarget.streamId),
       ),
     [
       childListTarget.streamId,
@@ -331,7 +327,12 @@ export function App(props: AppProps): React.JSX.Element {
       sessionViews.map((session) => childStreamListValue(session.id)),
     [sessionViews, workflowDashboard],
   );
-  const childListAvailable = childListValues.length > 0;
+  const workflowDashboardRootHasApproval =
+    workflowDashboard !== undefined &&
+    (pendingApprovalsForRows.get(workflowDashboard.root.streamId)?.length ??
+      0) > 0;
+  const childListAvailable =
+    childListValues.length > 0 || workflowDashboardRootHasApproval;
   const selectedWorkflowTask =
     selectedChildValue && workflowDashboard
       ? workflowDashboard.taskByValue.get(selectedChildValue)
@@ -404,10 +405,10 @@ export function App(props: AppProps): React.JSX.Element {
   }, []);
   const focusChildList = useCallback(() => {
     const firstChildValue = childListValues.at(0);
-    if (firstChildValue) {
+    if (firstChildValue || workflowDashboardRootHasApproval) {
       dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
     }
-  }, [childListValues]);
+  }, [childListValues, workflowDashboardRootHasApproval]);
   const focusSession = useCallback(
     (streamId: StreamTabId) => {
       if (isWorkflowTaskListValue(selectedChildValue)) {
@@ -808,6 +809,7 @@ export function App(props: AppProps): React.JSX.Element {
           selectedChildValue,
           selectedChildStreamId,
           workflowDashboard,
+          workflowDashboardRootHasApproval,
           streams,
           subagentExecutionLabels,
           activeSubagentExecutionIds,
