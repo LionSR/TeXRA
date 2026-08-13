@@ -65,6 +65,7 @@ function answeredManifest(): ExternalInquiryThreadManifest {
         kind: 'answered',
         turnIndex: 1,
         timestamp: '2026-06-14T08:00:00.000Z',
+        parentGenerationId: 'generation-a',
         question: 'Check the boundary case.',
         questionRelativePath: 'question.md',
         answerRelativePath: 'answer.md',
@@ -103,7 +104,7 @@ describe('external inquiry continuation session routing', () => {
     expect(submitFollowUpMock).toHaveBeenCalledWith(
       STREAM,
       expect.stringContaining('[inquiry] ei_aabbccdd0011 answered.'),
-      { session },
+      { session, expectedGenerationId: 'generation-a' },
     );
   });
 
