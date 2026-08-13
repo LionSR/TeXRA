@@ -180,8 +180,7 @@ export async function submitFollowUp(
   }
   if (
     admission === 'recoverable' &&
-    options.expectedGenerationId !== undefined &&
-    ownerSession.followUps.currentGenerationId(streamId) === undefined
+    options.expectedGenerationId !== undefined
   ) {
     const restored = await restorePersistedGeneration(streamId, ownerSession);
     if (!restored) return { status: 'dropped' };
