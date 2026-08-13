@@ -280,6 +280,14 @@ export function groupPendingApprovalsByRow(
   );
 }
 
+/** Row key that owns stream-less approvals on the currently visible surface. */
+export function visibleApprovalRootStreamId(
+  sessionRootStreamId: StreamTabId | undefined,
+  workflowDashboardRootStreamId: StreamTabId | undefined,
+): StreamTabId | undefined {
+  return workflowDashboardRootStreamId ?? sessionRootStreamId;
+}
+
 // A workflow-script grandchild `agent()` call is the only interactively
 // skip/retry-able row: a NATIVE agent run (no external CLI tool — those
 // children are driven by their own tool and would no-op here) whose parent

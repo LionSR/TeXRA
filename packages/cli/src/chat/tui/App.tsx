@@ -39,6 +39,7 @@ import {
   shouldDeferEscapeInterruptForMetaChord,
   triggerAppCtrlC,
   triggerEscapeInterrupt,
+  visibleApprovalRootStreamId,
   type EscapeInterruptState,
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
@@ -311,7 +312,10 @@ export function App(props: AppProps): React.JSX.Element {
     () =>
       groupPendingApprovalsByRow(
         pendingSummaries,
-        workflowDashboard?.root.streamId ?? rootStreamId,
+        visibleApprovalRootStreamId(
+          rootStreamId,
+          workflowDashboard?.root.streamId,
+        ),
       ),
     [pendingSummaries, rootStreamId, workflowDashboard],
   );
