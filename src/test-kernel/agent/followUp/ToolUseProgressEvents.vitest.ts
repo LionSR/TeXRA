@@ -378,7 +378,7 @@ describe('tool-use progress events', () => {
   });
 });
 
-describe('tool-use round outcome persistence (#8023)', () => {
+describe('tool-use session-stage outcome persistence (#8023)', () => {
   it.each([
     {
       name: 'completed',
@@ -405,7 +405,7 @@ describe('tool-use round outcome persistence (#8023)', () => {
       expectedStatus: RUN_OUTCOME.CANCELLED,
     },
   ])(
-    'persists a $name round with its canonical RunOutcome',
+    'persists a $name outer turn as a structural session stage',
     async ({
       name,
       shouldStop,
@@ -433,7 +433,7 @@ describe('tool-use round outcome persistence (#8023)', () => {
         );
 
         expect(result.outcome).toBe(expectedOutcome);
-        const roundEndStatuses =
+        const sessionStages =
           store
             .get(streamId)
             ?.getRange(0)
@@ -441,13 +441,23 @@ describe('tool-use round outcome persistence (#8023)', () => {
               if (
                 entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
                 isObject(entry.data) &&
-                entry.data.kind === 'round'
+                entry.data.kind === 'session'
               ) {
-                return [entry.data.status];
+                return [{ label: entry.text, status: entry.data.status }];
               }
               return [];
             }) ?? [];
-        expect(roundEndStatuses).toEqual([expectedStatus]);
+        expect(sessionStages).toEqual([
+          { label: 'Tool-use turn', status: expectedStatus },
+        ]);
+        expect(
+          store
+            .get(streamId)
+            ?.getRange(0)
+            .some(
+              (entry) => isObject(entry.data) && entry.data.kind === 'round',
+            ),
+        ).toBe(false);
       } finally {
         recorder.unsubscribe();
       }
