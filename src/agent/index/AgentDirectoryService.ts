@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Local imports
-import { CUSTOM_AGENTS_STORAGE_DIR } from '@platform/defaults/globalStorage';
+import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
 import type { AgentSource } from '@shared/schemas/agent';
 
 import {

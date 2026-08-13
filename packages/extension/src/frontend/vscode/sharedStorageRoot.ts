@@ -16,7 +16,11 @@ import { join } from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import {
+  CUSTOM_AGENTS_STORAGE_DIR,
+  EXTERNAL_INQUIRY_THREADS_DIR,
+  WORKSPACE_STORAGE_LAYOUT,
+} from '@common/storage/storageLayout';
 import * as logger from '@logger/logUtils';
 import type { StorageProvider } from '@platform/interfaces';
 import {
@@ -24,10 +28,6 @@ import {
   mergeLegacyWorkspaceStorageBucket,
   type LegacyDataMigrationLogger,
 } from '@platform/defaults/legacyDataMigration';
-import {
-  CUSTOM_AGENTS_STORAGE_DIR,
-  EXTERNAL_INQUIRY_THREADS_DIR,
-} from '@platform/defaults/globalStorage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 type BucketMigration = (
