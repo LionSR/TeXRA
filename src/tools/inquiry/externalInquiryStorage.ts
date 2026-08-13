@@ -4,8 +4,8 @@ import { z } from 'zod';
 
 import { createChannelTrace } from '@agent/trace';
 import { isFileNotFoundError } from '@common/errors';
+import { EXTERNAL_INQUIRY_THREADS_DIR } from '@common/storage/storageLayout';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import { EXTERNAL_INQUIRY_THREADS_DIR } from '@platform/defaults/globalStorage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
   InquirySessionLinksSchema,
