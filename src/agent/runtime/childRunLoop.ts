@@ -918,6 +918,10 @@ export function startChildRunLoop<TTurn>(
         childStream?.beginTurn();
       }
     } finally {
+      // A retry may reuse this execution ID as soon as its lease is released.
+      // Drain the prior attempt's queued attribution writes first so an old
+      // acceptance record cannot land after the retry's newer turn state.
+      await turnStateWrites.onIdle();
       detachLoopInterrupt?.();
       emitTurnDiagnostic(logger, 'loop.terminated', {
         executionId,
@@ -1024,7 +1028,6 @@ export function startChildRunLoop<TTurn>(
         );
       } finally {
         try {
-          await turnStateWrites.onIdle();
           await releaseExecutionLeaseAfterArtifacts(runSession, executionId);
         } catch (error) {
           logger.warn('Failed to persist final child-run artifacts', {
