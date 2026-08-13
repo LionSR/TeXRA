@@ -131,8 +131,11 @@ describe('ProgressBackend', () => {
     seedHistoryStreams(backend, 20);
 
     backend.webviewUpdater.sendStreamMetadata(
-      backend.state,
-      backend.state.streamStatus.getAllStreamStates(),
+      backend.projections.streamRoster(
+        backend.presentation.activeStream,
+        backend.state.streamStatus.getAllStreamStates(),
+      ),
+      backend.presentation.activeStream,
     );
 
     expect(
@@ -158,7 +161,9 @@ describe('ProgressBackend', () => {
       streamId: 'root',
       agentCategory: AgentCategory.Workflow,
     });
-    await vi.waitFor(() => expect(backend.state.activeStream).toBe('root'));
+    await vi.waitFor(() =>
+      expect(backend.presentation.activeStream).toBe('root'),
+    );
     messages.length = 0;
 
     emitActiveStream(target, {
@@ -172,7 +177,7 @@ describe('ProgressBackend', () => {
         backend.state.streamLogs.has('hidden-approval' as StreamTabId),
       ).toBe(true),
     );
-    expect(backend.state.activeStream).toBe('root');
+    expect(backend.presentation.activeStream).toBe('root');
     expect(messages).toContainEqual(
       expect.objectContaining({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
@@ -191,7 +196,9 @@ describe('ProgressBackend', () => {
       streamId: 'root',
       agentCategory: AgentCategory.ToolUse,
     });
-    await vi.waitFor(() => expect(backend.state.activeStream).toBe('root'));
+    await vi.waitFor(() =>
+      expect(backend.presentation.activeStream).toBe('root'),
+    );
     emitActiveStream(target, {
       streamId: run,
       agentCategory: AgentCategory.Workflow,
@@ -213,7 +220,7 @@ describe('ProgressBackend', () => {
 
     // The parent's viewport reads this row, so the push must reach a stream
     // that is not the active one.
-    expect(backend.state.activeStream).toBe('root');
+    expect(backend.presentation.activeStream).toBe('root');
     await vi.waitFor(() =>
       expect(backend.state.getStreamState(run)).toMatchObject({
         stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
@@ -298,8 +305,11 @@ describe('ProgressBackend', () => {
     messages.length = 0;
 
     backend.webviewUpdater.sendStreamMetadata(
-      backend.state,
-      backend.state.streamStatus.getAllStreamStates(),
+      backend.projections.streamRoster(
+        backend.presentation.activeStream,
+        backend.state.streamStatus.getAllStreamStates(),
+      ),
+      backend.presentation.activeStream,
     );
     const fullSync = fullSyncFrom(messages);
 
@@ -321,9 +331,9 @@ describe('ProgressBackend', () => {
     });
 
     await vi.waitFor(() =>
-      expect(first.backend.state.activeStream).toBe(firstStream),
+      expect(first.backend.presentation.activeStream).toBe(firstStream),
     );
-    expect(second.backend.state.activeStream).not.toBe(firstStream);
+    expect(second.backend.presentation.activeStream).not.toBe(firstStream);
     expect(JSON.stringify(second.messages)).not.toContain(firstStream);
 
     emitActiveStream(second, {
@@ -332,9 +342,9 @@ describe('ProgressBackend', () => {
     });
 
     await vi.waitFor(() =>
-      expect(second.backend.state.activeStream).toBe(secondStream),
+      expect(second.backend.presentation.activeStream).toBe(secondStream),
     );
-    expect(first.backend.state.activeStream).toBe(firstStream);
+    expect(first.backend.presentation.activeStream).toBe(firstStream);
     expect(JSON.stringify(first.messages)).not.toContain(secondStream);
   });
 
@@ -475,10 +485,10 @@ describe('ProgressBackend', () => {
     });
 
     await vi.waitFor(() =>
-      expect(first.backend.state.activeStream).toBe(firstStream),
+      expect(first.backend.presentation.activeStream).toBe(firstStream),
     );
     await vi.waitFor(() =>
-      expect(second.backend.state.activeStream).toBe(secondStream),
+      expect(second.backend.presentation.activeStream).toBe(secondStream),
     );
 
     expect(first.backend.state.streamStatus.get(firstStream)).toBe(
@@ -575,6 +585,9 @@ describe('ProgressBackend', () => {
       streamId,
       agentCategory: AgentCategory.Workflow,
     });
+    await vi.waitFor(() =>
+      expect(backend.presentation.activeStream).toBe(streamId),
+    );
     for (const spy of [
       updateFiles,
       updateMissingOutputs,
@@ -777,7 +790,7 @@ describe('ProgressBackend', () => {
     });
 
     await vi.waitFor(() =>
-      expect(backend.state.activeStream).toBe(parentStreamId),
+      expect(backend.presentation.activeStream).toBe(parentStreamId),
     );
     messages.length = 0;
 
@@ -854,7 +867,7 @@ describe('ProgressBackend', () => {
       agentCategory: AgentCategory.ToolUse,
     });
     backend.state.getOrCreateStreamState('tool-stream', AgentCategory.ToolUse);
-    backend.state.switchActiveStream('tool-stream');
+    backend.presentation.select('tool-stream');
 
     await backend.applyStreamStatus('unknown-stream', STREAM_PHASE.RUNNING);
 
@@ -863,7 +876,7 @@ describe('ProgressBackend', () => {
         message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
         message.streamInfo.name === 'unknown-stream',
     );
-    expect(backend.state.activeStream).toBe('tool-stream');
+    expect(backend.presentation.activeStream).toBe('tool-stream');
     expect(patch).toMatchObject({
       activeStream: undefined,
       streamInfo: {
@@ -957,7 +970,7 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream(focused);
-      backend.state.switchActiveStream(focused);
+      backend.presentation.select(focused);
       backend.state.streamLogs.ensureStream(background);
       backend.state.updateStreamMetadata(background, {
         agentCategory: AgentCategory.ToolUse,
@@ -1018,7 +1031,7 @@ describe('ProgressBackend', () => {
     try {
       await backend.state.snapshots.load([]);
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.switchActiveStream(stream);
+      backend.presentation.select(stream);
       snapshotFacts(backend.state.snapshots).setRunConfig(
         stream,
         toolUseConfig('search', 'deepseekproT'),

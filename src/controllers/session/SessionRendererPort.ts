@@ -1,8 +1,5 @@
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
-import type {
-  ActiveStreamId,
-  StreamBadgeSnapshot,
-} from '@controllers/session/SessionState';
+import type { StreamBadgeSnapshot } from '@controllers/session/SessionState';
 import type {
   ConversationProgress,
   GoalStatus,
@@ -15,6 +12,9 @@ import type {
   TokenUsageStats,
   TodoItem,
 } from '@shared/schemas';
+
+/** A host presentation's focused stream, or no focused stream. */
+export type PresentedStreamId = StreamTabId | '';
 
 /**
  * Host-renderer notifications from {@link SessionFactApplier}.
@@ -32,7 +32,7 @@ export interface SessionRendererPort {
     streamId: StreamTabId,
     options?: {
       streamStates?: Map<StreamTabId, StreamPhaseState>;
-      activeStream?: ActiveStreamId;
+      activeStream?: PresentedStreamId;
     },
   ): void;
 
@@ -44,7 +44,7 @@ export interface SessionRendererPort {
     substate?: StreamSubstate,
   ): void;
 
-  onActiveStreamChanged(streamId: ActiveStreamId): void;
+  onActiveStreamChanged(streamId: PresentedStreamId): void;
 
   onStreamDescriptionChanged(streamId: StreamTabId, description: string): void;
 
@@ -107,7 +107,7 @@ export interface SessionRendererPort {
    * TUI no-ops (transcript projection is separate).
    */
   syncStreamContent(
-    stream: ActiveStreamId,
+    stream: PresentedStreamId,
     options?: { includeActiveState?: boolean },
   ): void;
 }

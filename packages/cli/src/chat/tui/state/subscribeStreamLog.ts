@@ -190,9 +190,8 @@ export function subscribeStreamLog(): () => void {
 
     if (previous && previous !== nextActiveStreamId) {
       trySyncStreamLog(previous);
-      // Focus is a lifecycle boundary: a stream that finished while it was
-      // focused (and so was never released at its status transition) is
-      // released the moment focus moves off it.
+      // Terminal status normally requests eviction immediately. This focus
+      // boundary remains a backstop when that status event was not observed.
       releaseInactiveStreamTranscript(previous);
     }
     if (!nextActiveStreamId || nextActiveStreamId === previous) return;

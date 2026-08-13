@@ -1,6 +1,7 @@
 // Shared imports
 import {
   createStreamState,
+  isToolUseState,
   type AgentCategory,
   type LogMessageData,
   type StreamState,
@@ -70,6 +71,11 @@ export const EMPTY_STREAM_LOGS: StreamLogs = createEmptyStreamLogs();
 
 export interface ProgressState {
   activeStreamId: StreamTabId | null;
+  /** Reversible user intent awaiting backend hydration and confirmation. */
+  pendingStreamSelection: {
+    requestId: string;
+    streamId: StreamTabId;
+  } | null;
   /** Canonical stream storage — Map preserves insertion order for iteration. */
   streamById: Map<StreamTabId, StreamTabInfo>;
   /** Meta state per stream (status, todos, usage, ui, taskGroups, etc.) */
@@ -98,6 +104,34 @@ export function deleteStreamState(
   draft.streamStates.delete(streamId);
   draft.streamLogs.delete(streamId);
   draft.followupOptionsByStream.delete(streamId);
+}
+
+/**
+ * Drop reloadable content while retaining the lightweight tab projection and
+ * unsent tool-use draft owned by this browser surface. Follow-up option
+ * catalogs are also lightweight and remain usable by an already-open panel.
+ */
+export function releaseStreamContent(
+  draft: Draft<ProgressState>,
+  streamId: StreamTabId,
+): void {
+  draft.streamLogs.delete(streamId);
+  const current = draft.streamStates.get(streamId);
+  if (!current) return;
+  const lightweight = {
+    status: current.status,
+    substate: current.substate,
+    userFollowUpSupport: current.userFollowUpSupport,
+    lastTimestamp: current.lastTimestamp,
+    conversationProgress: current.conversationProgress,
+    stage: current.stage,
+    subagents: current.subagents,
+    ...(isToolUseState(current) ? { ui: current.ui } : {}),
+  };
+  draft.streamStates.set(
+    streamId,
+    createStreamState(current.category, lightweight),
+  );
 }
 
 /** Clear every visible child edge targeting a deleted parent stream. */
@@ -147,16 +181,10 @@ export function ensureStreamState(
   return state;
 }
 
-/** Return the first stream ID from a streamById Map, or null if empty. */
-export function firstStreamId(
-  streamById: Map<StreamTabId, StreamTabInfo>,
-): StreamTabId | null {
-  return streamById.keys().next().value ?? null;
-}
-
 export function createInitialState(): ProgressState {
   return {
     activeStreamId: null,
+    pendingStreamSelection: null,
     streamById: new Map(),
     streamStates: new Map(),
     streamLogs: new Map(),

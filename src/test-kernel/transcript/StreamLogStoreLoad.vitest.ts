@@ -538,6 +538,50 @@ describe('StreamLogStore load', () => {
     expect(store.get('alpha')?.size).toBe(1);
   });
 
+  it('releases only the presentation lease that owns its token', async () => {
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: {
+        alpha: summary(100, 100, { hasRunningGroup: false }),
+      },
+    });
+    const store = await StreamLogStore.open();
+    const first = await store.ensureLoaded('alpha', {
+      retainForPresentation: true,
+    });
+    const second = await store.ensureLoaded('alpha', {
+      retainForPresentation: true,
+    });
+
+    store.requestEviction('alpha');
+    first.close();
+    expect(store.get('alpha')?.size).toBe(1);
+
+    second.close();
+    expect(store.get('alpha')).toBeUndefined();
+    // Obsolete close is idempotent and cannot affect a later owner.
+    first.close();
+    expect(store.get('alpha')).toBeUndefined();
+  });
+
+  it('evicts a historical transcript when its final presentation closes', async () => {
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: {
+        alpha: summary(100, 100, { hasRunningGroup: false }),
+      },
+    });
+    const store = await StreamLogStore.open();
+    const lease = await store.ensureLoaded('alpha', {
+      retainForPresentation: true,
+    });
+
+    expect(store.get('alpha')?.size).toBe(1);
+    lease.close();
+
+    expect(store.get('alpha')).toBeUndefined();
+  });
+
   it('honors eviction requested while a focused rehydrate is pending', async () => {
     const readStarted = createDeferred();
     const readGate = createDeferred();

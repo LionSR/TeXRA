@@ -29,6 +29,7 @@ import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 import { progressAppStyles } from './progressAppStyles';
 import {
   activeStreamId$,
+  displayedActiveStreamId$,
   childStreamsByParent$,
   diffStatusAnnouncement,
   hasAnyStreams$,
@@ -199,7 +200,7 @@ export class ProgressApp extends ProgressAppBase {
                       slot="end"
                       .compact=${compactTabs}
                       .streams=${topLevelStreams$.get()}
-                      .activeStreamId=${activeStreamId$.get()}
+                      .activeStreamId=${displayedActiveStreamId$.get()}
                       .streamStates=${streamStates$.get()}
                       .pendingApprovalStreamIds=${pendingApprovalIds$.get()}
                       .childStreamsByParent=${childStreamsByParent$.get()}

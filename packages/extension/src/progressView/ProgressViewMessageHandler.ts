@@ -362,7 +362,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
       workflowFileActions: {
         state: {
-          getActiveStream: () => this.provider.state.activeStream,
+          getActiveStream: () =>
+            this.provider.backend.presentation.activeStream,
           getRunMetadata: (stream) =>
             this.provider.state.snapshots.getRunMetadata(stream),
           getOutputFiles: (stream) =>
@@ -474,7 +475,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
       commands: {
         lifecycle: {
-          setActiveStream: (stream) => this.provider.setActiveStream(stream),
+          setActiveStream: (stream, requestId) =>
+            this.provider.setActiveStream(stream, requestId),
           deleteStream: (stream) => this.provider.backend.deleteStream(stream),
           deleteAllStreams: () => this.handleDeleteAll(),
           stopStream: (stream) => this.provider.backend.stopStream(stream),
