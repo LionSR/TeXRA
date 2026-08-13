@@ -350,20 +350,42 @@ export function resumeWorkflowOutputFile(
 ): string | undefined {
   if (config.agentCategory !== AgentCategory.Workflow) return undefined;
 
-  const resolveStoredOutputFile = (outputFile: string | undefined | null) => {
-    const trimmed = outputFile?.trim();
-    if (!trimmed) return undefined;
-    if (path.isAbsolute(trimmed)) return trimmed;
-
-    const workingDirectory = config.workingDirectory?.trim();
-    return workingDirectory ? path.join(workingDirectory, trimmed) : trimmed;
+  const resolveOutputFile = (outputFile: string | undefined | null) => {
+    if (outputFile == null || outputFile.length === 0) return undefined;
+    if (path.isAbsolute(outputFile)) return outputFile;
+    const workingDirectory = config.workingDirectory;
+    return workingDirectory
+      ? path.join(workingDirectory, outputFile)
+      : outputFile;
   };
 
-  const cliOutputFile = resolveStoredOutputFile(config.cliOutputFile);
-  if (cliOutputFile) return cliOutputFile;
+  const cliOutputFile = config.cliOutputFile;
+  if (cliOutputFile != null && cliOutputFile.length > 0) {
+    if (!path.isAbsolute(cliOutputFile)) {
+      throw new CliUsageError(
+        `Stored workflow output file is not absolute: ${cliOutputFile}`,
+      );
+    }
+    return cliOutputFile;
+  }
 
   const outputFiles = config.outputFiles ?? [];
   return outputFiles.length === 1
-    ? resolveStoredOutputFile(outputFiles[0])
+    ? resolveOutputFile(outputFiles[0])
     : undefined;
+}
+
+export function resumeWorkflowOutputDirectory(
+  config: AgentConfigPayload,
+): string | undefined {
+  if (config.agentCategory !== AgentCategory.Workflow) return undefined;
+
+  const outputDirectory = config.cliOutputDirectory;
+  if (outputDirectory == null || outputDirectory.length === 0) return undefined;
+  if (!path.isAbsolute(outputDirectory)) {
+    throw new CliUsageError(
+      `Stored workflow output directory is not absolute: ${outputDirectory}`,
+    );
+  }
+  return outputDirectory;
 }

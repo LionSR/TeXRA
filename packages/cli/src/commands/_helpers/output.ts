@@ -1,7 +1,9 @@
 import {
   writeNdjsonStdout,
   writeTextStderr,
+  writeTextStderrAndWait,
   writeTextStdout,
+  writeTextStdoutAndWait,
 } from '@cli/runtime/logSinks';
 import { pageStdout } from '@cli/runtime/pager';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -15,6 +17,17 @@ export function cliProgressWriter(
   context: Pick<CliContext, 'outputFormat'>,
 ): (text: string) => void {
   return context.outputFormat === 'text' ? writeTextStdout : writeTextStderr;
+}
+
+/** Awaitable counterpart for signal shutdown, where process.exit follows the
+ * lifecycle drain and accepted text must reach its destination first. */
+export function writeCliProgressAndWait(
+  context: Pick<CliContext, 'outputFormat'>,
+  text: string,
+): Promise<void> {
+  return context.outputFormat === 'text'
+    ? writeTextStdoutAndWait(text)
+    : writeTextStderrAndWait(text);
 }
 
 /**

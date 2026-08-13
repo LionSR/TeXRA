@@ -25,7 +25,7 @@ import { getStreamTabId } from './streamTab';
 import { defaultSession } from './SessionHandle';
 import { flushOwnedExecutionArtifacts } from './executionOwnership';
 import { ResumeAdmissionCancelledError } from './resumeAdmission';
-import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
+import type { AgentFlowResult } from './AgentFlowResult';
 
 /**
  * Options for `runAgent`. Fields shared with the lower-level `executeAgent`
@@ -48,8 +48,8 @@ export interface RunAgentOptions extends Pick<
   | 'onStreamResolved'
   | 'onIdle'
   | 'launchSignal'
+  | 'openWorkflowOutput'
 > {
-  openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
   /**
    * Persist host-owned final state before the ordinary session drain. Return
    * true when the hook already drained artifacts and disposed of ownership.
@@ -92,7 +92,6 @@ export async function runAgent(
   // exactly the `Pick<ExecuteAgentOptions, …>` that `RunAgentOptions` extends, so
   // it forwards verbatim and a newly-picked option needs no change here.
   const {
-    openWorkflowOutput,
     beforeLeaseRelease,
     onExecutionLeaseAcquired,
     registerExecution: registerExecutionOption,
@@ -164,9 +163,6 @@ export async function runAgent(
             await callerOnRun?.(handle);
           },
         });
-        if (result.category === 'workflow') {
-          await openWorkflowOutput?.(result);
-        }
         runResult = result;
       } catch (error) {
         runFailure = { error };

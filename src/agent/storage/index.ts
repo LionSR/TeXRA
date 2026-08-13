@@ -45,6 +45,7 @@ export {
   deriveResumability,
   type ResumabilityDecision,
 } from './resumability';
+export { inspectExecutionLease } from './executionLease';
 export { resolveChildRunOutput } from './childRunOutput';
 export {
   SessionStores,

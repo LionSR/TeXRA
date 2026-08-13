@@ -34,6 +34,10 @@ const AgentConfigSharedFieldsSchema = NullableFileFieldsSchema.extend({
   workingDirectory: z.string().nullish(),
   /** CLI-only workspace copy target for `texra run --output`, preserved for resume. */
   cliOutputFile: z.string().nullish(),
+  /** CLI-only workspace copy directory for `texra run --output-dir`. */
+  cliOutputDirectory: z.string().nullish(),
+  /** Relative artifacts expected under {@link cliOutputDirectory}. */
+  cliExpectedOutputFiles: z.array(z.string()).nullish(),
   /**
    * Team preset id this execution was launched from (`texra multi-agent run
    * <preset>` in the CLI; the main-view launcher also sets it for team runs so

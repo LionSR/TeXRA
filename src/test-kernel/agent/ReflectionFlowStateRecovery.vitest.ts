@@ -232,4 +232,23 @@ describe('runReflectionFlow persisted-state recovery', () => {
     expect(shared.workspaceSnapshot.workPlan.todos).toEqual([todo]);
     expect(Object.hasOwn(shared.workspaceSnapshot, 'todos')).toBe(false);
   });
+
+  it('clears a persisted cancellation latch when resuming a workflow', async () => {
+    const { key, run, store } = recoveryCase('cancelled-latch');
+    const shared = reflectionFlowShared({
+      totalRounds: 1,
+      context: null,
+      continueRounds: false,
+      lastError: undefined,
+    });
+    await store.write(key, flowRecord(shared));
+
+    const result = await run();
+
+    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+    const stored = await store.read<FlowRecord>(key);
+    expect(
+      ReflectionFlowStateCanonicalSchema.parse(stored?.shared).continueRounds,
+    ).toBe(true);
+  });
 });

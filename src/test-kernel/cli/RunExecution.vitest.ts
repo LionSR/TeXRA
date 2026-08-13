@@ -36,7 +36,9 @@ const mocks = vi.hoisted(() => ({
   createCliRuntimeHost: vi.fn(),
   disposeHostInteractions: vi.fn(),
   prepareInteractivePrompt: vi.fn(),
-  readCliRunOutcome: vi.fn(),
+  readCliRunOutcomeState: vi.fn(),
+  deriveResumability: vi.fn(),
+  inspectExecutionLease: vi.fn(),
   releaseExecutionLeaseAfterArtifacts: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
@@ -93,7 +95,9 @@ vi.mock('@cli/runtime/executionFinalization', async (importOriginal) => ({
 
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
+  deriveResumability: mocks.deriveResumability,
   finalizeExecution: mocks.finalizeExecution,
+  inspectExecutionLease: mocks.inspectExecutionLease,
 }));
 
 vi.mock('@cli/runtime/cliPresentationHost', () => ({
@@ -107,7 +111,7 @@ vi.mock('@cli/runtime/approvalAdapter', async (importOriginal) => ({
 
 vi.mock('@cli/runtime/terminalStatus', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/terminalStatus')>()),
-  readCliRunOutcome: mocks.readCliRunOutcome,
+  readCliRunOutcomeState: mocks.readCliRunOutcomeState,
 }));
 
 vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
@@ -216,7 +220,15 @@ function stubRunExecutionDeps(): void {
     prepareInteractivePrompt: mocks.prepareInteractivePrompt,
     close: mocks.close,
   });
-  mocks.readCliRunOutcome.mockResolvedValue('completed');
+  mocks.readCliRunOutcomeState.mockResolvedValue({
+    outcome: 'completed',
+    outcomePersisted: true,
+  });
+  mocks.deriveResumability.mockResolvedValue({
+    resumable: true,
+    cause: 'interrupted-with-flow',
+  });
+  mocks.inspectExecutionLease.mockResolvedValue({ status: 'missing' });
   mocks.releaseExecutionLeaseAfterArtifacts.mockResolvedValue(undefined);
   mocks.finalizeExecution.mockResolvedValue({
     status: 'durable',
@@ -474,13 +486,13 @@ describe('executeCliRequest', () => {
   it('reports outcome read failures without rejecting a successful run', async () => {
     const { executeCliRequest } = await loadRunExecution();
     const readError = new Error('metadata read failed');
-    mocks.readCliRunOutcome.mockImplementationOnce(
+    mocks.readCliRunOutcomeState.mockImplementationOnce(
       async (
         result: { readonly outcome: string },
         reportReadFailure: (error: Error) => void,
       ) => {
         reportReadFailure(readError);
-        return result.outcome;
+        return { outcome: result.outcome, outcomePersisted: false };
       },
     );
 
@@ -828,6 +840,11 @@ describe('executeCliRequest', () => {
         async (session, executionId) => session.flushArtifacts(executionId),
       );
       const runWithOwnership = vi.fn((operation: () => unknown) => operation());
+      let settleRecoveryWrite!: () => void;
+      const recoveryWrite = new Promise<void>((resolve) => {
+        settleRecoveryWrite = resolve;
+      });
+      const onInterruptedExecutionFinalized = vi.fn(() => recoveryWrite);
       let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
       let publishRun: LeaseOptions['onRun'];
       const hangingRun = stubHangingRun((options) => {
@@ -835,7 +852,10 @@ describe('executeCliRequest', () => {
         publishRun = options.onRun;
       });
 
-      const run = executeCliRequest(baseRequest(), cliContext(), options);
+      const run = executeCliRequest(baseRequest(), cliContext(), {
+        ...options,
+        onInterruptedExecutionFinalized,
+      });
       await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
       const shutdown = platform.lifecycle.runShutdown();
       await Promise.resolve();
@@ -846,8 +866,21 @@ describe('executeCliRequest', () => {
       expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1');
       expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
 
-      mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
+      mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+        outcome: 'cancelled',
+        outcomePersisted: true,
+      });
       hangingRun.resolve(COMPLETED_RUN);
+      await vi.waitFor(() =>
+        expect(onInterruptedExecutionFinalized).toHaveBeenCalledOnce(),
+      );
+      let shutdownResolved = false;
+      void shutdown.then(() => {
+        shutdownResolved = true;
+      });
+      await Promise.resolve();
+      expect(shutdownResolved).toBe(false);
+      settleRecoveryWrite();
       await shutdown;
       expect(runWithOwnership).toHaveBeenCalledOnce();
       expect(mocks.releaseExecutionLeaseAfterArtifacts).toHaveBeenCalledOnce();
@@ -861,8 +894,18 @@ describe('executeCliRequest', () => {
         mocks.releaseExecutionLeaseAfterArtifacts.mock.invocationCallOrder[0] ??
           Number.POSITIVE_INFINITY,
       );
+      expect(onInterruptedExecutionFinalized).toHaveBeenCalledExactlyOnceWith(
+        'exec-1',
+      );
+      expect(
+        mocks.releaseExecutionLeaseAfterArtifacts.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        onInterruptedExecutionFinalized.mock.invocationCallOrder[0] ??
+          Number.POSITIVE_INFINITY,
+      );
       await expect(run).resolves.toEqual({
         ok: true,
+        outcomePersisted: true,
         result: {
           category: 'toolUse',
           executionId: 'exec-1',
@@ -871,6 +914,134 @@ describe('executeCliRequest', () => {
         },
       });
       expect(mocks.finalizeExecution).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('does not advertise signal recovery before a flow checkpoint exists', async () => {
+    const { platform, executeCliRequest } = await installFakePlatform();
+    mocks.deriveResumability.mockResolvedValueOnce({
+      resumable: false,
+      cause: 'missing-flow',
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    const onInterruptedExecutionFinalized = vi.fn();
+    let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
+    let publishRun: LeaseOptions['onRun'];
+    const hangingRun = stubHangingRun((options) => {
+      publishLeaseScope = options.onExecutionLeaseAcquired;
+      publishRun = options.onRun;
+    });
+
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+      onInterruptedExecutionFinalized,
+    });
+    await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
+    const shutdown = platform.lifecycle.runShutdown();
+    publishLeaseScope?.(
+      (operation: () => unknown) => operation(),
+      'exec-1' as ExecutionId,
+    );
+    publishRun?.();
+    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+      outcome: 'cancelled',
+      outcomePersisted: true,
+    });
+    hangingRun.resolve(COMPLETED_RUN);
+
+    await shutdown;
+    await run;
+
+    expect(mocks.deriveResumability).toHaveBeenCalledExactlyOnceWith('exec-1');
+    expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
+  });
+
+  it('keeps pre-checkpoint shutdown bounded when recovery is not yet possible', async () => {
+    const { platform, executeCliRequest } = await installFakePlatform();
+    const onInterruptedExecutionFinalized = vi.fn();
+    let leaseOptions: LeaseOptions | undefined;
+    const hangingRun = stubHangingRun((options) => {
+      leaseOptions = options;
+    });
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+      onInterruptedExecutionFinalized,
+    });
+    await vi.waitFor(() => expect(leaseOptions).toBeDefined());
+
+    vi.useFakeTimers();
+    try {
+      const shutdown = platform.lifecycle.runShutdown();
+      await vi.advanceTimersByTimeAsync(5_000);
+      await shutdown;
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
+    hangingRun.resolve(COMPLETED_RUN);
+    await run;
+  });
+
+  it.each([
+    {
+      label: 'a fresh lease remains',
+      inspection: { status: 'foreign' as const, heartbeatAt: 1 },
+    },
+    {
+      label: 'lease inspection fails',
+      inspection: new Error('lease read failed'),
+    },
+  ])(
+    'does not advertise signal recovery when $label',
+    async ({ inspection }) => {
+      const { platform, executeCliRequest } = await installFakePlatform();
+      if (inspection instanceof Error) {
+        mocks.inspectExecutionLease.mockRejectedValueOnce(inspection);
+      } else {
+        mocks.inspectExecutionLease.mockResolvedValueOnce(inspection);
+      }
+      const onInterruptedExecutionFinalized = vi.fn();
+      let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
+      let publishRun: LeaseOptions['onRun'];
+      const hangingRun = stubHangingRun((options) => {
+        publishLeaseScope = options.onExecutionLeaseAcquired;
+        publishRun = options.onRun;
+      });
+
+      const run = executeCliRequest(baseRequest(), cliContext(), {
+        registerExecution: true,
+        onInterruptedExecutionFinalized,
+      });
+      await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
+      const shutdown = platform.lifecycle.runShutdown();
+      publishLeaseScope?.(
+        (operation: () => unknown) => operation(),
+        'exec-1' as ExecutionId,
+      );
+      publishRun?.();
+      mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+        outcome: 'cancelled',
+        outcomePersisted: true,
+      });
+      hangingRun.resolve(COMPLETED_RUN);
+
+      await shutdown;
+      await expect(run).resolves.toEqual({
+        ok: true,
+        outcomePersisted: true,
+        result: {
+          category: 'toolUse',
+          executionId: 'exec-1',
+          outcome: 'cancelled',
+          streamId: 'stream-1',
+        },
+      });
+
+      expect(mocks.inspectExecutionLease).toHaveBeenCalledExactlyOnceWith(
+        'exec-1',
+      );
+      expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
     },
   );
 
@@ -1001,14 +1172,19 @@ describe('executeCliRequest', () => {
       );
     });
 
+    const onInterruptedExecutionFinalized = vi.fn();
     const run = executeCliRequest(baseRequest(), cliContext(), {
       registerExecution: true,
+      onInterruptedExecutionFinalized,
     });
     await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledOnce());
     const shutdown = platform.lifecycle.runShutdown();
     await Promise.resolve();
     expect(mocks.emit).not.toHaveBeenCalled();
-    mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
+    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+      outcome: 'cancelled',
+      outcomePersisted: true,
+    });
     hangingRun.resolve(COMPLETED_RUN);
     await shutdown;
     expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
@@ -1018,6 +1194,7 @@ describe('executeCliRequest', () => {
 
     await expect(run).resolves.toEqual({
       ok: true,
+      outcomePersisted: true,
       result: {
         category: 'toolUse',
         executionId: 'exec-1',
@@ -1028,6 +1205,7 @@ describe('executeCliRequest', () => {
     expect(mocks.finalizeExecution).toHaveBeenCalledOnce();
     expect(mocks.emit).toHaveBeenCalledTimes(1);
     expect(mocks.close).toHaveBeenCalledTimes(1);
+    expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
   });
 
   it('removes the shutdown status hook after owned executions finish', async () => {
@@ -1060,7 +1238,10 @@ describe('executeCliConfig', () => {
       outcome: 'completed',
       response: 'Done.',
     });
-    mocks.readCliRunOutcome.mockResolvedValueOnce(resolvedOutcome);
+    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+      outcome: resolvedOutcome,
+      outcomePersisted: true,
+    });
     return executeCliToolUseConfig(toolUseConfig(), cliContext(), {
       registerExecution: true,
       stopAfterCycle: true,
