@@ -584,6 +584,7 @@ describe('createChatSessionController', () => {
         options.onFollowUpQueueReady?.({
           streamId: 'stream:test' as StreamTabId,
           generation: 1,
+          generationId: 'recovery-generation',
           kind: 'recovery',
         });
         return true;
@@ -1765,6 +1766,7 @@ describe('createChatSessionController', () => {
         options.onFollowUpQueueReady?.({
           streamId: 'stream:test' as StreamTabId,
           generation: 1,
+          generationId: 'recovery-generation',
           kind: 'recovery',
         });
         return resume.promise;

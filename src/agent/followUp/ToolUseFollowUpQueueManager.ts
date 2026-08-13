@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { LRUCache } from 'lru-cache';
 import { createChannelTrace } from '@agent/trace';
 import type { RecoveryContinuation } from '@platform/interfaces';
@@ -48,6 +50,8 @@ interface QueueEntry {
 export interface FollowUpConsumerLease {
   readonly streamId: StreamTabId;
   readonly generation: number;
+  /** Opaque identity of this session-owned queue generation. */
+  readonly generationId: string;
   readonly kind: FollowUpConsumerKind;
 }
 
@@ -306,6 +310,7 @@ export class ToolUseFollowUpQueue {
     const lease: FollowUpConsumerLease = {
       streamId,
       generation: entry.generation,
+      generationId: randomUUID(),
       kind,
     };
     entry.owner = lease;

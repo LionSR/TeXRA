@@ -162,6 +162,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
     const retry = queues.claimChildRun(id);
     expect(retry).toBeDefined();
     expect(retry?.kind).toBe('child');
+    expect(retry?.generationId).not.toBe(first.generationId);
     expect(queues.hasLiveOwner(id)).toBe(true);
   });
 
