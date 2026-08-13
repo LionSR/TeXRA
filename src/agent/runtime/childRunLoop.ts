@@ -692,7 +692,7 @@ export function startChildRunLoop<TTurn>(
       });
       loop.interrupt();
     });
-    queueLease = runSession.followUps.claimLive(childStreamId, 'child');
+    queueLease = runSession.followUps.claimChildRun(childStreamId);
     if (!queueLease) {
       throw new Error(
         `Follow-up continuation already has an owner for child ${childStreamId}.`,
