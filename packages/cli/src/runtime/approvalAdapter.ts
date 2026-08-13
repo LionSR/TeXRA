@@ -281,8 +281,11 @@ export function createHeadlessCliHostInteractions(
       );
       return toApprovalSettlement({
         ...decision,
-        ...(!prompted && !decision.accepted && decision.userMessage
-          ? { rejectionReason: decision.userMessage, userMessage: undefined }
+        ...(!prompted && !decision.accepted
+          ? {
+              rejectionReason: decision.userMessage ?? '',
+              userMessage: undefined,
+            }
           : {}),
       });
     },
@@ -295,8 +298,11 @@ export function createHeadlessCliHostInteractions(
       );
       return toApprovalSettlement({
         ...decision,
-        ...(!prompted && !decision.accepted && decision.userMessage
-          ? { rejectionReason: decision.userMessage, userMessage: undefined }
+        ...(!prompted && !decision.accepted
+          ? {
+              rejectionReason: decision.userMessage ?? '',
+              userMessage: undefined,
+            }
           : {}),
       });
     },
