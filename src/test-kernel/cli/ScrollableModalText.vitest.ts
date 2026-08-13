@@ -6,7 +6,7 @@ import {
   modalTextMaxScrollOffset,
   scrollableModalTextRowsBudget,
 } from '@cli/chat/tui/modals/ScrollableModalText';
-import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 
 const HEREDOC_COMMAND = [
   "python3 << 'EOF'",

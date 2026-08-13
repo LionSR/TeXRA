@@ -13,6 +13,10 @@ import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
 import { STATUS_BAR_HORIZONTAL_PADDING } from '@cli/tui/ui/theme';
+import {
+  textDisplayWidth,
+  truncateSummaryToWidth,
+} from '@cli/runtime/terminalText';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -50,10 +54,6 @@ import {
 } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-import {
-  textDisplayWidth,
-  truncateSummaryToWidth,
-} from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
 import { formatResumeCommand } from '../state/resumeHint';
 import {

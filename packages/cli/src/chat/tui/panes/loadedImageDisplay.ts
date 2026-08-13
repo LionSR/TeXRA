@@ -1,16 +1,14 @@
 // Local imports - shared formatting
-import { safeTerminalText } from '@cli/runtime/terminalText';
-import { POINTER } from '@cli/tui/ui/glyphs';
-import { collapseWhitespace, formatBytes } from '@utils/text/stringUtils';
-
-// Local imports - CLI TUI rendering
 import {
+  safeTerminalText,
   textDisplayWidth,
   truncateSummaryToWidth,
   truncateToWidth,
-} from '../render/terminalText';
+} from '@cli/runtime/terminalText';
+import { POINTER } from '@cli/tui/ui/glyphs';
+import { collapseWhitespace, formatBytes } from '@utils/text/stringUtils';
 
-// Local imports - CLI TUI glyphs
+// Local imports - CLI TUI state
 import type { LoadedImage } from '../state/cliState';
 
 /** The one terminal-text representation of an image prepared as context media. */

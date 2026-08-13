@@ -30,7 +30,7 @@ import {
   createTuiViewportController,
   type TuiRepaintOptions,
 } from '@cli/chat/tui/render/tuiViewportController';
-import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 import {
   estimateLiveTranscriptEntryRows,
   estimateTranscriptEntryRows,
