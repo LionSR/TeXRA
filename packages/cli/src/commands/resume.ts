@@ -34,7 +34,7 @@ export const resumeCommand = defineCommand({
       setExitCode(CliExitCode.Usage);
       return;
     }
-    const context = await contextFromArgs(ctx.args);
+    const context = await contextFromArgs(ctx.args, ctx.rawArgs);
     setExitCode(await runResumeExecution(context, id));
   },
 });
