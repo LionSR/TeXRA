@@ -45,6 +45,8 @@ export interface SubmitFollowUpOptions {
    * only a recoverable queue retained while that child was active.
    */
   readonly mode?: 'continuation' | 'live_notification' | 'child_delivery';
+  /** Reject a detached producer if its originating continuation was replaced. */
+  readonly expectedGenerationId?: string;
 }
 
 export function presentFollowUpResult(
@@ -104,6 +106,7 @@ export async function submitFollowUp(
       streamId,
       item,
       'live_owner',
+      options.expectedGenerationId,
     );
     if (submission.kind === 'duplicate') {
       return { status: 'duplicate' };
@@ -147,7 +150,12 @@ export async function submitFollowUp(
   } else if (target.kind === 'no_session') {
     admission = 'existing_recoverable';
   }
-  const submission = ownerSession.followUps.submit(streamId, item, admission);
+  const submission = ownerSession.followUps.submit(
+    streamId,
+    item,
+    admission,
+    options.expectedGenerationId,
+  );
   if (submission.kind === 'duplicate') {
     return { status: 'duplicate' };
   }

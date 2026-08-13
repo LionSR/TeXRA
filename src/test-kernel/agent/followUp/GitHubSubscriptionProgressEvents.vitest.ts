@@ -240,6 +240,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
     const streamId = 'stream-a' as StreamTabId;
     const source = new RegistryTestSource();
     const session = createTestSession();
+    const lease = session.followUps.claimLive(streamId, 'flow')!;
     const registry = new StreamSubscriptionRegistry<string, string>({
       name: 'test subscriptions',
       source,
@@ -261,7 +262,11 @@ describe('GitHub subscription app signals and follow-ups', () => {
       expect(submitFollowUpMock).toHaveBeenCalledWith(
         streamId,
         'new github event',
-        { session, mode: 'live_notification' },
+        {
+          session,
+          mode: 'live_notification',
+          expectedGenerationId: lease.generationId,
+        },
       );
     } finally {
       session.dispose();
