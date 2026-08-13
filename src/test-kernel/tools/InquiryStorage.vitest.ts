@@ -120,6 +120,7 @@ describe('InquiryStorage', () => {
   it('opens, answers, and resolves a thread end-to-end', async () => {
     const opened = await recordOpenQuestion({
       parentStreamId: STREAM_A,
+      parentGenerationId: 'generation-a',
       question: 'What is the Sobolev constant?',
       suggestSearch: false,
     });
@@ -127,6 +128,7 @@ describe('InquiryStorage', () => {
     expect(opened.manifest.status).toBe('open');
     expect(opened.manifest.parentStreamId).toBe(STREAM_A);
     expect(opened.manifest.turns).toHaveLength(1);
+    expect(opened.turn.parentGenerationId).toBe('generation-a');
     expect(opened.turn.suggestSearch).toBe(false);
 
     const open = await listThreadsByStatus({ status: 'open', scope: 'all' });
@@ -139,6 +141,7 @@ describe('InquiryStorage', () => {
     });
     expect(answered).not.toBeNull();
     expect(answered!.manifest.status).toBe('answered');
+    expect(answered!.turn.parentGenerationId).toBe('generation-a');
     expect(answered!.turn.answer).toBe('C = (n(n-2))^{-1} * ω_n^{2/n}');
 
     const stillOpen = await listThreadsByStatus({
