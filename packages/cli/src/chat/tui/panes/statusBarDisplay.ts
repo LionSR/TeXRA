@@ -801,6 +801,14 @@ function childListBindingsText(
         escBinding,
         ctrlCBinding,
       ]),
+      selectionKillable &&
+        statusBarBindingRow([
+          selectBinding,
+          killBinding,
+          tabBinding,
+          escBinding,
+          ctrlCBinding,
+        ]),
       statusBarBindingRow([
         selectBinding,
         enterBinding,
