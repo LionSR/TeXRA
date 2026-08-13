@@ -99,7 +99,11 @@ describe('Tool edit approval gating', () => {
     assert.strictEqual(request?.proposedContent, 'new content');
     assert.strictEqual(request?.sourceTool, 'write_file');
     assert.strictEqual(write.mock.lastCall?.[1], 'new content');
-    assert.strictEqual(result.output, 'written');
+    assert.strictEqual(
+      result.output,
+      'written\n\nReplaced 1 lines with 1 lines.',
+    );
+    assert.strictEqual(result.userInstruction, undefined);
   });
 
   it('write_file reports the content adjusted during approval', async () => {
