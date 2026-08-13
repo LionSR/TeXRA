@@ -224,7 +224,7 @@ ON CONFLICT (name) DO UPDATE SET
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
   'progressCheck',
-  'End-of-session reviewer. Looks at what was just done, the project''s standing goal, and the git/PR state to decide whether the orchestrator is actually finished or whether meaningful, low-risk progress is still sitting on the table. Read-only. Advises without editing or delegating.',
+  'End-of-session reviewer. Looks at what was just done and, when relevant, the project''s standing goal and git/PR state to decide whether the orchestrator is actually finished or whether meaningful, low-risk progress is still sitting on the table. Read-only. Advises without editing or delegating.',
   'tool-use/progressCheck.yaml',
   ARRAY['public'],
   'toolUse',
