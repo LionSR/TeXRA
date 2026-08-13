@@ -115,6 +115,22 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
+function expectedRecoveryHint(
+  context: CliContext,
+  executionId: string,
+  workingDirectory = context.cwd,
+): string {
+  return `Resume this workflow with: ${formatResumeCommand(
+    context.commandName,
+    executionId,
+    {
+      cwd: workingDirectory,
+      processCwd: process.cwd(),
+      approvalPolicy: context.approvalPolicy,
+    },
+  )}`;
+}
+
 /** Runs `body` against a fresh temp workspace, removed afterwards. */
 async function withTempRoot(
   body: (root: string) => Promise<void>,
@@ -424,6 +440,8 @@ describe('CLI workflow run command', () => {
         inputFiles: ['paper.tex'],
         outputFiles: [],
         cliOutputFile: 'polished.tex',
+        cliOutputDirectory: undefined,
+        cliExpectedOutputFiles: undefined,
       });
       await expect(
         fs.readFile(path.join(root, 'polished.tex'), 'utf8'),
@@ -482,6 +500,11 @@ describe('CLI workflow run command', () => {
       );
 
       expect(exitCode).toBe(0);
+      expect(mocks.executeCliConfig.mock.calls[0]?.[0]).toMatchObject({
+        cliOutputFile: undefined,
+        cliOutputDirectory: 'out',
+        cliExpectedOutputFiles: ['paper.tex'],
+      });
       await expect(
         fs.readFile(path.join(root, 'out', 'paper.tex'), 'utf8'),
       ).resolves.toBe('polished');
@@ -612,15 +635,14 @@ describe('CLI workflow run command', () => {
         }),
       );
       expect(mocks.writeTextStdout).toHaveBeenCalledExactlyOnceWith(
-        `Resume this workflow with: ${formatResumeCommand(
-          'texra-local',
-          'exec-interrupted',
-          {
+        expectedRecoveryHint(
+          cliContext({
             cwd: root,
-            processCwd: process.cwd(),
+            commandName: 'texra-local',
             approvalPolicy: 'never',
-          },
-        )}`,
+          }),
+          'exec-interrupted',
+        ),
       );
       expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.writeTextStdout.mock.invocationCallOrder[0],
@@ -646,7 +668,39 @@ describe('CLI workflow run command', () => {
       expect.objectContaining({ code: 'ENOENT' }),
     );
     expect(mocks.writeTextStdout).toHaveBeenCalledExactlyOnceWith(
-      'Resume this workflow with: texra resume exec-interrupted-copy --cwd /tmp/project --approval-policy never',
+      expectedRecoveryHint(cliContext(), 'exec-interrupted-copy'),
+    );
+  });
+
+  it('prints the durable shutdown hint once with the persisted workspace', async () => {
+    const execution = workflowExecution('exec-signal', {
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    mocks.executeCliConfig.mockImplementationOnce(
+      async (_config, _context, options) => {
+        if (!execution.ok) return execution;
+        await options.openWorkflowOutput?.(execution.result);
+        options.onInterruptedExecutionFinalized?.('exec-signal');
+        return execution;
+      },
+    );
+    const context = cliContext({ cwd: '/tmp/resume-invocation' });
+    const { executeCliWorkflowConfig } = await import('@cli/commands/workflow');
+
+    const exitCode = await executeCliWorkflowConfig(
+      {
+        agent: 'polish',
+        model: 'deepseekT',
+        workingDirectory: '/tmp/persisted-workspace',
+        agentCategory: AgentCategory.Workflow,
+      },
+      context,
+      { categoryMismatchMessage: 'unexpected category' },
+    );
+
+    expect(exitCode).toBe(CliExitCode.Interrupted);
+    expect(mocks.writeTextStdout).toHaveBeenCalledExactlyOnceWith(
+      expectedRecoveryHint(context, 'exec-signal', '/tmp/persisted-workspace'),
     );
   });
 
@@ -673,7 +727,7 @@ describe('CLI workflow run command', () => {
       expect(exitCode).toBe(CliExitCode.Interrupted);
       expect(mocks.writeTextStdout).not.toHaveBeenCalled();
       expect(mocks.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
-        'Resume this workflow with: texra resume exec-interrupted --cwd /tmp/project --approval-policy never',
+        expectedRecoveryHint(cliContext({ outputFormat }), 'exec-interrupted'),
       );
     },
   );

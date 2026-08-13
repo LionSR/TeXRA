@@ -57,6 +57,9 @@ interface CliExecuteOptions {
   readonly openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
   /** Forwarded to `runAgent` on resume, pinning the original handler dialect. */
   readonly modelHandlerCompatibilityKey?: RunAgentOptions['modelHandlerCompatibilityKey'];
+  /** Called during signal shutdown after CANCELLED status is durable and the
+   *  resumable checkpoint has been drained, before the signal handler exits. */
+  readonly onInterruptedExecutionFinalized?: (executionId: ExecutionId) => void;
   /** Wrap the run (e.g. multi-agent preset visibility) without leaking the
    *  runtime-host lifecycle into the caller. */
   readonly wrap?: (
@@ -281,8 +284,9 @@ export async function executeCliRequest(
       const executionId = ownedExecutionId;
       if (!runWithOwnership || !executionId) return false;
       try {
+        let terminalStatusPersisted = false;
         await runWithOwnership(async () => {
-          await finalizeCliExecution(
+          terminalStatusPersisted = await finalizeCliExecution(
             executionId,
             RUN_OUTCOME.CANCELLED,
             'preserve',
@@ -290,6 +294,9 @@ export async function executeCliRequest(
           );
           await releaseCliExecutionLeaseAfterArtifacts(session, executionId);
         });
+        if (terminalStatusPersisted) {
+          options.onInterruptedExecutionFinalized?.(executionId);
+        }
         return true;
       } catch (error) {
         // Record the original drain failure for the one-shot runtime adapter

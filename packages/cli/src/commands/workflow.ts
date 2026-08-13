@@ -100,6 +100,9 @@ export async function runWorkflowAgent(
 
       const model = await selectCliRunModel(context, init.model, 'run');
       const runContext = buildHeadlessRunContext(context);
+      const expectedOutputFiles = init.outputDir
+        ? expectedOutputFilesForOutputDir(agent, inputFiles)
+        : undefined;
       const config: AgentConfigPayload = {
         agent: init.agent,
         model,
@@ -107,6 +110,10 @@ export async function runWorkflowAgent(
         contextFiles,
         outputFiles: [],
         cliOutputFile: init.output,
+        cliOutputDirectory: init.outputDir,
+        cliExpectedOutputFiles: expectedOutputFiles
+          ? [...expectedOutputFiles]
+          : undefined,
         instruction,
         workingDirectory: runContext.cwd,
         agentCategory: AgentCategory.Workflow,
@@ -117,9 +124,7 @@ export async function runWorkflowAgent(
         categoryMismatchMessage: `Agent "${init.agent}" resolved to a non workflow run.`,
         output: init.output,
         outputDir: init.outputDir,
-        expectedOutputFiles: init.outputDir
-          ? expectedOutputFilesForOutputDir(agent, inputFiles)
-          : undefined,
+        expectedOutputFiles,
       });
     },
   );
@@ -147,11 +152,22 @@ export async function executeCliWorkflowConfig(
 ): Promise<number> {
   let workflowResult: CliWorkflowRunResult | undefined;
   let workflowOutputError: unknown;
+  let resumeHintWritten = false;
+  const writeResumeHint = (executionId: ExecutionId): void => {
+    if (resumeHintWritten) return;
+    resumeHintWritten = true;
+    writeWorkflowResumeHint(
+      runContext,
+      executionId,
+      config.workingDirectory?.trim() || runContext.cwd,
+    );
+  };
   const execution = await executeCliConfig(config, runContext, {
     enforceCategory: true,
     registerExecution: options.registerExecution,
     executionId: options.executionId,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+    onInterruptedExecutionFinalized: writeResumeHint,
     expectedCategory: AgentCategory.Workflow,
     categoryMismatchMessage: options.categoryMismatchMessage,
     openWorkflowOutput: async (result) => {
@@ -200,7 +216,7 @@ export async function executeCliWorkflowConfig(
   if (workflowOutputError !== undefined) {
     writeErrorStderr(workflowOutputError);
     if (result.outcome === RUN_OUTCOME.CANCELLED) {
-      writeWorkflowResumeHint(runContext, result.executionId);
+      writeResumeHint(result.executionId);
       return CliExitCode.Interrupted;
     }
     return CliExitCode.AgentError;
@@ -216,7 +232,7 @@ export async function executeCliWorkflowConfig(
   });
 
   if (result.outcome === RUN_OUTCOME.CANCELLED) {
-    writeWorkflowResumeHint(runContext, result.executionId);
+    writeResumeHint(result.executionId);
   }
 
   return runOutcomeExitCode(result.outcome);
@@ -225,9 +241,10 @@ export async function executeCliWorkflowConfig(
 function writeWorkflowResumeHint(
   context: CliContext,
   executionId: string,
+  workingDirectory: string,
 ): void {
   const resumeCommand = formatResumeCommand(context.commandName, executionId, {
-    cwd: context.cwd,
+    cwd: workingDirectory,
     processCwd: readCliCwd(),
     approvalPolicy: context.approvalPolicy,
   });

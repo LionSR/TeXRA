@@ -828,6 +828,7 @@ describe('executeCliRequest', () => {
         async (session, executionId) => session.flushArtifacts(executionId),
       );
       const runWithOwnership = vi.fn((operation: () => unknown) => operation());
+      const onInterruptedExecutionFinalized = vi.fn();
       let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
       let publishRun: LeaseOptions['onRun'];
       const hangingRun = stubHangingRun((options) => {
@@ -835,7 +836,10 @@ describe('executeCliRequest', () => {
         publishRun = options.onRun;
       });
 
-      const run = executeCliRequest(baseRequest(), cliContext(), options);
+      const run = executeCliRequest(baseRequest(), cliContext(), {
+        ...options,
+        onInterruptedExecutionFinalized,
+      });
       await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
       const shutdown = platform.lifecycle.runShutdown();
       await Promise.resolve();
@@ -859,6 +863,15 @@ describe('executeCliRequest', () => {
       });
       expect(mocks.finalizeExecution.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.releaseExecutionLeaseAfterArtifacts.mock.invocationCallOrder[0] ??
+          Number.POSITIVE_INFINITY,
+      );
+      expect(onInterruptedExecutionFinalized).toHaveBeenCalledExactlyOnceWith(
+        'exec-1',
+      );
+      expect(
+        mocks.releaseExecutionLeaseAfterArtifacts.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        onInterruptedExecutionFinalized.mock.invocationCallOrder[0] ??
           Number.POSITIVE_INFINITY,
       );
       await expect(run).resolves.toEqual({
@@ -1001,8 +1014,10 @@ describe('executeCliRequest', () => {
       );
     });
 
+    const onInterruptedExecutionFinalized = vi.fn();
     const run = executeCliRequest(baseRequest(), cliContext(), {
       registerExecution: true,
+      onInterruptedExecutionFinalized,
     });
     await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledOnce());
     const shutdown = platform.lifecycle.runShutdown();
@@ -1028,6 +1043,7 @@ describe('executeCliRequest', () => {
     expect(mocks.finalizeExecution).toHaveBeenCalledOnce();
     expect(mocks.emit).toHaveBeenCalledTimes(1);
     expect(mocks.close).toHaveBeenCalledTimes(1);
+    expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
   });
 
   it('removes the shutdown status hook after owned executions finish', async () => {

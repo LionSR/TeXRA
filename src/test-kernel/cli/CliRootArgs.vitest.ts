@@ -40,6 +40,7 @@ import {
 import {
   resolveWorkflowOutput,
   resumeWorkflowOutputFile,
+  resumeWorkflowOutputDirectory,
 } from '@cli/runtime/workflowOutput';
 import {
   isCliSupportedModelId,
@@ -935,6 +936,14 @@ describe('CLI root argument routing', () => {
         }),
       ),
     ).toBeUndefined();
+  });
+
+  it('restores a relative CLI output directory against the stored workspace', () => {
+    expect(
+      resumeWorkflowOutputDirectory(
+        storedConfig({ cliOutputDirectory: 'out/polished' }),
+      ),
+    ).toBe(path.join('/tmp/project', 'out/polished'));
   });
 
   it('reports successful stopped workflows with missing requested outputs as failed copies', async () => {

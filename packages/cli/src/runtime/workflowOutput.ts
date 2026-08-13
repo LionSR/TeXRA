@@ -367,3 +367,18 @@ export function resumeWorkflowOutputFile(
     ? resolveStoredOutputFile(outputFiles[0])
     : undefined;
 }
+
+export function resumeWorkflowOutputDirectory(
+  config: AgentConfigPayload,
+): string | undefined {
+  if (config.agentCategory !== AgentCategory.Workflow) return undefined;
+
+  const outputDirectory = config.cliOutputDirectory?.trim();
+  if (!outputDirectory) return undefined;
+  if (path.isAbsolute(outputDirectory)) return outputDirectory;
+
+  const workingDirectory = config.workingDirectory?.trim();
+  return workingDirectory
+    ? path.join(workingDirectory, outputDirectory)
+    : outputDirectory;
+}

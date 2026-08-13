@@ -11,7 +11,10 @@ import { initInteractiveCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import { buildHeadlessRunContext } from '../runtime/runModel';
 import { resolveCliLaunchAgent } from '../runtime/agents';
-import { resumeWorkflowOutputFile } from '../runtime/workflowOutput';
+import {
+  resumeWorkflowOutputDirectory,
+  resumeWorkflowOutputFile,
+} from '../runtime/workflowOutput';
 import { initializeHeadlessTranscriptSession } from '../runtime/transcriptSession';
 import {
   formatInteractiveTerminalFailure,
@@ -147,8 +150,11 @@ export async function runResumeExecution(
         {
           executionId: executionId ?? id,
           modelHandlerCompatibilityKey,
-          // Honor the original run's `--output` target, persisted on the config.
+          // Honor the original run's persisted output destination.
           output: resumeWorkflowOutputFile(workflowConfig),
+          outputDir: resumeWorkflowOutputDirectory(workflowConfig),
+          expectedOutputFiles:
+            workflowConfig.cliExpectedOutputFiles ?? undefined,
           categoryMismatchMessage: `Execution ${id} resolved to a non workflow run.`,
         },
       );

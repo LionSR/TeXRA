@@ -38,7 +38,7 @@ export async function finalizeCliExecution(
   outcome: RunOutcome,
   flowRecord: FinalizeExecutionInput['flowRecord'],
   reportFailure: CliFinalizationFailureReporter,
-): Promise<void> {
+): Promise<boolean> {
   let result: Awaited<ReturnType<typeof finalizeExecution>>;
   try {
     result = await finalizeExecution({
@@ -54,13 +54,14 @@ export async function finalizeCliExecution(
         { cause: error },
       ),
     );
-    return;
+    return false;
   }
-  if (result.status === 'durable') return;
+  if (result.status === 'durable') return true;
   markOwnedExecutionLeaseUndurable(executionId);
 
   const message = finalizationFailureMessage(result, executionId, outcome);
   reportFailure(new Error(message, { cause: result.error }));
+  return false;
 }
 
 /**
