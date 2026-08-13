@@ -267,7 +267,6 @@ export class ToolUseFollowUpQueue {
     if (entry.generationId !== generationId) {
       if (owner.kind !== 'recovery') return undefined;
       entry.generationId = generationId;
-      Object.assign(owner, { generationId });
     }
     return entry.queue;
   }
@@ -374,7 +373,9 @@ export class ToolUseFollowUpQueue {
     const lease: FollowUpConsumerLease = {
       streamId,
       generation: entry.generation,
-      generationId: entry.generationId,
+      get generationId() {
+        return entry.generationId;
+      },
       kind,
     };
     entry.owner = lease;
