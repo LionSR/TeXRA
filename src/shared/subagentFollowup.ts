@@ -95,7 +95,7 @@ export function stripOrchestratorFollowup(text: unknown): string {
 }
 
 function attr(xml: string, name: string): string | undefined {
-  return new RegExp(`\\b${escapeRegExp(name)}="([^"]*)"`).exec(xml)?.[1];
+  return new RegExp(`(?:^|\\s)${escapeRegExp(name)}="([^"]*)"`).exec(xml)?.[1];
 }
 
 function innerTag(xml: string, tag: string): string | undefined {
