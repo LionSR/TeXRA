@@ -9,8 +9,6 @@
 //
 // Host-agnostic, VS Code-free.
 
-import { randomUUID } from 'node:crypto';
-
 import PQueue from 'p-queue';
 
 import {
@@ -396,10 +394,10 @@ async function attemptTurn<TTurn>(
  */
 function mintChildTurnRef(
   executionId: ExecutionId,
-  attemptId: string,
+  generationId: string,
   turnIndex: number,
 ): ChildTurnRef {
-  const token = `${executionId}:attempt:${attemptId}:turn:${turnIndex}`;
+  const token = `${executionId}:generation:${generationId}:turn:${turnIndex}`;
   return { token, deliveryId: `${token}:delivery` };
 }
 
@@ -657,8 +655,6 @@ export function startChildRunLoop<TTurn>(
   // The code below is synchronous until the scoped loop task is spawned, so a
   // lost generation fails before any queue, listener, stage, or loop exists.
   runWithOwnedExecutionLease(executionId, () => undefined);
-  const attemptId = randomUUID();
-
   const runSession = currentSession();
   const releaseChildActivation = childStream
     ? () => undefined
@@ -739,6 +735,8 @@ export function startChildRunLoop<TTurn>(
     );
   }
 
+  const childRunGenerationId = queueLease.generationId;
+
   let bestCostUsd: number | undefined;
   const ports: ChildRunPorts = {
     notify: (update) => {
@@ -784,7 +782,11 @@ export function startChildRunLoop<TTurn>(
     try {
       while (!loop.isInterrupted()) {
         turnIndex += 1;
-        const turnRef = mintChildTurnRef(executionId, attemptId, turnIndex);
+        const turnRef = mintChildTurnRef(
+          executionId,
+          childRunGenerationId,
+          turnIndex,
+        );
         emitTurnDiagnostic(logger, 'turn.accepted', {
           executionId,
           turnRef,
