@@ -6,6 +6,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CliUsageError,
   readCliStdinText,
+  readCliCwd,
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -22,7 +23,8 @@ import {
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { emitCliResult } from './_helpers/output';
+import { cliProgressWriter, emitCliResult } from './_helpers/output';
+import { formatResumeCommand } from '../chat/tui/state/resumeHint';
 import {
   AGENT_RUN_GLOBAL_ARGS,
   collectCommonAgentRunFlags,
@@ -210,6 +212,21 @@ export async function executeCliWorkflowConfig(
     ndjson: { kind: 'result', result: workflowResult },
     text: formatWorkflowTextResult(workflowResult),
   });
+
+  if (result.outcome === RUN_OUTCOME.CANCELLED) {
+    const resumeCommand = formatResumeCommand(
+      runContext.commandName,
+      result.executionId,
+      {
+        cwd: runContext.cwd,
+        processCwd: readCliCwd(),
+        approvalPolicy: runContext.approvalPolicy,
+      },
+    );
+    cliProgressWriter(runContext)(
+      `Resume this workflow with: ${resumeCommand}`,
+    );
+  }
 
   return runOutcomeExitCode(result.outcome);
 }

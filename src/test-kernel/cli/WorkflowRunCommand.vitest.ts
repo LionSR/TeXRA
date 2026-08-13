@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
     writeErrorStderr: vi.fn(),
     writeResultMeta: vi.fn(),
     writeTextStderr: vi.fn(),
+    writeTextStdout: vi.fn(),
   };
 });
 
@@ -65,7 +66,8 @@ vi.mock('@cli/runtime/runModel', () => ({
   selectCliRunModel: mocks.selectCliRunModel,
 }));
 
-vi.mock('@cli/commands/_helpers/output', () => ({
+vi.mock('@cli/commands/_helpers/output', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/commands/_helpers/output')>()),
   emitCliResult: mocks.emitCliResult,
 }));
 
@@ -81,6 +83,7 @@ vi.mock('@cli/runtime/runExecution', () => ({
 vi.mock('@cli/runtime/logSinks', () => ({
   writeErrorStderr: mocks.writeErrorStderr,
   writeTextStderr: mocks.writeTextStderr,
+  writeTextStdout: mocks.writeTextStdout,
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
@@ -580,24 +583,81 @@ describe('CLI workflow run command', () => {
     );
   });
 
-  it('uses the resolved terminal outcome in the persisted envelope', async () => {
+  it('prints a resumable recovery command after persisting a cancelled workflow', async () => {
+    await withTempRoot(async (root) => {
+      mockWorkflowExecution(
+        workflowExecution('exec-interrupted', {
+          outcome: RUN_OUTCOME.CANCELLED,
+        }),
+        true,
+      );
+
+      const exitCode = await runWorkflow(
+        { output: 'polished.tex' },
+        cliContext({
+          cwd: root,
+          commandName: 'texra-local',
+          approvalPolicy: 'never',
+        }),
+      );
+
+      expect(exitCode).toBe(CliExitCode.Interrupted);
+      await expect(fs.stat(path.join(root, 'polished.tex'))).rejects.toThrow();
+      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+        expectedResultMeta({
+          outcome: RUN_OUTCOME.CANCELLED,
+          outputs: [],
+          compileFailures: [],
+        }),
+      );
+      expect(mocks.writeTextStdout).toHaveBeenCalledExactlyOnceWith(
+        `Resume this workflow with: texra-local resume exec-interrupted --cwd ${root} --approval-policy never`,
+      );
+      expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
+        mocks.writeTextStdout.mock.invocationCallOrder[0],
+      );
+    });
+  });
+
+  it('does not print a recovery command for completed workflows', async () => {
+    const exitCode = await runWorkflow();
+
+    expect(exitCode).toBe(CliExitCode.Success);
+    expect(mocks.writeTextStdout).not.toHaveBeenCalled();
+    expect(mocks.writeTextStderr).not.toHaveBeenCalled();
+  });
+
+  it.each(['json', 'ndjson'] as const)(
+    'keeps %s stdout free of the cancellation recovery hint',
+    async (outputFormat) => {
+      mockWorkflowExecution(
+        workflowExecution('exec-interrupted', {
+          outcome: RUN_OUTCOME.CANCELLED,
+        }),
+        true,
+      );
+
+      const exitCode = await runWorkflow({}, cliContext({ outputFormat }));
+
+      expect(exitCode).toBe(CliExitCode.Interrupted);
+      expect(mocks.writeTextStdout).not.toHaveBeenCalled();
+      expect(mocks.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
+        'Resume this workflow with: texra resume exec-interrupted --cwd /tmp/project --approval-policy never',
+      );
+    },
+  );
+
+  it('does not print a recovery command for failed workflows', async () => {
     mockWorkflowExecution(
-      workflowExecution('exec-interrupted', {
-        outcome: RUN_OUTCOME.CANCELLED,
-      }),
+      workflowExecution('exec-failed', { outcome: RUN_OUTCOME.FAILED }),
       true,
     );
 
     const exitCode = await runWorkflow();
 
-    expect(exitCode).toBe(CliExitCode.Interrupted);
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      expectedResultMeta({
-        outcome: RUN_OUTCOME.CANCELLED,
-        outputs: [],
-        compileFailures: [],
-      }),
-    );
+    expect(exitCode).toBe(CliExitCode.AgentError);
+    expect(mocks.writeTextStdout).not.toHaveBeenCalled();
+    expect(mocks.writeTextStderr).not.toHaveBeenCalled();
   });
 
   it('reports missing instruction files before starting platform or input work', async () => {
