@@ -234,7 +234,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       {
         id: 'core-task',
         finalized: true,
-        task: { status: 'completed' },
+        task: { status: 'completed', model: 'deepseekT' },
         text: 'Finished: Audit core · DeepSeek V4 Flash (Thinking)',
       },
       {
