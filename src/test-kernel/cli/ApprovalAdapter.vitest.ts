@@ -194,7 +194,7 @@ describe('human input approval policy', () => {
     expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
       action: 'drop',
       threadId: 'ei_test',
-      feedback: TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+      reason: TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
     });
   });
 
@@ -310,7 +310,7 @@ describe('approval prompt hooks', () => {
     expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
       action: 'drop',
       threadId: 'ei_aabbccdd0011',
-      feedback: expect.stringContaining('non-TUI CLI runs'),
+      cause: expect.stringContaining('non-TUI CLI runs'),
     });
   });
 });

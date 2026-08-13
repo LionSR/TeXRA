@@ -446,7 +446,34 @@ describe('TUI retry approvals', () => {
       expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith({
         action: 'drop',
         threadId: 'thread-interrupted',
-        feedback: 'Session interrupted.',
+        cause: 'Session interrupted.',
+      }),
+    );
+  });
+
+  it('drops a note-free external inquiry without synthesized feedback', async () => {
+    const { interactions } = tui();
+    await interactions.openExternalInquiry?.({
+      requestId: 'inquiry-note-free',
+      allowBypass: false,
+      streamId: 'inquiry-stream',
+      mode: 'new',
+      question: 'Which external fact should be checked?',
+      threadId: 'thread-note-free',
+      sessionLinks: null,
+      draft: null,
+      transcript: null,
+    });
+    await waitForApproval('externalInquiry', {
+      threadId: 'thread-note-free',
+    });
+
+    currentApproval.get()?.decide({ accepted: false });
+
+    await vi.waitFor(() =>
+      expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith({
+        action: 'drop',
+        threadId: 'thread-note-free',
       }),
     );
   });

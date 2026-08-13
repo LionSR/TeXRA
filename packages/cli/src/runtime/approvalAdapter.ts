@@ -212,7 +212,7 @@ async function askHeadlessUserQuestion(
 ): Promise<UserQuestionSettlement> {
   const denial = settleHumanInputDenial(context);
   if (denial != null) {
-    return { action: 'reject', reason: denial.userMessage };
+    return { action: 'reject', reason: denial.reason };
   }
 
   const answers: UserQuestionAnswers = {};
@@ -331,7 +331,7 @@ export function createHeadlessCliHostInteractions(
       await handleExternalInquiryAction({
         action: 'drop',
         threadId: request.threadId,
-        feedback:
+        cause:
           'External inquiry is not available in non-TUI CLI runs: inquiry answers are delivered as asynchronous continuations, and this process cannot resume them after the run finalizes. Use texra chat for the inquiry panel, or ask_user_question for synchronous CLI input.',
       });
       return { threadId: request.threadId };

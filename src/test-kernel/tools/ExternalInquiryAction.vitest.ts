@@ -24,6 +24,23 @@ const continuationMocks = vi.hoisted(() => ({
   injectContinuationForDroppedThread: vi.fn(),
 }));
 
+const traceMocks = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+}));
+
+vi.mock('@agent/trace', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agent/trace')>();
+  return {
+    ...actual,
+    createChannelTrace: () => ({
+      ...actual.noopTrace,
+      info: traceMocks.info,
+      warn: traceMocks.warn,
+    }),
+  };
+});
+
 vi.mock('@tools/inquiry/externalInquiryStorage', () => storageMocks);
 
 vi.mock('@tools/inquiry/inquiryContinuation', () => continuationMocks);
@@ -53,7 +70,7 @@ describe('handleExternalInquiryAction', () => {
     ).toHaveBeenCalledWith('thread-submit', manifest, undefined);
   });
 
-  it('persists and continues drop actions', async () => {
+  it('persists note-free drops without synthesizing provenance', async () => {
     const manifest = { status: 'dropped' };
     storageMocks.markDropped.mockResolvedValue(manifest);
 
@@ -68,5 +85,36 @@ describe('handleExternalInquiryAction', () => {
     expect(
       continuationMocks.injectContinuationForDroppedThread,
     ).toHaveBeenCalledWith('thread-drop', manifest, undefined);
+    expect(traceMocks.info).not.toHaveBeenCalled();
+  });
+
+  it('logs policy reasons without labeling them as feedback', async () => {
+    storageMocks.markDropped.mockResolvedValue({ status: 'dropped' });
+
+    await handleExternalInquiryAction({
+      action: 'drop',
+      threadId: 'thread-denied',
+      reason: 'Human input is disabled by policy.',
+    });
+
+    expect(traceMocks.info).toHaveBeenCalledWith(
+      'Inquiry thread-denied denied',
+      { data: 'Human input is disabled by policy.' },
+    );
+  });
+
+  it('logs lifecycle causes without labeling them as feedback', async () => {
+    storageMocks.markDropped.mockResolvedValue({ status: 'dropped' });
+
+    await handleExternalInquiryAction({
+      action: 'drop',
+      threadId: 'thread-cancelled',
+      cause: 'Session interrupted.',
+    });
+
+    expect(traceMocks.info).toHaveBeenCalledWith(
+      'Inquiry thread-cancelled dropped with cause',
+      { data: 'Session interrupted.' },
+    );
   });
 });
