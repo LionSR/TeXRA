@@ -166,7 +166,7 @@ export async function executeCliWorkflowConfig(
     const hint = formatWorkflowResumeHint(
       runContext,
       executionId,
-      config.workingDirectory?.trim() || runContext.cwd,
+      config.workingDirectory || runContext.cwd,
     );
     if (waitForWrite) return writeCliProgressAndWait(runContext, hint);
     cliProgressWriter(runContext)(hint);

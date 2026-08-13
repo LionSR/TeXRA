@@ -53,9 +53,9 @@ export function formatResumeCommand(
   executionId: string,
   options: ResumeCommandOptions = {},
 ): string {
-  const cwd = options.cwd?.trim();
+  const cwd = options.cwd;
   const cwdArg =
-    cwd && cwd !== options.processCwd?.trim() ? ` --cwd ${quote([cwd])}` : '';
+    cwd && cwd !== options.processCwd ? ` --cwd ${quote([cwd])}` : '';
   const policyFlag =
     options.approvalPolicy && options.approvalPolicy !== 'ask'
       ? ` --approval-policy ${options.approvalPolicy}`

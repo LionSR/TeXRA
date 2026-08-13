@@ -908,6 +908,17 @@ describe('CLI root argument routing', () => {
     ).toBe(path.join('/tmp/project', 'out/paper.polished.tex'));
   });
 
+  it('preserves whitespace in stored workflow output and workspace paths', () => {
+    expect(
+      resumeWorkflowOutputFile(
+        storedConfig({
+          workingDirectory: '/tmp/project ',
+          cliOutputFile: ' output.tex ',
+        }),
+      ),
+    ).toBe(path.join('/tmp/project ', ' output.tex '));
+  });
+
   it('keeps legacy resume output paths relative when no stored working directory exists', () => {
     expect(
       resumeWorkflowOutputFile(

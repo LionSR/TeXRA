@@ -12,6 +12,8 @@ import { writeTextStderr } from '../runtime/logSinks';
 import { buildHeadlessRunContext } from '../runtime/runModel';
 import { resolveCliLaunchAgent } from '../runtime/agents';
 import {
+  assertOutputDirAvailable,
+  assertOutputFileAvailable,
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
 } from '../runtime/workflowOutput';
@@ -144,6 +146,10 @@ export async function runResumeExecution(
       executionId,
       modelHandlerCompatibilityKey,
     ) => {
+      const output = resumeWorkflowOutputFile(workflowConfig);
+      const outputDir = resumeWorkflowOutputDirectory(workflowConfig);
+      await assertOutputFileAvailable(output, context.cwd);
+      await assertOutputDirAvailable(outputDir, context.cwd);
       exitCode = await executeCliWorkflowConfig(
         workflowConfig,
         buildHeadlessRunContext(context),
@@ -151,8 +157,8 @@ export async function runResumeExecution(
           executionId: executionId ?? id,
           modelHandlerCompatibilityKey,
           // Honor the original run's persisted output destination.
-          output: resumeWorkflowOutputFile(workflowConfig),
-          outputDir: resumeWorkflowOutputDirectory(workflowConfig),
+          output,
+          outputDir,
           expectedOutputFiles:
             workflowConfig.cliExpectedOutputFiles ?? undefined,
           categoryMismatchMessage: `Execution ${id} resolved to a non workflow run.`,

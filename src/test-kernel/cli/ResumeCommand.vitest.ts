@@ -11,12 +11,15 @@ import {
   releaseOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
+import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 const mocks = vi.hoisted(() => ({
+  assertOutputDirAvailable: vi.fn(),
+  assertOutputFileAvailable: vi.fn(),
   executeCliWorkflowConfig: vi.fn(),
   initInteractiveCliPlatform: vi.fn(),
   initializeHeadlessTranscriptSession: vi.fn(),
@@ -63,6 +66,12 @@ vi.mock('@cli/runtime/transcriptSession', () => ({
 
 vi.mock('@cli/commands/workflow', () => ({
   executeCliWorkflowConfig: mocks.executeCliWorkflowConfig,
+}));
+
+vi.mock('@cli/runtime/workflowOutput', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/runtime/workflowOutput')>()),
+  assertOutputDirAvailable: mocks.assertOutputDirAvailable,
+  assertOutputFileAvailable: mocks.assertOutputFileAvailable,
 }));
 
 vi.mock('@cli/chat/tui/runChatTui', () => ({
@@ -138,6 +147,8 @@ describe('runResumeExecution', () => {
     );
     mocks.runChat.mockResolvedValue({ exitCode: 0 });
     mocks.executeCliWorkflowConfig.mockResolvedValue(0);
+    mocks.assertOutputDirAvailable.mockResolvedValue(undefined);
+    mocks.assertOutputFileAvailable.mockResolvedValue(undefined);
   });
 
   it('reopens the chat TUI with the retrieved tool-use resume state', async () => {
@@ -242,6 +253,38 @@ describe('runResumeExecution', () => {
       expect.objectContaining({
         outputDir: path.join(workingDirectory, ' out '),
       }),
+    );
+  });
+
+  it('validates a restored output directory before resuming the workflow', async () => {
+    const workflowConfig = AgentConfigSchema.parse({
+      ...WORKFLOW_CONFIG,
+      workingDirectory: path.join(path.sep, 'tmp', 'paper'),
+      cliOutputDirectory: 'out',
+    });
+    mocks.readConfig.mockResolvedValue(workflowConfig);
+    mocks.retrieveSessionResumeData.mockResolvedValue({
+      type: 'workflow',
+      agentConfig: workflowConfig,
+      executionId: EXECUTION_ID,
+    });
+    mocks.assertOutputDirAvailable.mockRejectedValue(
+      new CliUsageError('--output-dir must refer to a directory.'),
+    );
+
+    await expect(run(cliContext())).resolves.toBe(CliExitCode.AgentError);
+
+    expect(mocks.assertOutputFileAvailable).toHaveBeenCalledWith(
+      undefined,
+      expect.any(String),
+    );
+    expect(mocks.assertOutputDirAvailable).toHaveBeenCalledWith(
+      path.join(path.sep, 'tmp', 'paper', 'out'),
+      expect.any(String),
+    );
+    expect(mocks.executeCliWorkflowConfig).not.toHaveBeenCalled();
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      expect.stringContaining('--output-dir must refer to a directory.'),
     );
   });
 

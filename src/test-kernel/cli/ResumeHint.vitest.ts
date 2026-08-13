@@ -174,6 +174,12 @@ describe('formatResumeHint', () => {
       expected: 'texra-local resume root',
     },
     {
+      name: 'preserves whitespace in a stored workspace path',
+      commandName: 'texra-local',
+      options: { cwd: '/tmp/paper ', processCwd: '/tmp/launcher' },
+      expected: "texra-local resume root --cwd '/tmp/paper '",
+    },
+    {
       name: 'omits the default approval policy',
       commandName: 'texra-local',
       options: { approvalPolicy: 'ask' },
