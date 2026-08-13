@@ -645,7 +645,7 @@ describe('CLI run progress renderer', () => {
     handleStreamDescription(
       renderer,
       'child-stream',
-      'Check multiplier\nsigns\tand resonance counterexamples',
+      'Check multiplier\nsigns\tand \x1b[2Jresonance counterexamples',
     );
     handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
 
@@ -674,6 +674,23 @@ describe('CLI run progress renderer', () => {
     );
   });
 
+  it('drops the previous task when a waiting child begins a follow-up turn', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'Initial review task');
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.WAITING);
+    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.RUNNING);
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — Initial review task · 0s\n' +
+        'orchestrator · subagent: review · 0s\n',
+    );
+  });
+
   it('forgets a child description when that child becomes terminal', () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output);
@@ -690,6 +707,23 @@ describe('CLI run progress renderer', () => {
         'orchestrator · subagent: review — First review task · 0s\n' +
         'orchestrator · subagent: review · 0s\n' +
         'orchestrator · 0s\n' +
+        'orchestrator · subagent: review · 0s\n',
+    );
+  });
+
+  it('ignores a description that arrives after the child becomes terminal', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'First review task');
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.COMPLETED);
+    handleStreamDescription(renderer, 'child-stream', 'Late generated label');
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — First review task · 0s\n' +
         'orchestrator · subagent: review · 0s\n',
     );
   });

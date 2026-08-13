@@ -17,7 +17,7 @@ import type {
   StreamPhase,
   StreamTabId,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, STREAM_PHASE } from '@shared/schemas';
 import { roundStageFromStageStart } from '@shared/streams/stage';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
@@ -28,6 +28,7 @@ import { assertNever } from '@utils/core';
 import { pluralize, truncateSummary } from '@utils/text/stringUtils';
 
 // Local file imports
+import { safeTerminalText } from './terminalText';
 import { writeRawStderr } from './logSinks';
 import type { CliContext } from './cliContext';
 
@@ -139,6 +140,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private rootStreamStatus: StreamPhase | undefined;
   private activeChildren: readonly ActiveChildInfo[] = [];
   private readonly childDescriptions = new Map<StreamTabId, string>();
+  private readonly waitingChildStreamIds = new Set<StreamTabId>();
+  private readonly closedChildStreamIds = new Set<StreamTabId>();
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
   /** Derived from the one status field, never mirrored into a second flag. */
@@ -205,6 +208,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       case 'setParentStream':
         return;
       case 'removeStream':
+        this.closedChildStreamIds.add(event.payload.streamId);
+        this.waitingChildStreamIds.delete(event.payload.streamId);
         this.deleteChildDescription(event.payload.streamId);
         return;
     }
@@ -302,6 +307,17 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private applyStatus(streamId: StreamTabId, status: StreamPhase): void {
     if (!this.isRootStream(streamId)) {
       if (isTerminalOutcomePhase(status)) {
+        this.closedChildStreamIds.add(streamId);
+        this.waitingChildStreamIds.delete(streamId);
+        this.deleteChildDescription(streamId);
+      } else if (status === STREAM_PHASE.WAITING) {
+        this.waitingChildStreamIds.add(streamId);
+      } else if (
+        status === STREAM_PHASE.RUNNING &&
+        this.waitingChildStreamIds.delete(streamId)
+      ) {
+        // A resumed child is processing a new instruction. Keep the agent-name
+        // fallback until the runtime publishes a description for this turn.
         this.deleteChildDescription(streamId);
       }
       return;
@@ -338,6 +354,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     description: string,
   ): void {
     if (!this.isRootStream(streamId)) {
+      if (this.closedChildStreamIds.has(streamId)) return;
       this.childDescriptions.set(streamId, description);
       if (
         !this.activeChildren.some((child) => child.childStreamId === streamId)
@@ -455,7 +472,10 @@ function formatActiveChildren(
     namedChildren.length > 1 ? ` +${namedChildren.length - 1}` : '';
   const description = descriptions.get(first.childStreamId);
   const task = description
-    ? ` — ${truncateSummary(description, ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH)}`
+    ? ` — ${truncateSummary(
+        safeTerminalText(description),
+        ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH,
+      )}`
     : '';
   return `${label}: ${first.agentName}${task}${suffix}`;
 }
