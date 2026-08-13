@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { StreamTabId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 const stream = (value: string) => value as StreamTabId;
 
@@ -146,6 +146,152 @@ describe('ToolUseFollowUpQueue ownership', () => {
     expect(queues.submit(id, { text: 'late' }, 'recoverable')).toEqual({
       kind: 'unavailable',
     });
+  });
+
+  it('starts a new child generation for an authorized retry', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const executionId = 'retry-execution' as ExecutionId;
+    const id = stream(`stream#${executionId}`);
+    const first = queues.claimChildRun(id, executionId)!;
+    queues.release(first, 'terminal');
+
+    expect(queues.claimLive(id, 'flow')).toBeUndefined();
+    expect(queues.submit(id, { text: 'late' }, 'live_owner')).toEqual({
+      kind: 'unavailable',
+    });
+
+    const retry = queues.claimChildRun(id, executionId);
+    expect(retry).toBeDefined();
+    expect(retry?.kind).toBe('child');
+    expect(retry?.generationId).not.toBe(first.generationId);
+    expect(
+      queues.submit(
+        id,
+        { text: 'late from prior generation' },
+        'live_owner',
+        first.generationId,
+      ),
+    ).toEqual({ kind: 'unavailable' });
+    expect(
+      queues.submit(
+        id,
+        { text: 'current generation' },
+        'live_owner',
+        retry?.generationId,
+      ),
+    ).toEqual({ kind: 'live' });
+    expect(queues.hasLiveOwner(id)).toBe(true);
+  });
+
+  it('reconstitutes only an independently verified persisted generation', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:persisted-recovery');
+    expect(queues.restorePersistedGeneration(id, 'persisted-generation')).toBe(
+      true,
+    );
+
+    const submission = queues.submit(
+      id,
+      { text: 'answer after reload' },
+      'recoverable',
+      'persisted-generation',
+    );
+
+    expect(submission.kind).toBe('recovery');
+    expect(
+      submission.kind === 'recovery'
+        ? submission.lease.generationId
+        : undefined,
+    ).toBe('persisted-generation');
+
+    const activeOnly = new ToolUseFollowUpQueue();
+    expect(
+      activeOnly.submit(
+        id,
+        { text: 'unowned live notification' },
+        'live_owner',
+        'persisted-generation',
+      ),
+    ).toEqual({ kind: 'unavailable' });
+  });
+
+  it('rejects a persisted producer after a new live generation exists', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:new-live-generation');
+    const live = queues.claimLive(id, 'flow')!;
+
+    expect(
+      queues.submit(
+        id,
+        { text: 'answer from prior process' },
+        'recoverable',
+        'persisted-generation',
+      ),
+    ).toEqual({ kind: 'unavailable' });
+    expect(queues.drainItems(live)).toEqual([]);
+  });
+
+  it('does not reopen a terminal stream for an unrelated execution', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const executionId = 'owned-execution' as ExecutionId;
+    const id = stream(`stream#${executionId}`);
+    const first = queues.claimChildRun(id, executionId)!;
+    queues.release(first, 'terminal');
+
+    expect(() =>
+      queues.claimChildRun(id, 'unrelated-execution' as ExecutionId),
+    ).toThrow('does not belong to execution');
+    expect(queues.claimLive(id, 'flow')).toBeUndefined();
+  });
+
+  it('restores only the authoritative persisted generation', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:persisted-authority');
+
+    expect(
+      queues.restorePersistedGeneration(id, 'authoritative-generation'),
+    ).toBe(true);
+    expect(queues.currentGenerationId(id)).toBe('authoritative-generation');
+    expect(
+      queues.restorePersistedGeneration(id, 'stale-producer-generation'),
+    ).toBe(false);
+    expect(
+      queues.submit(
+        id,
+        { text: 'stale answer' },
+        'recoverable',
+        'stale-producer-generation',
+      ),
+    ).toEqual({ kind: 'unavailable' });
+  });
+
+  it('rebinds a provisional recovery queue before the resumed flow borrows it', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:recovery-before-resume');
+    const recovery = queues.claimRecovery(id, true)!;
+    queues.submit(id, { text: 'continue' }, 'live_owner');
+
+    expect(
+      queues.externallyOwnedQueue(id, 'persisted-generation'),
+    ).toBeDefined();
+    expect(recovery.generationId).toBe('persisted-generation');
+    expect(queues.currentGenerationId(id)).toBe('persisted-generation');
+    expect(queues.drainItems(recovery).map((item) => item.text)).toEqual([
+      'continue',
+    ]);
+  });
+
+  it('rebinds a released provisional recovery queue from persisted state', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:released-provisional-recovery');
+    const recovery = queues.claimRecovery(id, true)!;
+    queues.release(recovery, 'recoverable');
+
+    expect(queues.restorePersistedGeneration(id, 'persisted-generation')).toBe(
+      true,
+    );
+    expect(recovery.generationId).toBe('persisted-generation');
+    expect(queues.currentGenerationId(id)).toBe('persisted-generation');
   });
 
   it('deletion invalidates a live generation and rejects late input', () => {

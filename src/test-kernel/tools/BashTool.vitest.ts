@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { afterEach, describe, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
@@ -646,6 +646,10 @@ describe('BashTool', () => {
       .mockResolvedValue({ status: 'sent' });
 
     const parentStreamId = 'bash-tool-bg-parent' as StreamTabId;
+    const parentLease = defaultSession().followUps.claimLive(
+      parentStreamId,
+      'flow',
+    )!;
     const recorded = recordSessionEvents(defaultSession().events);
 
     try {
@@ -662,7 +666,12 @@ describe('BashTool', () => {
       });
     } finally {
       recorded.detach();
+      defaultSession().followUps.release(parentLease, 'terminal');
     }
+
+    expect(submitFollowUpSpy.mock.calls[0]?.[2]?.expectedGenerationId).toBe(
+      parentLease.generationId,
+    );
 
     const followUpArg = submitFollowUpSpy.mock.calls[0]?.[1];
     const deliveredText =

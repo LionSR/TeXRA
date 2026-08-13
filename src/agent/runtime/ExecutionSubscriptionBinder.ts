@@ -31,6 +31,7 @@ type PerStream = Map<string, ExecutionSubscription>;
 
 interface ReleaseSource {
   onRelease(observer: (streamId: StreamTabId) => void): () => void;
+  currentGenerationId?(streamId: StreamTabId): string | undefined;
 }
 
 interface BinderLogger {
@@ -62,6 +63,7 @@ class ExecutionSubscription {
     >,
     private readonly logger: BinderLogger,
     private readonly onDisposed: () => void,
+    private readonly expectedGenerationId: string | undefined,
     private readonly session?: SessionHandle,
   ) {
     this.executionId = handle.executionId;
@@ -128,6 +130,9 @@ class ExecutionSubscription {
     void submitFollowUp(this.streamId, wrapAndSanitizeTag(TAG, text), {
       session: this.session,
       mode: 'live_notification',
+      ...(this.expectedGenerationId !== undefined
+        ? { expectedGenerationId: this.expectedGenerationId }
+        : {}),
     })
       .then((result) => {
         if (result.status !== 'sent' && result.status !== 'queued') return;
@@ -199,6 +204,7 @@ export class ExecutionSubscriptionBinder {
       this.registry,
       this.logger,
       () => this.removeBoundKey(streamId, executionId),
+      this.releaseSource.currentGenerationId?.(streamId),
       this.session,
     );
     bound.set(executionId, subscription);

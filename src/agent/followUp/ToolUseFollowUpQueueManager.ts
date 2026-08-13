@@ -1,7 +1,10 @@
+import { randomUUID } from 'node:crypto';
+
 import { LRUCache } from 'lru-cache';
 import { createChannelTrace } from '@agent/trace';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import type { StreamTabId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { KeyedMutex } from '@utils/core/keyedMutex';
 import {
   createBoundedIdSet,
   type BoundedIdSet,
@@ -23,6 +26,10 @@ export type FollowUpConsumerKind = 'flow' | 'child' | 'recovery';
 
 interface QueueEntry {
   readonly queue: FollowUpQueue;
+  /** Stable identity of this continuation generation across recovery claims. */
+  generationId: string;
+  /** True until persisted flow state or a resumed flow confirms the identity. */
+  generationProvisional: boolean;
   /**
    * Delivery ids already admitted for this stream (#9531). In-memory,
    * transport-level replay suppression only — NOT crash-safe exactly-once: a
@@ -48,6 +55,8 @@ interface QueueEntry {
 export interface FollowUpConsumerLease {
   readonly streamId: StreamTabId;
   readonly generation: number;
+  /** Opaque identity of this session-owned queue generation. */
+  readonly generationId: string;
   readonly kind: FollowUpConsumerKind;
 }
 
@@ -71,12 +80,14 @@ export type FollowUpSubmission =
  *
  * Lifecycle is explicit: an owned entry is `live` or `recovering`, an unowned
  * persisted cursor is `recoverable`, and terminal stream ids are retained in a
- * bounded tombstone cache. Terminal entries cannot be reopened.
+ * bounded tombstone cache. Delivery and ordinary live claims cannot reopen a
+ * terminal entry; a newly authorized child run may begin a new generation.
  */
 export class ToolUseFollowUpQueue {
   static readonly TERMINAL_CAP = 500;
   static readonly DELIVERY_ID_CAP = 1000;
   private readonly entries = new Map<StreamTabId, QueueEntry>();
+  private readonly submissionMutex = new KeyedMutex<StreamTabId>();
   private readonly terminal = new LRUCache<StreamTabId, true>({
     max: ToolUseFollowUpQueue.TERMINAL_CAP,
   });
@@ -91,14 +102,70 @@ export class ToolUseFollowUpQueue {
     };
   }
 
+  /** Serialize routing and admission for one stream within this session. */
+  runSubmissionExclusive<Result>(
+    streamId: StreamTabId,
+    operation: () => Promise<Result>,
+  ): Promise<Result> {
+    return this.submissionMutex.runExclusive(streamId, operation);
+  }
+
   /** Claim a live flow/child consumer. A competing owner is rejected. */
   claimLive(
     streamId: StreamTabId,
     kind: Exclude<FollowUpConsumerKind, 'recovery'>,
+    generationId?: string,
   ): FollowUpConsumerLease | undefined {
     if (this.terminal.has(streamId)) return undefined;
-    const entry = this.entries.get(streamId) ?? this.createEntry(streamId);
+    const entry =
+      this.entries.get(streamId) ?? this.createEntry(streamId, generationId);
+    if (generationId !== undefined && entry.generationId !== generationId) {
+      return undefined;
+    }
     return this.claim(entry, streamId, kind);
+  }
+
+  /** Restore a generation read from the stream's authoritative flow record. */
+  restorePersistedGeneration(
+    streamId: StreamTabId,
+    generationId: string,
+  ): boolean {
+    if (this.terminal.has(streamId)) return false;
+    const entry = this.entries.get(streamId);
+    if (entry) {
+      if (entry.generationId === generationId) {
+        entry.generationProvisional = false;
+        return true;
+      }
+      if (!entry.generationProvisional) return false;
+      entry.generationId = generationId;
+      entry.generationProvisional = false;
+      return true;
+    }
+    this.createEntry(streamId, generationId);
+    return true;
+  }
+
+  /**
+   * Begin a separately authorized child run, replacing a terminal generation
+   * when the deterministic child stream ID is reused. The caller must already
+   * own the execution lease; producers and ordinary live flows cannot cross
+   * this boundary, so late delivery remains rejected.
+   */
+  claimChildRun(
+    streamId: StreamTabId,
+    executionId: ExecutionId,
+  ): FollowUpConsumerLease | undefined {
+    if (!streamId.endsWith(`#${executionId}`)) {
+      throw new Error(
+        `Child stream ${streamId} does not belong to execution ${executionId}.`,
+      );
+    }
+    const retained = this.entries.get(streamId);
+    if (retained) return this.claim(retained, streamId, 'child');
+
+    this.terminal.delete(streamId);
+    return this.claim(this.createEntry(streamId), streamId, 'child');
   }
 
   /** Claim persisted recovery before any asynchronous resume preparation. */
@@ -109,7 +176,9 @@ export class ToolUseFollowUpQueue {
     if (this.terminal.has(streamId)) return undefined;
     const entry =
       this.entries.get(streamId) ??
-      (createIfMissing ? this.createEntry(streamId) : undefined);
+      (createIfMissing
+        ? this.createEntry(streamId, undefined, true)
+        : undefined);
     if (!entry || entry.lifecycle !== 'recoverable' || entry.owner) {
       return undefined;
     }
@@ -138,17 +207,24 @@ export class ToolUseFollowUpQueue {
     streamId: StreamTabId,
     followUp: FollowUpQueueInput,
     admission: 'live_owner' | 'recoverable' | 'existing_recoverable',
+    expectedGenerationId?: string,
   ): FollowUpSubmission {
     if (this.terminal.has(streamId)) return { kind: 'unavailable' };
 
     let entry = this.entries.get(streamId);
+    if (
+      expectedGenerationId !== undefined &&
+      entry?.generationId !== expectedGenerationId
+    ) {
+      return { kind: 'unavailable' };
+    }
     if (admission === 'live_owner') {
       if (!entry) return { kind: 'not_owned' };
     } else {
       if (!entry && admission === 'existing_recoverable') {
         return { kind: 'unavailable' };
       }
-      entry ??= this.createEntry(streamId);
+      entry ??= this.createEntry(streamId, undefined, true);
       if (!entry.owner) entry.lifecycle = 'recoverable';
     }
 
@@ -196,12 +272,29 @@ export class ToolUseFollowUpQueue {
     return owner?.kind === 'flow' || owner?.kind === 'child';
   }
 
-  /** Inner child/recovery flows borrow the queue their outer owner consumes. */
-  externallyOwnedQueue(streamId: StreamTabId): FollowUpQueue | undefined {
+  /**
+   * Inner child/recovery flows borrow the queue their outer owner consumes.
+   * A recovery created before persisted state was read has a provisional
+   * generation; the resumed flow is the authority that rebinds it. Child
+   * ownership is already authoritative and must match exactly.
+   */
+  externallyOwnedQueue(
+    streamId: StreamTabId,
+    generationId: string,
+  ): FollowUpQueue | undefined {
     const entry = this.entries.get(streamId);
-    return entry?.owner?.kind === 'child' || entry?.owner?.kind === 'recovery'
-      ? entry.queue
-      : undefined;
+    const owner = entry?.owner;
+    if (!entry || (owner?.kind !== 'child' && owner?.kind !== 'recovery')) {
+      return undefined;
+    }
+    if (entry.generationId !== generationId) {
+      if (owner.kind !== 'recovery' || !entry.generationProvisional) {
+        return undefined;
+      }
+      entry.generationId = generationId;
+    }
+    entry.generationProvisional = false;
+    return entry.queue;
   }
 
   queue(lease: FollowUpConsumerLease): FollowUpQueue {
@@ -268,9 +361,26 @@ export class ToolUseFollowUpQueue {
     return this.entries.get(streamId)?.queue.getAll() ?? [];
   }
 
-  private createEntry(streamId: StreamTabId): QueueEntry {
+  /** Generation fence for detached producers bound to the current stream. */
+  currentGenerationId(streamId: StreamTabId): string | undefined {
+    return this.entries.get(streamId)?.generationId;
+  }
+
+  /** Generation authority supplied by an outer child loop to its inner flow. */
+  currentChildGenerationId(streamId: StreamTabId): string | undefined {
+    const entry = this.entries.get(streamId);
+    return entry?.owner?.kind === 'child' ? entry.generationId : undefined;
+  }
+
+  private createEntry(
+    streamId: StreamTabId,
+    generationId: string = randomUUID(),
+    generationProvisional = false,
+  ): QueueEntry {
     const entry: QueueEntry = {
       queue: new FollowUpQueue(),
+      generationId,
+      generationProvisional,
       admittedDeliveryIds: createBoundedIdSet(
         ToolUseFollowUpQueue.DELIVERY_ID_CAP,
       ),
@@ -291,6 +401,9 @@ export class ToolUseFollowUpQueue {
     const lease: FollowUpConsumerLease = {
       streamId,
       generation: entry.generation,
+      get generationId() {
+        return entry.generationId;
+      },
       kind,
     };
     entry.owner = lease;
