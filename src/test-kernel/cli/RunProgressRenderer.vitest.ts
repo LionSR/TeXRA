@@ -715,6 +715,16 @@ describe('CLI run progress renderer', () => {
     handleStreamDescription(renderer, 'child-stream', 'Initial review task');
     handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
     handleFollowUpSent(renderer, 'child-stream');
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — Initial review task · 0s\n' +
+        'orchestrator · subagent: review · 0s\n',
+    );
+
+    // The status subscriber may repaint the roster before this renderer sees
+    // WAITING -> RUNNING. That repaint must not recover the previous label.
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
     handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.WAITING);
     handleStreamStatus(
       renderer,
