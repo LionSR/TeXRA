@@ -495,7 +495,7 @@ Coordinates multi-agent work on LaTeX research projects. It reads project contex
 
 ### `progressCheck`
 
-An end-of-session reviewer. It looks at what was just done, the project's standing goal, and the git/PR state to decide whether the orchestrator is actually finished or whether meaningful, low-risk progress is still on the table. Read-only — it advises, but does not edit or delegate. Bundled with every [team](#built-in-teams) except Software Engineer.
+An end-of-session reviewer. It looks at what was just done and, when the session changed files or depends on wider project context, the project's standing goal and git/PR state. For self-contained read-only work, it stays with the request and the named agent reports. Read-only — it advises, but does not edit or delegate. Bundled with every [team](#built-in-teams) except Software Engineer.
 
 **Best for:** Auditing what a team run actually delivered versus the goal
 
