@@ -70,6 +70,45 @@ describe('task-group StreamLog projection', () => {
     );
   });
 
+  it('removes a projected group when its terminal ownership is malformed', () => {
+    const taskGroups = projectTaskGroupsFromStreamLog([
+      entry('valid-phase', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
+        text: 'Explore',
+        data: { kind: 'phase', attemptId: 'attempt-1' },
+      }),
+      entry('neighbor', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
+        text: 'Verify',
+        data: { kind: 'phase', attemptId: 'attempt-1' },
+      }),
+      entry('valid-phase', STREAM_LOG_ENTRY_TYPES.GROUP_END, {
+        text: 'Explore',
+        data: {
+          kind: 'phase',
+          attemptId: '',
+          status: RUN_OUTCOME.COMPLETED,
+          endTime: 200,
+        },
+      }),
+      entry('neighbor', STREAM_LOG_ENTRY_TYPES.GROUP_END, {
+        text: 'Verify',
+        data: {
+          kind: 'phase',
+          attemptId: 'attempt-1',
+          status: RUN_OUTCOME.COMPLETED,
+          endTime: 250,
+        },
+      }),
+    ]);
+
+    expect(taskGroups).toEqual([
+      expect.objectContaining({
+        id: 'neighbor',
+        status: RUN_OUTCOME.COMPLETED,
+        endTime: 250,
+      }),
+    ]);
+  });
+
   it('projects group metadata and completes groups in source order', () => {
     const taskGroups = projectTaskGroupsFromStreamLog([
       entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
