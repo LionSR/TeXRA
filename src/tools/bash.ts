@@ -465,6 +465,8 @@ export class BashTool extends defineTool({
     // Capture the run's session inside the tool's ALS; deliverAndFinalize below
     // unregisters after the process ends, possibly outside the ALS.
     const runSession = currentSession();
+    const parentDeliveryGenerationId =
+      runSession.followUps.currentGenerationId(parentStreamId);
     const session = new BashBackgroundSession();
     const stopWatchingLease = onOwnedExecutionLeaseLost(executionId, () => {
       logger.error('Execution lease was lost; stopping background command', {
@@ -555,6 +557,9 @@ export class BashTool extends defineTool({
           targetStreamId: parentStreamId,
           followUp: { text, origin: 'subagent_result' },
           session: runSession,
+          ...(parentDeliveryGenerationId !== undefined
+            ? { expectedGenerationId: parentDeliveryGenerationId }
+            : {}),
         });
         if (delivery.kind !== 'delivered') {
           logger.warn(

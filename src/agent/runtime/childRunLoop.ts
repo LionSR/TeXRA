@@ -499,6 +499,7 @@ function resolveDeliveryTarget<TTurn>(
 interface PendingChildDelivery {
   readonly targetStreamId: StreamTabId;
   readonly followUp: FollowUpQueueInput;
+  readonly expectedGenerationId?: string;
 }
 
 /**
@@ -520,6 +521,8 @@ async function deliverTurn<TTurn>(params: {
   wallTimeMs: number;
   isError: boolean;
   prepareParentDelivery?: () => boolean;
+  /** Parent continuation generation captured before this producer started. */
+  parentDeliveryGenerationId?: string;
   /** Serializes turn-state writes against the acceptance write (#9531). */
   turnStateWrites: PQueue;
 }): Promise<PendingChildDelivery | undefined> {
@@ -534,6 +537,7 @@ async function deliverTurn<TTurn>(params: {
     wallTimeMs,
     isError,
     prepareParentDelivery,
+    parentDeliveryGenerationId,
   } = params;
   const delivered = turn != null && !isError;
   const msg = await (delivered
@@ -589,6 +593,9 @@ async function deliverTurn<TTurn>(params: {
   if (prepareParentDelivery?.() === false) return undefined;
   return {
     targetStreamId,
+    ...(parentDeliveryGenerationId !== undefined
+      ? { expectedGenerationId: parentDeliveryGenerationId }
+      : {}),
     followUp: {
       text: msg,
       origin: 'subagent_result',
@@ -612,6 +619,9 @@ async function submitPendingDelivery(
     targetStreamId: pending.targetStreamId,
     followUp: pending.followUp,
     session,
+    ...(pending.expectedGenerationId !== undefined
+      ? { expectedGenerationId: pending.expectedGenerationId }
+      : {}),
   });
   if (delivery.kind !== 'delivered') {
     logger.warn(
@@ -656,6 +666,11 @@ export function startChildRunLoop<TTurn>(
   // lost generation fails before any queue, listener, stage, or loop exists.
   runWithOwnedExecutionLease(executionId, () => undefined);
   const runSession = currentSession();
+  // Parent delivery belongs to the continuation generation under which this
+  // producer started. A terminal retry may reuse the same stream ID, but late
+  // progress or results from this child must not enter the replacement queue.
+  const parentDeliveryGenerationId =
+    runSession.followUps.currentGenerationId(parentStreamId);
   const releaseChildActivation = childStream
     ? () => undefined
     : runSession.executions.reserveChildActivation({
@@ -749,6 +764,9 @@ export function startChildRunLoop<TTurn>(
         followUp: { text: msg, origin: 'subagent_result' },
         session: runSession,
         mode: 'live_notification',
+        ...(parentDeliveryGenerationId !== undefined
+          ? { expectedGenerationId: parentDeliveryGenerationId }
+          : {}),
       });
     },
     recordCost: (totalCostUsd) => {
@@ -833,6 +851,7 @@ export function startChildRunLoop<TTurn>(
           strategy,
           executionId,
           parentStreamId,
+          parentDeliveryGenerationId,
           logger,
           turn,
           turnRef,
