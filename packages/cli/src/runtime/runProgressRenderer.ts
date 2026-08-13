@@ -228,11 +228,13 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       case 'setParentStream':
         return;
       case 'followUpSent':
+        if (this.rootStreamTerminal) return;
         if (!this.isRootStream(event.payload.streamId)) {
           this.pendingFollowUpChildStreamIds.add(event.payload.streamId);
         }
         return;
       case 'removeStream':
+        if (this.rootStreamTerminal) return;
         this.closedChildStreamIds.add(event.payload.streamId);
         this.pendingFollowUpChildStreamIds.delete(event.payload.streamId);
         this.deleteChildDescription(event.payload.streamId);
@@ -340,6 +342,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     previousStatus: StreamPhase | undefined,
   ): void {
     if (!this.isRootStream(streamId)) {
+      if (this.rootStreamTerminal) return;
       if (isTerminalOutcomePhase(status)) {
         this.closedChildStreamIds.add(streamId);
         this.pendingFollowUpChildStreamIds.delete(streamId);
