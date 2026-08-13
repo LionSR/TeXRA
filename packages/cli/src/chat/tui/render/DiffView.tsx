@@ -12,6 +12,11 @@ import {
   previousRowsText,
 } from '@cli/tui/overflowText';
 import { clampModalWidth } from '@cli/tui/ui/theme';
+import {
+  clipToWidth,
+  fillRows,
+  textDisplayWidth,
+} from '@cli/runtime/terminalText';
 import { clamp, isObject } from '@utils/core';
 
 import {
@@ -19,7 +24,6 @@ import {
   maxScrollableRowOffset,
   scrollBoundedRows,
 } from './scrollBounds';
-import { clipToWidth, fillRows, textDisplayWidth } from './terminalText';
 import type { StructuredPatchHunk } from 'diff';
 
 type Hunk = StructuredPatchHunk;

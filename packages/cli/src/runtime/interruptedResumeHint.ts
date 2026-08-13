@@ -9,8 +9,8 @@ export function tryReadCliCwd(): string | undefined {
   try {
     return readCliCwd();
   } catch {
-    // process.cwd() can fail after the launch directory is deleted. Omitting
-    // it safely makes the resume formatter state the workspace explicitly.
+    // The ambient launch-directory read can fail after that directory is
+    // deleted. Omitting it makes the formatter state the workspace explicitly.
     return undefined;
   }
 }

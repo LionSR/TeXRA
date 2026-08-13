@@ -21,6 +21,7 @@ import {
   CONFIRM_CARD_HORIZONTAL_DECORATION,
   isCompactRows,
 } from '@cli/tui/ui/theme';
+import { clipToWidth, textDisplayWidth } from '@cli/runtime/terminalText';
 import type {
   UserQuestionAnswers,
   UserQuestionPermission,
@@ -33,7 +34,6 @@ import {
   userQuestionDecision,
 } from './UserQuestionState';
 import { BaseTextInput } from '../input/BaseTextInput';
-import { clipToWidth, textDisplayWidth } from '../render/terminalText';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface UserQuestionProps {

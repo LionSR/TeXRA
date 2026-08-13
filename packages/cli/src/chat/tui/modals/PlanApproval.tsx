@@ -7,6 +7,7 @@ import {
   CONFIRM_CARD_HORIZONTAL_DECORATION,
   isCompactRows,
 } from '@cli/tui/ui/theme';
+import { fillRows, truncateToWidth } from '@cli/runtime/terminalText';
 import type { PlanApprovalPermission } from '@shared/schemas';
 import { PLAN_GOAL_COPY } from '@shared/copy/delegationApproval';
 
@@ -17,7 +18,6 @@ import {
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
 import { confirmCardCompactChromeRows } from './ConfirmCardState';
-import { fillRows, truncateToWidth } from '../render/terminalText';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface PlanApprovalProps {

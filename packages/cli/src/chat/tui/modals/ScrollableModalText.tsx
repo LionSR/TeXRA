@@ -10,6 +10,7 @@ import { Box, Text } from 'ink';
 import { clampModalWidth, MIN_MODAL_CONTENT_WIDTH } from '@cli/tui/ui/theme';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { fillRows } from '@cli/runtime/terminalText';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import {
   boundedScrollableLines,
@@ -18,7 +19,6 @@ import {
   scrollPageRows,
   type ScrollableDisplayLine,
 } from '../render/scrollBounds';
-import { fillRows } from '../render/terminalText';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 
 type ModalTextDisplayLine = ScrollableDisplayLine<'text'>;

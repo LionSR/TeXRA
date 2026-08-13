@@ -18,7 +18,7 @@ import {
   workflowDashboardModel,
   workflowDashboardPanelItemCount,
 } from '@cli/chat/tui/state/workflowDashboardModel';
-import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 import {
   workflowPhaseListValue,
   workflowTaskListValue,

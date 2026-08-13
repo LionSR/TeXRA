@@ -34,6 +34,8 @@ All notable changes to this project will be documented in this file.
   agent or multi-agent team now prints a command that preserves its workspace,
   approval policy, and skill sources while reopening the interactive session
   required for continuation.
+- **Headless team progress identifies delegated tasks** — direct multi-agent
+  runs show what the active child is checking, not only its generic agent name.
 
 ### Shared (all surfaces)
 
