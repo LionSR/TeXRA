@@ -79,15 +79,18 @@ interface PhaseHeaderDetails extends WorkflowPhaseHeading {
 
 function PhaseHeader({
   details,
+  focused = false,
 }: {
   readonly details: PhaseHeaderDetails;
+  readonly focused?: boolean;
 }): React.JSX.Element {
   const inlineProgress = details.progress ? ` · ${details.progress}` : '';
   return (
     <Box flexDirection="row" flexGrow={1} minWidth={0}>
       <Box minWidth={0} flexShrink={1}>
-        <Text dimColor>{'    '}</Text>
-        <Text aria-hidden dimColor>{`${STATUS_DIAMOND} `}</Text>
+        <Text aria-hidden dimColor>
+          {focused ? `${POINTER} ${STATUS_DIAMOND} ` : `    ${STATUS_DIAMOND} `}
+        </Text>
         <Text dimColor wrap="truncate-end">
           {`${formatWorkflowPhaseHeading(details)}${inlineProgress}`}
         </Text>
@@ -339,7 +342,11 @@ function WorkflowDashboard({
     value: workflowTaskListValue(entry.id),
   }));
   const narrowItems: SelectItem<ChildListValue>[] = groups.flatMap((group) => [
-    { label: group.label, value: group.value, disabled: true },
+    {
+      label: group.label,
+      value: group.value,
+      disabled: group.tasks.length > 0,
+    },
     ...group.tasks.map((entry) => ({
       label: entry.task.label,
       value: workflowTaskListValue(entry.id),
@@ -489,7 +496,10 @@ function WorkflowDashboard({
           renderItem={(item, state) => {
             const group = groupByValue.get(item.value);
             return group ? (
-              <PhaseHeader details={groupDetails(group)} />
+              <PhaseHeader
+                details={groupDetails(group)}
+                focused={state.focused}
+              />
             ) : (
               renderTask(item, state)
             );
