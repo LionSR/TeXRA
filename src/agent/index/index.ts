@@ -4,9 +4,6 @@
 
 export type { AgentSource } from '@shared/schemas/agent';
 
-/** All built-in delegating team roots (relay-served + bundled). */
-export { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
-
 export {
   AgentDirectoryService,
   type AbsoluteDirectoryAccess,
