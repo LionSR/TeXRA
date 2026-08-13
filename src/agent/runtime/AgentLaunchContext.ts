@@ -36,6 +36,10 @@ import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError } from '@common/errors';
+import {
+  isErrorPresented,
+  markErrorPresented,
+} from '@common/errors/sdkError/errorMetadata';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { normalizeRunId } from '@common/constants/runIds';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
@@ -168,7 +172,9 @@ export async function getAgentPath(
     { agentName: agentIdentifier },
     { replayWhenAttached: true },
   );
-  throw new AgentError(`Could not find agent: ${agentIdentifier}`);
+  const err = new AgentError(`Could not find agent: ${agentIdentifier}`);
+  markErrorPresented(err);
+  throw err;
 }
 
 async function validateModelExists(
@@ -188,7 +194,9 @@ async function validateModelExists(
     },
     { replayWhenAttached: true },
   );
-  throw new AgentError(`Model ${modelName} is not registered`);
+  const err = new AgentError(`Model ${modelName} is not registered`);
+  markErrorPresented(err);
+  throw err;
 }
 
 async function inferLaunchModelHandlerCompatibilityKey(
@@ -616,7 +624,11 @@ export async function buildAgentLaunchContext(
         runTrace,
       });
     });
-    if (!input.suppressErrorNotification && !(err instanceof ZodError)) {
+    if (
+      !input.suppressErrorNotification &&
+      !(err instanceof ZodError) &&
+      !isErrorPresented(err)
+    ) {
       interactions.emit(
         'requestShowError',
         { message: toErrorMessage(err) },

@@ -80,6 +80,33 @@ describe('AgentLaunchContext', () => {
     ]);
   });
 
+  it('does not double-surface a missing-agent failure via the generic error toast', async () => {
+    const recording = createRecordingHost();
+    const session = createTestSession({ interactions: recording.host });
+
+    try {
+      await expect(
+        buildAgentLaunchContext({
+          config: AgentConfigSchema.parse({ agent: '', model: '' }),
+          session,
+        }),
+      ).rejects.toThrow('Could not find agent');
+    } finally {
+      session.dispose();
+    }
+
+    // Only the targeted banner should fire; the generic `requestShowError`
+    // catch-all must not repeat a failure the banner already presented.
+    expect(
+      recording.events.filter((event) => event.event === 'requestShowError'),
+    ).toEqual([]);
+    expect(
+      recording.events.filter(
+        (event) => event.event === 'showAgentConfigBanner',
+      ),
+    ).toHaveLength(1);
+  });
+
   it('projects model changes into the active run context', async () => {
     const session = {} as SessionHandle;
     const executionId = 'launch-context-execution';
