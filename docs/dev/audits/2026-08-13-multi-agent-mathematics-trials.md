@@ -197,14 +197,16 @@ the exact remainder checks.
 
 - Team resolution, delegation, synthesis, and recovery all completed in real
   mathematical runs without weakening the mathematical acceptance criteria.
-- The compact progress status remains legible during long runs, but concurrent
-  ownership is partially hidden behind `+N`, and nested workflow structure is
-  represented by only its outer task label.
+- The compact progress status remained legible during long runs, but initially
+  hid the second concurrent owner behind `+N`. The follow-up formatter change
+  now retains two names and counts only further children. Nested workflow
+  structure is still represented by its outer task label.
 - The settings interface corrections made during the same audit are captured
   in commits `cc407df910`, `98edb7fa98`, and `b0de5a63cc`: delegation roles now
   come from backend capability data, the roster alone owns active-team state,
   and apply/delete actions use separate native controls.
 - No new recovery mechanism is justified by these trials. The intentional
   missing-agent failure was isolated and recovered by an ordinary subsequent
-  delegation. The remaining status limitation is an information-presentation
-  question, not evidence of incorrect lifecycle ownership.
+  delegation. The remaining nested-status limitation is an
+  information-presentation question, not evidence of incorrect lifecycle
+  ownership.

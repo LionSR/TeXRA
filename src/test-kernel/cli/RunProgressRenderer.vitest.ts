@@ -544,7 +544,7 @@ describe('CLI run progress renderer', () => {
 
     expect(output.text).toBe(
       'coordinator main.tex · 0s\n' +
-        'coordinator main.tex · subagents: reviewer +2 · 0s\n',
+        'coordinator main.tex · subagents: reviewer, compiler +1 · 0s\n',
     );
   });
 
