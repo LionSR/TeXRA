@@ -314,12 +314,7 @@ export function App(props: AppProps): React.JSX.Element {
         pendingSummaries,
         visibleApprovalRootStreamId(rootStreamId, childListTarget.streamId),
       ),
-    [
-      childListTarget.streamId,
-      pendingSummaries,
-      rootStreamId,
-      workflowDashboard,
-    ],
+    [childListTarget.streamId, pendingSummaries, rootStreamId],
   );
   const childListValues = useMemo<readonly ChildListValue[]>(
     () =>
