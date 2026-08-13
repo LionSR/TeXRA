@@ -877,6 +877,22 @@ describe('CLI run progress renderer', () => {
     );
   });
 
+  it('keeps the task description when an active child switches models', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output);
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'Current review task');
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleRunConfig(renderer, { streamId: 'child-stream', agent: 'review' });
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — Current review task · 0s\n',
+    );
+  });
+
   it('forgets a child description when that child stream is removed', () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output);
