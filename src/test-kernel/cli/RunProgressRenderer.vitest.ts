@@ -645,7 +645,7 @@ describe('CLI run progress renderer', () => {
     handleStreamDescription(
       renderer,
       'child-stream',
-      'Check multiplier signs and resonance counterexamples',
+      'Check multiplier\nsigns\tand resonance counterexamples',
     );
     handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
 
@@ -688,6 +688,7 @@ describe('CLI run progress renderer', () => {
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
         'orchestrator · subagent: review — First review task · 0s\n' +
+        'orchestrator · subagent: review · 0s\n' +
         'orchestrator · 0s\n' +
         'orchestrator · subagent: review · 0s\n',
     );
@@ -707,6 +708,7 @@ describe('CLI run progress renderer', () => {
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
         'orchestrator · subagent: review — Removed review task · 0s\n' +
+        'orchestrator · subagent: review · 0s\n' +
         'orchestrator · 0s\n' +
         'orchestrator · subagent: review · 0s\n',
     );

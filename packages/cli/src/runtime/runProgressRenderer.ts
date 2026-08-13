@@ -25,7 +25,7 @@ import {
   formatStreamStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
 import { assertNever } from '@utils/core';
-import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
+import { pluralize, truncateSummary } from '@utils/text/stringUtils';
 
 // Local file imports
 import { writeRawStderr } from './logSinks';
@@ -205,7 +205,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       case 'setParentStream':
         return;
       case 'removeStream':
-        this.childDescriptions.delete(event.payload.streamId);
+        this.deleteChildDescription(event.payload.streamId);
         return;
     }
     assertNever(event, 'Unhandled run-progress renderer session fact');
@@ -302,7 +302,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private applyStatus(streamId: StreamTabId, status: StreamPhase): void {
     if (!this.isRootStream(streamId)) {
       if (isTerminalOutcomePhase(status)) {
-        this.childDescriptions.delete(streamId);
+        this.deleteChildDescription(streamId);
       }
       return;
     }
@@ -313,6 +313,21 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (this.rootStreamTerminal) {
       this.state.activeSubagents = undefined;
     }
+    this.updateHeartbeat();
+    this.render(true);
+  }
+
+  private deleteChildDescription(streamId: StreamTabId): void {
+    if (!this.childDescriptions.delete(streamId)) return;
+    if (
+      !this.activeChildren.some((child) => child.childStreamId === streamId)
+    ) {
+      return;
+    }
+    this.state.activeSubagents = formatActiveChildren(
+      this.activeChildren,
+      this.childDescriptions,
+    );
     this.updateHeartbeat();
     this.render(true);
   }
@@ -439,7 +454,7 @@ function formatActiveChildren(
     namedChildren.length > 1 ? ` +${namedChildren.length - 1}` : '';
   const description = descriptions.get(first.childStreamId);
   const task = description
-    ? ` — ${truncateWithEllipsis(description, ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH)}`
+    ? ` — ${truncateSummary(description, ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH)}`
     : '';
   return `${label}: ${first.agentName}${task}${suffix}`;
 }
