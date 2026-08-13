@@ -25,6 +25,10 @@ All notable changes to this project will be documented in this file.
   input is hidden.
 - **Session views show recognizable model names** — headers, `/status`, and
   background-task rows use catalog labels instead of internal model IDs.
+- **Interrupted headless agent runs show how to resume** — stopping a tool-use
+  agent or multi-agent team now prints a command that preserves its workspace,
+  approval policy, and skill sources while reopening the interactive session
+  required for continuation.
 
 ### Shared (all surfaces)
 

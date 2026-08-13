@@ -294,6 +294,7 @@ describe('CLI multi-agent run command', () => {
     expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
       enforceCategory: true,
       registerExecution: true,
+      recoveryInputIsDurable: true,
       stopAfterCycle: true,
     });
     expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
@@ -339,6 +340,36 @@ describe('CLI multi-agent run command', () => {
       ...emission.json,
     });
     expect(emission?.text).toBe('The proof is correct.');
+  });
+
+  it('marks materialized stdin as unavailable for team recovery advertising', async () => {
+    mocks.withExpandedRunInputs.mockImplementationOnce(
+      async (
+        _inputSpecs: readonly string[],
+        _contextSpecs: readonly string[],
+        _cwd: string,
+        _options: unknown,
+        run: (inputs: {
+          readonly inputFiles: string[];
+          readonly contextFiles: string[];
+          readonly hasMaterializedStdinInput: boolean;
+        }) => Promise<unknown>,
+      ) =>
+        run({
+          inputFiles: ['.texra-tmp/stdin.tex'],
+          contextFiles: [],
+          hasMaterializedStdinInput: true,
+        }),
+    );
+
+    await runPreset({
+      inputFiles: ['-'],
+      instruction: 'Inspect the proof.',
+    });
+
+    expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
+      recoveryInputIsDurable: false,
+    });
   });
 
   it('marks run-plan resolution when authenticated gaps triggered a remote load', async () => {
