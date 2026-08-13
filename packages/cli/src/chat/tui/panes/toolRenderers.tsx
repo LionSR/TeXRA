@@ -11,6 +11,10 @@
 // Local imports - shared schemas and utilities
 import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
+import {
+  textDisplayWidth,
+  truncateSummaryToWidth,
+} from '@cli/runtime/terminalText';
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
 import {
   executionsSubagentSummary,
@@ -32,10 +36,6 @@ import {
   type InlinePatchGroup,
   wrappedDiffDisplayLines,
 } from '../render/DiffView';
-import {
-  textDisplayWidth,
-  truncateSummaryToWidth,
-} from '../render/terminalText';
 
 const MAX_HEADER_PREVIEW = 80;
 const MAX_ERROR_PREVIEW = 240;

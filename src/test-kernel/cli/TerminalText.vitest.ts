@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  clipToWidth,
-  truncateToWidth,
-} from '@cli/chat/tui/render/terminalText';
+import { clipToWidth, truncateToWidth } from '@cli/runtime/terminalText';
 
 describe('terminal text width limits', () => {
   describe('clipToWidth', () => {

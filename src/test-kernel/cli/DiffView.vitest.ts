@@ -7,7 +7,7 @@ import {
   scrollBoundedDiffDisplayLines,
   wrappedDiffDisplayLines,
 } from '@cli/chat/tui/render/DiffView';
-import { fillRows } from '@cli/chat/tui/render/terminalText';
+import { fillRows } from '@cli/runtime/terminalText';
 
 const SIX_LINE_HUNK_SOURCE = [
   'alpha',

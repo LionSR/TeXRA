@@ -8,7 +8,7 @@ import {
   planApprovalGoalNoticeLine,
 } from '@cli/chat/tui/modals/PlanApproval';
 import { confirmCardFeedbackRows } from '@cli/chat/tui/modals/confirmCardRowsBudget';
-import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 import { PLAN_GOAL_COPY } from '@shared/copy/delegationApproval';
 
 function compactBudget(

@@ -22,12 +22,12 @@ import {
   TOOL_OUTPUT_CORNER,
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 import type { WorkflowCallProgress } from '@shared/schemas';
 import type { CompactionActivityStatus } from '@shared/streams/compactionActivityProjection';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
-import { textDisplayWidth } from '../render/terminalText';
 import { isInquiryContinuationText } from './transcriptEntries';
 import { loadedImageDisplayLines } from './loadedImageDisplay';
 import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';

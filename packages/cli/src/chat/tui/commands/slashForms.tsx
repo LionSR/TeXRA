@@ -5,8 +5,8 @@ import { isEscapeInput } from '@cli/tui/inputKeys';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 import { FormFrame, formFrameWidth } from '../forms/_shared/FormFrame';
-import { textDisplayWidth } from '../render/terminalText';
 import { activeForm, formProgress, type FormProgress } from '../state/cliState';
 import { appendLocalUserTranscript } from '../state/transcript';
 

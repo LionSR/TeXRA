@@ -8,7 +8,7 @@ import {
 } from '@cli/chat/tui/modals/ExternalInquiry';
 import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
 import { textInputDisplayWindow } from '@cli/chat/tui/input/BaseTextInput';
-import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 
 describe('CLI external inquiry modal', () => {
   function hintText(
