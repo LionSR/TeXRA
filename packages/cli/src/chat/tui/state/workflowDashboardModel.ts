@@ -10,8 +10,8 @@
 // Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
 import {
-  latestWorkflowAttemptId,
   latestWorkflowCallsById,
+  latestWorkflowEntryAttemptId,
 } from '@shared/copy/workflowCall';
 
 // Local imports - TUI presentation constants
@@ -90,14 +90,7 @@ export function workflowDashboardModel(
   const byPhase = new Map<string | undefined, MutableWorkflowPhaseGroup>();
   const tasks: WorkflowTaskEntry[] = [];
   const currentAttemptId =
-    root.workflowAttemptId ??
-    latestWorkflowAttemptId(
-      root.entries.map((entry) => {
-        if (entry.role === 'workflowTask') return entry.task.attemptId;
-        if (entry.role === 'phase') return entry.attemptId;
-        return undefined;
-      }),
-    );
+    root.workflowAttemptId ?? latestWorkflowEntryAttemptId(root.entries);
   const currentCalls = new Set(
     latestWorkflowCallsById(
       root.entries.flatMap((entry) =>
