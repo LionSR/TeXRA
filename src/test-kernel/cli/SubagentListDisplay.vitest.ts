@@ -1321,12 +1321,18 @@ describe('CLI child list display model', () => {
           status: 'running',
           childStreamId: child,
         }),
+        workflowTaskEntry('failed-task', 'Failed: Refute', {
+          id: 'failed-task',
+          label: 'Refute',
+          status: 'failed',
+          error: 'Counterexample found.',
+        }),
       ],
     });
     const output = await renderSubagentList(
       {
         dashboard: workflowDashboardModel(rootSlice, 18),
-        maxRows: 5,
+        maxRows: 6,
         pendingApprovals: groupPendingApprovalsByRow(
           [
             { streamKey: '', kind: 'externalInquiry' },
