@@ -6,7 +6,7 @@ export const DELEGATION_APPROVAL_COPY = Object.freeze({
     'Press y to approve only this task. Press a to approve delegated tasks, file edits, and commands for this chat. Other prompts still ask.',
   progressViewAction: 'Approve agent work for this run',
   progressViewExplanation:
-    'Approves this request, queued and later agent tasks, and queued and later file edits and shell commands in this run. Plans, retries, external inquiries, and user questions still require a decision.',
+    'Approves this request and other work already queued in the current run. Later agent tasks, file edits, and shell commands in the current run and any runs delegated from it are auto-approved. Plans, retries, external inquiries, and user questions still require a decision.',
   progressViewToggle:
     'Auto-approve later agent tasks, file edits, and shell commands in this run',
   progressViewEditAction:
