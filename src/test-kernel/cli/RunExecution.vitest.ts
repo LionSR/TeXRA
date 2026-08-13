@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
   releaseExecutionLeaseAfterArtifacts: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
+  writeTextStderrAndWait: vi.fn<() => Promise<void>>(async () => undefined),
   finalizeExecution: vi.fn(),
 }));
 
@@ -126,6 +127,7 @@ vi.mock('@cli/runtime/workflowPlainOutput', () => ({
 
 vi.mock('@cli/runtime/logSinks', () => ({
   writeTextStderr: mocks.writeTextStderr,
+  writeTextStderrAndWait: mocks.writeTextStderrAndWait,
 }));
 
 type CliRequest = Parameters<typeof executeCliRequest>[0];
@@ -1247,6 +1249,92 @@ describe('executeCliConfig', () => {
       stopAfterCycle: true,
     });
   }
+
+  it('prints a complete resume command after interrupted tool-use recovery is available', async () => {
+    const { platform } = await installFakePlatform();
+    const { executeCliToolUseConfig } = await loadRunExecution();
+    const context = cliContext({
+      approvalPolicy: 'yolo',
+      outputFormat: 'ndjson',
+      skillSourceOptions: {
+        includeInterop: true,
+        additionalPaths: ['/tmp/skill path'],
+      },
+    });
+    let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
+    let publishRun: LeaseOptions['onRun'];
+    const hangingRun = stubHangingRun((options) => {
+      publishLeaseScope = options.onExecutionLeaseAcquired;
+      publishRun = options.onRun;
+    });
+    let settleRecoveryWrite!: () => void;
+    const recoveryWrite = new Promise<void>((resolve) => {
+      settleRecoveryWrite = resolve;
+    });
+    mocks.writeTextStderrAndWait.mockReturnValueOnce(recoveryWrite);
+
+    const run = executeCliToolUseConfig(toolUseConfig(), context, {
+      registerExecution: true,
+      stopAfterCycle: true,
+    });
+    await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
+    const shutdown = platform.lifecycle.runShutdown();
+    publishLeaseScope?.((operation) => operation(), 'exec-1' as ExecutionId);
+    publishRun?.();
+    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+      outcome: RUN_OUTCOME.CANCELLED,
+      outcomePersisted: true,
+    });
+    hangingRun.resolve(COMPLETED_RUN);
+
+    await vi.waitFor(() =>
+      expect(mocks.writeTextStderrAndWait).toHaveBeenCalledOnce(),
+    );
+    let shutdownResolved = false;
+    void shutdown.then(() => {
+      shutdownResolved = true;
+    });
+    await Promise.resolve();
+    expect(shutdownResolved).toBe(false);
+    settleRecoveryWrite();
+    await shutdown;
+    await expect(run).resolves.toMatchObject({
+      ok: true,
+      exitCode: CliExitCode.Interrupted,
+    });
+    expect(mocks.writeTextStderrAndWait).toHaveBeenCalledExactlyOnceWith(
+      "Resume this session with: texra resume exec-1 --cwd /tmp/project --approval-policy yolo --include-interop --source '/tmp/skill path'",
+    );
+  });
+
+  it('does not advertise recovery for invocation-owned temporary inputs', async () => {
+    const { platform } = await installFakePlatform();
+    const { executeCliToolUseConfig } = await loadRunExecution();
+    let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
+    let publishRun: LeaseOptions['onRun'];
+    const hangingRun = stubHangingRun((options) => {
+      publishLeaseScope = options.onExecutionLeaseAcquired;
+      publishRun = options.onRun;
+    });
+
+    const run = executeCliToolUseConfig(toolUseConfig(), cliContext(), {
+      registerExecution: true,
+      recoveryInputIsDurable: false,
+    });
+    await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
+    const shutdown = platform.lifecycle.runShutdown();
+    publishLeaseScope?.((operation) => operation(), 'exec-1' as ExecutionId);
+    publishRun?.();
+    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+      outcome: RUN_OUTCOME.CANCELLED,
+      outcomePersisted: true,
+    });
+    hangingRun.resolve(COMPLETED_RUN);
+
+    await shutdown;
+    await run;
+    expect(mocks.writeTextStderrAndWait).not.toHaveBeenCalled();
+  });
 
   /** Stubs a workflow-category result where a tool-use run was expected. */
   async function runWorkflowCategoryMismatch() {

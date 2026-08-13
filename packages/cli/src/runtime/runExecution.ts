@@ -36,6 +36,11 @@ import {
   finalizeCliExecution,
   releaseCliExecutionLeaseAfterArtifacts,
 } from './executionFinalization';
+import {
+  formatInterruptedResumeHint,
+  tryReadCliCwd,
+  writeInterruptedResumeHint,
+} from './interruptedResumeHint';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { initializeHeadlessTranscriptSession } from './transcriptSession';
 import { createCliRuntimeHost } from './cliPresentationHost';
@@ -172,10 +177,31 @@ export async function executeCliConfig<
 export async function executeCliToolUseConfig(
   config: AgentConfigPayload,
   runContext: CliContext,
-  options: CliConfigExecuteOptions<typeof AgentCategory.ToolUse> = {},
+  options: CliConfigExecuteOptions<typeof AgentCategory.ToolUse> & {
+    /** False when invocation-owned temporary inputs will not survive exit. */
+    readonly recoveryInputIsDurable?: boolean;
+  } = {},
 ) {
+  const { recoveryInputIsDurable = true, ...executeOptions } = options;
+  const recoveryProcessCwd = tryReadCliCwd();
+  const workingDirectory = config.workingDirectory || runContext.cwd;
   const execution = await executeCliConfig(config, runContext, {
-    ...options,
+    ...executeOptions,
+    onInterruptedExecutionFinalized:
+      recoveryInputIsDurable === true
+        ? (executeOptions.onInterruptedExecutionFinalized ??
+          ((executionId) =>
+            writeInterruptedResumeHint(
+              formatInterruptedResumeHint(
+                runContext,
+                executionId,
+                'session',
+                workingDirectory,
+                recoveryProcessCwd,
+              ),
+              true,
+            )))
+        : undefined,
     expectedCategory: AgentCategory.ToolUse,
   });
   if (!execution.ok) return execution;
