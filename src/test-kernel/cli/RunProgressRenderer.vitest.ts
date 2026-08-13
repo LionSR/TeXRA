@@ -760,6 +760,23 @@ describe('CLI run progress renderer', () => {
     );
   });
 
+  it('does not repaint a child after the root stream is terminal', () => {
+    const output = outputBuffer();
+    const renderer = plainRenderer(output, { minIntervalMs: 0 });
+
+    handleOrchestratorRootRun(renderer);
+    handleStreamDescription(renderer, 'child-stream', 'Late review task');
+    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
+    handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.CANCELLED);
+    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.CANCELLED);
+
+    expect(output.text).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · subagent: review — Late review task · 0s\n' +
+        'orchestrator · stopped · 0s\n',
+    );
+  });
+
   it('freezes on a failed terminal stream stop, same as completed/cancelled', () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output, { minIntervalMs: 0 });
