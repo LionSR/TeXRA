@@ -143,11 +143,20 @@ async function deliverContinuation(params: {
   threadId: InquiryThreadId;
   session?: SessionHandle;
 }): Promise<InjectionOutcome> {
+  if (params.parentGenerationId == null) {
+    logger.warn(
+      `Inquiry continuation for ${params.threadId}: the stored parent generation is unavailable.`,
+    );
+    await emitInquiryThreadUpdate(
+      params.threadId,
+      { resumeOutcome: 'parent_finished' },
+      params.session,
+    );
+    return 'archived';
+  }
   const result = await submitFollowUp(params.parentStreamId, params.text, {
     session: params.session,
-    ...(params.parentGenerationId != null
-      ? { expectedGenerationId: params.parentGenerationId }
-      : {}),
+    expectedGenerationId: params.parentGenerationId,
   });
 
   if (result.status === 'no_session') {

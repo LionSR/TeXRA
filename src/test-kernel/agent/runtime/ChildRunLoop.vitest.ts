@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
   deliverChildRunFollowUp: vi.fn(),
+  releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
   runWithOwnedExecutionLease: vi.fn(
     (_executionId: ExecutionId, operation: () => unknown) => operation(),
   ),
@@ -54,7 +55,8 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
 }));
 
 vi.mock('@agent/runtime/executionOwnership', () => ({
-  releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
+  releaseExecutionLeaseAfterArtifacts:
+    mocks.releaseExecutionLeaseAfterArtifacts,
 }));
 
 vi.mock('@agent/storage/childRunPersistence', () => ({
@@ -67,6 +69,7 @@ vi.mock('@agent/followUp/childRunDelivery', () => ({
 }));
 
 import type { WorkflowJournalEntry } from '@agent/workflowScript';
+import { getExecutionStore } from '@agent/storage';
 import {
   startChildRunLoop,
   type ChildRunLoopHandle,
@@ -484,6 +487,31 @@ describe('childRunLoop E2E fixtures', () => {
 
     await waitForLoopEnd(childStreamId);
     expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
+  });
+
+  it('drains pending turn-state writes before releasing a retryable execution', async () => {
+    const { childStreamId, executionId } = loopIds('turn-state-release');
+    const stateWrite = pDefer<void>();
+    vi.spyOn(getExecutionStore(executionId), 'writeTurnState')
+      .mockImplementationOnce(() => stateWrite.promise)
+      .mockResolvedValue(undefined);
+    const { strategy, rejectTurn } = createFakeStrategy();
+
+    const handle = startLoop({ childStreamId, executionId }, strategy);
+    await vi.waitFor(() =>
+      expect(getExecutionStore(executionId).writeTurnState).toHaveBeenCalled(),
+    );
+    mocks.leaseLossListener?.();
+    await rejectTurn(1, createAbortError());
+    await Promise.resolve();
+    expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
+
+    stateWrite.resolve();
+    await handle.completion;
+    expect(mocks.releaseExecutionLeaseAfterArtifacts).toHaveBeenCalledWith(
+      session,
+      executionId,
+    );
   });
 
   it('persists without parent delivery in persist-only mode', async () => {
