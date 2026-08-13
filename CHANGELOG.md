@@ -30,6 +30,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Concurrent app starts refresh bundled agents safely** — simultaneous TeXRA
+  processes sharing one data directory no longer fail while updating built-in
+  agent definitions.
 - **Claude Code forks leave the original conversation unchanged** — an
   incomplete fork now stops instead of continuing the original conversation.
 
