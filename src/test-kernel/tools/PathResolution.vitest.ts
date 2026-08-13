@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
