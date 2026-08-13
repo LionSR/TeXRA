@@ -195,6 +195,7 @@ Parameters map directly to subagent-result delivery attributes:
     const rejectionFeedback: string[] = [];
     const rejectionReasons: string[] = [];
     const rejectionCauses: string[] = [];
+    let sawCancellation = false;
 
     let totalStripped = 0;
 
@@ -220,7 +221,10 @@ Parameters map directly to subagent-result delivery attributes:
         firstRejectedPath ??= entry.original;
         if (approval.feedback) rejectionFeedback.push(approval.feedback);
         if (approval.reason) rejectionReasons.push(approval.reason);
-        if (approval.cause) rejectionCauses.push(approval.cause);
+        if ('cause' in approval) {
+          sawCancellation = true;
+          if (approval.cause) rejectionCauses.push(approval.cause);
+        }
         results.push(`rejected: ${entry.original}${mappingNote}`);
         continue;
       }
@@ -283,8 +287,8 @@ Parameters map directly to subagent-result delivery attributes:
           ...(rejectionReasons.length > 0
             ? { reason: rejectionReasons.join('\n') }
             : {}),
-          ...(rejectionCauses.length > 0
-            ? { cause: rejectionCauses.join('\n') }
+          ...(sawCancellation
+            ? { cause: rejectionCauses.join('\n') || undefined }
             : {}),
         },
       );

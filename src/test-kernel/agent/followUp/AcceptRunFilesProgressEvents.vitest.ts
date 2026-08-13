@@ -204,6 +204,26 @@ describe('accept_run_files progress events', () => {
     expect(result.error).not.toContain('cancelled');
   });
 
+  it('preserves a cause-free cancellation while aggregating rejections', async () => {
+    const tool = new AcceptRunFilesTool();
+
+    setRunStorageEntries({
+      [`executions/${executionId}/output.tex`]: FileType.File,
+    });
+    stubWorkspaceFiles(false, '');
+    vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
+    testApprovalHandler = async () => ({ accepted: false, cause: undefined });
+
+    const result = await runAccept(tool, [
+      { path: 'output.tex', original: 'paper.tex' },
+    ]);
+
+    expect(result.summary).toBe(
+      'Tool edit approval cancelled: accept_run_files for paper.tex.',
+    );
+    expect(result.userInstruction).toBeUndefined();
+  });
+
   it('preserves mixed policy-denial and cancellation details', async () => {
     const tool = new AcceptRunFilesTool();
 
