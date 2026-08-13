@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  ExternalInquiry,
   boundedExternalInquiryQuestionLines,
   externalInquiryAnswerRowsBudget,
   externalInquiryKeyHintsForWidth,
@@ -9,6 +10,8 @@ import {
 import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
 import { textInputDisplayWindow } from '@cli/chat/tui/input/BaseTextInput';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 
 describe('CLI external inquiry modal', () => {
   function hintText(
@@ -32,6 +35,39 @@ describe('CLI external inquiry modal', () => {
       width,
     });
   }
+
+  it.each([
+    { name: 'Esc skip', input: String.fromCharCode(27) },
+    { name: 'empty Ctrl-R rejection', input: String.fromCharCode(18) },
+  ])('does not synthesize feedback for $name', async ({ input }) => {
+    const { ink, React } = await loadInk();
+    const onDecide = vi.fn();
+    const { instance, stdin } = renderInteractive(
+      ink,
+      React.createElement(ExternalInquiry, {
+        payload: {
+          requestId: 'inquiry-note-free',
+          allowBypass: false,
+          streamId: 'inquiry-stream',
+          mode: 'new',
+          question: 'Which external fact should be checked?',
+          threadId: 'ei_000000000001',
+        },
+        onDecide,
+      }),
+      { columns: 100, rows: 30 },
+    );
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(input);
+      await vi.waitFor(() =>
+        expect(onDecide).toHaveBeenCalledWith({ accepted: false }),
+      );
+    } finally {
+      instance.unmount();
+    }
+  });
 
   it.each([
     {

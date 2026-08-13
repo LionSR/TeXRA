@@ -265,18 +265,14 @@ export function ExternalInquiry(
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) {
-      props.onDecide({
-        accepted: false,
-        userMessage: 'External inquiry skipped by user.',
-      });
+      props.onDecide({ accepted: false });
       return;
     }
     if (key.ctrl && input.toLowerCase() === 'r') {
       const feedback = answer.trim();
       props.onDecide({
         accepted: false,
-        userMessage:
-          feedback.length > 0 ? feedback : 'External inquiry rejected by user.',
+        ...(feedback.length > 0 ? { userMessage: feedback } : {}),
       });
       return;
     }
