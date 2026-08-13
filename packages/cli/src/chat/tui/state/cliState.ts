@@ -30,6 +30,7 @@ import {
   type UserFollowUpSupport,
   type WorkflowCallProgress,
 } from '@shared/schemas';
+import { latestWorkflowAttemptId } from '@shared/copy/workflowCall';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import type {
   CompactionActivityBlock,
@@ -135,6 +136,23 @@ export type ConversationEntry = ConversationEntryOrigin &
         readonly images: readonly LoadedImage[];
       })
   );
+
+/** Resolve the current workflow attempt from session state, with a legacy transcript fallback. */
+export function currentWorkflowAttemptId(
+  declaredAttemptId: string | undefined,
+  entries: readonly ConversationEntry[],
+): string | undefined {
+  return (
+    declaredAttemptId ??
+    latestWorkflowAttemptId(
+      entries.map((entry) => {
+        if (entry.role === 'workflowTask') return entry.task.attemptId;
+        if (entry.role === 'phase') return entry.attemptId;
+        return undefined;
+      }),
+    )
+  );
+}
 
 /**
  * One transcript-projection candidate: a rendered row plus the ordering key
