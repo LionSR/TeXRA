@@ -380,17 +380,19 @@ function WorkflowDashboard({
     { isActive: keyboardActive },
   );
 
+  const sessionApprovalSuffix = pendingApprovalRowSuffix(
+    pendingApprovals?.get(model.root.streamId),
+  );
   if (
-    (tasks.length === 0 && groups.length === 0) ||
+    (tasks.length === 0 &&
+      groups.length === 0 &&
+      sessionApprovalSuffix === undefined) ||
     (contentRows !== undefined && contentRows <= 0)
   ) {
     return null;
   }
   const heading = `${model.root.agent ?? 'Workflow'} · ${done}/${total} done`;
   const { failed } = workflowCallFailureTally(calls);
-  const sessionApprovalSuffix = pendingApprovalRowSuffix(
-    pendingApprovals?.get(model.root.streamId),
-  );
   const renderTask = (
     item: SelectItem<ChildListValue>,
     state: { readonly focused: boolean },
