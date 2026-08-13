@@ -95,6 +95,7 @@ function projectedView(slice: StreamSlice | undefined): unknown {
     compactingActive: slice?.compactingActive ?? false,
     activeSkills: slice?.activeSkills ?? [],
     taskGroups: slice?.taskGroups ?? [],
+    workflowAttemptId: slice?.workflowAttemptId,
   };
 }
 
@@ -454,6 +455,30 @@ describe('transcript fold vs from-scratch oracle', () => {
         ops.step();
         syncBothAndCompare(step, ' (compact)');
       }
+    } finally {
+      dispose();
+    }
+  });
+
+  it('folds a hidden workflow-attempt marker into projection state', () => {
+    const dispose = subscribeStreamLog();
+    try {
+      configureStreams(CONFIGS[1]);
+      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
+        id: 'workflow-attempt-current',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 1,
+        messageType: MESSAGE_TYPES.INTERNAL,
+        text: '',
+        data: { kind: 'workflowAttempt', attemptId: 'current-attempt' },
+      });
+
+      syncStreamLog(FOLD_STREAM);
+
+      const slice = streams.get().get(FOLD_STREAM);
+      expect(slice?.workflowAttemptId).toBe('current-attempt');
+      expect(slice?.entries).toEqual([]);
     } finally {
       dispose();
     }
