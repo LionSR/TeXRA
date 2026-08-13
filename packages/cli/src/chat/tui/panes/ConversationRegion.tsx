@@ -188,9 +188,7 @@ export function ConversationRegion({
     workflowDashboardItemCount > 0
       ? workflowDashboardItemCount
       : snapshot.sessionViews.length;
-  const approvalOnlyDashboard =
-    snapshot.workflowDashboardRootHasApproval &&
-    workflowDashboardItemCount === 1;
+  const approvalOnlyDashboard = workflowDashboardItemCount === 1;
   const minimumSessionPanelRows =
     workflowDashboardItemCount > 0 && !approvalOnlyDashboard ? 3 : 2;
   const {
