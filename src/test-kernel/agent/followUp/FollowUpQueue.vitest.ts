@@ -195,7 +195,6 @@ describe('ToolUseFollowUpQueue ownership', () => {
     ).toThrow('does not belong to execution');
     expect(queues.claimLive(id, 'flow')).toBeUndefined();
   });
-
   it('deletion invalidates a live generation and rejects late input', () => {
     const queues = new ToolUseFollowUpQueue();
     const id = stream('stream:deleted');
