@@ -748,6 +748,11 @@ const STREAM_RELEASED_REJECTION = {
   feedback: 'Stream resources released.',
 } as const;
 
+const BASH_STREAM_RELEASED_REJECTION = {
+  action: 'reject',
+  cause: 'Stream resources released.',
+} as const;
+
 function activateStream(bridge: TestableBridge, streamId: string): void {
   emitSessionFact(bridge, 'setActiveStream', {
     streamId,
@@ -2049,7 +2054,7 @@ describe('DesktopProgressBridge', () => {
 
     // This promise must settle through releaseStreamResources, which owns
     // stream-scoped interaction cleanup.
-    await expect(result).resolves.toEqual(STREAM_RELEASED_REJECTION);
+    await expect(result).resolves.toEqual(BASH_STREAM_RELEASED_REJECTION);
   });
 
   it('resumes workflow streams from persisted meta', async () => {

@@ -95,7 +95,7 @@ describe('tool edit approval controller', () => {
 
     await expect(approval).resolves.toEqual({
       accepted: false,
-      reason: 'Stream resources released.',
+      cause: 'Stream resources released.',
     });
     // No prompt is ever published for a request that never reached the user,
     // and the staged copies are cleaned up on the way out.

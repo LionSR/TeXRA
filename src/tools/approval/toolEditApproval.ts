@@ -71,11 +71,19 @@ export type ToolEditApprovalResult =
       readonly accepted: false;
       readonly feedback?: string;
       readonly reason?: never;
+      readonly cause?: never;
     }
   | {
       readonly accepted: false;
       readonly reason: string;
       readonly feedback?: never;
+      readonly cause?: never;
+    }
+  | {
+      readonly accepted: false;
+      readonly cause: string | undefined;
+      readonly feedback?: never;
+      readonly reason?: never;
     };
 
 const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
@@ -394,6 +402,7 @@ export function appendApprovalDiffNote(
 export interface ToolEditRejectionProvenance {
   readonly feedback?: string;
   readonly reason?: string;
+  readonly cause?: string;
 }
 
 export function buildApprovalRejectedResult(
@@ -402,11 +411,19 @@ export function buildApprovalRejectedResult(
   rejection: ToolEditRejectionProvenance,
 ): ToolResult {
   const feedback = rejection.feedback?.trim();
+  const isPolicyDenial = rejection.reason !== undefined;
+  const isAutomaticCancellation = 'cause' in rejection;
   const reason = rejection.reason?.trim();
-  const summary = reason
-    ? `Tool edit denied: ${sourceTool} for ${path}.`
-    : `User rejected ${sourceTool} for ${path}.`;
-  const error = reason ? `${summary}\n\n${reason}` : summary;
+  const cause = rejection.cause?.trim();
+  let summary = `User rejected ${sourceTool} for ${path}.`;
+  if (isPolicyDenial) {
+    summary = `Tool edit denied: ${sourceTool} for ${path}.`;
+  }
+  if (isAutomaticCancellation) {
+    summary = `Tool edit approval cancelled: ${sourceTool} for ${path}.`;
+  }
+  const detail = cause || reason;
+  const error = detail ? `${summary}\n\n${detail}` : summary;
   return errorResult(error, {
     summary,
     ...(feedback && { userInstruction: feedback }),
