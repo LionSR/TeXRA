@@ -305,7 +305,7 @@ export class BashTool extends defineTool({
     const approval = await requestBashApproval({ command: input.command, cwd });
 
     if (approval.action !== 'approve') {
-      return buildBashApprovalRejectedResult(input.command, approval.feedback);
+      return buildBashApprovalRejectedResult(input.command, approval);
     }
 
     // Signal execution starting (triggers in-progress log after approval)

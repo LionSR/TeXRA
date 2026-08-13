@@ -180,7 +180,16 @@ export interface HostExternalInquiryHandle {
 
 export type BashSettlement =
   | { readonly action: 'approve'; readonly feedback?: never }
-  | { readonly action: 'reject'; readonly feedback?: string };
+  | {
+      readonly action: 'reject';
+      readonly feedback?: string;
+      readonly reason?: never;
+    }
+  | {
+      readonly action: 'reject';
+      readonly reason: string;
+      readonly feedback?: never;
+    };
 
 export type UserQuestionSettlement =
   | {
