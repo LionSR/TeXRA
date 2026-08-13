@@ -251,11 +251,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     switch (event.type) {
       case 'run.config':
         if (this.rootStreamId && !this.isRootStream(event.streamId)) {
-          // A deterministic child stream ID may begin a new incarnation.
-          // run.config is the boundary emitted immediately before its new
-          // description, so reopen the ID without accepting late old facts.
-          this.closedChildStreamIds.delete(event.streamId);
-          this.childDescriptions.delete(event.streamId);
+          // Only a closed deterministic child ID begins a new incarnation.
+          // Active children also emit run.config when switching models.
+          if (this.closedChildStreamIds.delete(event.streamId)) {
+            this.childDescriptions.delete(event.streamId);
+          }
           return;
         }
         if (this.applyRunConfig(event.streamId, event.config)) {
