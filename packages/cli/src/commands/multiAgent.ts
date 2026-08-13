@@ -36,10 +36,7 @@ import {
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
-import {
-  formatCliRunFileInstruction,
-  formatMultiAgentRunInstruction,
-} from './_helpers/runInstructions';
+import { formatMultiAgentRunInstruction } from './_helpers/runInstructions';
 import { emitCliResult } from './_helpers/output';
 import {
   AGENT_RUN_GLOBAL_ARGS,
@@ -67,6 +64,35 @@ interface MultiAgentRunInit {
 
 const MULTI_AGENT_TASK_REQUIRED_MESSAGE =
   'Provide --input, --instruction, or --instruction-file for the team task. Example: texra multi-agent run physicist --instruction "Check this derivation"';
+
+function formatAttachedFileList(
+  title: string,
+  files: readonly string[],
+): string | undefined {
+  if (files.length === 0) return undefined;
+  return [
+    title,
+    ...files.map((file) =>
+      file === '-' ? '- Standard input' : `- ${JSON.stringify(file)}`,
+    ),
+  ].join('\n');
+}
+
+/** Preserve the user's launch input without copying model-only directives. */
+function formatMultiAgentDisplayInstruction(
+  instruction: string,
+  inputFiles: readonly string[],
+  contextFiles: readonly string[],
+): string {
+  if (instruction) return instruction;
+
+  return [
+    formatAttachedFileList('Attached input files:', inputFiles),
+    formatAttachedFileList('Attached read-only context files:', contextFiles),
+  ]
+    .filter((part): part is string => part !== undefined)
+    .join('\n\n');
+}
 
 function headlessAskMultiAgentMessage(presetId: string): string {
   return `Cannot run multi-agent preset "${presetId}" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`;
@@ -204,9 +230,11 @@ export async function runMultiAgentPreset(
         );
       }
 
-      const displayInstruction =
-        instruction ||
-        formatCliRunFileInstruction({ inputFiles, contextFiles });
+      const displayInstruction = formatMultiAgentDisplayInstruction(
+        instruction,
+        init.inputFiles,
+        init.contextFiles,
+      );
       const config: AgentConfigPayload = {
         agent: rootAgent.name,
         model,
