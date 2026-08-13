@@ -38,7 +38,9 @@ const WorkflowCallTerminalMetadataSchema = z.strictObject({
 const WorkflowCallProgressBaseSchema = WorkflowCallIdentitySchema.extend({
   /**
    * Physical workflow-script projection attempt. All progress records from one
-   * run share this id; older persisted transcripts may omit it.
+   * run share this id; older persisted transcripts may omit it. A malformed
+   * present value must fail parsing: treating corrupted attempt ownership as
+   * absent could mix a prior run's task into the current live projection.
    */
   attemptId: z.string().min(1).optional(),
   /**
