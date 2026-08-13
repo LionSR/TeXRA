@@ -3,11 +3,65 @@ import { describe, expect, it } from 'vitest';
 import {
   formatWorkflowCallMetadataParts,
   formatWorkflowCallLine,
+  latestWorkflowCallsById,
   workflowCallFailureTally,
   workflowPhaseCallProgress,
 } from '@shared/copy/workflowCall';
 
 describe('workflow call copy', () => {
+  it('selects the latest state per id in retained transcript order', () => {
+    const latestB = { id: 'b', label: 'B', status: 'running' as const };
+    const latestA = { id: 'a', label: 'A', status: 'cached' as const };
+
+    expect(
+      latestWorkflowCallsById([
+        { id: 'a', label: 'A', status: 'failed', error: 'old' },
+        { id: 'b', label: 'B', status: 'completed' },
+        latestB,
+        latestA,
+      ]),
+    ).toStrictEqual([latestB, latestA]);
+  });
+
+  it('uses the latest attempt as the current rerun task set', () => {
+    const currentB = {
+      id: 'b',
+      label: 'B revised',
+      status: 'running' as const,
+      attemptId: 'current',
+    };
+
+    expect(
+      latestWorkflowCallsById([
+        {
+          id: 'a',
+          label: 'A',
+          status: 'failed',
+          error: 'old',
+          attemptId: 'prior',
+        },
+        { id: 'b', label: 'B', status: 'completed', attemptId: 'prior' },
+        currentB,
+      ]),
+    ).toStrictEqual([currentB]);
+  });
+
+  it('honors an explicit attempt before it emits any calls', () => {
+    expect(
+      latestWorkflowCallsById(
+        [
+          {
+            id: 'old',
+            label: 'Old task',
+            status: 'completed',
+            attemptId: 'prior',
+          },
+        ],
+        'current',
+      ),
+    ).toStrictEqual([]);
+  });
+
   it('uses one terminal metadata representation across hosts', () => {
     expect(
       formatWorkflowCallMetadataParts({

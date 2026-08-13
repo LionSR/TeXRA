@@ -37,6 +37,8 @@ export interface StageOptions {
   readonly index?: number;
   /** Planned total count, when known, currently used for workflow rounds. */
   readonly total?: number;
+  /** Physical workflow attempt that owns this stage, when applicable. */
+  readonly attemptId?: string;
   /**
    * Outcome to emit at stage.end when no explicit status is supplied.
    * Defaults to `completed`.

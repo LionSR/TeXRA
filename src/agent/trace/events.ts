@@ -84,6 +84,7 @@ export interface StageStartEvent extends StageStamp {
   readonly kind?: 'run' | 'round' | 'phase' | 'session';
   readonly index?: number;
   readonly total?: number;
+  readonly attemptId?: string;
 }
 
 /** Immutable run identity emitted once when a stream enters RUNNING. */
@@ -143,6 +144,12 @@ interface WorkflowCallEvent extends StageStamp {
   readonly type: 'workflow.call';
   readonly logId: string;
   readonly call: WorkflowCallProgress;
+}
+
+/** A physical workflow-script projection began, before any optional work. */
+interface WorkflowAttemptEvent extends StageStamp {
+  readonly type: 'workflow.attempt';
+  readonly attemptId: string;
 }
 
 /** Exact raw skill catalog accepted for this run's initial prompt. */
@@ -367,6 +374,7 @@ export type AgentEvent =
   | StageEndEvent
   | ToolStartEvent
   | ToolEndEvent
+  | WorkflowAttemptEvent
   | WorkflowCallEvent
   | ActiveSkillsEvent
   | UsageEvent

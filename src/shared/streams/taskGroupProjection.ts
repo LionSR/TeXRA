@@ -80,7 +80,14 @@ export function upsertTaskGroupFromStreamLog(
     return false;
   }
 
-  const payload = GroupLogPayloadSchema.catch({}).parse(entry.data);
+  // A missing payload is valid for legacy lifecycle rows. A present malformed
+  // payload is not: in particular, erasing corrupted attempt ownership would
+  // turn a phase row into an apparently unowned generic group.
+  const parsedPayload = GroupLogPayloadSchema.safeParse(
+    entry.data === undefined ? {} : entry.data,
+  );
+  if (!parsedPayload.success) return true;
+  const payload = parsedPayload.data;
   const cachedIndex = taskGroupIndex.get(entry.id);
   const groupIndex =
     cachedIndex !== undefined && taskGroups[cachedIndex]?.id === entry.id

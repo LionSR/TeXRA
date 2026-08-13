@@ -232,6 +232,7 @@ export class TraceEmitter implements AgentTrace {
       kind: options.kind,
       index: options.index,
       total: options.total,
+      attemptId: options.attemptId,
     });
     return new StageHandleImpl(this, id, defaultStatus);
   }
