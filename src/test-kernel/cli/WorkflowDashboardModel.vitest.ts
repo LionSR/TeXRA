@@ -221,6 +221,32 @@ describe('workflow dashboard model', () => {
     ).toBeUndefined();
   });
 
+  it('shows only the latest row for a logical task after a rerun', () => {
+    const root = workflowRoot(
+      ['Verify'],
+      [{ id: 'verification', phase: 'Verify' }],
+    );
+    const original = root.entries.find(
+      (entry) => entry.role === 'workflowTask',
+    );
+    expect(original?.role).toBe('workflowTask');
+    if (original?.role !== 'workflowTask') return;
+    const current = {
+      ...original,
+      id: 'task-verification-current',
+      text: 'Running: verification again',
+      task: { ...original.task },
+    };
+
+    const model = workflowDashboardModel(
+      { ...root, entries: [...root.entries, current] },
+      WIDE_COLUMNS,
+    );
+
+    expect(model.tasks).toStrictEqual([current]);
+    expect(model.groups[0]?.tasks).toStrictEqual([current]);
+  });
+
   it('renders exactly the narrow row values the reducer reconciles against', async () => {
     const model = workflowDashboardModel(TWO_PHASE_ROOT, NARROW_COLUMNS);
     const visited = await navigateList(
