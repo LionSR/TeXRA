@@ -9,6 +9,8 @@
 //
 // Host-agnostic, VS Code-free.
 
+import { randomUUID } from 'node:crypto';
+
 import PQueue from 'p-queue';
 
 import {
@@ -387,15 +389,17 @@ async function attemptTurn<TTurn>(
 /**
  * Mint the logical identity of one accepted child turn (#9531): a stable turn
  * token plus the delivery id the turn's single parent delivery is admitted
- * under. Deterministic per execution and turn index — execution-owned, no
- * global registry — so a producer replaying the same logical delivery always
- * presents the same id, and distinct turns can never share one.
+ * under. Stable within one child-run attempt and distinct across attempts,
+ * even when a workflow deliberately reuses its execution ID. A producer
+ * replaying the same accepted turn therefore presents the same id, while a
+ * later workflow run cannot collide with its prior delivery.
  */
 function mintChildTurnRef(
   executionId: ExecutionId,
+  attemptId: string,
   turnIndex: number,
 ): ChildTurnRef {
-  const token = `${executionId}:turn:${turnIndex}`;
+  const token = `${executionId}:attempt:${attemptId}:turn:${turnIndex}`;
   return { token, deliveryId: `${token}:delivery` };
 }
 
@@ -653,6 +657,7 @@ export function startChildRunLoop<TTurn>(
   // The code below is synchronous until the scoped loop task is spawned, so a
   // lost generation fails before any queue, listener, stage, or loop exists.
   runWithOwnedExecutionLease(executionId, () => undefined);
+  const attemptId = randomUUID();
 
   const runSession = currentSession();
   const releaseChildActivation = childStream
@@ -776,7 +781,7 @@ export function startChildRunLoop<TTurn>(
     try {
       while (!loop.isInterrupted()) {
         turnIndex += 1;
-        const turnRef = mintChildTurnRef(executionId, turnIndex);
+        const turnRef = mintChildTurnRef(executionId, attemptId, turnIndex);
         emitTurnDiagnostic(logger, 'turn.accepted', {
           executionId,
           turnRef,
