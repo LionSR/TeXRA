@@ -193,8 +193,8 @@ describe('runResumeExecution', () => {
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
-  it('restores the persisted workflow output directory and expected files', async () => {
-    const workingDirectory = path.join(path.sep, 'tmp', 'paper');
+  it('restores workflow outputs against the unmodified persisted workspace', async () => {
+    const workingDirectory = path.join(path.sep, 'tmp', 'paper ');
     const workflowConfig = AgentConfigSchema.parse({
       ...WORKFLOW_CONFIG,
       workingDirectory,

@@ -55,24 +55,12 @@ export function runOutcomeExitCode(outcome: TurnOutcome): CliExitCode {
   return CliExitCode.Success;
 }
 
-export async function readCliRunOutcome(
-  result: ExecuteAgentResult,
-  reportReadFailure?: (error: Error) => void,
-): Promise<RunOutcome> {
-  return (await readCliRunOutcomeState(result, reportReadFailure)).outcome;
-}
-
-export interface CliRunOutcomeState {
-  readonly outcome: RunOutcome;
-  readonly outcomePersisted: boolean;
-}
-
 /** Read the terminal outcome together with the durability fact needed before
  *  advertising persisted-execution recovery. */
 export async function readCliRunOutcomeState(
   result: ExecuteAgentResult,
   reportReadFailure?: (error: Error) => void,
-): Promise<CliRunOutcomeState> {
+) {
   try {
     const meta = await getExecutionStore(result.executionId).readMeta();
     return meta?.outcome === undefined
