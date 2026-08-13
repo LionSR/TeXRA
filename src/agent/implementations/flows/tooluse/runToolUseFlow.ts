@@ -505,6 +505,16 @@ export async function runToolUseFlow<C = unknown>(
       // (SessionResumeRetrieval); this path stamps the active handler's key.
       let migratedData = migrationResult.data;
       let shouldWriteShared = migrationResult.migrated;
+      if (migratedData.continuationGenerationId !== continuationGenerationId) {
+        logger.debug(
+          'Rebound leftover tool-use flow state to the fresh continuation generation.',
+        );
+        migratedData = {
+          ...migratedData,
+          continuationGenerationId,
+        };
+        shouldWriteShared = true;
+      }
       const backfilled = stampCompatibilityKey(migratedData, compatibilityKey);
       if (backfilled !== migratedData) {
         logger.debug(
