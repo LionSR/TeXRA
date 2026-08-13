@@ -433,4 +433,29 @@ describe('InquiryStorage', () => {
       'Failed to parse external-inquiry manifest for ei_aabbccdd0077',
     );
   });
+
+  it('rejects an explicit null inquiry generation as corrupt', async () => {
+    await expectUnreadableManifest(
+      'ei_aabbccdd0088',
+      JSON.stringify({
+        schemaVersion: 1,
+        threadId: 'ei_aabbccdd0088',
+        parentStreamId: STREAM_A,
+        status: 'open',
+        createdAt: '2026-08-13T12:00:00.000Z',
+        updatedAt: '2026-08-13T12:00:00.000Z',
+        turns: [
+          {
+            kind: 'open',
+            turnIndex: 1,
+            timestamp: '2026-08-13T12:00:00.000Z',
+            parentGenerationId: null,
+            question: 'Is the estimate uniform?',
+            questionRelativePath: 't1/question.txt',
+          },
+        ],
+      }),
+      'Failed to parse external-inquiry manifest for ei_aabbccdd0088',
+    );
+  });
 });
