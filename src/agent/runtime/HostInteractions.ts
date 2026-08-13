@@ -184,11 +184,19 @@ export type BashSettlement =
       readonly action: 'reject';
       readonly feedback?: string;
       readonly reason?: never;
+      readonly cause?: never;
     }
   | {
       readonly action: 'reject';
       readonly reason: string;
       readonly feedback?: never;
+      readonly cause?: never;
+    }
+  | {
+      readonly action: 'reject';
+      readonly cause: string | undefined;
+      readonly feedback?: never;
+      readonly reason?: never;
     };
 
 export type UserQuestionSettlement =
@@ -212,7 +220,7 @@ type CancellationResultFactories = {
 };
 
 const cancellationResultFactories: CancellationResultFactories = {
-  bash: (feedback) => ({ action: 'reject', feedback: feedback?.trim() }),
+  bash: (cause) => ({ action: 'reject', cause: cause?.trim() }),
   planApproval: (feedback) => ({ action: 'reject', feedback }),
   proposal: (feedback) => ({ action: 'reject', feedback }),
   retry: () => ({ action: 'cancel' }),
