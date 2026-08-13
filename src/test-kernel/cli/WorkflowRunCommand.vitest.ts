@@ -762,6 +762,45 @@ describe('CLI workflow run command', () => {
     );
   });
 
+  it('prints recovery when the original process directory is unavailable', async () => {
+    const execution = workflowExecution('exec-deleted-cwd', {
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    mockWorkflowExecution(execution, true);
+    const stableWorkspace = path.join(path.sep, 'tmp', 'stable-workspace');
+    const context = cliContext({ cwd: stableWorkspace });
+    const cwdSpy = vi.spyOn(process, 'cwd').mockImplementationOnce(() => {
+      throw new Error('launch directory was deleted');
+    });
+    const { executeCliWorkflowConfig } = await import('@cli/commands/workflow');
+
+    const result = executeCliWorkflowConfig(
+      {
+        agent: 'polish',
+        model: 'deepseekT',
+        workingDirectory: stableWorkspace,
+        agentCategory: AgentCategory.Workflow,
+      },
+      context,
+      { categoryMismatchMessage: 'unexpected category' },
+    );
+    cwdSpy.mockRestore();
+
+    await expect(result).resolves.toBe(CliExitCode.Interrupted);
+    expect(mocks.writeTextStdout).toHaveBeenCalledExactlyOnceWith(
+      `Resume this workflow with: ${formatResumeCommand(
+        context.commandName,
+        'exec-deleted-cwd',
+        {
+          cwd: stableWorkspace,
+          processCwd: undefined,
+          approvalPolicy: context.approvalPolicy,
+          outputFormat: context.outputFormat,
+        },
+      )}`,
+    );
+  });
+
   it('does not print a recovery command for completed workflows', async () => {
     const exitCode = await runWorkflow();
 

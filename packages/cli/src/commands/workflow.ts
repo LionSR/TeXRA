@@ -70,6 +70,15 @@ function absoluteOutputDestination(
     : path.join(cwd, destination);
 }
 
+/** Read the launch directory without making recovery depend on its lifetime. */
+function tryReadCliCwd(): string | undefined {
+  try {
+    return readCliCwd();
+  } catch {
+    return undefined;
+  }
+}
+
 interface WorkflowRunInit {
   readonly agent: string;
   readonly inputFiles: string[];
@@ -175,6 +184,7 @@ export async function executeCliWorkflowConfig(
   let workflowResult: CliWorkflowRunResult | undefined;
   let workflowOutputError: unknown;
   let resumeHintWritten = false;
+  const recoveryProcessCwd = tryReadCliCwd();
   const recoveryInputIsDurable = [
     ...(config.inputFiles ?? []),
     ...(config.contextFiles ?? []),
@@ -190,6 +200,7 @@ export async function executeCliWorkflowConfig(
       runContext,
       executionId,
       config.workingDirectory || runContext.cwd,
+      recoveryProcessCwd,
     );
     if (waitForWrite) return writeCliProgressAndWait(runContext, hint);
     cliProgressWriter(runContext)(hint);
@@ -276,10 +287,11 @@ function formatWorkflowResumeHint(
   context: CliContext,
   executionId: string,
   workingDirectory: string,
+  processCwd: string | undefined,
 ): string {
   const resumeCommand = formatResumeCommand(context.commandName, executionId, {
     cwd: workingDirectory,
-    processCwd: readCliCwd(),
+    processCwd,
     approvalPolicy: context.approvalPolicy,
     outputFormat: context.outputFormat,
   });
