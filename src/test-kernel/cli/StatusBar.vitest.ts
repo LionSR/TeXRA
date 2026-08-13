@@ -389,6 +389,29 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('Tab sessions');
   });
 
+  it('prioritizes only an available child kill action at 70 columns', () => {
+    const input = statusInput({
+      width: 70,
+      ctrlCAction: 'stop',
+      foreground: { shortcutsActive: false },
+      childList: {
+        focused: true,
+        selectionKillable: true,
+      },
+    });
+    const display = buildStatusBarDisplay(input);
+
+    expect(display.bindings).toBe(
+      '↑/↓ select · k kill · Tab input · Esc input · Ctrl-C stop',
+    );
+    expect(
+      buildStatusBarDisplay({
+        ...input,
+        childList: { focused: true, selectionKillable: false },
+      }).bindings,
+    ).not.toContain('k kill');
+  });
+
   it('shows foreground actions while a list-owned surface is open', () => {
     const display = buildStatusBarDisplay(
       statusInput({
