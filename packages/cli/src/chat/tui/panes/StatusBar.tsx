@@ -51,6 +51,8 @@ const RELAY_QUOTA_REFRESH_MS = 10_000;
 const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;
 interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
+  /** True when the focused stream has a composer for slash commands and text. */
+  readonly chatInputAvailable: boolean;
   readonly childListFocused?: boolean;
   readonly childListSelectionKillable?: boolean;
   readonly childListSelectionWorkflowControllable?: boolean;
@@ -296,6 +298,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     },
     shortcuts: {
       agentSelectionAvailable: props.agentSelectionAvailable,
+      chatInputAvailable: props.chatInputAvailable,
       childNavigationAvailable: props.childNavigationAvailable,
       parentNavigationAvailable:
         activeStreamId !== undefined && parentStream.has(activeStreamId),

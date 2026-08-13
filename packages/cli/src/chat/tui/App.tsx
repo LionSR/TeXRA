@@ -754,6 +754,7 @@ export function App(props: AppProps): React.JSX.Element {
             />
             <StatusBar
               agentSelectionAvailable={rootRunStartAvailable}
+              chatInputAvailable={!childInputHidden}
               commandName={props.commandName}
               foregroundEscapeAction={foregroundEscapeAction({
                 activeFormEscapeAction: formBusy
