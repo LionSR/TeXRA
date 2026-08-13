@@ -1,0 +1,114 @@
+diff --git a/lib/responses/ResponseAccumulator.d.mts b/lib/responses/ResponseAccumulator.d.mts
+index 3012f7c5f9abe2e123188a5c94b9f36756ada1b8..5386313127f81a3c22e68ea074ed11099dc84df1 100644
+--- a/lib/responses/ResponseAccumulator.d.mts
++++ b/lib/responses/ResponseAccumulator.d.mts
+@@ -3,6 +3,10 @@ type ResponseKeepAliveEvent = {
+     type: 'keepalive';
+     sequence_number: number;
+ };
++type ResponseMetadataEvent = {
++    type: 'response.metadata';
++    [key: string]: unknown;
++};
+ /**
+  * Applies a streaming event to a response snapshot.
+  *
+@@ -10,6 +14,6 @@ type ResponseKeepAliveEvent = {
+  * in place, while response lifecycle events return a detached replacement. Event
+  * payloads are cloned, so retaining or replaying the raw events is safe.
+  */
+-export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent, snapshot?: Response): Response;
++export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent, snapshot?: Response): Response;
+ export {};
+ //# sourceMappingURL=ResponseAccumulator.d.mts.map
+\ No newline at end of file
+diff --git a/lib/responses/ResponseAccumulator.d.ts b/lib/responses/ResponseAccumulator.d.ts
+index 55f6fa542ac012f3d0d2db4a714f1848ba1341ed..2cfbe36c0526d15afbfd3f05a54bcf1eb8e95f80 100644
+--- a/lib/responses/ResponseAccumulator.d.ts
++++ b/lib/responses/ResponseAccumulator.d.ts
+@@ -3,6 +3,10 @@ type ResponseKeepAliveEvent = {
+     type: 'keepalive';
+     sequence_number: number;
+ };
++type ResponseMetadataEvent = {
++    type: 'response.metadata';
++    [key: string]: unknown;
++};
+ /**
+  * Applies a streaming event to a response snapshot.
+  *
+@@ -10,6 +14,6 @@ type ResponseKeepAliveEvent = {
+  * in place, while response lifecycle events return a detached replacement. Event
+  * payloads are cloned, so retaining or replaying the raw events is safe.
+  */
+-export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent, snapshot?: Response): Response;
++export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent, snapshot?: Response): Response;
+ export {};
+ //# sourceMappingURL=ResponseAccumulator.d.ts.map
+\ No newline at end of file
+diff --git a/lib/responses/ResponseAccumulator.js b/lib/responses/ResponseAccumulator.js
+index 44ff31698e5d2abe99ab4bfe4e9781be707598ca..b180b41d92918ec9dd2f842c1942e7670913691b 100644
+--- a/lib/responses/ResponseAccumulator.js
++++ b/lib/responses/ResponseAccumulator.js
+@@ -365,8 +365,10 @@ function accumulateResponse(event, snapshot) {
+         case 'response.mcp_list_tools.in_progress':
+         case 'response.mcp_list_tools.completed':
+         case 'response.mcp_list_tools.failed':
++        case 'response.metadata':
+         case 'keepalive':
+         case 'error': {
++            // TODO: Remove response.metadata compatibility once the upstream SDK supports it.
+             // These events do not contain state represented by the Response object.
+             break;
+         }
+diff --git a/lib/responses/ResponseAccumulator.mjs b/lib/responses/ResponseAccumulator.mjs
+index 7b50c8f82eef65d991020bd433cea6202ffaf98e..ae9dc909e9de7fe1b841ea29e07f3dc2b6390c47 100644
+--- a/lib/responses/ResponseAccumulator.mjs
++++ b/lib/responses/ResponseAccumulator.mjs
+@@ -362,8 +362,10 @@ export function accumulateResponse(event, snapshot) {
+         case 'response.mcp_list_tools.in_progress':
+         case 'response.mcp_list_tools.completed':
+         case 'response.mcp_list_tools.failed':
++        case 'response.metadata':
+         case 'keepalive':
+         case 'error': {
++            // TODO: Remove response.metadata compatibility once the upstream SDK supports it.
+             // These events do not contain state represented by the Response object.
+             break;
+         }
+diff --git a/src/lib/responses/ResponseAccumulator.ts b/src/lib/responses/ResponseAccumulator.ts
+index f3dee49f0da1d063824a00f1228d773862d34e49..76a3d515aac046165fef4ab36aae1327c9495e74 100644
+--- a/src/lib/responses/ResponseAccumulator.ts
++++ b/src/lib/responses/ResponseAccumulator.ts
+@@ -11,6 +11,11 @@ type ResponseKeepAliveEvent = {
+   sequence_number: number;
+ };
+ 
++type ResponseMetadataEvent = {
++  type: 'response.metadata';
++  [key: string]: unknown;
++};
++
+ /**
+  * Applies a streaming event to a response snapshot.
+  *
+@@ -19,7 +24,7 @@ type ResponseKeepAliveEvent = {
+  * payloads are cloned, so retaining or replaying the raw events is safe.
+  */
+ export function accumulateResponse(
+-  event: ResponseStreamEvent | ResponseKeepAliveEvent,
++  event: ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent,
+   snapshot?: Response,
+ ): Response {
+   if (!snapshot) {
+@@ -379,8 +384,10 @@ export function accumulateResponse(
+     case 'response.mcp_list_tools.in_progress':
+     case 'response.mcp_list_tools.completed':
+     case 'response.mcp_list_tools.failed':
++    case 'response.metadata':
+     case 'keepalive':
+     case 'error': {
++      // TODO: Remove response.metadata compatibility once the upstream SDK supports it.
+       // These events do not contain state represented by the Response object.
+       break;
+     }

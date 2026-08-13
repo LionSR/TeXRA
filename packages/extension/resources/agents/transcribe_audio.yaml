@@ -1,0 +1,76 @@
+name: transcribe_audio
+description: Transcribes audio with speaker identification and LaTeX math formatting.
+
+settings:
+  agentCategory: workflow
+  defaultOutputFiles:
+    - transcript.tex
+
+prompts:
+  systemPrompt: |
+    Transcribe audio content (one or more attached audio files), identify different speakers with timestamps, summarize the key points, structure the transcript into logical sections, and translate spoken mathematical equations into LaTeX format.
+
+    When processing audio content, you must:
+    \begin{itemize}
+        \item Accurately transcribe the spoken words. If multiple audio files are attached, treat them as a continuous session in the order given and merge their transcripts into a single coherent output.
+        \item Identify distinct speakers based on voice characteristics and context cues. Use speaker names if identifiable, otherwise label them as Speaker A, Speaker B, etc.
+        \item Prepend each utterance with a timestamp in [HH:MM:SS] format and the identified speaker name/label (e.g., [00:01:23] Speaker A: Transcript text...).
+        \item Generate a concise summary of the main topics discussed in the audio.
+        \item Translate any spoken mathematical equations into standard LaTeX format (e.g., inline math with \( ... \) or display math with \[ ... \]).
+        \item Divide the final transcript into logical sections based on topic shifts or conversation flow.
+        \item Pay attention to punctuation and grammar for readability.
+        \item Mark overlapping speech or unclear audio honestly (e.g., [unintelligible]) rather than guessing.
+        \item \textbf{Do not use any markdown formatting (like bold or italics) in the final transcript output.}
+    \end{itemize}
+
+  userPrefix: |
+    I will provide you with:
+    1. The audio content as one or more attached media files.
+    2. Any relevant context documents (optional).
+    3. Specific instructions or focus areas for the transcription.
+
+    Here is the context:
+
+    <documents>
+    {{ ALL_CONTEXTS }}
+    {{ ALL_INPUTS }} 
+
+    </documents>
+
+    The audio content is attached.
+
+  userRequest:
+    - |
+      <instruction>
+      {{ INSTRUCTION }}
+      </instruction>
+
+      Analyze the attached audio content and any provided context, then generate the initial audio transcript with timestamps, speaker identification, sectioning, and LaTeX equations. Do not use markdown. Use the following format:
+
+      <documents>
+      <document name="{{ OUTPUT_FILES[0] }}">
+      [HH:MM:SS:MS] SpeakerName: INITIAL_TRANSCRIPT_WITH_SPEAKERS_AND_EQUATIONS
+      </document>
+      </documents>
+    - |
+      Review the initial transcription and produce a final, refined transcript. Check the following aspects and fix any issues found:
+      \begin{itemize}
+          \item Transcription accuracy: noticeable word errors.
+          \item Speaker identification: speakers labeled correctly and consistently with names or letters as planned.
+          \item Timestamps included for each utterance in [HH:MM:SS] format and accurate.
+          \item Output follows required format: `[HH:MM:SS] SpeakerName: Text`.
+          \item Spoken mathematical equations correctly identified and translated into LaTeX (inline `\(...\)` or display `\[...\]`).
+          \item Transcript well-divided into logical sections with appropriate section breaks.
+          \item Punctuation and formatting clear and readable; no unintended markdown formatting (bold, italics).
+          \item Uncertain or unintelligible parts handled appropriately (e.g., `[unintelligible]`).
+      \end{itemize}
+
+      If the transcript already meets all of these requirements, reproduce it unchanged rather than rewording it.
+
+      Output the final, refined audio transcript with improved accuracy, correct speaker identification with timestamps, LaTeX equations, sectioning, and formatting. Ensure no markdown is used. Use the following format:
+
+      <documents>
+      <document name="{{ OUTPUT_FILES[0] }}">
+      [HH:MM:SS:MS] SpeakerName: REFINED_TRANSCRIPT_WITH_SECTIONS_SPEAKERS_AND_EQUATIONS
+      </document>
+      </documents>

@@ -1,0 +1,188 @@
+name: devise
+description: Mathematical paper enhancer with two-phase workflow. Rewrites document(s) by first adding rigorous derivations then revising to publication-ready scientific style.
+
+settings:
+  agentCategory: workflow
+
+prompts:
+  systemPrompt: |
+    Improve the papers in two phases: first derive the mathematics explicitly from first principles, then revise the result into publication-ready scientific prose.
+
+    When working with mathematical derivations in LaTeX, you must:
+    \begin{itemize}
+        \item Start every derivation from fundamental principles and basic definitions, showing the complete chain of reasoning.
+        \item Derive and show explicit expressions for all coefficients - never introduce new coefficients without deriving them in full detail.
+        \item Break down complex expressions into their constituent parts and show how they combine.
+        \item Show every single step in calculations - never skip steps or use phrases like ``after careful collection of terms'' or ``after some algebra''.
+        \item When expanding expressions, show the complete expansion with all terms written out explicitly.
+        \item Present every calculation in full detail, even if similar to previous calculations.
+        \item Use multi-line align environments extensively with line breaks to show each mathematical manipulation clearly.
+        \item Format long equations by breaking them at appropriate points (e.g., at plus/minus signs) for readability.
+        \item Include explanatory text between equation blocks to justify each step and explain the mathematical reasoning being applied.
+    \end{itemize}
+
+    When writing a professional scientific document, you must:
+    \begin{itemize}
+        \item Follow best practices to ensure zero warnings when checked by chktex.
+        \item Use consistent and appropriate mathematical notation and terminology throughout all papers.
+        \item Preserve comments starting with % in the document.
+        \item Use either `` or '' as an alternative to `"'.
+        \item Put punctuation outside inner math mode.
+        \item Use $\tr$ instead of \text{tr} or \textrm{tr}.
+        \item Prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$.
+        \item Add punctuation in displayed math environments based on sentence continuity.
+        \item Use the math commands defined in commands.tex or preamble.tex if provided.
+        \item When referring to equations, always use \cref{...} instead of numbers.
+        \item Give complete output containing every section in each input file's original order.
+
+        \item Ensure that you maintain the structure and formatting of each individual paper while making improvements.
+        \item When writing formal \LaTeX documents rather than thinking in the scratchpad, never barely list things like 1.\ 2.\ 3.\ \ldots{} as in markdown.
+
+    \end{itemize}
+
+    Write any prose you add or rewrite in plain technical English for the paper's reader: concrete statements, plain verbs (``use'', ``show''), each point made once, varied sentence length, and emphasis carried by wording rather than \textbf{}, spent sparingly.
+
+    In addition, since you will be working with multiple papers, you must:
+    \begin{itemize}
+        \item Ensure consistent notation and approach across related papers
+        \item Maintain the unique focus and style of each individual paper
+        \item Consider cross-references between papers when appropriate
+        \item Be consistent in the level of mathematical detail across papers of similar type
+    \end{itemize}
+
+  userPrefix: |
+    The following LaTeX drafts need mathematical derivations and scientific revision. Read every document before starting.
+
+    Here is the LaTeX document with input files (which may include appendix and LaTeX auxiliary files that define math commands):
+
+    <documents>
+    {{ ALL_CONTEXTS }}
+    {{ ALL_INPUTS }}
+    </documents>
+
+    Read every document and identify its mathematical content and scientific context.
+
+  userRequest:
+    - |
+      Revise these papers only as directed by the following instruction:
+      <instruction>
+      {{ INSTRUCTION }}
+      </instruction>
+      Apply only the given instruction. If asked to revise section A in all papers, do not modify section B unless consistency requires it.
+
+      Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
+
+      FIRST PHASE: In this initial phase, I want you to focus on DERIVATION. Start from fundamental principles and show every single step, deriving all coefficients explicitly. Show every calculation in full detail to ensure complete mathematical rigor. Think of this as creating detailed mathematical drafts where all steps are shown.
+
+      In the scratchpad below, plan how to expand the mathematical derivations to show every step clearly across all papers. Consider:
+      - What are the fundamental principles and definitions we start from
+      - Where additional steps are needed in each paper
+      - Which coefficients need explicit derivation
+      - Which calculations need to be shown in full (even if similar to others)
+      - How to break down complex expressions
+      - What explanatory text to add between equation blocks
+      - How to maintain consistency in notation across papers
+      Use the scratchpad to outline the detailed mathematical steps you plan to add.
+
+      <scratchpad>
+      \begin{enumerate}
+          \item [Starting point and principles]
+              \begin{itemize}
+                  \item Fundamental definitions: [List the basic definitions and principles]
+                  \item Initial expressions: [Write out starting expressions]
+
+                  \item Cross-paper dependencies: [Note any mathematical concepts that build across papers]
+
+              \end{itemize}
+          \item [Mathematical expansion point 1 / Paper 1]
+              \begin{itemize}
+                  \item Current state: [Brief description of current derivation]
+                  \item Missing steps: [List steps that need to be shown]
+                  \item Similar calculations to expand: [List calculations that need full derivation despite similarity]
+                  \item Coefficients to derive: [List coefficients needing explicit derivation]
+                  \item Implementation: [How to expand the derivation]
+              \end{itemize}
+          \item [Mathematical expansion point 2 / Paper 2]
+              \begin{itemize}
+                  \item Current state: [Brief description]
+                  \item Missing steps: [List steps]
+                  \item Similar calculations to expand: [List calculations needing full derivation]
+                  \item Coefficients to derive: [List coefficients]
+                  \item Implementation: [Expansion plan]
+              \end{itemize}
+
+          ... [Repeat for each paper]
+
+      \end{enumerate}
+      </scratchpad>
+
+      Following the scratchpad plan, output updated LaTeX with every mathematical step and coefficient derived explicitly. These fully derived versions will be revised in the next phase. Use this format:
+
+      <documents>
+      {% for output in INPUT_FILES %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
+      </document>
+      {% endfor %}
+      </documents>
+
+    - |
+      SECOND PHASE - REVISION: Revise the fully derived version(s) for scientific publication. Most scientific writing does not need every intermediate step, but it should motivate the argument clearly. Keep the original level of detail unless the instruction asks for more.
+
+      Again, the specific instruction is:
+      <instruction>
+      {{ INSTRUCTION }}
+      </instruction>
+
+      In the scratchpad below, plan how to revise the fully derived version(s) into polished scientific document(s). Consider:
+      <scratchpad>
+      <derive-to-revise>
+      \begin{enumerate}
+
+          \item Overall revision strategy across papers:
+              \begin{itemize}
+                  \item What level of mathematical detail is appropriate for each paper
+                  \item How to maintain consistency across papers
+                  \item Cross-paper considerations and references
+                  \item Target audience and publication standards
+              \end{itemize}
+          \item Paper-specific revision plans:
+              \begin{itemize}
+                  \item Paper 1:
+                      \begin{itemize}
+                          \item Which detailed steps should be kept based on the instruction
+                          \item Which steps can be condensed or summarized
+                          \item How to balance mathematical rigor with readability
+                          \item Where to add explanatory text that helps readers understand the purpose of calculations
+                          \item How to restructure derivations to present key insights first
+                          \item How to connect mathematical results with physical interpretations
+                      \end{itemize}
+                  \item Paper 2:
+                      \begin{itemize}
+                          \item [Similar considerations as above]
+                      \end{itemize}
+                  \item [Repeat for each paper]
+              \end{itemize}
+          \item Overall quality improvements:
+              \begin{itemize}
+                  \item Ensuring consistent notation across all papers
+                  \item Removing redundancy while maintaining completeness
+                  \item Improving clarity of scientific exposition
+                  \item Ensuring all terms and concepts are properly defined before use
+              \end{itemize}
+
+      \end{enumerate}
+      </derive-to-revise>
+      </scratchpad>
+
+      Following the scratchpad plan, output revised LaTeX documents that turn the fully derived drafts into scientific papers with an appropriate level of detail. Apply the original instruction, motivate the mathematics, and retain intermediate steps only when they serve the scientific content or the instruction requires them.
+
+      Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}.
+
+      <documents>
+      {% for output in INPUT_FILES %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
+      </document>
+      {% endfor %}
+      </documents>

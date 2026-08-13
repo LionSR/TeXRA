@@ -1,0 +1,64 @@
+name: merge
+description: Merges partial edits back into the full original document.
+
+settings:
+  agentCategory: workflow
+  rounds: 1
+
+prompts:
+  systemPrompt: |
+    Merge changes from an edited \LaTeX document into the original. Preserve the original structure and formatting while incorporating every edit.
+
+  userPrefix: |
+    {% if INPUT_FILES[1] %}
+    Create complete edited \LaTeX documents from each original and edited pair. Preserve the original structure so tools such as latexdiff can compare the versions accurately.
+
+    Here are the original \LaTeX documents:
+    {{ ALL_INPUTS }}
+
+    Here are the edited versions of the \LaTeX documents:
+    {{ ALL_EDITEDS }}
+    {% else %}
+    Create one complete edited \LaTeX document from the original and edited versions. Preserve the original structure so tools such as latexdiff can compare the versions accurately.
+
+    Here is the original \LaTeX document {{ INPUT_FILE }}:
+    <original_latex>
+    {{ INPUT_CONTENT }}
+    </original_latex>
+
+    Here is the edited version of the \LaTeX document {{ EDITED_FILE }}:
+    <edited_latex>
+    {{ EDITED_CONTENT }}
+    </edited_latex>
+    {% endif %}
+
+  userRequest: |
+    Follow these steps to create and verify the full version{% if INPUT_FILES[1] %}s{% endif %} of the edited document{% if INPUT_FILES[1] %}s{% endif %}:
+
+    STEP 1 - MERGE:
+    1. Read both the original and edited versions of {% if INPUT_FILES[1] %}each {% endif %}document.
+    2. For parts indicated as ``unchanged'' or ``previous parts remain unchanged'' in the edited version, copy the corresponding sections from the original document verbatim.
+    3. Where specific edits or additions are shown in the edited version, incorporate these changes exactly as they appear, replacing the corresponding parts in the original document.
+    4. Preserve any structural elements like section headers, equations, figures, or tables. Keep them in their correct positions and formats.
+    5. Maintain all LaTeX formatting, including commands, environments, and any custom macros or definitions present in the original document.
+    6. If there are any ambiguities or unclear instructions in the edited version, default to the original document's content for those sections.
+    {% if INPUT_FILES[1] %}
+    7. Process each document pair independently - changes in one document should not affect another.
+    {% endif %}
+
+    STEP 2 - VERIFY before outputting:
+    - All changes and additions from the edited version are accurately incorporated.
+    - Sections marked as ``unchanged'' in the edited version match the original document verbatim.
+    - The structure and formatting of the original document are maintained.
+    - No parts of the document are accidentally omitted or duplicated.
+    - {% if INPUT_FILES[1] %}Each output is{% else %}The output is{% endif %} a complete \LaTeX document, including the preamble, document class declarations, and all content up to \end{document}.
+
+    Provide your output as complete \LaTeX document{% if INPUT_FILES[1] %}s{% endif %}. Small discrepancies can affect diff tools, so preserve the source exactly where no edit applies.
+
+    <documents>
+    {% for output in INPUT_FILES %}
+    <document name="{{ output }}">
+    % Merged LaTeX document {{ loop.index }} here
+    </document>
+    {% endfor %}
+    </documents>

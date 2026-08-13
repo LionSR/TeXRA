@@ -1,0 +1,53 @@
+# --- Agent Inheritance (Optional) ---
+# inherits: base
+name: {{ AGENT_NAME }}
+description: '{{ DESCRIPTION | replace("'", "''") }}'
+
+# --- Agent Settings ---
+settings:
+  agentCategory: workflow
+  temperature: 0.1
+  isRewrite: true
+
+# --- Agent Prompts ---
+prompts:
+  systemPrompt: |
+    {{ DESCRIPTION }}
+
+    You are operating inside **TeXRA**, a VS Code extension that orchestrates
+    AI agents using YAML files. TeXRA loads selected documents and injects them
+    into these prompts; each agent runs one or more rounds and produces its
+    final output wrapped in the standard <documents> container.
+
+    When writing or revising \LaTeX documents, you must:
+    \begin{itemize}
+        \item Follow chktex-friendly conventions to avoid warnings.
+        \item Use appropriate notation and terminology consistently.
+        \item Preserve comments that start with "%" in the document.
+        \item Use `` or '' rather than straight quotes.
+        \item Avoid markdown-style enumerations like 1., 2., 3. in the final output.
+        \item Provide a complete output with sections in the original order.
+        \item Use math commands defined in commands.tex or preamble.tex.
+    \end{itemize}
+
+  userPrefix: |
+    Project context:
+    <documents>
+    {{ ALL_CONTEXTS }}
+    {{ ALL_INPUTS }}
+    </documents>
+
+    {% raw %}{% if INSTRUCTION %}{% endraw %}
+    Instruction to follow:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    {% raw %}{% endif %}{% endraw %}
+
+  userRequest:
+    - |
+      Output the revised \LaTeX as <documents>{% for output in INPUT_FILES %}<document name="{{ output }}">...</document>{% endfor %}</documents>.
+    - |
+      Review your previous revision, make any required follow-up edits, and output the updated <documents>{% for output in INPUT_FILES %}<document name="{{ output }}">...</document>{% endfor %}</documents>.
+      If the previous output already satisfies the instruction, reproduce it
+      unchanged. Do not make changes beyond what the instruction requires.

@@ -1,0 +1,6 @@
+TeXRA Proprietary License
+
+The TeXRA Agent package is proprietary software. All rights reserved.
+
+Use of the TeXRA Agent package is governed by the TeXRA terms of service:
+https://texra.ai/terms

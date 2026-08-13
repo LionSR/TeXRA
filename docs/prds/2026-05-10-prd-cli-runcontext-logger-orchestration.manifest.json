@@ -1,0 +1,264 @@
+{
+  "name": "cli-runcontext-logger-orchestration",
+  "created": "2026-05-10",
+  "updated": "2026-05-12",
+  "status": "complete",
+  "trackingIssue": "https://github.com/LionSR/TeXRA/issues/3838",
+  "primaryPrd": "docs/prds/2026-05-10-prd-cli-runcontext-logger-orchestration.md",
+  "currentAudit": {
+    "date": "2026-05-12",
+    "basePr": "https://github.com/LionSR/TeXRA/pull/3839",
+    "stack": [
+      {
+        "pr": "https://github.com/LionSR/TeXRA/pull/3839",
+        "scope": "scaffold CLI, RunContext, logger, and orchestration base",
+        "state": "merged into main on 2026-05-12 as 69ac7bd891707fdf9b7b848938e71bd9cb6820f0"
+      },
+      {
+        "pr": "https://github.com/LionSR/TeXRA/pull/3843",
+        "scope": "packaged texra run validation",
+        "parentIssues": [3834],
+        "followUpIssue": 3840,
+        "state": "merged into main on 2026-05-12 as 942cf9885e8ac8191c2fea37f4f964b0f5e3d378"
+      },
+      {
+        "pr": "https://github.com/LionSR/TeXRA/pull/3844",
+        "scope": "CLI ask approval prompts",
+        "parentIssues": [3835],
+        "followUpIssue": 3841,
+        "state": "merged into main on 2026-05-12 as a4c53792b716fd454bdb864d276abee8bfcd9453"
+      },
+      {
+        "pr": "https://github.com/LionSR/TeXRA/pull/3845",
+        "scope": "legacy host logs through structured logger sinks",
+        "parentIssues": [3833],
+        "followUpIssue": 3842,
+        "state": "merged into main on 2026-05-12 as c4bb72b21fb8dbd5d612cbb958e3d65cec91f49c"
+      },
+      {
+        "pr": "https://github.com/LionSR/TeXRA/pull/3846",
+        "scope": "texra chat loop and dependency-free richer terminal renderer",
+        "parentIssues": [3836],
+        "followUpIssue": 3848,
+        "state": "merged into main on 2026-05-12 as 6bfb4d40e2ded447a27c764465e06176ca8d736e"
+      },
+      {
+        "pr": "https://github.com/LionSR/TeXRA/pull/3847",
+        "scope": "ToolFileInteractionContext async storage and split run/call context views",
+        "parentIssues": [3837],
+        "followUpIssue": 3849,
+        "state": "merged on 2026-05-11 as 6f813067a184d5b662105562a9c919475bb3b4ce; #3837 and #3849 are closed"
+      }
+    ],
+    "verified": [
+      "PRs #3839, #3843, #3844, #3845, #3846, and #3847 are merged.",
+      "PR #3846 passed format, label, aggregate validate, macOS validation, Ubuntu validation, Cursor Bugbot, and Claude review on head 91e408b05 before merge.",
+      "Follow-up issues #3840, #3841, #3842, #3848, and #3849 are closed.",
+      "Parent issues #3833, #3834, #3835, #3836, and #3837 are closed.",
+      "packages/cli exists with texra bin, build script, packaged-runtime validation, run mode, model/agent listing, approval adapter, and chat loop.",
+      "texra chat rejects headless mode, supports follow-up turns, multiline drafts, chat ask-mode approval prompting, grouped/minimal/hidden display, and structured stream-log rendering without owning tool execution."
+    ],
+    "remainingGaps": [],
+    "deferredNonBlockingNotes": [
+      "OpenTUI-style rendering remains an optional future dependency decision only; the landed renderer is dependency-free and behind the chat presentation boundary.",
+      "The ToolFileInteractionContext compatibility getter is explicitly retained for non-tool migration surfaces, while tool-layer readers use split run/call access paths."
+    ]
+  },
+  "globalInvariants": [
+    "One owner per fact.",
+    "Do not introduce pass-through layers.",
+    "Shared core owns agent semantics; host packages own local effects.",
+    "Every PR must state source of truth, duplication impact, abstraction justification, host impact, scheduled refactoring, and validation."
+  ],
+  "issues": [
+    {
+      "id": 3833,
+      "title": "Logger v2",
+      "url": "https://github.com/LionSR/TeXRA/issues/3833",
+      "prd": "docs/prds/2026-05-06-prd-logger-v2.md",
+      "implementationPrs": [3839, 3845],
+      "sourceOfTruth": "src/logger/structuredLogger.ts: LogRecord schema and grouping semantics",
+      "status": "closed after PRs #3839 and #3845 merged",
+      "acceptance": [
+        "LogRecord is the shared schema for extension, desktop, CLI, and tests.",
+        "Host packages define sinks/renderers only.",
+        "Legacy logUtils and AgentLogger paths are migrated or explicitly scheduled as temporary compatibility shims."
+      ]
+    },
+    {
+      "id": 3834,
+      "title": "CLI texra run",
+      "url": "https://github.com/LionSR/TeXRA/issues/3834",
+      "prd": "docs/prds/2026-05-04-prd-cli-app.md",
+      "implementationPrs": [3839, 3843],
+      "sourceOfTruth": "packages/cli/src/runtime/cliContext.ts for process data; packages/cli/src/runtime/exitCodes.ts for exit codes; shared executeAgent runtime for execution semantics",
+      "status": "closed after PRs #3839 and #3843 merged",
+      "acceptance": [
+        "texra run enters the shared executeAgent path.",
+        "CLI commands consume CliContext and do not read ambient process data.",
+        "Repository lint, typecheck, and CLI architecture guards include the CLI package.",
+        "The package build produces the manifest-declared binary.",
+        "The packaged binary path is validated for text, JSON, and NDJSON output."
+      ]
+    },
+    {
+      "id": 3835,
+      "title": "CLI approval policy",
+      "url": "https://github.com/LionSR/TeXRA/issues/3835",
+      "prd": "docs/prds/2026-05-04-prd-cli-app.md",
+      "implementationPrs": [3839, 3844, 3846],
+      "sourceOfTruth": "packages/cli/src/runtime/approvalAdapter.ts maps CliContext.approvalPolicy to gate decisions",
+      "status": "closed after PRs #3839, #3844, and #3846 merged",
+      "acceptance": [
+        "The approval policy matrix is implemented for edit, bash, plan, proposal, retry, and external inquiry gates.",
+        "never and headless ask fail closed.",
+        "Shared coordinators own request identity and lifecycle.",
+        "Interactive ask prompts are serialized per CLI context."
+      ]
+    },
+    {
+      "id": 3836,
+      "title": "CLI texra chat",
+      "url": "https://github.com/LionSR/TeXRA/issues/3836",
+      "prd": "docs/prds/2026-05-04-prd-cli-app.md",
+      "implementationPrs": [3839, 3846],
+      "sourceOfTruth": "shared tool-use session lifecycle owns conversation semantics; CLI chat owns terminal input and presentation",
+      "status": "closed after PRs #3839 and #3846 merged",
+      "acceptance": [
+        "Chat rejects headless mode.",
+        "Chat provides user input and follow-up turns in the same tool-use session.",
+        "Terminal renderer is lazy-loaded from the chat path only.",
+        "OpenTUI is used only after Node 20+/npm distribution proof, otherwise a Node-stable renderer is used behind the same boundary.",
+        "Chat provides grouped, minimal, and hidden tool-display modes.",
+        "Chat provides a plain fallback input mode for conservative terminals.",
+        "Chat displays session metadata: active agent, active model, working directory, usage/cost when available, and resume identity.",
+        "Chat integrates permission prompts through the CLI approval adapter rather than duplicating approval lifecycle."
+      ],
+      "partialDelivery": "PR #3846 delivers the plain fallback input mode, richer dependency-free terminal renderer, multiline drafts, grouped/minimal/hidden display modes, and chat approval prompting over the shared follow-up path."
+    },
+    {
+      "id": 3837,
+      "title": "ToolFileInteractionContext ownership",
+      "url": "https://github.com/LionSR/TeXRA/issues/3837",
+      "prd": "docs/prds/2026-05-06-prd-runcontext-refactor.md",
+      "implementationPrs": [3839, 3847],
+      "sourceOfTruth": "RunContext owns run facts; ToolRunContext and ToolCallContext separate run-owned and call-owned tool facts",
+      "status": "closed after PR #3847 merged",
+      "acceptance": [
+        "Run-owned facts stay in RunContext/ToolRunContext.",
+        "Per-call facts stay in ToolCallContext.",
+        "Ownerless context bags and pass-through accessors are removed or justified by an ownership boundary.",
+        "The active tool-call context follows async execution scope rather than process-global mutable state."
+      ],
+      "partialDelivery": "PR #3847 removes process-global context stack lifetime, stores split run/call views with exhaustive field maps, moves runtime-host fallback ownership to the tools layer, and migrates src/tools readers to run-owned, call-owned, or explicit mixed access paths."
+    }
+  ],
+  "completionRule": "Do not mark complete until every issue acceptance gate is implemented, validated, merged, or moved to an owned follow-up issue with acceptance criteria.",
+  "validationStatus": "complete_landed",
+  "recommendedOrder": [
+    "All implementation and follow-up PRs have landed.",
+    "All parent and focused follow-up issues are closed except the tracking issue, which should close with this final ledger update."
+  ],
+  "landingStatus": [
+    "Merged PR #3839 into main.",
+    "Retargeted and merged PR #3843 into main.",
+    "Retargeted and merged PR #3844 into main.",
+    "Retargeted and merged PR #3845 into main.",
+    "Retargeted, revalidated, and merged PR #3846 into main.",
+    "PR #3847 was already merged; #3837 and #3849 are closed.",
+    "Focused follow-up issues #3840, #3841, #3842, #3848, and #3849 are closed.",
+    "Parent issues #3833, #3834, #3835, #3836, and #3837 are closed."
+  ],
+  "focusedFollowUps": [
+    {
+      "id": 3840,
+      "title": "CLI follow-up: validate texra run packaged runtime path",
+      "url": "https://github.com/LionSR/TeXRA/issues/3840",
+      "parentIssues": [3834, 3838],
+      "status": "closed after PR #3843 merged",
+      "sourceOfTruth": "packages/cli/scripts/validate-run.mjs and src/agent/runtime/ModelFactory.ts validation guard",
+      "acceptance": [
+        "Build and execute the package-local texra binary rather than only TypeScript entry points.",
+        "Validate a real workflow-agent path through shared executeAgent using a controlled model-handler fixture below executeAgent.",
+        "Cover text, JSON, and NDJSON result output semantics for texra run.",
+        "Cover command-local global flags after the run subcommand: --output-format, --approval-policy, --cwd, and --print.",
+        "Cover empty value-bearing flag normalization for inline and separate-token forms.",
+        "Do not add a command-framework abstraction unless it owns a real parsing invariant."
+      ]
+    },
+    {
+      "id": 3841,
+      "title": "CLI follow-up: implement ask approval prompts and matrix validation",
+      "url": "https://github.com/LionSR/TeXRA/issues/3841",
+      "parentIssues": [3835, 3838],
+      "status": "closed after PRs #3844 and #3846 merged",
+      "sourceOfTruth": "packages/cli/src/runtime/approvalAdapter.ts maps CLI approval policy to decisions; shared coordinators own request identity and lifecycle",
+      "acceptance": [
+        "Implement interactive ask prompts for CLI approval requests without duplicating shared coordinator lifecycle logic.",
+        "In non-TTY or headless mode, ask fails closed with a clear message instead of waiting forever.",
+        "Validate the approval matrix for bash, edit, plan, proposal, retry, and external inquiry paths.",
+        "Map denied or failed-closed approval outcomes to CliExitCode.ApprovalDenied at the CLI boundary.",
+        "Keep request identity and lifecycle in shared coordinators; the CLI adapter owns only policy-to-decision mapping and terminal prompting.",
+        "Keep tool-specific handlers free of CLI flag parsing and policy interpretation."
+      ]
+    },
+    {
+      "id": 3842,
+      "title": "Logger v2 follow-up: wire host sinks and legacy shim",
+      "url": "https://github.com/LionSR/TeXRA/issues/3842",
+      "parentIssues": [3833, 3838],
+      "status": "closed after PR #3845 merged",
+      "sourceOfTruth": "src/logger/structuredLogger.ts for LogRecord schema and grouping semantics; host packages own sinks and renderers; compatibility shim owns migration from logUtils and AgentLogger",
+      "acceptance": [
+        "Keep LogRecord and grouping semantics as the shared source of truth.",
+        "Wire host sinks for extension, desktop, and CLI without moving host rendering into shared record construction.",
+        "Define a compatibility shim for logUtils and AgentLogger, including temporary parts and the retirement path.",
+        "Preserve nested grouped logging and sink flushing semantics.",
+        "Keep progress event schema separate from LogRecord; bridge only at the host or rendering boundary if needed.",
+        "Add focused validation for grouped logging and sink behavior."
+      ]
+    },
+    {
+      "id": 3848,
+      "title": "CLI follow-up: add richer texra chat terminal renderer",
+      "url": "https://github.com/LionSR/TeXRA/issues/3848",
+      "parentIssues": [3836, 3838],
+      "recommendedOrderItem": "implement texra chat terminal renderer over existing session lifecycle",
+      "sourceOfTruth": "shared tool-use session lifecycle owns conversation semantics; ChatTerminalRenderer owns terminal presentation only",
+      "status": "closed after PR #3846 merged",
+      "acceptance": [
+        "Keep the terminal renderer behind the chat-only lazy boundary.",
+        "Add multiline input without creating a second approval or follow-up lifecycle.",
+        "Render inline approval cards while settlement remains in the CLI approval adapter and shared coordinators.",
+        "Render richer grouped tool-call bodies and tool results from shared progress and stream-log data.",
+        "Prove Node 20+ npm distribution before adopting OpenTUI as a hard dependency; otherwise keep a Node-stable renderer behind the same boundary.",
+        "Preserve grouped, minimal, and hidden display modes."
+      ]
+    },
+    {
+      "id": 3849,
+      "title": "RunContext follow-up: split ToolFileInteractionContext access paths",
+      "url": "https://github.com/LionSR/TeXRA/issues/3849",
+      "parentIssues": [3837, 3838],
+      "recommendedOrderItem": "continue RunContext and ToolFileInteractionContext ownership cleanup",
+      "sourceOfTruth": "RunContext owns ToolRunContext; ToolCallContext owns per-tool-call mutable state; mixed readers use an explicit mixed accessor",
+      "status": "closed after PR #3847 merged",
+      "acceptance": [
+        "Move tool-layer run-owned readers to getCurrentToolRunContext().",
+        "Move tool-layer call-owned readers to getCurrentToolCallContext().",
+        "Use getCurrentToolContexts() only for readers that genuinely need both views.",
+        "Keep runtime-host fallback lookup at the tool-use boundary, not inside ToolFileInteractionContext.",
+        "Retain the compatibility combined getter only for non-tool migration surfaces, with a clear retirement path."
+      ]
+    }
+  ],
+  "references": [
+    {
+      "name": "OpenRouter create-agent-tui",
+      "path": "references/openrouter-skills/skills/create-agent-tui/",
+      "source": "https://github.com/OpenRouterTeam/skills/tree/main/skills/create-agent-tui",
+      "allowedUse": "styling and interaction reference for texra chat only",
+      "forbiddenUse": "do not copy generated agent harness or runtime architecture into TeXRA"
+    }
+  ]
+}

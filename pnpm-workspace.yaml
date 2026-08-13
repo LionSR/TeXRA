@@ -1,0 +1,29 @@
+packages:
+  - packages/*
+supportedArchitectures:
+  os:
+    - current
+  cpu:
+    - current
+    - x64
+    - arm64
+  libc:
+    - current
+allowBuilds:
+  '@google/genai': true
+  '@openrouter/sdk': true
+  '@vscode/vsce-sign': true
+  electron-winstaller: true
+  esbuild: true
+  keytar: true
+  node-pty: true
+  protobufjs: true
+  unrs-resolver: true
+patchedDependencies:
+  ink@7.1.1: patches/ink@7.1.1.patch
+  openai@7.4.0: patches/openai@7.4.0.patch
+# pnpm 11 enables a 24h minimumReleaseAge supply-chain quarantine by default,
+# which blocked same-day dependency bumps (e.g. a fresh llm-zoo for a new model)
+# until they aged out, forcing a per-package allowlist. Disable it repo-wide so
+# reviewed bumps land immediately.
+minimumReleaseAge: 0

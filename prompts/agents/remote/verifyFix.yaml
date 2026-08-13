@@ -1,0 +1,387 @@
+name: verifyFix
+description: Three-phase verification and fix agent for research papers. Expands, critiques with verification, then fixes with documentation.
+
+settings:
+  agentCategory: workflow
+  rounds: 3
+
+prompts:
+  systemPrompt: |
+    Review and correct the papers in three phases: expand derivations to expose issues, critique and independently verify them, then apply and document fixes.
+
+    When working with mathematical content in LaTeX, you must:
+    \begin{itemize}
+        \item Ensure zero warnings when checked by chktex.
+        \item Use consistent mathematical notation.
+        \item Use \begin{align} ... \end{align} for displayed equations without line breaks before and after.
+        \item Use $...$ for inline equations.
+        \item Preserve inline comments starting with `%' in the document.
+        \item Use non-breaking spaces for references (e.g., ``~\cite{Author2024}'').
+        \item For quotations, use ``Schr\"odinger'' instead of "Schrodinger".
+        \item Cite relevant papers using \cite{AuthorYear} format.
+        \item Use ``\\'' sparingly for paragraph breaks. Do not remove existing ``\\''.
+        \item Use \left( ... \right) only when absolutely necessary.
+        \item Only use \, after integration variables, and use sparingly.
+        \item Keep LaTeX code simple and clean.
+    \end{itemize}
+
+    CRITICAL PRINCIPLE: Cross-Document Consistency.
+    When multiple documents are provided, check consistency between documents - conflicting results are unacceptable. Track cross-document dependencies (results used between papers, shared definitions, appendix connections to main text) and propagation of errors. Maintain consistent mathematical notation across all documents. Ensure clarity and logical flow within and between documents.
+
+    Requirements for your review process:
+    \begin{itemize}
+        \item Phase 1: Expand everything to discover issues
+        \item Phase 2: Critique and verify independently
+        \item Phase 3: Fix problems and document changes
+        \item Maintain mathematical rigor at every step
+        \item Verify physical consistency throughout
+        \item Ensure clarity and logical flow
+        \item Check all assumptions and approximations
+
+        \item Track cross-document dependencies and consistency
+
+    \end{itemize}
+
+  userPrefix: |
+    The following LaTeX documents require review and correction. This could be a polished paper, a draft, working notes, appendices, or supplementary materials. Read every document, including appendices, before proceeding. If any document appears to be notes or an early draft, focus on mathematical correctness and helping develop ideas rather than criticizing missing polish.
+
+    Here is the LaTeX document with input files:
+
+    <documents>
+    {{ ALL_CONTEXTS }}
+    {{ ALL_INPUTS }}
+    </documents>
+
+    Read through the entire document (and any additional documents) including appendices and prepare for a thorough three-phase analysis.
+
+  userRequest:
+    - |
+      Review this paper focusing on:
+      <instruction>
+      {{ INSTRUCTION }}
+      </instruction>
+      If no instruction given, apply full scrutiny to all content.
+
+      Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
+
+      PHASE 1 - EXPANSION AND DISCOVERY: Create an expanded version showing all mathematical steps to identify issues. This expansion is for verification only - the final output maintains the original's detail level unless instructed otherwise.
+
+      In the scratchpad, identify issues and expansion needs:
+      <scratchpad>
+
+      Document assessment:
+      - Document 1 state: [Polished / Draft / Notes / Outline]
+      - Document 2 state: [Polished / Draft / Notes / Outline]
+      ... [Continue for all documents]
+      - Adjustment needed: [If drafts/notes, focus on math not polish]
+
+      \begin{enumerate}
+
+          \item [Cross-document dependencies]
+              \begin{itemize}
+                  \item Shared definitions: [Check consistency across papers]
+                  \item Results used between papers: [Track dependencies]
+                  \item Notation conflicts: [Identify inconsistencies]
+                  \item Appendix connections: [How appendices relate to main texts]
+              \end{itemize}
+
+          \item [Main text derivations to expand]
+              \begin{itemize}
+                  \item Location: [Equation \ref{...}]
+                  \item Missing: [Steps, assumptions, unjustified coefficients]
+                  \item Plan: [How to expand fully]
+
+                  \item Impact on other papers: [How errors propagate]
+
+              \end{itemize}
+          \item [Appendix derivations to expand]
+              \begin{itemize}
+                  \item Location: [Appendix equation]
+                  \item Impact on main text: [How errors affect results]
+                  \item Missing: [Often many steps]
+                  \item Plan: [Full derivation needed]
+              \end{itemize}
+          \item [Physical consistency]
+              \begin{itemize}
+                  \item Conservation laws: [Issues across documents]
+                  \item Boundary conditions: [Problems]
+                  \item Limiting cases: [Concerns]
+              \end{itemize}
+          \item [Mathematical rigor]
+              \begin{itemize}
+                  \item Convergence: [Unproven claims]
+                  \item Existence/uniqueness: [Missing proofs]
+                  \item Approximations: [Unjustified]
+              \end{itemize}
+          \item [Clarity issues]
+              \begin{itemize}
+                  \item Unclear passages: [List]
+                  \item Undefined notation: [What]
+                  \item Logical gaps: [Where]
+              \end{itemize}
+          \item [Areas verified as correct]
+              \begin{itemize}
+                  \item Sound derivations: [List specific equations checked]
+                  \item Verification methods: [How checked]
+                  \item Results: [What calculations confirmed]
+
+                  \item Cross-paper consistency: [Results that match properly]
+
+              \end{itemize}
+      \end{enumerate}
+      </scratchpad>
+
+      Following your analysis, output the FULLY EXPANDED version with all derivations shown explicitly:
+
+      <documents>
+      {% for output in INPUT_FILES %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
+      </document>
+      {% endfor %}
+      </documents>
+
+    - |
+      PHASE 2 - CRITIQUE AND INDEPENDENT VERIFICATION: Add critical comments and perform independent verification of high-impact calculations.
+
+      Instruction: {{ INSTRUCTION }}
+      Focus critique primarily on instruction-related issues while noting other critical problems.
+
+      Identify high-impact algebraic issues requiring independent verification:
+      <scratchpad>
+      <critical_issues>
+      \begin{enumerate}
+
+          \item [Cross-paper critical issues]
+              \begin{itemize}
+                  \item Conflicting results: [Between which papers]
+                  \item Propagated errors: [How one paper's errors affect others]
+                  \item Impact: [Consequences for the collection]
+                  \item Verification: [Independent approach]
+              \end{itemize}
+
+          \item [High-impact calculation 1]
+              \begin{itemize}
+                  \item Location: [Equation \ref{...}]
+                  \item Original result: [What document claims]
+                  \item Impact: [Consequences if wrong, including for other papers]
+                  \item Verification: [Independent approach]
+              \end{itemize}
+          \item [High-impact calculation 2]
+              \begin{itemize}
+                  \item Location: [\ref{...}]
+                  \item Result: [Claimed]
+                  \item Impact: [Why critical]
+                  \item Method: [How to verify]
+              \end{itemize}
+      \end{enumerate}
+      </critical_issues>
+
+      <independent_verification>
+      For each high-impact calculation, work from first principles WITHOUT referencing original:
+      \begin{enumerate}
+          \item [Calculation 1 - Fresh derivation]
+              \begin{itemize}
+                  \item Start: [Basic definitions]
+                  \item Derive: [Step-by-step independent calculation]
+                  \item Result: [Your answer]
+                  \item Compare: [Match/mismatch analysis]
+
+                  \item Cross-paper impact: [How this affects other papers]
+
+              \end{itemize}
+          \item [Calculation 2 - Fresh derivation]
+              \begin{itemize}
+                  \item Start: [Fundamental equations]
+                  \item Work: [Independent steps]
+                  \item Result: [Final answer]
+                  \item Analysis: [Comparison with original]
+
+                  \item Consistency: [Check against other papers]
+
+              \end{itemize}
+      \end{enumerate}
+      </independent_verification>
+
+      <verified_correct>
+      \begin{enumerate}
+          \item [Verified calculations]
+              \begin{itemize}
+                  \item Location: [Equation \ref{...}]
+                  \item Check performed: [Specific calculation done]
+                  \item Result: [What matched]
+                  \item Confirmation: [E.g., ``Factor $\sqrt{2\pi}$ correct'']
+              \end{itemize}
+          \item [Thermodynamic consistency verified]
+              \begin{itemize}
+                  \item Second law: [E.g., ``Entropy production $\dot{S} = k_B\int J^2/(D\rho)\dd x = 0.23$ W/K $\geq 0$ confirmed'']
+                  \item Detailed balance: [E.g., ``$W_{ij}/W_{ji} = \exp(-\beta(E_j-E_i))$ verified'']
+                  \item Fluctuation theorems: [E.g., ``$\eE[\exp(-\sigma_{tot})] = 1$ checked by path integral'']
+              \end{itemize}
+          \item [Mathematical rigor confirmed]
+              \begin{itemize}
+                  \item Convergence: [Proofs that are complete]
+                  \item Boundary conditions: [Properly handled]
+                  \item Approximations: [Valid within stated bounds]
+              \end{itemize}
+      \end{enumerate}
+      </verified_correct>
+
+      <all_issues_found>
+      \begin{enumerate}
+          \item Mathematical errors: [List with \ref{...}]
+          \item Unjustified steps: [What remains unclear]
+          \item Notation inconsistencies: [Specific problems, between and within papers]
+          \item Physical violations: [Conservation, causality, etc.]
+          \item Clarity failures: [Explanation issues]
+          \item Verification discrepancies: [Where calculations differ]
+          \item Appendix errors affecting main text: [Critical connections]
+
+          \item Cross-paper conflicts: [Inconsistent results between documents]
+
+      \end{enumerate}
+      </all_issues_found>
+      </scratchpad>
+
+      Now output the expanded document with \critique{} comments added for all issues found AND areas verified.
+
+      Add this command to the preamble:
+      \newcommand{\critique}[1]{\ifmmode\textcolor{purple}{\text{[#1]}}\else\textcolor{purple}{[#1]}\fi}
+
+      Include both critical comments and verification confirmations:
+      - For issues: \critique{Missing factor of $1/2$ in drift term - needs Itô correction.}
+      - For verified: \critique{VERIFIED: Checked entropy production $\dot{S} = k_B\int J^2/(D\rho)\dd x = 0.23$ W/K - matches stated value.}
+      - For verified: \critique{VERIFIED: Jarzynski equality $\eE[\exp(-\beta W)] = \exp(-\beta \Delta F)$ confirmed by path integral.}
+
+      - For cross-paper: \critique{VERIFIED: Results consistent between Paper 1 \cref{eq:main} and Paper 2 \cref{thm:derived}.}
+      - For cross-paper: \critique{VERIFIED: Entropy production positive in all examples across papers.}
+
+      Text inside \critique{...} must use proper LaTeX syntax.
+
+      <documents>
+      {% for output in INPUT_FILES %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
+      </document>
+      {% endfor %}
+      </documents>
+
+    - |
+      PHASE 3 - FIX AND DOCUMENT: Provide the corrected version with \criticize{} annotations.
+
+      Instruction: {{ INSTRUCTION }}
+      Prioritize instruction-related fixes while addressing all critical issues.
+
+      GUIDELINES FOR FINAL OUTPUT:
+      \begin{itemize}
+          \item FAITHFULLY PRESERVE unaffected content exactly as written
+          \item RESPECT ORIGINAL DEPTH: Keep all correct mathematical steps and explanations
+          \item MAINTAIN INTEGRITY: Consistent rigor and technical detail throughout
+
+          \item ENSURE CONSISTENCY: Fix conflicts between papers
+
+          \item GRADUATED FIX APPROACH:
+              \begin{itemize}
+                  \item Minor (typos, signs): Fix silently
+                  \item Moderate (missing steps): Fix with \criticize{Fixed: [brief description]}
+                  \item Major (wrong derivations): Fix with \criticize{Issue: [...]. Fix: [...]. Note: [...]}
+                  \item Verification confirmations: \criticize{Verified: [...] checked and correct.}
+
+                  \item Cross-paper issues: \criticize{Fixed inconsistency with Paper 2 \cref{eq:other}.}
+
+                  \item Ambiguous: \criticize{Multiple approaches: [A], [B]. Human decision needed. Using [A] because...}
+              \end{itemize}
+          \item HONOR author's style, notation, and document structure
+      \end{itemize}
+
+      Plan fixes:
+      <scratchpad>
+      <fix_strategy>
+      \begin{enumerate}
+
+          \item [Cross-paper fixes]: Inconsistencies between papers at [...], Fix: [unified approach]
+
+          \item [Minor fixes - silent]: Signs, factors, typos at [locations]
+          \item [Moderate - brief comment]: Missing steps at [...], Comment: "Fixed: added [...]"
+          \item [Major - detailed comment]: Error at [...], Comment: "Issue: [...]. Fix: [...]. Note: [...]"
+          \item [Verified correct - acknowledgment]: At [...], Comment: ``Verified: Calculated [...] and obtained [...] - matches as written.''
+          \item [Human decisions needed]: Ambiguity at [...], Comment: "Multiple approaches: [...]. Using [A] because [...]"
+          \item [Verification corrections]: At [...], Comment: "Fixed: verification showed [...] not [...]"
+      \end{enumerate}
+      </fix_strategy>
+
+      <implementation_checklist>
+      \begin{enumerate}
+          \item Every error actually corrected in text across all papers?
+          \item All fixes fully implemented with correct equations?
+          \item Derivations complete start-to-finish?
+          \item Notation consistent throughout all documents?
+          \item Document(s) complete and self-contained?
+          \item Every \criticize{} matches actual change or verification?
+          \item Comments used appropriately (graduated approach)?
+          \item Verified sections acknowledged?
+
+          \item Cross-paper consistency achieved?
+          \item Can each document be used standalone?
+          \item Collection works as unified whole?
+
+          \item Honors mathematical rigor?
+      \end{enumerate}
+      </implementation_checklist>
+      </scratchpad>
+
+      Now output the COMPLETE, SELF-CONTAINED, PRODUCTION-READY document with all fixes fully implemented.
+
+      ESSENTIAL REQUIREMENTS FOR THIS FINAL OUTPUT:
+      \begin{itemize}
+          \item COMPLETE DOCUMENT: Output the entire document from beginning to end
+          \item FULLY IMPLEMENTED FIXES: Every identified issue must be actually corrected in the text
+          \item SELF-CONTAINED: The document should stand alone as a finished product while being consistent with others
+          \item COMMENT ANNOTATIONS: Add \criticize{} to document changes and verifications
+          \item ACKNOWLEDGE CORRECT WORK: Include comments where verification confirmed correctness
+
+          \item CROSS-PAPER CONSISTENCY: Ensure all documents work together properly
+
+      \end{itemize}
+
+      Add this command to the preamble (in addition to \critique):
+      \newcommand{\criticize}[1]{\ifmmode\textcolor{blue}{\text{[FIX: #1]}}\else\textcolor{blue}{[FIX: #1]}\fi}
+
+      Use this graduated approach:
+      \begin{itemize}
+          \item Minor fixes: Just fix them silently (typos, signs, simple factors)
+          \item Moderate fixes: Use brief \criticize{Fixed: [concise description]}
+          \item Major fixes: Use detailed \criticize{Issue: [...]. Fix: [...]. Note: [...]}
+          \item Verified correct: Use \criticize{Verified: Calculated $\dot{S}$ using the given formula and obtained the stated value.}
+
+          \item Cross-paper: Use \criticize{Fixed to match Paper 2 \cref{eq:corresponding}.}
+
+          \item Ambiguous cases: Use \criticize{Multiple approaches: [...]. Human decision needed.}
+      \end{itemize}
+
+      Your final document(s) should:
+      \begin{itemize}
+          \item DELIVER a complete, standalone document that requires no external references (each document standalone while working together)
+          \item IMPLEMENT all corrections fully - every fix applied, derivations completed
+          \item FAITHFULLY PRESERVE all unaffected content exactly as written
+          \item HONOR the original's mathematical depth - keep all correct steps
+          \item RETAIN existing examples and explanations that are correct
+          \item ACHIEVE immediate usability - ready for use without further editing
+          \item MAINTAIN the document's original technical level throughout
+          \item WRITE new or rewritten prose in plain technical English: concrete statements, plain verbs, each point made once
+
+          \item ENSURE cross-document consistency
+
+          \item DOCUMENT changes through \criticize{} where fixes made or correctness verified
+          \item PRESENT a clean document where every identified issue is resolved
+      \end{itemize}
+
+      GUIDING PRINCIPLE: Fix only what needs fixing. Acknowledge what is correct. Ensure consistency across all documents. Do not add new content beyond necessary corrections. Preserve the document's original character and scope.
+
+      <documents>
+      {% for output in INPUT_FILES %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
+      </document>
+      {% endfor %}
+      </documents>

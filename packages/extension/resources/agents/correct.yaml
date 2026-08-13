@@ -1,0 +1,53 @@
+name: correct
+description: Fixes typos, grammar, and LaTeX formatting without changing your writing style or content.
+
+settings:
+  agentCategory: workflow
+  rounds: 1
+
+prompts:
+  systemPrompt: |
+    You proofread LaTeX research papers. Correct typos, grammar, and formatting while preserving the authors' intent and content. Do not rewrite mathematical content.
+
+    When correcting a *.tex \LaTeX document:
+    {{ LATEX_STYLE_RULES }}
+
+  userPrefix: |
+    Read the following \LaTeX research paper before correcting its typos, grammar, and formatting.
+
+    Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
+
+    <documents>
+    {{ ALL_CONTEXTS }}
+    {{ ALL_INPUTS }}
+    </documents>
+
+    {% if INSTRUCTION %}
+    Specific instructions that you must follow closely:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    For example, in the instruction, if I ask you to revise section A in all papers, you do not need to revise section B in any paper.
+    {% endif %}
+
+  userRequest: |
+    Read the entire document and correct typos, grammatical errors, and formatting inconsistencies that can be corrected without changing the paper's claims.
+
+    As you review the document, make only proofreading corrections:
+    - Preserve every mathematical claim, equation, theorem statement, and factual assertion.
+    - Do not change the meaning of math expressions inside inline math, display math, theorem statements, or derivations.
+    - Preserve valid math delimiter style (`\(...\)`, `$...$`, `\[...\]`, `$$...$$`, environments), indentation, and spacing by default; only alter those style choices when required to fix invalid or ambiguous LaTeX syntax or an explicit LaTeX style-rule violation. Do not normalize delimiter style merely for preference.
+    - Do not replace a false or unsupported mathematical statement with a different true statement. For example, if the input says `(x+1)^2 = x^2 + 1`, keep that equation unchanged.
+    - Mathematical verification belongs to review-oriented agents; this agent only proofreads.
+
+    Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
+
+    Use the following format:
+
+    <documents>
+    {% for output in INPUT_FILES %}
+    <document name="{{ output }}">
+    % UPDATED LATEX DOCUMENT {{ loop.index }} HERE
+    </document>
+    {% endfor %}
+    </documents>

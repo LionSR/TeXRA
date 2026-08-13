@@ -1,0 +1,89 @@
+{
+  "name": "@texra-ai/cli",
+  "version": "0.40.3",
+  "description": "TeXRA CLI — your AI theorist in the terminal.",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "author": "TeXRA.ai",
+  "homepage": "https://texra.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/texra-ai/texra-issues.git"
+  },
+  "bugs": {
+    "url": "https://github.com/texra-ai/texra-issues/issues"
+  },
+  "keywords": [
+    "latex",
+    "tex",
+    "ai",
+    "cli",
+    "llm",
+    "research",
+    "academic",
+    "writing",
+    "texra"
+  ],
+  "files": [
+    "dist",
+    "!dist/bin/tui-harness.js",
+    "LICENSE.txt"
+  ],
+  "type": "module",
+  "bin": {
+    "texra": "dist/bin/texra.js"
+  },
+  "engines": {
+    "node": ">=22.9.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit --checkers 8 -p tsconfig.json && tsc --noEmit --checkers 8 -p tsconfig.scripts.json",
+    "check:architecture": "node scripts/check-host-imports.mjs",
+    "bundle": "node scripts/build-bundle.mjs",
+    "prepare:trace-viewer-assets": "corepack pnpm --filter @texra/trace-viewer run build",
+    "copy:resources": "node scripts/copy-resources.mjs",
+    "copy:docs": "node scripts/copy-docs.mjs",
+    "smoke:react-compiler": "node scripts/smoke-react-compiler.mjs",
+    "build": "npm run typecheck && npm run check:architecture && npm run smoke:react-compiler && npm run prepare:trace-viewer-assets && npm run bundle && npm run copy:resources && npm run copy:docs",
+    "prepack": "npm run build",
+    "validate:run": "node scripts/validate-run.mjs",
+    "validate:pack": "node scripts/validate-pack.mjs",
+    "validate:tui": "node scripts/validate-tui.mjs"
+  },
+  "dependencies": {
+    "@inkjs/ui": "^2.0.0",
+    "clipboardy": "^5.3.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@babel/preset-react": "^7.29.7",
+    "@babel/preset-typescript": "^7.29.7",
+    "@lit-labs/signals": "^0.3.0",
+    "@types/react": "^19.2.18",
+    "@types/semver": "^7.8.0",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "@xterm/headless": "^6.0.0",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "citty": "^0.2.2",
+    "cli-highlight": "^2.1.11",
+    "cli-table3": "^0.6.5",
+    "cli-truncate": "^6.1.1",
+    "diff": "^9.0.0",
+    "esbuild": "^0.28.2",
+    "ink": "^7.1.1",
+    "lru-cache": "^11.5.2",
+    "markdown-it": "^15.0.0",
+    "node-pty": "^1.0.0",
+    "p-queue": "^9.3.3",
+    "picocolors": "^1.1.1",
+    "react": "^19.2.8",
+    "semver": "^7.8.5",
+    "slice-ansi": "^9.0.0",
+    "string-width": "^8.2.2",
+    "strip-ansi": "^7.2.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "wrap-ansi": "^10.0.0"
+  }
+}

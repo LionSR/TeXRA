@@ -1,0 +1,46 @@
+# ci-sync-version: claude-provider-deepseek-v1
+# ci-sync-source: shared bot automation, prompts externalized under .github/prompts
+name: Repository Quality Improver
+
+on:
+  schedule:
+    - cron: '0 14 * * 1-5'
+  workflow_dispatch:
+
+concurrency:
+  group: quality-improver
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    # Repository variable kill switch:
+    #   REPOSITORY_QUALITY_IMPROVER_ENABLED=false disables scheduled quality scans.
+    #   unset or any other value preserves the default enabled behavior.
+    if: vars.REPOSITORY_QUALITY_IMPROVER_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    env:
+      CLAUDE_CODE_PROVIDER: ${{ vars.CLAUDE_CODE_PROVIDER || 'anthropic' }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      ANTHROPIC_BASE_URL: ${{ vars.ANTHROPIC_BASE_URL }}
+      CLAUDE_OPUS_MODEL: ${{ vars.CLAUDE_OPUS_MODEL }}
+      CLAUDE_SONNET_MODEL: ${{ vars.CLAUDE_SONNET_MODEL }}
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: LionSR/agent-ci-actions@v1
+        with:
+          provider: ${{ env.CLAUDE_CODE_PROVIDER }}
+          model-tier: sonnet
+          allowed-bots: 'github-actions[bot]'
+          allowed_tools_preset: quality-improver
+          allowed_tools_preset_map_file: .github/automation/allowed-tools.json
+          claude-prompt-file: .github/prompts/repository-quality-improver-prompt.md
+          claude-prompt-context: |
+            Repository: ${{ github.repository }}

@@ -1,0 +1,485 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  merge_group:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  # Nightly `schedule` runs use github.ref == refs/heads/main, the same ref a
+  # push to main uses. Without the event_name suffix, cancel-in-progress would
+  # let a same-ref push cancel the nightly runtime-validation timing run (or
+  # vice versa) — see #7756.
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+# Validation is split into parallel jobs (checks / test shards / build) so PR
+# wall-time is bounded by the slowest job, not the sum of a serial chain. Each
+# job repeats the cheap cached setup (~30s) to buy that parallelism.
+#
+# The nightly `schedule` run exists only for the runtime-validation timing
+# job; every push to main already runs full validation, so the heavy jobs are
+# gated off `schedule` rather than re-validating an unchanged tree nightly
+# (the macOS webview smoke bills at 10x Linux rates).
+jobs:
+  changes:
+    name: detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect non-docs changes
+        id: detect
+        run: |
+          # Heavy validation (typecheck/lint/tests/build) only runs when a PR touches
+          # something other than docs. Docs-only PRs fall through to the
+          # lightweight docs-build job below, keeping CI spend down. Pushes to
+          # main and manual dispatches always run full validation.
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "Event '${{ github.event_name }}' -> full validation."
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          files="$(git diff --name-only "$base...$head")"
+          echo "Changed files in this PR:"
+          printf '%s\n' "$files"
+          # A file counts as "code" unless it lives under docs/ or is a *.md file.
+          if printf '%s\n' "$files" | grep -vE '^docs/|\.md$' | grep -q .; then
+            echo "Non-docs changes detected -> full validation."
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Docs-only change -> lightweight docs build only."
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  checks:
+    name: static checks (linux)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    # Typecheck, lint, formatting, and the cheap invariant scripts — everything
+    # that needs neither the test runner nor a build. Runs in parallel with the
+    # kernel-test shards and the build job.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2.0.5
+        with:
+          deno-version: '2.8.3'
+          cache: true
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate CLI React Compiler
+        run: pnpm --filter @texra-ai/cli smoke:react-compiler
+
+      # Formatting remains a CI gate instead of an auto-committing workflow:
+      # the pre-commit hook formats staged files locally, avoiding a bot push and
+      # its token, retrigger, cancellation, and branch-race complexity.
+      - name: Check formatting
+        run: pnpm run format:check
+
+      - name: Type check
+        run: pnpm run typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      # Every function that owns a deno.json is validated, so a new edge
+      # function cannot ship untested by being omitted from this list.
+      - name: Validate edge functions
+        run: |
+          shopt -s nullglob
+          for dir in supabase/functions/*/; do
+            [ -f "${dir}deno.json" ] || continue
+            echo "::group::${dir}"
+            (
+              cd "${dir}"
+              tests=(*_test.ts)
+              deno check index.ts "${tests[@]}"
+              deno lint
+              if [ ${#tests[@]} -gt 0 ]; then
+                deno test --allow-env
+              fi
+            )
+            echo "::endgroup::"
+          done
+
+      - name: Check dead-code ratchet
+        run: pnpm run check:dead-code-ratchet
+
+      - name: Check extension package invariants
+        run: pnpm run check:extension-package-invariants
+
+      - name: Check extension package contributions
+        run: pnpm run check:package-contributes
+
+      - name: Check tsconfig paths are in sync with the root
+        run: pnpm run check:tsconfig-paths
+
+  guidance-refs:
+    name: guidance references
+    # Deliberately ungated: this is the one check that must run on BOTH sides
+    # of the docs/code split. A guidance-only PR (code=false) skips `checks`,
+    # and that is exactly the PR most likely to introduce a stale path; a
+    # code-only PR can break the prose by renaming what it cites. The script is
+    # dependency-free bare Node, so this needs no install and costs seconds.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          # This job installs nothing, so there is no package-manager cache to
+          # warm. Leaving the default on makes setup-node detect pnpm-lock.yaml
+          # and shell out to `pnpm` for its cache dir, which fails here because
+          # pnpm is deliberately not set up.
+          package-manager-cache: false
+
+      - name: Check guidance file references resolve
+        run: node scripts/check-guidance-refs.mjs
+
+  test:
+    # Keep the pre-existing `linux` / `windows` labels rather than the raw
+    # runner image: these strings are the check names branch protection pins.
+    name: kernel tests (${{ matrix.os == 'windows-latest' && 'windows' || 'linux' }}, shard ${{ matrix.shard }}/2)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      # Run every shard on every OS to completion so a red run reports every
+      # failure at once instead of hiding the other shard's results.
+      fail-fast: false
+      matrix:
+        # Windows is opt-in via `workflow_dispatch`, not part of PR or push
+        # validation. It re-ran assertions the Linux shards already cover —
+        # Windows-specific behaviour is exercised by suites that stub the
+        # platform (`platform: 'win32'`), and 17 assertions actively skip
+        # themselves when the runner really is Windows — while costing ~16 min
+        # per shard against ~10 on Linux (billed at 2x) and setting the
+        # wall-clock for the entire workflow. The inventory of genuine Windows
+        # defects the matrix did surface is in
+        # docs/proposals/2026-07-29-open-source-readiness.md §4.6; run CI
+        # manually from the Actions tab to re-check Windows before a release or
+        # after touching path handling.
+        os: ${{ fromJson(github.event_name == 'workflow_dispatch' && '["ubuntu-latest", "windows-latest"]' || '["ubuntu-latest"]') }}
+        shard: [1, 2]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # --maxWorkers=2 saturates the 2-vCPU hosted runner (see #8039); the
+      # shards exist because a single runner can't go wider than that.
+      - name: Kernel tests
+        run: pnpm run test --maxWorkers=2 --shard=${{ matrix.shard }}/2
+
+  build:
+    name: build artifacts (linux)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate CLI TUI smoke frames
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          pnpm --filter @texra-ai/cli validate:tui -- \
+            --snapshot-dir "$GITHUB_WORKSPACE/artifacts/tui-frames" \
+            edit-approval subagent-list-focus-full-frame hidden-root-approval-tab-return \
+            orchestrate-launcher orchestrate-agent-submenu \
+            orchestrate-independent-subscription-preferences \
+            orchestrate-history orchestrate-resume-submenu \
+            compact-orchestrate-launcher single-run-liveness \
+            subagent-followup-summary \
+            agent-proposal-approve-all workflow-timeline workflow-running \
+            root-transcript-reader-full-tool-output compact-api-form \
+            narrow-slash-palette-command-names
+
+      - name: Upload CLI TUI smoke frames
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-cli-tui-smoke-frames
+          path: artifacts/tui-frames
+          if-no-files-found: warn
+          retention-days: 14
+
+      # No separate dev-mode `pnpm run compile` step: build:fast starts with
+      # clean:dist and rebuilds esbuild + Vite output in production mode, so a
+      # preceding dev compile is discarded work.
+      # Desktop app packaging is intentionally not part of PR CI. Keep this
+      # check scoped to the VS Code extension package.
+      - name: Build extension VSIX package
+        run: pnpm --filter texra build:fast
+
+      - name: Check extension VSIX contents
+        run: pnpm run check:vsix-contents
+
+      - name: Upload extension VSIX artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-extension-vsix
+          path: releases/*.vsix
+          if-no-files-found: error
+          retention-days: 14
+
+  webview-smoke:
+    name: webview smoke (macOS)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    # macOS-only because the smoke renders the packaged webviews in Electron on
+    # the macOS runner. It needs just the Vite webview bundles
+    # (packages/extension/dist/*/bundle.js) — not the esbuild extension-host
+    # compile, typecheck, lint, or kernel tests, which the Linux jobs already
+    # cover. Keeping this job lean avoids paying macOS rates (10x Linux) to
+    # re-run platform-independent checks.
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build webview smoke assets
+        run: pnpm run vite:webviews
+
+      - name: Smoke extension webviews in Electron
+        run: pnpm run smoke:webviews:run
+
+      - name: Upload webview smoke screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-webview-smoke-screenshots
+          path: artifacts/webview-smoke/*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+  runtime-validation:
+    name: runtime validation (linux)
+    # Runs on push to main, the nightly schedule (whose whole purpose is this
+    # timing run), merge groups, and manual dispatch; never on PRs.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate CLI real-runtime run path
+        run: |
+          set +e
+          start_time="$(date +%s)"
+          pnpm --filter @texra-ai/cli validate:run
+          status="$?"
+          end_time="$(date +%s)"
+          duration="$((end_time - start_time))"
+          {
+            echo '### CLI real-runtime validation'
+            echo
+            echo "- Command: \`pnpm --filter @texra-ai/cli validate:run\`"
+            echo "- Duration: ${duration}s"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+  docs-check:
+    name: docs build
+    needs: changes
+    # Runs only for docs-only PRs (where the heavy validation jobs are
+    # skipped). Formatting still uses the root workspace's pinned Prettier;
+    # VitePress then builds from its self-contained npm sub-project.
+    if: needs.changes.result == 'success' && needs.changes.outputs.code != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install formatting dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Check formatting
+        run: pnpm run format:check
+
+      - name: Install docs dependencies
+        working-directory: docs
+        run: npm ci --legacy-peer-deps
+
+      - name: Build docs site
+        working-directory: docs
+        run: npm run docs:build
+
+  validate-status:
+    name: validate
+    runs-on: ubuntu-latest
+    needs:
+      - changes
+      - checks
+      - guidance-refs
+      - test
+      - build
+      - webview-smoke
+      - runtime-validation
+      - docs-check
+    if: always()
+
+    steps:
+      - name: Require validation jobs success
+        run: |
+          # On code PRs the checks/test/build/webview-smoke jobs gate; on
+          # docs-only PRs they are skipped and the lightweight docs
+          # build gates instead; on the nightly schedule only runtime-validation
+          # runs.
+          # Require whichever ran.
+          #
+          # `changes` must itself succeed (never skip): if it fails, every
+          # dependent job skips and the gate would otherwise go green with
+          # nothing validated.
+          if [ '${{ needs.changes.result }}' != 'success' ]; then
+            echo 'Change detection result: ${{ needs.changes.result }}'
+            exit 1
+          fi
+          # guidance-refs is ungated, so unlike the jobs below it must actually
+          # have succeeded — "skipped" here means it never ran and the gate
+          # would go green without checking anything.
+          if [ '${{ needs.guidance-refs.result }}' != 'success' ]; then
+            echo 'guidance-refs result: ${{ needs.guidance-refs.result }}'
+            exit 1
+          fi
+          for result in \
+            'checks:${{ needs.checks.result }}' \
+            'test:${{ needs.test.result }}' \
+            'build:${{ needs.build.result }}' \
+            'webview-smoke:${{ needs.webview-smoke.result }}' \
+            'runtime-validation:${{ needs.runtime-validation.result }}' \
+            'docs-check:${{ needs.docs-check.result }}'; do
+            name="${result%%:*}"
+            value="${result#*:}"
+            if [ "$value" != 'success' ] && [ "$value" != 'skipped' ]; then
+              echo "${name} result: ${value}"
+              exit 1
+            fi
+          done
+          # Docs-only PRs skip the heavy jobs, so the docs build must have
+          # actually succeeded (not merely been skipped). Scoped to
+          # pull_request: on the nightly schedule both sides are skipped by
+          # design.
+          if [ '${{ github.event_name }}' = 'pull_request' ] && \
+             [ '${{ needs.checks.result }}' = 'skipped' ] && \
+             [ '${{ needs.docs-check.result }}' != 'success' ]; then
+            echo 'Docs-only PR but docs build did not succeed: ${{ needs.docs-check.result }}'
+            exit 1
+          fi

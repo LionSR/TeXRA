@@ -1,0 +1,50 @@
+% ── TeXRA Chat Export preamble ──
+% This template defines the document class, packages, and tcolorbox
+% environments used when exporting a chat conversation to LaTeX/PDF.
+
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[most]{tcolorbox}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{xcolor}
+\geometry{margin=2.5cm}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=none,
+  aboveskip=0pt,
+  belowskip=0pt,
+}
+
+% ── Chat message environments ──
+\newtcolorbox{usermessage}{
+  colback=blue!5, colframe=blue!40, title={\textbf{User}},
+  breakable, before skip=8pt, after skip=8pt
+}
+
+\newtcolorbox{assistantmessage}{
+  colback=green!5, colframe=green!40, title={\textbf{Assistant}},
+  breakable, before skip=8pt, after skip=8pt
+}
+
+\newtcolorbox{toolcallbox}[1]{
+  colback=orange!5, colframe=orange!40, title={\textbf{Tool: \texttt{#1}}},
+  breakable, before skip=8pt, after skip=8pt
+}
+
+\newtcolorbox{toolresultbox}{
+  colback=yellow!5, colframe=yellow!30, title={\textbf{Tool Result}},
+  breakable, before skip=8pt, after skip=8pt, fontupper=\small
+}
+
+\newtcolorbox{websearchbox}{
+  colback=violet!5, colframe=violet!30, title={\textbf{Web Search}},
+  breakable, before skip=8pt, after skip=8pt
+}

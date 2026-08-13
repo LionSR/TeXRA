@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Scientific Presenter'
+  short_description: 'Build and refine research slide decks'
+  default_prompt: 'Use $scientific-presenter to turn this paper or codebase into a polished scientific talk.'

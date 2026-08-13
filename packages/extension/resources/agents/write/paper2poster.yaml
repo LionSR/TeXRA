@@ -1,0 +1,78 @@
+name: paper2poster
+description: Converts a research paper into a LaTeX conference poster using a provided template.
+
+settings:
+  agentCategory: workflow
+  isRewrite: False
+  defaultOutputFiles:
+    - poster.tex
+  requiredFilesInternal:
+    TEMPLATE_POSTER: template_poster.tex
+    TEMPLATE_POSTER_STYLE: beamercolorthemempi.sty
+    TEMPLATE_POSTER_THEME: beamerthemeconfposter.sty
+
+prompts:
+  systemPrompt: |
+    Create a mathematically detailed LaTeX Beamer poster from the research paper. Write for a scientific audience. Present the paper's key points, methods, results, and conclusions in a readable A5 layout.
+
+    When creating the poster:
+    - Cite relevant key papers using biblatex
+    - The poster must be self-contained: write as if the reader is a third party who has never read and will never read our conversations, so they should be able to understand and follow the poster on its own. Define all notations, abbreviations, and terminology before first use.
+    - Write poster text plainly: every sentence and bullet states a specific fact, method, or result in plain words. Give the poster one focal result, and let the results themselves carry the emphasis.
+
+  userPrefix: |
+    Create a detailed LaTeX Beamer poster from this research paper:
+
+    <documents>
+    {{ ALL_CONTEXTS }}
+    <document name="{{ TEMPLATE_POSTER_STYLE_FILE }}">
+    {{ TEMPLATE_POSTER_STYLE_CONTENT }}
+    </document>
+    <document name="{{ TEMPLATE_POSTER_THEME_FILE }}">
+    {{ TEMPLATE_POSTER_THEME_CONTENT }}
+    </document>
+    {{ ALL_INPUTS }}
+    </documents>
+
+    Read the full paper before creating the poster.
+
+    Create a mathematically detailed A5 LaTeX Beamer poster for a scientific audience.
+
+    \begin{itemize}
+        \item Use LaTeX Beamer syntax and commands correctly.
+        \item Structure the poster with clear sections: Abstract, Introduction, Theoretical Framework, Methods, Results, Discussion, and Conclusions.
+        \item Include detailed mathematical equations, derivations, and explanations from the original paper.
+        \item Create appropriate figures, tables, and diagrams to illustrate key concepts and results.
+        \item Write short, informative explanations for each section.
+        \item Use appropriate notation and terminology consistently.
+        \item Prioritize both mathematical depth and visual representations of key ideas.
+        \item Keep the poster readable at A5 size despite the detail: check font sizes, block density, and spacing.
+        \item Include author information, affiliations, and contact details.
+        \item End with a short conclusion stating the main findings and what follows from them.
+        \item Use the color scheme and design elements from the provided template.
+    \end{itemize}
+
+    {% if INSTRUCTION %}
+    Focus solely on the following specific instruction:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    {% endif %}
+
+  userRequest:
+    - |
+      Create a detailed, mathematically rich LaTeX Beamer poster for a scientific audience in A5 format. Include the paper's main results and the mathematical detail needed to support them. Use the following format:
+
+      <documents>
+      <document name="{{ OUTPUT_FILES[0] }}">
+      {{ TEMPLATE_POSTER_CONTENT }}
+      </document>
+      </documents>
+    - |
+      Review the draft poster against the requirements above, especially mathematical accuracy, A5 readability, compact biblatex references, use of the template's color scheme, and plain, concrete phrasing. Fix any issues and output the complete revised poster; if none, reproduce it unchanged:
+
+      <documents>
+      <document name="{{ OUTPUT_FILES[0] }}">
+      % Complete revised LaTeX Beamer poster here
+      </document>
+      </documents>

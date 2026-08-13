@@ -1,0 +1,182 @@
+# ci-sync-version: claude-provider-deepseek-v1
+# ci-sync-source: shared bot automation, prompts externalized under .github/prompts
+name: Claude Code Review
+
+# Reviews run once when a PR opens (or leaves draft), not on every push:
+# per-push `synchronize` reviews doubled API spend and re-reviewed stale
+# heads that were about to be pushed over. To request a fresh review after
+# addressing feedback, add the `re-review` label (the workflow removes it so
+# it can be re-applied).
+on:
+  pull_request:
+    types: [opened, ready_for_review, labeled]
+
+concurrency:
+  # Irrelevant `labeled` events (e.g. auto-label applying area labels right
+  # after open) get a unique group so they skip without cancelling an
+  # in-flight review in the PR's real group.
+  group: claude-review-${{ github.event.pull_request.number }}${{ (github.event.action == 'labeled' && github.event.label.name != 're-review') && format('-label-{0}', github.run_id) || '' }}
+  cancel-in-progress: true
+
+jobs:
+  claude-review:
+    name: claude-review-${{ matrix.provider }}
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: ${{ fromJson(vars.CLAUDE_CODE_REVIEW_PROVIDERS || format('["{0}"]', vars.CLAUDE_CODE_PROVIDER || 'anthropic')) }}
+    # Repository variable kill switch:
+    #   CLAUDE_REVIEW_ENABLED=false disables Claude-powered PR review.
+    #   unset or any other value preserves the default enabled behavior.
+    if: |
+      vars.CLAUDE_REVIEW_ENABLED != 'false' &&
+      (github.event.action != 'labeled' || github.event.label.name == 're-review')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: read
+      issues: write
+      id-token: write
+
+    env:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      ANTHROPIC_BASE_URL: ${{ vars.ANTHROPIC_BASE_URL }}
+      CLAUDE_OPUS_MODEL: ${{ vars.CLAUDE_OPUS_MODEL }}
+      CLAUDE_SONNET_MODEL: ${{ vars.CLAUDE_SONNET_MODEL }}
+      DEEPSEEK_BASE_URL: https://api.deepseek.com/anthropic
+      CLAUDE_ALLOWED_TOOLS: >-
+        Read,Glob,Grep,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api graphql:*),Bash(git diff:*),Bash(git log:*),mcp__github_inline_comment__create_inline_comment,mcp__github__*
+
+    steps:
+      # Consume the trigger label so a later `re-review` re-application fires
+      # a fresh run. Fork PR tokens are read-only; their review jobs already
+      # skip because provider credentials are unavailable. Runs per matrix
+      # provider; the second delete 404s harmlessly.
+      - name: Remove re-review label
+        if: github.event.action == 'labeled' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 're-review',
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+      - name: Check Claude review switch
+        id: claude-switch
+        env:
+          CLAUDE_REVIEW_ENABLED: ${{ vars.CLAUDE_REVIEW_ENABLED }}
+        run: |
+          if [ "$CLAUDE_REVIEW_ENABLED" = "false" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping Claude code review: CLAUDE_REVIEW_ENABLED=false"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check review provider token
+        if: steps.claude-switch.outputs.skip != 'true'
+        id: provider-token
+        env:
+          REVIEW_PROVIDER: ${{ matrix.provider }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          set -euo pipefail
+          case "$REVIEW_PROVIDER" in
+            anthropic) provider_token="$CLAUDE_CODE_OAUTH_TOKEN" ;;
+            deepseek) provider_token="$DEEPSEEK_API_KEY" ;;
+            *)
+              echo "::error::Unsupported review provider: $REVIEW_PROVIDER"
+              exit 1
+              ;;
+          esac
+          if [ -n "$provider_token" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "reason=$REVIEW_PROVIDER token is not configured" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository under review
+        if: steps.claude-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true'
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Checkout trusted automation
+        if: steps.claude-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: .trusted-actions
+          fetch-depth: 1
+
+      - name: Check trusted provider wrapper
+        if: steps.claude-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true'
+        id: trusted-provider-wrapper
+        run: |
+          # claude-code-with-provider is now external (LionSR/agent-ci-actions@v1), always available;
+          # the legacy trusted base-ref presence check is obsolete.
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code Review
+        if: steps.claude-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.trusted-provider-wrapper.outputs.available == 'true'
+        id: claude-review
+        continue-on-error: true
+        uses: LionSR/agent-ci-actions@v1
+        with:
+          provider: ${{ matrix.provider }}
+          model-tier: sonnet
+          allowed-bots: 'claude[bot],cursor[bot],cursor,copilot-pull-request-reviewer[bot]'
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          claude-prompt-file: .trusted-actions/.github/prompts/claude-code-review-prompt.md
+          claude-prompt-context: |
+            PR number: ${{ github.event.pull_request.number }}
+            Repository: ${{ github.repository }}
+            Repository owner: ${{ github.repository_owner }}
+            Repository name: ${{ github.event.repository.name }}
+            Review this TeXRA pull request: ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+            Review provider: ${{ matrix.provider }}
+            Trigger event: ${{ github.event.action }}
+          system-prompt-file: .trusted-actions/.github/prompts/claude-code-review-system-prompt.md
+
+      - name: Check for Claude quota errors and post comment
+        if: |
+          steps.claude-switch.outputs.skip != 'true' &&
+          steps.provider-token.outputs.skip != 'true' &&
+          steps.trusted-provider-wrapper.outputs.available == 'true' &&
+          steps.claude-review.outcome != 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const outcomeText = '${{ steps.claude-review.outcome }}';
+            if (outcomeText === 'failure' || outcomeText === 'cancelled') {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: '⏳ Claude quota exhausted or rate limit reached. Add the `re-review` label to retry the review.\n\n(If this persists, please check the [Claude Code action logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}))'
+              });
+            }
+
+      - name: Fail when Claude review did not complete
+        if: |
+          steps.claude-switch.outputs.skip != 'true' &&
+          steps.provider-token.outputs.skip != 'true' &&
+          steps.trusted-provider-wrapper.outputs.available == 'true' &&
+          steps.claude-review.outcome != 'success'
+        env:
+          CLAUDE_REVIEW_OUTCOME: ${{ steps.claude-review.outcome }}
+        run: |
+          echo "::error::Claude code review did not complete (outcome: $CLAUDE_REVIEW_OUTCOME)."
+          exit 1

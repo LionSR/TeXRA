@@ -1,0 +1,40 @@
+repos:
+  - repo: local
+    hooks:
+      - id: npm-format
+        name: prettier --write staged files
+        # During commits, pre-commit supplies staged paths and temporarily hides
+        # unstaged changes. It detects rewrites, aborts, and lets the contributor
+        # review and stage the formatter's output before retrying.
+        entry: corepack pnpm exec prettier --write --ignore-unknown --no-error-on-unmatched-pattern
+        language: system
+      # Forbid a stray internal doc at the docs root from being published to
+      # texra.ai. The boundary lives in docs/.vitepress/publicDocs.js; this
+      # dependency-free Node gate fails the commit if a root-level doc/dir is
+      # neither public nor excluded. (The docs-deploy.yml allowlist remains the
+      # server-side backstop.) Scoped to docs/ so it only runs when relevant.
+      - id: docs-root-boundary
+        name: docs root public/internal boundary
+        entry: node docs/scripts/check-root-docs.mjs
+        language: system
+        files: ^docs/
+        pass_filenames: false
+      # Agent-facing guidance (CLAUDE.md, AGENTS.md, .claude/skills/**,
+      # docs/dev/**) cites repo paths that nothing compiles, so they rot
+      # silently when code moves — and a confidently wrong path misleads more
+      # than a missing one. This gate fails the commit when a cited path no
+      # longer resolves.
+      #
+      # Deliberately unfiltered. A `files:` pattern would have to list every
+      # prefix the checker resolves (PATH_PREFIXES in the script: src, packages,
+      # docs, config, patches, scripts, supabase, .github, .claude) and would
+      # then be a second copy drifting out of sync with it — the exact failure
+      # mode this hook exists to catch. The script is dependency-free and runs
+      # in ~0.15s, so gating it saves nothing worth that risk. Mirrors the
+      # ungated `guidance-refs` job in ci.yml.
+      - id: guidance-refs
+        name: guidance file references resolve
+        entry: node scripts/check-guidance-refs.mjs
+        language: system
+        always_run: true
+        pass_filenames: false

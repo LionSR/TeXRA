@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:; connect-src data:;"
+    />
+    <link rel="stylesheet" href="${commonStyleUri}" />
+    <link rel="stylesheet" href="${settingsStyleUri}" />
+    <style nonce="${nonce}">
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        display: flex;
+        overflow: hidden;
+      }
+
+      settings-app {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+      }
+    </style>
+    <title>TeXRA Settings</title>
+  </head>
+
+  <body>
+    <settings-app role="main" aria-label="TeXRA settings"></settings-app>
+    <script type="module" nonce="${nonce}" src="${settingsBundleUri}"></script>
+  </body>
+</html>

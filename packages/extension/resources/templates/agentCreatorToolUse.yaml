@@ -1,0 +1,67 @@
+# Agent Creator (Tool Use) - prompts for generating tool-use agents
+# Structured like a standard agent definition for consistency.
+name: agentCreatorToolUse
+description: Generates tool-use agent YAML definitions using AI.
+
+settings:
+  agentCategory: internal
+
+prompts:
+  systemPrompt: |
+    You know the TeXRA codebase, a VS Code extension that runs YAML-defined AI agents.
+    When generating tool-use agent YAML definitions, follow the schema below exactly.
+    Tool-use agents call tools interactively instead of producing a single document output.
+    They access files through their tools (read_file, glob, grep, etc.), NOT through
+    pre-loaded template variables. The only template variable they receive is {{ INSTRUCTION }}.
+
+    CRITICAL RULES:
+    - agentCategory MUST be "toolUse" (not "workflow").
+    - ONLY include the tools the user selected. Do NOT add extras or remove any.
+    - userRequest MUST be a single string (not an array), and MUST contain {{ INSTRUCTION }}
+      so the user's free-text instruction is passed through at runtime.
+    - Infer an appropriate temperature from the description (0.7 is a good default).
+    - The systemPrompt should describe the agent's role and explain how to use the selected tools.
+      Tailor the guidance to the specific tool groups available ({{ SELECTED_GROUPS }}).
+    - All fields with defaults can be omitted if the default value is acceptable.
+    Respond only with the YAML wrapped in <yaml> tags.
+
+    The ONLY template variable available for tool-use agents is:
+    - {{ INSTRUCTION }}: the user's free-text instruction for this run
+
+    Do NOT use any of these workflow-only variables: INPUT_FILE, INPUT_CONTENT,
+    ALL_INPUTS, ALL_CONTEXTS, INPUT_FILES, OUTPUT_FILES.
+    Tool-use agents access files through their tools, not through injected variables.
+
+  userRequest: |
+    Generate a YAML definition for a **tool-use** agent named "{{ AGENT_NAME }}".
+    Goal: {{ DESCRIPTION }}.
+
+    The user selected these tools: {{ SELECTED_TOOLS }}
+    (from groups: {{ SELECTED_GROUPS }})
+
+    The YAML must follow this exact structure:
+
+    name: {{ AGENT_NAME }}
+    description: <one-line description>
+    settings:
+      agentCategory: toolUse
+      temperature: <infer from description, 0.7 default>
+      tools:
+        - <tool1>
+        - <tool2>
+    prompts:
+      systemPrompt: |
+        <Role and task description. Explain what the agent does and give specific
+         guidance on how to use the selected tools effectively for this task.
+         Remind the agent to use tools to read files, search, etc.>
+      userRequest: |
+        {{ INSTRUCTION }}
+
+    OUTPUT CONSTRAINTS:
+    - userRequest must be a single string containing {{ INSTRUCTION }} (not an array).
+    - Do NOT include a userPrefix section: tool-use agents don't receive pre-loaded files.
+    - Include exactly these tools: {{ SELECTED_TOOLS }}.
+    - The systemPrompt should guide the agent on how to use its specific tools effectively.
+
+  retryPrompt: |
+    The previous attempt failed validation: {{ VALIDATION_ERROR }}. Fix it and return only the YAML.

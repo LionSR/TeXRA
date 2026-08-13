@@ -1,0 +1,688 @@
+/**
+ * Document-level theme tokens for the TeXRA desktop (Electron) renderer.
+ *
+ * Single token system: --wa-* tokens are the ONLY tokens consumer code
+ * references. They are sourced directly from the desktop's native
+ * --desktop-color-* palette below. There is no --texra-* shim layer and
+ * consumers never reference --vscode-* directly.
+ *
+ * Niche palette tokens with no clean WA semantic equivalent (terminal ansi,
+ * symbol icons, charts, git decoration, debug tokens, diff editor, etc.) are
+ * promoted into the --wa-color-* namespace so the consumer surface stays
+ * uniform across both hosts.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Heading scale shared with extension litStyles.ts. Use these tokens
+     instead of hardcoded heading sizes so extension and desktop hosts
+     render headings at the same visual scale. */
+  --font-size-h1: 1.5em;
+  --font-size-h2: 1.25em;
+  --font-size-h3: 1em;
+
+  /* Shared pane-header height. The rail header, the conversation header, and
+     the editor tree header all pin to this so every pane starts its content on
+     the same baseline. Roomier than the extension's 34px: this is a window, not
+     a sidebar. */
+  --height-header: 46px;
+
+  /* ==========================================================================
+     Palette
+     --------------------------------------------------------------------------
+     This used to be a set of GitHub/VS Code hex values chosen so the desktop
+     app would pass for a VS Code panel. That is what made it feel dated: a
+     near-black #1e1e1e canvas, hairline #2b2b2b seams, and a muted #0e639c
+     accent, with radii pinned to 2-3px.
+
+     The desktop now follows the quieter ChatGPT/Codex surface language:
+     neutral white/charcoal canvases, an opaque layered surface ladder, soft
+     seams, and black/white primary actions. Color is reserved for semantic
+     information instead of tinting the whole application chrome.
+
+     Every --wa-* token in the bridge below derives from these, so the whole
+     shared Lit component set (wa-button, wa-input, wa-dialog, the progress
+     view, the settings view) re-skins from this one block.
+     ========================================================================== */
+
+  /* Canvas and text. These mirror ChatGPT's paper-white and charcoal modes
+     without turning the dark theme into a blue-black developer-tool skin. */
+  --desktop-color-background: light-dark(#ffffff, #212121);
+  --desktop-color-foreground: light-dark(#0d0d0d, #ececec);
+  --desktop-color-muted: light-dark(#5d5d5d, #b4b4b4);
+  --desktop-color-soft: light-dark(#8f8f8f, #8e8e8e);
+
+  /* Surface ladder. Opaque neutral steps keep nested panels legible without
+     translucent blue layers compounding into unrelated colors. */
+  --desktop-color-sidebar: light-dark(#f9f9f9, #171717);
+  --desktop-color-sidebar-header: light-dark(#f4f4f4, #2f2f2f);
+  --desktop-color-surface-3: light-dark(#ececec, #424242);
+
+  /* Seams are intentionally quiet: enough contrast to explain containment,
+     but never strong enough to make every region look like a card. */
+  --desktop-color-border: light-dark(#e5e5e5, rgb(255 255 255 / 10%));
+  --desktop-color-widget-border: light-dark(#d9d9d9, rgb(255 255 255 / 16%));
+  --desktop-edge-highlight: light-dark(
+    none,
+    inset 0 1px 0 rgb(255 255 255 / 4%)
+  );
+
+  /* Inputs use the same restrained surface ladder as the composer. */
+  --desktop-color-input-background: light-dark(#ffffff, #2f2f2f);
+  --desktop-color-input-border: light-dark(#d9d9d9, rgb(255 255 255 / 16%));
+  --desktop-color-input-foreground: light-dark(#0d0d0d, #ececec);
+  /* Placeholders sit at 4.5:1+ on the input surface: a placeholder is often a
+     control's only visible label, so it must meet normal-text contrast. */
+  --desktop-color-placeholder: light-dark(#767676, #9a9a9a);
+
+  /* Primary actions are deliberately achromatic. Informational blue lives in
+     --desktop-color-info below and is not reused as application chrome. */
+  --desktop-color-accent: light-dark(#0d0d0d, #f4f4f4);
+  --desktop-color-accent-hover: light-dark(#2f2f2f, #ffffff);
+  --desktop-color-accent-subtle: light-dark(#ececec, #3a3a3a);
+  --desktop-color-focus: light-dark(#0d0d0d, #ffffff);
+  /* Kept as a background-image-compatible value for existing consumers, but
+     intentionally flat: the old blue-to-purple gradient dominated the shell. */
+  --desktop-gradient-brand: light-dark(
+    linear-gradient(#0d0d0d, #0d0d0d),
+    linear-gradient(#f4f4f4, #f4f4f4)
+  );
+
+  --desktop-color-button-secondary: light-dark(#f4f4f4, #2f2f2f);
+  --desktop-color-button-secondary-hover: light-dark(#e7e7e7, #424242);
+  --desktop-color-toolbar-active: light-dark(#ececec, #3a3a3a);
+  --desktop-color-toolbar-hover: light-dark(#f2f2f2, #2a2a2a);
+  --desktop-color-list-hover: light-dark(#f2f2f2, #2a2a2a);
+  --desktop-color-menu-background: light-dark(#ffffff, #2f2f2f);
+  --desktop-color-menu-border: light-dark(#e5e5e5, rgb(255 255 255 / 16%));
+
+  /* Neutral, restrained elevation. No colored glow: raised surfaces should
+     feel close to the canvas, not like floating blue glass. */
+  --desktop-color-shadow: light-dark(rgb(0 0 0 / 10%), rgb(0 0 0 / 32%));
+  --desktop-shadow-sm: light-dark(
+    0 1px 2px rgb(0 0 0 / 6%),
+    0 1px 2px rgb(0 0 0 / 24%)
+  );
+  --desktop-shadow-md: light-dark(
+    0 4px 12px rgb(0 0 0 / 8%),
+    0 6px 18px rgb(0 0 0 / 28%)
+  );
+  --desktop-shadow-lg: light-dark(
+    0 18px 48px rgb(0 0 0 / 14%),
+    0 24px 64px rgb(0 0 0 / 38%)
+  );
+
+  /* Semantic status colors remain chromatic and independent from the neutral
+     interaction accent. */
+  --desktop-color-error: light-dark(#c2303c, #ff7a85);
+  --desktop-color-warning: light-dark(#a16207, #ffcf5c);
+  --desktop-color-warning-background: light-dark(
+    #fdf6e3,
+    rgb(255 207 92 / 13%)
+  );
+  --desktop-color-info: light-dark(#087ea4, #74c7ec);
+  --desktop-color-info-background: light-dark(#e7f5fa, rgb(116 199 236 / 14%));
+  --desktop-color-success: light-dark(#0a7a54, #56e0a0);
+  --desktop-color-success-background: light-dark(
+    #e3f7ee,
+    rgb(86 224 160 / 12%)
+  );
+  --desktop-color-error-background: light-dark(#fdecee, rgb(255 122 133 / 12%));
+  --desktop-color-orange: light-dark(#c2410c, #ff9d54);
+  --desktop-color-yellow: light-dark(#a16207, #ffcf5c);
+  --desktop-color-purple: light-dark(#7c3aed, #b183ff);
+  --desktop-color-cyan: light-dark(#0e8ba1, #5fd9e8);
+  --desktop-color-terminal-selection: light-dark(
+    #e7e7e7,
+    rgb(255 255 255 / 18%)
+  );
+
+  /* A nearly-flat neutral wash softens the first viewport without turning the
+     application canvas into decorative artwork. */
+  --desktop-canvas-wash-light: linear-gradient(180deg, #fafafa, #ffffff 14rem);
+  --desktop-canvas-wash-dark: linear-gradient(180deg, #171717, #212121 14rem);
+  /* Default until the host posts its theme (a body class then pins the pair).
+     Follows the OS so the very first paint isn't a white flash on a dark
+     desktop. */
+  --desktop-canvas-wash: light-dark(
+    var(--desktop-canvas-wash-light),
+    var(--desktop-canvas-wash-dark)
+  );
+}
+
+/*
+ * Web Awesome design-token bridge — single source of truth.
+ * Sourced directly from the native --desktop-color-* palette above.
+ */
+:root,
+.wa-light,
+.wa-dark .wa-invert {
+  /* Typography. Geist is bundled (see main.ts) rather than relying on the
+     platform UI font: the system stack is what made the app read as an OS
+     panel instead of a product. It falls back to the native stack if the
+     bundled face fails to load. JetBrains Mono covers code, paths, and the
+     terminal. */
+  --wa-font-family-body:
+    'Geist Variable', ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --wa-font-family-heading: var(--wa-font-family-body);
+  --wa-font-family-mono:
+    'JetBrains Mono Variable', ui-monospace, 'SF Mono', SFMono-Regular, Menlo,
+    Monaco, Consolas, monospace;
+  /* Referenced by BackgroundTasksPanel.ts/UsagePanel.ts/GoalTab.ts but not
+     defined anywhere else in this bridge — confirmed gaps against the actual
+     --wa-* surface those components consume. */
+  --wa-font-family-code: var(--wa-font-family-mono);
+  /* 13px chrome. This is a window that hosts a code editor and a terminal, so
+     it runs a denser ramp than a 16px reading surface would; prose surfaces
+     opt up via --font-size-prose. */
+  --wa-font-size-m: var(--desktop-font-size, 13px);
+  --wa-font-weight-normal: var(--desktop-font-weight, 400);
+  --wa-font-weight-semibold: 600;
+  --wa-editor-font-size: var(--desktop-font-size, 13px);
+
+  /* Surface / text. */
+  --wa-color-text-normal: var(--desktop-color-foreground);
+  --wa-color-text-quiet: var(--desktop-color-muted);
+  --wa-color-text-link: var(--desktop-color-accent);
+  --wa-color-text-link-active: var(--desktop-color-accent-hover);
+  --wa-color-text-preformat: var(--desktop-color-input-foreground);
+  --wa-color-text-placeholder: var(--desktop-color-placeholder);
+  --wa-color-surface-default: var(--desktop-color-background);
+  /* Mirror the extension bridge in common.css: `surface-lowered` is the
+     sidebar surface (consumers like .desktop-nav and .desktop-explorer rely
+     on this), `surface-raised` is the slightly darker elevated/hover band. */
+  --wa-color-surface-raised: var(--desktop-color-sidebar-header);
+  --wa-color-surface-lowered: var(--desktop-color-sidebar);
+  --wa-color-surface-border: var(--desktop-color-border);
+  --wa-color-surface-shadow: var(--desktop-color-shadow);
+
+  --wa-color-focus: var(--desktop-color-focus);
+  --wa-focus-ring-style: solid;
+  --wa-focus-ring-width: 2px;
+  --wa-focus-ring: var(--wa-focus-ring-style) var(--wa-focus-ring-width)
+    var(--wa-color-focus);
+  --wa-focus-ring-offset: 2px;
+
+  /* WA form-control tokens. */
+  --wa-form-control-background-color: var(--desktop-color-input-background);
+  --wa-form-control-text-color: var(--desktop-color-input-foreground);
+  --wa-form-control-border-color: var(--desktop-color-input-border);
+
+  /* Brand variant — primary buttons, links, focus accents. */
+  --wa-color-brand-fill-loud: var(--desktop-color-accent);
+  --wa-color-brand-on-loud: light-dark(#ffffff, #0d0d0d);
+  --wa-color-brand-border-loud: transparent;
+  --wa-color-brand-fill-quiet: var(--desktop-color-accent-subtle);
+  --wa-color-brand-border-quiet: color-mix(
+    in srgb,
+    var(--desktop-color-accent) 28%,
+    transparent
+  );
+  --wa-color-brand-on-quiet: var(--desktop-color-accent-hover);
+
+  /* Warning variant. */
+  --wa-color-warning-fill-loud: var(--desktop-color-warning);
+  --wa-color-warning-on-loud: light-dark(#ffffff, #241a00);
+  --wa-color-warning-border-loud: transparent;
+  --wa-color-warning-fill-quiet: var(--desktop-color-warning-background);
+  --wa-color-warning-border-quiet: color-mix(
+    in srgb,
+    var(--desktop-color-warning) 34%,
+    transparent
+  );
+  --wa-color-warning-on-quiet: var(--desktop-color-warning);
+
+  /* Danger variant. */
+  --wa-color-danger-fill-loud: var(--desktop-color-error);
+  --wa-color-danger-on-loud: light-dark(#ffffff, #2a0d10);
+  --wa-color-danger-border-loud: transparent;
+  --wa-color-danger-fill-quiet: var(--desktop-color-error-background);
+  --wa-color-danger-border-quiet: color-mix(
+    in srgb,
+    var(--desktop-color-error) 34%,
+    transparent
+  );
+  --wa-color-danger-on-quiet: var(--desktop-color-error);
+
+  /* Success variant. */
+  --wa-color-success-fill-loud: var(--desktop-color-success);
+  --wa-color-success-on-loud: light-dark(#ffffff, #04241a);
+  --wa-color-success-border-loud: transparent;
+  --wa-color-success-fill-quiet: var(--desktop-color-success-background);
+  --wa-color-success-border-quiet: color-mix(
+    in srgb,
+    var(--desktop-color-success) 34%,
+    transparent
+  );
+  --wa-color-success-on-quiet: var(--desktop-color-success);
+
+  /* Neutral variant — mirrors the extension bridge in common.css where
+     `neutral-fill-quiet` maps to `--vscode-button-secondaryBackground`.
+     Source from `--desktop-color-button-secondary` so secondary buttons
+     and quiet surfaces (e.g. .desktop-command-button)
+     match the prior --texra-button-secondaryBackground value. */
+  --wa-color-neutral-fill-quiet: var(--desktop-color-button-secondary);
+  --wa-color-neutral-border-quiet: var(--desktop-color-border);
+  --wa-color-neutral-on-quiet: var(--desktop-color-foreground);
+  --wa-color-neutral-fill-loud: var(--desktop-color-button-secondary-hover);
+  --wa-color-neutral-border-loud: var(--desktop-color-widget-border);
+  --wa-color-neutral-on-loud: var(--desktop-color-foreground);
+
+  /* Data palette — chart/identity colors with no semantic WA equivalent. */
+  --wa-color-data-orange: var(--desktop-color-orange);
+  --wa-color-data-yellow: var(--desktop-color-yellow);
+
+  /* Border-radius. These were pinned to 2-3px specifically so controls would
+     "read as native VS Code controls" — the single biggest contributor to the
+     dated look, since every button and input rendered as a hard rectangle.
+     Now a real radius scale: 11px is the control default, matching the
+     reference design system. */
+  --wa-border-radius-s: 6px;
+  --wa-border-radius-m: 10px;
+  --wa-border-radius-l: 14px;
+  --wa-border-radius-xl: 18px;
+  --wa-border-radius-pill: 9999px;
+  --wa-border-radius-circle: 50%;
+  --wa-border-radius-square: 0px;
+  --border-radius-medium: var(--wa-border-radius-m);
+
+  /* Control metrics for the shared Lit components (litStyles.ts reads these
+     with the VS Code-compact values as fallbacks). A standalone window can
+     afford roomier controls than a sidebar-width editor panel, and the cramped
+     22-24px rows were a large part of why the app felt like a tool panel. */
+  --wa-height-control: 30px;
+  --wa-height-control-compact: 26px;
+  --wa-height-header: 46px;
+  --wa-height-button: 34px;
+  --wa-height-option: 32px;
+  --height-control-compact: var(--wa-height-control-compact);
+  --height-button: var(--wa-height-button);
+
+  /* ==========================================================================
+     Shared control layer — the desktop's values for the tokens declared in
+     src/shared/styles/litStyles.ts.
+     --------------------------------------------------------------------------
+     These are :root duplicates of the shared :host declarations on purpose:
+     light DOM (styles.css, and every imperatively-built overlay) cannot adopt
+     a Lit CSSResult, so the renderer's document tree needs its own copy. The
+     shared sheet's `:host` block covers shadow DOM. Keep the two in sync — a
+     token added there and missing here silently resolves to nothing in the
+     desktop's light DOM.
+
+     The geometry values below are also the shared sheet's `--wa-*` fallbacks,
+     so shadow DOM lands on this density without the desktop overriding
+     anything. The extension is the host that overrides, via `--wa-row-height`
+     and friends in packages/extension/src/common/styles/common.css.
+     ========================================================================== */
+
+  /* State overlays. Alpha, never hue and never geometry, so one token is
+     correct on every surface in the ladder. The light/dark alphas differ
+     because the same alpha does not read as the same step against paper-white
+     and charcoal. */
+  --surface-hover: light-dark(rgb(0 0 0 / 7%), rgb(255 255 255 / 15%));
+  --surface-active: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 10%));
+  --surface-selected: light-dark(rgb(0 0 0 / 9%), rgb(255 255 255 / 12%));
+
+  /* Border widths and the caps tracking. Previously missing from this mirror
+     while styles.css and reviewPane.css consumed them 14 times: in light DOM
+     `border: var(--border-thin) solid X` with --border-thin undefined makes the
+     whole shorthand invalid at computed-value time, so those seams were not
+     rendering as authored. */
+  --border-thin: 1px;
+  --border-medium: 2px;
+  --letter-spacing-caps: 0.06em;
+
+  /* Status foregrounds. Same names the shared :host block declares, so a rule
+     moved between light and shadow DOM keeps its meaning. */
+  --color-success: var(--wa-color-success-on-quiet);
+  --color-error: var(--wa-color-danger-on-quiet);
+  --color-warning: var(--wa-color-warning-on-quiet);
+  --color-text-link: var(--wa-color-text-link);
+  --color-text-link-active: var(--wa-color-text-link-active);
+
+  /* De-emphasis that survives a contrast check — mirror of the same two tokens
+     in litStyles.ts. See that file for why the step is 55% and not 45%. */
+  --color-text-muted: color-mix(
+    in srgb,
+    var(--wa-color-text-normal) 55%,
+    transparent
+  );
+  --border-control: color-mix(
+    in srgb,
+    var(--wa-color-text-normal) 55%,
+    transparent
+  );
+
+  /* Seams. Only where a border is load-bearing; large regions separate by a
+     background step. */
+  --border-hairline: light-dark(rgb(0 0 0 / 10%), rgb(255 255 255 / 10%));
+  --border-hairline-soft: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 5%));
+  --border-hairline-strong: light-dark(
+    rgb(0 0 0 / 15%),
+    rgb(255 255 255 / 20%)
+  );
+
+  /* Control geometry. */
+  --control-size-s: 24px;
+  --control-size-m: 28px;
+  --control-size-l: 32px;
+  --control-padding-inline: 6px;
+  --control-fill: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 5%));
+  --control-fill-hover: light-dark(rgb(0 0 0 / 8%), rgb(255 255 255 / 9%));
+  --opacity-faint: 0.35;
+  --opacity-disabled: 0.5;
+  --opacity-muted: 0.6;
+  --row-height: 36px;
+  --row-radius: var(--wa-border-radius-m);
+  --row-padding: 6px 10px;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --textarea-h-s: 2.75rem;
+  --textarea-h-m: 6rem;
+  --textarea-h-l: 6.625rem;
+
+  /* Two typographic regimes: 13px chrome (this hosts a code editor and a
+     terminal, where 16px chrome would cost real content width) and 16px prose
+     for the transcript and launcher. The shared multiplier ramp
+     (--font-size-sm/-lg/-xs) derives from --font-size.
+
+     Both names are set because they reach different trees: shadow roots read
+     --font-size from litStyles' own `:host` (which aliases --wa-font-size-m,
+     overridden below), while light DOM reads it from here. Setting only one
+     would render the two trees at different sizes. */
+  --font-size: var(--wa-font-size-m);
+  --font-size-lg: calc(var(--font-size) * 1.2);
+  --font-size-sm: calc(var(--font-size) * 0.9);
+  --font-size-xs: calc(var(--font-size) * 0.8);
+  --font-size-icon: var(--font-size-lg);
+  --font-size-icon-sm: var(--font-size);
+  --font-size-prose: 16px;
+  --line-height-tight: 1;
+  --line-height-heading: 1.25;
+  --line-height-normal: 1.4;
+  --line-height-relaxed: 1.5;
+  --line-height-prose: 1.625;
+  /* Three weights, not a continuum. Chrome runs 400/500; 600 is reserved for
+     dialog and section titles. Arbitrary intermediate weights (550, 650, 750)
+     read as noise across a variable font and are invisible on a static one. */
+  --font-weight: var(--wa-font-weight-normal);
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --letter-spacing-tight: -0.005em;
+  --width-content-max: 1000px;
+
+  /* Motion. One easing, three durations; only background-color, opacity, and
+     box-shadow are ever transitioned. */
+  --transition-ease: cubic-bezier(0.2, 0, 0, 1);
+  --transition-fast: 120ms var(--transition-ease);
+  --transition-normal: 180ms var(--transition-ease);
+  --transition-relaxed: 300ms ease;
+
+  /* Buttons — niche tokens consumers still need. */
+  --wa-color-button-hover: var(--desktop-color-accent-hover);
+  --wa-color-button-border: transparent;
+  --wa-color-button-separator: light-dark(
+    rgb(255 255 255 / 38%),
+    rgb(0 0 0 / 20%)
+  );
+
+  /* Lists — no native WA equivalent yet (#3690). */
+  --wa-color-list-active-bg: var(--desktop-color-accent);
+  --wa-color-list-active-fg: light-dark(#ffffff, #0d0d0d);
+  --wa-color-list-hover-bg: var(--desktop-color-list-hover);
+  --wa-color-list-warning-fg: var(--desktop-color-warning);
+
+  /* Menus. */
+  --wa-color-menu-background: var(--desktop-color-menu-background);
+  --wa-color-menu-border: var(--desktop-color-menu-border);
+  --wa-color-menu-foreground: var(--desktop-color-input-foreground);
+
+  /* Toolbar. */
+  --wa-color-toolbar-active: var(--desktop-color-toolbar-active);
+  --wa-color-toolbar-hover: var(--desktop-color-toolbar-hover);
+
+  /* Charts. */
+  --wa-color-chart-blue: var(--desktop-color-info);
+  --wa-color-chart-green: var(--desktop-color-success);
+  --wa-color-chart-orange: var(--desktop-color-orange);
+  --wa-color-chart-red: var(--desktop-color-error);
+  --wa-color-chart-yellow: var(--desktop-color-yellow);
+  --wa-color-chart-purple: var(--desktop-color-purple);
+
+  /* Diff editor. */
+  --wa-color-diff-inserted: light-dark(
+    rgb(46 160 67 / 15%),
+    rgb(46 160 67 / 30%)
+  );
+  --wa-color-diff-removed: light-dark(
+    rgb(248 81 73 / 15%),
+    rgb(248 81 73 / 30%)
+  );
+
+  /* Git decoration. */
+  --wa-color-git-added: var(--desktop-color-success);
+  --wa-color-git-deleted: var(--desktop-color-error);
+  --wa-color-git-modified: var(--desktop-color-orange);
+
+  /* Debug token expressions. */
+  --wa-color-debug-name: var(--desktop-color-info);
+  --wa-color-debug-number: var(--desktop-color-orange);
+  --wa-color-debug-string: var(--desktop-color-success);
+
+  /* Symbol icons. */
+  --wa-color-symbol-class: var(--desktop-color-orange);
+  --wa-color-symbol-constant: var(--desktop-color-info);
+  --wa-color-symbol-function: var(--desktop-color-yellow);
+  --wa-color-symbol-keyword: var(--desktop-color-purple);
+  --wa-color-symbol-property: var(--desktop-color-info);
+  --wa-color-symbol-variable: var(--desktop-color-input-foreground);
+
+  /* Editor surface details. */
+  --wa-color-editor-selection: var(--desktop-color-accent-subtle);
+  --wa-color-editor-inactive-selection: var(--desktop-color-accent-subtle);
+  --wa-color-editor-line-highlight: light-dark(
+    rgb(31 35 40 / 6%),
+    rgb(255 255 255 / 4%)
+  );
+  --wa-color-editor-find-match: light-dark(#fff8c5, #623315);
+  --wa-color-editor-find-match-highlight: light-dark(#ffe09c, #4a3219);
+  --wa-color-editor-find-match-highlight-fg: var(--desktop-color-foreground);
+
+  /* Tabs. */
+  --wa-color-tabs-background: var(--desktop-color-sidebar-header);
+  --wa-color-tabs-border: var(--desktop-color-border);
+
+  /* Block quote. */
+  --wa-color-blockquote-border: var(--desktop-color-info);
+
+  /* Misc indicators. */
+  --wa-color-progress-bg: var(--desktop-color-accent);
+  --wa-color-status-warning-bg: var(--desktop-color-warning);
+  --wa-color-icon-info: var(--desktop-color-info);
+  --wa-color-activity-badge-bg: var(--desktop-color-accent);
+  --wa-color-badge-bg: var(--desktop-color-accent);
+
+  /* Testing icons. */
+  --wa-color-testing-passed: var(--desktop-color-success);
+  --wa-color-testing-failed: var(--desktop-color-error);
+
+  /* Terminal — full palette, no WA equivalent. */
+  --wa-color-terminal-background: var(--desktop-color-background);
+  --wa-color-terminal-foreground: var(--desktop-color-input-foreground);
+  --wa-color-terminal-selection-bg: var(--desktop-color-terminal-selection);
+  --wa-color-terminal-cursor: var(--desktop-color-input-foreground);
+  --wa-color-terminal-ansi-black: light-dark(#24292f, #6e7681);
+  --wa-color-terminal-ansi-blue: var(--desktop-color-accent);
+  --wa-color-terminal-ansi-cyan: light-dark(#1b7c83, #4ec9b0);
+  --wa-color-terminal-ansi-green: var(--desktop-color-success);
+  --wa-color-terminal-ansi-magenta: light-dark(#8250df, #c586c0);
+  --wa-color-terminal-ansi-red: var(--desktop-color-error);
+  --wa-color-terminal-ansi-white: light-dark(#6e7781, #cccccc);
+  --wa-color-terminal-ansi-yellow: var(--desktop-color-yellow);
+  --wa-color-terminal-ansi-bright-black: light-dark(#6e7781, #666666);
+  --wa-color-terminal-ansi-bright-blue: light-dark(#0550ae, #3794ff);
+  --wa-color-terminal-ansi-bright-cyan: light-dark(#1b7c83, #39cccc);
+  --wa-color-terminal-ansi-bright-green: var(--desktop-color-success);
+  --wa-color-terminal-ansi-bright-magenta: light-dark(#8250df, #d670d6);
+  --wa-color-terminal-ansi-bright-red: var(--desktop-color-error);
+  --wa-color-terminal-ansi-bright-white: light-dark(#57606a, #ffffff);
+  --wa-color-terminal-ansi-bright-yellow: var(--desktop-color-yellow);
+
+  /* Web Awesome canonical space scale — kept in sync with WA default theme. */
+  --wa-space-scale: 1;
+  --wa-space-3xs: calc(var(--wa-space-scale) * 0.125rem);
+  --wa-space-2xs: calc(var(--wa-space-scale) * 0.25rem);
+  --wa-space-xs: calc(var(--wa-space-scale) * 0.5rem);
+  --wa-space-s: calc(var(--wa-space-scale) * 0.75rem);
+  --wa-space-m: calc(var(--wa-space-scale) * 1rem);
+  --wa-space-l: calc(var(--wa-space-scale) * 1.5rem);
+  --wa-space-xl: calc(var(--wa-space-scale) * 2rem);
+  --wa-space-2xl: calc(var(--wa-space-scale) * 2.5rem);
+  --wa-space-3xl: calc(var(--wa-space-scale) * 3rem);
+  --wa-space-4xl: calc(var(--wa-space-scale) * 4rem);
+  --wa-space-5xl: calc(var(--wa-space-scale) * 5rem);
+
+  /* Motion follows one timing language across Web Awesome and the custom
+     desktop shell. The reduced-motion override below collapses both. */
+  --wa-transition-easing: cubic-bezier(0.2, 0, 0, 1);
+  --wa-transition-slow: 240ms;
+  --wa-transition-normal: 160ms;
+  --wa-transition-fast: 100ms;
+}
+
+/* The host's explicit theme choice pins `color-scheme`, which is what resolves
+   every `light-dark()` pair above. Both themes are first-class: light is a
+   paper-white skin with neutral shadows, dark is the deep blue-black canvas. */
+body.vscode-light,
+body.texra-light {
+  color-scheme: light;
+  --desktop-canvas-wash: var(--desktop-canvas-wash-light);
+}
+
+body.vscode-dark,
+body.texra-dark {
+  color-scheme: dark;
+  --desktop-canvas-wash: var(--desktop-canvas-wash-dark);
+}
+
+body.vscode-high-contrast,
+body.vscode-high-contrast-light,
+body.texra-high-contrast {
+  color-scheme: light dark;
+  --desktop-color-background: Canvas;
+  --desktop-color-foreground: CanvasText;
+  --desktop-color-muted: GrayText;
+  --desktop-color-sidebar: Canvas;
+  --desktop-color-sidebar-header: Canvas;
+  --desktop-color-surface-3: Canvas;
+  --desktop-color-border: CanvasText;
+  --desktop-color-widget-border: CanvasText;
+  --desktop-edge-highlight: none;
+  --desktop-color-input-background: Field;
+  --desktop-color-input-border: CanvasText;
+  --desktop-color-input-foreground: FieldText;
+  --desktop-color-placeholder: GrayText;
+  --desktop-color-accent: Highlight;
+  --desktop-color-accent-hover: Highlight;
+  --desktop-color-accent-subtle: Canvas;
+  --desktop-color-focus: Highlight;
+  --desktop-gradient-brand: linear-gradient(Highlight, Highlight);
+  --desktop-color-button-secondary: ButtonFace;
+  --desktop-color-button-secondary-hover: ButtonFace;
+  --desktop-color-toolbar-active: Highlight;
+  --desktop-color-toolbar-hover: ButtonFace;
+  --desktop-color-list-hover: ButtonFace;
+  --desktop-color-menu-background: Canvas;
+  --desktop-color-menu-border: CanvasText;
+  --desktop-color-shadow: transparent;
+  --desktop-shadow-sm: none;
+  --desktop-shadow-md: none;
+  --desktop-shadow-lg: none;
+  --desktop-canvas-wash: none;
+  /* Error/warning FOREGROUNDS stay CanvasText: Mark is a background keyword
+     paired with MarkText, so as text on Canvas its contrast is OS-defined and
+     can fail (yellow-on-white ≈1.6:1). Loud fills below re-pin the Mark chip
+     pairing explicitly; text roles differentiate by weight/icon instead. */
+  --desktop-color-error: CanvasText;
+  --desktop-color-warning: CanvasText;
+  --desktop-color-info: Highlight;
+  --desktop-color-success: Highlight;
+  --wa-color-list-active-fg: HighlightText;
+  --wa-color-brand-on-loud: HighlightText;
+  --wa-color-brand-border-loud: CanvasText;
+
+  /* Quiet variants for HC modes — without these, components fall back to
+     dark/light surface colors (low contrast against system Canvas).
+     Per the WCAG 1.4.11 + W3C high-contrast guidance, use the system
+     color keywords (Canvas/CanvasText/Highlight/Mark/ButtonFace) so the
+     OS palette dictates contrast. */
+  --wa-color-text-quiet: GrayText;
+
+  --wa-color-brand-fill-quiet: Canvas;
+  --wa-color-brand-border-quiet: Highlight;
+  --wa-color-brand-on-quiet: Highlight;
+
+  --wa-color-neutral-fill-quiet: ButtonFace;
+  --wa-color-neutral-border-quiet: CanvasText;
+  --wa-color-neutral-on-quiet: ButtonText;
+
+  --wa-color-warning-fill-quiet: Canvas;
+  --wa-color-warning-border-quiet: Mark;
+  --wa-color-warning-on-quiet: CanvasText;
+
+  --wa-color-danger-fill-quiet: Canvas;
+  --wa-color-danger-border-quiet: Mark;
+  --wa-color-danger-on-quiet: CanvasText;
+
+  /* Loud fills keep the Mark chip: a Mark background with MarkText on it is
+     the OS-guaranteed pairing, unlike Mark as a foreground on Canvas. */
+  --wa-color-warning-fill-loud: Mark;
+  --wa-color-warning-on-loud: MarkText;
+  --wa-color-danger-fill-loud: Mark;
+  --wa-color-danger-on-loud: MarkText;
+
+  --wa-color-success-fill-quiet: Canvas;
+  --wa-color-success-border-quiet: Highlight;
+  --wa-color-success-on-quiet: Highlight;
+
+  /* The --color-* aliases substitute their --wa-* source at the point of
+     declaration, not at the point of use. Declared on :root, they would keep
+     the ordinary palette even here, because this block sits on <body> — a
+     descendant — so overriding the --wa-* names alone never reaches them.
+     Re-declaring the aliases is what actually carries the system palette into
+     the light-DOM consumers. */
+  --color-success: Highlight;
+  --color-error: CanvasText;
+  --color-warning: CanvasText;
+  --color-text-link: LinkText;
+  --color-text-link-active: LinkText;
+  --color-text-muted: GrayText;
+  --border-control: CanvasText;
+}
+
+/* Honor the OS motion preference for both Web Awesome components and the
+   custom renderer transitions defined in styles.css. Keeping this in the
+   token bridge prevents individual surfaces from drifting. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --wa-transition-slow: 0ms;
+    --wa-transition-normal: 0ms;
+    --wa-transition-fast: 0ms;
+    --transition-fast: 0ms;
+    --transition-normal: 0ms;
+    --transition-relaxed: 0ms;
+  }
+}
+
+/* Dropdown items. Previously squeezed to VS Code's ~22-24px row height, which
+   left menus feeling cramped and hard to hit; the desktop app runs a comfortable
+   32px row with a rounded hover instead. */
+wa-option::part(base),
+wa-dropdown-item::part(base) {
+  padding: var(--wa-space-2xs) var(--wa-space-xs);
+  min-height: 32px;
+  border-radius: var(--wa-border-radius-s);
+  line-height: var(--wa-line-height-normal, 1.4);
+}

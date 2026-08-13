@@ -1,0 +1,85 @@
+appId: ai.texra.desktop
+productName: TeXRA
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+publish:
+  provider: github
+  owner: texra-ai
+  repo: texra-desktop-releases
+  private: false
+  releaseType: release
+protocols:
+  - name: TeXRA
+    schemes:
+      - texra
+asar: true
+asarUnpack:
+  # node-pty loads a native .node binary at runtime, which cannot be read from
+  # inside an asar archive.
+  - '**/node_modules/node-pty/**'
+npmRebuild: false
+directories:
+  output: dist-packaged
+  buildResources: build
+# electron-builder copies the node_modules of production dependencies only.
+# The Codex and Claude Code SDKs are therefore devDependencies: esbuild inlines
+# their JavaScript into dist/main, while their platform packages — 250-410 MiB
+# of native CLI binary each — stay out of the app, which resolves a
+# user-installed CLI at runtime instead. scripts/verify-desktop-package.mjs
+# fails the build if any of them reappear in the packaged app.
+files:
+  - from: dist
+    to: dist
+    filter:
+      - '**/*'
+  - package.json
+  # The main bundle keeps node-pty external (see esbuild.main.mjs), so the real
+  # package has to ship alongside it.
+  - '**/node_modules/node-pty/**'
+  # ...but that leading `**/` also matches the node-pty copy inside an app this
+  # run already wrote to dist-packaged. Without this exclusion the second arch
+  # of a universal build packs the first arch's finished .app inside itself,
+  # and the merge then fails on a Mach-O file count mismatch between arches.
+  - '!dist-packaged/**'
+extraResources:
+  - from: ../extension/resources
+    to: resources
+    filter:
+      - '**/*'
+  - from: ../../skills
+    to: resources/skills
+    filter:
+      - '**/*'
+mac:
+  category: public.app-category.productivity
+  icon: build/icon.icns
+  # node-pty ships a prebuild per platform+arch and picks one at runtime, so
+  # both arch builds contain the same darwin-arm64 and darwin-x64 binaries.
+  # @electron/universal refuses to merge Mach-O files that are byte-identical
+  # across arches unless they are declared here; declaring them keeps every
+  # prebuild in the merged app so each arch still resolves its own.
+  x64ArchFiles: '**/app.asar.unpacked/node_modules/node-pty/prebuilds/**'
+  target:
+    - target: dmg
+      arch:
+        - universal
+    - target: zip
+      arch:
+        - universal
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+linux:
+  category: Office
+  executableName: texra
+  icon: build/icon.png
+  maintainer: TeXRA.ai <contact@texra.ai>
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64

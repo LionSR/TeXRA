@@ -1,0 +1,87 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  getIndentTeXNotification,
+  getLatexdiffPackNotifications,
+} from '@commands/latex/latexHousekeepingNotifications';
+import type { LatexdiffPackResult } from '@housekeeping/packLatexdiffvc';
+import type { IndentLatexResult } from '@latex/formatter/indentDirectory';
+
+describe('latex housekeeping command notifications', () => {
+  it('restores indent config and error notifications', () => {
+    const missingConfig: IndentLatexResult = {
+      status: 'missing-config',
+      directory: '.',
+      count: 0,
+      configPath: '/tmp/missing.yaml',
+    };
+    const error = new Error('walk failed');
+    const failed: IndentLatexResult = {
+      status: 'error',
+      directory: '.',
+      count: 0,
+      error,
+    };
+
+    expect(getIndentTeXNotification(missingConfig)).toEqual({
+      severity: 'message',
+      message: 'Formatter config file not found at /tmp/missing.yaml',
+    });
+    expect(getIndentTeXNotification(failed)).toEqual({
+      severity: 'error',
+      message: 'Error during indentation process',
+      error,
+    });
+    expect(
+      getIndentTeXNotification({
+        status: 'formatted',
+        directory: '.',
+        count: 2,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('restores latexdiff pack and clean notifications', () => {
+    const results: LatexdiffPackResult[] = [
+      { status: 'no-files', inputFile: 'paper.tex' },
+      { status: 'cleaned', inputFile: 'paper.tex' },
+      {
+        status: 'packed',
+        inputFile: 'paper.tex',
+        outputFolder: 'Diffs/20260505_paper_HEAD',
+      },
+      { status: 'missing-inputs' },
+      { status: 'processed', inputFile: 'paper.tex' },
+      {
+        status: 'error',
+        inputFile: 'broken.tex',
+        error: new Error('rename failed'),
+      },
+    ];
+
+    const notifications = getLatexdiffPackNotifications(results);
+    expect(notifications).toMatchObject([
+      {
+        severity: 'info',
+        message: 'No LaTeX diff files found to process',
+      },
+      {
+        severity: 'info',
+        message: 'LaTeXdiff files cleaned',
+      },
+      {
+        severity: 'info',
+        message: 'Files packed into Diffs/20260505_paper_HEAD',
+      },
+      {
+        severity: 'message',
+        message: 'No input files provided for multiple LaTeX diff packing',
+      },
+      {
+        severity: 'error',
+        message: 'Error during packing broken.tex',
+      },
+    ]);
+    expect(notifications.at(-1)?.error).toBeInstanceOf(Error);
+  });
+});

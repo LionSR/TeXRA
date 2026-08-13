@@ -1,0 +1,197 @@
+name: Release
+
+# Fires once a GitHub Release is published. Tags are cut in pairs off the same
+# commit: `vX.Y.Z` for the extension, `cli-vX.Y.Z` for the CLI (plus legacy
+# `vX.Y.Z-frontend` tags, excluded below). Creating the tag/release itself
+# stays a manual step (gh release create) so a human still curates the
+# changelog body and decides when to go public; this workflow only handles
+# the build + publish that follows.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish-extension:
+    name: Publish VS Code extension (Marketplace + Open VSX)
+    if: ${{ !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Verify release tag matches extension package version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(node -p "require('./packages/extension/package.json').version")
+          if [ "$RELEASE_TAG" != "v$version" ]; then
+            echo "::error::Release tag '$RELEASE_TAG' does not match packages/extension/package.json version '$version' (expected 'v$version')"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm run typecheck
+
+      # Fail the release before building/publishing if the code-generated
+      # `contributes.*` subtrees in package.json have drifted from the settings
+      # and command catalogs. `check:vsix-contents` (below) only asserts these
+      # subtrees are present and non-empty before trimming them from its
+      # manifest snapshot; it does not compare their contents. Without this
+      # gate a release cut from a commit whose catalog drift bypassed PR CI
+      # could publish a stale VS Code manifest.
+      - name: Check package contributes catalog
+        run: pnpm run check:package-contributes
+
+      - name: Build extension VSIX
+        run: pnpm --filter texra build:fast
+
+      - name: Check VSIX contents
+        run: pnpm run check:vsix-contents
+
+      - name: Locate built VSIX
+        id: vsix
+        run: |
+          version=$(node -p "require('./packages/extension/package.json').version")
+          path="releases/texra-${version}.vsix"
+          test -f "$path"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to Visual Studio Marketplace
+        uses: HaaLeo/publish-vscode-extension@v2
+        with:
+          pat: ${{ secrets.VSCE_PAT }}
+          registryUrl: https://marketplace.visualstudio.com
+          extensionFile: ${{ steps.vsix.outputs.path }}
+          skipDuplicate: true
+
+      - name: Publish to Open VSX
+        uses: HaaLeo/publish-vscode-extension@v2
+        with:
+          pat: ${{ secrets.OVSX_PAT }}
+          registryUrl: https://open-vsx.org
+          extensionFile: ${{ steps.vsix.outputs.path }}
+          skipDuplicate: true
+
+  publish-cli:
+    name: Publish CLI to npm (Trusted Publishing)
+    if: ${{ !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'cli-v') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify release tag matches CLI package version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(node -p "require('./packages/cli/package.json').version")
+          if [ "$RELEASE_TAG" != "cli-v$version" ]; then
+            echo "::error::Release tag '$RELEASE_TAG' does not match packages/cli/package.json version '$version' (expected 'cli-v$version')"
+            exit 1
+          fi
+
+      - name: Use an npm CLI recent enough for trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish @texra-ai/cli
+        working-directory: packages/cli
+        # Provenance attestation requires a public source repository; this repo
+        # is private, so trusted-publishing auth still works but provenance
+        # generation must be disabled or npm rejects the publish with a 422.
+        env:
+          NPM_CONFIG_PROVENANCE: 'false'
+        run: npm publish
+
+  publish-agent:
+    name: Publish agent package to npm (Trusted Publishing)
+    # NOT PUBLISHED YET: @texra-ai/agent has no npm package or trusted
+    # publisher configured, so this job 404s on every cli-v* release. To
+    # re-enable, drop the `false &&` once the package is ready to ship.
+    if: ${{ false && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'cli-v') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify release tag matches agent package version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(node -p "require('./packages/agent/package.json').version")
+          if [ "$RELEASE_TAG" != "cli-v$version" ]; then
+            echo "::error::Release tag '$RELEASE_TAG' does not match packages/agent/package.json version '$version' (expected 'cli-v$version')"
+            exit 1
+          fi
+
+      - name: Use an npm CLI recent enough for trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish @texra-ai/agent
+        working-directory: packages/agent
+        env:
+          NPM_CONFIG_PROVENANCE: 'false'
+        run: npm publish

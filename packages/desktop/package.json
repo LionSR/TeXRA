@@ -1,0 +1,49 @@
+{
+  "name": "@texra/desktop",
+  "version": "0.40.3",
+  "description": "TeXRA standalone desktop application",
+  "author": "TeXRA.ai <contact@texra.ai>",
+  "homepage": "https://texra.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/texra-ai/texra-issues.git"
+  },
+  "private": true,
+  "type": "module",
+  "main": "./dist/main/index.js",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "watch:main": "node esbuild.main.watch.mjs",
+    "typecheck": "tsc --noEmit --checkers 8 -p tsconfig.json && tsc --noEmit --checkers 8 -p tsconfig.main.json && tsc --noEmit --checkers 8 -p tsconfig.preload.json && tsc --noEmit --checkers 8 -p tsconfig.renderer.json",
+    "build:main": "node esbuild.main.mjs",
+    "build:preload": "esbuild src/preload/index.ts --bundle --platform=node --format=cjs --outfile=dist/preload/index.cjs --external:electron",
+    "build:renderer": "vite build --config vite.config.ts",
+    "build": "corepack pnpm run typecheck && corepack pnpm run build:main && corepack pnpm run build:preload && corepack pnpm run build:renderer",
+    "package:dir": "corepack pnpm exec electron-builder --dir --config electron-builder.yml",
+    "package:dist": "corepack pnpm exec electron-builder --config electron-builder.yml --publish never",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.228",
+    "@openai/codex-sdk": "^0.147.0",
+    "@playwright/test": "^1.62.1",
+    "@types/semver": "^7.8.0",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "playwright": "^1.62.1",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "vite": "^8.2.1"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fortawesome/free-solid-svg-icons": "^7.3.1",
+    "@sentry/electron": "^7.16.0",
+    "fix-path": "^5.0.0",
+    "lucide-static": "^1.31.0",
+    "node-pty": "^1.1.0",
+    "semver": "^7.8.5"
+  }
+}

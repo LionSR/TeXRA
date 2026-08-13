@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:; img-src ${cspSource} data:; connect-src data:;"
+    />
+    <link rel="stylesheet" href="${commonStyleUri}" />
+    <link rel="stylesheet" href="${progressStyleUri}" />
+    <title>TeXRA Progress</title>
+    <style nonce="${nonce}">
+      body {
+        padding: 0;
+        display: flex;
+        height: 100vh;
+        background-color: var(--wa-color-surface-lowered);
+      }
+    </style>
+  </head>
+  <body>
+    <progress-app role="main" aria-label="TeXRA progress"></progress-app>
+    <script type="module" nonce="${nonce}" src="${progressBundleUri}"></script>
+  </body>
+</html>

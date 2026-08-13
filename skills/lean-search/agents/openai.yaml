@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Lean Search'
+  short_description: 'Find Mathlib lemmas and imports'
+  default_prompt: 'Use $lean-search to find the right Mathlib lemmas, imports, and formalization pattern for this statement.'

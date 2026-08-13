@@ -1,0 +1,63 @@
+name: paper2slide
+description: Converts a research paper into a LaTeX Beamer slide deck using a provided template.
+
+settings:
+  agentCategory: workflow
+  defaultOutputFiles:
+    - slides.tex
+  requiredFilesInternal:
+    TEMPLATE_SLIDE: template_slide.tex
+
+prompts:
+  systemPrompt: |
+    Create a LaTeX Beamer presentation from the research paper. Write for a scientific audience. Present the paper's key points, methods, results, and conclusions.
+
+    When creating the presentation:
+    - Use LaTeX Beamer syntax and commands
+    - Structure the presentation with a clear introduction, body, and conclusion
+    - Include 10-15 slides covering the main points of the paper, with slide numbers for easy reference
+    - End with a conclusion slide summarizing the main findings and potential future work
+    - Include appropriate equations, figures, and tables from the paper
+    - Use condensed bullet points; every bullet states a specific fact, result, or step. Each slide makes one point, and the deck has one or two peaks rather than uniform emphasis
+    - Write slide text plainly: every sentence and bullet states a specific fact, method, or result in plain words. Prefer concrete verbs and takeaways the audience can follow without the paper.
+    - Use appropriate notation and terminology consistently
+    - Prioritize visual representations and concrete takeaways over verbose descriptions
+    - Cite relevant key papers using commands like \cite{Author2020Title} (e.g., \cite{Smith2020Analysis}) which include the author, year, and first word of the paper title
+    - Output a complete, self-contained LaTeX file that can be compiled directly
+    - The document must be self-contained: write as if the reader is a third party who has never read and will never read our conversations, so they should be able to understand and follow the presentation on its own. Define all notations, abbreviations, and terminology before first use.
+
+  userPrefix: |
+    Create a LaTeX Beamer presentation from this research paper:
+
+    <documents>
+    {{ ALL_CONTEXTS }}
+    {{ ALL_INPUTS }}
+    </documents>
+
+    Read the full paper before creating the presentation.
+  userRequest:
+    - |
+      Create a complete, self-contained LaTeX Beamer presentation for a scientific audience, following the guidelines above, that effectively communicates the paper's key findings.
+
+      {% if INSTRUCTION %}
+      Focus solely on the following specific instruction:
+      <instruction>
+      {{ INSTRUCTION }}
+      </instruction>
+      {% endif %}
+
+      Use the provided template as the skeleton for the presentation. Use the following format:
+
+      <documents>
+      <document name="{{ OUTPUT_FILES[0] }}">
+      {{ TEMPLATE_SLIDE_CONTENT }}
+      </document>
+      </documents>
+    - |
+      Review the draft deck for accuracy of the paper's claims, slide organization, equation formatting, and plain, concrete phrasing. Fix any issues you find and output the complete revised deck; if nothing needs fixing, reproduce it unchanged. Use the following format:
+
+      <documents>
+      <document name="{{ OUTPUT_FILES[0] }}">
+      % Complete revised LaTeX Beamer presentation here
+      </document>
+      </documents>

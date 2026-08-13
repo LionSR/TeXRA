@@ -1,0 +1,15 @@
+{
+  "extends": "../desktop/tsconfig.paths.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["node", "vite/client"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "vite.config.ts",
+    "vite.standalone.config.ts",
+    "../../src/types/**/*.d.ts"
+  ],
+  "exclude": ["node_modules"]
+}

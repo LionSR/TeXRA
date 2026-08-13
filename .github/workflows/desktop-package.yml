@@ -1,0 +1,356 @@
+name: Desktop Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_desktop_installers:
+        description: 'Build macOS and Linux desktop installers'
+        required: false
+        default: false
+        type: boolean
+      run_windows_desktop:
+        description: 'Build Windows desktop installer'
+        required: false
+        default: false
+        type: boolean
+      require_desktop_signing:
+        description: 'Fail desktop installer jobs unless signing secrets are complete'
+        required: false
+        default: false
+        type: boolean
+      publish_desktop_release_artifacts:
+        description: 'Publish generated desktop installers to the public release repository'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: desktop-package-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  desktop-macos-installer:
+    name: desktop installer (macOS)
+    if: inputs.run_desktop_installers
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      CSC_LINK: ${{ secrets.DESKTOP_MACOS_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.DESKTOP_MACOS_CSC_KEY_PASSWORD }}
+      APPLE_API_KEY_ID: ${{ secrets.DESKTOP_MACOS_APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.DESKTOP_MACOS_APPLE_API_ISSUER }}
+      APPLE_ID: ${{ secrets.DESKTOP_MACOS_APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.DESKTOP_MACOS_APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.DESKTOP_MACOS_APPLE_TEAM_ID }}
+      APPLE_KEYCHAIN: ${{ secrets.DESKTOP_MACOS_APPLE_KEYCHAIN }}
+      APPLE_KEYCHAIN_PROFILE: ${{ secrets.DESKTOP_MACOS_APPLE_KEYCHAIN_PROFILE }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build desktop app
+        run: pnpm run desktop:build
+
+      - name: Prepare macOS notarization API key
+        env:
+          DESKTOP_MACOS_APPLE_API_KEY: ${{ secrets.DESKTOP_MACOS_APPLE_API_KEY }}
+          DESKTOP_MACOS_APPLE_API_KEY_ID: ${{ secrets.DESKTOP_MACOS_APPLE_API_KEY_ID }}
+        run: |
+          if [ -n "$DESKTOP_MACOS_APPLE_API_KEY" ]; then
+            key_id="${DESKTOP_MACOS_APPLE_API_KEY_ID:-texra}"
+            key_path="$RUNNER_TEMP/AuthKey_${key_id}.p8"
+            printf '%s' "$DESKTOP_MACOS_APPLE_API_KEY" > "$key_path"
+            chmod 600 "$key_path"
+            echo "APPLE_API_KEY=$key_path" >> "$GITHUB_ENV"
+          fi
+
+      - name: Verify macOS signing secrets
+        id: desktop-signing
+        env:
+          TEXRA_REQUIRE_DESKTOP_SIGNING: ${{ inputs.require_desktop_signing && '1' || '0' }}
+        run: node scripts/verify-desktop-signing-env.mjs mac
+
+      - name: Package macOS desktop installers
+        run: |
+          if [ '${{ steps.desktop-signing.outputs.signed }}' != 'true' ]; then
+            unset CSC_LINK
+            unset CSC_KEY_PASSWORD
+            unset APPLE_API_KEY
+            unset APPLE_API_KEY_ID
+            unset APPLE_API_ISSUER
+            unset APPLE_ID
+            unset APPLE_APP_SPECIFIC_PASSWORD
+            unset APPLE_TEAM_ID
+            unset APPLE_KEYCHAIN
+            unset APPLE_KEYCHAIN_PROFILE
+          fi
+          pnpm --filter @texra/desktop exec electron-builder --config ${{ steps.desktop-signing.outputs.electron_builder_config }} --publish never
+
+      - name: Smoke-test macOS packaged desktop app
+        run: >-
+          pnpm run desktop:package:smoke -- --app
+          packages/desktop/dist-packaged/mac-universal/TeXRA.app/Contents/MacOS/TeXRA
+
+      - name: Check macOS packaged desktop app contents
+        run: pnpm run check:desktop-package
+
+      - name: Check macOS desktop installer artifacts
+        run: pnpm run check:desktop-installers
+
+      - name: Upload macOS desktop installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-desktop-installers-macOS
+          path: |
+            packages/desktop/dist-packaged/*.dmg
+            packages/desktop/dist-packaged/*.zip
+            packages/desktop/dist-packaged/*.blockmap
+            packages/desktop/dist-packaged/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 14
+
+  desktop-linux-installer:
+    name: desktop installer (Linux)
+    if: inputs.run_desktop_installers
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Linux desktop smoke dependencies
+        run: pnpm --filter @texra/desktop exec playwright install-deps chromium
+
+      - name: Build desktop app
+        run: pnpm run desktop:build
+
+      - name: Package Linux desktop installers
+        run: pnpm --filter @texra/desktop package:dist
+
+      - name: Smoke-test Linux packaged desktop app
+        run: >-
+          xvfb-run --auto-servernum pnpm run desktop:package:smoke -- --app
+          packages/desktop/dist-packaged/linux-unpacked/texra
+
+      - name: Check Linux packaged desktop app contents
+        run: pnpm run check:desktop-package
+
+      - name: Check Linux desktop installer artifacts
+        run: pnpm run check:desktop-installers
+
+      - name: Upload Linux desktop installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-desktop-installers-Linux
+          path: |
+            packages/desktop/dist-packaged/*.AppImage
+            packages/desktop/dist-packaged/*.deb
+            packages/desktop/dist-packaged/*.blockmap
+            packages/desktop/dist-packaged/latest-linux.yml
+          if-no-files-found: error
+          retention-days: 14
+
+  desktop-windows-artifact:
+    name: desktop artifact (Windows)
+    if: inputs.run_windows_desktop
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.DESKTOP_WINDOWS_AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
+      TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.DESKTOP_WINDOWS_AZURE_TRUSTED_SIGNING_ENDPOINT }}
+      TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.DESKTOP_WINDOWS_AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME }}
+      TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.DESKTOP_WINDOWS_AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+      AZURE_TENANT_ID: ${{ secrets.DESKTOP_WINDOWS_AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.DESKTOP_WINDOWS_AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.DESKTOP_WINDOWS_AZURE_CLIENT_SECRET }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check desktop Electron binary
+        run: pnpm run check:desktop-electron-binary
+
+      - name: Build desktop artifacts
+        run: pnpm run desktop:build
+
+      - name: Check desktop build artifacts
+        run: pnpm run check:desktop-build-artifacts
+
+      - name: Verify Windows signing secrets
+        id: desktop-signing
+        env:
+          TEXRA_REQUIRE_DESKTOP_SIGNING: ${{ inputs.require_desktop_signing && '1' || '0' }}
+        run: node scripts/verify-desktop-signing-env.mjs win
+
+      - name: Package Windows desktop installer
+        run: pnpm --filter @texra/desktop exec electron-builder --config ${{ steps.desktop-signing.outputs.electron_builder_config }} --publish never
+
+      - name: Smoke-test Windows packaged desktop app
+        run: >-
+          pnpm run desktop:package:smoke -- --app
+          packages/desktop/dist-packaged/win-unpacked/TeXRA.exe
+
+      - name: Check Windows packaged desktop app contents
+        run: pnpm run check:desktop-package
+
+      - name: Check Windows desktop installer artifacts
+        run: pnpm run check:desktop-installers
+
+      - name: Upload Windows desktop installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-desktop-installers-Windows
+          path: |
+            packages/desktop/dist-packaged/*.exe
+            packages/desktop/dist-packaged/*.blockmap
+            packages/desktop/dist-packaged/latest.yml
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload desktop build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-desktop-dist-Windows
+          path: packages/desktop/dist/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-desktop-release-artifacts:
+    name: publish desktop release artifacts
+    if: always() && inputs.publish_desktop_release_artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - desktop-macos-installer
+      - desktop-linux-installer
+      - desktop-windows-artifact
+    permissions:
+      contents: read
+    env:
+      DESKTOP_RELEASE_REPO: texra-ai/texra-desktop-releases
+      GH_TOKEN: ${{ secrets.DESKTOP_RELEASES_TOKEN }}
+
+    steps:
+      - name: Require desktop artifacts
+        run: |
+          if [ '${{ needs.desktop-macos-installer.result }}' != 'success' ]; then
+            echo 'macOS desktop installer result: ${{ needs.desktop-macos-installer.result }}'
+            exit 1
+          fi
+          if [ '${{ needs.desktop-linux-installer.result }}' != 'success' ]; then
+            echo 'Linux desktop installer result: ${{ needs.desktop-linux-installer.result }}'
+            exit 1
+          fi
+          if [ '${{ needs.desktop-windows-artifact.result }}' != 'success' ]; then
+            echo 'Windows desktop artifact result: ${{ needs.desktop-windows-artifact.result }}'
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download desktop installer artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: texra-desktop-installers-*
+          path: artifacts/desktop-release
+          merge-multiple: true
+
+      - name: Verify downloaded desktop release artifacts
+        env:
+          TEXRA_DESKTOP_INSTALLER_PLATFORM: all
+          TEXRA_DESKTOP_INSTALLER_ROOT: artifacts/desktop-release
+        run: node scripts/verify-desktop-installer-artifacts.mjs
+
+      - name: Publish desktop artifacts to public release repository
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo 'DESKTOP_RELEASES_TOKEN is not configured; skipping desktop update publication.'
+            exit 0
+          fi
+
+          actual_repo="$(gh repo view "$DESKTOP_RELEASE_REPO" --json nameWithOwner --jq .nameWithOwner)"
+          visibility="$(gh repo view "$DESKTOP_RELEASE_REPO" --json visibility --jq .visibility)"
+
+          if [ "$actual_repo" != "$DESKTOP_RELEASE_REPO" ]; then
+            echo "Desktop release repo target mismatch: expected $DESKTOP_RELEASE_REPO, got $actual_repo"
+            exit 1
+          fi
+
+          if [ "$visibility" != 'PUBLIC' ]; then
+            echo "Desktop release repo must be public for token-free clients; got visibility $visibility"
+            exit 1
+          fi
+
+          version="$(node -p "require('./packages/desktop/package.json').version")"
+          tag="v${version}"
+          notes_file="$(mktemp)"
+          printf 'TeXRA desktop %s update artifacts.\n\nSource run: %s/%s/actions/runs/%s\nSource commit: %s\n' \
+            "$version" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_SHA" \
+            > "$notes_file"
+
+          shopt -s nullglob
+          assets=(artifacts/desktop-release/*)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo 'No downloaded desktop release assets found.'
+            exit 1
+          fi
+
+          if gh release view "$tag" --repo "$DESKTOP_RELEASE_REPO" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --repo "$DESKTOP_RELEASE_REPO" --clobber
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --repo "$DESKTOP_RELEASE_REPO" \
+              --title "TeXRA Desktop ${version}" \
+              --notes-file "$notes_file"
+          fi

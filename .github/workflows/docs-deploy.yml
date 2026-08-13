@@ -1,0 +1,122 @@
+name: Deploy Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'TERMS_OF_SERVICE.md'
+      - 'CHANGELOG.md'
+      - '.github/workflows/docs-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: docs-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install docs dependencies
+        working-directory: docs
+        # vitepress-plugin-mermaid still declares a peer on vitepress@^1, but
+        # we use the alpha of v2 intentionally. The lockfile is built with
+        # --legacy-peer-deps, so npm ci must match.
+        run: npm ci --legacy-peer-deps
+
+      - name: Build site
+        working-directory: docs
+        run: npm run docs:build
+
+      # Defense-in-depth: even if srcExclude in .vitepress/config.js drifts,
+      # this allowlist fails the workflow before anything reaches the public
+      # site. Any unexpected file or directory at the dist root — a stray new
+      # internal doc, a new top-level page that wasn't reviewed — trips it.
+      - name: Verify build output matches public allowlist
+        run: |
+          set -euo pipefail
+          dist=docs/.vitepress/dist
+          fail=0
+
+          # The exact set of entries we expect VitePress + public/ to produce
+          # at the dist root. Update deliberately when adding a public page or
+          # a new public/ asset.
+          allowed=(
+            .nojekyll
+            404.html
+            CNAME
+            assets
+            changelog.html
+            examples
+            favicon.svg
+            guide
+            hashmap.json
+            images
+            index.html
+            launch.html
+            logo-icon-board.svg
+            logo-icon.svg
+            logo-mark-mono.svg
+            logo-mark-reversed.svg
+            logo-mark.svg
+            providers.html
+            terms.html
+            vp-icons.css
+          )
+
+          for entry in "$dist"/* "$dist"/.[!.]*; do
+            [ -e "$entry" ] || continue
+            name=$(basename "$entry")
+            if printf '%s\n' "${allowed[@]}" | grep -Fxq "$name"; then
+              continue
+            fi
+            echo "::error::Unexpected entry in build output: $name"
+            echo "::error::If this is intentional, add it to the allowlist in .github/workflows/docs-deploy.yml"
+            fail=1
+          done
+
+          # Sanity: required public pages must actually exist.
+          for required in index.html launch.html terms.html providers.html changelog.html guide/index.html; do
+            if [ ! -f "$dist/$required" ]; then
+              echo "::error::Expected public page missing from build: $required"
+              fail=1
+            fi
+          done
+
+          exit $fail
+
+      - name: Configure Pages metadata
+        run: |
+          touch docs/.vitepress/dist/.nojekyll
+          echo 'texra.ai' > docs/.vitepress/dist/CNAME
+
+      - name: Deploy to gh-pages branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cd docs/.vitepress/dist
+          git init -q -b gh-pages
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -q -m "Deploy docs from ${COMMIT_SHA} [ci skip]"
+          git push -f -q \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            HEAD:gh-pages

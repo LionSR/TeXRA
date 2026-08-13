@@ -1,0 +1,55 @@
+{
+  "$schema": "Placement and visibility for agents in prompts/agents/remote/. Seeded from production remote_agents on 2026-04-15. Update this file (not YAML) when an agent's storage folder or visibility tags change. Agents managed outside prompts/agents/remote/ (e.g. lean, ocr, transcribe_audio — present in Supabase Storage but not in the repo) are intentionally omitted; the script leaves them alone. Only add names to `retired` when an agent has been deleted from Supabase Storage and should also be removed from the remote_agents table.",
+  "retired": [
+    "apply_multiple",
+    "criticize_multiple",
+    "devise_multiple",
+    "elevate_multiple",
+    "enhance_multiple",
+    "generic_multiple",
+    "logic_multiple",
+    "notation_multiple",
+    "verifyFix_multiple"
+  ],
+  "agents": {
+    "apply": { "folder": "researcher", "visibility": ["public"] },
+    "criticize": {
+      "folder": "QITBench",
+      "visibility": ["whitelist", "QITBench", "researcher", "public"]
+    },
+    "devise": {
+      "folder": "QITBench",
+      "visibility": ["researcher", "QITBench", "public"]
+    },
+    "elevate": { "folder": "researcher", "visibility": ["researcher"] },
+    "enhance": { "folder": "whitelist", "visibility": ["public"] },
+    "firstread": { "folder": "researcher", "visibility": ["public"] },
+    "generic": { "folder": "public", "visibility": ["public"] },
+    "humanize": { "folder": "researcher", "visibility": ["researcher"] },
+    "logic": { "folder": "researcher", "visibility": ["public"] },
+    "notation": { "folder": "researcher", "visibility": ["public"] },
+    "verifyFix": { "folder": "researcher", "visibility": ["researcher"] },
+    "orchestrator": { "folder": "tool-use", "visibility": ["public"] },
+    "presenter": { "folder": "tool-use", "visibility": ["public"] },
+    "progressCheck": { "folder": "tool-use", "visibility": ["public"] },
+    "search": { "folder": "tool-use", "visibility": ["public"] },
+    "simplifier": { "folder": "tool-use", "visibility": ["public"] },
+    "lean": { "folder": "tool-use-lean", "visibility": ["researcher", "lean"] },
+    "leanBlueprint": {
+      "folder": "tool-use-lean",
+      "visibility": ["researcher", "lean"]
+    },
+    "leanOrchestrator": {
+      "folder": "tool-use-lean",
+      "visibility": ["researcher", "lean"]
+    },
+    "leanSearch": {
+      "folder": "tool-use-lean",
+      "visibility": ["researcher", "lean"]
+    },
+    "leanSimplifier": {
+      "folder": "tool-use-lean",
+      "visibility": ["researcher", "lean"]
+    }
+  }
+}

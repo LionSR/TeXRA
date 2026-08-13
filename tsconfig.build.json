@@ -1,0 +1,97 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "packages/agent/dist/types",
+    "rootDir": ".",
+    "removeComments": true,
+    "types": ["node"],
+    "paths": {
+      "@shared/*": [
+        "./src/shared/*",
+        "./src/shared/*.ts",
+        "./src/shared/*/index.ts"
+      ],
+      "@common/*": [
+        "./src/common/*",
+        "./src/common/*.ts",
+        "./src/common/*/index.ts"
+      ],
+      "@agent/*": [
+        "./src/agent/*",
+        "./src/agent/*.ts",
+        "./src/agent/*/index.ts"
+      ],
+      "@hosts/*": [
+        "./src/hosts/*",
+        "./src/hosts/*.ts",
+        "./src/hosts/*/index.ts"
+      ],
+      "@utils/*": [
+        "./src/utils/*",
+        "./src/utils/*.ts",
+        "./src/utils/*/index.ts"
+      ],
+      "@logger/*": [
+        "./src/logger/*",
+        "./src/logger/*.ts",
+        "./src/logger/*/index.ts"
+      ],
+      "@telemetry/*": [
+        "./src/telemetry/*",
+        "./src/telemetry/*.ts",
+        "./src/telemetry/*/index.ts"
+      ],
+      "@transcript": ["./src/transcript/index.ts"],
+      "@transcript/*": [
+        "./src/transcript/*",
+        "./src/transcript/*.ts",
+        "./src/transcript/*/index.ts"
+      ],
+      "@latex/*": [
+        "./src/latex/*",
+        "./src/latex/*.ts",
+        "./src/latex/*/index.ts"
+      ],
+      "@model/*": [
+        "./src/model/*",
+        "./src/model/*.ts",
+        "./src/model/*/index.ts"
+      ],
+      "@skills/*": [
+        "./src/skills/*",
+        "./src/skills/*.ts",
+        "./src/skills/*/index.ts"
+      ],
+      "@housekeeping/*": [
+        "./src/housekeeping/*",
+        "./src/housekeeping/*.ts",
+        "./src/housekeeping/*/index.ts"
+      ],
+      "@replacement/*": [
+        "./src/replacement/*",
+        "./src/replacement/*.ts",
+        "./src/replacement/*/index.ts"
+      ],
+      "@tools/*": [
+        "./src/tools/*",
+        "./src/tools/*.ts",
+        "./src/tools/*/index.ts"
+      ],
+      "@eventBus/*": [
+        "./src/eventBus/*",
+        "./src/eventBus/*.ts",
+        "./src/eventBus/*/index.ts"
+      ],
+      "@auth/*": ["./src/auth/*", "./src/auth/*.ts", "./src/auth/*/index.ts"],
+      "@platform/*": [
+        "./src/platform/*",
+        "./src/platform/*.ts",
+        "./src/platform/*/index.ts"
+      ]
+    }
+  },
+  "include": ["packages/agent/src/**/*.ts", "src/types/ambient.d.ts"],
+  "exclude": ["node_modules", "src/test-kernel"]
+}

@@ -1,0 +1,28 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+#app.trace-viewer-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+}
+
+/* Load/parse failure surface rendered by main.ts (kept token-based so it
+   tracks the host bridge like the rest of the shell). */
+#app .trace-viewer-error {
+  margin: auto;
+  max-width: 40rem;
+  padding: var(--wa-space-xl);
+  color: var(--wa-color-text-normal);
+  font-family: var(--wa-font-family-body);
+  font-size: var(--wa-font-size-m);
+}
+
+#app .trace-viewer-error h1 {
+  margin-block: 0 var(--wa-space-m);
+  font-size: 1.25em;
+}

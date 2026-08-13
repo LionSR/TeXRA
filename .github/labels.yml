@@ -1,0 +1,113 @@
+# Source of truth for issue/PR labels on lionsr/texra.
+# Reflects the merged scheme: existing curated organic labels (preserved as-is)
+# plus a small additive layer for axes the existing scheme doesn't cover.
+# Synced by .github/workflows/label-sync.yml.
+
+# ---- type-equivalent (flat, GitHub-default-aligned) ----
+- name: 'bug'
+  color: 'd73a4a'
+  description: "Something isn't working"
+
+- name: 'enhancement'
+  color: 'a2eeef'
+  description: 'New feature or request'
+
+- name: 'tech-debt'
+  color: 'ededed'
+  description: 'Refactor or cleanup, no behavior change'
+
+- name: 'documentation'
+  color: '0075ca'
+  description: 'Improvements or additions to documentation'
+
+# ---- area: which part of the codebase (multi-select) ----
+# Five organic labels already in use, plus three additions for axes the
+# auto-labeller can derive cheaply from changed paths.
+- name: 'area:agent-runtime'
+  color: 'bfdadc'
+  description: 'Agent execution, flows, delegation, tools, task state, and orchestration'
+
+- name: 'area:model-handlers'
+  color: 'c5def5'
+  description: 'Model providers, SDK handlers, streaming, pricing, and model registry behavior'
+
+- name: 'area:progress-view'
+  color: 'd4c5f9'
+  description: 'Progress board, stream tabs, task groups, logs, and rendering behavior'
+
+- name: 'area:latex-workflow'
+  color: '5319e7'
+  description: 'LaTeX build, latexdiff, BibTeX, extraction, and document workflow behavior'
+
+- name: 'area:docs'
+  color: '0075ca'
+  description: 'Documentation, PRDs, walkthroughs, screenshots, and guides'
+
+- name: 'area:webview'
+  color: '1d76db'
+  description: 'Webview UI: agent panel, settings view, shared frontend components'
+
+- name: 'area:ci'
+  color: '1d76db'
+  description: 'GitHub Actions workflows and repo-root build/lint/tsconfig files'
+
+- name: 'area:deps'
+  color: '1d76db'
+  description: 'Dependency bumps and package manifests (Dependabot)'
+
+# ---- status: lifecycle (mutually exclusive in practice) ----
+- name: 'status:needs-triage'
+  color: 'd876e3'
+  description: 'Needs title/body cleanup or first-pass diagnosis before work is clear'
+
+- name: 'status:needs-validation'
+  color: 'fbca04'
+  description: 'Needs verification against API docs, CI, runtime behavior, or product intent'
+
+- name: 'status:ready-review'
+  color: '0e8a16'
+  description: 'Ready for human review or implementation'
+
+- name: 'status:blocked-external'
+  color: 'b60205'
+  description: 'Blocked on upstream provider behavior, docs, quota, or external system state'
+
+# ---- risk: blast radius ----
+- name: 'risk:low'
+  color: '0e8a16'
+  description: 'Small or low-blast-radius change'
+
+- name: 'risk:medium'
+  color: 'fbca04'
+  description: 'Moderate runtime, migration, or integration risk'
+
+- name: 'risk:high'
+  color: 'd93f0b'
+  description: 'High-blast-radius, architectural, schema, or stale-conflict risk'
+
+# ---- priority: only the one that means something ----
+- name: 'priority:p0'
+  color: 'b60205'
+  description: 'Drop everything: blocker, data loss, or security'
+
+# ---- lifecycle: GitHub-recognized canonical community labels ----
+- name: 'good first issue'
+  color: '7057ff'
+  description: 'Onboarding-friendly'
+
+- name: 'help wanted'
+  color: '008672'
+  description: 'Maintainer welcomes external contributions'
+
+# ---- workflow hooks ----
+- name: 'follow-up'
+  color: 'ededed'
+  description: 'Follow-up issue filed by post-merge agent from review feedback or deferred scope'
+
+- name: 'tracking'
+  color: '8a2be2'
+  description: 'Umbrella issue with sub-issue children'
+
+- name: 're-review'
+  color: '0e8a16'
+  description: 'Request a fresh AI review of this PR (consumed by the review workflows)'

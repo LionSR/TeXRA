@@ -1,0 +1,167 @@
+# ci-sync-version: claude-provider-deepseek-v1
+# ci-sync-source: shared bot automation, prompts externalized under .github/prompts
+name: Issue Tracker
+
+on:
+  issues:
+    types: [closed]
+  pull_request:
+    # `labeled` and `review_requested` are intentionally omitted — Playbook C
+    # does nothing for those events, and automation can otherwise cascade into
+    # duplicate, costly track runs.
+    types: [closed, opened]
+  pull_request_review:
+    types: [submitted]
+
+concurrency:
+  group: issue-tracker-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  track:
+    # Skip: closed-but-not-completed issues, closed-but-not-merged PRs
+    # Skip automated review summaries: the Claude action cannot exchange their
+    # OIDC token for a repo-writing app token, and Playbook C has no useful
+    # tracking action for bot-submitted review events.
+    # Repository variable kill switch:
+    #   ISSUE_TRACKER_ENABLED=false disables tracking issue updates.
+    #   unset or any other value preserves the default enabled behavior.
+    if: |
+      vars.ISSUE_TRACKER_ENABLED != 'false' &&
+      (
+        (github.event_name == 'issues' && github.event.issue.state_reason == 'completed') ||
+        (github.event_name == 'pull_request' &&
+         (github.event.action == 'opened' ||
+          (github.event.action == 'closed' && github.event.pull_request.merged == true))) ||
+        (github.event_name == 'pull_request_review' &&
+         github.event.review.user.type != 'Bot' &&
+         !endsWith(github.event.review.user.login, '[bot]') &&
+         github.actor != 'Copilot')
+      )
+    runs-on: ubuntu-latest
+    env:
+      CLAUDE_CODE_PROVIDER: ${{ vars.CLAUDE_CODE_PROVIDER || 'anthropic' }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      ANTHROPIC_BASE_URL: ${{ vars.ANTHROPIC_BASE_URL }}
+      CLAUDE_OPUS_MODEL: ${{ vars.CLAUDE_OPUS_MODEL }}
+      CLAUDE_SONNET_MODEL: ${{ vars.CLAUDE_SONNET_MODEL }}
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+      id-token: write
+    steps:
+      - name: Check tracker provider token
+        id: tracker-provider-token
+        shell: bash
+        env:
+          TRACKER_PROVIDER: ${{ env.CLAUDE_CODE_PROVIDER }}
+        run: |
+          set -euo pipefail
+
+          case "$TRACKER_PROVIDER" in
+            anthropic) provider_token="$CLAUDE_CODE_OAUTH_TOKEN" ;;
+            deepseek) provider_token="$DEEPSEEK_API_KEY" ;;
+            *)
+              echo "::error::Unsupported tracker provider: $TRACKER_PROVIDER"
+              exit 1
+              ;;
+          esac
+
+          if [[ -n "$provider_token" ]]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "reason=$TRACKER_PROVIDER token is not configured" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping tracker agent: $TRACKER_PROVIDER token is not configured for this event."
+          fi
+
+      - name: Checkout repository
+        if: steps.tracker-provider-token.outputs.skip != 'true'
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Gate tracker agent
+        if: steps.tracker-provider-token.outputs.skip != 'true'
+        id: tracker-gate
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          should_run=true
+
+          if [[ "$EVENT_NAME" == pull_request* ]]; then
+            diff_head="$HEAD_SHA"
+            if ! git cat-file -e "$diff_head^{commit}" 2>/dev/null && [[ -n "$MERGE_SHA" ]]; then
+              diff_head="$MERGE_SHA"
+            fi
+
+            if git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null && git cat-file -e "$diff_head^{commit}" 2>/dev/null; then
+              tracker_workflow_changes="$(git diff --name-only "$BASE_SHA" "$diff_head" -- .github/workflows/issue-tracker.yml)"
+              if [[ -n "$tracker_workflow_changes" ]]; then
+                should_run=false
+                echo "Skipping tracker agent because this PR changes issue-tracker.yml."
+                echo "The Claude action requires workflow content to match the default branch before token exchange."
+              fi
+            else
+              echo "::notice::Skipping tracker workflow diff gate because the pull request comparison commits are unavailable."
+            fi
+          fi
+
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout trusted automation
+        if: steps.tracker-provider-token.outputs.skip != 'true' && steps.tracker-gate.outputs.should_run == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          path: .trusted-actions
+          fetch-depth: 1
+
+      - name: Check trusted provider wrapper
+        if: steps.tracker-provider-token.outputs.skip != 'true' && steps.tracker-gate.outputs.should_run == 'true'
+        id: trusted-provider-wrapper
+        run: |
+          # claude-code-with-provider is now external (LionSR/agent-ci-actions@v1), always available;
+          # the legacy trusted base-ref presence check is obsolete.
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code
+        id: claude
+        if: steps.tracker-provider-token.outputs.skip != 'true' && steps.tracker-gate.outputs.should_run == 'true' && steps.trusted-provider-wrapper.outputs.available == 'true'
+        uses: LionSR/agent-ci-actions@v1
+        with:
+          provider: ${{ env.CLAUDE_CODE_PROVIDER }}
+          model-tier: sonnet
+          allowed-bots: 'dependabot[bot],github-actions[bot],Copilot,claude[bot],cursor[bot]'
+          allowed_tools_preset: issue-tracker
+          allowed_tools_preset_map_file: .trusted-actions/.github/automation/allowed-tools.json
+          claude-prompt-file: .trusted-actions/.github/prompts/issue-tracker-prompt.md
+          claude-prompt-context: |
+            Event: ${{ github.event_name }} / ${{ github.event.action }}
+            Repository: ${{ github.repository }}
+            Triggered by: ${{ github.event.sender.login }}
+
+            ${{ github.event_name == 'issues' && format('Issue number: #{0}', github.event.issue.number) || '' }}
+            ${{ github.event_name == 'issues' && format('Issue title: {0}', github.event.issue.title) || '' }}
+            ${{ github.event_name == 'issues' && format('Issue labels: {0}', join(github.event.issue.labels.*.name, ', ')) || '' }}
+
+            ${{ github.event_name != 'issues' && format('PR number: #{0}', github.event.pull_request.number) || '' }}
+            ${{ github.event_name != 'issues' && format('PR title: {0}', github.event.pull_request.title) || '' }}
+            ${{ github.event_name != 'issues' && format('PR labels: {0}', join(github.event.pull_request.labels.*.name, ', ')) || '' }}
+            ${{ github.event_name != 'issues' && format('PR state: {0}', github.event.pull_request.state) || '' }}
+            ${{ github.event_name != 'issues' && format('PR draft: {0}', github.event.pull_request.draft) || '' }}
+            ${{ github.event_name != 'issues' && format('Author: {0}', github.event.pull_request.user.login) || '' }}
+            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('Merged by: {0}', github.event.pull_request.merged_by.login) || '' }}
+            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('Base branch: {0}', github.event.pull_request.base.ref) || '' }}
+            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('Head branch: {0}', github.event.pull_request.head.ref) || '' }}
+            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('Base SHA: {0}', github.event.pull_request.base.sha) || '' }}
+            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('Head SHA: {0}', github.event.pull_request.head.sha) || '' }}
+            ${{ github.event_name == 'pull_request_review' && format('Review state: {0}', github.event.review.state) || '' }}
+            ${{ github.event_name == 'pull_request_review' && format('Reviewer: {0}', github.event.review.user.login) || '' }}

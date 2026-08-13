@@ -1,0 +1,4 @@
+interface:
+  display_name: 'TikZ Figure Builder'
+  short_description: 'Create and refine TikZ diagrams'
+  default_prompt: 'Use $tikz-figure-builder to create or improve a TikZ figure, then iteratively compile and visually read the rendered result until it is clean.'

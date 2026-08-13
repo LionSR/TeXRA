@@ -1,0 +1,713 @@
+{
+  "manifest": {
+    "name": "texra",
+    "displayName": "TeXRA",
+    "description": "TeXRA: Your 24/7 AI Theorist.",
+    "publisher": "texra-ai",
+    "engines": {
+      "vscode": "^1.125.0"
+    },
+    "categories": [
+      "Programming Languages",
+      "Chat",
+      "Machine Learning",
+      "Linters",
+      "Formatters",
+      "AI",
+      "Education",
+      "Data Science"
+    ],
+    "activationEvents": ["onStartupFinished", "onColorTheme"],
+    "main": "./dist/extension.js",
+    "capabilities": {
+      "untrustedWorkspaces": {
+        "description": "TeXRA runs AI agents that read workspace files and execute shell commands (LaTeX compilation, bash tools, external MCP tools). Open trusted workspaces only.",
+        "supported": false
+      }
+    },
+    "contributes": {
+      "authentication": [
+        {
+          "id": "texra-supabase",
+          "label": "TeXRA"
+        }
+      ],
+      "chatSkills": [
+        {
+          "name": "inline-paper-critic",
+          "path": "resources/skills/inline-paper-critic/SKILL.md"
+        },
+        {
+          "name": "lean-blueprint",
+          "path": "resources/skills/lean-blueprint/SKILL.md"
+        },
+        {
+          "name": "lean-proof-assistant",
+          "path": "resources/skills/lean-proof-assistant/SKILL.md"
+        },
+        {
+          "name": "lean-search",
+          "path": "resources/skills/lean-search/SKILL.md"
+        },
+        {
+          "name": "lean-simplifier",
+          "path": "resources/skills/lean-simplifier/SKILL.md"
+        },
+        {
+          "name": "lean-tactic-improver",
+          "path": "resources/skills/lean-tactic-improver/SKILL.md"
+        },
+        {
+          "name": "literature-search",
+          "path": "resources/skills/literature-search/SKILL.md"
+        },
+        {
+          "name": "manuscript-review",
+          "path": "resources/skills/manuscript-review/SKILL.md"
+        },
+        {
+          "name": "math-ocr",
+          "path": "resources/skills/math-ocr/SKILL.md"
+        },
+        {
+          "name": "mathematical-enhancer",
+          "path": "resources/skills/mathematical-enhancer/SKILL.md"
+        },
+        {
+          "name": "scientific-presenter",
+          "path": "resources/skills/scientific-presenter/SKILL.md"
+        },
+        {
+          "name": "scientific-simplifier",
+          "path": "resources/skills/scientific-simplifier/SKILL.md"
+        },
+        {
+          "name": "tikz-figure-builder",
+          "path": "resources/skills/tikz-figure-builder/SKILL.md"
+        },
+        {
+          "name": "writing-commenter",
+          "path": "resources/skills/writing-commenter/SKILL.md"
+        }
+      ],
+      "languageModelTools": [
+        {
+          "canBeReferencedInPrompt": true,
+          "displayName": "arXiv Search",
+          "icon": "$(search)",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "categories": {
+                "description": "Optional arXiv category filters such as \"math.NT\" or \"cs.AI\".",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "field": {
+                "description": "Search field: \"author\" for author names, \"title\" for paper titles, \"abstract\" for abstracts, \"all\" (default) for all fields.",
+                "enum": ["all", "author", "title", "abstract"],
+                "type": "string"
+              },
+              "maxResults": {
+                "description": "Maximum number of papers to return.",
+                "type": "integer"
+              },
+              "query": {
+                "description": "Search query terms, title text, or author names.",
+                "type": "string"
+              },
+              "sortBy": {
+                "description": "arXiv sort field to use.",
+                "enum": ["relevance", "lastUpdatedDate", "submittedDate"],
+                "type": "string"
+              },
+              "sortOrder": {
+                "description": "Sort direction for results.",
+                "enum": ["ascending", "descending"],
+                "type": "string"
+              },
+              "start": {
+                "description": "Zero-based result offset for pagination.",
+                "type": "integer"
+              }
+            },
+            "required": ["query"],
+            "type": "object"
+          },
+          "modelDescription": "Search arXiv for papers and return basic metadata for each hit. Use field=\"author\" for author name searches.",
+          "name": "texra_arxiv_search",
+          "tags": ["texra", "research", "arxiv"],
+          "toolReferenceName": "texra_arxiv_search"
+        },
+        {
+          "canBeReferencedInPrompt": true,
+          "displayName": "Web Fetch",
+          "icon": "$(globe)",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "prompt": {
+                "description": "Optional instruction describing what to extract from the page.",
+                "type": "string"
+              },
+              "url": {
+                "description": "Public HTTP or HTTPS URL to fetch.",
+                "type": "string"
+              }
+            },
+            "required": ["url"],
+            "type": "object"
+          },
+          "modelDescription": "Fetch content from a URL and return it as clean text. Include an optional prompt to explain what context you need so the fetched content can be interpreted correctly.",
+          "name": "texra_web_fetch",
+          "tags": ["texra", "research", "web"],
+          "toolReferenceName": "texra_web_fetch"
+        },
+        {
+          "canBeReferencedInPrompt": true,
+          "displayName": "Crossref Search",
+          "icon": "$(book)",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "filter": {
+                "description": "Crossref filter string, e.g. \"from-pub-date:2023\".",
+                "type": "string"
+              },
+              "offset": {
+                "description": "Zero-based result offset for pagination.",
+                "type": "integer"
+              },
+              "order": {
+                "description": "Crossref sort order.",
+                "enum": ["asc", "desc"],
+                "type": "string"
+              },
+              "query": {
+                "description": "Bibliographic search query for Crossref works.",
+                "type": "string"
+              },
+              "rows": {
+                "description": "Maximum number of works to return.",
+                "type": "integer"
+              },
+              "sort": {
+                "description": "Crossref sort field to apply.",
+                "type": "string"
+              }
+            },
+            "required": ["query"],
+            "type": "object"
+          },
+          "modelDescription": "Search Crossref works (journal articles, books, conference papers) and return top matches with bibliographic metadata.",
+          "name": "texra_crossref_search",
+          "tags": ["texra", "research", "citation"],
+          "toolReferenceName": "texra_crossref_search"
+        }
+      ],
+      "menus": {
+        "commandPalette": [
+          {
+            "command": "texra.agentReview.run",
+            "when": "texra.activated && !texra.agentReview.running"
+          },
+          {
+            "command": "texra.agentReview.runWithOptions",
+            "when": "texra.activated && !texra.agentReview.running"
+          },
+          {
+            "command": "texra.agentReview.stop",
+            "when": "texra.activated && texra.agentReview.running"
+          },
+          {
+            "command": "texra.agentReview.fixAllIssues",
+            "when": "texra.activated && texra.agentReview.hasIssues"
+          },
+          {
+            "command": "texra.agentReview.clear",
+            "when": "texra.activated && texra.agentReview.hasIssues"
+          },
+          {
+            "command": "texra.agentReview.fixIssue",
+            "when": "false"
+          },
+          {
+            "command": "texra.agentReview.dismissIssue",
+            "when": "false"
+          },
+          {
+            "command": "texra.agentReview.openIssue",
+            "when": "false"
+          },
+          {
+            "command": "texra.createSampleProject",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.openGettingStarted",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.runSetupAssistant",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.cleanOutput",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.cleanBuild",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.indentTeX",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.cloneOverleafProject",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.indentCurrentTeX",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.resumeAgent",
+            "when": "false"
+          },
+          {
+            "command": "texra.fixCompilation",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.getTeXCount",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.extractTikzFigures",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.compileTikzFigures",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.downloadArXivSource",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.showImportOptions",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.stopAgent",
+            "when": "false"
+          },
+          {
+            "command": "texra.execute",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.pack",
+            "when": "false"
+          },
+          {
+            "command": "texra.clean",
+            "when": "false"
+          },
+          {
+            "command": "texra.createAgentWithAI",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.setApiKey",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.removeApiKey",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.auth.signIn",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.auth.chatgpt.signIn",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.auth.signOut",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.auth.viewProfile",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.openDoc",
+            "when": "false"
+          },
+          {
+            "command": "texra.mainView.reset",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.showAgentHistory",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.showMemory",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.showModels",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.showAgents",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.showTools",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.showMultiAgent",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.showGitSettings",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.showMainView",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.showProgressView",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.toggleView",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.openProgressViewInTab",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.showDashboard",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.replyComment",
+            "when": "false"
+          },
+          {
+            "command": "texra.resolveCommentThread",
+            "when": "false"
+          },
+          {
+            "command": "texra.unresolveCommentThread",
+            "when": "false"
+          },
+          {
+            "command": "texra.compactResponse",
+            "when": "false"
+          }
+        ],
+        "comments/commentThread/context": [
+          {
+            "command": "texra.replyComment",
+            "group": "inline",
+            "when": "commentController == texra.inlineComments"
+          }
+        ],
+        "comments/commentThread/title": [
+          {
+            "command": "texra.resolveCommentThread",
+            "group": "inline@1",
+            "when": "commentController == texra.inlineComments && commentThread == texraInlineCommentOpen"
+          },
+          {
+            "command": "texra.unresolveCommentThread",
+            "group": "inline@1",
+            "when": "commentController == texra.inlineComments && commentThread == texraInlineCommentResolved"
+          }
+        ],
+        "editor/title": [
+          {
+            "command": "texra.fixCompilation",
+            "group": "navigation",
+            "when": "texra.activated && editorLangId == latex"
+          }
+        ],
+        "view/item/context": [
+          {
+            "command": "texra.agentReview.fixIssue",
+            "group": "inline@1",
+            "when": "view == texra.scmAgentReviewView && viewItem == texraReviewIssue"
+          },
+          {
+            "command": "texra.agentReview.dismissIssue",
+            "group": "inline@2",
+            "when": "view == texra.scmAgentReviewView && viewItem == texraReviewIssue"
+          }
+        ],
+        "view/title": [
+          {
+            "command": "texra.indentTeX",
+            "group": "navigation@1",
+            "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'"
+          },
+          {
+            "command": "texra.cleanOutput",
+            "group": "navigation@2",
+            "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'"
+          },
+          {
+            "command": "texra.cleanBuild",
+            "group": "navigation@3",
+            "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'"
+          },
+          {
+            "command": "texra.showDashboard",
+            "group": "navigation@4",
+            "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'"
+          },
+          {
+            "command": "texra.mainView.reset",
+            "group": "navigation@0",
+            "when": "texra.activated && view == texra.mainView && texra.activeView != 'progress'"
+          },
+          {
+            "command": "texra.showDashboard",
+            "group": "navigation@1",
+            "when": "texra.activated && view == texra.mainView && texra.activeView != 'progress'"
+          },
+          {
+            "command": "texra.agentReview.run",
+            "group": "navigation@1",
+            "when": "texra.activated && view == texra.scmAgentReviewView && !texra.agentReview.running"
+          },
+          {
+            "command": "texra.agentReview.stop",
+            "group": "navigation@1",
+            "when": "texra.activated && view == texra.scmAgentReviewView && texra.agentReview.running"
+          },
+          {
+            "command": "texra.agentReview.runWithOptions",
+            "group": "navigation@2",
+            "when": "texra.activated && view == texra.scmAgentReviewView && !texra.agentReview.running"
+          },
+          {
+            "command": "texra.agentReview.fixAllIssues",
+            "group": "navigation@3",
+            "when": "texra.activated && view == texra.scmAgentReviewView && texra.agentReview.hasIssues"
+          },
+          {
+            "command": "texra.agentReview.clear",
+            "group": "navigation@4",
+            "when": "texra.activated && view == texra.scmAgentReviewView && texra.agentReview.hasIssues"
+          }
+        ]
+      },
+      "views": {
+        "scm": [
+          {
+            "contextualTitle": "Agent Review",
+            "id": "texra.scmAgentReviewView",
+            "name": "Agent Review",
+            "type": "tree",
+            "visibility": "collapsed",
+            "when": "texra.activated"
+          }
+        ],
+        "texra": [
+          {
+            "contextualTitle": "TeXRA",
+            "id": "texra.mainView",
+            "name": "TeXRA",
+            "type": "webview"
+          }
+        ]
+      },
+      "viewsContainers": {
+        "secondarySidebar": [
+          {
+            "icon": "resources/logo-128x128.svg",
+            "id": "texra",
+            "title": "TeXRA"
+          }
+        ]
+      },
+      "viewsWelcome": [
+        {
+          "contents": "Review changes against the main branch for issues.\n[Find Issues](command:texra.agentReview.run)\n[Find Issues with Options…](command:texra.agentReview.runWithOptions)",
+          "view": "texra.scmAgentReviewView",
+          "when": "texra.activated && !texra.agentReview.running"
+        }
+      ],
+      "walkthroughs": [
+        {
+          "description": "Choose a credential, let the setup assistant check your project and run your first polish, then meet the orchestrator.",
+          "id": "texra.gettingStarted",
+          "steps": [
+            {
+              "completionEvents": [
+                "onCommand:texra.auth.signIn",
+                "onCommand:texra.auth.chatgpt.signIn",
+                "onCommand:texra.setApiKey"
+              ],
+              "description": "A credential is the one step no agent can do for you. Three ways in:\n\n**Use ChatGPT subscription** — ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Sign in with Researcher Access** — Free for academics; no API key needed. Signing in also unlocks remote agents, including the orchestrator.\n\n[Sign In](command:texra.auth.signIn)\n\n**Use your own provider API key** — Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions do not include API access.\n\n[Set API key](command:texra.setApiKey)",
+              "id": "texra.gettingStarted.signIn",
+              "media": {
+                "altText": "Screenshot of the API key configuration view",
+                "image": "resources/walkthroughs/media/api-key-setup.png"
+              },
+              "title": "Choose how TeXRA should sign in"
+            },
+            {
+              "completionEvents": ["onCommand:texra.runSetupAssistant"],
+              "description": "One conversation covers the rest. The setup assistant checks your environment and installs any missing LaTeX tools, asks what you're working on and applies the matching team, then runs your first polish -- ending at a diff so you can see every change. It asks before every command and explains what it's about to do; you stay in control.\n\n[Run Setup Assistant](command:texra.runSetupAssistant)\n\nPrefer to do it yourself? The manual steps below walk the same loop.",
+              "id": "texra.gettingStarted.setupAssistant",
+              "media": {
+                "markdown": "resources/walkthroughs/getting-started.md"
+              },
+              "title": "The setup assistant takes it from here"
+            },
+            {
+              "completionEvents": ["onCommand:texra.showMultiAgent"],
+              "description": "After setup, the **orchestrator** is the habit. You don't pick from 23 agents -- it reads your paper, figures out what needs work, and hands each task to the right agent. You just approve the proposals as they come in.\n\nPick **orchestrator** from the agent dropdown and choose a model -- bigger models give better results, smaller ones are faster and cheaper. On your own API key, start with **assistant** instead; the orchestrator is served through Researcher Access.\n\nTeams give the orchestrator the right tools for your field. The setup assistant applies one for you, or pick one yourself:\n\n[Pick a team](command:texra.showMultiAgent)",
+              "id": "texra.gettingStarted.agentModel",
+              "media": {
+                "altText": "Screenshot of the agent and model selection UI",
+                "image": "resources/walkthroughs/media/agent-model-selection.png"
+              },
+              "title": "Meet the orchestrator"
+            },
+            {
+              "completionEvents": ["onCommand:texra.createSampleProject"],
+              "description": "The steps from here mirror what the setup assistant does, for when you'd rather drive yourself.\n\nNot sure where to start? We've bundled a small LaTeX project you can play with.\n\n[Create the sample project](command:texra.createSampleProject)\n\nYou'll get a folder with example `.tex` files and a README that explains the layout.",
+              "id": "texra.gettingStarted.sampleWorkspace",
+              "media": {
+                "markdown": "resources/walkthroughs/getting-started.md"
+              },
+              "title": "Prefer to do it manually? Try the sample project"
+            },
+            {
+              "completionEvents": ["onCommand:texra.showMainView"],
+              "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Context** -- bib/style files, reference papers, or any read-only context (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.showMainView)",
+              "id": "texra.gettingStarted.stageFiles",
+              "media": {
+                "altText": "Screenshot of the file selection interface",
+                "image": "resources/walkthroughs/media/file-selection.png"
+              },
+              "title": "Manual path: pick your files"
+            },
+            {
+              "completionEvents": ["onCommand:texra.extractTikzFigures"],
+              "description": "Got figures or TikZ diagrams in your paper? Turn on auto-extraction and TeXRA will pull them out before running.\n\nFlip the **Auto-extract figures** and **Auto-extract TikZ** toggles in the main view. Or run TikZ extraction manually:\n\n[Extract TikZ figures](command:texra.extractTikzFigures)",
+              "id": "texra.gettingStarted.autoExtract",
+              "media": {
+                "altText": "Screenshot showing auto-extraction options",
+                "image": "resources/walkthroughs/media/auto-extract-options.png"
+              },
+              "title": "Manual path: auto-extract figures (optional)"
+            },
+            {
+              "completionEvents": ["onCommand:texra.execute"],
+              "description": "You're all set. Click Run agent and the orchestrator will start working through your paper.\n\n[Run agent](command:texra.execute)\n\nIt'll propose tasks as it goes -- you'll see each one pop up in the [Progress view](command:texra.showProgressView) where you can approve, tweak, or skip it.\n\nWant it to just run without asking? Turn on **auto-approve** in Settings > Multi-Agent.",
+              "id": "texra.gettingStarted.progress",
+              "media": {
+                "altText": "Screenshot of the Progress view",
+                "image": "resources/walkthroughs/media/texra-progressboard.png"
+              },
+              "title": "Manual path: run the agent"
+            },
+            {
+              "description": "Your originals are safe -- TeXRA writes edits to new files. Open them up and use VS Code's diff view to see exactly what changed. Accept what you like, ignore what you don't.",
+              "id": "texra.gettingStarted.review",
+              "media": {
+                "altText": "Screenshot of the VS Code diff view",
+                "image": "resources/walkthroughs/media/vscode-compare.png"
+              },
+              "title": "Manual path: check what it did"
+            },
+            {
+              "completionEvents": [
+                "onCommand:texra.cleanOutput",
+                "onCommand:texra.cleanBuild",
+                "onCommand:texra.pack",
+                "onCommand:texra.clean"
+              ],
+              "description": "Happy with the results? Use **Pack** $(archive) to save everything to a `History/` folder. Want to start over? Use **Clean** $(trash) to wipe the generated files.\n\nYou'll find both in the Progress toolbar or the command palette.\n\n[Clean all outputs](command:texra.cleanOutput) | [Clean build files](command:texra.cleanBuild)",
+              "id": "texra.gettingStarted.housekeeping",
+              "media": {
+                "altText": "Screenshot showing pack and clean buttons in the Progress toolbar",
+                "image": "resources/walkthroughs/media/texra-progressboard.png"
+              },
+              "title": "Manual path: clean up when you're done"
+            }
+          ],
+          "title": "Get started with TeXRA"
+        }
+      ]
+    },
+    "icon": "resources/logo-512x512.png"
+  },
+  "manifestAssetReferences": [
+    "resources/logo-128x128.svg",
+    "resources/logo-512x512.png",
+    "resources/skills/inline-paper-critic/SKILL.md",
+    "resources/skills/lean-blueprint/SKILL.md",
+    "resources/skills/lean-proof-assistant/SKILL.md",
+    "resources/skills/lean-search/SKILL.md",
+    "resources/skills/lean-simplifier/SKILL.md",
+    "resources/skills/lean-tactic-improver/SKILL.md",
+    "resources/skills/literature-search/SKILL.md",
+    "resources/skills/manuscript-review/SKILL.md",
+    "resources/skills/math-ocr/SKILL.md",
+    "resources/skills/mathematical-enhancer/SKILL.md",
+    "resources/skills/scientific-presenter/SKILL.md",
+    "resources/skills/scientific-simplifier/SKILL.md",
+    "resources/skills/tikz-figure-builder/SKILL.md",
+    "resources/skills/writing-commenter/SKILL.md",
+    "resources/walkthroughs/getting-started.md",
+    "resources/walkthroughs/media/agent-model-selection.png",
+    "resources/walkthroughs/media/api-key-setup.png",
+    "resources/walkthroughs/media/auto-extract-options.png",
+    "resources/walkthroughs/media/file-selection.png",
+    "resources/walkthroughs/media/texra-progressboard.png",
+    "resources/walkthroughs/media/vscode-compare.png"
+  ],
+  "requiredPackagedPaths": [
+    "LICENSE.txt",
+    "changelog.md",
+    "readme.md",
+    "resources/agents",
+    "resources/docs/agent-creation",
+    "resources/examples",
+    "resources/logo-128x128.svg",
+    "resources/logo-512x512.png",
+    "resources/shared/latex_style_rules.txt",
+    "resources/skills",
+    "resources/templates",
+    "resources/tool_use_agents",
+    "resources/walkthroughs",
+    "src/common/styles/common.css",
+    "src/progressView/index.html",
+    "src/settingsView/index.html",
+    "src/webview/index.html"
+  ],
+  "requiredVscodeIgnoreLines": [
+    "src/**",
+    "resources/traceViewerShared/**",
+    "!src/common/styles/*.css",
+    "!src/progressView/*.html",
+    "!src/settingsView/*.html",
+    "!src/webview/*.html"
+  ]
+}

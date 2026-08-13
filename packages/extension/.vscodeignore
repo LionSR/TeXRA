@@ -1,0 +1,68 @@
+.claude
+.github
+.cursor
+.cursor/*
+.cursorignore
+
+.pre-commit-config.yaml
+.DS_Store
+resources/.DS_Store
+
+.vscode/**
+.vscode-test/**
+out/**
+node_modules/**
+src/**
+.gitignore
+.yarnrc
+**/tsconfig.json
+eslint.config.mjs
+esbuild.config.mjs
+tsconfig.json
+**/*.map
+**/*.ts
+**/.vscode-test.*
+
+venv/**
+docs/**
+prototypes/**
+test/**
+test-loader.mjs
+AGENTS.md
+CLAUDE.md
+
+# Multi-file, external-assets trace-viewer build (shared-assets/site-hosting
+# export mode) — CLI-only (packages/cli/src/runtime/history.ts), never
+# referenced by the extension host. resources/traceViewer (the single-file
+# build historyHandlers.ts actually loads) is unaffected.
+#
+# No `!resources/**` line exists in this file (deliberately — see below), so
+# this plain ignore line works: vsce applies every `!`-negated line *after*
+# all plain ignore lines regardless of position in this file, so a blanket
+# `!resources/**` anywhere would silently re-include this directory no
+# matter where a plain `resources/traceViewerShared/**` ignore line was placed.
+# A prior `!resources/**` line here was dead weight anyway — verified no
+# earlier rule in this file broadly excludes resources/ content (the only
+# earlier match is the specific `resources/.DS_Store` line above), so every
+# other resources/* entry (agents, docs, examples, templates, ...) is already
+# included by default with no unignore needed at all.
+resources/traceViewerShared/**
+
+# Webview HTML entry points (loaded by BaseViewContentProvider)
+!src/webview/*.html
+!src/progressView/*.html
+!src/settingsView/*.html
+
+# VS Code <-> Web Awesome theme bridge stylesheet
+!src/common/styles/*.css
+
+.env
+
+supabase/**
+releases/**
+.prettierignore
+
+slides/**
+scripts/**
+.texpadtmp/**
+.github/**

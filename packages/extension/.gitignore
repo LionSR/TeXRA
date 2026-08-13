@@ -1,0 +1,20 @@
+# Copied from the repo root by scripts/copy-extension-docs.mjs during
+# `pnpm run build:fast` so vsce includes them in the VSIX. The source of
+# truth lives at the repo root. Anchored to the package root so the
+# patterns don't swallow README/CHANGELOG files in subdirectories
+# (e.g. the tracked resources/examples/README.md).
+/README.md
+/CHANGELOG.md
+
+# Generated from the repo-root skills tree by scripts/copy-extension-skills.mjs
+# during extension compile/package builds. The source of truth lives at the repo root.
+resources/skills/
+
+# Built by packages/trace-viewer's vite configs during `pnpm run package:fast`
+# (prepare:trace-viewer-assets) — the single-file, fully self-contained
+# bundle (default export mode, opens via file:// with no server) used by the
+# `--export html` CLI export and the Settings view's "Export as HTML" button,
+# and the multi-file bundle (shared-assets / --assets-dir export mode, served
+# over http/https).
+resources/traceViewer/
+resources/traceViewerShared/

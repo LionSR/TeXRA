@@ -1,0 +1,343 @@
+// Local imports
+import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
+import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
+import {
+  refreshRemoteAgentCatalogAfterSignOut,
+  requireOAuthRedirectUrl,
+} from '@auth/authFlowEffects';
+import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import {
+  DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+  toStorableSupabaseSession,
+  type SupabaseSession,
+  type SupabaseSessionCoordinator,
+} from '@auth/SupabaseSession';
+import type { StoredSessionState } from '@auth/TokenProvider';
+import {
+  RELAY_TOKEN_ENV_VAR,
+  fetchRelayTokenStatus,
+  getConfiguredRelayToken,
+} from '@auth/relayToken';
+import { getServerSideKeyService } from '@auth/serverKeys';
+import { tryPlatform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
+import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+// Local file imports
+import { readCliEnv } from './cliContext';
+import { getCliSecrets } from './cliSecrets';
+import { openBrowser } from './browser';
+import { startLoopbackCallbackServer } from './supabaseAuthCallbackServer';
+import {
+  pollForDeviceSession,
+  requestDeviceAuthorization,
+  type DeviceAuthorization,
+} from './supabaseAuthDeviceCode';
+
+/**
+ * Channel-logger contract used by the CLI auth coordinator and supporting
+ * helpers. Shape-compatible with `* as logger from '@logger/logUtils'` so
+ * callers can pass that module directly, but also allows a custom object
+ * literal (e.g. the deferred forwarder below) without depending on the
+ * platform layer.
+ */
+export interface LogBackend {
+  debug(channel: string, message: string): void;
+  info(channel: string, message: string): void;
+  warn(channel: string, message: string): void;
+  error(channel: string, message: string): void;
+}
+
+export interface CliAuthProfile {
+  authenticated: boolean;
+  /**
+   * Health of the stored GoTrue session. Absent when a usable CI relay token
+   * supplies access and the session is never classified. `transient` means the
+   * authentication service could not be reached, so the stored session is
+   * intact and signing in again would be premature.
+   */
+  sessionState?: StoredSessionState;
+  credentialSource?: 'session' | 'relayToken';
+  accountLabel?: string;
+  tier?: string;
+  expiresAt?: string;
+  /** Extra status context, e.g. a rejected or unverifiable CI relay token. */
+  note?: string;
+}
+
+export interface CliLoginOptions {
+  provider?: OAuthProvider;
+  openBrowser?: boolean;
+  selectAccount?: boolean;
+  loginHint?: string;
+  log?: LogBackend;
+  onAuthUrl?: (url: string) => void;
+  manualBrowserHint?: string;
+  signal?: AbortSignal;
+}
+
+export const CLI_MANUAL_AUTH_URL_PROMPT =
+  'Open this URL in a browser that can reach this terminal session:';
+
+export const CLI_MANUAL_AUTH_REMOTE_HINT =
+  'Remote SSH/container users may need to forward the callback port.';
+
+export function formatCliManualAuthUrlMessage(url: string): string {
+  return [CLI_MANUAL_AUTH_URL_PROMPT, url, CLI_MANUAL_AUTH_REMOTE_HINT].join(
+    '\n',
+  );
+}
+
+let coordinator: SupabaseSessionCoordinator | undefined;
+let coordinatorSecrets: PlatformSecrets | undefined;
+let activeAuthLog: LogBackend | undefined;
+const deferredAuthLog: LogBackend = {
+  debug: (channel, message) => activeAuthLog?.debug(channel, message),
+  info: (channel, message) => activeAuthLog?.info(channel, message),
+  warn: (channel, message) => activeAuthLog?.warn(channel, message),
+  error: (channel, message) => activeAuthLog?.error(channel, message),
+};
+
+export function initializeCliSupabaseAuth(
+  log?: LogBackend,
+  storageRoot?: string,
+): SupabaseSessionCoordinator {
+  activeAuthLog = log ?? activeAuthLog;
+  const secrets = tryPlatform()?.secrets ?? getCliSecrets(storageRoot);
+  if (!coordinator || coordinatorSecrets !== secrets) {
+    coordinator = createHostAuthCoordinator({
+      secrets,
+      log: deferredAuthLog,
+    });
+    coordinatorSecrets = secrets;
+  }
+  return coordinator;
+}
+
+export async function signInCliSupabase(
+  options: CliLoginOptions = {},
+): Promise<SupabaseSession> {
+  const provider = options.provider ?? DEFAULT_OAUTH_PROVIDER;
+  const authCoordinator = initializeCliSupabaseAuth();
+  const callbackServer = await startLoopbackCallbackServer(authCoordinator);
+  const redirectTo = callbackServer.redirectTo;
+  const queryParams = buildOAuthQueryParams(provider, options);
+
+  try {
+    options.signal?.throwIfAborted();
+    if (options.selectAccount || options.loginHint) {
+      await authCoordinator.clearSession();
+    }
+    const { data, error } =
+      await SupabaseClient.getClient().auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo,
+          ...(queryParams && { queryParams }),
+        },
+      });
+    const authUrl = requireOAuthRedirectUrl(data, error);
+
+    options.signal?.throwIfAborted();
+    const sessionPromise = callbackServer.waitForSession(options.signal);
+    options.onAuthUrl?.(authUrl);
+    if (options.openBrowser ?? true) {
+      const browserLaunch = openBrowser(
+        authUrl,
+        options.log,
+        options.manualBrowserHint ?? 'texra login --no-browser',
+      );
+      // A completed callback supersedes the launcher result, while callback
+      // failure or cancellation still preempts a stalled launcher.
+      await Promise.race([browserLaunch, sessionPromise.then(() => undefined)]);
+    }
+
+    const session = await sessionPromise;
+    getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
+    return session;
+  } finally {
+    await callbackServer.close();
+  }
+}
+
+function buildOAuthQueryParams(
+  provider: OAuthProvider,
+  options: Pick<CliLoginOptions, 'selectAccount' | 'loginHint'>,
+): Record<string, string> | undefined {
+  const queryParams: Record<string, string> = {};
+  if (options.loginHint) {
+    queryParams[provider === 'github' ? 'login' : 'login_hint'] =
+      options.loginHint;
+  }
+  if (options.selectAccount && provider === 'google') {
+    queryParams.prompt = 'select_account';
+  }
+  return Object.keys(queryParams).length > 0 ? queryParams : undefined;
+}
+
+export interface CliDeviceLoginOptions {
+  /** Called once with the code and verification URL the user must open. */
+  onDeviceCode?: (authorization: DeviceAuthorization) => void;
+  signal?: AbortSignal;
+}
+
+/**
+ * Device-code sign-in for headless terminals (SSH, WSL2, containers) where
+ * the loopback callback server can't be reached. The user approves a short
+ * code from a browser on any device; no callback port is needed here.
+ */
+export async function signInCliSupabaseDeviceCode(
+  options: CliDeviceLoginOptions = {},
+): Promise<SupabaseSession> {
+  const authCoordinator = initializeCliSupabaseAuth();
+  const authorization = await requestDeviceAuthorization({
+    signal: options.signal,
+  });
+  options.onDeviceCode?.(authorization);
+  const exchange = await pollForDeviceSession(authorization, {
+    signal: options.signal,
+  });
+  options.signal?.throwIfAborted();
+  // The token endpoint mints a native GoTrue session (auth-github shape), so
+  // standard Supabase refresh applies — no custom refresh flag.
+  const session = toStorableSupabaseSession(exchange, {
+    defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+  });
+  await authCoordinator.storeSession(session);
+  getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
+  return session;
+}
+
+export async function signOutCliSupabase(): Promise<void> {
+  const authCoordinator = initializeCliSupabaseAuth();
+  await authCoordinator.clearSession();
+  // Included access is a user preference, not a record of who is signed in.
+  // Sign-out drops the credential and clears the caches derived from it; the
+  // access decision is re-resolved against the remaining credentials on the
+  // next request, so a configured TEXRA_RELAY_TOKEN keeps working and a
+  // preference the user set by hand survives the round trip.
+  getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
+  await refreshRemoteAgentCatalogAfterSignOut(
+    invalidateRemoteAgentsAfterSignOut,
+    (message) => activeAuthLog?.warn('cli-auth', message),
+  );
+}
+
+/**
+ * Notice appended to sign-out output when TEXRA_RELAY_TOKEN is configured.
+ * Sign-out only clears the stored GoTrue session — the CLI cannot unset the
+ * parent shell's environment, so relay access stays active until the user
+ * removes the variable themselves. Say so instead of reporting a clean exit.
+ */
+export function relayTokenStillActiveNotice(
+  env: Record<string, string | undefined> = readCliEnv(),
+): string | undefined {
+  if (!getConfiguredRelayToken(env)) return undefined;
+  return `Note: ${RELAY_TOKEN_ENV_VAR} is still set in this environment, so ${INCLUDED_ACCESS.inline} stays active. Unset it (and revoke the token with \`texra auth token revoke\` if it leaked) to fully sign out.`;
+}
+
+/**
+ * TeXRA sign-out outcome text: the caller's signed-out line plus the
+ * relay-token caveat when TEXRA_RELAY_TOKEN keeps included access alive.
+ * Every sign-out surface routes through here so none can report a bare clean
+ * exit while relay access is still active.
+ */
+export function supabaseSignOutOutcomeMessage(signedOutLine: string): string {
+  const relayNotice = relayTokenStillActiveNotice();
+  return relayNotice ? `${signedOutLine}\n${relayNotice}` : signedOutLine;
+}
+
+/**
+ * Fresh access token for the stored CLI session, bypassing any configured
+ * TEXRA_RELAY_TOKEN. Token management (texra setup-token) must authenticate
+ * with a real user session — a CI token cannot mint or revoke tokens.
+ */
+export async function getCliSessionAccessToken(): Promise<string | null> {
+  return initializeCliSupabaseAuth().ensureFreshToken();
+}
+
+/**
+ * Resolves the tier that should back relay usage queries: the stored
+ * session's own tier for a CI relay token (the token's tier may describe a
+ * different account than the session reading its usage, and usage reads run
+ * on the session JWT), and the profile's own tier otherwise.
+ */
+export async function resolveCliUsageTier(
+  profile: Pick<CliAuthProfile, 'credentialSource' | 'tier'>,
+): Promise<string | undefined> {
+  return profile.credentialSource === 'relayToken'
+    ? SupabaseClient.getSessionTier()
+    : profile.tier;
+}
+
+export async function getCliAuthProfile(): Promise<CliAuthProfile> {
+  const authCoordinator = initializeCliSupabaseAuth();
+
+  // A configured CI relay token authenticates relay calls without a session;
+  // report it as the active credential so `texra auth status` / `texra
+  // doctor` explain where access is coming from. Verify it first: a token
+  // the server has rejected (expired, revoked) must not report a signed-in
+  // state the relay will 401. When the check itself fails (offline), stay
+  // optimistic but say the token could not be verified.
+  const relayToken = getConfiguredRelayToken(readCliEnv());
+  let rejectedTokenNote: string | undefined;
+  if (relayToken) {
+    const status = await fetchRelayTokenStatus(relayToken);
+    if (status.state === 'invalid') {
+      // A rejected token behaves as if unset: fall through to the stored
+      // session (which may still be valid), keeping a note that explains
+      // why relay calls won't use the configured token.
+      rejectedTokenNote = `${RELAY_TOKEN_ENV_VAR} is set but the server rejected it (expired or revoked). Create a new token with \`texra setup-token\`.`;
+    } else {
+      return {
+        authenticated: true,
+        credentialSource: 'relayToken',
+        accountLabel: `CI token (${RELAY_TOKEN_ENV_VAR})`,
+        tier: status.state === 'valid' ? status.tier : 'free',
+        ...(status.state === 'unknown' && {
+          note: `Could not check ${RELAY_TOKEN_ENV_VAR} right now (network error).`,
+        }),
+      };
+    }
+  }
+
+  // Classify the stored session instead of asking "is there a token": a
+  // GoTrue outage leaves the session stored and usable once the service
+  // recovers, so reporting it as signed out invites a needless re-login.
+  const sessionState = await SupabaseClient.getStoredSessionState();
+  if (sessionState !== 'authenticated') {
+    return {
+      authenticated: false,
+      sessionState,
+      ...(rejectedTokenNote && {
+        credentialSource: 'relayToken' as const,
+        note: rejectedTokenNote,
+      }),
+    };
+  }
+
+  const session = await authCoordinator.loadSession();
+  let tier = 'free';
+  try {
+    tier = await SupabaseClient.getUserTier();
+  } catch (error) {
+    // Keep status usable even if profile metadata is temporarily unavailable,
+    // but surface the cause so a transient provider/network failure is not
+    // mistaken for a clean 'free' tier.
+    activeAuthLog?.warn(
+      'cli-auth',
+      `Could not resolve usage tier: ${toErrorMessage(error)}`,
+    );
+  }
+  return {
+    authenticated: true,
+    sessionState,
+    credentialSource: 'session',
+    accountLabel: session?.account.label,
+    tier,
+    expiresAt: session ? new Date(session.expiresAt).toISOString() : undefined,
+    ...(rejectedTokenNote && { note: rejectedTokenNote }),
+  };
+}

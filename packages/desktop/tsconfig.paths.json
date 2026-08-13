@@ -1,0 +1,178 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "vscode-jsonrpc/node": [
+        "./../../node_modules/vscode-jsonrpc/lib/node/main"
+      ],
+      "@shared/*": [
+        "./../../src/shared/*",
+        "./../../src/shared/*.ts",
+        "./../../src/shared/*/index.ts"
+      ],
+      "@common/state": ["./../../packages/extension/src/common/state/index.ts"],
+      "@common/state/*": [
+        "./../../packages/extension/src/common/state/*",
+        "./../../packages/extension/src/common/state/*.ts",
+        "./../../packages/extension/src/common/state/*/index.ts"
+      ],
+      "@common/webview": [
+        "./../../packages/extension/src/common/webview/index.ts"
+      ],
+      "@common/webview/*": [
+        "./../../packages/extension/src/common/webview/*",
+        "./../../packages/extension/src/common/webview/*.ts",
+        "./../../packages/extension/src/common/webview/*/index.ts"
+      ],
+      "@common/*": [
+        "./../../src/common/*",
+        "./../../src/common/*.ts",
+        "./../../src/common/*/index.ts"
+      ],
+      "@webview/*": [
+        "./../../packages/extension/src/webview/*",
+        "./../../packages/extension/src/webview/*.ts",
+        "./../../packages/extension/src/webview/*/index.ts"
+      ],
+      "@agent/*": [
+        "./../../src/agent/*",
+        "./../../src/agent/*.ts",
+        "./../../src/agent/*/index.ts"
+      ],
+      "@frontend/*": [
+        "./../../packages/extension/src/frontend/*",
+        "./../../packages/extension/src/frontend/*.ts",
+        "./../../packages/extension/src/frontend/*/index.ts"
+      ],
+      "@hosts/*": [
+        "./../../src/hosts/*",
+        "./../../src/hosts/*.ts",
+        "./../../src/hosts/*/index.ts"
+      ],
+      "@utils/*": [
+        "./../../src/utils/*",
+        "./../../src/utils/*.ts",
+        "./../../src/utils/*/index.ts"
+      ],
+      "@logger/*": [
+        "./../../src/logger/*",
+        "./../../src/logger/*.ts",
+        "./../../src/logger/*/index.ts"
+      ],
+      "@telemetry/*": [
+        "./../../src/telemetry/*",
+        "./../../src/telemetry/*.ts",
+        "./../../src/telemetry/*/index.ts"
+      ],
+      "@transcript": ["./../../src/transcript/index.ts"],
+      "@transcript/*": [
+        "./../../src/transcript/*",
+        "./../../src/transcript/*.ts",
+        "./../../src/transcript/*/index.ts"
+      ],
+      "@latex/*": [
+        "./../../src/latex/*",
+        "./../../src/latex/*.ts",
+        "./../../src/latex/*/index.ts"
+      ],
+      "@commands/*": [
+        "./../../packages/extension/src/commands/*",
+        "./../../packages/extension/src/commands/*.ts",
+        "./../../packages/extension/src/commands/*/index.ts"
+      ],
+      "@resources/*": [
+        "./../../packages/extension/resources/*",
+        "./../../packages/extension/resources/*.ts",
+        "./../../packages/extension/resources/*/index.ts"
+      ],
+      "@model/*": [
+        "./../../src/model/*",
+        "./../../src/model/*.ts",
+        "./../../src/model/*/index.ts"
+      ],
+      "@skills/*": [
+        "./../../src/skills/*",
+        "./../../src/skills/*.ts",
+        "./../../src/skills/*/index.ts"
+      ],
+      "@housekeeping/*": [
+        "./../../src/housekeeping/*",
+        "./../../src/housekeeping/*.ts",
+        "./../../src/housekeeping/*/index.ts"
+      ],
+      "@progressView/*": [
+        "./../../packages/extension/src/progressView/*",
+        "./../../packages/extension/src/progressView/*.ts",
+        "./../../packages/extension/src/progressView/*/index.ts"
+      ],
+      "@settingsView/*": [
+        "./../../packages/extension/src/settingsView/*",
+        "./../../packages/extension/src/settingsView/*.ts",
+        "./../../packages/extension/src/settingsView/*/index.ts"
+      ],
+      "@extensionSchemas/*": [
+        "./../../packages/extension/src/schemas/*",
+        "./../../packages/extension/src/schemas/*.ts",
+        "./../../packages/extension/src/schemas/*/index.ts"
+      ],
+      "@replacement/*": [
+        "./../../src/replacement/*",
+        "./../../src/replacement/*.ts",
+        "./../../src/replacement/*/index.ts"
+      ],
+      "@tools/*": [
+        "./../../src/tools/*",
+        "./../../src/tools/*.ts",
+        "./../../src/tools/*/index.ts"
+      ],
+      "@eventBus/*": [
+        "./../../src/eventBus/*",
+        "./../../src/eventBus/*.ts",
+        "./../../src/eventBus/*/index.ts"
+      ],
+      "@auth/*": [
+        "./../../src/auth/*",
+        "./../../src/auth/*.ts",
+        "./../../src/auth/*/index.ts"
+      ],
+      "@platform/*": [
+        "./../../src/platform/*",
+        "./../../src/platform/*.ts",
+        "./../../src/platform/*/index.ts"
+      ],
+      "turndown-plugin-gfm": ["./../../src/types/ambient.d.ts"],
+      "data-uri-to-buffer": [
+        "./../../node_modules/data-uri-to-buffer/dist/node.d.ts"
+      ],
+      "@openrouter/sdk": [
+        "./../../node_modules/@openrouter/sdk/esm/index.d.ts"
+      ],
+      "@openrouter/sdk/models": [
+        "./../../node_modules/@openrouter/sdk/esm/models/index.d.ts"
+      ],
+      "@openrouter/sdk/models/errors": [
+        "./../../node_modules/@openrouter/sdk/esm/models/errors/index.d.ts"
+      ],
+      "@controllers/*": [
+        "./../../src/controllers/*",
+        "./../../src/controllers/*.ts",
+        "./../../src/controllers/*/index.ts"
+      ],
+      "@test/*": [
+        "./../../src/test-kernel/*",
+        "./../../src/test-kernel/*.ts",
+        "./../../src/test-kernel/*/index.ts"
+      ],
+      "@cli/*": [
+        "./../../packages/cli/src/*",
+        "./../../packages/cli/src/*.ts",
+        "./../../packages/cli/src/*/index.ts"
+      ],
+      "@desktop/*": [
+        "./../../packages/desktop/src/*",
+        "./../../packages/desktop/src/*.ts",
+        "./../../packages/desktop/src/*/index.ts"
+      ]
+    }
+  }
+}

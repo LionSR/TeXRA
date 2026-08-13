@@ -1,0 +1,127 @@
+name: Auto-label PR
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: auto-label-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply type and area labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          labels=()
+
+          # Strip leading bracketed bot tag like "[codex] " before prefix matching
+          # so that "[codex] fix: ..." derives bug from the rest of the title.
+          stripped="${TITLE#\[*\] }"
+          # Normalize Conventional Commits breaking-change marker so `feat!:` and
+          # `feat(scope)!:` match the same as `feat:` / `feat(scope):`.
+          stripped="${stripped/!:/:}"
+
+          # Type from conventional-commit prefix in title. The repo uses flat
+          # type labels (bug / enhancement / tech-debt / documentation) rather
+          # than a `type:*` prefix, matching GitHub's default labels.
+          # chore/ci/test/style/build prefixes get no type label — those PRs
+          # rely on area labels alone.
+          shopt -s nocasematch
+          case "$stripped" in
+            'fix:'*|'fix('*|'bug:'*)
+              labels+=('bug') ;;
+            'feat:'*|'feat('*)
+              labels+=('enhancement') ;;
+            'refactor:'*|'refactor('*|'perf:'*|'perf('*)
+              labels+=('tech-debt') ;;
+            'docs:'*|'docs('*)
+              labels+=('documentation') ;;
+            'chore(deps'*|'build(deps'*)
+              labels+=('area:deps') ;;
+          esac
+          shopt -u nocasematch
+
+          # Area from changed file paths.
+          # `gh pr view --json files` caps at 100 entries (cli/cli#5368), so paginate
+          # the REST API to get the full list for large PRs.
+          files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')
+          # Use here-strings (`<<<`) instead of `printf | grep` to avoid SIGPIPE
+          # bubbling under `set -o pipefail`: when `grep -q` matches early it
+          # closes the pipe, the upstream `printf` exits 141, and pipefail
+          # returns 141 — which the caller would misread as "no match". Here-
+          # strings avoid the pipeline entirely.
+          grep_files() { grep -qE "$1" <<<"$files"; }
+
+          # area:model-handlers covers handlers + registry + the src/model/ tree.
+          # Check it before area:agent-runtime so PRs that touch only modelHandlers
+          # don't double-tag.
+          grep_files '^src/agent/(modelHandlers|modelRegistry)/' && labels+=('area:model-handlers') || true
+          grep_files '^src/model/' && labels+=('area:model-handlers') || true
+          # area:agent-runtime: src/agent/ (excluding modelHandlers/modelRegistry)
+          # plus src/tools/ (per the label description: "...delegation, tools...").
+          # Filter into an intermediate variable so the two-stage check has no
+          # internal pipe (same SIGPIPE concern as above).
+          non_model_agent=$(grep -vE '^src/agent/(modelHandlers|modelRegistry)/' <<<"$files" || true)
+          if grep -qE '^src/agent/' <<<"$non_model_agent"; then
+            labels+=('area:agent-runtime')
+          fi
+          grep_files '^src/tools/' && labels+=('area:agent-runtime') || true
+          grep_files '^src/latex/' && labels+=('area:latex-workflow') || true
+          grep_files '^(src|packages/extension/src)/progressView/' && labels+=('area:progress-view') || true
+          # area:webview covers all webview-side and webview-adjacent UI code:
+          # webview frontends, the settings view, extension-host UI orchestration
+          # (packages/extension/src/frontend/), and the shared webview base classes.
+          grep_files '^(src|packages/extension/src)/(webview|settingsView|frontend)/' && labels+=('area:webview') || true
+          grep_files '^src/common/webview/' && labels+=('area:webview') || true
+          grep_files '^(docs/|README\.md|CHANGELOG\.md|resources/walkthroughs/|packages/extension/resources/walkthroughs/)' && labels+=('area:docs') || true
+          grep_files '^\.github/workflows/' && labels+=('area:ci') || true
+          # Build/lint/tsconfig at the repo root also belong to area:ci.
+          grep_files '^((packages/extension/)?(esbuild|vite|webpack)|eslint|prettier|babel|jest|rollup)\.config\.(mjs|cjs|js|ts)$' && labels+=('area:ci') || true
+          grep_files '^(packages/extension/)?tsconfig(\..+)?\.json$' && labels+=('area:ci') || true
+          grep_files '^(package(-lock)?\.json|\.github/dependabot\.yml)$' && labels+=('area:deps') || true
+
+          if [ ${#labels[@]} -eq 0 ]; then
+            echo "No labels matched."
+            exit 0
+          fi
+
+          # Dedupe.
+          mapfile -t unique < <(printf '%s\n' "${labels[@]}" | sort -u)
+
+          # Type labels (bug/enhancement/tech-debt/documentation) are mutually
+          # exclusive in practice. If we computed a desired type, strip any of
+          # the other three currently applied so retitles like `chore:` -> `fix:`
+          # don't leave stale labels. If we computed no type (bare title or chore),
+          # leave existing type labels alone so a manual override is preserved.
+          # area:* and risk:*/status:*/etc. are multi-select; never strip those.
+          desired_type=""
+          for l in "${unique[@]}"; do
+            case "$l" in bug|enhancement|tech-debt|documentation) desired_type="$l"; break ;; esac
+          done
+          if [ -n "$desired_type" ]; then
+            current_types=$(gh pr view "$PR" --repo "$REPO" --json labels \
+              --jq '.labels[] | select(.name == "bug" or .name == "enhancement" or .name == "tech-debt" or .name == "documentation") | .name')
+            while IFS= read -r t; do
+              [ -z "$t" ] && continue
+              if [ "$t" != "$desired_type" ]; then
+                gh pr edit "$PR" --repo "$REPO" --remove-label "$t" 2>&1 | sed "s/^/[remove $t] /" || true
+              fi
+            done <<< "$current_types"
+          fi
+
+          # Apply each label individually so a single missing label doesn't abort the rest.
+          for l in "${unique[@]}"; do
+            gh pr edit "$PR" --repo "$REPO" --add-label "$l" 2>&1 | sed "s/^/[$l] /" || true
+          done

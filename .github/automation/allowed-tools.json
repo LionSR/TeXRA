@@ -1,0 +1,7 @@
+{
+  "claude-interactive": "Read,Edit,Write,Glob,Grep,Bash(corepack pnpm install),Bash(pnpm install),Bash(npm run typecheck),Bash(npm run lint),Bash(npm run compile:fast),Bash(npm run compile:safe),Bash(npm run build:fast),Bash(npm run check:*),Bash(npm run test),Bash(node scripts/*),Bash(git diff *),Bash(git status),Bash(gh pr:*),Bash(gh issue:*),mcp__github__*",
+  "quality-improver": "mcp__github__*,Bash(find:*),Bash(grep:*),Bash(wc:*),Bash(jq:*),Bash(git log:*),Bash(git diff:*)",
+  "issue-tracker": "mcp__github__*,Bash(git diff:*),Bash(git log:*),Bash(git show:*)",
+  "issue-tree": "mcp__github__*",
+  "github-read": "Read,Glob,Grep,mcp__github__*"
+}

@@ -1,0 +1,225 @@
+% ====================
+% Dependencies
+% ====================
+
+\RequirePackage{exscale}
+\RequirePackage{ragged2e}
+\RequirePackage{changepage}
+%\RequirePackage{fontspec}
+\RequirePackage{marvosym}
+\RequirePackage{tikz}
+\RequirePackage{soul}
+
+% ====================
+% Macros
+% ====================
+\newcommand{\setconferencename}[1]
+{
+	\newcommand{\conference}{#1}
+}
+\newcommand{\setmail}[1]
+{
+	\newcommand{\mail}{\href{mailto:#1}{#1}}
+}
+\newcommand{\setwebsite}[1]
+{
+	\newcommand{\website}{\href{#1}{#1}}
+}
+\newcommand{\setlogo}[1]
+{
+	\newcommand{\logoimage}{\includegraphics[width=.9\textwidth,height=.6\textwidth,keepaspectratio]{#1}}
+}
+\newcommand{\roundbox}[2][]
+{
+	\tikz[overlay]\node[fill=darkgray!15,inner sep=2pt, anchor=text, rectangle, rounded corners=1mm,#1] {#2};\phantom{#2}
+}
+
+\makeatletter
+\newcommand{\highlight}[1]
+{%
+	\let\set@color\beamerorig@set@color%
+	\let\reset@color\beamerorig@reset@color%
+	\sethlcolor{darkblue}%
+	{%
+		~\color{white}%
+		\hl{#1}%
+		~%
+	}%
+}
+\makeatother
+
+% ====================
+% Fonts
+% ====================
+
+\usefonttheme{professionalfonts}
+
+\setbeamerfont{headline title}{size=\huge,series=\bfseries}
+\setbeamerfont{headline author}{size=\large}
+\setbeamerfont{headline institute}{size=\normalsize}
+\setbeamerfont{block title}{size=\large,series=\bfseries}
+\setbeamerfont{heading}{series=\bfseries}
+\setbeamerfont{caption}{size=\small}
+
+
+% ====================
+% Macros
+% ====================
+
+\newcommand{\samelineand}{\qquad}
+
+% ====================
+% Elements
+% ====================
+
+% List
+\makeatletter
+\def\@listi{\leftmargin\leftmarginii
+\topsep 1ex % spacing before
+\parsep 0\p@ \@plus\p@
+\itemsep 0.5ex} % spacing between
+\makeatother
+
+% Itemize
+
+\setbeamertemplate{itemize item}{\raise0.5ex \hbox{\vrule width 0.5ex height 0.5ex}}
+\setbeamertemplate{itemize subitem}{\raise0.3ex \hbox{\vrule width 0.5ex height 0.5ex}}
+\setbeamertemplate{itemize subsubitem}{\raise0.2ex \hbox{\vrule width 0.5ex height 0.5ex}}
+
+% Enumerate
+
+\setbeamertemplate{enumerate item}{\insertenumlabel.}
+\setbeamertemplate{enumerate subitem}{\insertsubenumlabel.}
+\setbeamertemplate{enumerate subsubitem}{\insertsubsubenumlabel.}
+
+% Equation
+\setlength\belowdisplayshortskip{2ex}
+
+% Caption
+\setbeamertemplate{caption}[numbered]
+\setbeamertemplate{caption label separator}[period]
+\setlength{\abovecaptionskip}{2ex}
+\setlength{\belowcaptionskip}{1ex}
+
+% Bibliography
+\setbeamertemplate{bibliography item}[text]
+
+% Navigation
+\beamertemplatenavigationsymbolsempty
+
+% ====================
+% Components
+% ====================
+
+% Heading
+\newcommand\heading[1]
+{%
+	\par\bigskip
+	{\usebeamerfont{heading}\usebeamercolor[fg]{heading}{#1}}\par\smallskip
+}
+
+% Headline
+\setbeamertemplate{headline}
+{
+	\begin{beamercolorbox}{headline}
+	\vspace{8ex}\\
+	\begin{columns}[c]
+	{
+		\ifdefined\logoimage
+			\begin{column}{.04\paperwidth}
+			\end{column}
+			\begin{column}{.725\paperwidth}
+				\centering
+				{\usebeamerfont{headline title}\usebeamercolor[fg]{headline title}\inserttitle\\[1ex]}
+				{\usebeamerfont{headline author}\usebeamercolor[fg]{headline author}\insertauthor\\[1ex]}
+				{\usebeamerfont{headline institute}\usebeamercolor[fg]{headline institute}\insertinstitute\\[1ex]}
+			\end{column}
+			\begin{column}{.25\paperwidth}
+				\begin{center}
+					\logoimage
+				\end{center}
+			\end{column}
+			\begin{column}{.03\paperwidth}
+			\end{column}
+		\else
+			\begin{column}{.05\paperwidth}
+			\end{column}
+			\begin{column}{.9\paperwidth}
+				\centering
+				{\usebeamerfont{headline title}\usebeamercolor[fg]{headline title}\inserttitle\\[1ex]}
+				{\usebeamerfont{headline author}\usebeamercolor[fg]{headline author}\insertauthor\\[1ex]}
+				{\usebeamerfont{headline institute}\usebeamercolor[fg]{headline institute}\insertinstitute\\[1ex]}
+			\end{column}
+			\begin{column}{.05\paperwidth}
+			\end{column}
+		\fi
+		}
+		\end{columns}
+		\vspace{1ex}
+		\ifbeamercolorempty[bg]{headline rule}{}
+		{
+			\begin{beamercolorbox}[wd=\paperwidth,colsep=0.5ex]{headline rule}\end{beamercolorbox}
+		}
+	\end{beamercolorbox}
+}
+
+
+% Block
+\setbeamertemplate{block begin}
+{
+	\begin{beamercolorbox}[colsep*=0ex,dp=2ex,center]{block title}
+		\vskip0pt
+		\usebeamerfont{block title}\insertblocktitle
+% 		\vskip-1.25ex
+		\vskip-1.5ex
+		\begin{beamercolorbox}[colsep=0.025ex]{block separator}\end{beamercolorbox}
+	\end{beamercolorbox}
+	{\parskip0pt\par}
+	\usebeamerfont{block body}
+	\vskip-0.5ex
+	\begin{beamercolorbox}[colsep*=0ex]{block body}
+	\justifying
+	\setlength{\parskip}{1ex}
+	\vskip-2ex
+}
+\setbeamertemplate{block end}
+{
+	\end{beamercolorbox}
+	\vskip0pt
+	\vspace*{2ex}
+}
+
+% Alert Block
+\setbeamertemplate{block alerted begin}
+{
+	\begin{beamercolorbox}[colsep*=0ex,dp=2ex,center]{block alerted title}
+		\vskip0.5ex
+		\usebeamerfont{block title}\insertblocktitle
+		\vskip-1.25ex
+		\begin{beamercolorbox}[colsep=0.025ex]{block alerted separator}
+		\end{beamercolorbox}
+	\end{beamercolorbox}
+	{\parskip0pt\par}
+	\usebeamerfont{block body}
+	\vskip-0.5ex
+	\begin{beamercolorbox}[colsep*=0ex]{block alerted body}
+	\justifying
+	\begin{adjustwidth}{1ex}{1ex}
+	\setlength{\parskip}{1ex}
+	\vskip-2ex
+}
+\setbeamertemplate{block alerted end}
+{
+	\end{adjustwidth}
+	\vskip1ex
+	\end{beamercolorbox}
+	\vskip0pt
+	\vspace*{2ex}
+}
+
+% Footline
+\newcommand{\footline}[3]
+{%
+	\makebox[0.98\linewidth][c]{\rlap{#1}\hfill{#2}\hfill\llap{#3}}%
+}
+

@@ -1,0 +1,32 @@
+{
+  "name": "texra-docs",
+  "version": "0.3.0",
+  "main": "index.js",
+  "scripts": {
+    "sync-legal": "cp ../TERMS_OF_SERVICE.md terms.md",
+    "sync-changelog": "cp ../CHANGELOG.md changelog.md",
+    "sync-content": "npm run sync-legal && npm run sync-changelog",
+    "check:content": "node scripts/check-root-docs.mjs",
+    "dev": "npm run check:content && npm run sync-content && vitepress dev .",
+    "docs:build": "npm run check:content && npm run sync-content && vitepress build .",
+    "docs:serve": "vitepress serve ."
+  },
+  "keywords": [
+    "texra",
+    "documentation",
+    "academic-writing",
+    "vscode-extension",
+    "ai"
+  ],
+  "author": "TeXRA Team",
+  "license": "MIT",
+  "description": "Documentation for TeXRA - an AI theorist for VS Code and the terminal",
+  "devDependencies": {
+    "@awesome.me/webawesome": "^3.11.0",
+    "@fortawesome/free-solid-svg-icons": "^7.3.1",
+    "mermaid": "^11.16.0",
+    "vitepress": "^2.0.0-alpha.18",
+    "vitepress-plugin-mermaid": "^2.0.17"
+  },
+  "type": "module"
+}

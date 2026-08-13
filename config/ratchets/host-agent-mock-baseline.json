@@ -1,0 +1,200 @@
+{
+  "semantics": "Distinct (file, form, specifier) mock() and doMock() call sites (on vi or on a createModuleMocks() recorder) in host-side (CLI + desktop) test-kernel suites (src/test-kernel/cli/**, src/test-kernel/desktop/**) that mock an internal @agent/* module specifier. Each site pins @agent's current internal module layout from outside src/agent, per issue #7684 QA-2 / #9731. The ratchet fails on any live tuple absent from this baseline (new edge) and on any baseline tuple with no live site (stale headroom); regenerating to remove stale entries is welcome and should shrink this file.",
+  "sites": [
+    {
+      "file": "src/test-kernel/cli/AgentResolution.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/AgentsCommand.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/AgentsRunCommand.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/AgentsRunCommand.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/ChatDefaults.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/chatSessionController.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/runtime/executeAgent"
+    },
+    {
+      "file": "src/test-kernel/cli/chatSessionController.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/runtime/resolveAndResumeStream"
+    },
+    {
+      "file": "src/test-kernel/cli/chatSessionController.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/runtime/resumeQueuedToolUse"
+    },
+    {
+      "file": "src/test-kernel/cli/chatSessionController.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/runtime/runAgent"
+    },
+    {
+      "file": "src/test-kernel/cli/chatSessionController.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/runtime/SessionHandle"
+    },
+    {
+      "file": "src/test-kernel/cli/chatSessionController.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/runtime/terminalResultToast"
+    },
+    {
+      "file": "src/test-kernel/cli/chatSessionController.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/CliInitPlatform.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/index/platformAgentDirectories"
+    },
+    {
+      "file": "src/test-kernel/cli/CliSupabaseAuth.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/ConfigCommand.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/History.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/InitCommand.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/MultiAgentRunCommand.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/MultiAgentRunCommand.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/OnboardingGate.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/ResumeCommand.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/runtime/SessionResumeRetrieval"
+    },
+    {
+      "file": "src/test-kernel/cli/ResumeCommand.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/RunChatConfig.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/RunExecution.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/runtime/runAgent"
+    },
+    {
+      "file": "src/test-kernel/cli/RunExecution.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/RunProgressRenderer.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/TranscriptSessionPolicy.vitest.ts",
+      "form": "doMock",
+      "specifier": "@agent/runtime/runAgent"
+    },
+    {
+      "file": "src/test-kernel/cli/TuiHostInteractionsCancelForStream.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/runtime/SessionHandle"
+    },
+    {
+      "file": "src/test-kernel/cli/WorkflowRunCommand.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/WorkflowRunCommand.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts",
+      "form": "doMock",
+      "specifier": "@agent/runtime/executeAgent"
+    },
+    {
+      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts",
+      "form": "doMock",
+      "specifier": "@agent/runtime/runAgent"
+    },
+    {
+      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts",
+      "form": "doMock",
+      "specifier": "@agent/runtime/SessionResumeRetrieval"
+    },
+    {
+      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts",
+      "form": "doMock",
+      "specifier": "@agent/storage/detectWaitingStreams"
+    },
+    {
+      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",
+      "form": "doMock",
+      "specifier": "@agent/runtime/executeAgent"
+    },
+    {
+      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",
+      "form": "doMock",
+      "specifier": "@agent/runtime/runAgent"
+    },
+    {
+      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",
+      "form": "doMock",
+      "specifier": "@agent/runtime/SessionResumeRetrieval"
+    },
+    {
+      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",
+      "form": "doMock",
+      "specifier": "@agent/storage/detectWaitingStreams"
+    },
+    {
+      "file": "src/test-kernel/desktop/DesktopToolEditApproval.vitest.ts",
+      "form": "doMock",
+      "specifier": "@agent/runtime/RunContext"
+    }
+  ]
+}

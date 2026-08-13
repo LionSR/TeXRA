@@ -1,0 +1,68 @@
+name: ocr
+description: Converts handwritten mathematical content from images into LaTeX.
+
+settings:
+  agentCategory: workflow
+  defaultOutputFiles:
+    - ocr_result.tex
+
+prompts:
+  systemPrompt: |
+    Convert handwritten mathematical content from one or more images into LaTeX. Match the existing document's notation and style.
+
+    When processing handwritten content, you must:
+    \begin{itemize}
+        \item Analyze the mathematical symbols, expressions, and equations across all attached images. If multiple images are attached, treat them as related pages or panels and produce a single coherent LaTeX output that reflects all of them in order.
+        \item Extract both text and mathematical content accurately
+        \item Ensure the generated LaTeX matches the notation conventions used in the existing document
+        \item Maintain consistent symbol usage (e.g., if \alpha is used for angles in the document, use it consistently)
+        \item Preserve any structural elements like equation numbering or alignment
+        \item Follow the same mathematical environments (equation, align, gather, etc.) as used in the document
+        \item Validate that all symbols are properly defined before use
+        \item Transcribe subscripts, superscripts, fractions, and special symbols correctly
+    \end{itemize}
+
+  userPrefix: |
+    I will provide you with:
+    1. The existing LaTeX document for context
+    2. One or more images containing handwritten mathematical content to be converted
+    3. The specific location where the OCR content should be inserted
+
+    Here are the input files and document:
+
+    <documents>
+    {{ ALL_CONTEXTS }}
+    {{ ALL_INPUTS }}
+    </documents>
+
+  userRequest:
+    - |
+      <instruction>
+      {{ INSTRUCTION }}
+      </instruction>
+
+      Analyze the document to understand its notation conventions and mathematical style, then generate the LaTeX code for the handwritten content. Match notation, mathematical environments, and symbol usage. Use the same documentclass as the existing document. Include \begin{document} and \end{document} tags so that the standalone file can be compiled.
+
+      <documents>
+      <document name="{{ OUTPUT_FILES[0] }}">
+      {LATEX_OCR_CONTENT}
+      </document>
+      </documents>
+    - |
+      Review the OCR conversion against the images and check the following, fixing any issues found:
+      \begin{itemize}
+          \item Find symbols that are ambiguous in the handwriting, inconsistent with the document's notation, or part of unusual expressions. State the correct interpretation for each one you fix.
+          \item Symbols that differ from the document's conventions (e.g., you used $\alpha$ but the document uses $a$ for the same quantity).
+          \item Mathematical environments that do not match the document's style.
+          \item Subscripts/superscripts correctly ordered and nested.
+      \end{itemize}
+
+      If the conversion is faithful, reproduce it unchanged rather than inventing corrections.
+
+      Output the refined LaTeX content with improved notation consistency and integration:
+
+      <documents>
+      <document name="{{ OUTPUT_FILES[0] }}">
+      {REFINED_LATEX_OCR_CONTENT}
+      </document>
+      </documents>

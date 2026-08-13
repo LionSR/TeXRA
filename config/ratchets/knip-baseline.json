@@ -1,0 +1,80 @@
+{
+  "semantics": "Per-symbol baseline of knip dead-code findings (files/exports/types/duplicate-export groups), each identified by (file, category, name) -- never by line number, so unrelated edits that shift lines never spuriously mark a baseline entry as fixed. The ratchet (scripts/check-dead-code-ratchet.mjs) fails only when the current knip run contains a finding not in this list. Removing entries here is always welcome (it means the dead code was cleaned up); a genuinely new unused file/export/type must either be deleted or, if intentionally kept, added here in the same PR. Regenerate by piping `knip --reporter json` through extractFindings() and sorting with compareFindings(); do not hand-edit into disorder.",
+  "findings": [
+    {
+      "file": "packages/desktop/src/main/desktopNavigationPolicy.ts",
+      "category": "exports",
+      "name": "isAllowedExternalUrl"
+    },
+    {
+      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
+      "category": "exports",
+      "name": "LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE"
+    },
+    {
+      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
+      "category": "exports",
+      "name": "__resetKeychainStateForTests"
+    },
+    {
+      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
+      "category": "exports",
+      "name": "getSecretStorageMode"
+    },
+    {
+      "file": "packages/desktop/src/main/platform/warningDialog.ts",
+      "category": "exports",
+      "name": "getDesktopWarningParentWindow"
+    },
+    {
+      "file": "packages/desktop/src/shared/desktopCommandSurface.ts",
+      "category": "exports",
+      "name": "DESKTOP_COMMAND_IDS"
+    },
+    {
+      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
+      "category": "exports",
+      "name": "executeFileCommand"
+    },
+    {
+      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
+      "category": "exports",
+      "name": "executeProjectCommand"
+    },
+    {
+      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
+      "category": "exports",
+      "name": "fetchDiagnosticsForFile"
+    },
+    {
+      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
+      "category": "exports",
+      "name": "getGoalState"
+    },
+    {
+      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
+      "category": "exports",
+      "name": "getHoverInfo"
+    },
+    {
+      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
+      "category": "exports",
+      "name": "getTermGoal"
+    },
+    {
+      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
+      "category": "exports",
+      "name": "navigateToFirstError"
+    },
+    {
+      "file": "packages/trace-viewer/vite.standalone.config.ts",
+      "category": "files",
+      "name": "packages/trace-viewer/vite.standalone.config.ts"
+    },
+    {
+      "file": "src/test-kernel/support/setupFakePlatform.ts",
+      "category": "files",
+      "name": "src/test-kernel/support/setupFakePlatform.ts"
+    }
+  ]
+}

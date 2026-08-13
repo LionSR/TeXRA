@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'daily'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+    ignore:
+      - dependency-name: '@types/node'
+      - dependency-name: '@types/vscode'
+    # Aggregate routine updates into as few PRs as possible: one grouped PR for
+    # all production minor/patch bumps, one for all dev minor/patch bumps. Major
+    # bumps stay individual (reviewed one at a time). Replaces the old narrow
+    # eslint/prettier-only group, which the development-dependencies group now
+    # subsumes.
+    groups:
+      production-dependencies:
+        dependency-type: 'production'
+        update-types:
+          - 'minor'
+          - 'patch'
+      development-dependencies:
+        dependency-type: 'development'
+        update-types:
+          - 'minor'
+          - 'patch'

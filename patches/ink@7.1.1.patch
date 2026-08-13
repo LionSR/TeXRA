@@ -1,0 +1,164 @@
+diff --git a/build/ink.js b/build/ink.js
+index 24d45ec..113ce4b 100644
+--- a/build/ink.js
++++ b/build/ink.js
+@@ -276,18 +276,39 @@ export default class Ink {
+         // error but consumers never call waitUntilExit().
+         void this.exitPromise.catch(noop);
+     }
++    resizeTimer = undefined;
+     resized = () => {
+         const currentWidth = getWindowSize(this.options.stdout).columns;
+-        if (currentWidth < this.lastTerminalWidth) {
+-            // We clear the screen when decreasing terminal width to prevent duplicate overlapping re-renders.
+-            this.log.clear();
+-            this.lastOutput = '';
+-            this.lastOutputToRender = '';
+-        }
+         this.calculateLayout();
+         dom.emitLayoutListeners(this.rootNode);
+-        this.onRender();
+-        this.lastTerminalWidth = currentWidth;
++        if (currentWidth === this.lastTerminalWidth && this.resizeTimer === undefined) {
++            this.onRender();
++            return;
++        }
++        // Full repaint on width changes, debounced. Ink normally erases the bottom live
++        // region by line count, but after the emulator reflows soft-wrapped lines
++        // at the new width no count is correct: too small leaves residue, too large
++        // walks up and erases the <Static> header above. The reflow/scroll geometry
++        // is owned by the emulator and not observable through a write-only stdout,
++        // so the only terminal-independent fix is to redraw from a known origin:
++        // a full repaint homes the cursor and clears screen+scrollback, then we
++        // reprint fullStaticOutput (header + finalized history, reflowed) and let
++        // onRender draw the live region below it. Layout listeners still fire
++        // synchronously above so components see the new terminal width immediately;
++        // only the expensive clear+repaint is debounced so a drag-storm of resize
++        // events collapses into a single repaint (TeXRA patch).
++        if (this.resizeTimer) {
++            clearTimeout(this.resizeTimer);
++        }
++        this.resizeTimer = setTimeout(this.repaintAfterResize, 24);
++        this.resizeTimer.unref?.();
++    };
++    repaintAfterResize = () => {
++        this.resizeTimer = undefined;
++        if (this.isUnmounted) {
++            return;
++        }
++        this.repaint({ clearScrollback: true });
+     };
+     resolveExitPromise = () => { };
+     rejectExitPromise = () => { };
+@@ -493,6 +514,13 @@ export default class Ink {
+             return;
+         }
+         this.isUnmounting = true;
++        // Cancel any pending debounced resize repaint so it can't fire after
++        // teardown (repaintAfterResize already guards on isUnmounted; this also
++        // drops the dangling timer reference). (TeXRA patch)
++        if (this.resizeTimer) {
++            clearTimeout(this.resizeTimer);
++            this.resizeTimer = undefined;
++        }
+         if (this.beforeExitHandler) {
+             process.off('beforeExit', this.beforeExitHandler);
+             this.beforeExitHandler = undefined;
+@@ -660,6 +688,54 @@ export default class Ink {
+             this.log.sync(this.lastOutputToRender || this.lastOutput + '\n');
+         }
+     }
++    repaint(options = {}) {
++        if (this.isUnmounted) {
++            return;
++        }
++        if (options.emitLayout !== false) {
++            this.calculateLayout();
++            dom.emitLayoutListeners(this.rootNode);
++        }
++        const startTime = performance.now();
++        const { output, outputHeight, staticOutput } = render(this.rootNode, this.isScreenReaderEnabled);
++        this.options.onRender?.({ renderTime: performance.now() - startTime });
++        const hasStaticOutput = staticOutput && staticOutput !== '\n';
++        // ansi-escapes@7.3.0 exposes clearViewport for visible-screen-only
++        // repaint callers; transcript switches request clearScrollback.
++        const clearSequence = options.clearScrollback === true
++            ? ansiEscapes.clearTerminal
++            : ansiEscapes.clearViewport;
++        const nextStaticOutput = hasStaticOutput ? staticOutput : '';
++        const previousStaticOutput = options.preserveStatic === false
++            ? ''
++            : (this.fullStaticOutput ?? '');
++        if (options.preserveStatic === false) {
++            this.fullStaticOutput = nextStaticOutput;
++        }
++        else if (hasStaticOutput) {
++            this.fullStaticOutput += staticOutput;
++        }
++        const outputToRender = outputHeight >= getWindowSize(this.options.stdout).rows
++            ? output
++            : output + '\n';
++        this.log.reset();
++        // Wrap the clear+reprint in synchronized output (DECSET 2026) when the
++        // terminal supports it (ink 7.1.0's bsu/esu helpers) so the emulator
++        // shows the new frame atomically instead of mid-repaint tearing. (TeXRA patch)
++        const sync = this.shouldSync();
++        if (sync) {
++            this.options.stdout.write(bsu);
++        }
++        this.options.stdout.write(clearSequence + previousStaticOutput + nextStaticOutput + outputToRender);
++        if (sync) {
++            this.options.stdout.write(esu);
++        }
++        this.log.sync(outputToRender);
++        this.lastOutput = output;
++        this.lastOutputToRender = outputToRender;
++        this.lastOutputHeight = outputHeight;
++        this.lastTerminalWidth = getWindowSize(this.options.stdout).columns;
++    }
+     patchConsole() {
+         if (this.options.debug) {
+             return;
+diff --git a/build/ink.d.ts b/build/ink.d.ts
+index db6a701..d94e9b5 100644
+--- a/build/ink.d.ts
++++ b/build/ink.d.ts
+@@ -125,6 +125,11 @@ export default class Ink {
+     waitUntilExit(): Promise<unknown>;
+     waitUntilRenderFlush(): Promise<void>;
+     clear(): void;
++    repaint(options?: {
++        clearScrollback?: boolean;
++        emitLayout?: boolean;
++        preserveStatic?: boolean;
++    }): void;
+     patchConsole(): void;
+     registerInputControl(pauseInput: () => void, resumeInput: () => void): void;
+     suspendTerminal(callback: () => void | Promise<void>): Promise<void>;
+diff --git a/build/render.js b/build/render.js
+index 6f185f6..faffcb3 100644
+--- a/build/render.js
++++ b/build/render.js
+@@ -32,6 +32,7 @@ const render = (node, options) => {
+             instance.unmount();
+         },
+         clear: instance.clear,
++        repaint: instance.repaint,
+     };
+ };
+ export default render;
+diff --git a/build/render.d.ts b/build/render.d.ts
+index 867edca..d133a98 100644
+--- a/build/render.d.ts
++++ b/build/render.d.ts
+@@ -168,6 +168,10 @@ export type Instance = {
+     Clear output.
+     */
+     clear: () => void;
++    /**
++    Repaint output from a known terminal origin.
++    */
++    repaint: Ink['repaint'];
+ };
+ /**
+ Mount a component and render the output.

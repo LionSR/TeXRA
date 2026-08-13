@@ -1,0 +1,17 @@
+# Prompt template for polishing user instruction text.
+# Used by polishModel.ts: not an agent definition.
+prompts:
+  userRequest: |
+    Correct any spelling errors, typos, grammatical mistakes, or punctuation issues. Preserve the original meaning and tone without adding new content or changing the structure unless necessary for clarity.
+
+    {% if FILE_CONTEXT %}{{ FILE_CONTEXT }}This text will be used as an instruction for editing the files mentioned above. If the text contains references to these files, make them match the exact filenames.
+
+    {% endif %}Apply these formatting rules:
+    1. If you spot inline LaTeX formulas, ensure they are wrapped with $ symbols (e.g., $E=mc^2$)
+    2. If you spot XML tags, fix any unbalanced or unpaired tags
+    3. If you spot Markdown syntax (like headers, lists, emphasis, links), fix any incorrect syntax
+    {% if FILE_CONTEXT %}4. If there are partial or ambiguous references to filenames from the context provided above, correct them to use the proper full filename
+    {% endif %}
+    Return the corrected text wrapped in <corrected_text> XML tags.
+
+    Text to correct:

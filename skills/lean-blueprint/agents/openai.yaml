@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Lean Blueprint'
+  short_description: 'Write and sync Lean blueprints'
+  default_prompt: 'Use $lean-blueprint to draft or sync this blueprint against the current Lean project.'

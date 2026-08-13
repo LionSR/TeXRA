@@ -1,0 +1,67 @@
+node_modules/
+dist/
+dist-packaged/
+.env
+.aider*
+releases/
+artifacts/
+
+# TeXRA CLI workspace runtime state (`texra init --gitignore` adds this same entry in user repos)
+.texra/
+
+.DS_Store
+.cursor
+.cursor/rules
+**/.claude/settings.local.json
+.vscode-test/
+
+# VitePress
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+docs/.vitepress/.temp/core
+# Generated at build time by `sync-content` (mirrors of root CHANGELOG.md / TERMS_OF_SERVICE.md)
+docs/changelog.md
+docs/terms.md
+
+resources/poster
+resources/poster-app
+
+supabase/.temp
+supabase/migrations/
+
+slides/
+.texpadtmp
+
+.claude/projects
+.claude/worktrees
+.claude/scheduled_tasks.lock
+.worktrees/
+
+# Playwright e2e: per-run artifacts (screenshots baselines under
+# tests/e2e/__screenshots__/ ARE committed — only the run output is ignored).
+packages/desktop/tests/e2e/test-results/
+packages/desktop/playwright-report/
+
+# Dev-only symlink mirroring electron-builder.yml's extraResources mapping
+# (../extension/resources -> resources) so an unpackaged `electron .` run can
+# still locate TeXRA resources. Packaged builds get this from the builder.
+packages/desktop/extension/
+
+# External design references cloned locally; do not vendor them into TeXRA.
+references/openrouter-skills/
+
+.pnpm-store/
+# The bot workflows (claude.yml, claude-code-review.yml, issue-tracker.yml)
+# check this repo out a second time here at the PR's *base* ref, so the
+# automation prompts and tool allowlists they run with come from trusted
+# committed history rather than the PR branch under review. Runtime-only;
+# never commit it.
+.trusted-actions/
+
+# Generated TypeScript compiler output
+out/
+
+
+errorLogs/
+# Playwright MCP debug artifacts
+.playwright-mcp/

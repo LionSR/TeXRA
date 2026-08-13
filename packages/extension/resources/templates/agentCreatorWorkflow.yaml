@@ -1,0 +1,123 @@
+# Agent Creator (Workflow) - prompts for generating workflow agents
+# Structured like a standard agent definition for consistency.
+# Fallback templates live in separate agentTemplate-*.yaml files.
+name: agentCreatorWorkflow
+description: Generates workflow agent YAML definitions using AI.
+
+settings:
+  agentCategory: internal
+
+# The schema reference is injected at runtime from the Zod schemas.
+# Tool-use prompts live in agentCreatorToolUse.yaml.
+prompts:
+  systemPrompt: |
+    You know the TeXRA codebase, a VS Code extension that runs YAML-defined AI agents.
+    When generating workflow agent YAML definitions, follow the schema below exactly.
+    Workflow agents process LaTeX documents in fixed rounds (default 2), producing output
+    wrapped in the standard <documents><document name="..."> container. Modern
+    thinking-capable models reason natively before producing the final output;
+    do not add scratchpad scaffolding by default.
+
+    CRITICAL RULES:
+    - agentCategory MUST be "workflow" (not "toolUse"). Workflow agents do NOT call tools.
+    - The output container (<documents><document name="...">) is fixed
+      protocol, not a per-agent setting. Do not add settings for it.
+    - Infer appropriate settings from the agent's description:
+      - isRewrite: true when the agent edits/revises/corrects existing documents, false when it creates new content.
+      - temperature: low (0.1) for editing/correction tasks, higher (0.5-0.8) for creative/generation tasks.
+      - rounds: 1 for simple single-pass tasks, 2 for tasks that benefit from reflection.
+    - userRequest is an array with exactly as many entries as rounds (1 or 2).
+    - Fields with defaults can be omitted if the default value is acceptable.
+    Respond only with the YAML wrapped in <yaml> tags.
+
+    TEMPLATE VARIABLES available in prompts (Nunjucks double-brace syntax):
+    - {{ INPUT_FILE }}: path of the main input file
+    - {{ INPUT_CONTENT }}: full text of the main input file
+    - {{ ALL_INPUTS }}: XML list of ALL input files (canonical for workflow agents)
+    - {{ ALL_CONTEXTS }}: XML list of context files (bibliographies, reference papers, style/macro definitions like .sty/.cls)
+    - {{ INSTRUCTION }}: the user's free-text instruction for this run
+    - {{ INPUT_FILES }}: ordered list of input filenames; use these as output names for editing agents
+    - {{ OUTPUT_FILES }}: declared generated output filenames, only for agents with defaultOutputFiles
+    Use these variables in the prompts section. They are substituted at runtime.
+
+  userRequest: |
+    Generate a YAML definition for a workflow agent named "{{ AGENT_NAME }}".
+    Goal: {{ DESCRIPTION }}.
+
+    Based on the goal above, decide the appropriate settings (temperature, rounds,
+    isRewrite) and write prompts tailored to this agent's purpose.
+
+    The YAML must follow this exact structure:
+
+    name: {{ AGENT_NAME }}
+    description: <one-line description>
+    settings:
+      agentCategory: workflow
+      isRewrite: <true if editing existing docs, false if creating new>
+      temperature: <0.1 for precise editing, 0.5-0.8 for creative>
+    prompts:
+      systemPrompt: |
+        <Role and task description. Written in LaTeX style using \begin{itemize} for lists.
+         Must include LaTeX conventions: chktex compliance, consistent notation, preserve comments,
+         use `` and '' instead of straight quotes, no markdown-style enumerations.>
+      userPrefix: |
+        <Context block wrapping input documents in <documents> XML tags.
+         Must reference {{ ALL_CONTEXTS }} and {{ ALL_INPUTS }} (which already
+         wraps each input file in its own <document name="..."> block).
+         Should include an <instruction>{{ INSTRUCTION }}</instruction> block.>
+      userRequest:
+        - |
+          <Round 1: Direct instruction to produce the output as <documents><document name="output.tex">...</document></documents>.>
+        # For 2-round agents, add a second entry:
+        # - |
+        #   <Round 2: Reflection and refinement instruction with a brief critique of the produced output,
+        #    then output the updated <documents><document name="output.tex">...</document></documents>.>
+
+    Here is a complete real-world example for reference (the "polish" agent):
+
+    name: polish
+    description: Improves writing quality and clarity based on your specific instructions.
+    settings:
+      agentCategory: workflow
+    prompts:
+      systemPrompt: |
+        Improve a LaTeX research paper
+        focusing solely on addressing the given instructions.
+        When writing a professional *.tex \LaTeX document, you must:
+        \begin{itemize}
+            \item Follow chktex-friendly conventions.
+            \item Use appropriate notation consistently.
+            \item Preserve comments starting with `%'.
+            \item Use `` or '' rather than straight quotes.
+            \item Give complete output with all sections in their original order.
+        \end{itemize}
+      userPrefix: |
+        <documents>
+        {{ ALL_CONTEXTS }}
+        {{ ALL_INPUTS }}
+        </documents>
+        <instruction>{{ INSTRUCTION }}</instruction>
+      userRequest:
+        - |
+          Output the revised \LaTeX as <documents>{% for output in INPUT_FILES %}<document name="{{ output }}">...</document>{% endfor %}</documents>, focusing solely on the instruction.
+        - |
+          Review the changes and output a corrected version. Check for these
+          failure modes and fix any you find:
+          \begin{itemize}
+              \item Review each change you made: is it inaccurate, unnecessary, or damaging to flow? Fix the ones that are. If a change holds up, leave it alone. Do not invent weaknesses to satisfy this checklist.
+              \item Are any equations or notations from the original now missing or used before defined?
+              \item Did you add generic filler sentences? Use ``show not tell.''
+              \item Did you change anything NOT required by the instruction? If so, revert it.
+          \end{itemize}
+          If the previous output already satisfies the instruction and no failure modes apply, reproduce it unchanged.
+          Output the corrected content as <documents>{% for output in INPUT_FILES %}<document name="{{ output }}">...</document>{% endfor %}</documents>.
+
+    OUTPUT CONSTRAINTS:
+    - Wrap the final output in <documents><document name="..."> exactly as shown
+      above: this container is fixed protocol, not a setting to configure.
+    - userRequest must be an array with exactly as many entries as rounds (1 or 2).
+    - Include {{ INSTRUCTION }} somewhere in the prompts so the user's instructions are passed through.
+    - Write prompt text in LaTeX style (\begin{itemize}, \textbf{}, etc.), not markdown.
+
+  retryPrompt: |
+    The previous attempt failed validation: {{ VALIDATION_ERROR }}. Fix it and return only the YAML.

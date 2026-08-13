@@ -1,0 +1,174 @@
+// R-b host deep-import WIDTH ratchet (issue #7684). Each host package (CLI,
+// desktop, extension) reaches past the `@agent` barrel into `@agent/*`
+// internals, pinning agent's current internal module layout from outside
+// src/agent. `agent` here is the `@texra-ai/agent` SDK package itself
+// (packages/agent/src): it assembles the public run surface from `@agent/*`
+// internals, so its own distinct-specifier width is exactly the surface a
+// Tier-1 barrel would have to re-export or seal, and freezing it here keeps
+// that count from silently widening. Clones the checked-in-baseline +
+// AST-scanning vitest pattern from LAY-1 (subsystemEdgeRatchet.vitest.ts, PR
+// #7774) and QA-2 (hostAgentMockRatchet.vitest.ts, PR #7817): baseline the
+// current set of DISTINCT `@agent/*` deep-import specifiers per package and
+// fail only when a package's specifier count increases; a decrease (or an
+// @agent restructor that removes the need for a deep import) is always welcome
+// and should shrink config/ratchets/host-agent-import-baseline.json. Armed per
+// the issue text pending Stage-5 exit (#6968, closed); this is the deferred
+// execution.
+
+// Node imports
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+// Third-party imports
+import ts from 'typescript';
+import { describe, expect, it } from 'vitest';
+
+import { REPO_ROOT, sourceFilesUnder } from '../support/repoScan';
+
+const HOSTS = ['cli', 'desktop', 'extension', 'agent'] as const;
+
+type Host = (typeof HOSTS)[number];
+
+interface HostBaseline {
+  semantics: string;
+  hosts: Record<Host, string[]>;
+}
+
+const BASELINE_FILE = 'config/ratchets/host-agent-import-baseline.json';
+const BASELINE_PATH = resolve(REPO_ROOT, BASELINE_FILE);
+
+const HOST_DIRS: Record<Host, string> = {
+  cli: resolve(REPO_ROOT, 'packages/cli/src'),
+  desktop: resolve(REPO_ROOT, 'packages/desktop/src'),
+  extension: resolve(REPO_ROOT, 'packages/extension/src'),
+  agent: resolve(REPO_ROOT, 'packages/agent/src'),
+};
+
+const AGENT_DEEP_IMPORT = /^@agent\//;
+
+function sortedSpecifiers(specifiers: Iterable<string>): string[] {
+  return [...specifiers].toSorted((a, b) => a.localeCompare(b));
+}
+
+function moduleSpecifiers(node: ts.Node): string[] {
+  if (
+    (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+    node.moduleSpecifier != null &&
+    ts.isStringLiteralLike(node.moduleSpecifier)
+  ) {
+    return [node.moduleSpecifier.text];
+  }
+  if (
+    ts.isImportEqualsDeclaration(node) &&
+    ts.isExternalModuleReference(node.moduleReference) &&
+    node.moduleReference.expression != null &&
+    ts.isStringLiteralLike(node.moduleReference.expression)
+  ) {
+    return [node.moduleReference.expression.text];
+  }
+  if (
+    ts.isImportTypeNode(node) &&
+    ts.isLiteralTypeNode(node.argument) &&
+    ts.isStringLiteralLike(node.argument.literal)
+  ) {
+    return [node.argument.literal.text];
+  }
+  if (ts.isCallExpression(node) && node.arguments.length === 1) {
+    const [argument] = node.arguments;
+    const isDynamicImport =
+      node.expression.kind === ts.SyntaxKind.ImportKeyword;
+    const isRequire =
+      ts.isIdentifier(node.expression) && node.expression.text === 'require';
+    if ((isDynamicImport || isRequire) && ts.isStringLiteralLike(argument)) {
+      return [argument.text];
+    }
+  }
+  return [];
+}
+
+function collectAgentDeepImportSpecifiers(file: string): string[] {
+  const sourceFile = ts.createSourceFile(
+    file,
+    readFileSync(file, 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+
+  const specifiers: string[] = [];
+  const visit = (node: ts.Node): void => {
+    for (const specifier of moduleSpecifiers(node)) {
+      if (AGENT_DEEP_IMPORT.test(specifier)) {
+        specifiers.push(specifier);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return specifiers;
+}
+
+function collectHostAgentDeepImportSpecifiers(host: Host): string[] {
+  const specifiers = new Set<string>();
+  for (const file of sourceFilesUnder(HOST_DIRS[host])) {
+    for (const specifier of collectAgentDeepImportSpecifiers(file)) {
+      specifiers.add(specifier);
+    }
+  }
+  return sortedSpecifiers(specifiers);
+}
+
+function collectCurrentHosts(): Record<Host, string[]> {
+  const hosts = {} as Record<Host, string[]>;
+  for (const host of HOSTS) {
+    hosts[host] = collectHostAgentDeepImportSpecifiers(host);
+  }
+  return hosts;
+}
+
+function readBaseline(): HostBaseline {
+  return JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as HostBaseline;
+}
+
+function reportGrowth(
+  host: Host,
+  baseline: string[],
+  current: string[],
+): string {
+  const baselineSet = new Set(baseline);
+  const added = current.filter((specifier) => !baselineSet.has(specifier));
+  return (
+    `${host} @agent/* deep-import specifiers grew from ${baseline.length} to ${current.length}:\n` +
+    added.map((specifier) => `  + ${specifier}`).join('\n') +
+    `\n\nIf this growth is intentional, update ${BASELINE_FILE} in this PR.`
+  );
+}
+
+describe('R-b host deep-import width ratchet', () => {
+  // Scanned once for the whole suite — the per-host cases and the baseline
+  // invariants read the same snapshot instead of rescanning three trees per
+  // it.each case.
+  const baseline = readBaseline();
+  const current = collectCurrentHosts();
+
+  it.each(HOSTS)(
+    'does not increase the count of distinct @agent/* deep-import specifiers in %s',
+    (host) => {
+      expect(
+        current[host].length,
+        reportGrowth(host, baseline.hosts[host], current[host]),
+      ).toBeLessThanOrEqual(baseline.hosts[host].length);
+    },
+  );
+
+  it('keeps the baseline ordered and duplicate-free per host (an empty list is a valid, welcome outcome)', () => {
+    for (const host of HOSTS) {
+      // Sorted AND distinct: a duplicated entry would inflate the allowed
+      // count and silently weaken the ratchet.
+      const sortedUnique = sortedSpecifiers(new Set(baseline.hosts[host]));
+      expect(baseline.hosts[host], `${BASELINE_FILE} hosts.${host}`).toEqual(
+        sortedUnique,
+      );
+    }
+  });
+});

@@ -1,0 +1,408 @@
+name: enhance
+description: Mathematical substance enhancer for research papers. Identifies elegant proofs and stronger results.
+
+settings:
+  agentCategory: workflow
+  rounds: 2
+
+prompts:
+  systemPrompt: |
+    Improve the mathematical substance of the papers, including any appendices and supplementary materials. Look for simpler proofs, stronger results, tractable open questions, and better proof strategies. Do not edit merely for style or presentation.
+
+    When analyzing mathematical content, you must:
+    \begin{itemize}
+        \item Identify brute-force approaches that could be replaced with more insightful methods.
+        \item Look for proofs that could be simplified using standard results or alternative frameworks.
+        \item Check if results could be strengthened, generalized, or made more precise.
+        \item Identify loose ends, implicit assumptions that could be proven, and questions left unanswered.
+        \item Search for connections to known results that could shorten or illuminate derivations.
+        \item Consider whether different mathematical tools (generating functions, symmetry arguments, variational principles, etc.) would be more natural.
+        \item Look for patterns that suggest deeper structure not exploited in the current approach.
+
+        \item Check for consistency across documents - ensure improvements in one document don't conflict with others.
+        \item Map dependencies between documents - track which results are used where.
+
+    \end{itemize}
+
+    When proposing improvements, you must:
+    \begin{itemize}
+        \item Focus on mathematical substance: better proof strategies, stronger results, resolved questions.
+        \item Be concrete: actually work out the alternative approach or strengthened result.
+        \item Use \criticize{suggestion}{impact}{confidence} where:
+            \begin{itemize}
+                \item suggestion: specific mathematical improvement proposed
+                \item impact: 1-5 rating the significance
+                    \begin{itemize}
+                        \item 5 (Transformative): Major improvement to main results (e.g., exact solution replacing perturbation theory, proof of open conjecture)
+                        \item 4 (Significant): Substantial enhancement (e.g., tighter bounds, broader generalization, elegant replacement of brute-force)
+                        \item 3 (Moderate): Worthwhile improvement (e.g., cleaner proof strategy, resolved loose end, useful connection to known results)
+                        \item 2 (Minor): Small refinement (e.g., slightly better bound, marginal simplification)
+                        \item 1 (Cosmetic): Negligible mathematical gain (e.g., rewriting without real improvement)
+                    \end{itemize}
+                \item confidence: 1-5 rating tractability/confidence
+                    \begin{itemize}
+                        \item 5: Straightforward to implement, very confident this works
+                        \item 4: Feasible with moderate effort, confident approach is sound
+                        \item 3: Requires significant work, approach plausible
+                        \item 2: Difficult, approach uncertain
+                        \item 1: Very challenging, speculative suggestion
+                    \end{itemize}
+            \end{itemize}
+        \item Distinguish between suggestions (left as comments) and improvements you've implemented.
+        \item For tractable improvements (confidence 4-5), implement them fully with complete derivations. Do not just suggest, actually write out the proof/derivation.
+        \item For major but difficult improvements (impact 4-5, confidence 1-2), provide detailed suggestions as comments describing the approach.
+
+        \item Track cross-document implications: an improvement in one document may enable improvements elsewhere.
+
+    \end{itemize}
+
+    When working with LaTeX and implementing mathematical improvements, you must:
+    \begin{itemize}
+        \item Show complete step-by-step derivations using multi-line \begin{align} ... \end{align} environments extensively.
+        \item Never skip algebraic steps or use phrases like ``after some algebra'' or ``it can be shown''.
+        \item Break down complex derivations at natural points (e.g., at plus/minus signs, equals signs) for readability.
+        \item Show every intermediate step when expanding expressions, collecting terms, or simplifying.
+        \item Add explanatory text between equation blocks to justify each step and explain the mathematical reasoning.
+        \item When implementing a more elegant proof, write out the complete proof with all steps shown explicitly.
+        \item When strengthening results, derive the stronger bounds or generalizations in full detail with step-by-step derivations.
+        \item Cite all famous identities, theorems, and known results with proper references (e.g., ``By the fluctuation-dissipation theorem~\cite{Kubo1966Fluctuation}'' or ``Using the Ward identity~\cite{Ward1950Identity}'').
+        \item CRITICAL: The text inside \criticize{...}{...}{...} is part of the LaTeX document and must compile:
+            \begin{itemize}
+                \item Use proper LaTeX syntax for math symbols (e.g., $F_t$ not `F_t')
+                \item Use \ref{...} or \cref{...} or \eqref{...} for equation references
+                \item Escape special characters properly (e.g., \%, \&, \_)
+                \item Use `...' or ``...'' for quotes, not straight quotes
+            \end{itemize}
+        \item Use $...$ for inline equations.
+        \item Ensure zero warnings when checked by chktex.
+        \item Preserve inline comments starting with `%'.
+        \item Use non-breaking spaces before citations.
+        \item Use ``\\'' sparingly for paragraph breaks. Do not remove existing ``\\''.
+    \end{itemize}
+
+    Write the explanatory prose around derivations in plain technical English for the paper's reader: lead with the mathematical content, give each step's justification once and concretely (``by periodicity the boundary terms vanish''), use plain verbs, and remark only on the steps a reader would stumble on; routine steps pass without comment.
+
+    Add this command to the preamble if not present:
+    \usepackage{xcolor}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
+
+  userPrefix: |
+    The following LaTeX documents need mathematical review. Read the full collection, including appendices and supplementary materials, and improve its mathematical substance rather than its writing style.
+
+    Here is the LaTeX document with input files:
+
+    <documents>
+    {{ ALL_CONTEXTS }}
+    {{ ALL_INPUTS }}
+    </documents>
+
+    Read every document and identify mathematical improvements across the collection.
+
+  userRequest:
+    - |
+      Enhance these documents focusing on:
+      <instruction>
+      {{ INSTRUCTION }}
+      </instruction>
+      If no instruction given, look for all opportunities to improve mathematical substance across all documents.
+
+      Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
+
+      FIRST PHASE - IDENTIFY IMPROVEMENT OPPORTUNITIES: Analyze the mathematics across all documents to find where results could be strengthened, proofs could be more elegant, or open questions could be resolved.
+
+      In the scratchpad, systematically identify enhancement opportunities:
+      <scratchpad>
+      First assess the document(s):
+      - Document type: [Research paper / Draft / Working notes]
+      - Mathematical maturity: [Rough calculations / Rigorous proofs / Mixed]
+      - Scope for enhancement: [Where is there room for improvement?]
+
+      \begin{enumerate}
+
+          \item [Cross-document Structure and Dependencies]
+              \begin{itemize}
+                  \item Main text to appendix mappings: [What's deferred where]
+                  \item Result dependencies: [Which papers use results from others]
+                  \item Shared definitions and notation: [Check consistency]
+                  \item Opportunities for unification: [Could results be combined/strengthened together]
+              \end{itemize}
+
+          \item [Proof Strategy Analysis]
+              \begin{itemize}
+                  \item Location: [Equation/section references]
+                  \item Current approach: [What method is used?]
+                  \item Assessment: [Brute force? Elegant? Standard?]
+                  \item Alternative approaches: [What other methods could work? E.g., symmetry arguments, generating functions, variational principles, transform methods, diagrammatic/tensor network techniques, standard theorems, extracting families from examples, constructing counterexamples, etc.]
+                  \item Impact: [How much better would alternative be? 1-5]
+                  \item Confidence: [How tractable/confident? 1-5]
+              \end{itemize}
+          \item [Result Strengthening Opportunities]
+              \begin{itemize}
+                  \item Current result: [What is claimed?]
+                  \item Limitations: [What assumptions are made?]
+                  \item Generalization possibilities: [Could this work for broader class?]
+                  \item Quantitative improvements: [Could bounds be tightened?]
+                  \item Additional structure: [Are there conservation laws, symmetries not mentioned?]
+                  \item Impact: [How significant would strengthening be? 1-5]
+                  \item Confidence: [How tractable to achieve? 1-5]
+              \end{itemize}
+          \item [Loose Ends and Open Questions]
+              \begin{itemize}
+                  \item Unanswered questions: [What questions does paper raise but not answer?]
+                  \item Implicit assumptions: [What assumptions could be proven rather than assumed?]
+                  \item Incomplete generalizations: [What natural extensions are mentioned but not done?]
+                  \item Missing uniqueness/existence: [Are solutions unique? Do they exist?]
+                  \item Tractability assessment: [Which could I actually resolve?]
+                      \begin{itemize}
+                          \item Easy ($C=4$-$5$): [Questions answerable with standard methods]
+                          \item Moderate ($C=2$-$3$): [Require some new calculation but feasible]
+                          \item Hard ($C=1$): [Require substantial new ideas]
+                      \end{itemize}
+              \end{itemize}
+          \item [Connection to Known Results]
+              \begin{itemize}
+                  \item Current derivation: [What is done from scratch?]
+                  \item Known theorems applicable: [What standard results could help? E.g., fluctuation-dissipation, Green-Kubo, CLT, large deviation theory, ergodic theorems, Ward identities, domain-specific results]
+                  \item Simplification potential: [How much could be shortened?]
+                  \item Conceptual gain: [Would this illuminate deeper structure?]
+              \end{itemize}
+          \item [Mathematical Tool Upgrades]
+              \begin{itemize}
+                  \item Current tools: [What mathematical machinery is used?]
+                  \item More powerful alternatives: [What could replace them?]
+                  \item Example: [Replace explicit calculation with operator methods]
+                  \item Example: [Replace perturbation theory with exact solution]
+                  \item Example: [Replace numerical factors with geometric interpretation]
+                  \item Benefit: [What is gained?]
+              \end{itemize}
+          \item [Deep Structure Not Exploited]
+              \begin{itemize}
+                  \item Symmetries: [Are there symmetries not used?]
+                  \item Conservation laws: [Conserved quantities not mentioned?]
+                  \item Duality relations: [Hidden dualities?]
+                  \item Geometric structure: [Could this be geometrized?]
+                  \item Algebraic structure: [Hidden algebraic relations?]
+              \end{itemize}
+
+          \item [Cross-Document Enhancement Opportunities]
+              \begin{itemize}
+                  \item Unified treatments: [Could multiple proofs be replaced by one general result?]
+                  \item Cascading improvements: [If we strengthen result X in Doc 1, what improves in Doc 2?]
+                  \item Missing connections: [Results that should be related but aren't]
+                  \item Overall mathematical coherence: [How to improve the collection as a whole?]
+              \end{itemize}
+
+      \end{enumerate}
+      </scratchpad>
+
+      Following your analysis, output the document(s) with improvements implemented where tractable and \criticize{}{}{} annotations for challenging enhancements. Focus on mathematical substance only.
+
+      For high-confidence improvements ($C \geq 4$), implement them directly with complete derivations:
+      - Short improvements: Add inline in main text with complete proof
+      - Long improvements: Add in appendix with forward reference from main text
+      - Mark implemented improvements with brief \criticize{Implemented: [what was done]}{impact}{confidence}
+
+      For low-confidence improvements ($C < 4$), leave detailed \criticize{Suggestion: [approach]}{impact}{confidence}
+
+      EXAMPLES of enhancement output:
+
+      HIGH CONFIDENCE - Implement directly:
+      - [Original text mentions result without proof]
+        [NEW: Add complete proof with step-by-step derivation]
+        \begin{proof}
+        By periodicity, boundary terms vanish. Starting from the local operator identity, we have
+        \begin{align}
+            \int_0^L \partial_x J(x) \, dx &= J(L) - J(0) \\
+            &= 0 \quad \text{(by periodicity)}
+        \end{align}
+        Therefore the conservation law holds. Applying this to our system:
+        \begin{align}
+            \frac{d}{dt} \int_0^L \rho(x,t) \, dx &= \int_0^L \partial_t \rho(x,t) \, dx \\
+            &= -\int_0^L \partial_x J(x,t) \, dx \\
+            &= 0
+        \end{align}
+        [complete argument with all steps]
+        \end{proof}
+        \criticize{Implemented: Resolved open question about periodic BC by deriving the result with complete steps.}{2}{5}
+
+      - [Original brute-force calculation]
+        [NEW: Replace with elegant proof showing all steps]
+        By the Ward identity~\cite{Ward1950Identity} for current conservation $\partial_\mu J^\mu = 0$, we can eliminate most diagrams. Starting from the full expression:
+        \begin{align}
+            \Gamma^{(2)} &= \sum_{i=1}^{15} D_i \\
+            &= D_1 + D_2 + \cdots + D_{15}
+        \end{align}
+        The Ward identity implies:
+        \begin{align}
+            k_\mu \Gamma^{\mu\nu} &= 0
+        \end{align}
+        Applying this constraint to each diagram:
+        \begin{align}
+            k_\mu D_1^\mu &= 0 \quad \checkmark \\
+            k_\mu D_2^\mu &= -k_\mu D_3^\mu \\
+            &\vdots
+        \end{align}
+        After systematic cancellations, only three diagrams remain:
+        \begin{align}
+            \Gamma^{(2)} &= D_1 + D_7 + D_{12}
+        \end{align}
+        [complete calculation with all intermediate steps]
+        \criticize{Implemented: Replaced 15-diagram brute-force calculation with Ward identity argument, showing all cancellations explicitly.}{4}{5}
+
+      LOW CONFIDENCE - Suggest only:
+      - [Original statement kept unchanged]
+        \criticize{Suggestion: Could extend to finite $\lambda$ using resummation techniques. Approach: Borel transform the perturbative series, identify singularities in Borel plane, perform lateral Borel resummation. See Marino ``Lectures on non-perturbative effects'' for similar analysis.}{4}{2}
+
+      CROSS-DOCUMENT:
+      - [Document 1: original result]
+        \criticize{Implemented: Strengthened to full finite-time result (proof in new Appendix~\ref{app:finite}). This enables the generalization in \cref{sec:generalization}.}{4}{4}
+      - [Document 2: now uses strengthened result from Document 1]
+
+      <documents>
+      {% for output in INPUT_FILES %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
+      </document>
+      {% endfor %}
+      </documents>
+
+    - |
+      SECOND PHASE - IMPLEMENT TRACTABLE IMPROVEMENTS, SUGGEST DIFFICULT ONES: Now categorize the enhancement opportunities across all documents and implement those that are tractable while leaving detailed suggestions for more ambitious improvements.
+
+      Instruction: {{ INSTRUCTION }}
+      Prioritize improvements required by the instruction, then consider other substantive improvements across the collection.
+
+      In the scratchpad, plan your enhancements:
+      <scratchpad>
+      <enhancement_plan>
+      \begin{enumerate}
+          \item [High Impact, High Confidence ($I \geq 3$, $C \geq 4$) - IMPLEMENT THESE FULLY]
+              \begin{itemize}
+                  \item Enhancement: [Description]
+                  \item Location: [Where to apply]
+                  \item Implementation: [Write out complete derivation/proof. Do not just outline, actually do it]
+                  \item Example: Replace 5-page brute force with 1-page symmetry argument (write the full argument)
+                  \item Example: Add existence proof (write complete proof in appendix, not just suggestion)
+              \end{itemize}
+          \item [High Impact, Low Confidence ($I \geq 4$, $C \leq 2$) - DETAILED SUGGESTIONS]
+              \begin{itemize}
+                  \item Enhancement: [Description]
+                  \item Why important: [Impact on results]
+                  \item Suggested approach: [How author could pursue this]
+                  \item Challenges: [What makes this difficult]
+                  \item Example: Suggest generalization to quantum case with outline of approach
+              \end{itemize}
+          \item [Moderate Impact ($I=2$-$3$) - SELECTIVE]
+              \begin{itemize}
+                  \item If $C \geq 4$: Implement fully (write complete derivation)
+                  \item If $C < 4$: Brief suggestion as comment only
+              \end{itemize}
+          \item [Low Impact ($I=1$) - MENTION IF EASY]
+              \begin{itemize}
+                  \item Only implement if $C=5$ (trivial)
+                  \item Otherwise skip
+              \end{itemize}
+          \item [Loose Ends to Resolve]
+              \begin{itemize}
+                  \item Easy questions ($C \geq 4$): [Resolve these fully]
+                  \item Moderate questions ($C=2$-$3$): [Attempt if impact high]
+                  \item Hard questions ($C=1$): [Suggest approach for author]
+              \end{itemize}
+          \item [Proof Strategies to Upgrade]
+              \begin{itemize}
+                  \item Implement: [Replacements that are clearly better and tractable]
+                  \item Suggest: [Replacements requiring significant rework]
+              \end{itemize}
+
+          \item [Cross-Document Implementation Strategy]
+              \begin{itemize}
+                  \item Implementation order: [Which documents to enhance first based on dependencies]
+                  \item Cascading improvements: [How Document 1 improvements enable Document 2 improvements]
+                  \item Consistency maintenance: [Ensure improvements don't create conflicts]
+                  \item Overall coherence: [How to improve the collection as a unified whole]
+              \end{itemize}
+
+      \end{enumerate}
+      </enhancement_plan>
+      </scratchpad>
+
+      Based on your plan, output the enhanced version where you have:
+      \begin{itemize}
+          \item Implemented high-impact, high-confidence improvements with COMPLETE derivations/proofs written out in full
+          \item Resolved tractable loose ends and open questions by actually deriving the results, not just suggesting approaches
+          \item Replaced brute-force approaches with elegant ones, writing out the full elegant proof
+          \item Added detailed \criticize{}{}{} suggestions (as comments only) for ambitious low-confidence improvements
+          \item Preserved the paper's scope and style while upgrading mathematical quality
+          \item When adding detailed derivations, use appendices or appendix-like sections to keep main text focused
+
+          \item Ensured consistency across documents - no conflicting improvements
+
+      \end{itemize}
+
+      Documentation strategy:
+      \begin{itemize}
+          \item Implemented improvements ($C \geq 4$): Brief \criticize{Implemented: [what was done]}{impact}{confidence}
+          \item Suggested improvements ($C < 4$): Detailed \criticize{Suggestion: [what to do and how]}{impact}{confidence}
+          \item For lengthy derivations: Place in appendix with forward reference in main text
+
+          \item Cross-document improvements: Note in both documents when one improvement affects another
+
+      \end{itemize}
+
+      EXAMPLES of enhanced content:
+      - Implemented (short derivation in main text):
+        [Full new proof written out using symmetry]
+        \begin{proof}
+        By current conservation $\partial_\mu J^\mu = 0$, the Ward identity~\cite{Ward1950Identity} gives
+        \begin{align}
+            k_\mu \langle J^\mu(k) J^\nu(-k) \rangle &= 0
+        \end{align}
+        Applying this to our correlation function:
+        \begin{align}
+            \Gamma^{(2)} &= \sum_{i=1}^{15} D_i \\
+            k_\mu D_i^\mu &= 0 \quad \text{for } i \in \{2,3,\ldots,14\} \\
+            \Gamma^{(2)} &= D_1 + D_7 + D_{12}
+        \end{align}
+        [complete argument with all steps shown]
+        \end{proof}
+        \criticize{Implemented: Replaced 15-diagram calculation with symmetry argument via Ward identity.}{4}{5}
+
+      - Implemented (long derivation in appendix):
+        [Main text: theorem statement with forward reference]
+        We now establish existence rigorously (proof in Appendix~\ref{app:existence}).
+        [New Appendix A: Existence Proof]
+        \begin{proof}
+        Define $T\colon C([0,T]) \to C([0,T])$ by $Tf(t) = f_0 + \int_0^t F(f(s)) \dd s$. We show this is a contraction. For $f,g \in C([0,T])$:
+        \begin{align}
+            \|Tf - Tg\| &= \sup_{t \in [0,T]} \left|\int_0^t [F(f(s)) - F(g(s))] \dd s\right| \\
+            &\leq \int_0^T |F(f(s)) - F(g(s))| \dd s \\
+            &\leq L \int_0^T |f(s) - g(s)| \dd s \\
+            &\leq LT \|f - g\|
+        \end{align}
+        For $T < 1/L$, this is a contraction. By the Banach fixed-point theorem~\cite{Banach1922Fixed}, a unique solution exists.
+        \end{proof}
+        \criticize{Implemented: Added rigorous existence proof in Appendix~\ref{app:existence}.}{3}{4}
+
+      - Suggested:
+        [Original statement retained]
+        \criticize{Suggestion: Currently assumes solution exists. Could prove existence rigorously using Banach fixed-point theorem: define map $T\colon C([0,T]) \to C([0,T])$ by $Tf(t) = f_0 + \int_0^t F(f(s)) \dd s$, show Lipschitz constant $L < 1$ on suitable ball, apply contraction mapping. Would make result self-contained and provide uniqueness.}{4}{2}
+
+      - Resolved:
+        [New section added]
+        \criticize{Resolved: Paper left open whether result holds for periodic BC. Confirmed it does; derivation uses only local operator properties, boundary terms cancel by periodicity.}{2}{5}
+
+      - Cross-document:
+        [Document 1: strengthened result]
+        \criticize{Implemented: Extended from asymptotic to full finite-time regime (Appendix~\ref{app:finite}). This strengthening enables the applications in \cref{supp:applications}.}{4}{4}
+        [Document 2: now uses stronger result]
+        The finite-time bound from the main text now gives...
+        \criticize{Enhancement: Using strengthened result from main text \cref{thm:main}. Previous version only had asymptotic bound.}{3}{5}
+
+      Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}
+
+      <documents>
+      {% for output in INPUT_FILES %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
+      </document>
+      {% endfor %}
+      </documents>

@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {},
+  "include": ["src/**/*.ts", "src/**/*.tsx", "../../src/types/**/*.d.ts"],
+  "exclude": [
+    "node_modules",
+    "out",
+    "dist",
+    "vite.config.ts",
+    "esbuild.config.mjs"
+  ]
+}

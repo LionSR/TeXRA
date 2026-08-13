@@ -1,0 +1,68 @@
+{
+  "semantics": "Public (static + instance) method declarations of StreamLogStore and StreamSnapshotStore, per issue #9590 Stage 5 (proof obligation 10). Every public method is a caller-verified contract, and every field exposed by a configured aggregate snapshot getter is one caller-visible contract unit. Replacing five field getters with getRunMetadata therefore leaves the StreamSnapshotStore contract budget unchanged: the aggregate method contributes five units, not one. Transcript row mutation is writer-only (TranscriptWriter via acquireWriter/loadAndAcquireWriter), snapshot event projection enters only through attachSessionEvents, and 'protected' counts as public because neither class is subclassed. The ratchet rejects growth in either public methods or configured aggregate fields. When the surface genuinely shrinks, lower this baseline in the same PR.",
+  "stores": {
+    "StreamLogStore": [
+      "acquireWriter",
+      "clear",
+      "delete",
+      "endRunningGroupsForStreams",
+      "ensureLoaded",
+      "ensureStream",
+      "ephemeral",
+      "flush",
+      "get",
+      "getSummaryMeta",
+      "getTimestampRange",
+      "getUnfinishedStreamIds",
+      "has",
+      "hasAuthoritativeStream",
+      "keys",
+      "loadAndAcquireWriter",
+      "onChange",
+      "open",
+      "openOrEphemeral",
+      "openReadOnlyForStream",
+      "readEntries",
+      "recordSummaryMeta",
+      "reload",
+      "requestEviction"
+    ],
+    "StreamSnapshotStore": [
+      "attachSessionEvents",
+      "deleteAll",
+      "deleteStream",
+      "evictAll",
+      "flush",
+      "getCompileFailures",
+      "getExecutionIdMap",
+      "getKnownFilePaths",
+      "getMissingOutputs",
+      "getOutputFiles",
+      "getParentStreamId",
+      "getRunMetadata",
+      "getRunUsage",
+      "getWorkPlan",
+      "hasPersistedWorkPlan",
+      "listPersistedStreams",
+      "listStagedDeletions",
+      "load",
+      "preload",
+      "read",
+      "readOutputFiles",
+      "readPersistedExecutionId",
+      "reconcileStagedDeletions",
+      "stageDeleteStream"
+    ]
+  },
+  "aggregateContracts": {
+    "StreamSnapshotStore": {
+      "getRunMetadata": [
+        "config",
+        "description",
+        "executionId",
+        "identity",
+        "userFollowUpSupport"
+      ]
+    }
+  }
+}

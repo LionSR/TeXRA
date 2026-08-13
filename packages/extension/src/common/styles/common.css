@@ -1,0 +1,416 @@
+/**
+ * Document-level styles for TeXRA webviews (VS Code host).
+ *
+ * Single token system: --wa-* tokens are the ONLY tokens consumer code
+ * references. They are sourced directly from the host's --vscode-* variables
+ * exposed by the VS Code webview iframe. There is no --texra-* shim layer
+ * and consumers never reference --vscode-* directly.
+ *
+ * Niche palette tokens with no clean WA semantic equivalent (terminal ansi,
+ * symbol icons, charts, git decoration, debug tokens, diff editor, etc.) are
+ * promoted into the --wa-color-* namespace so the consumer surface stays
+ * uniform.
+ */
+
+:root,
+.wa-light,
+.wa-dark .wa-invert {
+  /* ── Web Awesome surface / text tokens ──────────────────────────────── */
+  --wa-color-text-normal: var(
+    --vscode-editor-foreground,
+    var(--vscode-foreground)
+  );
+  /* Some VS Code themes (notably dark) set descriptionForeground too dim to
+     read against tinted surface cards. Mix 70% of the normal text color in
+     to guarantee a readable contrast in every theme. */
+  --wa-color-text-quiet: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground, var(--vscode-foreground)) 70%,
+    transparent
+  );
+  --wa-color-text-link: var(--vscode-textLink-foreground);
+  --wa-color-text-link-active: var(--vscode-textLink-activeForeground);
+  --wa-color-text-preformat: var(--vscode-textPreformat-foreground);
+  --wa-color-text-placeholder: var(--vscode-input-placeholderForeground);
+
+  --wa-color-surface-default: var(--vscode-editor-background);
+  --wa-color-surface-raised: var(--vscode-editorWidget-background);
+  --wa-color-surface-lowered: var(--vscode-sideBar-background);
+  --wa-color-surface-border: var(
+    --vscode-panel-border,
+    var(--vscode-widget-border)
+  );
+  --wa-color-surface-shadow: var(--vscode-widget-shadow);
+
+  --wa-color-focus: var(--vscode-focusBorder);
+
+  /* WA form-control tokens — wired to VS Code input palette so wa-input,
+     wa-textarea, wa-select inherit the host theme's editor surface. */
+  --wa-form-control-background-color: var(--vscode-input-background);
+  --wa-form-control-text-color: var(--vscode-input-foreground);
+  --wa-form-control-border-color: var(--vscode-input-border);
+
+  /* ── Semantic variants ──────────────────────────────────────────────────
+     One rule, no per-variant judgement: derive only what VS Code does not
+     ship, and derive it from what VS Code does ship.
+
+       ships background AND foreground → pass both through
+       ships one side                  → derive the other
+       ships only a role colour        → derive both sides from it
+
+     Each variant below names which case it is, so no line is a decision on
+     its own. Neutral and brand-loud are host pairs; warning-loud is a host
+     pair too (statusBarItem ships a background and a foreground); the status
+     roles ship a colour but no surface, so their quiet tiers derive.
+
+     A derived on-colour mixes toward --wa-color-text-normal rather than
+     toward black or white. That is what makes a single expression correct in
+     both appearances: it darkens the role colour on light themes and lightens
+     it on dark ones, holding hue either way.
+
+     Measured worst case over Dark Modern / Light Modern / Dark+ / Light+,
+     against each theme's own editorWidget.background: 4.74:1 quiet (warning
+     on Light Modern), 4.33:1 loud (success on light). Danger-on-quiet is the
+     APCA floor on dark themes at Lc 47.2 (5.6:1), which is VS Code's own
+     mid-lightness editorError colour — a lighter red stops reading as an
+     error.
+
+     The three steps are inputs to this sheet, not consumer tokens. */
+  --wa-variant-fill: 8%; /* role over the raised surface */
+  --wa-variant-border: 45%; /* role over transparent */
+  --wa-variant-ink: 55%; /* role toward the normal text colour */
+
+  /* Brand — primary buttons, links, focus accents.
+     loud: host pair. quiet: host ships the background only, and
+     inputValidation.infoForeground is null in every stock theme, so the
+     foreground derives to the colour that by definition reads on host
+     surfaces. Deriving it from the brand hue instead measures worse
+     (Lc 39.2 versus 68.7 on Dark+), because callout prose is body text
+     rather than a status label. */
+  --wa-color-brand-fill-loud: var(--vscode-button-background);
+  --wa-color-brand-on-loud: var(--vscode-button-foreground);
+  --wa-color-brand-border-loud: var(--vscode-button-border, transparent);
+  --wa-color-brand-fill-quiet: var(--vscode-inputValidation-infoBackground);
+  --wa-color-brand-border-quiet: var(--vscode-inputValidation-infoBorder);
+  --wa-color-brand-on-quiet: var(
+    --vscode-inputValidation-infoForeground,
+    var(--wa-color-text-normal)
+  );
+
+  /* Neutral — outlined wa-button / wa-callout, hovers. Host pair throughout
+     (button.secondary*), so nothing derives. */
+  --wa-color-neutral-fill-quiet: var(--vscode-button-secondaryBackground);
+  --wa-color-neutral-border-quiet: var(
+    --vscode-button-border,
+    var(--vscode-widget-border)
+  );
+  --wa-color-neutral-on-quiet: var(--vscode-button-secondaryForeground);
+  --wa-color-neutral-fill-loud: var(--vscode-button-secondaryBackground);
+  --wa-color-neutral-border-loud: var(
+    --vscode-button-border,
+    var(--vscode-widget-border)
+  );
+  --wa-color-neutral-on-loud: var(--vscode-button-secondaryForeground);
+
+  /* Warning — role colour editorWarning.foreground.
+     loud: host pair (statusBarItem.warningBackground is
+     darken(editorWarning.foreground, 0.4) in BOTH appearances, and the host
+     ships the matching foreground for it). quiet: host ships neither side for
+     this role, so both derive. */
+  --wa-color-warning-fill-loud: var(--vscode-statusBarItem-warningBackground);
+  --wa-color-warning-on-loud: var(--vscode-statusBarItem-warningForeground);
+  --wa-color-warning-border-loud: transparent;
+  --wa-color-warning-fill-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorWarning-foreground) var(--wa-variant-fill),
+    var(--wa-color-surface-raised)
+  );
+  --wa-color-warning-border-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorWarning-foreground) var(--wa-variant-border),
+    transparent
+  );
+  --wa-color-warning-on-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorWarning-foreground) var(--wa-variant-ink),
+    var(--wa-color-text-normal)
+  );
+
+  /* Danger — role colour editorError.foreground.
+     loud: host ships the role colour but no on-colour, so that side derives.
+     quiet: both sides derive. */
+  --wa-color-danger-fill-loud: var(--vscode-editorError-foreground);
+  --wa-color-danger-on-loud: var(--vscode-editor-background);
+  --wa-color-danger-border-loud: transparent;
+  --wa-color-danger-fill-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorError-foreground) var(--wa-variant-fill),
+    var(--wa-color-surface-raised)
+  );
+  --wa-color-danger-border-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorError-foreground) var(--wa-variant-border),
+    transparent
+  );
+  --wa-color-danger-on-quiet: color-mix(
+    in srgb,
+    var(--vscode-editorError-foreground) var(--wa-variant-ink),
+    var(--wa-color-text-normal)
+  );
+
+  /* Success — role colour charts.green. Same two cases as danger. */
+  --wa-color-success-fill-loud: var(--vscode-charts-green);
+  --wa-color-success-on-loud: var(--vscode-editor-background);
+  --wa-color-success-border-loud: transparent;
+  --wa-color-success-fill-quiet: color-mix(
+    in srgb,
+    var(--vscode-charts-green) var(--wa-variant-fill),
+    var(--wa-color-surface-raised)
+  );
+  --wa-color-success-border-quiet: color-mix(
+    in srgb,
+    var(--vscode-charts-green) var(--wa-variant-border),
+    transparent
+  );
+  --wa-color-success-on-quiet: color-mix(
+    in srgb,
+    var(--vscode-charts-green) var(--wa-variant-ink),
+    var(--wa-color-text-normal)
+  );
+
+  /* Buttons — niche tokens consumers still need. */
+  --wa-color-button-hover: var(--vscode-button-hoverBackground);
+  --wa-color-button-border: var(--vscode-button-border, transparent);
+  --wa-color-button-separator: var(
+    --vscode-button-separator,
+    rgb(255 255 255 / 40%)
+  );
+
+  /* Lists — no native WA equivalent yet (#3690). */
+  --wa-color-list-active-bg: var(--vscode-list-activeSelectionBackground);
+  --wa-color-list-active-fg: var(--vscode-list-activeSelectionForeground);
+  --wa-color-list-hover-bg: var(--vscode-list-hoverBackground);
+  --wa-color-list-warning-fg: var(--vscode-list-warningForeground);
+
+  /* Menus. */
+  --wa-color-menu-background: var(--vscode-menu-background);
+  --wa-color-menu-border: var(--vscode-menu-border);
+  --wa-color-menu-foreground: var(--vscode-menu-foreground);
+
+  /* Toolbar. */
+  --wa-color-toolbar-active: var(--vscode-toolbar-activeBackground);
+  --wa-color-toolbar-hover: var(--vscode-toolbar-hoverBackground);
+
+  /* Charts — palette tokens with no WA equivalent. */
+  --wa-color-chart-blue: var(--vscode-charts-blue);
+  --wa-color-chart-green: var(--vscode-charts-green);
+  --wa-color-chart-orange: var(--vscode-charts-orange);
+  --wa-color-chart-red: var(--vscode-charts-red);
+  --wa-color-chart-yellow: var(--vscode-charts-yellow);
+  --wa-color-chart-purple: var(--vscode-charts-purple);
+
+  /* Diff editor. */
+  --wa-color-diff-inserted: var(--vscode-diffEditor-insertedTextBackground);
+  --wa-color-diff-removed: var(--vscode-diffEditor-removedTextBackground);
+
+  /* Git decoration. */
+  --wa-color-git-added: var(--vscode-gitDecoration-addedResourceForeground);
+  --wa-color-git-deleted: var(--vscode-gitDecoration-deletedResourceForeground);
+  --wa-color-git-modified: var(
+    --vscode-gitDecoration-modifiedResourceForeground
+  );
+
+  /* Debug token expressions. */
+  --wa-color-debug-name: var(--vscode-debugTokenExpression-name);
+  --wa-color-debug-number: var(--vscode-debugTokenExpression-number);
+  --wa-color-debug-string: var(--vscode-debugTokenExpression-string);
+
+  /* Symbol icons. */
+  --wa-color-symbol-class: var(--vscode-symbolIcon-classForeground);
+  --wa-color-symbol-constant: var(--vscode-symbolIcon-constantForeground);
+  --wa-color-symbol-function: var(--vscode-symbolIcon-functionForeground);
+  --wa-color-symbol-keyword: var(--vscode-symbolIcon-keywordForeground);
+  --wa-color-symbol-property: var(--vscode-symbolIcon-propertyForeground);
+  --wa-color-symbol-variable: var(--vscode-symbolIcon-variableForeground);
+
+  /* Editor surface details. */
+  --wa-color-editor-selection: var(--vscode-editor-selectionBackground);
+  --wa-color-editor-inactive-selection: var(
+    --vscode-editor-inactiveSelectionBackground
+  );
+  --wa-color-editor-line-highlight: var(
+    --vscode-editor-lineHighlightBackground
+  );
+  --wa-color-editor-find-match: var(--vscode-editor-findMatchBackground);
+  --wa-color-editor-find-match-highlight: var(
+    --vscode-editor-findMatchHighlightBackground
+  );
+  --wa-color-editor-find-match-highlight-fg: var(
+    --vscode-editor-findMatchHighlightForeground
+  );
+
+  /* Tabs. */
+  --wa-color-tabs-background: var(--vscode-editorGroupHeader-tabsBackground);
+  --wa-color-tabs-border: var(--vscode-editorGroupHeader-tabsBorder);
+
+  /* Block quote. */
+  --wa-color-blockquote-border: var(--vscode-textBlockQuote-border);
+
+  /* Misc indicators. */
+  --wa-color-progress-bg: var(--vscode-progressBar-background);
+  --wa-color-status-warning-bg: var(--vscode-statusBarItem-warningBackground);
+  --wa-color-icon-info: var(--vscode-notificationsInfoIcon-foreground);
+  --wa-color-activity-badge-bg: var(--vscode-activityBarBadge-background);
+  --wa-color-badge-bg: var(--vscode-badge-background);
+
+  /* Testing icons. */
+  --wa-color-testing-passed: var(
+    --vscode-testing-iconPassed,
+    var(--vscode-charts-green)
+  );
+  --wa-color-testing-failed: var(
+    --vscode-testing-iconFailed,
+    var(--vscode-editorError-foreground)
+  );
+
+  /* Terminal — full palette, no WA equivalent. */
+  --wa-color-terminal-background: var(--vscode-terminal-background);
+  --wa-color-terminal-foreground: var(--vscode-terminal-foreground);
+  --wa-color-terminal-selection-bg: var(--vscode-terminal-selectionBackground);
+  --wa-color-terminal-cursor: var(--vscode-terminalCursor-foreground);
+  --wa-color-terminal-ansi-black: var(--vscode-terminal-ansiBlack);
+  --wa-color-terminal-ansi-blue: var(--vscode-terminal-ansiBlue);
+  --wa-color-terminal-ansi-cyan: var(--vscode-terminal-ansiCyan);
+  --wa-color-terminal-ansi-green: var(--vscode-terminal-ansiGreen);
+  --wa-color-terminal-ansi-magenta: var(--vscode-terminal-ansiMagenta);
+  --wa-color-terminal-ansi-red: var(--vscode-terminal-ansiRed);
+  --wa-color-terminal-ansi-white: var(--vscode-terminal-ansiWhite);
+  --wa-color-terminal-ansi-yellow: var(--vscode-terminal-ansiYellow);
+  --wa-color-terminal-ansi-bright-black: var(--vscode-terminal-ansiBrightBlack);
+  --wa-color-terminal-ansi-bright-blue: var(--vscode-terminal-ansiBrightBlue);
+  --wa-color-terminal-ansi-bright-cyan: var(--vscode-terminal-ansiBrightCyan);
+  --wa-color-terminal-ansi-bright-green: var(--vscode-terminal-ansiBrightGreen);
+  --wa-color-terminal-ansi-bright-magenta: var(
+    --vscode-terminal-ansiBrightMagenta
+  );
+  --wa-color-terminal-ansi-bright-red: var(--vscode-terminal-ansiBrightRed);
+  --wa-color-terminal-ansi-bright-white: var(--vscode-terminal-ansiBrightWhite);
+  --wa-color-terminal-ansi-bright-yellow: var(
+    --vscode-terminal-ansiBrightYellow
+  );
+
+  /* Typography. Inside the VS Code extension webview, always inherit
+     VS Code's chosen UI font so the webview matches the host chrome.
+     The `var()` fallback only fires if the var is somehow unset (e.g.,
+     in a unit-test polyfill). */
+  --wa-font-family-body: var(
+    --vscode-font-family,
+    ui-sans-serif,
+    system-ui,
+    sans-serif
+  );
+  --wa-font-family-heading: var(--wa-font-family-body);
+  --wa-font-family-mono: var(
+    --vscode-editor-font-family,
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace
+  );
+  --wa-font-size-m: var(--vscode-font-size, 13px);
+  --wa-font-weight-normal: var(--vscode-font-weight, 400);
+  --wa-editor-font-size: var(--vscode-editor-font-size, 13px);
+
+  /* Border-radius — VS Code-square overrides. WA default theme ships
+     s≈3px / m≈6px / l≈12px which feels too rounded against VS Code's
+     near-flat form-control aesthetic. Pin to the in-house --border-radius
+     scale (litStyles.ts) so wa-button, wa-input, wa-callout, wa-dialog,
+     wa-card all read as native VS Code controls. */
+  --wa-border-radius-s: 2px;
+  --wa-border-radius-m: 3px;
+  --wa-border-radius-l: 4px;
+  --wa-border-radius-xl: 6px;
+  --wa-border-radius-pill: 9999px;
+  --wa-border-radius-circle: 50%;
+  --wa-border-radius-square: 0px;
+
+  /* ==========================================================================
+     Shared control layer — the extension's density for the tokens declared in
+     src/shared/styles/litStyles.ts.
+     --------------------------------------------------------------------------
+     These are the `--wa-*` bridge names, not the shared names themselves. All
+     three webviews are a single Lit root, so `litStyles`' `:host` block wins
+     over anything declared here under the shared name — a `--row-height: 24px`
+     at `:root` would never reach a component. The shared sheet reads each
+     host-varying step through a `--wa-*` indirection, which inherits, so this
+     is the only shape that actually changes the rendered density.
+
+     Tighter than the desktop's: this is a sidebar-width panel, and the
+     row/control scale is what keeps it reading as editor chrome rather than a
+     web page embedded in one.
+     ========================================================================== */
+  --wa-control-size-s: 20px;
+  --wa-control-size-m: 22px;
+  --wa-control-size-l: 24px;
+  --wa-row-height: 24px;
+  --wa-row-padding: 2px 6px;
+  --wa-height-option: 22px;
+  --letter-spacing-tight: -0.005em;
+
+  /* Web Awesome canonical space scale. Mirrors the values from the WA default
+     theme so consumers can rely on --wa-space-* even if the WA color-scheme
+     class hasn't been mounted yet. */
+  --wa-space-scale: 1;
+  --wa-space-3xs: calc(var(--wa-space-scale) * 0.125rem); /* 2px */
+  --wa-space-2xs: calc(var(--wa-space-scale) * 0.25rem); /* 4px */
+  --wa-space-xs: calc(var(--wa-space-scale) * 0.5rem); /* 8px */
+  --wa-space-s: calc(var(--wa-space-scale) * 0.75rem); /* 12px */
+  --wa-space-m: calc(var(--wa-space-scale) * 1rem); /* 16px */
+  --wa-space-l: calc(var(--wa-space-scale) * 1.5rem); /* 24px */
+  --wa-space-xl: calc(var(--wa-space-scale) * 2rem); /* 32px */
+  --wa-space-2xl: calc(var(--wa-space-scale) * 2.5rem); /* 40px */
+  --wa-space-3xl: calc(var(--wa-space-scale) * 3rem); /* 48px */
+  --wa-space-4xl: calc(var(--wa-space-scale) * 4rem); /* 64px */
+  --wa-space-5xl: calc(var(--wa-space-scale) * 5rem); /* 80px */
+}
+
+body {
+  margin: 0;
+  padding: 20px;
+  font-family: var(--wa-font-family-body);
+  font-size: var(--wa-font-size-m);
+  color: var(--wa-color-text-normal);
+  background-color: var(--wa-color-surface-default);
+  box-sizing: border-box;
+}
+
+/* Match light-DOM text selection to the host editor theme. Shadow-root
+   content gets the same rule from the designTokens sheet (litStyles.ts). */
+::selection {
+  background-color: var(--wa-color-editor-selection);
+}
+
+/* Honor the OS-level reduced-motion preference for light-DOM content.
+   Shadow-root content gets the same damping from the designTokens sheet. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Option-row height for light DOM. The rule itself lives once in
+   `formControlStyles` (src/shared/styles/controlStyles.ts) and reads this
+   token; it was previously declared three times at three different heights. */
+wa-option::part(base),
+wa-dropdown-item::part(base) {
+  min-height: var(--wa-height-option);
+  padding: var(--wa-space-3xs) var(--wa-space-xs);
+  line-height: var(--wa-line-height-condensed);
+}

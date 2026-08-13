@@ -1,0 +1,40 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreDependencies": [".*"],
+  "ignoreBinaries": [".*"],
+  "workspaces": {
+    ".": {
+      "entry": ["src/test-kernel/**/*.vitest.ts", "scripts/**/*.mjs"],
+      "project": ["src/**/*.ts"],
+      "ignore": ["src/platform/index.ts"]
+    },
+    "packages/extension": {
+      "entry": ["src/extension.ts", "src/**/frontend/index.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/agent": {
+      "entry": [
+        "src/index.ts",
+        "src/node.ts",
+        "src/schemas.ts",
+        "scripts/*.mjs"
+      ],
+      "project": ["src/**/*.ts", "scripts/*.mjs"]
+    },
+    "packages/cli": {
+      "entry": ["src/bin/texra.ts", "scripts/**/*.{ts,tsx,mjs}"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/desktop": {
+      "entry": [
+        "src/main/bootstrap.ts",
+        "src/main/index.ts",
+        "src/preload/index.ts",
+        "src/renderer/main.ts",
+        "tests/**/*.{ts,tsx}"
+      ],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignore": ["src/renderer/vite-env.d.ts"]
+    }
+  }
+}

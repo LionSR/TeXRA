@@ -1,0 +1,1661 @@
+/*
+ * Desktop renderer document styles: the light-DOM half of the shared control
+ * layer, plus the surfaces that live outside a shadow root (overlays, the
+ * command palette, onboarding, the editor tree, the terminal well).
+ *
+ * Two things to know before editing:
+ *
+ * 1. Every value is a token. `src/shared/styles/controlStyles.ts` declares the
+ *    same `.btn-*` / `.icon-button` / `.settings-row` class names for shadow
+ *    DOM; this file mirrors them for light DOM because neither tree can adopt
+ *    the other's stylesheet. Since both copies are pure `var()` consumers they
+ *    cannot drift in appearance — only in existence. Add a declaration to one,
+ *    add it to the other.
+ * 2. Type and motion resolve through the shared token names (`--font-size-*`,
+ *    `--transition-*`) that `themeTokens.css` overrides. A desktop-private ramp
+ *    beside them is how the two trees end up at different sizes.
+ */
+
+:root {
+  font-family: var(--wa-font-family-body);
+  color: var(--wa-color-text-normal);
+}
+
+body {
+  margin: 0;
+  font-size: var(--font-size);
+  line-height: var(--line-height-normal);
+  /* A native app does not rubber-band its whole window. */
+  overscroll-behavior: none;
+  /* The ambient wash (radial brand tints over a deep gradient in dark, a soft
+     paper fade in light) is what stops the window reading as a flat rectangle.
+     Fixed so it doesn't scroll with pane content. */
+  background: var(--desktop-canvas-wash);
+  background-attachment: fixed;
+  color: var(--wa-color-text-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom elements need an explicit `[hidden]` rule — the user-agent
+   stylesheet's `[hidden] { display: none }` doesn't reach into wa-button's
+   shadow DOM consistently. */
+wa-button[hidden] {
+  display: none !important;
+}
+
+/* =====================================================================
+   Canonical controls — light-DOM mirror of src/shared/styles/controlStyles.ts
+   ----------------------------------------------------------------------
+   Same class names, same tokens, different tree. See the file header.
+   --------------------------------------------------------------------- */
+
+/* One focus ring for the whole renderer, unscoped on purpose: a ring scoped to
+   a shell class silently disappears the moment that class stops being
+   emitted. */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--wa-color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.focus-ring-inset:focus-visible {
+  outline-offset: calc(-1 * var(--focus-ring-offset));
+}
+
+/* Mirrors @shared/styles/litStyles.ts's animationStyles: same keyframe name so
+   a caller can override just the duration, as taskShell.css's
+   .task-environment-refresh does. */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 2s linear infinite;
+}
+
+wa-button.btn-primary::part(base),
+wa-button.btn-secondary::part(base) {
+  min-height: var(--height-button);
+  padding-inline: var(--wa-space-m);
+  border: var(--border-thin) solid transparent;
+  border-radius: var(--border-radius-medium);
+  font-weight: var(--font-weight-medium);
+  transition:
+    background-color var(--transition-normal),
+    border-color var(--transition-normal),
+    color var(--transition-normal),
+    box-shadow var(--transition-normal);
+}
+
+wa-button:is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .action-button,
+    .icon-button,
+    .action-icon-button
+  )
+  wa-icon {
+  flex: 0 0 auto;
+}
+
+/* A flat fill, not the former product gradient: the gradient plus its
+   shadow-on-hover was the loudest element in the app and made the one CTA
+   compete with content. */
+wa-button.btn-primary::part(base) {
+  background: var(--wa-color-brand-fill-loud);
+  color: var(--wa-color-brand-on-loud);
+}
+
+wa-button.btn-primary::part(base):hover {
+  background: color-mix(
+    in srgb,
+    var(--wa-color-brand-fill-loud) 92%,
+    var(--wa-color-brand-on-loud)
+  );
+}
+
+wa-button.btn-primary::part(base):active {
+  background: color-mix(
+    in srgb,
+    var(--wa-color-brand-fill-loud) 84%,
+    var(--wa-color-brand-on-loud)
+  );
+}
+
+wa-button.btn-secondary::part(base) {
+  border-color: var(--border-hairline-strong);
+  background: var(--control-fill);
+  color: var(--wa-color-text-normal);
+}
+
+wa-button.btn-secondary::part(base):hover {
+  border-color: color-mix(
+    in srgb,
+    var(--wa-color-focus) 38%,
+    var(--border-hairline-strong)
+  );
+  background: color-mix(
+    in srgb,
+    var(--wa-color-brand-fill-quiet) 40%,
+    var(--control-fill-hover)
+  );
+}
+
+wa-button.btn-secondary::part(base):active {
+  background: var(--surface-selected);
+}
+
+wa-button.btn-ghost,
+wa-button.action-button {
+  flex-shrink: 0;
+}
+
+wa-button.btn-ghost::part(base),
+wa-button.action-button:not(.btn-primary):not(.btn-secondary)::part(base) {
+  gap: var(--wa-space-2xs);
+  min-height: var(--height-control-compact);
+  padding-inline: var(--control-padding-inline);
+  border: var(--border-thin) solid transparent;
+  border-radius: var(--border-radius-medium);
+  background: transparent;
+  font-size: var(--font-size-sm);
+  transition:
+    background-color var(--transition-normal),
+    border-color var(--transition-normal),
+    color var(--transition-normal);
+}
+
+wa-button.btn-ghost::part(base):hover,
+wa-button.action-button:not(.btn-primary):not(.btn-secondary)::part(
+    base
+  ):hover {
+  border-color: var(--border-hairline);
+  background: var(--surface-hover);
+}
+
+wa-button.btn-ghost::part(base):active,
+wa-button.action-button:not(.btn-primary):not(.btn-secondary)::part(
+    base
+  ):active {
+  background: var(--surface-active);
+}
+
+wa-button.btn-ghost wa-icon,
+wa-button.action-button wa-icon {
+  font-size: var(--font-size-sm);
+}
+
+wa-button.icon-button,
+wa-button.action-icon-button {
+  --control-size: var(--control-size-s);
+  width: var(--control-size);
+  height: var(--control-size);
+}
+
+wa-button.icon-button {
+  --control-size: var(--control-size-m);
+}
+
+wa-button.icon-button::part(base),
+wa-button.action-icon-button::part(base) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-size);
+  min-width: 0;
+  height: var(--control-size);
+  min-height: 0;
+  padding: 0;
+  border: var(--border-thin) solid transparent;
+  border-radius: var(--row-radius);
+  background: transparent;
+  color: var(--wa-color-text-quiet);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+wa-button.icon-button::part(label),
+wa-button.action-icon-button::part(label) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+wa-button.icon-button::part(base):hover,
+wa-button.action-icon-button::part(base):hover {
+  border-color: var(--border-hairline);
+  background: var(--surface-hover);
+  color: var(--wa-color-text-normal);
+}
+
+wa-button.icon-button::part(base):active,
+wa-button.action-icon-button::part(base):active,
+wa-button.icon-button[aria-pressed='true']::part(base),
+wa-button.action-icon-button[aria-pressed='true']::part(base) {
+  border-color: color-mix(
+    in srgb,
+    var(--wa-color-focus) 34%,
+    var(--border-hairline)
+  );
+  background: var(--wa-color-brand-fill-quiet);
+  color: var(--wa-color-text-normal);
+}
+
+wa-button:is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .action-button,
+    .icon-button,
+    .action-icon-button
+  ):not([disabled]) {
+  transition: transform var(--transition-normal);
+}
+
+/* The hover lift is for standalone buttons only: .btn-ghost rows (sidebar
+   actions, project row, review file rows) are full-width list rows, where a
+   1px lift reads as a layout jitter. */
+wa-button:is(
+    .btn-primary,
+    .btn-secondary,
+    .action-button,
+    .icon-button,
+    .action-icon-button
+  ):not([disabled]):hover {
+  transform: translateY(-1px);
+}
+
+wa-button:is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .action-button,
+    .icon-button,
+    .action-icon-button
+  ):not([disabled]):active {
+  transform: translateY(0) scale(0.97);
+}
+
+wa-button.icon-button.is-size-s,
+wa-button.action-icon-button.is-size-s {
+  --control-size: var(--control-size-s);
+}
+
+wa-button.icon-button.is-size-m,
+wa-button.action-icon-button.is-size-m {
+  --control-size: var(--control-size-m);
+}
+
+wa-button.icon-button.is-size-l,
+wa-button.action-icon-button.is-size-l {
+  --control-size: var(--control-size-l);
+}
+
+wa-button.icon-button wa-icon,
+wa-button.action-icon-button wa-icon {
+  font-size: var(--font-size-icon-sm, var(--font-size));
+}
+
+wa-button:is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .action-button:not(.btn-primary):not(.btn-secondary),
+    .icon-button,
+    .action-icon-button
+  )[disabled]::part(base) {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+  box-shadow: none;
+}
+
+wa-button.btn-primary[disabled]::part(base):is(:hover, :active) {
+  background: var(--wa-color-brand-fill-loud);
+}
+
+wa-button.btn-secondary[disabled]::part(base):is(:hover, :active) {
+  background: var(--control-fill);
+}
+
+wa-button:is(
+    .btn-ghost,
+    .action-button,
+    .icon-button,
+    .action-icon-button
+  )[disabled]::part(base):is(:hover, :active) {
+  background: transparent;
+  color: var(--wa-color-text-quiet);
+}
+
+wa-button.btn-ghost.is-link::part(base),
+wa-button.action-button.is-link::part(base) {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-text-link);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  transition:
+    color var(--transition-fast),
+    text-decoration-color var(--transition-fast);
+}
+
+wa-button.btn-ghost.is-link::part(base):hover,
+wa-button.action-button.is-link::part(base):hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-link-active);
+  text-decoration-color: currentColor;
+}
+
+wa-button:is(.btn-ghost.is-link, .action-button.is-link):is(:hover, :active) {
+  transform: none;
+}
+
+wa-button.is-danger::part(base) {
+  color: var(--wa-color-danger-on-quiet);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  wa-button:is(
+      .btn-primary,
+      .btn-secondary,
+      .btn-ghost,
+      .action-button,
+      .icon-button,
+      .action-icon-button
+    ):not([disabled]):is(:hover, :active) {
+    transform: none;
+  }
+}
+
+/* Decorative leading-icon surface. This mirrors `iconSurfaceStyles` for the
+   renderer's light DOM and deliberately has no interaction states. */
+.icon-surface {
+  --icon-surface-size: var(--control-size-m);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: var(--icon-surface-size);
+  height: var(--icon-surface-size);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--row-radius);
+  background: var(--control-fill);
+  color: var(--wa-color-text-quiet);
+}
+
+.icon-surface wa-icon {
+  width: 1em;
+  min-width: 1em;
+  height: 1em;
+  min-height: 1em;
+  font-size: var(--font-size-icon-sm, var(--font-size));
+}
+
+.icon-surface.is-size-s {
+  --icon-surface-size: var(--control-size-s);
+}
+
+.icon-surface.is-size-m {
+  --icon-surface-size: var(--control-size-m);
+}
+
+.icon-surface.is-size-l {
+  --icon-surface-size: var(--control-size-l);
+}
+
+.icon-surface.is-size-l wa-icon {
+  font-size: var(--font-size-icon, 1em);
+}
+
+wa-button.is-danger::part(base):hover {
+  background: color-mix(
+    in srgb,
+    var(--wa-color-danger-on-quiet) 10%,
+    transparent
+  );
+  color: var(--wa-color-danger-on-quiet);
+}
+
+/* The borderless search skin: no box, one bottom hairline, larger type. Used
+   where the field owns its whole band and a bordered control would read as a
+   widget floating inside a panel. */
+wa-input.input-plain::part(base) {
+  min-height: var(--wa-height-header);
+  border: 0;
+  border-bottom: 1px solid var(--border-hairline);
+  border-radius: 0;
+  background: transparent;
+}
+
+wa-input.input-plain::part(input) {
+  padding-inline: var(--wa-space-m);
+  font-size: var(--font-size-lg);
+}
+
+/* Every imperative dialog receives this shared close control from
+   overlayDialog.ts. The route-specific class stays only as a testing/ownership
+   hook; position and skin no longer depend on which overlay created it. */
+wa-button.desktop-overlay-close {
+  position: absolute;
+  top: var(--wa-space-s);
+  right: var(--wa-space-s);
+  z-index: 10;
+}
+
+/* OverlayDialog applies the canonical large icon-button skin. These controls
+   float over content, so this local rule adds only the raised backing needed
+   for legibility over a diff or PDF. */
+wa-button.desktop-overlay-close::part(base) {
+  background: var(--wa-color-surface-raised);
+}
+
+/* The hover overlay composited onto the opaque backing, rather than replacing
+   it: same alpha step as every other hover, still legible over content. */
+wa-button.desktop-overlay-close::part(base):hover {
+  background:
+    linear-gradient(var(--surface-hover), var(--surface-hover)),
+    var(--wa-color-surface-raised);
+  color: var(--wa-color-text-normal);
+}
+
+/* Overlay headings share one type ramp so previews and prompts do not create
+   one-off visual hierarchies. Diff/PDF paths additionally share the same
+   compact monospace metadata treatment. */
+wa-dialog.desktop-pdf-overlay .desktop-pdf-title,
+wa-dialog.desktop-prompt-overlay .desktop-prompt-title {
+  margin: 0;
+  color: var(--wa-color-text-normal);
+  font-size: var(--font-size-h2);
+  font-weight: var(--wa-font-weight-semibold);
+  line-height: var(--line-height-heading);
+}
+
+wa-dialog.desktop-pdf-overlay .desktop-pdf-subtitle {
+  margin: var(--wa-space-2xs) 0 0;
+  overflow: hidden;
+  color: var(--wa-color-text-quiet);
+  font-family: var(--wa-font-family-mono);
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =====================================================================
+   PDF preview overlay (wa-dialog) — audit item B, trajectory #17
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-pdf-overlay {
+  --width: 100vw;
+  --height: 100vh;
+}
+
+wa-dialog.desktop-pdf-overlay::part(dialog) {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  margin: 0;
+  border-radius: 0;
+}
+
+wa-dialog.desktop-pdf-overlay::part(body) {
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+wa-dialog.desktop-pdf-overlay .desktop-pdf-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--wa-color-surface-default);
+}
+
+wa-dialog.desktop-pdf-overlay .desktop-pdf-header {
+  padding: var(--wa-space-m) var(--wa-space-l);
+  border-bottom: var(--wa-border-style-default, solid)
+    var(--wa-border-width-default, 1px) var(--wa-color-neutral-fill-quiet);
+  background: var(--wa-color-surface-raised);
+}
+
+wa-dialog.desktop-pdf-overlay .desktop-pdf-frame {
+  flex: 1;
+  min-height: 0;
+  display: block;
+  width: 100%;
+  border: 0;
+  background: var(--wa-color-surface-default);
+}
+
+/* =====================================================================
+   Correlated text/password prompt (wa-dialog)
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-prompt-overlay {
+  --width: min(520px, calc(100vw - var(--wa-space-l) * 2));
+}
+
+wa-dialog.desktop-prompt-overlay::part(body) {
+  padding: 0;
+}
+
+wa-dialog.desktop-prompt-overlay .desktop-prompt-body {
+  padding: var(--wa-space-l);
+}
+
+wa-dialog.desktop-prompt-overlay .desktop-prompt-header {
+  margin-bottom: var(--wa-space-m);
+}
+
+wa-dialog.desktop-prompt-overlay .desktop-prompt-subtitle {
+  margin: var(--wa-space-xs) 0 0;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+}
+
+.desktop-prompt-form {
+  display: grid;
+  gap: var(--wa-space-m);
+}
+
+.desktop-prompt-input {
+  width: 100%;
+}
+
+.desktop-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--wa-space-xs);
+}
+
+/* =====================================================================
+   Logs pane (hosted by the Logs tab)
+   --------------------------------------------------------------------- */
+
+.desktop-log-host {
+  display: block;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  container-type: inline-size;
+}
+
+/* =====================================================================
+   Command palette — Stacks-style searchable command card
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-command-palette {
+  --width: min(590px, calc(100vw - var(--wa-space-m) * 2));
+}
+
+wa-dialog.desktop-command-palette::part(dialog) {
+  align-self: flex-start;
+  max-height: min(720px, 76vh);
+  margin-block-start: 10vh;
+  overflow: hidden;
+  border: 1px solid var(--wa-color-menu-border);
+  border-radius: var(--wa-border-radius-l);
+  background: var(--wa-color-menu-background);
+  box-shadow: var(--desktop-shadow-lg), var(--desktop-edge-highlight);
+}
+
+wa-dialog.desktop-command-palette::part(body) {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: inherit;
+  padding: 0;
+  overflow: hidden;
+}
+
+.desktop-command-palette-search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--wa-space-xs);
+  min-height: 58px;
+  padding: var(--wa-space-2xs) var(--wa-space-s);
+  border-bottom: var(--border-thin) solid var(--border-hairline);
+}
+
+.desktop-command-palette-search-icon {
+  display: grid;
+  width: 1em;
+  height: 1em;
+  place-items: center;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-icon);
+}
+
+wa-input.desktop-command-palette-input {
+  width: 100%;
+}
+
+wa-input.desktop-command-palette-input::part(base) {
+  min-height: 44px;
+  padding: 0 var(--wa-space-2xs);
+  border: var(--border-thin) solid transparent;
+  border-radius: var(--row-radius);
+  background: transparent;
+  box-shadow: none;
+}
+
+wa-input.desktop-command-palette-input:hover::part(base) {
+  border-color: var(--border-hairline-strong);
+}
+
+wa-input.desktop-command-palette-input:focus-within::part(base) {
+  border-color: var(--wa-color-focus);
+  box-shadow: 0 0 0 1px var(--wa-color-focus);
+}
+
+wa-input.desktop-command-palette-input::part(input) {
+  padding: 0;
+  outline: 0;
+  color: var(--wa-color-text-normal);
+  font-size: var(--font-size-lg);
+}
+
+.desktop-command-palette-key,
+.desktop-command-palette-meta,
+.desktop-command-palette-help kbd {
+  border: var(--border-thin) solid var(--border-hairline-strong);
+  border-radius: var(--wa-border-radius-s);
+  background: var(--wa-color-surface-raised);
+  box-shadow: inset 0 -1px 0 var(--border-hairline);
+  color: var(--wa-color-text-quiet);
+  font-family: var(--wa-font-family-mono);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+}
+
+.desktop-command-palette-key {
+  padding: var(--wa-space-3xs) var(--wa-space-2xs);
+}
+
+.desktop-command-palette-list {
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--wa-space-2xs) var(--wa-space-xs) var(--wa-space-xs);
+}
+
+.desktop-command-palette-group + .desktop-command-palette-group {
+  margin-block-start: var(--wa-space-2xs);
+}
+
+.desktop-command-palette-group-label {
+  position: sticky;
+  z-index: 1;
+  top: calc(var(--wa-space-2xs) * -1);
+  margin: 0;
+  padding: var(--wa-space-xs) var(--wa-space-2xs) var(--wa-space-3xs);
+  background: var(--wa-color-menu-background);
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+}
+
+.desktop-command-palette-empty {
+  padding: var(--wa-space-s) var(--wa-space-m);
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.desktop-command-palette-item {
+  display: block;
+  width: 100%;
+}
+
+.desktop-command-palette-item::part(base) {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 48px;
+  padding: var(--wa-space-2xs);
+  border: 0;
+  border-radius: var(--row-radius);
+  background: transparent;
+  color: var(--wa-color-text-normal);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.desktop-command-palette-item::part(label) {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+
+.desktop-command-palette-item::part(end) {
+  flex: 0 0 auto;
+  margin-inline-start: var(--wa-space-xs);
+}
+
+.desktop-command-palette-item:hover::part(base) {
+  background: var(--surface-hover);
+}
+
+/* Keyboard selection is a neutral fill, not a brand tint: the row is a
+   position in a list, not an accented action. */
+.desktop-command-palette-item[aria-selected='true']::part(base) {
+  background: var(--surface-selected);
+}
+
+.desktop-command-palette-label,
+.desktop-command-palette-description,
+.desktop-command-palette-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-command-palette-item-icon {
+  display: grid;
+  width: var(--control-size-s);
+  height: var(--control-size-s);
+  place-items: center;
+  border: var(--border-thin) solid var(--border-hairline);
+  border-radius: var(--wa-border-radius-s);
+  background: var(--wa-color-surface-lowered);
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-icon-sm);
+}
+
+.desktop-command-palette-main {
+  display: grid;
+  grid-template-columns: var(--control-size-s) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--wa-space-xs);
+  width: 100%;
+  min-width: 0;
+}
+
+.desktop-command-palette-item-icon wa-icon {
+  display: grid;
+  width: 1em;
+  height: 1em;
+  place-items: center;
+}
+
+.desktop-command-palette-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.desktop-command-palette-label {
+  color: var(--wa-color-text-normal);
+  font-size: var(--font-size);
+  font-weight: var(--font-weight-medium);
+}
+
+.desktop-command-palette-description {
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-xs);
+}
+
+.desktop-command-palette-meta {
+  max-width: 12rem;
+  padding: var(--wa-space-3xs) var(--wa-space-2xs);
+}
+
+.desktop-command-palette-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--wa-space-xs);
+  min-height: 42px;
+  padding: var(--wa-space-2xs) var(--wa-space-s);
+  border-top: var(--border-thin) solid var(--border-hairline);
+  background: var(--wa-color-surface-lowered);
+}
+
+.desktop-command-palette-help {
+  display: flex;
+  align-items: center;
+  gap: var(--wa-space-s);
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-xs);
+}
+
+.desktop-command-palette-help span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wa-space-3xs);
+}
+
+.desktop-command-palette-help kbd {
+  padding: var(--wa-space-3xs) var(--wa-space-2xs);
+}
+
+.desktop-command-palette-customize::part(base) {
+  min-height: var(--height-control-compact);
+  padding-inline: var(--wa-space-2xs);
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-xs);
+}
+
+@media (max-width: 540px) {
+  .desktop-command-palette-help {
+    display: none;
+  }
+
+  .desktop-command-palette-footer {
+    justify-content: flex-end;
+  }
+}
+
+/* =====================================================================
+   Empty workspace + bootstrap fallback (preserved, lighter footprint)
+   --------------------------------------------------------------------- */
+
+.desktop-empty-workspace {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  padding: var(--wa-space-3xl) var(--wa-space-l);
+}
+
+.desktop-empty-workspace-panel {
+  max-width: 560px;
+  padding: var(--wa-space-2xl) var(--wa-space-xl);
+  border: 1px solid var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-xl);
+  background: var(--wa-color-surface-lowered);
+  text-align: center;
+}
+
+.desktop-empty-workspace-panel h1 {
+  margin: 0 0 var(--wa-space-s);
+  color: var(--wa-color-text-normal);
+  font-size: var(--font-size-h1);
+  font-weight: var(--wa-font-weight-semibold);
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+.desktop-empty-workspace-panel p {
+  margin: 0 0 var(--wa-space-m);
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-relaxed);
+}
+
+.shell-empty-icon {
+  margin: 0 auto var(--wa-space-m);
+}
+
+.desktop-empty-workspace-capabilities {
+  display: grid;
+  gap: var(--wa-space-xs);
+  max-width: 440px;
+  margin: 0 auto var(--wa-space-l);
+  padding: 0;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size);
+  line-height: var(--line-height-normal);
+  list-style: none;
+  text-align: left;
+}
+
+.desktop-empty-workspace-capabilities li {
+  position: relative;
+  padding-left: var(--wa-space-m);
+}
+
+.desktop-empty-workspace-capabilities li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--wa-color-brand-fill-loud);
+}
+
+.desktop-empty-workspace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--wa-space-s);
+}
+
+.desktop-bootstrap-fallback {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: var(--wa-space-3xl) var(--wa-space-l);
+  background: var(--desktop-canvas-wash);
+}
+
+.desktop-bootstrap-fallback-panel {
+  max-width: 560px;
+  padding: var(--wa-space-2xl) var(--wa-space-xl);
+  border: 1px solid var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-xl);
+  background: var(--wa-color-surface-lowered);
+  text-align: center;
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-bootstrap-fallback-panel h1 {
+  margin: 0 0 var(--wa-space-m);
+  font-size: var(--font-size-h1);
+  font-weight: var(--wa-font-weight-semibold);
+}
+
+.desktop-bootstrap-fallback-panel p {
+  margin: 0 0 var(--wa-space-s);
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-relaxed);
+}
+
+.desktop-bootstrap-fallback-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--wa-space-s);
+  margin-top: var(--wa-space-l);
+}
+
+/* =====================================================================
+   Log viewer body (hosted by the Logs tab)
+   --------------------------------------------------------------------- */
+
+.desktop-log-viewer {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--wa-space-m);
+  box-sizing: border-box;
+  gap: var(--wa-space-s);
+  overflow: hidden;
+}
+
+.desktop-log-viewer-header {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) auto;
+  gap: var(--wa-space-s);
+  align-items: flex-start;
+  min-width: 0;
+  padding-bottom: var(--wa-space-s);
+  border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
+}
+
+.desktop-log-viewer-header > div:first-child {
+  min-width: 0;
+}
+
+.desktop-log-viewer-header h2 {
+  margin: 0 0 var(--wa-space-2xs);
+  color: var(--wa-color-text-normal);
+  font-size: var(--font-size-h2);
+  font-weight: var(--wa-font-weight-semibold);
+  line-height: var(--line-height-heading);
+}
+
+.desktop-log-viewer-header p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-log-viewer-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  min-width: 0;
+  max-width: 100%;
+  padding-bottom: var(--wa-space-2xs);
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  gap: var(--wa-space-xs);
+}
+
+.desktop-log-viewer-actions wa-button {
+  flex: 0 0 auto;
+}
+
+/* Web Awesome icons embedded in light-DOM labels use one square glyph box.
+   This removes baseline-dependent offsets between toolbar, tree, and callout
+   text while leaving icon-only button geometry to the shared control skin. */
+.desktop-log-viewer-actions wa-icon,
+.desktop-log-entry-summary wa-icon,
+.desktop-editor-tree-icon,
+.desktop-editor-tree-refresh wa-icon,
+.desktop-editor-tree-empty wa-icon {
+  display: block;
+  flex: 0 0 auto;
+  width: 1em;
+  height: 1em;
+  font-size: var(--font-size-icon-sm);
+  line-height: var(--line-height-tight);
+}
+
+.desktop-log-viewer-list {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--wa-space-2xs);
+  overflow: auto;
+  border: var(--border-thin) solid var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-l);
+  background: var(--wa-form-control-background-color);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.desktop-log-entry {
+  min-width: 0;
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-log-entry::part(base) {
+  border: 0;
+  border-radius: var(--row-radius);
+  background: transparent;
+}
+
+.desktop-log-entry::part(header) {
+  min-height: var(--row-height);
+  padding: var(--row-padding);
+  border-radius: var(--row-radius);
+}
+
+.desktop-log-entry::part(header):hover {
+  background: var(--surface-hover);
+}
+
+.desktop-log-entry::part(content) {
+  padding: 0 var(--wa-space-s) var(--wa-space-s)
+    calc(var(--wa-space-s) + var(--control-size-s));
+}
+
+.desktop-log-entry::part(icon) {
+  color: var(--wa-color-text-quiet);
+}
+
+.desktop-log-entry-summary {
+  display: grid;
+  grid-template-columns: var(--control-size-s) auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--wa-space-xs);
+  min-width: 0;
+  width: 100%;
+}
+
+.desktop-log-entry-level-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--control-size-s);
+  height: var(--control-size-s);
+  border-radius: var(--wa-border-radius-s);
+  background: var(--control-fill);
+  color: var(--wa-color-text-quiet);
+}
+
+.desktop-log-entry-level-icon wa-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--font-size-icon-sm);
+  min-width: var(--font-size-icon-sm);
+  height: var(--font-size-icon-sm);
+  min-height: var(--font-size-icon-sm);
+  margin: 0;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+}
+
+.desktop-log-entry[data-level='error'] .desktop-log-entry-level-icon {
+  background: var(--wa-color-danger-fill-quiet);
+  color: var(--wa-color-danger-on-quiet);
+}
+
+.desktop-log-entry[data-level='warn'] .desktop-log-entry-level-icon {
+  background: var(--wa-color-warning-fill-quiet);
+  color: var(--wa-color-warning-on-quiet);
+}
+
+.desktop-log-entry[data-level='info'] .desktop-log-entry-level-icon {
+  color: var(--wa-color-icon-info);
+}
+
+.desktop-log-entry-level {
+  color: var(--wa-color-text-normal);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.desktop-log-entry-time {
+  color: var(--wa-color-text-quiet);
+  font-family: var(--wa-font-family-mono);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.desktop-log-entry-preview {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-log-entry-content {
+  margin: 0;
+  padding: var(--wa-space-s);
+  overflow: auto;
+  border-radius: var(--wa-border-radius-m);
+  background: var(--wa-color-surface-lowered);
+  color: var(--wa-color-text-quiet);
+  font-family: var(--wa-font-family-mono);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.desktop-log-viewer-empty {
+  display: grid;
+  min-height: 8rem;
+  place-items: center;
+  padding: var(--wa-space-l);
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+@container (max-width: 720px) {
+  .desktop-log-viewer-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .desktop-log-viewer-actions {
+    justify-content: flex-start;
+  }
+
+  .desktop-log-entry-summary {
+    grid-template-columns: var(--control-size-s) auto minmax(0, 1fr);
+  }
+
+  .desktop-log-entry-time {
+    display: none;
+  }
+}
+
+/* =====================================================================
+   Startup team panel
+   ---------------------------------------------------------------------
+   This is part of the task canvas, not a modal: the rest of the shell stays
+   visible and usable while a user chooses a starter team. */
+
+.desktop-startup-panel {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 100%;
+  padding: clamp(var(--wa-space-m), 5vh, var(--wa-space-2xl))
+    clamp(var(--wa-space-s), 4vw, var(--wa-space-xl));
+  overflow: auto;
+  background: var(--wa-color-surface-default);
+}
+
+wa-card.desktop-onboarding {
+  --spacing: var(--wa-space-l);
+  width: min(720px, 100%);
+  color: var(--wa-color-text-normal);
+}
+
+wa-card.desktop-onboarding::part(body) {
+  background: var(--wa-color-surface-lowered);
+}
+
+wa-card.desktop-onboarding::part(footer) {
+  background: var(--wa-color-surface-lowered);
+}
+
+.desktop-onboarding-header {
+  display: grid;
+  grid-template-columns: var(--control-size-l) minmax(0, 1fr);
+  gap: var(--wa-space-s);
+  padding-bottom: var(--wa-space-m);
+  margin-bottom: var(--wa-space-2xs);
+  border-bottom: 1px solid var(--wa-color-surface-border);
+}
+
+.desktop-onboarding-icon {
+  align-self: start;
+}
+
+.desktop-onboarding h1 {
+  margin: 0;
+  color: var(--wa-color-text-normal);
+  font-size: var(--font-size-h1);
+  font-weight: var(--wa-font-weight-semibold);
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+.desktop-onboarding p {
+  margin: var(--wa-space-xs) 0 0;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size);
+  line-height: var(--line-height-normal);
+}
+
+.desktop-onboarding-steps {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.desktop-onboarding-steps li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: var(--wa-space-s);
+  padding: var(--wa-space-s) 0;
+  border-bottom: 1px solid var(--wa-color-surface-border);
+}
+
+.desktop-onboarding-steps li:last-child {
+  border-bottom: 0;
+}
+
+.desktop-onboarding-step-index {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--wa-color-surface-border);
+  border-radius: 50%;
+  color: var(--wa-color-text-normal);
+  font-size: var(--font-size-sm);
+  font-weight: var(--wa-font-weight-semibold);
+}
+
+.desktop-onboarding-steps strong,
+.desktop-onboarding-steps span {
+  display: block;
+  min-width: 0;
+}
+
+.desktop-onboarding-steps strong {
+  color: var(--wa-color-text-normal);
+  font-size: var(--font-size);
+  font-weight: var(--wa-font-weight-semibold);
+}
+
+.desktop-onboarding-steps span {
+  margin-top: var(--wa-space-2xs);
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size);
+  line-height: var(--line-height-normal);
+}
+
+.desktop-onboarding-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--wa-space-xs);
+  width: 100%;
+}
+
+.desktop-onboarding-actions-spacer {
+  flex: 1 1 auto;
+}
+
+.desktop-onboarding-startup-choice {
+  color: var(--wa-color-text-quiet);
+}
+
+@media (max-width: 560px) {
+  .desktop-onboarding-actions {
+    align-items: stretch;
+  }
+
+  .desktop-onboarding-startup-choice,
+  .desktop-onboarding-actions-spacer {
+    flex-basis: 100%;
+  }
+
+  .desktop-onboarding-actions wa-button {
+    flex: 1 1 150px;
+  }
+}
+
+/* Work-type choices — the tour's first step. Each row selects a discipline
+   team, so they read as large tappable cards rather than a radio list. */
+.desktop-onboarding-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wa-space-2xs);
+  margin-top: var(--wa-space-s);
+}
+
+.desktop-onboarding-choice {
+  width: 100%;
+}
+
+.desktop-onboarding-choice::part(base) {
+  box-sizing: border-box;
+  justify-content: flex-start;
+  width: 100%;
+  padding: var(--wa-space-xs) var(--wa-space-s);
+  border-color: var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-l);
+  background: transparent;
+  color: var(--wa-color-text-normal);
+  text-align: left;
+}
+
+.desktop-onboarding-choice::part(base):hover {
+  border-color: color-mix(
+    in srgb,
+    var(--wa-color-brand-fill-loud) 40%,
+    transparent
+  );
+  background: color-mix(
+    in srgb,
+    var(--wa-color-brand-fill-loud) 8%,
+    transparent
+  );
+}
+
+.desktop-onboarding-choice-icon {
+  margin-inline-end: var(--wa-space-2xs);
+}
+
+.desktop-onboarding-choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wa-space-3xs);
+  min-width: 0;
+}
+
+.desktop-onboarding-choice-text strong {
+  font-size: var(--font-size);
+  font-weight: var(--wa-font-weight-semibold);
+}
+
+.desktop-onboarding-choice-text > span {
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+/* Roster confirmation — shows what the chosen team actually enabled, so the
+   preset is legible rather than an opaque label. */
+.desktop-onboarding-roster {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wa-space-s);
+  margin-top: var(--wa-space-s);
+}
+
+.desktop-onboarding-roster-summary {
+  margin: 0;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size);
+}
+
+.desktop-onboarding-roster-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wa-space-2xs);
+}
+
+.desktop-onboarding-roster-label {
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.desktop-onboarding-roster-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wa-space-2xs);
+}
+
+/* Each chip names one enabled agent, so they read as a brand-tinted roster
+   rather than neutral gray tags. */
+.desktop-onboarding-chip {
+  padding: 3px var(--wa-space-xs);
+  border: 1px solid
+    color-mix(in srgb, var(--wa-color-brand-fill-loud) 22%, transparent);
+  border-radius: var(--wa-border-radius-pill);
+  background: color-mix(
+    in srgb,
+    var(--wa-color-brand-fill-loud) 9%,
+    transparent
+  );
+  color: var(--wa-color-text-normal);
+  font-family: var(--wa-font-family-mono);
+  font-size: var(--font-size-xs);
+}
+
+/* =====================================================================
+   Editor pane (file tree + Monaco)
+   --------------------------------------------------------------------- */
+
+/* The file tree lives in the explorer sidebar, not beside the editor, so this
+   pane is a single full-width column. It previously reserved a tree column that
+   nothing occupied, which squeezed Monaco into a narrow strip and left the rest
+   of the pane blank. */
+.desktop-editor-pane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.desktop-editor-tree {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--wa-color-surface-lowered);
+}
+
+.desktop-editor-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--wa-height-header);
+  padding: 0 var(--wa-space-2xs) 0 var(--wa-space-s);
+  box-sizing: border-box;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.desktop-editor-tree-refresh {
+  --control-size: var(--control-size-s);
+}
+
+.desktop-editor-tree-list {
+  --indent-size: var(--wa-space-s);
+  --indent-guide-width: 1px;
+  --indent-guide-color: var(--border-hairline);
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--wa-space-2xs);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(
+      in srgb,
+      var(--wa-color-text-quiet) 24%,
+      transparent
+    )
+    transparent;
+}
+
+.desktop-editor-tree-row {
+  display: block;
+  width: 100%;
+  color: var(--wa-color-text-quiet);
+  font-family: var(--wa-font-family-mono);
+  font-size: var(--font-size-sm);
+}
+
+.desktop-editor-tree-row::part(item) {
+  min-height: var(--row-height);
+  padding: var(--row-padding);
+  border-radius: var(--row-radius);
+  /* wa-tree-item paints a brand left-edge on its selected row; the alpha fill
+     below is the whole selected affordance, so the edge is suppressed. */
+  border-inline-start-color: transparent;
+  transition: background-color var(--transition-fast);
+}
+
+.desktop-editor-tree-row::part(label) {
+  display: flex;
+  align-items: center;
+  gap: var(--wa-space-3xs);
+  min-width: 0;
+}
+
+.desktop-editor-tree-row::part(item):hover {
+  background: var(--surface-hover);
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-editor-tree-row[selected]::part(item) {
+  background: var(--surface-selected);
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-editor-tree-icon {
+  display: inline-grid;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 1em;
+  place-items: center;
+  color: var(--color-text-muted);
+}
+
+.desktop-editor-tree-icon wa-icon {
+  width: 1em;
+  min-width: 1em;
+  height: 1em;
+  min-height: 1em;
+}
+
+.desktop-editor-tree-status {
+  color: var(--wa-color-text-quiet);
+  font-family: var(--wa-font-family-body);
+  font-size: var(--font-size-xs);
+}
+
+.desktop-editor-tree-status::part(item) {
+  min-height: var(--height-control-compact);
+  padding: var(--row-padding);
+}
+
+.desktop-editor-tree-status.is-error {
+  color: var(--wa-color-danger-on-quiet);
+}
+
+/* Each row renders one path segment. Preserve its reading direction and
+   truncate only unusually long names. */
+.desktop-editor-tree-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-editor-dirty-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--wa-color-brand-fill-loud, currentColor);
+}
+
+.desktop-editor-tree-empty {
+  padding: var(--wa-space-m);
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+}
+
+.desktop-editor-surface {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* =====================================================================
+   Terminal pane
+   --------------------------------------------------------------------- */
+
+.desktop-terminal-pane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  box-sizing: border-box;
+  background: var(--wa-color-surface-default);
+}
+
+.desktop-terminal-pane .desktop-terminal-surface {
+  padding: var(--wa-space-xs);
+  border: 0;
+  border-radius: 0;
+  background: var(--wa-color-surface-default);
+}
+
+/* Sessions stack in one cell; inactive ones are [hidden]. Keeping them mounted
+   preserves scrollback and the running shell. */
+.desktop-terminal-surface {
+  grid-area: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.desktop-terminal-surface[hidden] {
+  display: none;
+}

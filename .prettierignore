@@ -1,0 +1,26 @@
+# Build output
+dist/
+out/
+releases/
+
+# Dependencies
+node_modules/
+pnpm-lock.yaml
+
+# CLI validation-only bundle and copied resources
+packages/cli/.texra-validate-run/
+
+# YAML templates with {{ }} placeholders - Prettier rewrites these as { { } }
+packages/extension/resources/templates/
+
+# Claude Code agent scratch space (worktrees contain unstaged template files)
+.claude/
+
+# Local git worktrees (contain unstaged template files prettier cannot parse)
+.worktrees/
+
+# GitHub Actions workflows — the format-pr workflow's GITHUB_TOKEN lacks
+# `workflows: write` permission, so any auto-formatting of workflow YAML
+# triggers a "refusing to update workflow" push rejection. Skip them
+# entirely from format runs.
+.github/workflows/

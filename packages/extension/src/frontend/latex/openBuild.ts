@@ -1,0 +1,178 @@
+import * as os from 'node:os';
+import * as path from 'node:path';
+
+import * as vscode from 'vscode';
+
+import { isLatexFile } from '@common/files/fileTypeUtils';
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { compileLatex2Pdf } from '@latex/texTools';
+import * as logger from '@logger/logUtils';
+import type { FileLocation } from '@shared/schemas';
+import {
+  LATEX_VIEWER_OPEN_DELAY_MS,
+  LATEX_VIEWER_REFRESH_DELAY_MS,
+} from '@shared/constants/latexTiming';
+
+// Local imports - utilities
+import { getFileStem } from '@utils/core';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { pathToLocation } from '@utils/files/fileLocation';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const CHANNEL = 'OpenBuildUtils';
+
+/**
+ * Resolve `latex-workshop.latex.outDir` by expanding all LaTeX Workshop
+ * placeholders for the given file.  Longer placeholders are replaced first
+ * so that e.g. `%DOC_EXT%` is not partially consumed by `%DOC%`.
+ *
+ * Falls back to a relative path resolved against the file's directory when the
+ * result is not absolute.
+ */
+function resolveLatexWorkshopOutDir(filePath: string): string {
+  const raw = vscode.workspace
+    .getConfiguration('latex-workshop.latex')
+    .get<string>('outDir', '%DIR%/build');
+
+  const dir = path.dirname(filePath);
+  const normalizedRaw = raw.trim();
+  if (!normalizedRaw) {
+    return path.join(dir, 'build');
+  }
+
+  const docfile = getFileStem(filePath);
+  const doc = path.join(dir, docfile);
+  const workspaceFolder =
+    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? dir;
+  const relativeDir = path.relative(workspaceFolder, dir);
+  const relativeDoc = path.relative(workspaceFolder, doc);
+
+  // Order matters: longer/more-specific placeholders first to avoid partial matches.
+  const replacements: [string, string][] = [
+    ['%DOC_EXT_W32%', filePath.replaceAll('/', '\\')],
+    ['%DOCFILE_EXT%', path.basename(filePath)],
+    ['%DOC_EXT%', filePath],
+    ['%DOCFILE%', docfile],
+    ['%DOC_W32%', doc.replaceAll('/', '\\')],
+    ['%DOC%', doc],
+    ['%DIR_W32%', dir.replaceAll('/', '\\')],
+    ['%DIR%', dir],
+    ['%WORKSPACE_FOLDER%', workspaceFolder],
+    ['%RELATIVE_DIR%', relativeDir],
+    ['%RELATIVE_DOC%', relativeDoc],
+    ['%TMPDIR%', os.tmpdir()],
+  ];
+
+  let resolved = normalizedRaw;
+  for (const [placeholder, value] of replacements) {
+    resolved = resolved.replaceAll(placeholder, value);
+  }
+
+  return path.isAbsolute(resolved) ? resolved : path.resolve(dir, resolved);
+}
+
+/**
+ * Invoke the LaTeX Workshop build command for a file, warn-logging on failure.
+ * `warnLabel` prefixes the failure message so callers keep their diagnostic context.
+ */
+export async function invokeLatexWorkshopBuild(
+  uri: vscode.Uri,
+  channel: string,
+  warnLabel: string,
+): Promise<void> {
+  try {
+    await vscode.commands.executeCommand('latex-workshop.build', uri);
+  } catch (err) {
+    logger.warn(channel, `${warnLabel}: ${toErrorMessage(err)}`);
+  }
+}
+
+/**
+ * Open a file, compile if it is TeX, and display the resulting PDF.
+ * The PDF viewer is refreshed if already loaded.
+ */
+export async function openBuildDisplayIfTex(
+  fileLocation: FileLocation,
+  options: { preserveFocus?: boolean } = {},
+): Promise<void> {
+  const absolutePath = fileLocation.absolutePath;
+
+  const exists = await AbsoluteFS.exists(absolutePath);
+  if (!exists) {
+    void showLoggedMessage(CHANNEL, `File not found: ${absolutePath}`);
+    return;
+  }
+
+  const uri = vscode.Uri.file(absolutePath);
+
+  if (!isLatexFile(absolutePath)) {
+    await vscode.commands.executeCommand('vscode.open', uri, {
+      preserveFocus: options.preserveFocus ?? false,
+    } satisfies vscode.TextDocumentShowOptions);
+    return;
+  }
+
+  await openAndBuildLatex(uri, fileLocation, options.preserveFocus ?? false);
+}
+
+/**
+ * Open LaTeX file, build it, and display PDF viewer.
+ *
+ * Files inside the workspace are compiled via LaTeX Workshop so the user
+ * gets the full editor integration (synctex, diagnostics, etc.).
+ *
+ * Files outside the workspace (e.g. in run-storage) are compiled with the
+ * internal `compileLatex2Pdf` helper which sets TEXINPUTS to include the
+ * workspace root, ensuring project-local .sty / .cls / .bib files are found.
+ */
+async function openAndBuildLatex(
+  uri: vscode.Uri,
+  fileLocation: FileLocation,
+  preserveFocus: boolean,
+): Promise<void> {
+  const doc = await vscode.workspace.openTextDocument(uri);
+  await vscode.window.showTextDocument(doc, { preview: true, preserveFocus });
+
+  if (fileLocation.kind === 'workspace') {
+    await invokeLatexWorkshopBuild(uri, CHANNEL, 'LaTeX Workshop build failed');
+  } else {
+    // Outside workspace — LaTeX Workshop cannot resolve project-local
+    // packages, so compile internally with TEXINPUTS set.
+    // Resolve the same outDir that LaTeX Workshop uses so the viewer finds the PDF.
+    const outDir = resolveLatexWorkshopOutDir(uri.fsPath);
+    const compiled = await compileLatex2Pdf(pathToLocation(uri.fsPath), {
+      outputDirectory: outDir,
+    });
+    if (!compiled.ok) {
+      // Include the tail in the visible message itself, not just `data` —
+      // writeLine only shows `data` when texra.logger.debugMode is on
+      // (default off), and this failure's whole point is to be visible
+      // without needing to enable debug logging.
+      logger.warn(
+        CHANNEL,
+        `Internal LaTeX compilation failed for ${uri.fsPath}:\n${compiled.logTail}`,
+        { data: { sourceFile: uri.fsPath, logTail: compiled.logTail } },
+      );
+    }
+  }
+
+  scheduleViewerDisplay();
+}
+
+/**
+ * Schedule PDF viewer display and refresh after build.
+ */
+function scheduleViewerDisplay(): void {
+  setTimeout(() => {
+    vscode.commands.executeCommand('latex-workshop.view').then(
+      () => {
+        setTimeout(() => {
+          vscode.commands.executeCommand('latex-workshop.refresh-viewer');
+        }, LATEX_VIEWER_REFRESH_DELAY_MS);
+      },
+      (err) => {
+        logger.warn(CHANNEL, `Viewer display failed: ${toErrorMessage(err)}`);
+      },
+    );
+  }, LATEX_VIEWER_OPEN_DELAY_MS);
+}
