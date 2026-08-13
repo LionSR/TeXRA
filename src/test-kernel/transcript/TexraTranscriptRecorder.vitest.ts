@@ -237,6 +237,30 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
     expect(modelResponseEntries[1]?.id).not.toBe(output.id);
   });
 
+  it('does not let an earlier tool-use turn leak into a later session stage', () => {
+    const { trace, rows } = attachRecorder();
+
+    const turn0 = trace.openStage('Tool-use turn', { kind: 'session' });
+    const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    output.append('I will inspect the workspace.');
+    output.finalize();
+    turn0.end();
+
+    const turn1 = trace.openStage('Tool-use turn', { kind: 'session' });
+    trace.responseFinalized('The workspace is ready.');
+    turn1.end();
+
+    const modelResponseEntries = rows().filter(
+      (entry) => entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
+    );
+    expect(modelResponseEntries.map((entry) => entry.text)).toEqual([
+      'I will inspect the workspace.',
+      'The workspace is ready.',
+    ]);
+    expect(modelResponseEntries[0]?.id).toBe(output.id);
+    expect(modelResponseEntries[1]?.id).not.toBe(output.id);
+  });
+
   it('does not let an earlier invocation in the same round stage overwrite a later finalized response', () => {
     const { trace, rows } = attachRecorder();
 
