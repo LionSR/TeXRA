@@ -133,6 +133,7 @@ function expectedRecoveryHint(
       cwd: workingDirectory,
       processCwd: process.cwd(),
       approvalPolicy: context.approvalPolicy,
+      outputFormat: context.outputFormat,
     },
   )}`;
 }

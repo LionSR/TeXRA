@@ -198,6 +198,12 @@ describe('formatResumeHint', () => {
       expected: 'texra resume root --approval-policy yolo',
     },
     {
+      name: 'preserves a non-default output format',
+      commandName: 'texra-local',
+      options: { outputFormat: 'ndjson' },
+      expected: 'texra-local resume root --output-format ndjson',
+    },
+    {
       name: 'includes both cwd and approval policy when both are needed',
       commandName: 'texra-local',
       options: {

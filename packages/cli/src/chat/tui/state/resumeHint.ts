@@ -7,6 +7,7 @@
 
 import { quote } from 'shell-quote';
 
+import type { CliOutputFormat } from '@cli/schemas/cliSettings';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   AgentCategory,
@@ -44,6 +45,7 @@ export interface ResumeCommandOptions {
   /** Ambient shell cwd where the printed command will be copy-pasted. */
   readonly processCwd?: string;
   readonly approvalPolicy?: TexraApprovalPolicy;
+  readonly outputFormat?: CliOutputFormat;
 }
 
 const DEFAULT_RESUME_COMMAND_NAME = 'texra';
@@ -60,7 +62,11 @@ export function formatResumeCommand(
     options.approvalPolicy && options.approvalPolicy !== 'ask'
       ? ` --approval-policy ${options.approvalPolicy}`
       : '';
-  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}${cwdArg}${policyFlag}`;
+  const outputFormatFlag =
+    options.outputFormat && options.outputFormat !== 'text'
+      ? ` --output-format ${options.outputFormat}`
+      : '';
+  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}${cwdArg}${policyFlag}${outputFormatFlag}`;
 }
 
 function formatInteger(value: number): string {

@@ -281,6 +281,7 @@ function formatWorkflowResumeHint(
     cwd: workingDirectory,
     processCwd: readCliCwd(),
     approvalPolicy: context.approvalPolicy,
+    outputFormat: context.outputFormat,
   });
   return `Resume this workflow with: ${resumeCommand}`;
 }
