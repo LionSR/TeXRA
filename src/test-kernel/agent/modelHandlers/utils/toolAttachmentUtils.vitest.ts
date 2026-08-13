@@ -13,7 +13,7 @@ import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
 } from '@agent/modelHandlers/contextManagementConstants';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type { ToolFileAttachment } from '@shared/schemas';
 
 /** Head and tail well over their truncation budgets, with an elidable middle. */
 function oversizedText(): { head: string; tail: string; text: string } {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import { uploadToolAttachments } from '@agent/modelHandlers/anthropic/anthropicTools';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type { ToolFileAttachment } from '@shared/schemas';
 
 function createWarningRecorder(): {
   logger: AgentTrace;

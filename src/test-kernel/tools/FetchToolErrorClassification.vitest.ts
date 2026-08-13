@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { HTTPError, TimeoutError } from 'ky';
 
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError } from '@shared/schemas';
 import { toFetchToolError } from '@tools/timeouts';
 
 const MESSAGES = {

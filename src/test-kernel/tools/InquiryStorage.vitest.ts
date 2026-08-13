@@ -9,7 +9,7 @@ import {
   type InquiryThreadId,
   type StreamTabId,
 } from '@shared/schemas';
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   getOpenTurnDraft,
