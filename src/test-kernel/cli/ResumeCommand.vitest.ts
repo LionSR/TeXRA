@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -192,9 +194,10 @@ describe('runResumeExecution', () => {
   });
 
   it('restores the persisted workflow output directory and expected files', async () => {
+    const workingDirectory = path.join(path.sep, 'tmp', 'paper');
     const workflowConfig = AgentConfigSchema.parse({
       ...WORKFLOW_CONFIG,
-      workingDirectory: '/tmp/paper',
+      workingDirectory,
       cliOutputDirectory: 'out',
       cliExpectedOutputFiles: ['paper.tex', 'appendix.tex'],
     });
@@ -211,7 +214,7 @@ describe('runResumeExecution', () => {
       workflowConfig,
       expect.any(Object),
       expect.objectContaining({
-        outputDir: '/tmp/paper/out',
+        outputDir: path.join(workingDirectory, 'out'),
         expectedOutputFiles: ['paper.tex', 'appendix.tex'],
       }),
     );

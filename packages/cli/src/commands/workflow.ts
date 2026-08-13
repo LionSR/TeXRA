@@ -23,7 +23,11 @@ import {
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { cliProgressWriter, emitCliResult } from './_helpers/output';
+import {
+  cliProgressWriter,
+  emitCliResult,
+  writeCliProgressAndWait,
+} from './_helpers/output';
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
 import {
   AGENT_RUN_GLOBAL_ARGS,
@@ -153,21 +157,27 @@ export async function executeCliWorkflowConfig(
   let workflowResult: CliWorkflowRunResult | undefined;
   let workflowOutputError: unknown;
   let resumeHintWritten = false;
-  const writeResumeHint = (executionId: ExecutionId): void => {
+  const writeResumeHint = (
+    executionId: ExecutionId,
+    waitForWrite = false,
+  ): Promise<void> | undefined => {
     if (resumeHintWritten) return;
     resumeHintWritten = true;
-    writeWorkflowResumeHint(
+    const hint = formatWorkflowResumeHint(
       runContext,
       executionId,
       config.workingDirectory?.trim() || runContext.cwd,
     );
+    if (waitForWrite) return writeCliProgressAndWait(runContext, hint);
+    cliProgressWriter(runContext)(hint);
   };
   const execution = await executeCliConfig(config, runContext, {
     enforceCategory: true,
     registerExecution: options.registerExecution,
     executionId: options.executionId,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-    onInterruptedExecutionFinalized: writeResumeHint,
+    onInterruptedExecutionFinalized: (executionId) =>
+      writeResumeHint(executionId, true),
     expectedCategory: AgentCategory.Workflow,
     categoryMismatchMessage: options.categoryMismatchMessage,
     openWorkflowOutput: async (result) => {
@@ -238,17 +248,17 @@ export async function executeCliWorkflowConfig(
   return runOutcomeExitCode(result.outcome);
 }
 
-function writeWorkflowResumeHint(
+function formatWorkflowResumeHint(
   context: CliContext,
   executionId: string,
   workingDirectory: string,
-): void {
+): string {
   const resumeCommand = formatResumeCommand(context.commandName, executionId, {
     cwd: workingDirectory,
     processCwd: readCliCwd(),
     approvalPolicy: context.approvalPolicy,
   });
-  cliProgressWriter(context)(`Resume this workflow with: ${resumeCommand}`);
+  return `Resume this workflow with: ${resumeCommand}`;
 }
 
 async function persistWorkflowResultMeta(

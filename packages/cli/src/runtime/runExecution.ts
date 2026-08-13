@@ -59,7 +59,9 @@ interface CliExecuteOptions {
   readonly modelHandlerCompatibilityKey?: RunAgentOptions['modelHandlerCompatibilityKey'];
   /** Called during signal shutdown after CANCELLED status is durable and the
    *  resumable checkpoint has been drained, before the signal handler exits. */
-  readonly onInterruptedExecutionFinalized?: (executionId: ExecutionId) => void;
+  readonly onInterruptedExecutionFinalized?: (
+    executionId: ExecutionId,
+  ) => void | Promise<void>;
   /** Wrap the run (e.g. multi-agent preset visibility) without leaking the
    *  runtime-host lifecycle into the caller. */
   readonly wrap?: (
@@ -295,7 +297,7 @@ export async function executeCliRequest(
           await releaseCliExecutionLeaseAfterArtifacts(session, executionId);
         });
         if (terminalStatusPersisted) {
-          options.onInterruptedExecutionFinalized?.(executionId);
+          await options.onInterruptedExecutionFinalized?.(executionId);
         }
         return true;
       } catch (error) {

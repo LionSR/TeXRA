@@ -27,7 +27,9 @@ const mocks = vi.hoisted(() => {
     writeErrorStderr: vi.fn(),
     writeResultMeta: vi.fn(),
     writeTextStderr: vi.fn(),
+    writeTextStderrAndWait: vi.fn(async () => undefined),
     writeTextStdout: vi.fn(),
+    writeTextStdoutAndWait: vi.fn(async () => undefined),
   };
 });
 
@@ -84,7 +86,9 @@ vi.mock('@cli/runtime/runExecution', () => ({
 vi.mock('@cli/runtime/logSinks', () => ({
   writeErrorStderr: mocks.writeErrorStderr,
   writeTextStderr: mocks.writeTextStderr,
+  writeTextStderrAndWait: mocks.writeTextStderrAndWait,
   writeTextStdout: mocks.writeTextStdout,
+  writeTextStdoutAndWait: mocks.writeTextStdoutAndWait,
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
@@ -684,14 +688,20 @@ describe('CLI workflow run command', () => {
         return execution;
       },
     );
-    const context = cliContext({ cwd: '/tmp/resume-invocation' });
+    const resumeInvocation = path.join(path.sep, 'tmp', 'resume-invocation');
+    const persistedWorkspace = path.join(
+      path.sep,
+      'tmp',
+      'persisted-workspace',
+    );
+    const context = cliContext({ cwd: resumeInvocation });
     const { executeCliWorkflowConfig } = await import('@cli/commands/workflow');
 
     const exitCode = await executeCliWorkflowConfig(
       {
         agent: 'polish',
         model: 'deepseekT',
-        workingDirectory: '/tmp/persisted-workspace',
+        workingDirectory: persistedWorkspace,
         agentCategory: AgentCategory.Workflow,
       },
       context,
@@ -699,8 +709,9 @@ describe('CLI workflow run command', () => {
     );
 
     expect(exitCode).toBe(CliExitCode.Interrupted);
-    expect(mocks.writeTextStdout).toHaveBeenCalledExactlyOnceWith(
-      expectedRecoveryHint(context, 'exec-signal', '/tmp/persisted-workspace'),
+    expect(mocks.writeTextStdout).not.toHaveBeenCalled();
+    expect(mocks.writeTextStdoutAndWait).toHaveBeenCalledExactlyOnceWith(
+      expectedRecoveryHint(context, 'exec-signal', persistedWorkspace),
     );
   });
 

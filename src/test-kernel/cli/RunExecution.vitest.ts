@@ -828,7 +828,11 @@ describe('executeCliRequest', () => {
         async (session, executionId) => session.flushArtifacts(executionId),
       );
       const runWithOwnership = vi.fn((operation: () => unknown) => operation());
-      const onInterruptedExecutionFinalized = vi.fn();
+      let settleRecoveryWrite!: () => void;
+      const recoveryWrite = new Promise<void>((resolve) => {
+        settleRecoveryWrite = resolve;
+      });
+      const onInterruptedExecutionFinalized = vi.fn(() => recoveryWrite);
       let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
       let publishRun: LeaseOptions['onRun'];
       const hangingRun = stubHangingRun((options) => {
@@ -852,6 +856,16 @@ describe('executeCliRequest', () => {
 
       mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
       hangingRun.resolve(COMPLETED_RUN);
+      await vi.waitFor(() =>
+        expect(onInterruptedExecutionFinalized).toHaveBeenCalledOnce(),
+      );
+      let shutdownResolved = false;
+      void shutdown.then(() => {
+        shutdownResolved = true;
+      });
+      await Promise.resolve();
+      expect(shutdownResolved).toBe(false);
+      settleRecoveryWrite();
       await shutdown;
       expect(runWithOwnership).toHaveBeenCalledOnce();
       expect(mocks.releaseExecutionLeaseAfterArtifacts).toHaveBeenCalledOnce();
