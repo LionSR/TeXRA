@@ -340,7 +340,7 @@ describe('workflow dashboard model', () => {
     });
   });
 
-  it('keeps a current empty dynamic phase while dropping prior attempts', () => {
+  it('renders a current empty dynamic phase while dropping prior attempts', async () => {
     const root = workflowRoot(['Prior'], [{ id: 'old', phase: 'Prior' }]);
     const entries = root.entries.map((entry) => {
       if (entry.role === 'workflowTask') {
@@ -369,6 +369,26 @@ describe('workflow dashboard model', () => {
       heading: currentPhase,
       tasks: [],
     });
+    const { ink, React } = await loadInk();
+    const { instance, stdout } = renderInteractive(
+      ink,
+      React.createElement(SubagentList, {
+        dashboard: model,
+        keyboardActive: false,
+        listRootStreamId: ROOT,
+        maxRows: 5,
+        selectedValue: model.groups[0]?.value,
+        sessions: [],
+        streams: new Map([[ROOT, root]]),
+      }),
+      { columns: WIDE_COLUMNS },
+    );
+    try {
+      await waitFor(() => stdout.output.includes('Explore · 0/0'));
+      expect(stdout.output).toContain('workflow · 0/0 done');
+    } finally {
+      instance.unmount();
+    }
   });
 
   it('renders exactly the narrow row values the reducer reconciles against', async () => {

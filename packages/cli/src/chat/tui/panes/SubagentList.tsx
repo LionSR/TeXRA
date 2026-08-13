@@ -373,7 +373,10 @@ function WorkflowDashboard({
     { isActive: keyboardActive },
   );
 
-  if (tasks.length === 0 || (contentRows !== undefined && contentRows <= 0)) {
+  if (
+    (tasks.length === 0 && groups.length === 0) ||
+    (contentRows !== undefined && contentRows <= 0)
+  ) {
     return null;
   }
   const heading = `${model.root.agent ?? 'Workflow'} · ${done}/${total} done`;
