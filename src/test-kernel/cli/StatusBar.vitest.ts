@@ -413,6 +413,20 @@ describe('CLI StatusBar display model', () => {
     ).not.toContain('k kill');
   });
 
+  it('does not drop focus controls for a non-killable narrow selection', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        width: 55,
+        childList: {
+          focused: true,
+          selectionKillable: false,
+        },
+      }),
+    );
+
+    expect(display.bindings).toBe('Enter focus · Esc input · Ctrl-C exit');
+  });
+
   it('shows foreground actions while a list-owned surface is open', () => {
     const display = buildStatusBarDisplay(
       statusInput({
