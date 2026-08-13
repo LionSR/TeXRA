@@ -380,6 +380,37 @@ describe('submitFollowUp', () => {
     });
     expect(session.followUps.currentGenerationId(streamId)).toBe(generationId);
   });
+
+  it('rebinds a provisional recovery before admitting a durable producer', async () => {
+    const streamId = id('stream:provisional-recovery');
+    const session = fakeSession({ kind: 'queue', reason: 'waiting' });
+    const executionId = 'persisted-execution';
+    const generationId = 'a2047268-908c-4ac5-8194-71fb377bd7f3';
+    vi.spyOn(session.snapshots, 'getRunMetadata').mockReturnValue({
+      executionId,
+    } as never);
+    vi.spyOn(resumability, 'deriveResumability').mockResolvedValue({
+      resumable: true,
+      cause: resumability.RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
+      flowRecord: {
+        flowName: 'texra',
+        shared: { continuationGenerationId: generationId },
+        createdAt: '2026-08-13T12:00:00.000Z',
+        nodes: [],
+      },
+    });
+    const provisional = session.followUps.claimRecovery(streamId, true)!;
+    expect(provisional.generationId).not.toBe(generationId);
+
+    await expect(
+      submitFollowUp(streamId, 'answer during recovery startup', {
+        session,
+        resumePort: { tryResumeStream: mockTryResume() },
+        expectedGenerationId: generationId,
+      }),
+    ).resolves.toMatchObject({ status: 'queued' });
+    expect(provisional.generationId).toBe(generationId);
+  });
 });
 
 describe('ToolUseFollowUpQueue claim exclusivity', () => {
