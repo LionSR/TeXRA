@@ -86,19 +86,39 @@ async function restorePersistedGeneration(
   const executionId =
     session.snapshots.getRunMetadata(streamId).executionId ??
     (await session.snapshots.readPersistedExecutionId(streamId));
-  if (!executionId) return false;
+  if (!executionId) {
+    logger.warn(
+      `Cannot restore continuation generation for ${streamId}: no persisted execution id.`,
+    );
+    return false;
+  }
   const resumability = await deriveResumability(executionId);
-  if (!resumability.resumable) return false;
+  if (!resumability.resumable) {
+    logger.warn(
+      `Cannot restore continuation generation for ${streamId}: ${resumability.cause}.`,
+    );
+    return false;
+  }
   const parsed = PersistedContinuationGenerationSchema.safeParse(
     resumability.flowRecord.shared,
   );
-  return (
-    parsed.success &&
-    session.followUps.restorePersistedGeneration(
-      streamId,
-      parsed.data.continuationGenerationId,
-    )
+  if (!parsed.success) {
+    logger.warn(
+      `Cannot restore continuation generation for ${streamId}: persisted flow state is invalid.`,
+      { data: parsed.error },
+    );
+    return false;
+  }
+  const restored = session.followUps.restorePersistedGeneration(
+    streamId,
+    parsed.data.continuationGenerationId,
   );
+  if (!restored) {
+    logger.warn(
+      `Cannot restore continuation generation for ${streamId}: the retained queue belongs to another generation.`,
+    );
+  }
+  return restored;
 }
 
 export function notifyFollowUpSent(
