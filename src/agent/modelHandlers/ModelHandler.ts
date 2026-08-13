@@ -1123,7 +1123,16 @@ export abstract class ModelHandler<
   /** Creates and configures a client instance for the specific model provider. */
   abstract getClient(selection?: ModelCredentialSelection): Promise<C>;
 
-  /** Rebuild a client for an explicit route without publishing settings. */
+  /**
+   * Rebuild a client for an explicit route without publishing settings.
+   *
+   * This is a deliberate override seam, not a redundant alias for
+   * {@link getClient}: handlers that cache a client across calls (for example
+   * `modelHandlerGoogleInteractions`) invalidate that cache here before
+   * rebuilding, so a credential rotation actually produces a fresh client
+   * instead of returning the cached one. Handlers without a cache keep the
+   * base pass-through default.
+   */
   async refreshClient(
     selection: ModelCredentialSelection = 'configured',
   ): Promise<C> {
