@@ -96,6 +96,8 @@ function projectedView(slice: StreamSlice | undefined): unknown {
     activeSkills: slice?.activeSkills ?? [],
     taskGroups: slice?.taskGroups ?? [],
     workflowAttemptId: slice?.workflowAttemptId,
+    workflowAttemptBoundaryDeclared:
+      slice?.workflowAttemptBoundaryDeclared ?? false,
   };
 }
 
@@ -478,6 +480,7 @@ describe('transcript fold vs from-scratch oracle', () => {
 
       const slice = streams.get().get(FOLD_STREAM);
       expect(slice?.workflowAttemptId).toBe('current-attempt');
+      expect(slice?.workflowAttemptBoundaryDeclared).toBe(true);
       expect(slice?.entries).toEqual([]);
 
       appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
@@ -504,8 +507,10 @@ describe('transcript fold vs from-scratch oracle', () => {
         data: { kind: 'workflowAttempt', attemptId: '' },
       });
       syncStreamLog(FOLD_STREAM);
-      expect(streams.get().get(FOLD_STREAM)?.workflowAttemptId).toBeUndefined();
-      expect(streams.get().get(FOLD_STREAM)?.entries).toEqual([]);
+      const invalidSlice = streams.get().get(FOLD_STREAM);
+      expect(invalidSlice?.workflowAttemptId).toBeUndefined();
+      expect(invalidSlice?.workflowAttemptBoundaryDeclared).toBe(true);
+      expect(invalidSlice?.entries).toEqual([]);
     } finally {
       dispose();
     }

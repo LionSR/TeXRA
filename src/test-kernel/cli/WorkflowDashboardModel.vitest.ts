@@ -440,6 +440,25 @@ describe('workflow dashboard model', () => {
     expect(model.tasks).toStrictEqual([]);
   });
 
+  it('does not revive prior rows after a malformed declared boundary', () => {
+    const prior = workflowRoot(
+      ['Verify'],
+      [{ id: 'verification', phase: 'Verify' }],
+    );
+
+    const model = workflowDashboardModel(
+      {
+        ...prior,
+        workflowAttemptId: undefined,
+        workflowAttemptBoundaryDeclared: true,
+      },
+      WIDE_COLUMNS,
+    );
+
+    expect(model.groups).toStrictEqual([]);
+    expect(model.tasks).toStrictEqual([]);
+  });
+
   it('renders exactly the narrow row values the reducer reconciles against', async () => {
     const model = workflowDashboardModel(TWO_PHASE_ROOT, NARROW_COLUMNS);
     const visited = await navigateList(
