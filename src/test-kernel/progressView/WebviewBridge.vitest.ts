@@ -132,6 +132,89 @@ describe('WebviewBridge', () => {
     );
   });
 
+  it('projects workflow-call model ids to runtime labels at the webview boundary', async () => {
+    const { store, sendMessage, bridge } = setupBridge();
+
+    bridge.syncStream(ACTIVE);
+    appendTranscriptEntry(store, ACTIVE, {
+      id: 'workflow-call-1',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+      text: 'Summarize',
+      data: {
+        id: 'call-1',
+        label: 'Summarize',
+        status: 'completed',
+        model: 'gpt56-',
+        durationMs: 7000,
+        totalCostUsd: 0.04,
+      },
+    });
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      logDeltaMessage(ACTIVE, {
+        entries: [
+          expect.objectContaining({
+            id: 'workflow-call-1',
+            data: expect.objectContaining({ model: 'GPT-5.6 Terra' }),
+          }),
+        ],
+      }),
+    );
+
+    // The canonical id stays in the stream-log entry the webview copy projects from.
+    expect(store.get(ACTIVE)?.getRange(0)[0]?.data).toEqual(
+      expect.objectContaining({ model: 'gpt56-' }),
+    );
+  });
+
+  it('projects workflow-call model labels on in-place terminal updates', async () => {
+    const { store, sendMessage, bridge } = setupBridge();
+
+    bridge.syncStream(ACTIVE);
+    appendTranscriptEntry(store, ACTIVE, {
+      id: 'workflow-call-1',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+      text: 'Summarize',
+      data: {
+        id: 'call-1',
+        label: 'Summarize',
+        status: 'running',
+      },
+    });
+    await vi.advanceTimersByTimeAsync(20);
+    sendMessage.mockClear();
+
+    updateTranscriptEntry(store, ACTIVE, 'workflow-call-1', {
+      data: {
+        id: 'call-1',
+        label: 'Summarize',
+        status: 'completed',
+        model: 'gpt56-',
+        durationMs: 7000,
+        totalCostUsd: 0.04,
+      },
+    });
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      logDeltaMessage(ACTIVE, {
+        updates: [
+          expect.objectContaining({
+            id: 'workflow-call-1',
+            data: expect.objectContaining({ model: 'GPT-5.6 Terra' }),
+          }),
+        ],
+      }),
+    );
+  });
+
   it('pushes restart-repair group settlements through log deltas', async () => {
     const repairStream = 'active-repair' as StreamTabId;
     const { store, sendMessage, bridge } = setupBridge({
