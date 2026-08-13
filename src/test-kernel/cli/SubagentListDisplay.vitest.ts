@@ -1358,6 +1358,30 @@ describe('CLI child list display model', () => {
     ).toBe(true);
   });
 
+  it('shows a session approval before workflow dashboard rows exist', async () => {
+    const run = 'approval-run' as StreamTabId;
+    const rootSlice = workflowAgentSlice(run, {
+      agent: 'Starting workflow',
+      identity: {
+        kind: 'multiAgentWorkflow',
+        workflowName: 'starting-workflow',
+      },
+      status: STREAM_PHASE.RUNNING,
+      entries: [],
+    });
+    const output = await renderSubagentList(
+      {
+        dashboard: workflowDashboardModel(rootSlice, 40),
+        maxRows: 3,
+        pendingApprovals: new Map([[run, ['externalInquiry']]]),
+        streams: new Map([[run, rootSlice]]),
+      },
+      40,
+    );
+
+    expect(output).toContain('Starting workflow · 0/0 done · inquiry');
+  });
+
   // The right-aligned metadata column is the one row element `SubagentList`
   // drops purely on terminal width (`CHILD_ROW_METADATA_MIN_COLUMNS`), so it is
   // what proves a width test drives the width it names: through
