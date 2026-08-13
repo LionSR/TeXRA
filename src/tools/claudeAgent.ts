@@ -41,12 +41,12 @@ import {
 import type {
   ClaudeAgentEffort,
   ClaudeAgentPermissionMode,
-  StreamTabId,
   ExecutionId,
+  StreamTabId,
+  ToolResult,
   ToolUseLog,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
-import { type ToolResult } from '@shared/schemas/toolResult';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds, isNonEmptyString } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';

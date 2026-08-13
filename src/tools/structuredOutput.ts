@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Internal imports
 import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
 import { convertToolSchema } from '@agent/modelHandlers/toolConversion';
-import type { ToolResult } from '@shared/schemas/toolResult';
+import type { ToolResult } from '@shared/schemas';
 
 // Local file imports
 import { defineTool } from './core/define';

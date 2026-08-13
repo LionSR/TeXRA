@@ -15,9 +15,12 @@ import {
   isTexraApprovalDenied,
   texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
-import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
+import type {
+  StreamTabId,
+  ToolEditPermission,
+  ToolResult,
+} from '@shared/schemas';
 import type { LineChanges } from '@shared/schemas/lineChanges';
-import { type ToolResult } from '@shared/schemas/toolResult';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files/workspaceFS';

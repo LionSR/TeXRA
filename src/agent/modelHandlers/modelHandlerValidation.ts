@@ -13,11 +13,12 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import type { ResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
-import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
+  FileLocation,
+  MediaAttachmentKind,
   ToolFileAttachment,
   ToolResult,
-} from '@shared/schemas/toolResult';
+} from '@shared/schemas';
 
 // Local imports - model handlers
 import { ModelHandler } from './ModelHandler';

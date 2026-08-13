@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports
 import { ArxivProcessor } from '@latex/arxivProcessor';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
 import { wrapApiCall } from '@tools/utils';

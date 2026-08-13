@@ -17,8 +17,8 @@ import {
   type ToolUseAgentProposal,
   type StreamTabId,
 } from '@shared/schemas';
+import type { ToolResult } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
-import type { ToolResult } from '@shared/schemas/toolResult';
 import { proposalApprovals } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import { generateShortId } from '@utils/core';

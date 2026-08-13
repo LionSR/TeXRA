@@ -23,7 +23,7 @@ import {
   getRunContextWorkingDirectory,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas';
 import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';

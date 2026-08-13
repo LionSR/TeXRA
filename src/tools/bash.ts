@@ -35,12 +35,13 @@ import {
   backgroundBashOutputData,
 } from '@shared/toolUse';
 import {
-  USER_FOLLOW_UP_SUPPORT,
-  type StreamTabId,
-  type ExecutionId,
   AgentCategory,
+  ToolError,
+  type ExecutionId,
+  type StreamTabId,
+  type ToolResult,
+  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
 import {
   formatBashDelivery,

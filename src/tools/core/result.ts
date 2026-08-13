@@ -7,7 +7,7 @@
 //
 // Host-agnostic, VS Code-free.
 
-import type { ToolResult } from '@shared/schemas/toolResult';
+import type { ToolResult } from '@shared/schemas';
 
 type ExecutedToolResult = Extract<ToolResult, { status: 'executed' }>;
 type ErrorToolResult = Extract<ToolResult, { status: 'error' }>;

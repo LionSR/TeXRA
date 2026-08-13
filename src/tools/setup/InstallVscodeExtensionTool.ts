@@ -2,8 +2,8 @@
 import { z } from 'zod';
 
 // Local imports
+import { ToolError, type ToolResult } from '@shared/schemas';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { LEAN4_EXTENSION_ID } from '@tools/lean/leanTypes';
 import { executed } from '@tools/core/result';
 import { delay } from '@utils/core';

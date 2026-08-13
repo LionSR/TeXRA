@@ -29,8 +29,7 @@ import {
   getCurrentToolContexts,
   type CurrentToolContexts,
 } from '@agent/followUp/ToolFileInteractionContext';
-import type { Plan } from '@shared/schemas';
-import { type ToolResult } from '@shared/schemas/toolResult';
+import type { Plan, ToolResult } from '@shared/schemas';
 import {
   formatGoalTime,
   goalElapsedMs,

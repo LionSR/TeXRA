@@ -17,7 +17,7 @@ import OpenAI, {
 
 import type { AgentTrace } from '@agent/trace';
 import { buildErrorLogData } from '@common/errors/sdkError/providerErrorFormat';
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
+import type { ToolFileAttachment } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 

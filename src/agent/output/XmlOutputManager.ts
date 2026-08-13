@@ -4,7 +4,6 @@ import { XMLParser } from 'fast-xml-parser';
 
 import { debugInternal, logInternal, type AgentTrace } from '@agent/trace';
 import { reportMissingOutputs } from '@agent/runtime/runFactEvents';
-import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
@@ -13,6 +12,7 @@ import {
   OUTPUT_DOCUMENT_TAG,
   OUTPUT_DOCUMENTS_TAG,
 } from '@shared/schemas/output';
+import { getExtractedDocOutputFileName } from '@utils/files/outputFileUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
   createExternalLocation,

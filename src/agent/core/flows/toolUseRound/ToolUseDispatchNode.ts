@@ -14,8 +14,7 @@ import {
   type ExtractedToolAttachments,
 } from '@agent/core/tools/toolAttachmentExtraction';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
-import type { FileLocation } from '@shared/schemas';
-import type { ToolResult } from '@shared/schemas/toolResult';
+import type { FileLocation, ToolResult } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';

@@ -29,13 +29,14 @@ import {
   type RunContext,
 } from '@agent/runtime/RunContext';
 import {
-  USER_FOLLOW_UP_SUPPORT,
+  ToolError,
   type ExecutionId,
   type StorageKey,
   type StreamTabId,
   type TokenUsageStats,
+  type ToolResult,
+  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
 import {
   requestBashApproval,

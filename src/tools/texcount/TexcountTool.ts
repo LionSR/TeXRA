@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Local imports - latex utilities
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { getTeXCount } from '@latex/texcount';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { ensureArray } from '@utils/core';

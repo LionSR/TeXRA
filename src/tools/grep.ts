@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat, currentToolRoot } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';

@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 // Internal imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { ToolResult } from '@shared/schemas/toolResult';
+import { ToolResult } from '@shared/schemas';
 import {
   joinAbortSignal,
   retryTransientFetch,

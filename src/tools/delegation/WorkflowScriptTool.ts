@@ -23,14 +23,15 @@ import {
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import {
   AgentCategory,
-  RUN_OUTCOME,
-  USER_FOLLOW_UP_SUPPORT,
   DEFAULT_TOOL_CONFIG,
+  RUN_OUTCOME,
+  ToolError,
+  type ToolResult,
   type WorkflowAgentProposal,
   type WorkflowExecutionSnapshot,
+  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import {
