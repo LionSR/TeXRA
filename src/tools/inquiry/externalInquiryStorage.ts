@@ -48,8 +48,13 @@ const logger = createChannelTrace('ExternalInquiryStorage');
 const InquiryTurnBaseShape = {
   turnIndex: z.int().positive(),
   timestamp: z.string().min(1),
-  /** Fences a delayed answer to the continuation that dispatched this turn. */
-  parentGenerationId: z.string().min(1).nullish(),
+  /**
+   * Fences a delayed answer to the continuation that dispatched this turn.
+   * Omission reads manifests written before 2026-08-13; retire this optional
+   * reader after 2026-11-13, when those open inquiries are outside the
+   * repository's three-month compatibility window.
+   */
+  parentGenerationId: z.string().min(1).optional(),
   question: z.string(),
   context: z.string().nullish(),
   questionRelativePath: z.string().min(1),
