@@ -260,7 +260,11 @@ async function decidePresentedApproval<
       ApprovalPayload,
       { kind: K }
     >);
-  } catch {
+  } catch (error) {
+    logWarning(
+      'cli.tui',
+      `The approval prompt failed: ${toErrorMessage(error)}`,
+    );
     return {
       accepted: false,
       rejectionCause: 'CLI approval prompt failed.',
@@ -274,6 +278,12 @@ async function decideWithPolicy<K extends 'planApproval' | 'proposal', P>(
   payload: P,
 ): Promise<ApprovalDecision> {
   const policy = settleExecutable(context);
+  if (policy && !policy.accepted) {
+    return {
+      accepted: false,
+      rejectionReason: policy.userMessage,
+    };
+  }
   return policy ?? decidePresentedApproval(kind, payload);
 }
 
@@ -461,10 +471,13 @@ async function requestUserQuestionInteraction(
 ): Promise<UserQuestionSettlement> {
   const denial = settleHumanInputDenial(context);
   if (denial != null) {
-    return { action: 'reject', feedback: denial.userMessage };
+    return { action: 'reject', reason: denial.userMessage };
   }
 
   const decision = await enqueueTuiApproval({ kind: 'userQuestion', payload });
+  if (decision.rejectionCause !== undefined) {
+    return { action: 'reject', cause: decision.rejectionCause };
+  }
   return decision.accepted && decision.userQuestionAnswers
     ? { action: 'submit', answers: decision.userQuestionAnswers }
     : {

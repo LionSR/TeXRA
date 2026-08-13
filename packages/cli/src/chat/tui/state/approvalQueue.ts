@@ -62,6 +62,8 @@ export type ApprovalPayload =
 export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   /** Queue or prompt lifecycle failure, never text entered by the user. */
   readonly rejectionCause?: string;
+  /** Automatic policy denial, never text entered by the user. */
+  readonly rejectionReason?: string;
   /** Session bypass to activate before accepting this approval. */
   readonly bypass?: ApprovalBypassKind;
   /** Credential mode to apply before accepting this approval. */

@@ -177,6 +177,29 @@ describe('PlanTool — update (plan approval)', () => {
     expect(workPlanState.planSummary).toBeNull();
   });
 
+  it('does not attribute a lifecycle cancellation to the user', async () => {
+    await installPlatform(false);
+    const { decisions, resultPromise, events } = startPlanUpdate(
+      'stream:plan-cancel' as StreamTabId,
+      plan.objective,
+    );
+
+    const approval = findPlanApproval(events);
+    expect(
+      submitPlanDecision(decisions, approval, {
+        action: 'reject',
+        cause: 'CLI approval prompt failed.',
+      }),
+    ).toBe(true);
+
+    const result = await resultPromise;
+    expect(result.status).toBe('error');
+    expect(result.summary).toBe('Plan approval cancelled');
+    expect(result.error).toContain('CLI approval prompt failed.');
+    expect(result.error).not.toContain('user rejected');
+    expect(result.userInstruction).toBeUndefined();
+  });
+
   it('approve_and_goal starts a goal using the plan document as the objective', async () => {
     const streamId = 'stream:plan-goal' as StreamTabId;
     await installPlatform(true);

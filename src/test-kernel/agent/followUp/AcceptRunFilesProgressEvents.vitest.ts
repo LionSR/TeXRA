@@ -245,7 +245,7 @@ describe('accept_run_files progress events', () => {
 
     expect(result.status).toBe('error');
     expect(result.summary).toBe(
-      'Tool edit approval cancelled: accept_run_files for first.tex.',
+      'Tool edit approval cancelled: accept_run_files for multiple files.',
     );
     expect(result.error).toContain('Denied by approval policy.');
     expect(result.error).toContain('Session disposed.');
