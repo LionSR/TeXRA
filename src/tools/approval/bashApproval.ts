@@ -136,12 +136,13 @@ export function buildBashApprovalRejectedResult(
 ): ToolResult {
   const preview = truncateWithEllipsis(command, 60);
   const feedback = rejection.feedback?.trim();
+  const isPolicyDenial = rejection.reason != null;
   const reason = rejection.reason?.trim();
-  const message = reason
+  const message = isPolicyDenial
     ? `Command denied: ${preview}`
     : `User rejected command: ${preview}`;
-  const guidance = reason || DEFAULT_BASH_REJECTION_GUIDANCE;
-  const error = feedback ? message : `${message}\n\n${guidance}`;
+  const guidance = isPolicyDenial ? reason : DEFAULT_BASH_REJECTION_GUIDANCE;
+  const error = feedback || !guidance ? message : `${message}\n\n${guidance}`;
   return errorResult(error, {
     summary: message,
     ...(feedback && { userInstruction: feedback }),
