@@ -302,6 +302,26 @@ describe('childRunLoop E2E fixtures', () => {
     expect(callCount()).toBe(0);
   });
 
+  it('revalidates the lease when claiming a new queue generation', () => {
+    const { childStreamId, executionId } = loopIds('lost-during-setup');
+    const { strategy, callCount } = createFakeStrategy();
+    const claimChildRun = vi.spyOn(session.followUps, 'claimChildRun');
+    mocks.runWithOwnedExecutionLease
+      .mockImplementationOnce((_id, operation) => operation())
+      .mockImplementationOnce(() => {
+        throw new Error('lease generation lost during setup');
+      });
+
+    expect(() => startLoop({ childStreamId, executionId }, strategy)).toThrow(
+      'lease generation lost during setup',
+    );
+
+    expect(claimChildRun).not.toHaveBeenCalled();
+    expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false);
+    expect(mocks.leaseLossListener).toBeUndefined();
+    expect(callCount()).toBe(0);
+  });
+
   it('unwinds provider ownership and loop resources when synchronous setup fails', () => {
     const { childStreamId, executionId } = loopIds('setup-failure');
     const registry = new AgentCliSessionRegistry('test_session_id');
@@ -454,7 +474,7 @@ describe('childRunLoop E2E fixtures', () => {
     const { strategy, rejectTurn } = createFakeStrategy();
 
     startLoop({ childStreamId, executionId }, strategy);
-    expect(mocks.runWithOwnedExecutionLease).toHaveBeenCalledTimes(2);
+    expect(mocks.runWithOwnedExecutionLease).toHaveBeenCalledTimes(3);
     await vi.waitFor(() => expect(mocks.leaseLossListener).toBeDefined());
 
     mocks.leaseLossListener?.();
