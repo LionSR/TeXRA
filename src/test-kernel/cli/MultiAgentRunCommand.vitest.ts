@@ -530,6 +530,24 @@ describe('CLI multi-agent run command', () => {
     );
   });
 
+  it('shows attached inputs instead of orchestration guidance without an instruction', async () => {
+    const exitCode = await runPreset({
+      inputFiles: ['problem.tex'],
+      instruction: '',
+    });
+
+    expect(exitCode).toBe(0);
+    const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
+    expect(config?.displayInstruction).toContain('Primary user input files:');
+    expect(config?.displayInstruction).toContain('- "problem.tex"');
+    expect(config?.displayInstruction).not.toContain(
+      'Run the "Mathematician" multi-agent team preset.',
+    );
+    expect(config?.instruction).toContain(
+      'Run the "Mathematician" multi-agent team preset.',
+    );
+  });
+
   it('allows instruction-file-only team runs without input files', async () => {
     mockExpandedRunInputs({
       inputFiles: [],
