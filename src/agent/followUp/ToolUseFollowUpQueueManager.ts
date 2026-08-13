@@ -120,7 +120,12 @@ export class ToolUseFollowUpQueue {
   ): boolean {
     if (this.terminal.has(streamId)) return false;
     const entry = this.entries.get(streamId);
-    if (entry) return entry.generationId === generationId;
+    if (entry) {
+      if (entry.generationId === generationId) return true;
+      if (entry.owner?.kind !== 'recovery') return false;
+      entry.generationId = generationId;
+      return true;
+    }
     this.createEntry(streamId, generationId);
     return true;
   }
