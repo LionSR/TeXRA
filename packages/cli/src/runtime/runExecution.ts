@@ -9,6 +9,7 @@ import {
 import { deriveResumability } from '@agent/storage';
 import {
   ExecutionLeaseLostError,
+  inspectExecutionLease,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
@@ -306,7 +307,13 @@ export async function executeCliRequest(
         const resumability = terminalStatusPersisted
           ? await deriveResumability(executionId)
           : undefined;
-        if (resumability?.resumable) {
+        const lease = resumability?.resumable
+          ? await inspectExecutionLease(executionId)
+          : undefined;
+        if (
+          resumability?.resumable &&
+          (lease?.status === 'missing' || lease?.status === 'stale')
+        ) {
           await options.onInterruptedExecutionFinalized?.(executionId);
         }
         return true;
@@ -338,10 +345,19 @@ export async function executeCliRequest(
         !runLifecycleStarted || interruptionAccepted || shutdownInterrupted;
       // Earlier shutdown handlers interrupt the live agent sessions. Wait for
       // runAgent to finish unwinding before the final drain releases ownership,
-      // so no transcript or checkpoint writer can race the lease release. A
-      // provider or filesystem operation outside our abortable boundaries must
-      // not prevent signal termination indefinitely; on timeout, leave the
-      // lease intact for stale-owner recovery rather than releasing it early.
+      // so no transcript or checkpoint writer can race the lease release.
+      // A workflow recovery command is only truthful after the run has
+      // finished its output work, persisted CANCELLED, drained artifacts,
+      // and released ownership. Keep signal shutdown alive for that contract;
+      // commands without a recovery callback retain the bounded grace period.
+      if (options.onInterruptedExecutionFinalized) {
+        await shutdownFinalizationDone;
+        return;
+      }
+      // Without a recovery promise, a provider or filesystem operation outside
+      // our abortable boundaries must not prevent termination indefinitely. On
+      // timeout, keep the lease for stale-owner recovery rather than releasing
+      // it while a writer may still be active.
       const grace = new AbortController();
       const graceExpired = sleep(CLI_RUN_SHUTDOWN_GRACE_MS, undefined, {
         signal: grace.signal,

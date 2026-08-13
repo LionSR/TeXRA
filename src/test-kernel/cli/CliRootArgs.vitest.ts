@@ -1032,6 +1032,10 @@ describe('CLI root argument routing', () => {
 });
 
 describe('CLI global color/input flags', () => {
+  it('preserves whitespace in the explicit workspace argument', () => {
+    expect(pickGlobalArgs({ cwd: ' workspace ' }).cwd).toBe(' workspace ');
+  });
+
   it('maps CLI color and no-input flags to canonical knobs', () => {
     expect(pickGlobalArgs({ color: false, 'no-input': true })).toMatchObject({
       noColor: true,
