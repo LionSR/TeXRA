@@ -84,6 +84,7 @@ export interface StageStartEvent extends StageStamp {
   readonly kind?: 'run' | 'round' | 'phase' | 'session';
   readonly index?: number;
   readonly total?: number;
+  readonly attemptId?: string;
 }
 
 /** Immutable run identity emitted once when a stream enters RUNNING. */

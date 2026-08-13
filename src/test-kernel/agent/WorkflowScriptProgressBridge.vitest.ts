@@ -159,6 +159,7 @@ return await agent('Inspect', { id: 'inspect' })`,
         kind: 'phase',
         index: 0,
         total: 2,
+        attemptId: planned?.call.attemptId,
       }),
     );
     expect(events.some((event) => event.type === 'child.activity')).toBe(false);

@@ -88,6 +88,7 @@ function phaseEntry(
     readonly finalized?: boolean;
     readonly phaseIndex?: number;
     readonly phaseTotal?: number;
+    readonly attemptId?: string;
   } = {},
 ): ConversationEntry {
   return {
@@ -282,6 +283,7 @@ describe('CLI child list display model', () => {
         phaseEntry('phase-verify-old', 'Verify', {
           phaseIndex: 1,
           phaseTotal: 2,
+          attemptId: 'prior',
         }),
         workflowTaskEntry('task-verify-old', 'Failed: Verify', {
           id: 'verification',
@@ -294,6 +296,7 @@ describe('CLI child list display model', () => {
         phaseEntry('phase-verify-current', 'Verify', {
           phaseIndex: 1,
           phaseTotal: 2,
+          attemptId: 'current',
         }),
         workflowTaskEntry('task-verify-current', 'Running: Verify', {
           id: 'verification',
@@ -308,6 +311,34 @@ describe('CLI child list display model', () => {
     expect(
       workflowRunStatusSummary(slice)?.map((segment) => segment.text),
     ).toEqual(['Verify (2/2)', '0/1 done']);
+  });
+
+  it('does not combine a prior phase heading with a phase-less rerun', () => {
+    const slice = workflowAgentSlice('phase-removed', {
+      entries: [
+        phaseEntry('phase-old', 'Verify', {
+          phaseIndex: 1,
+          phaseTotal: 2,
+          attemptId: 'prior',
+        }),
+        workflowTaskEntry('task-old', 'Failed: Verify', {
+          id: 'verification',
+          label: 'Verify',
+          phase: 'Verify',
+          status: 'failed',
+          error: 'Old failure.',
+          attemptId: 'prior',
+        }),
+        workflowTaskEntry('task-current', 'Running: Direct check', {
+          id: 'direct-check',
+          label: 'Direct check',
+          status: 'running',
+          attemptId: 'current',
+        }),
+      ],
+    });
+
+    expect(workflowRunStatusSummary(slice)).toBeUndefined();
   });
 
   it('tallys failures across the whole run, not just the current phase', () => {

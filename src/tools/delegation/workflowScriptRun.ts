@@ -235,6 +235,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         parentId: parentStageId,
         index,
         total,
+        attemptId: projectionId,
       }),
       failed: false,
     };

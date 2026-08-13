@@ -123,6 +123,8 @@ export type ConversationEntry = ConversationEntryOrigin &
         readonly phaseIndex?: number;
         /** Total phase count for the run, when the emitter provides it. */
         readonly phaseTotal?: number;
+        /** Physical workflow attempt that emitted this phase. */
+        readonly attemptId?: string;
       })
     | (ConversationEntryBase & {
         readonly role: 'tool';

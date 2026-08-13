@@ -60,6 +60,20 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (issue #7993)',
     expect(dataOf(startEntry).status).toBe(STREAM_PHASE.RUNNING);
   });
 
+  it('retains workflow attempt identity when a phase settles', () => {
+    const { trace, row } = attachRecorder();
+
+    const stage = trace.openStage('Verify', {
+      kind: 'phase',
+      attemptId: 'attempt-current',
+    });
+    expect(dataOf(row(stage.id)).attemptId).toBe('attempt-current');
+
+    stage.end();
+
+    expect(dataOf(row(stage.id)).attemptId).toBe('attempt-current');
+  });
+
   it('defaults GROUP_END to the literal RunOutcome.COMPLETED, not a folded EndGroupStatus', () => {
     const { trace, row } = attachRecorder();
 
