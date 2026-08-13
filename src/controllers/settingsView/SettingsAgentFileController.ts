@@ -4,7 +4,7 @@ import * as path from 'node:path';
 // Local imports - shared
 import type { AgentCategory } from '@shared/schemas/agent';
 
-export interface SettingsAgentTemplatePlan {
+interface SettingsAgentTemplatePlan {
   fileName: string;
   filePath: string;
   baseName: string;

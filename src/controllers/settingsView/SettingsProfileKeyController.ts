@@ -1,7 +1,7 @@
 // Local imports - hosts
 import type { ExternalOpener, PromptHost } from '@hosts/uiHosts';
 
-export interface SettingsProfileKeyControllerDeps {
+interface SettingsProfileKeyControllerDeps {
   prompt: Pick<PromptHost, 'input' | 'info' | 'confirm'>;
   externalOpener: Pick<ExternalOpener, 'openExternal'>;
   getProviderDisplayName(provider: string): string;

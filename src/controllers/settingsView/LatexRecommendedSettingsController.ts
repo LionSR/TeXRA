@@ -1,6 +1,6 @@
-export type LatexRecommendedSettingField = 'outDir' | 'autoRevealExclude';
+type LatexRecommendedSettingField = 'outDir' | 'autoRevealExclude';
 
-export interface LatexRecommendedSettingUpdate {
+interface LatexRecommendedSettingUpdate {
   key: string;
   value: unknown;
 }
@@ -11,7 +11,7 @@ interface LatexRecommendedSettingsConfig {
   isExplicitlySet(key: string): boolean;
 }
 
-export interface LatexRecommendedSettingsControllerDeps {
+interface LatexRecommendedSettingsControllerDeps {
   config: LatexRecommendedSettingsConfig;
 }
 

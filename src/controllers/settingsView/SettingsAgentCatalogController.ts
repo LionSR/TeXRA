@@ -54,7 +54,7 @@ export interface SettingsAgentCatalogState {
   removeCustomPreset(presetId: string, remaining: unknown[]): Promise<void>;
 }
 
-export interface SettingsAgentCatalogControllerDeps {
+interface SettingsAgentCatalogControllerDeps {
   state: SettingsAgentCatalogState;
   builtInOrchestratorAgentNames?: readonly string[];
   now?: () => number;

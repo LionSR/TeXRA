@@ -35,7 +35,7 @@ import { parseAgentModePresets } from '@shared/schemas/agentPresets';
 
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 
-export interface AgentControllerFactoryOptions extends SettingsStatePorts {
+interface AgentControllerFactoryOptions extends SettingsStatePorts {
   readonly getCustomAgentDirectory: () => Promise<string>;
   readonly getSourceDirectory: (
     source: AgentSource,

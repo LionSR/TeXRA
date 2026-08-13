@@ -30,7 +30,7 @@ import type {
 } from '@shared/schemas/settingsViewMessages';
 import { getGlobalStreaming } from '@utils/config/providerConfig';
 
-export interface BuildProfileMessageDeps {
+interface BuildProfileMessageDeps {
   /**
    * Build the provider key statuses. Host-specific: the extension fills
    * `providerSettings` supplied by the active host.
