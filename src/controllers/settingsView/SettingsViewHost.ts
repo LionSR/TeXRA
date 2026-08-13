@@ -18,9 +18,6 @@ import { SettingsMemoryController } from './SettingsMemoryController';
 import type { SettingsModelSelectionController } from './SettingsModelSelectionController';
 
 type Awaitable<T> = T | PromiseLike<T>;
-type MemoryControllerOptions = ConstructorParameters<
-  typeof SettingsMemoryController
->[0];
 type MemoryPreviewMessage = SettingsMessageFor<
   typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW
 >;
@@ -35,9 +32,11 @@ type SetReasoningLevelInput = Omit<
   SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL>,
   'command'
 >;
-export interface SettingsViewHostOptions {
+interface SettingsViewHostOptions {
   readonly state: SettingsStatePorts;
-  readonly memoryPrompt: MemoryControllerOptions['prompt'];
+  readonly memoryPrompt: ConstructorParameters<
+    typeof SettingsMemoryController
+  >[0]['prompt'];
   readonly respond?: SettingsRespond;
   readonly modelSelectionExtras?: ModelSelectionExtras;
   readonly beforeModelSelectionMessage?: () => Awaitable<void>;
@@ -47,7 +46,7 @@ export interface SettingsViewHostOptions {
   };
 }
 
-export interface SettingsViewHostMutationOptions {
+interface SettingsViewHostMutationOptions {
   readonly afterUpdate?: () => Awaitable<void>;
   readonly afterPost?: () => Awaitable<void>;
 }
@@ -182,10 +181,6 @@ export class SettingsViewHost {
   ): Promise<void> {
     await this.modelSelectionController.setPreferShortModelNames(enabled);
     await this.postModelSelectionMutation(options);
-  }
-
-  getVisibleModels(): readonly string[] {
-    return this.modelSelectionController.getVisibleModels();
   }
 
   private async postModelSelectionMutation(

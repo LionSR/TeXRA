@@ -21,7 +21,7 @@ interface GitHubSubscriptionOwner {
   readonly label: string;
 }
 
-export interface GitHubSubscriptionEntry {
+interface GitHubSubscriptionEntry {
   readonly key: string;
   readonly owners: readonly GitHubSubscriptionOwner[];
 }

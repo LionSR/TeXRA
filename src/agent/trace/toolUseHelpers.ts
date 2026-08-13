@@ -8,9 +8,7 @@
  * stage as its start.
  *
  * These helpers exist so agent code can program against `AgentTrace`
- * without importing TeXRA-specific sugar (`logToolUseStart`,
- * `updateToolUse`, `emitToolUse`) — those names live alongside the other
- * helper functions but ultimately reduce to the same `toolStart` /
+ * without TeXRA-specific sugar; they reduce to the same `toolStart` /
  * `toolEnd` emissions.
  */
 import { generateShortId } from '@utils/core';
@@ -49,7 +47,7 @@ export function startToolUseCard(
  */
 export function endToolUseCard(
   trace: AgentTrace,
-  ref: { logId: string; groupId?: string },
+  ref: ToolUseCardRef,
   result: unknown,
   status: ToolStatus = 'completed',
 ): void {
