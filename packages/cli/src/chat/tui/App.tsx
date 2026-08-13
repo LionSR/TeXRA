@@ -275,10 +275,6 @@ export function App(props: AppProps): React.JSX.Element {
       view.slice !== undefined &&
       isActivePhase(view.slice.status),
   ).length;
-  const pendingApprovalsForRows = useMemo(
-    () => groupPendingApprovalsByRow(pendingSummaries, rootStreamId),
-    [pendingSummaries, rootStreamId],
-  );
   const activeSubagentExecutionIds = useMemo(() => {
     const executionIds = new Map<StreamTabId, string>();
     const parentIds = new Set(
@@ -310,6 +306,14 @@ export function App(props: AppProps): React.JSX.Element {
         ? workflowDashboardModel(workflowDashboardRoot, columns)
         : undefined,
     [columns, workflowDashboardRoot],
+  );
+  const pendingApprovalsForRows = useMemo(
+    () =>
+      groupPendingApprovalsByRow(
+        pendingSummaries,
+        workflowDashboard?.root.streamId ?? rootStreamId,
+      ),
+    [pendingSummaries, rootStreamId, workflowDashboard],
   );
   const childListValues = useMemo<readonly ChildListValue[]>(
     () =>
