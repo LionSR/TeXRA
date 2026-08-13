@@ -1,5 +1,5 @@
 // Local imports - shared schemas
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas';
 
 // Local imports - tools
 import { requireFileReadForEdit } from '@tools/fileInteractions';

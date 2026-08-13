@@ -36,11 +36,12 @@ import {
   type LanguageModelToolCallPart,
   type LanguageModelToolResultPart,
 } from '@platform/languageModel';
-import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
+  FileLocation,
+  MediaAttachmentKind,
   ToolFileAttachment,
   ToolResult,
-} from '@shared/schemas/toolResult';
+} from '@shared/schemas';
 import { getMimeType } from '@utils/files/mimeUtils';
 
 // Local file imports

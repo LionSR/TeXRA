@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports
 import { apiKeySecretName } from '@model/apiProviders';
-import { type ToolResult } from '@shared/schemas/toolResult';
+import { type ToolResult } from '@shared/schemas';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';

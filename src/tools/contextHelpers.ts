@@ -14,7 +14,7 @@ import {
 } from '@agent/runtime/RunContext';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { StreamTabId } from '@shared/schemas';
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError } from '@shared/schemas';
 
 /**
  * Return the active RunContext's session host interactions, throwing a ToolError

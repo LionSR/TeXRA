@@ -17,13 +17,13 @@ import { getExecutionStore } from '@agent/storage';
 import { appSignals } from '@eventBus/AppSignals';
 import { diffFileLocation } from '@latex/acceptedFileTarget';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
-import { ExecutionIdSchema } from '@shared/schemas';
-import type { ExecutionId, FileLocation } from '@shared/schemas';
 import {
+  ExecutionIdSchema,
   ToolError,
   type EditRecord,
   type ToolResult,
-} from '@shared/schemas/toolResult';
+} from '@shared/schemas';
+import type { ExecutionId, FileLocation } from '@shared/schemas';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import {

@@ -8,7 +8,7 @@ import {
 import { z } from 'zod';
 
 // Local imports
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';

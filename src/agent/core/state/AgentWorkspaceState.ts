@@ -5,20 +5,18 @@ import { z } from 'zod';
 import type { ServerToolContentBlock } from '@agent/types/ServerTools';
 import {
   FileLocationSchema,
+  FlattenedEditRecordSchema,
   PlanSchema,
-  WorkPlanSnapshotSchema,
   planSummaryLine,
   TodoItemSchema,
-  type TodoItem,
-  type Plan,
+  type EditRecord,
   type FileLocation,
   type LineChanges,
+  type Plan,
+  type TodoItem,
   type WorkPlanSnapshot,
+  WorkPlanSnapshotSchema,
 } from '@shared/schemas';
-import {
-  FlattenedEditRecordSchema,
-  type EditRecord,
-} from '@shared/schemas/toolResult';
 import { isObject } from '@utils/core';
 import { pathToLocation } from '@utils/files/fileLocation';
 

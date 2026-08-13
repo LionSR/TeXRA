@@ -1,5 +1,5 @@
 // Local imports
-import { ToolError, type ToolFileAttachment } from '@shared/schemas/toolResult';
+import { ToolError, type ToolFileAttachment } from '@shared/schemas';
 import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
 import {
   resolveAndFormat,

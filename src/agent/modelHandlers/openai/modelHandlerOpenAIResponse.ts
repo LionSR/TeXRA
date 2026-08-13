@@ -45,12 +45,13 @@ import type {
   OpenAIResponseProviderCapabilities,
   ProviderCapabilityProfile,
 } from '@model/providerCapabilities';
-import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type {
+  FileLocation,
+  MediaAttachmentKind,
   ToolFileAttachment,
   ToolResult,
-} from '@shared/schemas/toolResult';
+} from '@shared/schemas';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { clamp, filterNotNullish } from '@utils/core';
 import { getWebSocketEnabled } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';

@@ -3,7 +3,7 @@
  */
 
 import type { ToolDefinition } from '@model/ToolDefinition';
-import type { ToolResult } from '@shared/schemas/toolResult';
+import type { ToolResult } from '@shared/schemas';
 
 /**
  * Contract for tool implementations.

@@ -2,10 +2,7 @@
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
-import type {
-  ToolFileAttachment,
-  ToolResult,
-} from '@shared/schemas/toolResult';
+import type { ToolFileAttachment, ToolResult } from '@shared/schemas';
 import type { ProviderMessage } from './ProviderMessage';
 
 /**

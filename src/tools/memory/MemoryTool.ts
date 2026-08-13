@@ -11,7 +11,7 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
 import {
   setMemoryPinned,

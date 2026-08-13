@@ -22,11 +22,12 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkError/errorPatterns';
 import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
-import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
+  FileLocation,
+  MediaAttachmentKind,
   ToolFileAttachment,
   ToolResult,
-} from '@shared/schemas/toolResult';
+} from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 

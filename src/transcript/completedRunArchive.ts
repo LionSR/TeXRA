@@ -10,17 +10,17 @@ import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  ToolResultSchema,
   ToolUseLogSchema,
-  UserMessagePayloadSchema,
-  WebFetchPayloadSchema,
-  WebSearchPayloadSchema,
   type ExecutionId,
   type ExecutionMeta,
   type StreamLogEntry,
   type StreamTabId,
   type ToolUseLog,
+  UserMessagePayloadSchema,
+  WebFetchPayloadSchema,
+  WebSearchPayloadSchema,
 } from '@shared/schemas';
-import { ToolResultSchema } from '@shared/schemas/toolResult';
 import { assertNever, isObject } from '@utils/core';
 
 import { StreamLogStore } from './StreamLogStore';

@@ -30,11 +30,12 @@ import {
 } from '@agent/runtime/SessionHandle';
 import {
   InquiryThreadIdSchema,
+  ToolError,
   type ExternalInquiryPermission,
   type InquiryThreadSummary,
   type StreamTabId,
+  type ToolResult,
 } from '@shared/schemas';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';

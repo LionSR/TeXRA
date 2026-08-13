@@ -7,7 +7,6 @@
 import * as path from 'node:path';
 
 // Local imports
-import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import type { MathMarkupOption } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
@@ -22,6 +21,7 @@ import {
   midEraWorkflowOutputStem,
   parseWorkflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
+import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { WorkspaceFS } from '@utils/files/workspaceFS';

@@ -9,7 +9,7 @@ import {
   formatZodIssuesForDiagnostics,
   ToolError,
   type ToolResult,
-} from '@shared/schemas/toolResult';
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**

@@ -6,8 +6,8 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 // Local imports
+import { type ToolResult } from '@shared/schemas';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
-import { type ToolResult } from '@shared/schemas/toolResult';
 import { executed } from '@tools/core/result';
 import { detectPackageManager } from '@utils/system/toolUtils';
 import { extendEnvPath, safeHomedir } from '@utils/system/platformPaths';

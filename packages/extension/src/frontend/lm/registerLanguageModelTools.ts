@@ -12,7 +12,7 @@
 import * as vscode from 'vscode';
 
 import { createLog } from '@logger/logUtils';
-import type { ToolResult } from '@shared/schemas/toolResult';
+import type { ToolResult } from '@shared/schemas';
 import { getDefaultToolRegistry } from '@tools/registry';
 
 // Local imports - language model tools

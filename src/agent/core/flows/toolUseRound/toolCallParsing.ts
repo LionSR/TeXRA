@@ -10,7 +10,7 @@ import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
   type ValidationErrorDiagnostics,
-} from '@shared/schemas/toolResult';
+} from '@shared/schemas';
 import { isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

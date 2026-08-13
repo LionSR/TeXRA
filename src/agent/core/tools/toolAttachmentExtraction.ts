@@ -6,7 +6,7 @@ import {
   type ToolResult,
   ToolResultSchema,
   ValidationErrorDiagnosticsSchema,
-} from '@shared/schemas/toolResult';
+} from '@shared/schemas';
 
 const ERROR_PAYLOAD_STRIPPED_KEYS = new Set([
   'output',

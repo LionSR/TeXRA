@@ -2,7 +2,7 @@
 import path from 'node:path';
 
 // Local imports
-import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
+import { extractAgentSuffix } from '@latex/mergeFileUtils';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import type { FileLocation } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';

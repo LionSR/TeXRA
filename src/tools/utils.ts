@@ -1,5 +1,5 @@
 // Local imports - common
-import { ToolError } from '@shared/schemas/toolResult';
+import { ToolError } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**

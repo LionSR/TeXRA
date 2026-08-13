@@ -7,7 +7,7 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { createLog } from '@logger/logUtils';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
