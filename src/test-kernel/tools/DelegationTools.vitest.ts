@@ -177,6 +177,9 @@ describe('DelegateAgentTool resume ownership', () => {
     } as never);
     mocks.currentSession.mockReturnValue({
       executions: { getHandle: () => makeHandle() },
+      followUps: {
+        currentGenerationId: () => 'parent-generation',
+      },
     } as never);
     mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
   });
@@ -212,6 +215,9 @@ describe('DelegateAgentTool resume ownership', () => {
 
     await vi.waitFor(() =>
       assert.strictEqual(mocks.deliverChildRunFollowUp.mock.calls.length, 1),
+    );
+    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedGenerationId: 'parent-generation' }),
     );
   });
 });
