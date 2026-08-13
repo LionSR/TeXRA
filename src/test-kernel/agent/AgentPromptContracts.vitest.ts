@@ -622,6 +622,9 @@ describe('progress-check agent prompts', () => {
   const orchestrator = loadAgentYaml<ToolUseAgentYaml>(
     'prompts/agents/remote/orchestrator.yaml',
   );
+  const leanOrchestrator = loadAgentYaml<ToolUseAgentYaml>(
+    'prompts/agents/remote/Lean4/leanOrchestrator.yaml',
+  );
 
   it('keeps self-contained read-only reviews on the narrow evidence path', () => {
     expect(progressCheck.prompts.systemPrompt).toContain(
@@ -633,12 +636,20 @@ describe('progress-check agent prompts', () => {
     expect(progressCheck.prompts.systemPrompt).toContain(
       'On the narrow path, evaluate only the named reports and explicitly named files.',
     );
+    expect(progressCheck.prompts.systemPrompt).toContain(
+      'Otherwise, continue with the broader checks below',
+    );
+    expect(progressCheck.prompts.systemPrompt).toContain(
+      'Do not call `/executions/current`, list sibling executions, or inspect unnamed reports.',
+    );
   });
 
-  it('gives progressCheck the request and execution records needed for the gate', () => {
-    expect(orchestrator.prompts.systemPrompt).toContain(
-      'Include the latest user request and the relevant execution IDs in the delegated instruction.',
-    );
+  it('gives progressCheck the request and execution records from every orchestrator', () => {
+    for (const agent of [orchestrator, leanOrchestrator]) {
+      expect(agent.prompts.systemPrompt).toContain(
+        'Include the latest user request and the relevant execution IDs in the delegated instruction.',
+      );
+    }
   });
 });
 
