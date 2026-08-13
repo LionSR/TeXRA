@@ -145,7 +145,7 @@ describe('WebviewBridge', () => {
       text: 'Summarize',
       data: {
         id: 'call-1',
-        label: 'Summarize',
+        label: '  Summarize  ',
         status: 'completed',
         model: 'gpt56-',
         durationMs: 7000,
@@ -159,7 +159,10 @@ describe('WebviewBridge', () => {
         entries: [
           expect.objectContaining({
             id: 'workflow-call-1',
-            data: expect.objectContaining({ model: 'GPT-5.6 Terra' }),
+            data: expect.objectContaining({
+              label: '  Summarize  ',
+              model: 'GPT-5.6 Terra',
+            }),
           }),
         ],
       }),
