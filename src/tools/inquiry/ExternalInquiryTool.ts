@@ -288,6 +288,13 @@ export class ExternalInquiryTool extends defineTool({
       );
     }
     const ownerSession = session ?? defaultSession();
+    const parentGenerationId =
+      ownerSession.followUps.currentGenerationId(streamId);
+    if (!parentGenerationId) {
+      throw new ToolError(
+        'Inquiry dispatch requires an active parent continuation generation.',
+      );
+    }
 
     logger.info(`Inquiry dispatch [${input.thread_id ?? 'new'}]`, {
       data: input.question.slice(0, 100),
@@ -296,7 +303,7 @@ export class ExternalInquiryTool extends defineTool({
     const persisted = await recordOpenQuestion({
       threadId: input.thread_id ?? undefined,
       parentStreamId: streamId,
-      parentGenerationId: ownerSession.followUps.currentGenerationId(streamId),
+      parentGenerationId,
       question: input.question,
       context: input.context ?? undefined,
       suggestSearch: input.suggestSearch ?? undefined,

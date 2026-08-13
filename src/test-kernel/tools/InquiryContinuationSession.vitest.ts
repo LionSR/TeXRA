@@ -108,6 +108,21 @@ describe('external inquiry continuation session routing', () => {
     );
   });
 
+  it('archives legacy inquiry answers without a parent generation fence', async () => {
+    const manifest = answeredManifest();
+    const turns = manifest.turns.map(
+      ({ parentGenerationId: _, ...turn }) => turn,
+    );
+
+    const outcome = await injectContinuationForAnsweredThread(THREAD, {
+      ...manifest,
+      turns,
+    });
+
+    expect(outcome).toBe('archived');
+    expect(submitFollowUpMock).not.toHaveBeenCalled();
+  });
+
   it('emits inquiry thread updates through the explicit session hub', async () => {
     const session = createTestSession();
     const explicit = captureFacts(session);
