@@ -903,6 +903,47 @@ describe('handleTuiSlashCommand', () => {
     expect(statusText).toContain('active background tasks: 1');
   });
 
+  it('counts only running children among mixed direct-children phases', async () => {
+    registerBuiltinSlashCommands();
+    const session = createSession();
+    const rootStreamId = 'stream-root' as StreamTabId;
+    const runningChildId = 'stream-child-running' as StreamTabId;
+    const waitingChildId = 'stream-child-waiting' as StreamTabId;
+    activeStreamId.set(rootStreamId);
+    setStreamStatusInCliState({
+      streamId: rootStreamId,
+      status: STREAM_PHASE.WAITING,
+    });
+    setStreamStatusInCliState({
+      streamId: runningChildId,
+      status: STREAM_PHASE.RUNNING,
+    });
+    setStreamStatusInCliState({
+      streamId: waitingChildId,
+      status: STREAM_PHASE.WAITING,
+    });
+    projectChildRoster(
+      rootStreamId,
+      [runningChildId, waitingChildId].map((childStreamId, index) => ({
+        executionId: `child-exec-${index}`,
+        identity: { kind: 'agent' as const, agent: `critic-${index}` },
+        agentName: `critic-${index}`,
+        status:
+          childStreamId === runningChildId
+            ? STREAM_PHASE.RUNNING
+            : STREAM_PHASE.WAITING,
+        startedAt: index + 1,
+        elapsed: '1s',
+        childStreamId,
+      })),
+    );
+
+    await handleTuiSlashCommand('/status', createContext(session));
+
+    const statusText = lastEntryText(rootStreamId);
+    expect(statusText).toContain('active background tasks: 1');
+  });
+
   it('does not count retained idle children as active background tasks', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
