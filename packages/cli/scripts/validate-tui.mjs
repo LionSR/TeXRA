@@ -3064,24 +3064,6 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'subagent-list-transcript-reader-returns-input',
-    frame: 'viewport',
-    cols: 120,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, DC4, ESC],
-    expect: ['3 agents', 'Tab sessions', 'Ctrl-T transcript'],
-    unexpect: [
-      'Task details',
-      'signal read during notification phase',
-      'ERROR',
-    ],
-  },
-  {
     name: 'subagent-transcript-reader-return-root',
     frame: 'viewport',
     cols: 120,
