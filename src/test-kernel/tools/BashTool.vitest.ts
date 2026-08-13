@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { afterEach, describe, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
@@ -669,8 +669,7 @@ describe('BashTool', () => {
       defaultSession().followUps.release(parentLease, 'terminal');
     }
 
-    assert.equal(
-      submitFollowUpSpy.mock.calls[0]?.[2]?.expectedGenerationId,
+    expect(submitFollowUpSpy.mock.calls[0]?.[2]?.expectedGenerationId).toBe(
       parentLease.generationId,
     );
 
