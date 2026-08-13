@@ -163,6 +163,22 @@ describe('ToolUseFollowUpQueue ownership', () => {
     expect(retry).toBeDefined();
     expect(retry?.kind).toBe('child');
     expect(retry?.generationId).not.toBe(first.generationId);
+    expect(
+      queues.submit(
+        id,
+        { text: 'late from prior generation' },
+        'live_owner',
+        first.generationId,
+      ),
+    ).toEqual({ kind: 'unavailable' });
+    expect(
+      queues.submit(
+        id,
+        { text: 'current generation' },
+        'live_owner',
+        retry?.generationId,
+      ),
+    ).toEqual({ kind: 'live' });
     expect(queues.hasLiveOwner(id)).toBe(true);
   });
 
