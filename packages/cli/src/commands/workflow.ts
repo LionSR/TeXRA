@@ -13,10 +13,14 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CliUsageError,
   readCliStdinText,
-  readCliCwd,
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
+import {
+  formatInterruptedResumeHint,
+  tryReadCliCwd,
+  writeInterruptedResumeHint,
+} from '../runtime/interruptedResumeHint';
 import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
@@ -29,12 +33,7 @@ import {
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import {
-  cliProgressWriter,
-  emitCliResult,
-  writeCliProgressAndWait,
-} from './_helpers/output';
-import { formatResumeCommand } from '../chat/tui/state/resumeHint';
+import { emitCliResult } from './_helpers/output';
 import {
   AGENT_RUN_GLOBAL_ARGS,
   collectCommonAgentRunFlags,
@@ -71,15 +70,6 @@ function absoluteOutputDestination(
   return path.isAbsolute(destination)
     ? destination
     : path.join(cwd, destination);
-}
-
-/** Read the launch directory without making recovery depend on its lifetime. */
-function tryReadCliCwd(): string | undefined {
-  try {
-    return readCliCwd();
-  } catch {
-    return undefined;
-  }
 }
 
 interface WorkflowRunInit {
@@ -217,14 +207,14 @@ export async function executeCliWorkflowConfig(
     if (!recoveryInputIsDurable) return;
     if (resumeHintWritten) return;
     resumeHintWritten = true;
-    const hint = formatWorkflowResumeHint(
+    const hint = formatInterruptedResumeHint(
       runContext,
       executionId,
+      'workflow',
       config.workingDirectory || runContext.cwd,
       recoveryProcessCwd,
     );
-    if (waitForWrite) return writeCliProgressAndWait(runContext, hint);
-    cliProgressWriter(runContext)(hint);
+    return writeInterruptedResumeHint(hint, waitForWrite);
   };
   const execution = await executeCliConfig(config, runContext, {
     enforceCategory: true,
@@ -309,24 +299,6 @@ export async function executeCliWorkflowConfig(
   }
 
   return runOutcomeExitCode(result.outcome);
-}
-
-function formatWorkflowResumeHint(
-  context: CliContext,
-  executionId: string,
-  workingDirectory: string,
-  processCwd: string | undefined,
-): string {
-  const resumeCommand = formatResumeCommand(context.commandName, executionId, {
-    cwd: workingDirectory,
-    processCwd,
-    approvalPolicy: context.approvalPolicy,
-    outputFormat: context.outputFormat,
-    print: context.mode === 'headless',
-    includeInteropSkills: context.skillSourceOptions.includeInterop,
-    skillSourcePaths: context.skillSourceOptions.additionalPaths,
-  });
-  return `Resume this workflow with: ${resumeCommand}`;
 }
 
 async function persistWorkflowResultMeta(

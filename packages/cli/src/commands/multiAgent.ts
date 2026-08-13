@@ -194,7 +194,7 @@ export async function runMultiAgentPreset(
       requireWorkspaceFiles: true,
       readStdinText: readCliStdinText,
     },
-    async ({ inputFiles, contextFiles }) => {
+    async ({ inputFiles, contextFiles, hasMaterializedStdinInput }) => {
       if (runContext.approvalPolicy === 'never') {
         writeTextStderr(
           `WARN preset ${plan.preset.id} may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
@@ -225,6 +225,7 @@ export async function runMultiAgentPreset(
         enforceCategory: true,
         registerExecution: true,
         stopAfterCycle: true,
+        recoveryInputIsDurable: hasMaterializedStdinInput !== true,
         categoryMismatchMessage: `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,
       });
       if (!execution.ok) return execution.exitCode;

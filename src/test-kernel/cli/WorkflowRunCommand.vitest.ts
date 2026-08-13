@@ -30,7 +30,6 @@ const mocks = vi.hoisted(() => {
     writeTextStderr: vi.fn(),
     writeTextStderrAndWait: vi.fn(async () => undefined),
     writeTextStdout: vi.fn(),
-    writeTextStdoutAndWait: vi.fn(async () => undefined),
   };
 });
 
@@ -90,7 +89,6 @@ vi.mock('@cli/runtime/logSinks', () => ({
   writeTextStderr: mocks.writeTextStderr,
   writeTextStderrAndWait: mocks.writeTextStderrAndWait,
   writeTextStdout: mocks.writeTextStdout,
-  writeTextStdoutAndWait: mocks.writeTextStdoutAndWait,
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
@@ -652,7 +650,7 @@ describe('CLI workflow run command', () => {
           compileFailures: [],
         }),
       );
-      expect(mocks.writeTextStdout).toHaveBeenCalledExactlyOnceWith(
+      expect(mocks.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
         expectedRecoveryHint(
           cliContext({
             cwd: root,
@@ -663,7 +661,7 @@ describe('CLI workflow run command', () => {
         ),
       );
       expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
-        mocks.writeTextStdout.mock.invocationCallOrder[0],
+        mocks.writeTextStderr.mock.invocationCallOrder[0],
       );
     });
   });
@@ -725,7 +723,7 @@ describe('CLI workflow run command', () => {
     expect(mocks.writeErrorStderr).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ code: 'ENOENT' }),
     );
-    expect(mocks.writeTextStdout).toHaveBeenCalledExactlyOnceWith(
+    expect(mocks.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
       expectedRecoveryHint(cliContext(), 'exec-interrupted-copy'),
     );
   });
@@ -803,7 +801,7 @@ describe('CLI workflow run command', () => {
     expect(
       mocks.executeCliConfig.mock.calls[0]?.[2].onInterruptedExecutionFinalized,
     ).toBeTypeOf('function');
-    expect(mocks.writeTextStdout).toHaveBeenCalledOnce();
+    expect(mocks.writeTextStderr).toHaveBeenCalledOnce();
   });
 
   it('rejects recovery advertising for a checkpoint carrying a flow failure', async () => {
@@ -860,7 +858,7 @@ describe('CLI workflow run command', () => {
 
     expect(exitCode).toBe(CliExitCode.Interrupted);
     expect(mocks.writeTextStdout).not.toHaveBeenCalled();
-    expect(mocks.writeTextStdoutAndWait).toHaveBeenCalledExactlyOnceWith(
+    expect(mocks.writeTextStderrAndWait).toHaveBeenCalledExactlyOnceWith(
       expectedRecoveryHint(context, 'exec-signal', persistedWorkspace),
     );
   });
@@ -890,7 +888,7 @@ describe('CLI workflow run command', () => {
     await expect(result).resolves.toBe(CliExitCode.Interrupted);
     expect(cwdSpy).toHaveBeenCalledOnce();
     cwdSpy.mockRestore();
-    expect(mocks.writeTextStdout).toHaveBeenCalledExactlyOnceWith(
+    expect(mocks.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
       `Resume this workflow with: ${formatResumeCommand(
         context.commandName,
         'exec-deleted-cwd',
