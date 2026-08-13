@@ -10,6 +10,7 @@ import {
   ConversationPane,
   workflowRunStatusSummary,
 } from '@cli/chat/tui/panes/ConversationPane';
+import { groupPendingApprovalsByRow } from '@cli/chat/tui/appInteractionPolicy';
 import {
   SubagentList,
   type SubagentListProps,
@@ -1307,6 +1308,7 @@ describe('CLI child list display model', () => {
   });
 
   it('keeps session-wide approvals visible in a workflow dashboard', async () => {
+    const sessionRoot = 'session-root' as StreamTabId;
     const run = 'approval-run' as StreamTabId;
     const child = 'approval-child' as StreamTabId;
     const rootSlice = workflowAgentSlice(run, {
@@ -1325,10 +1327,14 @@ describe('CLI child list display model', () => {
       {
         dashboard: workflowDashboardModel(rootSlice, 36),
         maxRows: 4,
-        pendingApprovals: new Map([
-          [run, ['planApproval', 'proposal']],
-          [child, ['bash']],
-        ]),
+        pendingApprovals: groupPendingApprovalsByRow(
+          [
+            { streamKey: '', kind: 'bash' },
+            { streamKey: sessionRoot, kind: 'planApproval' },
+            { streamKey: child, kind: 'toolEdit' },
+          ],
+          run,
+        ),
         selectedValue: workflowTaskListValue('task'),
         streams: new Map([
           [run, rootSlice],
@@ -1338,8 +1344,9 @@ describe('CLI child list display model', () => {
       36,
     );
 
-    expect(output).toContain('waiting: plan +1');
-    expect(output).toContain('Check · Running · bash');
+    expect(output).toContain('waiting: bash');
+    expect(output).toContain('Check · Running · edit');
+    expect(output).not.toContain('plan');
     expect(
       output.split('\n').every((line) => textDisplayWidth(line) <= 36),
     ).toBe(true);

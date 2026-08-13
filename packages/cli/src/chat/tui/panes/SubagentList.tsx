@@ -544,14 +544,15 @@ export interface SubagentListProps {
   readonly onSelectionChange?: (value: ChildListValue) => void;
   /**
    * Pending approval kinds per stream id (see `pendingApprovalSummaries`; the
-   * caller folds session-wide / stream-less approvals onto the root stream id
-   * via `groupPendingApprovalsByRow`).
+   * caller folds stream-less approvals onto the visible surface root via
+   * `groupPendingApprovalsByRow`).
    *
    * When `dashboard` is present, per-task buckets render on their task rows and
-   * the root-folded session-wide bucket (plan, proposal, stream-less retry,
-   * …) renders in the dashboard heading. The queue remains the authority for
-   * approval identity and order; this map only projects that state onto the
-   * rows which present it.
+   * the root-folded stream-less bucket renders in the dashboard heading.
+   * Stream-bound plan, proposal, and retry approvals remain keyed to their
+   * actual owning stream. The queue remains the authority for approval
+   * identity and order; this map only projects that state onto the rows which
+   * present it.
    */
   readonly pendingApprovals?: ReadonlyMap<
     string,
