@@ -183,6 +183,7 @@ function workflowExecution(
   return {
     ok: true,
     executionId,
+    outcomePersisted: true,
     result: {
       category: AgentCategory.Workflow,
       executionId,
@@ -674,6 +675,22 @@ describe('CLI workflow run command', () => {
     expect(mocks.writeTextStdout).toHaveBeenCalledExactlyOnceWith(
       expectedRecoveryHint(cliContext(), 'exec-interrupted-copy'),
     );
+  });
+
+  it('does not advertise resume when cancelled status is not durable', async () => {
+    const durableExecution = workflowExecution('exec-undurable', {
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    if (!durableExecution.ok) throw new Error('Expected a workflow result.');
+    mockWorkflowExecution(
+      { ...durableExecution, outcomePersisted: false },
+      true,
+    );
+
+    await expect(runWorkflow()).resolves.toBe(CliExitCode.Interrupted);
+
+    expect(mocks.writeTextStdout).not.toHaveBeenCalled();
+    expect(mocks.writeTextStderr).not.toHaveBeenCalled();
   });
 
   it('prints the durable shutdown hint once with the persisted workspace', async () => {

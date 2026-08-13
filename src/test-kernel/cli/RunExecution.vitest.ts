@@ -36,7 +36,7 @@ const mocks = vi.hoisted(() => ({
   createCliRuntimeHost: vi.fn(),
   disposeHostInteractions: vi.fn(),
   prepareInteractivePrompt: vi.fn(),
-  readCliRunOutcome: vi.fn(),
+  readCliRunOutcomeState: vi.fn(),
   releaseExecutionLeaseAfterArtifacts: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
@@ -107,7 +107,7 @@ vi.mock('@cli/runtime/approvalAdapter', async (importOriginal) => ({
 
 vi.mock('@cli/runtime/terminalStatus', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/terminalStatus')>()),
-  readCliRunOutcome: mocks.readCliRunOutcome,
+  readCliRunOutcomeState: mocks.readCliRunOutcomeState,
 }));
 
 vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
@@ -216,7 +216,10 @@ function stubRunExecutionDeps(): void {
     prepareInteractivePrompt: mocks.prepareInteractivePrompt,
     close: mocks.close,
   });
-  mocks.readCliRunOutcome.mockResolvedValue('completed');
+  mocks.readCliRunOutcomeState.mockResolvedValue({
+    outcome: 'completed',
+    outcomePersisted: true,
+  });
   mocks.releaseExecutionLeaseAfterArtifacts.mockResolvedValue(undefined);
   mocks.finalizeExecution.mockResolvedValue({
     status: 'durable',
@@ -474,13 +477,13 @@ describe('executeCliRequest', () => {
   it('reports outcome read failures without rejecting a successful run', async () => {
     const { executeCliRequest } = await loadRunExecution();
     const readError = new Error('metadata read failed');
-    mocks.readCliRunOutcome.mockImplementationOnce(
+    mocks.readCliRunOutcomeState.mockImplementationOnce(
       async (
         result: { readonly outcome: string },
         reportReadFailure: (error: Error) => void,
       ) => {
         reportReadFailure(readError);
-        return result.outcome;
+        return { outcome: result.outcome, outcomePersisted: false };
       },
     );
 
@@ -854,7 +857,10 @@ describe('executeCliRequest', () => {
       expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1');
       expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
 
-      mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
+      mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+        outcome: 'cancelled',
+        outcomePersisted: true,
+      });
       hangingRun.resolve(COMPLETED_RUN);
       await vi.waitFor(() =>
         expect(onInterruptedExecutionFinalized).toHaveBeenCalledOnce(),
@@ -890,6 +896,7 @@ describe('executeCliRequest', () => {
       );
       await expect(run).resolves.toEqual({
         ok: true,
+        outcomePersisted: true,
         result: {
           category: 'toolUse',
           executionId: 'exec-1',
@@ -1037,7 +1044,10 @@ describe('executeCliRequest', () => {
     const shutdown = platform.lifecycle.runShutdown();
     await Promise.resolve();
     expect(mocks.emit).not.toHaveBeenCalled();
-    mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
+    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+      outcome: 'cancelled',
+      outcomePersisted: true,
+    });
     hangingRun.resolve(COMPLETED_RUN);
     await shutdown;
     expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
@@ -1047,6 +1057,7 @@ describe('executeCliRequest', () => {
 
     await expect(run).resolves.toEqual({
       ok: true,
+      outcomePersisted: true,
       result: {
         category: 'toolUse',
         executionId: 'exec-1',
@@ -1090,7 +1101,10 @@ describe('executeCliConfig', () => {
       outcome: 'completed',
       response: 'Done.',
     });
-    mocks.readCliRunOutcome.mockResolvedValueOnce(resolvedOutcome);
+    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+      outcome: resolvedOutcome,
+      outcomePersisted: true,
+    });
     return executeCliToolUseConfig(toolUseConfig(), cliContext(), {
       registerExecution: true,
       stopAfterCycle: true,

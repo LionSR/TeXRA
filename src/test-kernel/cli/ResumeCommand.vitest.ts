@@ -220,6 +220,31 @@ describe('runResumeExecution', () => {
     );
   });
 
+  it('preserves whitespace in a persisted workflow output directory', async () => {
+    const workingDirectory = path.join(path.sep, 'tmp', 'paper');
+    const workflowConfig = AgentConfigSchema.parse({
+      ...WORKFLOW_CONFIG,
+      workingDirectory,
+      cliOutputDirectory: ' out ',
+    });
+    mocks.readConfig.mockResolvedValue(workflowConfig);
+    mocks.retrieveSessionResumeData.mockResolvedValue({
+      type: 'workflow',
+      agentConfig: workflowConfig,
+      executionId: EXECUTION_ID,
+    });
+
+    await expect(run(cliContext())).resolves.toBe(0);
+
+    expect(mocks.executeCliWorkflowConfig).toHaveBeenCalledWith(
+      workflowConfig,
+      expect.any(Object),
+      expect.objectContaining({
+        outputDir: path.join(workingDirectory, ' out '),
+      }),
+    );
+  });
+
   it('reports a missing workflow agent as a usage error', async () => {
     mocks.readConfig.mockResolvedValue(WORKFLOW_CONFIG);
     mocks.resolveCliLaunchAgent.mockRejectedValue(

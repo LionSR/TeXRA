@@ -226,7 +226,7 @@ export async function executeCliWorkflowConfig(
   if (workflowOutputError !== undefined) {
     writeErrorStderr(workflowOutputError);
     if (result.outcome === RUN_OUTCOME.CANCELLED) {
-      writeResumeHint(result.executionId);
+      if (execution.outcomePersisted) writeResumeHint(result.executionId);
       return CliExitCode.Interrupted;
     }
     return CliExitCode.AgentError;
@@ -242,7 +242,7 @@ export async function executeCliWorkflowConfig(
   });
 
   if (result.outcome === RUN_OUTCOME.CANCELLED) {
-    writeResumeHint(result.executionId);
+    if (execution.outcomePersisted) writeResumeHint(result.executionId);
   }
 
   return runOutcomeExitCode(result.outcome);

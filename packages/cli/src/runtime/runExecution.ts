@@ -36,7 +36,7 @@ import { createCliRuntimeHost } from './cliPresentationHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
 import {
-  readCliRunOutcome,
+  readCliRunOutcomeState,
   runOutcomeExitCode,
   type ExecuteAgentResult,
 } from './terminalStatus';
@@ -92,6 +92,7 @@ export type CliConfigExecuteResult<C extends AgentCategory | undefined> =
   | {
       readonly ok: true;
       readonly executionId: string;
+      readonly outcomePersisted: boolean;
       readonly result: ExecuteAgentResultForCategory<C>;
     }
   | {
@@ -153,6 +154,7 @@ export async function executeCliConfig<
   return {
     ok: true,
     executionId,
+    outcomePersisted: execution.outcomePersisted,
     result: result as ExecuteAgentResultForCategory<C>,
   };
 }
@@ -203,7 +205,11 @@ export async function executeCliRequest(
   runContext: CliContext,
   options: CliExecuteOptions = {},
 ): Promise<
-  | { ok: true; result: ExecuteAgentResult }
+  | {
+      ok: true;
+      outcomePersisted: boolean;
+      result: ExecuteAgentResult;
+    }
   | { ok: false; exitCode: CliExitCode }
 > {
   // Transcript persistence is a launch prerequisite for every headless run.
@@ -484,11 +490,15 @@ export async function executeCliRequest(
   }
 
   try {
-    const outcome = await readCliRunOutcome(
+    const { outcome, outcomePersisted } = await readCliRunOutcomeState(
       runResult.result,
       reportFinalizationFailure,
     );
-    return { ok: true, result: { ...runResult.result, outcome } };
+    return {
+      ok: true,
+      outcomePersisted,
+      result: { ...runResult.result, outcome },
+    };
   } finally {
     await detachPresentation();
   }
