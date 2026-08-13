@@ -38,6 +38,7 @@ import {
   isXaiSubscriptionActive,
 } from '@model/providerCapabilities';
 import { formatTexraApprovalPolicy } from '@shared/approvalPolicy';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -108,16 +109,19 @@ export async function showCliSessionStatus(
           parentStream: parentStream.get(),
         })
       : activeStreamId;
-  let activeChildSessions = directActiveChildren.length;
+  let workflowChildren = directActiveChildren;
   if (workflowStreamId !== activeStreamId) {
-    activeChildSessions = workflowStreamId
+    workflowChildren = workflowStreamId
       ? activeSubagentsFor(
           workflowStreamId,
           childStreamEntries.get(),
           streamSlices,
-        ).length
-      : 0;
+        )
+      : [];
   }
+  const activeChildSessions = workflowChildren.filter((child) =>
+    isActivePhase(child.status),
+  ).length;
   // Use root-session access facts only before any stream exists.
   const model = slice?.model ?? (meta.model || context.initialModel);
   const subscriptionActive = await isCodexSubscriptionActive(model);
