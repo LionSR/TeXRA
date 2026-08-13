@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent
 import {
@@ -21,14 +21,7 @@ import {
   type AgentDirectoryStorage,
 } from '@agent/index/AgentDirectorySync';
 import type { BundledAgentDirectoryName } from '@agent/index/BundledAgentDirectories';
-
-function pendingReconcileCount(): number {
-  return (
-    BundledAgentDirectorySync as unknown as {
-      reconcileByStorageRoot: { mutexes: Map<string, unknown> };
-    }
-  ).reconcileByStorageRoot.mutexes.size;
-}
+import { platform } from '@platform/platform';
 
 class FsAgentDirectoryStorage implements AgentDirectoryStorage {
   constructor(private readonly root: string) {}
@@ -93,6 +86,8 @@ describe('BundledAgentDirectorySync', () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -131,20 +126,30 @@ describe('BundledAgentDirectorySync', () => {
       'agents',
       'tool_use_agents',
     ]);
-    expect(pendingReconcileCount()).toBe(0);
   });
 
-  it('skips a recent same-version sync from another process', async () => {
+  it('retries contention and rechecks the marker after acquiring the shared lock', async () => {
     const copied: BundledAgentDirectoryName[] = [];
     let storedVersion: string | undefined;
-    await writeFile(
-      join(tempDir, '.bundled-agent-sync.json'),
-      `${JSON.stringify({
-        completedAt: Date.now(),
-        ownerPid: process.pid + 1,
-        version: '1.0.0',
-      })}\n`,
-    );
+    const runExclusive = vi
+      .spyOn(platform().fileLocks, 'runExclusive')
+      .mockImplementationOnce(async () => {
+        throw Object.assign(new Error('Lock file is already being held'), {
+          code: 'ELOCKED',
+        });
+      })
+      .mockImplementationOnce(async (lockPath, operation) => {
+        expect(lockPath).toBe(join(tempDir, '.bundled-agent-sync.json'));
+        await writeFile(
+          lockPath,
+          `${JSON.stringify({
+            completedAt: Date.now(),
+            ownerPid: process.pid + 1,
+            version: '1.0.0',
+          })}\n`,
+        );
+        return operation();
+      });
 
     const sync = createSync(
       new FsAgentDirectoryStorage(tempDir),
@@ -164,19 +169,72 @@ describe('BundledAgentDirectorySync', () => {
 
     expect(copied).toEqual([]);
     expect(storedVersion).toBe('1.0.0');
-    expect(pendingReconcileCount()).toBe(0);
+    expect(runExclusive).toHaveBeenCalledTimes(2);
+  });
+
+  it('skips refresh when cross-process ownership remains unavailable', async () => {
+    vi.useFakeTimers();
+    const warnings: string[] = [];
+    const runExclusive = vi
+      .spyOn(platform().fileLocks, 'runExclusive')
+      .mockRejectedValue(
+        Object.assign(new Error('Lock file is already being held'), {
+          code: 'ELOCKED',
+        }),
+      );
+    const sync = createSync(
+      new FsAgentDirectoryStorage(tempDir),
+      { copyDirectory: async () => undefined },
+      { onWarn: (message) => warnings.push(message) },
+    );
+
+    const result = sync.reconcile('1.0.0');
+    await vi.runAllTimersAsync();
+
+    await expect(result).resolves.toBe(false);
+    expect(runExclusive).toHaveBeenCalledTimes(21);
+    expect(warnings).toEqual([
+      'Skipping bundled agent refresh because another process still owns the sync lock',
+    ]);
+  });
+
+  it('does not mistake an in-operation ELOCKED failure for lock contention', async () => {
+    const copied: BundledAgentDirectoryName[] = [];
+    const sync = createSync(
+      new FsAgentDirectoryStorage(tempDir),
+      {
+        async copyDirectory(directoryName) {
+          copied.push(directoryName);
+        },
+      },
+      {
+        onVersion: () => {
+          throw Object.assign(new Error('version store lock failed'), {
+            code: 'ELOCKED',
+          });
+        },
+      },
+    );
+
+    await expect(sync.reconcile('1.0.0')).rejects.toThrow(
+      'version store lock failed',
+    );
+    expect(copied).toEqual(['agents', 'tool_use_agents']);
   });
 
   it('clears the reconcile lock after copy failure', async () => {
+    let shouldFail = true;
     const sync = createSync(new FsAgentDirectoryStorage(tempDir), {
       async copyDirectory() {
-        throw new Error('copy failed');
+        if (shouldFail) {
+          shouldFail = false;
+          throw new Error('copy failed');
+        }
       },
     });
 
     await expect(sync.reconcile('1.0.0')).rejects.toThrow('copy failed');
-
-    expect(pendingReconcileCount()).toBe(0);
+    await expect(sync.reconcile('1.0.0')).resolves.toBe(true);
   });
 
   it('does not fail reconciliation when the marker write fails', async () => {
@@ -214,6 +272,5 @@ describe('BundledAgentDirectorySync', () => {
     expect(warnings).toEqual([
       'Failed to write bundled agent sync marker: marker unwritable',
     ]);
-    expect(pendingReconcileCount()).toBe(0);
   });
 });
