@@ -105,7 +105,7 @@ export async function persistExternalInquiryAction(
       data: payload.reason,
     });
   } else if (payload.cause) {
-    logger.info(`Inquiry ${payload.threadId} cancelled`, {
+    logger.info(`Inquiry ${payload.threadId} dropped with cause`, {
       data: payload.cause,
     });
   }

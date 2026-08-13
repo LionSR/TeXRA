@@ -105,7 +105,7 @@ describe('handleExternalInquiryAction', () => {
     });
 
     expect(traceMocks.info).toHaveBeenCalledWith(
-      'Inquiry thread-cancelled cancelled',
+      'Inquiry thread-cancelled dropped with cause',
       { data: 'Session interrupted.' },
     );
   });
