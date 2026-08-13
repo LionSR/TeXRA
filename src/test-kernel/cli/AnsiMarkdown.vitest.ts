@@ -327,6 +327,17 @@ describe('renderAnsiMarkdown', () => {
     plainLinesWithinWidth(renderAnsiMarkdown(md, { width: 40 }), 40);
   });
 
+  it('wraps ordinary prose table cells at word boundaries', () => {
+    const md = '| Words |\n|---|\n| alpha beta gamma delta |';
+    const cells = renderPlain(md, { width: 16 })
+      .split('\n')
+      .filter((line) => line.startsWith('│'))
+      .map((line) => line.split('│')[1]?.trim());
+
+    expect(cells).toContain('alpha beta');
+    expect(cells).toContain('gamma delta');
+  });
+
   it('preserves long unbroken LaTeX cells in width-constrained tables', () => {
     const heading = '$\\operatorname{eig}(\\rho_{\\mathcal{A}_\\gamma}^{T_B})$';
     const spectrum = '$\\{-\\tfrac12,\\tfrac12,\\tfrac12,\\tfrac12\\}$';
