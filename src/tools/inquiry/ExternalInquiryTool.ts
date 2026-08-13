@@ -296,6 +296,7 @@ export class ExternalInquiryTool extends defineTool({
     const persisted = await recordOpenQuestion({
       threadId: input.thread_id ?? undefined,
       parentStreamId: streamId,
+      parentGenerationId: ownerSession.followUps.currentGenerationId(streamId),
       question: input.question,
       context: input.context ?? undefined,
       suggestSearch: input.suggestSearch ?? undefined,
