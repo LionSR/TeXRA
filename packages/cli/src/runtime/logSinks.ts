@@ -97,6 +97,23 @@ function writeRaw(key: StreamKey, text: string): void {
   }
 }
 
+function writeRawAndWait(key: StreamKey, text: string): Promise<void> {
+  if (closed[key]) return Promise.resolve();
+  const stream = process[key];
+  if (stream.destroyed) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    try {
+      stream.write(text, (error) => {
+        if (error) closed[key] = true;
+        resolve();
+      });
+    } catch {
+      closed[key] = true;
+      resolve();
+    }
+  });
+}
+
 export function writeTextStdout(text: string): void {
   writeRaw('stdout', `${text}\n`);
 }
@@ -111,6 +128,14 @@ export function writeRawStderr(text: string): void {
 
 export function writeTextStderr(text: string): void {
   writeRaw('stderr', `${text}\n`);
+}
+
+export function writeTextStdoutAndWait(text: string): Promise<void> {
+  return writeRawAndWait('stdout', `${text}\n`);
+}
+
+export function writeTextStderrAndWait(text: string): Promise<void> {
+  return writeRawAndWait('stderr', `${text}\n`);
 }
 
 /**

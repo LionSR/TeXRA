@@ -329,6 +329,8 @@ async function finishWorkflowInputExpansion(
 export interface ExpandedRunInputs {
   readonly inputFiles: string[];
   readonly contextFiles: string[];
+  /** True only when this invocation expanded the literal `-` stdin token. */
+  readonly hasMaterializedStdinInput?: boolean;
 }
 
 /**
@@ -412,7 +414,12 @@ export async function withExpandedRunInputs<T>(
       requireWorkspaceFiles: options.requireWorkspaceFiles,
       stdinInputFile,
     });
-    return await run(inputs);
+    return await run({
+      ...inputs,
+      hasMaterializedStdinInput: [...inputSpecs, ...contextSpecs].some(
+        isStdinWorkflowInputSpec,
+      ),
+    });
   } finally {
     await stdinInputFile.cleanup();
   }

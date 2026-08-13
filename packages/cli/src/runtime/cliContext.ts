@@ -367,7 +367,7 @@ export async function resolveCliCwd(
   if (!isNonEmptyString(cwdFlag)) {
     return canonicalizeWorkspacePath(readCliCwd());
   }
-  const requested = path.resolve(cwdFlag.trim());
+  const requested = path.resolve(cwdFlag);
   let info: Stats;
   try {
     info = await stat(requested);

@@ -7,6 +7,11 @@ import {
   type RunAgentOptions,
 } from '@agent/runtime';
 import {
+  deriveResumability,
+  inspectExecutionLease,
+  type ResumabilityDecision,
+} from '@agent/storage';
+import {
   ExecutionLeaseLostError,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
@@ -36,7 +41,7 @@ import { createCliRuntimeHost } from './cliPresentationHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
 import {
-  readCliRunOutcome,
+  readCliRunOutcomeState,
   runOutcomeExitCode,
   type ExecuteAgentResult,
 } from './terminalStatus';
@@ -57,6 +62,15 @@ interface CliExecuteOptions {
   readonly openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
   /** Forwarded to `runAgent` on resume, pinning the original handler dialect. */
   readonly modelHandlerCompatibilityKey?: RunAgentOptions['modelHandlerCompatibilityKey'];
+  /** Called during signal shutdown after CANCELLED status is durable and the
+   *  resumable checkpoint has been drained, before the signal handler exits. */
+  readonly onInterruptedExecutionFinalized?: (
+    executionId: ExecutionId,
+  ) => void | Promise<void>;
+  /** Refine generic flow resumability for the launched workflow's state. */
+  readonly canAdvertiseInterruptedExecution?: (
+    resumability: Extract<ResumabilityDecision, { resumable: true }>,
+  ) => boolean;
   /** Wrap the run (e.g. multi-agent preset visibility) without leaking the
    *  runtime-host lifecycle into the caller. */
   readonly wrap?: (
@@ -87,6 +101,7 @@ export type CliConfigExecuteResult<C extends AgentCategory | undefined> =
   | {
       readonly ok: true;
       readonly executionId: string;
+      readonly outcomePersisted: boolean;
       readonly result: ExecuteAgentResultForCategory<C>;
     }
   | {
@@ -148,6 +163,7 @@ export async function executeCliConfig<
   return {
     ok: true,
     executionId,
+    outcomePersisted: execution.outcomePersisted,
     result: result as ExecuteAgentResultForCategory<C>,
   };
 }
@@ -198,7 +214,11 @@ export async function executeCliRequest(
   runContext: CliContext,
   options: CliExecuteOptions = {},
 ): Promise<
-  | { ok: true; result: ExecuteAgentResult }
+  | {
+      ok: true;
+      outcomePersisted: boolean;
+      result: ExecuteAgentResult;
+    }
   | { ok: false; exitCode: CliExitCode }
 > {
   // Transcript persistence is a launch prerequisite for every headless run.
@@ -273,6 +293,10 @@ export async function executeCliRequest(
   const shutdownFinalizationDone = new Promise<void>((resolve) => {
     settleShutdownFinalization = resolve;
   });
+  let settleRecoveryNoticeStarted: () => void = () => undefined;
+  const recoveryNoticeStarted = new Promise<void>((resolve) => {
+    settleRecoveryNoticeStarted = resolve;
+  });
   let shutdownStatusFinalized: Promise<boolean> | undefined;
   const finalizeShutdownStatus = (): Promise<boolean> => {
     if (!shutdownInterrupted) return Promise.resolve(false);
@@ -281,8 +305,9 @@ export async function executeCliRequest(
       const executionId = ownedExecutionId;
       if (!runWithOwnership || !executionId) return false;
       try {
+        let terminalStatusPersisted = false;
         await runWithOwnership(async () => {
-          await finalizeCliExecution(
+          terminalStatusPersisted = await finalizeCliExecution(
             executionId,
             RUN_OUTCOME.CANCELLED,
             'preserve',
@@ -290,6 +315,31 @@ export async function executeCliRequest(
           );
           await releaseCliExecutionLeaseAfterArtifacts(session, executionId);
         });
+        const resumability = terminalStatusPersisted
+          ? await deriveResumability(executionId)
+          : undefined;
+        const canAdvertiseRecovery =
+          resumability?.resumable === true &&
+          options.onInterruptedExecutionFinalized !== undefined &&
+          (options.canAdvertiseInterruptedExecution?.(resumability) ?? true);
+        let lease:
+          Awaited<ReturnType<typeof inspectExecutionLease>> | undefined;
+        if (canAdvertiseRecovery) {
+          try {
+            lease = await inspectExecutionLease(executionId);
+          } catch {
+            // Lease inspection only decides whether the optional recovery
+            // notice is immediately usable. Failure suppresses that notice;
+            // it does not invalidate the durable cancellation above.
+          }
+        }
+        if (
+          canAdvertiseRecovery &&
+          (lease?.status === 'missing' || lease?.status === 'stale')
+        ) {
+          settleRecoveryNoticeStarted();
+          await options.onInterruptedExecutionFinalized(executionId);
+        }
         return true;
       } catch (error) {
         // Record the original drain failure for the one-shot runtime adapter
@@ -317,12 +367,34 @@ export async function executeCliRequest(
       // run's own terminal verdict with CANCELLED.
       shutdownInterrupted =
         !runLifecycleStarted || interruptionAccepted || shutdownInterrupted;
+      let resumableCheckpoint:
+        Extract<ResumabilityDecision, { resumable: true }> | undefined;
+      if (shutdownInterrupted && ownedExecutionId) {
+        try {
+          const resumability = await deriveResumability(ownedExecutionId);
+          if (resumability.resumable) resumableCheckpoint = resumability;
+        } catch {
+          // The ordinary bounded shutdown path below remains authoritative
+          // when checkpoint inspection itself is unavailable.
+        }
+      }
       // Earlier shutdown handlers interrupt the live agent sessions. Wait for
       // runAgent to finish unwinding before the final drain releases ownership,
-      // so no transcript or checkpoint writer can race the lease release. A
-      // provider or filesystem operation outside our abortable boundaries must
-      // not prevent signal termination indefinitely; on timeout, leave the
-      // lease intact for stale-owner recovery rather than releasing it early.
+      // so no transcript or checkpoint writer can race the lease release.
+      // A provider or filesystem operation outside our abortable boundaries
+      // must not prevent termination indefinitely before recovery is known to
+      // be possible. Once durable resumability and lease availability have
+      // been established, however, keep shutdown alive until the promised
+      // recovery notice has been flushed.
+      if (
+        resumableCheckpoint &&
+        (options.canAdvertiseInterruptedExecution?.(resumableCheckpoint) ??
+          true) &&
+        options.onInterruptedExecutionFinalized
+      ) {
+        await shutdownFinalizationDone;
+        return;
+      }
       const grace = new AbortController();
       const graceExpired = sleep(CLI_RUN_SHUTDOWN_GRACE_MS, undefined, {
         signal: grace.signal,
@@ -330,7 +402,16 @@ export async function executeCliRequest(
         if (!grace.signal.aborted) throw error;
       });
       try {
-        await Promise.race([shutdownFinalizationDone, graceExpired]);
+        const first = await Promise.race([
+          shutdownFinalizationDone.then(() => 'finalized' as const),
+          graceExpired.then(() => 'expired' as const),
+          ...(options.onInterruptedExecutionFinalized
+            ? [recoveryNoticeStarted.then(() => 'recovery-started' as const)]
+            : []),
+        ]);
+        if (first === 'recovery-started') {
+          await shutdownFinalizationDone;
+        }
       } finally {
         grace.abort();
         await graceExpired;
@@ -475,11 +556,15 @@ export async function executeCliRequest(
   }
 
   try {
-    const outcome = await readCliRunOutcome(
+    const { outcome, outcomePersisted } = await readCliRunOutcomeState(
       runResult.result,
       reportFinalizationFailure,
     );
-    return { ok: true, result: { ...runResult.result, outcome } };
+    return {
+      ok: true,
+      outcomePersisted,
+      result: { ...runResult.result, outcome },
+    };
   } finally {
     await detachPresentation();
   }

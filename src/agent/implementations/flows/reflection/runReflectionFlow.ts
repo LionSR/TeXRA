@@ -208,6 +208,12 @@ export async function runReflectionFlow<C = unknown>(
     // A keyless legacy record gets the active handler's key stamped here;
     // model-based inference for such records lives at SessionResumeRetrieval.
     shared = stampCompatibilityKey(shared, compatibilityKey);
+    // Response-cycle cancellation persists a WAITING cursor together with
+    // this latch. It records why the previous invocation stopped, not a
+    // durable instruction that all later invocations must also stop.
+    if (!shared.continueRounds && !shared.lastError) {
+      shared.continueRounds = true;
+    }
     // Always sync totalRounds from the current agent config so that changes
     // to the YAML (e.g. rounds: 2 → 1) take effect on resume.
     shared.totalRounds = totalRounds;

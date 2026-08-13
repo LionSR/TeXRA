@@ -55,13 +55,17 @@ export function runOutcomeExitCode(outcome: TurnOutcome): CliExitCode {
   return CliExitCode.Success;
 }
 
-export async function readCliRunOutcome(
+/** Read the terminal outcome together with the durability fact needed before
+ *  advertising persisted-execution recovery. */
+export async function readCliRunOutcomeState(
   result: ExecuteAgentResult,
   reportReadFailure?: (error: Error) => void,
-): Promise<RunOutcome> {
+) {
   try {
     const meta = await getExecutionStore(result.executionId).readMeta();
-    return meta?.outcome ?? result.outcome;
+    return meta?.outcome === undefined
+      ? { outcome: result.outcome, outcomePersisted: false }
+      : { outcome: meta.outcome, outcomePersisted: true };
   } catch (error) {
     reportReadFailure?.(
       new Error(
@@ -69,6 +73,6 @@ export async function readCliRunOutcome(
         { cause: error },
       ),
     );
-    return result.outcome;
+    return { outcome: result.outcome, outcomePersisted: false };
   }
 }

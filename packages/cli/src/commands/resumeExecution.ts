@@ -1,3 +1,6 @@
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+
 import { resolveAndResumeStream } from '@agent/runtime';
 import { getExecutionStore } from '@agent/storage';
 import { inspectExecutionLease } from '@agent/storage/executionLease';
@@ -11,7 +14,12 @@ import { initInteractiveCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import { buildHeadlessRunContext } from '../runtime/runModel';
 import { resolveCliLaunchAgent } from '../runtime/agents';
-import { resumeWorkflowOutputFile } from '../runtime/workflowOutput';
+import {
+  assertOutputDirAvailable,
+  assertOutputFileAvailable,
+  resumeWorkflowOutputDirectory,
+  resumeWorkflowOutputFile,
+} from '../runtime/workflowOutput';
 import { initializeHeadlessTranscriptSession } from '../runtime/transcriptSession';
 import {
   formatInteractiveTerminalFailure,
@@ -36,6 +44,29 @@ function leaseInspectionFailureMessage(
 
 function activeExecutionMessage(id: ExecutionId): string {
   return `Execution ${id} is active in TeXRA.`;
+}
+
+async function workflowRecoveryInputsAreDurable(
+  config: Parameters<typeof executeCliWorkflowConfig>[0],
+  fallbackCwd: string,
+): Promise<boolean> {
+  const workingDirectory = config.workingDirectory || fallbackCwd;
+  const paths = [...(config.inputFiles ?? []), ...(config.contextFiles ?? [])];
+  return (
+    await Promise.all(
+      paths.map(async (inputPath) => {
+        const absolutePath = path.isAbsolute(inputPath)
+          ? inputPath
+          : path.resolve(workingDirectory, inputPath);
+        try {
+          await fs.access(absolutePath);
+          return true;
+        } catch {
+          return false;
+        }
+      }),
+    )
+  ).every(Boolean);
 }
 
 /**
@@ -124,6 +155,7 @@ export async function runResumeExecution(
 
   let exitCode: number = CliExitCode.Usage;
   let failed = false;
+  let failureExitCode: CliExitCode = CliExitCode.AgentError;
   const resumed = await resolveAndResumeStream(streamId, {
     interactions: session.interactions,
     streamStatus: session.status,
@@ -141,14 +173,25 @@ export async function runResumeExecution(
       executionId,
       modelHandlerCompatibilityKey,
     ) => {
+      const output = resumeWorkflowOutputFile(workflowConfig);
+      const outputDir = resumeWorkflowOutputDirectory(workflowConfig);
+      await assertOutputFileAvailable(output, context.cwd);
+      await assertOutputDirAvailable(outputDir, context.cwd);
       exitCode = await executeCliWorkflowConfig(
         workflowConfig,
         buildHeadlessRunContext(context),
         {
           executionId: executionId ?? id,
           modelHandlerCompatibilityKey,
-          // Honor the original run's `--output` target, persisted on the config.
-          output: resumeWorkflowOutputFile(workflowConfig),
+          // Honor the original run's persisted output destination.
+          output,
+          outputDir,
+          expectedOutputFiles:
+            workflowConfig.cliExpectedOutputFiles ?? undefined,
+          recoveryInputIsDurable: await workflowRecoveryInputsAreDurable(
+            workflowConfig,
+            context.cwd,
+          ),
           categoryMismatchMessage: `Execution ${id} resolved to a non workflow run.`,
         },
       );
@@ -158,9 +201,14 @@ export async function runResumeExecution(
     },
     reportFailure: (_streamId, error) => {
       failed = true;
-      writeTextStderr(loadFailureMessage(id, error));
+      if (error instanceof CliUsageError) {
+        failureExitCode = CliExitCode.Usage;
+        writeTextStderr(error.message);
+      } else {
+        writeTextStderr(loadFailureMessage(id, error));
+      }
     },
   });
-  if (failed) return CliExitCode.AgentError;
+  if (failed) return failureExitCode;
   return resumed ? exitCode : CliExitCode.Usage;
 }

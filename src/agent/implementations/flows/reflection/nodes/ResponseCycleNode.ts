@@ -170,7 +170,10 @@ export class ResponseCycleNode<C = unknown> extends Node<
       logger.debug('Response cycle cancelled by user');
       shared.continueRounds = false;
       shared.lastError = undefined;
-      return FlowTransition.DEFAULT;
+      // Keep the cursor on this node. Resume clears the cancellation-only
+      // latch at hydration and retries the interrupted response instead of
+      // skipping ahead to output with an incomplete model turn.
+      return FlowTransition.WAITING;
     }
 
     shared.lastError = undefined;

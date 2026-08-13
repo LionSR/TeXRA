@@ -7,6 +7,7 @@
 
 import { quote } from 'shell-quote';
 
+import type { CliOutputFormat } from '@cli/schemas/cliSettings';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   AgentCategory,
@@ -44,6 +45,11 @@ export interface ResumeCommandOptions {
   /** Ambient shell cwd where the printed command will be copy-pasted. */
   readonly processCwd?: string;
   readonly approvalPolicy?: TexraApprovalPolicy;
+  readonly outputFormat?: CliOutputFormat;
+  /** Preserve an effective non-interactive launch when pasted into a TTY. */
+  readonly print?: boolean;
+  readonly includeInteropSkills?: boolean;
+  readonly skillSourcePaths?: readonly string[];
 }
 
 const DEFAULT_RESUME_COMMAND_NAME = 'texra';
@@ -53,14 +59,24 @@ export function formatResumeCommand(
   executionId: string,
   options: ResumeCommandOptions = {},
 ): string {
-  const cwd = options.cwd?.trim();
+  const cwd = options.cwd;
   const cwdArg =
-    cwd && cwd !== options.processCwd?.trim() ? ` --cwd ${quote([cwd])}` : '';
+    cwd && cwd !== options.processCwd ? ` --cwd ${quote([cwd])}` : '';
   const policyFlag =
     options.approvalPolicy && options.approvalPolicy !== 'ask'
       ? ` --approval-policy ${options.approvalPolicy}`
       : '';
-  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}${cwdArg}${policyFlag}`;
+  const outputFormatFlag =
+    options.outputFormat && options.outputFormat !== 'text'
+      ? ` --output-format ${options.outputFormat}`
+      : '';
+  const printFlag = options.print === true ? ' --print' : '';
+  const interopFlag =
+    options.includeInteropSkills === true ? ' --include-interop' : '';
+  const sourceFlags = (options.skillSourcePaths ?? [])
+    .map((source) => ` --source ${quote([source])}`)
+    .join('');
+  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${interopFlag}${sourceFlags}`;
 }
 
 function formatInteger(value: number): string {

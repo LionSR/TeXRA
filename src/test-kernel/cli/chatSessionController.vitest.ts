@@ -147,7 +147,7 @@ import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import { readCliRunOutcome } from '@cli/runtime/terminalStatus';
+import { readCliRunOutcomeState } from '@cli/runtime/terminalStatus';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
 import {
@@ -464,13 +464,16 @@ describe('CLI terminal outcome resolution', () => {
     );
 
     await expect(
-      readCliRunOutcome({
+      readCliRunOutcomeState({
         category: 'toolUse',
         executionId: 'shutdown-race',
         outcome: RUN_OUTCOME.COMPLETED,
         streamId: 'shutdown-race',
-      } as Parameters<typeof readCliRunOutcome>[0]),
-    ).resolves.toBe(RUN_OUTCOME.CANCELLED);
+      } as Parameters<typeof readCliRunOutcomeState>[0]),
+    ).resolves.toEqual({
+      outcome: RUN_OUTCOME.CANCELLED,
+      outcomePersisted: true,
+    });
   });
 
   it('reports an outcome read failure and retains the completed run', async () => {
@@ -482,16 +485,19 @@ describe('CLI terminal outcome resolution', () => {
     );
 
     await expect(
-      readCliRunOutcome(
+      readCliRunOutcomeState(
         {
           category: 'toolUse',
           executionId: 'broken-storage',
           outcome: RUN_OUTCOME.COMPLETED,
           streamId: 'broken-storage',
-        } as Parameters<typeof readCliRunOutcome>[0],
+        } as Parameters<typeof readCliRunOutcomeState>[0],
         reportReadFailure,
       ),
-    ).resolves.toBe(RUN_OUTCOME.COMPLETED);
+    ).resolves.toEqual({
+      outcome: RUN_OUTCOME.COMPLETED,
+      outcomePersisted: false,
+    });
     expect(reportReadFailure).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         message:

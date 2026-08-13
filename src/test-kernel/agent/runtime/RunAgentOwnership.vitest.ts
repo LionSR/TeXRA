@@ -295,6 +295,19 @@ describe('runAgent execution ownership', () => {
     ]);
   });
 
+  it('delegates workflow output finalization to the live execution lifecycle', async () => {
+    const openWorkflowOutput = vi.fn();
+
+    await launch({ registerExecution: true, openWorkflowOutput });
+
+    expect(mocks.executeAgent).toHaveBeenCalledWith(
+      CONFIG,
+      EXECUTION_ID,
+      expect.objectContaining({ openWorkflowOutput }),
+    );
+    expect(openWorkflowOutput).not.toHaveBeenCalled();
+  });
+
   it('does not drain artifacts again after the host disposed of ownership', async () => {
     const order: string[] = [];
     mocks.executeAgent.mockImplementationOnce(async () => {
