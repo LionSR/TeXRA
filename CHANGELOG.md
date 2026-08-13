@@ -26,8 +26,8 @@ All notable changes to this project will be documented in this file.
 - **Session views show recognizable model names** — headers, `/status`, and
   background-task rows use catalog labels instead of internal model IDs.
 - **Workflow task progress shows recognizable model names** — focused
-  dashboards and interactive transcripts use catalog labels instead of
-  internal model IDs.
+  dashboards, interactive transcripts, and headless progress use catalog
+  labels instead of internal model IDs.
 - **Workflow dashboards identify blocked tasks** — a task waiting for approval
   now shows the pending approval kind on its own row.
 
