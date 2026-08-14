@@ -421,9 +421,9 @@ describe('completedRunArchive facade', () => {
     });
     await getExecutionStore(executionId).write(flowKey(executionId), {
       flowName: 'texra',
-      params: {},
       shared: persistedResumeState.shared,
       createdAt: new Date().toISOString(),
+      cursor: { nextNodeId: 'start' },
       nodes: [],
     });
 

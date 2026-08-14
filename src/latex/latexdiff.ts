@@ -8,7 +8,6 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { executeCommand } from '@utils/system/execUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
-import { runLatexFormatter } from './formatter/texFormatter';
 import {
   buildBetweenRoundDiffSuffix,
   generateDiffFileName,
@@ -84,7 +83,6 @@ export class LaTeXdiffService {
     inputLocation: FileLocation,
     editedLocation: FileLocation,
     suffix = '_diff',
-    runIndent = true,
     mathMarkup?: MathMarkupOption,
     options?: { cwd?: string; subtype?: string; outputDirectory?: string },
   ): Promise<LaTeXdiffResult> {
@@ -122,11 +120,6 @@ export class LaTeXdiffService {
         this.channel,
         `Running latexdiff for ${inputLocation.absolutePath} and ${editedLocation.absolutePath}`,
       );
-
-      // Format files if requested
-      if (runIndent) {
-        await this.formatFiles([inputLocation, editedLocation]);
-      }
 
       // Execute latexdiff command
       const result = await this.commandExecutor.executeDiff(
@@ -230,7 +223,6 @@ export class LaTeXdiffService {
         baseLocation,
         outputLocation,
         '_diff',
-        false,
         mathMarkup,
         options,
       );
@@ -259,7 +251,6 @@ export class LaTeXdiffService {
         firstLocation,
         secondLocation,
         diffSuffix,
-        false,
         mathMarkup,
         options,
       );
@@ -294,22 +285,6 @@ export class LaTeXdiffService {
       return result.success && result.stdout ? result.stdout.trim() : null;
     } catch {
       return null;
-    }
-  }
-
-  private async formatFiles(fileLocations: FileLocation[]): Promise<void> {
-    const failedFiles: string[] = [];
-    for (const location of fileLocations) {
-      const file = location.absolutePath;
-      if (!(await runLatexFormatter(file))) {
-        failedFiles.push(file);
-      }
-    }
-    if (failedFiles.length > 0) {
-      logger.warn(
-        this.channel,
-        `Failed to indent files:\n${failedFiles.join('\n')}\nProceeding with latexdiff anyway.`,
-      );
     }
   }
 }

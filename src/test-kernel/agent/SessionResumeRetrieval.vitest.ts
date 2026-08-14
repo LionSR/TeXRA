@@ -117,9 +117,9 @@ async function writeFlowRecord(
 ): Promise<void> {
   await getExecutionStore(executionId).write(flowKey(executionId), {
     flowName: 'texra',
-    params: {},
     shared,
     createdAt: new Date().toISOString(),
+    cursor: { nextNodeId: 'start' },
     nodes: [],
     ...overrides,
   });
@@ -1135,6 +1135,17 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           stateSlices: null,
         },
         createdAt: '2026-01-01T00:00:00.000Z',
+        cursor: { nextNodeId: 'start' },
+        nodes: [],
+      },
+    },
+    {
+      name: 'legacy record without a replay cursor',
+      reason: 'unsupported-record',
+      stored: {
+        flowName: 'texra',
+        shared: VALID_TOOL_USE_SHARED,
+        createdAt: '2026-01-01T00:00:00.000Z',
         nodes: [],
       },
     },
@@ -1268,13 +1279,13 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       flowContext?.interrupt();
       return {
         flowName: 'texra',
-        params: {},
         shared: {
           messages: [],
           shouldSkipCycle: true,
           stateSlices: snapshot.shared.stateSlices,
         },
         createdAt: new Date().toISOString(),
+        cursor: { nextNodeId: 'start' },
         nodes: [],
       };
     });
@@ -1366,8 +1377,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // Reject the flow's first node-step persist with the provider's abort:
     // the run then fails mid-flight through the public storage boundary, the
     // same way a real cancellation reaches `runToolUseFlow` out of the flow.
-    // Only step writes carry a cursor, so the resume boundary's self-heal
-    // write passes through untouched.
+    // Only step writes append to the nodes audit log, so the resume
+    // boundary's self-heal write (nodes stays empty) passes through untouched.
     const realWrite = store.write.bind(store);
     let abortFired = false;
     const writeSpy = vi
@@ -1377,7 +1388,9 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           !abortFired &&
           value !== null &&
           typeof value === 'object' &&
-          'cursor' in value
+          'nodes' in value &&
+          Array.isArray(value.nodes) &&
+          value.nodes.length > 0
         ) {
           abortFired = true;
           flowContext?.interrupt();

@@ -340,6 +340,7 @@ describe('CLI workflow run command', () => {
         flowName: 'texra',
         shared: {},
         createdAt: '2026-08-13T00:00:00.000Z',
+        cursor: { nextNodeId: 'start' },
         nodes: [],
       },
     });
@@ -996,6 +997,7 @@ describe('CLI workflow run command', () => {
           flowName: 'texra',
           shared: { lastError: { message: 'provider failed' } },
           createdAt: '2026-08-13T00:00:00.000Z',
+          cursor: { nextNodeId: 'start' },
           nodes: [],
         },
       }),

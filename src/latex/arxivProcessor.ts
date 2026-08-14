@@ -40,8 +40,6 @@ export interface DownloadSourceOptions {
   progressCallback?: (msg: string, increment?: number) => void;
   autoIndent?: boolean;
   destination?: ArxivDownloadDestination;
-  /** Workspace-relative destination directory. Defaults to References/<id>. */
-  into?: string;
 }
 
 const INVALID_ARXIV_INPUT_ERROR =
@@ -50,24 +48,11 @@ const INVALID_ARXIV_INPUT_ERROR =
 const PDF_ONLY_SUBMISSION_ERROR =
   'This arXiv paper only has a PDF submission — no LaTeX source is available for download';
 
-function normalizeWorkspaceRelativeDirectory(candidate: string): string {
-  return candidate
-    .trim()
-    .replaceAll(path.sep, '/')
-    .replaceAll(/^\/+|\/+$/g, '');
-}
-
 export function resolveArxivPaperDirectoryRelative(
   id: string,
-  options: Pick<DownloadSourceOptions, 'destination' | 'into'> = {},
+  options: Pick<DownloadSourceOptions, 'destination'> = {},
 ): string {
   const paperDirName = id.replaceAll('/', '_');
-  const customRoot = options.into
-    ? normalizeWorkspaceRelativeDirectory(options.into)
-    : '';
-  if (customRoot) {
-    return customRoot === '.' ? paperDirName : `${customRoot}/${paperDirName}`;
-  }
   return options.destination === 'root' ? '.' : `References/${paperDirName}`;
 }
 
@@ -282,7 +267,6 @@ class ArxivSourceProcessor {
       progressCallback,
       autoIndent = true,
       destination = 'references',
-      into,
     } = options;
 
     // Normalize input (URL or ID) to plain arXiv ID
@@ -299,7 +283,6 @@ class ArxivSourceProcessor {
 
     const paperDirRelative = resolveArxivPaperDirectoryRelative(id, {
       destination,
-      into,
     });
     const isRoot = paperDirRelative === '.';
     const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);

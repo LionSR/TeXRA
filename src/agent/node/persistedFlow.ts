@@ -36,27 +36,21 @@ interface NodeRecord {
 interface FlowCursor {
   /** The next graph-local node path, or null when the flow has reached a terminal edge. */
   nextNodeId: string | null;
-  /** Last action emitted by the previous node, for diagnostics and legacy parity. */
+  /** Last action emitted by the previous node; reported as the terminal action on replay. */
   lastAction?: string;
 }
 
 export interface FlowRecord {
   schemaVersion?: number;
   flowName: string;
-  /**
-   * Legacy per-execution params, always `{}` in practice — the params
-   * channel was removed from the node/flow engine. Kept optional so a
-   * tolerant reader still accepts records written before the removal;
-   * new records omit it entirely.
-   */
-  params?: Record<string, unknown>;
   shared: unknown;
   createdAt: string;
   /**
-   * Authoritative replay cursor. `nodes[]` is now only an audit log: it can be
-   * capped or moved later without changing resume semantics.
+   * Authoritative replay cursor. `nodes[]` is only an audit log: it can be
+   * capped or moved later without changing resume semantics. Every write path
+   * stamps a cursor; a record without one is rejected as unsupported.
    */
-  cursor?: FlowCursor;
+  cursor: FlowCursor;
   nodes: NodeRecord[];
 }
 
@@ -73,10 +67,9 @@ const PersistedFlowCursorSchema = z.looseObject({
 const PersistedFlowRecordObjectSchema = z.looseObject({
   schemaVersion: z.int().min(1).max(FLOW_RECORD_SCHEMA_VERSION).optional(),
   flowName: z.string(),
-  params: z.record(z.string(), z.unknown()).optional(),
   shared: z.unknown(),
   createdAt: z.string(),
-  cursor: PersistedFlowCursorSchema.optional(),
+  cursor: PersistedFlowCursorSchema,
   nodes: z.array(PersistedFlowNodeRecordSchema),
 });
 
@@ -363,7 +356,7 @@ export class PersistedFlow<
       this.cachedRecord = flow;
       return {
         hasMore: false,
-        action: flow.cursor?.lastAction ?? flow.nodes.at(-1)?.action,
+        action: flow.cursor.lastAction,
         shared: this.readShared(flow),
       };
     }
@@ -430,27 +423,19 @@ export class PersistedFlow<
   }
 
   private resolveCursor(flow: FlowRecord): BaseNode | undefined {
-    if (flow.cursor) {
-      if (flow.cursor.nextNodeId === null) return undefined;
-      const byId = this.nodeIndex().byId;
-      const cursor = byId.get(flow.cursor.nextNodeId);
-      if (!cursor) {
-        throw new Error(
-          `Invalid persisted flow cursor: ${flow.cursor.nextNodeId}`,
-        );
-      }
-      return cursor;
+    if (!flow.cursor) {
+      throw new Error(
+        `Persisted flow record for run "${this.runId}" has no replay cursor; ` +
+          'legacy no-cursor records are no longer resumable',
+      );
     }
-
-    return this.replayLegacyNodePath(flow.nodes);
-  }
-
-  private replayLegacyNodePath(
-    nodes: readonly NodeRecord[],
-  ): BaseNode | undefined {
-    let cursor: BaseNode | undefined = this.start;
-    for (const n of nodes) {
-      cursor = cursor?.getNextNode(n.action as Action);
+    if (flow.cursor.nextNodeId === null) return undefined;
+    const byId = this.nodeIndex().byId;
+    const cursor = byId.get(flow.cursor.nextNodeId);
+    if (!cursor) {
+      throw new Error(
+        `Invalid persisted flow cursor: ${flow.cursor.nextNodeId}`,
+      );
     }
     return cursor;
   }

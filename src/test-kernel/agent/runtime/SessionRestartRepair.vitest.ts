@@ -39,6 +39,7 @@ const validFlowRecord = {
   flowName: 'texra',
   shared: { messages: [] },
   createdAt: META_TIMESTAMP,
+  cursor: { nextNodeId: 'start' },
   nodes: [],
 };
 

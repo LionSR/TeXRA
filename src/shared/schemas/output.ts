@@ -153,14 +153,7 @@ export const CompileResultSchema = z.discriminatedUnion('status', [
 export type CompileResult = z.infer<typeof CompileResultSchema>;
 
 export const OutputXmlSummarySchema = z.strictObject({
-  tagContents: z
-    .record(
-      z.string(),
-      z
-        .union([z.array(z.string()), z.string().transform((s) => [s])])
-        .catch([]),
-    )
-    .prefault(() => ({})),
+  tagContents: z.record(z.string(), z.array(z.string())).prefault(() => ({})),
   singleOutputFile: z.string().nullable().prefault(null),
   sourceLocation: FileLocationSchema.nullable().prefault(null),
 });
