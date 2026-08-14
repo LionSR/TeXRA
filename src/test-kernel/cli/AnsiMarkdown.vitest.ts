@@ -224,6 +224,28 @@ describe('renderAnsiMarkdown', () => {
   );
 
   it.each([
+    [
+      'Cost $5/item then <strong>$a<b>c$</strong>',
+      'Cost $5/item then **$a<b>c$**',
+    ],
+    [
+      'Use $HOME/bin then <strong>$a<b>c$</strong>',
+      'Use $HOME/bin then **$a<b>c$**',
+    ],
+  ] as const)(
+    'keeps slash-suffixed literal tokens separate from later math: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it('does not consume the numeric prefix of later inline math as a price', () => {
+    expect(normalizeKnownHtmlForCliMarkdown('Cost $5 then $10x<b>y$')).toBe(
+      'Cost $5 then $10x<b>y$',
+    );
+  });
+
+  it.each([
     ['<code>$HOME</code> and <code>$PATH</code>', '`$HOME` and `$PATH`'],
     ['`$HOME` <strong>or</strong> `$PATH`', '`$HOME` **or** `$PATH`'],
     ['$HOME <strong>or</strong> $PATH', '$HOME **or** $PATH'],
@@ -242,8 +264,11 @@ describe('renderAnsiMarkdown', () => {
     ['$HOME then <strong>$a<b>c$</strong>', '$HOME then **$a<b>c$**'],
     ['$HOME then <b>$a<p>c$</b>', '$HOME then **$a<p>c$**'],
     ['$HOME then <i>$a<p>c$</i>', '$HOME then _$a<p>c$_'],
+    ['$5 then <b>x and $y$</b>', '$5 then **x and $y$**'],
+    ['$5 then <i>x and $y$</i>', '$5 then _x and $y$_'],
+    ['$5 then <p>x and $y$</p>', '$5 then x and $y$'],
   ] as const)(
-    'keeps a lone shell token separate from later math: %s',
+    'keeps a lone literal token separate from later math: %s',
     (source, expected) => {
       expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
     },
@@ -302,6 +327,17 @@ describe('renderAnsiMarkdown', () => {
       ),
     ).toBe('`echo $HOME` and `echo $PATH`');
   });
+
+  it(
+    'normalizes many unmatched HTML code openers without rescanning suffixes',
+    { timeout: 2_000 },
+    () => {
+      const source = '<code>x'.repeat(64_000);
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(
+        '`x'.repeat(64_000),
+      );
+    },
+  );
 
   it('normalizes shell variables inside multi-backtick code spans', () => {
     expect(
