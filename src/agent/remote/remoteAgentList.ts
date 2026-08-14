@@ -27,13 +27,12 @@ import { RemoteAgentListItemSchema, type RemoteAgentListItem } from './types';
 export const CHANNEL = 'RemoteAgentLoader';
 
 const REMOTE_AGENT_LIST_COLUMNS =
-  'id, name, description, visibility, tools, agent_category';
+  'id, name, description, tools, agent_category';
 
 interface RemoteAgentListRow {
   id: string;
   name: string;
   description?: string | null;
-  visibility?: string[] | null;
   tools?: string[] | null;
   agent_category: string;
 }
@@ -59,7 +58,6 @@ function parseListItemRow(row: RemoteAgentListRow): RemoteAgentListItem | null {
     id: row.id,
     name: row.name,
     description: row.description,
-    visibility: row.visibility,
     tools: row.tools,
     agentCategory: row.agent_category,
   });
