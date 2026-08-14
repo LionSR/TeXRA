@@ -13,6 +13,7 @@ import {
   _resetAnsiMarkdownForTests,
   renderAnsiMarkdown,
 } from '@cli/chat/tui/render/ansiMarkdown';
+import { normalizeKnownHtmlForCliMarkdown } from '@cli/chat/tui/render/htmlMarkdownNormalize';
 
 const ESC = String.fromCharCode(27);
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-9;]*m`, 'u');
@@ -78,7 +79,7 @@ describe('renderAnsiMarkdown', () => {
   it('renders common HTML formatting without leaking tags', () => {
     const plain = renderPlain(
       [
-        '<blockquote><strong>Subagent <code>prover</code> finished execution abc:</strong>',
+        '<blockquote class="result"><strong data-kind="agent">Subagent <code title=tool>prover</code> finished execution abc:</strong>',
         '',
         'Done.</blockquote>',
       ].join('\n'),
@@ -87,9 +88,516 @@ describe('renderAnsiMarkdown', () => {
 
     expect(plain).toContain('│ Subagent `prover` finished execution abc:');
     expect(plain).toContain('│ Done.');
-    expect(plain).not.toContain('<blockquote>');
-    expect(plain).not.toContain('<strong>');
-    expect(plain).not.toContain('<code>');
+    expect(plain).not.toContain('<blockquote');
+    expect(plain).not.toContain('<strong');
+    expect(plain).not.toContain('<code');
+  });
+
+  it.each([
+    '\\[0<p<1\\]',
+    '\\[0<p>1\\]',
+    '\\[a<b>c\\]',
+    '\\[a<i>c\\]',
+    '\\[a<br>c\\]',
+    '\\[0<p<1, 1-\\frac{2p}{3}>0, \\frac p3>0\\]',
+    '$0<p>1$',
+    '$$0<p>1$$',
+    '\\(0 < p < 1\\)',
+    '\\(0 <p <1\\)',
+    '\\(0 <p < 1\\)',
+    '\\(0 <p > 1\\)',
+    '\\(0 <p> 1\\)',
+    '\\(if x <p and y>1 then z\\)',
+  ])('preserves a TeX inequality that resembles HTML: %s', (example) => {
+    expect(renderPlain(example)).toContain(example);
+  });
+
+  it('continues normalizing unpaired and nested HTML formatting', () => {
+    const plain = renderPlain(
+      '<p class="intro">Unpaired paragraph\n<b data-level=outer>outer <b>inner</b></b>',
+    );
+
+    expect(plain).toContain('Unpaired paragraph');
+    expect(plain).toContain('outer');
+    expect(plain).toContain('inner');
+    expect(plain).not.toContain('<p');
+    expect(plain).not.toContain('<b');
+    expect(plain).not.toContain('</b>');
+  });
+
+  it.each([
+    ['0<p>1', '01'],
+    ['a<b>c', 'a**c'],
+    ['a<i>c', 'a_c'],
+    ['a<br>c', 'a\nc'],
+  ] as const)(
+    'retains established bare tag-shaped normalization: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it('continues normalizing standard boolean HTML attributes', () => {
+    const plain = renderPlain(
+      [
+        '<p hidden>Paragraph <b hidden>bold</b> <code hidden>code</code></p>',
+        '<div popover>Popover</div>',
+        '<div contenteditable>Editable</div>',
+      ].join('\n'),
+    );
+
+    expect(plain).toContain('Paragraph');
+    expect(plain).toContain('bold');
+    expect(plain).toContain('code');
+    expect(plain).toContain('Popover');
+    expect(plain).toContain('Editable');
+    expect(plain).not.toContain('<p hidden>');
+    expect(plain).not.toContain('<b hidden>');
+    expect(plain).not.toContain('<code hidden>');
+    expect(plain).not.toContain('<div popover>');
+    expect(plain).not.toContain('<div contenteditable>');
+  });
+
+  it('normalizes an opening tag whose discarded attribute contains a dollar', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '<strong title="$foo">x</strong> then $a<b>c$',
+      ),
+    ).toBe('**x** then $a<b>c$');
+  });
+
+  it('rejects a long invalid valueless attribute without changing the text', () => {
+    const source = `<p${' '.repeat(20_000)}x>`;
+    expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(source);
+  });
+
+  it.each([
+    'Cost $5 <strong>today</strong>, then $10',
+    'Cost $5 <strong>today</strong>, then ($10)',
+    'Cost $5 <strong>today</strong>, then -$10',
+    'Cost US$5 <strong>today</strong>, then US$10',
+    'Cost $.99 <strong>today</strong>, then $.50',
+    'Cost $-5 <strong>today</strong>, then $-10',
+    'Cost A$5 <strong>today</strong>, then A$10',
+  ])('normalizes HTML between same-line currency amounts: %s', (example) => {
+    const normalized = normalizeKnownHtmlForCliMarkdown(example);
+    expect(normalized).toBe(
+      example.replace('<strong>', '**').replace('</strong>', '**'),
+    );
+    expect(normalized).not.toContain('<strong>');
+    expect(normalized).not.toContain('</strong>');
+  });
+
+  it.each([
+    ['<strong>$5</strong> and <em>$10</em>', '**$5** and _$10_'],
+    ['<strong>US$5</strong> and <em>A$10</em>', '**US$5** and _A$10_'],
+  ] as const)(
+    'normalizes independently wrapped currency amounts: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it('normalizes unpaired HTML between same-line currency amounts', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('Cost $5 <strong>today, then $10'),
+    ).toBe('Cost $5 **today, then $10');
+  });
+
+  it.each([
+    ['Cost $5, then', 'Cost $5, then'],
+    ['Cost $50, then', 'Cost $50, then'],
+    ['Cost $5.99, then', 'Cost $5.99, then'],
+    ['Cost $.99, then', 'Cost $.99, then'],
+    ['Cost <b>$5</b>, then', 'Cost **$5**, then'],
+  ] as const)(
+    'preserves inline math after a standalone currency amount: %s',
+    (prefix, expectedPrefix) => {
+      expect(
+        normalizeKnownHtmlForCliMarkdown(`${prefix} <strong>$a<b>c$</strong>`),
+      ).toBe(`${expectedPrefix} **$a<b>c$**`);
+    },
+  );
+
+  it.each([
+    ['$5 x$ <strong>and</strong> $y = 2$', '$5 x$ **and** $y = 2$'],
+    ['$10 a$ <b>then</b> $20 b$', '$10 a$ **then** $20 b$'],
+    ['$5, x<b>y$', '$5, x<b>y$'],
+    ['$5, x$ <strong>and</strong> $z$', '$5, x$ **and** $z$'],
+    ['$5, x<b>y$, then <strong>$z$</strong>', '$5, x<b>y$, then **$z$**'],
+    ['$5</b>1$', '$5</b>1$'],
+    ['$AB</b>1$', '$AB</b>1$'],
+  ] as const)(
+    'does not classify numeric inline math as currency: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it.each([
+    [
+      'Cost $5/item then <strong>$a<b>c$</strong>',
+      'Cost $5/item then **$a<b>c$**',
+    ],
+    [
+      'Use $HOME/bin then <strong>$a<b>c$</strong>',
+      'Use $HOME/bin then **$a<b>c$**',
+    ],
+  ] as const)(
+    'keeps slash-suffixed literal tokens separate from later math: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it('does not consume the numeric prefix of later inline math as a price', () => {
+    expect(normalizeKnownHtmlForCliMarkdown('Cost $5 then $10x<b>y$')).toBe(
+      'Cost $5 then $10x<b>y$',
+    );
+  });
+
+  it.each([
+    ['$5 then $a<b>c$', '$5 then $a<b>c$'],
+    ['$HOME then $a<b>c$', '$HOME then $a<b>c$'],
+  ] as const)(
+    'keeps a plain literal token separate from later math: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it.each([
+    ['<code>$HOME</code> and <code>$PATH</code>', '`$HOME` and `$PATH`'],
+    ['`$HOME` <strong>or</strong> `$PATH`', '`$HOME` **or** `$PATH`'],
+    ['$HOME <strong>or</strong> $PATH', '$HOME **or** $PATH'],
+  ] as const)(
+    'normalizes HTML between same-line shell variables: %s',
+    (source, expected) => {
+      const normalized = normalizeKnownHtmlForCliMarkdown(source);
+      expect(normalized).toBe(expected);
+      expect(normalized).not.toContain('<strong>');
+      expect(normalized).not.toContain('</strong>');
+    },
+  );
+
+  it.each([
+    ['$HOME <strong>or</strong> $x$', '$HOME **or** $x$'],
+    ['$foo then <strong>$a<b>c$</strong>', '$foo then **$a<b>c$**'],
+    ['$myVar then <strong>$a<b>c$</strong>', '$myVar then **$a<b>c$**'],
+    ['$HOME then <strong>$a<b>c$</strong>', '$HOME then **$a<b>c$**'],
+    ['$HOME then <b>$a<p>c$</b>', '$HOME then **$a<p>c$**'],
+    ['$HOME then <i>$a<p>c$</i>', '$HOME then _$a<p>c$_'],
+    [
+      'Use $HOME then <strong>$AB <p>1$</strong>',
+      'Use $HOME then **$AB <p>1$**',
+    ],
+    ['$5 then <b>x and $y$</b>', '$5 then **x and $y$**'],
+    ['$5 then <i>x and $y$</i>', '$5 then _x and $y$_'],
+    ['$5 then <p>x and $y$</p>', '$5 then x and $y$'],
+  ] as const)(
+    'keeps a lone literal token separate from later math: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it('keeps an unwrapped shell PID token separate from later math', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('PID $$ then <strong>$a<b>c$</strong>'),
+    ).toBe('PID $$ then **$a<b>c$**');
+  });
+
+  it('keeps a shell-shaped math opener separate from later math', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('$AB <p>1$ <strong>and</strong> $y$'),
+    ).toBe('$AB <p>1$ **and** $y$');
+  });
+
+  it('normalizes a wrapped shell token before later math', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '<strong>$HOME</strong> then <strong>$a<b>c$</strong>',
+      ),
+    ).toBe('**$HOME** then **$a<b>c$**');
+  });
+
+  it('normalizes presentation markup before a lone trailing dollar', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('Cost $5 <strong>today</strong> $'),
+    ).toBe('Cost $5 **today** $');
+  });
+
+  it.each([
+    ['Use $HOME <br> $a<b>c$', 'Use $HOME \n $a<b>c$'],
+    ['Use $HOME <br/> $a<b>c$', 'Use $HOME \n $a<b>c$'],
+    ['Use $HOME <br /> $a<b>c$', 'Use $HOME \n $a<b>c$'],
+  ] as const)(
+    'recognizes supported line breaks before later math: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it.each([
+    ['Cost $5 <b>today</b> and $y=2$', 'Cost $5 **today** and $y=2$'],
+    ['Cost $5 <i>today</i> and $y=2$', 'Cost $5 _today_ and $y=2$'],
+    ['Cost $5 <p>today</p> and $y=2$', 'Cost $5 today\n\n and $y=2$'],
+  ] as const)(
+    'normalizes a complete one-letter wrapper before later math: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it(
+    'handles many unmatched one-letter wrappers without rescanning suffixes',
+    { timeout: 2_000 },
+    () => {
+      const source = `Cost $5 ${'<b>x'.repeat(64_000)} and $y=2$`;
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(source);
+    },
+  );
+
+  it('normalizes HTML between same-line shell PID expansions', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('<code>$$</code> and <code>$$</code>'),
+    ).toBe('`$$` and `$$`');
+  });
+
+  it('keeps backslash math delimiters literal inside code spans', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '<code>\\(</code> <strong>or</strong> <code>\\)</code>',
+      ),
+    ).toBe('`\\(` **or** `\\)`');
+  });
+
+  it.each([
+    ['<code>$_</code> and <code>$-</code>', '`$_` and `$-`'],
+    ['<code>$10</code> and <code>$foo</code>', '`$10` and `$foo`'],
+    ['<code>$HOME</code> and <code>$$</code>', '`$HOME` and `$$`'],
+    ['<code>$$</code> and <code>$PATH</code>', '`$$` and `$PATH`'],
+    [
+      '<code>${HOME}</code> and <code>${PATH}</code>',
+      '`${HOME}` and `${PATH}`',
+    ],
+    [
+      '<code>echo $HOME</code> and <code>echo $PATH</code>',
+      '`echo $HOME` and `echo $PATH`',
+    ],
+  ] as const)(
+    'normalizes HTML between code-wrapped shell parameters: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it('normalizes shell variables inside nontrivial code spans', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '<code>echo $HOME</code> and <code>echo $PATH</code>',
+      ),
+    ).toBe('`echo $HOME` and `echo $PATH`');
+  });
+
+  it(
+    'normalizes many unmatched HTML code openers without rescanning suffixes',
+    { timeout: 2_000 },
+    () => {
+      const source = '<code>x'.repeat(64_000);
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(
+        '`x'.repeat(64_000),
+      );
+    },
+  );
+
+  it('normalizes shell variables inside multi-backtick code spans', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '``echo $HOME`` <strong>or</strong> ``echo $PATH``',
+      ),
+    ).toBe('``echo $HOME`` **or** ``echo $PATH``');
+  });
+
+  it('matches only complete Markdown code delimiter runs', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '``$HOME ``` $PATH`` <strong>$a<b>c$</strong>',
+      ),
+    ).toBe('``$HOME ``` $PATH`` **$a<b>c$**');
+  });
+
+  it('does not replace user text resembling a generated placeholder', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        'literal @@CLI-LITERAL-MATH-0@@ and <code>$HOME</code>',
+      ),
+    ).toBe('literal @@CLI-LITERAL-MATH-0@@ and `$HOME`');
+  });
+
+  it('does not replace user text resembling a math placeholder', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '@@LATEX-MATH-0@@ <strong>x</strong> $a<b>c$',
+      ),
+    ).toBe('@@LATEX-MATH-0@@ **x** $a<b>c$');
+  });
+
+  it('binds code-wrapped shell pairs to the current dollar delimiters', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '<code>$HOME</code> <strong>$x$</strong> <code>$PATH</code>',
+      ),
+    ).toBe('`$HOME` **$x$** `$PATH`');
+  });
+
+  it.each([
+    [
+      '<code>$HOME</code> then <strong>$a<b>c$</strong>',
+      '`$HOME` then **$a<b>c$**',
+    ],
+    [
+      '<strong>$a<b>c$</strong> then <code>$HOME</code>',
+      '**$a<b>c$** then `$HOME`',
+    ],
+    ['`$HOME` then <strong>$a<b>c$</strong>', '`$HOME` then **$a<b>c$**'],
+  ] as const)(
+    'protects math adjacent to a code-wrapped shell token: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it.each([
+    [
+      '`${HOME:-/tmp}` <strong>or</strong> `${PATH:+x}`',
+      '`${HOME:-/tmp}` **or** `${PATH:+x}`',
+    ],
+    [
+      '<code>${HOME:=/tmp}</code> <strong>or</strong> <code>${PATH:?missing}</code>',
+      '`${HOME:=/tmp}` **or** `${PATH:?missing}`',
+    ],
+    [
+      '<code>${HOME%/usr}</code> <strong>or</strong> <code>${#PATH}</code>',
+      '`${HOME%/usr}` **or** `${#PATH}`',
+    ],
+    [
+      '${HOME%/usr} <strong>or</strong> ${#PATH}',
+      '${HOME%/usr} **or** ${#PATH}',
+    ],
+  ] as const)(
+    'normalizes HTML between compound shell expansions: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it.each([
+    '$0<p>1$2',
+    '$0<p>1$-condition',
+    '$a<b>c$d',
+    '$x<i>y$z',
+    '$a<br>c$',
+    '$a<strong>b($c',
+    '$0<p>1$$',
+    '$a <b> c $b',
+    '$A <b> c $B',
+    '$AB<p>1$',
+    '$AB <p>1$',
+    '$AB<p>1$RESULT',
+    '$0<p>1$-',
+    '$0<p>1$RESULT',
+    '$a<b>c$RESULT',
+    '$x<i>y$_',
+    '$a<br>c$-',
+    '$5 > X <p>y</p>$2',
+    '$</code>0<b>1$ trailing text$',
+    '$</code>0<b>1$ trailing text`',
+    '$$0 <p> 1 $$10',
+  ])(
+    'preserves complete inline math beside token characters: %s',
+    (example) => {
+      expect(normalizeKnownHtmlForCliMarkdown(example)).toBe(example);
+    },
+  );
+
+  it.each(['$5 <br>1$', '$AB <strong>C$', '$5 <em>C$'])(
+    'preserves complete inline math containing a supported tag: %s',
+    (source) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(source);
+    },
+  );
+
+  it('does not pair escaped backslash delimiters across presentation HTML', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('Show \\\\( <strong>or</strong> \\\\)'),
+    ).toBe('Show \\\\( **or** \\\\)');
+  });
+
+  it.each(['<strong-x>x</strong-x>', '<p.foo>x</p.foo>', '<b:tag>x</b:tag>'])(
+    'leaves suffixed tag-shaped text literal: %s',
+    (source) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(source);
+    },
+  );
+
+  it.each([
+    '$HOME and $5, then <strong>run</strong> and check $PATH',
+    '$HOME <strong>and</strong> $5, then run and check $PATH',
+  ])('normalizes HTML among three unlike dollar tokens: %s', (example) => {
+    expect(normalizeKnownHtmlForCliMarkdown(example)).toBe(
+      example.replace('<strong>', '**').replace('</strong>', '**'),
+    );
+  });
+
+  it('does not replace user text resembling a dollar placeholder', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '@@CLI-LITERAL-MATH-0@@ <code>$HOME</code>',
+      ),
+    ).toBe('@@CLI-LITERAL-MATH-0@@ `$HOME`');
+  });
+
+  it('preserves adjacent inline math spans independently of markdown', () => {
+    expect(renderPlain('$*a*$$*b*$')).toContain('$*a*$$*b*$');
+    expect(renderPlain('$a_{i}$$')).toContain('$a_{i}$$');
+  });
+
+  it('preserves a complete inline span after an unmatched display opener', () => {
+    expect(renderPlain('x$$y*a*$z')).toContain('x$$y*a*$z');
+  });
+
+  it('keeps every multiline math line inside an HTML blockquote', () => {
+    const plain = renderPlain('<blockquote>\\[\na<b\n>0\n\\]</blockquote>', {
+      colorEnabled: false,
+      width: 80,
+    });
+
+    expect(plain).toContain('│ \\[\n│ a<b\n│ >0\n│ \\]');
+    expect(plain).not.toContain('\n> a<b');
+  });
+
+  it('preserves comparison prose that resembles HTML attributes', () => {
+    expect(renderPlain('if x <p and y>1 then z')).toContain(
+      'if x <p and y>1 then z',
+    );
+  });
+
+  it('continues normalizing self-closing HTML formatting tags', () => {
+    const plain = renderPlain(
+      '<p/>Paragraph <b/>bold <code/>code <p/ >spaced <strong/ >strong <p />before <p hidden />hidden',
+    );
+
+    expect(plain).toContain('Paragraph');
+    expect(plain).toContain('bold');
+    expect(plain).toContain('code');
+    expect(plain).not.toContain('<p/>');
+    expect(plain).not.toContain('<b/>');
+    expect(plain).not.toContain('<code/>');
+    expect(plain).not.toContain('<p/ >');
+    expect(plain).not.toContain('<strong/ >');
+    expect(plain).not.toContain('<p />');
+    expect(plain).not.toContain('<p hidden />');
   });
 
   it('renders HTML headings as markdown headings without leaking tags', () => {
@@ -159,6 +667,72 @@ describe('renderAnsiMarkdown', () => {
     const plain = renderPlain('> first\n> second\n>\n> third');
     expect(plain).toContain('│ first\n│ second');
     expect(plain).toContain('│ third');
+  });
+
+  it('keeps multiline math inside a Markdown blockquote', () => {
+    const plain = renderPlain('> \\[\n> a+b\n> \\]', {
+      colorEnabled: false,
+      width: 80,
+    });
+
+    expect(plain).toContain('│ \\[\n│ a+b\n│ \\]');
+    expect(plain).not.toContain('\n> a+b');
+  });
+
+  it('keeps lazy multiline math continuation inside a Markdown blockquote', () => {
+    const plain = renderPlain('> \\[\n  a+b\n> \\]', {
+      colorEnabled: false,
+      width: 80,
+    });
+
+    expect(plain).toContain('│ \\[\n│   a+b\n│ \\]');
+    expect(plain).not.toContain('\n> \\]');
+  });
+
+  it('strips a partial lazy prefix inside a nested Markdown blockquote', () => {
+    const plain = renderPlain('> > \\[\n> a+b\n> > \\]', {
+      colorEnabled: false,
+      width: 80,
+    });
+
+    expect(plain).toContain('│ │ \\[\n│ │ a+b\n│ │ \\]');
+    expect(plain).not.toContain('│ │ > a+b');
+  });
+
+  it('keeps multiline math inside a quoted list item', () => {
+    const plain = renderPlain('> - \\[\n>   a+b\n>   \\]', {
+      colorEnabled: false,
+      width: 80,
+    });
+
+    expect(plain).toContain('│   • \\[\n│   a+b\n│   \\]');
+    expect(plain).not.toContain('\n>   a+b');
+  });
+
+  it('keeps multiline math inside a blockquote nested under a list', () => {
+    const plain = renderPlain('- > \\[\n  > a+b\n  > \\]', {
+      colorEnabled: false,
+      width: 80,
+    });
+
+    expect(plain).toContain('│ \\[');
+    expect(plain).toContain('│ a+b');
+    expect(plain).toContain('│ \\]');
+    expect(plain).not.toContain('\n  > a+b');
+  });
+
+  it('keeps multiline math through an alternating quote-list chain', () => {
+    const plain = renderPlain('> - > \\[\n>   > a+b\n>   > \\]', {
+      colorEnabled: false,
+      width: 80,
+    });
+    const mathLine = plain.split('\n').find((line) => line.includes('a+b'));
+
+    expect(mathLine).toBeDefined();
+    expect([...(mathLine ?? '')].filter((char) => char === '│')).toHaveLength(
+      2,
+    );
+    expect(mathLine).not.toContain('>');
   });
 
   it('renders nested blockquote prefixes once per depth', () => {
@@ -431,6 +1005,11 @@ describe('renderAnsiMarkdown', () => {
     const plain = renderPlain('loose \\; macro and set \\{1,2\\}');
     expect(plain).toContain('\\;');
     expect(plain).toContain('\\{1,2\\}');
+  });
+
+  it('does not replace user text resembling a LaTeX macro placeholder', () => {
+    const plain = renderPlain('literal @@LATEX-MACRO-0@@ and \\;');
+    expect(plain).toContain('literal @@LATEX-MACRO-0@@ and \\;');
   });
 
   it('still honours genuine markdown backslash-escapes outside the LaTeX set', () => {

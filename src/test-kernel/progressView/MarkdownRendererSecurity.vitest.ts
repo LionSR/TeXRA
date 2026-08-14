@@ -31,6 +31,13 @@ describe('processMarkdownContent security', () => {
     expect(ref?.textContent).toBe(`\\ref{${label}}`);
     expect(doc.querySelector('img')).toBeNull();
   });
+
+  it('does not replace user text resembling a LaTeX reference placeholder', () => {
+    const doc = renderToDocument('literal @@LATEX-REF-0@@ and \\ref{actual}');
+
+    expect(doc.body.textContent).toContain('literal @@LATEX-REF-0@@ and');
+    expect(doc.querySelector('.latex-ref')?.textContent).toBe('\\ref{actual}');
+  });
 });
 
 // Regression coverage for #7449 — see PR description for the trace-viewer
