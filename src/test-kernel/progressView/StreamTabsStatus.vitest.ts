@@ -274,6 +274,37 @@ describe('stream-tab lifecycle distinction', () => {
     expect(compactStyles).toContain('max-width: none');
   });
 
+  it('surfaces a descendant approval on the compact parent row', async () => {
+    const tabs = await mountComponent<StreamTabs>('stream-tabs', {
+      streams: [stream('parent')],
+      streamStates: new Map([['parent', streamState(STREAM_PHASE.RUNNING)]]),
+      pendingApprovalStreamIds: new Set(['child']),
+      childStreamsByParent: new Map([
+        ['parent', [{ ...stream('child'), parentStreamId: 'parent' }]],
+      ]),
+      compact: true,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const row = tabs.shadowRoot?.querySelector('stream-tab');
+
+    expect(
+      row?.shadowRoot
+        ?.querySelector('.tab-container')
+        ?.classList.contains('has-pending-approval'),
+    ).toBe(true);
+    expect(
+      (
+        row?.shadowRoot?.querySelector('.tab-status-icon') as
+          (Element & { name?: string }) | null
+      )?.name,
+    ).toBe('triangle-exclamation');
+    expect(
+      row?.shadowRoot
+        ?.querySelector('#stream-tab-select-button')
+        ?.getAttribute('aria-label'),
+    ).toContain('Status: Approval required');
+  });
+
   it('keeps selection primary while retaining the accessible lifecycle label', async () => {
     const tabs = await mountTabs(
       [stream('selected-running'), stream('selected-stopped')],
