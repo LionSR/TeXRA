@@ -44,7 +44,7 @@ const SURFACE_INTERIOR = 'src/shared/schemas/';
 const DEEP_IMPORT_PREFIX = '@shared/schemas/';
 
 const SEMANTICS =
-  "Production statements that reach past the published '@shared/schemas' " +
+  "Production and test-kernel statements that reach past the published '@shared/schemas' " +
   'barrel into a leaf module, keyed by specifier, valued by the importing ' +
   "file ('(type-only)' marks an `import type` statement, so a file that " +
   'splits its value and type imports contributes two distinct entries). ' +
@@ -834,6 +834,15 @@ describe('@shared/schemas deep-import ratchet', () => {
       `Every name in these statements is already exported by '@shared/schemas'; import the barrel instead.\n${report}\n\n` +
         `If the growth is intentional (e.g. the barrel was widened, reclassifying forced statements), regenerate ${BASELINE_FILE} in this PR.`,
     ).toEqual([]);
+  });
+
+  it('scans test-kernel files so their deep imports stay ratcheted', () => {
+    // The scan must actually cover src/test-kernel. A revert of
+    // `excludeTestKernel: false` would still pass the count-growth cases below
+    // (they only fail on growth, never shrinkage), so pin one known entry.
+    expect(current.gratuitous['@shared/schemas/todo']).toContain(
+      'src/test-kernel/architecture/SharedLiteralImmutability.vitest.ts',
+    );
   });
 
   it('does not push a new module off the published @shared/schemas surface', () => {
