@@ -104,7 +104,12 @@ describe('renderAnsiMarkdown', () => {
         '\\(0 <p <1\\)',
         '\\(0 <p < 1\\)',
         'if x <p and y>1 then z',
+        '\\(0 <p > 1\\)',
+        '\\(0 <p> 1\\)',
+        '\\(if x <p and y>1 then z\\)',
         'Real break: <br>After',
+        'Adjacent HTML: word<b>bold</b>.',
+        'Lone closing tag: Summary</p>',
         'Then \\[a>0\\]',
       ].join('\n'),
     );
@@ -118,8 +123,15 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).toContain('\\(0 <p <1\\)');
     expect(plain).toContain('\\(0 <p < 1\\)');
     expect(plain).toContain('if x <p and y>1 then z');
+    expect(plain).toContain('\\(0 <p > 1\\)');
+    expect(plain).toContain('\\(0 <p> 1\\)');
+    expect(plain).toContain('\\(if x <p and y>1 then z\\)');
+    expect(plain).toContain('if x <p and y>1 then z');
     expect(plain).toContain('Real break:');
     expect(plain).toContain('After');
+    expect(plain).toContain('Adjacent HTML: wordbold.');
+    expect(plain).toContain('Lone closing tag: Summary');
+    expect(plain).not.toContain('</p>');
     expect(plain).toContain('\\[a>0\\]');
   });
 

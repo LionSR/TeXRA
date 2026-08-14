@@ -153,6 +153,23 @@ function restorePlaceholders(
   });
 }
 
+/** Shields complete LaTeX math spans while another text transform runs. */
+export function protectLatexMathSpans(content: string): {
+  content: string;
+  restore: (value: string) => string;
+} {
+  const protectedMath = protectByPatterns(
+    content,
+    MATH_SPAN_PATTERNS,
+    'LATEX-MATH',
+  );
+  return {
+    content: protectedMath.content,
+    restore: (value) =>
+      restorePlaceholders(value, MATH_PLACEHOLDER, protectedMath.items),
+  };
+}
+
 const MACRO_PLACEHOLDER = /@@LATEX-MACRO-(\d+)@@/g;
 
 // LaTeX backslash-macros whose trailing character is CommonMark-escapable
@@ -199,9 +216,10 @@ export function createMarkdownProcessor(
     // reverse so a ref placeholder revealed inside a restored span is still
     // formatted. After span protection, only out-of-span macros remain to net.
     const { content: refProtected, refs } = protectLatexReferences(content);
-    const { content: mathProtected, items: spans } = config.protectLatexMath
-      ? protectByPatterns(refProtected, MATH_SPAN_PATTERNS, 'LATEX-MATH')
-      : { content: refProtected, items: [] };
+    const mathProtection = config.protectLatexMath
+      ? protectLatexMathSpans(refProtected)
+      : { content: refProtected, restore: (value: string) => value };
+    const mathProtected = mathProtection.content;
     const { content: protectedContent, items: macros } = config.protectLatexMath
       ? protectByPatterns(mathProtected, [LATEX_MACRO], 'LATEX-MACRO')
       : { content: mathProtected, items: [] };
@@ -213,7 +231,7 @@ export function createMarkdownProcessor(
       let restored = value;
       if (config.protectLatexMath) {
         restored = restorePlaceholders(restored, MACRO_PLACEHOLDER, macros);
-        restored = restorePlaceholders(restored, MATH_PLACEHOLDER, spans);
+        restored = mathProtection.restore(restored);
       }
       return restoreLatexReferences(restored, refs, format);
     };

@@ -1,9 +1,9 @@
 import { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
+import { protectLatexMathSpans } from '@shared/markdown/createMarkdownProcessor';
 import { clamp } from '@utils/core';
 
-// Compact comparisons such as `0<p>1` are TeX, not paragraph markup.
 const KNOWN_HTML_TAG_RE =
-  /(?<![\p{L}\p{N}_])<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/iu;
+  /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/i;
 
 function quoteHtmlBlock(body: string): string {
   const trimmed = body.trim();
@@ -22,34 +22,40 @@ function headingMarker(level: string): string {
 
 export function normalizeKnownHtmlForCliMarkdown(content: string): string {
   const summarized = summarizeEmbeddedSubagentFollowups(content);
-  if (!KNOWN_HTML_TAG_RE.test(summarized)) return summarized;
+  const mathProtection = protectLatexMathSpans(summarized);
+  if (!KNOWN_HTML_TAG_RE.test(mathProtection.content)) return summarized;
 
-  return summarized
+  const normalized = mathProtection.content
     .replaceAll(
-      /(?<![\p{L}\p{N}_])<h([1-6])(?=[\s/>])[^<>]*>([\s\S]*?)<\/h\1>/giu,
+      /<h([1-6])(?=[\s/>])[^<>]*>([\s\S]*?)<\/h\1>/gi,
       (_match, level: string, body: string) =>
         `\n\n${headingMarker(level)} ${body.trim()}\n\n`,
     )
-    .replaceAll(/(?<![\p{L}\p{N}_])<br\s*\/?>/giu, '\n')
+    .replaceAll(/<br\s*\/?>/gi, '\n')
     .replaceAll(
-      /(?<![\p{L}\p{N}_])<(p|div)(?=[\s/>])[^<>]*>([\s\S]*?)<\/\1>/giu,
+      /<(p|div)(?=[\s/>])[^<>]*>([\s\S]*?)<\/\1>/gi,
       (_match, _tag: string, body: string) => `\n\n${body.trim()}\n\n`,
     )
+    .replaceAll(/<\/(?:p|div)>/gi, '\n\n')
     .replaceAll(
-      /(?<![\p{L}\p{N}_])<(strong|b)(?=[\s/>])[^<>]*>([\s\S]*?)<\/\1>/giu,
+      /<(strong|b)(?=[\s/>])[^<>]*>([\s\S]*?)<\/\1>/gi,
       (_match, _tag: string, body: string) => `**${body}**`,
     )
+    .replaceAll(/<\/(?:strong|b)>/gi, '**')
     .replaceAll(
-      /(?<![\p{L}\p{N}_])<(em|i)(?=[\s/>])[^<>]*>([\s\S]*?)<\/\1>/giu,
+      /<(em|i)(?=[\s/>])[^<>]*>([\s\S]*?)<\/\1>/gi,
       (_match, _tag: string, body: string) => `_${body}_`,
     )
+    .replaceAll(/<\/(?:em|i)>/gi, '_')
     .replaceAll(
-      /(?<![\p{L}\p{N}_])<code(?=[\s/>])[^<>]*>([\s\S]*?)<\/code>/giu,
+      /<code(?=[\s/>])[^<>]*>([\s\S]*?)<\/code>/gi,
       (_match, body: string) => `\`${body}\``,
     )
+    .replaceAll(/<\/code>/gi, '`')
     .replaceAll(
-      /(?<![\p{L}\p{N}_])<blockquote(?=[\s/>])[^<>]*>([\s\S]*?)<\/blockquote>/giu,
+      /<blockquote(?=[\s/>])[^<>]*>([\s\S]*?)<\/blockquote>/gi,
       (_match, body: string) => quoteHtmlBlock(body),
     )
     .trim();
+  return mathProtection.restore(normalized);
 }
