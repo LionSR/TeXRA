@@ -112,6 +112,10 @@ jobs:
             echo 'code-change classifier self-test failed (rename into docs)' >&2
             exit 1
           fi
+          if ! printf 'R100\tdocs/foo.ts\tsrc/foo.ts\n' | code_change_match; then
+            echo 'code-change classifier self-test failed (rename dest only)' >&2
+            exit 1
+          fi
           if printf 'M\tdocs/guide.md\n' | code_change_match; then
             echo 'code-change classifier self-test failed (docs-only)' >&2
             exit 1
