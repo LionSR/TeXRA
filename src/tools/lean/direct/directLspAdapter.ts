@@ -160,9 +160,10 @@ export function createDirectLspLeanAdapter(
     return tracked;
   }
 
-  function endUse(root: string): void {
+  function endUse(root: string, session?: LeanSession): void {
     const tracked = sessions.get(root);
     if (!tracked) return;
+    if (session && tracked.session !== session) return;
     tracked.inFlight = Math.max(0, tracked.inFlight - 1);
     if (tracked.inFlight > 0) return;
     tracked.lastUsedAt = now();
@@ -181,7 +182,7 @@ export function createDirectLspLeanAdapter(
       await session.ensureReady();
       return session;
     } catch (error) {
-      endUse(root);
+      endUse(root, session);
       throw error;
     }
   }
@@ -194,7 +195,7 @@ export function createDirectLspLeanAdapter(
     try {
       return await invoke(session);
     } finally {
-      endUse(session.workspaceRoot);
+      endUse(session.workspaceRoot, session);
     }
   }
 
@@ -325,9 +326,10 @@ export function createDirectLspLeanAdapter(
   /** Dispose every session and reject starts that have not begun. */
   async function disposeAll(): Promise<void> {
     startGeneration += 1;
-    startAbort.abort();
+    // Abort queued `add()` promises in place. `clear()` would drop them
+    // without settling, leaving Lean tool calls pending forever.
+    startAbort.abort(new Error(ADAPTER_STOPPED_MESSAGE));
     startAbort = new AbortController();
-    startQueue.clear();
     notifySessionFreed();
     await Promise.all(
       [...sessions.keys()].map((root) => disposeSession(root, 'shutdown')),
@@ -401,6 +403,8 @@ export function createDirectLspLeanAdapter(
       workspaceRoot: root,
       lakeCommand,
       onExit: () => {
+        const tracked = sessions.get(root);
+        if (tracked?.disposing) return;
         forgetSession(root, session);
       },
     });
@@ -488,7 +492,7 @@ export function createDirectLspLeanAdapter(
         );
         return { ok: false, kind: 'file_missing', message };
       } finally {
-        endUse(session.workspaceRoot);
+        endUse(session.workspaceRoot, session);
       }
     },
 
@@ -542,18 +546,26 @@ export function createDirectLspLeanAdapter(
         case 'clean':
         case 'fetch_cache':
         case 'fetch_file_cache': {
-          const active = new Map(
-            [...sessions].map(([root, tracked]) => [root, tracked.session]),
-          );
-          for (const root of active.keys()) beginUse(root);
+          const acquired: TrackedLeanSession[] = [];
+          for (const [root] of [...sessions]) {
+            const tracked = beginUse(root);
+            if (tracked) acquired.push(tracked);
+          }
           try {
             await runForAllSessions(
-              active,
+              new Map(
+                acquired.map((tracked) => [
+                  tracked.session.workspaceRoot,
+                  tracked.session,
+                ]),
+              ),
               lakeCommand,
               LAKE_PROJECT_ARGS[command],
             );
           } finally {
-            for (const root of active.keys()) endUse(root);
+            for (const tracked of acquired) {
+              endUse(tracked.session.workspaceRoot, tracked.session);
+            }
           }
           return;
         }

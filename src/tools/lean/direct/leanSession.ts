@@ -59,7 +59,9 @@ export interface LeanSessionOptions {
 
 export class LeanSession {
   private child?: ChildProcessWithoutNullStreams;
+  private spawned?: ChildProcessWithoutNullStreams;
   private rpc?: JsonRpcConnection;
+  private closeWait?: Promise<void>;
   private readonly id: string;
   private readyPromise?: Promise<void>;
   private disposed = false;
@@ -87,26 +89,33 @@ export class LeanSession {
     if (this.disposed) return;
     this.disposed = true;
     const child = this.child;
+    const spawned = this.spawned;
     const rpc = this.rpc;
+    const closeWait = this.closeWait;
     this.child = undefined;
+    this.spawned = undefined;
     this.rpc = undefined;
     this.readyPromise = undefined;
     this.releaseAllDiagnosticsWaiters();
     this.openFiles.clear();
     unregisterLeanServer(this.id);
-    if (!rpc || !child) return;
     try {
-      await pTimeout(rpc.request('shutdown'), {
-        milliseconds: SHUTDOWN_TIMEOUT_MS,
-        message: 'Lean LSP shutdown timeout',
-      }).catch(() => undefined);
-      rpc.notify('exit');
-    } finally {
-      rpc.dispose('LeanSession.dispose');
-      if (!child.killed) {
-        child.kill();
+      if (rpc && child) {
+        try {
+          await pTimeout(rpc.request('shutdown'), {
+            milliseconds: SHUTDOWN_TIMEOUT_MS,
+            message: 'Lean LSP shutdown timeout',
+          }).catch(() => undefined);
+          rpc.notify('exit');
+        } finally {
+          rpc.dispose('LeanSession.dispose');
+        }
       }
-      await waitForProcessClose(child);
+      if (spawned && !spawned.killed) {
+        spawned.kill();
+      }
+    } finally {
+      await closeWait;
     }
   }
 
@@ -194,6 +203,8 @@ export class LeanSession {
       });
     }
     this.child = child;
+    this.spawned = child;
+    this.closeWait = waitForProcessClose(child);
     let stderrTail = '';
     const STDERR_TAIL_LIMIT = 4096;
     let finalized = false;

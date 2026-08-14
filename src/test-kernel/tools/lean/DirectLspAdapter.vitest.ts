@@ -352,6 +352,42 @@ describe('createDirectLspLeanAdapter', () => {
     expect(await countStarts()).toBe(starts);
   });
 
+  fakeLakeIt(
+    'settles a start that was already queued when dispose runs',
+    async () => {
+      vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
+      const second = makeLakeProject(tempRoot, 'project-b');
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        maxSessions: 1,
+        idleTimeoutMs: 0,
+      });
+      const first = adapter.fetchDiagnosticsForFile(filePath);
+      try {
+        await delay(150);
+        expect(activeServerRoots()).toEqual([projectRoot]);
+        const queued = adapter.fetchDiagnosticsForFile(second.filePath);
+        await delay(50);
+        const disposed = adapter.dispose();
+        await expect(
+          Promise.race([
+            queued,
+            delay(1_000).then(() => {
+              throw new Error('queued start did not settle after dispose');
+            }),
+          ]),
+        ).resolves.toMatchObject({
+          ok: false,
+          kind: 'toolchain_unavailable',
+        });
+        await disposed;
+      } finally {
+        await adapter.dispose();
+        await Promise.allSettled([first]);
+      }
+    },
+  );
+
   fakeLakeIt('stops a restarted session after it sits idle', async () => {
     const adapter = createDirectLspLeanAdapter({
       lakeCommand: fakeLakePath,
