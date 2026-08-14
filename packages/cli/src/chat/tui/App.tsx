@@ -401,9 +401,21 @@ export function App(props: AppProps): React.JSX.Element {
   const focusChildList = useCallback(() => {
     const firstChildValue = childListValues.at(0);
     if (firstChildValue || workflowDashboardRootHasApproval) {
+      if (
+        workflowDashboardRootHasApproval &&
+        childListTarget.streamId !== undefined
+      ) {
+        promoteApprovalsForStream(childListTarget.streamId, {
+          includeSessionWide: true,
+        });
+      }
       dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
     }
-  }, [childListValues, workflowDashboardRootHasApproval]);
+  }, [
+    childListTarget.streamId,
+    childListValues,
+    workflowDashboardRootHasApproval,
+  ]);
   const focusSession = useCallback(
     (streamId: StreamTabId) => {
       if (isWorkflowTaskListValue(selectedChildValue)) {

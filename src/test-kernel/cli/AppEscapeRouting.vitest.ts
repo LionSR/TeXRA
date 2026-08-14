@@ -10,6 +10,7 @@ import { App, type AppProps } from '@cli/chat/tui/App';
 import { ESC_META_CHORD_INTERRUPT_DELAY_MS } from '@cli/chat/tui/appInteractionPolicy';
 import {
   clearApprovals,
+  currentApproval,
   enqueueApproval,
 } from '@cli/chat/tui/state/approvalQueue';
 import { POINTER } from '@cli/tui/ui/glyphs';
@@ -1144,7 +1145,7 @@ describe('App foreground Escape ownership', () => {
 });
 
 describe('App workflow dashboard ownership', () => {
-  it('allocates an approval-only dashboard before workflow rows exist', async () => {
+  it('promotes an approval-only dashboard before workflow rows exist', async () => {
     seedRootStream();
     patchStream(ROOT, (slice) => ({
       ...slice,
@@ -1182,9 +1183,15 @@ describe('App workflow dashboard ownership', () => {
 
     try {
       stdin.write('\t');
-      await waitFor(() =>
-        stdout.output.includes('Starting workflow · 0/0 done · inquiry'),
+      await waitFor(
+        () =>
+          currentApproval.get()?.payload.payload.requestId ===
+          'external-session',
       );
+      await waitFor(() =>
+        stdout.output.includes('Verify the workflow before it emits rows.'),
+      );
+      expect(stdout.output).not.toContain('Wait outside the active stream.');
     } finally {
       instance.unmount();
     }
