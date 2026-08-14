@@ -486,6 +486,56 @@ describe('createDirectLspLeanAdapter', () => {
     },
   );
 
+  it('retries EMFILE after evicting idle sessions without waiting for busy ones', async () => {
+    const second = makeLakeProject(tempRoot, 'project-b');
+    const third = makeLakeProject(tempRoot, 'project-c');
+    let spawnCount = 0;
+    let failNextSpawn = false;
+    spawnOverride.current = () => {
+      spawnCount += 1;
+      if (failNextSpawn) {
+        failNextSpawn = false;
+        throw Object.assign(new Error('too many open files'), {
+          code: 'EMFILE',
+        });
+      }
+      return createFakeLeanChild();
+    };
+
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 0,
+    });
+    try {
+      await adapter.fetchDiagnosticsForFile(filePath);
+      await adapter.fetchDiagnosticsForFile(second.filePath);
+
+      // Keep the first workspace in-flight so recovery cannot evict it.
+      const pendingBusy = adapter.getHoverInfo(filePath, 0, 0);
+      await delay(50);
+
+      failNextSpawn = true;
+      const started = adapter.fetchDiagnosticsForFile(third.filePath);
+      await expect(
+        Promise.race([
+          started,
+          delay(1_000).then(() => {
+            throw new Error('EMFILE recovery waited for the busy session');
+          }),
+        ]),
+      ).resolves.toMatchObject({
+        ok: true,
+        diagnostics: [{ message: 'fake diagnostic' }],
+      });
+      expect(activeServerRoots()).toEqual([projectRoot, third.projectRoot]);
+      expect(spawnCount).toBe(4);
+      await adapter.dispose();
+      await Promise.allSettled([pendingBusy]);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
   it('keeps a disposing session reserved until the child closes', async () => {
     let spawnCount = 0;
     spawnOverride.current = () => {
@@ -650,7 +700,8 @@ function createFakeLeanChild(options?: {
     }
   });
 
-  const child = Object.assign(new EventEmitter(), {
+  const events = new EventEmitter();
+  const child = Object.assign(events, {
     stdin,
     stdout,
     stderr,
@@ -658,6 +709,7 @@ function createFakeLeanChild(options?: {
     killed: false,
     exitCode: null as number | null,
     signalCode: null as NodeJS.Signals | null,
+    emit: events.emit.bind(events),
     kill(signal?: NodeJS.Signals) {
       if (this.exitCode != null || this.signalCode != null) return true;
       this.killed = true;
