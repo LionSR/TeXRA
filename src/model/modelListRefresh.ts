@@ -126,7 +126,10 @@ export async function refreshModelListStateIfNeeded(
     );
     added = reconciliation.added;
     removed = reconciliation.removed;
-    reordered = !sameModelList(currentModels, reconciliation.models);
+    reordered =
+      added.length === 0 &&
+      removed.length === 0 &&
+      !sameModelList(currentModels, reconciliation.models);
     if (added.length > 0 || removed.length > 0 || reordered) {
       await state.update(GlobalStateKey.ENABLED_MODELS, reconciliation.models);
     }
