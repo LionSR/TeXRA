@@ -728,9 +728,14 @@ return 'guest success'`,
           snapshots.push(snapshot);
         },
       });
-      void run.finally(() => {
-        settled = true;
-      });
+      void run.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
+      );
 
       await childStarted.promise;
       await vi.advanceTimersByTimeAsync(4_000);
