@@ -45,10 +45,6 @@ export interface DesktopBrowserViews {
   show(tabId: string, bounds: Rectangle): void;
   /** Detaches all views, e.g. when a non-browser tab becomes active. */
   hideAll(): void;
-  navigate(tabId: string, url: string): void;
-  goBack(tabId: string): void;
-  goForward(tabId: string): void;
-  reload(tabId: string): void;
   close(tabId: string): void;
   disposeAll(): void;
 }
@@ -209,28 +205,6 @@ export function createDesktopBrowserViews(
     },
 
     hideAll: detachAll,
-
-    navigate(tabId, url) {
-      if (!isEmbeddableUrl(url)) {
-        openAllowedExternalUrl(url);
-        return;
-      }
-      views.get(tabId)?.webContents.loadURL(url).catch(reportError);
-    },
-
-    goBack(tabId) {
-      const history = views.get(tabId)?.webContents.navigationHistory;
-      if (history?.canGoBack()) history.goBack();
-    },
-
-    goForward(tabId) {
-      const history = views.get(tabId)?.webContents.navigationHistory;
-      if (history?.canGoForward()) history.goForward();
-    },
-
-    reload(tabId) {
-      views.get(tabId)?.webContents.reload();
-    },
 
     close: closeTabView,
 

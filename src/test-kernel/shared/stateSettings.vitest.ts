@@ -515,11 +515,6 @@ const CLI_CORE_SETTING_READER_FILES = {
 } as const;
 
 const EXTENSION_ONLY_CORE_SETTING_READER_FILES = {
-  // The criticism sink that honors this flag is a VS Code diagnostics surface;
-  // the desktop reports inline criticism as unsupported.
-  'packages/extension/src/frontend/latex/inlineCriticism.ts': [
-    'inlineCriticism.enabled',
-  ],
   'packages/extension/src/frontend/review/agentReviewCommitWatcher.ts': [
     'agentReview.runOnCommit',
   ],

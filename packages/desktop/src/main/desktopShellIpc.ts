@@ -194,9 +194,6 @@ function dispatchMainViewInboundOnShell(
       }
       return true;
     }
-    case MAIN_VIEW_COMMANDS.SETTINGS_OPEN:
-      actions.showSettings();
-      return true;
     case MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS:
       actions.showSettings(
         SETTINGS_TAB.AGENTS,

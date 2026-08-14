@@ -2,7 +2,6 @@
 
 interface Window {
   texraDesktop?: {
-    electronVersion: string;
     hasWorkspace: boolean;
     workspacePath?: string | undefined;
   };

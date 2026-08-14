@@ -368,18 +368,6 @@ export function createDesktopWorkspaceIpc(
         case DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE:
           options.browserViews.hideAll();
           return true;
-        case DESKTOP_WORKSPACE_COMMANDS.BROWSER_NAVIGATE:
-          options.browserViews.navigate(data.tabId, data.url);
-          return true;
-        case DESKTOP_WORKSPACE_COMMANDS.BROWSER_BACK:
-          options.browserViews.goBack(data.tabId);
-          return true;
-        case DESKTOP_WORKSPACE_COMMANDS.BROWSER_FORWARD:
-          options.browserViews.goForward(data.tabId);
-          return true;
-        case DESKTOP_WORKSPACE_COMMANDS.BROWSER_RELOAD:
-          options.browserViews.reload(data.tabId);
-          return true;
         case DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE:
           options.browserViews.close(data.tabId);
           return true;

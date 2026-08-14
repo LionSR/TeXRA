@@ -57,9 +57,6 @@ export const DEFAULT_CORE_SETTINGS = {
   agentOutputs: {
     autoOpenFinal: true,
   },
-  inlineCriticism: {
-    enabled: false,
-  },
   goal: {
     enabled: true,
   },
@@ -184,14 +181,6 @@ export const CoreSettingsShape = {
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.agentOutputs),
-  inlineCriticism: z
-    .strictObject({
-      enabled: boolField(
-        DEFAULT_CORE_SETTINGS.inlineCriticism.enabled,
-        'Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the diagnostics tool\'s "add" command.',
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.inlineCriticism),
   goal: z
     .strictObject({
       enabled: boolField(
@@ -440,7 +429,6 @@ type AssertNever<T extends never> = T;
  */
 export const CORE_SETTING_PATHS = [
   'agentOutputs.autoOpenFinal',
-  'inlineCriticism.enabled',
   'goal.enabled',
   'model.useOpenAIResponsesAPI',
   'model.useGoogleInteractionsServerState',
@@ -562,9 +550,6 @@ export const CLI_CORE_SETTING_PATHS = [
  * guardrail (test-kernel), not here.
  */
 export const EXTENSION_ONLY_CORE_SETTING_PATHS = [
-  // The criticism sink that honors this flag is a VS Code diagnostics surface;
-  // the desktop reports inline criticism as unsupported.
-  'inlineCriticism.enabled',
   'agentReview.runOnCommit',
 ] as const satisfies readonly CoreSettingPath[];
 

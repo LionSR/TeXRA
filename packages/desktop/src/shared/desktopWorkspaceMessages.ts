@@ -30,10 +30,6 @@ export const DESKTOP_WORKSPACE_COMMANDS = {
   BROWSER_OPEN: 'desktop:browser:open',
   BROWSER_BOUNDS: 'desktop:browser:bounds',
   BROWSER_HIDE: 'desktop:browser:hide',
-  BROWSER_NAVIGATE: 'desktop:browser:navigate',
-  BROWSER_BACK: 'desktop:browser:back',
-  BROWSER_FORWARD: 'desktop:browser:forward',
-  BROWSER_RELOAD: 'desktop:browser:reload',
   BROWSER_CLOSE: 'desktop:browser:close',
   BROWSER_STATE: 'desktop:browser:state',
   // Environment
@@ -186,28 +182,10 @@ const DesktopBrowserHideMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE),
 });
 
-const DesktopBrowserNavigateMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_NAVIGATE),
+const DesktopBrowserCloseMessageSchema = z.object({
+  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE),
   tabId: z.string(),
-  url: z.string(),
 });
-
-/** Back / forward / reload / close all carry just the tab id. */
-const browserTabCommand = <T extends string>(command: T) =>
-  z.object({ command: z.literal(command), tabId: z.string() });
-
-const DesktopBrowserBackMessageSchema = browserTabCommand(
-  DESKTOP_WORKSPACE_COMMANDS.BROWSER_BACK,
-);
-const DesktopBrowserForwardMessageSchema = browserTabCommand(
-  DESKTOP_WORKSPACE_COMMANDS.BROWSER_FORWARD,
-);
-const DesktopBrowserReloadMessageSchema = browserTabCommand(
-  DESKTOP_WORKSPACE_COMMANDS.BROWSER_RELOAD,
-);
-const DesktopBrowserCloseMessageSchema = browserTabCommand(
-  DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE,
-);
 
 export const DesktopBrowserStateMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_STATE),
@@ -268,10 +246,6 @@ export const DesktopWorkspaceInboundMessageSchema = z.discriminatedUnion(
     DesktopBrowserOpenMessageSchema,
     DesktopBrowserBoundsMessageSchema,
     DesktopBrowserHideMessageSchema,
-    DesktopBrowserNavigateMessageSchema,
-    DesktopBrowserBackMessageSchema,
-    DesktopBrowserForwardMessageSchema,
-    DesktopBrowserReloadMessageSchema,
     DesktopBrowserCloseMessageSchema,
     DesktopEnvironmentRequestMessageSchema,
   ],
