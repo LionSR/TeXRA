@@ -100,12 +100,15 @@ export function createDesktopBrowserViews(
       openAllowedExternalUrl(url);
     });
     // `page-title-updated` covers every explicit title change; `did-navigate`
-    // covers pages without one, where `getTitle()` falls back to the URL.
+    // and `did-navigate-in-page` cover pages without one, where `getTitle()`
+    // falls back to the URL (hash/pushState navigations emit only the
+    // in-page event, so dropping it would strand the URL-derived title).
     const republish = (): void => {
       const view = views.get(tabId);
       if (view) publishState(tabId, view);
     };
     webContents.on('did-navigate', republish);
+    webContents.on('did-navigate-in-page', republish);
     webContents.on('page-title-updated', republish);
   }
 
