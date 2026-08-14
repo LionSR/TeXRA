@@ -28,8 +28,10 @@ const ANSI_TOKENS = [
 describe('resolveXtermTheme', () => {
   it('reads the full token map from the supplied target', () => {
     const target = document.createElement('div');
-    target.style.setProperty('--wa-color-surface-default', '#111111');
-    target.style.setProperty('--wa-color-text-normal', '#eeeeee');
+    target.style.setProperty('--wa-color-terminal-background', '#111111');
+    target.style.setProperty('--wa-color-terminal-foreground', '#eeeeee');
+    target.style.setProperty('--wa-color-surface-default', '#222222');
+    target.style.setProperty('--wa-color-text-normal', '#dddddd');
     target.style.setProperty('--wa-color-terminal-cursor', '#00aa00');
     target.style.setProperty('--wa-color-terminal-selection-bg', '#264f78');
     target.style.setProperty('--wa-font-family-mono', '"JetBrains Mono"');
@@ -59,6 +61,23 @@ describe('resolveXtermTheme', () => {
 
     target.style.removeProperty('--wa-color-text-normal');
     expect(resolveXtermTheme(target).theme.cursor).toBe('#cccccc');
+  });
+
+  it('falls background and foreground back to surface tokens, then hardcoded', () => {
+    const target = document.createElement('div');
+    target.style.setProperty('--wa-color-surface-default', '#111111');
+    target.style.setProperty('--wa-color-text-normal', '#eeeeee');
+    document.body.append(target);
+
+    const themed = resolveXtermTheme(target).theme;
+    expect(themed.background).toBe('#111111');
+    expect(themed.foreground).toBe('#eeeeee');
+
+    target.style.removeProperty('--wa-color-surface-default');
+    target.style.removeProperty('--wa-color-text-normal');
+    const fallback = resolveXtermTheme(target).theme;
+    expect(fallback.background).toBe('#1e1e1e');
+    expect(fallback.foreground).toBe('#cccccc');
   });
 
   it('uses hardcoded fallbacks when surface tokens are unset', () => {

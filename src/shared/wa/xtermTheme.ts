@@ -3,10 +3,9 @@
  * Extension and desktop both call this with their own DOM target so the
  * terminal matches the active theme instead of a second hardcoded palette.
  *
- * Background and foreground keep the surface/text tokens the two hosts
- * already used. Dedicated `--wa-color-terminal-background` /
- * `--wa-color-terminal-foreground` exist on both sheets; switching would
- * change the progress-view palette and is out of this extraction's scope.
+ * Background and foreground prefer the dedicated terminal tokens so the
+ * progress-view terminal matches the host integrated terminal. Surface and
+ * text tokens remain fallbacks when a host omits the terminal pair.
  */
 
 const XTERM_THEME_FALLBACKS = {
@@ -47,9 +46,13 @@ export function resolveXtermTheme(target: Element): ResolvedXtermTheme {
 
   const theme: Record<string, string> = {
     background:
-      token('--wa-color-surface-default') || XTERM_THEME_FALLBACKS.background,
+      token('--wa-color-terminal-background') ||
+      token('--wa-color-surface-default') ||
+      XTERM_THEME_FALLBACKS.background,
     foreground:
-      token('--wa-color-text-normal') || XTERM_THEME_FALLBACKS.foreground,
+      token('--wa-color-terminal-foreground') ||
+      token('--wa-color-text-normal') ||
+      XTERM_THEME_FALLBACKS.foreground,
   };
 
   for (const [key, cssVar] of XTERM_ANSI_COLOR_TOKENS) {
