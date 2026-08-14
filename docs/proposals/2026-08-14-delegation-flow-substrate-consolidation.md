@@ -18,13 +18,16 @@ special case per `2026-07-17-workflow-script-async-execution.md`).
 What remains is a short, specific list. This document ranks the ten debts
 still standing across `src/agent/core/flows/`, the two flow implementations,
 `src/tools/delegation/`, `src/agent/runtime/childRunLoop.ts`, and
-`src/agent/workflowScript/`, and turns them into an execution plan. Four of
-the ten are already claimed by existing proposals and need execution, not
-design; four are real but unclaimed until this document; two are cheap
+`src/agent/workflowScript/`, and turns them into an execution plan. A
+2026-08-14 review against head restated two claimed items (item 1's
+layering premise; item 5's three-fold claim), marked two others as mostly
+landed residue (items 6 and 7), and left four unclaimed plus two cheap
 honesty fixes.
 
 This is a consolidation plan, not a re-design. The architecture rulings that
 bound it are restated in "Non-goals" and are not to be relitigated here.
+Every wave starts by re-verifying the cited proposal Status line and the
+named sites against head so completed work is not re-planned.
 
 ## The ten debts, ranked
 
@@ -33,19 +36,35 @@ Rank is blast radius × correctness risk, not size.
 ### 1. Layering inversion: `@tools/delegation` ↔ `executeAgent` cycle
 
 **Claimed** — H4 in `2026-08-10-simplifier-fleet-round1-strategy.md`; named a
-Step-3 SDK blocker.
+Step-3 SDK blocker. The cycle half is current; the "childRunLoop imports
+from the tools layer" half is inherited stale from fleet H4.
 
 The cycle `@tools/registry → DelegationTools → proposalFlow →
 subagentExecution → executeAgent → registry` is papered over with two lazy
 `await import('./nativeSubagentStrategy.js')` edges
-(`subagentExecution.ts`, `inBandSubagentExecution.ts`; documented at
-`subagentExecution.ts` header), and `childRunLoop.ts` (runtime layer) imports
-persistence and delivery formatting from `@tools/delegation` (tools layer).
+(`subagentExecution.ts:203`, `inBandSubagentExecution.ts:400`; documented
+at `subagentExecution.ts` header).
 
-**Fix.** Break the cycle at the root as H4 prescribes; both lazy edges retire
-together. Acceptance: no dynamic imports of `nativeSubagentStrategy`, no
-`@tools/delegation` import from `src/agent/runtime/`, and the
-`architecture-edges` ratchet baseline shrinks (never widens).
+`childRunLoop.ts` does **not** import from `@tools/delegation`. It imports
+`deliverChildRunFollowUp` from `@agent/followUp/childRunDelivery` (`:45`),
+`persistChildRunDeliveryBestEffort` from
+`@agent/storage/childRunDeliveryPersistence` (`:46`), and
+`formatSubagentProgress` from `@shared/subagentFollowup` (`:55`). Those
+helpers import nothing from `@tools` either. The remaining
+`src/agent/runtime/` → `@tools/delegation` edge is the availability
+predicates in `agentToolResolution.ts:41-47` (plus
+`src/agent/prompt/userVars.ts:24`). Those predicates are not the inversion.
+
+**Fix.** Break the cycle at the root as H4 prescribes; both lazy edges
+retire together. Acceptance: no dynamic imports of
+`nativeSubagentStrategy`. Do **not** require "no `@tools/delegation` import
+from `src/agent/runtime/`" — that would force removing the
+`delegationAvailability` predicates, which are a different edge. Do **not**
+require the `architecture-edges` ratchet to shrink: that ratchet tracks
+top-level subsystem pairs, and the existing `agent → tools` value edge
+remains required by `agentToolResolution.ts`, `agentSettingTools.ts`,
+`HostInteractions.ts`, and `toolInjection.ts`. Shrinking it is broader later
+work, not an acceptance criterion of the cycle break.
 
 ### 2. Cost accounting: three disciplines for one fact
 
@@ -102,13 +121,13 @@ deliberately and documented, not via a silent no-op); (b) either retain and
 wire the controller into the caller's cancellation scope or stop
 constructing it and pass the bound signal explicitly, so the code states
 what cancellation exists instead of implying cancellation that doesn't.
-The in-band-vs-async *durability* split stays (see Non-goals).
+The in-band-vs-async _durability_ split stays (see Non-goals).
 
 ### 4. Two independent concurrency budgets
 
 **Half-claimed** — `2026-07-05-workflow-script-engine.md` §4 already states
 "the same semaphore should eventually gate LLM-driven delegation too";
-unbuilt.
+unbuilt. Scope and inheritance are **not** settled (see Open question 2).
 
 `ToolUseDispatchNode` runs parallel-safe tool calls under a local
 `PQueue({ concurrency: 4 })` (`MAX_PARALLEL_TOOL_CALLS`,
@@ -117,62 +136,108 @@ calls under its own semaphore (default 4). An orchestrator combining direct
 parallel-safe tool calls with a running workflow script can hold up to both
 budgets at once, and neither is provider-rate-aware.
 
-**Fix.** One run-scoped (eventually provider-aware) budget both draw from,
-owned in `@agent/runtime` (not in either consumer), injected into the
-dispatch node's queue and the engine's semaphore. Keep the engine's
-*lifetime* call cap and fan-out caps where they are — those are script
-governance, not concurrency.
+A purely run-scoped budget does not by itself close that case:
+`delegate_multi_agents` returns after launching a detached workflow
+execution, so the parent's `ToolUseDispatchNode` and the workflow child's
+semaphore belong to distinct runs unless budget inheritance is designed.
 
-### 5. Three event-folds over one `WorkflowScriptEvent` stream
+**Fix.** One budget both draw from, owned in `@agent/runtime` (not in either
+consumer), injected into the dispatch node's queue and the engine's
+semaphore. Settle per-run vs per-session vs per-provider-key — and whether
+a detached child inherits its parent's remaining slots — in the Wave-4
+design note **before** implementing. Keep the engine's _lifetime_ call cap
+and fan-out caps where they are — those are script governance, not
+concurrency.
 
-**Claimed** — H2 in `2026-08-10-simplifier-fleet-round1-strategy.md`.
+### 5. Dual-channel sync tax over `WorkflowScriptEvent` + snapshot
 
-`workflowScriptDeliverySummary.ts`, `workflowScriptStrategy.ts`, and
-`workflowScriptRun.ts` each independently fold the same event stream into
-state — three chances to disagree about what a run did.
+**Claimed** — H2 in `2026-08-10-simplifier-fleet-round1-strategy.md`,
+restated against head. The original "three independent event-folds" inventory
+is stale.
 
-**Fix.** One fold owner producing one snapshot type; the other two consume
-it. Per H2.
+There is no `workflowScriptDeliverySummary.ts` file (the
+`WorkflowScriptDeliverySummary` type lives in
+`src/shared/schemas/workflowScriptDelivery.ts`).
+`workflowScriptStrategy.ts` does not fold the event stream — `settleSummary`
+reads the engine's terminal snapshot + journal so it "can never disagree
+with `/executions/{id}`" (`workflowScriptStrategy.ts:167-169`, `:181-216`).
+The sole event fold is `workflowScriptRun.ts:308` (`project`, wired as the
+engine's only `onEvent` consumer at `:428`).
+
+The remaining debt is the dual hand-synchronized channel (snapshot +
+events) with its dual-stamp tax — the same debt A7 describes. The ranked
+list and the addendum agree on the design.
+
+**Fix.** Execute A7: emit per-transition snapshots; narrow
+`WorkflowScriptEvent` to the facts a snapshot cannot carry. Unify
+`event.label` derivation first as a separate reviewed commit (it is not
+snapshot-derivable today: prompt-excerpt fallback vs role fallback).
 
 ### 6. Lineage and identity residue
 
-**Claimed** — steps 6–7 of
-`2026-08-03-run-classification-consolidation.md` enumerate the exact sites.
+**Mostly landed** — steps 6–7 of
+`2026-08-03-run-classification-consolidation.md` are implemented (that
+document's status header: "Part I implemented (steps 1-7 ... lineage
+predicate dedup, per-tool delegation availability)"). Do not re-execute
+the step-6/7 table.
 
-Four open-coded `isChildExecution` copies, four open-coded ownership checks,
-the `orchestratorStreamId`/`parentStreamId` naming split, three independent
-`isSubagent` spellings at finalize, the fabricated
-`DELEGATION_AVAILABILITY_CATEGORY` row (wrong for the bi-categorical
-`delegate_multi_agents`), and — the sharpest edge — a second stream-id
-derivation (`getStreamTabId(...)` in `subagentExecution.ts`, again in
-`inBandSubagentExecution.ts`) that must *silently* match
-`AgentLaunchContext`'s internal `reservedStreamId` formula. Nothing enforces
-the match; a drift is a lineage bug with no error.
+Already gone at head:
 
-**Fix.** Execute the step-6/7 table as written. The stream-id formula
-collapse comes first within this item: one exported derivation, both
-call sites deleted, a test pinning equality with `AgentLaunchContext`.
+- The only `isChildExecution` predicate is the canonical
+  `ExecutionHandle.ts:207` (plus the exported helper); the four open-coded
+  copies are consolidated.
+- All four ownership-check sites call `handle.isOwnedBy(...)`.
+- `DELEGATION_AVAILABILITY_CATEGORY` has zero hits outside proposal docs.
+- `getStreamTabId` is defined once (`src/agent/runtime/streamTab.ts:12-17`)
+  and imported by both launch sites; they re-invoke it, they do not
+  re-derive it. The match with `AgentLaunchContext` is documented
+  (`subagentExecution.ts:152-158`) and pinned by
+  `SubagentExecutionChildStreamId.vitest.ts:166-176`.
 
-### 7. Detached-launch lease choreography, three copies
+What remains:
 
-**Claimed with a deliberately narrow ruling** — H3 in
+- the `orchestratorStreamId`/`parentStreamId` naming split
+  (`subagentExecution.ts:71`)
+- two `isSubagent` spellings (`handle.isChildExecution` vs hardcoded `true`
+  at `nativeSubagentStrategy.ts:239`) across three finalize sites
+
+**Fix.** Rename the parameter and replace the hardcoded `true`. Cheap
+honesty, not a Wave-1 unlock.
+
+### 7. Detached-launch lease choreography
+
+**Mostly landed** — H3 in
 `2026-08-10-simplifier-fleet-round1-strategy.md`.
 
-`subagentExecution.ts`, `WorkflowScriptTool.ts`, and
-`inBandSubagentExecution.ts` each hand-roll register + lease +
-release-on-failure. H3's ruling: do **not** extract a shared launcher; move
-only the register/lease/release-on-failure triplet next to
-`captureOwnedExecutionLease` in `@agent/storage`. Execute exactly that.
+The three launch sites no longer hand-roll register + lease +
+release-on-failure. All three call `registerOwnedExecution` from
+`@agent/storage/executionLifecycle`; the two detached paths share
+`startDetachedChildRunLoop` and its `runWithOwnedExecutionLeaseLaunchGuard`;
+the in-band path uses the same storage guard while retaining its distinct
+terminal-release policy. There is no Wave-3 PR for the original triplet
+move.
+
+**Fix.** Audit the remaining in-band vs detached terminal-release policy
+difference before scheduling anything; do not extract a shared launcher
+(H3's ruling stands).
 
 ### 8. The flow twins: mechanical duplication around the two flows
 
 **Unclaimed until now** (individual pieces noted across audits; no single
 owner).
 
-- Two near-identical persisted-record hydration blocks:
-  `runReflectionFlow.ts` (read → boundary-parse → `stampCompatibilityKey` →
-  back-write → `PersistedFlowStateError`) and the same ladder in
-  `runToolUseFlow.ts`.
+- Two persisted-record hydration blocks that share a read → parse/migrate
+  → `stampCompatibilityKey` skeleton but are **not** near-identical
+  schema-pair ladders:
+  - `runReflectionFlow.ts:189-210` is read → `safeParse` →
+    `PersistedFlowStateError` → in-memory `stampCompatibilityKey`. There
+    is no `kv.*` back-write; persistence happens later via the
+    `RoundPersistedFlow` it constructs (~`:264`).
+  - `runToolUseFlow.ts` first distinguishes a resume handoff from a leftover
+    record, checks `sourceShared` for concurrent drift, runs
+    `migrateSharedState`, repairs the continuation generation, stamps the
+    flow-record schema version, and conditionally writes (`:486-490`,
+    `:530-534`).
 - Two outer cycle nodes with the same skeleton and near-verbatim comments
   (`ResponseCycleNode` / `ToolUseCycleNode`), including twin
   `execFallback` → `buildFailedRetryInfo` converters.
@@ -186,12 +251,14 @@ owner).
 - Comment-for-comment identical "log the opening transcript row in
   `finally`" blocks (`MediaExtractionNode` / `ToolUsePrepareNode`).
 
-**Fix.** Extract the hydration ladder into one shared boundary helper in
-`@agent/node/persistedFlow` (both call sites, parameterized by schema pair —
-this is a multi-caller extraction, allowed). Leave the cycle-node skeletons
-alone unless a later change touches both (the shared shape is the D6-fenced
-kernel's job, and a forced merge is the super-cycle trap). Do not touch the
-retention policies in this pass; if reconciled later, release-note it.
+**Fix.** Extract only operations that are actually shared (read +
+parse/migrate + stamp) into one helper in `@agent/node/persistedFlow`. The
+write step must be parameterized or left to the caller — a helper
+parameterized only by a schema pair cannot preserve tool-use's
+durable-state checks. Leave the cycle-node skeletons alone unless a later
+change touches both (the shared shape is the D6-fenced kernel's job, and a
+forced merge is the super-cycle trap). Do not touch the retention policies
+in this pass; if reconciled later, release-note it.
 
 ### 9. Misfiled and mislabeled modules
 
@@ -234,13 +301,13 @@ which tool launched it.
 **Fix.** Decide, and write down in `src/agent/workflowScript/README.md`,
 which asymmetries are contract (typed result instead of report is arguably
 the feature) and which are gaps. Minimum concrete change: persist a report
-for successful grandchildren too *or* document that `result` is the sole
+for successful grandchildren too _or_ document that `result` is the sole
 artifact for scripted children and teach the `executions` tool's `report`
 action to say so instead of returning nothing.
 
 ## Honorable mentions (tracked, not planned here)
 
-- Workflow agents *can* declare `tools:` in YAML (shared
+- Workflow agents _can_ declare `tools:` in YAML (shared
   `AgentSettingBaseSchema.tools`); definitions would be sent to the provider
   but a returned call is never dispatched — a latent silent-failure trap,
   currently moot because no shipped workflow YAML declares tools. A load-time
@@ -255,18 +322,21 @@ action to say so instead of returning nothing.
 ## Execution plan
 
 Order respects dependencies and keeps each PR reviewable alone. Every PR:
-`npm run typecheck`, `npm test`, `npm run check:dead-code-ratchet`; no
-ratchet baseline widens.
+`npm run format`, `npm run compile:fast`, `npm run lint`, `npm run typecheck`,
+`npm test`, `npm run check:dead-code-ratchet`; no ratchet baseline widens.
+Before scheduling any item, re-verify the cited proposal's Status line and
+the named sites against head.
 
 **Wave 1 — unlock and de-risk (independent, can run in parallel):**
 
-1. Item 1 (cycle break). Prerequisite for the SDK step-3 work; also the
-   enabling change for item 7's file moves to land cleanly.
-2. Item 6's stream-id formula collapse (small, test-pinned, removes the
-   coincidence-based invariant). The rest of steps 6–7 follows as its own
-   PR per the run-classification plan.
-3. Item 9's relocations (mechanical; churn-only; best landed early before
+1. Item 1 (cycle break: retire the two lazy
+   `nativeSubagentStrategy` imports). Prerequisite for the SDK step-3 work.
+   Acceptance is "no dynamic imports of `nativeSubagentStrategy`"; the
+   `architecture-edges` ratchet stays unchanged.
+2. Item 9's relocations (mechanical; churn-only; best landed early before
    other waves touch the same files).
+3. Item 6's leftover naming (parameter rename + hardcoded `true`); not a
+   blocker.
 
 **Wave 2 — contracts (design-first, small diffs):**
 
@@ -276,21 +346,24 @@ ratchet baseline widens.
 
 **Wave 3 — consolidations:**
 
-7. Item 5 (one event-fold owner).
-8. Item 7 (lease triplet move, exactly as H3 scoped).
-9. Item 8's hydration helper (the only extraction in the item; the rest of
-   item 8 stays deliberately untouched).
+7. Item 5 / A7 (emit per-transition snapshots; narrow the event stream;
+   label-derivation micro-step first).
+8. Item 8's shared hydration operations (read + parse/migrate + stamp
+   only; write parameterized or left to the caller). The rest of item 8
+   stays deliberately untouched.
+
+Item 7 (H3 lease triplet) has no Wave-3 PR.
 
 **Wave 4 — capability:**
 
-10. Item 4 (shared concurrency budget). Last because it is the only item
-    that changes runtime behavior under load and wants the cost contract
-    (item 2) settled first so budget accounting and cost accounting don't
-    co-evolve.
+9. Item 4 (shared concurrency budget). Last because it is the only item
+   that changes runtime behavior under load, wants the cost contract
+   (item 2) settled first, and needs the scope/inheritance design note
+   written before any code moves.
 
 **Wave 5 — audit addendum (see Addendum below):** A5's defect fix ships
 immediately (it is a bug, not debt); A1–A3 and A6 are independent and can
-interleave with Waves 1–3; A7 executes *as* item 5's implementation; A4
+interleave with Waves 1–3; A7 executes _as_ item 5's implementation; A4
 lands after item 1 (same files); A8 lands last in its area (largest blast
 radius of the addendum items).
 
@@ -308,7 +381,8 @@ radius of the addendum items).
   (`2026-08-03-run-classification-consolidation.md`). Item 3 upgrades the
   in-band path's honesty; it does not fold the paths.
 - **No shared detached-launcher abstraction** beyond H3's scoped triplet
-  move.
+  move (already landed; remaining residue is the in-band terminal-release
+  policy, if any).
 - **XML follow-up delivery and the typed `AgentFinalResult` remain two
   surfaces** — one feeds a model's conversation, one feeds a deterministic
   script; collapsing them recreates the flattening the workflow-script
@@ -363,41 +437,57 @@ wash).
 ### A3. One error channel for child-run/terminal persistence (−90 LoC, −9)
 
 `finalizeExecution` (`executionLifecycle.ts`) provably never throws — every
-await is inside a try whose catch returns `{status:'failed'}` — yet four
-call sites carry dead defensive `thrownError` arms. `childRunPersistence.ts`
-(38 LoC) converts KV-store throws into a `{kind}` result object that its
-consumer immediately converts back into a `SubagentDurabilityError` throw;
-`bash.ts` hand-rolls a second copy of the delivery-persistence policy and
-the CLI a third. Fix: delete the result-object layer and the dead throw
-arms; route bash/CLI through the two surviving owners. Verifier
-corrections: `rejectedMessage` warn strings are asserted verbatim by tests
-(must land together); keep the CLI's per-stage `finalizationFailureMessage`
-(headless-parity reporting surface).
+await is inside a try whose catch returns `{status:'failed'}` — yet two
+call sites carry dead defensive `thrownError` arms (`runAgent.ts:182-183`
+and `terminalPersistence.ts:96-101`). The other finalize-family sites
+(`restartRepair.ts:185`, `AgentRunLifecycle.ts:197`,
+`executionRegistry.ts:850`, CLI `executionFinalization.ts:47`) have no
+`thrownError` arm. `childRunPersistence.ts` (37 LoC) converts KV-store
+throws into a `{kind}` result object that its consumer immediately converts
+back into a `SubagentDurabilityError` throw; `bash.ts` hand-rolls a second
+copy of the delivery-persistence policy and the CLI a third. Fix: delete
+the result-object layer and the two dead throw arms; route bash/CLI through
+the two surviving owners. Verifier corrections: `rejectedMessage` warn
+strings are asserted verbatim by tests (must land together); keep the CLI's
+per-stage `finalizationFailureMessage` (headless-parity reporting surface).
 
 ### A4. Delegation shallow-file collapse (−75 LoC, −8 elements)
 
-Three shallow indirections dissolve into their single real consumers:
-`childRunDelivery.ts` (34 LoC — renames `SubmitFollowUpResult`'s five
-variants to three, but its own caller file also imports raw
-`submitFollowUp`, so the vocabulary boundary is already breached);
-`ToolUseFollowUpQueue.drainItems`/`.restore` (one-line delegations of the
-already-guarded `queue(lease)` accessor); and the
-`subagentDiffs.ts → subagentDeliveryFormat.ts` strict two-deep
-single-caller chain, folded into `subagentResults.ts` with the 14-line
-`formatBuiltSubagentDelivery` arg-rearranger inlined. Verifier cut: do
-**not** fold the `workflowScriptAgentRunner`/`createRunAgent` seam — it is
-a load-bearing dependency-injection port (19 fake-runner injections in
-tests) and closes over run identity, not just a stream id.
+Two shallow indirections dissolve into their real consumers:
+
+- `ToolUseFollowUpQueue.drainItems`/`.restore` (one-line delegations of the
+  already-guarded `queue(lease)` accessor).
+- Merge the two-consumer `subagentDeliveryFormat.ts` (production consumers:
+  `inBandSubagentExecution.ts:51`, `nativeSubagentStrategy.ts:67`; it
+  already imports both `./subagentDiffs` and `./subagentResults`) and its
+  single-caller `subagentDiffs.ts` leaf into `subagentResults.ts`, inlining
+  the 14-line `formatBuiltSubagentDelivery` arg-rearranger.
+
+Do **not** dissolve `childRunDelivery.ts` (34 LoC). Production callers
+include `src/agent/runtime/childRunLoop.ts`, `src/tools/bash.ts`, and
+`src/tools/delegation/DelegationTools.ts`. That only
+`DelegationTools.ts` also imports raw `submitFollowUp` does not make the
+wrapper redundant for the other two paths.
+
+Verifier cut: do **not** fold the `workflowScriptAgentRunner` /
+`createRunAgent` seam — it is a load-bearing dependency-injection port
+(16 `createRunAgent:` injection sites in `WorkflowScriptStrategy.vitest.ts`)
+and closes over run identity, not just a stream id.
 
 ### A5. One bundled-prompt loader — fixes a live desktop defect (−65 LoC, −7)
 
 `polishModel.ts` and `goal/promptLoader.ts` are two copies of the same
 host-wired YAML-prompt singleton pattern, and the wiring drift already
 shipped a defect: `initializePolishModel`'s only production caller is
-`extension.ts`, while desktop wires `polishTextWithAI` into its follow-up
-polish controller — so **every desktop follow-up polish fails** with
-"Polish model not initialized" (caught and silently degraded downstream);
-the CLI ships `instructionPolish.yaml` that nothing loads. Fix: one
+`extension.ts:184-188` (it _does_ pass `templates/instructionPolish.yaml`
+and `loadPromptTemplate` reads it lazily on first `renderPolishPrompt`),
+while desktop wires `polishTextWithAI` into its follow-up polish controller
+(`desktopAgentExecution.ts:212-215`) without initializing — so **every
+desktop follow-up polish fails** with "Polish model not initialized"
+(`polishModel.ts:25-29`; `textEnhancement.ts` logs the error, then returns
+`{ success: false }`, so the user-visible result is a polish that never
+changes the text). The CLI bundles a copy (`copy-resources.mjs` lists
+`templates/instructionPolish.yaml`) that no CLI code loads. Fix: one
 table-driven bundled-prompt loader (`{relPath, schema, missingPolicy}`
 rows, one `initializeBundledPrompts(resourcesPath)` per host); per-row
 failure semantics stay data. The defect fix ships first, independent of the
@@ -408,8 +498,10 @@ fit the single-caller-extraction claim.
 ### A6. Resume topology cleanup (−45 LoC, −2 elements)
 
 Tier 1 (verified dead): `ResumeStreamPorts.interactions` is a required
-field supplied at five construction sites and never read; `resumeAdmission.ts`
-is a 9-LoC file whose three importers all already import `executeAgent.ts`.
+field supplied at four production construction sites
+(`resumeFromResumeData.ts`, `desktopAgentResume.ts`, `resumeExecution.ts`,
+`chatSessionController.ts`) and never read; `resumeAdmission.ts` is a
+9-LoC file whose three importers all already import `executeAgent.ts`.
 Tier 2: extension and desktop each maintain a near-identical
 preload-then-read resume-state resolver over the same `StreamSnapshotStore`
 (the extension comment admits the mirroring), and the extension's
@@ -429,7 +521,7 @@ dual-stamp; four terminal sites stamping both). The event stream has exactly
 one consumer in the repo, and it already trusts `lastSnapshot` over its own
 event fold. Fix: emit per-transition snapshots; narrow `WorkflowScriptEvent`
 to the facts a snapshot cannot carry. Verifier correction: `event.label` is
-*not* snapshot-derivable today (two divergent label derivations exist —
+_not_ snapshot-derivable today (two divergent label derivations exist —
 prompt-excerpt fallback vs role fallback); unifying the label derivation is
 a prerequisite micro-step and changes surfaced labels, so it lands as its
 own reviewed commit.
@@ -458,7 +550,9 @@ prerequisite.
 2. Item 4: is the shared budget per run, per session, or per provider key?
    The engine's semaphore is per run today; the dispatch queue is per
    batch. Provider-rate-awareness argues for per-provider-key with a
-   per-run floor — needs a short design note before Wave 4.
+   per-run floor. A detached workflow child is a distinct run, so
+   inheritance (or not) must be written down. This note is a Wave-4
+   prerequisite, not an open afterthought.
 3. Item 10: does any consumer besides the `executions` tool's `report`
    action assume a report exists for every terminal child? Audit before
    choosing between "persist report" and "document result-only".
