@@ -471,9 +471,9 @@
    CHECKBOX DROPDOWN (open wa-dropdown popover)
    The per-run helper menus that hang under a file-group header trigger
    (FileSelectGroup.ts): Tool config (Attach TeX Count / Diagnostics) and Media
-   Auto-extract (Figures / TikZ / Compile PDF). Shared by ToolConfigHero,
-   AutoExtractMenu, and InstructionHeaderCard, which previously each re-rolled
-   this CSS. Each consumer keeps only its own `.wa-menu` margin (the popover's
+   Auto-extract (Figures / TikZ / Compile PDF). Shared by ToolConfigHero and
+   AutoExtractMenu, which previously each re-rolled this CSS. Each consumer
+   keeps only its own `.wa-menu` margin (the popover's
    position relative to its trigger). The leading check toggles via opacity so
    every row's label stays left-aligned whether or not it is checked.
    ============================================ */

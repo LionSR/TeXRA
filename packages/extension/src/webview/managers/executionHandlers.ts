@@ -27,13 +27,6 @@ type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
   { command: C }
 >;
 
-/** Housekeeping commands take no payload beyond the command itself. */
-type HousekeepingMessage = MessageFor<
-  | typeof MAIN_VIEW_COMMANDS.CLEAN_OUTPUT
-  | typeof MAIN_VIEW_COMMANDS.CLEAN_BUILD
-  | typeof MAIN_VIEW_COMMANDS.INDENT_TEX
->;
-
 /** Single-file pack/clean commands: the file plus the agent/model to run it with. */
 type SingleOperationMessage = MessageFor<
   typeof MAIN_VIEW_COMMANDS.PACK_SINGLE | typeof MAIN_VIEW_COMMANDS.CLEAN_SINGLE
@@ -136,10 +129,6 @@ export function handleFileOperation(message: FileOperationMessage): void {
       );
       return;
   }
-}
-
-export function handleHousekeeping(message: HousekeepingMessage): void {
-  void vscode.commands.executeCommand(`texra.${message.command}`);
 }
 
 export function handleSingleOperation(message: SingleOperationMessage): void {

@@ -95,9 +95,6 @@ export enum GlobalStateKey {
   CUSTOM_AGENT_DIR = 'texra.customAgentDir',
   REMOTE_AGENT_META_CACHE = 'texra.remoteAgentMetaCache',
 
-  // Anthropic API settings
-  ANTHROPIC_DYNAMIC_FILTERING = 'texra.anthropic.dynamicFiltering',
-
   // Endpoint settings
   ENDPOINT_OPENAI = 'texra.endpoint.openai',
   ENDPOINT_ANTHROPIC = 'texra.endpoint.anthropic',

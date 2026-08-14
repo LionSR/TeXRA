@@ -46,10 +46,6 @@ function createBrowserViews(): DesktopBrowserViews {
     open: vi.fn(),
     show: vi.fn(),
     hideAll: vi.fn(),
-    navigate: vi.fn(),
-    goBack: vi.fn(),
-    goForward: vi.fn(),
-    reload: vi.fn(),
     close: vi.fn(),
     disposeAll: vi.fn(),
   };

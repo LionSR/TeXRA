@@ -52,7 +52,6 @@ import type {
   ToolResult,
 } from '@shared/schemas';
 import { joinNonEmpty } from '@utils/text/stringUtils';
-import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
 import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';
 
 // Local file imports
@@ -701,7 +700,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
         // Web fetch is available on the same Anthropic models that support native web search
         supportsNativeWebFetch: this.capabilities.supportsNativeWebSearch,
-        useDynamicFiltering: getAnthropicDynamicFiltering(),
       });
 
       options.tool_choice =
