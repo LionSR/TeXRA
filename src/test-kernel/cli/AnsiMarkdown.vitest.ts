@@ -158,6 +158,14 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('<div contenteditable>');
   });
 
+  it('normalizes an opening tag whose discarded attribute contains a dollar', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '<strong title="$foo">x</strong> then $a<b>c$',
+      ),
+    ).toBe('**x** then $a<b>c$');
+  });
+
   it('rejects a long invalid valueless attribute without changing the text', () => {
     const source = `<p${' '.repeat(20_000)}x>`;
     expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(source);
@@ -245,6 +253,12 @@ describe('renderAnsiMarkdown', () => {
     );
   });
 
+  it('does not consume a punctuated numeric-led formula as currency', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('$5, x<b>y$, then <strong>$z$</strong>'),
+    ).toBe('$5, x<b>y$, then **$z$**');
+  });
+
   it.each([
     ['<code>$HOME</code> and <code>$PATH</code>', '`$HOME` and `$PATH`'],
     ['`$HOME` <strong>or</strong> `$PATH`', '`$HOME` **or** `$PATH`'],
@@ -273,6 +287,19 @@ describe('renderAnsiMarkdown', () => {
       expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
     },
   );
+
+  it.each(['$5 then $a<b>c$', '$HOME then $a<b>c$'])(
+    'keeps a plain-gap literal token separate from later tag-shaped math: %s',
+    (source) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(source);
+    },
+  );
+
+  it('keeps an unwrapped shell PID token separate from later math', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('PID $$ then <strong>$a<b>c$</strong>'),
+    ).toBe('PID $$ then **$a<b>c$**');
+  });
 
   it('keeps a shell-shaped math opener separate from later math', () => {
     expect(
@@ -608,6 +635,16 @@ describe('renderAnsiMarkdown', () => {
 
     expect(plain).toContain('│ \\[\n│ a+b\n│ \\]');
     expect(plain).not.toContain('\n> a+b');
+  });
+
+  it('keeps lazy multiline math continuation inside a Markdown blockquote', () => {
+    const plain = renderPlain('> \\\[\n  a+b\n> \\\]', {
+      colorEnabled: false,
+      width: 80,
+    });
+
+    expect(plain).toContain('│ \\\[\n│   a+b\n│ \\\]');
+    expect(plain).not.toContain('\n> \\\]');
   });
 
   it('keeps multiline math inside a quoted list item', () => {

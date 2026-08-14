@@ -163,8 +163,7 @@ function protectByPatterns(
           .slice(1)
           .map((line) => requiredPrefix.exec(line)?.[0]);
         const isQuotedSpan =
-          quoteDepth > 0 &&
-          remainingPrefixes.every((prefix) => prefix !== undefined);
+          quoteDepth > 0 && remainingPrefixes.at(-1) !== undefined;
         if (!isQuotedSpan) {
           const index = items.push(match) - 1;
           return `@@${selectedTag}-${index}@@`;

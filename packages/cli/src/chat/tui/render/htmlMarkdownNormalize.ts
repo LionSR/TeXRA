@@ -21,6 +21,10 @@ const HTML_TAG_END = String.raw`(?:\s*\/\s*|\s*)>`;
 const HTML_CODE_CANDIDATE_RE = /<code/giu;
 const HTML_CODE_OPEN_RE = new RegExp(`<code${HTML_ATTRIBUTES}\\s*>`, 'iyu');
 const HTML_CODE_CLOSE_RE = /<\/code>/giu;
+const HTML_OPEN_TAG_RE = new RegExp(
+  `<(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])${HTML_ATTRIBUTES}${HTML_TAG_END}`,
+  'giu',
+);
 const MARKDOWN_CODE_SPAN_RE = /(?<!`)(`+)(?!`)[\s\S]*?\1(?!`)/gu;
 const CURRENCY_PAIR_RE = new RegExp(
   `\\$${CURRENCY_AMOUNT}${CURRENCY_BOUNDARY}[^\\n$]*?(?:\\s|\\s[([{"'‘“+–—-]|\\s[A-Z]{1,3})\\$${CURRENCY_AMOUNT}${CURRENCY_BOUNDARY}`,
@@ -54,6 +58,7 @@ const SHELL_UNWRAPPED_TOKEN_RE = new RegExp(
   `(?<![A-Za-z0-9_}>])\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
   'gu',
 );
+const SHELL_PID_LABEL_RE = /\bPID\s+\$\$(?=[\s/.,;:!?()[\]{}'"’”]|$)/giu;
 const UNAMBIGUOUS_PRESENTATION_TAG_RE = new RegExp(
   `(?:<(?:blockquote|strong|em|code|div|br|h[1-6])${HTML_ATTRIBUTES}${HTML_TAG_END}|<\\/(?:blockquote|strong|em|code|div|h[1-6])\\s*>)`,
   'iu',
@@ -134,12 +139,20 @@ function hasPresentationHtmlBeforeNextDollar(
   if (closingDollar < 0) return false;
   if (hasAmbiguousPresentationPair(between)) return true;
   const afterClosingDollar = source.slice(closingDollar + 1);
-  return [...between.matchAll(AMBIGUOUS_PRESENTATION_OPEN_RE)].some(
+  const wrapsCandidateMath = [
+    ...between.matchAll(AMBIGUOUS_PRESENTATION_OPEN_RE),
+  ].some(
     (ambiguousOpen) =>
       ambiguousOpen[1] !== undefined &&
       new RegExp(`^\\s*<\\/${ambiguousOpen[1]}\\s*>`, 'iu').test(
         afterClosingDollar,
       ),
+  );
+  if (wrapsCandidateMath) return true;
+  if (KNOWN_HTML_TAG_RE.test(between)) return false;
+  return (
+    /\S/u.test(source[nextDollar + 1] ?? '') &&
+    KNOWN_HTML_TAG_RE.test(source.slice(nextDollar + 1, closingDollar))
   );
 }
 
@@ -153,6 +166,12 @@ function shouldMaskPunctuatedCurrency(
   if (nextDollar < 0) return true;
   const between = source.slice(start, nextDollar);
   if (UNAMBIGUOUS_PRESENTATION_TAG_RE.test(between)) return true;
+  if (
+    KNOWN_HTML_TAG_RE.test(between) &&
+    !hasAmbiguousPresentationPair(between)
+  ) {
+    return false;
+  }
   const closingDollar = source.indexOf('$', nextDollar + 1);
   return closingDollar >= 0 && /\S/u.test(source[nextDollar + 1] ?? '');
 }
@@ -211,6 +230,10 @@ function protectLiteralDollarTokens(content: string): {
       return `${placeholderPrefix}${index}@@`;
     });
   const codeProtected = protectHtmlCodeElementDollars(content, protectDollars);
+  const openingTagsProtected = codeProtected.replaceAll(
+    HTML_OPEN_TAG_RE,
+    protectDollars,
+  );
   const withoutCodeOrPairedTokenDollars = [
     MARKDOWN_CODE_SPAN_RE,
     CURRENCY_BEFORE_NUMERIC_MATH_RE,
@@ -218,9 +241,10 @@ function protectLiteralDollarTokens(content: string): {
     CURRENCY_BEFORE_CLOSING_TAG_RE,
     SHELL_UNWRAPPED_PAIR_RE,
     SHELL_BEFORE_CLOSING_TAG_RE,
+    SHELL_PID_LABEL_RE,
   ].reduce(
     (value, pattern) => value.replaceAll(pattern, protectDollars),
-    codeProtected,
+    openingTagsProtected,
   );
   const punctuatedCurrencyProtected =
     withoutCodeOrPairedTokenDollars.replaceAll(
