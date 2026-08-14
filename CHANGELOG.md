@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Interrupted workflows keep provisional files in run storage** — cancelling
+  a workflow no longer copies unfinished rounds to `--output` or
+  `--output-dir` destinations.
 - **Multi-agent transcripts show the user's request** — team runs keep internal
   orchestration guidance out of history and resumed chat messages.
 - **Completed workflow tasks can be retried without restarting chat** — a new

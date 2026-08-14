@@ -706,28 +706,6 @@ describe('CLI workflow run command', () => {
     );
   });
 
-  it('prints the recovery command when cancelled output resolution fails', async () => {
-    mockWorkflowExecution(
-      workflowExecution('exec-interrupted-copy', {
-        outcome: RUN_OUTCOME.CANCELLED,
-        outputs: [
-          runOutputSummary('/missing/run/r1/paper.tex', '/workspace/paper.tex'),
-        ],
-      }),
-      true,
-    );
-
-    const exitCode = await runWorkflow({ output: 'polished.tex' });
-
-    expect(exitCode).toBe(CliExitCode.Interrupted);
-    expect(mocks.writeErrorStderr).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ code: 'ENOENT' }),
-    );
-    expect(mocks.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
-      expectedRecoveryHint(cliContext(), 'exec-interrupted-copy'),
-    );
-  });
-
   it('does not advertise resume when cancelled status is not durable', async () => {
     const durableExecution = workflowExecution('exec-undurable', {
       outcome: RUN_OUTCOME.CANCELLED,
