@@ -244,6 +244,8 @@ export async function resolveWorkflowOutput(
   options: WorkflowOutputResolutionOptions,
 ): Promise<CliWorkflowRunResult> {
   const runDirectory = options.runDirectory ?? getRunDir(result.executionId);
+  // Interrupted rounds remain inspectable in run storage, but are not final
+  // artifacts and must not replace the user's requested destination.
   if (result.outcome === RUN_OUTCOME.CANCELLED && (outputFile || outputDir)) {
     return {
       ...result,
@@ -331,6 +333,9 @@ export async function resolveWorkflowOutput(
 }
 
 export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
+  if (result.outcome === RUN_OUTCOME.CANCELLED && result.runDirectory) {
+    return result.runDirectory;
+  }
   if (result.copiedOutputs?.length) {
     return result.copiedOutputs.join('\n');
   }
