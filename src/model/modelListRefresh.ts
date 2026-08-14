@@ -6,10 +6,6 @@ import {
   isRetiredModel,
   MODEL_LIST_VERSION,
 } from './modelOptionsBasic';
-import {
-  COPILOT_MODEL_PREFIX,
-  normalizePersistedCopilotModelId,
-} from './runtimeModelRegistry';
 
 interface ModelListState {
   get<T>(key: string): T | undefined;
@@ -125,81 +121,4 @@ export async function refreshModelListStateIfNeeded(
     added,
     removed,
   };
-}
-
-/**
- * One-time migration for #9635: rewrite persisted `copilot:<baseModel>`
- * selections to the canonical base model id and record the Copilot route
- * preference so the migrated model keeps routing through Copilot. Covers the
- * enabled-models list, the helper model, and reasoning-level override keys.
- *
- * Temporary: introduced 2026-08-03; retire three months after the
- * route-based model identity ships (target 2026-11-03) together with
- * `normalizePersistedCopilotModelId`. Only the extension host calls this —
- * the desktop app is unreleased and adopts the current format directly, and
- * CLI state uses only current schemas.
- */
-export async function migrateCopilotModelRouteSelections(
-  state: ModelListState,
-): Promise<void> {
-  if (state.get<number>(GlobalStateKey.COPILOT_ROUTE_MIGRATION) === 1) return;
-
-  const enabled = state.get<readonly string[]>(GlobalStateKey.ENABLED_MODELS);
-  const helperModel = state.get<string>(GlobalStateKey.HELPER_MODEL);
-  const reasoningLevels = state.get<Record<string, string>>(
-    GlobalStateKey.REASONING_LEVELS,
-  );
-
-  // Compute and persist the route preference FIRST: if activation stops
-  // mid-migration, the retry still sees the `copilot:*` ids and re-derives
-  // the same preference, so an interrupted run cannot lose it.
-  const routeModels = new Set(
-    state.get<readonly string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS) ?? [],
-  );
-  for (const model of [
-    ...(enabled ?? []),
-    ...(helperModel ? [helperModel] : []),
-    ...Object.keys(reasoningLevels ?? {}),
-  ]) {
-    if (model.startsWith(COPILOT_MODEL_PREFIX)) {
-      routeModels.add(normalizePersistedCopilotModelId(model));
-    }
-  }
-  await state.update(GlobalStateKey.COPILOT_ROUTE_MODELS, [...routeModels]);
-
-  if (enabled?.some((model) => model.startsWith(COPILOT_MODEL_PREFIX))) {
-    const migrated: string[] = [];
-    for (const model of enabled) {
-      const canonical = normalizePersistedCopilotModelId(model);
-      if (!migrated.includes(canonical)) migrated.push(canonical);
-    }
-    await state.update(GlobalStateKey.ENABLED_MODELS, migrated);
-  }
-
-  if (helperModel?.startsWith(COPILOT_MODEL_PREFIX)) {
-    await state.update(
-      GlobalStateKey.HELPER_MODEL,
-      normalizePersistedCopilotModelId(helperModel),
-    );
-  }
-
-  if (
-    reasoningLevels &&
-    Object.keys(reasoningLevels).some((model) =>
-      model.startsWith(COPILOT_MODEL_PREFIX),
-    )
-  ) {
-    const migrated: Record<string, string> = {};
-    for (const [model, level] of Object.entries(reasoningLevels)) {
-      const canonical = normalizePersistedCopilotModelId(model);
-      // A pre-existing canonical override wins over the migrated copilot
-      // one, regardless of key iteration order.
-      if (!model.startsWith(COPILOT_MODEL_PREFIX) || !(canonical in migrated)) {
-        migrated[canonical] = level;
-      }
-    }
-    await state.update(GlobalStateKey.REASONING_LEVELS, migrated);
-  }
-
-  await state.update(GlobalStateKey.COPILOT_ROUTE_MIGRATION, 1);
 }

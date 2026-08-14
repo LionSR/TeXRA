@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 // Local imports
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { getFileLister } from '@frontend/files/fileLister';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { createLog } from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -78,7 +77,6 @@ export function registerOpenFileCommands(
   context: vscode.ExtensionContext,
 ): void {
   registerCommandEntries(context, [
-    { id: 'texra.openFileCompile', handler: openBuildDisplayIfTex },
     { id: 'texra.openFile', handler: openFile },
     { id: 'texra.openLabel', handler: openLabel },
   ]);

@@ -98,7 +98,7 @@ describe('retry-request-panel', () => {
   it('distinguishes a fresh direct-model run from retrying Copilot', async () => {
     const element = await mountPanel({
       requestId: 'copilot-retry',
-      model: 'copilot:sonnet46',
+      model: 'sonnet46',
       errorMessage: 'Copilot quota exhausted',
       errorDetails: {
         exhaustionReason: 'copilot-subscription',

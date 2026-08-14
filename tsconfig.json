@@ -111,11 +111,6 @@
         "./packages/extension/src/settingsView/*.ts",
         "./packages/extension/src/settingsView/*/index.ts"
       ],
-      "@extensionSchemas/*": [
-        "./packages/extension/src/schemas/*",
-        "./packages/extension/src/schemas/*.ts",
-        "./packages/extension/src/schemas/*/index.ts"
-      ],
       "@replacement/*": [
         "./src/replacement/*",
         "./src/replacement/*.ts",

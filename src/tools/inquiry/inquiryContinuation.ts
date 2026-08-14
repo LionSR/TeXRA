@@ -138,22 +138,11 @@ function mapSubmissionToInquiryOutcome(
 
 async function deliverContinuation(params: {
   parentStreamId: StreamTabId;
-  parentGenerationId?: string | null;
+  parentGenerationId: string;
   text: string;
   threadId: InquiryThreadId;
   session?: SessionHandle;
 }): Promise<InjectionOutcome> {
-  if (params.parentGenerationId == null) {
-    logger.warn(
-      `Inquiry continuation for ${params.threadId}: the stored parent generation is unavailable.`,
-    );
-    await emitInquiryThreadUpdate(
-      params.threadId,
-      { resumeOutcome: 'parent_finished' },
-      params.session,
-    );
-    return 'archived';
-  }
   const result = await submitFollowUp(params.parentStreamId, params.text, {
     session: params.session,
     expectedGenerationId: params.parentGenerationId,
@@ -185,9 +174,9 @@ async function deliverContinuation(params: {
 
 /**
  * Shared body of the answered / dropped injectors: resolve the manifest,
- * archive when there is nothing to continue (missing thread, an `answered`
- * event whose last turn is no longer answered, or no parent stream), then
- * build and deliver the continuation.
+ * archive when there is nothing to continue (missing thread, a turn-less
+ * manifest, an `answered` event whose last turn is no longer answered, or
+ * no parent stream), then build and deliver the continuation.
  */
 async function injectContinuation(
   event: 'answered' | 'dropped',
@@ -199,7 +188,21 @@ async function injectContinuation(
   if (!manifest) return 'archived';
 
   const lastTurn = manifest.turns.at(-1);
-  if (event === 'answered' && lastTurn?.kind !== 'answered') return 'archived';
+  if (!lastTurn) {
+    // Structural guard: the manifest schema does not require turns, so a
+    // turn-less thread is representable — there is nothing to continue and
+    // no parent generation to fence a follow-up against.
+    logger.warn(
+      `Inquiry continuation for ${threadId}: manifest has no turns; archiving.`,
+    );
+    await emitInquiryThreadUpdate(
+      threadId,
+      { resumeOutcome: 'parent_finished' },
+      session,
+    );
+    return 'archived';
+  }
+  if (event === 'answered' && lastTurn.kind !== 'answered') return 'archived';
   if (manifest.parentStreamId == null) {
     await emitInquiryThreadUpdate(
       threadId,
@@ -219,9 +222,9 @@ async function injectContinuation(
   const text = buildContinuationText({
     event,
     threadId,
-    question: lastTurn?.question ?? '',
+    question: lastTurn.question,
     answer:
-      event === 'answered' && lastTurn?.kind === 'answered'
+      event === 'answered' && lastTurn.kind === 'answered'
         ? lastTurn.answer
         : undefined,
     stillOpen,
@@ -229,7 +232,7 @@ async function injectContinuation(
 
   return deliverContinuation({
     parentStreamId: manifest.parentStreamId,
-    parentGenerationId: lastTurn?.parentGenerationId,
+    parentGenerationId: lastTurn.parentGenerationId,
     text,
     threadId,
     session,

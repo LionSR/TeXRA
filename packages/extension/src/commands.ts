@@ -11,7 +11,6 @@ import { registerOpenFileCommands } from '@commands/files/openFileCommands';
 import { registerLatexdiffCommands } from '@commands/latex/latexdiffCommands';
 import { registerMergeCommands } from '@commands/agent/mergeCommands';
 import { registerFollowUpCommand } from '@commands/agent/followUpCommand';
-import { registerResumeAgentCommand } from '@commands/agent/resumeCommand';
 import { registerMainViewCommands } from '@commands/system/mainViewCommands';
 import { registerStateRestoreCommand } from '@commands/taskFormState/stateRestoreCommand';
 import { registerGitCommands } from '@commands/git/gitCommands';
@@ -32,7 +31,6 @@ export function registerCommands(
   registerStateRestoreCommand(context);
   const settingsViewProvider = new SettingsViewProvider(context);
   registerFollowUpCommand(context);
-  registerResumeAgentCommand(context);
   registerOpenFileCommands(context);
   registerMainViewCommands(context);
 

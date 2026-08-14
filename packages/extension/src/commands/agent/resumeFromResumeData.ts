@@ -11,16 +11,33 @@
  * orchestrator owns the guard, retrieval, and tool-use/workflow branch; the
  * extension supplies only how it resolves persisted state and launches a run.
  */
+import * as vscode from 'vscode';
+
 import { createChannelTrace } from '@agent/trace';
-import { defaultSession, resolveAndResumeStream } from '@agent/runtime';
+import {
+  defaultSession,
+  resolveAndResumeStream,
+  resumeQueuedToolUseFromResumeData,
+} from '@agent/runtime';
+import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { StreamTabId } from '@shared/schemas';
 
 import { runExecuteCommand } from './executeCommand';
-import { resumeExtensionToolUseFromResumeData } from './resumeCommand';
 
-const logger = createChannelTrace('resumeFromResumeData');
+const CHANNEL = 'resumeFromResumeData';
+
+const logger = createChannelTrace(CHANNEL);
+
+async function showResumeError(error: unknown): Promise<void> {
+  const message = logErrorMessage(
+    CHANNEL,
+    'Failed to resume tool-use session',
+    error,
+  );
+  await vscode.window.showWarningMessage(message);
+}
 
 export function tryResumeFromResumeData(
   streamId: StreamTabId,
@@ -80,7 +97,14 @@ export function tryResumeFromResumeData(
           ...(parentStreamId !== undefined && { parentStreamId }),
         };
       },
-      resumeToolUse: resumeExtensionToolUseFromResumeData,
+      // Extension wrapper around the host-neutral tool-use resume: it
+      // supplies the extension runtime host and surfaces failures as a
+      // warning toast.
+      resumeToolUse: (resume, recovery) =>
+        resumeQueuedToolUseFromResumeData(resume.streamId, resume, {
+          recovery,
+          onError: showResumeError,
+        }),
       executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
         runExecuteCommand({
           config,

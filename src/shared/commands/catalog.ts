@@ -85,11 +85,6 @@ export const commandCatalog = [
     enablement: '!virtualWorkspace',
   },
   {
-    id: 'texra.resumeAgent',
-    title: 'Resume Tool-Use Agent',
-    category: 'TeXRA',
-  },
-  {
     id: 'texra.fixCompilation',
     extensionRegistry: true,
     title: 'Fix LaTeX Compilation Errors',
@@ -134,12 +129,6 @@ export const commandCatalog = [
     id: 'texra.stopAgent',
     extensionRegistry: true,
     title: 'Stop Agent',
-    category: 'TeXRA',
-  },
-  {
-    id: 'texra.compactResponse',
-    extensionRegistry: true,
-    title: 'Compact Response',
     category: 'TeXRA',
   },
   {

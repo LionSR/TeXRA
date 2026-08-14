@@ -112,12 +112,11 @@ type ExtensionRegistryCatalogEntry = Extract<
 type ExtensionRegistryCatalogCommandId = ExtensionRegistryCatalogEntry['id'];
 
 /**
- * Internal and compatibility ids intentionally absent from the shared
- * catalog — they don't appear in the command palette or `package.json`
- * contributions — but must keep resolving for extension callers.
+ * Internal ids intentionally absent from the shared catalog — they don't
+ * appear in the command palette or `package.json` contributions — but must
+ * keep resolving for extension callers.
  */
 export const EXTENSION_INTERNAL_COMMAND_IDS = [
-  'texra.showSettingsView',
   'texra.packSingle',
   'texra.packMultiple',
   'texra.cleanSingle',
@@ -199,7 +198,6 @@ export interface ExtensionCommandActions {
   openProgressViewInTab(): Promise<void>;
   openDoc(page: string): Promise<void>;
   stopAgent(streamId: string): void;
-  compactResponse(streamId: string): Promise<void>;
   indentCurrentTeX(): Promise<void>;
   fixCompilation(): Promise<void>;
   getTeXCount(): Promise<void>;
@@ -218,7 +216,6 @@ export interface ExtensionCommandActions {
 
 export const EXTENSION_COMMAND_HANDLERS = {
   'texra.showDashboard': (actions) => awaitTrue(actions.showSettings()),
-  'texra.showSettingsView': (actions) => awaitTrue(actions.showSettings()),
   'texra.showMemory': (actions) =>
     awaitTrue(actions.showSettings(SETTINGS_TAB.MEMORY)),
   'texra.showAgentHistory': (actions) =>
@@ -318,11 +315,6 @@ export const EXTENSION_COMMAND_HANDLERS = {
       actions.stopAgent(streamId);
       return true;
     },
-  ),
-  'texra.compactResponse': definedHandler(
-    z.tuple([StreamTabIdSchema]),
-    (actions: ExtensionCommandActions, streamId) =>
-      awaitTrue(actions.compactResponse(streamId)),
   ),
   'texra.indentCurrentTeX': (actions) => awaitTrue(actions.indentCurrentTeX()),
   'texra.fixCompilation': (actions) => awaitTrue(actions.fixCompilation()),

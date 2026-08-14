@@ -41,47 +41,50 @@ describe('latex housekeeping command notifications', () => {
     ).toBeUndefined();
   });
 
-  it('restores latexdiff pack and clean notifications', () => {
-    const results: LatexdiffPackResult[] = [
-      { status: 'no-files', inputFile: 'paper.tex' },
-      { status: 'cleaned', inputFile: 'paper.tex' },
-      {
+  const packCases: Array<{
+    result: LatexdiffPackResult;
+    expected: { severity: string; message: string } | undefined;
+  }> = [
+    {
+      result: { status: 'no-files', inputFile: 'paper.tex' },
+      expected: {
+        severity: 'info',
+        message: 'No LaTeX diff files found to process',
+      },
+    },
+    {
+      result: { status: 'cleaned', inputFile: 'paper.tex' },
+      expected: {
+        severity: 'info',
+        message: 'LaTeXdiff files cleaned',
+      },
+    },
+    {
+      result: {
         status: 'packed',
         inputFile: 'paper.tex',
         outputFolder: 'Diffs/20260505_paper_HEAD',
       },
-      { status: 'missing-inputs' },
-      { status: 'processed', inputFile: 'paper.tex' },
-      {
-        status: 'error',
-        inputFile: 'broken.tex',
-        error: new Error('rename failed'),
-      },
-    ];
-
-    const notifications = getLatexdiffPackNotifications(results);
-    expect(notifications).toMatchObject([
-      {
-        severity: 'info',
-        message: 'No LaTeX diff files found to process',
-      },
-      {
-        severity: 'info',
-        message: 'LaTeXdiff files cleaned',
-      },
-      {
+      expected: {
         severity: 'info',
         message: 'Files packed into Diffs/20260505_paper_HEAD',
       },
-      {
-        severity: 'message',
-        message: 'No input files provided for multiple LaTeX diff packing',
-      },
-      {
-        severity: 'error',
-        message: 'Error during packing broken.tex',
-      },
-    ]);
-    expect(notifications.at(-1)?.error).toBeInstanceOf(Error);
-  });
+    },
+    {
+      result: { status: 'processed', inputFile: 'paper.tex' },
+      expected: undefined,
+    },
+  ];
+
+  it.each(packCases)(
+    'restores the latexdiff pack notification for $result.status',
+    ({ result, expected }) => {
+      const notification = getLatexdiffPackNotifications(result);
+      if (expected === undefined) {
+        expect(notification).toBeUndefined();
+      } else {
+        expect(notification).toMatchObject(expected);
+      }
+    },
+  );
 });

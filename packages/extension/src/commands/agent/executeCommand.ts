@@ -27,7 +27,7 @@ interface WrappedExecuteInput {
  * - Fresh execution: Pass raw config or { config } - creates new executionId
  * - Resume workflow: Pass { config, executionId } - reuses executionId to resume
  *
- * For tool-use sessions, use texra.resumeAgent with a snapshot instead.
+ * Tool-use sessions resume through `tryResumeFromResumeData` instead.
  */
 export async function runExecuteCommand(input: unknown): Promise<void> {
   try {

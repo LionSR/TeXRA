@@ -10,12 +10,6 @@ import type {
   LanguageModelReference,
 } from '@platform/languageModel';
 
-/**
- * Prefix of the retired synthetic Copilot picker ids (`copilot:<baseModel>`).
- * Kept for the dated compatibility readers that normalize persisted state
- * written before #9635 (retire target 2026-11-03).
- */
-export const COPILOT_MODEL_PREFIX = 'copilot:';
 const MODEL_ACCESS_REQUEST_TIMEOUT_MS = 120_000;
 const MODEL_ACCESS_DISCOVERY_ATTEMPTS = 2;
 
@@ -196,22 +190,9 @@ export function invalidateRuntimeModelRegistry(): void {
   };
 }
 
-/**
- * Compatibility reader for persisted `copilot:<baseModel>` ids written while
- * Copilot models were synthetic picker identities. Introduced 2026-08-03 with
- * #9635; retirement: remove three months after the route-based identity
- * ships (target 2026-11-03), together with the `modelListRefresh` sweep that
- * rewrites persisted `copilot:*` selections.
- */
-export function normalizePersistedCopilotModelId(model: string): string {
-  return model.startsWith(COPILOT_MODEL_PREFIX)
-    ? model.slice(COPILOT_MODEL_PREFIX.length)
-    : model;
-}
-
 /** Resolve a static model config by its persisted id. */
 export function getRuntimeModelConfig(model: string): ModelConfig | undefined {
-  return MODEL_CONFIGS[normalizePersistedCopilotModelId(model)];
+  return MODEL_CONFIGS[model];
 }
 
 /** Resolve a persisted model id to its user-facing registry label. */
@@ -270,14 +251,12 @@ export function getRuntimeModelDirectFallback(
   model: string,
   useOpenRouter: boolean,
 ): RuntimeModelDirectFallback | undefined {
-  // Retry panels persisted before #9635 can still carry a `copilot:` id.
-  const directModel = normalizePersistedCopilotModelId(model);
-  const config = MODEL_CONFIGS[directModel];
+  const config = MODEL_CONFIGS[model];
   if (!config) return undefined;
   const provider = resolveModelApiKeyProvider(config, useOpenRouter);
   return provider
     ? {
-        model: directModel,
+        model,
         provider,
         chatGptSubscriptionEligible: Boolean(config.codexSubscription),
       }

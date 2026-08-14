@@ -186,7 +186,7 @@ function createRetryNode(
   const streamStatus = session.status;
   const node = new ExposedRetryNode().setServices(
     retryServices(streamId, {
-      config: { model: 'copilot:sonnet46' },
+      config: { model: 'sonnet46' },
       session,
       modelCell: testRetryModelCell(rebind, route),
     }),
@@ -1364,7 +1364,7 @@ describe('RetryState', () => {
         expect.objectContaining({
           streamId,
           operation: 'Model request',
-          model: 'copilot:sonnet46',
+          model: 'sonnet46',
         }),
         // Every run carries a model cell, so the host is always offered the
         // credential-selecting retry preparation.

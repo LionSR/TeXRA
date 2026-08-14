@@ -274,10 +274,6 @@
             "when": "texra.activated"
           },
           {
-            "command": "texra.resumeAgent",
-            "when": "false"
-          },
-          {
             "command": "texra.fixCompilation",
             "when": "texra.activated"
           },
@@ -411,10 +407,6 @@
           },
           {
             "command": "texra.unresolveCommentThread",
-            "when": "false"
-          },
-          {
-            "command": "texra.compactResponse",
             "when": "false"
           }
         ],

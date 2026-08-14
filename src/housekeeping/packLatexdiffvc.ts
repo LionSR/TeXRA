@@ -2,7 +2,6 @@ import * as path from 'node:path';
 
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CHANNEL, TEMP_EXTENSIONS } from './constants';
 import { collectFilesFromPatterns, generateTimestamp } from './utils';
@@ -24,14 +23,6 @@ export type LatexdiffPackResult =
   | {
       status: 'processed';
       inputFile: string;
-    }
-  | {
-      status: 'missing-inputs';
-    }
-  | {
-      status: 'error';
-      inputFile: string;
-      error: unknown;
     };
 
 export async function runPackLatexdiffvc(
@@ -93,32 +84,4 @@ export async function runPackLatexdiffvc(
   }
 
   return { status: 'processed', inputFile };
-}
-
-export async function runPackLatexdiffvcMultiple(
-  inputFiles: string[],
-  commitHash: string,
-  clean: boolean = false,
-): Promise<LatexdiffPackResult[]> {
-  if (inputFiles.length === 0) {
-    logger.error(
-      CHANNEL,
-      'No input files provided for multiple LaTeX diff packing',
-    );
-    return [{ status: 'missing-inputs' }];
-  }
-
-  const results: LatexdiffPackResult[] = [];
-  for (const inputFile of inputFiles) {
-    try {
-      results.push(await runPackLatexdiffvc(inputFile, commitHash, clean));
-    } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error during packing ${inputFile}: ${toErrorMessage(err)}`,
-      );
-      results.push({ status: 'error', inputFile, error: err });
-    }
-  }
-  return results;
 }

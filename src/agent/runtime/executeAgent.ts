@@ -556,8 +556,8 @@ export async function resumeToolUseFromResumeData(
         modelHandlerCompatibilityKey:
           resume.shared.modelHandlerCompatibilityKey,
         suppressViewSwitch: isSubagent,
-        // resumeCommand surfaces its own warning toast on failure; skip the
-        // bus-level error to avoid double-notifying.
+        // Host resume callers surface their own warning toast on failure;
+        // skip the bus-level error to avoid double-notifying.
         suppressErrorNotification: true,
         session: options.session,
       });

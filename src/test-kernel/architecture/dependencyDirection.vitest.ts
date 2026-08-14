@@ -75,7 +75,6 @@ const HOST_LAYER_IMPORT_PREFIXES = [
   '@progressView/',
   '@settingsView/',
   '@frontend/',
-  '@extensionSchemas/',
   '@resources/',
   '@common/state/',
   '@common/webview/',

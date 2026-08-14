@@ -670,9 +670,8 @@ describe('ProgressBackend cleanup', () => {
   });
 
   it('sweeps leftover background shells at load, keeping real sessions', async () => {
-    // No identity on its execution row: every stream a workspace wrote before
-    // identity stamping (#9705) hydrates this way, so the sweep has only the
-    // minted prefix to read.
+    // The sweep reads the persisted identity meta (kind 'process'), the
+    // authority since the legacy name-prefix reader was retired.
     const shell = {
       stream: 'bash@tool#a6961a' as StreamTabId,
       executionId: 'a6961a' as ExecutionId,
@@ -681,10 +680,16 @@ describe('ProgressBackend cleanup', () => {
     const first = await createPersistentRecordingBackend();
 
     try {
-      for (const ids of [shell, session]) {
-        registerStream(first.backend, ids);
-        await writeExecutionConfig(ids.executionId);
-      }
+      registerStream(first.backend, shell);
+      await writeExecutionConfig(shell.executionId, {
+        streamId: shell.stream,
+        identity: { kind: 'process', tool: 'bash' },
+      });
+      registerStream(first.backend, session);
+      await writeExecutionConfig(session.executionId, {
+        streamId: session.stream,
+        identity: { kind: 'agent', agent: 'search' },
+      });
       await first.backend.state.flush();
     } finally {
       first.backend.dispose();

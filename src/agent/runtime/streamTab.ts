@@ -46,27 +46,3 @@ export function getStreamTabDisplayName(streamId: string): string {
 
 /** Stream-id prefix minted for a background shell child (`src/tools/bash.ts`). */
 export const BASH_CHILD_STREAM_PREFIX = 'bash@tool';
-
-/**
- * Whether `streamId` was minted for a background shell child.
- *
- * For any live run the authority is `RunIdentity` (`{ kind: 'process' }`). This
- * answers the one question identity cannot: whether a stream found *on disk*
- * that predates identity stamping (#9705) was a background shell. Its sole
- * caller is `SessionStores.sweepEphemeralStreams`, and it is a legacy-data
- * question rather than a runtime one — no run is addressed, resolved, or
- * classified through it, so the rule that identity is never reconstructed from
- * a stream id (#9755) still governs all of those.
- *
- * The match is exact, not heuristic: {@link BASH_CHILD_STREAM_PREFIX} is the
- * prefix's only minter, and no agent can carry it — `getCleanAgentName` splits
- * a roster name at ':' and a bare agent name has no '@'.
- *
- * Introduced 2026-08-08 as a compatibility reader. Retire it once no reachable
- * workspace can hold a stream written before identity stamping shipped
- * (#9705, 2026-08-04) — i.e. from 2026-11-04, when the compatibility window
- * closes — and let the sweep read `RunIdentity` alone.
- */
-export function isBackgroundShellStream(streamId: StreamTabId): boolean {
-  return getStreamTabDisplayName(streamId) === BASH_CHILD_STREAM_PREFIX;
-}
