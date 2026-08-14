@@ -1,4 +1,5 @@
 import type { SubscriptionUsageWindow } from '@shared/schemas';
+import { clamp } from '@utils/core';
 
 export type JsonObject = Record<string, unknown>;
 
@@ -79,10 +80,6 @@ export function timestampField(
   return undefined;
 }
 
-function clampPercent(value: number): number {
-  return Math.min(100, Math.max(0, value));
-}
-
 export function usageWindow(
   name: string,
   usage: { readonly used?: number; readonly remaining?: number },
@@ -93,9 +90,9 @@ export function usageWindow(
 ): SubscriptionUsageWindow | undefined {
   let percentUsed: number | undefined;
   if (usage.used !== undefined) {
-    percentUsed = clampPercent(usage.used);
+    percentUsed = clamp(usage.used, 0, 100);
   } else if (usage.remaining !== undefined) {
-    percentUsed = 100 - clampPercent(usage.remaining);
+    percentUsed = 100 - clamp(usage.remaining, 0, 100);
   }
   if (percentUsed === undefined) return undefined;
   return {
