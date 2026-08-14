@@ -93,8 +93,15 @@ jobs:
 
           # Self-test the classifiers before trusting them on real input, so a
           # shell/awk regression fails CI instead of silently misrouting it.
-          if ! printf 'M\tdocs/supabase/remote-agents.config.json\nR100\tdocs/supabase/remote-agents.config.json.old\tdocs/supabase/remote-agents.config.json\n' | drift_gate_match; then
-            echo 'drift-gate classifier self-test failed' >&2
+          # Keep each positive case in its own invocation so `found` cannot
+          # leak across records. The rename dest-only case is the one that
+          # fails a field-2-only (or rename-skipping) matcher.
+          if ! printf 'M\tdocs/supabase/remote-agents.config.json\n' | drift_gate_match; then
+            echo 'drift-gate classifier self-test failed (modified gate file)' >&2
+            exit 1
+          fi
+          if ! printf 'R100\tdocs/supabase/remote-agents.config.json.old\tdocs/supabase/SYNC_REMOTE_AGENTS.sql\n' | drift_gate_match; then
+            echo 'drift-gate classifier self-test failed (rename dest only)' >&2
             exit 1
           fi
           if printf 'M\tdocs/guide.md\n' | drift_gate_match; then
