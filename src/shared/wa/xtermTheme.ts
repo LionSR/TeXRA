@@ -2,16 +2,21 @@
  * Resolve an xterm.js theme from Web Awesome CSS tokens on a host element.
  * Extension and desktop both call this with their own DOM target so the
  * terminal matches the active theme instead of a second hardcoded palette.
+ *
+ * Background and foreground keep the surface/text tokens the two hosts
+ * already used. Dedicated `--wa-color-terminal-background` /
+ * `--wa-color-terminal-foreground` exist on both sheets; switching would
+ * change the progress-view palette and is out of this extraction's scope.
  */
 
-export const XTERM_THEME_FALLBACKS = {
+const XTERM_THEME_FALLBACKS = {
   background: '#1e1e1e',
   foreground: '#cccccc',
   fontFamily: 'monospace',
 } as const;
 
 /** Web Awesome terminal ANSI color tokens mapped to xterm.js theme keys. */
-export const XTERM_ANSI_COLOR_TOKENS = [
+const XTERM_ANSI_COLOR_TOKENS = [
   ['black', '--wa-color-terminal-ansi-black'],
   ['red', '--wa-color-terminal-ansi-red'],
   ['green', '--wa-color-terminal-ansi-green'],
@@ -30,7 +35,7 @@ export const XTERM_ANSI_COLOR_TOKENS = [
   ['brightWhite', '--wa-color-terminal-ansi-bright-white'],
 ] as const;
 
-export interface ResolvedXtermTheme {
+interface ResolvedXtermTheme {
   readonly theme: Record<string, string>;
   readonly fontFamily: string;
 }
@@ -52,8 +57,13 @@ export function resolveXtermTheme(target: Element): ResolvedXtermTheme {
     if (value) theme[key] = value;
   }
 
-  const cursor = token('--wa-color-terminal-cursor');
-  theme.cursor = cursor || theme.foreground;
+  // Dedicated cursor token first; `--wa-color-text-normal` next so a host
+  // that omits the cursor token keeps the desktop high-contrast source
+  // (CanvasText) rather than jumping to FieldText via input-foreground.
+  theme.cursor =
+    token('--wa-color-terminal-cursor') ||
+    token('--wa-color-text-normal') ||
+    theme.foreground;
 
   const selectionBackground = token('--wa-color-terminal-selection-bg');
   if (selectionBackground) theme.selectionBackground = selectionBackground;
