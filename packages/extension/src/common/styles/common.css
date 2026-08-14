@@ -273,8 +273,15 @@
     var(--vscode-editorError-foreground)
   );
 
-  /* Terminal — full palette, no WA equivalent. */
-  --wa-color-terminal-background: var(--vscode-terminal-background);
+  /* Terminal — full palette, no WA equivalent. VS Code registers
+     terminal.background without a default, so themes that don't set it
+     inject no --vscode-terminal-background into the webview; the integrated
+     terminal itself falls back to the panel background in that case, so the
+     chain below mirrors the host instead of silently dropping the token. */
+  --wa-color-terminal-background: var(
+    --vscode-terminal-background,
+    var(--vscode-panel-background)
+  );
   --wa-color-terminal-foreground: var(--vscode-terminal-foreground);
   --wa-color-terminal-selection-bg: var(--vscode-terminal-selectionBackground);
   --wa-color-terminal-cursor: var(--vscode-terminalCursor-foreground);
