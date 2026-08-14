@@ -12,6 +12,7 @@ import {
   type MainViewPersistedState,
   AgentCategory,
 } from '@shared/schemas';
+import { isNonEmptyString } from '@utils/core';
 
 /**
  * Entry-point schema for a restore-into-the-main-view payload. Unwraps the
@@ -39,12 +40,7 @@ export const RestoreRunConfigInputSchema = z.preprocess(
         'agent' in input ? input.agent : undefined,
         'model' in input ? input.model : undefined,
       ].filter((value) => value !== undefined);
-      return (
-        identities.length > 0 &&
-        identities.every(
-          (value) => typeof value === 'string' && value.trim().length > 0,
-        )
-      );
+      return identities.length > 0 && identities.every(isNonEmptyString);
     }, 'A restored run configuration must identify a non-empty agent or model.')
     .pipe(AgentConfigSchema),
 );
