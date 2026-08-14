@@ -72,8 +72,6 @@ const LoogleHitSchema = z.looseObject({
 type LoogleHit = z.infer<typeof LoogleHitSchema>;
 
 const LoogleSuccessSchema = z.looseObject({
-  count: z.number(),
-  header: z.string(),
   hits: z.array(LoogleHitSchema),
 });
 

@@ -31,7 +31,6 @@ vi.mock('node:fs', async (importOriginal) => ({
 
 const NO_TERMINAL_CAPABILITIES = {
   kittyKeyboard: false,
-  graphemeClusters: false,
   oscColorReports: false,
 };
 
