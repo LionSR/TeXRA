@@ -144,7 +144,9 @@ function protectByPatterns(
         const firstLineStart = source.lastIndexOf('\n', offset - 1) + 1;
         const firstLinePrefix = source.slice(firstLineStart, offset);
         const firstQuotePrefix =
-          /^(?:[ \t]*>[ \t]?)+/u.exec(firstLinePrefix)?.[0] ?? '';
+          /^(?:[ \t]*(?:[-+*]|\d+[.)])[ \t]+)?((?:[ \t]*>[ \t]?)+)/u.exec(
+            firstLinePrefix,
+          )?.[1] ?? '';
         const quoteDepth = [...firstQuotePrefix].filter(
           (char) => char === '>',
         ).length;

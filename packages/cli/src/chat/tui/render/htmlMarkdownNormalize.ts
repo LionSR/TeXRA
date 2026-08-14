@@ -6,8 +6,9 @@ const KNOWN_HTML_TAG_RE =
   /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/i;
 const CURRENCY_AMOUNT = String.raw`[+-]?(?:\d|\.\d)`;
 const SHELL_PARAMETER_NAME = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+|[?@*#!-])`;
-const SHELL_PARAMETER = String.raw`(?:${SHELL_PARAMETER_NAME}|\{${SHELL_PARAMETER_NAME}\})`;
-const SHELL_UNWRAPPED_PARAMETER = String.raw`(?:[A-Z_][A-Z0-9_]+|\{${SHELL_PARAMETER_NAME}\}|[_?@*#!-])`;
+const SHELL_BRACED_PARAMETER = String.raw`\{${SHELL_PARAMETER_NAME}(?:(?::?[-+=?])[^}\n]*)?\}`;
+const SHELL_PARAMETER = String.raw`(?:${SHELL_PARAMETER_NAME}|${SHELL_BRACED_PARAMETER})`;
+const SHELL_UNWRAPPED_PARAMETER = String.raw`(?:[A-Z_][A-Z0-9_]+|${SHELL_BRACED_PARAMETER}|[_?@*#!-])`;
 const SHELL_PARAMETER_BOUNDARY = String.raw`(?=[\s.,;:!?()[\]{}'"’”]|$)`;
 const SHELL_TOKEN = String.raw`(?:\$\$|\$${SHELL_PARAMETER})`;
 

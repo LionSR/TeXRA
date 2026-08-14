@@ -243,6 +243,22 @@ describe('renderAnsiMarkdown', () => {
   );
 
   it.each([
+    [
+      '`${HOME:-/tmp}` <strong>or</strong> `${PATH:+x}`',
+      '`${HOME:-/tmp}` **or** `${PATH:+x}`',
+    ],
+    [
+      '<code>${HOME:=/tmp}</code> <strong>or</strong> <code>${PATH:?missing}</code>',
+      '`${HOME:=/tmp}` **or** `${PATH:?missing}`',
+    ],
+  ] as const)(
+    'normalizes HTML between compound shell expansions: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it.each([
     '$0<p>1$2',
     '$0<p>1$-condition',
     '$a<b>c$d',
@@ -406,6 +422,18 @@ describe('renderAnsiMarkdown', () => {
 
     expect(plain).toContain('│   • \\[\n│   a+b\n│   \\]');
     expect(plain).not.toContain('\n>   a+b');
+  });
+
+  it('keeps multiline math inside a blockquote nested under a list', () => {
+    const plain = renderPlain('- > \\[\n  > a+b\n  > \\]', {
+      colorEnabled: false,
+      width: 80,
+    });
+
+    expect(plain).toContain('│ \\[');
+    expect(plain).toContain('│ a+b');
+    expect(plain).toContain('│ \\]');
+    expect(plain).not.toContain('\n  > a+b');
   });
 
   it('renders nested blockquote prefixes once per depth', () => {
