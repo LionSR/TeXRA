@@ -110,23 +110,30 @@ must keep. Code movement only where a site violates the written contract.
 `executeInBand` (`inBandSubagentExecution.ts:389`) drops progress
 notifications entirely (`notify: () => {}`, `:463`) and passes
 `strategy.launch` a fresh `AbortController` (`:467`) that no caller retains a
-reference to — the only live cancellation is `options.signal` threaded via
-`bindAbortSignals`. There is no lease-lost watchdog and no loop-level
-interrupt handler. The workflow-script path compensates with its own event
-channel (`WorkflowScriptEvent` projection); the headless `stopAfterCycle`
-arm of `delegate_agent`/`delegate_workflow` simply loses both.
+reference to — the only live cancellation at that wrapper is
+`options.signal` threaded via `bindAbortSignals`. The workflow-script path
+compensates with its own event channel (`WorkflowScriptEvent` projection);
+the headless `stopAfterCycle` arm of `delegate_agent`/`delegate_workflow`
+loses the notification sink.
 
-By the repo's own rule — silent degradation is a defect — this is debt even
-where it has not yet caused a reported failure.
+The in-band run does **not** lack a lease-lost watchdog once
+`strategy.launch` enters `executeAgent`: `runFlowWithLifecycle` attaches
+`onOwnedExecutionLeaseLost` for the same execution ID, marks the handle
+lease-lost, and calls `handle.interrupt()`, and also attaches the run
+interrupt handler (`AgentRunLifecycle.ts:490-501`). Treating that as
+absent would add a second watcher and double-run cancellation side
+effects.
 
 **Fix.** Two scoped changes, not a rewrite: (a) thread a real notification
 sink for the `stopAfterCycle` arm (the parent is in-band, so "notify" can
 degrade to trace-card emission rather than follow-up delivery — but
 deliberately and documented, not via a silent no-op); (b) either retain and
-wire the controller into the caller's cancellation scope or stop
-constructing it and pass the bound signal explicitly, so the code states
-what cancellation exists instead of implying cancellation that doesn't.
-The in-band-vs-async _durability_ split stays (see Non-goals).
+wire the unused wrapper `AbortController` into the caller's cancellation
+scope or stop constructing it and pass the bound signal explicitly. Do
+**not** add a second lease-lost watcher or loop-level interrupt path.
+If anything remains after `executeAgent` owns lifecycle, it is only the
+brief pre-`executeAgent` launch window. The in-band-vs-async _durability_
+split stays (see Non-goals).
 
 ### 4. Two independent concurrency budgets
 
@@ -149,15 +156,24 @@ A purely run-scoped budget does not by itself close that case:
 execution, so the parent's launch and the workflow child's semaphore belong
 to distinct runs unless budget inheritance is designed.
 
-**Fix.** One budget owned in `@agent/runtime`, acquired and held at the
-actual child-execution boundary (native launch / child-run loop / workflow
-engine semaphore) — **not** injected into the dispatch node's `PQueue`,
-which would throttle `read_file`/`grep` while leaving child-agent
-lifetimes ungated. Settle per-run vs per-session vs per-provider-key —
-and whether a detached child inherits its parent's remaining slots — in
-the Wave-4 design note **before** implementing. Keep the engine's
-_lifetime_ call cap and fan-out caps where they are — those are script
-governance, not concurrency.
+**Fix.** One budget owned in `@agent/runtime`, acquired and held at
+**one** child-execution boundary — **not** injected into the dispatch
+node's `PQueue`, which would throttle `read_file`/`grep` while leaving
+child-agent lifetimes ungated. The listed sites are nested, not
+independent: a workflow-script `agent()` holds the engine semaphore
+while its production runner enters in-band native launch
+(`workflowScriptAgentRunner.ts` → `executeStableSubagentInBand`), and a
+detached native run calls `strategy.launch` from inside
+`startChildRunLoop` (`childRunLoop.ts:790`). Acquiring the same shared
+budget at every listed site charges one physical child twice; at
+concurrency 1 that deadlocks immediately, and nested delegation
+deadlocks when parents occupy every slot while awaiting children.
+Define a single owner per physical execution, or pass a reentrant lease
+through the nested layers, in the Wave-4 design note **before**
+implementing. Also settle per-run vs per-session vs per-provider-key
+and whether a detached child inherits its parent's remaining slots.
+Keep the engine's _lifetime_ call cap and fan-out caps where they are —
+those are script governance, not concurrency.
 
 ### 5. Dual-channel sync tax over `WorkflowScriptEvent` + snapshot
 
@@ -353,7 +369,8 @@ the named sites against head.
 4. Item 2 (cost contract + workflow-path conformance + tests). Do not
    add an in-band single-commit test unless a multi-observation path
    is found.
-5. Item 3 (in-band notify sink + explicit cancellation wiring).
+5. Item 3 (in-band notify sink + unused AbortController honesty).
+   Do not add a second lease-lost watcher.
 6. Item 10 (report/result decision, README, `executions` tool messaging).
 
 **Wave 3 — consolidations:**
@@ -368,11 +385,11 @@ Item 7 (H3 lease triplet) has no Wave-3 PR.
 
 **Wave 4 — capability:**
 
-9. Item 4 (shared concurrency budget, held at the child-execution
-   boundary). Last because it is the only item that changes runtime
+9. Item 4 (shared concurrency budget, one owner per physical
+   execution). Last because it is the only item that changes runtime
    behavior under load, wants the cost contract (item 2) settled first,
-   and needs the scope/inheritance design note written before any code
-   moves.
+   and needs the scope/inheritance/reentrancy design note written
+   before any code moves.
 
 **Wave 5 — audit addendum (see Addendum below):** A5's defect fix ships
 immediately (it is a bug, not debt); A1–A3 and A6 are independent and can
@@ -456,13 +473,25 @@ and `terminalPersistence.ts:96-101`). The other finalize-family sites
 (`restartRepair.ts:185`, `AgentRunLifecycle.ts:197`,
 `executionRegistry.ts:850`, CLI `executionFinalization.ts:47`) have no
 `thrownError` arm. `childRunPersistence.ts` (37 LoC) converts KV-store
-throws into a `{kind}` result object that its consumer immediately converts
-back into a `SubagentDurabilityError` throw; `bash.ts` hand-rolls a second
-copy of the delivery-persistence policy and the CLI a third. Fix: delete
-the result-object layer and the two dead throw arms; route bash/CLI through
-the two surviving owners. Verifier corrections: `rejectedMessage` warn
-strings are asserted verbatim by tests (must land together); keep the CLI's
-per-stage `finalizationFailureMessage` (headless-parity reporting surface).
+throws into a `{kind}` result object. One required consumer
+(`persistResultMetaRequired` in `inBandSubagentExecution.ts:258-264`)
+immediately converts a failure back into a `SubagentDurabilityError`
+throw. A second consumer, `persistChildRunDeliveryBestEffort`, calls
+both result-returning functions, inspects each result independently,
+marks the lease undurable, and reports failures without rejecting
+(`childRunDeliveryPersistence.ts:17-30`). That helper is used by the
+detached child loop and in-band failure paths, so deleting the
+result-object layer literally would let an artifact write escape a
+deliberately best-effort path or drop one of two concurrent failures.
+`bash.ts` hand-rolls a second copy of the delivery-persistence policy
+and the CLI a third. Fix: delete the two dead throw arms; route
+bash/CLI through the two surviving owners; keep the result type (or
+replace it with an equivalent `Promise.allSettled` that still inspects
+both writes independently) so the best-effort consumer does not start
+throwing. Verifier corrections: `rejectedMessage` warn strings are
+asserted verbatim by tests (must land together); keep the CLI's
+per-stage `finalizationFailureMessage` (headless-parity reporting
+surface).
 
 ### A4. Delegation shallow-file collapse (−75 LoC, −8 elements)
 
@@ -574,8 +603,10 @@ and only ship the emit fold.
    The engine's semaphore is per run today; the dispatch queue is per
    batch. Provider-rate-awareness argues for per-provider-key with a
    per-run floor. A detached workflow child is a distinct run, so
-   inheritance (or not) must be written down. This note is a Wave-4
-   prerequisite, not an open afterthought.
+   inheritance (or not) must be written down. Nested sites (engine
+   semaphore ⊃ in-band launch; child-run loop ⊃ `strategy.launch`) also
+   need a single owner per physical execution or a reentrant lease.
+   This note is a Wave-4 prerequisite, not an open afterthought.
 3. Item 10: does any consumer besides the `executions` tool's `report`
    action assume a report exists for every terminal child? Audit before
    choosing between "persist report" and "document result-only".
