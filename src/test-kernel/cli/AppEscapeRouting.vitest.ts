@@ -1183,11 +1183,13 @@ describe('App workflow dashboard ownership', () => {
 
     try {
       stdin.write('\t');
-      await waitFor(
-        () =>
-          currentApproval.get()?.payload.payload.requestId ===
-          'external-session',
-      );
+      await waitFor(() => {
+        const pending = currentApproval.get()?.payload;
+        return (
+          pending?.kind === 'externalInquiry' &&
+          pending.payload.requestId === 'external-session'
+        );
+      });
       await waitFor(() =>
         stdout.output.includes('Verify the workflow before it emits rows.'),
       );
