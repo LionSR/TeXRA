@@ -17,16 +17,6 @@ import { FileType } from '@platform/interfaces';
 import { ArxivDownloadTool } from '@tools/arxiv/ArxivDownloadTool';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
-declare module '@latex/arxivProcessor' {
-  interface ArxivSourceProcessor {
-    validateId(id: string): string | null;
-    downloadSource(
-      input: string,
-      options?: DownloadSourceOptions,
-    ): Promise<{ path: string; alreadyExisted: boolean }>;
-  }
-}
-
 describe('ArxivDownloadTool', () => {
   afterEach(() => {
     vi.restoreAllMocks();

@@ -155,13 +155,7 @@ describe('CLI child controls', () => {
   // Alt+1..9 numbers follow the rows exactly as the tree yields them.
   it('assigns visible shortcut indices in newest-first roster order', () => {
     const ids = ['a', 'b', 'c', 'd', 'e'].map((id) => id as StreamTabId);
-    const [a, b, c, d, e] = ids as [
-      StreamTabId,
-      StreamTabId,
-      StreamTabId,
-      StreamTabId,
-      StreamTabId,
-    ];
+    const [a, b, c, d, e] = ids;
     const entries = buildChildStreamEntries({
       parentStreamId: root,
       retained: [
@@ -183,6 +177,8 @@ describe('CLI child controls', () => {
       ids.filter((id) => id !== b).map((id) => [id, root] as const),
     );
 
+    // Retained oldest-first (a…e), reversed for display; the `Map`/`Reduce`
+    // tags on the roster rows do not move anybody.
     expect(
       streamTreeEntries({
         activeStreamId: root,
@@ -191,8 +187,6 @@ describe('CLI child controls', () => {
         rootStreamId: root,
         streams,
       }),
-      // Retained oldest-first (a…e), reversed for display; the `Map`/`Reduce`
-      // tags on the roster rows do not move anybody.
     ).toEqual([
       { id: root },
       { id: e, shortcutIndex: 1 },

@@ -6,10 +6,10 @@ import * as logUtils from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import {
   ExternalInquiryPermissionSchema,
+  ToolError,
   type InquiryThreadId,
   type StreamTabId,
 } from '@shared/schemas';
-import { ToolError } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   getOpenTurnDraft,

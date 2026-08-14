@@ -46,6 +46,11 @@ function tokenPx(name: string): number {
   return Number.parseFloat(tokenValue(name));
 }
 
+/** Strip CSS block comments so prose references can't satisfy token matches. */
+function stripCssComments(text: string): string {
+  return text.replaceAll(/\/\*[\s\S]*?\*\//g, '');
+}
+
 describe('desktop theme tokens', () => {
   it('defines textarea and text input colors via the WA form-control tokens', () => {
     // Per #3741, consumer code references --wa-* tokens directly and the
@@ -164,7 +169,7 @@ describe('desktop theme tokens', () => {
     //       or src/ references --desktop-color-* or --desktop-font-*.
     // Strip CSS comments before matching so prose in doc-comments cannot
     // accidentally satisfy the inside-file expectations.
-    const insideCss = readThemeTokens().replaceAll(/\/\*[\s\S]*?\*\//g, '');
+    const insideCss = stripCssComments(readThemeTokens());
     expect(insideCss).toMatch(/--desktop-color-[a-zA-Z-]+\s*:/);
     expect(insideCss).toMatch(/var\(--desktop-color-[a-zA-Z-]+\)/);
 
@@ -186,12 +191,8 @@ function collectDesktopTokenOffenders(): string[] {
   // CSS comments + multi-line JS/TS comments. The regex pass ignores
   // declarations/refs that live inside any comment so doc-comments referencing
   // these tokens don't trip the test.
-  const stripCommentsCss = (text: string): string =>
-    text.replaceAll(/\/\*[\s\S]*?\*\//g, '');
   const stripCommentsTs = (text: string): string =>
-    text
-      .replaceAll(/\/\*[\s\S]*?\*\//g, '')
-      .replaceAll(/(^|[^:])\/\/.*$/gm, '$1');
+    stripCssComments(text).replaceAll(/(^|[^:])\/\/.*$/gm, '$1');
 
   for (const dir of [
     repoPath('packages/desktop/src'),
@@ -203,7 +204,7 @@ function collectDesktopTokenOffenders(): string[] {
       if (!/\.(css|ts|mts|tsx|js|mjs|cjs)$/.test(absPath)) return;
       const raw = readFileSync(absPath, 'utf8');
       const text = absPath.endsWith('.css')
-        ? stripCommentsCss(raw)
+        ? stripCssComments(raw)
         : stripCommentsTs(raw);
       if (tokenPattern.test(text)) {
         offenders.push(relative(repoRoot, absPath));

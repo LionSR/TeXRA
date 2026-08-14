@@ -71,6 +71,18 @@ function getKimiUsageRow(
   );
 }
 
+function mountTab(): Promise<SubscriptionsTabElement> {
+  return mountComponent<SubscriptionsTabElement>('subscriptions-tab', {
+    usage: snapshots,
+  });
+}
+
+function mountTabWithFakeTimers(): Promise<SubscriptionsTabElement> {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+  return mountTab();
+}
+
 describe('subscription usage rendering', () => {
   useLitComponentTestDom(
     () => import('@settingsView/frontend/tabs/SubscriptionsTab'),
@@ -80,10 +92,7 @@ describe('subscription usage rendering', () => {
   afterEach(() => vi.useRealTimers());
 
   it('renders native collapsed summaries, accessible meters, and one refresh action', async () => {
-    const tab = await mountComponent<SubscriptionsTabElement>(
-      'subscriptions-tab',
-      { usage: snapshots },
-    );
+    const tab = await mountTab();
 
     expect(mocks.postMessage).toHaveBeenCalledWith(
       SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE,
@@ -128,12 +137,7 @@ describe('subscription usage rendering', () => {
   });
 
   it('advances one tab clock while connected and stops it after disconnect', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(NOW);
-    const tab = await mountComponent<SubscriptionsTabElement>(
-      'subscriptions-tab',
-      { usage: snapshots },
-    );
+    const tab = await mountTabWithFakeTimers();
     expect(tab.now).toBe(NOW);
     expect(vi.getTimerCount()).toBe(1);
 
@@ -155,12 +159,7 @@ describe('subscription usage rendering', () => {
   });
 
   it('restarts one fresh clock when the same tab reconnects', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(NOW);
-    const tab = await mountComponent<SubscriptionsTabElement>(
-      'subscriptions-tab',
-      { usage: snapshots },
-    );
+    const tab = await mountTabWithFakeTimers();
 
     tab.remove();
     expect(vi.getTimerCount()).toBe(0);
@@ -176,12 +175,7 @@ describe('subscription usage rendering', () => {
   });
 
   it('refreshes the tab clock when fresh usage arrives', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(NOW);
-    const tab = await mountComponent<SubscriptionsTabElement>(
-      'subscriptions-tab',
-      { usage: snapshots },
-    );
+    const tab = await mountTabWithFakeTimers();
     tab.now = NOW - 10 * 60_000;
     vi.setSystemTime(NOW + 30_000);
     tab.usage = {

@@ -278,14 +278,10 @@ describe('completedRunArchive facade', () => {
     await writeSidecarFixture(executionId, streamId);
 
     const store = getExecutionStore(executionId);
-    await store.writeRunRecord(
-      AgentConfigSchema.parse({
-        agent: 'orchestrator',
-        model: 'deepseekproT',
-        agentCategory: AgentCategory.ToolUse,
-        instruction: 'Fix the lemma.',
-      }),
-    );
+    await store.writeRunRecord({
+      ...runConfig('orchestrator'),
+      instruction: 'Fix the lemma.',
+    });
     await stampStreamId(executionId, streamId);
 
     const conversationResult = await readCompletedRunConversation(executionId);

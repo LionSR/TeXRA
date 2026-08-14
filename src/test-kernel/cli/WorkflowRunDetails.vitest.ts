@@ -13,6 +13,7 @@ import {
   type CompileFailure,
   LOG_LEVELS,
   MESSAGE_TYPES,
+  type OutputFileInfo,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   type StreamLogEntry,
@@ -57,7 +58,7 @@ function completedRound(
   total: number,
   startTime: number,
   endTime: number,
-) {
+): TaskGroup {
   return {
     id: `r${index}`,
     name: `r${index}`,
@@ -73,7 +74,7 @@ function completedRound(
 function generatedFile(
   relativePath: string,
   diff: { added: number; removed: number } | null,
-) {
+): OutputFileInfo {
   return {
     source: 'paper.tex',
     round: 0,

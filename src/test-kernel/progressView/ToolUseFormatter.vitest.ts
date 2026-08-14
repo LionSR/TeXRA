@@ -459,18 +459,13 @@ const SUMMARY_CONTROL_CASES = [
     detailsSelector: 'wa-details.tool-use-details',
     controlSelector: 'button.proposal-restore-link',
     buildTemplate: () =>
-      formatToolUseTemplate({
-        id: 'proposal-2',
-        text: '',
-        level: LOG_LEVELS.INFO,
-        timestamp: 1,
-        messageType: 'toolUse',
-        data: {
+      formatToolUseTemplate(
+        toolUseMessage('proposal-2', {
           toolName: 'delegate_agent',
           input: { agent: 'assistant', instruction: 'do the thing' },
           output: 'proposed',
-        },
-      }),
+        }),
+      ),
   },
   {
     control: 'copy button',

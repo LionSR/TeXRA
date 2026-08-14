@@ -12,9 +12,7 @@ import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundSha
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { testModelCell } from '../modelCellTestUtils';
 
-function buildServices(
-  overrides: Partial<ToolUseRoundServices<unknown>> = {},
-): ToolUseRoundServices<unknown> {
+function buildServices(): ToolUseRoundServices<unknown> {
   return {
     run: { totalResponseTimeMs: 0, usageAccumulator: {}, totalRounds: 0 },
     workspace: {
@@ -37,7 +35,6 @@ function buildServices(
       error: vi.fn(),
       responseFinalized: vi.fn(),
     },
-    ...overrides,
   } as unknown as ToolUseRoundServices<unknown>;
 }
 

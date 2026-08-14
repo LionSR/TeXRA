@@ -834,14 +834,13 @@ function stubWorkflowResumeData(
 
 /** Creates a bridge with the given runAgent mock and starts one workflow
  * execution through the host file actions. */
-async function startMergeExecution(runAgent: RunExecutionRequest): Promise<{
-  bridge: TestableBridge;
-  showErrorMessage: ReturnType<typeof vi.fn>;
-}> {
+async function startMergeExecution(
+  runAgent: RunExecutionRequest,
+): Promise<{ showErrorMessage: ReturnType<typeof vi.fn> }> {
   const showErrorMessage = vi.fn(async () => undefined);
   const bridge = await createBridge([], { runAgent, showErrorMessage });
   bridge.fileActions.host.startExecution({ config: workflowConfig() });
-  return { bridge, showErrorMessage };
+  return { showErrorMessage };
 }
 
 /** Builds a bridge behind a transcript-open gate, asserts nothing reaches the
@@ -2789,11 +2788,7 @@ describe('DesktopProgressBridge', () => {
               PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
             ).filter(
               (message) =>
-                (
-                  message as ProgressMessage & {
-                    permission?: { data?: { approvalId?: string } };
-                  }
-                ).permission?.data?.approvalId ===
+                message.permission?.data?.approvalId ===
                 'approval-during-reopen-load',
             ),
           ).toHaveLength(1);

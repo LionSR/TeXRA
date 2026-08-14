@@ -14,7 +14,6 @@ import {
   WolframTool,
 } from '@tools/wolfram/WolframTool';
 import * as wolframScriptUtils from '@tools/wolfram/wolframScriptUtils';
-import { executeWolframCode } from '@tools/wolfram/wolframScriptUtils';
 import * as toolUtils from '@utils/system/toolUtils';
 import * as execUtils from '@utils/system/execUtils';
 import {
@@ -157,7 +156,7 @@ describe('wolframScriptUtils', () => {
       .spyOn(execUtils, 'executeCommand')
       .mockResolvedValue({ success: true, stdout: '2', stderr: '' });
 
-    const result = await executeWolframCode('1+1');
+    const result = await wolframScriptUtils.executeWolframCode('1+1');
 
     expect(executeCommand).toHaveBeenCalledWith(
       ['wolframscript', '-code', '1+1'],

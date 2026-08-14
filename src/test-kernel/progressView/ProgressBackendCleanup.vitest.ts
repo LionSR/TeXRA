@@ -111,6 +111,19 @@ async function expectStored(path: string, expected: boolean): Promise<void> {
   expect(await StorageFS.exists(path)).toBe(expected);
 }
 
+/** Tears down the foreign-lease fixtures: lease file, goal, execution store. */
+async function cleanupForeignLease(
+  backend: IsolatedBackend,
+  ids: StreamExecution,
+): Promise<void> {
+  // Best-effort teardown: the lease file may already be gone; a delete
+  // failure here must not mask the assertion this fixture is protecting.
+  await StorageFS.delete(executionLeasePath(ids.executionId)).catch(() => {});
+  await GoalStore.forget(ids.stream);
+  await getExecutionStore(ids.executionId).clear();
+  await backend.state.clearAll();
+}
+
 describe('ProgressBackend cleanup', () => {
   it('deletes the execution directory named by stream metadata when a stream is cleared', async () => {
     const { backend } = createIsolatedRecordingBackend();
@@ -221,10 +234,7 @@ describe('ProgressBackend cleanup', () => {
       await expectStored(streamDataDir(stream), true);
       expect(GoalStore.getForStream(stream)).not.toBeNull();
     } finally {
-      await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
-      await GoalStore.forget(stream);
-      await getExecutionStore(executionId).clear();
-      await backend.state.clearAll();
+      await cleanupForeignLease(backend, { stream, executionId });
     }
   });
 
@@ -249,10 +259,7 @@ describe('ProgressBackend cleanup', () => {
       await expectStored(streamDataDir(stream), false);
       expect(GoalStore.getForStream(stream)).toBeNull();
     } finally {
-      await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
-      await GoalStore.forget(stream);
-      await getExecutionStore(executionId).clear();
-      await backend.state.clearAll();
+      await cleanupForeignLease(backend, { stream, executionId });
     }
   });
 
@@ -274,10 +281,7 @@ describe('ProgressBackend cleanup', () => {
       expect(backend.state.streamLogs.has(stream)).toBe(false);
       await expectStored(`executions/${executionId}`, true);
     } finally {
-      await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
-      await GoalStore.forget(stream);
-      await getExecutionStore(executionId).clear();
-      await backend.state.clearAll();
+      await cleanupForeignLease(backend, { stream, executionId });
     }
   });
 

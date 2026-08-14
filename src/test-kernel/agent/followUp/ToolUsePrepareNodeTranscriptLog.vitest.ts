@@ -46,9 +46,9 @@ describe('ToolUsePrepareNode transcript logging (regression #7508)', () => {
     const services = buildServices({
       initialUserMessageForTranscript: 'Do the thing.',
     });
-    services.modelCell.handler.initializeMessages = vi
-      .fn()
-      .mockRejectedValue(new Error('media processing failed')) as never;
+    vi.mocked(services.modelCell.handler.initializeMessages).mockRejectedValue(
+      new Error('media processing failed'),
+    );
     const node = new ToolUsePrepareNode().setServices(services);
 
     await expect(node.exec(undefined)).rejects.toThrow(
@@ -79,9 +79,9 @@ describe('ToolUsePrepareNode transcript logging (regression #7508)', () => {
     const services = buildServices({
       initialUserMessageForTranscript: undefined,
     });
-    services.modelCell.handler.initializeMessages = vi
-      .fn()
-      .mockRejectedValue(new Error('boom')) as never;
+    vi.mocked(services.modelCell.handler.initializeMessages).mockRejectedValue(
+      new Error('boom'),
+    );
     const node = new ToolUsePrepareNode().setServices(services);
 
     await expect(node.exec(undefined)).rejects.toThrow('boom');

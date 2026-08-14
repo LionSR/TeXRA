@@ -208,6 +208,13 @@ function childExecutionId(resultOutput: string | undefined): ExecutionId {
   return match[1] as ExecutionId;
 }
 
+function interruptActiveExecutions(session: SessionHandle): void {
+  for (const executionId of session.executions.getActiveIds()) {
+    const handle = session.executions.getHandle(executionId);
+    if (handle instanceof AgentExecutionHandle) handle.interrupt();
+  }
+}
+
 async function waitForCompletedResumes(count: number): Promise<void> {
   await vi.waitFor(() => expect(completedResumes).toHaveLength(count), {
     timeout: 10_000,
@@ -342,10 +349,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
   });
 
   afterEach(async () => {
-    for (const executionId of session.executions.getActiveIds()) {
-      const handle = session.executions.getHandle(executionId);
-      if (handle instanceof AgentExecutionHandle) handle.interrupt();
-    }
+    interruptActiveExecutions(session);
     if (childId) await waitForOwnedExecutionLeaseRelease(childId);
     await releaseOwnedExecutionLease(PARENT_EXECUTION_ID);
     session.dispose();
@@ -661,10 +665,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     });
 
     // Interrupt turn 2 before it persists any result.
-    for (const activeId of session.executions.getActiveIds()) {
-      const handle = session.executions.getHandle(activeId);
-      if (handle instanceof AgentExecutionHandle) handle.interrupt();
-    }
+    interruptActiveExecutions(session);
     releaseTurn2(new Error('interrupted before result persistence'));
     await waitForOwnedExecutionLeaseRelease(executionId);
 

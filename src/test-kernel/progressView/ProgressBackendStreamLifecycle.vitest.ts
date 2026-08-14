@@ -68,6 +68,23 @@ function stubClearAll(
   });
 }
 
+/**
+ * Stalls `clearStream` until the returned release is called, so a test can
+ * interleave a selection change while a stream deletion is in flight.
+ */
+function gateClearStream(backend: RecordingTarget['backend']): () => void {
+  const clearStream = backend.state.clearStream.bind(backend.state);
+  let releaseClear!: () => void;
+  const clearGate = new Promise<void>((resolve) => {
+    releaseClear = resolve;
+  });
+  vi.spyOn(backend.state, 'clearStream').mockImplementation(async (stream) => {
+    await clearGate;
+    return clearStream(stream);
+  });
+  return releaseClear;
+}
+
 describe('ProgressBackend', () => {
   it('projects every approval bypass kind through one backend port', () => {
     const { backend, messages } = createRecordingBackend();
@@ -647,17 +664,7 @@ describe('ProgressBackend', () => {
     const active = 'active-stream' as StreamTabId;
     const fallback = 'fallback-stream' as StreamTabId;
     const selected = 'selected-during-delete' as StreamTabId;
-    const clearStream = backend.state.clearStream.bind(backend.state);
-    let releaseClear!: () => void;
-    const clearGate = new Promise<void>((resolve) => {
-      releaseClear = resolve;
-    });
-    vi.spyOn(backend.state, 'clearStream').mockImplementation(
-      async (stream) => {
-        await clearGate;
-        return clearStream(stream);
-      },
-    );
+    const releaseClear = gateClearStream(backend);
 
     for (const stream of [active, fallback, selected]) {
       backend.state.streamLogs.ensureStream(stream);
@@ -692,17 +699,7 @@ describe('ProgressBackend', () => {
     const { backend, messages } = createIsolatedRecordingBackend();
     const fallback = 'surviving-fallback' as StreamTabId;
     const deleting = 'selected-while-deleting' as StreamTabId;
-    const clearStream = backend.state.clearStream.bind(backend.state);
-    let releaseClear!: () => void;
-    const clearGate = new Promise<void>((resolve) => {
-      releaseClear = resolve;
-    });
-    vi.spyOn(backend.state, 'clearStream').mockImplementation(
-      async (stream) => {
-        await clearGate;
-        return clearStream(stream);
-      },
-    );
+    const releaseClear = gateClearStream(backend);
 
     backend.state.streamLogs.ensureStream(fallback);
     backend.state.streamLogs.ensureStream(deleting);
@@ -727,17 +724,7 @@ describe('ProgressBackend', () => {
     const { backend, messages } = createIsolatedRecordingBackend();
     const deleting = 'active-delete-in-progress' as StreamTabId;
     const fallback = 'launcher-must-not-replace' as StreamTabId;
-    const clearStream = backend.state.clearStream.bind(backend.state);
-    let releaseClear!: () => void;
-    const clearGate = new Promise<void>((resolve) => {
-      releaseClear = resolve;
-    });
-    vi.spyOn(backend.state, 'clearStream').mockImplementation(
-      async (stream) => {
-        await clearGate;
-        return clearStream(stream);
-      },
-    );
+    const releaseClear = gateClearStream(backend);
 
     backend.state.streamLogs.ensureStream(fallback);
     backend.state.streamLogs.ensureStream(deleting);
@@ -763,18 +750,8 @@ describe('ProgressBackend', () => {
     const deleting = 'active-being-deleted' as StreamTabId;
     const fallback = 'older-roster-fallback' as StreamTabId;
     const requested = 'newer-pending-switch' as StreamTabId;
-    const clearStream = backend.state.clearStream.bind(backend.state);
-    let releaseClear!: () => void;
+    const releaseClear = gateClearStream(backend);
     let finishRequestedPreload!: () => void;
-    const clearGate = new Promise<void>((resolve) => {
-      releaseClear = resolve;
-    });
-    vi.spyOn(backend.state, 'clearStream').mockImplementation(
-      async (stream) => {
-        await clearGate;
-        return clearStream(stream);
-      },
-    );
     vi.spyOn(backend.state.snapshots, 'preload').mockImplementationOnce(
       () =>
         new Promise<void>((resolve) => {
@@ -819,17 +796,7 @@ describe('ProgressBackend', () => {
     const fallback = 'recovery-survivor' as StreamTabId;
     const loadError = new Error('replacement hydration failed');
     let rejectRequestedPreload!: (error: Error) => void;
-    let releaseClear!: () => void;
-    const clearGate = new Promise<void>((resolve) => {
-      releaseClear = resolve;
-    });
-    const clearStream = backend.state.clearStream.bind(backend.state);
-    vi.spyOn(backend.state, 'clearStream').mockImplementation(
-      async (stream) => {
-        await clearGate;
-        return clearStream(stream);
-      },
-    );
+    const releaseClear = gateClearStream(backend);
 
     for (const stream of [fallback, requested, deleting]) {
       backend.state.streamLogs.ensureStream(stream);
@@ -877,18 +844,8 @@ describe('ProgressBackend', () => {
     const deleting = 'active-before-two-switches' as StreamTabId;
     const committed = 'first-concurrent-switch' as StreamTabId;
     const requested = 'second-pending-switch' as StreamTabId;
-    const clearStream = backend.state.clearStream.bind(backend.state);
-    let releaseClear!: () => void;
+    const releaseClear = gateClearStream(backend);
     let finishRequestedPreload!: () => void;
-    const clearGate = new Promise<void>((resolve) => {
-      releaseClear = resolve;
-    });
-    vi.spyOn(backend.state, 'clearStream').mockImplementation(
-      async (stream) => {
-        await clearGate;
-        return clearStream(stream);
-      },
-    );
 
     for (const stream of [committed, requested, deleting]) {
       backend.state.streamLogs.ensureStream(stream);

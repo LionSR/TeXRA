@@ -168,6 +168,14 @@ function toolUseConfig() {
   };
 }
 
+/** Tools the CLI runtime hides by default during agent execution. */
+const DEFAULT_RUNTIME_UNAVAILABLE_TOOLS = [
+  'inquiry',
+  ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
+  'inline_comment',
+  DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
+];
+
 function loadRunExecution(): Promise<
   typeof import('@cli/runtime/runExecution')
 > {
@@ -408,12 +416,7 @@ describe('executeCliRequest', () => {
       request,
       expect.objectContaining({
         approvalPromptsUnavailable: false,
-        runtimeUnavailableTools: [
-          'inquiry',
-          ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
-          'inline_comment',
-          DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
-        ],
+        runtimeUnavailableTools: DEFAULT_RUNTIME_UNAVAILABLE_TOOLS,
       }),
     );
   });
@@ -430,10 +433,7 @@ describe('executeCliRequest', () => {
       request,
       expect.objectContaining({
         runtimeUnavailableTools: [
-          'inquiry',
-          ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
-          'inline_comment',
-          DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
+          ...DEFAULT_RUNTIME_UNAVAILABLE_TOOLS,
           'custom_tool',
         ],
       }),
