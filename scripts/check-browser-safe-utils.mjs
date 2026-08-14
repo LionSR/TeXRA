@@ -10,11 +10,12 @@
 // closure, or prose that drifts in either file all fail the check.
 //
 // Dependency-free (bare Node): the CI guidance-references job runs it without
-// installing anything. Comments are stripped before scanning so JSDoc
-// examples that mention `@utils/*` paths are not mistaken for real imports.
+// installing anything. Comments and string/template literals are masked before
+// import scanning so prose that merely mentions an import path is not mistaken
+// for a real import.
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -25,8 +26,8 @@ const frontendDirs = [
   'packages/extension/src/settingsView/frontend',
 ].map((entry) => join(rootDir, entry));
 
-// The canonical reachable set, kept in codepoint order and cross-checked
-// against the enumerated list in both guidance files below.
+// The canonical reachable set, cross-checked against the enumerated list in
+// both guidance files below.
 const EXPECTED_REACHABLE = [
   '@utils/core',
   '@utils/core/boundedIdSet',
@@ -38,6 +39,18 @@ const EXPECTED_REACHABLE = [
 ];
 
 const compareCodePoints = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+const WORD_TO_NUMBER = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+};
 
 /** Recursive list of TypeScript source files under a directory. */
 function listSourceFiles(dir) {
@@ -56,59 +69,69 @@ function listSourceFiles(dir) {
   return results;
 }
 
-/** Strip line and block comments while respecting string/template literals. */
-function stripComments(text) {
-  let output = '';
+/**
+ * Byte ranges of comments and string/template literals. A regex match whose
+ * start index falls inside one of these ranges is prose or a string value,
+ * not code, so it cannot be a real import.
+ */
+function maskedRanges(text) {
+  const ranges = [];
   let i = 0;
-  let quote = null;
-  while (i < text.length) {
+  const n = text.length;
+  while (i < n) {
     const char = text[i];
-    const next = text[i + 1];
-    if (quote !== null) {
-      output += char;
-      if (char === '\\') {
-        output += next ?? '';
-        i += 2;
-        continue;
-      }
-      if (char === quote) quote = null;
-      i += 1;
-      continue;
-    }
-    if (char === "'" || char === '"' || char === '`') {
-      quote = char;
-      output += char;
-      i += 1;
-      continue;
-    }
-    if (char === '/' && next === '/') {
-      while (i < text.length && text[i] !== '\n') i += 1;
-      continue;
-    }
-    if (char === '/' && next === '*') {
+    if (char === '/' && text[i + 1] === '/') {
+      const start = i;
       i += 2;
-      while (i < text.length && !(text[i] === '*' && text[i + 1] === '/')) {
-        i += 1;
-      }
+      while (i < n && text[i] !== '\n') i += 1;
+      ranges.push([start, i]);
+    } else if (char === '/' && text[i + 1] === '*') {
+      const start = i;
       i += 2;
-      continue;
+      while (i < n && !(text[i] === '*' && text[i + 1] === '/')) i += 1;
+      i += 2;
+      ranges.push([start, i]);
+    } else if (char === '"' || char === "'" || char === '`') {
+      const start = i;
+      const quote = char;
+      i += 1;
+      while (i < n) {
+        if (text[i] === '\\') {
+          i += 2;
+        } else if (text[i] === quote) {
+          i += 1;
+          break;
+        } else {
+          i += 1;
+        }
+      }
+      ranges.push([start, i]);
+    } else {
+      i += 1;
     }
-    output += char;
-    i += 1;
   }
-  return output;
+  return ranges;
+}
+
+function insideRanges(index, ranges) {
+  return ranges.some(([start, end]) => index >= start && index < end);
 }
 
 /** Every module specifier in import/require/export-from positions. */
 function importSpecifiers(text) {
-  const stripped = stripComments(text);
+  const ranges = maskedRanges(text);
   const specifiers = new Set();
   const pattern =
     /(?:from\s*|import\s*(?:\(\s*)?|require(?:\.resolve)?\s*\(\s*|import\.meta\.resolve\s*\(\s*)['"]([^'"]+)['"]/g;
-  for (const match of stripped.matchAll(pattern)) {
+  for (const match of text.matchAll(pattern)) {
+    if (insideRanges(match.index, ranges)) continue;
     specifiers.add(match[1]);
   }
   return specifiers;
+}
+
+function isTsFile(path) {
+  return /\.tsx?$/.test(path) && isFile(path);
 }
 
 function isFile(path) {
@@ -119,27 +142,32 @@ function isFile(path) {
   }
 }
 
-/** Resolve an `@utils/X` specifier to its on-disk source file, if any. */
-function resolveUtilsFile(specifier) {
-  const relativePath = specifier.slice('@utils/'.length);
-  return [
-    join(utilsDir, `${relativePath}.ts`),
-    join(utilsDir, `${relativePath}.tsx`),
-    join(utilsDir, relativePath, 'index.ts'),
-    join(utilsDir, relativePath, 'index.tsx'),
-  ].find(isFile);
-}
-
-/** Resolve a relative specifier against the file that imports it. */
-function resolveRelativeFile(specifier, fromFile) {
-  const base = resolve(dirname(fromFile), specifier);
-  return [
+/** Candidate on-disk files for a specifier base, including NodeNext .js->.ts. */
+function candidatesFor(base) {
+  const candidates = [
     base,
     `${base}.ts`,
     `${base}.tsx`,
     join(base, 'index.ts'),
     join(base, 'index.tsx'),
-  ].find(isFile);
+  ];
+  if (base.endsWith('.js') || base.endsWith('.jsx')) {
+    const stem = base.slice(0, -3);
+    candidates.push(`${stem}.ts`, `${stem}.tsx`);
+  }
+  return candidates;
+}
+
+/** Resolve an `@utils/X` specifier to its on-disk source file, if any. */
+function resolveUtilsFile(specifier) {
+  const relativePath = specifier.slice('@utils/'.length);
+  return candidatesFor(join(utilsDir, relativePath)).find(isTsFile);
+}
+
+/** Resolve a relative specifier against the file that imports it. */
+function resolveRelativeFile(specifier, fromFile) {
+  const base = resolve(dirname(fromFile), specifier);
+  return candidatesFor(base).find(isTsFile);
 }
 
 /** Normalize an absolute `src/utils` file to its `@utils/...` specifier. */
@@ -151,8 +179,10 @@ function utilsSpecifierFor(file) {
   return `@utils/${withoutIndex}`;
 }
 
+/** Platform-independent containment check against the src/utils directory. */
 function isUnderUtilsDir(file) {
-  return file === utilsDir || file.startsWith(`${utilsDir}/`);
+  const rel = relative(utilsDir, file);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }
 
 function reachableUtils() {
@@ -217,6 +247,12 @@ function documentedFacts() {
   const claudeOther = claude.match(
     /The other (\d+)\s+TypeScript modules are not browser-reachable/,
   )?.[1];
+  const claudeReachableWord = claude.match(
+    /Exactly (\w+)\s+modules are browser-reachable today/,
+  )?.[1];
+  const agentsReachableWord = agents.match(
+    /exactly (\w+) modules are reachable from/,
+  )?.[1];
   const claudeList = documentedList(
     claude,
     /browser-reachable today:\s*([\s\S]*?)\.\s*The other/,
@@ -230,6 +266,8 @@ function documentedFacts() {
     agentsTotal == null ||
     agentsOther == null ||
     claudeOther == null ||
+    claudeReachableWord == null ||
+    agentsReachableWord == null ||
     claudeList == null ||
     agentsList == null
   ) {
@@ -239,10 +277,21 @@ function documentedFacts() {
     process.exit(1);
   }
 
+  const claudeReachable = WORD_TO_NUMBER[claudeReachableWord.toLowerCase()];
+  const agentsReachable = WORD_TO_NUMBER[agentsReachableWord.toLowerCase()];
+  if (claudeReachable == null || agentsReachable == null) {
+    console.error(
+      'Could not parse the documented reachable-module count words.',
+    );
+    process.exit(1);
+  }
+
   return {
     agentsTotal: Number(agentsTotal),
     agentsOther: Number(agentsOther),
     claudeOther: Number(claudeOther),
+    claudeReachable,
+    agentsReachable,
     claudeList,
     agentsList,
   };
@@ -279,9 +328,19 @@ function main() {
       `CLAUDE.md non-reachable count drifted: documented ${facts.claudeOther}, actual ${nonReachable}`,
     );
   }
-  if (facts.agentsTotal !== facts.claudeOther + expectedSorted.length) {
+  if (facts.agentsReachable !== reachable.size) {
     errors.push(
-      `Cross-document total mismatch: AGENTS.md total ${facts.agentsTotal} != CLAUDE.md reachable (${expectedSorted.length}) + other (${facts.claudeOther})`,
+      `AGENTS.md reachable count drifted: documented ${facts.agentsReachable}, actual ${reachable.size}`,
+    );
+  }
+  if (facts.claudeReachable !== reachable.size) {
+    errors.push(
+      `CLAUDE.md reachable count drifted: documented ${facts.claudeReachable}, actual ${reachable.size}`,
+    );
+  }
+  if (facts.agentsTotal !== facts.claudeReachable + facts.claudeOther) {
+    errors.push(
+      `Cross-document total mismatch: AGENTS.md total ${facts.agentsTotal} != CLAUDE.md reachable (${facts.claudeReachable}) + other (${facts.claudeOther})`,
     );
   }
 
