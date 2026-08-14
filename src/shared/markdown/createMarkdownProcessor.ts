@@ -144,36 +144,38 @@ function protectByPatterns(
       const offset = args.at(-2) as number;
       const source = args.at(-1) as string;
       if (!shouldProtect(match, offset, source)) return match;
-      // Keep Markdown blockquote prefixes visible to the parser instead of
-      // collapsing an entire quoted display span into one placeholder line.
-      const firstLineStart = source.lastIndexOf('\n', offset - 1) + 1;
-      const firstLinePrefix = source.slice(firstLineStart, offset);
-      const firstQuotePrefix =
-        /^(?:[ \t]*>[ \t]?)+/u.exec(firstLinePrefix)?.[0] ?? '';
-      const remainingLines = match.split('\n').slice(1);
-      const quoteDepth = [...firstQuotePrefix].filter(
-        (char) => char === '>',
-      ).length;
-      const requiredPrefix = new RegExp(
-        `^(?:[ \\t]*>[ \\t]?){${quoteDepth}}`,
-        'u',
-      );
-      const remainingPrefixes = remainingLines.map(
-        (line) => requiredPrefix.exec(line)?.[0],
-      );
-      const isQuotedSpan =
-        quoteDepth > 0 &&
-        remainingPrefixes.every((prefix) => prefix !== undefined);
-      if (preserveBlockquotePrefixes && isQuotedSpan) {
-        return match
-          .split('\n')
-          .map((line, lineIndex) => {
-            const prefix =
-              lineIndex === 0 ? '' : remainingPrefixes[lineIndex - 1];
-            const index = items.push(line.slice(prefix.length)) - 1;
-            return `${prefix}@@${tag}-${index}@@`;
-          })
-          .join('\n');
+      if (preserveBlockquotePrefixes && match.includes('\n')) {
+        // Keep Markdown blockquote prefixes visible to the parser instead of
+        // collapsing an entire quoted display span into one placeholder line.
+        const firstLineStart = source.lastIndexOf('\n', offset - 1) + 1;
+        const firstLinePrefix = source.slice(firstLineStart, offset);
+        const firstQuotePrefix =
+          /^(?:[ \t]*>[ \t]?)+/u.exec(firstLinePrefix)?.[0] ?? '';
+        const remainingLines = match.split('\n').slice(1);
+        const quoteDepth = [...firstQuotePrefix].filter(
+          (char) => char === '>',
+        ).length;
+        const requiredPrefix = new RegExp(
+          `^(?:[ \\t]*>[ \\t]?){${quoteDepth}}`,
+          'u',
+        );
+        const remainingPrefixes = remainingLines.map(
+          (line) => requiredPrefix.exec(line)?.[0],
+        );
+        const isQuotedSpan =
+          quoteDepth > 0 &&
+          remainingPrefixes.every((prefix) => prefix !== undefined);
+        if (isQuotedSpan) {
+          return match
+            .split('\n')
+            .map((line, lineIndex) => {
+              const prefix =
+                lineIndex === 0 ? '' : remainingPrefixes[lineIndex - 1];
+              const index = items.push(line.slice(prefix.length)) - 1;
+              return `${prefix}@@${tag}-${index}@@`;
+            })
+            .join('\n');
+        }
       }
       const index = items.push(match) - 1;
       return `@@${tag}-${index}@@`;

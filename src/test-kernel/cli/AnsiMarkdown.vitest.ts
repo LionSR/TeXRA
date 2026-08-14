@@ -93,27 +93,23 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('<code');
   });
 
-  it('preserves TeX inequalities that resemble opening HTML tags', () => {
-    const examples = [
-      '\\[0<p<1\\]',
-      '\\[0<p>1\\]',
-      '\\[a<b>c\\]',
-      '\\[a<i>c\\]',
-      '\\[a<br>c\\]',
-      '\\[0<p<1, 1-\\frac{2p}{3}>0, \\frac p3>0\\]',
-      '$0<p>1$',
-      '$$0<p>1$$',
-      '\\(0 < p < 1\\)',
-      '\\(0 <p <1\\)',
-      '\\(0 <p < 1\\)',
-      '\\(0 <p > 1\\)',
-      '\\(0 <p> 1\\)',
-      '\\(if x <p and y>1 then z\\)',
-    ];
-
-    for (const example of examples) {
-      expect(renderPlain(example)).toContain(example);
-    }
+  it.each([
+    '\\[0<p<1\\]',
+    '\\[0<p>1\\]',
+    '\\[a<b>c\\]',
+    '\\[a<i>c\\]',
+    '\\[a<br>c\\]',
+    '\\[0<p<1, 1-\\frac{2p}{3}>0, \\frac p3>0\\]',
+    '$0<p>1$',
+    '$$0<p>1$$',
+    '\\(0 < p < 1\\)',
+    '\\(0 <p <1\\)',
+    '\\(0 <p < 1\\)',
+    '\\(0 <p > 1\\)',
+    '\\(0 <p> 1\\)',
+    '\\(if x <p and y>1 then z\\)',
+  ])('preserves a TeX inequality that resembles HTML: %s', (example) => {
+    expect(renderPlain(example)).toContain(example);
   });
 
   it('continues normalizing unpaired and nested HTML formatting', () => {
@@ -150,25 +146,21 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('<div contenteditable>');
   });
 
-  it('normalizes HTML between same-line currency amounts', () => {
-    const examples = [
-      'Cost $5 <strong>today</strong>, then $10',
-      'Cost $5 <strong>today</strong>, then ($10)',
-      'Cost $5 <strong>today</strong>, then -$10',
-      'Cost US$5 <strong>today</strong>, then US$10',
-      'Cost $.99 <strong>today</strong>, then $.50',
-      'Cost $-5 <strong>today</strong>, then $-10',
-      'Cost A$5 <strong>today</strong>, then A$10',
-    ];
-
-    for (const example of examples) {
-      const normalized = normalizeKnownHtmlForCliMarkdown(example);
-      expect(normalized).toBe(
-        example.replace('<strong>', '**').replace('</strong>', '**'),
-      );
-      expect(normalized).not.toContain('<strong>');
-      expect(normalized).not.toContain('</strong>');
-    }
+  it.each([
+    'Cost $5 <strong>today</strong>, then $10',
+    'Cost $5 <strong>today</strong>, then ($10)',
+    'Cost $5 <strong>today</strong>, then -$10',
+    'Cost US$5 <strong>today</strong>, then US$10',
+    'Cost $.99 <strong>today</strong>, then $.50',
+    'Cost $-5 <strong>today</strong>, then $-10',
+    'Cost A$5 <strong>today</strong>, then A$10',
+  ])('normalizes HTML between currency amounts: %s', (example) => {
+    const normalized = normalizeKnownHtmlForCliMarkdown(example);
+    expect(normalized).toBe(
+      example.replace('<strong>', '**').replace('</strong>', '**'),
+    );
+    expect(normalized).not.toContain('<strong>');
+    expect(normalized).not.toContain('</strong>');
   });
 
   it('normalizes unpaired HTML between same-line currency amounts', () => {
@@ -182,6 +174,12 @@ describe('renderAnsiMarkdown', () => {
       ['<code>$HOME</code> and <code>$PATH</code>', '`$HOME` and `$PATH`'],
       ['`$HOME` <strong>or</strong> `$PATH`', '`$HOME` **or** `$PATH`'],
       ['$HOME <strong>or</strong> $PATH', '$HOME **or** $PATH'],
+      [
+        '<code>$HOME</code> <strong>$x$</strong> <code>$PATH</code>',
+        '`$HOME` **$x$** `$PATH`',
+      ],
+      ['<code>$HOME</code> and <code>$$</code>', '`$HOME` and `$$`'],
+      ['<code>$$</code> and <code>$HOME</code>', '`$$` and `$HOME`'],
     ] as const;
 
     for (const [source, expected] of examples) {
@@ -212,24 +210,23 @@ describe('renderAnsiMarkdown', () => {
     }
   });
 
-  it('preserves complete inline math beside token characters', () => {
-    const examples = [
-      '$0<p>1$2',
-      '$0<p>1$-condition',
-      '$a<b>c$d',
-      '$x<i>y$z',
-      '$a<br>c$',
-      '$a<strong>b($c',
-      '$0<p>1$$',
-      '$a <b> c $b',
-      '$A <b> c $B',
-      '$$0 <p> 1 $$10',
-    ];
-
-    for (const example of examples) {
+  it.each([
+    '$0<p>1$2',
+    '$0<p>1$-condition',
+    '$a<b>c$d',
+    '$x<i>y$z',
+    '$a<br>c$',
+    '$a<strong>b($c',
+    '$0<p>1$$',
+    '$a <b> c $b',
+    '$A <b> c $B',
+    '$$0 <p> 1 $$10',
+  ])(
+    'preserves complete inline math beside token characters: %s',
+    (example) => {
       expect(normalizeKnownHtmlForCliMarkdown(example)).toBe(example);
-    }
-  });
+    },
+  );
 
   it('preserves adjacent inline math spans independently of markdown', () => {
     expect(renderPlain('$*a*$$*b*$')).toContain('$*a*$$*b*$');

@@ -10,17 +10,34 @@ const SHELL_PID_CODE_PAIR_RE =
   /^\$\$?<\/code>[\s\S]*<code(?:\s[^<>]*)?>\$\$?$/iu;
 const SHELL_PARAMETER_NAME = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*|[0-9?@*#!-])`;
 const SHELL_PARAMETER = String.raw`(?:${SHELL_PARAMETER_NAME}|\{${SHELL_PARAMETER_NAME}\})`;
-const SHELL_PARAMETER_CODE_PAIR_RE = new RegExp(
-  `^\\$${SHELL_PARAMETER}<\\/code>[\\s\\S]*?<code(?:\\s[^<>]*)?>\\$${SHELL_PARAMETER}<\\/code>`,
+const SHELL_CODE_START_RE = /<code(?:\s[^<>]*)?>$/iu;
+const SHELL_PARAMETER_CODE_START_RE = new RegExp(
+  `^\\$${SHELL_PARAMETER}<\\/code>`,
   'iu',
 );
-const SHELL_PARAMETER_MARKDOWN_CODE_PAIR_RE = new RegExp(
-  `^\\$${SHELL_PARAMETER}\`[\\s\\S]*?\`\\$${SHELL_PARAMETER}\``,
+const SHELL_PID_CODE_START_RE = /^\$<\/code>/iu;
+const SHELL_CODE_END_RE = /<code(?:\s[^<>]*)?>\$$/iu;
+const SHELL_CODE_SUFFIX_RE = new RegExp(
+  `^(?:${SHELL_PARAMETER}|\\$)<\\/code>`,
+  'iu',
+);
+const SHELL_PARAMETER_MARKDOWN_CODE_START_RE = new RegExp(
+  `^\\$${SHELL_PARAMETER}\``,
+  'iu',
+);
+const SHELL_MARKDOWN_CODE_END_RE = /`\$$/u;
+const SHELL_MARKDOWN_CODE_SUFFIX_RE = new RegExp(
+  `^(?:${SHELL_PARAMETER}|\\$)\``,
   'iu',
 );
 const SHELL_UNWRAPPED_PARAMETER = String.raw`(?:[A-Z_][A-Z0-9_]+|\{${SHELL_PARAMETER_NAME}\}|[_?@*#!-])`;
-const SHELL_UNWRAPPED_PARAMETER_PAIR_RE = new RegExp(
-  `^\\$${SHELL_UNWRAPPED_PARAMETER}(?=[\\s<.,;:!?()[\\]{}'"’”]|$)[\\s\\S]*?\\$${SHELL_UNWRAPPED_PARAMETER}(?=[\\s<.,;:!?()[\\]{}'"’”]|$)`,
+const SHELL_UNWRAPPED_BOUNDARY = String.raw`(?=[\s<.,;:!?()[\]{}'"’”]|$)`;
+const SHELL_UNWRAPPED_PARAMETER_SPAN_RE = new RegExp(
+  `^\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_UNWRAPPED_BOUNDARY}[\\s\\S]*?\\$$`,
+  'u',
+);
+const SHELL_UNWRAPPED_PARAMETER_SUFFIX_RE = new RegExp(
+  `^${SHELL_UNWRAPPED_PARAMETER}${SHELL_UNWRAPPED_BOUNDARY}`,
   'u',
 );
 
@@ -80,19 +97,27 @@ function shouldProtectMathSpanDuringHtmlNormalization(
     CURRENCY_AMOUNT_START_RE.test(span.slice(1)) &&
     CURRENCY_PAIR_END_RE.test(span) &&
     CURRENCY_AMOUNT_START_RE.test(source.slice(offset + span.length));
-  const isShellParameterPair = SHELL_PARAMETER_CODE_PAIR_RE.test(
-    source.slice(offset),
-  );
-  const isMarkdownCodeShellParameterPair =
-    source.at(offset - 1) === '`' &&
-    SHELL_PARAMETER_MARKDOWN_CODE_PAIR_RE.test(source.slice(offset));
-  const isUnwrappedShellParameterPair = SHELL_UNWRAPPED_PARAMETER_PAIR_RE.test(
-    source.slice(offset),
-  );
+  const sourceAfterSpan = source.slice(offset + span.length);
+  const startsInHtmlCode = SHELL_CODE_START_RE.test(source.slice(0, offset));
+  const hasHtmlCodeShellEndpoint =
+    (startsInHtmlCode && SHELL_PARAMETER_CODE_START_RE.test(span)) ||
+    (startsInHtmlCode &&
+      source.at(offset - 1) === '$' &&
+      SHELL_PID_CODE_START_RE.test(span)) ||
+    (SHELL_CODE_END_RE.test(span) &&
+      SHELL_CODE_SUFFIX_RE.test(sourceAfterSpan));
+  const hasMarkdownCodeShellEndpoint =
+    (source.at(offset - 1) === '`' &&
+      SHELL_PARAMETER_MARKDOWN_CODE_START_RE.test(span)) ||
+    (SHELL_MARKDOWN_CODE_END_RE.test(span) &&
+      SHELL_MARKDOWN_CODE_SUFFIX_RE.test(sourceAfterSpan));
+  const isUnwrappedShellParameterPair =
+    SHELL_UNWRAPPED_PARAMETER_SPAN_RE.test(span) &&
+    SHELL_UNWRAPPED_PARAMETER_SUFFIX_RE.test(sourceAfterSpan);
   return !(
     isCurrencyPair ||
-    isShellParameterPair ||
-    isMarkdownCodeShellParameterPair ||
+    hasHtmlCodeShellEndpoint ||
+    hasMarkdownCodeShellEndpoint ||
     isUnwrappedShellParameterPair ||
     SHELL_PID_CODE_PAIR_RE.test(span)
   );
