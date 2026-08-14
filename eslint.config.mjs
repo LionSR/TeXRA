@@ -94,7 +94,6 @@ const HOST_LAYER_RESTRICTED_IMPORT_PATTERNS = [
       '@progressView/**',
       '@settingsView/**',
       '@frontend/**',
-      '@extensionSchemas/**',
       '@resources/**',
       '@common/state/**',
       '@common/webview/**',

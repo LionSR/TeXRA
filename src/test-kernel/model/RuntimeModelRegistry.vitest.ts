@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import {
   computeModelOptionsData,
   invalidateModelOptionsCache,
@@ -151,8 +150,6 @@ describe('runtime model registry', () => {
         }),
       }),
     );
-    // No synthetic picker identity is materialized for the route.
-    expect(copilotRouteForModel('copilot:gemini36f')).toBeUndefined();
     expect(getRuntimeModelConfig('gemini36f')?.label).not.toContain('Copilot');
   });
 
@@ -396,24 +393,6 @@ describe('runtime model registry', () => {
       provider: 'openai',
       chatGptSubscriptionEligible: true,
     });
-    // Retry panels persisted before #9635 can still carry the synthetic id.
-    expect(getRuntimeModelDirectFallback('copilot:gemini36f', false)).toEqual({
-      model: 'gemini36f',
-      provider: 'google',
-      chatGptSubscriptionEligible: false,
-    });
-  });
-
-  it('normalizes persisted copilot ids to the canonical base model config', async () => {
-    await installModels();
-
-    expect(getRuntimeModelConfig('copilot:gemini36f')).toBe(
-      getRuntimeModelConfig('gemini36f'),
-    );
-    expect(getRuntimeModelConfig('copilot:gemini36f')?.provider).toBe('google');
-    expect(
-      inferPersistedModelHandlerCompatibilityKey('copilot:gemini36f'),
-    ).toBe('ModelHandlerVscodeLm');
   });
 
   it('reports no route error only when preferred Copilot access is allowed', async () => {

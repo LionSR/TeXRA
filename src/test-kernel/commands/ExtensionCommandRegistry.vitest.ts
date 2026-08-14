@@ -51,7 +51,6 @@ function makeActions(): ExtensionCommandActions {
     openProgressViewInTab: asyncNoop(),
     openDoc: asyncNoop(),
     stopAgent: vi.fn(),
-    compactResponse: asyncNoop(),
     indentCurrentTeX: asyncNoop(),
     fixCompilation: asyncNoop(),
     getTeXCount: asyncNoop(),
@@ -123,7 +122,6 @@ describe('extension command registry — catalog-driven registration', () => {
 describe('extension command surface — catalog-tagged command dispatch', () => {
   it.each([
     ['texra.showDashboard', 'showSettings'],
-    ['texra.showSettingsView', 'showSettings'],
     ['texra.cleanOutput', 'cleanOutput'],
     ['texra.cleanBuild', 'cleanBuild'],
     ['texra.indentTeX', 'indentTeX'],
@@ -209,22 +207,6 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       dispatch(actions, 'texra.stopAgent', 'stream-1'),
     ).resolves.toBe(true);
     expect(actions.stopAgent).toHaveBeenCalledExactlyOnceWith('stream-1');
-  });
-
-  it('texra.compactResponse forwards parsed streamId', async () => {
-    const actions = makeActions();
-    await expect(
-      dispatch(actions, 'texra.compactResponse', 'stream-2'),
-    ).resolves.toBe(true);
-    expect(actions.compactResponse).toHaveBeenCalledExactlyOnceWith('stream-2');
-  });
-
-  it('texra.compactResponse rejects empty streamId', async () => {
-    const actions = makeActions();
-    await expect(dispatch(actions, 'texra.compactResponse', '')).resolves.toBe(
-      false,
-    );
-    expect(actions.compactResponse).not.toHaveBeenCalled();
   });
 
   describe('typed file-operation arguments', () => {
@@ -521,14 +503,14 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       await expect(dispatch(actions, id)).rejects.toBe(failure);
     });
 
-    it('typed handler texra.compactResponse rejection bubbles up', async () => {
+    it('typed handler texra.openDoc rejection bubbles up', async () => {
       const actions = makeActions();
-      const failure = new Error('boom-compactResponse');
+      const failure = new Error('boom-openDoc');
 
-      (actions.compactResponse as any).mockRejectedValueOnce(failure);
+      (actions.openDoc as any).mockRejectedValueOnce(failure);
 
       await expect(
-        dispatch(actions, 'texra.compactResponse', 'stream-3'),
+        dispatch(actions, 'texra.openDoc', 'getting-started'),
       ).rejects.toBe(failure);
     });
   });

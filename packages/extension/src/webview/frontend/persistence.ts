@@ -29,7 +29,12 @@ import { type ZodError } from 'zod';
 import { hostBridge } from '@shared/hostBridge';
 import type { MainViewPersistedState } from '@shared/schemas';
 import { Signal } from '@shared/signals';
-import { AGENT_CATEGORIES, byCategory, type ByCategory } from '@shared/schemas';
+import {
+  AGENT_CATEGORIES,
+  byCategory,
+  MainViewPersistedStateSchema,
+  type ByCategory,
+} from '@shared/schemas';
 import {
   createWebviewStorage,
   PersistedState,
@@ -38,7 +43,6 @@ import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { createFlushableDebounce } from '@utils/core';
 
 // Local imports - main view
-import { VscodeMainViewPersistedStateSchema } from '../vscodeMainViewPersistedState';
 import { SESSION_TYPES } from './constants';
 import { SESSION_DEFAULTS } from './sessionDefaults';
 import {
@@ -67,7 +71,7 @@ const webviewStorage = createWebviewStorage(hostBridge);
 const stateManager = new PersistedState(
   webviewStorage,
   'mainViewState',
-  VscodeMainViewPersistedStateSchema,
+  MainViewPersistedStateSchema,
 );
 
 /**
@@ -217,7 +221,7 @@ export function handleRestoreState(
     return false;
   }
 
-  const parsed = VscodeMainViewPersistedStateSchema.safeParse(message.state);
+  const parsed = MainViewPersistedStateSchema.safeParse(message.state);
   if (!parsed.success) {
     onSchemaError('[MainApp] State restore validation failed.', parsed.error);
     return false;
