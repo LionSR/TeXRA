@@ -63,15 +63,55 @@ jobs:
           printf '%s\n' "$files"
           # Keep these docs-side paths synchronized with configPath and
           # defaultOutputPath in scripts/sync-remote-agents.mjs.
-          if printf '%s\n' "$name_status" | grep -qE '(^|\t)docs/supabase/(SYNC_REMOTE_AGENTS\.sql|remote-agents\.config\.json)(\t|$)'; then
+          #
+          # Parse --name-status fields explicitly. GNU grep's -E mode does not
+          # treat \t as a tab escape, so matching real tab separators through
+          # awk avoids a silent always-false drift gate. Field 1 is the status
+          # letter; every later field is a path (renames carry src and dst).
+          drift_gate_match() {
+            awk -F '\t' '{
+              for (i = 2; i <= NF; i++) {
+                if ($i == "docs/supabase/SYNC_REMOTE_AGENTS.sql" ||
+                    $i == "docs/supabase/remote-agents.config.json") {
+                  found = 1
+                }
+              }
+            }
+            END { exit !found }'
+          }
+          # A file counts as "code" unless every changed path lives under docs/
+          # or is a *.md file. Remote-agent docs keep this classification:
+          # their separate drift job must not suppress the public docs build.
+          code_change_match() {
+            awk -F '\t' '{
+              for (i = 2; i <= NF; i++) {
+                if ($i !~ /\.md$/ && $i !~ /^docs\//) found = 1
+              }
+            }
+            END { exit !found }'
+          }
+
+          # Self-test the classifiers before trusting them on real input, so a
+          # shell/awk regression fails CI instead of silently misrouting it.
+          if ! printf 'M\tdocs/supabase/remote-agents.config.json\nR100\tdocs/supabase/SYNC_REMOTE_AGENTS.sql\tdocs/supabase/SYNC_REMOTE_AGENTS.sql\n' | drift_gate_match; then
+            echo 'drift-gate classifier self-test failed' >&2
+            exit 1
+          fi
+          if ! printf 'M\tdocs/guide.md\nR100\tsrc/foo.ts\tdocs/foo.ts\n' | code_change_match; then
+            echo 'code-change classifier self-test failed (rename into docs)' >&2
+            exit 1
+          fi
+          if printf 'M\tdocs/guide.md\n' | code_change_match; then
+            echo 'code-change classifier self-test failed (docs-only)' >&2
+            exit 1
+          fi
+
+          if printf '%s\n' "$name_status" | drift_gate_match; then
             echo "remote_agent_docs=true" >> "$GITHUB_OUTPUT"
           else
             echo "remote_agent_docs=false" >> "$GITHUB_OUTPUT"
           fi
-          # A file counts as "code" unless it lives under docs/ or is a *.md
-          # file. Remote-agent docs keep this classification: their separate
-          # drift job must not suppress the public docs build.
-          if printf '%s\n' "$files" | grep -vE '\.md$' | grep -vE '^docs/' | grep -q .; then
+          if printf '%s\n' "$name_status" | code_change_match; then
             echo "Non-docs changes detected -> full validation."
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
