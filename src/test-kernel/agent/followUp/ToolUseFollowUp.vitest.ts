@@ -434,7 +434,9 @@ describe('submitFollowUp', () => {
     const generationId = '5038fe96-7113-449a-82a9-3e58f292d1ba';
     mockPersistedExecution(session);
     const lookup =
-      createDeferred<Awaited<ReturnType<typeof resumability.deriveResumability>>>();
+      createDeferred<
+        Awaited<ReturnType<typeof resumability.deriveResumability>>
+      >();
     const deriveResumability = vi
       .spyOn(resumability, 'deriveResumability')
       .mockReturnValueOnce(lookup.promise);

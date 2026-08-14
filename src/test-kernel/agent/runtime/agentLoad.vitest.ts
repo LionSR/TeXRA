@@ -1,7 +1,15 @@
 import { strict as assert } from 'node:assert';
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { afterAll, beforeAll, describe, it, beforeEach, afterEach, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  it,
+  beforeEach,
+  afterEach,
+  vi,
+} from 'vitest';
 import { z } from 'zod';
 
 import {
