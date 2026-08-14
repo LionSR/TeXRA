@@ -82,8 +82,10 @@ const TOOL_USE_SETTING = AgentToolUseSettingSchema.parse({});
 const TOOL_USE_PROMPT = AgentPromptSchema.parse({});
 const ACTIVE_COMPATIBILITY_KEY = 'ModelHandlerOpenAIResponse';
 const WAIT_NODE_CURSOR = 'start/default/default';
+const CONTINUATION_GENERATION_ID = '2c25c6a6-6c3f-4d64-9d1f-4a4f2c9b7e10';
 const VALID_TOOL_USE_SHARED = {
   messages: [],
+  continuationGenerationId: CONTINUATION_GENERATION_ID,
   shouldSkipCycle: false,
   stateSlices: null,
 };
@@ -117,9 +119,9 @@ async function writeFlowRecord(
 ): Promise<void> {
   await getExecutionStore(executionId).write(flowKey(executionId), {
     flowName: 'texra',
-    params: {},
     shared,
     createdAt: new Date().toISOString(),
+    cursor: { nextNodeId: 'start' },
     nodes: [],
     ...overrides,
   });
@@ -259,6 +261,7 @@ function buildToolUseResumeData(
 ): ToolUseResumeData {
   const shared = {
     messages: [],
+    continuationGenerationId: CONTINUATION_GENERATION_ID,
     shouldSkipCycle: false,
     stateSlices: defaultStateSlices(),
   };
@@ -280,6 +283,7 @@ function buildResponseResumeData(
   const shared = {
     messages: [{ role: 'assistant', content: response }],
     lastResponse: response,
+    continuationGenerationId: CONTINUATION_GENERATION_ID,
     shouldSkipCycle: false,
     stateSlices: defaultStateSlices(),
   };
@@ -457,6 +461,7 @@ describe('retrieveSessionResumeData', () => {
   it('derives a missing model id from the legacy MODEL variable', () => {
     const result = migrateSharedState({
       messages: [],
+      continuationGenerationId: CONTINUATION_GENERATION_ID,
       shouldSkipCycle: false,
       stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt55' }),
     });
@@ -486,24 +491,17 @@ describe('retrieveSessionResumeData', () => {
     });
   });
 
-  it('backfills a durable continuation generation once', () => {
-    const first = migrateSharedState({
+  it('rejects a record without a continuation generation', () => {
+    // The pre-fencing omission reader is retired: intermediate-era records
+    // that never persisted a generation id fail the parse loudly instead of
+    // being backfilled with a fresh UUID.
+    const result = migrateSharedState({
       messages: [],
       shouldSkipCycle: false,
       stateSlices: null,
     });
-    expect(first).toMatchObject({
-      success: true,
-      data: { continuationGenerationId: expect.any(String) },
-      migrated: true,
-    });
-    if (!first.success) throw first.error;
 
-    expect(migrateSharedState(first.data)).toEqual({
-      success: true,
-      data: first.data,
-      migrated: false,
-    });
+    expect(result.success).toBe(false);
   });
 
   it('uses the persisted model id while preserving the original stream id', async () => {
@@ -512,6 +510,7 @@ describe('retrieveSessionResumeData', () => {
     await writeFlowRecord(executionId, {
       messages: [],
       modelId: 'gpt55',
+      continuationGenerationId: CONTINUATION_GENERATION_ID,
       shouldSkipCycle: false,
       // A stale MODEL projection must not win over the persisted model id.
       stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt54' }),
@@ -529,6 +528,7 @@ describe('retrieveSessionResumeData', () => {
     const streamId = 'chat@gpt54#abc123-legacy-model' as StreamTabId;
     await writeFlowRecord(executionId, {
       messages: [],
+      continuationGenerationId: CONTINUATION_GENERATION_ID,
       shouldSkipCycle: false,
       stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt55' }),
     });
@@ -544,6 +544,7 @@ describe('retrieveSessionResumeData', () => {
     const streamId = 'chat@gpt54#abc123-no-model' as StreamTabId;
     await writeFlowRecord(executionId, {
       messages: [],
+      continuationGenerationId: CONTINUATION_GENERATION_ID,
       shouldSkipCycle: false,
       stateSlices: {
         runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
@@ -564,6 +565,7 @@ describe('retrieveSessionResumeData', () => {
     const parentStreamId = 'chat@gpt54#abc131-parent' as StreamTabId;
     await writeFlowRecord(executionId, {
       messages: [],
+      continuationGenerationId: CONTINUATION_GENERATION_ID,
       shouldSkipCycle: false,
       stateSlices: defaultStateSlices(),
     });
@@ -585,6 +587,7 @@ describe('retrieveSessionResumeData', () => {
           content: [{ type: 'text', text: 'Continue.' }],
         },
       ],
+      continuationGenerationId: CONTINUATION_GENERATION_ID,
       shouldSkipCycle: false,
       stateSlices: defaultStateSlices('gemini35f'),
     };
@@ -604,6 +607,7 @@ describe('retrieveSessionResumeData', () => {
     const store = getExecutionStore(executionId);
     await writeFlowRecord(executionId, {
       messages: [],
+      continuationGenerationId: CONTINUATION_GENERATION_ID,
       shouldSkipCycle: false,
       stateSlices: defaultStateSlices(),
     });
@@ -636,6 +640,7 @@ describe('retrieveSessionResumeData', () => {
     });
     await writeFlowRecord(executionId, {
       messages: [],
+      continuationGenerationId: CONTINUATION_GENERATION_ID,
       shouldSkipCycle: false,
       stateSlices: defaultStateSlices(),
     });
@@ -1135,6 +1140,17 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           stateSlices: null,
         },
         createdAt: '2026-01-01T00:00:00.000Z',
+        cursor: { nextNodeId: 'start' },
+        nodes: [],
+      },
+    },
+    {
+      name: 'legacy record without a replay cursor',
+      reason: 'unsupported-record',
+      stored: {
+        flowName: 'texra',
+        shared: VALID_TOOL_USE_SHARED,
+        createdAt: '2026-01-01T00:00:00.000Z',
         nodes: [],
       },
     },
@@ -1169,6 +1185,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         flowName: 'texra',
         shared: VALID_TOOL_USE_SHARED,
         createdAt: '2026-01-01T00:00:00.000Z',
+        // Cursor present so the version bound is the only failing constraint.
+        cursor: { nextNodeId: 'start' },
         nodes: [],
       },
     },
@@ -1268,13 +1286,13 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       flowContext?.interrupt();
       return {
         flowName: 'texra',
-        params: {},
         shared: {
           messages: [],
           shouldSkipCycle: true,
           stateSlices: snapshot.shared.stateSlices,
         },
         createdAt: new Date().toISOString(),
+        cursor: { nextNodeId: 'start' },
         nodes: [],
       };
     });
@@ -1331,6 +1349,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const streamId = 'chat@gpt54#abc-declined-retry' as StreamTabId;
     const shared = {
       messages: [],
+      continuationGenerationId: CONTINUATION_GENERATION_ID,
       shouldSkipCycle: false,
       stateSlices: defaultStateSlices(),
       userCancelledRetry: true,
@@ -1366,8 +1385,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // Reject the flow's first node-step persist with the provider's abort:
     // the run then fails mid-flight through the public storage boundary, the
     // same way a real cancellation reaches `runToolUseFlow` out of the flow.
-    // Only step writes carry a cursor, so the resume boundary's self-heal
-    // write passes through untouched.
+    // Only step writes append to the nodes audit log, so the resume
+    // boundary's self-heal write (nodes stays empty) passes through untouched.
     const realWrite = store.write.bind(store);
     let abortFired = false;
     const writeSpy = vi
@@ -1377,7 +1396,9 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           !abortFired &&
           value !== null &&
           typeof value === 'object' &&
-          'cursor' in value
+          'nodes' in value &&
+          Array.isArray(value.nodes) &&
+          value.nodes.length > 0
         ) {
           abortFired = true;
           flowContext?.interrupt();
@@ -1641,6 +1662,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       {
         messages: [{ role: 'user', content: 'Continue.' }],
         modelHandlerCompatibilityKey: persistedCompatibilityKey,
+        continuationGenerationId: CONTINUATION_GENERATION_ID,
         shouldSkipCycle: false,
         stateSlices: defaultStateSlices(),
       },
@@ -1683,6 +1705,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         executionId,
         {
           messages: [{ role: 'user', content: 'Continue.' }],
+          continuationGenerationId: CONTINUATION_GENERATION_ID,
           shouldSkipCycle: true,
           stateSlices: {
             runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),

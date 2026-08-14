@@ -41,7 +41,6 @@ import {
   hasErrorPresentedMarker,
 } from '@common/errors/sdkError/errorMetadata';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import { normalizeRunId } from '@common/constants/runIds';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
@@ -404,9 +403,7 @@ async function assembleAgentLaunchContext(
       initialMediaMayBeInserted ? undefined : initialInstruction,
     ),
   );
-  const storageKey: StorageKey = parentStage.id
-    ? normalizeRunId(parentStage.id)
-    : (executionId as StorageKey);
+  const storageKey = (parentStage.id || executionId) as StorageKey;
 
   // Tell the user when attached images will be dropped because the chosen model
   // lacks vision. The downstream initializeMessages/addMediaToUserMessage guards

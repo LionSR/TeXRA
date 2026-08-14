@@ -85,7 +85,6 @@ describe('PersistedFlow', () => {
     await store.write(flowKey(executionId), {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       flowName: 'texra',
-      params: {},
       shared: { count: 0, continue: false },
       createdAt: new Date().toISOString(),
       cursor: { nextNodeId: 'start/again', lastAction: 'again' },
@@ -101,7 +100,7 @@ describe('PersistedFlow', () => {
     });
   });
 
-  it('migrates legacy node-path records to cursor replay on the next step', async () => {
+  it('rejects a legacy no-cursor record loudly instead of replaying the node log', async () => {
     const executionId = 'abc128' as ExecutionId;
     const store = getExecutionStore(executionId);
     const first = new ContinueOnceNode();
@@ -109,25 +108,18 @@ describe('PersistedFlow', () => {
     first.on('again', second);
     const flow = new PersistedFlow(first, store, executionId);
 
+    // Deliberately invalid: pre-cursor records are no longer supported.
     await store.write(flowKey(executionId), {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       flowName: 'texra',
-      params: {},
       shared: { count: 1, continue: false },
       createdAt: new Date().toISOString(),
       nodes: [{ action: 'again' }],
-    } satisfies FlowRecord);
-
-    await flow.run({ count: 999, continue: true });
-
-    await expectStoredRecord(store, executionId, {
-      shared: { count: 2, continue: false },
-      cursor: { nextNodeId: null, lastAction: 'complete' },
-      nodes: [
-        { action: 'again' },
-        { action: 'complete', nodeId: 'start/again' },
-      ],
     });
+
+    await expect(flow.run({ count: 999, continue: true })).rejects.toThrow(
+      /no replay cursor/,
+    );
   });
 
   it('persists WAITING without advancing the replay cursor', async () => {

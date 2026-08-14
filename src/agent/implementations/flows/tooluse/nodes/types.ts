@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
 import { z } from 'zod';
@@ -42,7 +41,7 @@ export type StateSlicesSnapshot = z.output<typeof StateSlicesSchema>;
 const ToolUseRunSharedSchema = z.looseObject({
   messages: ProviderMessageArraySchema,
   /** Durable identity of the continuation attempt that owns this flow. */
-  continuationGenerationId: z.uuid().optional(),
+  continuationGenerationId: z.uuid(),
   /**
    * The model the run is on, mirroring the live `ModelCell`. This is the
    * resume SSOT for model identity; the `MODEL` user variable is the legacy
@@ -148,18 +147,10 @@ export function migrateSharedState(
     (parsed.data.stateSlices
       ? currentModelFromUserChannels(parsed.data.stateSlices.userChannels)
       : undefined);
-  const modelNormalized =
+  const data =
     derivedModelId === undefined
       ? parsed.data
       : { ...parsed.data, modelId: derivedModelId };
-  // Introduced 2026-08-13. Remove this omission reader after 2026-11-13,
-  // once resumable flow records from before continuation fencing have aged
-  // beyond the three-month internal compatibility window.
-  const data = {
-    ...modelNormalized,
-    continuationGenerationId:
-      modelNormalized.continuationGenerationId ?? randomUUID(),
-  };
 
   return {
     success: true,

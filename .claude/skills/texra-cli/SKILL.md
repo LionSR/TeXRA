@@ -86,8 +86,8 @@ search, and mouse-scroll for finalized history, so don't reinvent them.
 
 - **Capability-gate terminal features.** Negotiate support via the DA1-sentinel
   discovery (`state/terminalCapabilities.ts`) before emitting Kitty-keyboard,
-  OSC color, bracketed-paste, or notification sequences. No "assume a modern
-  terminal" feature use.
+  OSC color, or notification sequences. No "assume a modern terminal" feature
+  use. (Bracketed paste is deliberately unconditional.)
 
 - **Sync-teardown terminal restoration on every exit path.** `exitNow()` and
   every signal handler does synchronous `writeSync` mode-disable (mouse, kitty,

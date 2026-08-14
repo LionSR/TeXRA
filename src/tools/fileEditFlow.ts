@@ -110,7 +110,7 @@ interface ResolveWritableTargetOptions {
 }
 
 /** Apply the shared read-before-edit gate, then load the current content. */
-export async function loadEditableFile(
+async function loadEditableFile(
   path: string,
   missing: 'allow' | 'require' = 'require',
 ): Promise<EditableFileLoad> {

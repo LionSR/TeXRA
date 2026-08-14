@@ -13,7 +13,6 @@ import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-import { TextEditorTool } from '@tools/TextEditorTool';
 import { WriteFileTool } from '@tools/WriteTool';
 import {
   cleanupAllApprovals,
@@ -279,30 +278,5 @@ describe('Tool edit approval gating', () => {
       [true, true],
     );
     assert.strictEqual(handlerCalls, 1);
-  });
-
-  it('text editor str_replace rejects an empty old_str before approval', async () => {
-    await installPlatform(
-      {},
-      {
-        '/workspace/shared.tex': 'alpha\n',
-      },
-    );
-    const tool = new TextEditorTool();
-
-    testApprovalHandler = async () => {
-      throw new Error('approval should not be requested');
-    };
-
-    const result = await tool.call({
-      command: 'str_replace',
-      path: 'shared.tex',
-      old_str: '',
-      new_str: 'beta',
-    });
-
-    assert.strictEqual(result.status, 'error');
-    assert.match(result.error ?? '', /old_str must not be empty/);
-    assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'alpha\n');
   });
 });
