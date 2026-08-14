@@ -19,13 +19,7 @@ export type CodexSubscriptionPreferenceUpdate = SubscriptionPreferenceUpdate;
 const preference = createSubscriptionPreference(CODEX_PREFER_SUBSCRIPTION_KEY);
 
 /** Whether the user has switched on "prefer ChatGPT subscription". */
-export function isPreferCodexSubscription(): boolean {
-  return preference.isPrefer();
-}
+export const isPreferCodexSubscription = preference.isPrefer;
 
 /** Update the preference at the scope that currently controls its value. */
-export async function setPreferCodexSubscription(
-  enabled: boolean,
-): Promise<CodexSubscriptionPreferenceUpdate> {
-  return preference.setPrefer(enabled);
-}
+export const setPreferCodexSubscription = preference.setPrefer;
