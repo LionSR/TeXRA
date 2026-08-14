@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { TraceEmitter, type StatusEvent } from '@agent/trace';
+import type { StatusEvent } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {

@@ -32,7 +32,7 @@ import {
   SYNTHETIC_SHIFT_RETURN_INPUT,
 } from '@cli/tui/inputKeys';
 
-const ESC = String.fromCharCode(27);
+const ESC = '\u001B';
 const NEWLINE_MODE = { shiftEnter: 'newline' } as const;
 const PRESERVE_MODE = { shiftEnter: 'preserve' } as const;
 

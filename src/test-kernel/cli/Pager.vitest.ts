@@ -1,7 +1,8 @@
+import type * as childProcess from 'node:child_process';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import type * as childProcess from 'node:child_process';
 
 const spawnSyncMock =
   vi.fn<(...args: Parameters<typeof childProcess.spawnSync>) => unknown>();

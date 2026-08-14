@@ -431,9 +431,9 @@ describe('latex forbidden commands replacements', () => {
     const input =
       '\\chapter{Ch}\n\\end{chapter}\n\\section{S}\n\\end{section}\n\\subsubsection{SS}\n\\end{subsubsection}';
     const result = apply(input, LATEX_FORBIDDEN_REPLACEMENTS);
-    assert.strictEqual(result.includes('\\end{chapter}'), false);
-    assert.strictEqual(result.includes('\\end{section}'), false);
-    assert.strictEqual(result.includes('\\end{subsubsection}'), false);
+    assert.ok(!result.includes('\\end{chapter}'));
+    assert.ok(!result.includes('\\end{section}'));
+    assert.ok(!result.includes('\\end{subsubsection}'));
   });
 });
 

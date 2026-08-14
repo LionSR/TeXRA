@@ -56,8 +56,8 @@ function interceptFirstEntryWrite(
 describe('workflow-script persistence', () => {
   it('replays a completed journal after restart without new agent calls', async () => {
     const store = getExecutionStore(executionId);
-    const firstRunner = vi.fn(async ({ prompt }: { prompt: string }) =>
-      Promise.resolve(`result:${prompt}`),
+    const firstRunner = vi.fn(
+      async ({ prompt }: { prompt: string }) => `result:${prompt}`,
     );
 
     const first = await runPersistedWorkflowScript({
@@ -728,14 +728,9 @@ return 'guest success'`,
           snapshots.push(snapshot);
         },
       });
-      void run.then(
-        () => {
-          settled = true;
-        },
-        () => {
-          settled = true;
-        },
-      );
+      void run.finally(() => {
+        settled = true;
+      });
 
       await childStarted.promise;
       await vi.advanceTimersByTimeAsync(4_000);

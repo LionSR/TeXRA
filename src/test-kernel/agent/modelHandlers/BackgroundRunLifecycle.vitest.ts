@@ -182,14 +182,12 @@ describe('BackgroundRunLifecycle.retrieveAndRemember', () => {
   it('remembers the id as pending before retrieving', async () => {
     const lifecycle = createLifecycle();
     let pendingDuringRetrieve: string | null = null;
-    const client = {
-      responses: {
-        retrieve: vi.fn(async () => {
-          pendingDuringRetrieve = lifecycle.getPendingId();
-          return completedResponse('resp-recovered');
-        }),
-      },
-    } as unknown as OpenAI;
+    const client = clientWith(
+      vi.fn(async () => {
+        pendingDuringRetrieve = lifecycle.getPendingId();
+        return completedResponse('resp-recovered');
+      }),
+    );
 
     const result = await lifecycle.retrieveAndRemember(
       client,
@@ -205,13 +203,11 @@ describe('BackgroundRunLifecycle.retrieveAndRemember', () => {
   it('rethrows and clears pending on a non-retryable retrieve failure', async () => {
     const lifecycle = createLifecycle();
     const notFound = Object.assign(new Error('not found'), { status: 404 });
-    const client = {
-      responses: {
-        retrieve: vi.fn(async () => {
-          throw notFound;
-        }),
-      },
-    } as unknown as OpenAI;
+    const client = clientWith(
+      vi.fn(async () => {
+        throw notFound;
+      }),
+    );
 
     await expect(
       lifecycle.retrieveAndRemember(client, 'resp-x', undefined, undefined),
@@ -229,7 +225,7 @@ describe('BackgroundRunLifecycle.retrieveAndRemember', () => {
         vi.setSystemTime(Date.now() + 2);
         throw new Error('socket hang up');
       });
-    const client = { responses: { retrieve } } as unknown as OpenAI;
+    const client = clientWith(retrieve);
 
     await expect(
       lifecycle.retrieveAndRemember(client, 'resp-late', undefined, undefined),
@@ -245,7 +241,7 @@ describe('BackgroundRunLifecycle.retrieveAndRemember', () => {
 describe('BackgroundRunLifecycle.waitForCompletion', () => {
   it('returns the initial response unchanged when it has no id', async () => {
     const lifecycle = createLifecycle();
-    const client = { responses: { retrieve: vi.fn() } } as unknown as OpenAI;
+    const client = clientWith(vi.fn());
     const response = { status: 'completed' } as Response;
 
     const result = await lifecycle.waitForCompletion(client, response);
@@ -259,15 +255,13 @@ describe('BackgroundRunLifecycle.waitForCompletion', () => {
     // instead of swapping in a fast poller through the private field.
     vi.useFakeTimers();
     const lifecycle = createLifecycle();
-    const client = {
-      responses: {
-        retrieve: vi.fn(async () => ({
-          id: 'resp-terminal',
-          status: 'failed',
-          error: { message: 'server error' },
-        })),
-      },
-    } as unknown as OpenAI;
+    const client = clientWith(
+      vi.fn(async () => ({
+        id: 'resp-terminal',
+        status: 'failed',
+        error: { message: 'server error' },
+      })),
+    );
 
     const completion = lifecycle.waitForCompletion(client, {
       id: 'resp-terminal',

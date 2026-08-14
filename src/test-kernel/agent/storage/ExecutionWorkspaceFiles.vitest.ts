@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { listExecutionWorkspaceFiles } from '@agent/storage';
 import { platform } from '@platform/platform';

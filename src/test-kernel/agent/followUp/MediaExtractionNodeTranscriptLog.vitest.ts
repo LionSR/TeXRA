@@ -48,11 +48,9 @@ describe('MediaExtractionNode transcript logging (regression #7508)', () => {
     const services = buildServices({
       initialUserMessageForTranscript: 'Do the thing.',
     });
-    (
-      services.modelCell.handler.addMediaToUserMessage as ReturnType<
-        typeof vi.fn
-      >
-    ).mockRejectedValue(new Error('media insertion failed'));
+    vi
+      .mocked(services.modelCell.handler.addMediaToUserMessage)
+      .mockRejectedValue(new Error('media insertion failed'));
     const node = new MediaExtractionNode().setServices(services);
     const shared = reflectionFlowShared();
 
@@ -82,11 +80,9 @@ describe('MediaExtractionNode transcript logging (regression #7508)', () => {
     const services = buildServices({
       initialUserMessageForTranscript: 'Do the thing.',
     });
-    (
-      services.modelCell.handler.addMediaToUserMessage as ReturnType<
-        typeof vi.fn
-      >
-    ).mockRejectedValue(new Error('boom'));
+    vi
+      .mocked(services.modelCell.handler.addMediaToUserMessage)
+      .mockRejectedValue(new Error('boom'));
     const node = new MediaExtractionNode().setServices(services);
     const shared = reflectionFlowShared({ currentRound: 1 });
 

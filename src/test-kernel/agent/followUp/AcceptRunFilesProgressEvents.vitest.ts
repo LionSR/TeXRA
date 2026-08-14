@@ -36,6 +36,11 @@ let testApprovalHandler:
   | undefined;
 let detachHostInteractions = (): void => {};
 
+const executionId = 'abcdef' as ExecutionId;
+const streamId = 'stream:accept-run-files' as StreamTabId;
+const workspacePath = '/workspace';
+const storagePath = '/storage';
+
 function installTestPlatform(): Promise<void> {
   return installPlatform({
     workspacePath,
@@ -55,11 +60,6 @@ function installTestPlatform(): Promise<void> {
     });
   });
 }
-
-const executionId = 'abcdef' as ExecutionId;
-const streamId = 'stream:accept-run-files' as StreamTabId;
-const workspacePath = '/workspace';
-const storagePath = '/storage';
 
 function runStorageStat(type: number): FileStat {
   return { type, ctime: 0, mtime: 0, size: 1 };

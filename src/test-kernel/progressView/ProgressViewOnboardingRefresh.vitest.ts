@@ -3,6 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as vscode from 'vscode';
 
 // Local imports
 import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
@@ -18,8 +19,6 @@ import {
   createOutputFile,
   createWorkflowConfig,
 } from '../support/ProgressControllerHarnesses';
-
-import type * as vscode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
   safeExecuteCommand: vi.fn(),

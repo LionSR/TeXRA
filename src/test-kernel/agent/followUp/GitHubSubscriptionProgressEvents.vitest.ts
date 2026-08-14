@@ -1,6 +1,4 @@
 // Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
@@ -18,8 +16,6 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { appSignals, type AppSignalPayloads } from '@eventBus/AppSignals';
 import type { StreamTabId } from '@shared/schemas';
-
-// Test support imports
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { GitHubAuthError } from '@tools/github/githubClient';
 import {

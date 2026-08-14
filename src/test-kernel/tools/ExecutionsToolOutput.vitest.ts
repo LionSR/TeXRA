@@ -150,6 +150,28 @@ async function registerProcessExecution(
   return { executionId, streamId };
 }
 
+/** Register a multi-agent-workflow execution and return its id. */
+async function registerWorkflowExecution(
+  name: string,
+  model?: string,
+): Promise<string> {
+  const executionId = generateExecutionId();
+  await registerExecution(
+    executionId,
+    {
+      name,
+      instruction: `Workflow script ${name}`,
+      ...(model ? { model } : {}),
+    },
+    name,
+    {
+      streamId: `workflow-script#${executionId}` as StreamTabId,
+      identity: { kind: 'multiAgentWorkflow', workflowName: name },
+    },
+  );
+  return executionId;
+}
+
 describe('ExecutionsTool /executions/{id}/output', () => {
   setupPlatform({
     workspacePath: '/workspace',
@@ -407,19 +429,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   });
 
   it('exposes the canonical workflow aggregate without full instructions', async () => {
-    const executionId = generateExecutionId();
-    await registerExecution(
-      executionId,
-      { name: 'observable', instruction: 'Workflow script observable' },
-      'observable',
-      {
-        streamId: `workflow-script#${executionId}` as StreamTabId,
-        identity: {
-          kind: 'multiAgentWorkflow',
-          workflowName: 'observable',
-        },
-      },
-    );
+    const executionId = await registerWorkflowExecution('observable');
     const timestamp = new Date().toISOString();
     const longStageId = `stage-${'s'.repeat(2_500)}-stage-tail`;
     const longCallId = `call-${'i'.repeat(2_500)}-call-tail`;
@@ -517,19 +527,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   });
 
   it('keeps a failed call ahead of newer completed current-stage calls when bounded', async () => {
-    const executionId = generateExecutionId();
-    await registerExecution(
-      executionId,
-      { name: 'failed-rank', instruction: 'Workflow script failed-rank' },
-      'failed-rank',
-      {
-        streamId: `workflow-script#${executionId}` as StreamTabId,
-        identity: {
-          kind: 'multiAgentWorkflow',
-          workflowName: 'failed-rank',
-        },
-      },
-    );
+    const executionId = await registerWorkflowExecution('failed-rank');
     const base = Date.parse('2026-04-01T00:00:00.000Z');
     const completedCalls = Array.from({ length: 8 }, (_, index) => {
       const updatedAt = new Date(base + (index + 1) * 1_000).toISOString();
@@ -611,19 +609,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   });
 
   it('keeps an earlier-stage live call ahead of current-stage terminal calls when bounded', async () => {
-    const executionId = generateExecutionId();
-    await registerExecution(
-      executionId,
-      { name: 'ranked', instruction: 'Workflow script ranked' },
-      'ranked',
-      {
-        streamId: `workflow-script#${executionId}` as StreamTabId,
-        identity: {
-          kind: 'multiAgentWorkflow',
-          workflowName: 'ranked',
-        },
-      },
-    );
+    const executionId = await registerWorkflowExecution('ranked');
     const timestamp = new Date().toISOString();
     const terminalCalls = Array.from({ length: 8 }, (_, index) => ({
       id: `current-terminal-${index}`,
@@ -694,19 +680,9 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   });
 
   it('shows one model for a workflow run in both the listing and its summary', async () => {
-    const executionId = generateExecutionId();
-    await registerExecution(
-      executionId,
-      {
-        name: 'model-parity',
-        instruction: 'Workflow script model-parity',
-        model: 'parity-model-1',
-      },
+    const executionId = await registerWorkflowExecution(
       'model-parity',
-      {
-        streamId: `workflow-script#${executionId}` as StreamTabId,
-        identity: { kind: 'multiAgentWorkflow', workflowName: 'model-parity' },
-      },
+      'parity-model-1',
     );
 
     const summary = await new ExecutionsTool().call({

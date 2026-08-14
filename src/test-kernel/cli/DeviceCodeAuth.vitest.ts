@@ -26,12 +26,14 @@ const AUTHORIZATION = {
   interval: 5,
 };
 
+type FetchCall = { url: string; body: unknown };
+
 /** Fetch fake that serves one queued result per call (Response or throw). */
 function queuedFetch(queue: Array<Response | Error>): {
   fetchImpl: typeof fetch;
-  calls: Array<{ url: string; body: unknown }>;
+  calls: FetchCall[];
 } {
-  const calls: Array<{ url: string; body: unknown }> = [];
+  const calls: FetchCall[] = [];
   const fetchImpl = ((input: RequestInfo | URL, init?: RequestInit) => {
     calls.push({
       url: String(input),
@@ -71,7 +73,7 @@ function pollWithQueue(
 ): {
   completion: ReturnType<typeof pollForDeviceSession>;
   clock: ReturnType<typeof fakeClock>;
-  calls: Array<{ url: string; body: unknown }>;
+  calls: FetchCall[];
 } {
   const clock = fakeClock();
   const { fetchImpl, calls } = queuedFetch(queue);

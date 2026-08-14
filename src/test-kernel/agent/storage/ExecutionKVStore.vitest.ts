@@ -35,6 +35,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const META_TIMESTAMP = '2026-07-04T00:00:00.000Z';
+
 function mockWarn(): MockInstance<typeof logger.warn> {
   return vi.spyOn(logger, 'warn').mockImplementation(() => {});
 }
@@ -52,15 +54,14 @@ function expectParseWarning(
 }
 
 function validWorkflowSnapshot(): WorkflowExecutionSnapshot {
-  const timestamp = '2026-07-04T00:00:00.000Z';
   return {
     lifecycle: 'completed',
     stages: [],
     calls: [],
     timestamps: {
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      completedAt: timestamp,
+      createdAt: META_TIMESTAMP,
+      updatedAt: META_TIMESTAMP,
+      completedAt: META_TIMESTAMP,
     },
   };
 }
@@ -110,7 +111,7 @@ describe('ExecutionKVStore meta read shims', () => {
     async (outcome) => {
       const id = `canonical-${outcome}` as ExecutionId;
       await getExecutionStore(id).write('meta', {
-        timestamp: '2026-07-04T00:00:00.000Z',
+        timestamp: META_TIMESTAMP,
         outcome,
       });
 
@@ -125,26 +126,26 @@ describe('ExecutionKVStore meta read shims', () => {
     const id = 'versioned-meta' as ExecutionId;
 
     await getExecutionStore(id).writeMeta({
-      timestamp: '2026-07-04T00:00:00.000Z',
+      timestamp: META_TIMESTAMP,
     });
 
     await expect(getExecutionStore(id).read('meta')).resolves.toMatchObject({
       schemaVersion: EXECUTION_META_SCHEMA_VERSION,
-      timestamp: '2026-07-04T00:00:00.000Z',
+      timestamp: META_TIMESTAMP,
     });
   });
 
   it('ignores obsolete delegation depth in persisted metadata', async () => {
     const id = 'legacy-delegation-depth' as ExecutionId;
     await getExecutionStore(id).write('meta', {
-      timestamp: '2026-07-04T00:00:00.000Z',
+      timestamp: META_TIMESTAMP,
       parentExecutionId: 'abcdef',
       delegationDepth: 3,
     });
 
     await expect(getExecutionStore(id).readMeta()).resolves.toEqual({
       schemaVersion: EXECUTION_META_SCHEMA_VERSION,
-      timestamp: '2026-07-04T00:00:00.000Z',
+      timestamp: META_TIMESTAMP,
       parentExecutionId: 'abcdef',
     });
   });
@@ -154,7 +155,7 @@ describe('ExecutionKVStore meta read shims', () => {
     const interim = interimResultMeta('Interim result.');
     await getExecutionStore(id).write('result-meta', interim);
     await getExecutionStore(id).write('meta', {
-      timestamp: '2026-07-04T00:00:00.000Z',
+      timestamp: META_TIMESTAMP,
       outcome: RUN_OUTCOME.CANCELLED,
     });
 
@@ -176,7 +177,7 @@ describe('ExecutionKVStore meta read shims', () => {
       interimResultMeta('The subagent reported an error.', RUN_OUTCOME.FAILED),
     );
     await getExecutionStore(id).write('meta', {
-      timestamp: '2026-07-04T00:00:00.000Z',
+      timestamp: META_TIMESTAMP,
       outcome: RUN_OUTCOME.COMPLETED,
     });
 
@@ -192,7 +193,7 @@ describe('ExecutionKVStore meta read shims', () => {
       interimResultMeta('Waiting for the next turn.'),
     );
     await getExecutionStore(id).write('meta', {
-      timestamp: '2026-07-04T00:00:00.000Z',
+      timestamp: META_TIMESTAMP,
     });
 
     await expect(getExecutionStore(id).readResultMeta()).resolves.toMatchObject(
@@ -209,7 +210,7 @@ describe('ExecutionKVStore meta read shims', () => {
     const interim = interimResultMeta('Interim result before the stop.');
     await getExecutionStore(id).write('result-meta', interim);
     await getExecutionStore(id).write('meta', {
-      timestamp: '2026-07-04T00:00:00.000Z',
+      timestamp: META_TIMESTAMP,
       outcome: RUN_OUTCOME.CANCELLED,
       streamId: 'assistant#resume-boundary',
     });
@@ -230,7 +231,7 @@ describe('ExecutionKVStore meta read shims', () => {
     );
     await expect(getExecutionStore(id).readMeta()).resolves.toEqual({
       schemaVersion: EXECUTION_META_SCHEMA_VERSION,
-      timestamp: '2026-07-04T00:00:00.000Z',
+      timestamp: META_TIMESTAMP,
       streamId: 'assistant#resume-boundary',
     });
   });
@@ -251,7 +252,7 @@ describe('ExecutionKVStore meta read shims', () => {
     const warnSpy = mockWarn();
     const store = getExecutionStore(id);
     await store.write('meta', {
-      timestamp: '2026-07-04T00:00:00.000Z',
+      timestamp: META_TIMESTAMP,
       outcome: RUN_OUTCOME.CANCELLED,
       identity: { kind: 'process', tool: 'bash' },
       description: 'Readable core metadata',
@@ -260,7 +261,7 @@ describe('ExecutionKVStore meta read shims', () => {
 
     const expectedCore = {
       schemaVersion: EXECUTION_META_SCHEMA_VERSION,
-      timestamp: '2026-07-04T00:00:00.000Z',
+      timestamp: META_TIMESTAMP,
       outcome: RUN_OUTCOME.CANCELLED,
       identity: { kind: 'process', tool: 'bash' },
       description: 'Readable core metadata',
@@ -285,7 +286,7 @@ describe('ExecutionKVStore meta read shims', () => {
     const workflow = validWorkflowSnapshot();
 
     await store.writeMeta({
-      timestamp: '2026-07-04T00:00:00.000Z',
+      timestamp: META_TIMESTAMP,
       workflow,
     });
     await expect(store.readMeta()).resolves.toMatchObject({ workflow });
@@ -294,7 +295,7 @@ describe('ExecutionKVStore meta read shims', () => {
     malformed.currentStageId = '';
     await expect(
       store.writeMeta({
-        timestamp: '2026-07-04T00:00:00.000Z',
+        timestamp: META_TIMESTAMP,
         workflow: malformed,
       }),
     ).rejects.toThrow();

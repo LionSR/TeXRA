@@ -157,11 +157,10 @@ describe('follow-up-input pasted-image state across stream switches', () => {
     const element = createFollowUpInput('stream-a');
     await element.updateComplete;
 
-    const streamB = getFollowUpInputTransientState('stream-b');
     const imageA = seedPendingImage('stream-a', 'pasted-a.png');
     const imageB = image('pasted-b.png');
 
-    bindStream(element, 'stream-b');
+    const streamB = bindStream(element, 'stream-b');
     streamB.pendingImages = [imageB];
     await element.updateComplete;
 

@@ -8,10 +8,8 @@ import {
 import {
   AgentPromptSchema,
   AgentWorkflowSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
-import type {
-  AgentSetting,
-  AgentPrompt,
+  type AgentPrompt,
+  type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
 import {
   buildUserVars,

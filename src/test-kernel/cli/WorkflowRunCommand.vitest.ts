@@ -229,6 +229,35 @@ function mockWorkflowExecution(
   else mocks.executeCliConfig.mockImplementation(implementation);
 }
 
+/** Mocks a run whose cancellation lands during output finalization. */
+function mockCancellationDuringOutputFinalization(
+  provisional: WorkflowExecuteResult,
+  tryCommitPublication: () => boolean,
+): void {
+  if (!provisional.ok) throw new Error('Expected a workflow result.');
+  mocks.executeCliConfig.mockImplementationOnce(
+    async (
+      _config: unknown,
+      _context: unknown,
+      options: {
+        readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
+      },
+    ) => {
+      await options.openWorkflowOutput?.(
+        provisional.result,
+        tryCommitPublication,
+      );
+      return {
+        ...provisional,
+        result: {
+          ...provisional.result,
+          outcome: RUN_OUTCOME.CANCELLED,
+        },
+      };
+    },
+  );
+}
+
 /** The result envelope the command persists for history details. */
 function expectedResultMeta(options: {
   readonly outcome: string;
@@ -655,14 +684,12 @@ describe('CLI workflow run command', () => {
         true,
       );
 
-      const exitCode = await runWorkflow(
-        { output: 'polished.tex' },
-        cliContext({
-          cwd: root,
-          commandName: 'texra-local',
-          approvalPolicy: 'never',
-        }),
-      );
+      const context = cliContext({
+        cwd: root,
+        commandName: 'texra-local',
+        approvalPolicy: 'never',
+      });
+      const exitCode = await runWorkflow({ output: 'polished.tex' }, context);
 
       expect(exitCode).toBe(CliExitCode.Interrupted);
       await expect(fs.stat(path.join(root, 'polished.tex'))).rejects.toThrow();
@@ -674,14 +701,7 @@ describe('CLI workflow run command', () => {
         }),
       );
       expect(mocks.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
-        expectedRecoveryHint(
-          cliContext({
-            cwd: root,
-            commandName: 'texra-local',
-            approvalPolicy: 'never',
-          }),
-          'exec-interrupted',
-        ),
+        expectedRecoveryHint(context, 'exec-interrupted'),
       );
       expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.writeTextStderr.mock.invocationCallOrder[0],
@@ -787,25 +807,9 @@ describe('CLI workflow run command', () => {
   });
 
   it('presents the lifecycle verdict when cancellation lands during output finalization', async () => {
-    const provisional = workflowExecution('exec-output-interrupted');
-    if (!provisional.ok) throw new Error('Expected a workflow result.');
-    mocks.executeCliConfig.mockImplementationOnce(
-      async (
-        _config: unknown,
-        _context: unknown,
-        options: {
-          readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
-        },
-      ) => {
-        await options.openWorkflowOutput?.(provisional.result, () => true);
-        return {
-          ...provisional,
-          result: {
-            ...provisional.result,
-            outcome: RUN_OUTCOME.CANCELLED,
-          },
-        };
-      },
+    mockCancellationDuringOutputFinalization(
+      workflowExecution('exec-output-interrupted'),
+      () => true,
     );
 
     const exitCode = await runWorkflow();
@@ -864,27 +868,11 @@ describe('CLI workflow run command', () => {
           generated,
           path.join(root, 'paper.tex'),
         );
-        const provisional = workflowExecution('exec-output-interrupted', {
-          outputs: [outputSummary],
-        });
-        if (!provisional.ok) throw new Error('Expected a workflow result.');
-        mocks.executeCliConfig.mockImplementationOnce(
-          async (
-            _config: unknown,
-            _context: unknown,
-            options: {
-              readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
-            },
-          ) => {
-            await options.openWorkflowOutput?.(provisional.result, () => false);
-            return {
-              ...provisional,
-              result: {
-                ...provisional.result,
-                outcome: RUN_OUTCOME.CANCELLED,
-              },
-            };
-          },
+        mockCancellationDuringOutputFinalization(
+          workflowExecution('exec-output-interrupted', {
+            outputs: [outputSummary],
+          }),
+          () => false,
         );
         const target = destination(root);
         if (existing) {

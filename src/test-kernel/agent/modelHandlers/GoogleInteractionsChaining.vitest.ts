@@ -15,7 +15,7 @@ import {
   userStep,
 } from './googleInteractionsTestUtils';
 
-// Third-party imports
+// Provider SDK types
 import type { Interactions } from '@google/genai';
 
 type Step = Interactions.Step;
@@ -335,7 +335,6 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
   it('T6: compaction clears the chain and returns updatedMessages', async () => {
     const handler = createHandler();
     handler.setAgentCategory(AgentCategory.ToolUse);
-    handler.setLogger({ ...noopTrace });
     (
       handler as unknown as {
         postProcessResponse: (text: string) => string;

@@ -73,6 +73,10 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
+// Import the module under test after the mock factories above so its imports
+// resolve to the mocked modules.
+const { runToolUseAgent } = await import('@cli/commands/agentsRun');
+
 describe('CLI agents run command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -114,8 +118,6 @@ describe('CLI agents run command', () => {
   });
 
   it('anchors headless tool-use runs on provided files without polluting display text', async () => {
-    const { runToolUseAgent } = await import('@cli/commands/agentsRun');
-
     const exitCode = await runToolUseAgent(cliContext(), {
       agent: 'chat',
       inputFiles: ['problem.md'],
@@ -203,8 +205,6 @@ describe('CLI agents run command', () => {
           hasMaterializedStdinInput: true,
         }),
     );
-    const { runToolUseAgent } = await import('@cli/commands/agentsRun');
-
     await runToolUseAgent(cliContext(), {
       agent: 'chat',
       inputFiles: ['-'],
@@ -230,8 +230,6 @@ describe('CLI agents run command', () => {
       },
       exitCode: CliExitCode.Interrupted,
     });
-    const { runToolUseAgent } = await import('@cli/commands/agentsRun');
-
     const exitCode = await runToolUseAgent(cliContext(), {
       agent: 'chat',
       inputFiles: ['problem.md'],
@@ -246,8 +244,6 @@ describe('CLI agents run command', () => {
   });
 
   it('reports missing instruction before resolving the model', async () => {
-    const { runToolUseAgent } = await import('@cli/commands/agentsRun');
-
     await expect(
       runToolUseAgent(cliContext(), {
         agent: 'chat',
@@ -281,8 +277,6 @@ describe('CLI agents run command', () => {
     'reports $scenario before resolving the model',
     async ({ agent, message }) => {
       mocks.resolveCliLaunchAgent.mockRejectedValueOnce(new Error(message));
-      const { runToolUseAgent } = await import('@cli/commands/agentsRun');
-
       await expect(
         runToolUseAgent(cliContext(), {
           agent,

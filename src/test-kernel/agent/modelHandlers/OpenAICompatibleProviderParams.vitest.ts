@@ -2,7 +2,7 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { describe, it, vi } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports
@@ -206,10 +206,11 @@ describe('OpenAI-compatible provider request params', () => {
       temperature: 0,
     });
 
-    expect(handler.getLastCredentialUsageRoute()).toBe(
+    assert.equal(
+      handler.getLastCredentialUsageRoute(),
       'glm-coding-plan-subscription',
     );
-    expect(
+    assert.equal(
       handler.normalizeUsage(
         {
           prompt_tokens: 1_000_000,
@@ -218,7 +219,8 @@ describe('OpenAI-compatible provider request params', () => {
         },
         10,
       ).cost,
-    ).toBe(0);
+      0,
+    );
   });
 
   it('records coding-endpoint Kimi requests as subscription usage', async () => {

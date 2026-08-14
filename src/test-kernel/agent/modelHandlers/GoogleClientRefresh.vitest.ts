@@ -1,3 +1,5 @@
+// Third-party imports
+import type { GoogleGenAI } from '@google/genai';
 import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
 
@@ -5,9 +7,6 @@ import { describe, expect, it } from 'vitest';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
-
-// Third-party imports
-import type { GoogleGenAI } from '@google/genai';
 
 const GOOGLE_TEST_CONFIG = Object.freeze({
   name: 'google-client-refresh',
