@@ -40,19 +40,12 @@ interface OpenRouterRoutingConfig {
 export type ModelRoutingConfig = OpenRouterRoutingConfig &
   KimiSubscriptionModelFields;
 
-/** Whether a registry entry owns an atomic managed-service route. */
-export function hasManagedDirectRoute(
-  config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
-): boolean {
-  return isKimiCodeExclusiveModel(config);
-}
-
 function isOpenRouterAccessSelected(
   config: ModelRoutingConfig,
   useOpenRouter: boolean,
 ): boolean {
   return (
-    !hasManagedDirectRoute(config) &&
+    !isKimiCodeExclusiveModel(config) &&
     !config.forceDirectProvider &&
     (config.openRouterOnly || useOpenRouter)
   );
@@ -84,7 +77,7 @@ export function resolveModelApiKeyProvider(
 export function resolveDirectModelApiKeyProvider(
   config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
 ): ApiProvider | undefined {
-  if (hasManagedDirectRoute(config)) return 'kimiCode';
+  if (isKimiCodeExclusiveModel(config)) return 'kimiCode';
   return config.provider && isApiProvider(config.provider)
     ? config.provider
     : undefined;
@@ -94,14 +87,14 @@ export function resolveDirectModelApiKeyProvider(
 export function resolveModelSource(
   config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
 ): string | undefined {
-  return hasManagedDirectRoute(config) ? 'kimiCode' : config.provider;
+  return isKimiCodeExclusiveModel(config) ? 'kimiCode' : config.provider;
 }
 
 /** Whether a model may be sent through TeXRA's included-access relay. */
 export function allowsModelRelay(
   config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
 ): boolean {
-  return !hasManagedDirectRoute(config);
+  return !isKimiCodeExclusiveModel(config);
 }
 
 /** Return whether this model request should be routed through OpenRouter. */
