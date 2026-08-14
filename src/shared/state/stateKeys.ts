@@ -124,12 +124,6 @@ export enum GlobalStateKey {
   USE_OPENROUTER = 'texra.useOpenRouter',
   /** Canonical base model ids the user prefers to serve through Copilot. */
   COPILOT_ROUTE_MODELS = 'texra.copilotRouteModels',
-  /**
-   * One-time migration marker for rewriting persisted `copilot:*` model ids
-   * (#9635). Temporary: introduced 2026-08-03, retires with the migration in
-   * `modelListRefresh.ts` three months after ship (target 2026-11-03).
-   */
-  COPILOT_ROUTE_MIGRATION = 'texra.copilotRouteMigration',
 
   // Transport settings
   WEBSOCKET_OPENAI = 'texra.websocket.openai',

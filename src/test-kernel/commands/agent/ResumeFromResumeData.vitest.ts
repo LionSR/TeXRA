@@ -18,9 +18,6 @@ vi.mock('@progressView/ProgressViewProvider', () => ({
 vi.mock('@commands/agent/executeCommand', () => ({
   runExecuteCommand: vi.fn(),
 }));
-vi.mock('@commands/agent/resumeCommand', () => ({
-  resumeExtensionToolUseFromResumeData: vi.fn(async () => true),
-}));
 
 import type { ResumeStreamPorts } from '@agent/runtime/resolveAndResumeStream';
 import { defaultSession } from '@agent/runtime/SessionHandle';

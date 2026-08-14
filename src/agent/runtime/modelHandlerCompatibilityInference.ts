@@ -1,10 +1,7 @@
 import { ModelProvider } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
-import {
-  COPILOT_MODEL_PREFIX,
-  getRuntimeModelConfig,
-} from '@model/runtimeModelRegistry';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { isObject } from '@utils/core';
 import {
   ModelHandlerCompatibilityKeySchema,
@@ -26,13 +23,6 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 export function inferPersistedModelHandlerCompatibilityKey(
   model: string,
 ): ModelHandlerCompatibilityKey | undefined {
-  // Compatibility reader for transcripts persisted while Copilot models were
-  // synthetic `copilot:<baseModel>` ids (#9635, introduced 2026-08-03; retire
-  // three months after ship, target 2026-11-03). Those sessions ran through
-  // ModelHandlerVscodeLm by construction; new sessions persist their explicit
-  // compatibility key and never reach this inference.
-  if (model.startsWith(COPILOT_MODEL_PREFIX)) return 'ModelHandlerVscodeLm';
-
   const modelConfig = getRuntimeModelConfig(model);
 
   // Copilot had no direct handler before ModelHandlerVscodeLm. Its only

@@ -166,6 +166,7 @@ describe('InquiryStorage', () => {
   ])('$name', async ({ retire }) => {
     const opened = await recordOpenQuestion({
       parentStreamId: STREAM_A,
+      parentGenerationId: GENERATION_A,
       question: 'Q1',
     });
     await retire(opened.threadId);
@@ -174,6 +175,7 @@ describe('InquiryStorage', () => {
       recordOpenQuestion({
         threadId: opened.threadId,
         parentStreamId: STREAM_A,
+        parentGenerationId: GENERATION_A,
         question: 'Q2',
       }),
     ).rejects.toBeInstanceOf(ToolError);
@@ -182,6 +184,7 @@ describe('InquiryStorage', () => {
   it('allows ask follow-up on an answered thread; status flips back to open', async () => {
     const t = await recordOpenQuestion({
       parentStreamId: STREAM_A,
+      parentGenerationId: GENERATION_A,
       question: 'Q1',
     });
     await recordAnswerForOpenTurn({ threadId: t.threadId, answer: 'A1' });
@@ -189,6 +192,7 @@ describe('InquiryStorage', () => {
     const followUp = await recordOpenQuestion({
       threadId: t.threadId,
       parentStreamId: STREAM_A,
+      parentGenerationId: GENERATION_A,
       question: 'Q2 (follow-up)',
     });
 
@@ -200,6 +204,7 @@ describe('InquiryStorage', () => {
   it('keeps first-turn draft context valid for hydrated new inquiries', async () => {
     const t = await recordOpenQuestion({
       parentStreamId: STREAM_A,
+      parentGenerationId: GENERATION_A,
       question: 'Q1',
     });
     const draft = {
@@ -236,12 +241,14 @@ describe('InquiryStorage', () => {
   it('persists open-turn drafts and exposes transcript turns', async () => {
     const t = await recordOpenQuestion({
       parentStreamId: STREAM_A,
+      parentGenerationId: GENERATION_A,
       question: 'Q1',
     });
     await recordAnswerForOpenTurn({ threadId: t.threadId, answer: 'A1' });
     await recordOpenQuestion({
       threadId: t.threadId,
       parentStreamId: STREAM_A,
+      parentGenerationId: GENERATION_A,
       question: 'Q2',
     });
 
@@ -268,6 +275,7 @@ describe('InquiryStorage', () => {
   it('updates parentStreamId on cross-stream follow-up', async () => {
     const t = await recordOpenQuestion({
       parentStreamId: STREAM_A,
+      parentGenerationId: GENERATION_A,
       question: 'Q1',
     });
     await recordAnswerForOpenTurn({ threadId: t.threadId, answer: 'A1' });
@@ -275,6 +283,7 @@ describe('InquiryStorage', () => {
     const fromB = await recordOpenQuestion({
       threadId: t.threadId,
       parentStreamId: STREAM_B,
+      parentGenerationId: GENERATION_A,
       question: 'Q2 from B',
     });
     expect(fromB.manifest.parentStreamId).toBe(STREAM_B);
@@ -296,17 +305,20 @@ describe('InquiryStorage', () => {
   it('listThreadsByStatus filters by status and scope', async () => {
     const t1 = await recordOpenQuestion({
       parentStreamId: STREAM_A,
+      parentGenerationId: GENERATION_A,
       question: 'Q1',
     });
     await recordAnswerForOpenTurn({ threadId: t1.threadId, answer: 'A1' });
 
     const t2 = await recordOpenQuestion({
       parentStreamId: STREAM_A,
+      parentGenerationId: GENERATION_A,
       question: 'Q2',
     });
 
     const t3 = await recordOpenQuestion({
       parentStreamId: STREAM_B,
+      parentGenerationId: GENERATION_A,
       question: 'Q3',
     });
     await markDropped({ threadId: t3.threadId });
@@ -334,6 +346,7 @@ describe('InquiryStorage', () => {
   it('stamps schemaVersion on newly written manifests', async () => {
     const t = await recordOpenQuestion({
       parentStreamId: STREAM_A,
+      parentGenerationId: GENERATION_A,
       question: 'Q1',
     });
 
@@ -357,6 +370,7 @@ describe('InquiryStorage', () => {
       recordOpenQuestion({
         threadId: 'ei_aabbccdd0033' as InquiryThreadId,
         parentStreamId: STREAM_A,
+        parentGenerationId: GENERATION_A,
         question: 'Q?',
       }),
     ).rejects.toBeInstanceOf(ToolError);
@@ -438,6 +452,10 @@ describe('InquiryStorage', () => {
   it.each([
     { label: 'null', value: null },
     { label: 'a non-UUID string', value: 'generation-a' },
+    // JSON.stringify drops the undefined entry, reproducing a pre-2026-08-13
+    // manifest written before the parent-generation fence existed. That
+    // legacy tolerance is retired: such manifests read as missing, loudly.
+    { label: 'an absent', value: undefined },
   ])('rejects $label inquiry generation as corrupt', async ({ value }) => {
     await expectUnreadableManifest(
       'ei_aabbccdd0088',

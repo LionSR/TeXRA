@@ -5,8 +5,7 @@
   "workspaces": {
     ".": {
       "entry": ["src/test-kernel/**/*.vitest.ts", "scripts/**/*.mjs"],
-      "project": ["src/**/*.ts"],
-      "ignore": ["src/platform/index.ts"]
+      "project": ["src/**/*.ts"]
     },
     "packages/extension": {
       "entry": ["src/extension.ts", "src/**/frontend/index.ts"],

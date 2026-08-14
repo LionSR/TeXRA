@@ -108,27 +108,6 @@ describe('CLI multi-agent presets', () => {
     expect(preset.texraHostedAgents).toContain('criticize');
   });
 
-  it('preserves missing hosted provenance on a legacy custom preset', () => {
-    // Legacy pair-shaped preset (pre-record recut): must normalize, not drop.
-    const presets = teamPresets([
-      {
-        id: 'legacy',
-        name: 'Legacy',
-        description: 'Saved before hosted metadata existed',
-        icon: 'screwdriver-wrench',
-        workflowAgents: ['generic', 'polish'],
-        toolUseAgents: ['orchestrator', 'review'],
-      },
-    ]);
-
-    const legacy = findTeamPreset(presets, 'legacy');
-    expect(legacy?.agents).toEqual({
-      workflow: ['generic', 'polish'],
-      toolUse: ['orchestrator', 'review'],
-    });
-    expect(legacy?.texraHostedAgents).toBeUndefined();
-  });
-
   it('lists planned built-in team presets with stable counts', () => {
     const presets = teamPresets(undefined);
     const plans = planTeamRuns(presets, {

@@ -158,75 +158,32 @@ const WorkflowToolConfigFieldsSchema = ToolConfigFieldsSchema.omit({
   attachDiagnostics: true,
 });
 
-/**
- * Legacy persisted blobs carried the per-category agent and instruction as
- * flat `workflowAgent`/`toolUseAgent` and `workflowInstruction`/
- * `toolUseInstruction` fields. Lift them into the canonical `agent`/
- * `instruction` records once, at the parse entrance, when the record keys are
- * absent — otherwise upgrading silently resets the user's saved selections.
- *
- * Introduced 2026-08-04 (#9705); retire three months after ship (target
- * 2026-11-04). The persisted state rewrites in the canonical shape on every
- * main-view save, so the window only covers dormant workspaces.
- */
-function liftLegacyMainViewFlatFields(input: unknown): unknown {
-  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    return input;
-  }
-  const raw = input as Record<string, unknown>;
-  const lifted = { ...raw };
-  if (raw.agent === undefined) {
-    const record = {
-      ...(typeof raw.workflowAgent === 'string'
-        ? { workflow: raw.workflowAgent }
-        : {}),
-      ...(typeof raw.toolUseAgent === 'string'
-        ? { toolUse: raw.toolUseAgent }
-        : {}),
-    };
-    if (Object.keys(record).length > 0) lifted.agent = record;
-  }
-  if (raw.instruction === undefined) {
-    const record = {
-      ...(typeof raw.workflowInstruction === 'string'
-        ? { workflow: raw.workflowInstruction }
-        : {}),
-      ...(typeof raw.toolUseInstruction === 'string'
-        ? { toolUse: raw.toolUseInstruction }
-        : {}),
-    };
-    if (Object.keys(record).length > 0) lifted.instruction = record;
-  }
-  return lifted;
-}
-
 // Composes: UIFileFieldsSchema (file fields) + workflow tool options.
-export const MainViewPersistedStateSchema = z.preprocess(
-  liftLegacyMainViewFlatFields,
-  UIFileFieldsSchema.merge(WorkflowToolConfigFieldsSchema).extend({
-    sessionType: SessionTypeSchema.prefault('toolUse'),
-    launchTarget: LaunchTargetSchema.prefault('agent'),
-    selectedTeamId: z.string().prefault(''),
-    workingDirectory: z.string().prefault(''),
-    agent: z
-      .object({
-        workflow: z.string().prefault('correct'),
-        toolUse: z.string().prefault('orchestrator'),
-      })
-      .prefault({}),
-    model: z.string().prefault(DEFAULT_AGENT_MODEL),
-    commit: z.string().prefault('HEAD'),
-    instruction: z
-      .object({
-        workflow: z.string().prefault(''),
-        toolUse: z.string().prefault(''),
-      })
-      .prefault({}),
-    baseFile: z.string().prefault(''),
-    latexdiffsVisible: z.boolean().prefault(false),
-    openedFiles: z.array(z.string()).nullish(),
-  }),
-);
+export const MainViewPersistedStateSchema = UIFileFieldsSchema.merge(
+  WorkflowToolConfigFieldsSchema,
+).extend({
+  sessionType: SessionTypeSchema.prefault('toolUse'),
+  launchTarget: LaunchTargetSchema.prefault('agent'),
+  selectedTeamId: z.string().prefault(''),
+  workingDirectory: z.string().prefault(''),
+  agent: z
+    .object({
+      workflow: z.string().prefault('correct'),
+      toolUse: z.string().prefault('orchestrator'),
+    })
+    .prefault({}),
+  model: z.string().prefault(DEFAULT_AGENT_MODEL),
+  commit: z.string().prefault('HEAD'),
+  instruction: z
+    .object({
+      workflow: z.string().prefault(''),
+      toolUse: z.string().prefault(''),
+    })
+    .prefault({}),
+  baseFile: z.string().prefault(''),
+  latexdiffsVisible: z.boolean().prefault(false),
+  openedFiles: z.array(z.string()).nullish(),
+});
 export type MainViewPersistedState = z.infer<
   typeof MainViewPersistedStateSchema
 >;

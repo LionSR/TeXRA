@@ -35,6 +35,7 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   CommonViewMessageSchema,
   MainViewMessageSchema,
+  MainViewPersistedStateSchema,
   agentKeyOf,
   AgentCategory,
 } from '@shared/schemas';
@@ -49,7 +50,6 @@ import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 
 // Local file imports
 import { MainViewMessageHandler } from './MainViewMessageHandler';
-import { VscodeMainViewPersistedStateSchema } from './vscodeMainViewPersistedState';
 import type { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 
 export class MainViewProvider
@@ -386,9 +386,7 @@ export class MainViewProvider
       pendingData;
       pendingData = consumePendingState()
     ) {
-      const parsed = VscodeMainViewPersistedStateSchema.safeParse(
-        pendingData.state,
-      );
+      const parsed = MainViewPersistedStateSchema.safeParse(pendingData.state);
       if (!parsed.success) {
         console.warn('Invalid pending state restore payload', parsed.error);
         continue;

@@ -374,12 +374,25 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
 describe('SessionStores startup sweep', () => {
   const shell = 'bash@tool#4f4f4f4f4f4f' as StreamTabId;
   const realSession = 'chat@deepseek#5f5f5f5f5f5f' as StreamTabId;
+  // A shell-named stream whose summary never mirrored its identity meta:
+  // the sweep keys on `RunIdentity`, never the name prefix, so it stays.
+  const preMetaShell = 'bash@tool#6f6f6f6f6f6f' as StreamTabId;
 
-  /** Stores over a transcript index holding one shell and one real session. */
+  /**
+   * Stores over a transcript index holding one identity-stamped shell, one
+   * real agent session, and one pre-meta shell-named stream.
+   */
   async function storesWithLeftovers(): Promise<SessionStores> {
     const streamLogs = await StreamLogStore.open();
     streamLogs.ensureStream(shell);
+    streamLogs.recordSummaryMeta(shell, {
+      identity: { kind: 'process', tool: 'bash' },
+    });
     streamLogs.ensureStream(realSession);
+    streamLogs.recordSummaryMeta(realSession, {
+      identity: { kind: 'agent', agent: 'chat' },
+    });
+    streamLogs.ensureStream(preMetaShell);
     const snapshots = new StreamSnapshotStore();
     // Keep the orphan half of the sweep out of this: it reads the whole
     // storage root, which other suites in this process also write.

@@ -270,20 +270,17 @@ async function compileOne(
   const pathForSafeName = comparablePath.startsWith(roundPrefix)
     ? comparablePath.slice(roundPrefix.length)
     : comparablePath;
-  const rawPathForSafeName = rawComparablePath.startsWith(roundPrefix)
-    ? rawComparablePath.slice(roundPrefix.length)
-    : rawComparablePath;
   // Sanitizing to a filesystem-safe name is lossy: two distinct paths that
   // differ only in characters outside [a-zA-Z0-9._-] (e.g. "a:b.tex" and
   // "a_b.tex") both collapse to the same string, so a second file's log
   // write/delete would clobber the first's. Suffix with a short hash of the
   // untruncated path so every output gets its own collision-free log slot.
-  const legacySafeName = sanitizePathSegment(pathForSafeName, {
+  const sanitizedName = sanitizePathSegment(pathForSafeName, {
     invalidCharPattern: /[^a-zA-Z0-9._-]/g,
     replacement: '_',
   });
   const pathHash = truncatedHexId(pathForSafeName, PATH_HASH_LENGTH, 'sha1');
-  const sanitizedStem = legacySafeName.slice(0, MAX_SANITIZED_STEM_LENGTH);
+  const sanitizedStem = sanitizedName.slice(0, MAX_SANITIZED_STEM_LENGTH);
   const safeName = `${sanitizedStem}_${pathHash}`;
   const buildDir = path.join(
     opts.compileRoot,
@@ -298,23 +295,6 @@ async function compileOne(
     'compile',
     `r${currentRound}_${safeName}.log`,
   );
-  // Compatibility introduced 2026-08-09: pre-fix builds wrote to this
-  // un-hashed name. Windows builds before path normalization also retained the
-  // `r<N>\\` prefix while sanitizing, and the first normalized builds hashed
-  // that raw path. Remove these three legacy spellings after 2026-11-09, once
-  // runs created before normalization are no longer expected to be resumed.
-  const rawLegacySafeName = sanitizePathSegment(rawPathForSafeName, {
-    invalidCharPattern: /[^a-zA-Z0-9._-]/g,
-    replacement: '_',
-  });
-  const rawSafeName = `${rawLegacySafeName.slice(0, MAX_SANITIZED_STEM_LENGTH)}_${truncatedHexId(
-    rawPathForSafeName,
-    PATH_HASH_LENGTH,
-    'sha1',
-  )}`;
-  const legacyLogPaths = [
-    ...new Set([legacySafeName, rawLegacySafeName, rawSafeName]),
-  ].map((name) => path.join(opts.compileRoot, `r${currentRound}_${name}.log`));
   const { executionId } = ctx.fileService;
 
   const target: CompileTarget = {
@@ -326,12 +306,8 @@ async function compileOne(
     executionId,
   };
 
-  const clearStaleLogs = (): Promise<void[]> =>
-    Promise.all(
-      [logDest.absolutePath, ...legacyLogPaths].map((logPath) =>
-        AbsoluteFS.delete(logPath).catch(() => undefined),
-      ),
-    );
+  const clearStaleLogs = (): Promise<void> =>
+    AbsoluteFS.delete(logDest.absolutePath).catch(() => undefined);
 
   let compileResult: CompileLatex2PdfResult;
   try {
