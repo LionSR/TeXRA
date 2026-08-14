@@ -6,7 +6,7 @@ import {
   buildLatexSearchParts,
   compileLatex2Pdf,
 } from '@latex/texTools';
-import type { ExecResult } from '@shared/schemas/opResults';
+import type { ExecResult } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';

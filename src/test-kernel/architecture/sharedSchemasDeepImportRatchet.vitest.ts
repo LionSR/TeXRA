@@ -58,8 +58,9 @@ const SEMANTICS =
   'file in the same PR). The leaf-aware published-surface snapshot preserves ' +
   'the exact type/value bindings used by baseline gratuitous imports, so those ' +
   'bindings may not contract even if their importers move. Scan covers ' +
-  'repo-root src/ and every packages/*/src directory, excluding ' +
-  'src/test-kernel/ and the surface interior src/shared/schemas/.';
+  'repo-root src/ and every packages/*/src directory, excluding only the ' +
+  'surface interior src/shared/schemas/ (test-kernel files are ratcheted ' +
+  'like production).';
 
 type DeepImports = Record<string, string[]>;
 type ExportSpace = 'type' | 'value';
@@ -557,7 +558,7 @@ function collectCurrent(): Pick<
 
   for (const root of scanRoots()) {
     for (const file of sourceFilesUnder(resolve(REPO_ROOT, root), {
-      excludeTestKernel: true,
+      excludeTestKernel: false,
       missingDirReturnsEmpty: true,
     })) {
       const repoPath = toRepoPath(file);
