@@ -78,7 +78,7 @@ describe('renderAnsiMarkdown', () => {
   it('renders common HTML formatting without leaking tags', () => {
     const plain = renderPlain(
       [
-        '<blockquote><strong>Subagent <code>prover</code> finished execution abc:</strong>',
+        '<blockquote class="result"><strong data-kind="agent">Subagent <code title=tool>prover</code> finished execution abc:</strong>',
         '',
         'Done.</blockquote>',
       ].join('\n'),
@@ -87,9 +87,9 @@ describe('renderAnsiMarkdown', () => {
 
     expect(plain).toContain('│ Subagent `prover` finished execution abc:');
     expect(plain).toContain('│ Done.');
-    expect(plain).not.toContain('<blockquote>');
-    expect(plain).not.toContain('<strong>');
-    expect(plain).not.toContain('<code>');
+    expect(plain).not.toContain('<blockquote');
+    expect(plain).not.toContain('<strong');
+    expect(plain).not.toContain('<code');
   });
 
   it('preserves TeX inequalities that resemble opening HTML tags', () => {
@@ -110,6 +110,7 @@ describe('renderAnsiMarkdown', () => {
         'Real break: <br>After',
         'Adjacent HTML: word<b>bold</b>.',
         'Lone closing tag: Summary</p>',
+        '<p>unclosed paragraph',
         'Then \\[a>0\\]',
       ].join('\n'),
     );
@@ -122,7 +123,7 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).toContain('\\(0 < p < 1\\)');
     expect(plain).toContain('\\(0 <p <1\\)');
     expect(plain).toContain('\\(0 <p < 1\\)');
-    expect(plain).toContain('if x <p and y>1 then z');
+    expect([...plain.matchAll(/if x <p and y>1 then z/g)]).toHaveLength(2);
     expect(plain).toContain('\\(0 <p > 1\\)');
     expect(plain).toContain('\\(0 <p> 1\\)');
     expect(plain).toContain('\\(if x <p and y>1 then z\\)');
@@ -132,6 +133,7 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).toContain('Adjacent HTML: wordbold.');
     expect(plain).toContain('Lone closing tag: Summary');
     expect(plain).not.toContain('</p>');
+    expect(plain).toContain('<p>unclosed paragraph');
     expect(plain).toContain('\\[a>0\\]');
   });
 

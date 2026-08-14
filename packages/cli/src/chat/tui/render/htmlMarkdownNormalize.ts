@@ -4,6 +4,35 @@ import { clamp } from '@utils/core';
 
 const KNOWN_HTML_TAG_RE =
   /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/i;
+// Formatting tags may carry ordinary name/value attributes. Boolean-like
+// prose after a comparison variable (for example `<p and y>`) is deliberately
+// not accepted as an opening tag because it can otherwise pair with an
+// unrelated closing tag later in a transcript and silently consume text.
+const HTML_ATTRIBUTES = String.raw`(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>]+))*\s*`;
+const HEADING_TAG_RE = new RegExp(
+  `<h([1-6])${HTML_ATTRIBUTES}>([\\s\\S]*?)<\\/h\\1>`,
+  'gi',
+);
+const PARAGRAPH_TAG_RE = new RegExp(
+  `<(p|div)${HTML_ATTRIBUTES}>([\\s\\S]*?)<\\/\\1>`,
+  'gi',
+);
+const STRONG_TAG_RE = new RegExp(
+  `<(strong|b)${HTML_ATTRIBUTES}>([\\s\\S]*?)<\\/\\1>`,
+  'gi',
+);
+const EMPHASIS_TAG_RE = new RegExp(
+  `<(em|i)${HTML_ATTRIBUTES}>([\\s\\S]*?)<\\/\\1>`,
+  'gi',
+);
+const CODE_TAG_RE = new RegExp(
+  `<code${HTML_ATTRIBUTES}>([\\s\\S]*?)<\\/code>`,
+  'gi',
+);
+const BLOCKQUOTE_TAG_RE = new RegExp(
+  `<blockquote${HTML_ATTRIBUTES}>([\\s\\S]*?)<\\/blockquote>`,
+  'gi',
+);
 
 function quoteHtmlBlock(body: string): string {
   const trimmed = body.trim();
@@ -22,39 +51,37 @@ function headingMarker(level: string): string {
 
 export function normalizeKnownHtmlForCliMarkdown(content: string): string {
   const summarized = summarizeEmbeddedSubagentFollowups(content);
+  if (!KNOWN_HTML_TAG_RE.test(summarized)) return summarized;
+
   const mathProtection = protectLatexMathSpans(summarized);
   if (!KNOWN_HTML_TAG_RE.test(mathProtection.content)) return summarized;
 
   const normalized = mathProtection.content
     .replaceAll(
-      /<h([1-6])(?=[\s/>])[^<>]*>([\s\S]*?)<\/h\1>/gi,
+      HEADING_TAG_RE,
       (_match, level: string, body: string) =>
         `\n\n${headingMarker(level)} ${body.trim()}\n\n`,
     )
     .replaceAll(/<br\s*\/?>/gi, '\n')
     .replaceAll(
-      /<(p|div)(?=[\s/>])[^<>]*>([\s\S]*?)<\/\1>/gi,
+      PARAGRAPH_TAG_RE,
       (_match, _tag: string, body: string) => `\n\n${body.trim()}\n\n`,
     )
     .replaceAll(/<\/(?:p|div)>/gi, '\n\n')
     .replaceAll(
-      /<(strong|b)(?=[\s/>])[^<>]*>([\s\S]*?)<\/\1>/gi,
+      STRONG_TAG_RE,
       (_match, _tag: string, body: string) => `**${body}**`,
     )
     .replaceAll(/<\/(?:strong|b)>/gi, '**')
     .replaceAll(
-      /<(em|i)(?=[\s/>])[^<>]*>([\s\S]*?)<\/\1>/gi,
+      EMPHASIS_TAG_RE,
       (_match, _tag: string, body: string) => `_${body}_`,
     )
     .replaceAll(/<\/(?:em|i)>/gi, '_')
-    .replaceAll(
-      /<code(?=[\s/>])[^<>]*>([\s\S]*?)<\/code>/gi,
-      (_match, body: string) => `\`${body}\``,
-    )
+    .replaceAll(CODE_TAG_RE, (_match, body: string) => `\`${body}\``)
     .replaceAll(/<\/code>/gi, '`')
-    .replaceAll(
-      /<blockquote(?=[\s/>])[^<>]*>([\s\S]*?)<\/blockquote>/gi,
-      (_match, body: string) => quoteHtmlBlock(body),
+    .replaceAll(BLOCKQUOTE_TAG_RE, (_match, body: string) =>
+      quoteHtmlBlock(body),
     )
     .trim();
   return mathProtection.restore(normalized);
