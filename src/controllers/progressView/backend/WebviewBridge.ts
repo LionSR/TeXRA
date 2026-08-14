@@ -1,9 +1,9 @@
 import { createLog } from '@logger/logUtils';
+import { projectWorkflowCallEntry } from '@model/projectWorkflowCallEntry';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
 import { StreamLogDeltaBuffer } from '@transcript/StreamLog';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
-import { projectWorkflowCallEntry } from '@model/projectWorkflowCallEntry';
 import { createFlushableDebounce, type FlushableDebounce } from '@utils/core';
 
 const log = createLog('WebviewBridge');
