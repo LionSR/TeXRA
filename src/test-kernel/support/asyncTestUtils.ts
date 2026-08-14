@@ -52,14 +52,17 @@ export async function waitForRecordedEvent<TEvent extends string>(
   throw new Error(`Timed out waiting for ${eventName}`);
 }
 
-/** Create a promise together with the resolver that settles it, for tests that need to control timing externally. */
+/** Create a promise together with the resolvers that settle it, for tests that need to control timing externally. */
 export function createDeferred<T = void>(): {
   promise: Promise<T>;
   resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
 } {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((done, fail) => {
     resolve = done;
+    reject = fail;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }

@@ -6,6 +6,7 @@ import {
   createDesktopPtyHost,
   type DesktopPtyHostOptions,
 } from '@desktop/main/desktopPtyHost';
+import { createDeferred } from '@test/support/asyncTestUtils';
 
 type LoadPty = NonNullable<DesktopPtyHostOptions['loadPty']>;
 type PtyModule = Awaited<ReturnType<LoadPty>>;
@@ -38,20 +39,6 @@ function createFakePty(pid: number): FakePty & PtyProcess {
 
 function loadFakePty(spawn: SpawnPty): LoadPty {
   return async () => ({ spawn });
-}
-
-function deferred<T>(): {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (error: unknown) => void;
-} {
-  let resolve = (_value: T): void => {};
-  let reject = (_error: unknown): void => {};
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return { promise, resolve, reject };
 }
 
 const TERMINAL_ID = 'workbench:terminal:1';
@@ -114,7 +101,7 @@ describe('desktop pty host', () => {
   it('abandons a session creation invalidated while its module loads', async () => {
     const pty = createFakePty(201);
     const spawnPty = vi.fn<SpawnPty>(() => pty);
-    const firstLoad = deferred<PtyModule>();
+    const firstLoad = createDeferred<PtyModule>();
     const loadPty = vi
       .fn<LoadPty>()
       .mockReturnValueOnce(firstLoad.promise)
@@ -144,7 +131,7 @@ describe('desktop pty host', () => {
   });
 
   it('ignores a module-load failure from an invalidated creation', async () => {
-    const loadFailure = deferred<PtyModule>();
+    const loadFailure = createDeferred<PtyModule>();
     const host = createHost({
       loadPty: vi.fn<LoadPty>().mockReturnValue(loadFailure.promise),
     });

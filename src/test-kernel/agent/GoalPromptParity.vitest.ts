@@ -1,9 +1,8 @@
 import { readFileSync } from 'node:fs';
-import { mkdtemp, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import * as yaml from 'yaml';
 
 import {
@@ -13,6 +12,7 @@ import {
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 interface GoalPromptsYaml {
   continuation: { template: string };
@@ -33,6 +33,12 @@ const goalYaml = yaml.parse(
 // completion-audit discipline. Both must render the same template.
 describe('Goal prompt parity (YAML ↔ inline fallback)', () => {
   setupPlatform({}, { fs: nodeFilesystem });
+
+  const tempDirs: string[] = [];
+
+  afterEach(async () => {
+    await cleanupTempDirs(tempDirs);
+  });
 
   it('continuation template in YAML is fully reflected in the inline fallback', () => {
     const loader = readFileSync(
@@ -63,7 +69,7 @@ describe('Goal prompt parity (YAML ↔ inline fallback)', () => {
   });
 
   it('falls back to the inline template instead of throwing on malformed goal YAML', async () => {
-    const dir = await mkdtemp(resolve(tmpdir(), 'texra-goal-'));
+    const dir = await makeTempDir('texra-goal-', tempDirs);
     const brokenPath = resolve(dir, 'broken.yaml');
     await writeFile(brokenPath, 'continuation:\n  template: "unterminated\n');
     initializeGoalPrompts(brokenPath);

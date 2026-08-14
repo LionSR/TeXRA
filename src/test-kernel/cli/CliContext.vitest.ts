@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, realpath, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   buildCliContext,
@@ -18,6 +18,7 @@ import {
 } from '@cli/runtime/cliContext';
 import { loadWorkspaceCliConfig } from '@cli/runtime/cliConfig';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 const ambient = {
   isCi: true,
@@ -40,8 +41,14 @@ function ttyAmbient(overrides: Partial<CliAmbientState> = {}): CliAmbientState {
   };
 }
 
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+  await cleanupTempDirs(tempDirs);
+});
+
 async function workspaceWithConfig(config: string): Promise<string> {
-  const workspace = await mkdtemp(join(tmpdir(), 'texra-cli-context-'));
+  const workspace = await makeTempDir('texra-cli-context-', tempDirs);
   await mkdir(join(workspace, '.texra'), { recursive: true });
   await writeFile(join(workspace, '.texra', 'config.json'), config);
   return workspace;
@@ -190,7 +197,7 @@ describe('CLI context config defaults', () => {
   });
 
   it('canonicalizes existing workspace paths before reading config', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'texra-cli-context-link-'));
+    const root = await makeTempDir('texra-cli-context-link-', tempDirs);
     const workspace = join(root, 'workspace');
     const link = join(root, 'linked-workspace');
     await mkdir(join(workspace, '.texra'), { recursive: true });
@@ -221,7 +228,7 @@ describe('CLI context config defaults', () => {
   });
 
   it('reports unreadable workspace config files without treating them as absent', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'texra-cli-context-'));
+    const workspace = await makeTempDir('texra-cli-context-', tempDirs);
     await mkdir(join(workspace, '.texra', 'config.json'), {
       recursive: true,
     });
@@ -294,7 +301,7 @@ describe('CLI context config defaults', () => {
 
 describe('CLI --cwd validation', () => {
   it('accepts an existing directory and returns its realpath', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'texra-cli-cwd-'));
+    const workspace = await makeTempDir('texra-cli-cwd-', tempDirs);
 
     await expect(resolveCliCwd(workspace)).resolves.toBe(
       canonicalizeWorkspacePath(workspace),
@@ -302,7 +309,7 @@ describe('CLI --cwd validation', () => {
   });
 
   it('preserves whitespace in an explicit workspace path', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'texra-cli-cwd-root-'));
+    const root = await makeTempDir('texra-cli-cwd-root-', tempDirs);
     const workspace = join(root, 'workspace ');
     await mkdir(workspace);
 
@@ -319,7 +326,7 @@ describe('CLI --cwd validation', () => {
   });
 
   it('rejects a --cwd path that points at a file', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'texra-cli-cwd-'));
+    const workspace = await makeTempDir('texra-cli-cwd-', tempDirs);
     const filePath = join(workspace, 'config.json');
     await writeFile(filePath, '{}');
 
