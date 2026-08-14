@@ -83,6 +83,8 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Delegating to a tool-use agent no longer fails on newer Node.js** —
+  launching a subagent no longer dies immediately with a request-body error.
 - **Command rejections preserve the user's actual instructions** — rejecting a
   shell-backed action without a note no longer presents generated retry
   guidance to the agent as though the user had written it.
