@@ -124,6 +124,32 @@ function insideRanges(index, ranges) {
   return ranges.some(([start, end]) => index >= start && index < end);
 }
 
+/**
+ * True when the matched specifier is erased by TypeScript (`import type` /
+ * `export type ... from` / a named import whose every binding is `type`).
+ * Mixed `{ type X, y }` stays reachable because `y` is a value import.
+ */
+function isTypeOnlySpecifier(text, match) {
+  const matched = match[0];
+  if (/^(?:import\s*\(|require|import\.meta\.resolve)/.test(matched)) {
+    return false;
+  }
+  const before = text.slice(Math.max(0, match.index - 400), match.index);
+  const keyword = [...before.matchAll(/\b(?:import|export)\b/g)].at(-1);
+  if (keyword == null) return false;
+  const clause = before.slice(keyword.index);
+  if (/^(?:import|export)\s+type\b/.test(clause)) return true;
+  const named = clause.match(/^(?:import|export)\s*\{([^}]*)\}\s*$/);
+  if (named == null) return false;
+  const bindings = named[1]
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  return (
+    bindings.length > 0 && bindings.every((binding) => /^type\b/.test(binding))
+  );
+}
+
 /** Every module specifier in import/require/export-from positions. */
 function importSpecifiers(text) {
   const ranges = maskedRanges(text);
@@ -132,9 +158,59 @@ function importSpecifiers(text) {
     /(?:from\s*|import\s*(?:\(\s*)?|require(?:\.resolve)?\s*\(\s*|import\.meta\.resolve\s*\(\s*)['"]([^'"]+)['"]/g;
   for (const match of text.matchAll(pattern)) {
     if (insideRanges(match.index, ranges)) continue;
+    if (isTypeOnlySpecifier(text, match)) continue;
     specifiers.add(match[1]);
   }
   return specifiers;
+}
+
+/** Fail the guard itself if type-only detection regresses. */
+function selfTestImportSpecifiers() {
+  const cases = [
+    {
+      text: "import type { X } from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "export type { X } from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "import { type X } from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "import {\n  type X,\n} from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "export { type X } from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "import { type X, y } from './mixed';\n",
+      expected: ['./mixed'],
+    },
+    {
+      text: "import { y } from './value';\n",
+      expected: ['./value'],
+    },
+    {
+      text: "import './side-effect';\n",
+      expected: ['./side-effect'],
+    },
+  ];
+  for (const { text, expected } of cases) {
+    const actual = [...importSpecifiers(text)].toSorted(compareCodePoints);
+    const wanted = [...expected].toSorted(compareCodePoints);
+    if (!sameSet(actual, wanted)) {
+      console.error(
+        'importSpecifiers self-test failed:',
+        JSON.stringify({ text, actual, expected: wanted }),
+      );
+      process.exit(1);
+    }
+  }
 }
 
 function isTsFile(path) {
@@ -315,6 +391,7 @@ function sameSet(a, b) {
 }
 
 function main() {
+  selfTestImportSpecifiers();
   const total = listSourceFiles(utilsDir).length;
   const facts = documentedFacts();
   const { reachable, unresolvable } = reachableUtils();
