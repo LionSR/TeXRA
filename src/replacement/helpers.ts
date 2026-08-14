@@ -176,23 +176,6 @@ export function generateEnvironmentLinebreakFixes(
 }
 
 /**
- * Generate patterns for mapping decorated math symbols to shorter versions
- * Example: \\boldsymbol{\\alpha} -> \\bal
- */
-export function generateDecoratedMathShortcuts(
-  decorators: string[],
-  symbols: string[],
-  shortcutPrefix: string,
-): PatternDict {
-  return createPatterns(decorators, (decorator) =>
-    symbols.map((symbol) => [
-      `\\${decorator}{\\${symbol}}`,
-      `\\${shortcutPrefix}${symbol}`,
-    ]),
-  );
-}
-
-/**
  * Generate patterns for single-argument commands wrapping one letter, covering
  * both decorators and math fonts.
  * Examples:

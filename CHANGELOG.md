@@ -13,6 +13,12 @@ All notable changes to this project will be documented in this file.
 
 ### Extension (VS Code) and Desktop
 
+#### Bug Fixes
+
+- **Bold Greek letters render in the progress view** — shortcuts such as
+  bold alpha, eta, and sigma now display as the intended symbols instead of
+  unknown commands.
+
 #### Features
 
 - **The model picker now starts with Sonnet 5 (Thinking)** — Gemini is no

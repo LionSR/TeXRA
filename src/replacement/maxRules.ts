@@ -7,7 +7,6 @@ import { GREEK_LETTERS } from './constants';
 import { NonRegexReplacementCategory, RegexReplacementCategory } from './types';
 import {
   createPatterns,
-  generateDecoratedMathShortcuts,
   generateDecoratorShortcuts,
   generateNestedDecoratorShortcuts,
   generateDifferentialSpacing,
@@ -39,6 +38,15 @@ const GREEK_LETTER_SHORTCUTS: Record<string, string> = {
   omega: 'om',
   Omega: 'Om',
   Gamma: 'Ga',
+};
+
+// Bold Greek destinations must be KaTeX short forms (`\bal`), not `\balpha`.
+// `eta` and `Lambda` stay out of GREEK_LETTER_SHORTCUTS: `\et` is undefined
+// and `\La` is `\Leftarrow`.
+const BOLD_GREEK_SHORTCUTS: Record<string, string> = {
+  ...GREEK_LETTER_SHORTCUTS,
+  eta: 'et',
+  Lambda: 'La',
 };
 
 // Automatically generated replacement patterns
@@ -190,7 +198,13 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
     // Vector variables: \vec{x} -> \vx
     ...generateDecoratorShortcuts('vec', vectorLetters, 'v'),
     ...generateCommandShortcuts(GREEK_LETTER_SHORTCUTS),
-    ...generateDecoratedMathShortcuts(['boldsymbol'], greekBoldLetters, 'b'),
+    // Bold Greek: \boldsymbol{\alpha} -> \bal
+    ...createPatterns(greekBoldLetters, (letter) => [
+      [
+        `\\boldsymbol{\\${letter}}`,
+        `\\b${BOLD_GREEK_SHORTCUTS[letter] ?? letter}`,
+      ],
+    ]),
     // Mathcal: \mathcal{X} -> \cX
     ...generateDecoratorShortcuts('mathcal', upperLetters, 'c'),
     // Mathbb: \mathbb{X} -> \eX
