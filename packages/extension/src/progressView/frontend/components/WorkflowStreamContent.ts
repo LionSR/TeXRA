@@ -8,7 +8,6 @@ import { customElement } from 'lit/decorators.js';
 import { isWorkflowState, type WorkflowStreamState } from '@shared/schemas';
 
 // Local imports - progress view
-import { hasOutputFiles } from '../stateUtils';
 import { BaseStreamContent } from './BaseStreamContent';
 import { conversationContentStyles } from './ConversationContent.styles';
 
@@ -18,7 +17,6 @@ import './StreamHeader';
 // Side-effect imports - sibling components
 import './TaskGroupList';
 import './FileList';
-import './WorkflowToolUseFollowupSection';
 import './BackgroundTasksPanel';
 
 @customElement('workflow-stream-content')
@@ -62,18 +60,6 @@ export class WorkflowStreamContent extends BaseStreamContent {
             .failuresByRound=${state.compileFailures}
             .unsupportedCommands=${this.streamContext.unsupportedCommands}
           ></file-list>
-
-          <workflow-tool-use-followup-section
-            .status=${state.status}
-            .hasOutputFiles=${hasOutputFiles(state.files)}
-            .options=${this.streamContext.followupOptions}
-            .streamModel=${
-              streamInfo.identity?.kind === 'agent'
-                ? (streamInfo.model ?? null)
-                : null
-            }
-            .unsupportedCommands=${this.streamContext.unsupportedCommands}
-          ></workflow-tool-use-followup-section>
         </div>
       </div>
     `;

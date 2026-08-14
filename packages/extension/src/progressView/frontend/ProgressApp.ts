@@ -46,7 +46,6 @@ import {
 // Local imports - event handlers
 import {
   handleFileAction,
-  handleFollowupRequestOptions,
   handleFollowUpChange,
   handleFollowUpFocusComplete,
   handleFollowUpPolish,
@@ -57,7 +56,6 @@ import {
   handleStreamSwitch,
   handleToolbarCommand,
   runCompileFixer,
-  sendFollowupCommand,
 } from './eventHandlers';
 import { dispatchMessage } from './messageDispatcher';
 // Local imports - progress view components
@@ -187,9 +185,6 @@ export class ProgressApp extends ProgressAppBase {
                       @file-action=${handleFileAction}
                       @compile-fixer-run=${runCompileFixer}
                       @getting-started-action=${handleGettingStartedAction}
-                      @followup-request-options=${handleFollowupRequestOptions}
-                      @followup-setup=${this.onFollowupSetup}
-                      @followup-run=${this.onFollowupRun}
                       @followup-change=${handleFollowUpChange}
                       @followup-send=${handleFollowUpSend}
                       @followup-polish=${handleFollowUpPolish}
@@ -344,12 +339,4 @@ export class ProgressApp extends ProgressAppBase {
   private onPopBack = (): void => {
     postMessage(PROGRESS_VIEW_COMMANDS.POP_BACK);
   };
-
-  // `sendFollowupCommand` is shared by both followup entry points; these
-  // arrows bind which backend command each event maps to.
-  private onFollowupSetup = (e: CustomEvent): void =>
-    sendFollowupCommand(PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP, e);
-
-  private onFollowupRun = (e: CustomEvent): void =>
-    sendFollowupCommand(PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP, e);
 }

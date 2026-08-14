@@ -110,8 +110,6 @@ function createController({
   state?: ProgressFollowUpState;
 } = {}): ProgressFollowUpController {
   return new ProgressFollowUpController({
-    getAgentCategory: (agent) =>
-      agent === 'tool-agent' ? AgentCategory.ToolUse : AgentCategory.Workflow,
     loadModelOptions: async () => modelOptions,
     state,
     workspace: {
@@ -125,91 +123,6 @@ function createController({
 }
 
 describe('ProgressFollowUpController', () => {
-  it('builds a tool-use follow-up restore plan from workflow outputs', () => {
-    const controller = createController();
-    const runConfig = createFollowUpWorkflowConfig();
-    const plan = controller.planToolUseFollowUp({
-      streamId: 'stream-a',
-      runConfig,
-      outputFiles: [createRunStorageOutputFile()],
-      agent: 'tool-agent',
-      model: 'gemini31p',
-      initialQuestion: ' Please inspect the proof. ',
-      executeImmediately: true,
-      modelOptions: [{ value: 'gemini31p' }],
-      executionId: 'exec-123',
-    });
-
-    expect(plan.kind).toBe('restoreState');
-    if (plan.kind !== 'restoreState') return;
-    expect(plan.executeImmediately).toBe(true);
-    expect(plan.config.agent).toBe('tool-agent');
-    expect(plan.config.agentCategory).toBe(AgentCategory.ToolUse);
-    // The follow-up keeps the workflow's input files exactly as recorded.
-    expect(plan.config.inputFiles).toEqual(runConfig.inputFiles);
-    expect(plan.config.outputFiles.length).toBe(0);
-    expect(plan.config.instruction).toMatch(
-      /\/executions\/exec-123\/files\/answer\.tex/,
-    );
-    expect(plan.config.instruction).toMatch(
-      /User follow-up request: Please inspect the proof\./,
-    );
-  });
-
-  it('builds a stream-scoped tool-use plan from snapshot state', async () => {
-    const runConfig = createFollowUpWorkflowConfig();
-    const outputFile = createRunStorageOutputFile();
-    const metadataReads: string[] = [];
-    const controller = createController({
-      modelOptions: [{ value: 'gemini31p' }],
-      state: {
-        getRunMetadata: (stream) => {
-          metadataReads.push(stream);
-          return { config: runConfig, executionId: 'exec-123' };
-        },
-        getOutputFiles: () => ({ 2: [outputFile] }),
-        getCompileFailures: () => ({}),
-      },
-    });
-
-    const plan = await controller.planToolUseFollowUpForStream({
-      streamId: 'stream-a',
-      agent: 'tool-agent',
-      model: 'gemini31p',
-      initialQuestion: 'Check the final paragraph.',
-      executeImmediately: false,
-    });
-
-    expect(metadataReads).toEqual(['stream-a']);
-    expect(plan.kind).toBe('restoreState');
-    if (plan.kind !== 'restoreState') return;
-    expect(plan.executeImmediately).toBe(false);
-    expect(plan.config.agent).toBe('tool-agent');
-    expect(plan.config.instruction).toMatch(
-      /\/executions\/exec-123\/files\/answer\.tex/,
-    );
-    expect(plan.config.instruction).toMatch(
-      /User follow-up request: Check the final paragraph\./,
-    );
-  });
-
-  it('rejects follow-up setup when the selected model is disabled', () => {
-    const plan = createController().planToolUseFollowUp({
-      streamId: 'stream-a',
-      runConfig: createFollowUpWorkflowConfig(),
-      outputFiles: [createRunStorageOutputFile()],
-      agent: 'tool-agent',
-      model: 'gemini31p',
-      executeImmediately: false,
-      modelOptions: [{ value: 'gemini31p', disabled: true }],
-    });
-
-    expect(plan).toEqual({
-      kind: 'warning',
-      message: 'Select an available model before starting a follow-up.',
-    });
-  });
-
   it('plans latexFixer with generated output sources before input recovery', async () => {
     const controller = createController({
       existingFiles: new Set(['source.tex', 'main.tex']),

@@ -659,9 +659,6 @@ describe('stream meta frontend state', () => {
         },
       }),
     );
-    state.followupOptionsByStream.set(stream, {
-      toolUseAgentsData: [{ label: 'Search', value: 'search' }],
-    });
     const getState = seedState(state);
 
     dispatch(streamLifecycleHandlers, {
@@ -675,9 +672,6 @@ describe('stream meta frontend state', () => {
       runUsage: {},
       todos: [],
       ui: { followUpText: 'unsent observation' },
-    });
-    expect(getState().followupOptionsByStream.get(stream)).toEqual({
-      toolUseAgentsData: [{ label: 'Search', value: 'search' }],
     });
   });
 });

@@ -181,15 +181,6 @@ const UpdateQueuedFollowUpsMessageSchema = StreamScopedBaseSchema.extend({
   messages: z.array(z.string()),
 });
 
-const SetFollowupOptionsMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS),
-  toolUseAgentsData: z.array(AgentOptionDataSchema).optional(),
-  modelOptionsData: z.array(ModelOptionDataSchema).optional(),
-});
-export type SetFollowupOptionsMessage = z.infer<
-  typeof SetFollowupOptionsMessageSchema
->;
-
 const PermissionKindSchema = z.enum(PERMISSION_KIND);
 /**
  * The one approval/prompt kind vocabulary. Wire payloads, the backend handler
@@ -417,7 +408,6 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdatePlanMessageSchema,
     UpdateRunUsageMessageSchema,
     UpdateQueuedFollowUpsMessageSchema,
-    SetFollowupOptionsMessageSchema,
     SyncStreamContentMessageSchema,
     UpdatePermissionMessageSchema,
     UpdateBypassMessageSchema,

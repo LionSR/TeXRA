@@ -121,7 +121,6 @@ function createSecondTierActions(
         .mockResolvedValue({ proceeded: false, retried: false }),
     },
     followUp: {
-      planToolUseFollowUpForStream: vi.fn(),
       planCompileFixerForStream: vi.fn(),
     },
     followUpPolish: {
@@ -143,7 +142,6 @@ function createSecondTierActions(
     applyFollowUpPlan: vi.fn(),
     applyPolishResult: vi.fn(),
     onPolishError: vi.fn(),
-    loadFollowUpOptions: vi.fn().mockResolvedValue({}),
     postToRenderer: vi.fn(),
     restoreProposalConfig: vi.fn(),
     retry: {
@@ -881,9 +879,6 @@ describe('createProgressViewSecondTierHandlers', () => {
         PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE,
         PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG,
         PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP,
-        PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP,
-        PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP,
-        PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS,
         PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER,
       ].toSorted(),
     );

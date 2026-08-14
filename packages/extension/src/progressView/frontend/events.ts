@@ -37,12 +37,6 @@ export interface FollowUpSendDetail {
   readonly images: readonly ExtractedClipboardImage[];
 }
 
-export interface FollowupCommandDetail {
-  agent: string;
-  model: string;
-  initialQuestion: string;
-}
-
 /**
  * Frontend-only panel action emitted by the inline edit/command approval
  * button / `a` shortcut on the edit and bash approval prompts.
@@ -191,15 +185,6 @@ export const ProgressEvents = {
     createEvent('followup-send', detail),
 
   followupPolish: () => createEvent('followup-polish', undefined),
-
-  followupRequestOptions: () =>
-    createEvent('followup-request-options', undefined),
-
-  followupSetup: (detail: FollowupCommandDetail) =>
-    createEvent('followup-setup', detail),
-
-  followupRun: (detail: FollowupCommandDetail) =>
-    createEvent('followup-run', detail),
 
   compileFixerRun: () => createEvent('compile-fixer-run', undefined),
 

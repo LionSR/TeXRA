@@ -64,17 +64,4 @@ export const followUpHandlers = {
       }),
     );
   },
-
-  [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: (data) => {
-    if (!appState.get().streamStates.has(data.stream)) return;
-
-    appState.set(
-      create(appState.get(), (draft) => {
-        draft.followupOptionsByStream.set(data.stream, {
-          toolUseAgentsData: data.toolUseAgentsData,
-          modelOptionsData: data.modelOptionsData,
-        });
-      }),
-    );
-  },
 } satisfies Partial<ProgressViewOutboundHandlerRegistry>;
