@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { CompactionActivity } from '@progressView/frontend/components/CompactionActivity';
-import type { CompactionActivityStatus } from '@shared/streams/compactionActivityProjection';
+import {
+  COMPACTION_ACTIVITY_LABEL,
+  type CompactionActivityStatus,
+} from '@shared/streams/compactionActivityProjection';
 
 // Local file imports
 import {
@@ -41,24 +44,35 @@ describe('compaction-activity render branches', () => {
   it('renders an aria-hidden wa-spinner while running', async () => {
     const element = await mount('running');
 
+    const row = query(element, '.activity');
+    expect(row?.getAttribute('role')).toBe('status');
+    expect(row?.getAttribute('aria-live')).toBe('polite');
+    expect(query(element, '.label')?.textContent).toBe(
+      COMPACTION_ACTIVITY_LABEL.running,
+    );
+
     const spinner = query(element, '.icon');
     expect(spinner?.tagName).toBe('WA-SPINNER');
+    // The row announces via role="status"; hide the spinner from AT.
     expect(spinner?.getAttribute('aria-hidden')).toBe('true');
-    // The row already announces via role="status"; no nested progressbar.
-    expect(query(element, '[role="progressbar"]')).toBeFalsy();
   });
 
   it('keeps the reduced-motion override on the shared spinner', async () => {
     const { CompactionActivity: Component } =
       await import('@progressView/frontend/components/CompactionActivity');
 
-    const cssText = Component.styles
-      ?.map((style) => (typeof style === 'string' ? style : style.cssText))
-      .join('\n');
+    // designTokens also mention prefers-reduced-motion, so pin the
+    // component-owned rule rather than the joined stylesheet text.
+    const componentStyle = Component.styles?.at(-1);
+    const cssText =
+      typeof componentStyle === 'string'
+        ? componentStyle
+        : (componentStyle?.cssText ?? '');
+    const collapsed = cssText.replaceAll(/\s+/g, ' ').trim();
 
-    expect(cssText).toContain('prefers-reduced-motion');
-    expect(cssText).toContain('wa-spinner::part(base)');
-    expect(cssText).toContain('animation: none');
+    expect(collapsed).toContain(
+      '@media (prefers-reduced-motion: reduce) { wa-spinner::part(base) { animation: none; } }',
+    );
   });
 
   it('renders the expected status icon for every non-running status', async () => {
