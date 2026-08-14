@@ -65,6 +65,14 @@ describe('compaction-activity render branches', () => {
     );
     expect(reducedMotion?.textContent).toContain('.indicator');
     expect(reducedMotion?.textContent).toMatch(/animation:\s*none/);
+    expect(
+      spinner?.shadowRoot?.querySelector('.indicator'),
+      'Web Awesome still paints the dash on .indicator',
+    ).not.toBeNull();
+    expect(
+      spinner?.shadowRoot?.querySelector('svg'),
+      'Web Awesome still paints the spin on svg',
+    ).not.toBeNull();
   });
 
   it('keeps the reduced-motion override on the shared spinner', async () => {
