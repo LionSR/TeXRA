@@ -1,12 +1,12 @@
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import { html, nothing, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - Web Awesome
+import { stopSpinnerMotion } from './spinner';
 import { waIcon } from './webAwesomeIcons';
 import type { TeXRAIconName } from './iconNames';
 
@@ -202,6 +202,7 @@ function renderActionButtonBase(
           ? html`<wa-spinner
               class="action-busy-spinner"
               aria-hidden="true"
+              ${stopSpinnerMotion()}
             ></wa-spinner>`
           : nothing
       }

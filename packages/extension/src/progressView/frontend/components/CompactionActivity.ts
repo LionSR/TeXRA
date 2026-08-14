@@ -1,6 +1,4 @@
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
-
 import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -10,6 +8,7 @@ import {
   type CompactionActivityStatus,
 } from '@shared/streams/compactionActivityProjection';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { stopSpinnerMotion } from '@shared/wa/spinner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 const ACTIVITY_ICON: Record<
@@ -97,7 +96,11 @@ export class CompactionActivity extends LitElement {
     >
       ${
         this.status === 'running'
-          ? html`<wa-spinner class="icon" aria-hidden="true"></wa-spinner>`
+          ? html`<wa-spinner
+              class="icon"
+              aria-hidden="true"
+              ${stopSpinnerMotion()}
+            ></wa-spinner>`
           : waIcon(ACTIVITY_ICON[this.status], { className: 'icon' })
       }
       <span class="label">${label}</span>
