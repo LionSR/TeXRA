@@ -324,6 +324,16 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('\n> a+b');
   });
 
+  it('keeps multiline math inside a quoted list item', () => {
+    const plain = renderPlain('> - \\[\n>   a+b\n>   \\]', {
+      colorEnabled: false,
+      width: 80,
+    });
+
+    expect(plain).toContain('│   • \\[\n│   a+b\n│   \\]');
+    expect(plain).not.toContain('\n>   a+b');
+  });
+
   it('renders nested blockquote prefixes once per depth', () => {
     const plain = renderPlain('> outer\n> > inner');
     expect(plain).toContain('│ outer');

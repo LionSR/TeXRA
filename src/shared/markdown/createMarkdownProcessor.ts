@@ -148,8 +148,10 @@ function protectByPatterns(
       // collapsing an entire quoted display span into one placeholder line.
       const firstLineStart = source.lastIndexOf('\n', offset - 1) + 1;
       const firstLinePrefix = source.slice(firstLineStart, offset);
+      const firstQuotePrefix =
+        /^(?:[ \t]*>[ \t]?)+/u.exec(firstLinePrefix)?.[0] ?? '';
       const remainingLines = match.split('\n').slice(1);
-      const quoteDepth = [...firstLinePrefix].filter(
+      const quoteDepth = [...firstQuotePrefix].filter(
         (char) => char === '>',
       ).length;
       const requiredPrefix = new RegExp(
@@ -161,7 +163,6 @@ function protectByPatterns(
       );
       const isQuotedSpan =
         quoteDepth > 0 &&
-        /^(?:[ \t]*>[ \t]?)+$/u.test(firstLinePrefix) &&
         remainingPrefixes.every((prefix) => prefix !== undefined);
       if (preserveBlockquotePrefixes && isQuotedSpan) {
         return match
