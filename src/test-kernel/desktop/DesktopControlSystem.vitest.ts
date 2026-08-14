@@ -309,12 +309,4 @@ describe('desktop control system', () => {
     }
     expect(workspaceIpc).not.toContain('onEditorDirtyChange');
   });
-
-  it('executes immediate follow-up plans after restoring their launcher state', () => {
-    const bridge = read('packages/desktop/src/main/desktopAgentExecution.ts');
-
-    expect(bridge).toMatch(
-      /case 'restoreState':[\s\S]*?if \(!plan\.executeImmediately\) return;[\s\S]*?await this\.runValidatedExecutionRequest\(\{ config: plan\.config \}\);/u,
-    );
-  });
 });

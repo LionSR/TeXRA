@@ -24,7 +24,6 @@ import './TexraDiffView';
 import type { StreamTabs } from '@progressView/frontend/components/StreamTabs';
 import {
   handleFileAction,
-  handleFollowupRequestOptions,
   handleFollowUpChange,
   handleFollowUpFocusComplete,
   handleFollowUpPolish,
@@ -37,7 +36,6 @@ import {
   runCompileFixer,
   requestStreamDeselection,
   requestStreamSwitch,
-  sendFollowupCommand,
 } from '@progressView/frontend/eventHandlers';
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
 import {
@@ -1460,20 +1458,6 @@ function wireConversation(): void {
     'getting-started-action',
     handleGettingStartedAction as EventListener,
   );
-  conversationView.addEventListener(
-    'followup-request-options',
-    handleFollowupRequestOptions,
-  );
-  conversationView.addEventListener('followup-setup', ((e: CustomEvent) =>
-    sendFollowupCommand(
-      PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP,
-      e,
-    )) as EventListener);
-  conversationView.addEventListener('followup-run', ((e: CustomEvent) =>
-    sendFollowupCommand(
-      PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP,
-      e,
-    )) as EventListener);
   conversationView.addEventListener(
     'followup-change',
     handleFollowUpChange as EventListener,

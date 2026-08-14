@@ -3,7 +3,6 @@ import path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
 
-import { computeAgentOptionsData, getAgent } from '@agent/index';
 import { createChannelTrace } from '@agent/trace';
 import type { SessionStores } from '@agent/storage';
 import {
@@ -78,7 +77,6 @@ import {
   PROGRESS_VIEW_COMMANDS,
 } from '@shared/ipc';
 import {
-  AgentCategory,
   INSTRUCTION_ACTION,
   SETTINGS_TAB,
   type InstructionAction,
@@ -176,7 +174,7 @@ export class DesktopProgressBridge {
    * store and calls back into the two host-supplied operations below.
    */
   private workflowActions!: ProgressWorkflowActionsController;
-  /** Plans tool-use follow-up runs and compile-fix runs for a finished stream. */
+  /** Plans compile-fix runs for a finished stream. */
   private followUpController!: ProgressFollowUpController;
   /** Rewrites follow-up text with the helper model ("Polish" in the follow-up box). */
   private readonly followUpPolishController: ProgressFollowUpPolishController;
@@ -517,13 +515,11 @@ export class DesktopProgressBridge {
 
   /**
    * Mirrors the extension's `createFollowUpController`. The controller decides
-   * what a follow-up or compile-fix run should be; the desktop only supplies the
-   * catalog lookups and the same snapshot-store reads.
+   * what a compile-fix run should be; the desktop only supplies the catalog
+   * lookups and the same snapshot-store reads.
    */
   private createFollowUpController(): ProgressFollowUpController {
     return new ProgressFollowUpController({
-      getAgentCategory: (agent) =>
-        getAgent(agent, AgentCategory.ToolUse)?.category,
       loadModelOptions: () => computeModelOptionsData(),
       state: {
         getRunMetadata: (stream) => this.getRunMetadata(stream),
@@ -589,16 +585,6 @@ export class DesktopProgressBridge {
       case 'info':
         await this.options.host.showInfoMessage(plan.message);
         return;
-      case 'restoreState': {
-        const restored = this.restoreRunConfig(plan.config);
-        if (!restored) {
-          await this.options.host.showErrorMessage('Failed to restore state');
-          return;
-        }
-        if (!plan.executeImmediately) return;
-        await this.runValidatedExecutionRequest({ config: plan.config });
-        return;
-      }
       case 'execute': {
         await this.runValidatedExecutionRequest(plan.request, {
           preferHelperModel: true,
@@ -891,16 +877,6 @@ export class DesktopProgressBridge {
         await this.options.host.showErrorMessage(
           `Error polishing follow-up: ${message}`,
         );
-      },
-      loadFollowUpOptions: async () => {
-        const [agentOptions, modelOptionsData] = await Promise.all([
-          computeAgentOptionsData(),
-          computeModelOptionsData(),
-        ]);
-        return {
-          toolUseAgentsData: agentOptions.toolUse,
-          modelOptionsData,
-        };
       },
       postToRenderer: (message) => this.postToRenderer(message),
       restoreProposalConfig: async (proposal) => {

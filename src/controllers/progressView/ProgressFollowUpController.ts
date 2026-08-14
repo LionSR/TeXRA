@@ -1,8 +1,5 @@
 // Local imports
-import {
-  ToolUseAgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import { decideRunModel } from '@model/runModelDecision';
@@ -32,7 +29,6 @@ interface ProgressFollowUpWorkspace {
 }
 
 export interface ProgressFollowUpControllerDeps {
-  getAgentCategory(agent: string): AgentCategory | undefined;
   loadModelOptions(): Promise<readonly ProgressFollowUpModelOption[]>;
   state: ProgressFollowUpState;
   workspace: ProgressFollowUpWorkspace;
@@ -56,27 +52,10 @@ interface CompileFixerTarget {
 export type ProgressFollowUpPlan =
   | { kind: 'warning'; message: string }
   | { kind: 'info'; message: string }
-  | {
-      kind: 'restoreState';
-      config: AgentConfig;
-      executeImmediately: boolean;
-    }
   // Produced only by planCompileFixer (latexFixer). The progress view opts every
   // 'execute' plan into the helper-model preference, so a new 'execute'-plan
   // producer would inherit it (gate the swap more narrowly if that isn't wanted).
   | { kind: 'execute'; request: ExecutionRequest };
-
-export interface ToolUseFollowUpInput {
-  streamId: StreamTabId;
-  runConfig: AgentConfig | undefined;
-  outputFiles: OutputFileInfo[];
-  agent: string;
-  model: string;
-  initialQuestion?: string;
-  executeImmediately: boolean;
-  modelOptions: readonly ProgressFollowUpModelOption[];
-  executionId?: string;
-}
 
 export interface CompileFixerInput {
   streamId: StreamTabId;
@@ -87,12 +66,7 @@ export interface CompileFixerInput {
   executionId?: string;
 }
 
-export type StreamToolUseFollowUpInput = Omit<
-  ToolUseFollowUpInput,
-  'runConfig' | 'outputFiles' | 'modelOptions' | 'executionId'
->;
-
-/** Both follow-up planners are workflow-only; tool-use runs have no plan. */
+/** The compile-fixer planner is workflow-only; tool-use runs have no plan. */
 function asWorkflowConfig(
   config: AgentConfig | undefined,
 ): AgentConfig | undefined {
@@ -101,26 +75,6 @@ function asWorkflowConfig(
 
 export class ProgressFollowUpController {
   constructor(private readonly deps: ProgressFollowUpControllerDeps) {}
-
-  async planToolUseFollowUpForStream(
-    input: StreamToolUseFollowUpInput,
-  ): Promise<ProgressFollowUpPlan> {
-    const modelOptions = await this.deps.loadModelOptions();
-    const outputFiles = Object.values(
-      this.deps.state.getOutputFiles(input.streamId),
-    ).flat();
-    const { config: runConfig, executionId } = this.deps.state.getRunMetadata(
-      input.streamId,
-    );
-
-    return this.planToolUseFollowUp({
-      ...input,
-      runConfig,
-      outputFiles,
-      modelOptions,
-      executionId,
-    });
-  }
 
   async planCompileFixerForStream(
     streamId: StreamTabId,
@@ -140,59 +94,6 @@ export class ProgressFollowUpController {
       modelOptions,
       executionId,
     });
-  }
-
-  planToolUseFollowUp(input: ToolUseFollowUpInput): ProgressFollowUpPlan {
-    const workflowConfig = asWorkflowConfig(input.runConfig);
-    if (!workflowConfig) {
-      return {
-        kind: 'warning',
-        message:
-          'No workflow state found for this stream. Cannot set up a follow-up.',
-      };
-    }
-
-    if (input.outputFiles.length === 0) {
-      return {
-        kind: 'info',
-        message: 'No workflow output files are available for a follow-up yet.',
-      };
-    }
-
-    if (this.deps.getAgentCategory(input.agent) !== AgentCategory.ToolUse) {
-      return {
-        kind: 'warning',
-        message: 'Select a tool-use agent before starting a follow-up.',
-      };
-    }
-
-    if (!this.hasEnabledModel(input.modelOptions, input.model)) {
-      return {
-        kind: 'warning',
-        message: 'Select an available model before starting a follow-up.',
-      };
-    }
-
-    const agentConfig = ToolUseAgentConfigSchema.parse({
-      ...workflowConfig,
-      agent: input.agent,
-      model: input.model,
-      agentCategory: AgentCategory.ToolUse,
-      instruction: this.buildWorkflowToolUseFollowupInstruction(
-        input.outputFiles,
-        input.initialQuestion,
-        input.executionId,
-      ),
-      outputFiles: [],
-      editedFile: null,
-      editedFiles: [],
-    });
-
-    return {
-      kind: 'restoreState',
-      config: agentConfig,
-      executeImmediately: input.executeImmediately,
-    };
   }
 
   async planCompileFixer(
@@ -282,30 +183,6 @@ export class ProgressFollowUpController {
     );
     if (!decision || decision.unavailable) return null;
     return decision.model;
-  }
-
-  private buildWorkflowToolUseFollowupInstruction(
-    outputFiles: OutputFileInfo[],
-    initialQuestion: string | undefined,
-    executionId: string | undefined,
-  ): string {
-    const executionHint = executionId ? `Execution: ${executionId}` : undefined;
-    const userQuestion = initialQuestion?.trim();
-    const outputLines = outputFiles.map((output) => {
-      const outputPath = this.formatOutputReferencePath(output, executionId);
-      const source = output.source ? ` (source: ${output.source})` : '';
-      return `- r${output.round}: ${outputPath}${source}`;
-    });
-
-    return [
-      'Continue from the completed workflow run. The workflow wrote generated files to task-run storage, so use the output paths below as read-only context unless a path is explicitly in the workspace.',
-      executionHint,
-      'Workflow outputs:',
-      ...outputLines,
-      userQuestion ? `User follow-up request: ${userQuestion}` : undefined,
-    ]
-      .filter(Boolean)
-      .join('\n');
   }
 
   private buildCompileFixerQuestion(
@@ -486,29 +363,11 @@ export class ProgressFollowUpController {
     }
     return output.relativePath;
   }
-
-  private formatOutputReferencePath(
-    output: OutputFileInfo,
-    executionId: string | undefined,
-  ): string {
-    const location = output.location;
-    switch (location.kind) {
-      case 'runStorage':
-        return runStorageFilePath(
-          executionId ?? location.executionId,
-          location.relativePath,
-        );
-      case 'workspace':
-        return location.relativePath;
-      case 'external':
-        return location.absolutePath;
-    }
-  }
 }
 
 /**
- * Reference to a run-storage file the way the follow-up prompt addresses it:
- * `/executions/<executionId>/files/<relativePath>`.
+ * Reference to a run-storage file the way the compile-fixer prompt addresses
+ * it: `/executions/<executionId>/files/<relativePath>`.
  */
 function runStorageFilePath(executionId: string, relativePath: string): string {
   return `/executions/${executionId}/files/${relativePath}`;

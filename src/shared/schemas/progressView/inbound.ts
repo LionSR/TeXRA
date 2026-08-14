@@ -49,20 +49,6 @@ function fileWithBaseCommand<T extends string>(command: T) {
   });
 }
 
-const FollowupConfigSchema = StreamScopedBaseSchema.extend({
-  agent: TrimmedStringSchema,
-  model: TrimmedStringSchema,
-  initialQuestion: z.string().optional(),
-});
-
-const SetupFollowupMessageSchema = FollowupConfigSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP),
-});
-
-const RunFollowupMessageSchema = FollowupConfigSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP),
-});
-
 const UseOwnApiKeyMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY),
   requestId: z.string(),
@@ -316,9 +302,6 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     fileWithBaseCommand(PROGRESS_VIEW_COMMANDS.MERGE_FILE),
     fileWithBaseCommand(PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE),
     OpenLabelMessageSchema,
-    streamScopedCommand(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS),
-    SetupFollowupMessageSchema,
-    RunFollowupMessageSchema,
     GettingStartedActionMessageSchema,
   ],
 );
