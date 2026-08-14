@@ -31,14 +31,22 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
         `\n\n${headingMarker(level)} ${body.trim()}\n\n`,
     )
     .replaceAll(/(?<![\p{L}\p{N}_])<br\s*\/?>/giu, '\n')
-    .replaceAll(/<\/(?:p|div)>/gi, '\n\n')
-    .replaceAll(/(?<![\p{L}\p{N}_])<(?:p|div)(?=[\s/>])[^<>]*>/giu, '')
-    .replaceAll(/(?<![\p{L}\p{N}_])<(?:strong|b)(?=[\s/>])[^<>]*>/giu, '**')
-    .replaceAll(/<\/(?:strong|b)>/gi, '**')
-    .replaceAll(/(?<![\p{L}\p{N}_])<(?:em|i)(?=[\s/>])[^<>]*>/giu, '_')
-    .replaceAll(/<\/(?:em|i)>/gi, '_')
-    .replaceAll(/(?<![\p{L}\p{N}_])<code(?=[\s/>])[^<>]*>/giu, '`')
-    .replaceAll(/<\/code>/gi, '`')
+    .replaceAll(
+      /(?<![\p{L}\p{N}_])<(p|div)(?=[\s/>])[^<>]*>([\s\S]*?)<\/\1>/giu,
+      (_match, _tag: string, body: string) => `\n\n${body.trim()}\n\n`,
+    )
+    .replaceAll(
+      /(?<![\p{L}\p{N}_])<(strong|b)(?=[\s/>])[^<>]*>([\s\S]*?)<\/\1>/giu,
+      (_match, _tag: string, body: string) => `**${body}**`,
+    )
+    .replaceAll(
+      /(?<![\p{L}\p{N}_])<(em|i)(?=[\s/>])[^<>]*>([\s\S]*?)<\/\1>/giu,
+      (_match, _tag: string, body: string) => `_${body}_`,
+    )
+    .replaceAll(
+      /(?<![\p{L}\p{N}_])<code(?=[\s/>])[^<>]*>([\s\S]*?)<\/code>/giu,
+      (_match, body: string) => `\`${body}\``,
+    )
     .replaceAll(
       /(?<![\p{L}\p{N}_])<blockquote(?=[\s/>])[^<>]*>([\s\S]*?)<\/blockquote>/giu,
       (_match, body: string) => quoteHtmlBlock(body),
