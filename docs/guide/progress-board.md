@@ -67,7 +67,7 @@ The header provides a summary and actions for the selected stream:
 <p class="hero-caption">The status dot: green while running, blue while waiting for input, grey once finished, red on error.</p>
 
 - **Token & Cost Summary**: Displays the combined input and output token counts from all completed rounds (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
-- **Stream Header Actions**: A toolbar of icon buttons acting on the selected stream. Workflow streams get Stop, Run New, Resume, Restore, Open in task storage, Diff, Clean, and Pack; tool-use streams get Stop, YOLO, agent-work approval, Compact, Restore, and Open in task storage.
+- **Stream Header Actions**: A toolbar of icon buttons acting on the selected stream. Workflow streams get Stop, Run New, Resume, Restore, Open in task storage, Copy run context, Diff, Clean, and Pack; tool-use streams get Stop, YOLO, agent-work approval, Compact, Restore, and Open in task storage.
 
 <StreamHeaderActions />
 
@@ -84,6 +84,10 @@ Each action in detail:
   Reveals the run folder under task-run storage so you can browse generated
   files, compile logs, mirrored dependencies, and intermediate artifacts
   manually.
+- <wa-icon library="texra" name="copy"></wa-icon> **Copy run context**: Copies the
+  run identity, output paths, and compile failures to the clipboard as plain
+  text, so you can paste them into a new tool-use chat. The button is disabled
+  when the run has neither outputs nor compile failures.
 - <wa-icon library="texra" name="box-archive"></wa-icon> **Pack**: Archives the output files and log for this stream into the `History` folder. See [File Management](./file-management.md).
 - <wa-icon library="texra" name="trash"></wa-icon> **Clean**: Deletes the task storage folder associated with this stream.
 
@@ -108,9 +112,13 @@ When a tool-use agent tackles a multi-step task, it shows a **live checklist** r
 
 ### After a workflow run
 
-The Progress board no longer starts a new chat from a finished workflow. Copy
-the run from the header toolbar if you want its output paths and compile
-failures, then start a tool-use chat from the **New** view.
+The ProgressBoard no longer starts a general-purpose chat from a finished
+workflow. Use **Copy run context** in the header toolbar to put the run's
+output paths and compile failures on the clipboard, then start a tool-use chat
+from the **New** view and paste that text into the instruction box.
+
+When a run recorded a compile failure, **Run latexFixer** still appears under
+**Generated Files** and starts a repair chat from those logs.
 
 ### Memory
 
