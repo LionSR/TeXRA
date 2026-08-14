@@ -181,6 +181,14 @@ describe('renderAnsiMarkdown', () => {
     ).toBe('Cost $5 **today, then $10');
   });
 
+  it('preserves inline math after a standalone currency amount', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        'Cost $5, then <strong>$a<b>c$</strong>',
+      ),
+    ).toBe('Cost $5, then **$a<b>c$**');
+  });
+
   it.each([
     ['<code>$HOME</code> and <code>$PATH</code>', '`$HOME` and `$PATH`'],
     ['`$HOME` <strong>or</strong> `$PATH`', '`$HOME` **or** `$PATH`'],
@@ -434,6 +442,20 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).toContain('│ a+b');
     expect(plain).toContain('│ \\]');
     expect(plain).not.toContain('\n  > a+b');
+  });
+
+  it('keeps multiline math through an alternating quote-list chain', () => {
+    const plain = renderPlain('> - > \\[\n>   > a+b\n>   > \\]', {
+      colorEnabled: false,
+      width: 80,
+    });
+    const mathLine = plain.split('\n').find((line) => line.includes('a+b'));
+
+    expect(mathLine).toBeDefined();
+    expect([...(mathLine ?? '')].filter((char) => char === '│')).toHaveLength(
+      2,
+    );
+    expect(mathLine).not.toContain('>');
   });
 
   it('renders nested blockquote prefixes once per depth', () => {

@@ -28,6 +28,10 @@ const CURRENCY_PAIR_RE = new RegExp(
   `\\$${CURRENCY_AMOUNT}[^\\n$]*?(?:\\s|\\s[([{"'‘“+–—-]|\\s[A-Z]{1,3})\\$${CURRENCY_AMOUNT}`,
   'gu',
 );
+const CURRENCY_BEFORE_MATH_RE = new RegExp(
+  `(?<![A-Za-z0-9_}>])(?:[A-Z]{1,3})?\\$${CURRENCY_AMOUNT}${SHELL_PARAMETER_BOUNDARY}(?=[^\\n$]*\\$[^\\n$]*\\$)`,
+  'gu',
+);
 const SHELL_UNWRAPPED_TOKEN_RE = new RegExp(
   `(?<![A-Za-z0-9_}>])\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
   'gu',
@@ -87,6 +91,7 @@ function protectLiteralDollarTokens(content: string): {
     HTML_CODE_SHELL_TOKEN_RE,
     MARKDOWN_CODE_SHELL_TOKEN_RE,
     CURRENCY_PAIR_RE,
+    CURRENCY_BEFORE_MATH_RE,
     SHELL_UNWRAPPED_TOKEN_RE,
   ].reduce(
     (value, pattern) => value.replaceAll(pattern, protectDollars),

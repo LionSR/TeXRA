@@ -143,11 +143,11 @@ function protectByPatterns(
         // collapsing an entire quoted display span into one placeholder line.
         const firstLineStart = source.lastIndexOf('\n', offset - 1) + 1;
         const firstLinePrefix = source.slice(firstLineStart, offset);
-        const firstQuotePrefix =
-          /^(?:[ \t]*(?:[-+*]|\d+[.)])[ \t]+)?((?:[ \t]*>[ \t]?)+)/u.exec(
+        const firstContainerPrefix =
+          /^(?:(?:[ \t]*>[ \t]?)|(?:[ \t]*(?:[-+*]|\d+[.)])[ \t]+))+/u.exec(
             firstLinePrefix,
-          )?.[1] ?? '';
-        const quoteDepth = [...firstQuotePrefix].filter(
+          )?.[0] ?? '';
+        const quoteDepth = [...firstContainerPrefix].filter(
           (char) => char === '>',
         ).length;
         const requiredPrefix = new RegExp(
