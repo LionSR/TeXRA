@@ -16,12 +16,16 @@ const REDUCED_MOTION_CSS = `@media (prefers-reduced-motion: reduce) {
   }
 }`;
 
+function hasReducedMotionStyle(host: Element): boolean {
+  return (
+    host.shadowRoot?.querySelector(`style[${REDUCED_MOTION_STYLE_ATTR}]`) !=
+    null
+  );
+}
+
 function adoptReducedMotion(host: Element): void {
   const root = host.shadowRoot;
-  if (
-    root == null ||
-    root.querySelector(`style[${REDUCED_MOTION_STYLE_ATTR}]`)
-  ) {
+  if (root == null || hasReducedMotionStyle(host)) {
     return;
   }
   const style = document.createElement('style');
@@ -34,7 +38,15 @@ function scheduleAdopt(host: Element): void {
   const pending = (host as { updateComplete?: Promise<unknown> })
     .updateComplete;
   if (pending) {
-    void pending.then(() => adoptReducedMotion(host));
+    void pending.then(
+      () => adoptReducedMotion(host),
+      (error: unknown) => {
+        console.warn(
+          'Failed to adopt reduced-motion style for wa-spinner',
+          error,
+        );
+      },
+    );
     return;
   }
   queueMicrotask(() => adoptReducedMotion(host));
@@ -46,7 +58,12 @@ class StopSpinnerMotionDirective extends Directive {
   }
 
   override update(part: ElementPart): typeof nothing {
-    scheduleAdopt(part.element);
+    // The style marker is visible as soon as it is adopted. Skip the
+    // updateComplete hop on later host commits so we do not request a
+    // fresh spinner update on every progress-view re-render.
+    if (!hasReducedMotionStyle(part.element)) {
+      scheduleAdopt(part.element);
+    }
     return nothing;
   }
 }
