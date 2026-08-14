@@ -106,14 +106,11 @@ When a tool-use agent tackles a multi-step task, it shows a **live checklist** r
 
 <p class="hero-caption">A live checklist: completed items are checked and struck through, the active item spins, pending items wait.</p>
 
-### Followup Tasks
+### After a workflow run
 
-Finished a polish run and want to discuss the results or merge the outputs? Instead of setting everything up again, use the **Followup** controls that appear after a workflow completes:
-
-- **Chat** about what the agent changed
-- **Run another agent** (like `merge`) on the output files
-
-The followup picks up right where the previous run left off - no need to re-select files or re-enter your instruction.
+The Progress board no longer starts a new chat from a finished workflow. Copy
+the run from the header toolbar if you want its output paths and compile
+failures, then start a tool-use chat from the **New** view.
 
 ### Memory
 
