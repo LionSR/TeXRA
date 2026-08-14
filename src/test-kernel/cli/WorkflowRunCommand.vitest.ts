@@ -669,6 +669,61 @@ describe('CLI workflow run command', () => {
     });
   });
 
+  it('keeps cancelled non-empty outputs in run storage and still prints the run directory and recovery hint', async () => {
+    await withTempRoot(async (root) => {
+      const generated = await writeGeneratedOutput(root);
+      const outputSummary = runOutputSummary(
+        generated,
+        path.join(root, 'paper.tex'),
+      );
+      mockWorkflowExecution(
+        workflowExecution('exec-cancelled-outputs', {
+          outcome: RUN_OUTCOME.CANCELLED,
+          outputs: [outputSummary],
+        }),
+        true,
+      );
+
+      const exitCode = await runWorkflow(
+        { output: 'polished.tex' },
+        cliContext({
+          cwd: root,
+          commandName: 'texra-local',
+          approvalPolicy: 'never',
+        }),
+      );
+
+      expect(exitCode).toBe(CliExitCode.Interrupted);
+      await expect(fs.stat(path.join(root, 'polished.tex'))).rejects.toThrow();
+      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+        expectedResultMeta({
+          outcome: RUN_OUTCOME.CANCELLED,
+          outputs: [outputSummary],
+          compileFailures: [],
+        }),
+      );
+      const emitted = mocks.emitCliResult.mock.calls[0]?.[1];
+      expect(emitted?.json).toMatchObject({
+        outcome: RUN_OUTCOME.CANCELLED,
+        runDirectory: '/tmp/runs/exec-cancelled-outputs',
+        outputs: [outputSummary],
+      });
+      expect(emitted?.json).not.toHaveProperty('copiedOutput');
+      expect(emitted?.json).not.toHaveProperty('copiedOutputs');
+      expect(emitted?.text).toBe('/tmp/runs/exec-cancelled-outputs');
+      expect(mocks.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
+        expectedRecoveryHint(
+          cliContext({
+            cwd: root,
+            commandName: 'texra-local',
+            approvalPolicy: 'never',
+          }),
+          'exec-cancelled-outputs',
+        ),
+      );
+    });
+  });
+
   it('presents the lifecycle verdict when cancellation lands during output finalization', async () => {
     const provisional = workflowExecution('exec-output-interrupted');
     if (!provisional.ok) throw new Error('Expected a workflow result.');
