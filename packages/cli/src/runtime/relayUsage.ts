@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CONFIG, getRelaySpendingLimit } from '@auth/config';
+import { utcMonthStart } from '@utils/core';
 
 const USAGE_PAGE_SIZE = 1000;
 
@@ -56,11 +57,12 @@ export function currentUtcMonthRange(now = new Date()): {
   start: Date;
   end: Date;
 } {
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const end = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
-  );
-  return { start, end };
+  const year = now.getUTCFullYear();
+  const monthIndex = now.getUTCMonth();
+  return {
+    start: utcMonthStart(year, monthIndex),
+    end: utcMonthStart(year, monthIndex + 1),
+  };
 }
 
 export function parseUtcMonth(month: string): { start: Date; end: Date } {
@@ -74,9 +76,10 @@ export function parseUtcMonth(month: string): { start: Date; end: Date } {
     throw new Error('Expected month in YYYY-MM format.');
   }
 
-  const start = new Date(Date.UTC(year, monthIndex, 1));
-  const end = new Date(Date.UTC(year, monthIndex + 1, 1));
-  return { start, end };
+  return {
+    start: utcMonthStart(year, monthIndex),
+    end: utcMonthStart(year, monthIndex + 1),
+  };
 }
 
 export async function fetchRelayUsageSummary(input: {
