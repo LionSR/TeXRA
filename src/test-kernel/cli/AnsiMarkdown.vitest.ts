@@ -152,6 +152,16 @@ describe('renderAnsiMarkdown', () => {
     expect(normalized).not.toContain('</strong>');
   });
 
+  it('normalizes HTML between same-line shell variables', () => {
+    const normalized = normalizeKnownHtmlForCliMarkdown(
+      '<code>$HOME</code> and <code>$PATH</code>',
+    );
+
+    expect(normalized).toBe('`$HOME` and `$PATH`');
+    expect(normalized).not.toContain('<code>');
+    expect(normalized).not.toContain('</code>');
+  });
+
   it('keeps every multiline math line inside an HTML blockquote', () => {
     const normalized = normalizeKnownHtmlForCliMarkdown(
       '<blockquote>\\[\na<b\nb>c\n\\]</blockquote>',

@@ -4,6 +4,7 @@ import { clamp } from '@utils/core';
 
 const KNOWN_HTML_TAG_RE =
   /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/i;
+const DOLLAR_TOKEN_START_RE = /^[A-Za-z0-9_{?@*#!(-]/u;
 
 // Formatting tags may carry ordinary name/value attributes or standard HTML
 // boolean attributes. Arbitrary bare words (for example `<p and y>`) are not
@@ -55,11 +56,11 @@ function shouldProtectMathSpanDuringHtmlNormalization(
   source: string,
 ): boolean {
   const isInlineDollarSpan = span.startsWith('$') && !span.startsWith('$$');
-  const isCurrencyPair =
+  const isLiteralDollarTokenPair =
     isInlineDollarSpan &&
-    /^\$\d/u.test(span) &&
-    /^\d/u.test(source.slice(offset + span.length));
-  return !(isCurrencyPair && KNOWN_HTML_TAG_RE.test(span));
+    DOLLAR_TOKEN_START_RE.test(span.slice(1)) &&
+    DOLLAR_TOKEN_START_RE.test(source.slice(offset + span.length));
+  return !(isLiteralDollarTokenPair && KNOWN_HTML_TAG_RE.test(span));
 }
 
 export function normalizeKnownHtmlForCliMarkdown(content: string): string {
