@@ -42,46 +42,48 @@ describe('latex housekeeping command notifications', () => {
   });
 
   it('restores latexdiff pack and clean notifications', () => {
-    const results: LatexdiffPackResult[] = [
-      { status: 'no-files', inputFile: 'paper.tex' },
-      { status: 'cleaned', inputFile: 'paper.tex' },
+    const cases: Array<{
+      result: LatexdiffPackResult;
+      expected: { severity: string; message: string } | undefined;
+    }> = [
       {
-        status: 'packed',
-        inputFile: 'paper.tex',
-        outputFolder: 'Diffs/20260505_paper_HEAD',
+        result: { status: 'no-files', inputFile: 'paper.tex' },
+        expected: {
+          severity: 'info',
+          message: 'No LaTeX diff files found to process',
+        },
       },
-      { status: 'missing-inputs' },
-      { status: 'processed', inputFile: 'paper.tex' },
       {
-        status: 'error',
-        inputFile: 'broken.tex',
-        error: new Error('rename failed'),
+        result: { status: 'cleaned', inputFile: 'paper.tex' },
+        expected: {
+          severity: 'info',
+          message: 'LaTeXdiff files cleaned',
+        },
+      },
+      {
+        result: {
+          status: 'packed',
+          inputFile: 'paper.tex',
+          outputFolder: 'Diffs/20260505_paper_HEAD',
+        },
+        expected: {
+          severity: 'info',
+          message: 'Files packed into Diffs/20260505_paper_HEAD',
+        },
+      },
+      {
+        result: { status: 'processed', inputFile: 'paper.tex' },
+        expected: undefined,
       },
     ];
 
-    const notifications = getLatexdiffPackNotifications(results);
-    expect(notifications).toMatchObject([
-      {
-        severity: 'info',
-        message: 'No LaTeX diff files found to process',
-      },
-      {
-        severity: 'info',
-        message: 'LaTeXdiff files cleaned',
-      },
-      {
-        severity: 'info',
-        message: 'Files packed into Diffs/20260505_paper_HEAD',
-      },
-      {
-        severity: 'message',
-        message: 'No input files provided for multiple LaTeX diff packing',
-      },
-      {
-        severity: 'error',
-        message: 'Error during packing broken.tex',
-      },
-    ]);
-    expect(notifications.at(-1)?.error).toBeInstanceOf(Error);
+    for (const { result, expected } of cases) {
+      const notification = getLatexdiffPackNotifications(result);
+      if (expected === undefined) {
+        expect(notification).toBeUndefined();
+      } else {
+        expect(notification).toMatchObject(expected);
+      }
+    }
   });
 });

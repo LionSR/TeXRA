@@ -54,7 +54,6 @@ export function loadRootPaths(rootDir) {
 // `src/tools/lean/direct/jsonRpc.ts` and `src/test-kernel/**`.
 export const EXTENSION_EXCLUDED_ALIASES = [
   'vscode-jsonrpc/node',
-  '@extensionSchemas/*',
   '@test/*',
   '@cli/*',
   '@desktop/*',
@@ -114,7 +113,6 @@ export const BUILD_EXCLUDED_ALIASES = [
   '@resources/*',
   '@progressView/*',
   '@settingsView/*',
-  '@extensionSchemas/*',
   'turndown-plugin-gfm',
   'data-uri-to-buffer',
   '@openrouter/sdk',
