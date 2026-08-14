@@ -1,6 +1,6 @@
 import { getReasonPhrase } from 'http-status-codes';
 import { safeParseJson } from '@common/parsing/safeParseJson';
-import { isObject, isString } from '@utils/core';
+import { isNonEmptyString, isObject, isString } from '@utils/core';
 
 import { pickStatus } from './sdkErrorKinds';
 
@@ -23,7 +23,7 @@ export function errorBodyCandidates(
 export function pickStringField(v: unknown, key: string): string | undefined {
   if (!isObject(v)) return undefined;
   const value = (v as Record<string, unknown>)[key];
-  return isString(value) && value.trim().length > 0 ? value : undefined;
+  return isNonEmptyString(value) ? value : undefined;
 }
 
 /** Pick a finite-number field off an error-body object. See {@link pickStringField}. */

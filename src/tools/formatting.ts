@@ -1,6 +1,7 @@
 // Third-party imports
 import { z } from 'zod';
 import type { ToolFileAttachment } from '@shared/schemas';
+import { clamp } from '@utils/core';
 
 // Local imports
 
@@ -28,7 +29,7 @@ export function sliceLineRange<T>(
   end: number,
 ): T[] {
   const from = Math.max(start - 1, 0);
-  const to = Math.max(Math.min(end, lines.length), from);
+  const to = clamp(end, from, lines.length);
   return lines.slice(from, to);
 }
 

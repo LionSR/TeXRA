@@ -3,6 +3,7 @@ import type { ApiProvider } from '@model/apiProviders';
 import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import type { ExhaustionReason, StreamTabId } from '@shared/schemas';
+import { isNonEmptyString } from '@utils/core';
 
 export interface ProgressApiKeyRetryRequest {
   stream: StreamTabId;
@@ -302,11 +303,7 @@ export class ProgressApiKeyRetryController {
     const keysAfter = await this.readKeys(providers);
     return providers.some((provider) => {
       const next = keysAfter.get(provider);
-      return (
-        typeof next === 'string' &&
-        next.trim().length > 0 &&
-        next !== keysBefore.get(provider)
-      );
+      return isNonEmptyString(next) && next !== keysBefore.get(provider);
     });
   }
 
