@@ -4,6 +4,9 @@ import { createHash } from 'node:crypto';
 // Third-party imports
 import stableStringify from 'fast-json-stable-stringify';
 
+// Local imports
+import { truncatedHexId } from '@utils/core/idHash';
+
 const WORKFLOW_SCRIPT_CHECKPOINT_KEY_PREFIX = 'workflow-script-';
 
 /**
@@ -21,16 +24,14 @@ export function deriveWorkflowScriptCheckpointId(identity: {
   readonly defaultAgent: string;
   readonly parentExecutionId: string;
 }): string {
-  return createHash('sha256')
-    .update(
-      stableStringify({
-        defaultAgent: identity.defaultAgent,
-        name: identity.name,
-        parentExecutionId: identity.parentExecutionId,
-      }),
-    )
-    .digest('hex')
-    .slice(0, 32);
+  return truncatedHexId(
+    stableStringify({
+      defaultAgent: identity.defaultAgent,
+      name: identity.name,
+      parentExecutionId: identity.parentExecutionId,
+    }),
+    32,
+  );
 }
 
 /** Build the execution-KV key owned by one workflow invocation. */
