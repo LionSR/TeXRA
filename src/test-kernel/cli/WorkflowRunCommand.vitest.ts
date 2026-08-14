@@ -212,7 +212,10 @@ function mockWorkflowExecution(
     },
   ) => {
     if (result.ok) {
-      const outputOutcome = await options.openWorkflowOutput?.(result.result);
+      const outputOutcome = await options.openWorkflowOutput?.(
+        result.result,
+        () => true,
+      );
       if (outputOutcome !== undefined) {
         return {
           ...result,
@@ -677,7 +680,7 @@ describe('CLI workflow run command', () => {
           readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
         },
       ) => {
-        await options.openWorkflowOutput?.(provisional.result);
+        await options.openWorkflowOutput?.(provisional.result, () => true);
         return {
           ...provisional,
           result: {
@@ -705,6 +708,98 @@ describe('CLI workflow run command', () => {
       }),
     );
   });
+
+  it.each([
+    {
+      label: '--output',
+      state: 'missing',
+      existing: false,
+      init: { output: 'published.tex' },
+      destination: (root: string) => path.join(root, 'published.tex'),
+    },
+    {
+      label: '--output-dir',
+      state: 'missing',
+      existing: false,
+      init: { outputDir: 'published' },
+      destination: (root: string) => path.join(root, 'published', 'paper.tex'),
+    },
+    {
+      label: '--output',
+      state: 'existing',
+      existing: true,
+      init: { output: 'published.tex' },
+      destination: (root: string) => path.join(root, 'published.tex'),
+    },
+    {
+      label: '--output-dir',
+      state: 'existing',
+      existing: true,
+      init: { outputDir: 'published' },
+      destination: (root: string) => path.join(root, 'published', 'paper.tex'),
+    },
+  ])(
+    'leaves a $state $label destination untouched when cancellation commits first',
+    async ({ init, destination, existing }) => {
+      await withTempRoot(async (root) => {
+        const generated = await writeGeneratedOutput(root);
+        const outputSummary = runOutputSummary(
+          generated,
+          path.join(root, 'paper.tex'),
+        );
+        const provisional = workflowExecution('exec-output-interrupted', {
+          outputs: [outputSummary],
+        });
+        if (!provisional.ok) throw new Error('Expected a workflow result.');
+        mocks.executeCliConfig.mockImplementationOnce(
+          async (
+            _config: unknown,
+            _context: unknown,
+            options: {
+              readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
+            },
+          ) => {
+            await options.openWorkflowOutput?.(provisional.result, () => false);
+            return {
+              ...provisional,
+              result: {
+                ...provisional.result,
+                outcome: RUN_OUTCOME.CANCELLED,
+              },
+            };
+          },
+        );
+        const target = destination(root);
+        if (existing) {
+          await fs.mkdir(path.dirname(target), { recursive: true });
+          await fs.writeFile(target, 'existing');
+        }
+
+        const exitCode = await runWorkflow(init, cliContext({ cwd: root }));
+
+        expect(exitCode).toBe(CliExitCode.Interrupted);
+        if (existing) {
+          await expect(fs.readFile(target, 'utf8')).resolves.toBe('existing');
+        } else {
+          await expect(fs.stat(target)).rejects.toThrow();
+        }
+        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+          expectedResultMeta({
+            outcome: RUN_OUTCOME.CANCELLED,
+            outputs: [outputSummary],
+            compileFailures: [],
+          }),
+        );
+        const emitted = mocks.emitCliResult.mock.calls[0]?.[1]?.json;
+        expect(emitted).toMatchObject({
+          outcome: RUN_OUTCOME.CANCELLED,
+          runDirectory: '/tmp/runs/exec-output-interrupted',
+        });
+        expect(emitted).not.toHaveProperty('copiedOutput');
+        expect(emitted).not.toHaveProperty('copiedOutputs');
+      });
+    },
+  );
 
   it('does not advertise resume when cancelled status is not durable', async () => {
     const durableExecution = workflowExecution('exec-undurable', {

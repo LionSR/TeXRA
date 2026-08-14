@@ -4,6 +4,7 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { RunAgentOptions } from '@agent/runtime/runAgent';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
 import { AgentError } from '@common/errors';
@@ -140,6 +141,17 @@ const COMPLETED_RUN = {
   streamId: 'stream-1',
 } as const;
 
+const COMPLETED_WORKFLOW_RUN: Parameters<
+  NonNullable<RunAgentOptions['openWorkflowOutput']>
+>[0] = {
+  category: 'workflow',
+  executionId: 'exec-1',
+  outcome: 'completed',
+  streamId: 'stream-1',
+  outputs: [],
+  compileFailures: [],
+};
+
 function baseRequest(): CliRequest {
   return { config: {}, executionId: 'exec-1' } as CliRequest;
 }
@@ -164,6 +176,7 @@ function loadRunExecution(): Promise<
 
 type LeaseOptions = {
   beforeLeaseRelease?: () => Promise<boolean | void>;
+  openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
   onRun?: () => void;
   launchSignal?: AbortSignal;
   onExecutionLeaseAcquired?: (
@@ -1129,6 +1142,83 @@ describe('executeCliRequest', () => {
 
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
     expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
+  });
+
+  it('denies workflow output publication after shutdown interruption commits', async () => {
+    const { platform, executeCliRequest } = await installFakePlatform();
+    let leaseOptions: LeaseOptions | undefined;
+    const hangingRun = stubHangingRun((options) => {
+      leaseOptions = options;
+    });
+    let publicationCommitted: boolean | undefined;
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+      openWorkflowOutput: async (_result, tryCommitPublication) => {
+        publicationCommitted = tryCommitPublication();
+      },
+    });
+    await vi.waitFor(() => expect(leaseOptions).toBeDefined());
+
+    const shutdown = platform.lifecycle.runShutdown();
+    leaseOptions?.onExecutionLeaseAcquired?.(
+      (operation: () => unknown) => operation(),
+      'exec-1' as ExecutionId,
+    );
+    leaseOptions?.onRun?.();
+    await leaseOptions?.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN);
+    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+      outcome: RUN_OUTCOME.CANCELLED,
+      outcomePersisted: true,
+    });
+    hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
+
+    await shutdown;
+    await expect(run).resolves.toMatchObject({
+      ok: true,
+      result: { outcome: RUN_OUTCOME.CANCELLED },
+    });
+    expect(publicationCommitted).toBe(false);
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: 'exec-1',
+      outcome: RUN_OUTCOME.CANCELLED,
+      flowRecord: 'preserve',
+    });
+  });
+
+  it('preserves the workflow verdict after output publication commits', async () => {
+    const { platform, executeCliRequest } = await installFakePlatform();
+    const { defaultSession } = await import('@agent/runtime/SessionHandle');
+    const killSpy = vi.spyOn(defaultSession().executions, 'kill');
+    let leaseOptions: LeaseOptions | undefined;
+    const hangingRun = stubHangingRun((options) => {
+      leaseOptions = options;
+    });
+    let publicationCommitted: boolean | undefined;
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+      openWorkflowOutput: async (_result, tryCommitPublication) => {
+        publicationCommitted = tryCommitPublication();
+      },
+    });
+    await vi.waitFor(() => expect(leaseOptions).toBeDefined());
+    leaseOptions?.onExecutionLeaseAcquired?.(
+      (operation: () => unknown) => operation(),
+      'exec-1' as ExecutionId,
+    );
+    leaseOptions?.onRun?.();
+    await leaseOptions?.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN);
+
+    const shutdown = platform.lifecycle.runShutdown();
+    hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
+
+    await shutdown;
+    await expect(run).resolves.toMatchObject({
+      ok: true,
+      result: { outcome: RUN_OUTCOME.COMPLETED },
+    });
+    expect(publicationCommitted).toBe(true);
+    expect(killSpy).not.toHaveBeenCalled();
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
 
   it('does not finalize shutdown through a captured lease that is already lost', async () => {
