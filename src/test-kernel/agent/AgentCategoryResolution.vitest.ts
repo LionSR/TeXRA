@@ -1,10 +1,9 @@
 // Node imports
-import { mkdtemp, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
 import {
@@ -22,6 +21,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { AgentCategory } from '@shared/schemas';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 /** Resolve exactly as launch does: through the single launch resolver, by the
  * source the delegation captured at validation time (see `getAgentPath`). */
@@ -41,6 +41,8 @@ function launchAs(category: AgentCategory, entry: AgentEntry | undefined) {
  * it cannot diverge from what validation accepted.
  */
 describe('cross-category agent resolution', () => {
+  const tempDirs: string[] = [];
+
   beforeAll(async () => {
     const customAgents: Record<string, string[]> = {
       'assistant.yaml': [
@@ -60,7 +62,7 @@ describe('cross-category agent resolution', () => {
         '  systemPrompt: Custom review agent.',
       ],
     };
-    const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
+    const customDir = await makeTempDir('texra-custom-agent-', tempDirs);
     for (const [fileName, lines] of Object.entries(customAgents)) {
       await writeFile(resolve(customDir, fileName), `${lines.join('\n')}\n`);
     }
@@ -80,6 +82,10 @@ describe('cross-category agent resolution', () => {
     );
 
     await refresh({ includeRemote: false });
+  });
+
+  afterAll(async () => {
+    await cleanupTempDirs(tempDirs);
   });
 
   it('demonstrates the divergence the category-scoped resolver closes', () => {

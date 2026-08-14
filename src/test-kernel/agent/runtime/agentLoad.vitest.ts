@@ -1,8 +1,7 @@
 import { strict as assert } from 'node:assert';
-import { mkdtemp, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { beforeAll, describe, it, beforeEach, afterEach, vi } from 'vitest';
+import { afterAll, beforeAll, describe, it, beforeEach, afterEach, vi } from 'vitest';
 import { z } from 'zod';
 
 import {
@@ -24,12 +23,19 @@ import type { AgentDirectoriesPort } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { AgentCategory } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 vi.mock('@agent/index', async () => {
   const actual =
     await vi.importActual<typeof import('@agent/index')>('@agent/index');
   return { ...actual, resolveAgent: vi.fn(actual.resolveAgent) };
+});
+
+const tempDirs: string[] = [];
+
+afterAll(async () => {
+  await cleanupTempDirs(tempDirs);
 });
 
 describe('validateAgentYamlContent', () => {
@@ -238,7 +244,7 @@ describe('inline agent definitions', () => {
     // Every agent directory points at an empty folder: nothing the registry
     // returns below can have come from YAML on disk.
     await useAgentDirectories(
-      await mkdtemp(path.join(tmpdir(), 'texra-empty-agents-')),
+      await makeTempDir('texra-empty-agents-', tempDirs),
     );
     registerInlineAgents([SCRATCHPAD]);
     await loadAgents({ includeRemote: false });
@@ -470,7 +476,7 @@ describe('inline agent definitions', () => {
   });
 
   it('keys inline agents apart from a same-named custom agent', async () => {
-    const customDir = await mkdtemp(path.join(tmpdir(), 'texra-custom-'));
+    const customDir = await makeTempDir('texra-custom-', tempDirs);
     await writeFile(
       path.join(customDir, 'scratchpad.yaml'),
       [
@@ -524,7 +530,7 @@ describe('agent registry load state', () => {
   }
 
   beforeAll(async () => {
-    agentDir = await mkdtemp(path.join(tmpdir(), 'texra-load-state-'));
+    agentDir = await makeTempDir('texra-load-state-', tempDirs);
     await writeFile(
       path.join(agentDir, 'stateProbe.yaml'),
       [
