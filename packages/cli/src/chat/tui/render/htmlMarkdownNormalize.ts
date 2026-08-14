@@ -4,12 +4,15 @@ import { clamp } from '@utils/core';
 
 const KNOWN_HTML_TAG_RE =
   /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/i;
-const DOLLAR_TOKEN_START_RE = /^[A-Za-z0-9_{?@*#!(]/u;
-const LITERAL_DOLLAR_PAIR_END_RE = /(?:[\s>]|[\s>][([{"'‘“+–—-])\$\$?$/u;
+const CURRENCY_AMOUNT_START_RE = /^\d/u;
+const CURRENCY_PAIR_END_RE = /(?:[\s>]|[\s>][([{"'‘“+–—-]|[\s>][A-Z]{2,3})\$$/u;
 const SHELL_PID_CODE_PAIR_RE =
   /^\$\$?<\/code>[\s\S]*<code(?:\s[^<>]*)?>\$\$?$/iu;
-const SHELL_SPECIAL_PARAMETER_CODE_PAIR_RE =
-  /^\$[_?@*#!-]<\/code>[\s\S]*?<code(?:\s[^<>]*)?>\$[_?@*#!-]<\/code>/iu;
+const SHELL_PARAMETER = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*|[0-9?@*#!-])`;
+const SHELL_PARAMETER_CODE_PAIR_RE = new RegExp(
+  `^\\$${SHELL_PARAMETER}<\\/code>[\\s\\S]*?<code(?:\\s[^<>]*)?>\\$${SHELL_PARAMETER}<\\/code>`,
+  'iu',
+);
 
 // Formatting tags may carry ordinary name/value attributes or standard HTML
 // attributes whose value may be omitted. Arbitrary bare words (for example
@@ -62,16 +65,17 @@ function shouldProtectMathSpanDuringHtmlNormalization(
 ): boolean {
   if (!span.startsWith('$')) return true;
   const delimiterWidth = span.startsWith('$$') ? 2 : 1;
-  const isLiteralDollarTokenPair =
-    DOLLAR_TOKEN_START_RE.test(span.slice(delimiterWidth)) &&
-    LITERAL_DOLLAR_PAIR_END_RE.test(span) &&
-    DOLLAR_TOKEN_START_RE.test(source.slice(offset + span.length));
-  const isShellSpecialParameterPair = SHELL_SPECIAL_PARAMETER_CODE_PAIR_RE.test(
+  const isCurrencyPair =
+    delimiterWidth === 1 &&
+    CURRENCY_AMOUNT_START_RE.test(span.slice(1)) &&
+    CURRENCY_PAIR_END_RE.test(span) &&
+    CURRENCY_AMOUNT_START_RE.test(source.slice(offset + span.length));
+  const isShellParameterPair = SHELL_PARAMETER_CODE_PAIR_RE.test(
     source.slice(offset),
   );
   return !(
-    isLiteralDollarTokenPair ||
-    isShellSpecialParameterPair ||
+    isCurrencyPair ||
+    isShellParameterPair ||
     SHELL_PID_CODE_PAIR_RE.test(span)
   );
 }

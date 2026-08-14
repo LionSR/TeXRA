@@ -155,6 +155,7 @@ describe('renderAnsiMarkdown', () => {
       'Cost $5 <strong>today</strong>, then $10',
       'Cost $5 <strong>today</strong>, then ($10)',
       'Cost $5 <strong>today</strong>, then -$10',
+      'Cost US$5 <strong>today</strong>, then US$10',
     ];
 
     for (const example of examples) {
@@ -203,6 +204,9 @@ describe('renderAnsiMarkdown', () => {
       '$x<i>y$z',
       '$a<br>c$',
       '$a<strong>b($c',
+      '$0<p>1$$',
+      '$a <b> c $b',
+      '$$0 <p> 1 $$10',
     ];
 
     for (const example of examples) {
@@ -212,6 +216,7 @@ describe('renderAnsiMarkdown', () => {
 
   it('preserves adjacent inline math spans independently of markdown', () => {
     expect(renderPlain('$*a*$$*b*$')).toContain('$*a*$$*b*$');
+    expect(renderPlain('$a_{i}$$')).toContain('$a_{i}$$');
   });
 
   it('preserves a complete inline span after an unmatched display opener', () => {

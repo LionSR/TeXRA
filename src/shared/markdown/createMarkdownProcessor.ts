@@ -121,7 +121,7 @@ const MATH_SPAN_PATTERNS: readonly RegExp[] = [
   /\$\$[\s\S]+?\$\$/g, // $$ … $$  (display, may span lines)
   /\\\[[\s\S]+?\\\]/g, // \[ … \]  (display)
   /\\\([\s\S]+?\\\)/g, // \( … \)  (inline)
-  /(?<!\\)\$(?!\$)[^\n$]+?(?<![\\$])\$(?:\$(?!\$)[^\n$]+?(?<![\\$])\$)*(?!\$)/g, // $ … $  (one or more adjacent inline spans, single line)
+  /(?<!\\)\$(?!\$)[^\n$]+?(?<![\\$])\$(?:\$(?!\$)[^\n$]+?(?<![\\$])\$)*/g, // $ … $  (one or more adjacent inline spans, single line)
 ];
 
 // Replace every match of `patterns` with an indexed `@@<tag>-N@@` placeholder,
