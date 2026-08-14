@@ -608,6 +608,148 @@ session identity and an explicit disposal contract to the shared
 registry before replacing the binder, or keep the session-owned binder
 and only ship the emit fold.
 
+## Addendum B: the surrounding substrate (second debt-audit run, 2026-08-14)
+
+A second audit run swept the substrate *around* the already-audited core —
+`src/tools/` (minus delegation), storage/trace/output/prompt/goal/roster/
+index/modelHandlers, controllers, eventBus, shared, platform, and the three
+hosts' import edges — under five lenses (pass-throughs, dual systems, dead
+code, ownership-and-layering, coupling surface), with everything above
+excluded from its charter. Nine candidates were shortlisted; **eight
+verified REAL_NET_GAIN (~−2,430 LoC, ~−178 elements), one BLOCKED** — and
+the blocked verdict is recorded below as a standing negative result so the
+same deletion is not re-proposed.
+
+The mappers also returned a clean bill of health worth recording: the
+agent-CLI twins (already consolidated over one strategy engine), the GitHub
+polling verticals (real divergence, not copy-shape), the storage core
+("healthiest territory in this audit"), modelHandlers (per-member #7101
+fold-rejection annotations), and most controller `*Deps` interfaces
+(genuine two-host seams) all survive scrutiny as designed, not as debt.
+
+### B1. Empty the shared-schemas deep-import baseline (−880 LoC, −80 elements)
+
+The repo's largest frozen list (878 lines,
+`config/ratchets/shared-schemas-deep-import-baseline.json`) is certified
+100% gratuitous by its own classifier: `forced={}` — every one of the 387
+deep-import statements rewrites verbatim to the `@shared/schemas` barrel
+that 1,016 statements already use. A mechanical codemod plus the built-in
+baseline regen deletes the committed duplicate knowledge while the ratchet
+stays armed at zero. Folding `schemas/settingsView/{data,inbound}`
+(1,138 LoC) into the 49-line pure re-export shim that all ~81 importers
+already use deletes the dual organizational scheme. Verifier corrections:
+the ratchet's own sanity assertion (`totals > 0`) needs a ~5-line edit; a
+~20-statement scope cut in the low layers (logger/utils/transcript/…) where
+the barrel would invert layering.
+
+### B2. Single-caller extraction sweep (−190 LoC, −24 elements)
+
+~9 surviving micro-files and write-only surfaces, each grep-verified to one
+production consumer or zero readers: the three `executions/` satellites
+(`configFieldFilter`, `fileListingFormat`, `runDirectoryFiles`),
+`imageUtils.ts`, two shared/streams reducers with one caller each,
+`detectWaitingStreams`, three trace sugar helpers, six write-only agent-CLI
+session-entry fields (collapsing two interfaces and a generic), and two
+fabricated `DISPLAY_MODEL` rows. Verifier cut four items whose
+single-caller premise failed (the inquiry formatter and the goal directory
+have multiple real consumers; `executionKvFiles.ts` is a genuine
+cross-package SSOT — keep).
+
+### B3. Make the host-agent baseline tell the truth (−25 LoC net, −18 elements)
+
+`host-agent-import-baseline.json` carries **5 stale rows** (specifiers with
+zero hits in any host package) while desktop live-imports
+`@agent/index/agentEntry` unrecorded — drift the count-only gate
+structurally cannot catch, since any specifier can swap for any other under
+the same count. The sibling `hostAgentMockRatchet` already runs the
+set-based two-check form green in the same directory. Fix: purge stale
+rows, record the drift, convert the gate to set-based; reshape the lean
+exports out of knip (7 of 15 knip-baseline rows exist only for it).
+Verifier correction: TS-side cost is ~+15 LoC (the set-based checks are
+longer than the count assert) — accepted because the gate then states
+truth.
+
+### B4. Controllers pass-through purge (−200 LoC, −20 elements)
+
+`WebviewUpdater` (349 LoC, no second implementor): 25 of 26 send methods
+are 1:1 forwards to a 3-line `sendMessage`, 17 with exactly one caller —
+folds into `LitSessionRenderer` as the single Lit-delivery owner. Delete
+`SettingsProfileProviderDeps` (re-injects 10 module constants both hosts
+spread verbatim from the same default source) and `SettingsModelSelectionState`.
+Verifier cut: **keep** `ProgressBackend.applyStreamStatus` (a documented
+awaitable test seam whose removal would create flaky hub-waits); only the
+other three test-only seeds go.
+
+### B5. One keyless `githubSubscriptionsChanged` signal (−55 LoC, −10)
+
+Six per-kind AppSignals (pr/repo/issue × Subscriptions/Bindings) broadcast
+one fact to exactly one subscriber — a six-name loop binding all of them to
+the same zero-arg refresh; no listener reads the payloads. One keyless
+signal deletes the abstract emit-hook, three overrides, and the
+anti-double-emit dance. The separate `onKeysChanged` listener channel (which
+has a real payload consumer) stays.
+
+### B6. Retire `str_replace_editor` (−870 LoC, −6 elements)
+
+The substrate's one genuine resting dual system: `TextEditorTool` (617 LoC
+plus registry row, provider type-mapping, frontend formatter branches, and
+a private undo store existing nowhere else) duplicates the shipped
+`read_file`/`write_file`/`edit_file` family over the same write pipeline,
+and **nothing ships it** — zero agent YAMLs, no runtime default, no doc;
+reachable only from a custom user agent naming it. It survives as the
+target for Anthropic's native `text_editor_20250429` type, which no shipped
+configuration requests either. Standing gate: retiring it is a deliberate
+product decision (custom YAMLs naming it would need the warn-and-degrade
+path); the `str_replace` branch in `toolSections.ts` is shared with
+provider variants and stays.
+
+### B7. Reflection-output pipeline cleanup and relocation (−150 LoC, −11)
+
+`src/agent/output/` (18 files, 3,815 LoC) has exactly four production
+importers — all reflection-flow files. Because it pretends to be
+flow-agnostic, `OutputNode` re-projects `ReflectionServices` into an
+`OutputDependencies` bag on every prep/exec/post while `runReflectionFlow`
+hand-builds the same literal again. Deletions verified: the `getRoundOutput`
+call is a no-op at its single call site (result discarded; outputs already
+assigned), `ProcessingContext`'s members are one-line forwards. Then
+relocate the directory under `implementations/flows/reflection/` (the same
+move as item 9's `ResponseCycleFlow`). Verifier correction: the relocation
+*does* touch the shared-schemas ratchet (three files are listed in the
+baseline) — regenerate in the same PR, or land after B1 empties it.
+
+### B8. BLOCKED — do not delete the "orphaned" inline-agent machinery or the legacy-storage migrations
+
+Recorded as a negative result. Both subsystems look unclaimed (zero
+production callers at HEAD) but are claimed in writing: inline agents are
+the explicitly ruled SDK Tier-1 mechanism ("definitions-as-values: add an
+'inline' AgentSource; do not build an options API" —
+`2026-07-27-agent-npm-package-step3.md`), and the legacy migrations carry
+their own retention decisions. Deleting either contradicts the plan of
+record; the correct follow-up is a *date* on the migrations' retirement,
+not a deletion PR.
+
+### B9. Converge the composition roots (−60 LoC, −9 elements; extends A5)
+
+The generalization of A5's finding: hosts run **two injection mechanisms
+side by side** — the compile-time-complete `Platform` object and ~13
+ordered module-singleton setters — and the second has a shipped defect
+proving its failure class (the desktop polish bug; the CLI suffered the
+same class before, per `nodeHost.ts`'s own docstring). Scope after verifier
+correction: one `initializePackagedPrompts(resourcesPath)` replaces the two
+separately-remembered prompt initializers (fixes the bug by construction),
+plus the `isInstalled` capability and agent-directory module merges — but
+**not** Platform-absorption of the setup/lean singletons, which deletes
+only accessor trios while adding Platform members and host-adapter churn (a
+wash that fails the net-gain bar).
+
+### Sequencing against the waves
+
+B8 ships nothing. B1 and B3 are ratchet-layer work and slot beside Wave 1
+(B1 before B7's relocation). B9 merges into A5's slot in Wave 5 (one PR:
+defect fix + loader convergence). B6 needs a product sign-off before any
+code moves. B2, B4, B5, B7 are independent Wave-5-class cleanups, smallest
+first.
+
 ## Open questions
 
 1. Item 2: should the cost contract also cover agent-CLI children
