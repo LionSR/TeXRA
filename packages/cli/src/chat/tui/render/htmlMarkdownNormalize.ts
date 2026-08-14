@@ -49,11 +49,27 @@ function headingMarker(level: string): string {
   return '#'.repeat(depth);
 }
 
+function shouldProtectMathSpanDuringHtmlNormalization(
+  span: string,
+  offset: number,
+  source: string,
+): boolean {
+  const isInlineDollarSpan = span.startsWith('$') && !span.startsWith('$$');
+  const isCurrencyPair =
+    isInlineDollarSpan &&
+    /^\$\d/u.test(span) &&
+    /^\d/u.test(source.slice(offset + span.length));
+  return !(isCurrencyPair && KNOWN_HTML_TAG_RE.test(span));
+}
+
 export function normalizeKnownHtmlForCliMarkdown(content: string): string {
   const summarized = summarizeEmbeddedSubagentFollowups(content);
   if (!KNOWN_HTML_TAG_RE.test(summarized)) return summarized;
 
-  const mathProtection = protectLatexMathSpans(summarized);
+  const mathProtection = protectLatexMathSpans(
+    summarized,
+    shouldProtectMathSpanDuringHtmlNormalization,
+  );
   if (!KNOWN_HTML_TAG_RE.test(mathProtection.content)) return summarized;
 
   const normalized = mathProtection.content
@@ -72,7 +88,7 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
     .replaceAll(CODE_OPEN_TAG_RE, '`')
     .replaceAll(/<\/code>/gi, '`')
     .replaceAll(BLOCKQUOTE_TAG_RE, (_match, body: string) =>
-      quoteHtmlBlock(body),
+      quoteHtmlBlock(mathProtection.restore(body)),
     )
     .trim();
   return mathProtection.restore(normalized);

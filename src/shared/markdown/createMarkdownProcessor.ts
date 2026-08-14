@@ -130,11 +130,17 @@ function protectByPatterns(
   content: string,
   patterns: readonly RegExp[],
   tag: string,
+  shouldProtect: (
+    span: string,
+    offset: number,
+    source: string,
+  ) => boolean = () => true,
 ): { content: string; items: string[] } {
   const items: string[] = [];
   let out = content;
   for (const pattern of patterns) {
-    out = out.replaceAll(pattern, (match) => {
+    out = out.replaceAll(pattern, (match, offset: number, source: string) => {
+      if (!shouldProtect(match, offset, source)) return match;
       const index = items.push(match) - 1;
       return `@@${tag}-${index}@@`;
     });
@@ -153,8 +159,11 @@ function restorePlaceholders(
   });
 }
 
-/** Shields complete LaTeX math spans while another text transform runs. */
-export function protectLatexMathSpans(content: string): {
+/** Shields selected complete LaTeX math spans while another transform runs. */
+export function protectLatexMathSpans(
+  content: string,
+  shouldProtect?: (span: string, offset: number, source: string) => boolean,
+): {
   content: string;
   restore: (value: string) => string;
 } {
@@ -162,6 +171,7 @@ export function protectLatexMathSpans(content: string): {
     content,
     MATH_SPAN_PATTERNS,
     'LATEX-MATH',
+    shouldProtect,
   );
   return {
     content: protectedMath.content,

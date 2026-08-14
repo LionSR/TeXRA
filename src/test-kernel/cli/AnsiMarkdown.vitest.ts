@@ -13,6 +13,7 @@ import {
   _resetAnsiMarkdownForTests,
   renderAnsiMarkdown,
 } from '@cli/chat/tui/render/ansiMarkdown';
+import { normalizeKnownHtmlForCliMarkdown } from '@cli/chat/tui/render/htmlMarkdownNormalize';
 
 const ESC = String.fromCharCode(27);
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-9;]*m`, 'u');
@@ -100,6 +101,8 @@ describe('renderAnsiMarkdown', () => {
       '\\[a<i>c\\]',
       '\\[a<br>c\\]',
       '\\[0<p<1, 1-\\frac{2p}{3}>0, \\frac p3>0\\]',
+      '$0<p>1$',
+      '$$0<p>1$$',
       '\\(0 < p < 1\\)',
       '\\(0 <p <1\\)',
       '\\(0 <p < 1\\)',
@@ -137,6 +140,24 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('<p hidden>');
     expect(plain).not.toContain('<b hidden>');
     expect(plain).not.toContain('<code hidden>');
+  });
+
+  it('normalizes HTML between same-line currency amounts', () => {
+    const normalized = normalizeKnownHtmlForCliMarkdown(
+      'Cost $5 <strong>today</strong>, then $10',
+    );
+
+    expect(normalized).toBe('Cost $5 **today**, then $10');
+    expect(normalized).not.toContain('<strong>');
+    expect(normalized).not.toContain('</strong>');
+  });
+
+  it('keeps every multiline math line inside an HTML blockquote', () => {
+    const normalized = normalizeKnownHtmlForCliMarkdown(
+      '<blockquote>\\[\na<b\nb>c\n\\]</blockquote>',
+    );
+
+    expect(normalized).toBe('> \\[\n> a<b\n> b>c\n> \\]');
   });
 
   it('preserves comparison prose that resembles HTML attributes', () => {
