@@ -10,7 +10,6 @@ import {
   type ExecutionStreamReference,
 } from '@agent/storage/executionListing';
 import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
-import { isBackgroundShellStream } from '@agent/runtime/streamTab';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
@@ -492,7 +491,12 @@ export class SessionStores {
     const swept: StreamTabId[] = [];
     const retained: StreamTabId[] = [];
     for (const stream of liveStreams) {
-      if (!isBackgroundShellStream(stream)) continue;
+      // Identity is the one authority on what a stream is: a background shell
+      // persists `RunIdentity` `{ kind: 'process' }` in its summary meta
+      // mirror. A summary without the mirror is treated as not-a-shell and
+      // left alone until its next sidecar hydration backfills the meta.
+      if (this.streamLogs.getSummaryMeta(stream)?.identity?.kind !== 'process')
+        continue;
       // Awaited one at a time because `deletionQueue` already serializes every
       // deletion on this instance at concurrency 1: firing them together would
       // only queue them, trading readable sequencing for a burst of promises.

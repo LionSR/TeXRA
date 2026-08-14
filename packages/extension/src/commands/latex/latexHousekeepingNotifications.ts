@@ -36,40 +36,27 @@ export function getIndentTeXNotification(
 }
 
 export function getLatexdiffPackNotifications(
-  results: LatexdiffPackResult | LatexdiffPackResult[],
-): LatexHousekeepingNotification[] {
-  return (Array.isArray(results) ? results : [results]).flatMap((result) => {
-    switch (result.status) {
-      case 'no-files':
-        return {
-          severity: 'info',
-          message: 'No LaTeX diff files found to process',
-        };
-      case 'cleaned':
-        return {
-          severity: 'info',
-          message: 'LaTeXdiff files cleaned',
-        };
-      case 'packed':
-        return {
-          severity: 'info',
-          message: `Files packed into ${result.outputFolder}`,
-        };
-      case 'missing-inputs':
-        return {
-          severity: 'message',
-          message: 'No input files provided for multiple LaTeX diff packing',
-        };
-      case 'error':
-        return {
-          severity: 'error',
-          message: `Error during packing ${result.inputFile}`,
-          error: result.error,
-        };
-      case 'processed':
-        return [];
-    }
-  });
+  result: LatexdiffPackResult,
+): LatexHousekeepingNotification | undefined {
+  switch (result.status) {
+    case 'no-files':
+      return {
+        severity: 'info',
+        message: 'No LaTeX diff files found to process',
+      };
+    case 'cleaned':
+      return {
+        severity: 'info',
+        message: 'LaTeXdiff files cleaned',
+      };
+    case 'packed':
+      return {
+        severity: 'info',
+        message: `Files packed into ${result.outputFolder}`,
+      };
+    case 'processed':
+      return undefined;
+  }
 }
 
 export async function showLatexHousekeepingNotification(

@@ -76,22 +76,6 @@ export function registerMainViewCommands(
 ): void {
   registerCommandEntries(context, [
     {
-      id: 'texra.refreshModelOptions',
-      handler: () =>
-        runRefresh('model options', async (webview) => {
-          postModelOptions(webview, await loadMainViewModelOptions());
-        }),
-    },
-    {
-      id: 'texra.refreshAgentOptions',
-      handler: () =>
-        runRefresh('agent options', async (webview) => {
-          await refresh();
-          postAgentOptions(webview, await computeAgentOptionsData());
-          await postTeamOptions(webview);
-        }),
-    },
-    {
       id: 'texra.refreshAllOptions',
       handler: (args?: RefreshAllOptionsArgs) =>
         runRefresh('options', async (webview) => {

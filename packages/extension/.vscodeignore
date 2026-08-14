@@ -4,7 +4,6 @@
 .cursor/*
 .cursorignore
 
-.pre-commit-config.yaml
 .DS_Store
 resources/.DS_Store
 
@@ -14,7 +13,6 @@ out/**
 node_modules/**
 src/**
 .gitignore
-.yarnrc
 **/tsconfig.json
 eslint.config.mjs
 esbuild.config.mjs
@@ -23,11 +21,7 @@ tsconfig.json
 **/*.ts
 **/.vscode-test.*
 
-venv/**
 docs/**
-prototypes/**
-test/**
-test-loader.mjs
 AGENTS.md
 CLAUDE.md
 
@@ -58,11 +52,8 @@ resources/traceViewerShared/**
 
 .env
 
-supabase/**
 releases/**
 .prettierignore
 
-slides/**
 scripts/**
-.texpadtmp/**
 .github/**

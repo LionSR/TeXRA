@@ -15,7 +15,6 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import {
   runPackLatexdiffvc,
-  runPackLatexdiffvcMultiple,
   type LatexdiffPackResult,
 } from '@housekeeping/packLatexdiffvc';
 import type { LaTeXdiffResult } from '@latex/latexdiff';
@@ -153,10 +152,9 @@ async function runDiffAndOpen(
 
 // Turn pack/clean run results into user notifications. Folds the notification
 // derivation and display that every latexdiff-vc handler invoked together.
-function reportLatexdiff(
-  results: LatexdiffPackResult | LatexdiffPackResult[],
-): void {
-  for (const notification of getLatexdiffPackNotifications(results)) {
+function reportLatexdiff(result: LatexdiffPackResult): void {
+  const notification = getLatexdiffPackNotifications(result);
+  if (notification) {
     void showLatexHousekeepingNotification(CHANNEL, notification);
   }
 }
@@ -168,15 +166,7 @@ export function registerLatexdiffCommands(
     { id: 'texra.latexdiff', handler: handleLatexdiff },
     { id: 'texra.latexdiffvc', handler: handleLatexdiffvc },
     { id: 'texra.packLatexdiffvc', handler: handlePackLatexdiffvc },
-    {
-      id: 'texra.packLatexdiffvcMultiple',
-      handler: handlePackLatexdiffvcMultiple,
-    },
     { id: 'texra.cleanLatexdiffvc', handler: handleCleanLatexdiffvc },
-    {
-      id: 'texra.cleanLatexdiffvcMultiple',
-      handler: handleCleanLatexdiffvcMultiple,
-    },
     { id: 'texra.runLatexdiff', handler: handleRunLatexdiff },
   ]);
 }
@@ -254,27 +244,6 @@ async function handlePackLatexdiffvc(
   );
 }
 
-async function handlePackLatexdiffvcMultiple(
-  inputFiles: string[],
-  commitHash: string,
-  clean: boolean,
-): Promise<void> {
-  await withLatexdiffTool(
-    'latexdiff-vc',
-    'Error packing LaTeX diffs',
-    async () => {
-      logger.debug(
-        CHANNEL,
-        `Command called with: commitHash=${commitHash}, clean=${clean}`,
-      );
-      logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
-      reportLatexdiff(
-        await runPackLatexdiffvcMultiple(inputFiles, commitHash, clean),
-      );
-    },
-  );
-}
-
 async function handleCleanLatexdiffvc(
   inputFile: string,
   baseFile: string,
@@ -290,23 +259,6 @@ async function handleCleanLatexdiffvc(
       );
       const fileToUse = baseFile ?? inputFile;
       reportLatexdiff(await runPackLatexdiffvc(fileToUse, commitHash, true));
-    },
-  );
-}
-
-async function handleCleanLatexdiffvcMultiple(
-  inputFiles: string[],
-  commitHash: string,
-): Promise<void> {
-  await withLatexdiffTool(
-    'latexdiff-vc',
-    'Error cleaning LaTeX diffs',
-    async () => {
-      logger.debug(CHANNEL, `Command called with: commitHash=${commitHash}`);
-      logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
-      reportLatexdiff(
-        await runPackLatexdiffvcMultiple(inputFiles, commitHash, true),
-      );
     },
   );
 }

@@ -28,10 +28,12 @@ describe('agent preset hosted-definition metadata', () => {
     expect(softwareTeam?.texraHostedAgents).toEqual([]);
   });
 
-  it('normalizes a legacy pair-shaped custom team into the category record', () => {
-    // Migration fixture: user-authored teams persisted before the ByCategory
-    // recut carry `workflowAgents`/`toolUseAgents`. Dropping them instead of
-    // normalizing would silently delete users' saved teams.
+  it('rejects a retired legacy pair-shaped custom team with a warning', () => {
+    // The `workflowAgents`/`toolUseAgents` legacy pair (#9705) is retired:
+    // such a blob must fail parsing loudly, not silently masquerade as an
+    // empty roster.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
     const presets = parseAgentModePresets([
       {
         id: 'legacy-team',
@@ -44,12 +46,9 @@ describe('agent preset hosted-definition metadata', () => {
       },
     ]);
 
-    expect(presets).toHaveLength(1);
-    expect(presets[0]).toMatchObject({
-      id: 'legacy-team',
-      agents: { workflow: ['polish', 'correct'], toolUse: ['assistant'] },
-      texraHostedAgents: ['assistant'],
-    });
+    expect(presets).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('index 0'));
+    vi.restoreAllMocks();
   });
 });
 

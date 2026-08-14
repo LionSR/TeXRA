@@ -124,15 +124,12 @@ describe('external inquiry continuation session routing', () => {
     );
   });
 
-  it('archives legacy inquiry answers without a parent generation fence', async () => {
-    const manifest = answeredManifest();
-    const turns = manifest.turns.map(
-      ({ parentGenerationId: _, ...turn }) => turn,
-    );
-
+  it('archives a turn-less manifest without dispatching a follow-up', async () => {
+    // The manifest schema does not require turns; the structural guard must
+    // archive (not crash) when there is no turn to fence against.
     const outcome = await injectContinuationForAnsweredThread(THREAD, {
-      ...manifest,
-      turns,
+      ...answeredManifest(),
+      turns: [],
     });
 
     expect(outcome).toBe('archived');

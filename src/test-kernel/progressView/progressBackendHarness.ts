@@ -23,9 +23,11 @@ import {
   AgentCategory,
   type ExecutionId,
   type ProgressViewOutboundMessage,
+  type RunIdentity,
   type SetActiveStreamPayload,
   type StreamTabId,
   type UpdateStreamDescriptionPayload,
+  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import {
@@ -141,10 +143,22 @@ export function executionDeleter(backend: ProgressBackend): ExecutionDeleter {
 
 export async function writeExecutionConfig(
   executionId: ExecutionId,
+  options: { streamId?: StreamTabId; identity?: RunIdentity } = {},
 ): Promise<void> {
-  await getExecutionStore(executionId).writeRunRecord(
-    toolUseConfig('search', 'deepseekproT'),
-  );
+  const store = getExecutionStore(executionId);
+  await store.writeRunRecord(toolUseConfig('search', 'deepseekproT'));
+  // Identity hydrates from the persisted execution meta — what
+  // `registerExecution` writes at birth — so tests exercising the
+  // identity-keyed sweep must persist it the same way.
+  if (options.streamId && options.identity) {
+    await store.writeMeta({
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      streamId: options.streamId,
+      identity: options.identity,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    });
+  }
 }
 
 export function emitRunEvent(

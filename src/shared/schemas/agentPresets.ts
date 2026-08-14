@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 
-import { AgentCategory, AgentCategorySchema } from './agent';
+import { AgentCategorySchema } from './agent';
 
 const AGENT_MODE_PRESET_ICON_NAMES = [
   'bookmark',
@@ -46,8 +46,8 @@ const AgentModePresetIconSchema = z.string().transform((rawIcon) => {
   return FALLBACK_AGENT_MODE_PRESET_ICON;
 });
 
-/** Canonical schema for a single agent team: members keyed by category. */
-const AgentModePresetCanonicalSchema = z.object({
+/** Schema for a single agent team: members keyed by category. */
+export const AgentModePresetSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
@@ -57,38 +57,7 @@ const AgentModePresetCanonicalSchema = z.object({
   texraHostedAgents: z.array(z.string()).optional(),
 });
 
-/**
- * Legacy persisted shape: user-authored teams under `CUSTOM_AGENT_PRESETS`
- * carried the members as a `workflowAgents`/`toolUseAgents` field pair.
- * Normalized to the category-keyed record once, here at the parse boundary —
- * dropping this member would silently drop users' saved teams.
- *
- * Introduced 2026-08-04 (#9705); retire three months after ship (target
- * 2026-11-04). Stored presets rewrite to the canonical shape on any preset
- * save, so the window only covers dormant profiles.
- */
-const AgentModePresetLegacySchema = AgentModePresetCanonicalSchema.omit({
-  agents: true,
-})
-  .extend({
-    workflowAgents: z.array(z.string()),
-    toolUseAgents: z.array(z.string()),
-  })
-  .transform(({ workflowAgents, toolUseAgents, ...rest }) => ({
-    ...rest,
-    agents: {
-      [AgentCategory.Workflow]: workflowAgents,
-      [AgentCategory.ToolUse]: toolUseAgents,
-    },
-  }));
-
-/** Schema for a single agent team (canonical, with legacy-pair normalization). */
-export const AgentModePresetSchema = z.union([
-  AgentModePresetCanonicalSchema,
-  AgentModePresetLegacySchema,
-]);
-
-export type AgentModePreset = z.infer<typeof AgentModePresetCanonicalSchema>;
+export type AgentModePreset = z.infer<typeof AgentModePresetSchema>;
 
 export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
   const parsedRecords = z.array(z.unknown()).prefault([]).safeParse(raw);

@@ -156,8 +156,7 @@ function remoteTeamPreset(): Record<string, unknown> {
     name: 'Remote team',
     description: 'Uses a hosted root',
     icon: 'screwdriver-wrench',
-    workflowAgents: [],
-    toolUseAgents: ['orchestrator'],
+    agents: { workflow: [], toolUse: ['orchestrator'] },
     texraHostedAgents: ['orchestrator'],
   };
 }
@@ -339,8 +338,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       name: 'Paper Team',
       description: 'Every member resolves locally',
       icon: 'screwdriver-wrench',
-      workflowAgents: ['correct'],
-      toolUseAgents: ['review'],
+      agents: { workflow: ['correct'], toolUse: ['review'] },
     });
     const { controller, infoMessages } = createControllerFixture({
       catalog,
@@ -460,8 +458,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       name: 'Custom Team',
       description: 'test',
       icon: 'codicon-bookmark',
-      workflowAgents: ['correct'],
-      toolUseAgents: ['review'],
+      agents: { workflow: ['correct'], toolUse: ['review'] },
     });
   }
 

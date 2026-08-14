@@ -4,11 +4,10 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports - shared constants and types
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
-import {
-  MainViewPersistedStateSchema,
-  type FileStateContextValue,
-  type MainViewPersistedState,
-  type SessionContextValue,
+import type {
+  FileStateContextValue,
+  MainViewPersistedState,
+  SessionContextValue,
 } from '@shared/schemas';
 
 // Local imports - component type (type-only: the module loads inside the DOM harness)
@@ -26,9 +25,9 @@ import {
  * These pin down the shared behavior of the two restore entry points:
  *   1. mount-time webview-storage restore (`restorePersistedState`), and
  *   2. backend-pushed history-rerun/reset restore (`handleRestoreState`),
- * including legacy single-`instruction` migration, transient output-file
- * reset, and the single-writer rules in `persistence.ts` (exactly one storage
- * write per backend restore, no write when nothing persisted changed).
+ * including transient output-file reset and the single-writer rules in
+ * `persistence.ts` (exactly one storage write per backend restore, no write
+ * when nothing persisted changed).
  *
  * They observe only refactor-stable surfaces — the `@provide`/`@state` context
  * values, host-bridge storage writes, and posted messages — so they must pass
@@ -212,49 +211,6 @@ describe('MainApp persistence and restore characterization', () => {
     });
   });
 
-  it('lifts legacy flat agent/instruction fields into the persisted records', () => {
-    // Old blob shape: per-category agent and instruction as flat fields.
-    // Parsing must lift them, not silently reset to the record prefaults.
-    const legacyBlob: Record<string, unknown> = {
-      ...PERSISTED_SEED,
-      agent: undefined,
-      instruction: undefined,
-      workflowAgent: 'polish',
-      toolUseAgent: 'research',
-      workflowInstruction: 'legacy workflow instruction',
-      toolUseInstruction: 'legacy tool-use instruction',
-    };
-    delete legacyBlob.agent;
-    delete legacyBlob.instruction;
-
-    const parsed = MainViewPersistedStateSchema.parse(legacyBlob);
-    expect(parsed.agent).toEqual({ workflow: 'polish', toolUse: 'research' });
-    expect(parsed.instruction).toEqual({
-      workflow: 'legacy workflow instruction',
-      toolUse: 'legacy tool-use instruction',
-    });
-    expect(parsed).not.toHaveProperty('workflowAgent');
-    expect(parsed).not.toHaveProperty('toolUseInstruction');
-  });
-
-  it('keeps the shared persisted-state schema current-only', () => {
-    expect(
-      MainViewPersistedStateSchema.parse({
-        ...PERSISTED_SEED,
-        model: 'copilot:sonnet46',
-      }).model,
-    ).toBe('copilot:sonnet46');
-  });
-
-  it('normalizes a legacy Copilot model id during VS Code mount-time restore', async () => {
-    seedWebviewState({ ...PERSISTED_SEED, model: 'copilot:sonnet46' });
-
-    const element = await mountMainApp();
-
-    expect(contextsOf(element).session.model).toBe('sonnet46');
-    expect(storageWrites).toHaveLength(0);
-  });
-
   it('restores persisted state on mount through the canonical state applicator', async () => {
     const element = await mountMainApp();
     const { fileState, session } = contextsOf(element);
@@ -338,15 +294,6 @@ describe('MainApp persistence and restore characterization', () => {
       launchTarget: 'agent',
       selectedTeamId: 'physicist',
     });
-  });
-
-  it('normalizes a legacy Copilot model id during VS Code backend restore', async () => {
-    const element = await mountFreshApp();
-
-    await pushRestore(element, { model: 'copilot:sonnet46' });
-
-    expect(contextsOf(element).session.model).toBe('sonnet46');
-    expect(lastPersistedBlob().model).toBe('sonnet46');
   });
 
   it('applies a backend-pushed restore with exactly one storage write and forced output reset', async () => {

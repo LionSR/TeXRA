@@ -34,7 +34,6 @@ const SAMPLE_ROOT_PATHS = {
   '@/*': ['./packages/extension/src/*', './src/*'],
   '@shared/*': ['./src/shared/*'],
   '@commands/*': ['./packages/extension/src/commands/*'],
-  '@extensionSchemas/*': ['./packages/extension/src/schemas/*'],
   '@test/*': ['./src/test-kernel/*'],
   '@cli/*': ['./packages/cli/src/*'],
   '@desktop/*': ['./packages/desktop/src/*'],

@@ -17,6 +17,7 @@ function manifestWithSessionLinks(
       kind: 'answered',
       turnIndex: turn.turnIndex,
       timestamp: `2026-05-16T00:00:0${turn.turnIndex}.000Z`,
+      parentGenerationId: 'f9de9269-9198-4103-a248-6a3bd78bd4eb',
       question: `Q${turn.turnIndex}`,
       context: undefined,
       questionRelativePath: `turn-${turn.turnIndex}/question.md`,
