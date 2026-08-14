@@ -5,7 +5,7 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { createToolUseRoundFlow } from '@agent/core/flows/ToolUseRoundFlow';
 import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundShared';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import { USER_VAR_INSTRUCTION } from '@agent/utils/userVars';
+import { USER_VAR_INSTRUCTION } from '@agent/prompt/userVars';
 import { buildFailedRetryInfo } from '@common/errors/sdkError/providerErrorFormat';
 import {
   MESSAGE_TYPES,

@@ -14,10 +14,11 @@ import {
   runHelperModelCompletion,
 } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
-import { buildUserVarPassthrough } from '@agent/utils/userVars';
+import { buildUserVarPassthrough } from '@agent/prompt/userVars';
 import { createLog } from '@logger/logUtils';
 import type { AgentCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
+import { createTexraNunjucksEnvironment } from '@utils/prompt';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
@@ -207,10 +208,9 @@ const DESCRIPTION_PROMPTS: Record<AgentCategory, string> = {
 
 const PASSTHROUGH = buildUserVarPassthrough();
 
-/* autoescape off: templates contain Nunjucks/YAML syntax, not HTML.
- * Isolated Environment so the setting does not leak into Nunjucks' shared
- * singleton used by other renderers in the extension. */
-const nunjucksEnv = new nunjucks.Environment(null, { autoescape: false });
+// No loader: only in-memory template strings are rendered here, never named
+// template files, so `{% include %}`/`{% extends %}` never resolve.
+const nunjucksEnv = createTexraNunjucksEnvironment(nunjucks);
 
 /** Lazily built and cached for the extension host lifetime. Schemas are static. */
 let schemaRefCache: Record<AgentCategory, string> | null = null;

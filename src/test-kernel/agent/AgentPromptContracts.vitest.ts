@@ -79,7 +79,7 @@ const STOCK_MODEL_PHRASING =
 const SHARED_PROMPT_FRAGMENTS = {
   'packages/extension/resources/shared/latex_style_rules.txt': {
     token: 'LATEX_STYLE_RULES',
-    loader: 'src/agent/utils/userVars.ts',
+    loader: 'src/agent/prompt/userVars.ts',
   },
 } as const;
 

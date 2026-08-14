@@ -275,7 +275,7 @@ const AGENT_SKILLS_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/utils/userVars.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts',
 } satisfies CliRuntimeReachability;
 const TEXRA_APPROVAL_POLICY_RUNTIME_REACHABILITY = {
   command:
@@ -873,7 +873,7 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'tools',
     store: 'config',
     hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer: 'src/agent/utils/userVars.ts',
+    cliConsumer: 'src/agent/prompt/userVars.ts',
     cliRuntimeReachability: AGENT_SKILLS_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'agent-skills',
   },
