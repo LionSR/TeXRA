@@ -509,7 +509,7 @@ const CLI_CORE_SETTING_READER_FILES = {
   'src/logger/logUtils.ts': ['logger.debugMode'],
   'src/telemetry/UsageLogService.ts': ['telemetry.enabled'],
   'src/agent/utils/debugMessageSaver.ts': ['debug.saveModelIO'],
-  'src/agent/utils/userVars.ts': ['skills.enabled'],
+  'src/agent/prompt/userVars.ts': ['skills.enabled'],
   'src/tools/approval/toolEditApproval.ts': ['toolUse.requireEditApproval'],
   'src/tools/approval/bashApproval.ts': ['toolUse.requireBashApproval'],
 } as const;

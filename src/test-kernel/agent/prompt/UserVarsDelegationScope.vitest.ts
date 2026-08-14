@@ -59,7 +59,7 @@ import {
   AgentPromptSchema,
   AgentWorkflowSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { buildUserVars } from '@agent/utils/userVars';
+import { buildUserVars } from '@agent/prompt/userVars';
 import { AgentCategory } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 

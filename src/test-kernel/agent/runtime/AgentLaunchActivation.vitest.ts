@@ -29,7 +29,7 @@ vi.mock('@transcript', async (importActual) => ({
   ...(await importActual<typeof import('@transcript')>()),
   createRunTrace: mocks.createTrace,
 }));
-vi.mock('@agent/utils/userVars', () => ({ buildUserVars: mocks.buildVars }));
+vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
 vi.mock('@agent/storage/executionLifecycle', () => ({
   clearTerminalExecutionState: mocks.clearTerminalExecutionState,
   getPersistedUserFollowUpSupport: mocks.getPersistedUserFollowUpSupport,
