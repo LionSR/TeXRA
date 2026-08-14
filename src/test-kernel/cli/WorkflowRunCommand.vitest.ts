@@ -666,6 +666,127 @@ describe('CLI workflow run command', () => {
     });
   });
 
+  it('keeps non-empty cancelled outputs in run storage without copying to --output', async () => {
+    await withTempRoot(async (root) => {
+      const outputSummary = runOutputSummary(
+        path.join(root, 'run', 'r1', 'paper.tex'),
+        path.join(root, 'paper.tex'),
+      );
+      mockWorkflowExecution(
+        workflowExecution('exec-cancelled-output', {
+          outcome: RUN_OUTCOME.CANCELLED,
+          outputs: [outputSummary],
+        }),
+        true,
+      );
+
+      const context = cliContext({
+        cwd: root,
+        commandName: 'texra-local',
+        approvalPolicy: 'never',
+      });
+      const exitCode = await runWorkflow({ output: 'polished.tex' }, context);
+
+      expect(exitCode).toBe(CliExitCode.Interrupted);
+      // The destination did not previously exist and must stay absent.
+      await expect(fs.stat(path.join(root, 'polished.tex'))).rejects.toThrow();
+      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+        expectedResultMeta({
+          outcome: RUN_OUTCOME.CANCELLED,
+          outputs: [outputSummary],
+          compileFailures: [],
+        }),
+      );
+      const emission = mocks.emitCliResult.mock.calls[0]?.[1];
+      expect(emission?.json).toMatchObject({
+        outcome: RUN_OUTCOME.CANCELLED,
+        workingDirectory: root,
+        runDirectory: '/tmp/runs/exec-cancelled-output',
+      });
+      expect(emission?.json).not.toHaveProperty('copiedOutput');
+      expect(emission?.json).not.toHaveProperty('copiedOutputs');
+      expect(emission?.text).toBe('/tmp/runs/exec-cancelled-output');
+      expect(mocks.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
+        expectedRecoveryHint(context, 'exec-cancelled-output'),
+      );
+    });
+  });
+
+  it('keeps non-empty cancelled outputs in run storage without copying to --output-dir', async () => {
+    await withTempRoot(async (root) => {
+      const outputSummary = runOutputSummary(
+        path.join(root, 'run', 'r1', 'paper.tex'),
+        path.join(root, 'paper.tex'),
+      );
+      mockWorkflowExecution(
+        workflowExecution('exec-cancelled-output-dir', {
+          outcome: RUN_OUTCOME.CANCELLED,
+          outputs: [outputSummary],
+        }),
+        true,
+      );
+
+      const context = cliContext({
+        cwd: root,
+        commandName: 'texra-local',
+        approvalPolicy: 'never',
+      });
+      const exitCode = await runWorkflow({ outputDir: 'out' }, context);
+
+      expect(exitCode).toBe(CliExitCode.Interrupted);
+      // The pre-flight probe may create the directory itself, but no output
+      // file may be copied into it.
+      await expect(
+        fs.stat(path.join(root, 'out', 'paper.tex')),
+      ).rejects.toThrow();
+      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+        expectedResultMeta({
+          outcome: RUN_OUTCOME.CANCELLED,
+          outputs: [outputSummary],
+          compileFailures: [],
+        }),
+      );
+      const emission = mocks.emitCliResult.mock.calls[0]?.[1];
+      expect(emission?.json).toMatchObject({
+        outcome: RUN_OUTCOME.CANCELLED,
+        workingDirectory: root,
+        runDirectory: '/tmp/runs/exec-cancelled-output-dir',
+      });
+      expect(emission?.json).not.toHaveProperty('copiedOutput');
+      expect(emission?.json).not.toHaveProperty('copiedOutputs');
+      expect(emission?.text).toBe('/tmp/runs/exec-cancelled-output-dir');
+      expect(mocks.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
+        expectedRecoveryHint(context, 'exec-cancelled-output-dir'),
+      );
+    });
+  });
+
+  it('leaves a pre-existing --output destination untouched for a cancelled run', async () => {
+    await withTempRoot(async (root) => {
+      const destination = path.join(root, 'polished.tex');
+      await fs.writeFile(destination, 'keep-me');
+      const outputSummary = runOutputSummary(
+        path.join(root, 'run', 'r1', 'paper.tex'),
+        path.join(root, 'paper.tex'),
+      );
+      mockWorkflowExecution(
+        workflowExecution('exec-cancelled-existing-output', {
+          outcome: RUN_OUTCOME.CANCELLED,
+          outputs: [outputSummary],
+        }),
+        true,
+      );
+
+      const exitCode = await runWorkflow(
+        { output: 'polished.tex' },
+        cliContext({ cwd: root }),
+      );
+
+      expect(exitCode).toBe(CliExitCode.Interrupted);
+      await expect(fs.readFile(destination, 'utf8')).resolves.toBe('keep-me');
+    });
+  });
+
   it('presents the lifecycle verdict when cancellation lands during output finalization', async () => {
     const provisional = workflowExecution('exec-output-interrupted');
     if (!provisional.ok) throw new Error('Expected a workflow result.');
