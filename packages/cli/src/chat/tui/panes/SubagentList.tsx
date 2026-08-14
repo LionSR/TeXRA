@@ -132,9 +132,9 @@ function SessionRow({
     },
     nowMs,
   );
-  // Significance order — the summary segment sheds first (flexShrink 2), then
-  // this truncate-end text sheds inline elapsed, model, stage, and label. The
-  // approval kind and metadata column never shrink.
+  // Significance order — informational counts shed first, then the summary,
+  // then this truncate-end text sheds inline elapsed, model, stage, and label.
+  // The actionable approval kind and metadata column never shrink.
   const approval = pendingApprovalRowDisplay(pendingKinds);
   const stageLabel = formatStageLabel(session.slice?.stage);
   // The resolved model is per-agent identity (a workflow run's grandchildren
@@ -147,8 +147,8 @@ function SessionRow({
       : undefined;
   const modelLabel = model ? getRuntimeModelLabel(model) : undefined;
   // The right-aligned `elapsed · ↓tokens` column is pushed to the terminal edge
-  // so the figures line up across rows. Non-shrinking: the summary segment
-  // yields first; rows drop the column entirely on narrow terminals (see
+  // so the figures line up across rows. Lower-priority inline segments yield;
+  // rows drop the column entirely on narrow terminals (see
   // `CHILD_ROW_METADATA_MIN_COLUMNS`).
   const metadata = metadataColumn
     ? childRowMetadataText({
@@ -211,8 +211,8 @@ function SessionRow({
         </Box>
       ) : null}
       {focused && hiddenRowSummary ? (
-        <Box flexShrink={0}>
-          <Text dimColor>{` · ${hiddenRowSummary}`}</Text>
+        <Box minWidth={0} flexShrink={4}>
+          <Text dimColor wrap="truncate-end">{` · ${hiddenRowSummary}`}</Text>
         </Box>
       ) : null}
       {metadata ? (
