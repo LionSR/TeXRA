@@ -106,16 +106,16 @@ function shouldProtectMathSpanDuringHtmlNormalization(
     (SHELL_CODE_COMPLETE_PAIR_SPAN_RE.test(span) &&
       suffix.startsWith('</code>')) ||
     SHELL_CODE_LEADING_ENDPOINT_RE.test(span) ||
-    (source.at(offset - 1) === '$' && span.startsWith('$</code>')) ||
+    (source[offset - 1] === '$' && span.startsWith('$</code>')) ||
     (SHELL_CODE_TRAILING_ENDPOINT_RE.test(span) &&
       SHELL_CODE_TRAILING_SUFFIX_RE.test(suffix));
   const isMarkdownCodeShellParameterPair =
-    (source.at(offset - 1) === '`' &&
+    (source[offset - 1] === '`' &&
       SHELL_MARKDOWN_LEADING_ENDPOINT_RE.test(span)) ||
     (SHELL_MARKDOWN_TRAILING_ENDPOINT_RE.test(span) &&
       SHELL_MARKDOWN_TRAILING_SUFFIX_RE.test(suffix));
   const isUnwrappedShellParameterPair =
-    SHELL_UNWRAPPED_LEADING_ENDPOINT_RE.test(span) ||
+    SHELL_UNWRAPPED_LEADING_ENDPOINT_RE.test(span) &&
     SHELL_UNWRAPPED_TRAILING_SUFFIX_RE.test(suffix);
   return !(
     isCurrencyPair ||
