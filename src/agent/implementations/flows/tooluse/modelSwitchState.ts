@@ -1,5 +1,5 @@
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
-import { USER_VAR_MODEL } from '@agent/utils/userVars';
+import { USER_VAR_MODEL } from '@agent/prompt/userVars';
 import { isNonEmptyString } from '@utils/core';
 
 import type { ToolUseRunShared } from './nodes/types';

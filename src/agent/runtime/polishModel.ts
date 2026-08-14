@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
+import { createTexraNunjucksEnvironment } from '@utils/prompt';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 let polishPromptPath: string | null = null;
@@ -52,9 +53,7 @@ export async function renderPolishPrompt(
     loadPromptTemplate(),
     import('nunjucks'),
   ]);
-  const environment = new nunjucks.Environment(undefined, {
-    autoescape: false,
-  });
+  const environment = createTexraNunjucksEnvironment(nunjucks);
   return (
     environment.renderString(template, { FILE_CONTEXT: fileContext }) + text
   );

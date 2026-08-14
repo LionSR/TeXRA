@@ -37,8 +37,8 @@ vi.mock('@agent/runtime/ModelFactory', async (importActual) => ({
   createModelHandler: launchMocks.createHandler,
   createModelHandlerForCompatibilityKey: launchMocks.createHandler,
 }));
-vi.mock('@agent/utils/userVars', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/utils/userVars')>()),
+vi.mock('@agent/prompt/userVars', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/prompt/userVars')>()),
   buildUserVars: launchMocks.buildVars,
 }));
 vi.mock('@agent/storage/executionLifecycle', async (importActual) => ({

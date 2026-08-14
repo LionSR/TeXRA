@@ -17,7 +17,7 @@ import {
   buildUserVars,
   getToolFlags,
   resolveOutputFiles,
-} from '@agent/utils/userVars';
+} from '@agent/prompt/userVars';
 import { AgentCategory } from '@shared/schemas';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import { setupPlatform } from '@test/support/setupPlatform';
