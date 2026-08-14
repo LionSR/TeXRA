@@ -30,6 +30,7 @@ import {
   registerTeXRAWebAwesomeIcons,
   waIcon,
 } from '@shared/wa/webAwesomeIcons';
+import { utcMonthStart } from '@utils/core';
 
 // Local imports - settings view
 import {
@@ -169,11 +170,10 @@ export class SettingsApp extends SettingsAppBase {
     }
     const now = Date.now();
     const date = new Date(now);
-    const nextMonthUtc = Date.UTC(
+    const nextMonthUtc = utcMonthStart(
       date.getUTCFullYear(),
       date.getUTCMonth() + 1,
-      1,
-    );
+    ).getTime();
     const delay = Math.min(nextMonthUtc - now, MAX_TIMEOUT_MS);
     this.monthlyProfileRefreshTimer = setTimeout(() => {
       if (Date.now() >= nextMonthUtc) {
