@@ -26,6 +26,14 @@ All notable changes to this project will be documented in this file.
   → Agents no longer hides View prompt behind an Ultra plan, and remote agents
   no longer show a Remote badge or access-group labels.
 
+### CLI and Desktop
+
+#### Bug Fixes
+
+- **Unused Lean language servers no longer accumulate** — leftover CLI and
+  desktop Lean sessions stop after they sit unused, so later Lean work is not
+  disrupted by leftover servers from earlier worktrees.
+
 ### CLI
 
 #### Features

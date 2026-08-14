@@ -29,7 +29,7 @@ TeXRA detects the running Lean 4 extension and routes its tools through it — s
 
 ### <wa-icon library="texra" name="terminal"></wa-icon> In the CLI
 
-There's no Lean 4 extension to lean on, so TeXRA spawns its own server (`lake env lean --server`, one process per project). You need `lake` on your `PATH`:
+There's no Lean 4 extension to lean on, so TeXRA spawns its own server (`lake env lean --server`). Each Lake project gets its own process; an unused one is stopped after thirty minutes. You need `lake` on your `PATH`:
 
 1. Install **elan** (the Lean version manager):
    ```bash
@@ -52,7 +52,7 @@ If you don't have elan yet, see the [Lean community install guide](https://leanp
 There is **no switch to flip**. Lean support turns on automatically the moment a Lean-capable agent runs a Lean tool on a `.lean` file in a Lake project. To get going, just pick a Lean-capable agent (see below) and ask it to work on your proof.
 
 ::: tip Check that it's working
-Open **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) → **Lean 4 Proof Assistant** (<wa-icon library="texra" name="beaker"></wa-icon>) to confirm your setup is detected. The panel shows whether the Lean 4 extension is available (VS Code) or whether `lake` was found (CLI), and lists any active language servers — one per Lake project root.
+Open **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) → **Lean 4 Proof Assistant** (<wa-icon library="texra" name="beaker"></wa-icon>) to confirm your setup is detected. The panel shows whether the Lean 4 extension is available (VS Code) or whether `lake` was found (CLI), and lists any active language servers.
 :::
 
 ## Choosing an Agent

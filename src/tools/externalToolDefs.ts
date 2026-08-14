@@ -387,14 +387,15 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     name: 'Lean 4 Proof Assistant',
     category: 'lean',
     description:
-      'Interact with Lean 4 projects: check diagnostics, inspect terms, search Loogle, and manage files. Active language servers (one per project root) are listed below.',
+      'Interact with Lean 4 projects: check diagnostics, inspect terms, search Loogle, and manage files. Active language servers are listed below.',
     installGuide:
       'TeXRA can drive Lean 4 in two ways:\n\n' +
       '  • VS Code build: uses the "lean4" extension\n' +
       '    (leanprover.lean4) and its running language server.\n' +
       '  • CLI / desktop build: spawns `lake env lean --server`\n' +
-      '    directly, one process per Lake project root. Requires\n' +
-      '    `lake` (from elan/Lean) on PATH; install via\n' +
+      '    directly (one process per Lake project; idle ones stop\n' +
+      '    after thirty minutes). Requires `lake` (from elan/Lean) on\n' +
+      '    PATH; install via\n' +
       '    https://leanprover-community.github.io/install/.\n\n' +
       'Setup (VS Code):\n' +
       '  1. Install the "lean4" extension from VS Code Marketplace\n' +
@@ -409,7 +410,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     installExtensionId: LEAN4_EXTENSION_ID,
     configNotes:
       'VS Code build: requires the leanprover.lean4 extension. ' +
-      'CLI / desktop builds: requires `lake` on PATH; each Lake project root gets its own language server, surfaced below.',
+      'CLI / desktop builds: requires `lake` on PATH; each Lake project can have its own language server, and idle ones stop after thirty minutes, surfaced below.',
     ...prerequisitesChecks({
       probe: async () => {
         const extensionAvailable =

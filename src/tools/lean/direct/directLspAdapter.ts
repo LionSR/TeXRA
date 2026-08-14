@@ -5,13 +5,19 @@
  * integration. Per-workspace sessions are cached: the first request that
  * targets a file in a given Lake project spawns `lake env lean --server`
  * from that project root; subsequent requests from any agent reuse the
- * same session. Sessions are torn down on platform shutdown.
+ * same session. An unused server is stopped after thirty minutes. Sessions
+ * are also torn down on platform shutdown.
  */
 
+// Node imports
 import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { warn } from '@logger/logUtils';
+// Third-party imports
+import PQueue from 'p-queue';
+
+// Local imports
+import { info, warn } from '@logger/logUtils';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -30,6 +36,10 @@ import type {
 } from '../leanTypes';
 
 const LOG_CHANNEL = 'lean.direct';
+const ADAPTER_STOPPED_MESSAGE = 'Lean adapter was stopped.';
+
+/** Long-lived CLI/desktop hosts otherwise keep unused servers forever. */
+const DEFAULT_LEAN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
 /**
  * Lake arguments for project commands that fan out across all active sessions.
@@ -48,6 +58,15 @@ export interface DirectLspLeanAdapterOptions {
   lakeCommand?: string;
   /** Override the project-root locator (mostly for tests). */
   resolveWorkspaceRoot?: (filePath: string) => Promise<string | null>;
+  /**
+   * Optional cap on simultaneous `lean --server` processes. Unset means no
+   * capacity eviction — parallel worktrees stay up until they go idle.
+   */
+  maxSessions?: number;
+  /** Stop a session after this much idle time. `0` disables idle eviction. */
+  idleTimeoutMs?: number;
+  /** Clock for idle/LRU decisions (tests). */
+  now?: () => number;
 }
 
 /**
@@ -75,100 +94,367 @@ export function createDirectLspLeanAdapter(
   const lakeCommand = options.lakeCommand ?? 'lake';
   const resolveRoot =
     options.resolveWorkspaceRoot ?? defaultResolveWorkspaceRoot;
-  const sessions = new Map<string, LeanSession>();
-  const sessionStarts = new Map<string, Promise<LeanSession>>();
+  const maxSessions =
+    options.maxSessions == null ? undefined : Math.max(1, options.maxSessions);
+  const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_LEAN_IDLE_TIMEOUT_MS;
+  const now = options.now ?? Date.now;
+  const sessions = new Map<string, TrackedLeanSession>();
+  const startQueue = new PQueue({ concurrency: 1 });
+  const sessionFreedWaiters = new Set<() => void>();
+  const startsIdleWaiters = new Set<() => void>();
+  let startsInFlight = 0;
+  let startGeneration = 0;
+  let startAbort = new AbortController();
 
   async function getSession(filePath: string): Promise<LeanSession> {
+    const generation = startGeneration;
     const absolute = path.resolve(filePath);
     const root = await resolveRoot(absolute);
+    throwIfStopped(generation);
     if (!root) {
       throw new Error(
         `No Lean project found for ${absolute}. Lake projects need a lakefile.lean or lakefile.toml in an ancestor directory.`,
       );
     }
-    return getOrStartSession(root);
+    return getOrStartSession(root, generation);
+  }
+
+  function throwIfStopped(generation: number): void {
+    if (startGeneration !== generation) {
+      throw new Error(ADAPTER_STOPPED_MESSAGE);
+    }
+  }
+
+  function notifySessionFreed(): void {
+    for (const resolve of sessionFreedWaiters) resolve();
+    sessionFreedWaiters.clear();
+  }
+
+  function waitForSessionFreed(): Promise<void> {
+    return new Promise((resolve) => {
+      sessionFreedWaiters.add(resolve);
+    });
+  }
+
+  function notifyStartsIdle(): void {
+    for (const resolve of startsIdleWaiters) resolve();
+    startsIdleWaiters.clear();
+  }
+
+  function waitForStartsIdle(): Promise<void> {
+    if (startsInFlight === 0) return Promise.resolve();
+    return new Promise((resolve) => {
+      startsIdleWaiters.add(resolve);
+    });
+  }
+
+  function beginUse(root: string): TrackedLeanSession | undefined {
+    const tracked = sessions.get(root);
+    if (!tracked || tracked.disposing) return undefined;
+    tracked.inFlight += 1;
+    tracked.lastUsedAt = now();
+    if (tracked.idleTimer) {
+      clearTimeout(tracked.idleTimer);
+      tracked.idleTimer = undefined;
+    }
+    return tracked;
+  }
+
+  function endUse(root: string, session?: LeanSession): void {
+    const tracked = sessions.get(root);
+    if (!tracked) return;
+    if (session && tracked.session !== session) return;
+    tracked.inFlight = Math.max(0, tracked.inFlight - 1);
+    if (tracked.inFlight > 0) return;
+    tracked.lastUsedAt = now();
+    armIdleTimer(root, tracked);
+    notifySessionFreed();
+  }
+
+  async function leaseSession(
+    root: string,
+    session: LeanSession,
+  ): Promise<LeanSession> {
+    if (!beginUse(root)) {
+      throw new Error(ADAPTER_STOPPED_MESSAGE);
+    }
+    try {
+      await session.ensureReady();
+      return session;
+    } catch (error) {
+      endUse(root, session);
+      throw error;
+    }
+  }
+
+  async function withSession<T>(
+    filePath: string,
+    invoke: (session: LeanSession) => Promise<T>,
+  ): Promise<T> {
+    const session = await getSession(filePath);
+    try {
+      return await invoke(session);
+    } finally {
+      endUse(session.workspaceRoot, session);
+    }
+  }
+
+  function armIdleTimer(root: string, tracked: TrackedLeanSession): void {
+    if (tracked.idleTimer) {
+      clearTimeout(tracked.idleTimer);
+      tracked.idleTimer = undefined;
+    }
+    if (idleTimeoutMs <= 0 || tracked.inFlight > 0) return;
+    const timer = setTimeout(() => {
+      void disposeSession(root, 'idle').catch((error) => {
+        warn(
+          LOG_CHANNEL,
+          `Idle stop failed for ${root}: ${toErrorMessage(error)}`,
+        );
+      });
+    }, idleTimeoutMs);
+    timer.unref?.();
+    tracked.idleTimer = timer;
+  }
+
+  function forgetSession(root: string, session?: LeanSession): void {
+    const tracked = sessions.get(root);
+    if (!tracked) return;
+    if (session && tracked.session !== session) return;
+    if (tracked.idleTimer) clearTimeout(tracked.idleTimer);
+    sessions.delete(root);
+    notifySessionFreed();
+  }
+
+  async function disposeSession(
+    root: string,
+    reason: 'idle' | 'capacity' | 'exhausted' | 'restart' | 'shutdown',
+  ): Promise<void> {
+    const tracked = sessions.get(root);
+    if (!tracked) return;
+    if (tracked.disposing) {
+      await tracked.disposing;
+      return;
+    }
+    let settleDisposing!: () => void;
+    tracked.disposing = new Promise<void>((resolve) => {
+      settleDisposing = resolve;
+    });
+    if (tracked.idleTimer) {
+      clearTimeout(tracked.idleTimer);
+      tracked.idleTimer = undefined;
+    }
+    if (reason === 'idle' || reason === 'capacity' || reason === 'exhausted') {
+      info(LOG_CHANNEL, `Stopping Lean server at ${root} (${reason})`);
+    }
+    try {
+      await tracked.session.dispose();
+    } finally {
+      forgetSession(root, tracked.session);
+      settleDisposing();
+    }
+  }
+
+  async function evictIdleSessions(): Promise<void> {
+    if (idleTimeoutMs <= 0) return;
+    const cutoff = now() - idleTimeoutMs;
+    const idleRoots = [...sessions.entries()]
+      .filter(
+        ([, tracked]) =>
+          !tracked.disposing &&
+          tracked.inFlight === 0 &&
+          tracked.lastUsedAt <= cutoff,
+      )
+      .map(([root]) => root);
+    await Promise.all(idleRoots.map((root) => disposeSession(root, 'idle')));
+  }
+
+  function lruRootExcept(exceptRoot: string): string | undefined {
+    let oldestRoot: string | undefined;
+    let oldestAt = Number.POSITIVE_INFINITY;
+    for (const [root, tracked] of sessions) {
+      if (root === exceptRoot || tracked.disposing || tracked.inFlight > 0) {
+        continue;
+      }
+      if (tracked.lastUsedAt < oldestAt) {
+        oldestAt = tracked.lastUsedAt;
+        oldestRoot = root;
+      }
+    }
+    return oldestRoot;
+  }
+
+  async function evictForNewSession(
+    newRoot: string,
+    generation: number,
+  ): Promise<void> {
+    await evictIdleSessions();
+    if (maxSessions == null) return;
+    while (sessions.size >= maxSessions) {
+      throwIfStopped(generation);
+      const victim = lruRootExcept(newRoot);
+      if (victim) {
+        await disposeSession(victim, 'capacity');
+        continue;
+      }
+      await waitForSessionFreed();
+    }
   }
 
   /**
-   * Register an in-flight start so concurrent callers join the same promise,
-   * dropping the session on failure and clearing the in-flight slot once it
-   * settles.
+   * Stop currently-idle other workspaces after EMFILE/ENFILE, then return so
+   * the caller can retry the spawn. Await sessions already shutting down so
+   * their descriptors are gone first. Do not wait for busy sessions: position
+   * RPCs have no timeout, so one hung hover/goal would stall the start queue.
    */
-  function trackStart(
-    root: string,
-    session: LeanSession | undefined,
-    start: Promise<LeanSession>,
-  ): Promise<LeanSession> {
-    sessionStarts.set(root, start);
-    void start
-      .catch(() => {
-        if (session && sessions.get(root) === session) {
-          sessions.delete(root);
-        }
-      })
-      .finally(() => {
-        if (sessionStarts.get(root) === start) {
-          sessionStarts.delete(root);
-        }
-      });
-    return start;
-  }
-
-  /** Dispose every session and clear all tracking. */
-  async function disposeAll(): Promise<void> {
-    const all = [...sessions.values()];
-    sessions.clear();
-    sessionStarts.clear();
-    await Promise.all(all.map((session) => session.dispose()));
-  }
-
-  function getOrStartSession(root: string): Promise<LeanSession> {
-    const inFlight = sessionStarts.get(root);
-    if (inFlight) return inFlight;
-
-    const existing = sessions.get(root);
-    if (existing) {
-      return trackStart(
-        root,
-        existing,
-        existing.ensureReady().then(() => existing),
-      );
+  async function evictOthersForExhausted(
+    exceptRoot: string,
+    generation: number,
+  ): Promise<void> {
+    throwIfStopped(generation);
+    const idleOthers: string[] = [];
+    const alreadyDisposing: Array<Promise<void>> = [];
+    for (const [key, tracked] of sessions) {
+      if (key === exceptRoot) continue;
+      if (tracked.disposing) {
+        alreadyDisposing.push(tracked.disposing);
+        continue;
+      }
+      if (tracked.inFlight === 0) idleOthers.push(key);
     }
-
-    return startFreshSession(root);
+    await Promise.all([
+      ...idleOthers.map((key) => disposeSession(key, 'exhausted')),
+      ...alreadyDisposing,
+    ]);
   }
 
-  function startFreshSession(root: string): Promise<LeanSession> {
+  /** Dispose every session and reject starts that have not begun. */
+  async function disposeAll(): Promise<void> {
+    startGeneration += 1;
+    // Abort queued `add()` promises in place. `clear()` would drop them
+    // without settling, leaving Lean tool calls pending forever.
+    startAbort.abort(new Error(ADAPTER_STOPPED_MESSAGE));
+    startAbort = new AbortController();
+    notifySessionFreed();
+    await Promise.all(
+      [...sessions.keys()].map((root) => disposeSession(root, 'shutdown')),
+    );
+    await waitForStartsIdle();
+    await Promise.all(
+      [...sessions.keys()].map((root) => disposeSession(root, 'shutdown')),
+    );
+  }
+
+  function enqueueStart<T>(task: () => Promise<T>): Promise<T> {
+    return startQueue.add(
+      async () => {
+        startsInFlight += 1;
+        try {
+          return await task();
+        } finally {
+          startsInFlight -= 1;
+          if (startsInFlight === 0) notifyStartsIdle();
+        }
+      },
+      { signal: startAbort.signal },
+    ) as Promise<T>;
+  }
+
+  function getOrStartSession(
+    root: string,
+    generation = startGeneration,
+  ): Promise<LeanSession> {
+    return enqueueStart(() => getOrStartSessionLocked(root, generation));
+  }
+
+  async function getOrStartSessionLocked(
+    root: string,
+    generation: number,
+  ): Promise<LeanSession> {
+    throwIfStopped(generation);
+    const existing = sessions.get(root);
+    if (existing?.disposing) {
+      await existing.disposing;
+      throwIfStopped(generation);
+      return getOrStartSessionLocked(root, generation);
+    }
+    if (existing) {
+      return leaseSession(root, existing.session);
+    }
+    await evictForNewSession(root, generation);
+    throwIfStopped(generation);
+    try {
+      return await startAndLease(root, generation);
+    } catch (error) {
+      if (!isFileTableExhausted(error) || sessions.size === 0) {
+        throw error;
+      }
+      warn(
+        LOG_CHANNEL,
+        `Lean spawn hit a full file table; stopping other servers and retrying (${toErrorMessage(error)})`,
+      );
+      await evictOthersForExhausted(root, generation);
+      throwIfStopped(generation);
+      return startAndLease(root, generation);
+    }
+  }
+
+  async function startFreshSession(
+    root: string,
+    generation: number,
+  ): Promise<LeanSession> {
+    throwIfStopped(generation);
     const session = new LeanSession({
       workspaceRoot: root,
       lakeCommand,
       onExit: () => {
-        if (sessions.get(root) === session) {
-          sessions.delete(root);
-        }
+        const tracked = sessions.get(root);
+        if (tracked?.disposing) return;
+        forgetSession(root, session);
       },
     });
-    sessions.set(root, session);
-    return trackStart(
-      root,
+    sessions.set(root, {
       session,
-      session.ensureReady().then(() => session),
-    );
+      lastUsedAt: now(),
+      inFlight: 0,
+    });
+    if (startGeneration !== generation) {
+      await disposeSession(root, 'shutdown');
+      throw new Error(ADAPTER_STOPPED_MESSAGE);
+    }
+    try {
+      await session.ensureReady();
+    } catch (error) {
+      await disposeSession(root, 'shutdown');
+      throw error;
+    }
+    if (startGeneration !== generation) {
+      await disposeSession(root, 'shutdown');
+      throw new Error(ADAPTER_STOPPED_MESSAGE);
+    }
+    return session;
   }
 
-  function restartSession(root: string): Promise<LeanSession> {
-    return trackStart(
-      root,
-      undefined,
-      (async () => {
-        const existing = sessions.get(root);
-        if (existing) {
-          sessions.delete(root);
-          await existing.dispose();
-        }
-        return startFreshSession(root);
-      })(),
-    );
+  async function startAndLease(
+    root: string,
+    generation: number,
+  ): Promise<LeanSession> {
+    const session = await startFreshSession(root, generation);
+    return leaseSession(root, session);
+  }
+
+  function restartSession(root: string): Promise<void> {
+    const generation = startGeneration;
+    return enqueueStart(async () => {
+      throwIfStopped(generation);
+      await disposeSession(root, 'restart');
+      throwIfStopped(generation);
+      await evictForNewSession(root, generation);
+      throwIfStopped(generation);
+      await startFreshSession(root, generation);
+      const tracked = sessions.get(root);
+      if (tracked) armIdleTimer(root, tracked);
+    });
   }
 
   return {
@@ -195,14 +481,23 @@ export function createDirectLspLeanAdapter(
         const diagnostics = await session.fetchDiagnostics(file);
         return { ok: true, diagnostics };
       } catch (error) {
+        const message = toErrorMessage(error);
+        if (isInterruptedLeanSession(message)) {
+          warn(
+            LOG_CHANNEL,
+            `fetchDiagnosticsForFile: session interrupted for ${file}: ${message}`,
+          );
+          return { ok: false, kind: 'toolchain_unavailable', message };
+        }
         // Opening/reading the file itself failed (e.g. ENOENT) — the file is
         // the problem, so the tool keeps its "could not open file" framing.
-        const message = toErrorMessage(error);
         warn(
           LOG_CHANNEL,
           `fetchDiagnosticsForFile: could not read ${file}: ${message}`,
         );
         return { ok: false, kind: 'file_missing', message };
+      } finally {
+        endUse(session.workspaceRoot, session);
       }
     },
 
@@ -219,8 +514,7 @@ export function createDirectLspLeanAdapter(
       try {
         // Both file commands have the same effect from our point of view: drop
         // the cached open state and re-open with fresh contents.
-        const session = await getSession(filePath);
-        await session.restartFile(filePath);
+        await withSession(filePath, (session) => session.restartFile(filePath));
         return true;
       } catch (error) {
         // Return false (LeanFileTool surfaces it as a failure result) and log
@@ -256,13 +550,30 @@ export function createDirectLspLeanAdapter(
         case 'build':
         case 'clean':
         case 'fetch_cache':
-        case 'fetch_file_cache':
-          await runForAllSessions(
-            sessions,
-            lakeCommand,
-            LAKE_PROJECT_ARGS[command],
-          );
+        case 'fetch_file_cache': {
+          const acquired: TrackedLeanSession[] = [];
+          for (const [root] of [...sessions]) {
+            const tracked = beginUse(root);
+            if (tracked) acquired.push(tracked);
+          }
+          try {
+            await runForAllSessions(
+              new Map(
+                acquired.map((tracked) => [
+                  tracked.session.workspaceRoot,
+                  tracked.session,
+                ]),
+              ),
+              lakeCommand,
+              LAKE_PROJECT_ARGS[command],
+            );
+          } finally {
+            for (const tracked of acquired) {
+              endUse(tracked.session.workspaceRoot, tracked.session);
+            }
+          }
           return;
+        }
         case 'install_elan':
         case 'install_deps':
         case 'update_elan':
@@ -327,8 +638,7 @@ export function createDirectLspLeanAdapter(
     invoke: (session: LeanSession) => Promise<T | null>,
   ): Promise<LspResult<T>> {
     try {
-      const session = await getSession(filePath);
-      const data = await invoke(session);
+      const data = await withSession(filePath, invoke);
       if (!data)
         return {
           data: null,
@@ -342,6 +652,32 @@ export function createDirectLspLeanAdapter(
       };
     }
   }
+}
+
+interface TrackedLeanSession {
+  session: LeanSession;
+  lastUsedAt: number;
+  inFlight: number;
+  idleTimer?: ReturnType<typeof setTimeout>;
+  disposing?: Promise<void>;
+}
+
+function isInterruptedLeanSession(message: string): boolean {
+  return (
+    message.includes('Lean session has been disposed') ||
+    message.includes('Lean session is not running') ||
+    message.includes(ADAPTER_STOPPED_MESSAGE)
+  );
+}
+
+function isFileTableExhausted(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; current != null && depth < 4; depth += 1) {
+    const code = (current as NodeJS.ErrnoException).code;
+    if (code === 'EMFILE' || code === 'ENFILE') return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 async function runForAllSessions(
