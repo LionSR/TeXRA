@@ -224,6 +224,7 @@ describe('renderAnsiMarkdown', () => {
     ['$10 a$ <b>then</b> $20 b$', '$10 a$ **then** $20 b$'],
     ['$5, x<b>y$', '$5, x<b>y$'],
     ['$5, x$ <strong>and</strong> $z$', '$5, x$ **and** $z$'],
+    ['$5, x<b>y$, then <strong>$z$</strong>', '$5, x<b>y$, then **$z$**'],
   ] as const)(
     'does not classify numeric inline math as currency: %s',
     (source, expected) => {
@@ -253,11 +254,15 @@ describe('renderAnsiMarkdown', () => {
     );
   });
 
-  it('does not consume a punctuated numeric-led formula as currency', () => {
-    expect(
-      normalizeKnownHtmlForCliMarkdown('$5, x<b>y$, then <strong>$z$</strong>'),
-    ).toBe('$5, x<b>y$, then **$z$**');
-  });
+  it.each([
+    ['$5 then $a<b>c$', '$5 then $a<b>c$'],
+    ['$HOME then $a<b>c$', '$HOME then $a<b>c$'],
+  ] as const)(
+    'keeps a plain literal token separate from later math: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
 
   it.each([
     ['<code>$HOME</code> and <code>$PATH</code>', '`$HOME` and `$PATH`'],
@@ -285,13 +290,6 @@ describe('renderAnsiMarkdown', () => {
     'keeps a lone literal token separate from later math: %s',
     (source, expected) => {
       expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
-    },
-  );
-
-  it.each(['$5 then $a<b>c$', '$HOME then $a<b>c$'])(
-    'keeps a plain-gap literal token separate from later tag-shaped math: %s',
-    (source) => {
-      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(source);
     },
   );
 
@@ -499,6 +497,20 @@ describe('renderAnsiMarkdown', () => {
     },
   );
 
+  it.each(['$5 <br>1$', '$AB <strong>C$', '$5 <em>C$'])(
+    'preserves complete inline math containing a supported tag: %s',
+    (source) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(source);
+    },
+  );
+
+  it.each(['<strong-x>x</strong-x>', '<p.foo>x</p.foo>', '<b:tag>x</b:tag>'])(
+    'leaves suffixed tag-shaped text literal: %s',
+    (source) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(source);
+    },
+  );
+
   it.each([
     '$HOME and $5, then <strong>run</strong> and check $PATH',
     '$HOME <strong>and</strong> $5, then run and check $PATH',
@@ -638,13 +650,13 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('keeps lazy multiline math continuation inside a Markdown blockquote', () => {
-    const plain = renderPlain('> \\\[\n  a+b\n> \\\]', {
+    const plain = renderPlain('> \\[\n  a+b\n> \\]', {
       colorEnabled: false,
       width: 80,
     });
 
-    expect(plain).toContain('│ \\\[\n│   a+b\n│ \\\]');
-    expect(plain).not.toContain('\n> \\\]');
+    expect(plain).toContain('│ \\[\n│   a+b\n│ \\]');
+    expect(plain).not.toContain('\n> \\]');
   });
 
   it('keeps multiline math inside a quoted list item', () => {

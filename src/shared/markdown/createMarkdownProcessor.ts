@@ -158,18 +158,24 @@ function protectByPatterns(
           `^(?:[ \\t]*>[ \\t]?){${quoteDepth}}`,
           'u',
         );
-        const remainingPrefixes = match
-          .split('\n')
-          .slice(1)
-          .map((line) => requiredPrefix.exec(line)?.[0]);
+        const lines = match.split('\n');
+        const remainingLines = lines.slice(1);
+        const remainingPrefixes = remainingLines.map(
+          (line) => requiredPrefix.exec(line)?.[0],
+        );
         const isQuotedSpan =
-          quoteDepth > 0 && remainingPrefixes.at(-1) !== undefined;
+          quoteDepth > 0 &&
+          remainingPrefixes.at(-1) !== undefined &&
+          remainingPrefixes.every(
+            (prefix, index) =>
+              prefix !== undefined ||
+              (remainingLines[index]?.trim().length ?? 0) > 0,
+          );
         if (!isQuotedSpan) {
           const index = items.push(match) - 1;
           return `@@${selectedTag}-${index}@@`;
         }
-        return match
-          .split('\n')
+        return lines
           .map((line, lineIndex) => {
             const prefix =
               lineIndex === 0 ? '' : (remainingPrefixes[lineIndex - 1] ?? '');

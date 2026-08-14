@@ -2,8 +2,12 @@ import { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
 import { protectLatexMathSpans } from '@shared/markdown/createMarkdownProcessor';
 import { clamp } from '@utils/core';
 
+// Only exact supported tag names enter the presentation grammar. Suffixes such
+// as `<strong-x>` remain literal transcript text.
 const KNOWN_HTML_TAG_RE =
-  /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/i;
+  /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/iu;
+const KNOWN_HTML_TAG_AT_START_RE =
+  /^<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/iu;
 const CURRENCY_AMOUNT = String.raw`[+-]?(?:\d+(?:\.\d+)?|\.\d+)`;
 const SHELL_BRACED_PARAMETER = String.raw`\{[^{}\n$]+\}`;
 const SHELL_UNWRAPPED_PARAMETER = String.raw`(?:[A-Z_][A-Z0-9_]+|${SHELL_BRACED_PARAMETER}|[_?@*#!-])`;
@@ -18,6 +22,10 @@ const HTML_VALUELESS_ATTRIBUTE = String.raw`(?:allowfullscreen|async|autofocus|a
 const HTML_ATTRIBUTE = String.raw`(?:[A-Za-z_:][A-Za-z0-9_.:-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>]+)|${HTML_VALUELESS_ATTRIBUTE})`;
 const HTML_ATTRIBUTES = String.raw`(?:\s+${HTML_ATTRIBUTE})*`;
 const HTML_TAG_END = String.raw`(?:\s*\/\s*|\s*)>`;
+const PRESENTATION_CONTAINER_TAG_RE = new RegExp(
+  `(?:<(blockquote|strong|b|em|i|code|p|div|h[1-6])${HTML_ATTRIBUTES}\\s*>|<\\/(blockquote|strong|b|em|i|code|p|div|h[1-6])\\s*>)`,
+  'giu',
+);
 const HTML_CODE_CANDIDATE_RE = /<code/giu;
 const HTML_CODE_OPEN_RE = new RegExp(`<code${HTML_ATTRIBUTES}\\s*>`, 'iyu');
 const HTML_CODE_CLOSE_RE = /<\/code>/giu;
@@ -59,6 +67,10 @@ const SHELL_UNWRAPPED_TOKEN_RE = new RegExp(
   'gu',
 );
 const SHELL_PID_LABEL_RE = /\bPID\s+\$\$(?=[\s/.,;:!?()[\]{}'"’”]|$)/giu;
+const SHELL_LITERAL_AT_START_RE = new RegExp(
+  `^\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
+  'u',
+);
 const UNAMBIGUOUS_PRESENTATION_TAG_RE = new RegExp(
   `(?:<(?:blockquote|strong|em|code|div|br|h[1-6])${HTML_ATTRIBUTES}${HTML_TAG_END}|<\\/(?:blockquote|strong|em|code|div|h[1-6])\\s*>)`,
   'iu',
@@ -66,6 +78,10 @@ const UNAMBIGUOUS_PRESENTATION_TAG_RE = new RegExp(
 const AMBIGUOUS_PRESENTATION_TAG_RE = new RegExp(
   `(?:<(b|i|p)${HTML_ATTRIBUTES}\\s*>|<\\/(b|i|p)\\s*>)`,
   'giu',
+);
+const AMBIGUOUS_PRESENTATION_ANY_RE = new RegExp(
+  `(?:<(?:b|i|p)${HTML_ATTRIBUTES}\\s*>|<\\/(?:b|i|p)\\s*>)`,
+  'iu',
 );
 const AMBIGUOUS_PRESENTATION_OPEN_RE = new RegExp(
   `<(b|i|p)${HTML_ATTRIBUTES}\\s*>`,
@@ -111,9 +127,9 @@ function headingMarker(level: string): string {
   return '#'.repeat(depth);
 }
 
-function hasAmbiguousPresentationPair(content: string): boolean {
+function hasPresentationPair(content: string): boolean {
   const openTags = new Set<string>();
-  for (const match of content.matchAll(AMBIGUOUS_PRESENTATION_TAG_RE)) {
+  for (const match of content.matchAll(PRESENTATION_CONTAINER_TAG_RE)) {
     const openingTag = match[1]?.toLowerCase();
     if (openingTag !== undefined) openTags.add(openingTag);
     const closingTag = match[2]?.toLowerCase();
@@ -129,31 +145,43 @@ function hasPresentationHtmlBeforeNextDollar(
 ): boolean {
   const start = offset + matchLength;
   const nextDollar = source.indexOf('$', start);
-  // Two later dollar delimiters supply the candidate math span that this
-  // literal token must not absorb. Bare one-letter tags remain deliberately
-  // ambiguous, but a matched wrapper pair is presentation markup.
+  // A later complete span must look like a new opener, rather than the closer
+  // of math beginning at this token. Bare one-letter tags remain deliberately
+  // ambiguous unless they form a matched presentation wrapper.
   if (nextDollar < 0) return false;
   const between = source.slice(start, nextDollar);
-  if (UNAMBIGUOUS_PRESENTATION_TAG_RE.test(between)) return true;
   const closingDollar = source.indexOf('$', nextDollar + 1);
-  if (closingDollar < 0) return false;
-  if (hasAmbiguousPresentationPair(between)) return true;
+  if (closingDollar < 0) {
+    return (
+      hasPresentationPair(between) &&
+      (nextDollar === source.length - 1 ||
+        SHELL_LITERAL_AT_START_RE.test(source.slice(nextDollar)))
+    );
+  }
+
+  const afterNextDollar = source.slice(nextDollar + 1);
+  const candidateFirst = afterNextDollar[0];
+  if (
+    candidateFirst === undefined ||
+    /[\s$,.;:!?)}\]'"’”]/u.test(candidateFirst) ||
+    KNOWN_HTML_TAG_AT_START_RE.test(afterNextDollar)
+  ) {
+    return false;
+  }
+  if (UNAMBIGUOUS_PRESENTATION_TAG_RE.test(between)) return true;
+  if (hasPresentationPair(between)) return true;
   const afterClosingDollar = source.slice(closingDollar + 1);
-  const wrapsCandidateMath = [
-    ...between.matchAll(AMBIGUOUS_PRESENTATION_OPEN_RE),
-  ].some(
-    (ambiguousOpen) =>
-      ambiguousOpen[1] !== undefined &&
-      new RegExp(`^\\s*<\\/${ambiguousOpen[1]}\\s*>`, 'iu').test(
-        afterClosingDollar,
-      ),
-  );
-  if (wrapsCandidateMath) return true;
-  if (KNOWN_HTML_TAG_RE.test(between)) return false;
-  return (
-    /\S/u.test(source[nextDollar + 1] ?? '') &&
-    KNOWN_HTML_TAG_RE.test(source.slice(nextDollar + 1, closingDollar))
-  );
+  const candidateCloser = /^\s*<\/(b|i|p)\s*>/iu.exec(afterClosingDollar)?.[1];
+  if (candidateCloser !== undefined) {
+    for (const ambiguousOpen of between.matchAll(
+      AMBIGUOUS_PRESENTATION_OPEN_RE,
+    )) {
+      if (ambiguousOpen[1]?.toLowerCase() === candidateCloser.toLowerCase()) {
+        return true;
+      }
+    }
+  }
+  return !AMBIGUOUS_PRESENTATION_ANY_RE.test(between);
 }
 
 function shouldMaskPunctuatedCurrency(
@@ -165,15 +193,13 @@ function shouldMaskPunctuatedCurrency(
   const nextDollar = source.indexOf('$', start);
   if (nextDollar < 0) return true;
   const between = source.slice(start, nextDollar);
-  if (UNAMBIGUOUS_PRESENTATION_TAG_RE.test(between)) return true;
   if (
-    KNOWN_HTML_TAG_RE.test(between) &&
-    !hasAmbiguousPresentationPair(between)
+    UNAMBIGUOUS_PRESENTATION_TAG_RE.test(between) ||
+    hasPresentationPair(between)
   ) {
-    return false;
+    return true;
   }
-  const closingDollar = source.indexOf('$', nextDollar + 1);
-  return closingDollar >= 0 && /\S/u.test(source[nextDollar + 1] ?? '');
+  return hasPresentationHtmlBeforeNextDollar(source, offset, matchLength);
 }
 
 /** Masks complete HTML code elements without rescanning unmatched openers. */
