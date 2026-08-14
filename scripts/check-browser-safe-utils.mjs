@@ -128,15 +128,49 @@ function insideRanges(index, ranges) {
  * True when the matched specifier is erased by TypeScript (`import type` /
  * `export type ... from` / a named import whose every binding is `type Foo`).
  * Mixed `{ type X, y }` stays reachable because `y` is a value import.
- * A binding named `type` (`import { type } from`) is a value import.
+ * A binding named `type` (`import { type }` / `import { type as value }`) is
+ * a value import — TypeScript treats `type` followed by `as` as the name.
  */
 function isTypeOnlyBinding(binding) {
-  return /^type\s+[A-Za-z_$]/.test(binding);
+  return /^type\s+(?!as\b)[A-Za-z_$]/.test(binding);
+}
+
+/** Blank comment ranges so they cannot change binding classification. */
+function withoutComments(text) {
+  const ranges = maskedRanges(text);
+  let result = '';
+  let cursor = 0;
+  for (const [start, end] of ranges) {
+    const chunk = text.slice(start, end);
+    if (chunk.startsWith('//') || chunk.startsWith('/*')) {
+      result += text.slice(cursor, start) + ' '.repeat(end - start);
+      cursor = end;
+    }
+  }
+  return result + text.slice(cursor);
+}
+
+function precedingUnmaskedClause(text, matchIndex, ranges) {
+  const before = text.slice(0, matchIndex);
+  let keywordIndex = -1;
+  for (const keyword of before.matchAll(/\b(?:import|export)\b/g)) {
+    if (!insideRanges(keyword.index, ranges)) {
+      keywordIndex = keyword.index;
+    }
+  }
+  return keywordIndex < 0 ? '' : before.slice(keywordIndex);
 }
 
 function isTypeOnlySpecifier(text, match, ranges) {
   const matched = match[0];
-  if (/^(?:import\s*\(|require|import\.meta\.resolve)/.test(matched)) {
+  // `import type X = require('...')` is erased. A bare require() is not.
+  if (/^require/.test(matched)) {
+    const clause = withoutComments(
+      precedingUnmaskedClause(text, match.index, ranges),
+    );
+    return /^(?:import|export)\s+type\s+[A-Za-z_$][\w$]*\s*=\s*$/.test(clause);
+  }
+  if (/^(?:import\s*\(|import\.meta\.resolve)/.test(matched)) {
     return false;
   }
   // Bare side-effect `import 'x'` is always a value edge. Its match includes
@@ -148,17 +182,12 @@ function isTypeOnlySpecifier(text, match, ranges) {
     return false;
   }
 
-  const before = text.slice(0, match.index);
-  let keywordIndex = -1;
-  for (const keyword of before.matchAll(/\b(?:import|export)\b/g)) {
-    if (!insideRanges(keyword.index, ranges)) {
-      keywordIndex = keyword.index;
-    }
-  }
-  if (keywordIndex < 0) return false;
-  const clause = before.slice(keywordIndex);
+  const clause = precedingUnmaskedClause(text, match.index, ranges);
+  if (clause.length === 0) return false;
   if (/^(?:import|export)\s+type\b/.test(clause)) return true;
-  const named = clause.match(/^(?:import|export)\s*\{([^}]*)\}\s*$/);
+  const named = withoutComments(clause).match(
+    /^(?:import|export)\s*\{([^}]*)\}\s*$/,
+  );
   if (named == null) return false;
   const bindings = named[1]
     .split(',')
@@ -225,7 +254,27 @@ function selfTestImportSpecifiers() {
       expected: ['./value'],
     },
     {
+      text: "import { type as value } from './value';\n",
+      expected: ['./value'],
+    },
+    {
+      text: "import { /* public shape */ type X } from './typeOnly';\n",
+      expected: [],
+    },
+    {
       text: "import { y /* import type */ } from './value';\n",
+      expected: ['./value'],
+    },
+    {
+      text: "import type Utils = require('./typeOnly');\n",
+      expected: [],
+    },
+    {
+      text: "import Utils = require('./value');\n",
+      expected: ['./value'],
+    },
+    {
+      text: "const x = require('./value');\n",
       expected: ['./value'],
     },
     {
