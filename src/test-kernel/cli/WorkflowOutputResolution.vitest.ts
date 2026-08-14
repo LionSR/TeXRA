@@ -536,4 +536,28 @@ describe('CLI workflow output resolution', () => {
 
     expect(formatWorkflowTextResult(result)).toBe('/run');
   });
+
+  it('reports destinations that were copied before cancellation', () => {
+    const result: CliWorkflowRunResult = {
+      ...workflowResult(
+        [{ absolutePath: '/run/r0/main.tex', relativePath: 'r0/main.tex' }],
+        RUN_OUTCOME.CANCELLED,
+      ),
+      workingDirectory: '/workspace',
+      runDirectory: '/run',
+      copiedOutput: '/workspace/final.tex',
+    };
+
+    expect(formatWorkflowTextResult(result)).toBe('/workspace/final.tex');
+    expect(
+      formatWorkflowTextResult({
+        ...result,
+        copiedOutput: undefined,
+        copiedOutputs: [
+          '/workspace/final/main.tex',
+          '/workspace/final/appendix.tex',
+        ],
+      }),
+    ).toBe('/workspace/final/main.tex\n/workspace/final/appendix.tex');
+  });
 });
