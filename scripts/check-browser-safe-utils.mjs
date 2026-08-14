@@ -130,8 +130,11 @@ function insideRanges(index, ranges) {
  * Mixed `{ type X, y }` stays reachable because `y` is a value import.
  * A binding named `type` (`import { type }` / `import { type as value }`) is
  * a value import — TypeScript treats `type` followed by `as` as the name.
+ * `type as as Alias` is type-only: `type` is the modifier and `as` is the name.
  */
 function isTypeOnlyBinding(binding) {
+  // `type as as Alias` is a type-only import of the name `as`.
+  if (/^type\s+as\s+as\s+[A-Za-z_$]/.test(binding)) return true;
   // `type as value` imports a runtime binding named `type`.
   // `type as` / `type as,` is a type-only import of the name `as`.
   if (/^type\s+as\s+[A-Za-z_$]/.test(binding)) return false;
@@ -189,7 +192,12 @@ function isTypeOnlySpecifier(text, match, ranges) {
     precedingUnmaskedClause(text, match.index, ranges),
   );
   if (clause.length === 0) return false;
-  if (/^(?:import|export)\s+type\b/.test(clause)) return true;
+  // `import type from` is a default binding named `type`. Type-only needs a
+  // specifier after `type` (`{`, `*`, or a name). Blanked comments are spaces,
+  // so `import /* c */ type from` stays a value import.
+  if (/^(?:import|export)\s+type(?:\s+[A-Za-z_$]|\s*[{*])/.test(clause)) {
+    return true;
+  }
   const named = clause.match(/^(?:import|export)\s*\{([^}]*)\}\s*$/);
   if (named == null) return false;
   const bindings = named[1]
@@ -263,6 +271,18 @@ function selfTestImportSpecifiers() {
     {
       text: "import { type as } from './typeOnly';\n",
       expected: [],
+    },
+    {
+      text: "import { type as as Value } from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "import type from './value';\n",
+      expected: ['./value'],
+    },
+    {
+      text: "import /* note */ type from './value';\n",
+      expected: ['./value'],
     },
     {
       text: "import /* note */ type { X } from './typeOnly';\n",
