@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import {
   chmodSync,
   mkdirSync,
@@ -8,8 +9,24 @@ import {
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
+import { PassThrough } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { spawnOverride } = vi.hoisted(() => ({
+  spawnOverride: {
+    current: undefined as undefined | ((...args: unknown[]) => unknown),
+  },
+}));
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    spawn: (...args: Parameters<typeof actual.spawn>) =>
+      (spawnOverride.current ?? actual.spawn)(...args),
+  };
+});
 
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { fileUriToPath, LeanSession } from '@tools/lean/direct/leanSession';
@@ -24,7 +41,9 @@ const FAKE_LAKE = `#!/usr/bin/env node
 const fs = require('node:fs');
 
 if (!process.argv.includes('--server')) {
-  process.exit(0);
+  const delayMs = Number(process.env.TEXRA_FAKE_LEAN_LAKE_DELAY || 0);
+  setTimeout(() => process.exit(0), delayMs);
+  return;
 }
 
 const countPath = process.env.TEXRA_FAKE_LEAN_COUNT;
@@ -48,7 +67,9 @@ function handle(message) {
     return;
   }
   if (message.method === 'exit') {
-    process.exit(0);
+    const delayMs = Number(process.env.TEXRA_FAKE_LEAN_EXIT_DELAY || 0);
+    setTimeout(() => process.exit(0), delayMs);
+    return;
   }
   if (message.method === 'textDocument/didOpen') {
     if (process.env.TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS === '1') return;
@@ -114,6 +135,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  spawnOverride.current = undefined;
   vi.unstubAllEnvs();
   rmSync(tempRoot, { recursive: true, force: true });
 });
@@ -388,6 +410,106 @@ describe('createDirectLspLeanAdapter', () => {
     },
   );
 
+  fakeLakeIt(
+    'does not SIGKILL a live server two seconds after spawn',
+    async () => {
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        idleTimeoutMs: 0,
+      });
+      try {
+        await adapter.fetchDiagnosticsForFile(filePath);
+        await delay(2_200);
+        expect(activeServerRoots()).toEqual([projectRoot]);
+        expect(await countStarts()).toBe(1);
+        await expect(
+          adapter.fetchDiagnosticsForFile(filePath),
+        ).resolves.toMatchObject({ ok: true });
+        expect(await countStarts()).toBe(1);
+      } finally {
+        await adapter.dispose();
+      }
+    },
+  );
+
+  it('waits for the child to close before a failed start finishes disposing', async () => {
+    const child = createFakeLeanChild({ closeDelayMs: 80, silent: true });
+    spawnOverride.current = () => child;
+
+    const session = new LeanSession({
+      workspaceRoot: projectRoot,
+      lakeCommand: fakeLakePath,
+    });
+    const ready = session.ensureReady();
+    await delay(20);
+    const disposed = session.dispose();
+    let finished = false;
+    void Promise.allSettled([ready, disposed]).then(() => {
+      finished = true;
+    });
+    await delay(30);
+    expect(finished).toBe(false);
+    child.closeSoon();
+    await disposed;
+    await Promise.allSettled([ready]);
+    expect(finished).toBe(true);
+  });
+
+  fakeLakeIt(
+    'does not release a replacement session from a project command that never acquired it',
+    async () => {
+      vi.stubEnv('TEXRA_FAKE_LEAN_EXIT_DELAY', '150');
+      vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '400');
+      const second = makeLakeProject(tempRoot, 'project-b');
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        maxSessions: 1,
+        idleTimeoutMs: 40,
+      });
+      try {
+        await adapter.fetchDiagnosticsForFile(filePath);
+        await delay(80);
+        const build = adapter.executeProjectCommand('build');
+        void build.catch(() => undefined);
+        await delay(200);
+        vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
+        const pending = adapter.fetchDiagnosticsForFile(filePath);
+        await Promise.allSettled([build]);
+        const other = adapter.fetchDiagnosticsForFile(second.filePath);
+        await delay(80);
+        expect(activeServerRoots()).toContain(projectRoot);
+        await adapter.dispose();
+        await Promise.allSettled([pending, other]);
+      } finally {
+        await adapter.dispose();
+      }
+    },
+  );
+
+  it('keeps a disposing session reserved until the child closes', async () => {
+    let spawnCount = 0;
+    spawnOverride.current = () => {
+      spawnCount += 1;
+      return createFakeLeanChild({ closeDelayMs: 200 });
+    };
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 30,
+    });
+    try {
+      await adapter.fetchDiagnosticsForFile(filePath);
+      expect(spawnCount).toBe(1);
+      await delay(60);
+      const pending = adapter.fetchDiagnosticsForFile(filePath);
+      await delay(40);
+      expect(spawnCount).toBe(1);
+      await pending;
+      expect(spawnCount).toBe(2);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
   fakeLakeIt('stops a restarted session after it sits idle', async () => {
     const adapter = createDirectLspLeanAdapter({
       lakeCommand: fakeLakePath,
@@ -442,4 +564,119 @@ function activeServerRoots(): string[] {
     .filter(isLeanServerActive)
     .map((info) => info.workspaceRoot)
     .toSorted((a, b) => a.localeCompare(b));
+}
+
+interface FakeLeanChild extends EventEmitter {
+  stdin: PassThrough;
+  stdout: PassThrough;
+  stderr: PassThrough;
+  pid: number | undefined;
+  killed: boolean;
+  exitCode: number | null;
+  signalCode: NodeJS.Signals | null;
+  kill: (signal?: NodeJS.Signals) => boolean;
+  closeSoon: () => void;
+}
+
+function createFakeLeanChild(options?: {
+  closeDelayMs?: number;
+  silent?: boolean;
+}): FakeLeanChild {
+  const stdin = new PassThrough();
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  let buffer = Buffer.alloc(0);
+  const closeDelayMs = options?.closeDelayMs ?? 0;
+
+  function send(message: unknown): void {
+    const body = Buffer.from(JSON.stringify(message), 'utf8');
+    stdout.write(`Content-Length: ${body.length}\r\n\r\n`);
+    stdout.write(body);
+  }
+
+  function handle(message: {
+    id?: number;
+    method?: string;
+    params?: { textDocument?: { uri?: string } };
+  }): void {
+    if (message.method === 'initialize') {
+      if (options?.silent) return;
+      send({ jsonrpc: '2.0', id: message.id, result: { capabilities: {} } });
+      return;
+    }
+    if (message.method === 'shutdown') {
+      send({ jsonrpc: '2.0', id: message.id, result: null });
+      return;
+    }
+    if (message.method === 'textDocument/didOpen') {
+      const uri = message.params?.textDocument?.uri;
+      if (!uri) return;
+      send({
+        jsonrpc: '2.0',
+        method: 'textDocument/publishDiagnostics',
+        params: {
+          uri,
+          diagnostics: [
+            {
+              severity: 1,
+              message: 'fake diagnostic',
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 1 },
+              },
+              source: 'fake-lean',
+            },
+          ],
+        },
+      });
+    }
+  }
+
+  stdin.on('data', (chunk: Buffer) => {
+    buffer = Buffer.concat([buffer, chunk]);
+    for (;;) {
+      const headerEnd = buffer.indexOf('\r\n\r\n');
+      if (headerEnd < 0) return;
+      const header = buffer.subarray(0, headerEnd).toString('utf8');
+      const match = header.match(/Content-Length: (\d+)/i);
+      if (!match) return;
+      const length = Number.parseInt(match[1], 10);
+      const bodyStart = headerEnd + 4;
+      const frameEnd = bodyStart + length;
+      if (buffer.length < frameEnd) return;
+      const body = buffer.subarray(bodyStart, frameEnd).toString('utf8');
+      buffer = buffer.subarray(frameEnd);
+      handle(JSON.parse(body) as Parameters<typeof handle>[0]);
+    }
+  });
+
+  const child = Object.assign(new EventEmitter(), {
+    stdin,
+    stdout,
+    stderr,
+    pid: 4242,
+    killed: false,
+    exitCode: null as number | null,
+    signalCode: null as NodeJS.Signals | null,
+    kill(signal?: NodeJS.Signals) {
+      if (this.exitCode != null || this.signalCode != null) return true;
+      this.killed = true;
+      this.exitCode = 0;
+      this.emit('exit', 0, signal ?? null);
+      const finish = () => {
+        if (!stdin.destroyed) stdin.end();
+        if (!stdout.destroyed) stdout.end();
+        if (!stderr.destroyed) stderr.end();
+        this.emit('close', 0, null);
+      };
+      if (closeDelayMs > 0) setTimeout(finish, closeDelayMs);
+      else finish();
+      return true;
+    },
+    closeSoon() {
+      this.exitCode = 1;
+      this.emit('close', 1, null);
+    },
+  });
+  return child;
 }

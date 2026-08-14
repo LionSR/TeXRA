@@ -111,11 +111,13 @@ export class LeanSession {
           rpc.dispose('LeanSession.dispose');
         }
       }
-      if (spawned && !spawned.killed) {
+      if (spawned && spawned.exitCode == null && spawned.signalCode == null) {
         spawned.kill();
       }
     } finally {
-      await closeWait;
+      if (spawned) {
+        await waitForProcessClose(spawned, closeWait);
+      }
     }
   }
 
@@ -204,7 +206,9 @@ export class LeanSession {
     }
     this.child = child;
     this.spawned = child;
-    this.closeWait = waitForProcessClose(child);
+    this.closeWait = new Promise<void>((resolve) => {
+      child.once('close', () => resolve());
+    });
     let stderrTail = '';
     const STDERR_TAIL_LIMIT = 4096;
     let finalized = false;
@@ -427,11 +431,17 @@ function lspSeverityToVsCode(severity: number): DiagnosticSeverity {
 
 async function waitForProcessClose(
   child: ChildProcessWithoutNullStreams,
+  alreadyClosed?: Promise<void>,
 ): Promise<void> {
-  if (child.exitCode != null || child.signalCode != null) return;
-  const closed = new Promise<void>((resolve) => {
-    child.once('close', () => resolve());
-  });
+  const closed =
+    alreadyClosed ??
+    new Promise<void>((resolve) => {
+      if (child.exitCode != null || child.signalCode != null) {
+        resolve();
+        return;
+      }
+      child.once('close', () => resolve());
+    });
   try {
     await pTimeout(closed, {
       milliseconds: SHUTDOWN_TIMEOUT_MS,
