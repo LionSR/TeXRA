@@ -15,7 +15,10 @@ type PatternMapper<T> = (item: T) => [string, string][];
  * Creates a pattern dictionary from items using a mapper function.
  * This is the core abstraction for all pattern generators.
  */
-function createPatterns<T>(items: T[], mapper: PatternMapper<T>): PatternDict {
+export function createPatterns<T>(
+  items: T[],
+  mapper: PatternMapper<T>,
+): PatternDict {
   return Object.fromEntries(items.flatMap(mapper));
 }
 
