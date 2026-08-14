@@ -24,7 +24,7 @@ import { platform } from '@platform/platform';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { getPreferKimiCode } from '@utils/config/providerConfig';
 
-import { apiKeyExists } from './apiProviders';
+import { hasUsableApiKey } from './apiProviders';
 import { includedModelAccess } from './includedModelAccess';
 import { zeroCostAccessOverrides } from './subscriptionAccessOverrides';
 
@@ -171,7 +171,7 @@ export async function resolveKimiCodeRoutingFacts(
     : false;
   return {
     useOpenRouter,
-    keySet: await apiKeyExists(platform().secrets, 'kimiCode'),
+    keySet: await hasUsableApiKey(platform().secrets, 'kimiCode'),
     preferKimiCode: getPreferKimiCode(),
     includedAccess,
   };

@@ -1,7 +1,10 @@
 import { getCodexStatus } from '@auth/codex';
 import { getXaiStatus, xaiAccountLabel } from '@auth/xai';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
-import { apiKeyExists, configuredApiKeyProviders } from '@model/apiProviders';
+import {
+  configuredApiKeyProviders,
+  hasUsableApiKey,
+} from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
   codingPlanSubscriptionRuntimes,
@@ -71,7 +74,7 @@ export async function readCliModelAccessStatus(
               runtime.descriptor.id,
               {
                 preferred: runtime.getEnabled(),
-                keySet: await apiKeyExists(
+                keySet: await hasUsableApiKey(
                   secrets,
                   runtime.descriptor.apiProvider,
                 ),
@@ -215,7 +218,7 @@ async function updateKeyedCliModelAccess(
 
   // The provider API key is the subscription credential — there is no
   // separate sign-in flow.
-  if (!(await apiKeyExists(platform().secrets, plan.apiProvider))) {
+  if (!(await hasUsableApiKey(platform().secrets, plan.apiProvider))) {
     return {
       apiMode,
       message: `No ${plan.credentialName} API key configured — add one with /key or /config → API keys (get one at ${plan.credentialSetupUrl}).`,
