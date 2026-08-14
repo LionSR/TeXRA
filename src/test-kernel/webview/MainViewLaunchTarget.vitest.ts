@@ -96,6 +96,23 @@ describe('main-view launch target', () => {
       expect(parsed.launchTarget).toBe('team');
       expect(parsed.selectedTeamId).toBe('physicist');
     });
+
+    it('rejects retired pre-#9705 flat-field snapshots instead of silently resetting them', () => {
+      // Stripping the retired keys and prefaulting the canonical records
+      // would silently drop the saved selections; the parse must fail so the
+      // caller's warn-and-reset path runs.
+      const parsed = MainViewPersistedStateSchema.safeParse({
+        workflowAgent: 'correct',
+        workflowInstruction: 'Polish the intro.',
+      });
+
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues[0]?.message).toContain(
+          'retired flat-field main-view state',
+        );
+      }
+    });
   });
 
   describe('changeLaunchTarget', () => {
