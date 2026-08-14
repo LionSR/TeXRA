@@ -162,12 +162,30 @@ describe('renderAnsiMarkdown', () => {
     expect(normalized).not.toContain('</code>');
   });
 
-  it('keeps every multiline math line inside an HTML blockquote', () => {
-    const normalized = normalizeKnownHtmlForCliMarkdown(
-      '<blockquote>\\[\na<b\nb>c\n\\]</blockquote>',
-    );
+  it('normalizes HTML between same-line shell PID expansions', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('<code>$$</code> and <code>$$</code>'),
+    ).toBe('`$$` and `$$`');
+  });
 
-    expect(normalized).toBe('> \\[\n> a<b\n> b>c\n> \\]');
+  it('preserves complete inline math beside token characters', () => {
+    const examples = ['$0<p>1$5', '$0<p>1$-condition', '$a<b>c$d'];
+
+    for (const example of examples) {
+      expect(normalizeKnownHtmlForCliMarkdown(example)).toBe(example);
+    }
+  });
+
+  it('keeps every multiline math line inside an HTML blockquote', () => {
+    const plain = renderPlain('<blockquote>\\[\na<b\nb>c\n\\]</blockquote>', {
+      colorEnabled: false,
+      width: 80,
+    });
+
+    expect(plain).toContain('│ \\[');
+    expect(plain).toContain('│ a<b');
+    expect(plain).toContain('│ b>c');
+    expect(plain).toContain('│ \\]');
   });
 
   it('preserves comparison prose that resembles HTML attributes', () => {

@@ -135,12 +135,28 @@ function protectByPatterns(
     offset: number,
     source: string,
   ) => boolean = () => true,
+  preserveBlockquotePrefixes = false,
 ): { content: string; items: string[] } {
   const items: string[] = [];
   let out = content;
   for (const pattern of patterns) {
-    out = out.replaceAll(pattern, (match, offset: number, source: string) => {
+    out = out.replaceAll(pattern, (match, ...args: unknown[]) => {
+      const offset = args.at(-2) as number;
+      const source = args.at(-1) as string;
       if (!shouldProtect(match, offset, source)) return match;
+      // Keep Markdown blockquote prefixes visible to the parser instead of
+      // collapsing an entire quoted display span into one placeholder line.
+      if (preserveBlockquotePrefixes && /\n\s*>/u.test(match)) {
+        return match
+          .split('\n')
+          .map((line, lineIndex) => {
+            const prefix =
+              lineIndex === 0 ? '' : (/^\s*(?:>\s*)+/u.exec(line)?.[0] ?? '');
+            const index = items.push(line.slice(prefix.length)) - 1;
+            return `${prefix}@@${tag}-${index}@@`;
+          })
+          .join('\n');
+      }
       const index = items.push(match) - 1;
       return `@@${tag}-${index}@@`;
     });
@@ -172,6 +188,7 @@ export function protectLatexMathSpans(
     MATH_SPAN_PATTERNS,
     'LATEX-MATH',
     shouldProtect,
+    true,
   );
   return {
     content: protectedMath.content,
