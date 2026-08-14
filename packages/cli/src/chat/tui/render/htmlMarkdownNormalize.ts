@@ -30,7 +30,7 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
       (_match, level: string, body: string) =>
         `\n\n${headingMarker(level)} ${body.trim()}\n\n`,
     )
-    .replaceAll(/<br\s*\/?>/gi, '\n')
+    .replaceAll(/(?<![\p{L}\p{N}_])<br\s*\/?>/giu, '\n')
     .replaceAll(/<\/(?:p|div)>/gi, '\n\n')
     .replaceAll(/(?<![\p{L}\p{N}_])<(?:p|div)(?=[\s/>])[^>]*>/giu, '')
     .replaceAll(/(?<![\p{L}\p{N}_])<(?:strong|b)(?=[\s/>])[^>]*>/giu, '**')
