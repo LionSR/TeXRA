@@ -27,16 +27,18 @@ const CURRENCY_PAIR_RE = new RegExp(
   `\\$${CURRENCY_AMOUNT}[^\\n$]*?(?:\\s|\\s[([{"'‘“+–—-]|\\s[A-Z]{1,3})\\$${CURRENCY_AMOUNT}`,
   'gu',
 );
+const PUNCTUATED_CURRENCY_TOKEN_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:[A-Z]{1,3})?\\$${CURRENCY_AMOUNT}(?=[,.;:!?)](?:\\s|$))`,
+  'gu',
+);
 const CURRENCY_BEFORE_MATH_RE = new RegExp(
   `(?<![A-Za-z0-9_])(?:[A-Z]{1,3})?\\$${CURRENCY_AMOUNT}${CURRENCY_BOUNDARY}(?=[^\\n$]*\\$[^\\n$]*\\$)`,
   'gu',
 );
-const SHELL_UNWRAPPED_TOKEN_RE = new RegExp(
-  `(?<![A-Za-z0-9_}>])\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
+const SHELL_UNWRAPPED_PAIR_RE = new RegExp(
+  `(?<![A-Za-z0-9_}>])\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}[^\\n$]*?\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
   'gu',
 );
-const KNOWN_HTML_OPEN_TAG_RE =
-  /<(blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])[^>]*>/giu;
 const HEADING_TAG_RE = new RegExp(
   `<h([1-6])${HTML_ATTRIBUTES}\\/?\\s*>([\\s\\S]*?)<\\/h\\1>`,
   'gi',
@@ -74,17 +76,6 @@ function headingMarker(level: string): string {
   return '#'.repeat(depth);
 }
 
-function hasUnclosedKnownHtmlTag(content: string): boolean {
-  for (const match of content.matchAll(KNOWN_HTML_OPEN_TAG_RE)) {
-    const [openTag, tagName] = match;
-    if (openTag.endsWith('/>')) continue;
-    if (tagName?.toLowerCase() === 'br') return true;
-    const remainder = content.slice((match.index ?? 0) + openTag.length);
-    if (!new RegExp(`<\\/${tagName}\\s*>`, 'iu').test(remainder)) return true;
-  }
-  return false;
-}
-
 // CLI presentation owns currency and shell syntax. Mask only their dollar
 // tokens before shared math recognition so a shell token cannot pair with a
 // later formula delimiter and cause that formula's HTML-shaped TeX to leak.
@@ -101,25 +92,16 @@ function protectLiteralDollarTokens(content: string): {
       const index = items.push(dollars) - 1;
       return `${placeholderPrefix}${index}@@`;
     });
-  const withoutCodeOrCurrencyDollars = [
+  const protectedContent = [
     HTML_CODE_ELEMENT_RE,
     MARKDOWN_CODE_SPAN_RE,
     CURRENCY_PAIR_RE,
+    PUNCTUATED_CURRENCY_TOKEN_RE,
     CURRENCY_BEFORE_MATH_RE,
+    SHELL_UNWRAPPED_PAIR_RE,
   ].reduce(
     (value, pattern) => value.replaceAll(pattern, protectDollars),
     content,
-  );
-  const protectedContent = withoutCodeOrCurrencyDollars.replaceAll(
-    SHELL_UNWRAPPED_TOKEN_RE,
-    (match, offset: number, source: string) => {
-      const nextDollar = source.indexOf('$', offset + match.length);
-      const followingSpan =
-        nextDollar < 0 ? '' : source.slice(offset + match.length, nextDollar);
-      return hasUnclosedKnownHtmlTag(followingSpan)
-        ? match
-        : protectDollars(match);
-    },
   );
   return {
     content: protectedContent,

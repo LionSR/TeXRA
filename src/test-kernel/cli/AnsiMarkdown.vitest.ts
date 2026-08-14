@@ -225,6 +225,10 @@ describe('renderAnsiMarkdown', () => {
       '<code>${HOME}</code> and <code>${PATH}</code>',
       '`${HOME}` and `${PATH}`',
     ],
+    [
+      '<code>echo $HOME</code> and <code>echo $PATH</code>',
+      '`echo $HOME` and `echo $PATH`',
+    ],
   ] as const)(
     'normalizes HTML between code-wrapped shell parameters: %s',
     (source, expected) => {
@@ -329,6 +333,14 @@ describe('renderAnsiMarkdown', () => {
     expect(normalizeKnownHtmlForCliMarkdown(example)).toBe(
       example.replace('<strong>', '**').replace('</strong>', '**'),
     );
+  });
+
+  it('does not replace user text resembling a dollar placeholder', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '@@CLI-LITERAL-DOLLAR-0@@ <code>$HOME</code>',
+      ),
+    ).toBe('@@CLI-LITERAL-DOLLAR-0@@ `$HOME`');
   });
 
   it('preserves adjacent inline math spans independently of markdown', () => {
