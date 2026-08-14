@@ -156,6 +156,8 @@ describe('renderAnsiMarkdown', () => {
       'Cost $5 <strong>today</strong>, then ($10)',
       'Cost $5 <strong>today</strong>, then -$10',
       'Cost US$5 <strong>today</strong>, then US$10',
+      'Cost $.99 <strong>today</strong>, then $.50',
+      'Cost $-5 <strong>today</strong>, then $-10',
     ];
 
     for (const example of examples) {

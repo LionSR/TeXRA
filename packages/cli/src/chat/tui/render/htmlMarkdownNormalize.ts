@@ -4,7 +4,7 @@ import { clamp } from '@utils/core';
 
 const KNOWN_HTML_TAG_RE =
   /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/i;
-const CURRENCY_AMOUNT_START_RE = /^\d/u;
+const CURRENCY_AMOUNT_START_RE = /^[+-]?(?:\d|\.\d)/u;
 const CURRENCY_PAIR_END_RE = /(?:[\s>]|[\s>][([{"'‘“+–—-]|[\s>][A-Z]{2,3})\$$/u;
 const SHELL_PID_CODE_PAIR_RE =
   /^\$\$?<\/code>[\s\S]*<code(?:\s[^<>]*)?>\$\$?$/iu;
