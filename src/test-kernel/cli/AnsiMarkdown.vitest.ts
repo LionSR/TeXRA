@@ -175,6 +175,12 @@ describe('renderAnsiMarkdown', () => {
     expect(normalized).not.toContain('</strong>');
   });
 
+  it('normalizes independently wrapped currency amounts', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('<strong>$5</strong> and <em>$10</em>'),
+    ).toBe('**$5** and _$10_');
+  });
+
   it('normalizes unpaired HTML between same-line currency amounts', () => {
     expect(
       normalizeKnownHtmlForCliMarkdown('Cost $5 <strong>today, then $10'),
@@ -196,6 +202,12 @@ describe('renderAnsiMarkdown', () => {
     },
   );
 
+  it('does not classify numeric inline math as currency', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('$5 x$ <strong>and</strong> $y = 2$'),
+    ).toBe('$5 x$ **and** $y = 2$');
+  });
+
   it.each([
     ['<code>$HOME</code> and <code>$PATH</code>', '`$HOME` and `$PATH`'],
     ['`$HOME` <strong>or</strong> `$PATH`', '`$HOME` **or** `$PATH`'],
@@ -207,6 +219,16 @@ describe('renderAnsiMarkdown', () => {
       expect(normalized).toBe(expected);
       expect(normalized).not.toContain('<strong>');
       expect(normalized).not.toContain('</strong>');
+    },
+  );
+
+  it.each([
+    ['$HOME <strong>or</strong> $x$', '$HOME **or** $x$'],
+    ['$HOME then <strong>$a<b>c$</strong>', '$HOME then **$a<b>c$**'],
+  ] as const)(
+    'keeps a lone shell token separate from later math: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
     },
   );
 
@@ -244,12 +266,28 @@ describe('renderAnsiMarkdown', () => {
     ).toBe('`echo $HOME` and `echo $PATH`');
   });
 
+  it('normalizes shell variables inside multi-backtick code spans', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '``echo $HOME`` <strong>or</strong> ``echo $PATH``',
+      ),
+    ).toBe('``echo $HOME`` **or** ``echo $PATH``');
+  });
+
   it('does not replace user text resembling a generated placeholder', () => {
     expect(
       normalizeKnownHtmlForCliMarkdown(
         'literal @@CLI-LITERAL-DOLLAR-0@@ and <code>$HOME</code>',
       ),
     ).toBe('literal @@CLI-LITERAL-DOLLAR-0@@ and `$HOME`');
+  });
+
+  it('does not replace user text resembling a math placeholder', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '@@LATEX-MATH-0@@ <strong>x</strong> $a<b>c$',
+      ),
+    ).toBe('@@LATEX-MATH-0@@ **x** $a<b>c$');
   });
 
   it('binds code-wrapped shell pairs to the current dollar delimiters', () => {

@@ -110,8 +110,6 @@ function restoreLatexReferences(
   });
 }
 
-const MATH_PLACEHOLDER = /@@LATEX-MATH-(\d+)@@/g;
-
 // Math spans whose body must reach the renderer verbatim. Order matters: the
 // display fences are matched before the inline ones so `$…$` never splits a
 // `$$…$$`. Inline `$…$` requires both delimiters to be unescaped (`\$` is a
@@ -198,16 +196,19 @@ export function protectLatexMathSpans(content: string): {
   content: string;
   restore: (value: string) => string;
 } {
+  let placeholderTag = 'LATEX-MATH';
+  while (content.includes(`@@${placeholderTag}-`)) placeholderTag += '@';
+  const placeholderPattern = new RegExp(`@@${placeholderTag}-(\\d+)@@`, 'g');
   const protectedMath = protectByPatterns(
     content,
     MATH_SPAN_PATTERNS,
-    'LATEX-MATH',
+    placeholderTag,
     true,
   );
   return {
     content: protectedMath.content,
     restore: (value) =>
-      restorePlaceholders(value, MATH_PLACEHOLDER, protectedMath.items),
+      restorePlaceholders(value, placeholderPattern, protectedMath.items),
   };
 }
 

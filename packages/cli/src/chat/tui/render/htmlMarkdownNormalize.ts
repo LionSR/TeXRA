@@ -22,7 +22,11 @@ const HTML_CODE_ELEMENT_RE = new RegExp(
   `<code${HTML_ATTRIBUTES}>[\\s\\S]*?<\\/code>`,
   'giu',
 );
-const MARKDOWN_CODE_SPAN_RE = /`[^`\n]*`/gu;
+const MARKDOWN_CODE_SPAN_RE = /(?<!`)(`+)(?!`)([^\n]*?)\1(?!`)/gu;
+const HTML_WRAPPED_CURRENCY_RE = new RegExp(
+  `<(?:strong|b|em|i)${HTML_ATTRIBUTES}>\\$${CURRENCY_AMOUNT}<\\/(?:strong|b|em|i)>`,
+  'giu',
+);
 const CURRENCY_PAIR_RE = new RegExp(
   `\\$${CURRENCY_AMOUNT}[^\\n$]*?(?:\\s|\\s[([{"'‘“+–—-]|\\s[A-Z]{1,3})\\$${CURRENCY_AMOUNT}`,
   'gu',
@@ -31,14 +35,22 @@ const PUNCTUATED_CURRENCY_TOKEN_RE = new RegExp(
   `(?<![\\p{L}\\p{N}_])(?:[A-Z]{1,3})?\\$${CURRENCY_AMOUNT}(?=[,.;:!?)](?:\\s|$))`,
   'gu',
 );
-const CURRENCY_BEFORE_MATH_RE = new RegExp(
-  `(?<![A-Za-z0-9_])(?:[A-Z]{1,3})?\\$${CURRENCY_AMOUNT}${CURRENCY_BOUNDARY}(?=[^\\n$]*\\$[^\\n$]*\\$)`,
+const CURRENCY_TOKEN_RE = new RegExp(
+  `(?<![A-Za-z0-9_])(?:[A-Z]{1,3})?\\$${CURRENCY_AMOUNT}${CURRENCY_BOUNDARY}`,
   'gu',
 );
 const SHELL_UNWRAPPED_PAIR_RE = new RegExp(
   `(?<![A-Za-z0-9_}>])\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}[^\\n$]*?\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
   'gu',
 );
+const SHELL_UNWRAPPED_TOKEN_RE = new RegExp(
+  `(?<![A-Za-z0-9_}>])\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
+  'gu',
+);
+const KNOWN_HTML_CLOSE_TAG_RE =
+  /<\/(?:blockquote|strong|b|em|i|code|p|div|h[1-6])\s*>/iu;
+const KNOWN_HTML_OPEN_TAG_AT_END_RE =
+  /<(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])[^>]*>\s*$/iu;
 const HEADING_TAG_RE = new RegExp(
   `<h([1-6])${HTML_ATTRIBUTES}\\/?\\s*>([\\s\\S]*?)<\\/h\\1>`,
   'gi',
@@ -92,16 +104,40 @@ function protectLiteralDollarTokens(content: string): {
       const index = items.push(dollars) - 1;
       return `${placeholderPrefix}${index}@@`;
     });
-  const protectedContent = [
+  const hasFormattingBeforeLaterMath = (
+    match: string,
+    offset: number,
+    source: string,
+  ): boolean => {
+    const nextDollar = source.indexOf('$', offset + match.length);
+    if (nextDollar < 0 || source.indexOf('$', nextDollar + 1) < 0) return false;
+    const beforeNextDollar = source.slice(offset + match.length, nextDollar);
+    return (
+      KNOWN_HTML_CLOSE_TAG_RE.test(beforeNextDollar) ||
+      KNOWN_HTML_OPEN_TAG_AT_END_RE.test(beforeNextDollar)
+    );
+  };
+  const withoutCodeOrPairedTokenDollars = [
     HTML_CODE_ELEMENT_RE,
     MARKDOWN_CODE_SPAN_RE,
+    HTML_WRAPPED_CURRENCY_RE,
     CURRENCY_PAIR_RE,
     PUNCTUATED_CURRENCY_TOKEN_RE,
-    CURRENCY_BEFORE_MATH_RE,
     SHELL_UNWRAPPED_PAIR_RE,
   ].reduce(
     (value, pattern) => value.replaceAll(pattern, protectDollars),
     content,
+  );
+  const protectedContent = [CURRENCY_TOKEN_RE, SHELL_UNWRAPPED_TOKEN_RE].reduce(
+    (value, pattern) =>
+      value.replaceAll(pattern, (match, ...args: unknown[]) => {
+        const offset = args.at(-2) as number;
+        const source = args.at(-1) as string;
+        return hasFormattingBeforeLaterMath(match, offset, source)
+          ? protectDollars(match)
+          : match;
+      }),
+    withoutCodeOrPairedTokenDollars,
   );
   return {
     content: protectedContent,
