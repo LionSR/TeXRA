@@ -1145,6 +1145,52 @@ describe('App foreground Escape ownership', () => {
 });
 
 describe('App approval surface ownership', () => {
+  it('promotes a session-wide approval against the post-Escape root', async () => {
+    seedChildHierarchy();
+    focusStream(CHILD);
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-other-after-escape',
+        mode: 'followUp',
+        question: 'Wait outside the destination root.',
+        threadId: 'ei_000000000005',
+        allowBypass: false,
+        streamId: 'other-stream',
+      },
+    });
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-session-after-escape',
+        mode: 'followUp',
+        question: 'Verify the destination root.',
+        threadId: 'ei_000000000006',
+        allowBypass: false,
+        streamId: '',
+      },
+    });
+    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
+
+    try {
+      stdin.write(ESC);
+      await waitFor(() => activeStreamId.get() === ROOT);
+      await waitFor(() => {
+        const pending = currentApproval.get()?.payload;
+        return (
+          pending?.kind === 'externalInquiry' &&
+          pending.payload.requestId === 'external-session-after-escape'
+        );
+      });
+      await waitFor(() =>
+        stdout.output.includes('Verify the destination root.'),
+      );
+      expect(stdout.output).not.toContain('Wait outside the destination root.');
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('promotes a session-wide approval from a scoped-list root', async () => {
     seedChildHierarchy();
     focusStream(GRANDCHILD);

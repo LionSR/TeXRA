@@ -591,7 +591,13 @@ export function App(props: AppProps): React.JSX.Element {
     }
     const parentId = parentStreamSignal.get().get(streamId);
     if (parentId !== undefined) {
-      focusStreamAndPromoteApprovals(parentId, childListTarget.streamId);
+      const destinationListRoot = resolveChildListTarget({
+        activeStreamId: parentId,
+        childStreamEntries: childStreamEntriesSignal.get(),
+        parentStream: parentStreamSignal.get(),
+        streams: streamsSignal.get(),
+      }).streamId;
+      focusStreamAndPromoteApprovals(parentId, destinationListRoot);
       if (
         selectedWorkflowChildStreamId === streamId &&
         workflowDashboard?.root.streamId === parentId

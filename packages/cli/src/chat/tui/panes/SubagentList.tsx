@@ -133,8 +133,8 @@ function SessionRow({
     nowMs,
   );
   // Significance order — the summary segment sheds first (flexShrink 2), then
-  // this truncate-end text sheds inline elapsed (narrow mode only), the round,
-  // and last the pending-approval kind. The metadata column never shrinks.
+  // this truncate-end text sheds inline elapsed, model, stage, and label. The
+  // approval kind and metadata column never shrink.
   const approvalSuffix = pendingApprovalRowSuffix(pendingKinds);
   const stageLabel = formatStageLabel(session.slice?.stage);
   // The resolved model is per-agent identity (a workflow run's grandchildren
@@ -188,7 +188,6 @@ function SessionRow({
         <Text bold={active} wrap="truncate-end">
           {session.label}
           {statusLabel ? ` ${statusLabel}` : ''}
-          {approvalSuffix ? ` · ${approvalSuffix}` : ''}
           {stageLabel ? ` · ${stageLabel}` : ''}
           {modelLabel ? ` · ${modelLabel}` : ''}
           {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
@@ -199,6 +198,11 @@ function SessionRow({
           <Text dimColor wrap="truncate-end">
             {` · ${truncateSummaryToWidth(summary, SUBAGENT_SUMMARY_MAX_COLUMNS)}`}
           </Text>
+        </Box>
+      ) : null}
+      {approvalSuffix ? (
+        <Box flexShrink={0}>
+          <Text>{` · ${approvalSuffix}`}</Text>
         </Box>
       ) : null}
       {focused && hiddenRowSummary ? (
