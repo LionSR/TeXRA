@@ -4,7 +4,7 @@ import {
   CHILD_STATUS_MARKER,
   childRowMetadataText,
   childStatusColor,
-  pendingApprovalRowSuffix,
+  pendingApprovalRowDisplay,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
 import {
   ConversationPane,
@@ -636,13 +636,19 @@ describe('CLI child list display model', () => {
   });
 
   it('summarizes what a row is waiting on from its pending approval kinds', () => {
-    expect(pendingApprovalRowSuffix(undefined)).toBeUndefined();
-    expect(pendingApprovalRowSuffix([])).toBeUndefined();
-    expect(pendingApprovalRowSuffix(['bash'])).toBe('bash');
-    expect(pendingApprovalRowSuffix(['externalInquiry'])).toBe('inquiry');
-    expect(pendingApprovalRowSuffix(['toolEdit', 'bash', 'userQuestion'])).toBe(
-      'edit +2',
-    );
+    expect(pendingApprovalRowDisplay(undefined)).toBeUndefined();
+    expect(pendingApprovalRowDisplay([])).toBeUndefined();
+    expect(pendingApprovalRowDisplay(['bash'])).toEqual({
+      label: 'bash',
+      overflow: undefined,
+    });
+    expect(pendingApprovalRowDisplay(['externalInquiry'])).toEqual({
+      label: 'inquiry',
+      overflow: undefined,
+    });
+    expect(
+      pendingApprovalRowDisplay(['toolEdit', 'bash', 'userQuestion']),
+    ).toEqual({ label: 'edit', overflow: '+2' });
   });
 
   it('moves selection through every session and wraps at the ends', () => {
@@ -1334,7 +1340,7 @@ describe('CLI child list display model', () => {
       {
         listRootStreamId: run,
         maxRows: 3,
-        pendingApprovals: new Map([[run, ['externalInquiry']]]),
+        pendingApprovals: new Map([[run, ['externalInquiry', 'proposal']]]),
         sessions: [
           {
             id: run,
@@ -1349,6 +1355,7 @@ describe('CLI child list display model', () => {
     );
 
     expect(output).toContain(' · inquiry');
+    expect(output).not.toContain('+1');
     expect(output).not.toContain('deliberately');
     expect(
       output.split('\n').every((line) => textDisplayWidth(line) <= 18),
