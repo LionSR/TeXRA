@@ -247,6 +247,16 @@ describe('desktop control system', () => {
     expect(browserViews).toContain('Blocked external browser URL');
     expect(browserViews).toContain('setPermissionRequestHandler');
     expect(browserViews).toContain('setPermissionCheckHandler');
+    // Tab-title freshness: every event that can change getTitle()'s value
+    // must republish. did-navigate-in-page is load-bearing for hash and
+    // pushState navigations on untitled pages (URL-derived titles).
+    expect(browserViews).toContain("webContents.on('did-navigate', republish)");
+    expect(browserViews).toContain(
+      "webContents.on('did-navigate-in-page', republish)",
+    );
+    expect(browserViews).toContain(
+      "webContents.on('page-title-updated', republish)",
+    );
     expect(commandSurface).toContain("SAVE_FILE: 'texra.desktop.saveFile'");
     expect(commandSurface).toContain("accelerator: 'CommandOrControl+S'");
     expect(renderer).toContain('void editorPane.save()');

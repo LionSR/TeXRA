@@ -111,8 +111,9 @@ Animations should share one Clock (single timer, idle when unsubscribed,
 offscreen rows unsubscribe via a ref-only check) instead of per-component
 intervals; raw mode should be reference-counted (enable on 0→1, disable on 0,
 snapshot/restore across Ctrl-Z) instead of toggled directly; the resize
-clear+reprint should wrap in DEC 2026 sync-output (BSU/ESU, gated on the
-existing DECRQM 2027 probe) if a blank flash is ever observed; prefer a
+clear+reprint should wrap in DEC 2026 sync-output (BSU/ESU, gated on a
+DECRQM 2026 probe added to `state/terminalCapabilities.ts`) if a blank flash
+is ever observed; prefer a
 `/dev/tty` fallback over refusing the TUI when stdin is piped but a real
 terminal is present, and handle EPIPE globally.
 

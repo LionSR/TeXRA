@@ -2,7 +2,6 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
-import { appSignals } from '@eventBus/AppSignals';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
@@ -107,10 +106,10 @@ export class DesktopProgressFileActions {
         writeFile: (location, content) =>
           writeFile(location.absolutePath, content, 'utf8'),
         confirm: (message) => this.ui.confirmAcceptFile(message),
-        emitWritten: (absolutePath) =>
-          appSignals.emit('workspaceFilesWritten', {
-            absolutePaths: [absolutePath],
-          }),
+        // The desktop main process has no `workspaceFilesWritten` subscriber
+        // (file decorations are a VS Code surface), so there is nothing to
+        // notify.
+        emitWritten: () => undefined,
         showInfo: (message) => this.ui.showInfoMessage(message),
         deleteFile: async (location) => {
           try {
