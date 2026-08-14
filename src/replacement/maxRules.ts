@@ -6,6 +6,7 @@ import type {
 import { GREEK_LETTERS } from './constants';
 import { NonRegexReplacementCategory, RegexReplacementCategory } from './types';
 import {
+  createPatterns,
   generateDecoratedMathShortcuts,
   generateDecoratorShortcuts,
   generateNestedDecoratorShortcuts,
@@ -147,49 +148,41 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
   return {
     ...generateBackslashFixes(backslashFixCommands),
     // Math Operators: \mathrm{op} -> \op and \text{op} -> \op
-    ...Object.fromEntries(
-      mathOperators.flatMap((op) => [
-        [`\\mathrm{${op}}`, `\\${op}`],
-        [`\\text{${op}}`, `\\${op}`],
-        [`\\mbox{${op}}`, `\\${op}`],
-        [`\\textrm{${op}}`, `\\${op}`],
-        [`{\\rm ${op}}`, `\\${op}`],
-        [`_\\op`, `_{\\${op}}`],
-        [`^\\op`, `^{\\${op}}`],
-      ]),
-    ),
+    ...createPatterns(mathOperators, (op) => [
+      [`\\mathrm{${op}}`, `\\${op}`],
+      [`\\text{${op}}`, `\\${op}`],
+      [`\\mbox{${op}}`, `\\${op}`],
+      [`\\textrm{${op}}`, `\\${op}`],
+      [`{\\rm ${op}}`, `\\${op}`],
+      [`_\\op`, `_{\\${op}}`],
+      [`^\\op`, `^{\\${op}}`],
+    ]),
     // Text Commands: \text{cmd} -> \cmd
-    ...Object.fromEntries(
-      textCommands.flatMap((cmd) => [
-        [`\\text{${cmd}}`, `\\${cmd}`],
-        [`\\mathrm{${cmd}}`, `\\${cmd}`],
-        [`\\mbox{${cmd}}`, `\\${cmd}`],
-        [`\\textrm{${cmd}}`, `\\${cmd}`],
-        [`{\\rm ${cmd}}`, `\\${cmd}`],
-        [`_{\\${cmd}}`, `_\\${cmd}`],
-        [`^{\\${cmd}}`, `^\\${cmd}`],
-        [`_{${cmd}}`, `_\\${cmd}`],
-        [`^{${cmd}}`, `^\\${cmd}`],
-      ]),
-    ),
+    ...createPatterns(textCommands, (cmd) => [
+      [`\\text{${cmd}}`, `\\${cmd}`],
+      [`\\mathrm{${cmd}}`, `\\${cmd}`],
+      [`\\mbox{${cmd}}`, `\\${cmd}`],
+      [`\\textrm{${cmd}}`, `\\${cmd}`],
+      [`{\\rm ${cmd}}`, `\\${cmd}`],
+      [`_{\\${cmd}}`, `_\\${cmd}`],
+      [`^{\\${cmd}}`, `^\\${cmd}`],
+      [`_{${cmd}}`, `_\\${cmd}`],
+      [`^{${cmd}}`, `^\\${cmd}`],
+    ]),
     // Symbol operators: _{op} -> _\op (no braces needed)
-    ...Object.fromEntries(
-      symbolOperators.flatMap((op) => [
-        [`_{\\${op}}`, `_\\${op}`],
-        [`^{\\${op}}`, `^\\${op}`],
-      ]),
-    ),
+    ...createPatterns(symbolOperators, (op) => [
+      [`_{\\${op}}`, `_\\${op}`],
+      [`^{\\${op}}`, `^\\${op}`],
+    ]),
     ...generateDifferentialSpacing(differentialVariables, '~'),
-    ...Object.fromEntries(
-      fractionDiffVariables.flatMap((variable) => [
-        // Handle cases like {dx} -> {\\dd x}
-        [`{d${variable}}`, `{\\dd${variable}}`],
-        // Handle cases like \\frac{dx} -> \\frac{\\dd x}
-        [`\\frac{d${variable}`, `\\frac{\\dd${variable}`],
-        // Handle cases like \\frac{d}{dx} -> \\frac{\\dd}{\\dd x}
-        [`\\frac{d}{d${variable}}`, `\\frac{\\dd}{\\dd${variable}}`],
-      ]),
-    ),
+    ...createPatterns(fractionDiffVariables, (variable) => [
+      // Handle cases like {dx} -> {\\dd x}
+      [`{d${variable}}`, `{\\dd${variable}}`],
+      // Handle cases like \\frac{dx} -> \\frac{\\dd x}
+      [`\\frac{d${variable}`, `\\frac{\\dd${variable}`],
+      // Handle cases like \\frac{d}{dx} -> \\frac{\\dd}{\\dd x}
+      [`\\frac{d}{d${variable}}`, `\\frac{\\dd}{\\dd${variable}}`],
+    ]),
     '\\int d\\': '\\int \\dd\\',
     '\\int \\dd \\bx \\': '\\int \\dd \\bx~ \\',
     ...generateArrowRelationShortcuts(arrowRelationMap),
@@ -241,28 +234,25 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
       'c',
     ),
     // Tilde with Greek: \tilde{\gamma} -> \tga
-    ...Object.fromEntries(
-      tildeGreekLetters.map((letter) => [
+    ...createPatterns(tildeGreekLetters, (letter) => [
+      [
         `\\tilde{\\${letter}}`,
         `\\t${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
-      ]),
-    ),
+      ],
+    ]),
     // Tilde with boldsymbol+Greek: \tilde{\boldsymbol{\zeta}} -> \tbze
-    ...Object.fromEntries(
-      tildeGreekBoldLetters.map((letter) => [
+    ...createPatterns(tildeGreekBoldLetters, (letter) => [
+      [
         `\\tilde{\\boldsymbol{\\${letter}}}`,
         `\\tb${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
-      ]),
-    ),
+      ],
+    ]),
     // Hat variables: \hat{H} -> \hH
     ...generateDecoratorShortcuts('hat', hatLetters, 'h'),
     // Hat with Greek: \hat{\sigma} -> \hsg
-    ...Object.fromEntries(
-      hatGreekLetters.map((letter) => [
-        `\\hat{\\${letter}}`,
-        `\\h${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
-      ]),
-    ),
+    ...createPatterns(hatGreekLetters, (letter) => [
+      [`\\hat{\\${letter}}`, `\\h${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`],
+    ]),
     // Hat with mathbf: \hat{\mathbf{n}} -> \hbn
     ...generateNestedDecoratorShortcuts(
       'hat',
@@ -272,23 +262,21 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
       'b',
     ),
     // Hat with boldsymbol+Greek: \hat{\boldsymbol{\zeta}} -> \hbze
-    ...Object.fromEntries(
-      hatBoldsymbolLetters.map((letter) => [
+    ...createPatterns(hatBoldsymbolLetters, (letter) => [
+      [
         `\\hat{\\boldsymbol{\\${letter}}}`,
         `\\hb${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
-      ]),
-    ),
+      ],
+    ]),
     // Bold backslash fixes: \\ba -> \ba (lowercase), \\bA -> \bA (uppercase)
     ...generateBackslashFixes(
       [...lowerLetters, ...mathbfUpperLetters].map((letter) => `b${letter}`),
     ),
-    ...Object.fromEntries(
-      functionNames.flatMap((name) => [
-        [`\\${name}_`, `${name}_`],
-        [`\\${name}^`, `${name}^`],
-        [`\\${name}(`, `${name}(`],
-      ]),
-    ),
+    ...createPatterns(functionNames, (name) => [
+      [`\\${name}_`, `${name}_`],
+      [`\\${name}^`, `${name}^`],
+      [`\\${name}(`, `${name}(`],
+    ]),
   };
 })();
 
