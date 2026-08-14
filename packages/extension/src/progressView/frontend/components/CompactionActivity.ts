@@ -67,6 +67,15 @@ export class CompactionActivity extends LitElement {
         min-width: 0;
         overflow-wrap: break-word;
       }
+
+      /* wa-spinner animates inside its own shadow root, so the wildcard
+         reduced-motion rule in designTokens can't reach it; --speed is a
+         custom property and inherits through the shadow boundary instead. */
+      @media (prefers-reduced-motion: reduce) {
+        wa-spinner {
+          --speed: 0.01ms;
+        }
+      }
     `,
   ];
 
