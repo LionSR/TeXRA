@@ -5,8 +5,8 @@
  * integration. Per-workspace sessions are cached: the first request that
  * targets a file in a given Lake project spawns `lake env lean --server`
  * from that project root; subsequent requests from any agent reuse the
- * same session. At most two servers stay alive; an unused one is stopped
- * after ten minutes. Sessions are also torn down on platform shutdown.
+ * same session. An unused server is stopped after ten minutes. Sessions
+ * are also torn down on platform shutdown.
  */
 
 import { access } from 'node:fs/promises';
@@ -34,8 +34,6 @@ import type {
 
 const LOG_CHANNEL = 'lean.direct';
 
-/** Mathlib-sized servers hold thousands of file descriptors each. */
-const DEFAULT_MAX_LEAN_SESSIONS = 2;
 /** Long-lived CLI/desktop hosts otherwise keep unused servers forever. */
 const DEFAULT_LEAN_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -56,7 +54,10 @@ export interface DirectLspLeanAdapterOptions {
   lakeCommand?: string;
   /** Override the project-root locator (mostly for tests). */
   resolveWorkspaceRoot?: (filePath: string) => Promise<string | null>;
-  /** Cap on simultaneous `lean --server` processes. Minimum 1. */
+  /**
+   * Optional cap on simultaneous `lean --server` processes. Unset means no
+   * capacity eviction — parallel worktrees stay up until they go idle.
+   */
   maxSessions?: number;
   /** Stop a session after this much idle time. `0` disables idle eviction. */
   idleTimeoutMs?: number;
@@ -89,10 +90,8 @@ export function createDirectLspLeanAdapter(
   const lakeCommand = options.lakeCommand ?? 'lake';
   const resolveRoot =
     options.resolveWorkspaceRoot ?? defaultResolveWorkspaceRoot;
-  const maxSessions = Math.max(
-    1,
-    options.maxSessions ?? DEFAULT_MAX_LEAN_SESSIONS,
-  );
+  const maxSessions =
+    options.maxSessions == null ? undefined : Math.max(1, options.maxSessions);
   const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_LEAN_IDLE_TIMEOUT_MS;
   const now = options.now ?? Date.now;
   const sessions = new Map<string, TrackedLeanSession>();
@@ -179,6 +178,7 @@ export function createDirectLspLeanAdapter(
 
   async function evictForNewSession(newRoot: string): Promise<void> {
     await evictIdleSessions();
+    if (maxSessions == null) return;
     while (sessions.size >= maxSessions) {
       const victim = lruRootExcept(newRoot);
       if (!victim) break;

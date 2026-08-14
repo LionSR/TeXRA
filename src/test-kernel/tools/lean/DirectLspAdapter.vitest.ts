@@ -238,6 +238,28 @@ describe('createDirectLspLeanAdapter', () => {
     },
   );
 
+  fakeLakeIt('keeps more than two active workspaces by default', async () => {
+    const second = makeLakeProject(tempRoot, 'project-b');
+    const third = makeLakeProject(tempRoot, 'project-c');
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 0,
+    });
+    try {
+      await adapter.fetchDiagnosticsForFile(filePath);
+      await adapter.fetchDiagnosticsForFile(second.filePath);
+      await adapter.fetchDiagnosticsForFile(third.filePath);
+      expect(await countStarts()).toBe(3);
+      expect(activeServerRoots()).toEqual([
+        projectRoot,
+        second.projectRoot,
+        third.projectRoot,
+      ]);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
   fakeLakeIt('stops an idle workspace before opening another', async () => {
     const second = makeLakeProject(tempRoot, 'project-b');
     let clock = 0;

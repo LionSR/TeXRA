@@ -23,9 +23,10 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Leftover Lean language servers are stopped** — the CLI and desktop keep at
-  most two Lean servers at a time and stop one that has been idle for ten
-  minutes, so unused servers no longer exhaust the system file table.
+- **Leftover Lean language servers are stopped** — the CLI and desktop stop a
+  Lean server that has been idle for ten minutes, so unused worktree servers
+  no longer exhaust the system file table. Parallel worktrees stay up while
+  they are in use.
 
 ### CLI
 

@@ -393,7 +393,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       '  • VS Code build: uses the "lean4" extension\n' +
       '    (leanprover.lean4) and its running language server.\n' +
       '  • CLI / desktop build: spawns `lake env lean --server`\n' +
-      '    directly (at most two project servers; idle ones stop\n' +
+      '    directly (one process per Lake project; idle ones stop\n' +
       '    after ten minutes). Requires `lake` (from elan/Lean) on\n' +
       '    PATH; install via\n' +
       '    https://leanprover-community.github.io/install/.\n\n' +
@@ -410,7 +410,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     installExtensionId: LEAN4_EXTENSION_ID,
     configNotes:
       'VS Code build: requires the leanprover.lean4 extension. ' +
-      'CLI / desktop builds: requires `lake` on PATH; at most two Lake project servers stay running and idle ones stop after ten minutes, surfaced below.',
+      'CLI / desktop builds: requires `lake` on PATH; each Lake project can have its own language server, and idle ones stop after ten minutes, surfaced below.',
     ...prerequisitesChecks({
       probe: async () => {
         const extensionAvailable =
