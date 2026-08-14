@@ -53,8 +53,6 @@ import { faDatabase } from '@fortawesome/free-solid-svg-icons/faDatabase';
 import { faDiagramProject } from '@fortawesome/free-solid-svg-icons/faDiagramProject';
 import { faDownload } from '@fortawesome/free-solid-svg-icons/faDownload';
 import { faEllipsis } from '@fortawesome/free-solid-svg-icons/faEllipsis';
-import { faEraser } from '@fortawesome/free-solid-svg-icons/faEraser';
-import { faEye } from '@fortawesome/free-solid-svg-icons/faEye';
 import { faFile } from '@fortawesome/free-solid-svg-icons/faFile';
 import { faFileCirclePlus } from '@fortawesome/free-solid-svg-icons/faFileCirclePlus';
 import { faFileCode } from '@fortawesome/free-solid-svg-icons/faFileCode';
@@ -88,7 +86,6 @@ import { faMicrophone } from '@fortawesome/free-solid-svg-icons/faMicrophone';
 import { faMinus } from '@fortawesome/free-solid-svg-icons/faMinus';
 import { faMoon } from '@fortawesome/free-solid-svg-icons/faMoon';
 import { faNoteSticky } from '@fortawesome/free-solid-svg-icons/faNoteSticky';
-import { faPalette } from '@fortawesome/free-solid-svg-icons/faPalette';
 import { faPaperPlane } from '@fortawesome/free-solid-svg-icons/faPaperPlane';
 import { faPencil } from '@fortawesome/free-solid-svg-icons/faPencil';
 import { faPictureInPicture } from '@fortawesome/free-solid-svg-icons/faPictureInPicture';
@@ -206,8 +203,6 @@ const icons = {
   'diagram-project': faDiagramProject,
   download: faDownload,
   ellipsis: faEllipsis,
-  eraser: faEraser,
-  eye: faEye,
   file: faFile,
   'file-circle-plus': faFileCirclePlus,
   'file-code': faFileCode,
@@ -241,7 +236,6 @@ const icons = {
   minus: faMinus,
   moon: faMoon,
   'note-sticky': faNoteSticky,
-  palette: faPalette,
   'paper-plane': faPaperPlane,
   pencil: faPencil,
   'picture-in-picture': faPictureInPicture,

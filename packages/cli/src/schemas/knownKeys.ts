@@ -16,9 +16,8 @@ import { CLI_SETTING_PATHS } from './cliSettings';
  * *from config*. Keys the CLI doesn't read from `.texra/config.json` are
  * intentionally excluded so they still warn as unknown:
  *
- * - Core settings the CLI does not consume (`agentReview.*`,
- *   `inlineCriticism.enabled`). Other hosts may write them to the shared TeXRA
- *   config, but they have no CLI behavior.
+ * - Core settings the CLI does not consume (`agentReview.*`). Other hosts may
+ *   write them to the shared TeXRA config, but they have no CLI behavior.
  * - State-backed settings the CLI reads from its `state.json` store
  *   (workflow/latexdiff): putting those in `config.json` is a no-op.
  */

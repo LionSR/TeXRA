@@ -18,12 +18,6 @@ export function createSessionHandlers(host: MainViewInboundHost) {
     [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: (m) =>
       executionHandlers.handleFileOperation(m),
 
-    [MAIN_VIEW_COMMANDS.CLEAN_OUTPUT]: (m) =>
-      executionHandlers.handleHousekeeping(m),
-    [MAIN_VIEW_COMMANDS.CLEAN_BUILD]: (m) =>
-      executionHandlers.handleHousekeeping(m),
-    [MAIN_VIEW_COMMANDS.INDENT_TEX]: (m) =>
-      executionHandlers.handleHousekeeping(m),
     [MAIN_VIEW_COMMANDS.PACK_SINGLE]: (m) =>
       executionHandlers.handleSingleOperation(m),
     [MAIN_VIEW_COMMANDS.CLEAN_SINGLE]: (m) =>

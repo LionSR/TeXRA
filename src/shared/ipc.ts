@@ -16,9 +16,6 @@ export const MAIN_VIEW_COMMANDS = {
   MERGE: 'merge',
   COMPARE: 'compare',
 
-  // Settings
-  SETTINGS_OPEN: 'openSettings',
-
   // Request file cases (single-file refresh requests)
   REQUEST_EDITED_FILE: 'requestEditedFile',
   REQUEST_BASE_FILE: 'requestBaseFile',
@@ -110,9 +107,6 @@ export const MAIN_VIEW_COMMANDS = {
   CLEAN_LATEXDIFFVC: 'cleanLatexdiffvc',
 
   // Housekeeping operations
-  CLEAN_OUTPUT: 'cleanOutput',
-  CLEAN_BUILD: 'cleanBuild',
-  INDENT_TEX: 'indentTeX',
   PACK_SINGLE: 'packSingle',
   CLEAN_SINGLE: 'cleanSingle',
   PACK_MULTIPLE: 'packMultiple',

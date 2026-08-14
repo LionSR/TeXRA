@@ -119,7 +119,6 @@ vi.mock('@webview/managers/InstructionManager', () => ({
 vi.mock('@webview/managers/executionHandlers', () => ({
   handleExecute: vi.fn(),
   handleFileOperation: vi.fn(),
-  handleHousekeeping: vi.fn(),
   handleMultipleOperation: vi.fn(),
   handleSingleOperation: vi.fn(),
 }));
@@ -191,8 +190,7 @@ describe('MainViewMessageHandler interaction mappings', () => {
     });
   });
 
-  it('preserves extension and agent-settings arguments', async () => {
-    await dispatch({ command: MAIN_VIEW_COMMANDS.SETTINGS_OPEN });
+  it('preserves agent-settings arguments', async () => {
     await dispatch({
       command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
       sessionType: 'workflow',
@@ -203,7 +201,6 @@ describe('MainViewMessageHandler interaction mappings', () => {
     });
 
     expect(mocks.safeExecuteCommand.mock.calls).toEqual([
-      ['texra.showDashboard', [], 'MainView'],
       ['texra.showAgents', [undefined], 'MainView'],
       ['texra.showAgents', ['toolUse'], 'MainView'],
     ]);

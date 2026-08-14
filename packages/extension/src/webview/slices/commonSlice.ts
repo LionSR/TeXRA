@@ -48,8 +48,6 @@ export function createCommonHandlers(host: MainViewInboundHost) {
       );
     },
 
-    [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: () =>
-      safeExecuteCommand('texra.showDashboard', [], host.viewName),
     [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: (m) =>
       safeExecuteCommand(
         'texra.showAgents',
