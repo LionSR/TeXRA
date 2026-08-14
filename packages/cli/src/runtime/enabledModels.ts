@@ -117,15 +117,16 @@ export async function setCliModelEnabled(
 
   await persistEnabledModels(next);
 
-  // If the helper model was just removed, pin a still-enabled one (matches
-  // Settings → Models behavior).
+  // If the helper model was just removed, pin the built-in default (matches
+  // Settings → Models behavior). Do not fall back to the first remaining
+  // picker model — that is a premium default, not the cheap auxiliary.
   const helper = platform().globalState.get<string>(
     GlobalStateKey.HELPER_MODEL,
   );
   if (!enabled && resolveEffectiveHelperModel(helper, current) === model) {
     await platform().globalState.update(
       GlobalStateKey.HELPER_MODEL,
-      next[0] ?? DEFAULT_HELPER_MODEL,
+      DEFAULT_HELPER_MODEL,
     );
   }
 

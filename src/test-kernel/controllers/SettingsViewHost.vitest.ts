@@ -5,6 +5,7 @@ import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import type { ModelOptionData } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
@@ -99,7 +100,7 @@ describe('SettingsViewHost', () => {
     });
     expect(messages.at(3)).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      helperModel: 'sonnet46T',
+      helperModel: DEFAULT_HELPER_MODEL,
     });
     expect(modelSelection.state.enabledModels).toEqual(['sonnet46T']);
     expect(beforeModelSelectionMessage).toHaveBeenCalledTimes(2);

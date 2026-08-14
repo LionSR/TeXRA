@@ -338,6 +338,19 @@ export class ModelSelectionList extends LitElement {
 
   private renderHelperModelDropdown(): TemplateResult {
     const enabledModels = this.models.filter((m) => m.enabled);
+    // The pinned default (`DEFAULT_HELPER_MODEL`) is valid even when it is
+    // not an enabled picker row. Keep it selectable so wa-select is not blank.
+    const selectedHelper =
+      this.helperModel !== '' &&
+      !enabledModels.some((m) => m.name === this.helperModel)
+        ? (this.models.find((m) => m.name === this.helperModel) ?? {
+            name: this.helperModel,
+            label: this.helperModel,
+          })
+        : undefined;
+    const helperOptions = selectedHelper
+      ? [selectedHelper, ...enabledModels]
+      : enabledModels;
 
     return html`
       <div class="helper-model-row">
@@ -348,7 +361,7 @@ export class ModelSelectionList extends LitElement {
           .value=${this.helperModel}
           @change=${this.handleHelperModelChange}
         >
-          ${enabledModels.map(
+          ${helperOptions.map(
             (m) => html`
               <wa-option value=${m.name}>
                 ${m.label === m.name ? m.name : `${m.label} (${m.name})`}
