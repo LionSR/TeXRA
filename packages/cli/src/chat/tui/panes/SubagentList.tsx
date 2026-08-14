@@ -65,7 +65,7 @@ import {
   CHILD_STATUS_MARKER,
   childRowMetadataText,
   childStatusColor,
-  pendingApprovalRowSuffix,
+  pendingApprovalRowDisplay,
 } from './SubagentListDisplay';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 import type { StreamSlice } from '../state/cliState';
@@ -135,7 +135,7 @@ function SessionRow({
   // Significance order — the summary segment sheds first (flexShrink 2), then
   // this truncate-end text sheds inline elapsed, model, stage, and label. The
   // approval kind and metadata column never shrink.
-  const approvalSuffix = pendingApprovalRowSuffix(pendingKinds);
+  const approval = pendingApprovalRowDisplay(pendingKinds);
   const stageLabel = formatStageLabel(session.slice?.stage);
   // The resolved model is per-agent identity (a workflow run's grandchildren
   // can each resolve a different model); the list-root row is the conversation
@@ -200,9 +200,14 @@ function SessionRow({
           </Text>
         </Box>
       ) : null}
-      {approvalSuffix ? (
+      {approval ? (
         <Box flexShrink={0}>
-          <Text>{` · ${approvalSuffix}`}</Text>
+          <Text>{` · ${approval.label}`}</Text>
+        </Box>
+      ) : null}
+      {approval?.overflow ? (
+        <Box minWidth={0} flexShrink={3}>
+          <Text wrap="truncate-end">{` ${approval.overflow}`}</Text>
         </Box>
       ) : null}
       {focused && hiddenRowSummary ? (
@@ -272,7 +277,7 @@ function WorkflowTaskRow({
 }): React.JSX.Element {
   const style = WORKFLOW_TASK_STATUS_STYLE[entry.task.status];
   const metadata = workflowTaskMetadata(entry.task, child, nowMs);
-  const approvalSuffix = pendingApprovalRowSuffix(pendingKinds);
+  const approval = pendingApprovalRowDisplay(pendingKinds);
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
@@ -284,9 +289,14 @@ function WorkflowTaskRow({
           {entry.task.label} · {WORKFLOW_TASK_STATUS_LABEL[entry.task.status]}
         </Text>
       </Box>
-      {approvalSuffix ? (
+      {approval ? (
         <Box flexShrink={0}>
-          <Text>{` · ${approvalSuffix}`}</Text>
+          <Text>{` · ${approval.label}`}</Text>
+        </Box>
+      ) : null}
+      {approval?.overflow ? (
+        <Box minWidth={0} flexShrink={3}>
+          <Text wrap="truncate-end">{` ${approval.overflow}`}</Text>
         </Box>
       ) : null}
       {metadata ? (
@@ -384,17 +394,15 @@ function WorkflowDashboard({
     { isActive: keyboardActive },
   );
 
-  const sessionApprovalSuffix = pendingApprovalRowSuffix(
+  const sessionApproval = pendingApprovalRowDisplay(
     pendingApprovals?.get(model.root.streamId),
   );
   const approvalOnlyDashboard =
-    tasks.length === 0 &&
-    groups.length === 0 &&
-    sessionApprovalSuffix !== undefined;
+    tasks.length === 0 && groups.length === 0 && sessionApproval !== undefined;
   if (
     (tasks.length === 0 &&
       groups.length === 0 &&
-      sessionApprovalSuffix === undefined) ||
+      sessionApproval === undefined) ||
     (contentRows !== undefined && contentRows <= 0 && !approvalOnlyDashboard)
   ) {
     return null;
@@ -469,10 +477,17 @@ function WorkflowDashboard({
             </Text>
           </Box>
         ) : null}
-        {sessionApprovalSuffix ? (
+        {sessionApproval ? (
           <Box flexShrink={0}>
             <Text bold color={COLOR_WARNING}>
-              {` · ${sessionApprovalSuffix}`}
+              {` · ${sessionApproval.label}`}
+            </Text>
+          </Box>
+        ) : null}
+        {sessionApproval?.overflow ? (
+          <Box minWidth={0} flexShrink={3}>
+            <Text bold color={COLOR_WARNING} wrap="truncate-end">
+              {` ${sessionApproval.overflow}`}
             </Text>
           </Box>
         ) : null}

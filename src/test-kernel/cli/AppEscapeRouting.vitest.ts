@@ -1145,6 +1145,130 @@ describe('App foreground Escape ownership', () => {
 });
 
 describe('App approval surface ownership', () => {
+  it('promotes a session-wide approval when a child becomes the scoped root', async () => {
+    seedChildHierarchy();
+    focusStream(ROOT);
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-other-new-scope',
+        mode: 'followUp',
+        question: 'Wait outside the new scope.',
+        threadId: 'ei_000000000007',
+        allowBypass: false,
+        streamId: 'other-stream',
+      },
+    });
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-session-new-scope',
+        mode: 'followUp',
+        question: 'Verify the newly scoped child.',
+        threadId: 'ei_000000000008',
+        allowBypass: false,
+        streamId: '',
+      },
+    });
+    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
+
+    try {
+      stdin.write('\t');
+      await waitFor(() => stdout.output.includes('Choosing a session'));
+      stdin.write(ARROW_KEYS.Down);
+      await waitFor(() =>
+        stripAnsi(stdout.output)
+          .split('\n')
+          .some((line) => line.includes('child') && line.includes(POINTER)),
+      );
+      stdin.write('\r');
+      await waitFor(() => activeStreamId.get() === CHILD);
+      await waitFor(() => {
+        const pending = currentApproval.get()?.payload;
+        return (
+          pending?.kind === 'externalInquiry' &&
+          pending.payload.requestId === 'external-session-new-scope'
+        );
+      });
+      await waitFor(() =>
+        stdout.output.includes('Verify the newly scoped child.'),
+      );
+      expect(stdout.output).not.toContain('Wait outside the new scope.');
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('focuses a dashboard root before presenting its bound approval', async () => {
+    seedRootStream();
+    setRunning(CHILD);
+    projectChildRoster(ROOT, [
+      runningChild('approval-task-execution', 'approval-task', CHILD),
+    ]);
+    setParentStream(CHILD, ROOT);
+    patchStream(ROOT, (slice) => ({
+      ...slice,
+      agent: 'approval-workflow',
+      identity: {
+        kind: 'multiAgentWorkflow' as const,
+        workflowName: 'approval-workflow',
+      },
+      category: AgentCategory.Workflow,
+      entries: [
+        {
+          id: 'approval-task',
+          role: 'workflowTask' as const,
+          text: 'Running: Approval task',
+          finalized: false,
+          task: {
+            id: 'approval-task',
+            label: 'Approval task',
+            status: 'running' as const,
+            childStreamId: CHILD,
+          },
+        },
+      ],
+    }));
+    focusStream(CHILD);
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-other-dashboard',
+        mode: 'followUp',
+        question: 'Wait outside the dashboard root.',
+        threadId: 'ei_000000000009',
+        allowBypass: false,
+        streamId: 'other-stream',
+      },
+    });
+    void enqueueApproval({
+      kind: 'planApproval',
+      payload: {
+        approvalId: 'plan-dashboard-root',
+        streamId: ROOT,
+        plan: { objective: 'Verify the dashboard root.' },
+        goalEnabled: false,
+      },
+    });
+    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
+
+    try {
+      stdin.write('\t');
+      await waitFor(() => activeStreamId.get() === ROOT);
+      await waitFor(() => {
+        const pending = currentApproval.get()?.payload;
+        return (
+          pending?.kind === 'planApproval' &&
+          pending.payload.approvalId === 'plan-dashboard-root'
+        );
+      });
+      await waitFor(() => stdout.output.includes('Approve plan?'));
+      expect(stdout.output).not.toContain('Wait outside the dashboard root.');
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('promotes a session-wide approval against the post-Escape root', async () => {
     seedChildHierarchy();
     focusStream(CHILD);
