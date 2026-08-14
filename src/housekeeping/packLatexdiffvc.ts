@@ -85,4 +85,3 @@ export async function runPackLatexdiffvc(
 
   return { status: 'processed', inputFile };
 }
-
