@@ -5,7 +5,6 @@ import { isEditLikeToolName, toolDisplayKind } from '@shared/tools/toolKind';
 describe('toolDisplayKind', () => {
   it.each([
     ['edit_file', 'edit'],
-    ['str_replace_editor', 'edit'],
     ['read_file', 'read'],
     ['write_file', 'write'],
     ['bash', 'bash'],
@@ -30,12 +29,9 @@ describe('toolDisplayKind', () => {
 });
 
 describe('isEditLikeToolName', () => {
-  it.each(['edit_file', 'str_replace_editor'])(
-    'classifies registered edit tool %s',
-    (toolName) => {
-      expect(isEditLikeToolName(toolName)).toBe(true);
-    },
-  );
+  it('classifies registered edit tool edit_file', () => {
+    expect(isEditLikeToolName('edit_file')).toBe(true);
+  });
 
   it.each([
     'edit',
@@ -43,6 +39,9 @@ describe('isEditLikeToolName', () => {
     'claude:Edit',
     'my_str_replace_tool',
     'mcp:server/text_editor',
+    // Historical traces may still carry the retired str_replace_editor tool;
+    // the substring fallback keeps their diff treatment.
+    'str_replace_editor',
   ])('classifies delegated/provider variant %s', (toolName) => {
     expect(isEditLikeToolName(toolName)).toBe(true);
   });

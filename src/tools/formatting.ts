@@ -21,9 +21,9 @@ const LINE_NUMBER_WIDTH = 6;
 /**
  * Slice an array using a 1-based inclusive `[start, end]` line range, clamped
  * to the array bounds. Canonical semantics shared by every tool that slices
- * file/output lines by view range (read_file, text_editor, executions).
+ * file/output lines by view range (read_file, executions).
  */
-export function sliceLineRange<T>(
+function sliceLineRange<T>(
   lines: readonly T[],
   start: number,
   end: number,
@@ -83,8 +83,8 @@ export interface FileViewResult {
 
 /**
  * Shared pipeline for displaying file content with line numbers, truncation,
- * and a standardised "Read …" summary.  Used by read_file, text_editor view,
- * memory view, and executions readFile.
+ * and a standardised "Read …" summary.  Used by read_file, memory view, and
+ * executions readFile.
  */
 export function formatFileView({
   path: filePath,

@@ -25,7 +25,6 @@ export type ToolDisplayKind = 'edit' | 'read' | 'write' | 'bash';
  */
 const TOOL_DISPLAY_KIND = {
   edit_file: 'edit',
-  str_replace_editor: 'edit',
 
   read_file: 'read',
 

@@ -1,7 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { RunUsageAccumulatorJSONSchema } from '@agent/core/usage/RunUsageAccumulator';
-import * as logger from '@logger/logUtils';
 import {
   ActiveChildInfoSchema,
   ContextManagementDataSchema,
@@ -19,80 +18,37 @@ const usageFixture = {
   provider: 'anthropic',
 } as const;
 
-describe('RunUsageAccumulatorJSONSchema — legacy normalizedSnapshots migration', () => {
-  it('takes the last element when normalizedSnapshots has multiple entries', () => {
-    const older = { ...usageFixture, inputTokens: 50 };
-    const latest = { ...usageFixture, inputTokens: 200 };
-    const result = RunUsageAccumulatorJSONSchema.parse({
-      normalizedSnapshots: [
-        { round: 0, usage: older },
-        { round: 1, usage: latest },
-      ],
-    });
-
-    expect(result.latestUsage?.inputTokens).toBe(200);
-  });
-
-  it('sets latestUsage to null for an empty normalizedSnapshots array', () => {
-    const result = RunUsageAccumulatorJSONSchema.parse({
-      normalizedSnapshots: [],
-    });
-
-    expect(result.latestUsage).toBeNull();
-  });
-
-  it('keeps an explicit null latestUsage over snapshots in a hybrid payload', () => {
-    const result = RunUsageAccumulatorJSONSchema.parse({
-      latestUsage: null,
-      normalizedSnapshots: [{ round: 0, usage: usageFixture }],
-    });
-
-    // Key-presence semantics: an explicit null means already-migrated, so the
-    // snapshot must NOT revive a value. Matches the old `'latestUsage' in raw`.
-    expect(result.latestUsage).toBeNull();
-  });
-
-  it('preserves the last valid usage when an earlier snapshot is malformed', () => {
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    try {
-      const result = RunUsageAccumulatorJSONSchema.parse({
-        normalizedSnapshots: [
-          { round: 0, usage: { bogus: 'not a usage' } },
-          { round: 1, usage: usageFixture },
-        ],
-      });
-
-      // A malformed earlier snapshot must not drop the latest valid usage.
-      expect(result.latestUsage).toMatchObject(usageFixture);
-      // The degradation must be logged, not silent.
-      expect(warnSpy).toHaveBeenCalledWith(
-        'RunUsageAccumulator',
-        expect.stringContaining('Malformed legacy normalizedSnapshots entry'),
-        expect.anything(),
-      );
-    } finally {
-      warnSpy.mockRestore();
-    }
-  });
-
+describe('RunUsageAccumulatorJSONSchema — canonical shape', () => {
   it('parses empty object to zero totals and null latestUsage', () => {
     const result = RunUsageAccumulatorJSONSchema.parse({});
 
     expect(result.latestUsage).toBeNull();
     expect(result.totals.totalInputTokens).toBe(0);
   });
-});
 
-describe('OutputXmlSummarySchema — tagContents legacy string coercion', () => {
-  it('coerces a bare string value to a single-element array', () => {
-    const result = OutputXmlSummarySchema.parse({
-      tagContents: { title: 'My Paper' },
+  it('passes a canonical payload through unchanged', () => {
+    const result = RunUsageAccumulatorJSONSchema.parse({
+      totals: { totalInputTokens: 100 },
+      latestUsage: usageFixture,
     });
 
-    expect(result.tagContents['title']).toEqual(['My Paper']);
+    expect(result.totals.totalInputTokens).toBe(100);
+    expect(result.latestUsage).toMatchObject(usageFixture);
   });
 
-  it('passes an existing string[] through unchanged', () => {
+  it('rejects a retired normalizedSnapshots blob instead of migrating it', () => {
+    // The legacy writer is extinct; a blob still carrying the key must fail
+    // loudly through the resume-parse failure path, not degrade silently.
+    expect(() =>
+      RunUsageAccumulatorJSONSchema.parse({
+        normalizedSnapshots: [{ round: 0, usage: usageFixture }],
+      }),
+    ).toThrow();
+  });
+});
+
+describe('OutputXmlSummarySchema — tagContents values', () => {
+  it('passes a string[] value through unchanged', () => {
     const result = OutputXmlSummarySchema.parse({
       tagContents: { authors: ['Alice', 'Bob'] },
     });
@@ -100,12 +56,19 @@ describe('OutputXmlSummarySchema — tagContents legacy string coercion', () => 
     expect(result.tagContents['authors']).toEqual(['Alice', 'Bob']);
   });
 
-  it('degrades a malformed value to [] via .catch', () => {
-    const result = OutputXmlSummarySchema.parse({
-      tagContents: { broken: 42 },
-    });
+  it('defaults a missing tagContents to an empty record', () => {
+    const result = OutputXmlSummarySchema.parse({});
 
-    expect(result.tagContents['broken']).toEqual([]);
+    expect(result.tagContents).toEqual({});
+  });
+
+  it.each([
+    ['a retired bare-string value', { tagContents: { title: 'My Paper' } }],
+    ['a malformed value', { tagContents: { broken: 42 } }],
+  ])('rejects %s instead of coercing it', (_label, payload) => {
+    // The string-to-array coercion and its .catch([]) are retired: persisted
+    // data that no longer parses must fail loudly, not degrade silently.
+    expect(() => OutputXmlSummarySchema.parse(payload)).toThrow();
   });
 });
 

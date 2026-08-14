@@ -6,10 +6,7 @@ import {
   NormalizedUsageSchema,
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
-import * as logger from '@logger/logUtils';
 import { TokenCountSchema } from '@shared/schemas';
-
-const CHANNEL = 'RunUsageAccumulator';
 
 /**
  * Schema for run usage totals. Internal only.
@@ -55,12 +52,15 @@ const TOTAL_ACCUMULATORS = [
 >;
 
 /**
- * Canonical schema for RunUsageAccumulator JSON serialization.
+ * Schema for RunUsageAccumulator JSON serialization.
  *
  * `latestUsage` replaces the old unbounded `normalizedSnapshots` array;
- * only the most-recent round's usage is needed at runtime.
+ * only the most-recent round's usage is needed at runtime. The legacy
+ * `normalizedSnapshots` format is retired: strict parsing rejects a blob
+ * still carrying that key, so stale resume data fails loudly through the
+ * existing resume-parse failure path instead of silently dropping usage.
  */
-const RunUsageAccumulatorCanonicalSchema = z.object({
+export const RunUsageAccumulatorJSONSchema = z.strictObject({
   totals: RunUsageTotalsSchema.prefault({}),
   latestUsage: NormalizedUsageSchema.nullable().prefault(null),
 });
@@ -70,63 +70,8 @@ const RunUsageAccumulatorCanonicalSchema = z.object({
  * Uses z.output<> to get the type after parsing (totals fully resolved).
  */
 export type RunUsageAccumulatorJSON = z.output<
-  typeof RunUsageAccumulatorCanonicalSchema
+  typeof RunUsageAccumulatorJSONSchema
 >;
-
-/**
- * Legacy persisted format: an unbounded `normalizedSnapshots` array instead of
- * `latestUsage`. Only the most-recent snapshot's usage is needed, so the array
- * is collapsed to its last element and the rest discarded. This arm requires
- * `normalizedSnapshots`, so it only matches genuinely-legacy data; canonical
- * and empty inputs fall through to the canonical schema below. Hybrid payloads
- * that carry both keys keep their canonical `latestUsage` (see the transform).
- *
- * Each snapshot is parsed tolerantly (`.catch`): the old preprocess only ever
- * read the last element's `usage`, so a malformed earlier snapshot must not
- * fail the whole arm (which would drop the latest valid usage on resume). A
- * malformed `usage` degrades to `null` rather than rejecting the payload, but
- * the degradation is logged so a corrupted legacy record doesn't vanish
- * silently.
- */
-const LegacyRunUsageAccumulatorSchema = z
-  .object({
-    totals: RunUsageTotalsSchema.prefault({}),
-    latestUsage: NormalizedUsageSchema.nullish(),
-    normalizedSnapshots: z.array(
-      z.object({ usage: NormalizedUsageSchema.nullish() }).catch((ctx) => {
-        logger.warn(
-          CHANNEL,
-          'Malformed legacy normalizedSnapshots entry, discarding its usage',
-          { data: ctx.issues },
-        );
-        return { usage: null };
-      }),
-    ),
-  })
-  .transform((legacy): RunUsageAccumulatorJSON => ({
-    totals: legacy.totals,
-    // Key-presence, not value-nullish: a hybrid payload carrying both an
-    // explicit `latestUsage` (even `null`, an already-migrated state) and
-    // snapshots must keep the canonical value. `.nullish()` parses an absent
-    // key as `undefined` and an explicit `null` as `null`, so `!== undefined`
-    // keeps an explicit null and only an absent key falls back to the latest
-    // snapshot. Matches the prior `'latestUsage' in raw` preprocess guard.
-    latestUsage:
-      legacy.latestUsage !== undefined
-        ? legacy.latestUsage
-        : (legacy.normalizedSnapshots.at(-1)?.usage ?? null),
-  }));
-
-/**
- * Entry schema handling both formats in one place (per the backward-compat
- * convention in CLAUDE.md). The legacy arm is tried first because it requires
- * `normalizedSnapshots`; canonical and empty payloads only match the second
- * arm, so all downstream code sees one canonical shape.
- */
-export const RunUsageAccumulatorJSONSchema = z.union([
-  LegacyRunUsageAccumulatorSchema,
-  RunUsageAccumulatorCanonicalSchema,
-]);
 
 // ============================================================================
 // Standalone functions operating on RunUsageAccumulatorJSON

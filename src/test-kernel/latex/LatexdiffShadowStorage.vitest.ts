@@ -76,7 +76,6 @@ describe('LaTeXdiffService shadow output', () => {
       createExternalLocation(path.join(sourceDir, 'base.tex')),
       createExternalLocation(path.join(sourceDir, 'revised.tex')),
       '_diff',
-      false,
       undefined,
       { outputDirectory: shadowDir },
     );

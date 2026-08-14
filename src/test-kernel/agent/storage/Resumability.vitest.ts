@@ -24,9 +24,9 @@ import { setupPlatform } from '@test/support/setupPlatform';
 
 const BASE_FLOW_RECORD: FlowRecord = {
   flowName: 'texra',
-  params: {},
   shared: { messages: [] },
   createdAt: '2026-07-05T00:00:00.000Z',
+  cursor: { nextNodeId: 'start' },
   nodes: [],
 };
 

@@ -415,14 +415,10 @@ function toOpenAISchemaObject(def: ToolDefinition): Record<string, unknown> {
 
 // Map local tool names to Anthropic remote tool types.
 // The custom `memory` tool (with pin/unpin) is sent as a regular function tool.
-// `memory_anthropic` maps to Anthropic's native memory server tool for cases
-// where the native implementation is preferred over our custom one.
 const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
   bash: 'bash_20250124',
-  str_replace_editor: 'text_editor_20250429',
   web_search: 'web_search_20260209',
   web_fetch: 'web_fetch_20260209',
-  memory_anthropic: 'memory_20250818',
 };
 
 /**

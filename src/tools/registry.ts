@@ -26,7 +26,6 @@ import { ArxivDownloadTool } from './arxiv/ArxivDownloadTool';
 import { ArxivMetadataTool } from './arxiv/ArxivMetadataTool';
 import { ArxivSearchTool } from './arxiv/ArxivSearchTool';
 import { ReadFileTool } from './ReadTool';
-import { TextEditorTool } from './TextEditorTool';
 import { WriteFileTool } from './WriteTool';
 import { WebFetchTool } from './web/WebFetchTool';
 import { WebSearchTool } from './web/WebSearchTool';
@@ -89,7 +88,6 @@ let defaultRegistryInstance: IToolRegistry | null = null;
  */
 function createDefaultTools() {
   return {
-    str_replace_editor: new TextEditorTool(),
     diagnostics: new DiagnosticsTool(),
     inline_comment: new InlineCommentTool(),
     report_review_issue: new ReportReviewIssueTool(),

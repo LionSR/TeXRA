@@ -203,7 +203,6 @@ async function handleLatexdiff(
         fileToUseLocation,
         pathToLocation(editedFile),
         '_diff',
-        false,
         mathMarkup,
       ),
     );

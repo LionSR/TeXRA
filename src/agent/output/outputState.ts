@@ -15,7 +15,6 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
-import { normalizeRunId } from '@common/constants/runIds';
 import {
   OutputXmlSummarySchema,
   type CompileFailure,
@@ -96,7 +95,12 @@ export async function withOutputStage<T>(
 }
 
 export function getStorageKey(state: OutputState): StorageKey {
-  return state.storageKey ?? normalizeRunId(null);
+  if (state.storageKey == null) {
+    throw new Error(
+      'OutputState.storageKey is unset: setActiveRun() must run before output processing reads the storage key',
+    );
+  }
+  return state.storageKey;
 }
 
 export function ensureRoundData(
