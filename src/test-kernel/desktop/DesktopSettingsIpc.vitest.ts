@@ -9,6 +9,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/schemas/stateSettings';
 import {
@@ -790,7 +791,9 @@ describe('desktop settings IPC', () => {
     expect(globalState.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
       'sonnet46T',
     ]);
-    expect(globalState.get(GlobalStateKey.HELPER_MODEL)).toBe('sonnet46T');
+    expect(globalState.get(GlobalStateKey.HELPER_MODEL)).toBe(
+      DEFAULT_HELPER_MODEL,
+    );
     expect(errors).toEqual([]);
     expect(
       posted.findLast(
@@ -799,7 +802,7 @@ describe('desktop settings IPC', () => {
       ),
     ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      helperModel: 'sonnet46T',
+      helperModel: DEFAULT_HELPER_MODEL,
     });
     expect(postMainModelOptionsData).toHaveBeenCalledOnce();
 

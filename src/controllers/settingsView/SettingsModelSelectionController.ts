@@ -146,7 +146,7 @@ export class SettingsModelSelectionController {
 
     await this.deps.state.setEnabledModels(updated);
     if (wasHelper) {
-      await this.deps.state.setHelperModel(updated[0] ?? DEFAULT_HELPER_MODEL);
+      await this.deps.state.setHelperModel(DEFAULT_HELPER_MODEL);
     }
   }
 

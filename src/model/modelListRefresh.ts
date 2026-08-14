@@ -24,6 +24,8 @@ export interface ModelListRefreshResult {
   currentVersion: number;
   added: string[];
   removed: string[];
+  /** True when the persisted enabled list was rewritten only to change order. */
+  reordered: boolean;
 }
 
 /**
@@ -124,7 +126,10 @@ export async function refreshModelListStateIfNeeded(
     );
     added = reconciliation.added;
     removed = reconciliation.removed;
-    reordered = !sameModelList(currentModels, reconciliation.models);
+    reordered =
+      added.length === 0 &&
+      removed.length === 0 &&
+      !sameModelList(currentModels, reconciliation.models);
     if (added.length > 0 || removed.length > 0 || reordered) {
       await state.update(GlobalStateKey.ENABLED_MODELS, reconciliation.models);
     }
@@ -143,5 +148,6 @@ export async function refreshModelListStateIfNeeded(
     currentVersion: MODEL_LIST_VERSION,
     added,
     removed,
+    reordered,
   };
 }

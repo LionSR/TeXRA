@@ -291,15 +291,15 @@ export async function initCliPlatform(
     // lives in shared `~/.texra` state. Preferred defaults reconcile when
     // MODEL_LIST_VERSION changes; retired entries are swept on every startup.
     try {
-      const { added, removed } = await refreshModelListStateIfNeeded(
+      const { added, removed, reordered } = await refreshModelListStateIfNeeded(
         stateStores.globalState,
       );
-      if (added.length > 0 || removed.length > 0) {
+      if (added.length > 0 || removed.length > 0 || reordered) {
         invalidateModelOptionsCache();
         logAt(
           'info',
           'cli.models',
-          `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]`,
+          `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
         );
       }
     } catch (error) {

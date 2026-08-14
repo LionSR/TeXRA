@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 const state = new Map<string, unknown>();
@@ -42,6 +43,16 @@ describe('CLI enabled models catalog', () => {
     expect(result.enabled).toBe(true);
     expect(result.list).toEqual(['deepseekproT', 'grok45']);
     expect(getCliEnabledModels()).toContain('grok45');
+  });
+
+  it('pins a disabled helper to the built-in default', async () => {
+    state.set(GlobalStateKey.ENABLED_MODELS, ['deepseekproT', 'grok45']);
+    state.set(GlobalStateKey.HELPER_MODEL, 'deepseekproT');
+
+    await setCliModelEnabled('deepseekproT', false);
+
+    expect(state.get(GlobalStateKey.HELPER_MODEL)).toBe(DEFAULT_HELPER_MODEL);
+    expect(getCliEnabledModels()).toEqual(['grok45']);
   });
 
   it('refuses to disable the last remaining model', async () => {
