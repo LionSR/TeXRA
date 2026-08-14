@@ -22,8 +22,8 @@ import {
 } from '@utils/config/providerConfig';
 
 import {
-  apiKeyExists,
   apiKeyExistsUncached,
+  hasUsableApiKey,
   type ApiProvider,
 } from './apiProviders';
 import {
@@ -284,7 +284,7 @@ async function getPersonalAccessKindForModel(
   if (!provider) return null;
 
   try {
-    if (await ctx.apiKeyExists(provider)) {
+    if (await ctx.hasUsableApiKey(provider)) {
       return 'provider-key';
     }
   } catch {
@@ -298,7 +298,7 @@ async function getPersonalAccessKindForModel(
 }
 
 interface ModelAvailabilityContext {
-  apiKeyExists(provider: ApiProvider): Promise<boolean>;
+  hasUsableApiKey(provider: ApiProvider): Promise<boolean>;
   hasOpenRouter: boolean;
   hasServerAccess: boolean;
   relayQuotaExhausted: boolean;
@@ -474,7 +474,7 @@ async function buildAvailabilityContext(
   const { serverSideKeyService } = access;
   const hasApiKey = (provider: ApiProvider) =>
     useApiKeyCache
-      ? apiKeyExists(access.secrets, provider)
+      ? hasUsableApiKey(access.secrets, provider)
       : apiKeyExistsUncached(access.secrets, provider);
   const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
   const [
@@ -498,7 +498,7 @@ async function buildAvailabilityContext(
       : Promise.resolve(false),
   ]);
   return {
-    apiKeyExists: hasApiKey,
+    hasUsableApiKey: hasApiKey,
     hasOpenRouter,
     hasServerAccess,
     includedAccessSignedOut,
