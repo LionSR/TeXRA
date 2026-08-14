@@ -1,6 +1,6 @@
 import { ModelProvider } from 'llm-zoo';
 
-import { apiKeyExists } from '@model/apiProviders';
+import { hasUsableApiKey } from '@model/apiProviders';
 import { includedModelAccess } from '@model/includedModelAccess';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { isKimiCodeSubscriptionActive } from '@model/providerCapabilities';
@@ -46,7 +46,7 @@ async function isGlmCodingPlanActive(modelId: string): Promise<boolean> {
   ) {
     return false;
   }
-  return apiKeyExists(platform().secrets, 'glm');
+  return hasUsableApiKey(platform().secrets, 'glm');
 }
 
 const RUNTIME_BY_ID = {
