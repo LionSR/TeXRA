@@ -396,26 +396,36 @@ export class StreamTabs extends LitElement {
   /** Which parent streams have their child list expanded — derived from
    *  inputs + `userOverride` on every reactive update. Not a source of truth. */
   @state() private expandedParents: Set<string> = new Set();
+  /** Self or ancestor of a pending-approval stream — derived with expansion. */
+  private approvalBadgeStreamIds: Set<string> = new Set();
 
   /**
-   * Per-parent user intent that overrides the auto-expand/collapse rules.
-   * Entries live as long as the parent is in `childStreamsByParent`; a new
-   * appearance (new run) starts from auto. One map replaces the former
-   * `manuallyCollapsed` + `finishedCollapseHandled` sets.
+   * Per-parent user intent. Child lists start collapsed; this map records
+   * whether the user has expanded or collapsed a given parent. Entries live
+   * as long as the parent is in `childStreamsByParent`.
    */
   private userOverride: Map<string, StreamTreeExpansionOverride> = new Map();
 
   protected override willUpdate(changed: PropertyValues): void {
-    if (!changed.has('childStreamsByParent') && !changed.has('streamStates'))
+    if (
+      !changed.has('childStreamsByParent') &&
+      !changed.has('streamStates') &&
+      !changed.has('pendingApprovalStreamIds') &&
+      !changed.has('activeStreamId')
+    ) {
       return;
+    }
 
     const projection = computeStreamTreeProjection({
       streamStates: this.streamStates,
       childStreamsByParent: this.childStreamsByParent,
       userOverrides: this.userOverride,
+      pendingApprovalStreamIds: this.pendingApprovalStreamIds,
+      activeStreamId: this.activeStreamId,
     });
 
     this.userOverride = projection.userOverrides;
+    this.approvalBadgeStreamIds = projection.approvalBadgeStreamIds;
     if (!setsEqual(projection.expandedParents, this.expandedParents)) {
       this.expandedParents = projection.expandedParents;
     }
@@ -456,7 +466,7 @@ export class StreamTabs extends LitElement {
         .substate=${streamState?.substate}
         .lastTimestamp=${streamState?.lastTimestamp}
         ?active=${stream.name === this.activeStreamId}
-        .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)}
+        .hasPendingApproval=${this.approvalBadgeStreamIds.has(stream.name)}
         .childCount=${childCount}
         ?expanded=${expanded}
       ></stream-tab>

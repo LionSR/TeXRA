@@ -285,8 +285,10 @@ export const DEFAULT_HELPER_MODEL = 'deepseek';
  * truth shared by the agent config schema (`@agent/core/definition/AgentConfig`),
  * the main-view persisted state, and the progress-view proposal reconstruction —
  * so a change here propagates to all three instead of drifting per call site.
+ * Keep this aligned with the first default-list entry — the picker leads
+ * with that model, and it must not be a Gemini id.
  */
-export const DEFAULT_AGENT_MODEL = 'gemini35f';
+export const DEFAULT_AGENT_MODEL = 'sonnet5T';
 
 /**
  * Zod schema for a boolean setting surfaced per provider (without runtime value).

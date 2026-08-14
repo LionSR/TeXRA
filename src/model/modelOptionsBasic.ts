@@ -34,14 +34,16 @@ export function isRetiredModel(model: string): boolean {
  * includes this membership and each preferred pick's lifecycle status.
  */
 export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
-  'gemini36f',
-  'gemini31p',
+  // First entry is the picker / new-chat default (`DEFAULT_AGENT_MODEL`).
+  // Do not lead with Gemini — Sonnet is the quality default.
   'sonnet5T',
   'opus5T',
   'fable5',
   'gpt56',
   'gpt56-',
   'gpt56--',
+  'gemini36f',
+  'gemini31p',
   'deepseekT',
   'deepseekproT',
   'kimi26T',
