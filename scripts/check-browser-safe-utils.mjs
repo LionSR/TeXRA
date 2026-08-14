@@ -132,7 +132,10 @@ function insideRanges(index, ranges) {
  * a value import — TypeScript treats `type` followed by `as` as the name.
  */
 function isTypeOnlyBinding(binding) {
-  return /^type\s+(?!as\b)[A-Za-z_$]/.test(binding);
+  // `type as value` imports a runtime binding named `type`.
+  // `type as` / `type as,` is a type-only import of the name `as`.
+  if (/^type\s+as\s+[A-Za-z_$]/.test(binding)) return false;
+  return /^type\s+[A-Za-z_$]/.test(binding);
 }
 
 /** Blank comment ranges so they cannot change binding classification. */
@@ -182,12 +185,12 @@ function isTypeOnlySpecifier(text, match, ranges) {
     return false;
   }
 
-  const clause = precedingUnmaskedClause(text, match.index, ranges);
+  const clause = withoutComments(
+    precedingUnmaskedClause(text, match.index, ranges),
+  );
   if (clause.length === 0) return false;
   if (/^(?:import|export)\s+type\b/.test(clause)) return true;
-  const named = withoutComments(clause).match(
-    /^(?:import|export)\s*\{([^}]*)\}\s*$/,
-  );
+  const named = clause.match(/^(?:import|export)\s*\{([^}]*)\}\s*$/);
   if (named == null) return false;
   const bindings = named[1]
     .split(',')
@@ -256,6 +259,14 @@ function selfTestImportSpecifiers() {
     {
       text: "import { type as value } from './value';\n",
       expected: ['./value'],
+    },
+    {
+      text: "import { type as } from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "import /* note */ type { X } from './typeOnly';\n",
+      expected: [],
     },
     {
       text: "import { /* public shape */ type X } from './typeOnly';\n",
