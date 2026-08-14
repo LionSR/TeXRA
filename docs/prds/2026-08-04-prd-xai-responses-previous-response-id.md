@@ -52,15 +52,15 @@ This PRD sequences a **setting-gated** migration for direct `api.x.ai` Grok mode
 
 ## 3. Current state (TeXRA)
 
-| Layer                   | Today                                                           |
-| ----------------------- | --------------------------------------------------------------- |
-| Endpoint                | `https://api.x.ai/v1`                                           |
-| Handler                 | `ModelHandlerXAI` extends chat-completions `ModelHandlerOpenAI` |
-| Factory                 | `ModelProvider.XAI` → `ModelHandlerXAI` only                    |
-| `shouldUseResponsesAPI` | **OpenAI only**                                                 |
-| Chain                   | None for xAI; OpenAI uses `ServerChainState`                    |
-| Auth                    | API key / server key / OpenRouter / SuperGrok OAuth Bearer      |
-| Catalog                 | `grok-4.5`, `grok-4.3`, retired older; no build/4.20            |
+| Layer                   | Today                                                                                                                                                                                                      |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Endpoint                | `https://api.x.ai/v1`                                                                                                                                                                                      |
+| Handler                 | `ModelHandlerXAI` extends chat-completions `ModelHandlerOpenAI`                                                                                                                                            |
+| Factory                 | `ModelProvider.XAI` → `ModelHandlerXAI` only                                                                                                                                                               |
+| `shouldUseResponsesAPI` | **OpenAI only**                                                                                                                                                                                            |
+| Chain                   | None for xAI; OpenAI uses `ServerChainState`                                                                                                                                                               |
+| Auth                    | API key / server key / OpenRouter / SuperGrok OAuth Bearer                                                                                                                                                 |
+| Catalog                 | llm-zoo 1.27.0: `grok46` (xAI `grok-4.6`), `grok45`, `grok43`, retired older. Not in catalogue: `grok-build-0.1`, `grok-4.20-multi-agent-0309`, `grok-4.20-0309-reasoning`, `grok-4.20-0309-non-reasoning` |
 
 OpenAI Responses already provides:
 
@@ -75,7 +75,7 @@ OpenAI Responses already provides:
 
 1. **Preferred long-term path for direct xAI is Responses.** Chat Completions remains a supported fallback, not the destination.
 2. **MVP is chaining + client tools**, not “full xAI agent API.”
-3. **Ship behind a setting first** (mirror `texra.model.useOpenAIResponsesAPI`), default **off**, until soak criteria pass.
+3. **Ship behind a setting first** (mirror `texra.model.useOpenAIResponsesAPI`), default **off**, until soak criteria pass. After soak, flip default **on** in the **next release** (one release behind the flag), not a longer hold: xAI now labels Chat Completions “Deprecated,” so staying on Completions past one soak cycle is the riskier path. The first ship stays default-off so a Responses regression cannot take production Grok traffic without an explicit opt-in.
 4. **Default `store: true`** for xAI (docs default). Rely on `previous_response_id` for continuity; do not invent a second history system.
 5. **OpenRouter keeps Completions** for xAI models.
 6. **Do not enable xAI native server tools in MVP** even if the Responses tools array supports them later.
@@ -227,7 +227,7 @@ Items 1–3 help Completions **and** make Responses land cleaner; none require w
 
 ## 11. Open questions
 
-1. Default-on timeline after soak — one release behind the flag, or longer?
+1. Default-on timeline after soak — **decided 2026-08-14:** one release behind the flag. Completions is now explicitly deprecated on xAI’s comparison page; a longer hold is not justified once soak criteria pass. First ship remains default-off.
 2. Does xAI `/responses/input_tokens` exist and match OpenAI enough to enable token counting?
 3. Does xAI `/responses/compact` match our OpenAI compact client path, or client-only compaction forever?
 4. Is `reasoning_effort` on Responses for grok-4.5 the same as docs’ “4.3 only” note on Chat Completions?
@@ -293,8 +293,10 @@ catalog changes made — recon only**, per the §2 non-goals.
    every OpenAI-compatible handler, `ModelHandlerXAI` included. The only gap
    is the long-context _tier_ switch in point 3, not cache-token extraction.
 
-Candidate next steps, smallest first: (a) refresh §3 for `grok-4.6` and track
-upstream catalogue support for the remaining model IDs, (b) model long-context
-tiered pricing in `computeStandardPrice` once a rate source exists, (c) revisit
+Candidate next steps, smallest first: (a) ~~refresh §3 for `grok-4.6` and track
+upstream catalogue support for the remaining model IDs~~ (done 2026-08-14;
+remaining IDs still wait on llm-zoo), (b) model long-context
+tiered pricing in `computeStandardPrice` once a rate source exists, (c) ~~revisit
 this PRD's default-off timeline given Chat Completions' now-explicit deprecated
-status.
+status~~ (done 2026-08-14: one release behind the flag; see §4 decision 3 and
+§11 Q1).
