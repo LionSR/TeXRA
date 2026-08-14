@@ -97,7 +97,7 @@ export class CompactionActivity extends LitElement {
     >
       ${
         this.status === 'running'
-          ? html`<wa-spinner class="icon"></wa-spinner>`
+          ? html`<wa-spinner class="icon" aria-hidden="true"></wa-spinner>`
           : waIcon(ACTIVITY_ICON[this.status], { className: 'icon' })
       }
       <span class="label">${label}</span>
