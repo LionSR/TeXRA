@@ -282,6 +282,8 @@ describe('renderAnsiMarkdown', () => {
 
   it.each([
     ['$HOME <strong>or</strong> $x$', '$HOME **or** $x$'],
+    ['$foo then <strong>$a<b>c$</strong>', '$foo then **$a<b>c$**'],
+    ['$myVar then <strong>$a<b>c$</strong>', '$myVar then **$a<b>c$**'],
     ['$HOME then <strong>$a<b>c$</strong>', '$HOME then **$a<b>c$**'],
     ['$HOME then <b>$a<p>c$</b>', '$HOME then **$a<p>c$**'],
     ['$HOME then <i>$a<p>c$</i>', '$HOME then _$a<p>c$_'],
@@ -417,12 +419,20 @@ describe('renderAnsiMarkdown', () => {
     ).toBe('``echo $HOME`` **or** ``echo $PATH``');
   });
 
+  it('matches only complete Markdown code delimiter runs', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '``$HOME ``` $PATH`` <strong>$a<b>c$</strong>',
+      ),
+    ).toBe('``$HOME ``` $PATH`` **$a<b>c$**');
+  });
+
   it('does not replace user text resembling a generated placeholder', () => {
     expect(
       normalizeKnownHtmlForCliMarkdown(
-        'literal @@CLI-LITERAL-DOLLAR-0@@ and <code>$HOME</code>',
+        'literal @@CLI-LITERAL-MATH-0@@ and <code>$HOME</code>',
       ),
-    ).toBe('literal @@CLI-LITERAL-DOLLAR-0@@ and `$HOME`');
+    ).toBe('literal @@CLI-LITERAL-MATH-0@@ and `$HOME`');
   });
 
   it('does not replace user text resembling a math placeholder', () => {
@@ -518,6 +528,12 @@ describe('renderAnsiMarkdown', () => {
     },
   );
 
+  it('does not pair escaped backslash delimiters across presentation HTML', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('Show \\\\( <strong>or</strong> \\\\)'),
+    ).toBe('Show \\\\( **or** \\\\)');
+  });
+
   it.each(['<strong-x>x</strong-x>', '<p.foo>x</p.foo>', '<b:tag>x</b:tag>'])(
     'leaves suffixed tag-shaped text literal: %s',
     (source) => {
@@ -537,9 +553,9 @@ describe('renderAnsiMarkdown', () => {
   it('does not replace user text resembling a dollar placeholder', () => {
     expect(
       normalizeKnownHtmlForCliMarkdown(
-        '@@CLI-LITERAL-DOLLAR-0@@ <code>$HOME</code>',
+        '@@CLI-LITERAL-MATH-0@@ <code>$HOME</code>',
       ),
-    ).toBe('@@CLI-LITERAL-DOLLAR-0@@ `$HOME`');
+    ).toBe('@@CLI-LITERAL-MATH-0@@ `$HOME`');
   });
 
   it('preserves adjacent inline math spans independently of markdown', () => {

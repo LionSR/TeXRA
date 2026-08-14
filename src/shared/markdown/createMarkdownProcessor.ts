@@ -122,8 +122,8 @@ function restoreLatexReferences(
 // stray currency `$` from being captured and avoids cascading mis-splits.
 const MATH_SPAN_PATTERNS: readonly RegExp[] = [
   /\$\$[\s\S]+?\$\$/g, // $$ … $$  (display, may span lines)
-  /\\\[[\s\S]+?\\\]/g, // \[ … \]  (display)
-  /\\\([\s\S]+?\\\)/g, // \( … \)  (inline)
+  /(?<!\\)\\\[[\s\S]+?(?<!\\)\\\]/g, // \[ … \]  (display)
+  /(?<!\\)\\\([\s\S]+?(?<!\\)\\\)/g, // \( … \)  (inline)
   /(?<!\\)\$(?!\$)[^\n$]+?(?<![\\$])\$(?:\$(?!\$)[^\n$]+?(?<![\\$])\$)*/g, // $ … $  (one or more adjacent inline spans, single line)
 ];
 

@@ -10,7 +10,7 @@ const KNOWN_HTML_TAG_AT_START_RE =
   /^<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/iu;
 const CURRENCY_AMOUNT = String.raw`[+-]?(?:\d+(?:\.\d+)?|\.\d+)`;
 const SHELL_BRACED_PARAMETER = String.raw`\{[^{}\n$]+\}`;
-const SHELL_UNWRAPPED_PARAMETER = String.raw`(?:[A-Z_][A-Z0-9_]+|${SHELL_BRACED_PARAMETER}|[_?@*#!-])`;
+const SHELL_UNWRAPPED_PARAMETER = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*|${SHELL_BRACED_PARAMETER}|[?@*#!-])`;
 const SHELL_PARAMETER_BOUNDARY = String.raw`(?=[\s/.,;:!?()[\]{}'"’”]|$)`;
 const CURRENCY_BOUNDARY = String.raw`(?=[\s/.,;:!?()[\]{}'"’”]|<\/[A-Za-z]|$)`;
 
@@ -33,7 +33,7 @@ const HTML_OPEN_TAG_RE = new RegExp(
   `<(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])${HTML_ATTRIBUTES}${HTML_TAG_END}`,
   'giu',
 );
-const MARKDOWN_CODE_SPAN_RE = /(?<!`)(`+)(?!`)[\s\S]*?\1(?!`)/gu;
+const MARKDOWN_CODE_SPAN_RE = /(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/gu;
 const CURRENCY_PAIR_RE = new RegExp(
   `\\$${CURRENCY_AMOUNT}${CURRENCY_BOUNDARY}[^\\n$]*?(?:\\s|\\s[([{"'‘“+–—-]|\\s[A-Z]{1,3})\\$${CURRENCY_AMOUNT}${CURRENCY_BOUNDARY}`,
   'gu',
