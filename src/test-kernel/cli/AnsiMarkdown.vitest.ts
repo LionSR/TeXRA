@@ -192,10 +192,18 @@ describe('renderAnsiMarkdown', () => {
     ).toBe('`$$` and `$$`');
   });
 
-  it('normalizes HTML between code-wrapped shell special parameters', () => {
-    expect(
-      normalizeKnownHtmlForCliMarkdown('<code>$_</code> and <code>$-</code>'),
-    ).toBe('`$_` and `$-`');
+  it('normalizes HTML between code-wrapped shell parameters', () => {
+    const examples = [
+      ['<code>$_</code> and <code>$-</code>', '`$_` and `$-`'],
+      [
+        '<code>${HOME}</code> and <code>${PATH}</code>',
+        '`${HOME}` and `${PATH}`',
+      ],
+    ] as const;
+
+    for (const [source, expected] of examples) {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    }
   });
 
   it('preserves complete inline math beside token characters', () => {

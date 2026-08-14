@@ -8,7 +8,8 @@ const CURRENCY_AMOUNT_START_RE = /^[+-]?(?:\d|\.\d)/u;
 const CURRENCY_PAIR_END_RE = /(?:[\s>]|[\s>][([{"'‘“+–—-]|[\s>][A-Z]{2,3})\$$/u;
 const SHELL_PID_CODE_PAIR_RE =
   /^\$\$?<\/code>[\s\S]*<code(?:\s[^<>]*)?>\$\$?$/iu;
-const SHELL_PARAMETER = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*|[0-9?@*#!-])`;
+const SHELL_PARAMETER_NAME = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*|[0-9?@*#!-])`;
+const SHELL_PARAMETER = String.raw`(?:${SHELL_PARAMETER_NAME}|\{${SHELL_PARAMETER_NAME}\})`;
 const SHELL_PARAMETER_CODE_PAIR_RE = new RegExp(
   `^\\$${SHELL_PARAMETER}<\\/code>[\\s\\S]*?<code(?:\\s[^<>]*)?>\\$${SHELL_PARAMETER}<\\/code>`,
   'iu',
