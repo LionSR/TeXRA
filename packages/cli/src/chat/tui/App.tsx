@@ -114,12 +114,15 @@ interface InputEventEmitterLike {
 }
 
 // Jump-to-waiting: surface the newly focused stream's pending approval right
-// away instead of leaving it queued behind other streams' items. The root
-// row also owns session-wide (stream-less) approvals.
-function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
+// away instead of leaving it queued behind other streams' items. The visible
+// list-root row also owns session-wide (stream-less) approvals.
+function focusStreamAndPromoteApprovals(
+  streamId: StreamTabId,
+  visibleListRootStreamId = rootStreamIdSignal.get(),
+): void {
   focusStream(streamId);
   promoteApprovalsForStream(streamId, {
-    includeSessionWide: streamId === rootStreamIdSignal.get(),
+    includeSessionWide: streamId === visibleListRootStreamId,
   });
 }
 
@@ -405,6 +408,9 @@ export function App(props: AppProps): React.JSX.Element {
         workflowDashboardRootHasApproval &&
         childListTarget.streamId !== undefined
       ) {
+        // The dashboard heading is not a selectable row. Focusing the list is
+        // therefore the jump-to-waiting action for its advertised root bucket,
+        // whether or not task rows already exist.
         promoteApprovalsForStream(childListTarget.streamId, {
           includeSessionWide: true,
         });
@@ -423,9 +429,9 @@ export function App(props: AppProps): React.JSX.Element {
       } else {
         dispatchChildListSelection({ kind: 'focusStream', streamId });
       }
-      focusStreamAndPromoteApprovals(streamId);
+      focusStreamAndPromoteApprovals(streamId, childListTarget.streamId);
     },
-    [selectedChildValue],
+    [childListTarget.streamId, selectedChildValue],
   );
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
@@ -551,7 +557,7 @@ export function App(props: AppProps): React.JSX.Element {
         zeroBasedIndex: digit - 1,
       });
       if (!target) return false;
-      focusStreamAndPromoteApprovals(target);
+      focusStreamAndPromoteApprovals(target, childListTarget.streamId);
       return true;
     }
     return false;
@@ -585,7 +591,7 @@ export function App(props: AppProps): React.JSX.Element {
     }
     const parentId = parentStreamSignal.get().get(streamId);
     if (parentId !== undefined) {
-      focusStreamAndPromoteApprovals(parentId);
+      focusStreamAndPromoteApprovals(parentId, childListTarget.streamId);
       if (
         selectedWorkflowChildStreamId === streamId &&
         workflowDashboard?.root.streamId === parentId

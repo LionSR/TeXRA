@@ -1144,7 +1144,55 @@ describe('App foreground Escape ownership', () => {
   });
 });
 
-describe('App workflow dashboard ownership', () => {
+describe('App approval surface ownership', () => {
+  it('promotes a session-wide approval from a scoped-list root', async () => {
+    seedChildHierarchy();
+    focusStream(GRANDCHILD);
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-other-scoped',
+        mode: 'followUp',
+        question: 'Wait outside the scoped list.',
+        threadId: 'ei_000000000003',
+        allowBypass: false,
+        streamId: 'other-stream',
+      },
+    });
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-session-scoped',
+        mode: 'followUp',
+        question: 'Verify the scoped child session.',
+        threadId: 'ei_000000000004',
+        allowBypass: false,
+        streamId: '',
+      },
+    });
+    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
+
+    try {
+      stdin.write('\t');
+      await waitFor(() => stdout.output.includes('inquiry'));
+      stdin.write(ARROW_KEYS.Up);
+      stdin.write('\r');
+      await waitFor(() => {
+        const pending = currentApproval.get()?.payload;
+        return (
+          pending?.kind === 'externalInquiry' &&
+          pending.payload.requestId === 'external-session-scoped'
+        );
+      });
+      await waitFor(() =>
+        stdout.output.includes('Verify the scoped child session.'),
+      );
+      expect(stdout.output).not.toContain('Wait outside the scoped list.');
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('promotes an approval-only dashboard before workflow rows exist', async () => {
     seedRootStream();
     patchStream(ROOT, (slice) => ({
