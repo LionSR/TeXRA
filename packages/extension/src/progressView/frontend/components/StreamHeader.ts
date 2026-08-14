@@ -14,6 +14,7 @@ import {
   STREAM_SUBSTATE,
   isPlainAgentIdentity,
   isToolUseState,
+  isWorkflowState,
   type ConversationProgress,
   type StreamStage,
   type StreamState,
@@ -21,6 +22,8 @@ import {
   type StreamTabInfo,
 } from '@shared/schemas';
 import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
+import { formatWorkflowRunContext } from '@shared/copy/workflowRunContext';
+import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import { deriveGoalState, type GoalStatus } from '@shared/schemas/goal';
 import {
   progressHeaderStatus,
@@ -61,7 +64,8 @@ import {
 
 /**
  * Buttons enabled while a run is active (running / waiting / resuming): stop
- * plus the live-session controls (bypass toggles, compact, restore, storage).
+ * plus the live-session controls (bypass toggles, compact, restore, storage)
+ * and the run-context copy, whose text is worth handing off mid-run.
  */
 const ACTIVE_STATE_BUTTONS = [
   ELEMENT_IDS.STOP_STREAM_BTN,
@@ -70,12 +74,13 @@ const ACTIVE_STATE_BUTTONS = [
   ELEMENT_IDS.COMPACT_RESPONSE_BTN,
   ELEMENT_IDS.RESTORE_STATE_BTN,
   ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ];
 
 /**
  * Buttons enabled in every terminal (finished) state — failed / completed /
- * cancelled: the run is over, so re-run, resume, archive, diff, and restore
- * are all available.
+ * cancelled: the run is over, so re-run, resume, archive, diff, restore, and
+ * the run-context copy are all available.
  */
 const TERMINAL_STATE_BUTTONS = [
   ELEMENT_IDS.RUN_NEW_BTN,
@@ -85,7 +90,17 @@ const TERMINAL_STATE_BUTTONS = [
   ELEMENT_IDS.RESTORE_STATE_BTN,
   ELEMENT_IDS.DIFF_STREAM_BTN,
   ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ];
+
+/**
+ * Terminal-set buttons that make no sense before the stream's first run:
+ * there is no prior run to resume, and no outputs to copy context from.
+ */
+const NOT_YET_RUN_BUTTONS = new Set<string>([
+  ELEMENT_IDS.RESUME_BTN,
+  ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
+]);
 
 /**
  * Buttons enabled per phase/substate - pre-computed as Sets to avoid
@@ -103,10 +118,8 @@ const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
   [STREAM_PHASE.FAILED]: new Set(TERMINAL_STATE_BUTTONS),
   [STREAM_PHASE.COMPLETED]: new Set(TERMINAL_STATE_BUTTONS),
   [STREAM_PHASE.CANCELLED]: new Set(TERMINAL_STATE_BUTTONS),
-  // 'ready' is the terminal set minus resume — there is no prior run to
-  // resume before the stream has started for the first time.
   ready: new Set(
-    TERMINAL_STATE_BUTTONS.filter((id) => id !== ELEMENT_IDS.RESUME_BTN),
+    TERMINAL_STATE_BUTTONS.filter((id) => !NOT_YET_RUN_BUTTONS.has(id)),
   ),
   [STREAM_PHASE.WAITING]: new Set(ACTIVE_STATE_BUTTONS),
   [STREAM_SUBSTATE.RESUMING]: new Set(ACTIVE_STATE_BUTTONS),
@@ -342,6 +355,26 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
   @consume({ context: streamByIdContext, subscribe: true })
   private streamById: StreamByIdMap = EMPTY_STREAM_BY_ID;
 
+  /** Owns the copied/reset feedback for the run-context copy button. */
+  private readonly copyRunContext = new CopyButtonController(this, {
+    successTitle: 'Copied!',
+  });
+
+  /**
+   * The run-context text for this stream, or `''` when there is nothing worth
+   * copying (not a workflow stream, or no outputs and no compile failures) —
+   * which is what disables the button.
+   */
+  private runContextText(): string {
+    const state = this.state;
+    if (!this.stream || !state || !isWorkflowState(state)) return '';
+    return formatWorkflowRunContext({
+      stream: this.stream,
+      files: state.files,
+      compileFailures: state.compileFailures,
+    });
+  }
+
   override render(): TemplateResult | typeof nothing {
     if (!this.stream) {
       return nothing;
@@ -381,6 +414,9 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
     const enabledButtons = displayKey
       ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
       : undefined;
+    // Composed once per render: it both gates the copy button and is the
+    // payload its click writes.
+    const runContext = this.runContextText();
 
     // Precompute per-button view metadata once. Only the tooltip is
     // active-state-aware; the accessible name stays constant because
@@ -399,18 +435,28 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         hasExecutionId,
         isNativeAgentRun,
       );
+      const isCopyRunContext = btn.localAction === 'copyRunContext';
       // Read-only trace-viewer export: no toolbar action reaches a live
       // backend — the onClick below re-checks `disabled` before
       // dispatching, so this one flag both looks and behaves inert.
-      const disabled = this.archived || computedDisabled;
+      const disabled =
+        this.archived ||
+        computedDisabled ||
+        (isCopyRunContext && runContext === '');
       const isActive = Boolean(
         btn.isToggle &&
         (btn.id === ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN
           ? superYoloActive
           : yoloActive),
       );
-      const tooltipText =
+      // A tooltip only shows on hover, so the copy confirmation also swaps the
+      // icon — same pairing as the external-inquiry copy button.
+      const copied = isCopyRunContext && this.copyRunContext.state.copied;
+      const restingTooltip =
         isActive && btn.titleActive ? btn.titleActive : btn.title;
+      const tooltipText = copied
+        ? this.copyRunContext.state.title
+        : restingTooltip;
       const className = [
         btn.className,
         hidden ? 'toolbar-button--hidden' : undefined,
@@ -420,7 +466,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         .join(' ');
       const { button, tooltip } = renderIconActionButtonParts({
         id: btn.id,
-        icon: btn.icon,
+        icon: copied ? 'check' : btn.icon,
         label: btn.label ?? btn.title,
         tooltip: tooltipText,
         className,
@@ -433,6 +479,13 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         ariaHidden: hidden,
         onClick: () => {
           if (disabled) return;
+          if (isCopyRunContext) {
+            void this.copyRunContext.copy(runContext);
+            return;
+          }
+          // Non-local buttons all carry a command; the table pairs exactly one
+          // of `command` / `localAction` with each entry.
+          if (btn.command === undefined) return;
           this.dispatchEvent(
             ProgressEvents.toolbarCommand({ command: btn.command }),
           );
@@ -508,7 +561,10 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
     const hidden =
       (EXECUTION_DEPENDENT_BUTTONS.has(button.id) && !hasExecutionId) ||
       (NATIVE_AGENT_ONLY_BUTTONS.has(button.id) && !isNativeAgentRun) ||
-      isKnownUnsupported(this.unsupportedCommands, button.command);
+      // A local action has no backend command, so no host can declare it
+      // unsupported.
+      (button.command !== undefined &&
+        isKnownUnsupported(this.unsupportedCommands, button.command));
     const disabled = hidden || !enabledButtons?.has(button.id);
     return { disabled, hidden };
   }

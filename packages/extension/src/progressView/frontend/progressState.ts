@@ -111,7 +111,6 @@ export const displayedActiveStreamId$ = new Signal.Computed(
   () => pendingStreamSelection$.get()?.streamId ?? activeStreamId$.get(),
 );
 const inquiries$ = select(appState, (s) => s.inquiries);
-const followupOptions$ = select(appState, (s) => s.followupOptionsByStream);
 
 // ---------------------------------------------------------------------------
 // Derived computeds: only re-evaluate when selector inputs propagate.
@@ -418,14 +417,11 @@ export const streamContext$ = new Signal.Computed((): StreamContextValue => {
     return { ...EMPTY_STREAM_CONTEXT, hasStreams, unsupportedCommands };
   }
 
-  const followupOptions =
-    followupOptions$.get().get(activeStreamInfo.name) ?? null;
   return {
     streamInfo: activeStreamInfo,
     streamState: activeStreamState$.get(),
     isToolUse: activeIsToolUse$.get(),
     hasStreams,
-    followupOptions,
     unsupportedCommands,
   };
 });
@@ -479,7 +475,7 @@ export function setStreamStateForId(
   if (updated === current) return;
   appState.set(
     create(state, (draft) => {
-      // Backfills streamLogs/followupOptionsByStream alongside streamStates
+      // Backfills streamLogs alongside streamStates
       // when this is the first handler to observe the stream (see
       // `ensureStreamState`'s doc comment for the owned key list).
       ensureStreamState(draft, streamId, current.category);

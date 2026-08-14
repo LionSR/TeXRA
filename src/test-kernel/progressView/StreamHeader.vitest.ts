@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { StreamHeader } from '@progressView/frontend/components/StreamHeader';
@@ -11,6 +11,7 @@ import {
   createStreamState,
   type StreamTabInfo,
   type ToolUseStreamState,
+  type WorkflowStreamState,
 } from '@shared/schemas';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
@@ -39,6 +40,31 @@ function baseState(
     status: STREAM_PHASE.RUNNING,
     ...overrides,
   }) as ToolUseStreamState;
+}
+
+function workflowState(
+  overrides: Partial<WorkflowStreamState> = {},
+): WorkflowStreamState {
+  return createStreamState(AgentCategory.Workflow, {
+    status: STREAM_PHASE.COMPLETED,
+    files: {
+      2: [
+        {
+          source: 'main.tex',
+          round: 2,
+          lineage: null,
+          diff: null,
+          location: {
+            kind: 'runStorage',
+            absolutePath: '/tmp/exec/answer.tex',
+            relativePath: 'answer.tex',
+            executionId: 'a1b2c3d4',
+          },
+        },
+      ],
+    },
+    ...overrides,
+  }) as WorkflowStreamState;
 }
 
 function mount(props: Partial<StreamHeader> = {}): Promise<StreamHeader> {
@@ -313,6 +339,72 @@ describe('stream-header', () => {
 
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({ command: expect.any(String) });
+    });
+  });
+
+  /**
+   * The run-context copy is the one toolbar entry with no backend command: it
+   * writes the clipboard from state the webview already holds. These pin that
+   * it stays a local action (no `toolbar-command`) and that it only offers
+   * itself when there is something to copy.
+   */
+  describe('copy run context', () => {
+    it('writes the run context and dispatches no toolbar command', async () => {
+      const element = await mount({
+        stream: baseStream({
+          model: 'gemini31p',
+          modelLabel: 'Gemini 3.1 Pro',
+          executionId: 'a1b2c3d4',
+        }),
+        state: workflowState(),
+      });
+      const commands: unknown[] = [];
+      element.addEventListener('toolbar-command', (event) => {
+        commands.push((event as CustomEvent).detail);
+      });
+
+      const writeText = vi.fn(async () => undefined);
+      vi.stubGlobal('navigator', { clipboard: { writeText } });
+      element.shadowRoot
+        ?.querySelector<HTMLElement>(`#${ELEMENT_IDS.COPY_RUN_CONTEXT_BTN}`)
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+      await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+      expect(writeText).toHaveBeenCalledWith(
+        [
+          'Workflow run: stream-a (Gemini 3.1 Pro)',
+          'Execution: a1b2c3d4',
+          '',
+          'Outputs:',
+          '- r2: /executions/a1b2c3d4/files/answer.tex (source: main.tex)',
+        ].join('\n'),
+      );
+      expect(commands).toHaveLength(0);
+      vi.unstubAllGlobals();
+    });
+
+    it('disables itself when the workflow produced nothing to copy', async () => {
+      const element = await mount({
+        state: workflowState({ files: {} }),
+      });
+
+      const button = element.shadowRoot?.querySelector(
+        `#${ELEMENT_IDS.COPY_RUN_CONTEXT_BTN}`,
+      );
+      expect(button?.hasAttribute('disabled')).toBe(true);
+    });
+
+    it('is not offered on a tool-use stream', async () => {
+      const element = await mount({
+        stream: baseStream({ agentCategory: AgentCategory.ToolUse }),
+        state: baseState(),
+      });
+
+      expect(
+        element.shadowRoot?.querySelector(
+          `#${ELEMENT_IDS.COPY_RUN_CONTEXT_BTN}`,
+        ),
+      ).toBeNull();
     });
   });
 });
