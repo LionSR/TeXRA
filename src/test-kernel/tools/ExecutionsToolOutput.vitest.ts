@@ -23,10 +23,10 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  type ExecResult,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
-import type { ExecResult } from '@shared/schemas/opResults';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { BashTool } from '@tools/bash';

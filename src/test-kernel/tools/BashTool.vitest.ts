@@ -40,11 +40,11 @@ import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmen
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
+  type ExecResult,
   type StreamTabId,
   type ToolResult,
   AgentCategory,
 } from '@shared/schemas';
-import type { ExecResult } from '@shared/schemas/opResults';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
