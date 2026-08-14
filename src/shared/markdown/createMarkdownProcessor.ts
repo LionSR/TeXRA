@@ -75,8 +75,6 @@ interface ProtectedRef {
   readonly label: string;
 }
 
-const REF_PLACEHOLDER = /@@LATEX-REF-(\d+)@@/g;
-
 function defaultFormatLatexReference(refType: string, label: string): string {
   const safeAttrLabel = escapeAttr(label);
   const safeTextLabel = escapeText(label);
@@ -86,24 +84,31 @@ function defaultFormatLatexReference(refType: string, label: string): string {
 function protectLatexReferences(content: string): {
   content: string;
   refs: ProtectedRef[];
+  placeholder: RegExp;
 } {
   const refs: ProtectedRef[] = [];
+  const tag = selectPlaceholderTag(content, 'LATEX-REF');
   const protectedContent = content.replaceAll(
     /\\(ref|cref|eqref)\{([^}]+)\}/g,
     (_match, refType: string, label: string) => {
       const index = refs.push({ refType, label }) - 1;
-      return `@@LATEX-REF-${index}@@`;
+      return `@@${tag}-${index}@@`;
     },
   );
-  return { content: protectedContent, refs };
+  return {
+    content: protectedContent,
+    refs,
+    placeholder: new RegExp(`@@${tag}-(\\d+)@@`, 'g'),
+  };
 }
 
 function restoreLatexReferences(
   content: string,
+  placeholder: RegExp,
   refs: ProtectedRef[],
   format: LatexReferenceFormatter,
 ): string {
-  return content.replaceAll(REF_PLACEHOLDER, (match, rawIndex) => {
+  return content.replaceAll(placeholder, (match, rawIndex) => {
     const index = Number(rawIndex);
     const ref = refs[index];
     return ref ? format(ref.refType, ref.label) : match;
@@ -129,8 +134,9 @@ function protectByPatterns(
   patterns: readonly RegExp[],
   tag: string,
   preserveBlockquotePrefixes = false,
-): { content: string; items: string[] } {
+): { content: string; items: string[]; placeholder: RegExp } {
   const items: string[] = [];
+  const selectedTag = selectPlaceholderTag(content, tag);
   let out = content;
   for (const pattern of patterns) {
     out = out.replaceAll(pattern, (match, ...args: unknown[]) => {
@@ -161,7 +167,7 @@ function protectByPatterns(
           remainingPrefixes.every((prefix) => prefix !== undefined);
         if (!isQuotedSpan) {
           const index = items.push(match) - 1;
-          return `@@${tag}-${index}@@`;
+          return `@@${selectedTag}-${index}@@`;
         }
         return match
           .split('\n')
@@ -169,15 +175,25 @@ function protectByPatterns(
             const prefix =
               lineIndex === 0 ? '' : (remainingPrefixes[lineIndex - 1] ?? '');
             const index = items.push(line.slice(prefix.length)) - 1;
-            return `${prefix}@@${tag}-${index}@@`;
+            return `${prefix}@@${selectedTag}-${index}@@`;
           })
           .join('\n');
       }
       const index = items.push(match) - 1;
-      return `@@${tag}-${index}@@`;
+      return `@@${selectedTag}-${index}@@`;
     });
   }
-  return { content: out, items };
+  return {
+    content: out,
+    items,
+    placeholder: new RegExp(`@@${selectedTag}-(\\d+)@@`, 'g'),
+  };
+}
+
+function selectPlaceholderTag(content: string, requestedTag: string): string {
+  let tag = requestedTag;
+  while (content.includes(`@@${tag}-`)) tag += '@';
+  return tag;
 }
 
 function restorePlaceholders(
@@ -196,23 +212,22 @@ export function protectLatexMathSpans(content: string): {
   content: string;
   restore: (value: string) => string;
 } {
-  let placeholderTag = 'LATEX-MATH';
-  while (content.includes(`@@${placeholderTag}-`)) placeholderTag += '@';
-  const placeholderPattern = new RegExp(`@@${placeholderTag}-(\\d+)@@`, 'g');
   const protectedMath = protectByPatterns(
     content,
     MATH_SPAN_PATTERNS,
-    placeholderTag,
+    'LATEX-MATH',
     true,
   );
   return {
     content: protectedMath.content,
     restore: (value) =>
-      restorePlaceholders(value, placeholderPattern, protectedMath.items),
+      restorePlaceholders(
+        value,
+        protectedMath.placeholder,
+        protectedMath.items,
+      ),
   };
 }
-
-const MACRO_PLACEHOLDER = /@@LATEX-MACRO-(\d+)@@/g;
 
 // LaTeX backslash-macros whose trailing character is CommonMark-escapable
 // punctuation, so markdown-it's parser strips the backslash (`\;`→`;`,
@@ -257,14 +272,19 @@ export function createMarkdownProcessor(
     // Protect in widening order (refs → math spans → stray macros); restore in
     // reverse so a ref placeholder revealed inside a restored span is still
     // formatted. After span protection, only out-of-span macros remain to net.
-    const { content: refProtected, refs } = protectLatexReferences(content);
+    const {
+      content: refProtected,
+      refs,
+      placeholder: refPlaceholder,
+    } = protectLatexReferences(content);
     const mathProtection = config.protectLatexMath
       ? protectLatexMathSpans(refProtected)
       : { content: refProtected, restore: (value: string) => value };
     const mathProtected = mathProtection.content;
-    const { content: protectedContent, items: macros } = config.protectLatexMath
+    const macroProtection = config.protectLatexMath
       ? protectByPatterns(mathProtected, [LATEX_MACRO], 'LATEX-MACRO')
-      : { content: mathProtected, items: [] };
+      : { content: mathProtected, items: [], placeholder: /$^/g };
+    const protectedContent = macroProtection.content;
     // OpenAI reasoning summaries sometimes omit the line break before a bold
     // heading mid-sentence (".**Heading**" → no break). Force one.
     const formatted = protectedContent.replaceAll(/\.(\*\*[A-Z])/g, '.\n$1');
@@ -272,10 +292,14 @@ export function createMarkdownProcessor(
     const restoreProtectedLatex = (value: string): string => {
       let restored = value;
       if (config.protectLatexMath) {
-        restored = restorePlaceholders(restored, MACRO_PLACEHOLDER, macros);
+        restored = restorePlaceholders(
+          restored,
+          macroProtection.placeholder,
+          macroProtection.items,
+        );
         restored = mathProtection.restore(restored);
       }
-      return restoreLatexReferences(restored, refs, format);
+      return restoreLatexReferences(restored, refPlaceholder, refs, format);
     };
 
     // markdown-it v15's `render(src, env)` forwards `env` to renderer rules,

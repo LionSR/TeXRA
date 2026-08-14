@@ -5,8 +5,7 @@ import { clamp } from '@utils/core';
 const KNOWN_HTML_TAG_RE =
   /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/i;
 const CURRENCY_AMOUNT = String.raw`[+-]?(?:\d+(?:\.\d+)?|\.\d+)`;
-const SHELL_PARAMETER_NAME = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+|[?@*#!-])`;
-const SHELL_BRACED_PARAMETER = String.raw`\{${SHELL_PARAMETER_NAME}(?:(?::?[-+=?])[^}\n]*)?\}`;
+const SHELL_BRACED_PARAMETER = String.raw`\{[^{}\n$]+\}`;
 const SHELL_UNWRAPPED_PARAMETER = String.raw`(?:[A-Z_][A-Z0-9_]+|${SHELL_BRACED_PARAMETER}|[_?@*#!-])`;
 const SHELL_PARAMETER_BOUNDARY = String.raw`(?=[\s.,;:!?()[\]{}'"’”]|$)`;
 const CURRENCY_BOUNDARY = String.raw`(?=[\s.,;:!?()[\]{}'"’”]|<\/[A-Za-z]|$)`;
@@ -22,11 +21,7 @@ const HTML_CODE_ELEMENT_RE = new RegExp(
   `<code${HTML_ATTRIBUTES}>[\\s\\S]*?<\\/code>`,
   'giu',
 );
-const MARKDOWN_CODE_SPAN_RE = /(?<!`)(`+)(?!`)([^\n]*?)\1(?!`)/gu;
-const HTML_WRAPPED_CURRENCY_RE = new RegExp(
-  `<(?:strong|b|em|i)${HTML_ATTRIBUTES}>\\$${CURRENCY_AMOUNT}<\\/(?:strong|b|em|i)>`,
-  'giu',
-);
+const MARKDOWN_CODE_SPAN_RE = /(?<!`)(`+)(?!`)[\s\S]*?\1(?!`)/gu;
 const CURRENCY_PAIR_RE = new RegExp(
   `\\$${CURRENCY_AMOUNT}[^\\n$]*?(?:\\s|\\s[([{"'‘“+–—-]|\\s[A-Z]{1,3})\\$${CURRENCY_AMOUNT}`,
   'gu',
@@ -35,8 +30,12 @@ const PUNCTUATED_CURRENCY_TOKEN_RE = new RegExp(
   `(?<![\\p{L}\\p{N}_])(?:[A-Z]{1,3})?\\$${CURRENCY_AMOUNT}(?=[,.;:!?)](?:\\s|$))`,
   'gu',
 );
+const CURRENCY_BEFORE_CLOSING_TAG_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:[A-Z]{1,3})?\\$${CURRENCY_AMOUNT}(?=<\\/(?:blockquote|strong|b|em|i|code|p|div|h[1-6])\\s*>)`,
+  'giu',
+);
 const CURRENCY_TOKEN_RE = new RegExp(
-  `(?<![A-Za-z0-9_])(?:[A-Z]{1,3})?\\$${CURRENCY_AMOUNT}${CURRENCY_BOUNDARY}`,
+  `(?<![\\p{L}\\p{N}_])(?:[A-Z]{1,3})?\\$${CURRENCY_AMOUNT}${CURRENCY_BOUNDARY}`,
   'gu',
 );
 const SHELL_UNWRAPPED_PAIR_RE = new RegExp(
@@ -47,10 +46,10 @@ const SHELL_UNWRAPPED_TOKEN_RE = new RegExp(
   `(?<![A-Za-z0-9_}>])\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
   'gu',
 );
-const KNOWN_HTML_CLOSE_TAG_RE =
-  /<\/(?:blockquote|strong|b|em|i|code|p|div|h[1-6])\s*>/iu;
-const KNOWN_HTML_OPEN_TAG_AT_END_RE =
-  /<(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])[^>]*>\s*$/iu;
+const UNAMBIGUOUS_PRESENTATION_TAG_RE = new RegExp(
+  `(?:<(?:blockquote|strong|em|code|div|h[1-6])${HTML_ATTRIBUTES}\\/?\\s*>|<\\/(?:blockquote|strong|em|code|div|h[1-6])\\s*>)`,
+  'iu',
+);
 const HEADING_TAG_RE = new RegExp(
   `<h([1-6])${HTML_ATTRIBUTES}\\/?\\s*>([\\s\\S]*?)<\\/h\\1>`,
   'gi',
@@ -88,6 +87,21 @@ function headingMarker(level: string): string {
   return '#'.repeat(depth);
 }
 
+function hasPresentationHtmlBeforeNextDollar(
+  source: string,
+  offset: number,
+  matchLength: number,
+): boolean {
+  const start = offset + matchLength;
+  const nextDollar = source.indexOf('$', start);
+  // A later complete dollar pair supplies the math span that this literal
+  // token must not absorb. One-letter tags remain deliberately ambiguous:
+  // `<p>`, `<b>`, `<i>`, and `<br>` commonly occur inside generated TeX.
+  if (nextDollar < 0 || !source.includes('$', nextDollar + 1)) return false;
+  const between = source.slice(start, nextDollar);
+  return UNAMBIGUOUS_PRESENTATION_TAG_RE.test(between);
+}
+
 // CLI presentation owns currency and shell syntax. Mask only their dollar
 // tokens before shared math recognition so a shell token cannot pair with a
 // later formula delimiter and cause that formula's HTML-shaped TeX to leak.
@@ -104,43 +118,29 @@ function protectLiteralDollarTokens(content: string): {
       const index = items.push(dollars) - 1;
       return `${placeholderPrefix}${index}@@`;
     });
-  const hasFormattingBeforeLaterMath = (
-    match: string,
-    offset: number,
-    source: string,
-  ): boolean => {
-    const nextDollar = source.indexOf('$', offset + match.length);
-    if (nextDollar < 0 || source.indexOf('$', nextDollar + 1) < 0) return false;
-    const beforeNextDollar = source.slice(offset + match.length, nextDollar);
-    return (
-      KNOWN_HTML_CLOSE_TAG_RE.test(beforeNextDollar) ||
-      KNOWN_HTML_OPEN_TAG_AT_END_RE.test(beforeNextDollar)
-    );
-  };
   const withoutCodeOrPairedTokenDollars = [
     HTML_CODE_ELEMENT_RE,
     MARKDOWN_CODE_SPAN_RE,
-    HTML_WRAPPED_CURRENCY_RE,
     CURRENCY_PAIR_RE,
     PUNCTUATED_CURRENCY_TOKEN_RE,
+    CURRENCY_BEFORE_CLOSING_TAG_RE,
     SHELL_UNWRAPPED_PAIR_RE,
   ].reduce(
     (value, pattern) => value.replaceAll(pattern, protectDollars),
     content,
   );
-  const protectedContent = [CURRENCY_TOKEN_RE, SHELL_UNWRAPPED_TOKEN_RE].reduce(
-    (value, pattern) =>
-      value.replaceAll(pattern, (match, ...args: unknown[]) => {
-        const offset = args.at(-2) as number;
-        const source = args.at(-1) as string;
-        return hasFormattingBeforeLaterMath(match, offset, source)
-          ? protectDollars(match)
-          : match;
-      }),
+  const protectBeforeLaterMath = (value: string, pattern: RegExp): string =>
+    value.replaceAll(pattern, (match, offset: number, source: string) =>
+      hasPresentationHtmlBeforeNextDollar(source, offset, match.length)
+        ? protectDollars(match)
+        : match,
+    );
+  const contextProtected = [CURRENCY_TOKEN_RE, SHELL_UNWRAPPED_TOKEN_RE].reduce(
+    protectBeforeLaterMath,
     withoutCodeOrPairedTokenDollars,
   );
   return {
-    content: protectedContent,
+    content: contextProtected,
     restore: (value) =>
       value.replaceAll(
         placeholderPattern,

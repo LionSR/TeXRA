@@ -175,11 +175,15 @@ describe('renderAnsiMarkdown', () => {
     expect(normalized).not.toContain('</strong>');
   });
 
-  it('normalizes independently wrapped currency amounts', () => {
-    expect(
-      normalizeKnownHtmlForCliMarkdown('<strong>$5</strong> and <em>$10</em>'),
-    ).toBe('**$5** and _$10_');
-  });
+  it.each([
+    ['<strong>$5</strong> and <em>$10</em>', '**$5** and _$10_'],
+    ['<strong>US$5</strong> and <em>A$10</em>', '**US$5** and _A$10_'],
+  ] as const)(
+    'normalizes independently wrapped currency amounts: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
 
   it('normalizes unpaired HTML between same-line currency amounts', () => {
     expect(
@@ -202,11 +206,15 @@ describe('renderAnsiMarkdown', () => {
     },
   );
 
-  it('does not classify numeric inline math as currency', () => {
-    expect(
-      normalizeKnownHtmlForCliMarkdown('$5 x$ <strong>and</strong> $y = 2$'),
-    ).toBe('$5 x$ **and** $y = 2$');
-  });
+  it.each([
+    ['$5 x$ <strong>and</strong> $y = 2$', '$5 x$ **and** $y = 2$'],
+    ['$10 a$ <b>then</b> $20 b$', '$10 a$ **then** $20 b$'],
+  ] as const)(
+    'does not classify numeric inline math as currency: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
 
   it.each([
     ['<code>$HOME</code> and <code>$PATH</code>', '`$HOME` and `$PATH`'],
@@ -231,6 +239,12 @@ describe('renderAnsiMarkdown', () => {
       expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
     },
   );
+
+  it('keeps a shell-shaped math opener separate from later math', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('$AB <p>1$ <strong>and</strong> $y$'),
+    ).toBe('$AB <p>1$ **and** $y$');
+  });
 
   it('normalizes HTML between same-line shell PID expansions', () => {
     expect(
@@ -327,6 +341,10 @@ describe('renderAnsiMarkdown', () => {
     [
       '<code>${HOME%/usr}</code> <strong>or</strong> <code>${#PATH}</code>',
       '`${HOME%/usr}` **or** `${#PATH}`',
+    ],
+    [
+      '${HOME%/usr} <strong>or</strong> ${#PATH}',
+      '${HOME%/usr} **or** ${#PATH}',
     ],
   ] as const)(
     'normalizes HTML between compound shell expansions: %s',
@@ -806,6 +824,11 @@ describe('renderAnsiMarkdown', () => {
     const plain = renderPlain('loose \\; macro and set \\{1,2\\}');
     expect(plain).toContain('\\;');
     expect(plain).toContain('\\{1,2\\}');
+  });
+
+  it('does not replace user text resembling a LaTeX macro placeholder', () => {
+    const plain = renderPlain('literal @@LATEX-MACRO-0@@ and \\;');
+    expect(plain).toContain('literal @@LATEX-MACRO-0@@ and \\;');
   });
 
   it('still honours genuine markdown backslash-escapes outside the LaTeX set', () => {
