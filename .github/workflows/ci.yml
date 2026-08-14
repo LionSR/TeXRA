@@ -56,11 +56,14 @@ jobs:
           base='${{ github.event.pull_request.base.sha }}'
           head='${{ github.event.pull_request.head.sha }}'
           files="$(git diff --name-only "$base...$head")"
+          # --name-status keeps a rename's source path on the R### line, so a
+          # rename of either drift-gate file is still detected as touching it.
+          name_status="$(git diff --name-status "$base...$head")"
           echo "Changed files in this PR:"
           printf '%s\n' "$files"
           # Keep these docs-side paths synchronized with configPath and
           # defaultOutputPath in scripts/sync-remote-agents.mjs.
-          if printf '%s\n' "$files" | grep -qE '^docs/supabase/(SYNC_REMOTE_AGENTS\.sql|remote-agents\.config\.json)$'; then
+          if printf '%s\n' "$name_status" | grep -qE '(^|\t)docs/supabase/(SYNC_REMOTE_AGENTS\.sql|remote-agents\.config\.json)(\t|$)'; then
             echo "remote_agent_docs=true" >> "$GITHUB_OUTPUT"
           else
             echo "remote_agent_docs=false" >> "$GITHUB_OUTPUT"
