@@ -288,6 +288,12 @@ ratchet baseline widens.
     (item 2) settled first so budget accounting and cost accounting don't
     co-evolve.
 
+**Wave 5 — audit addendum (see Addendum below):** A5's defect fix ships
+immediately (it is a bug, not debt); A1–A3 and A6 are independent and can
+interleave with Waves 1–3; A7 executes *as* item 5's implementation; A4
+lands after item 1 (same files); A8 lands last in its area (largest blast
+radius of the addendum items).
+
 ## Non-goals (standing rulings, restated so this plan cannot drift)
 
 - **No merged super-cycle flow.** D6
@@ -312,6 +318,137 @@ ratchet baseline widens.
   journals suit LLM-authored scripts (edit-and-rerun replay). They already
   share the `ExecutionKVStore`; convergence, if any, is at record
   versioning/strictness conventions only.
+
+## Addendum: eight further verified candidates (debt-audit run, 2026-08-14)
+
+A structural debt-audit workflow (25 agents: seam mapping → ideation →
+shortlist → adversarial net-gain verification) swept the same area with this
+document's ten items excluded from its charter. Eight candidates survived
+adversarial verification, all with confirmed net gain — combined roughly
+−665 LoC and −60 structural elements. Verifier corrections are folded into
+the scopes below; where a verifier cut a sub-item, the cut is stated.
+
+### A1. Collapse the retry template-method split (−110 LoC, −11 elements)
+
+`RetryableInvocationNode` (`RetryState.ts`, 606 LoC) is an abstract
+template-method base with exactly one production subclass —
+`ModelInvocationNode`. The promised second instantiation never materialized
+(`ToolUseDispatchNode` extends `Node` directly), so the abstract/concrete
+split, three virtual-dispatch pairs, and `RetryableNodeServices` are
+speculative generality. Independently, seven classify/predicate functions in
+`providerErrorFormat.ts` have exactly one consumer each
+(`ModelInvocationNode`), re-deriving cause-chain/status/rate-limit-scope up
+to six times per relay failure. Fix: merge `RetryState.ts` into
+`ModelInvocationNode` (one deep module behind the unchanged `Node`
+interface); collapse the seven classifiers into one route-verdict function.
+Verifier corrections: the verdict shape must carry `exhaustionReason` (the
+relay-gate predicate has no 429 gate), the transport/5xx/408 wire branch,
+and relay's max(header, body) retryAfter with rate-vs-concurrency reason;
+the existing `RetryState.vitest.ts` predicate condition tables survive
+unchanged; the test harness needs a dummy config, which is churn, not risk.
+
+### A2. Approval surface trim (−100 LoC, −13 elements)
+
+Three shippable trims, none touching the healthy core: delete the
+"re-export commonly used functions" convenience barrel block in
+`tools/approval/index.ts` (a banned barrel with a live dual import path);
+dissolve `proposalApproval.ts` (46 LoC of `SessionApprovals` behavior
+stranded two directories from its owner — becomes a method on the class
+already owning the bypass objects); single-source the
+`{feedback}|{reason}|{cause}` rejection-provenance union hand-written five
+times across `HostInteractions.ts`/`toolEditApproval.ts`. Verifier cut:
+keep `cleanupAllApprovals` (test teardown consumer set makes deletion a
+wash).
+
+### A3. One error channel for child-run/terminal persistence (−90 LoC, −9)
+
+`finalizeExecution` (`executionLifecycle.ts`) provably never throws — every
+await is inside a try whose catch returns `{status:'failed'}` — yet four
+call sites carry dead defensive `thrownError` arms. `childRunPersistence.ts`
+(38 LoC) converts KV-store throws into a `{kind}` result object that its
+consumer immediately converts back into a `SubagentDurabilityError` throw;
+`bash.ts` hand-rolls a second copy of the delivery-persistence policy and
+the CLI a third. Fix: delete the result-object layer and the dead throw
+arms; route bash/CLI through the two surviving owners. Verifier
+corrections: `rejectedMessage` warn strings are asserted verbatim by tests
+(must land together); keep the CLI's per-stage `finalizationFailureMessage`
+(headless-parity reporting surface).
+
+### A4. Delegation shallow-file collapse (−75 LoC, −8 elements)
+
+Three shallow indirections dissolve into their single real consumers:
+`childRunDelivery.ts` (34 LoC — renames `SubmitFollowUpResult`'s five
+variants to three, but its own caller file also imports raw
+`submitFollowUp`, so the vocabulary boundary is already breached);
+`ToolUseFollowUpQueue.drainItems`/`.restore` (one-line delegations of the
+already-guarded `queue(lease)` accessor); and the
+`subagentDiffs.ts → subagentDeliveryFormat.ts` strict two-deep
+single-caller chain, folded into `subagentResults.ts` with the 14-line
+`formatBuiltSubagentDelivery` arg-rearranger inlined. Verifier cut: do
+**not** fold the `workflowScriptAgentRunner`/`createRunAgent` seam — it is
+a load-bearing dependency-injection port (19 fake-runner injections in
+tests) and closes over run identity, not just a stream id.
+
+### A5. One bundled-prompt loader — fixes a live desktop defect (−65 LoC, −7)
+
+`polishModel.ts` and `goal/promptLoader.ts` are two copies of the same
+host-wired YAML-prompt singleton pattern, and the wiring drift already
+shipped a defect: `initializePolishModel`'s only production caller is
+`extension.ts`, while desktop wires `polishTextWithAI` into its follow-up
+polish controller — so **every desktop follow-up polish fails** with
+"Polish model not initialized" (caught and silently degraded downstream);
+the CLI ships `instructionPolish.yaml` that nothing loads. Fix: one
+table-driven bundled-prompt loader (`{relPath, schema, missingPolicy}`
+rows, one `initializeBundledPrompts(resourcesPath)` per host); per-row
+failure semantics stay data. The defect fix ships first, independent of the
+consolidation. Verifier correction: `getHelperModelName` has four
+production consumers and stays a barrel export; only `helperModelPreference`
+fit the single-caller-extraction claim.
+
+### A6. Resume topology cleanup (−45 LoC, −2 elements)
+
+Tier 1 (verified dead): `ResumeStreamPorts.interactions` is a required
+field supplied at five construction sites and never read; `resumeAdmission.ts`
+is a 9-LoC file whose three importers all already import `executeAgent.ts`.
+Tier 2: extension and desktop each maintain a near-identical
+preload-then-read resume-state resolver over the same `StreamSnapshotStore`
+(the extension comment admits the mirroring), and the extension's
+`ProgressViewProvider` singleton hop is provably identical to
+`defaultSession().snapshots` while adding a spurious "progress view never
+opened" failure mode — one runtime default resolver deletes both host
+copies. The riskier CLI two-rehydration-path merge is droppable without
+losing the tiers above.
+
+### A7. `WorkflowExecutionSnapshot` as the one fold owner (−70 LoC, −6)
+
+This is the concrete design for item 5 (H2): the engine publishes every run
+fact on two hand-synchronized channels and already pays documented tax to
+police the duplication (cost restated onto events with a "never accumulate
+a second, divergent total" comment; `failCall` existing solely to
+dual-stamp; four terminal sites stamping both). The event stream has exactly
+one consumer in the repo, and it already trusts `lastSnapshot` over its own
+event fold. Fix: emit per-transition snapshots; narrow `WorkflowScriptEvent`
+to the facts a snapshot cannot carry. Verifier correction: `event.label` is
+*not* snapshot-derivable today (two divergent label derivations exist —
+prompt-excerpt fallback vs role fallback); unifying the label derivation is
+a prerequisite micro-step and changes surfaced labels, so it lands as its
+own reviewed commit.
+
+### A8. One subscription registry (−110 LoC, −4 elements)
+
+`ExecutionSubscriptionBinder` (270 LoC, `agent/runtime`) and
+`StreamSubscriptionRegistry` (275 LoC, `tools/github`, three instances) are
+the same machine written twice — the registry's own doc says "Mirrors
+ExecutionSubscriptionBinder" — with parallel Map-of-Map bookkeeping,
+bind-time generation capture, auto-dispose hooks, and an identical
+`submitFollowUp(live_notification)` → emit → warn-catch sequence. Fix:
+express the execution channel as the registry's fourth instance via an
+`ExecutionRegistry → PollingSourceLike` adapter; the independently-shippable
+first step folds the copy-pasted post-notification emit into
+`submitFollowUp` itself. Verifier correction: the "layering forced the
+duplicate" premise is false — `agent/runtime` already imports `@tools`
+within the ratcheted baseline, so relocation is optional taste, not a
+prerequisite.
 
 ## Open questions
 
