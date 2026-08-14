@@ -57,12 +57,12 @@ jobs:
           head='${{ github.event.pull_request.head.sha }}'
           files="$(git diff --name-only "$base...$head")"
           # --name-status keeps a rename's source path on the R### line, so a
-          # rename of either drift-gate file is still detected as touching it.
+          # rename of the drift-gate file is still detected as touching it.
           name_status="$(git diff --name-status "$base...$head")"
           echo "Changed files in this PR:"
           printf '%s\n' "$files"
-          # Keep these docs-side paths synchronized with configPath and
-          # defaultOutputPath in scripts/sync-remote-agents.mjs.
+          # Catalog placement lives in remote-agents.config.json. Generated SQL
+          # is no longer committed.
           #
           # Parse --name-status fields explicitly. GNU grep's -E mode does not
           # treat \t as a tab escape, so matching real tab separators through
@@ -71,8 +71,7 @@ jobs:
           drift_gate_match() {
             awk -F '\t' '{
               for (i = 2; i <= NF; i++) {
-                if ($i == "docs/supabase/SYNC_REMOTE_AGENTS.sql" ||
-                    $i == "docs/supabase/remote-agents.config.json") {
+                if ($i == "docs/supabase/remote-agents.config.json") {
                   found = 1
                 }
               }
@@ -100,7 +99,7 @@ jobs:
             echo 'drift-gate classifier self-test failed (modified gate file)' >&2
             exit 1
           fi
-          if ! printf 'R100\tdocs/supabase/remote-agents.config.json.old\tdocs/supabase/SYNC_REMOTE_AGENTS.sql\n' | drift_gate_match; then
+          if ! printf 'R100\tdocs/supabase/remote-agents.config.json.old\tdocs/supabase/remote-agents.config.json\n' | drift_gate_match; then
             echo 'drift-gate classifier self-test failed (rename dest only)' >&2
             exit 1
           fi
@@ -220,11 +219,11 @@ jobs:
       - name: Check tsconfig paths are in sync with the root
         run: pnpm run check:tsconfig-paths
 
-      - name: Check remote-agents SQL is in sync
-        run: pnpm run check:remote-agents
+      - name: Check remote-agents catalog generates
+        run: npm run sync:remote-agents
 
   remote-agent-docs:
-    name: remote-agents SQL sync
+    name: remote-agents catalog
     needs: changes
     if: needs.changes.outputs.code != 'true' && needs.changes.outputs.remote_agent_docs == 'true' && github.event_name != 'schedule'
     runs-on: ubuntu-latest
@@ -248,8 +247,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Check remote-agents SQL is in sync
-        run: pnpm run check:remote-agents
+      - name: Check remote-agents catalog generates
+        run: npm run sync:remote-agents
 
   guidance-refs:
     name: guidance references
@@ -596,6 +595,6 @@ jobs:
              [ '${{ needs.changes.outputs.code }}' != 'true' ] && \
              [ '${{ needs.changes.outputs.remote_agent_docs }}' = 'true' ] && \
              [ '${{ needs.remote-agent-docs.result }}' != 'success' ]; then
-            echo 'Remote-agent docs changed but SQL sync did not succeed: ${{ needs.remote-agent-docs.result }}'
+            echo 'Remote-agent catalog config changed but generate did not succeed: ${{ needs.remote-agent-docs.result }}'
             exit 1
           fi
