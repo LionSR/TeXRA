@@ -1,5 +1,5 @@
 {
-  "$schema": "Placement and visibility for agents in prompts/agents/remote/. Seeded from production remote_agents on 2026-04-15. Update this file (not YAML) when an agent's storage folder or visibility tags change. Agents managed outside prompts/agents/remote/ (e.g. lean, ocr, transcribe_audio — present in Supabase Storage but not in the repo) are intentionally omitted; the script leaves them alone. Only add names to `retired` when an agent has been deleted from Supabase Storage and should also be removed from the remote_agents table.",
+  "$schema": "Placement and visibility for agents in prompts/agents/remote/. Seeded from production remote_agents on 2026-04-15. Update this file (not YAML) when an agent's storage folder or visibility tags change. The sync script only upserts names discovered under prompts/agents/remote/ and only deletes names listed in `retired`; any other remote_agents rows are left alone. Only add names to `retired` when an agent has been deleted from Supabase Storage and should also be removed from the remote_agents table.",
   "retired": [
     "apply_multiple",
     "criticize_multiple",
