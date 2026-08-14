@@ -126,6 +126,19 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('</b>');
   });
 
+  it('continues normalizing standard boolean HTML attributes', () => {
+    const plain = renderPlain(
+      '<p hidden>Paragraph <b hidden>bold</b> <code hidden>code</code></p>',
+    );
+
+    expect(plain).toContain('Paragraph');
+    expect(plain).toContain('bold');
+    expect(plain).toContain('code');
+    expect(plain).not.toContain('<p hidden>');
+    expect(plain).not.toContain('<b hidden>');
+    expect(plain).not.toContain('<code hidden>');
+  });
+
   it('preserves comparison prose that resembles HTML attributes', () => {
     expect(renderPlain('if x <p and y>1 then z')).toContain(
       'if x <p and y>1 then z',
