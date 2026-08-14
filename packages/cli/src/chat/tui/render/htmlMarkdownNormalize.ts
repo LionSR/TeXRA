@@ -17,6 +17,7 @@ const CURRENCY_BOUNDARY = String.raw`(?=[\s.,;:!?()[\]{}'"’”]|<\/[A-Za-z]|$)
 const HTML_VALUELESS_ATTRIBUTE = String.raw`(?:allowfullscreen|async|autofocus|autoplay|checked|contenteditable|controls|default|defer|disabled|formnovalidate|hidden|inert|ismap|itemscope|loop|multiple|muted|nomodule|novalidate|open|playsinline|popover|readonly|required|reversed|selected)`;
 const HTML_ATTRIBUTE = String.raw`(?:[A-Za-z_:][A-Za-z0-9_.:-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>]+)|${HTML_VALUELESS_ATTRIBUTE})`;
 const HTML_ATTRIBUTES = String.raw`(?:\s+${HTML_ATTRIBUTE})*`;
+const HTML_TAG_END = String.raw`(?:\s*\/\s*|\s*)>`;
 const HTML_CODE_ELEMENT_RE = new RegExp(
   `<code${HTML_ATTRIBUTES}\\s*>[\\s\\S]*?<\\/code>`,
   'giu',
@@ -51,7 +52,7 @@ const SHELL_UNWRAPPED_TOKEN_RE = new RegExp(
   'gu',
 );
 const UNAMBIGUOUS_PRESENTATION_TAG_RE = new RegExp(
-  `(?:<(?:blockquote|strong|em|code|div|h[1-6])${HTML_ATTRIBUTES}\\/?\\s*>|<\\/(?:blockquote|strong|em|code|div|h[1-6])\\s*>)`,
+  `(?:<(?:blockquote|strong|em|code|div|h[1-6])${HTML_ATTRIBUTES}${HTML_TAG_END}|<\\/(?:blockquote|strong|em|code|div|h[1-6])\\s*>)`,
   'iu',
 );
 const AMBIGUOUS_PRESENTATION_OPEN_AT_END_RE = new RegExp(
@@ -59,24 +60,27 @@ const AMBIGUOUS_PRESENTATION_OPEN_AT_END_RE = new RegExp(
   'iu',
 );
 const HEADING_TAG_RE = new RegExp(
-  `<h([1-6])${HTML_ATTRIBUTES}\\/?\\s*>([\\s\\S]*?)<\\/h\\1>`,
+  `<h([1-6])${HTML_ATTRIBUTES}${HTML_TAG_END}([\\s\\S]*?)<\\/h\\1>`,
   'gi',
 );
 const PARAGRAPH_OPEN_TAG_RE = new RegExp(
-  `<(?:p|div)${HTML_ATTRIBUTES}\\/?\\s*>`,
+  `<(?:p|div)${HTML_ATTRIBUTES}${HTML_TAG_END}`,
   'gi',
 );
 const STRONG_OPEN_TAG_RE = new RegExp(
-  `<(?:strong|b)${HTML_ATTRIBUTES}\\/?\\s*>`,
+  `<(?:strong|b)${HTML_ATTRIBUTES}${HTML_TAG_END}`,
   'gi',
 );
 const EMPHASIS_OPEN_TAG_RE = new RegExp(
-  `<(?:em|i)${HTML_ATTRIBUTES}\\/?\\s*>`,
+  `<(?:em|i)${HTML_ATTRIBUTES}${HTML_TAG_END}`,
   'gi',
 );
-const CODE_OPEN_TAG_RE = new RegExp(`<code${HTML_ATTRIBUTES}\\/?\\s*>`, 'gi');
+const CODE_OPEN_TAG_RE = new RegExp(
+  `<code${HTML_ATTRIBUTES}${HTML_TAG_END}`,
+  'gi',
+);
 const BLOCKQUOTE_TAG_RE = new RegExp(
-  `<blockquote${HTML_ATTRIBUTES}\\/?\\s*>([\\s\\S]*?)<\\/blockquote>`,
+  `<blockquote${HTML_ATTRIBUTES}${HTML_TAG_END}([\\s\\S]*?)<\\/blockquote>`,
   'gi',
 );
 
@@ -106,10 +110,10 @@ function hasPresentationHtmlBeforeNextDollar(
   // literal token must not absorb. Bare one-letter tags remain deliberately
   // ambiguous, but a matched wrapper pair is presentation markup.
   if (nextDollar < 0) return false;
-  const closingDollar = source.indexOf('$', nextDollar + 1);
-  if (closingDollar < 0) return false;
   const between = source.slice(start, nextDollar);
   if (UNAMBIGUOUS_PRESENTATION_TAG_RE.test(between)) return true;
+  const closingDollar = source.indexOf('$', nextDollar + 1);
+  if (closingDollar < 0) return false;
   const ambiguousOpen = AMBIGUOUS_PRESENTATION_OPEN_AT_END_RE.exec(between);
   return (
     ambiguousOpen?.[1] !== undefined &&
@@ -117,6 +121,20 @@ function hasPresentationHtmlBeforeNextDollar(
       source.slice(closingDollar + 1),
     )
   );
+}
+
+function shouldMaskPunctuatedCurrency(
+  source: string,
+  offset: number,
+  matchLength: number,
+): boolean {
+  const start = offset + matchLength;
+  const nextDollar = source.indexOf('$', start);
+  if (nextDollar < 0) return true;
+  const between = source.slice(start, nextDollar);
+  if (UNAMBIGUOUS_PRESENTATION_TAG_RE.test(between)) return true;
+  const closingDollar = source.indexOf('$', nextDollar + 1);
+  return closingDollar >= 0 && /\S/u.test(source[nextDollar + 1] ?? '');
 }
 
 // CLI presentation owns currency and shell syntax. Mask only their dollar
@@ -139,7 +157,6 @@ function protectLiteralDollarTokens(content: string): {
     HTML_CODE_ELEMENT_RE,
     MARKDOWN_CODE_SPAN_RE,
     CURRENCY_PAIR_RE,
-    PUNCTUATED_CURRENCY_TOKEN_RE,
     CURRENCY_BEFORE_CLOSING_TAG_RE,
     SHELL_UNWRAPPED_PAIR_RE,
     SHELL_BEFORE_CLOSING_TAG_RE,
@@ -147,6 +164,14 @@ function protectLiteralDollarTokens(content: string): {
     (value, pattern) => value.replaceAll(pattern, protectDollars),
     content,
   );
+  const punctuatedCurrencyProtected =
+    withoutCodeOrPairedTokenDollars.replaceAll(
+      PUNCTUATED_CURRENCY_TOKEN_RE,
+      (match, offset: number, source: string) =>
+        shouldMaskPunctuatedCurrency(source, offset, match.length)
+          ? protectDollars(match)
+          : match,
+    );
   const protectBeforeLaterMath = (value: string, pattern: RegExp): string =>
     value.replaceAll(pattern, (match, offset: number, source: string) =>
       hasPresentationHtmlBeforeNextDollar(source, offset, match.length)
@@ -155,7 +180,7 @@ function protectLiteralDollarTokens(content: string): {
     );
   const contextProtected = [CURRENCY_TOKEN_RE, SHELL_UNWRAPPED_TOKEN_RE].reduce(
     protectBeforeLaterMath,
-    withoutCodeOrPairedTokenDollars,
+    punctuatedCurrencyProtected,
   );
   return {
     content: contextProtected,

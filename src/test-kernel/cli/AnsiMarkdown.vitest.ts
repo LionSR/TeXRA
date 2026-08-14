@@ -214,6 +214,8 @@ describe('renderAnsiMarkdown', () => {
   it.each([
     ['$5 x$ <strong>and</strong> $y = 2$', '$5 x$ **and** $y = 2$'],
     ['$10 a$ <b>then</b> $20 b$', '$10 a$ **then** $20 b$'],
+    ['$5, x<b>y$', '$5, x<b>y$'],
+    ['$5, x$ <strong>and</strong> $z$', '$5, x$ **and** $z$'],
   ] as const)(
     'does not classify numeric inline math as currency: %s',
     (source, expected) => {
@@ -259,6 +261,12 @@ describe('renderAnsiMarkdown', () => {
         '<strong>$HOME</strong> then <strong>$a<b>c$</strong>',
       ),
     ).toBe('**$HOME** then **$a<b>c$**');
+  });
+
+  it('normalizes presentation markup before a lone trailing dollar', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('Cost $5 <strong>today</strong> $'),
+    ).toBe('Cost $5 **today** $');
   });
 
   it('normalizes HTML between same-line shell PID expansions', () => {
@@ -441,7 +449,7 @@ describe('renderAnsiMarkdown', () => {
 
   it('continues normalizing self-closing HTML formatting tags', () => {
     const plain = renderPlain(
-      '<p/>Paragraph <b/>bold <code/>code <p/ >spaced <strong/ >strong',
+      '<p/>Paragraph <b/>bold <code/>code <p/ >spaced <strong/ >strong <p />before <p hidden />hidden',
     );
 
     expect(plain).toContain('Paragraph');
@@ -452,6 +460,8 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('<code/>');
     expect(plain).not.toContain('<p/ >');
     expect(plain).not.toContain('<strong/ >');
+    expect(plain).not.toContain('<p />');
+    expect(plain).not.toContain('<p hidden />');
   });
 
   it('renders HTML headings as markdown headings without leaking tags', () => {
