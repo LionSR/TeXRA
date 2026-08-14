@@ -316,6 +316,15 @@ describe('renderAnsiMarkdown', () => {
     },
   );
 
+  it(
+    'handles many unmatched one-letter wrappers without rescanning suffixes',
+    { timeout: 2_000 },
+    () => {
+      const source = `Cost $5 ${'<b>x'.repeat(64_000)} and $y=2$`;
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(source);
+    },
+  );
+
   it('normalizes HTML between same-line shell PID expansions', () => {
     expect(
       normalizeKnownHtmlForCliMarkdown('<code>$$</code> and <code>$$</code>'),

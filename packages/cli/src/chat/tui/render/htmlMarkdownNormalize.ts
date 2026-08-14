@@ -58,9 +58,9 @@ const UNAMBIGUOUS_PRESENTATION_TAG_RE = new RegExp(
   `(?:<(?:blockquote|strong|em|code|div|br|h[1-6])${HTML_ATTRIBUTES}${HTML_TAG_END}|<\\/(?:blockquote|strong|em|code|div|h[1-6])\\s*>)`,
   'iu',
 );
-const AMBIGUOUS_PRESENTATION_PAIR_RE = new RegExp(
-  `<(b|i|p)${HTML_ATTRIBUTES}\\s*>[\\s\\S]*?<\\/\\1\\s*>`,
-  'iu',
+const AMBIGUOUS_PRESENTATION_TAG_RE = new RegExp(
+  `(?:<(b|i|p)${HTML_ATTRIBUTES}\\s*>|<\\/(b|i|p)\\s*>)`,
+  'giu',
 );
 const AMBIGUOUS_PRESENTATION_OPEN_RE = new RegExp(
   `<(b|i|p)${HTML_ATTRIBUTES}\\s*>`,
@@ -106,6 +106,17 @@ function headingMarker(level: string): string {
   return '#'.repeat(depth);
 }
 
+function hasAmbiguousPresentationPair(content: string): boolean {
+  const openTags = new Set<string>();
+  for (const match of content.matchAll(AMBIGUOUS_PRESENTATION_TAG_RE)) {
+    const openingTag = match[1]?.toLowerCase();
+    if (openingTag !== undefined) openTags.add(openingTag);
+    const closingTag = match[2]?.toLowerCase();
+    if (closingTag !== undefined && openTags.has(closingTag)) return true;
+  }
+  return false;
+}
+
 function hasPresentationHtmlBeforeNextDollar(
   source: string,
   offset: number,
@@ -121,7 +132,7 @@ function hasPresentationHtmlBeforeNextDollar(
   if (UNAMBIGUOUS_PRESENTATION_TAG_RE.test(between)) return true;
   const closingDollar = source.indexOf('$', nextDollar + 1);
   if (closingDollar < 0) return false;
-  if (AMBIGUOUS_PRESENTATION_PAIR_RE.test(between)) return true;
+  if (hasAmbiguousPresentationPair(between)) return true;
   const afterClosingDollar = source.slice(closingDollar + 1);
   return [...between.matchAll(AMBIGUOUS_PRESENTATION_OPEN_RE)].some(
     (ambiguousOpen) =>
