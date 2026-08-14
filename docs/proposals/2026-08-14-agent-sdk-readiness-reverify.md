@@ -75,8 +75,9 @@ itself at 10 specifiers. This pass applies the same pattern to that package:
 | `@agent/runtime/AgentFlowResult`  | ✓      | **kept deliberately** — see §4 |
 
 Net: **10 → 7**, baseline shrunk in `config/ratchets/host-agent-import-baseline.json`.
-The package no longer pins five internal runtime module paths; runtime files can
-move or split without breaking it.
+The package stops pinning five internal module paths — four under `runtime/` plus
+`index/agentRegistry` — so those files can move or split without breaking it.
+`@agent/runtime/AgentFlowResult` stays pinned by design (§4).
 
 This is a **barrel fold, not a new layer** — no wrapper function, no facade, no
 new abstraction. The touched files are `packages/agent/src/index.ts`,
@@ -148,10 +149,17 @@ concern. Future passes should not resurrect the wrapper.
 
 Re-checked against the repo's guardrails; all load-bearing:
 
-- **`runAgent` → `executeAgent` is earned.** `runAgent` validates-then-runs:
-  assigns `executionId`, registers the execution, opens workflow output
-  (`runAgent.ts:78-85`). `executeAgent` has ≥3 production entries
-  (`runAgent.ts:157`, `nativeSubagentStrategy.ts:254`, CLI resume).
+- **`runAgent` → `executeAgent` is earned.** `runAgent` validates-then-runs: it
+  assigns the `executionId` (`runAgent.ts:103`), registers the execution
+  (`:121`), and calls the engine (`:157`), which forwards `openWorkflowOutput` so
+  the host can surface a workflow result (`executeAgent.ts:474`). The
+  `executeAgent` module's two engine entries have ≥4 production consumers:
+  `executeAgent` itself from `runAgent.ts:157` and
+  `nativeSubagentStrategy.ts:254`, and its sibling `resumeToolUseFromResumeData`
+  (`executeAgent.ts:522`) from `resumeQueuedToolUse.ts:134`,
+  `nativeSubagentStrategy.ts:306`, and the CLI resume path
+  (`chatSessionController.ts:573`) — the resume entry CLAUDE.md deliberately
+  distinguishes from `runAgent`.
 - **`ModelHandler` remains a genuine provider port**, consumed as the narrowed
   `IModelHandler` with its one interface-only optional member
   (`createBatchedToolUseFollowUpMessages`, `IModelHandler.ts:104`).
