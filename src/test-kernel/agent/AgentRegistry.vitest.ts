@@ -30,7 +30,6 @@ const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {
     id: 'remote-orchestrator',
     name: 'orchestrator',
     description: 'Remote team root',
-    visibility: ['researcher'],
     tools: ['delegate_agent'],
     agentCategory: 'toolUse',
   };
@@ -94,7 +93,6 @@ function remoteAgentFixture(id: string, name: string, description: string) {
     id,
     name,
     description,
-    visibility: [],
     tools: [],
     agentCategory: 'toolUse',
   };

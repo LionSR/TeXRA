@@ -41,7 +41,6 @@ const canonicalReviewRow = {
   id: 'agent-2',
   name: 'review',
   description: 'Canonical row',
-  visibility: ['public'],
   tools: [],
   agent_category: 'toolUse',
 };
@@ -51,7 +50,6 @@ function invalidAgentRow(overrides: Record<string, unknown>) {
     id: 'agent-1',
     name: 'review team',
     description: 'Invalid row',
-    visibility: ['public'],
     tools: [],
     agent_category: 'toolUse',
     ...overrides,
@@ -102,7 +100,7 @@ describe('remote agent listing', () => {
 
     expect(agents).toEqual([]);
     expect(selectedColumns).toEqual([
-      'id, name, description, visibility, tools, agent_category',
+      'id, name, description, tools, agent_category',
     ]);
   });
 });
