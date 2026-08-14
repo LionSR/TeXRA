@@ -5,7 +5,7 @@
  * integration. Per-workspace sessions are cached: the first request that
  * targets a file in a given Lake project spawns `lake env lean --server`
  * from that project root; subsequent requests from any agent reuse the
- * same session. An unused server is stopped after ten minutes. Sessions
+ * same session. An unused server is stopped after thirty minutes. Sessions
  * are also torn down on platform shutdown.
  */
 
@@ -35,7 +35,7 @@ import type {
 const LOG_CHANNEL = 'lean.direct';
 
 /** Long-lived CLI/desktop hosts otherwise keep unused servers forever. */
-const DEFAULT_LEAN_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_LEAN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
 /**
  * Lake arguments for project commands that fan out across all active sessions.

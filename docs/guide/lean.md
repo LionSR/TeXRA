@@ -29,7 +29,7 @@ TeXRA detects the running Lean 4 extension and routes its tools through it — s
 
 ### <wa-icon library="texra" name="terminal"></wa-icon> In the CLI
 
-There's no Lean 4 extension to lean on, so TeXRA spawns its own server (`lake env lean --server`). Each Lake project gets its own process; an unused one is stopped after ten minutes. You need `lake` on your `PATH`:
+There's no Lean 4 extension to lean on, so TeXRA spawns its own server (`lake env lean --server`). Each Lake project gets its own process; an unused one is stopped after thirty minutes. You need `lake` on your `PATH`:
 
 1. Install **elan** (the Lean version manager):
    ```bash
