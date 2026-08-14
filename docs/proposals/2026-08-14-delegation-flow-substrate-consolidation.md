@@ -108,15 +108,22 @@ must keep. Code movement only where a site violates the written contract.
 **Unclaimed until now.**
 
 `executeInBand` (`inBandSubagentExecution.ts:389`) drops progress
-notifications entirely (`notify: () => {}`, `:463`) and passes
-`strategy.launch` a fresh `AbortController` (`:467`) that no caller retains a
-reference to — the only live cancellation at that wrapper is
-`options.signal` threaded via `bindAbortSignals`. The workflow-script path
-compensates with its own event channel (`WorkflowScriptEvent` projection);
-the headless `stopAfterCycle` arm of `delegate_agent`/`delegate_workflow`
-loses the notification sink.
+notifications entirely (`notify: () => {}`, `:463`). The workflow-script
+path compensates with its own event channel (`WorkflowScriptEvent`
+projection); the headless `stopAfterCycle` arm of
+`delegate_agent`/`delegate_workflow` loses the notification sink.
 
-The in-band run does **not** lack a lease-lost watchdog once
+The fresh `AbortController` passed to `strategy.launch` (`:467`) is
+**not** an unhandled caller-cancellation gap. `runNative` already
+combines `params.signal` and `abortController.signal` and binds the
+result to `handle.interrupt()` (`nativeSubagentStrategy.ts:182-190`);
+`onAbort` fires immediately even if the caller signal was aborted
+before the handle existed. Retaining the controller in the caller adds
+no cancellation behavior, and removing it would change the shared
+`ChildRunStrategy.launch` contract just to drop an inert allocation.
+Keep it as the strategy-interface argument.
+
+The in-band run also does **not** lack a lease-lost watchdog once
 `strategy.launch` enters `executeAgent`: `runFlowWithLifecycle` attaches
 `onOwnedExecutionLeaseLost` for the same execution ID, marks the handle
 lease-lost, and calls `handle.interrupt()`, and also attaches the run
@@ -124,16 +131,13 @@ interrupt handler (`AgentRunLifecycle.ts:490-501`). Treating that as
 absent would add a second watcher and double-run cancellation side
 effects.
 
-**Fix.** Two scoped changes, not a rewrite: (a) thread a real notification
+**Fix.** One scoped change, not a rewrite: thread a real notification
 sink for the `stopAfterCycle` arm (the parent is in-band, so "notify" can
 degrade to trace-card emission rather than follow-up delivery — but
-deliberately and documented, not via a silent no-op); (b) either retain and
-wire the unused wrapper `AbortController` into the caller's cancellation
-scope or stop constructing it and pass the bound signal explicitly. Do
-**not** add a second lease-lost watcher or loop-level interrupt path.
-If anything remains after `executeAgent` owns lifecycle, it is only the
-brief pre-`executeAgent` launch window. The in-band-vs-async _durability_
-split stays (see Non-goals).
+deliberately and documented, not via a silent no-op). Do **not** add a
+second lease-lost watcher, a loop-level interrupt path, or a launch-
+signature change to retire the controller. The in-band-vs-async
+_durability_ split stays (see Non-goals).
 
 ### 4. Two independent concurrency budgets
 
@@ -185,19 +189,26 @@ There is no `workflowScriptDeliverySummary.ts` file (the
 `WorkflowScriptDeliverySummary` type lives in
 `src/shared/schemas/workflowScriptDelivery.ts`).
 `workflowScriptStrategy.ts` does not fold the event stream — `settleSummary`
-reads the engine's terminal snapshot + journal so it "can never disagree
-with `/executions/{id}`" (`workflowScriptStrategy.ts:167-169`, `:181-216`).
-The sole event fold is `workflowScriptRun.ts:308` (`project`, wired as the
-engine's only `onEvent` consumer at `:428`).
+reads the engine's terminal snapshot + journal (`:181-216`). The comment
+at `:167-169` claims this "can never disagree with `/executions/{id}`";
+that is overstated. `onSnapshot` assigns `lastSnapshot` **before**
+awaiting `params.onSnapshot` (`:275-277`), and the failure path later
+passes that unpersisted value to `settleSummary` (`:294-299`). If
+snapshot persistence fails, durable execution metadata keeps the older
+snapshot while the delivery summary reports the rejected newer one.
+The sole event fold is `workflowScriptRun.ts:308` (`project`, wired as
+the engine's only `onEvent` consumer at `:428`).
 
 The remaining debt is the dual hand-synchronized channel (snapshot +
-events) with its dual-stamp tax — the same debt A7 describes. The ranked
-list and the addendum agree on the design.
+events) with its dual-stamp tax — the same debt A7 describes — plus the
+failed-write disagreement above.
 
 **Fix.** Execute A7: emit per-transition snapshots; narrow
 `WorkflowScriptEvent` to the facts a snapshot cannot carry. Unify
 `event.label` derivation first as a separate reviewed commit (it is not
 snapshot-derivable today: prompt-excerpt fallback vs role fallback).
+Assign `lastSnapshot` only after `onSnapshot` persistence succeeds (or
+stop claiming the delivery summary matches the durable execution view).
 
 ### 6. Lineage and identity residue
 
@@ -369,8 +380,8 @@ the named sites against head.
 4. Item 2 (cost contract + workflow-path conformance + tests). Do not
    add an in-band single-commit test unless a multi-observation path
    is found.
-5. Item 3 (in-band notify sink + unused AbortController honesty).
-   Do not add a second lease-lost watcher.
+5. Item 3 (in-band notify sink only). Do not add a second lease-lost
+   watcher or change the `ChildRunStrategy.launch` signature.
 6. Item 10 (report/result decision, README, `executions` tool messaging).
 
 **Wave 3 — consolidations:**
@@ -467,13 +478,16 @@ wash).
 ### A3. One error channel for child-run/terminal persistence (−90 LoC, −9)
 
 `finalizeExecution` (`executionLifecycle.ts`) provably never throws — every
-await is inside a try whose catch returns `{status:'failed'}` — yet two
-call sites carry dead defensive `thrownError` arms (`runAgent.ts:182-183`
-and `terminalPersistence.ts:96-101`). The other finalize-family sites
-(`restartRepair.ts:185`, `AgentRunLifecycle.ts:197`,
-`executionRegistry.ts:850`, CLI `executionFinalization.ts:47`) have no
-`thrownError` arm. `childRunPersistence.ts` (37 LoC) converts KV-store
-throws into a `{kind}` result object. One required consumer
+await is inside a try whose catch returns `{status:'failed'}` — yet three
+call sites still carry dead defensive throw arms: `'thrownError' in` at
+`runAgent.ts:182-183` and `terminalPersistence.ts:96-101`, plus the
+CLI `try`/`catch` around `finalizeExecution` at
+`packages/cli/src/runtime/executionFinalization.ts:43-58` (it reports an
+"unexpected" thrown failure that cannot occur). The other finalize-family
+sites (`restartRepair.ts:185`, `AgentRunLifecycle.ts:197`,
+`executionRegistry.ts:850`) have no such arm.
+`childRunPersistence.ts` (37 LoC) converts KV-store throws into a
+`{kind}` result object. One required consumer
 (`persistResultMetaRequired` in `inBandSubagentExecution.ts:258-264`)
 immediately converts a failure back into a `SubagentDurabilityError`
 throw. A second consumer, `persistChildRunDeliveryBestEffort`, calls
@@ -484,14 +498,14 @@ detached child loop and in-band failure paths, so deleting the
 result-object layer literally would let an artifact write escape a
 deliberately best-effort path or drop one of two concurrent failures.
 `bash.ts` hand-rolls a second copy of the delivery-persistence policy
-and the CLI a third. Fix: delete the two dead throw arms; route
-bash/CLI through the two surviving owners; keep the result type (or
-replace it with an equivalent `Promise.allSettled` that still inspects
-both writes independently) so the best-effort consumer does not start
-throwing. Verifier corrections: `rejectedMessage` warn strings are
-asserted verbatim by tests (must land together); keep the CLI's
-per-stage `finalizationFailureMessage` (headless-parity reporting
-surface).
+and the CLI a third. Fix: delete the three dead throw/catch arms
+(including the CLI catch); route bash/CLI through the two surviving
+owners; keep the result type (or replace it with an equivalent
+`Promise.allSettled` that still inspects both writes independently) so
+the best-effort consumer does not start throwing. Verifier corrections:
+`rejectedMessage` warn strings are asserted verbatim by tests (must
+land together); keep the CLI's per-stage `finalizationFailureMessage`
+(headless-parity reporting surface).
 
 ### A4. Delegation shallow-file collapse (−75 LoC, −8 elements)
 
