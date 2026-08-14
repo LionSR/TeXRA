@@ -126,18 +126,37 @@ function insideRanges(index, ranges) {
 
 /**
  * True when the matched specifier is erased by TypeScript (`import type` /
- * `export type ... from` / a named import whose every binding is `type`).
+ * `export type ... from` / a named import whose every binding is `type Foo`).
  * Mixed `{ type X, y }` stays reachable because `y` is a value import.
+ * A binding named `type` (`import { type } from`) is a value import.
  */
-function isTypeOnlySpecifier(text, match) {
+function isTypeOnlyBinding(binding) {
+  return /^type\s+[A-Za-z_$]/.test(binding);
+}
+
+function isTypeOnlySpecifier(text, match, ranges) {
   const matched = match[0];
   if (/^(?:import\s*\(|require|import\.meta\.resolve)/.test(matched)) {
     return false;
   }
-  const before = text.slice(Math.max(0, match.index - 400), match.index);
-  const keyword = [...before.matchAll(/\b(?:import|export)\b/g)].at(-1);
-  if (keyword == null) return false;
-  const clause = before.slice(keyword.index);
+  // Bare side-effect `import 'x'` is always a value edge. Its match includes
+  // the `import` keyword, so looking backward would see the previous clause.
+  if (/^import\s*['"]/.test(matched)) {
+    return false;
+  }
+  if (!/^from\b/.test(matched)) {
+    return false;
+  }
+
+  const before = text.slice(0, match.index);
+  let keywordIndex = -1;
+  for (const keyword of before.matchAll(/\b(?:import|export)\b/g)) {
+    if (!insideRanges(keyword.index, ranges)) {
+      keywordIndex = keyword.index;
+    }
+  }
+  if (keywordIndex < 0) return false;
+  const clause = before.slice(keywordIndex);
   if (/^(?:import|export)\s+type\b/.test(clause)) return true;
   const named = clause.match(/^(?:import|export)\s*\{([^}]*)\}\s*$/);
   if (named == null) return false;
@@ -145,9 +164,7 @@ function isTypeOnlySpecifier(text, match) {
     .split(',')
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
-  return (
-    bindings.length > 0 && bindings.every((binding) => /^type\b/.test(binding))
-  );
+  return bindings.length > 0 && bindings.every(isTypeOnlyBinding);
 }
 
 /** Every module specifier in import/require/export-from positions. */
@@ -158,7 +175,7 @@ function importSpecifiers(text) {
     /(?:from\s*|import\s*(?:\(\s*)?|require(?:\.resolve)?\s*\(\s*|import\.meta\.resolve\s*\(\s*)['"]([^'"]+)['"]/g;
   for (const match of text.matchAll(pattern)) {
     if (insideRanges(match.index, ranges)) continue;
-    if (isTypeOnlySpecifier(text, match)) continue;
+    if (isTypeOnlySpecifier(text, match, ranges)) continue;
     specifiers.add(match[1]);
   }
   return specifiers;
@@ -198,6 +215,22 @@ function selfTestImportSpecifiers() {
     {
       text: "import './side-effect';\n",
       expected: ['./side-effect'],
+    },
+    {
+      text: "import type { X } from './typeOnly';\nimport './side-effect';\n",
+      expected: ['./side-effect'],
+    },
+    {
+      text: "import { type } from './value';\n",
+      expected: ['./value'],
+    },
+    {
+      text: "import { y /* import type */ } from './value';\n",
+      expected: ['./value'],
+    },
+    {
+      text: `${'import type {\n'}  ${'A,\n'.repeat(80)}} from './typeOnly';\n`,
+      expected: [],
     },
   ];
   for (const { text, expected } of cases) {
