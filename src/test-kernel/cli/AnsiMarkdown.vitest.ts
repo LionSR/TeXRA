@@ -152,6 +152,12 @@ describe('renderAnsiMarkdown', () => {
     expect(normalized).not.toContain('</strong>');
   });
 
+  it('normalizes unpaired HTML between same-line currency amounts', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('Cost $5 <strong>today, then $10'),
+    ).toBe('Cost $5 **today, then $10');
+  });
+
   it('normalizes HTML between same-line shell variables', () => {
     const normalized = normalizeKnownHtmlForCliMarkdown(
       '<code>$HOME</code> and <code>$PATH</code>',
@@ -169,7 +175,13 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('preserves complete inline math beside token characters', () => {
-    const examples = ['$0<p>1$2', '$0<p>1$-condition', '$a<b>c$d', '$x<i>y$z'];
+    const examples = [
+      '$0<p>1$2',
+      '$0<p>1$-condition',
+      '$a<b>c$d',
+      '$x<i>y$z',
+      '$a<br>c$',
+    ];
 
     for (const example of examples) {
       expect(normalizeKnownHtmlForCliMarkdown(example)).toBe(example);
@@ -177,12 +189,12 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('keeps every multiline math line inside an HTML blockquote', () => {
-    const plain = renderPlain('<blockquote>\\[\na<b\nb>c\n\\]</blockquote>', {
+    const plain = renderPlain('<blockquote>\\[\na<b\n>0\n\\]</blockquote>', {
       colorEnabled: false,
       width: 80,
     });
 
-    expect(plain).toContain('│ \\[\n│ a<b\n│ b>c\n│ \\]');
+    expect(plain).toContain('│ \\[\n│ a<b\n│ >0\n│ \\]');
     expect(plain).not.toContain('\n> a<b');
   });
 

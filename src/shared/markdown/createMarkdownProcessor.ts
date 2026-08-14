@@ -121,7 +121,7 @@ const MATH_SPAN_PATTERNS: readonly RegExp[] = [
   /\$\$[\s\S]+?\$\$/g, // $$ … $$  (display, may span lines)
   /\\\[[\s\S]+?\\\]/g, // \[ … \]  (display)
   /\\\([\s\S]+?\\\)/g, // \( … \)  (inline)
-  /(?<!\\)\$(?!\$)[^\n$]+?(?<!\\)\$/g, // $ … $  (inline, single line, both $ unescaped)
+  /(?<![\\$])\$(?!\$)[^\n$]+?(?<![\\$])\$(?!\$)/g, // $ … $  (inline, single line, neither delimiter belongs to $$)
 ];
 
 // Replace every match of `patterns` with an indexed `@@<tag>-N@@` placeholder,
@@ -149,15 +149,26 @@ function protectByPatterns(
       const firstLineStart = source.lastIndexOf('\n', offset - 1) + 1;
       const firstLinePrefix = source.slice(firstLineStart, offset);
       const remainingLines = match.split('\n').slice(1);
+      const quoteDepth = [...firstLinePrefix].filter(
+        (char) => char === '>',
+      ).length;
+      const requiredPrefix = new RegExp(
+        `^(?:[ \\t]*>[ \\t]?){${quoteDepth}}`,
+        'u',
+      );
+      const remainingPrefixes = remainingLines.map(
+        (line) => requiredPrefix.exec(line)?.[0],
+      );
       const isQuotedSpan =
+        quoteDepth > 0 &&
         /^(?:[ \t]*>[ \t]?)+$/u.test(firstLinePrefix) &&
-        remainingLines.every((line) => /^(?:[ \t]*>[ \t]?)+/u.test(line));
+        remainingPrefixes.every((prefix) => prefix !== undefined);
       if (preserveBlockquotePrefixes && isQuotedSpan) {
         return match
           .split('\n')
           .map((line, lineIndex) => {
             const prefix =
-              lineIndex === 0 ? '' : (/^\s*(?:>\s*)+/u.exec(line)?.[0] ?? '');
+              lineIndex === 0 ? '' : remainingPrefixes[lineIndex - 1];
             const index = items.push(line.slice(prefix.length)) - 1;
             return `${prefix}@@${tag}-${index}@@`;
           })
