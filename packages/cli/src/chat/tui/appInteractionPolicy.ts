@@ -257,9 +257,10 @@ export function foregroundMaxRowsForKind({
 }
 
 // Group the flat FIFO summaries per row, folding stream-less (session-wide)
-// approvals onto the root/main row. Grouping from the flat list keeps each
-// row's first shown kind the first-to-present even when the root's own and
-// session-wide items interleave in the global queue.
+// approvals onto the root of the visible surface: normally the main row, or
+// the workflow-dashboard heading while that surface replaces the session
+// list. Grouping from the flat list keeps each row's first shown kind the
+// first-to-present even when bound and stream-less items interleave globally.
 export function groupPendingApprovalsByRow(
   summaries: readonly PendingApprovalSummary[],
   rootStreamId: StreamTabId | undefined,
@@ -277,6 +278,14 @@ export function groupPendingApprovalsByRow(
     (entry) => entry.key,
     (entry) => entry.summary.kind,
   );
+}
+
+/** Row key that owns stream-less approvals on the currently visible surface. */
+export function visibleApprovalRootStreamId(
+  sessionRootStreamId: StreamTabId | undefined,
+  childListRootStreamId: StreamTabId | undefined,
+): StreamTabId | undefined {
+  return childListRootStreamId ?? sessionRootStreamId;
 }
 
 // A workflow-script grandchild `agent()` call is the only interactively

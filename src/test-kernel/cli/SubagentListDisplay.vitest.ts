@@ -4,12 +4,13 @@ import {
   CHILD_STATUS_MARKER,
   childRowMetadataText,
   childStatusColor,
-  pendingApprovalRowSuffix,
+  pendingApprovalRowDisplay,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
 import {
   ConversationPane,
   workflowRunStatusSummary,
 } from '@cli/chat/tui/panes/ConversationPane';
+import { groupPendingApprovalsByRow } from '@cli/chat/tui/appInteractionPolicy';
 import {
   SubagentList,
   type SubagentListProps,
@@ -20,6 +21,7 @@ import {
 } from '@cli/chat/tui/state/workflowDashboardModel';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import {
+  childStreamListValue,
   workflowPhaseListValue,
   workflowTaskListValue,
 } from '@cli/chat/tui/state/childListSelection';
@@ -155,15 +157,24 @@ describe('CLI child list display model', () => {
     const narrow = workflowDashboardModel(root, 99);
 
     expect(
-      workflowDashboardPanelItemCount(wide, workflowPhaseListValue('phase-a')),
+      workflowDashboardPanelItemCount(
+        wide,
+        workflowPhaseListValue('phase-a'),
+        false,
+      ),
     ).toBe(3);
     expect(
-      workflowDashboardPanelItemCount(wide, workflowTaskListValue('task-b-1')),
+      workflowDashboardPanelItemCount(
+        wide,
+        workflowTaskListValue('task-b-1'),
+        false,
+      ),
     ).toBe(6);
     expect(
       workflowDashboardPanelItemCount(
         narrow,
         workflowPhaseListValue('phase-a'),
+        false,
       ),
     ).toBe(10);
     // No workflow root, no reserved rows.
@@ -171,8 +182,16 @@ describe('CLI child list display model', () => {
       workflowDashboardPanelItemCount(
         undefined,
         workflowPhaseListValue('phase-a'),
+        false,
       ),
     ).toBe(0);
+
+    const empty = workflowDashboardModel(
+      workflowAgentSlice('empty-dashboard', { entries: [] }),
+      100,
+    );
+    expect(workflowDashboardPanelItemCount(empty, undefined, false)).toBe(0);
+    expect(workflowDashboardPanelItemCount(empty, undefined, true)).toBe(1);
   });
 
   it('omits static input and context counts from the live workflow band', () => {
@@ -618,13 +637,19 @@ describe('CLI child list display model', () => {
   });
 
   it('summarizes what a row is waiting on from its pending approval kinds', () => {
-    expect(pendingApprovalRowSuffix(undefined)).toBeUndefined();
-    expect(pendingApprovalRowSuffix([])).toBeUndefined();
-    expect(pendingApprovalRowSuffix(['bash'])).toBe('bash');
-    expect(pendingApprovalRowSuffix(['externalInquiry'])).toBe('inquiry');
-    expect(pendingApprovalRowSuffix(['toolEdit', 'bash', 'userQuestion'])).toBe(
-      'edit +2',
-    );
+    expect(pendingApprovalRowDisplay(undefined)).toBeUndefined();
+    expect(pendingApprovalRowDisplay([])).toBeUndefined();
+    expect(pendingApprovalRowDisplay(['bash'])).toEqual({
+      label: 'bash',
+      overflow: undefined,
+    });
+    expect(pendingApprovalRowDisplay(['externalInquiry'])).toEqual({
+      label: 'inquiry',
+      overflow: undefined,
+    });
+    expect(
+      pendingApprovalRowDisplay(['toolEdit', 'bash', 'userQuestion']),
+    ).toEqual({ label: 'edit', overflow: '+2' });
   });
 
   it('moves selection through every session and wraps at the ends', () => {
@@ -1304,6 +1329,148 @@ describe('CLI child list display model', () => {
     expect(
       output.split('\n').every((line) => textDisplayWidth(line) <= 36),
     ).toBe(true);
+  });
+
+  it('keeps a scoped-root approval visible when its label truncates', async () => {
+    const run = 'approval-run-with-a-deliberately-long-id' as StreamTabId;
+    const rootSlice = workflowAgentSlice(run, {
+      agent: 'A scoped conversation with a deliberately long label',
+      status: STREAM_PHASE.RUNNING,
+    });
+    const output = await renderSubagentList(
+      {
+        listRootStreamId: run,
+        maxRows: 3,
+        pendingApprovals: new Map([[run, ['externalInquiry', 'proposal']]]),
+        sessions: [
+          {
+            id: run,
+            label: 'A scoped conversation with a deliberately long label',
+            active: true,
+            slice: rootSlice,
+          },
+        ],
+      },
+      18,
+      { until: (frame) => frame.includes('inquiry') },
+    );
+
+    expect(output).toContain(' · inquiry');
+    expect(output).not.toContain('+1');
+    expect(output).not.toContain('deliberately');
+    expect(
+      output.split('\n').every((line) => textDisplayWidth(line) <= 18),
+    ).toBe(true);
+  });
+
+  it('keeps the approval kind when the hidden-session count also truncates', async () => {
+    const run = 'approval-root' as StreamTabId;
+    const childOne = 'approval-child-one' as StreamTabId;
+    const childTwo = 'approval-child-two' as StreamTabId;
+    const output = await renderSubagentList(
+      {
+        keyboardActive: true,
+        listRootStreamId: run,
+        maxRows: 2,
+        pendingApprovals: new Map([[run, ['proposal', 'proposal']]]),
+        selectedValue: childStreamListValue(run),
+        sessions: [
+          {
+            id: run,
+            label: 'A deliberately long scoped root',
+            active: true,
+            slice: workflowAgentSlice(run, {
+              status: STREAM_PHASE.RUNNING,
+            }),
+          },
+          session(childOne),
+          session(childTwo),
+        ],
+      },
+      18,
+      { until: (frame) => frame.includes('proposal') },
+    );
+
+    expect(output).toContain(' · proposal');
+    expect(output).not.toContain('sessions');
+    expect(
+      output.split('\n').every((line) => textDisplayWidth(line) <= 18),
+    ).toBe(true);
+  });
+
+  it('keeps session-wide approvals visible in a workflow dashboard', async () => {
+    const sessionRoot = 'session-root' as StreamTabId;
+    const run = 'approval-run' as StreamTabId;
+    const child = 'approval-child' as StreamTabId;
+    const rootSlice = workflowAgentSlice(run, {
+      agent: 'A workflow with a deliberately long name',
+      status: STREAM_PHASE.RUNNING,
+      entries: [
+        workflowTaskEntry('task', 'Running: Check', {
+          id: 'task',
+          label: 'Check',
+          status: 'running',
+          childStreamId: child,
+        }),
+        workflowTaskEntry('failed-task', 'Failed: Refute', {
+          id: 'failed-task',
+          label: 'Refute',
+          status: 'failed',
+          error: 'Counterexample found.',
+        }),
+      ],
+    });
+    const output = await renderSubagentList(
+      {
+        dashboard: workflowDashboardModel(rootSlice, 18),
+        maxRows: 6,
+        pendingApprovals: groupPendingApprovalsByRow(
+          [
+            { streamKey: '', kind: 'externalInquiry' },
+            { streamKey: sessionRoot, kind: 'planApproval' },
+            { streamKey: child, kind: 'toolEdit' },
+          ],
+          run,
+        ),
+        selectedValue: workflowTaskListValue('task'),
+        streams: new Map([
+          [run, rootSlice],
+          [child, workflowAgentSlice(child, {})],
+        ]),
+      },
+      18,
+    );
+
+    expect(output).toContain(' · inquiry');
+    expect(output).toContain('edit');
+    expect(output).not.toContain('plan');
+    expect(
+      output.split('\n').every((line) => textDisplayWidth(line) <= 18),
+    ).toBe(true);
+  });
+
+  it('shows a session approval before workflow dashboard rows exist', async () => {
+    const run = 'approval-run' as StreamTabId;
+    const rootSlice = workflowAgentSlice(run, {
+      agent: 'Starting workflow',
+      identity: {
+        kind: 'multiAgentWorkflow',
+        workflowName: 'starting-workflow',
+      },
+      status: STREAM_PHASE.RUNNING,
+      entries: [],
+    });
+    const output = await renderSubagentList(
+      {
+        dashboard: workflowDashboardModel(rootSlice, 40),
+        maxRows: 3,
+        pendingApprovals: new Map([[run, ['externalInquiry']]]),
+        streams: new Map([[run, rootSlice]]),
+      },
+      40,
+    );
+
+    expect(output).toContain('Starting workflow · 0/0 done · inquiry');
   });
 
   // The right-aligned metadata column is the one row element `SubagentList`

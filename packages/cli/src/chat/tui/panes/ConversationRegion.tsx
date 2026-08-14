@@ -62,6 +62,7 @@ interface ConversationRegionSnapshot {
   readonly selectedChildStreamId: StreamTabId | undefined;
   /** Dashboard rows for a workflow-script list root, derived once by `App`. */
   readonly workflowDashboard: WorkflowDashboardModel | undefined;
+  readonly workflowDashboardRootHasApproval: boolean;
   readonly childListFocused: boolean;
   readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
@@ -181,12 +182,15 @@ export function ConversationRegion({
   const workflowDashboardItemCount = workflowDashboardPanelItemCount(
     snapshot.workflowDashboard,
     snapshot.selectedChildValue,
+    snapshot.workflowDashboardRootHasApproval,
   );
   const sessionPanelItemCount =
     workflowDashboardItemCount > 0
       ? workflowDashboardItemCount
       : snapshot.sessionViews.length;
-  const minimumSessionPanelRows = workflowDashboardItemCount > 0 ? 3 : 2;
+  const approvalOnlyDashboard = workflowDashboardItemCount === 1;
+  const minimumSessionPanelRows =
+    workflowDashboardItemCount > 0 && !approvalOnlyDashboard ? 3 : 2;
   const {
     bottomPanelRows: bottomPanelBudget,
     conversationRows,

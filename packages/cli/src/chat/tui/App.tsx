@@ -39,6 +39,7 @@ import {
   shouldDeferEscapeInterruptForMetaChord,
   triggerAppCtrlC,
   triggerEscapeInterrupt,
+  visibleApprovalRootStreamId,
   type EscapeInterruptState,
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
@@ -113,12 +114,18 @@ interface InputEventEmitterLike {
 }
 
 // Jump-to-waiting: surface the newly focused stream's pending approval right
-// away instead of leaving it queued behind other streams' items. The root
-// row also owns session-wide (stream-less) approvals.
+// away instead of leaving it queued behind other streams' items. The visible
+// list-root row also owns session-wide (stream-less) approvals.
 function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
+  const visibleListRootStreamId = resolveChildListTarget({
+    activeStreamId: streamId,
+    childStreamEntries: childStreamEntriesSignal.get(),
+    parentStream: parentStreamSignal.get(),
+    streams: streamsSignal.get(),
+  }).streamId;
   focusStream(streamId);
   promoteApprovalsForStream(streamId, {
-    includeSessionWide: streamId === rootStreamIdSignal.get(),
+    includeSessionWide: streamId === visibleListRootStreamId,
   });
 }
 
@@ -275,10 +282,6 @@ export function App(props: AppProps): React.JSX.Element {
       view.slice !== undefined &&
       isActivePhase(view.slice.status),
   ).length;
-  const pendingApprovalsForRows = useMemo(
-    () => groupPendingApprovalsByRow(pendingSummaries, rootStreamId),
-    [pendingSummaries, rootStreamId],
-  );
   const activeSubagentExecutionIds = useMemo(() => {
     const executionIds = new Map<StreamTabId, string>();
     const parentIds = new Set(
@@ -311,13 +314,26 @@ export function App(props: AppProps): React.JSX.Element {
         : undefined,
     [columns, workflowDashboardRoot],
   );
+  const pendingApprovalsForRows = useMemo(
+    () =>
+      groupPendingApprovalsByRow(
+        pendingSummaries,
+        visibleApprovalRootStreamId(rootStreamId, childListTarget.streamId),
+      ),
+    [childListTarget.streamId, pendingSummaries, rootStreamId],
+  );
   const childListValues = useMemo<readonly ChildListValue[]>(
     () =>
       workflowDashboard?.listValues ??
       sessionViews.map((session) => childStreamListValue(session.id)),
     [sessionViews, workflowDashboard],
   );
-  const childListAvailable = childListValues.length > 0;
+  const workflowDashboardRootHasApproval =
+    workflowDashboard !== undefined &&
+    (pendingApprovalsForRows.get(workflowDashboard.root.streamId)?.length ??
+      0) > 0;
+  const childListAvailable =
+    childListValues.length > 0 || workflowDashboardRootHasApproval;
   const selectedWorkflowTask =
     selectedChildValue && workflowDashboard
       ? workflowDashboard.taskByValue.get(selectedChildValue)
@@ -390,10 +406,22 @@ export function App(props: AppProps): React.JSX.Element {
   }, []);
   const focusChildList = useCallback(() => {
     const firstChildValue = childListValues.at(0);
-    if (firstChildValue) {
+    if (firstChildValue || workflowDashboardRootHasApproval) {
+      if (
+        workflowDashboardRootHasApproval &&
+        childListTarget.streamId !== undefined
+      ) {
+        // The dashboard heading is not selectable, so focusing the list also
+        // focuses its root and presents the approval advertised there.
+        focusStreamAndPromoteApprovals(childListTarget.streamId);
+      }
       dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
     }
-  }, [childListValues]);
+  }, [
+    childListTarget.streamId,
+    childListValues,
+    workflowDashboardRootHasApproval,
+  ]);
   const focusSession = useCallback(
     (streamId: StreamTabId) => {
       if (isWorkflowTaskListValue(selectedChildValue)) {
@@ -794,6 +822,7 @@ export function App(props: AppProps): React.JSX.Element {
           selectedChildValue,
           selectedChildStreamId,
           workflowDashboard,
+          workflowDashboardRootHasApproval,
           streams,
           subagentExecutionLabels,
           activeSubagentExecutionIds,
