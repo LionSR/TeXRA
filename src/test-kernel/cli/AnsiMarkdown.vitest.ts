@@ -158,6 +158,7 @@ describe('renderAnsiMarkdown', () => {
       'Cost US$5 <strong>today</strong>, then US$10',
       'Cost $.99 <strong>today</strong>, then $.50',
       'Cost $-5 <strong>today</strong>, then $-10',
+      'Cost A$5 <strong>today</strong>, then A$10',
     ];
 
     for (const example of examples) {
@@ -177,13 +178,18 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('normalizes HTML between same-line shell variables', () => {
-    const normalized = normalizeKnownHtmlForCliMarkdown(
-      '<code>$HOME</code> and <code>$PATH</code>',
-    );
+    const examples = [
+      ['<code>$HOME</code> and <code>$PATH</code>', '`$HOME` and `$PATH`'],
+      ['`$HOME` <strong>or</strong> `$PATH`', '`$HOME` **or** `$PATH`'],
+      ['$HOME <strong>or</strong> $PATH', '$HOME **or** $PATH'],
+    ] as const;
 
-    expect(normalized).toBe('`$HOME` and `$PATH`');
-    expect(normalized).not.toContain('<code>');
-    expect(normalized).not.toContain('</code>');
+    for (const [source, expected] of examples) {
+      const normalized = normalizeKnownHtmlForCliMarkdown(source);
+      expect(normalized).toBe(expected);
+      expect(normalized).not.toContain('<strong>');
+      expect(normalized).not.toContain('</strong>');
+    }
   });
 
   it('normalizes HTML between same-line shell PID expansions', () => {
@@ -216,6 +222,7 @@ describe('renderAnsiMarkdown', () => {
       '$a<strong>b($c',
       '$0<p>1$$',
       '$a <b> c $b',
+      '$A <b> c $B',
       '$$0 <p> 1 $$10',
     ];
 

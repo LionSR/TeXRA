@@ -5,7 +5,7 @@ import { clamp } from '@utils/core';
 const KNOWN_HTML_TAG_RE =
   /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/i;
 const CURRENCY_AMOUNT_START_RE = /^[+-]?(?:\d|\.\d)/u;
-const CURRENCY_PAIR_END_RE = /(?:[\s>]|[\s>][([{"'‘“+–—-]|[\s>][A-Z]{2,3})\$$/u;
+const CURRENCY_PAIR_END_RE = /(?:[\s>]|[\s>][([{"'‘“+–—-]|[\s>][A-Z]{1,3})\$$/u;
 const SHELL_PID_CODE_PAIR_RE =
   /^\$\$?<\/code>[\s\S]*<code(?:\s[^<>]*)?>\$\$?$/iu;
 const SHELL_PARAMETER_NAME = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*|[0-9?@*#!-])`;
@@ -13,6 +13,15 @@ const SHELL_PARAMETER = String.raw`(?:${SHELL_PARAMETER_NAME}|\{${SHELL_PARAMETE
 const SHELL_PARAMETER_CODE_PAIR_RE = new RegExp(
   `^\\$${SHELL_PARAMETER}<\\/code>[\\s\\S]*?<code(?:\\s[^<>]*)?>\\$${SHELL_PARAMETER}<\\/code>`,
   'iu',
+);
+const SHELL_PARAMETER_MARKDOWN_CODE_PAIR_RE = new RegExp(
+  `^\\$${SHELL_PARAMETER}\`[\\s\\S]*?\`\\$${SHELL_PARAMETER}\``,
+  'iu',
+);
+const SHELL_UNWRAPPED_PARAMETER = String.raw`(?:[A-Z_][A-Z0-9_]+|\{${SHELL_PARAMETER_NAME}\}|[_?@*#!-])`;
+const SHELL_UNWRAPPED_PARAMETER_PAIR_RE = new RegExp(
+  `^\\$${SHELL_UNWRAPPED_PARAMETER}(?=[\\s<.,;:!?()[\\]{}'"’”]|$)[\\s\\S]*?\\$${SHELL_UNWRAPPED_PARAMETER}(?=[\\s<.,;:!?()[\\]{}'"’”]|$)`,
+  'u',
 );
 
 // Formatting tags may carry ordinary name/value attributes or standard HTML
@@ -74,9 +83,17 @@ function shouldProtectMathSpanDuringHtmlNormalization(
   const isShellParameterPair = SHELL_PARAMETER_CODE_PAIR_RE.test(
     source.slice(offset),
   );
+  const isMarkdownCodeShellParameterPair =
+    source.at(offset - 1) === '`' &&
+    SHELL_PARAMETER_MARKDOWN_CODE_PAIR_RE.test(source.slice(offset));
+  const isUnwrappedShellParameterPair = SHELL_UNWRAPPED_PARAMETER_PAIR_RE.test(
+    source.slice(offset),
+  );
   return !(
     isCurrencyPair ||
     isShellParameterPair ||
+    isMarkdownCodeShellParameterPair ||
+    isUnwrappedShellParameterPair ||
     SHELL_PID_CODE_PAIR_RE.test(span)
   );
 }
