@@ -36,11 +36,13 @@ function project(
   childStreamsByParent: Map<string, StreamTabInfo[]>,
   streamStates: Map<string, StreamState> = new Map(),
   userOverrides: Map<string, StreamTreeExpansionOverride> = new Map(),
+  pendingApprovalStreamIds: ReadonlySet<string> = new Set(),
 ): StreamTreeProjection {
   return computeStreamTreeProjection({
     streamStates,
     childStreamsByParent,
     userOverrides,
+    pendingApprovalStreamIds,
   });
 }
 
@@ -72,8 +74,20 @@ describe('progress stream tree policy', () => {
     const projection = project(childStreamsByParent, streamStates);
 
     assert.equal(projection.expandedParents.has('root'), false);
-    assert.equal(projection.branchActivityByStream.get('child-a'), 'finished');
-    assert.equal(projection.branchActivityByStream.get('child-b'), 'finished');
+    assert.equal(
+      getStreamBranchActivity(
+        { streamStates, childStreamsByParent },
+        'child-a',
+      ),
+      'finished',
+    );
+    assert.equal(
+      getStreamBranchActivity(
+        { streamStates, childStreamsByParent },
+        'child-b',
+      ),
+      'finished',
+    );
   });
 
   it('keeps ancestors collapsed when a descendant is active', () => {
@@ -90,8 +104,17 @@ describe('progress stream tree policy', () => {
 
     assert.equal(projection.expandedParents.has('root'), false);
     assert.equal(projection.expandedParents.has('child'), false);
-    assert.equal(projection.branchActivityByStream.get('child'), 'active');
-    assert.equal(projection.branchActivityByStream.get('grandchild'), 'active');
+    assert.equal(
+      getStreamBranchActivity({ streamStates, childStreamsByParent }, 'child'),
+      'active',
+    );
+    assert.equal(
+      getStreamBranchActivity(
+        { streamStates, childStreamsByParent },
+        'grandchild',
+      ),
+      'active',
+    );
   });
 
   it('honors user overrides and drops overrides for missing parents', () => {
@@ -126,6 +149,26 @@ describe('progress stream tree policy', () => {
     );
 
     assert.equal(projection.expandedParents.has('root'), true);
+  });
+
+  it('expands and badges ancestors when a descendant needs approval', () => {
+    const childStreamsByParent = new Map([
+      ['root', [stream('child', 'root')]],
+      ['child', [stream('grandchild', 'child')]],
+    ]);
+
+    const projection = project(
+      childStreamsByParent,
+      new Map(),
+      new Map([['root', 'collapsed']]),
+      new Set(['grandchild']),
+    );
+
+    assert.equal(projection.expandedParents.has('root'), true);
+    assert.equal(projection.expandedParents.has('child'), true);
+    assert.equal(projection.approvalBadgeStreamIds.has('root'), true);
+    assert.equal(projection.approvalBadgeStreamIds.has('child'), true);
+    assert.equal(projection.approvalBadgeStreamIds.has('grandchild'), true);
   });
 
   it('guards cycles while preserving the stream own activity', () => {

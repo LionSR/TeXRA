@@ -16,41 +16,71 @@ interface StreamTreeInputs {
 
 export interface StreamTreeProjection {
   readonly expandedParents: Set<string>;
-  readonly branchActivityByStream: Map<StreamTabId, StreamBranchActivity>;
+  readonly approvalBadgeStreamIds: Set<string>;
   readonly userOverrides: Map<string, StreamTreeExpansionOverride>;
 }
 
 export function computeStreamTreeProjection(
   inputs: StreamTreeInputs & {
     readonly userOverrides: ReadonlyMap<string, StreamTreeExpansionOverride>;
+    readonly pendingApprovalStreamIds?: ReadonlySet<string>;
   },
 ): StreamTreeProjection {
-  const branchActivityByStream = new Map<StreamTabId, StreamBranchActivity>();
   const userOverrides = pruneStreamTreeUserOverrides(
     inputs.userOverrides,
     inputs.childStreamsByParent,
   );
+  const approvalSignals = collectPendingApprovalSignals(
+    inputs.childStreamsByParent,
+    inputs.pendingApprovalStreamIds ?? new Set(),
+  );
   const expandedParents = new Set<string>();
 
-  for (const [parentId, children] of inputs.childStreamsByParent) {
-    for (const child of children) {
-      getStreamBranchActivity(
-        inputs,
-        child.name,
-        new Set([parentId]),
-        branchActivityByStream,
-      );
-    }
-    if (userOverrides.get(parentId) === 'expanded') {
+  for (const parentId of inputs.childStreamsByParent.keys()) {
+    if (
+      userOverrides.get(parentId) === 'expanded' ||
+      approvalSignals.expandParents.has(parentId)
+    ) {
       expandedParents.add(parentId);
     }
   }
 
   return {
     expandedParents,
-    branchActivityByStream,
+    approvalBadgeStreamIds: approvalSignals.badgeStreamIds,
     userOverrides,
   };
+}
+
+/**
+ * A pending approval on a hidden descendant is still blocking. Walk from each
+ * pending stream up to the root so ancestors expand and show the same badge
+ * the child row would have shown.
+ */
+function collectPendingApprovalSignals(
+  childStreamsByParent: ReadonlyMap<string, readonly StreamTabInfo[]>,
+  pendingApprovalStreamIds: ReadonlySet<string>,
+): { expandParents: Set<string>; badgeStreamIds: Set<string> } {
+  const parentByChild = new Map<string, string>();
+  for (const [parentId, children] of childStreamsByParent) {
+    for (const child of children) {
+      parentByChild.set(child.name, parentId);
+    }
+  }
+
+  const expandParents = new Set<string>();
+  const badgeStreamIds = new Set(pendingApprovalStreamIds);
+  for (const pendingId of pendingApprovalStreamIds) {
+    const seen = new Set<string>();
+    let current = parentByChild.get(pendingId);
+    while (current !== undefined && !seen.has(current)) {
+      seen.add(current);
+      expandParents.add(current);
+      badgeStreamIds.add(current);
+      current = parentByChild.get(current);
+    }
+  }
+  return { expandParents, badgeStreamIds };
 }
 
 function pruneStreamTreeUserOverrides(
