@@ -6,7 +6,6 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { TokenCountOptions } from '@agent/types/ModelHandlerContracts';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { isKimiCodeExclusiveModel } from '@model/kimiCodeSubscriptionRouting';
-import { hasManagedDirectRoute } from '@model/openRouterRouting';
 import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import { resolveMoonshotRequestParameters } from '../support/moonshotRequestParameters';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
@@ -160,7 +159,7 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
     // may expose only the configured chat endpoint, so they must opt in via
     // capabilities before this handler calls the auxiliary tokenizer route.
     return (
-      !hasManagedDirectRoute(this.config) ||
+      !isKimiCodeExclusiveModel(this.config) ||
       this.capabilities.supportsTokenCounting
     );
   }
