@@ -6,11 +6,11 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Side-effect imports - register WA icon and spinner components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { TODO_STATUS, STATUS_ICONS, type TodoItem } from '@shared/schemas';
+import { stopSpinnerMotion } from '@shared/wa/spinner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { ELEMENT_IDS } from '../constants';
@@ -129,7 +129,10 @@ export class TodoList extends CollapsiblePanel {
       >
         ${
           isInProgress
-            ? html`<wa-spinner class="todo-item__icon"></wa-spinner>`
+            ? html`<wa-spinner
+                class="todo-item__icon"
+                ${stopSpinnerMotion()}
+              ></wa-spinner>`
             : waIcon(icon, { className: 'todo-item__icon' })
         }
         <span class="todo-item__content">${content}</span>

@@ -21,6 +21,7 @@ import { hljs } from '@shared/highlighting/hljs';
 
 // Local imports - shared utilities
 import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { stopSpinnerMotion } from '@shared/wa/spinner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
 import { DIFF_DELETE, DIFF_INSERT, diffTextByChar } from '@utils/text/diff';
@@ -159,7 +160,7 @@ function renderIconOrSpinner(
 ): TemplateResult {
   if (iconName === SPINNER_ICON_NAME) {
     // prettier-ignore
-    return html`<wa-spinner class=${ifDefined(className)}></wa-spinner>`;
+    return html`<wa-spinner class=${ifDefined(className)} ${stopSpinnerMotion()}></wa-spinner>`;
   }
   return waIcon(iconName, { className });
 }

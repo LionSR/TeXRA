@@ -55,6 +55,16 @@ describe('compaction-activity render branches', () => {
     expect(spinner?.tagName).toBe('WA-SPINNER');
     // The row announces via role="status"; hide the spinner from AT.
     expect(spinner?.getAttribute('aria-hidden')).toBe('true');
+
+    // The dash stroke lives on .indicator inside the spinner shadow root.
+    const litSpinner = spinner as
+      (Element & { updateComplete?: Promise<unknown> }) | null | undefined;
+    await litSpinner?.updateComplete;
+    const reducedMotion = spinner?.shadowRoot?.querySelector(
+      'style[data-texra-reduced-motion]',
+    );
+    expect(reducedMotion?.textContent).toContain('.indicator');
+    expect(reducedMotion?.textContent).toMatch(/animation:\s*none/);
   });
 
   it('keeps the reduced-motion override on the shared spinner', async () => {
