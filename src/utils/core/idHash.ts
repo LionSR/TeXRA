@@ -13,7 +13,7 @@ type ExecutionIdentity = Readonly<Record<string, string | number>>;
  * Algorithms used by truncated hex IDs. `sha1` is compile-log only — drop
  * that member with the 2026-11-09 legacy compile-log spellings.
  */
-export type TruncatedHexAlgorithm = 'sha256' | 'sha1';
+type TruncatedHexAlgorithm = 'sha256' | 'sha1';
 
 /** Stable hex prefix of a digest. Default algorithm is sha256. */
 export function truncatedHexId(
