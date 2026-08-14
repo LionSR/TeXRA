@@ -188,6 +188,10 @@ describe('renderAnsiMarkdown', () => {
     }
   });
 
+  it('preserves adjacent inline math spans independently of markdown', () => {
+    expect(renderPlain('$*a*$$*b*$')).toContain('$*a*$$*b*$');
+  });
+
   it('keeps every multiline math line inside an HTML blockquote', () => {
     const plain = renderPlain('<blockquote>\\[\na<b\n>0\n\\]</blockquote>', {
       colorEnabled: false,
