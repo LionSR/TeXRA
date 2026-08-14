@@ -6,6 +6,7 @@ import {
   FENCED_LATEX_BLOCK_PATTERN_INLINE,
   FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
 } from './constants';
+import { createPatterns } from './helpers';
 
 const EQUATION_ENVIRONMENT_PATTERN =
   '(?:align\\*?|aligned\\*?|alignat\\*?|flalign\\*?|gather\\*?|multline\\*?|equation\\*?|eqnarray\\*?|split\\*?)';
@@ -399,7 +400,7 @@ export const EQUATION_STYLE_REPLACEMENTS: RegexReplacementCategory = {
     // '\\\\(textbf|textit|emph|underline)\\{([^{}]*)\\s+\\}': '\\\\$1{$2}', // might not working now
 
     // Remove spaces inside textbf/textit/emph/underline/overbrace/underbrace/label
-    ...Object.fromEntries(
+    ...createPatterns(
       [
         'textbf',
         'textit',
@@ -408,7 +409,8 @@ export const EQUATION_STYLE_REPLACEMENTS: RegexReplacementCategory = {
         'overbrace',
         'underbrace',
         'label',
-      ].map((cmd) => [`\\\\${cmd}\\{\\s+([^}]*)\\s+\\}`, `\\${cmd}{$1}`]),
+      ],
+      (cmd) => [[`\\\\${cmd}\\{\\s+([^}]*)\\s+\\}`, `\\${cmd}{$1}`]],
     ),
     // Remove spaces inside caption (only horizontal whitespace, preserving newlines for multi-line captions)
     '\\\\caption\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}':
