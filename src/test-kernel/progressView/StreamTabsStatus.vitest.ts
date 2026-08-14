@@ -50,6 +50,11 @@ function styleText(element: Element): string {
     .join('\n');
 }
 
+/** Let the nested <stream-tab> finish its own first render. */
+function settleChildRender(): Promise<unknown> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 async function mountTabs(
   streams: StreamTabInfo[],
   statuses: readonly StreamLifecycleStatus[],
@@ -66,7 +71,7 @@ async function mountTabs(
     streamStates,
     activeStreamId,
   });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await settleChildRender();
   return tabs;
 }
 
@@ -166,7 +171,7 @@ describe('stream-tab lifecycle distinction', () => {
         ],
       ]),
     });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settleChildRender();
     const row = tabs.shadowRoot?.querySelector('stream-tab');
 
     expect(
@@ -216,7 +221,7 @@ describe('stream-tab lifecycle distinction', () => {
       ]),
       compact: true,
     });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settleChildRender();
     const rows = [...(tabs.shadowRoot?.querySelectorAll('stream-tab') ?? [])];
 
     expect(

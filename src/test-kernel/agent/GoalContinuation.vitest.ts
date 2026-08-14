@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
-import { platform, type Platform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import type { StreamTabId } from '@shared/schemas';
 import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas/goal';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
@@ -14,9 +14,8 @@ const STREAM_ID = 'stream:goal-cont' as StreamTabId;
 
 async function installPlatformWithConfig(
   config: Record<string, unknown>,
-): Promise<Platform> {
+): Promise<void> {
   await installFakePlatform({ config });
-  return platform();
 }
 
 describe('isGoalEnabled', () => {

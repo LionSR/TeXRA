@@ -15,9 +15,7 @@ const EXPECTED_DEFAULTS = EXTERNAL_TOOL_DEFS.filter(
 ).map((def) => def.id);
 
 describe('seedDisabledToolDefaults', () => {
-  afterEach(async () => {
-    await installPlatform();
-  });
+  afterEach(() => installPlatform());
 
   it('seeds every toggleable tool as disabled on a genuinely fresh install', async () => {
     await installPlatform({ globalState: {} });

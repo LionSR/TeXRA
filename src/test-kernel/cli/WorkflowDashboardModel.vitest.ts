@@ -71,6 +71,17 @@ function workflowRoot(
   };
 }
 
+/** Mark every task and phase of a slice as belonging to a prior attempt. */
+function markPriorAttempt(entries: StreamSlice['entries']) {
+  return entries.map((entry) => {
+    if (entry.role === 'workflowTask') {
+      return { ...entry, task: { ...entry.task, attemptId: 'prior' } };
+    }
+    if (entry.role === 'phase') return { ...entry, attemptId: 'prior' };
+    return entry;
+  });
+}
+
 /** Two phases, two tasks each, in the order the transcript emitted them. */
 const TWO_PHASE_ROOT = workflowRoot(
   ['Map', 'Reduce'],
@@ -259,13 +270,7 @@ describe('workflow dashboard model', () => {
       ['Verify'],
       [{ id: 'verification', phase: 'Verify' }],
     );
-    const priorEntries = prior.entries.map((entry) => {
-      if (entry.role === 'workflowTask') {
-        return { ...entry, task: { ...entry.task, attemptId: 'prior' } };
-      }
-      if (entry.role === 'phase') return { ...entry, attemptId: 'prior' };
-      return entry;
-    });
+    const priorEntries = markPriorAttempt(prior.entries);
     const currentEntries = current.entries.map((entry) => {
       if (entry.role === 'workflowTask') {
         return {
@@ -342,13 +347,7 @@ describe('workflow dashboard model', () => {
 
   it('renders a current empty dynamic phase while dropping prior attempts', async () => {
     const root = workflowRoot(['Prior'], [{ id: 'old', phase: 'Prior' }]);
-    const entries = root.entries.map((entry) => {
-      if (entry.role === 'workflowTask') {
-        return { ...entry, task: { ...entry.task, attemptId: 'prior' } };
-      }
-      if (entry.role === 'phase') return { ...entry, attemptId: 'prior' };
-      return entry;
-    });
+    const entries = markPriorAttempt(root.entries);
     const currentPhase = {
       id: 'phase-current',
       role: 'phase' as const,
@@ -423,13 +422,7 @@ describe('workflow dashboard model', () => {
       ['Verify'],
       [{ id: 'verification', phase: 'Verify' }],
     );
-    const entries = prior.entries.map((entry) => {
-      if (entry.role === 'workflowTask') {
-        return { ...entry, task: { ...entry.task, attemptId: 'prior' } };
-      }
-      if (entry.role === 'phase') return { ...entry, attemptId: 'prior' };
-      return entry;
-    });
+    const entries = markPriorAttempt(prior.entries);
 
     const model = workflowDashboardModel(
       { ...prior, workflowAttemptId: 'current', entries },

@@ -45,6 +45,11 @@ describe('coding-plan subscription runtime', () => {
     });
   });
 
+  afterEach(async () => {
+    setIncludedModelAccess(null);
+    await setProviderEndpoint('glm', '');
+  });
+
   it('freezes every runtime catalog entry', () => {
     expect(Object.isFrozen(codingPlanSubscriptionRuntimes)).toBe(true);
     expect(codingPlanSubscriptionRuntimes.every(Object.isFrozen)).toBe(true);
@@ -78,11 +83,6 @@ describe('coding-plan subscription runtime', () => {
         useOpenRouter: true,
       }),
     ).toEqual({ baseUrl: 'https://openrouter.ai/api/v1' });
-  });
-
-  afterEach(async () => {
-    setIncludedModelAccess(null);
-    await setProviderEndpoint('glm', '');
   });
 
   it('does not report the GLM plan when included access serves the model', async () => {

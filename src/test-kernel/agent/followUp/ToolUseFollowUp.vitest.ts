@@ -53,6 +53,32 @@ function activeTarget(
 
 const id = (value: string) => value as StreamTabId;
 
+/** Stub the run-metadata read the durable-producer path performs. */
+function mockPersistedExecution(session: SessionHandle): void {
+  vi.spyOn(session.snapshots, 'getRunMetadata').mockReturnValue({
+    executionId: 'persisted-execution',
+  } as never);
+}
+
+/**
+ * The resumability decision every durable-admission scenario shares: a
+ * resumable flow whose snapshot carries the given continuation generation.
+ */
+function durableResumabilityDecision(
+  generationId: string,
+): resumability.ResumabilityDecision {
+  return {
+    resumable: true,
+    cause: resumability.RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
+    flowRecord: {
+      flowName: 'texra',
+      shared: { continuationGenerationId: generationId },
+      createdAt: '2026-08-13T12:00:00.000Z',
+      nodes: [],
+    },
+  };
+}
+
 describe('submitFollowUp', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -388,21 +414,11 @@ describe('submitFollowUp', () => {
   it('restores the persisted generation before admitting a durable producer', async () => {
     const streamId = id('stream:persisted-generation');
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });
-    const executionId = 'persisted-execution';
     const generationId = 'e63883b0-0fe0-48c7-9888-a2daeaab30a5';
-    vi.spyOn(session.snapshots, 'getRunMetadata').mockReturnValue({
-      executionId,
-    } as never);
-    vi.spyOn(resumability, 'deriveResumability').mockResolvedValue({
-      resumable: true,
-      cause: resumability.RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
-      flowRecord: {
-        flowName: 'texra',
-        shared: { continuationGenerationId: generationId },
-        createdAt: '2026-08-13T12:00:00.000Z',
-        nodes: [],
-      },
-    });
+    mockPersistedExecution(session);
+    vi.spyOn(resumability, 'deriveResumability').mockResolvedValue(
+      durableResumabilityDecision(generationId),
+    );
     const tryResumeStream = mockTryResume();
 
     await expect(
@@ -421,11 +437,8 @@ describe('submitFollowUp', () => {
   it('serializes durable generation lookup before later ordinary admission', async () => {
     const streamId = id('stream:serialized-generation-lookup');
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });
-    const executionId = 'persisted-execution';
     const generationId = '5038fe96-7113-449a-82a9-3e58f292d1ba';
-    vi.spyOn(session.snapshots, 'getRunMetadata').mockReturnValue({
-      executionId,
-    } as never);
+    mockPersistedExecution(session);
     const lookup =
       deferred<Awaited<ReturnType<typeof resumability.deriveResumability>>>();
     const deriveResumability = vi
@@ -448,16 +461,7 @@ describe('submitFollowUp', () => {
     expect(tryResumeStream).not.toHaveBeenCalled();
     expect(session.followUps.getAll(streamId)).toEqual([]);
 
-    lookup.resolve({
-      resumable: true,
-      cause: resumability.RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
-      flowRecord: {
-        flowName: 'texra',
-        shared: { continuationGenerationId: generationId },
-        createdAt: '2026-08-13T12:00:00.000Z',
-        nodes: [],
-      },
-    });
+    lookup.resolve(durableResumabilityDecision(generationId));
 
     await vi.waitFor(() =>
       expect(session.followUps.getAll(streamId)).toEqual([
@@ -501,21 +505,11 @@ describe('submitFollowUp', () => {
   it('rebinds a provisional recovery before admitting a durable producer', async () => {
     const streamId = id('stream:provisional-recovery');
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });
-    const executionId = 'persisted-execution';
     const generationId = 'a2047268-908c-4ac5-8194-71fb377bd7f3';
-    vi.spyOn(session.snapshots, 'getRunMetadata').mockReturnValue({
-      executionId,
-    } as never);
-    vi.spyOn(resumability, 'deriveResumability').mockResolvedValue({
-      resumable: true,
-      cause: resumability.RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
-      flowRecord: {
-        flowName: 'texra',
-        shared: { continuationGenerationId: generationId },
-        createdAt: '2026-08-13T12:00:00.000Z',
-        nodes: [],
-      },
-    });
+    mockPersistedExecution(session);
+    vi.spyOn(resumability, 'deriveResumability').mockResolvedValue(
+      durableResumabilityDecision(generationId),
+    );
     const provisional = session.followUps.claimRecovery(streamId, true)!;
     expect(provisional.generationId).not.toBe(generationId);
 
@@ -532,21 +526,11 @@ describe('submitFollowUp', () => {
   it('rebinds a released provisional recovery before durable admission', async () => {
     const streamId = id('stream:released-provisional-recovery');
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });
-    const executionId = 'persisted-execution';
     const generationId = '51c54412-e977-48ab-8304-53007cc0bb7a';
-    vi.spyOn(session.snapshots, 'getRunMetadata').mockReturnValue({
-      executionId,
-    } as never);
-    vi.spyOn(resumability, 'deriveResumability').mockResolvedValue({
-      resumable: true,
-      cause: resumability.RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
-      flowRecord: {
-        flowName: 'texra',
-        shared: { continuationGenerationId: generationId },
-        createdAt: '2026-08-13T12:00:00.000Z',
-        nodes: [],
-      },
-    });
+    mockPersistedExecution(session);
+    vi.spyOn(resumability, 'deriveResumability').mockResolvedValue(
+      durableResumabilityDecision(generationId),
+    );
     const provisional = session.followUps.claimRecovery(streamId, true)!;
     session.followUps.release(provisional, 'recoverable');
 

@@ -30,7 +30,6 @@ const RETRIED_WITH_OWN_KEY_RESULT = {
 interface HarnessOptions {
   keys?: Partial<Record<ApiProvider, string | undefined>>;
   prompt?(keys: Map<ApiProvider, string | undefined>): void;
-  preferChatGptSubscription?: boolean;
   glmCodingPlan?: boolean;
   retryAvailable?: boolean;
   retryPending?: boolean;
@@ -55,7 +54,7 @@ function createHarness(options: HarnessOptions = {}): {
   const includedAccessValues: boolean[] = [];
   const chatGptSubscriptionValues: boolean[] = [];
   const glmCodingPlanValues: boolean[] = [];
-  let preferChatGptSubscription = options.preferChatGptSubscription ?? true;
+  let preferChatGptSubscription = true;
   let glmCodingPlan = options.glmCodingPlan ?? true;
   let invalidations = 0;
   const retries: string[] = [];

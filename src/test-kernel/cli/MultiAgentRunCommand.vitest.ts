@@ -70,21 +70,19 @@ vi.mock('@cli/commands/_helpers/output', () => ({
   emitCliResult: mocks.emitCliResult,
 }));
 
-vi.mock('@cli/runtime/multiAgentPresets', () => {
-  return {
-    cliMultiAgentPresetNdjsonRecords: vi.fn(() => []),
-    formatCliMultiAgentPresetInspection: vi.fn(() => ''),
-    formatCliMultiAgentPresetList: vi.fn(() => ''),
-    formatCliMultiAgentPresetRunWarnings:
-      mocks.formatCliMultiAgentPresetRunWarnings,
-    formatCliMultiAgentTeamLaunchBlockMessage:
-      mocks.formatCliMultiAgentTeamLaunchBlockMessage,
-    MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION:
-      'Root agent for the team run (defaults to the preset orchestrator)',
-    MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION: 'Model for the team root agent',
-    readCliMultiAgentPresets: vi.fn(() => []),
-  };
-});
+vi.mock('@cli/runtime/multiAgentPresets', () => ({
+  cliMultiAgentPresetNdjsonRecords: vi.fn(() => []),
+  formatCliMultiAgentPresetInspection: vi.fn(() => ''),
+  formatCliMultiAgentPresetList: vi.fn(() => ''),
+  formatCliMultiAgentPresetRunWarnings:
+    mocks.formatCliMultiAgentPresetRunWarnings,
+  formatCliMultiAgentTeamLaunchBlockMessage:
+    mocks.formatCliMultiAgentTeamLaunchBlockMessage,
+  MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION:
+    'Root agent for the team run (defaults to the preset orchestrator)',
+  MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION: 'Model for the team root agent',
+  readCliMultiAgentPresets: vi.fn(() => []),
+}));
 
 vi.mock('@common/teams/TeamPlan', async (importOriginal) => {
   const actual =
@@ -235,6 +233,27 @@ function mockExpandedRunInputs(inputs: {
   );
 }
 
+function mockMaterializedStdin(inputFiles: string[]): void {
+  mocks.withExpandedRunInputs.mockImplementationOnce(
+    async (
+      _inputSpecs: readonly string[],
+      _contextSpecs: readonly string[],
+      _cwd: string,
+      _options: unknown,
+      run: (expanded: {
+        readonly inputFiles: string[];
+        readonly contextFiles: string[];
+        readonly hasMaterializedStdinInput: boolean;
+      }) => Promise<unknown>,
+    ) =>
+      run({
+        inputFiles,
+        contextFiles: [],
+        hasMaterializedStdinInput: true,
+      }),
+  );
+}
+
 describe('CLI multi-agent run command', () => {
   const approvalUnavailableWarning =
     'WARN preset mathematician may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
@@ -346,24 +365,7 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('marks materialized stdin as unavailable for team recovery advertising', async () => {
-    mocks.withExpandedRunInputs.mockImplementationOnce(
-      async (
-        _inputSpecs: readonly string[],
-        _contextSpecs: readonly string[],
-        _cwd: string,
-        _options: unknown,
-        run: (inputs: {
-          readonly inputFiles: string[];
-          readonly contextFiles: string[];
-          readonly hasMaterializedStdinInput: boolean;
-        }) => Promise<unknown>,
-      ) =>
-        run({
-          inputFiles: ['.texra-tmp/stdin.tex'],
-          contextFiles: [],
-          hasMaterializedStdinInput: true,
-        }),
-    );
+    mockMaterializedStdin(['.texra-tmp/stdin.tex']);
 
     await runPreset({
       inputFiles: ['-'],
@@ -560,24 +562,7 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('uses a stable display label for a file-only stdin launch', async () => {
-    mocks.withExpandedRunInputs.mockImplementationOnce(
-      async (
-        _inputSpecs: readonly string[],
-        _contextSpecs: readonly string[],
-        _cwd: string,
-        _options: unknown,
-        run: (inputs: {
-          readonly inputFiles: string[];
-          readonly contextFiles: string[];
-          readonly hasMaterializedStdinInput: boolean;
-        }) => Promise<unknown>,
-      ) =>
-        run({
-          inputFiles: ['.texra-tmp/texra-stdin-123/stdin.tex'],
-          contextFiles: [],
-          hasMaterializedStdinInput: true,
-        }),
-    );
+    mockMaterializedStdin(['.texra-tmp/texra-stdin-123/stdin.tex']);
 
     const exitCode = await runPreset({ inputFiles: [' - '], instruction: '' });
 

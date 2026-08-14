@@ -56,25 +56,23 @@ describe('TUI validator args', () => {
 
   it('prints scenario names without building the harness', () => {
     const result = runValidator(['--list']);
+    const lines = result.stdout.split('\n');
 
     expect(result.status).toBe(0);
-    expect(result.stdout.split('\n')).toContain('transcript');
-    expect(result.stdout.split('\n')).toContain('no-color-model-form');
-    expect(result.stdout.split('\n')).toContain(
-      'subagent-list-focus-full-frame',
-    );
+    expect(lines).toContain('transcript');
+    expect(lines).toContain('no-color-model-form');
+    expect(lines).toContain('subagent-list-focus-full-frame');
     expect(result.stdout).not.toContain('Available scenarios:');
     expect(result.stderr).not.toContain('building tui-harness bundle');
   });
 
   it('treats list-scenarios as a scenario list alias', () => {
     const result = runValidator(['--list-scenarios']);
+    const lines = result.stdout.split('\n');
 
     expect(result.status).toBe(0);
-    expect(result.stdout.split('\n')).toContain('transcript');
-    expect(result.stdout.split('\n')).toContain(
-      'subagent-list-focus-full-frame',
-    );
+    expect(lines).toContain('transcript');
+    expect(lines).toContain('subagent-list-focus-full-frame');
     expect(result.stdout).not.toContain('Available scenarios:');
     expect(result.stderr).toBe('');
   });

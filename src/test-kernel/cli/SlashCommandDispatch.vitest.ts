@@ -158,6 +158,20 @@ function silentOutput(): SlashCommandOutput {
   return { appendOutcome: vi.fn(), setNotice: vi.fn(), writeProgress: vi.fn() };
 }
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve: (value: T) => void = () => undefined;
+  let reject: (reason?: unknown) => void = () => undefined;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function workPlanSnapshots(
   read: (streamId: StreamTabId) => {
     readonly plan: Plan | null;
@@ -287,10 +301,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('waits for canonical hydration before deciding a focused plan is empty', async () => {
-    let resolvePreload: () => void = () => undefined;
-    const preload = new Promise<void>((resolve) => {
-      resolvePreload = resolve;
-    });
+    const { promise: preload, resolve: resolvePreload } = deferred<void>();
     const streamId = 'historical-plan' as StreamTabId;
     registerBuiltinSlashCommands({
       workPlanSnapshots: workPlanSnapshots(
@@ -368,10 +379,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('lets a newer no-focus request cancel pending ownership', async () => {
-    let resolvePreload: () => void = () => undefined;
-    const preload = new Promise<void>((resolve) => {
-      resolvePreload = resolve;
-    });
+    const { promise: preload, resolve: resolvePreload } = deferred<void>();
     const streamId = 'superseded-loading-plan' as StreamTabId;
     registerBuiltinSlashCommands({
       workPlanSnapshots: workPlanSnapshots(
@@ -395,10 +403,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('does not reopen a loading plan reader after Escape', async () => {
-    let resolvePreload: () => void = () => undefined;
-    const preload = new Promise<void>((resolve) => {
-      resolvePreload = resolve;
-    });
+    const { promise: preload, resolve: resolvePreload } = deferred<void>();
     const streamId = 'escape-loading-plan' as StreamTabId;
     registerBuiltinSlashCommands({
       workPlanSnapshots: workPlanSnapshots(
@@ -420,10 +425,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('closes a loading reader and reports a current preload error', async () => {
-    let rejectPreload: (error: unknown) => void = () => undefined;
-    const preload = new Promise<void>((_resolve, reject) => {
-      rejectPreload = reject;
-    });
+    const { promise: preload, reject: rejectPreload } = deferred<void>();
     const streamId = 'error-loading-plan' as StreamTabId;
     registerBuiltinSlashCommands({
       workPlanSnapshots: workPlanSnapshots(

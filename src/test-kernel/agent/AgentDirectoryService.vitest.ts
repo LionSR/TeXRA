@@ -17,7 +17,7 @@ import type {
 const STORAGE_BASE_PATH = path.resolve('/global-storage');
 const VALID_PARENT_PATH = path.resolve('/valid-parent');
 const VALID_CUSTOM_PATH = path.join(VALID_PARENT_PATH, 'custom');
-const MISSING_CUSTOM_PATH = path.join(path.resolve('/missing'), 'custom');
+const MISSING_CUSTOM_PATH = path.join('/missing', 'custom');
 
 class RecordingStorage implements AgentDirectoryPathStorage {
   readonly ensured: string[] = [];

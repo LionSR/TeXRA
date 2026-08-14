@@ -56,6 +56,14 @@ function makeCoordinator(options: {
   return new XaiSessionCoordinator({ ...options, now: () => NOW });
 }
 
+function makeClient(overrides: Partial<XaiOAuthClient> = {}): XaiOAuthClient {
+  return {
+    exchangeAuthorizationCode: vi.fn(),
+    refreshTokens: vi.fn(),
+    ...overrides,
+  };
+}
+
 describe('XaiSessionCoordinator', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -108,10 +116,9 @@ describe('XaiSessionCoordinator', () => {
     const storage = memoryStorage();
     const coordinator = makeCoordinator({
       storage,
-      client: {
+      client: makeClient({
         exchangeAuthorizationCode: vi.fn(async () => tokens()),
-        refreshTokens: vi.fn(),
-      },
+      }),
     });
     const stored = await coordinator.completeLoginWithCode({
       code: 'code',
@@ -129,10 +136,7 @@ describe('XaiSessionCoordinator', () => {
     const refreshTokens = vi.fn(() => refreshDeferred.promise);
     const coordinator = makeCoordinator({
       storage,
-      client: {
-        exchangeAuthorizationCode: vi.fn(),
-        refreshTokens,
-      },
+      client: makeClient({ refreshTokens }),
     });
 
     const a = coordinator.getFreshAccessToken();
@@ -150,12 +154,11 @@ describe('XaiSessionCoordinator', () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW + FIVE_MIN - 1 }));
     const coordinator = makeCoordinator({
       storage,
-      client: {
-        exchangeAuthorizationCode: vi.fn(),
+      client: makeClient({
         refreshTokens: vi.fn(async () => {
           throw new XaiAuthError('revoked', 'fatal', 400);
         }),
-      },
+      }),
     });
     await expect(coordinator.getFreshAccessToken()).rejects.toMatchObject({
       kind: 'fatal',

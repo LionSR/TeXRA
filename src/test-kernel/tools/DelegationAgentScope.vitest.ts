@@ -14,6 +14,10 @@ const customReview = {
   name: 'review',
   path: '/agents/custom-review.yaml',
 } as const;
+const remoteReviewScope = {
+  workflow: [],
+  toolUse: ['remote:review'],
+};
 const mocks = vi.hoisted(() => ({
   context: undefined as unknown,
 }));
@@ -55,10 +59,7 @@ describe('execution-scoped delegation agents', () => {
     mocks.context = {
       kind: 'launch',
       runScope: {
-        delegationAgentScope: {
-          workflow: [],
-          toolUse: ['remote:review'],
-        },
+        delegationAgentScope: remoteReviewScope,
       },
     };
   });
@@ -71,15 +72,15 @@ describe('execution-scoped delegation agents', () => {
 
   it('can enforce a captured scope without ambient run context', () => {
     mocks.context = undefined;
-    const scope = {
-      workflow: [],
-      toolUse: ['remote:review'],
-    };
 
-    expect(getDelegationAgents('toolUse', scope)).toEqual([remoteReview]);
-    expect(getDelegationAgent('toolUse', 'review', scope)).toBe(remoteReview);
+    expect(getDelegationAgents('toolUse', remoteReviewScope)).toEqual([
+      remoteReview,
+    ]);
+    expect(getDelegationAgent('toolUse', 'review', remoteReviewScope)).toBe(
+      remoteReview,
+    );
     expect(
-      getDelegationAgent('toolUse', 'custom:review', scope),
+      getDelegationAgent('toolUse', 'custom:review', remoteReviewScope),
     ).toBeUndefined();
   });
 
