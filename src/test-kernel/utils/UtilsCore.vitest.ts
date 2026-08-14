@@ -17,7 +17,7 @@ import {
   utcMonthStart,
   type FlushableDebounce,
 } from '@utils/core';
-import { deriveExecutionId } from '@utils/core/idHash';
+import { deriveExecutionId, truncatedHexId } from '@utils/core/idHash';
 
 describe('utcMonthStart', () => {
   it('builds midnight UTC on the 1st of the given month', () => {
@@ -361,6 +361,17 @@ describe('coalesceAsync', () => {
       return 'recovered';
     });
     expect(recomputeCount).toBe(1);
+  });
+});
+
+describe('truncatedHexId', () => {
+  it('defaults to a sha256 prefix of the requested length', () => {
+    expect(truncatedHexId('source', 8)).toBe('41cf6794');
+    expect(truncatedHexId('source', 16)).toBe('41cf6794ba4200b8');
+  });
+
+  it('keeps the compile-log sha1 spelling', () => {
+    expect(truncatedHexId('path.tex', 8, 'sha1')).toBe('eefc4296');
   });
 });
 

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { basename } from 'node:path';
 
 import stableStringify from 'fast-json-stable-stringify';
@@ -15,6 +14,7 @@ import {
 } from '@shared/schemas';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { isNonEmptyString, onAbort } from '@utils/core';
+import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { parseWorkflowScript } from './parseScript';
@@ -49,16 +49,14 @@ function journalKey(
   const executionOptions: WorkflowAgentCallOptions = { ...options };
   delete executionOptions.label;
   delete executionOptions.phase;
-  return createHash('sha256')
-    .update(
-      stableStringify({
-        options: executionOptions,
-        prompt,
-        dependencyFingerprint,
-      }),
-    )
-    .digest('hex')
-    .slice(0, 16);
+  return truncatedHexId(
+    stableStringify({
+      options: executionOptions,
+      prompt,
+      dependencyFingerprint,
+    }),
+    16,
+  );
 }
 
 const DEFAULT_CONCURRENCY = 4;

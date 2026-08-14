@@ -1,5 +1,4 @@
 // Node imports
-import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join, posix, relative } from 'node:path';
 
@@ -8,6 +7,7 @@ import {
   WORKSPACE_STORAGE_LAYOUT,
 } from '@common/storage/storageLayout';
 import * as logger from '@logger/logUtils';
+import { truncatedHexId } from '@utils/core/idHash';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
@@ -33,13 +33,9 @@ export const WORKSPACE_STORAGE_COLLECTIONS_MERGED_PER_CHILD = [
 
 type WorkspacePathSource = string | undefined | (() => string | undefined);
 
-function workspaceStorageHash(source: string, length: number): string {
-  return createHash('sha256').update(source).digest('hex').slice(0, length);
-}
-
 function legacyWorkspaceStorageId(workspacePath: string | undefined): string {
   const source = workspacePath?.trim() || 'no-workspace';
-  return workspaceStorageHash(source, 16);
+  return truncatedHexId(source, 16);
 }
 
 function sanitizeWorkspaceBasename(workspacePath: string): string {
@@ -58,7 +54,7 @@ export function workspaceStorageId(workspacePath: string | undefined): string {
     source === 'no-workspace'
       ? 'no-workspace'
       : sanitizeWorkspaceBasename(source);
-  return `${stem}-${workspaceStorageHash(source, 8)}`;
+  return `${stem}-${truncatedHexId(source, 8)}`;
 }
 
 export function resolveGlobalStoragePath(storageRoot: string): string {
