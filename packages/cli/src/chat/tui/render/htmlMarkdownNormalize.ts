@@ -12,11 +12,11 @@ const SHELL_SPECIAL_PARAMETER_CODE_PAIR_RE =
   /^\$[_?@*#!-]<\/code>[\s\S]*?<code(?:\s[^<>]*)?>\$[_?@*#!-]<\/code>/iu;
 
 // Formatting tags may carry ordinary name/value attributes or standard HTML
-// boolean attributes. Arbitrary bare words (for example `<p and y>`) are not
-// accepted because they are otherwise indistinguishable from mathematical
-// prose and would be removed from the transcript.
-const HTML_BOOLEAN_ATTRIBUTE = String.raw`(?:allowfullscreen|async|autofocus|autoplay|checked|contenteditable|controls|default|defer|disabled|formnovalidate|hidden|inert|ismap|itemscope|loop|multiple|muted|nomodule|novalidate|open|playsinline|popover|readonly|required|reversed|selected)`;
-const HTML_ATTRIBUTE = String.raw`(?:[A-Za-z_:][A-Za-z0-9_.:-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>]+)|${HTML_BOOLEAN_ATTRIBUTE})`;
+// attributes whose value may be omitted. Arbitrary bare words (for example
+// `<p and y>`) are not accepted because they are otherwise indistinguishable
+// from mathematical prose and would be removed from the transcript.
+const HTML_VALUELESS_ATTRIBUTE = String.raw`(?:allowfullscreen|async|autofocus|autoplay|checked|contenteditable|controls|default|defer|disabled|formnovalidate|hidden|inert|ismap|itemscope|loop|multiple|muted|nomodule|novalidate|open|playsinline|popover|readonly|required|reversed|selected)`;
+const HTML_ATTRIBUTE = String.raw`(?:[A-Za-z_:][A-Za-z0-9_.:-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>]+)|${HTML_VALUELESS_ATTRIBUTE})`;
 const HTML_ATTRIBUTES = String.raw`(?:\s+${HTML_ATTRIBUTE})*\s*`;
 const HEADING_TAG_RE = new RegExp(
   `<h([1-6])${HTML_ATTRIBUTES}\\/?>([\\s\\S]*?)<\\/h\\1>`,
