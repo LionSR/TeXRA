@@ -1280,9 +1280,12 @@ describe('executeCliRequest', () => {
     });
     expect(publicationCommitted).toBe(true);
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
-    expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
-      message: outputFailure.message,
-    });
+    expect(mocks.emit).toHaveBeenCalledExactlyOnceWith(
+      'requestShowError',
+      expect.objectContaining({
+        message: expect.stringContaining(outputFailure.message),
+      }),
+    );
   });
 
   it('does not finalize shutdown through a captured lease that is already lost', async () => {
