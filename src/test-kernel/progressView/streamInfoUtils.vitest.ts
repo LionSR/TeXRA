@@ -61,7 +61,7 @@ describe('compareByNewestCreationTime', () => {
   ])('$title', ({ streams, expected }) => {
     expect(
       streams.sort(compareByNewestCreationTime).map((stream) => stream.name),
-    ).toEqual(expected);
+    ).toStrictEqual(expected);
   });
 });
 

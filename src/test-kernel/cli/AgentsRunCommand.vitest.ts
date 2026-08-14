@@ -73,8 +73,8 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
-// Import the module under test after the mock factories above so its imports
-// resolve to the mocked modules.
+// Hoisted out of each test body — a dynamic import()'s result is cached, so
+// one call here serves every test below.
 const { runToolUseAgent } = await import('@cli/commands/agentsRun');
 
 describe('CLI agents run command', () => {

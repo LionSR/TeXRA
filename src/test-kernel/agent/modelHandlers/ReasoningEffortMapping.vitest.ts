@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { ReasoningEffort } from 'llm-zoo';
 
 // Local imports - mappings under test

@@ -19,7 +19,6 @@ import {
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 
-// Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
 function streamPair(label: string): {

@@ -116,6 +116,8 @@ async function cleanupForeignLease(
   backend: IsolatedBackend,
   ids: StreamExecution,
 ): Promise<void> {
+  // Best-effort teardown: the lease file may already be gone; a delete
+  // failure here must not mask the assertion this fixture is protecting.
   await StorageFS.delete(executionLeasePath(ids.executionId)).catch(() => {});
   await GoalStore.forget(ids.stream);
   await getExecutionStore(ids.executionId).clear();

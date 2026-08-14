@@ -129,7 +129,9 @@ describe('progress stream tree policy', () => {
     );
 
     expect(projection.expandedParents.has('root')).toBe(false);
-    expect([...projection.userOverrides]).toEqual([['root', 'collapsed']]);
+    expect([...projection.userOverrides]).toStrictEqual([
+      ['root', 'collapsed'],
+    ]);
   });
 
   it('allows users to keep a finished parent expanded', () => {

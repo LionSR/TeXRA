@@ -16,8 +16,6 @@ import {
   GOOGLE_INTERACTIONS_TEST_CONFIG,
   StreamingGoogleInteractionsHandler,
 } from './googleInteractionsTestUtils';
-
-// Provider SDK types
 import type { Interactions } from '@google/genai';
 
 const originalGetConfig = configModule.getConfig;

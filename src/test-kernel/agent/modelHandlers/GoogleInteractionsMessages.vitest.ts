@@ -14,7 +14,7 @@ import {
   userStep,
 } from './googleInteractionsTestUtils';
 
-// Provider SDK types
+// Third-party imports
 import type { GoogleGenAI, Interactions } from '@google/genai';
 
 type Step = Interactions.Step;
