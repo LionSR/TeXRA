@@ -154,7 +154,7 @@ describe('renderAnsiMarkdown', () => {
     'Cost $.99 <strong>today</strong>, then $.50',
     'Cost $-5 <strong>today</strong>, then $-10',
     'Cost A$5 <strong>today</strong>, then A$10',
-  ])('normalizes HTML between currency amounts: %s', (example) => {
+  ])('normalizes HTML between same-line currency amounts: %s', (example) => {
     const normalized = normalizeKnownHtmlForCliMarkdown(example);
     expect(normalized).toBe(
       example.replace('<strong>', '**').replace('</strong>', '**'),
@@ -169,26 +169,19 @@ describe('renderAnsiMarkdown', () => {
     ).toBe('Cost $5 **today, then $10');
   });
 
-  it('normalizes HTML between same-line shell variables', () => {
-    const examples = [
-      ['<code>$HOME</code> and <code>$PATH</code>', '`$HOME` and `$PATH`'],
-      ['`$HOME` <strong>or</strong> `$PATH`', '`$HOME` **or** `$PATH`'],
-      ['$HOME <strong>or</strong> $PATH', '$HOME **or** $PATH'],
-      [
-        '<code>$HOME</code> <strong>$x$</strong> <code>$PATH</code>',
-        '`$HOME` **$x$** `$PATH`',
-      ],
-      ['<code>$HOME</code> and <code>$$</code>', '`$HOME` and `$$`'],
-      ['<code>$$</code> and <code>$HOME</code>', '`$$` and `$HOME`'],
-    ] as const;
-
-    for (const [source, expected] of examples) {
+  it.each([
+    ['<code>$HOME</code> and <code>$PATH</code>', '`$HOME` and `$PATH`'],
+    ['`$HOME` <strong>or</strong> `$PATH`', '`$HOME` **or** `$PATH`'],
+    ['$HOME <strong>or</strong> $PATH', '$HOME **or** $PATH'],
+  ] as const)(
+    'normalizes HTML between same-line shell variables: %s',
+    (source, expected) => {
       const normalized = normalizeKnownHtmlForCliMarkdown(source);
       expect(normalized).toBe(expected);
       expect(normalized).not.toContain('<strong>');
       expect(normalized).not.toContain('</strong>');
-    }
-  });
+    },
+  );
 
   it('normalizes HTML between same-line shell PID expansions', () => {
     expect(
@@ -199,6 +192,9 @@ describe('renderAnsiMarkdown', () => {
   it('normalizes HTML between code-wrapped shell parameters', () => {
     const examples = [
       ['<code>$_</code> and <code>$-</code>', '`$_` and `$-`'],
+      ['<code>$10</code> and <code>$foo</code>', '`$10` and `$foo`'],
+      ['<code>$HOME</code> and <code>$$</code>', '`$HOME` and `$$`'],
+      ['<code>$$</code> and <code>$PATH</code>', '`$$` and `$PATH`'],
       [
         '<code>${HOME}</code> and <code>${PATH}</code>',
         '`${HOME}` and `${PATH}`',
@@ -208,6 +204,14 @@ describe('renderAnsiMarkdown', () => {
     for (const [source, expected] of examples) {
       expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
     }
+  });
+
+  it('binds code-wrapped shell pairs to the current dollar delimiters', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '<code>$HOME</code> <strong>$x$</strong> <code>$PATH</code>',
+      ),
+    ).toBe('`$HOME` **$x$** `$PATH`');
   });
 
   it.each([

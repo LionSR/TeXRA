@@ -6,38 +6,39 @@ const KNOWN_HTML_TAG_RE =
   /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/i;
 const CURRENCY_AMOUNT_START_RE = /^[+-]?(?:\d|\.\d)/u;
 const CURRENCY_PAIR_END_RE = /(?:[\s>]|[\s>][([{"'‘“+–—-]|[\s>][A-Z]{1,3})\$$/u;
-const SHELL_PID_CODE_PAIR_RE =
-  /^\$\$?<\/code>[\s\S]*<code(?:\s[^<>]*)?>\$\$?$/iu;
-const SHELL_PARAMETER_NAME = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*|[0-9?@*#!-])`;
+const SHELL_PARAMETER_NAME = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+|[?@*#!-])`;
 const SHELL_PARAMETER = String.raw`(?:${SHELL_PARAMETER_NAME}|\{${SHELL_PARAMETER_NAME}\})`;
-const SHELL_CODE_START_RE = /<code(?:\s[^<>]*)?>$/iu;
-const SHELL_PARAMETER_CODE_START_RE = new RegExp(
+const SHELL_CODE_ENDPOINT = String.raw`(?:\$${SHELL_PARAMETER}|\$\$)`;
+const SHELL_CODE_COMPLETE_PAIR_SPAN_RE = new RegExp(
+  `^${SHELL_CODE_ENDPOINT}<\\/code>[\\s\\S]*<code(?:\\s[^<>]*)?>${SHELL_CODE_ENDPOINT}$`,
+  'iu',
+);
+const SHELL_CODE_LEADING_ENDPOINT_RE = new RegExp(
   `^\\$${SHELL_PARAMETER}<\\/code>`,
   'iu',
 );
-const SHELL_PID_CODE_START_RE = /^\$<\/code>/iu;
-const SHELL_CODE_END_RE = /<code(?:\s[^<>]*)?>\$$/iu;
-const SHELL_CODE_SUFFIX_RE = new RegExp(
+const SHELL_CODE_TRAILING_ENDPOINT_RE = /<code(?:\s[^<>]*)?>\$$/iu;
+const SHELL_CODE_TRAILING_SUFFIX_RE = new RegExp(
   `^(?:${SHELL_PARAMETER}|\\$)<\\/code>`,
   'iu',
 );
-const SHELL_PARAMETER_MARKDOWN_CODE_START_RE = new RegExp(
+const SHELL_MARKDOWN_LEADING_ENDPOINT_RE = new RegExp(
   `^\\$${SHELL_PARAMETER}\``,
   'iu',
 );
-const SHELL_MARKDOWN_CODE_END_RE = /`\$$/u;
-const SHELL_MARKDOWN_CODE_SUFFIX_RE = new RegExp(
+const SHELL_MARKDOWN_TRAILING_ENDPOINT_RE = /`\$$/u;
+const SHELL_MARKDOWN_TRAILING_SUFFIX_RE = new RegExp(
   `^(?:${SHELL_PARAMETER}|\\$)\``,
   'iu',
 );
 const SHELL_UNWRAPPED_PARAMETER = String.raw`(?:[A-Z_][A-Z0-9_]+|\{${SHELL_PARAMETER_NAME}\}|[_?@*#!-])`;
-const SHELL_UNWRAPPED_BOUNDARY = String.raw`(?=[\s<.,;:!?()[\]{}'"’”]|$)`;
-const SHELL_UNWRAPPED_PARAMETER_SPAN_RE = new RegExp(
-  `^\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_UNWRAPPED_BOUNDARY}[\\s\\S]*?\\$$`,
+const SHELL_PARAMETER_BOUNDARY = String.raw`(?=[\s<.,;:!?()[\]{}'"’”]|$)`;
+const SHELL_UNWRAPPED_LEADING_ENDPOINT_RE = new RegExp(
+  `^\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
   'u',
 );
-const SHELL_UNWRAPPED_PARAMETER_SUFFIX_RE = new RegExp(
-  `^${SHELL_UNWRAPPED_PARAMETER}${SHELL_UNWRAPPED_BOUNDARY}`,
+const SHELL_UNWRAPPED_TRAILING_SUFFIX_RE = new RegExp(
+  `^${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
   'u',
 );
 
@@ -97,29 +98,30 @@ function shouldProtectMathSpanDuringHtmlNormalization(
     CURRENCY_AMOUNT_START_RE.test(span.slice(1)) &&
     CURRENCY_PAIR_END_RE.test(span) &&
     CURRENCY_AMOUNT_START_RE.test(source.slice(offset + span.length));
-  const sourceAfterSpan = source.slice(offset + span.length);
-  const startsInHtmlCode = SHELL_CODE_START_RE.test(source.slice(0, offset));
-  const hasHtmlCodeShellEndpoint =
-    (startsInHtmlCode && SHELL_PARAMETER_CODE_START_RE.test(span)) ||
-    (startsInHtmlCode &&
-      source.at(offset - 1) === '$' &&
-      SHELL_PID_CODE_START_RE.test(span)) ||
-    (SHELL_CODE_END_RE.test(span) &&
-      SHELL_CODE_SUFFIX_RE.test(sourceAfterSpan));
-  const hasMarkdownCodeShellEndpoint =
+  const suffix = source.slice(offset + span.length);
+  // The permissive inline-math matcher can split a shell token at either
+  // delimiter. Expose a match when either endpoint is demonstrably shell
+  // presentation so protected fragments cannot strand HTML between them.
+  const isShellParameterPair =
+    (SHELL_CODE_COMPLETE_PAIR_SPAN_RE.test(span) &&
+      suffix.startsWith('</code>')) ||
+    SHELL_CODE_LEADING_ENDPOINT_RE.test(span) ||
+    (source.at(offset - 1) === '$' && span.startsWith('$</code>')) ||
+    (SHELL_CODE_TRAILING_ENDPOINT_RE.test(span) &&
+      SHELL_CODE_TRAILING_SUFFIX_RE.test(suffix));
+  const isMarkdownCodeShellParameterPair =
     (source.at(offset - 1) === '`' &&
-      SHELL_PARAMETER_MARKDOWN_CODE_START_RE.test(span)) ||
-    (SHELL_MARKDOWN_CODE_END_RE.test(span) &&
-      SHELL_MARKDOWN_CODE_SUFFIX_RE.test(sourceAfterSpan));
+      SHELL_MARKDOWN_LEADING_ENDPOINT_RE.test(span)) ||
+    (SHELL_MARKDOWN_TRAILING_ENDPOINT_RE.test(span) &&
+      SHELL_MARKDOWN_TRAILING_SUFFIX_RE.test(suffix));
   const isUnwrappedShellParameterPair =
-    SHELL_UNWRAPPED_PARAMETER_SPAN_RE.test(span) &&
-    SHELL_UNWRAPPED_PARAMETER_SUFFIX_RE.test(sourceAfterSpan);
+    SHELL_UNWRAPPED_LEADING_ENDPOINT_RE.test(span) ||
+    SHELL_UNWRAPPED_TRAILING_SUFFIX_RE.test(suffix);
   return !(
     isCurrencyPair ||
-    hasHtmlCodeShellEndpoint ||
-    hasMarkdownCodeShellEndpoint ||
-    isUnwrappedShellParameterPair ||
-    SHELL_PID_CODE_PAIR_RE.test(span)
+    isShellParameterPair ||
+    isMarkdownCodeShellParameterPair ||
+    isUnwrappedShellParameterPair
   );
 }
 
