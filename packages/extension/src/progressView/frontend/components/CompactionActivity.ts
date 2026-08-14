@@ -12,8 +12,10 @@ import {
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
-const ACTIVITY_ICON: Record<CompactionActivityStatus, TeXRAIconName> = {
-  running: 'arrows-rotate',
+const ACTIVITY_ICON: Record<
+  Exclude<CompactionActivityStatus, 'running'>,
+  TeXRAIconName
+> = {
   completed: 'circle-check',
   failed: 'circle-xmark',
   cancelled: 'ban',
@@ -60,7 +62,9 @@ export class CompactionActivity extends LitElement {
       }
 
       .activity--running .icon {
-        color: var(--wa-color-chart-blue);
+        /* wa-spinner ignores color; it strokes via --indicator-color, a
+           custom property that inherits through its shadow root. */
+        --indicator-color: var(--wa-color-chart-blue);
       }
 
       .label {
