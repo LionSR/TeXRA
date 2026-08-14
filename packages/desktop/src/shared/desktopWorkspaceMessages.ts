@@ -190,11 +190,7 @@ const DesktopBrowserCloseMessageSchema = z.object({
 export const DesktopBrowserStateMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_STATE),
   tabId: z.string(),
-  url: z.string(),
   title: z.string(),
-  canGoBack: z.boolean(),
-  canGoForward: z.boolean(),
-  loading: z.boolean(),
 });
 
 // ── Environment ──

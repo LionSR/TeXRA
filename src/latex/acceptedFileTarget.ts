@@ -114,8 +114,8 @@ export interface CommitAcceptedFilePorts {
 /**
  * Host capabilities the accept-edited replace flow reaches through, so the
  * host-neutral orchestration can run on both the VS Code command (AbsoluteFS,
- * warning dialog, app signals) and the desktop bridge (node fs, runtime
- * host emit) without each side re-implementing the confirm / commit sequence.
+ * warning dialog, app signals) and the desktop bridge (node fs, dialog IPC)
+ * without each side re-implementing the confirm / commit sequence.
  */
 export interface AcceptEditedFileReplacePorts extends CommitAcceptedFilePorts {
   exists: (location: FileLocation) => Promise<boolean>;
