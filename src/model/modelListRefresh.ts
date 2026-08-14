@@ -82,15 +82,32 @@ function reconcileEnabledModels(
   // resolveDefaultModels (modelOptionsBasic.ts) drops retired/deprecated
   // picks before this module ever sees them -- so the only remaining check
   // here is "not already present".
+  const keptSet = new Set(kept);
   const added = addDefaults
-    ? DEFAULT_MODELS.filter((model) => !kept.includes(model))
+    ? DEFAULT_MODELS.filter((model) => !keptSet.has(model))
     : [];
+  // Preferred defaults keep their curated order in the picker. User-enabled
+  // extras stay after that block so a stale Gemini-first list cannot keep
+  // leading once Sonnet is the default.
+  const defaultOrdered = DEFAULT_MODELS.filter(
+    (model) => keptSet.has(model) || added.includes(model),
+  );
+  const extras = kept.filter((model) => !DEFAULT_MODELS.includes(model));
 
   return {
-    models: [...kept, ...added],
+    models: [...defaultOrdered, ...extras],
     added,
     removed: [...strippedSet],
   };
+}
+
+function sameModelList(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length && left.every((model, i) => model === right[i])
+  );
 }
 
 /** Sweep retired entries and reconcile defaults when MODEL_LIST_VERSION changes. */
@@ -102,6 +119,7 @@ export async function refreshModelListStateIfNeeded(
   const currentModels = state.get<string[]>(GlobalStateKey.ENABLED_MODELS);
   let added: string[] = [];
   let removed: string[] = [];
+  let reordered = false;
   if (currentModels) {
     const reconciliation = reconcileEnabledModels(
       currentModels,
@@ -110,7 +128,8 @@ export async function refreshModelListStateIfNeeded(
     );
     added = reconciliation.added;
     removed = reconciliation.removed;
-    if (added.length > 0 || removed.length > 0) {
+    reordered = !sameModelList(currentModels, reconciliation.models);
+    if (added.length > 0 || removed.length > 0 || reordered) {
       await state.update(GlobalStateKey.ENABLED_MODELS, reconciliation.models);
     }
   }
@@ -119,7 +138,11 @@ export async function refreshModelListStateIfNeeded(
     await state.update(GlobalStateKey.MODEL_LIST_VERSION, MODEL_LIST_VERSION);
   }
   return {
-    skipped: !versionChanged && removed.length === 0,
+    skipped:
+      !versionChanged &&
+      added.length === 0 &&
+      removed.length === 0 &&
+      !reordered,
     previousVersion,
     currentVersion: MODEL_LIST_VERSION,
     added,

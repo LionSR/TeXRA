@@ -33,15 +33,15 @@ export function computeStreamTreeProjection(
   const expandedParents = new Set<string>();
 
   for (const [parentId, children] of inputs.childStreamsByParent) {
-    if (
-      shouldExpandStreamParent(
+    for (const child of children) {
+      getStreamBranchActivity(
         inputs,
-        parentId,
-        children,
-        userOverrides,
+        child.name,
+        new Set([parentId]),
         branchActivityByStream,
-      )
-    ) {
+      );
+    }
+    if (userOverrides.get(parentId) === 'expanded') {
       expandedParents.add(parentId);
     }
   }
@@ -66,8 +66,8 @@ function pruneStreamTreeUserOverrides(
 
 /**
  * Classify an entire child branch, not just the direct row. Absent entries in
- * `streamStates` are `unknown` so expansion can wait for a real lifecycle
- * signal instead of immediately treating a new child as finished.
+ * `streamStates` are `unknown` so a brand-new child is not treated as
+ * finished before it reports a lifecycle signal.
  */
 export function getStreamBranchActivity(
   inputs: StreamTreeInputs,
@@ -110,27 +110,6 @@ export function getStreamBranchActivity(
   const activity = anyUnknown ? 'unknown' : 'finished';
   cache.set(streamId, activity);
   return activity;
-}
-
-function shouldExpandStreamParent(
-  inputs: StreamTreeInputs,
-  parentId: string,
-  children: readonly StreamTabInfo[],
-  userOverrides: ReadonlyMap<string, StreamTreeExpansionOverride>,
-  cache: Map<StreamTabId, StreamBranchActivity>,
-): boolean {
-  const override = userOverrides.get(parentId);
-  if (override) return override === 'expanded';
-
-  return children.some(
-    (child) =>
-      getStreamBranchActivity(
-        inputs,
-        child.name,
-        new Set([parentId]),
-        cache,
-      ) !== 'finished',
-  );
 }
 
 function classifyStreamActivity(

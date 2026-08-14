@@ -398,10 +398,9 @@ export class StreamTabs extends LitElement {
   @state() private expandedParents: Set<string> = new Set();
 
   /**
-   * Per-parent user intent that overrides the auto-expand/collapse rules.
-   * Entries live as long as the parent is in `childStreamsByParent`; a new
-   * appearance (new run) starts from auto. One map replaces the former
-   * `manuallyCollapsed` + `finishedCollapseHandled` sets.
+   * Per-parent user intent. Child lists start collapsed; this map records
+   * whether the user has expanded or collapsed a given parent. Entries live
+   * as long as the parent is in `childStreamsByParent`.
    */
   private userOverride: Map<string, StreamTreeExpansionOverride> = new Map();
 

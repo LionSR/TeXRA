@@ -45,12 +45,12 @@ function project(
 }
 
 describe('progress stream tree policy', () => {
-  it('keeps a parent expanded while a child has not reported status yet', () => {
+  it('starts a parent collapsed while a child has not reported status yet', () => {
     const childStreamsByParent = new Map([['root', [stream('child', 'root')]]]);
 
     const projection = project(childStreamsByParent);
 
-    assert.equal(projection.expandedParents.has('root'), true);
+    assert.equal(projection.expandedParents.has('root'), false);
     assert.equal(
       getStreamBranchActivity(
         { streamStates: new Map(), childStreamsByParent },
@@ -76,7 +76,7 @@ describe('progress stream tree policy', () => {
     assert.equal(projection.branchActivityByStream.get('child-b'), 'finished');
   });
 
-  it('expands ancestors when a descendant is active', () => {
+  it('keeps ancestors collapsed when a descendant is active', () => {
     const childStreamsByParent = new Map([
       ['root', [stream('child', 'root')]],
       ['child', [stream('grandchild', 'child')]],
@@ -88,8 +88,8 @@ describe('progress stream tree policy', () => {
 
     const projection = project(childStreamsByParent, streamStates);
 
-    assert.equal(projection.expandedParents.has('root'), true);
-    assert.equal(projection.expandedParents.has('child'), true);
+    assert.equal(projection.expandedParents.has('root'), false);
+    assert.equal(projection.expandedParents.has('child'), false);
     assert.equal(projection.branchActivityByStream.get('child'), 'active');
     assert.equal(projection.branchActivityByStream.get('grandchild'), 'active');
   });

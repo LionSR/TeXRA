@@ -10,11 +10,15 @@ All notable changes to this project will be documented in this file.
 
 - **Lean Project remotes are available after sign-in** — the hosted Lean
   agents no longer need a special access group.
+- **The model picker now starts with Sonnet 5 (Thinking)** — new chats use
+  that model by default, and Gemini is no longer the first entry.
 
 ### Extension (VS Code) and Desktop
 
 #### Features
 
+- **Background tasks start collapsed in Sessions** — a new sub-agent or
+  nested run no longer opens the parent row; expand it to inspect children.
 - **Remote agent prompts are available to every signed-in account** — Settings
   → Agents no longer hides View prompt behind an Ultra plan, and remote agents
   no longer show a Remote badge or access-group labels.
