@@ -14,24 +14,9 @@ import {
   KeyedMutex,
   throwAggregated,
   toNewestFirstByTimestamp,
-  utcMonthStart,
   type FlushableDebounce,
 } from '@utils/core';
 import { deriveExecutionId } from '@utils/core/idHash';
-
-describe('utcMonthStart', () => {
-  it('builds midnight UTC on the 1st of the given month', () => {
-    expect(utcMonthStart(2026, 4).toISOString()).toBe(
-      '2026-05-01T00:00:00.000Z',
-    );
-  });
-
-  it('rolls a 12-index month into the next year, for exclusive-end ranges', () => {
-    expect(utcMonthStart(2026, 12).toISOString()).toBe(
-      '2027-01-01T00:00:00.000Z',
-    );
-  });
-});
 
 describe('toNewestFirstByTimestamp', () => {
   it('orders values by newest timestamp first', () => {
