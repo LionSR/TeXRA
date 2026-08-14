@@ -189,22 +189,21 @@ describe('renderAnsiMarkdown', () => {
     ).toBe('`$$` and `$$`');
   });
 
-  it('normalizes HTML between code-wrapped shell parameters', () => {
-    const examples = [
-      ['<code>$_</code> and <code>$-</code>', '`$_` and `$-`'],
-      ['<code>$10</code> and <code>$foo</code>', '`$10` and `$foo`'],
-      ['<code>$HOME</code> and <code>$$</code>', '`$HOME` and `$$`'],
-      ['<code>$$</code> and <code>$PATH</code>', '`$$` and `$PATH`'],
-      [
-        '<code>${HOME}</code> and <code>${PATH}</code>',
-        '`${HOME}` and `${PATH}`',
-      ],
-    ] as const;
-
-    for (const [source, expected] of examples) {
+  it.each([
+    ['<code>$_</code> and <code>$-</code>', '`$_` and `$-`'],
+    ['<code>$10</code> and <code>$foo</code>', '`$10` and `$foo`'],
+    ['<code>$HOME</code> and <code>$$</code>', '`$HOME` and `$$`'],
+    ['<code>$$</code> and <code>$PATH</code>', '`$$` and `$PATH`'],
+    [
+      '<code>${HOME}</code> and <code>${PATH}</code>',
+      '`${HOME}` and `${PATH}`',
+    ],
+  ] as const)(
+    'normalizes HTML between code-wrapped shell parameters: %s',
+    (source, expected) => {
       expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
-    }
-  });
+    },
+  );
 
   it('binds code-wrapped shell pairs to the current dollar delimiters', () => {
     expect(
