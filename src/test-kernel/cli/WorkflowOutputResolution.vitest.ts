@@ -96,6 +96,57 @@ describe('CLI workflow output resolution', () => {
     ).rejects.toThrow(/b\.tex/);
   });
 
+  it('does not publish cancelled workflow outputs to requested destinations', async () => {
+    const cwd = await makeTempDir();
+    const runOutput = await writeRunFile(cwd, 'r0/paper.tex', 'provisional');
+    const outputFile = join(cwd, 'out.tex');
+    const outputDirectoryFile = join(cwd, 'out', 'paper.tex');
+    await writeFile(outputFile, 'existing file');
+    await mkdir(dirname(outputDirectoryFile), { recursive: true });
+    await writeFile(outputDirectoryFile, 'existing directory file');
+
+    const resultForFile = await resolveWorkflowOutput(
+      outputFile,
+      undefined,
+      workflowResult(
+        [{ absolutePath: runOutput, relativePath: 'r0/paper.tex', round: 0 }],
+        RUN_OUTCOME.CANCELLED,
+      ),
+      testContext(cwd),
+      { runDirectory: join(cwd, 'run') },
+    );
+    const resultForDirectory = await resolveWorkflowOutput(
+      undefined,
+      join(cwd, 'out'),
+      workflowResult(
+        [{ absolutePath: runOutput, relativePath: 'r0/paper.tex', round: 0 }],
+        RUN_OUTCOME.CANCELLED,
+      ),
+      testContext(cwd),
+      {
+        expectedOutputFiles: ['paper.tex'],
+        runDirectory: join(cwd, 'run'),
+      },
+    );
+
+    for (const result of [resultForFile, resultForDirectory]) {
+      expect(result).toMatchObject({
+        outcome: RUN_OUTCOME.CANCELLED,
+        workingDirectory: cwd,
+        runDirectory: join(cwd, 'run'),
+      });
+      expect(Object.hasOwn(result, 'status')).toBe(false);
+      expect(Object.hasOwn(result, 'terminalStatus')).toBe(false);
+      expect(Object.hasOwn(result, 'endGroupStatus')).toBe(false);
+      expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
+      expect(Object.hasOwn(result, 'copiedOutputs')).toBe(false);
+    }
+    await expect(readFile(outputFile, 'utf8')).resolves.toBe('existing file');
+    await expect(readFile(outputDirectoryFile, 'utf8')).resolves.toBe(
+      'existing directory file',
+    );
+  });
+
   it('carries only the cancelled outcome for missing workflow outputs', async () => {
     const cwd = await makeTempDir();
 
@@ -104,12 +155,13 @@ describe('CLI workflow output resolution', () => {
       undefined,
       workflowResult([], RUN_OUTCOME.CANCELLED),
       testContext(cwd),
-      {},
+      { runDirectory: join(cwd, 'run') },
     );
 
     expect(result).toMatchObject({
       outcome: RUN_OUTCOME.CANCELLED,
       workingDirectory: cwd,
+      runDirectory: join(cwd, 'run'),
     });
     expect(Object.hasOwn(result, 'status')).toBe(false);
     expect(Object.hasOwn(result, 'terminalStatus')).toBe(false);
