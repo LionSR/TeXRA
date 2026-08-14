@@ -14,6 +14,7 @@ import {
   shouldDeferEscapeInterruptForMetaChord,
   triggerAppCtrlC,
   triggerEscapeInterrupt,
+  visibleApprovalRootStreamId,
   type AppCtrlCState,
   type EscapeInterruptState,
   type ForegroundSurfaceKind,
@@ -109,6 +110,18 @@ function foregroundInput(
 }
 
 describe('app interaction policy', () => {
+  it('folds stream-less approvals onto the root of the visible surface', () => {
+    const sessionRoot = 'session-root' as StreamTabId;
+    const scopedListRoot = 'scoped-list-root' as StreamTabId;
+
+    expect(visibleApprovalRootStreamId(sessionRoot, undefined)).toBe(
+      sessionRoot,
+    );
+    expect(visibleApprovalRootStreamId(sessionRoot, scopedListRoot)).toBe(
+      scopedListRoot,
+    );
+  });
+
   it.each([
     {
       scenario:

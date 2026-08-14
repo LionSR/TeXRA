@@ -8,6 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { App, type AppProps } from '@cli/chat/tui/App';
 import { ESC_META_CHORD_INTERRUPT_DELAY_MS } from '@cli/chat/tui/appInteractionPolicy';
+import {
+  clearApprovals,
+  currentApproval,
+  enqueueApproval,
+} from '@cli/chat/tui/state/approvalQueue';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
@@ -178,7 +183,10 @@ function fakeHistory(entries: readonly string[]): InputHistory {
 }
 
 beforeEach(() => resetCliState());
-afterEach(() => resetCliState());
+afterEach(() => {
+  clearApprovals();
+  resetCliState();
+});
 
 describe('App foreground Escape ownership', () => {
   it('lets a foreground information pane own Escape before child back', async () => {
@@ -1130,6 +1138,280 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => stdout.output.includes('latest prompt'));
 
       expect(stdout.output).not.toContain('Choosing a session');
+    } finally {
+      instance.unmount();
+    }
+  });
+});
+
+describe('App approval surface ownership', () => {
+  it('promotes a session-wide approval when a child becomes the scoped root', async () => {
+    seedChildHierarchy();
+    focusStream(ROOT);
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-other-new-scope',
+        mode: 'followUp',
+        question: 'Wait outside the new scope.',
+        threadId: 'ei_000000000007',
+        allowBypass: false,
+        streamId: 'other-stream',
+      },
+    });
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-session-new-scope',
+        mode: 'followUp',
+        question: 'Verify the newly scoped child.',
+        threadId: 'ei_000000000008',
+        allowBypass: false,
+        streamId: '',
+      },
+    });
+    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
+
+    try {
+      stdin.write('\t');
+      await waitFor(() => stdout.output.includes('Choosing a session'));
+      stdin.write(ARROW_KEYS.Down);
+      await waitFor(() =>
+        stripAnsi(stdout.output)
+          .split('\n')
+          .some((line) => line.includes('child') && line.includes(POINTER)),
+      );
+      stdin.write('\r');
+      await waitFor(() => activeStreamId.get() === CHILD);
+      await waitFor(() => {
+        const pending = currentApproval.get()?.payload;
+        return (
+          pending?.kind === 'externalInquiry' &&
+          pending.payload.requestId === 'external-session-new-scope'
+        );
+      });
+      await waitFor(() =>
+        stdout.output.includes('Verify the newly scoped child.'),
+      );
+      expect(stdout.output).not.toContain('Wait outside the new scope.');
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('focuses a dashboard root before presenting its bound approval', async () => {
+    seedRootStream();
+    setRunning(CHILD);
+    projectChildRoster(ROOT, [
+      runningChild('approval-task-execution', 'approval-task', CHILD),
+    ]);
+    setParentStream(CHILD, ROOT);
+    patchStream(ROOT, (slice) => ({
+      ...slice,
+      agent: 'approval-workflow',
+      identity: {
+        kind: 'multiAgentWorkflow' as const,
+        workflowName: 'approval-workflow',
+      },
+      category: AgentCategory.Workflow,
+      entries: [
+        {
+          id: 'approval-task',
+          role: 'workflowTask' as const,
+          text: 'Running: Approval task',
+          finalized: false,
+          task: {
+            id: 'approval-task',
+            label: 'Approval task',
+            status: 'running' as const,
+            childStreamId: CHILD,
+          },
+        },
+      ],
+    }));
+    focusStream(CHILD);
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-other-dashboard',
+        mode: 'followUp',
+        question: 'Wait outside the dashboard root.',
+        threadId: 'ei_000000000009',
+        allowBypass: false,
+        streamId: 'other-stream',
+      },
+    });
+    void enqueueApproval({
+      kind: 'planApproval',
+      payload: {
+        approvalId: 'plan-dashboard-root',
+        streamId: ROOT,
+        plan: { objective: 'Verify the dashboard root.' },
+        goalEnabled: false,
+      },
+    });
+    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
+
+    try {
+      stdin.write('\t');
+      await waitFor(() => activeStreamId.get() === ROOT);
+      await waitFor(() => {
+        const pending = currentApproval.get()?.payload;
+        return (
+          pending?.kind === 'planApproval' &&
+          pending.payload.approvalId === 'plan-dashboard-root'
+        );
+      });
+      await waitFor(() => stdout.output.includes('Approve plan?'));
+      expect(stdout.output).not.toContain('Wait outside the dashboard root.');
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('promotes a session-wide approval against the post-Escape root', async () => {
+    seedChildHierarchy();
+    focusStream(CHILD);
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-other-after-escape',
+        mode: 'followUp',
+        question: 'Wait outside the destination root.',
+        threadId: 'ei_000000000005',
+        allowBypass: false,
+        streamId: 'other-stream',
+      },
+    });
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-session-after-escape',
+        mode: 'followUp',
+        question: 'Verify the destination root.',
+        threadId: 'ei_000000000006',
+        allowBypass: false,
+        streamId: '',
+      },
+    });
+    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
+
+    try {
+      stdin.write(ESC);
+      await waitFor(() => activeStreamId.get() === ROOT);
+      await waitFor(() => {
+        const pending = currentApproval.get()?.payload;
+        return (
+          pending?.kind === 'externalInquiry' &&
+          pending.payload.requestId === 'external-session-after-escape'
+        );
+      });
+      await waitFor(() =>
+        stdout.output.includes('Verify the destination root.'),
+      );
+      expect(stdout.output).not.toContain('Wait outside the destination root.');
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('promotes a session-wide approval from a scoped-list root', async () => {
+    seedChildHierarchy();
+    focusStream(GRANDCHILD);
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-other-scoped',
+        mode: 'followUp',
+        question: 'Wait outside the scoped list.',
+        threadId: 'ei_000000000003',
+        allowBypass: false,
+        streamId: 'other-stream',
+      },
+    });
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-session-scoped',
+        mode: 'followUp',
+        question: 'Verify the scoped child session.',
+        threadId: 'ei_000000000004',
+        allowBypass: false,
+        streamId: '',
+      },
+    });
+    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
+
+    try {
+      stdin.write('\t');
+      await waitFor(() => stdout.output.includes('inquiry'));
+      stdin.write(ARROW_KEYS.Up);
+      stdin.write('\r');
+      await waitFor(() => {
+        const pending = currentApproval.get()?.payload;
+        return (
+          pending?.kind === 'externalInquiry' &&
+          pending.payload.requestId === 'external-session-scoped'
+        );
+      });
+      await waitFor(() =>
+        stdout.output.includes('Verify the scoped child session.'),
+      );
+      expect(stdout.output).not.toContain('Wait outside the scoped list.');
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('promotes an approval-only dashboard before workflow rows exist', async () => {
+    seedRootStream();
+    patchStream(ROOT, (slice) => ({
+      ...slice,
+      agent: 'Starting workflow',
+      category: AgentCategory.Workflow,
+      identity: {
+        kind: 'multiAgentWorkflow',
+        workflowName: 'starting-workflow',
+      },
+      entries: [],
+    }));
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-other',
+        mode: 'followUp',
+        question: 'Wait outside the active stream.',
+        threadId: 'ei_000000000001',
+        allowBypass: false,
+        streamId: 'other-stream',
+      },
+    });
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'external-session',
+        mode: 'followUp',
+        question: 'Verify the workflow before it emits rows.',
+        threadId: 'ei_000000000002',
+        allowBypass: false,
+        streamId: '',
+      },
+    });
+    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
+
+    try {
+      stdin.write('\t');
+      await waitFor(() => {
+        const pending = currentApproval.get()?.payload;
+        return (
+          pending?.kind === 'externalInquiry' &&
+          pending.payload.requestId === 'external-session'
+        );
+      });
+      await waitFor(() =>
+        stdout.output.includes('Verify the workflow before it emits rows.'),
+      );
+      expect(stdout.output).not.toContain('Wait outside the active stream.');
     } finally {
       instance.unmount();
     }
