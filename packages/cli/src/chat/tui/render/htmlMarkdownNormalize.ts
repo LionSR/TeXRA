@@ -11,15 +11,24 @@ const KNOWN_HTML_TAG_RE =
 // from HTML and would be removed from mathematical prose.
 const HTML_ATTRIBUTES = String.raw`(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>]+))*\s*`;
 const HEADING_TAG_RE = new RegExp(
-  `<h([1-6])${HTML_ATTRIBUTES}>([\\s\\S]*?)<\\/h\\1>`,
+  `<h([1-6])${HTML_ATTRIBUTES}\\/?>([\\s\\S]*?)<\\/h\\1>`,
   'gi',
 );
-const PARAGRAPH_OPEN_TAG_RE = new RegExp(`<(?:p|div)${HTML_ATTRIBUTES}>`, 'gi');
-const STRONG_OPEN_TAG_RE = new RegExp(`<(?:strong|b)${HTML_ATTRIBUTES}>`, 'gi');
-const EMPHASIS_OPEN_TAG_RE = new RegExp(`<(?:em|i)${HTML_ATTRIBUTES}>`, 'gi');
-const CODE_OPEN_TAG_RE = new RegExp(`<code${HTML_ATTRIBUTES}>`, 'gi');
+const PARAGRAPH_OPEN_TAG_RE = new RegExp(
+  `<(?:p|div)${HTML_ATTRIBUTES}\\/?>`,
+  'gi',
+);
+const STRONG_OPEN_TAG_RE = new RegExp(
+  `<(?:strong|b)${HTML_ATTRIBUTES}\\/?>`,
+  'gi',
+);
+const EMPHASIS_OPEN_TAG_RE = new RegExp(
+  `<(?:em|i)${HTML_ATTRIBUTES}\\/?>`,
+  'gi',
+);
+const CODE_OPEN_TAG_RE = new RegExp(`<code${HTML_ATTRIBUTES}\\/?>`, 'gi');
 const BLOCKQUOTE_TAG_RE = new RegExp(
-  `<blockquote${HTML_ATTRIBUTES}>([\\s\\S]*?)<\\/blockquote>`,
+  `<blockquote${HTML_ATTRIBUTES}\\/?>([\\s\\S]*?)<\\/blockquote>`,
   'gi',
 );
 

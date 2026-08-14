@@ -99,6 +99,7 @@ describe('renderAnsiMarkdown', () => {
       '\\[a<b>c\\]',
       '\\[a<i>c\\]',
       '\\[a<br>c\\]',
+      '\\[0<p<1, 1-\\frac{2p}{3}>0, \\frac p3>0\\]',
       '\\(0 < p < 1\\)',
       '\\(0 <p <1\\)',
       '\\(0 <p < 1\\)',
@@ -129,6 +130,17 @@ describe('renderAnsiMarkdown', () => {
     expect(renderPlain('if x <p and y>1 then z')).toContain(
       'if x <p and y>1 then z',
     );
+  });
+
+  it('continues normalizing self-closing HTML formatting tags', () => {
+    const plain = renderPlain('<p/>Paragraph <b/>bold <code/>code');
+
+    expect(plain).toContain('Paragraph');
+    expect(plain).toContain('bold');
+    expect(plain).toContain('code');
+    expect(plain).not.toContain('<p/>');
+    expect(plain).not.toContain('<b/>');
+    expect(plain).not.toContain('<code/>');
   });
 
   it('renders HTML headings as markdown headings without leaking tags', () => {
