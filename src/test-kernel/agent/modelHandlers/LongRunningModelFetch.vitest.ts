@@ -109,6 +109,46 @@ describe('long-running model transport', () => {
     expect(result.text).toBe('transcribed text');
     const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
     expect(init?.body).toBeInstanceOf(UndiciFormData);
+    expect(init?.duplex).toBeUndefined();
+  });
+
+  it('does not set duplex on a direct string body', async () => {
+    stubComposedDispatcher();
+    transportMocks.undiciFetch.mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+
+    await expect(
+      longRunningModelFetch('https://api.example/v1/chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{"prompt":"hello"}',
+      }),
+    ).resolves.toBeInstanceOf(Response);
+
+    const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
+    expect(init?.body).toBe('{"prompt":"hello"}');
+    expect(init?.duplex).toBeUndefined();
+  });
+
+  it('does not set duplex on a direct ArrayBuffer body', async () => {
+    stubComposedDispatcher();
+    transportMocks.undiciFetch.mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+    const body = new TextEncoder().encode('{"prompt":"hello"}').buffer;
+
+    await expect(
+      longRunningModelFetch('https://api.example/v1/chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      }),
+    ).resolves.toBeInstanceOf(Response);
+
+    const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
+    expect(init?.body).toBe(body);
+    expect(init?.duplex).toBeUndefined();
   });
 
   it('sets duplex: half when a caller sends a stream body without it', async () => {
@@ -156,5 +196,27 @@ describe('long-running model transport', () => {
 
     const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
     expect(init?.duplex).toBe('half');
+  });
+
+  it('sets duplex: half for a stream-like body that is not a same-realm ReadableStream', async () => {
+    stubComposedDispatcher();
+    transportMocks.undiciFetch.mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+    const body = {
+      pipeTo: async () => undefined,
+    };
+
+    await expect(
+      longRunningModelFetch('https://api.example/v1/chat', {
+        method: 'POST',
+        body: body as unknown as ReadableStream,
+      }),
+    ).resolves.toBeInstanceOf(Response);
+
+    const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
+    expect(init?.body).toBe(body);
+    expect(init?.duplex).toBe('half');
+    expect(body instanceof ReadableStream).toBe(false);
   });
 });
