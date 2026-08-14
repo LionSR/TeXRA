@@ -59,7 +59,9 @@ export interface LeanSessionOptions {
 
 export class LeanSession {
   private child?: ChildProcessWithoutNullStreams;
+  private spawned?: ChildProcessWithoutNullStreams;
   private rpc?: JsonRpcConnection;
+  private closeWait?: Promise<void>;
   private readonly id: string;
   private readyPromise?: Promise<void>;
   private disposed = false;
@@ -87,31 +89,45 @@ export class LeanSession {
     if (this.disposed) return;
     this.disposed = true;
     const child = this.child;
+    const spawned = this.spawned;
     const rpc = this.rpc;
+    const closeWait = this.closeWait;
     this.child = undefined;
+    this.spawned = undefined;
     this.rpc = undefined;
     this.readyPromise = undefined;
     this.releaseAllDiagnosticsWaiters();
     this.openFiles.clear();
     unregisterLeanServer(this.id);
-    if (!rpc || !child) return;
     try {
-      await pTimeout(rpc.request('shutdown'), {
-        milliseconds: SHUTDOWN_TIMEOUT_MS,
-        message: 'Lean LSP shutdown timeout',
-      }).catch(() => undefined);
-      rpc.notify('exit');
+      if (rpc && child) {
+        try {
+          await pTimeout(rpc.request('shutdown'), {
+            milliseconds: SHUTDOWN_TIMEOUT_MS,
+            message: 'Lean LSP shutdown timeout',
+          }).catch(() => undefined);
+          rpc.notify('exit');
+        } finally {
+          rpc.dispose('LeanSession.dispose');
+        }
+      }
+      if (spawned && spawned.exitCode == null && spawned.signalCode == null) {
+        spawned.kill();
+      }
     } finally {
-      rpc.dispose('LeanSession.dispose');
-      if (!child.killed) {
-        child.kill();
+      if (spawned) {
+        await waitForProcessClose(spawned, closeWait);
       }
     }
   }
 
   async fetchDiagnostics(filePath: string): Promise<LeanDiagnostic[]> {
     const absolute = await this.openAndSettle(filePath);
-    return this.openFiles.get(absolute)?.diagnostics ?? [];
+    const diagnostics = this.openFiles.get(absolute)?.diagnostics;
+    if (this.disposed || diagnostics == null) {
+      throw new Error('Lean session has been disposed.');
+    }
+    return diagnostics;
   }
 
   async restartFile(filePath: string): Promise<void> {
@@ -189,6 +205,10 @@ export class LeanSession {
       });
     }
     this.child = child;
+    this.spawned = child;
+    this.closeWait = new Promise<void>((resolve) => {
+      child.once('close', () => resolve());
+    });
     let stderrTail = '';
     const STDERR_TAIL_LIMIT = 4096;
     let finalized = false;
@@ -335,7 +355,9 @@ export class LeanSession {
     if (!state) return;
     const start = Date.now();
     while (Date.now() - start < DIAGNOSTICS_WAIT_MS) {
-      if (this.disposed || this.openFiles.get(absolute) !== state) return;
+      if (this.disposed || this.openFiles.get(absolute) !== state) {
+        throw new Error('Lean session has been disposed.');
+      }
       const sinceLast = state.lastDiagnosticsAt
         ? Date.now() - state.lastDiagnosticsAt
         : 0;
@@ -405,6 +427,35 @@ function lspSeverityToVsCode(severity: number): DiagnosticSeverity {
   // unexpected out-of-range value is still dropped by SEVERITY_CONFIG's
   // numeric lookup downstream, exactly as before).
   return Math.max(0, severity - 1) as DiagnosticSeverity;
+}
+
+async function waitForProcessClose(
+  child: ChildProcessWithoutNullStreams,
+  alreadyClosed?: Promise<void>,
+): Promise<void> {
+  const closed =
+    alreadyClosed ??
+    new Promise<void>((resolve) => {
+      if (child.exitCode != null || child.signalCode != null) {
+        resolve();
+        return;
+      }
+      child.once('close', () => resolve());
+    });
+  try {
+    await pTimeout(closed, {
+      milliseconds: SHUTDOWN_TIMEOUT_MS,
+      message: 'Lean process close timeout',
+    });
+  } catch {
+    if (child.exitCode == null && child.signalCode == null) {
+      child.kill('SIGKILL');
+    }
+    await pTimeout(closed, {
+      milliseconds: SHUTDOWN_TIMEOUT_MS,
+      message: 'Lean process close timeout after SIGKILL',
+    }).catch(() => undefined);
+  }
 }
 
 function pathToUri(absolute: string): string {
