@@ -1,3 +1,5 @@
+// Node imports
+import { EventEmitter } from 'node:events';
 import {
   chmodSync,
   mkdirSync,
@@ -8,16 +10,45 @@ import {
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
+import { PassThrough } from 'node:stream';
 import { pathToFileURL } from 'node:url';
+
+// Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { spawnOverride } = vi.hoisted(() => ({
+  spawnOverride: {
+    current: undefined as undefined | ((...args: unknown[]) => unknown),
+  },
+}));
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    spawn: (...args: Parameters<typeof actual.spawn>) =>
+      (spawnOverride.current ?? actual.spawn)(...args),
+  };
+});
+
+// Local imports
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { fileUriToPath, LeanSession } from '@tools/lean/direct/leanSession';
+import {
+  isLeanServerActive,
+  listLeanServers,
+} from '@tools/lean/leanServerRegistry';
 import { delay } from '@utils/core';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
 const FAKE_LAKE = `#!/usr/bin/env node
 const fs = require('node:fs');
+
+if (!process.argv.includes('--server')) {
+  const delayMs = Number(process.env.TEXRA_FAKE_LEAN_LAKE_DELAY || 0);
+  setTimeout(() => process.exit(0), delayMs);
+  return;
+}
 
 const countPath = process.env.TEXRA_FAKE_LEAN_COUNT;
 if (countPath) fs.appendFileSync(countPath, 'start\\n');
@@ -40,7 +71,9 @@ function handle(message) {
     return;
   }
   if (message.method === 'exit') {
-    process.exit(0);
+    const delayMs = Number(process.env.TEXRA_FAKE_LEAN_EXIT_DELAY || 0);
+    setTimeout(() => process.exit(0), delayMs);
+    return;
   }
   if (message.method === 'textDocument/didOpen') {
     if (process.env.TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS === '1') return;
@@ -106,6 +139,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  spawnOverride.current = undefined;
   vi.unstubAllEnvs();
   rmSync(tempRoot, { recursive: true, force: true });
 });
@@ -148,15 +182,12 @@ describe('createDirectLspLeanAdapter', () => {
     await session.ensureReady();
 
     const pendingDiagnostics = session.fetchDiagnostics(filePath);
+    const settled = expect(pendingDiagnostics).rejects.toThrow(
+      'Lean session has been disposed.',
+    );
     await delay(100);
     await session.dispose();
-
-    await expect(
-      Promise.race([
-        pendingDiagnostics.then(() => 'settled'),
-        delay(500).then(() => 'timed out'),
-      ]),
-    ).resolves.toBe('settled');
+    await settled;
   });
 
   fakeLakeIt(
@@ -213,4 +244,545 @@ describe('createDirectLspLeanAdapter', () => {
       }
     },
   );
+
+  fakeLakeIt(
+    'evicts the least-recent workspace when the session cap is reached',
+    async () => {
+      const second = makeLakeProject(tempRoot, 'project-b');
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        maxSessions: 1,
+        idleTimeoutMs: 0,
+      });
+      try {
+        await adapter.fetchDiagnosticsForFile(filePath);
+        await adapter.fetchDiagnosticsForFile(second.filePath);
+        expect(await countStarts()).toBe(2);
+        expect(activeServerRoots()).toEqual([second.projectRoot]);
+      } finally {
+        await adapter.dispose();
+      }
+    },
+  );
+
+  fakeLakeIt('keeps more than two active workspaces by default', async () => {
+    const second = makeLakeProject(tempRoot, 'project-b');
+    const third = makeLakeProject(tempRoot, 'project-c');
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 0,
+    });
+    try {
+      await adapter.fetchDiagnosticsForFile(filePath);
+      await adapter.fetchDiagnosticsForFile(second.filePath);
+      await adapter.fetchDiagnosticsForFile(third.filePath);
+      expect(await countStarts()).toBe(3);
+      expect(activeServerRoots()).toEqual([
+        projectRoot,
+        second.projectRoot,
+        third.projectRoot,
+      ]);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
+  fakeLakeIt('stops an idle workspace before opening another', async () => {
+    const second = makeLakeProject(tempRoot, 'project-b');
+    let clock = 0;
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      maxSessions: 2,
+      idleTimeoutMs: 1_000,
+      now: () => clock,
+    });
+    try {
+      await adapter.fetchDiagnosticsForFile(filePath);
+      clock = 2_000;
+      await adapter.fetchDiagnosticsForFile(second.filePath);
+      expect(await countStarts()).toBe(2);
+      expect(activeServerRoots()).toEqual([second.projectRoot]);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
+  fakeLakeIt(
+    'does not stop a session while a diagnostics request is in flight',
+    async () => {
+      vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        idleTimeoutMs: 50,
+      });
+      const pending = adapter.fetchDiagnosticsForFile(filePath);
+      try {
+        await delay(700);
+        expect(activeServerRoots()).toEqual([projectRoot]);
+        await delay(150);
+        expect(activeServerRoots()).toEqual([projectRoot]);
+        await adapter.dispose();
+        await expect(pending).resolves.toMatchObject({
+          ok: false,
+          kind: 'toolchain_unavailable',
+        });
+      } finally {
+        await adapter.dispose();
+        await Promise.allSettled([pending]);
+      }
+    },
+  );
+
+  fakeLakeIt(
+    'does not evict a workspace that still has an in-flight request',
+    async () => {
+      vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
+      const second = makeLakeProject(tempRoot, 'project-b');
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        maxSessions: 1,
+        idleTimeoutMs: 0,
+      });
+      const pendingFirst = adapter.fetchDiagnosticsForFile(filePath);
+      try {
+        await delay(100);
+        const pendingSecond = adapter.fetchDiagnosticsForFile(second.filePath);
+        await delay(100);
+        expect(activeServerRoots()).toEqual([projectRoot]);
+        await adapter.dispose();
+        await Promise.allSettled([pendingFirst, pendingSecond]);
+      } finally {
+        await adapter.dispose();
+        await Promise.allSettled([pendingFirst]);
+      }
+    },
+  );
+
+  fakeLakeIt('does not start queued servers after dispose', async () => {
+    const second = makeLakeProject(tempRoot, 'project-b');
+    const third = makeLakeProject(tempRoot, 'project-c');
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 0,
+    });
+    const pending = Promise.allSettled([
+      adapter.fetchDiagnosticsForFile(filePath),
+      adapter.fetchDiagnosticsForFile(second.filePath),
+      adapter.fetchDiagnosticsForFile(third.filePath),
+    ]);
+    await adapter.dispose();
+    await pending;
+    expect(activeServerRoots()).toEqual([]);
+    const starts = await countStarts();
+    await delay(100);
+    expect(await countStarts()).toBe(starts);
+  });
+
+  fakeLakeIt(
+    'settles a start that was already queued when dispose runs',
+    async () => {
+      vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
+      const second = makeLakeProject(tempRoot, 'project-b');
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        maxSessions: 1,
+        idleTimeoutMs: 0,
+      });
+      const first = adapter.fetchDiagnosticsForFile(filePath);
+      try {
+        await delay(150);
+        expect(activeServerRoots()).toEqual([projectRoot]);
+        const queued = adapter.fetchDiagnosticsForFile(second.filePath);
+        await delay(50);
+        const disposed = adapter.dispose();
+        await expect(
+          Promise.race([
+            queued,
+            delay(1_000).then(() => {
+              throw new Error('queued start did not settle after dispose');
+            }),
+          ]),
+        ).resolves.toMatchObject({
+          ok: false,
+          kind: 'toolchain_unavailable',
+        });
+        await disposed;
+      } finally {
+        await adapter.dispose();
+        await Promise.allSettled([first]);
+      }
+    },
+  );
+
+  fakeLakeIt(
+    'does not SIGKILL a live server two seconds after spawn',
+    async () => {
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        idleTimeoutMs: 0,
+      });
+      try {
+        await adapter.fetchDiagnosticsForFile(filePath);
+        await delay(2_200);
+        expect(activeServerRoots()).toEqual([projectRoot]);
+        expect(await countStarts()).toBe(1);
+        await expect(
+          adapter.fetchDiagnosticsForFile(filePath),
+        ).resolves.toMatchObject({ ok: true });
+        expect(await countStarts()).toBe(1);
+      } finally {
+        await adapter.dispose();
+      }
+    },
+  );
+
+  it('waits for the child to close before a failed start finishes disposing', async () => {
+    const child = createFakeLeanChild({ closeDelayMs: 80, silent: true });
+    spawnOverride.current = () => child;
+
+    const session = new LeanSession({
+      workspaceRoot: projectRoot,
+      lakeCommand: fakeLakePath,
+    });
+    const ready = session.ensureReady();
+    await delay(20);
+    const disposed = session.dispose();
+    let finished = false;
+    void Promise.allSettled([ready, disposed]).then(() => {
+      finished = true;
+    });
+    await delay(30);
+    expect(finished).toBe(false);
+    child.closeSoon();
+    await disposed;
+    await Promise.allSettled([ready]);
+    expect(finished).toBe(true);
+  });
+
+  fakeLakeIt(
+    'does not release a replacement session from a project command that never acquired it',
+    async () => {
+      vi.stubEnv('TEXRA_FAKE_LEAN_EXIT_DELAY', '150');
+      vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '400');
+      const second = makeLakeProject(tempRoot, 'project-b');
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        maxSessions: 1,
+        idleTimeoutMs: 40,
+      });
+      try {
+        await adapter.fetchDiagnosticsForFile(filePath);
+        await delay(80);
+        const build = adapter.executeProjectCommand('build');
+        void build.catch(() => undefined);
+        await delay(200);
+        vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
+        const pending = adapter.fetchDiagnosticsForFile(filePath);
+        await Promise.allSettled([build]);
+        const other = adapter.fetchDiagnosticsForFile(second.filePath);
+        await delay(80);
+        expect(activeServerRoots()).toContain(projectRoot);
+        await adapter.dispose();
+        await Promise.allSettled([pending, other]);
+      } finally {
+        await adapter.dispose();
+      }
+    },
+  );
+
+  it('retries EMFILE after evicting idle sessions without waiting for busy ones', async () => {
+    const second = makeLakeProject(tempRoot, 'project-b');
+    const third = makeLakeProject(tempRoot, 'project-c');
+    let spawnCount = 0;
+    let failNextSpawn = false;
+    spawnOverride.current = () => {
+      spawnCount += 1;
+      if (failNextSpawn) {
+        failNextSpawn = false;
+        throw Object.assign(new Error('too many open files'), {
+          code: 'EMFILE',
+        });
+      }
+      return createFakeLeanChild();
+    };
+
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 0,
+    });
+    try {
+      await adapter.fetchDiagnosticsForFile(filePath);
+      await adapter.fetchDiagnosticsForFile(second.filePath);
+
+      // Keep the first workspace in-flight so recovery cannot evict it.
+      const pendingBusy = adapter.getHoverInfo(filePath, 0, 0);
+      await delay(50);
+
+      failNextSpawn = true;
+      const started = adapter.fetchDiagnosticsForFile(third.filePath);
+      await expect(
+        Promise.race([
+          started,
+          delay(1_000).then(() => {
+            throw new Error('EMFILE recovery waited for the busy session');
+          }),
+        ]),
+      ).resolves.toMatchObject({
+        ok: true,
+        diagnostics: [{ message: 'fake diagnostic' }],
+      });
+      expect(activeServerRoots()).toEqual([projectRoot, third.projectRoot]);
+      expect(spawnCount).toBe(4);
+      await adapter.dispose();
+      await Promise.allSettled([pendingBusy]);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
+  it('awaits already-disposing sessions before retrying EMFILE', async () => {
+    const second = makeLakeProject(tempRoot, 'project-b');
+    let spawnCount = 0;
+    let firstClosed = false;
+    spawnOverride.current = () => {
+      spawnCount += 1;
+      if (spawnCount > 1 && !firstClosed) {
+        throw Object.assign(new Error('too many open files'), {
+          code: 'EMFILE',
+        });
+      }
+      const child = createFakeLeanChild({
+        closeDelayMs: spawnCount === 1 ? 200 : 0,
+      });
+      if (spawnCount === 1) {
+        child.on('close', () => {
+          firstClosed = true;
+        });
+      }
+      return child;
+    };
+
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 30,
+    });
+    try {
+      await adapter.fetchDiagnosticsForFile(filePath);
+      await delay(80);
+      const started = adapter.fetchDiagnosticsForFile(second.filePath);
+      await expect(
+        Promise.race([
+          started,
+          delay(1_000).then(() => {
+            throw new Error(
+              'EMFILE recovery did not wait for the disposing session',
+            );
+          }),
+        ]),
+      ).resolves.toMatchObject({
+        ok: true,
+        diagnostics: [{ message: 'fake diagnostic' }],
+      });
+      expect(firstClosed).toBe(true);
+      expect(spawnCount).toBe(3);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
+  it('keeps a disposing session reserved until the child closes', async () => {
+    let spawnCount = 0;
+    spawnOverride.current = () => {
+      spawnCount += 1;
+      return createFakeLeanChild({ closeDelayMs: 200 });
+    };
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 30,
+    });
+    try {
+      await adapter.fetchDiagnosticsForFile(filePath);
+      expect(spawnCount).toBe(1);
+      await delay(60);
+      const pending = adapter.fetchDiagnosticsForFile(filePath);
+      await delay(40);
+      expect(spawnCount).toBe(1);
+      await pending;
+      expect(spawnCount).toBe(2);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
+  fakeLakeIt('stops a restarted session after it sits idle', async () => {
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 50,
+    });
+    try {
+      await adapter.fetchDiagnosticsForFile(filePath);
+      await adapter.executeProjectCommand('restart_server');
+      expect(activeServerRoots()).toEqual([projectRoot]);
+      await delay(150);
+      expect(activeServerRoots()).toEqual([]);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
+  fakeLakeIt('treats project commands as session activity', async () => {
+    const second = makeLakeProject(tempRoot, 'project-b');
+    let clock = 0;
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      maxSessions: 2,
+      idleTimeoutMs: 1_000,
+      now: () => clock,
+    });
+    try {
+      await adapter.fetchDiagnosticsForFile(filePath);
+      clock = 2_000;
+      await adapter.executeProjectCommand('build');
+      await adapter.fetchDiagnosticsForFile(second.filePath);
+      expect(activeServerRoots()).toEqual([projectRoot, second.projectRoot]);
+    } finally {
+      await adapter.dispose();
+    }
+  });
 });
+
+function makeLakeProject(
+  root: string,
+  name: string,
+): { projectRoot: string; filePath: string } {
+  const projectRoot = path.join(root, name);
+  mkdirSync(projectRoot);
+  writeFileSync(path.join(projectRoot, 'lakefile.toml'), `name = "${name}"\n`);
+  const filePath = path.join(projectRoot, 'Test.lean');
+  writeFileSync(filePath, 'example : True := by trivial\n');
+  return { projectRoot, filePath };
+}
+
+function activeServerRoots(): string[] {
+  return listLeanServers()
+    .filter(isLeanServerActive)
+    .map((info) => info.workspaceRoot)
+    .toSorted((a, b) => a.localeCompare(b));
+}
+
+interface FakeLeanChild extends EventEmitter {
+  stdin: PassThrough;
+  stdout: PassThrough;
+  stderr: PassThrough;
+  pid: number | undefined;
+  killed: boolean;
+  exitCode: number | null;
+  signalCode: NodeJS.Signals | null;
+  kill: (signal?: NodeJS.Signals) => boolean;
+  closeSoon: () => void;
+}
+
+function createFakeLeanChild(options?: {
+  closeDelayMs?: number;
+  silent?: boolean;
+}): FakeLeanChild {
+  const stdin = new PassThrough();
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  let buffer = Buffer.alloc(0);
+  const closeDelayMs = options?.closeDelayMs ?? 0;
+
+  function send(message: unknown): void {
+    const body = Buffer.from(JSON.stringify(message), 'utf8');
+    stdout.write(`Content-Length: ${body.length}\r\n\r\n`);
+    stdout.write(body);
+  }
+
+  function handle(message: {
+    id?: number;
+    method?: string;
+    params?: { textDocument?: { uri?: string } };
+  }): void {
+    if (message.method === 'initialize') {
+      if (options?.silent) return;
+      send({ jsonrpc: '2.0', id: message.id, result: { capabilities: {} } });
+      return;
+    }
+    if (message.method === 'shutdown') {
+      send({ jsonrpc: '2.0', id: message.id, result: null });
+      return;
+    }
+    if (message.method === 'textDocument/didOpen') {
+      const uri = message.params?.textDocument?.uri;
+      if (!uri) return;
+      send({
+        jsonrpc: '2.0',
+        method: 'textDocument/publishDiagnostics',
+        params: {
+          uri,
+          diagnostics: [
+            {
+              severity: 1,
+              message: 'fake diagnostic',
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 1 },
+              },
+              source: 'fake-lean',
+            },
+          ],
+        },
+      });
+    }
+  }
+
+  stdin.on('data', (chunk: Buffer) => {
+    buffer = Buffer.concat([buffer, chunk]);
+    for (;;) {
+      const headerEnd = buffer.indexOf('\r\n\r\n');
+      if (headerEnd < 0) return;
+      const header = buffer.subarray(0, headerEnd).toString('utf8');
+      const match = header.match(/Content-Length: (\d+)/i);
+      if (!match) return;
+      const length = Number.parseInt(match[1], 10);
+      const bodyStart = headerEnd + 4;
+      const frameEnd = bodyStart + length;
+      if (buffer.length < frameEnd) return;
+      const body = buffer.subarray(bodyStart, frameEnd).toString('utf8');
+      buffer = buffer.subarray(frameEnd);
+      handle(JSON.parse(body) as Parameters<typeof handle>[0]);
+    }
+  });
+
+  const events = new EventEmitter();
+  const child = Object.assign(events, {
+    stdin,
+    stdout,
+    stderr,
+    pid: 4242,
+    killed: false,
+    exitCode: null as number | null,
+    signalCode: null as NodeJS.Signals | null,
+    emit: events.emit.bind(events),
+    kill(signal?: NodeJS.Signals) {
+      if (this.exitCode != null || this.signalCode != null) return true;
+      this.killed = true;
+      this.exitCode = 0;
+      this.emit('exit', 0, signal ?? null);
+      const finish = () => {
+        if (!stdin.destroyed) stdin.end();
+        if (!stdout.destroyed) stdout.end();
+        if (!stderr.destroyed) stderr.end();
+        this.emit('close', 0, null);
+      };
+      if (closeDelayMs > 0) setTimeout(finish, closeDelayMs);
+      else finish();
+      return true;
+    },
+    closeSoon() {
+      this.exitCode = 1;
+      this.emit('close', 1, null);
+    },
+  });
+  return child;
+}
