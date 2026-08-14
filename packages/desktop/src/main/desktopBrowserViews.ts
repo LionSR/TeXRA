@@ -26,15 +26,8 @@ export interface DesktopBrowserViewsOptions {
   getWindow(): BaseWindow | undefined;
   /** Opens a URL outside the app (used for schemes we refuse to embed). */
   openExternalUrl(url: string): Promise<void>;
-  /** Reports navigation state so the renderer can update its URL bar. */
-  onNavigated(input: {
-    tabId: string;
-    url: string;
-    title: string;
-    canGoBack: boolean;
-    canGoForward: boolean;
-    loading: boolean;
-  }): void;
+  /** Reports the page title so the renderer can rename the browser tab. */
+  onNavigated(input: { tabId: string; title: string }): void;
   onError?(error: unknown): void;
 }
 
@@ -87,14 +80,7 @@ export function createDesktopBrowserViews(
   function publishState(tabId: string, view: WebContentsView): void {
     const { webContents } = view;
     if (webContents.isDestroyed()) return;
-    options.onNavigated({
-      tabId,
-      url: webContents.getURL(),
-      title: webContents.getTitle(),
-      canGoBack: webContents.navigationHistory.canGoBack(),
-      canGoForward: webContents.navigationHistory.canGoForward(),
-      loading: webContents.isLoading(),
-    });
+    options.onNavigated({ tabId, title: webContents.getTitle() });
   }
 
   function installPolicy(tabId: string, webContents: WebContents): void {
@@ -113,17 +99,13 @@ export function createDesktopBrowserViews(
       event.preventDefault();
       openAllowedExternalUrl(url);
     });
-    // Registered one at a time rather than in a loop: `WebContents.on` is a
-    // union of per-event overloads, so a loop variable collapses to the last
-    // signature and stops type-checking.
+    // `page-title-updated` covers every explicit title change; `did-navigate`
+    // covers pages without one, where `getTitle()` falls back to the URL.
     const republish = (): void => {
       const view = views.get(tabId);
       if (view) publishState(tabId, view);
     };
     webContents.on('did-navigate', republish);
-    webContents.on('did-navigate-in-page', republish);
-    webContents.on('did-finish-load', republish);
-    webContents.on('did-stop-loading', republish);
     webContents.on('page-title-updated', republish);
   }
 

@@ -185,8 +185,8 @@ export function createMessageRoutes(
     messageRoute(DesktopTerminalErrorMessageSchema, (message) =>
       handlers.terminal.reportError(message.sessionId, message.message),
     ),
-    // Only the title is surfaced today: it renames the document so a browser tab
-    // reads as its page rather than a generic "Browser".
+    // Renames the document so a browser tab reads as its page rather than a
+    // generic "Browser".
     messageRoute(DesktopBrowserStateMessageSchema, (message) =>
       handlers.renameBrowserTab(message.tabId, message.title),
     ),

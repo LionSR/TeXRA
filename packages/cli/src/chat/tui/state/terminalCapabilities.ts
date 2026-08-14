@@ -1,9 +1,8 @@
 // Terminal feature discovery via the DA1-sentinel pattern.
 //
-// We write a batch of capability queries (Kitty keyboard protocol, DECRQM
-// for grapheme cluster mode, OSC color reads) followed by
-// `CSI c` (Device Attributes 1). Every terminal answers DA1, so
-// any feature whose reply lands before the DA1 response is supported.
+// We write a batch of capability queries (Kitty keyboard protocol, OSC color
+// reads) followed by `CSI c` (Device Attributes 1). Every terminal answers
+// DA1, so any feature whose reply lands before the DA1 response is supported.
 // There are no *per-capability* timeouts — only an outer 250ms safeguard for
 // terminals that fail to answer DA1 at all, so startup never blocks.
 //
@@ -19,15 +18,12 @@ import { signal } from '@lit-labs/signals';
 export interface TerminalCapabilities {
   /** Kitty keyboard progressive enhancement protocol (`CSI ? u`). */
   readonly kittyKeyboard: boolean;
-  /** Grapheme cluster mode (DECRQM mode 2027). */
-  readonly graphemeClusters: boolean;
   /** OSC 4 (color table) is honored — proxy for OSC-family support. */
   readonly oscColorReports: boolean;
 }
 
 const NONE: TerminalCapabilities = {
   kittyKeyboard: false,
-  graphemeClusters: false,
   oscColorReports: false,
 };
 
@@ -37,7 +33,6 @@ export const terminalCapabilities = signal<TerminalCapabilities>(NONE);
 // The order matches the response order so we can scan for response markers.
 const QUERIES = {
   kittyKeyboard: '[?u',
-  graphemeClusters: '[?2027$p',
   oscColorReports: ']4;0;?',
 } as const satisfies Record<keyof TerminalCapabilities, string>;
 
@@ -51,8 +46,6 @@ const DA1_SENTINEL = '[c';
 const RESPONSE_MARKERS = {
   // Kitty keyboard: `CSI ? <flags> u`
   kittyKeyboard: /\[\?[\d;]*u/,
-  // DECRPM grapheme clusters: `CSI ? 2027 ; <value> $ y`
-  graphemeClusters: /\[\?2027;[01]\$y/,
   // OSC 4 color: `OSC 4 ; <index> ; rgb:... BEL` (or ST)
   oscColorReports: /\]4;0;rgb:/,
 } as const satisfies Record<keyof typeof QUERIES, RegExp>;
@@ -119,7 +112,6 @@ export async function discoverTerminalCapabilities(
 
   const caps: TerminalCapabilities = {
     kittyKeyboard: RESPONSE_MARKERS.kittyKeyboard.test(result),
-    graphemeClusters: RESPONSE_MARKERS.graphemeClusters.test(result),
     oscColorReports: RESPONSE_MARKERS.oscColorReports.test(result),
   };
   terminalCapabilities.set(caps);
