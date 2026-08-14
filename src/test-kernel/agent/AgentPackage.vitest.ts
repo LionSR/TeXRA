@@ -44,7 +44,7 @@ vi.mock('@agent/trace', () => ({
   createChannelTrace: () => ({ warn: mocks.warn }),
 }));
 
-vi.mock('@agent/index/agentRegistry', () => ({
+vi.mock('@agent/index', () => ({
   loadAgents: mocks.loadAgents,
   resolveAgent: () => ({
     entry: {
@@ -55,7 +55,9 @@ vi.mock('@agent/index/agentRegistry', () => ({
   }),
 }));
 
-vi.mock('@agent/runtime/SessionHandle', () => ({
+// The package reaches the runtime through the curated `@agent/runtime` barrel,
+// so the suite mocks that one door instead of each runtime module by path.
+vi.mock('@agent/runtime', () => ({
   SessionHandle: class {
     readonly events = { subscribe: mocks.subscribe };
     readonly executions = {
@@ -65,15 +67,12 @@ vi.mock('@agent/runtime/SessionHandle', () => ({
     useHostInteractions = mocks.useHostInteractions;
     dispose = mocks.disposeSession;
   },
+  runAgent: mocks.runValidatedAgent,
 }));
 
 vi.mock('@tools/agentCliSessionStores', () => ({
   ClaudeAgentSessions: { interruptAll: mocks.interruptClaudeAgentSessions },
   CodexThreads: { interruptAll: mocks.interruptCodexThreads },
-}));
-
-vi.mock('@agent/runtime/runAgent', () => ({
-  runAgent: mocks.runValidatedAgent,
 }));
 
 vi.mock('@platform/defaults/nodeHost', () => ({

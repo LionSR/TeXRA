@@ -1,150 +1,192 @@
-# Agent-SDK readiness — scheduled re-verification pass (2026-08-14)
+# Agent-SDK readiness — re-verification pass and SDK-package fold-in (2026-08-14)
 
-> **Status:** Verification / reconciliation, written 2026-08-14 at HEAD `70df50f`.
-> This is **not** a new plan. A scheduled audit routine re-ran the standing
-> question — "audit the core, model handler, logger, and surface for unnecessary
-> abstraction and unready surface" — against the current tree and reconciled the
-> answer with the plan of record
+> **Status:** Verification + one landed increment, written 2026-08-14 at HEAD
+> `70df50f`. A scheduled audit routine re-ran the standing question — "audit the
+> core, model handler, logger, and surface for unnecessary abstraction and
+> unready surface" — reconciled it against the plan of record
 > ([`2026-07-09-agent-sdk-north-star.md`](./2026-07-09-agent-sdk-north-star.md))
-> and the two prior verification passes
-> ([`2026-08-04-agent-sdk-readiness-review.md`](./2026-08-04-agent-sdk-readiness-review.md),
-> [`2026-08-12-agent-sdk-readiness-reverify.md`](./2026-08-12-agent-sdk-readiness-reverify.md)).
-> Every claim carries a `file:line` or config path, checked at this HEAD. No code
-> was changed by this routine.
+> and the prior passes
+> ([`-08-04`](./2026-08-04-agent-sdk-readiness-review.md),
+> [`-08-12`](./2026-08-12-agent-sdk-readiness-reverify.md)), and then landed the
+> next incremental fold-in. Every claim carries a `file:line`, config path, or
+> commit, checked at this HEAD.
 
 ## 0. Verdict
 
-**The standing verdict still holds: the codebase is already well-aligned with an
-Agent-SDK shape. No structural refactor is warranted, and no genuinely redundant
-abstraction was found to remove.** The one structural open item (§3) is the
-human-review-gated Tier-1 public-API decision, not an unattended mechanical edit,
-so this routine performed **no code changes**.
+**The standing verdict holds: the codebase is well-aligned with an Agent-SDK
+shape, no structural refactor is warranted, and no genuinely redundant
+abstraction was found to remove.**
 
-Two things are worth recording since `-08-12`:
+What is new in this pass:
 
-1. **The host deep-import baselines are materially smaller than the last recorded
-   pass** (§2). Whichever way the history reconciles, at this HEAD the surface is
-   tighter and the invariant CLAUDE.md pins — _never widen a baseline_ — holds.
-2. **The SDK package's own coupling width is unchanged at 10 specifiers, with the
-   identical 5-public + 5-incidental split** (§2). The concrete Tier-1 fold-in
-   target has therefore **not** advanced in the barrel — it is exactly where
-   `-08-12 §2` left it.
+1. **The `-08-12` reconciliation item is resolved** (§2). The host baselines
+   dropped because of two real merged commits, not a history gap.
+2. **The SDK package is folded behind the `@agent/runtime` barrel: 10 → 7
+   specifiers** (§3) — the increment #10011 skipped.
+3. **A hard constraint was discovered that bounds the fold** (§4): the package's
+   _public_ types cannot come from the broad runtime barrel, because declaration
+   emit drags the barrel's whole `.d.ts` graph into the published type surface
+   and trips the provider-type leak check. This is enforced, not stylistic.
+4. **Two items previously listed as open are already done** (§5), and **the
+   `-08-12` "higher-level public-typed entry" proposal conflicts with the plan of
+   record** (§6) and should not be built as written.
 
 ---
 
 ## 1. Scope re-audited
 
-| Area          | Entry points inspected                                                                                              |
-| ------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Agent core    | `src/agent/runtime/{runAgent,executeAgent}.ts`, `src/agent/implementations/flows/`                                  |
-| Model handler | `src/agent/modelHandlers/ModelHandler.ts`, `src/agent/types/IModelHandler.ts`                                       |
-| Logger        | `src/logger/{logUtils,redaction}.ts`, `src/agent/trace/channelTrace.ts`                                             |
-| Surface       | `packages/agent/src/{index,schemas,node}.ts`, `config/ratchets/host-agent-import-baseline.json`, the R-b ratchet    |
-| Subagents     | `src/tools/delegation/`, `src/agent/{review,goal,roster}/`, `implementations/flows/agentCreator/`                   |
+| Area          | Entry points inspected                                                                                         |
+| ------------- | -------------------------------------------------------------------------------------------------------------- |
+| Agent core    | `src/agent/runtime/{runAgent,executeAgent,index}.ts`, `src/agent/implementations/flows/`                       |
+| Model handler | `src/agent/modelHandlers/ModelHandler.ts`, `src/agent/types/IModelHandler.ts`                                  |
+| Logger        | `src/logger/{logUtils,redaction}.ts`, `src/agent/trace/channelTrace.ts`                                        |
+| Surface       | `packages/agent/src/{index,schemas,node}.ts`, the R-b ratchet, `packages/agent/scripts/validate-artifacts.mjs` |
+| Subagents     | `src/tools/delegation/`, `src/agent/{review,goal,roster}/`, `implementations/flows/agentCreator/`              |
 
-## 2. Surface — invariant holds; the fold-in target is unchanged
+## 2. Reconciliation item from `-08-12` — resolved
 
-Distinct `@agent/*` deep-import specifiers per package
-(`config/ratchets/host-agent-import-baseline.json`, verified against a scan of
-each package's `src` tree):
+The `-08-12` pass recorded extension 34 / cli 31 / desktop 25, while this tree
+showed 17 / 18 / 13. Fetching the cited HEAD settles it: at `a7b1a64` the
+baseline was **exactly cli 31, desktop 25, extension 34, agent 10** — the `-08-12`
+numbers were correct. The drop came from two merged commits:
 
-| Package     | `-08-12` (recorded) | `-08-14` baseline | scan at HEAD | invariant |
-| ----------- | ------------------- | ----------------- | ------------ | --------- |
-| extension   | 34                  | **17**            | ≤ 17         | held      |
-| cli         | 31                  | **18**            | ≤ 18         | held      |
-| desktop     | 25                  | **13**            | ≤ 13         | held      |
-| agent (SDK) | 10                  | **10**            | 10           | held      |
+- **`d3e6ad51` — "fold host runtime deep-imports behind an `@agent/runtime`
+  barrel (#10011)"**, whose own message calls it "the first incremental Tier-1
+  fold-in from the Agent-SDK north star".
+- **`66796d1f` — "relocate misplaced abstraction-layer utilities (#10118)"**.
 
-The scan at HEAD sits at or below the checked-in baseline for every package —
-nothing widened, which is the only thing the R-b ratchet
-(`src/test-kernel/architecture/hostAgentDeepImportRatchet.vitest.ts:154-161`)
-guards. The host counts are much lower than the numbers the `-08-12` note
-recorded; this branch's history is shallow here and does not contain that pass's
-cited HEAD, so I record the current authoritative numbers rather than assert a
-delta I cannot fully trace. Either way the direction is correct and the invariant
-holds. **One reconciliation item for a maintainer:** confirm the host-list shrink
-reflects landed Tier-1 fold-in versus a branch-history gap; it does not block
-anything.
+So this is **landed Tier-1 progress, not a history gap**. No bookkeeping action
+remains. Note for future passes: #10011 also settles the §5 "no barrel" question
+— that caution was about a premature public `@texra/core` package, not about an
+internal curated barrel, which is now the sanctioned fold-in mechanism.
 
-The **SDK package's own 10 specifiers** decompose exactly as `-08-12 §2` found:
+## 3. What this pass landed — the SDK package fold-in (10 → 7)
 
-- **5 genuine public re-exports** — `@agent/core/definition/AgentConfig` and
-  `@agent/core/definition/AgentDataclass` (schemas + types,
-  `packages/agent/src/schemas.ts:1-24`), `@agent/core/tools/ToolTypes`
-  (`index.ts:24-25`), `@agent/runtime/AgentFlowResult` (`schemas.ts:25-33`,
-  `index.ts:29-33`), and `@agent/trace` (`index.ts:23`).
-- **5 incidental internal wiring** reached only inside the `runAgent` wrapper
-  body — `@agent/index/agentRegistry` (`index.ts:10`),
-  `@agent/runtime/runAgent` (`:12`), `@agent/runtime/SessionHandle` (`:11`), and
-  the type-only `@agent/runtime/ExecutionHandle` (`:3`) and
-  `@agent/runtime/HostInteractions` (`:5`).
+#10011 folded the three hosts behind `@agent/runtime` but left the SDK package
+itself at 10 specifiers. This pass applies the same pattern to that package:
 
-Sealing those five behind one higher-level, public-typed runtime entry (resolve
-agent by name, own the session, accept/return only public types) is the concrete
-shrink target — **unchanged since `-08-12`**, because the barrel
-(`packages/agent/src/index.ts`) is structurally the same: a single
-`runAgent(input): AgentRun` (`:206`), `HostInteractions` that still withholds
-approval methods pending a stable contract (`:42-50`), a hard-deny `requestRetry`
-(`:236-239`), and package-owned child teardown (`:282-297`).
+| Specifier                         | Before | After                          |
+| --------------------------------- | ------ | ------------------------------ |
+| `@agent/runtime/runAgent`         | ✓      | → `@agent/runtime`             |
+| `@agent/runtime/SessionHandle`    | ✓      | → `@agent/runtime`             |
+| `@agent/runtime/ExecutionHandle`  | ✓      | → `@agent/runtime`             |
+| `@agent/runtime/HostInteractions` | ✓      | → `@agent/runtime`             |
+| `@agent/index/agentRegistry`      | ✓      | → `@agent/index`               |
+| `@agent/runtime/AgentFlowResult`  | ✓      | **kept deliberately** — see §4 |
 
-## 3. Abstraction audit — still nothing redundant to remove
+Net: **10 → 7**, baseline shrunk in `config/ratchets/host-agent-import-baseline.json`.
+The package no longer pins five internal runtime module paths; runtime files can
+move or split without breaking it.
 
-Every layer a generic "collapse the wrappers" pass would flag was re-checked
-against the repo's own guardrails and remains load-bearing:
+This is a **barrel fold, not a new layer** — no wrapper function, no facade, no
+new abstraction. The touched files are `packages/agent/src/index.ts`,
+`src/test-kernel/agent/AgentPackage.vitest.ts` (mocks the one barrel door
+instead of each module path), and the baseline.
 
-- **Runtime layering `runAgent` → `executeAgent` is earned.** `runAgent`
-  (`runAgent.ts:78-85`) validates-then-runs: assigns an `executionId` when the
-  request omits one, registers the execution, and invokes `openWorkflowOutput` —
-  not a pass-through. `executeAgent` has ≥3 distinct production entries
-  (`runAgent.ts:157`, subagent delegation `nativeSubagentStrategy.ts:254`, and the
-  CLI resume path), so the split carries real reuse.
-- **`ModelHandler` remains a genuine provider port.** `IModelHandler`
-  (`src/agent/types/IModelHandler.ts`) is the narrowed consumer port and still
-  carries the single interface-only optional member the class does not require of
-  every path — `createBatchedToolUseFollowUpMessages` (`:104`) — feature-detected
-  at the call site. Not redundant.
-- **The logger surface is already minimal** and single-owner: `logUtils.ts`
-  (250 LoC) is the sink/redaction layer, `redaction.ts` (117 LoC) the policy, and
-  `channelTrace.ts` (82 LoC) spreads `noopTrace` and overrides only the log
-  methods — no wrapper subclass. Nothing to remove.
-- **Standing watch-items, unchanged, do not touch:** the `applyHelperModelPreference`
-  single-caller extraction (real capability branching + its own vitest) and the
-  `ModelFactory` routing round-trip that re-reads `PROVIDER_HANDLER_ROUTES`
-  (documented rationale; async provider overrides can't live in the pure
-  predicate). Both remain defensible-but-not-free — revisit only if edited for
-  another reason.
+Verified: `npm run typecheck` clean; agent package build validates 720
+declarations / 69 external packages; lint and prettier clean; 3,107 tests pass
+across `src/test-kernel/architecture/` and `src/test-kernel/agent/`.
 
-## 4. Logger observability gap — carried forward from `-08-12 §4`
+## 4. New hard finding — the barrel cannot carry the package's public types
 
-No change. Anything logged outside a live run's `AgentTrace` still never reaches
-the SDK embedder's `AgentRun` stream: the package's own bootstrap logger
-(`createChannelTrace('agentPackage')`, `index.ts:75`) and model-handler routing
-decisions log to the process-wide sink, not the per-run `AgentEvent` stream.
-Whether those should join the stream is a Tier-1 surface decision, not a defect to
-hot-fix. (`platform().log` is still not a real surface — do not plan against it.)
+This bounds the fold-in permanently and is the most useful thing this pass found.
 
-## 5. Subagent boundaries — unchanged from `-08-04 §4` / `-08-12 §5`
+`packages/agent/scripts/validate-artifacts.mjs:115-132` walks the **entire
+transitive `.d.ts` graph reachable from the main entry** and fails the build if
+any provider SDK appears (`@anthropic-ai/sdk`, `@google/genai`, `@openrouter/sdk`,
+`openai`). Routing `AgentFlowResult` — which appears in the package's public
+declarations (`AgentRun.result`, plus its re-export) — through `@agent/runtime`
+made `index.d.ts` import the barrel, whose graph reaches
+`ModelHandlerContracts.d.ts` → `@anthropic-ai/sdk`. The build failed with
+`Provider type leaked into the main entry`.
+
+The rule this yields, now documented at the import site
+(`packages/agent/src/index.ts`):
+
+- **Values, and types used only inside function bodies** (`SessionHandle`,
+  `runAgent`, `AgentRunHandle`, `HostInteractions`) — safe through the barrel;
+  they never reach the emitted declarations.
+- **Types in public declarations** (`AgentFlowResult`) — must come from their own
+  narrow module, or the barrel's whole graph joins the published surface.
+
+This also explains why #10011 stopped where it did: **the SDK package's remaining
+specifiers are not all collapsible.** Any future "seal the last specifiers" work
+has to respect this, so the realistic floor is a handful of narrow public-type
+modules plus the barrel — not one door.
+
+## 5. Items previously listed as open that are already done
+
+Checked against the north-star's own acceptance metrics (§6 of that doc):
+
+- **Phantom contract arms (metric: 6 of 11 → 0).** Done.
+  `RuntimePresentationEventPayloads` now has exactly **5 arms**, none phantom
+  (`src/agent/runtime/runtimePresentationEvents.ts:16-22`).
+- **Embedder smoke test (metric: none → contract suite green).** Done.
+  `src/test-kernel/agent/AgentPackage.vitest.ts` is a real consumer-contract
+  suite: init-once-per-process, event-subscribe-before-run ordering, approval-tool
+  rejection, teardown ordering, disposal-failure paths, early-iteration detach.
+- **`'runFact.'` prefix retirement — not yet due.** Dated v0.41; the repo is at
+  **0.40.3**. On schedule, no action.
+
+## 6. Correction — the `-08-12` "higher-level entry" proposal conflicts with the plan of record
+
+`-08-12 §2` proposed sealing four specifiers "by giving the runtime one
+higher-level, public-typed entry that resolves the agent by name, owns the
+session, and returns/accepts only public types", and called that "unchanged from
+the north-star". **That last claim is wrong.** North-star §5, under "What NOT to
+do (verified traps, do not relitigate)":
+
+> **No `runSession()` facade / SDK wrapper layer** — the ceremony shrinks by
+> _deleting_ host-side bookkeeping into `SessionHandle`, not by wrapping it.
+
+The proposed entry is exactly that facade. The sanctioned mechanism is the
+barrel fold (§3, precedent #10011) plus, per north-star Step 2, moving
+attach/load/flush bookkeeping _into_ `SessionHandle` — host lines deleted per
+concern. Future passes should not resurrect the wrapper.
+
+## 7. Abstraction audit — still nothing redundant to remove
+
+Re-checked against the repo's guardrails; all load-bearing:
+
+- **`runAgent` → `executeAgent` is earned.** `runAgent` validates-then-runs:
+  assigns `executionId`, registers the execution, opens workflow output
+  (`runAgent.ts:78-85`). `executeAgent` has ≥3 production entries
+  (`runAgent.ts:157`, `nativeSubagentStrategy.ts:254`, CLI resume).
+- **`ModelHandler` remains a genuine provider port**, consumed as the narrowed
+  `IModelHandler` with its one interface-only optional member
+  (`createBatchedToolUseFollowUpMessages`, `IModelHandler.ts:104`).
+- **The logger surface is minimal and single-owner** — `logUtils.ts` (250 LoC),
+  `redaction.ts` (117), `channelTrace.ts` (82, spreads `noopTrace`, no wrapper
+  subclass).
+- **Standing watch-items, unchanged:** `applyHelperModelPreference`
+  (single-caller but real branching + its own vitest) and the `ModelFactory`
+  routing round-trip. Revisit only if edited for another reason.
+
+## 8. Subagent boundaries — unchanged
 
 The dispatch boundary (`delegate_agent`/`delegate_workflow` → `executeSubagent` →
-`createNativeSubagentStrategy` → `startChildRunLoop`) is still cleanly drawn and
-host-agnostic. Already-independent units to promote as-is: `src/tools/delegation/`,
-`src/agent/review/` (review→fix pipeline), `agentCreator/agentCreatorFlow.ts`, the
-agent-CLI adapters. The two per-run engines (`runReflectionFlow`, `runToolUseFlow`)
-and the `goal/` loop remain runtime-coupled; isolating them behind the barrel _is_
-the §2 Tier-1 work, not a separate refactor.
+`createNativeSubagentStrategy` → `startChildRunLoop`) is cleanly drawn and
+host-agnostic. Promote-as-is units: `src/tools/delegation/`, `src/agent/review/`,
+`agentCreator/agentCreatorFlow.ts`, the agent-CLI adapters. The two per-run
+engines and the `goal/` loop remain runtime-coupled — north-star Step 2 work.
 
-## 6. Actionable items (all pre-existing; none performed by this routine)
+## 9. Remaining open items
 
-1. **Tier-1 barrel, incrementally** (north-star; §2). Fold the five incidental
-   wiring specifiers into one higher-level public entry, one cluster per PR, and
-   shrink the matching baseline. Human-review gated.
-2. **Stabilize the withheld interaction contract** (`index.ts:42-50`, hard-deny
-   `requestRetry` `:236-239`). The next surface decision.
-3. **Decide the logger→stream question** (§4). Small, additive; belongs to the
-   Tier-1 surface decision, not a standalone churn PR.
-4. **Reconcile the host baseline numbers** (§2). Confirm the drop from the
-   `-08-12` record is landed fold-in versus a history gap. Bookkeeping, not a code
-   change.
+1. **`HostInteractions` required/optional (north-star TD-2(a), metric 0/7 → 6/7).**
+   Still open — all request methods are optional (`HostInteractions.ts:344-391`).
+   This is the real content of what earlier passes vaguely called "stabilize the
+   withheld interaction contract". **Genuine maintainer decision, not a mechanical
+   edit:** it is cross-host, it "rides micro-audit A2's −300..−450 legacy-fallback
+   deletion" per the north-star, and it forces an answer to what a UI-less embedder
+   does about tool-edit/bash approval — today the package rejects approval-requiring
+   tools outright (`packages/agent/src/index.ts`) and hard-denies `requestRetry`.
+   Deliberately not invented here.
+2. **Logger → event stream (`-08-12 §4`).** Unchanged: the package's bootstrap
+   logger and model-handler routing decisions reach only the process-wide sink,
+   never the embedder's `AgentRun`. Surfacing them means **extending `AgentEvent`**,
+   which CLAUDE.md routes through the event-channel ruling — a proposal, not a
+   churn PR. (`platform().log` is still not a real surface; do not plan against it.)
+3. **Further specifier reduction** is bounded by §4 — the remaining 7 are near the
+   realistic floor without redesigning the barrel's type graph.
 
-Nothing here is a defect. Items 1–3 are the already-planned north-star work with
-current line references; item 4 is this pass's only fresh, non-code note.
+Nothing in §9 is a defect.
