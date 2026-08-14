@@ -13,7 +13,6 @@ import {
 } from '@agent/output/OutputFileProcessor';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { normalizeRunId } from '@common/constants/runIds';
 import type {
   AgentFileLocation,
   CompileFailure,
@@ -21,6 +20,7 @@ import type {
   FileLocation,
   OutputFileInfo,
   RoundOutput,
+  StorageKey,
   StreamTabId,
 } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -93,7 +93,7 @@ function createCompileFailureFixture() {
     logExcerpt: '! Missing $ inserted.',
   };
   const summary = {
-    storageKey: normalizeRunId('run:compile-context'),
+    storageKey: 'run:compile-context' as StorageKey,
     currRound: 0,
     fileInfos: [],
     filesToOpen: [],
@@ -211,7 +211,7 @@ describe('output progress events', () => {
         },
         {
           summary: {
-            storageKey: normalizeRunId('run:output-node'),
+            storageKey: 'run:output-node' as StorageKey,
             currRound: 2,
             fileInfos: [fileInfo],
             filesToOpen: [openedLocation],

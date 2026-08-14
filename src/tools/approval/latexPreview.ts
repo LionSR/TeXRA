@@ -257,7 +257,6 @@ export async function runLatexdiff(
       tempPathToLocation(originalPath),
       tempPathToLocation(proposedPath),
       '_diff',
-      false,
       'coarse',
       {
         cwd: WorkspaceFS.getPath() ?? path.dirname(originalPath),

@@ -121,7 +121,12 @@ describe('settings history handlers', () => {
       {
         resumable: true,
         cause: RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
-        flowRecord: { flowName: 'tooluse', params: {}, shared: {}, nodes: [] },
+        flowRecord: {
+          flowName: 'tooluse',
+          shared: {},
+          cursor: { nextNodeId: 'start' },
+          nodes: [],
+        },
         outcome: RUN_OUTCOME.CANCELLED,
       },
       HISTORY_RUN_STATUS.RESUMABLE,

@@ -73,8 +73,6 @@ describe('GitHub REST response schemas', () => {
         annotation_level: null,
         title: null,
         message: 'message',
-        raw_details: null,
-        blob_href: null,
       }).success,
     ).toBe(true);
 

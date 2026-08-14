@@ -32,9 +32,7 @@ vi.mock('node:fs', async (importOriginal) => ({
 const NO_TERMINAL_CAPABILITIES = {
   kittyKeyboard: false,
   graphemeClusters: false,
-  bracketedPaste: false,
   oscColorReports: false,
-  discovered: false,
 };
 
 afterEach(() => {
@@ -98,7 +96,6 @@ describe('installTerminalTitleUpdates', () => {
     terminalCapabilities.set({
       ...NO_TERMINAL_CAPABILITIES,
       oscColorReports: true,
-      discovered: true,
     });
   };
   const flushTitleUpdate = async (): Promise<void> => {

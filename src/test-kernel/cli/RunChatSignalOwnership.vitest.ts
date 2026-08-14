@@ -288,8 +288,6 @@ describe('runChat signal ownership wiring', () => {
       reverseFind: vi.fn(),
     });
     mocks.discoverTerminalCapabilities.mockResolvedValue({
-      bracketedPaste: false,
-      discovered: false,
       graphemeClusters: false,
       kittyKeyboard: false,
       oscColorReports: false,

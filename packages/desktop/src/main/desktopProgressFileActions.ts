@@ -173,7 +173,6 @@ export class DesktopProgressFileActions {
       pathToLocation(baseFile),
       pathToLocation(editedFile),
       '_diff',
-      false,
       DEFAULT_MATH_MARKUP,
     );
 

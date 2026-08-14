@@ -38,17 +38,9 @@ describe('arXiv processor paths', () => {
     options?: Parameters<typeof resolveArxivPaperDirectoryRelative>[1];
     expected: string;
   }>([
-    {
-      id: '2404.12175',
-      options: { into: 'papers' },
-      expected: 'papers/2404.12175',
-    },
-    {
-      id: 'math/0501234',
-      options: { into: 'papers/' },
-      expected: 'papers/math_0501234',
-    },
     { id: '2404.12175', expected: 'References/2404.12175' },
+    { id: 'math/0501234', expected: 'References/math_0501234' },
+    { id: '2404.12175', options: { destination: 'root' }, expected: '.' },
   ])(
     'keeps arxiv destinations id-specific ($id → $expected)',
     ({ id, options, expected }) => {

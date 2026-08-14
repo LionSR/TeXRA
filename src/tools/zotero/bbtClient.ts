@@ -71,23 +71,16 @@ const CslCreatorSchema = z.object({
   family: z.string().nullish(),
   /** Given name (first name) in CSL format */
   given: z.string().nullish(),
-  /** Institutional or single-field name */
-  literal: z.string().nullish(),
   // Zotero native format (may appear in some responses)
   lastName: z.string().nullish(),
   firstName: z.string().nullish(),
   name: z.string().nullish(),
-  creatorType: z.string().nullish(),
 });
 
 /** CSL JSON date format. */
 const CslDateSchema = z.object({
   /** Date parts as [[year, month?, day?]] */
   'date-parts': z.array(z.array(z.number())).nullish(),
-  /** Raw date string */
-  raw: z.string().nullish(),
-  /** Literal date text */
-  literal: z.string().nullish(),
 });
 
 /** Zotero collection metadata returned by `user.groups(true)`. */
@@ -134,69 +127,26 @@ export const BbtCollectionChainSchema: z.ZodType<BbtCollectionChain> = z.lazy(
  * CSL JSON item returned by Better BibTeX item.search.
  *
  * This is standard CSL JSON (from Zotero.Utilities.Item.itemToCSLJSON) plus
- * BBT-specific `library` and `citekey` fields. Reference:
+ * the BBT-specific `citekey` field, narrowed to the fields the search tool
+ * reads per the boundary rule above. Reference:
  * https://github.com/retorquere/zotero-better-bibtex/blob/master/content/json-rpc.ts
  */
 export const BbtSearchResultItemSchema = z.object({
-  // ─── Better BibTeX additions ───────────────────────────────────────
   /** Citation key from Better BibTeX KeyManager */
   citekey: z.string(),
-  /** Library name or fallback `library#${libraryID}` */
-  library: z.string(),
-
-  // ─── CSL JSON core fields ──────────────────────────────────────────
-  /** Internal Zotero item ID (as URI or number) */
-  id: z.union([z.string(), z.number()]).nullish(),
   /** CSL item type (article-journal, book, chapter, etc.) */
   type: z.string().nullish(),
   /** Item title */
   title: z.string().nullish(),
   /** Authors */
   author: z.array(CslCreatorSchema).nullish(),
-  /** Editors */
-  editor: z.array(CslCreatorSchema).nullish(),
   /** Publication/issue date */
   issued: CslDateSchema.nullish(),
-  /** Access date */
-  accessed: CslDateSchema.nullish(),
 
-  // ─── Zotero-style fields (legacy, may appear) ──────────────────────
+  // Zotero-style fields (legacy, may appear)
   itemType: z.string().nullish(),
   creators: z.array(CslCreatorSchema).nullish(),
   date: z.string().nullish(),
-
-  // ─── Identifiers ───────────────────────────────────────────────────
-  DOI: z.string().nullish(),
-  ISBN: z.string().nullish(),
-  ISSN: z.string().nullish(),
-  PMID: z.string().nullish(),
-  PMCID: z.string().nullish(),
-  URL: z.string().nullish(),
-
-  // ─── Publication info ──────────────────────────────────────────────
-  /** Journal/book title */
-  'container-title': z.string().nullish(),
-  /** Short container title */
-  'container-title-short': z.string().nullish(),
-  /** Publisher name */
-  publisher: z.string().nullish(),
-  /** Publisher location */
-  'publisher-place': z.string().nullish(),
-  /** Volume number */
-  volume: z.string().nullish(),
-  /** Issue number */
-  issue: z.string().nullish(),
-  /** Page range */
-  page: z.string().nullish(),
-  /** Number of pages */
-  'number-of-pages': z.string().nullish(),
-  /** Edition */
-  edition: z.string().nullish(),
-
-  // ─── Content ───────────────────────────────────────────────────────
-  abstract: z.string().nullish(),
-  note: z.string().nullish(),
-  language: z.string().nullish(),
 });
 export type BbtSearchResultItem = z.infer<typeof BbtSearchResultItemSchema>;
 

@@ -143,7 +143,13 @@ export async function resolveAgentTools({
     if (!passesRuntimeGates(def.name)) continue;
     if (disabled.has(def.name)) continue;
     if (unavailable.has(def.name)) continue;
-    if (!effectiveRegistry.has(def.name)) continue;
+    if (!effectiveRegistry.has(def.name)) {
+      // A declared name with no registration is a configuration error (typo,
+      // or a tool retired from the registry) — dropping it silently would
+      // strip the agent's capability with no trace.
+      logger.warn(`Declared tool not found in registry: ${def.name}`);
+      continue;
+    }
     resolved.push(runtimeNarrowToolDefinition(def, diagnosticsAddUnavailable));
     resolvedNames.add(def.name);
   }

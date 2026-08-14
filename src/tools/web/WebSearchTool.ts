@@ -66,7 +66,6 @@ const DuckDuckGoResponseSchema = z.looseObject({
   AbstractText: z.string().nullish(),
   AbstractURL: z.string().nullish(),
   AbstractSource: z.string().nullish(),
-  Heading: z.string().nullish(),
   RelatedTopics: z.array(DuckDuckGoResultSchema).nullish(),
   Infobox: z
     .looseObject({

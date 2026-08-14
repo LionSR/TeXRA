@@ -107,6 +107,7 @@ export function toolUseRunShared(
 ): ToolUseRunShared {
   return {
     messages: [],
+    continuationGenerationId: '7b7f4d7e-3f60-49a5-b640-df1c8f9be302',
     shouldSkipCycle: false,
     stateSlices: null,
     ...overrides,

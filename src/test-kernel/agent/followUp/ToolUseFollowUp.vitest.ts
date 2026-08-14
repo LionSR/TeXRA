@@ -74,6 +74,7 @@ function durableResumabilityDecision(
       flowName: 'texra',
       shared: { continuationGenerationId: generationId },
       createdAt: '2026-08-13T12:00:00.000Z',
+      cursor: { nextNodeId: 'start' },
       nodes: [],
     },
   };

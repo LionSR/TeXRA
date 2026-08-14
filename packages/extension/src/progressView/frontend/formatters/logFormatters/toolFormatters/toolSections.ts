@@ -96,10 +96,10 @@ function buildFileGroupsSection(
  * display purposes only.
  *
  * No single canonical schema validates this shape: this dispatch entry (the
- * shared `isEditLikeToolName` classifier) covers three different registered
- * tool names — edit_file (`EditInputSchema`), str_replace_editor
- * (`TextEditorInputSchema`, a discriminated union where only the `str_replace`
- * branch has old_str/new_str), and str_replace_based_edit_tool, which is
+ * shared `isEditLikeToolName` classifier) covers edit_file
+ * (`EditInputSchema`), the retired str_replace_editor name still present in
+ * historical traces (its schema left with the tool; only the `str_replace`
+ * shape carried old_str/new_str), and str_replace_based_edit_tool, which is
  * Anthropic's native tool-use alias — plus the verbatim built-in names
  * (`edit`, `multiedit`, provider `str_replace`/`text_editor` variants) a
  * delegated sub-agent reports. A delegated Claude `Edit` reports
