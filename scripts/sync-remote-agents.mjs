@@ -338,7 +338,10 @@ function applyRemoteAgentsSql() {
   writeFileSync(sqlPath, generateRemoteAgentsSql());
   args.push('-f', sqlPath);
 
-  const result = spawnSync('supabase', args, { stdio: 'inherit', cwd: rootDir });
+  const result = spawnSync('supabase', args, {
+    stdio: 'inherit',
+    cwd: rootDir,
+  });
   rmSync(sqlDir, { recursive: true, force: true });
 
   if (result.error) {
@@ -372,5 +375,5 @@ const { values: flags } = parseArgs({
 if (flags.apply) {
   applyRemoteAgentsSql();
 } else {
-  generateRemoteAgentsSql();
+  process.stdout.write(generateRemoteAgentsSql());
 }

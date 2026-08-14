@@ -575,15 +575,21 @@ Keeping generated SQL in the repo drifts from the YAML. The catalog is only:
 - `prompts/agents/remote/**/*.yaml` — prompt, tools, category
 - `docs/supabase/remote-agents.config.json` — storage folder and visibility
 
+Preview the generated SQL (stdout only; nothing is written):
+
+```bash
+npm run sync:remote-agents
+```
+
 Apply it with:
 
 ```bash
 npm run sync:remote-agents -- --apply
 ```
 
-Needs a `supabase link`ed checkout, or `SUPABASE_DB_URL` / `SUPABASE_PROJECT_REF`.
+Needs a `supabase link`ed checkout, or `SUPABASE_DB_URL`, or `SUPABASE_ACCESS_TOKEN` plus `SUPABASE_PROJECT_REF`.
 
-The same command runs on merge to `main` when those files change (`.github/workflows/remote-agents-sync.yml`). PRs run `npm run sync:remote-agents` (generate only) and do not write production.
+The same apply command runs on merge to `main` when those files change (`.github/workflows/remote-agents-sync.yml`). PRs run `npm run sync:remote-agents` (generate only) and do not write production.
 
 YAML bodies in the `agent-configs` bucket are still uploaded separately. Folder names must match the `folder` field in `remote-agents.config.json`.
 

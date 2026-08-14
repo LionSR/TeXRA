@@ -61,4 +61,11 @@ jobs:
             echo 'SUPABASE_PROJECT_REF is not set. Add the production project ref as a repository variable.'
             exit 1
           fi
+          {
+            echo '## Generated remote-agents SQL'
+            echo
+            echo '```sql'
+            node scripts/sync-remote-agents.mjs
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
           npm run sync:remote-agents -- --apply
