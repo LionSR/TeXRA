@@ -181,13 +181,20 @@ describe('renderAnsiMarkdown', () => {
     ).toBe('Cost $5 **today, then $10');
   });
 
-  it('preserves inline math after a standalone currency amount', () => {
-    expect(
-      normalizeKnownHtmlForCliMarkdown(
-        'Cost $5, then <strong>$a<b>c$</strong>',
-      ),
-    ).toBe('Cost $5, then **$a<b>c$**');
-  });
+  it.each([
+    ['Cost $5, then', 'Cost $5, then'],
+    ['Cost $50, then', 'Cost $50, then'],
+    ['Cost $5.99, then', 'Cost $5.99, then'],
+    ['Cost $.99, then', 'Cost $.99, then'],
+    ['Cost <b>$5</b>, then', 'Cost **$5**, then'],
+  ] as const)(
+    'preserves inline math after a standalone currency amount: %s',
+    (prefix, expectedPrefix) => {
+      expect(
+        normalizeKnownHtmlForCliMarkdown(`${prefix} <strong>$a<b>c$</strong>`),
+      ).toBe(`${expectedPrefix} **$a<b>c$**`);
+    },
+  );
 
   it.each([
     ['<code>$HOME</code> and <code>$PATH</code>', '`$HOME` and `$PATH`'],
@@ -225,6 +232,22 @@ describe('renderAnsiMarkdown', () => {
     },
   );
 
+  it('normalizes shell variables inside nontrivial code spans', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '<code>echo $HOME</code> and <code>echo $PATH</code>',
+      ),
+    ).toBe('`echo $HOME` and `echo $PATH`');
+  });
+
+  it('does not replace user text resembling a generated placeholder', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        'literal @@CLI-LITERAL-DOLLAR-0@@ and <code>$HOME</code>',
+      ),
+    ).toBe('literal @@CLI-LITERAL-DOLLAR-0@@ and `$HOME`');
+  });
+
   it('binds code-wrapped shell pairs to the current dollar delimiters', () => {
     expect(
       normalizeKnownHtmlForCliMarkdown(
@@ -259,6 +282,10 @@ describe('renderAnsiMarkdown', () => {
       '<code>${HOME:=/tmp}</code> <strong>or</strong> <code>${PATH:?missing}</code>',
       '`${HOME:=/tmp}` **or** `${PATH:?missing}`',
     ],
+    [
+      '<code>${HOME%/usr}</code> <strong>or</strong> <code>${#PATH}</code>',
+      '`${HOME%/usr}` **or** `${#PATH}`',
+    ],
   ] as const)(
     'normalizes HTML between compound shell expansions: %s',
     (source, expected) => {
@@ -277,6 +304,7 @@ describe('renderAnsiMarkdown', () => {
     '$a <b> c $b',
     '$A <b> c $B',
     '$AB<p>1$',
+    '$AB <p>1$',
     '$AB<p>1$RESULT',
     '$0<p>1$-',
     '$0<p>1$RESULT',
