@@ -73,6 +73,8 @@ interface CliExecuteOptions {
   readonly stopAfterCycle?: boolean;
   /** Additional tools unavailable in this CLI runtime. */
   readonly runtimeUnavailableTools?: readonly string[];
+  /** Workflow output handler extended with the CLI publication gate; attempt
+   *  the commit synchronously once before destination validation or I/O. */
   readonly openWorkflowOutput?: CliWorkflowOutputHandler;
   /** Forwarded to `runAgent` on resume, pinning the original handler dialect. */
   readonly modelHandlerCompatibilityKey?: RunAgentOptions['modelHandlerCompatibilityKey'];
@@ -402,6 +404,8 @@ export async function executeCliRequest(
     async () => {
       shutdownRequested = true;
       launchAbortController.abort();
+      // Paired with tryCommitWorkflowOutputPublication: keep this flag read
+      // and the shutdownInterrupted assignment below in one synchronous turn.
       const interruptionAccepted =
         !workflowOutputPublicationCommitted && ownedExecutionId
           ? session.executions.kill(ownedExecutionId)
