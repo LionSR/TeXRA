@@ -1025,7 +1025,7 @@ describe('CLI workflow run command', () => {
     mocks.executeCliConfig.mockImplementationOnce(
       async (_config, _context, options) => {
         if (!execution.ok) return execution;
-        await options.openWorkflowOutput?.(execution.result);
+        await options.openWorkflowOutput?.(execution.result, () => true);
         options.onInterruptedExecutionFinalized?.('exec-signal');
         return execution;
       },
