@@ -26,6 +26,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
+import { KVStoreCache } from '@common/storage/KVStoreCache';
 import { createLog } from '@logger/logUtils';
 import {
   CompileFailureSchema,
@@ -290,7 +291,7 @@ type DiskState = 'unknown' | 'verified-absent' | 'loaded';
 /**
  * Every per-stream field this store tracks, keyed by stream id in ONE map
  * (`records`): the accumulators, the `diskState`/`seedChain` seeding
- * bookkeeping, the overlay patches, and the cached `KVStore` handles. Because every field
+ * bookkeeping, and the overlay patches. Because every field
  * for a stream lives on the same object, dropping a stream's memory is one
  * `records.delete(stream)` — every field disappears with it BY CONSTRUCTION,
  * so `evict()`/`evictAll()` cannot drift from the field list.
@@ -360,9 +361,6 @@ interface StreamRecord {
   // is never clobbered by that seed's raw disk read. See `mutateWithOverlay`.
   metaOverlay: boolean;
   overlays: Partial<OverlayPatches>;
-
-  // -- Cached KVStore handle for this stream's sidecar directory. ----------
-  kv: KVStore | undefined;
 }
 
 interface DirtySidecarWrite {
@@ -395,8 +393,18 @@ export class StreamSnapshotStore {
     seedRefreshBaseline: undefined,
     metaOverlay: false,
     overlays: {},
-    kv: undefined,
   }));
+  /**
+   * Lazily-created per-stream handles over `streamDataDir(streamId)`. A
+   * handle is a stateless wrapper, so dropping one is lossless:
+   * `evict()`/`evictAll()` drop handles alongside the records, and
+   * {@link invalidateKvHandles} forces re-resolution after a stream's
+   * directory may have moved (staged-deletion rollback, storage-root
+   * refresh).
+   */
+  private readonly kvHandles = new KVStoreCache<StreamTabId>(
+    (streamId) => new KVStore(streamDataDir(streamId)),
+  );
   /**
    * The crash-safe staged-deletion + rollback-recovery machine. It owns which
    * namespace holds a staged stream's data and the sidecar writes buffered
@@ -507,19 +515,15 @@ export class StreamSnapshotStore {
   }
 
   private kv(streamId: StreamTabId): KVStore {
-    const record = this.getOrCreateRecord(streamId);
-    if (!record.kv) {
-      record.kv = new KVStore(streamDataDir(streamId));
-    }
-    return record.kv;
+    // Record creation on read-only access stays deliberate (see
+    // clearMissingOutputs): hasDiskProvenance() keys off record presence.
+    this.getOrCreateRecord(streamId);
+    return this.kvHandles.get(streamId);
   }
 
   /** Drop the cached KV handle so the next access re-resolves against the stream's current directory. */
   private invalidateKvHandles(stream: StreamTabId): void {
-    const record = this.records.get(stream);
-    if (record) {
-      record.kv = undefined;
-    }
+    this.kvHandles.invalidate(stream);
   }
 
   private async listStreamsUnder(root: string): Promise<StreamTabId[]> {
@@ -1117,6 +1121,7 @@ export class StreamSnapshotStore {
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
   private evict(stream: StreamTabId): void {
     this.records.evict(stream);
+    this.kvHandles.invalidate(stream);
     for (const key of [...this.writeMutexes.keys()]) {
       if (!key.startsWith(`${stream}::`)) continue;
       this.writeMutexes.delete(key);
@@ -1129,6 +1134,7 @@ export class StreamSnapshotStore {
 
   evictAll(): void {
     this.records.evictAll();
+    this.kvHandles.invalidateAll();
     this.writeMutexes.clear();
     this.dirtyWrites.clear();
     this.unseededReadWarned.clear();
