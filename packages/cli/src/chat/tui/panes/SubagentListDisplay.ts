@@ -91,13 +91,18 @@ export function childRowMetadataText({
   return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
-/** One-word "waiting on what" suffix for a session row: the row's first
- *  pending approval kind, plus a `+N` overflow when more are queued. */
-export function pendingApprovalRowSuffix(
+/** Compact "waiting on what" display for a row. The first kind and overflow
+ * count are separate so narrow layouts can preserve the actionable kind while
+ * allowing the informational count to yield. */
+export function pendingApprovalRowDisplay(
   kinds: readonly PendingApprovalKind[] | undefined,
-): string | undefined {
+):
+  | { readonly label: string; readonly overflow: string | undefined }
+  | undefined {
   const first = kinds?.[0];
   if (kinds === undefined || first === undefined) return undefined;
-  const label = PENDING_APPROVAL_ROW_LABELS[first];
-  return kinds.length > 1 ? `${label} +${kinds.length - 1}` : label;
+  return {
+    label: PENDING_APPROVAL_ROW_LABELS[first],
+    overflow: kinds.length > 1 ? `+${kinds.length - 1}` : undefined,
+  };
 }
