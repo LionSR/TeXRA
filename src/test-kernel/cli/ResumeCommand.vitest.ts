@@ -123,6 +123,15 @@ async function run(context: CliContext, id: ExecutionId = EXECUTION_ID) {
   return runResumeExecution(context, id);
 }
 
+function stubWorkflowResume(config: AgentConfig): void {
+  mocks.readConfig.mockResolvedValue(config);
+  mocks.retrieveSessionResumeData.mockResolvedValue({
+    type: 'workflow',
+    agentConfig: config,
+    executionId: EXECUTION_ID,
+  });
+}
+
 describe('runResumeExecution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -213,12 +222,7 @@ describe('runResumeExecution', () => {
       cliOutputDirectory: outputDirectory,
       cliExpectedOutputFiles: ['paper.tex', 'appendix.tex'],
     });
-    mocks.readConfig.mockResolvedValue(workflowConfig);
-    mocks.retrieveSessionResumeData.mockResolvedValue({
-      type: 'workflow',
-      agentConfig: workflowConfig,
-      executionId: EXECUTION_ID,
-    });
+    stubWorkflowResume(workflowConfig);
 
     await expect(run(cliContext())).resolves.toBe(0);
 
@@ -240,12 +244,7 @@ describe('runResumeExecution', () => {
       workingDirectory,
       cliOutputDirectory: outputDirectory,
     });
-    mocks.readConfig.mockResolvedValue(workflowConfig);
-    mocks.retrieveSessionResumeData.mockResolvedValue({
-      type: 'workflow',
-      agentConfig: workflowConfig,
-      executionId: EXECUTION_ID,
-    });
+    stubWorkflowResume(workflowConfig);
 
     await expect(run(cliContext())).resolves.toBe(0);
 
@@ -265,12 +264,7 @@ describe('runResumeExecution', () => {
       workingDirectory,
       cliOutputDirectory: path.join(workingDirectory, 'out'),
     });
-    mocks.readConfig.mockResolvedValue(workflowConfig);
-    mocks.retrieveSessionResumeData.mockResolvedValue({
-      type: 'workflow',
-      agentConfig: workflowConfig,
-      executionId: EXECUTION_ID,
-    });
+    stubWorkflowResume(workflowConfig);
     mocks.assertOutputDirAvailable.mockRejectedValue(
       new CliUsageError('--output-dir must refer to a directory.'),
     );

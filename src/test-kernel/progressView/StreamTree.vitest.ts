@@ -1,5 +1,4 @@
-import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   computeStreamTreeProjection,
@@ -54,14 +53,13 @@ describe('progress stream tree policy', () => {
 
     const projection = project(childStreamsByParent);
 
-    assert.equal(projection.expandedParents.has('root'), false);
-    assert.equal(
+    expect(projection.expandedParents.has('root')).toBe(false);
+    expect(
       getStreamBranchActivity(
         { streamStates: new Map(), childStreamsByParent },
         'child',
       ),
-      'unknown',
-    );
+    ).toBe('unknown');
   });
 
   it('collapses a parent once every child branch is finished', () => {
@@ -75,21 +73,19 @@ describe('progress stream tree policy', () => {
 
     const projection = project(childStreamsByParent, streamStates);
 
-    assert.equal(projection.expandedParents.has('root'), false);
-    assert.equal(
+    expect(projection.expandedParents.has('root')).toBe(false);
+    expect(
       getStreamBranchActivity(
         { streamStates, childStreamsByParent },
         'child-a',
       ),
-      'finished',
-    );
-    assert.equal(
+    ).toBe('finished');
+    expect(
       getStreamBranchActivity(
         { streamStates, childStreamsByParent },
         'child-b',
       ),
-      'finished',
-    );
+    ).toBe('finished');
   });
 
   it('keeps ancestors collapsed when a descendant is active', () => {
@@ -104,19 +100,17 @@ describe('progress stream tree policy', () => {
 
     const projection = project(childStreamsByParent, streamStates);
 
-    assert.equal(projection.expandedParents.has('root'), false);
-    assert.equal(projection.expandedParents.has('child'), false);
-    assert.equal(
+    expect(projection.expandedParents.has('root')).toBe(false);
+    expect(projection.expandedParents.has('child')).toBe(false);
+    expect(
       getStreamBranchActivity({ streamStates, childStreamsByParent }, 'child'),
-      'active',
-    );
-    assert.equal(
+    ).toBe('active');
+    expect(
       getStreamBranchActivity(
         { streamStates, childStreamsByParent },
         'grandchild',
       ),
-      'active',
-    );
+    ).toBe('active');
   });
 
   it('honors user overrides and drops overrides for missing parents', () => {
@@ -134,8 +128,10 @@ describe('progress stream tree policy', () => {
       ]),
     );
 
-    assert.equal(projection.expandedParents.has('root'), false);
-    assert.deepEqual([...projection.userOverrides], [['root', 'collapsed']]);
+    expect(projection.expandedParents.has('root')).toBe(false);
+    expect([...projection.userOverrides]).toStrictEqual([
+      ['root', 'collapsed'],
+    ]);
   });
 
   it('allows users to keep a finished parent expanded', () => {
@@ -150,7 +146,7 @@ describe('progress stream tree policy', () => {
       new Map([['root', 'expanded']]),
     );
 
-    assert.equal(projection.expandedParents.has('root'), true);
+    expect(projection.expandedParents.has('root')).toBe(true);
   });
 
   it('expands and badges ancestors when a descendant needs approval', () => {
@@ -166,11 +162,11 @@ describe('progress stream tree policy', () => {
       new Set(['grandchild']),
     );
 
-    assert.equal(projection.expandedParents.has('root'), true);
-    assert.equal(projection.expandedParents.has('child'), true);
-    assert.equal(projection.approvalBadgeStreamIds.has('root'), true);
-    assert.equal(projection.approvalBadgeStreamIds.has('child'), true);
-    assert.equal(projection.approvalBadgeStreamIds.has('grandchild'), true);
+    expect(projection.expandedParents.has('root')).toBe(true);
+    expect(projection.expandedParents.has('child')).toBe(true);
+    expect(projection.approvalBadgeStreamIds.has('root')).toBe(true);
+    expect(projection.approvalBadgeStreamIds.has('child')).toBe(true);
+    expect(projection.approvalBadgeStreamIds.has('grandchild')).toBe(true);
   });
 
   it('expands ancestors of the viewed stream without opening sibling branches', () => {
@@ -188,10 +184,10 @@ describe('progress stream tree policy', () => {
       'grandchild',
     );
 
-    assert.equal(projection.expandedParents.has('root'), true);
-    assert.equal(projection.expandedParents.has('child'), true);
-    assert.equal(projection.expandedParents.has('other'), false);
-    assert.equal(projection.approvalBadgeStreamIds.size, 0);
+    expect(projection.expandedParents.has('root')).toBe(true);
+    expect(projection.expandedParents.has('child')).toBe(true);
+    expect(projection.expandedParents.has('other')).toBe(false);
+    expect(projection.approvalBadgeStreamIds.size).toBe(0);
   });
 
   it('does not expand a parent just because it is the active stream', () => {
@@ -205,7 +201,7 @@ describe('progress stream tree policy', () => {
       'root',
     );
 
-    assert.equal(projection.expandedParents.has('root'), false);
+    expect(projection.expandedParents.has('root')).toBe(false);
   });
 
   it('guards cycles while preserving the stream own activity', () => {
@@ -218,14 +214,13 @@ describe('progress stream tree policy', () => {
       ['child', streamState(STREAM_PHASE.CANCELLED)],
     ]);
 
-    assert.equal(
+    expect(
       getStreamBranchActivity(
         { streamStates, childStreamsByParent },
         'child',
         new Set(['root']),
       ),
-      'finished',
-    );
+    ).toBe('finished');
   });
 
   it('guards direct self-loops', () => {
@@ -234,13 +229,12 @@ describe('progress stream tree policy', () => {
       ['root', streamState(STREAM_PHASE.CANCELLED)],
     ]);
 
-    assert.equal(
+    expect(
       getStreamBranchActivity(
         { streamStates, childStreamsByParent },
         'root',
         new Set(['root']),
       ),
-      'finished',
-    );
+    ).toBe('finished');
   });
 });

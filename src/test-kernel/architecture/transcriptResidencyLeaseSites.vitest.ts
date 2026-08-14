@@ -35,16 +35,24 @@ const PRESENTATION_LEASE_SITE_ALLOWLIST = new Set([
   'src/transcript/StreamLogStore.ts',
 ]);
 
+/** Files under a scan root that match `pattern` and are not allowlisted. */
+function findOffenders(pattern: RegExp, allowlist: Set<string>): string[] {
+  return SCAN_ROOTS.flatMap(productionFilesUnder)
+    .filter((file) => !allowlist.has(file))
+    .filter((file) =>
+      pattern.test(
+        stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
+      ),
+    )
+    .toSorted();
+}
+
 describe('transcript residency lease sites', () => {
   it('keeps transcript hydration at the closed focus/runtime boundary', () => {
-    const offenders = SCAN_ROOTS.flatMap(productionFilesUnder)
-      .filter((file) => !HYDRATION_SITE_ALLOWLIST.has(file))
-      .filter((file) =>
-        /\.ensureLoaded\s*\(/.test(
-          stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
-        ),
-      )
-      .toSorted();
+    const offenders = findOffenders(
+      /\.ensureLoaded\s*\(/,
+      HYDRATION_SITE_ALLOWLIST,
+    );
 
     expect(
       offenders,
@@ -55,14 +63,10 @@ describe('transcript residency lease sites', () => {
   });
 
   it('keeps exact presentation residency at the progress coordinator boundary', () => {
-    const offenders = SCAN_ROOTS.flatMap(productionFilesUnder)
-      .filter((file) => !PRESENTATION_LEASE_SITE_ALLOWLIST.has(file))
-      .filter((file) =>
-        /retainForPresentation\s*:\s*true/.test(
-          stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
-        ),
-      )
-      .toSorted();
+    const offenders = findOffenders(
+      /retainForPresentation\s*:\s*true/,
+      PRESENTATION_LEASE_SITE_ALLOWLIST,
+    );
 
     expect(offenders).toEqual([]);
   });

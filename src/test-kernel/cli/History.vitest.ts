@@ -138,6 +138,20 @@ const config = AgentConfigSchema.parse({
 
 const tempDirs: string[] = [];
 
+// An internal tool-use agent config with no input/output files, built from
+// the base `config` with per-test field overrides.
+function toolUseAgentConfig(
+  overrides: Record<string, unknown> = {},
+): typeof config {
+  return AgentConfigSchema.parse({
+    ...config,
+    agentCategory: 'toolUse',
+    inputFiles: [],
+    outputFiles: [],
+    ...overrides,
+  });
+}
+
 function mockToolUseWorkspace(workspace: string): void {
   mocks.readConfig.mockResolvedValue({
     ...config,
@@ -345,13 +359,7 @@ describe('CLI history runtime', () => {
   });
 
   it('hides internal process-bookkeeping and configless entries from the history list', async () => {
-    const processConfig = AgentConfigSchema.parse({
-      ...config,
-      agent: 'bash',
-      agentCategory: 'toolUse',
-      inputFiles: [],
-      outputFiles: [],
-    });
+    const processConfig = toolUseAgentConfig({ agent: 'bash' });
     mocks.listExecutions.mockResolvedValue([
       runListEntry('visible'),
       {
@@ -390,12 +398,8 @@ describe('CLI history runtime', () => {
   });
 
   it('labels multi-agent team runs by preset in history lists', async () => {
-    const teamConfig = AgentConfigSchema.parse({
-      ...config,
+    const teamConfig = toolUseAgentConfig({
       agent: 'engineer',
-      agentCategory: 'toolUse',
-      inputFiles: [],
-      outputFiles: [],
       cliMultiAgentPresetId: ' software-engineer ',
     });
     mocks.listExecutions.mockResolvedValue([
@@ -418,13 +422,7 @@ describe('CLI history runtime', () => {
   });
 
   it('uses the history description for no-input chat rows', async () => {
-    const chatConfig = AgentConfigSchema.parse({
-      ...config,
-      agent: 'assistant',
-      agentCategory: 'toolUse',
-      inputFiles: [],
-      outputFiles: [],
-    });
+    const chatConfig = toolUseAgentConfig({ agent: 'assistant' });
     mocks.listExecutions.mockResolvedValue([
       runListEntry('chat1', {
         identity: { kind: 'agent', agent: 'assistant' },

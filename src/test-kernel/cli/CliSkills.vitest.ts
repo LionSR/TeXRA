@@ -132,6 +132,13 @@ describe('CLI skills runtime', () => {
   });
 
   it('deduplicates repeated source paths while preserving required custom roots', () => {
+    const projectSkillsPath = path.resolve(
+      path.sep,
+      'tmp',
+      'project',
+      '.texra',
+      'skills',
+    );
     const sources = defaultSkillSources(
       {
         cwd: path.resolve(path.sep, 'tmp', 'project'),
@@ -143,11 +150,7 @@ describe('CLI skills runtime', () => {
     );
 
     expect(
-      sources.filter(
-        (source) =>
-          source.path ===
-          path.resolve(path.sep, 'tmp', 'project', '.texra', 'skills'),
-      ),
+      sources.filter((source) => source.path === projectSkillsPath),
     ).toEqual([
       expect.objectContaining({
         scope: 'custom',
@@ -191,10 +194,9 @@ describe('CLI skills runtime', () => {
         scope: 'custom',
       },
     ]);
-    expect(formatCliSkillList(result.skills)).toContain(
-      'custom\tshared-skill\tThe custom skill.',
-    );
-    expect(formatCliSkillList(result.skills)).not.toContain(
+    const formatted = formatCliSkillList(result.skills);
+    expect(formatted).toContain('custom\tshared-skill\tThe custom skill.');
+    expect(formatted).not.toContain(
       'bundled\tshared-skill\tThe bundled skill.',
     );
     expect(result.errors).toContainEqual(
@@ -235,10 +237,9 @@ describe('CLI skills runtime', () => {
         scope: 'project',
       },
     ]);
-    expect(formatCliSkillList(result.skills)).toContain(
-      'project\tshared-skill\tThe project skill.',
-    );
-    expect(formatCliSkillList(result.skills)).not.toContain(
+    const formatted = formatCliSkillList(result.skills);
+    expect(formatted).toContain('project\tshared-skill\tThe project skill.');
+    expect(formatted).not.toContain(
       'bundled\tshared-skill\tThe bundled skill.',
     );
     expect(result.errors).toContainEqual(

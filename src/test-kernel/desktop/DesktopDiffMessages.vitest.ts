@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import { loadSourceModule } from './loadSourceModule.ts';
+
+type DesktopDiffMessagesModule =
+  typeof import('@desktop/shared/desktopDiffMessages');
+
+let DesktopShowDiffMessageSchema!: DesktopDiffMessagesModule['DesktopShowDiffMessageSchema'];
 
 describe('DesktopShowDiffMessageSchema', () => {
   const basePayload = {
@@ -10,10 +15,13 @@ describe('DesktopShowDiffMessageSchema', () => {
     proposedText: 'b',
   } as const;
 
-  it('round-trips a complete payload', async () => {
-    const { DesktopShowDiffMessageSchema } = await loadSourceModule(
+  beforeAll(async () => {
+    ({ DesktopShowDiffMessageSchema } = await loadSourceModule(
       '@desktop/shared/desktopDiffMessages',
-    );
+    ));
+  });
+
+  it('round-trips a complete payload', () => {
     const parsed = DesktopShowDiffMessageSchema.parse({
       ...basePayload,
       displayPath: 'src/file.ts',
@@ -26,18 +34,12 @@ describe('DesktopShowDiffMessageSchema', () => {
     expect(parsed.displayPath).toBe('src/file.ts');
   });
 
-  it('requires displayPath', async () => {
-    const { DesktopShowDiffMessageSchema } = await loadSourceModule(
-      '@desktop/shared/desktopDiffMessages',
-    );
+  it('requires displayPath', () => {
     const result = DesktopShowDiffMessageSchema.safeParse(basePayload);
     expect(result.success).toBe(false);
   });
 
-  it('defaults missing language to plaintext', async () => {
-    const { DesktopShowDiffMessageSchema } = await loadSourceModule(
-      '@desktop/shared/desktopDiffMessages',
-    );
+  it('defaults missing language to plaintext', () => {
     const parsed = DesktopShowDiffMessageSchema.parse({
       ...basePayload,
       displayPath: 'src/file.ts',

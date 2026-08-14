@@ -988,8 +988,7 @@ describe('childRunLoop E2E fixtures', () => {
 
   it('keeps the failing turn diagnosis when an interrupt lands after the failure', async () => {
     const executionId = 'fa11ed01' as ExecutionId;
-    const parentStreamId = 'parent' as StreamTabId;
-    const childStream = createChildStream(executionId, parentStreamId, {
+    const childStream = createChildStream(executionId, PARENT_STREAM_ID, {
       streamPrefix: 'codex',
       run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
       description: 'Fail a turn, then take an interrupt',
@@ -1006,13 +1005,9 @@ describe('childRunLoop E2E fixtures', () => {
       mocks.leaseLossListener?.();
     });
 
-    startChildRunLoop({
+    startLoop({ childStreamId, executionId }, strategy, {
       childStream,
-      childStreamId,
-      parentStreamId,
-      executionId,
       agentName: 'fake-cli',
-      strategy,
       recordCost: interruptAfterFailure,
     });
 

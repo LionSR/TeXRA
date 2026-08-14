@@ -416,13 +416,13 @@ describe('UsageLogService', () => {
     // records populate, so an opt-out that suppressed them would let hosted
     // calls run on against a stale total. Only `api-key` rounds are optional.
     it.each([
-      ['relay', 'relay'],
-      ['chatgpt-subscription', 'chatgpt-subscription'],
-      ['kimi-code-subscription', 'kimi-code-subscription'],
-      ['glm-coding-plan-subscription', 'glm-coding-plan-subscription'],
+      'relay',
+      'chatgpt-subscription',
+      'kimi-code-subscription',
+      'glm-coding-plan-subscription',
     ] as const)(
       'still sends %s usage while the setting is off',
-      async (_label, usageRoute) => {
+      async (usageRoute) => {
         stubRelayToken();
         await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
 
@@ -495,7 +495,7 @@ describe('UsageLogService', () => {
       await expectOptedOutFlush();
     });
 
-    it.each([['0'], ['false'], ['']])(
+    it.each(['0', 'false', ''])(
       'ignores TEXRA_NO_TELEMETRY=%p',
       async (value) => {
         stubRelayToken();
@@ -533,7 +533,7 @@ describe('UsageLogService', () => {
 
     // JsonConfigProvider returns raw JSON from a hand-edited .texra/config.json,
     // so a mistyped string must not read as truthy and re-enable logging.
-    it.each([['false'], ['0'], [0], [null]])(
+    it.each(['false', '0', 0, null])(
       'treats the non-boolean value %p as opted out',
       async (value) => {
         stubRelayToken();

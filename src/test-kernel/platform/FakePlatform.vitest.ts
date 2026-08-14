@@ -19,7 +19,6 @@ import {
 } from '../support/FakePlatform';
 
 type ProviderCase = {
-  name: string;
   provider: FileSystemProvider;
   resolve(testPath: string): string;
   expectedRealPath(testPath: string): Promise<string>;
@@ -31,7 +30,6 @@ async function createProviderCase(
 ): Promise<ProviderCase> {
   if (name === 'fake') {
     return {
-      name,
       provider: new FakeFileSystemProvider(),
       resolve: (testPath) => testPath,
       expectedRealPath: async (testPath) => testPath,
@@ -43,7 +41,6 @@ async function createProviderCase(
   const resolve = (testPath: string): string =>
     path.join(root, testPath.slice(1));
   return {
-    name,
     provider: nodeFilesystem,
     resolve,
     expectedRealPath: (testPath) => fs.realpath(resolve(testPath)),

@@ -16,7 +16,7 @@ import {
 } from '../settings/litComponentTestUtils';
 
 function createPermission(
-  data: Partial<ToolEditPermission>,
+  data: Partial<ToolEditPermission> = {},
 ): ToolEditRequestPanel['permission'] {
   return {
     kind: 'toolEdit',
@@ -84,7 +84,7 @@ describe('tool-edit-request-panel', () => {
   );
 
   it('uses a shared tooltip for the direct diff action', async () => {
-    const element = await mountPanel(createPermission({}));
+    const element = await mountPanel(createPermission());
     const button = element.shadowRoot?.querySelector('#tool-edit-diff-button');
 
     expect(button).toBeTruthy();
@@ -93,7 +93,7 @@ describe('tool-edit-request-panel', () => {
   });
 
   it('keeps the non-LaTeX diff action as a plain standalone button', async () => {
-    const element = await mountPanel(createPermission({}));
+    const element = await mountPanel(createPermission());
     const button = element.shadowRoot?.querySelector(
       'wa-button[data-action="openDiff"]',
     );
@@ -220,7 +220,7 @@ describe('tool-edit-request-panel', () => {
     // Each host answers openDiff its own way — the extension opens a VS Code
     // diff tab, the desktop posts desktop:showDiff to its Review workbench —
     // so the panel never renders a diff itself and holds no toggle state.
-    const element = await mountPanel(createPermission({}));
+    const element = await mountPanel(createPermission());
     const actions = recordPermissionActions(element);
 
     expect(element.handleKeyboardShortcut('d')).toBe(true);

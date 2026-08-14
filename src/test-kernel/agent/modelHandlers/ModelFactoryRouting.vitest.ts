@@ -806,7 +806,9 @@ describe('Google Interactions API routing', () => {
     vi.unstubAllEnvs();
   });
 
-  const googleConfig = (): ModelConfig => modelConfig(ModelProvider.GOOGLE);
+  function googleConfig(): ModelConfig {
+    return modelConfig(ModelProvider.GOOGLE);
+  }
 
   // Re-imports the factory alongside the platform it reads from (see the
   // module-header note on this file's vi.resetModules() calls).

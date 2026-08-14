@@ -1,4 +1,3 @@
-import { strict as assert } from 'node:assert';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getStreamTabDisplayName } from '@agent/runtime/streamTab';
 import {
@@ -60,10 +59,9 @@ describe('compareByNewestCreationTime', () => {
       expected: ['a-stream', 'b-stream'],
     },
   ])('$title', ({ streams, expected }) => {
-    assert.deepEqual(
+    expect(
       streams.sort(compareByNewestCreationTime).map((stream) => stream.name),
-      expected,
-    );
+    ).toStrictEqual(expected);
   });
 });
 
