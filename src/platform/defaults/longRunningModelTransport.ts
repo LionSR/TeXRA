@@ -12,6 +12,19 @@ const MODEL_STREAM_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MODEL_RESPONSE_HEADERS_TIMEOUT_MS = 10 * 60 * 1000;
 type UploadCompatibleFetch = typeof fetch & { Response: typeof Response };
 
+/**
+ * Detect a WHATWG ReadableStream without `instanceof`. A stream constructed
+ * in another realm (worker_threads, a second vendored `node:stream/web`)
+ * fails the brand check and would otherwise miss the `duplex` hint.
+ */
+function isReadableStreamBody(body: unknown): boolean {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    typeof (body as { pipeTo?: unknown }).pipeTo === 'function'
+  );
+}
+
 async function normalizeModelRequest(
   input: RequestInfo | URL,
   init?: RequestInit,
@@ -20,10 +33,7 @@ async function normalizeModelRequest(
   // FormData, and ArrayBuffer bodies must stay free of it; undici tolerates the
   // field on non-stream bodies today, but the Fetch spec does not.
   const requestInit = { ...(init ?? {}) } as UndiciRequestInit;
-  if (
-    requestInit.body instanceof ReadableStream &&
-    requestInit.duplex == null
-  ) {
+  if (isReadableStreamBody(requestInit.body) && requestInit.duplex == null) {
     requestInit.duplex = 'half';
   }
   if (!(input instanceof Request)) {
