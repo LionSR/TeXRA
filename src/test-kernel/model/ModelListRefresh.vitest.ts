@@ -54,6 +54,7 @@ describe('refreshModelListStateIfNeeded', () => {
     expect(result.skipped).toBe(false);
     expect(result.added).toEqual([]);
     expect(result.removed).toContain('kimi2');
+    expect(result.reordered).toBe(false);
     expect(enabledModels(state)).toEqual(['opus5T']);
   });
 
@@ -69,6 +70,7 @@ describe('refreshModelListStateIfNeeded', () => {
 
     expect(result.skipped).toBe(false);
     expect(result.removed).toContain('grok4');
+    expect(result.reordered).toBe(false);
     expect(enabledModels(state)).not.toContain('grok4');
   });
 
@@ -81,6 +83,9 @@ describe('refreshModelListStateIfNeeded', () => {
     const result = await refreshModelListStateIfNeeded(state);
 
     expect(result.skipped).toBe(false);
+    expect(result.reordered).toBe(true);
+    expect(result.added).toEqual([]);
+    expect(result.removed).toEqual([]);
     expect(enabledModels(state)).toEqual(['sonnet5T', 'gemini31p', 'custom']);
   });
 });

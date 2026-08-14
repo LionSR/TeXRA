@@ -162,10 +162,10 @@ describe('SettingsModelSelectionController', () => {
     });
   });
 
-  it('moves a stale helper fallback when disabling the effective helper model', async () => {
+  it('pins a disabled helper to the built-in default', async () => {
     const state = createState({
       enabledModels: ['gpt55', 'sonnet46T'],
-      helperModel: 'removed-model',
+      helperModel: 'gpt55',
     });
     const controller = createController({ state });
 
@@ -174,7 +174,7 @@ describe('SettingsModelSelectionController', () => {
     await controller.setModelEnabled({ modelName: 'gpt55', enabled: false });
 
     expect(state.getEnabledModels()).toEqual(['sonnet46T']);
-    expect(state.getHelperModel()).toBe('sonnet46T');
+    expect(state.getHelperModel()).toBe(DEFAULT_HELPER_MODEL);
   });
 
   it('falls back to default models when the persisted enabled list is empty', async () => {

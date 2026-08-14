@@ -86,6 +86,32 @@ describe('ModelSelectionList provider key status', () => {
     );
   });
 
+  it('keeps the pinned helper visible when it is not enabled', async () => {
+    const list = await renderModelSelectionList({
+      models: [
+        { ...deepseekModel, enabled: false },
+        {
+          ...deepseekModel,
+          name: 'sonnet5T',
+          label: 'Sonnet 5 (Thinking)',
+          provider: 'anthropic',
+          enabled: true,
+        },
+      ],
+      helperModel: 'deepseek',
+    });
+
+    const helperOptions = [
+      ...list.shadowRoot!.querySelectorAll('.helper-model-select wa-option'),
+    ];
+    expect(helperOptions.map((option) => option.getAttribute('value'))).toEqual(
+      ['deepseek', 'sonnet5T'],
+    );
+    expect(helperOptions[0]?.textContent?.trim()).toBe(
+      'DeepSeek V4 Flash (deepseek)',
+    );
+  });
+
   it('renders the per-model enabled toggle as wa-switch and posts setModelEnabled on change', async () => {
     const list = await renderModelSelectionList();
 

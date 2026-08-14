@@ -15,10 +15,10 @@ describe('resolveEffectiveHelperModel', () => {
     );
   });
 
-  it('falls back to the first candidate when the configured model is not in the list', () => {
+  it('falls back to the built-in default when the configured model is not in the list', () => {
     expect(
       resolveEffectiveHelperModel('retired-model', ['gpt55', 'opus']),
-    ).toBe('gpt55');
+    ).toBe(DEFAULT_HELPER_MODEL);
   });
 
   it('falls back to the built-in default when the candidate list is empty', () => {
@@ -53,7 +53,7 @@ describe('getHelperModelName', () => {
     expect(getHelperModelName()).toBe('legacy-helper-model');
   });
 
-  it('falls back to the first enabled model when the configured model is not enabled', async () => {
+  it('falls back to the built-in default when the configured model is not enabled', async () => {
     await installPlatform({
       globalState: {
         [GlobalStateKey.HELPER_MODEL]: 'retired-model',
@@ -61,7 +61,7 @@ describe('getHelperModelName', () => {
       },
     });
 
-    expect(getHelperModelName()).toBe('gpt55');
+    expect(getHelperModelName()).toBe(DEFAULT_HELPER_MODEL);
   });
 });
 
@@ -108,6 +108,6 @@ describe('#7582 runtime vs Settings UI helper-model divergence', () => {
 
     const { helperModel } = await controller.buildSelectionData();
     expect(helperModel).not.toBe(configuredModel);
-    expect(helperModel).toBe(DEFAULT_MODELS[0]);
+    expect(helperModel).toBe(DEFAULT_HELPER_MODEL);
   });
 });

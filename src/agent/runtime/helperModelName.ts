@@ -7,7 +7,7 @@ import { isNonEmptyString } from '@utils/core';
  * Resolve the configured helper model name from global state.
  *
  * When the user has explicitly configured a helper model, validate it against
- * the enabled model list and fall back to the first enabled model if the
+ * the enabled model list and fall back to the built-in default if the
  * configured one was removed. The built-in default is always accepted because
  * it is used for internal auxiliary tasks, not user-facing generation.
  */

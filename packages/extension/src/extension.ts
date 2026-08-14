@@ -382,8 +382,14 @@ export async function activate(context: vscode.ExtensionContext) {
     })(),
     (async () => {
       try {
-        const { added, currentVersion, previousVersion, removed, skipped } =
-          await refreshModelListStateIfNeeded(globalSM);
+        const {
+          added,
+          currentVersion,
+          previousVersion,
+          removed,
+          reordered,
+          skipped,
+        } = await refreshModelListStateIfNeeded(globalSM);
         if (!skipped) {
           if (previousVersion !== currentVersion) {
             logger.info(
@@ -392,11 +398,11 @@ export async function activate(context: vscode.ExtensionContext) {
             );
           }
           logger.info('extension', 'Model list refresh completed successfully');
-          if (added.length > 0 || removed.length > 0) {
+          if (added.length > 0 || removed.length > 0 || reordered) {
             invalidateModelOptionsCache();
             logger.info(
               'extension',
-              `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]`,
+              `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
             );
           }
         }
