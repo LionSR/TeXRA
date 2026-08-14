@@ -1221,6 +1221,70 @@ describe('executeCliRequest', () => {
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
 
+  it('does not convert a committed output failure to cancelled by a later shutdown', async () => {
+    const { platform, executeCliRequest } = await installFakePlatform();
+    const { defaultSession } = await import('@agent/runtime/SessionHandle');
+    // Imported dynamically (like the lease test below) so the `instanceof`
+    // check in runExecution.ts sees the same module instance even after an
+    // earlier test's `vi.resetModules()` in this file.
+    const { AgentError: RuntimeAgentError } = await import('@common/errors');
+    const killSpy = vi.spyOn(defaultSession().executions, 'kill');
+    const runWithOwnership = vi.fn((operation: () => unknown) => operation());
+    const outputFailure = new Error(
+      'Workflow completed without generated outputs; nothing was copied to out.',
+    );
+    let publicationCommitted: boolean | undefined;
+    let outputResolutionFailed = false;
+    let releaseRun!: () => void;
+    const runGate = new Promise<void>((resolve) => {
+      releaseRun = resolve;
+    });
+    mocks.runAgent.mockImplementationOnce(
+      async (_request: unknown, options: LeaseOptions) => {
+        options.onExecutionLeaseAcquired?.(
+          runWithOwnership,
+          'exec-1' as ExecutionId,
+        );
+        options.onRun?.();
+        try {
+          await options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN);
+        } catch {
+          outputResolutionFailed = true;
+        }
+        await runGate;
+        // runAgent classifies the host output failure before it reaches the
+        // CLI boundary; the copy/missing-output error must stay the primary
+        // run failure below.
+        throw new RuntimeAgentError(outputFailure.message);
+      },
+    );
+
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+      openWorkflowOutput: async (_result, tryCommitPublication) => {
+        publicationCommitted = tryCommitPublication();
+        throw outputFailure;
+      },
+    });
+
+    await vi.waitFor(() => expect(outputResolutionFailed).toBe(true));
+    const shutdown = platform.lifecycle.runShutdown();
+    await Promise.resolve();
+    expect(killSpy).not.toHaveBeenCalled();
+
+    releaseRun();
+    await shutdown;
+    await expect(run).resolves.toEqual({
+      ok: false,
+      exitCode: CliExitCode.AgentError,
+    });
+    expect(publicationCommitted).toBe(true);
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
+      message: outputFailure.message,
+    });
+  });
+
   it('does not finalize shutdown through a captured lease that is already lost', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();
     // Imported dynamically (matching the module above) so the `instanceof`
