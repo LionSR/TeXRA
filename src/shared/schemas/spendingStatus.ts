@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { clamp } from '@utils/core';
 
 /**
  * Monthly relay spending status for the authenticated user, returned by
@@ -47,5 +48,5 @@ export function spendingQuotaState(status: SpendingStatus): SpendingQuotaState {
 
 /** Whole-percent headroom left in the monthly relay quota, clamped at 0. */
 export function spendingQuotaRemainingPercent(status: SpendingStatus): number {
-  return Math.max(0, Math.round(100 - Math.min(status.percentUsed, 100)));
+  return Math.round(clamp(100 - status.percentUsed, 0, 100));
 }

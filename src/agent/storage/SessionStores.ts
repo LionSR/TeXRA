@@ -10,14 +10,13 @@ import {
   type ExecutionStreamReference,
 } from '@agent/storage/executionListing';
 import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
-import { throwUnwrapAggregate } from '@agent/storage/storageErrors';
 import { isBackgroundShellStream } from '@agent/runtime/streamTab';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 import type { StagedStreamSnapshotDeletion } from '@transcript/StagedDeletionCoordinator';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
-import { unique } from '@utils/core';
+import { throwAggregated, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('SessionStores');
@@ -402,7 +401,7 @@ export class SessionStores {
           async () => {
             const cleanup = await this.deleteAdjacentStreamStates(streams);
             failedAdjacentStreams = cleanup.failed;
-            throwUnwrapAggregate(
+            throwAggregated(
               cleanup.failures,
               'Multiple adjacent cleanups failed',
             );
