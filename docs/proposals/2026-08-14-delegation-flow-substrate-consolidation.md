@@ -68,16 +68,20 @@ work, not an acceptance criterion of the cycle break.
 
 ### 2. Cost accounting: three disciplines for one fact
 
-**Unclaimed until now.**
+**Unclaimed until now.** The in-band "per-event forwarding" framing is stale.
 
-Three sites account subagent cost three different ways:
+Three sites still write cost differently:
 
 - Loop path: `ChildRunLoopParams.recordCost` retains `max(bestCostUsd)`
   across turns and commits exactly once at run end
   (`childRunLoop.ts`, cost retention + single-commit).
-- In-band path: `recordCost(options.onCost, totalCostUsd)` fires per
-  observation (`inBandSubagentExecution.ts:464`) with no max-retention and no
-  single-commit discipline.
+- In-band path: `executionMode: 'single-cycle'` and one `strategy.launch`
+  (`inBandSubagentExecution.ts:456-468`). `runNative` then calls
+  `ports.recordCost(result.totalCostUsd)` exactly once after that
+  invocation (`nativeSubagentStrategy.ts:192-199`). That is one
+  cumulative observation per physical attempt, not repeated per-event
+  forwarding. A second retention layer would be churn around an
+  invariant that already holds.
 - Workflow-script path: a three-level roll-up (grandchild `onCost` →
   `createWorkflowAttemptCostTracker` delta accounting in
   `workflowScriptStrategy.ts` → run-level `recordCost`), plus a separate
@@ -90,13 +94,14 @@ lives; today correctness rests on each site independently honoring the
 "child cost lands in parent totals exactly once" invariant that only the
 loop path states.
 
-**Fix.** One written contract for child-cost observation: who observes
-(ports), who retains (max vs delta — the answer differs by attempt model and
-must be stated, not implied), who commits, and when. Then make the in-band
-path honor it (it is the outlier: per-event forwarding with no retention
-policy). Extend `WorkflowScriptCost.vitest.ts` and add an in-band cost test
-pinning single-commit behavior. This is a contract-and-tests change first;
-code movement only where a site violates the written contract.
+**Fix.** Write the contract first: who observes (ports), who retains
+(max vs delta — the answer differs by attempt model and must be stated),
+who commits, and when. Then make the workflow-script path honor it (it is
+the remaining complexity: delta tracker, journal settlement, recovered
+guard). Do **not** add an in-band retention layer or a new in-band
+single-commit test unless a multi-observation in-band path is identified.
+Extend `WorkflowScriptCost.vitest.ts` for the contract the workflow path
+must keep. Code movement only where a site violates the written contract.
 
 ### 3. The in-band path is a degraded copy of the loop path
 
@@ -129,25 +134,30 @@ The in-band-vs-async _durability_ split stays (see Non-goals).
 "the same semaphore should eventually gate LLM-driven delegation too";
 unbuilt. Scope and inheritance are **not** settled (see Open question 2).
 
-`ToolUseDispatchNode` runs parallel-safe tool calls under a local
+`ToolUseDispatchNode` runs **only** `parallelSafe` tool calls under a local
 `PQueue({ concurrency: 4 })` (`MAX_PARALLEL_TOOL_CALLS`,
-`ToolUseDispatchNode.ts:33`). The workflow-script engine runs `agent()`
-calls under its own semaphore (default 4). An orchestrator combining direct
-parallel-safe tool calls with a running workflow script can hold up to both
-budgets at once, and neither is provider-rate-aware.
+`ToolUseDispatchNode.ts:33`; queue vs barrier at `:165-181`). Delegation
+tools do not declare `parallelSafe`, so they execute on the barrier branch
+and never take a queue slot. Detached delegation also returns after launch,
+so a queue slot would be released while the child keeps running. The
+workflow-script engine runs `agent()` under its own semaphore (default 4).
+An orchestrator can therefore hold the engine budget plus ungated native
+child-agent lifetimes at once, and neither is provider-rate-aware.
 
 A purely run-scoped budget does not by itself close that case:
 `delegate_multi_agents` returns after launching a detached workflow
-execution, so the parent's `ToolUseDispatchNode` and the workflow child's
-semaphore belong to distinct runs unless budget inheritance is designed.
+execution, so the parent's launch and the workflow child's semaphore belong
+to distinct runs unless budget inheritance is designed.
 
-**Fix.** One budget both draw from, owned in `@agent/runtime` (not in either
-consumer), injected into the dispatch node's queue and the engine's
-semaphore. Settle per-run vs per-session vs per-provider-key — and whether
-a detached child inherits its parent's remaining slots — in the Wave-4
-design note **before** implementing. Keep the engine's _lifetime_ call cap
-and fan-out caps where they are — those are script governance, not
-concurrency.
+**Fix.** One budget owned in `@agent/runtime`, acquired and held at the
+actual child-execution boundary (native launch / child-run loop / workflow
+engine semaphore) — **not** injected into the dispatch node's `PQueue`,
+which would throttle `read_file`/`grep` while leaving child-agent
+lifetimes ungated. Settle per-run vs per-session vs per-provider-key —
+and whether a detached child inherits its parent's remaining slots — in
+the Wave-4 design note **before** implementing. Keep the engine's
+_lifetime_ call cap and fan-out caps where they are — those are script
+governance, not concurrency.
 
 ### 5. Dual-channel sync tax over `WorkflowScriptEvent` + snapshot
 
@@ -340,7 +350,9 @@ the named sites against head.
 
 **Wave 2 — contracts (design-first, small diffs):**
 
-4. Item 2 (cost contract + in-band conformance + tests).
+4. Item 2 (cost contract + workflow-path conformance + tests). Do not
+   add an in-band single-commit test unless a multi-observation path
+   is found.
 5. Item 3 (in-band notify sink + explicit cancellation wiring).
 6. Item 10 (report/result decision, README, `executions` tool messaging).
 
@@ -356,10 +368,11 @@ Item 7 (H3 lease triplet) has no Wave-3 PR.
 
 **Wave 4 — capability:**
 
-9. Item 4 (shared concurrency budget). Last because it is the only item
-   that changes runtime behavior under load, wants the cost contract
-   (item 2) settled first, and needs the scope/inheritance design note
-   written before any code moves.
+9. Item 4 (shared concurrency budget, held at the child-execution
+   boundary). Last because it is the only item that changes runtime
+   behavior under load, wants the cost contract (item 2) settled first,
+   and needs the scope/inheritance design note written before any code
+   moves.
 
 **Wave 5 — audit addendum (see Addendum below):** A5's defect fix ships
 immediately (it is a bug, not debt); A1–A3 and A6 are independent and can
@@ -533,14 +546,24 @@ own reviewed commit.
 the same machine written twice — the registry's own doc says "Mirrors
 ExecutionSubscriptionBinder" — with parallel Map-of-Map bookkeeping,
 bind-time generation capture, auto-dispose hooks, and an identical
-`submitFollowUp(live_notification)` → emit → warn-catch sequence. Fix:
-express the execution channel as the registry's fourth instance via an
-`ExecutionRegistry → PollingSourceLike` adapter; the independently-shippable
-first step folds the copy-pasted post-notification emit into
-`submitFollowUp` itself. Verifier correction: the "layering forced the
-duplicate" premise is false — `agent/runtime` already imports `@tools`
-within the ratcheted baseline, so relocation is optional taste, not a
-prerequisite.
+`submitFollowUp(live_notification)` → emit → warn-catch sequence. The
+independently-shippable first step folds the copy-pasted post-notification
+emit into `submitFollowUp` itself. Verifier correction: the "layering
+forced the duplicate" premise is false — `agent/runtime` already imports
+`@tools` within the ratcheted baseline, so relocation is optional taste,
+not a prerequisite.
+
+Do **not** replace the binder with a fourth registry instance until the
+lifecycle difference is designed. The binder is created and disposed per
+`SessionHandle` (`SessionHandle.ts:200-207`, `:864-869`). The registry keys
+process-level state only by `StreamTabId`, captures whichever session
+called `bind`, and has no `dispose()` for its source or queue hooks
+(`StreamSubscriptionRegistry.ts:72-100`, `:220-237`). A process-wide
+fourth instance can collide when two sessions share a stream/key; a
+per-session fourth instance leaks registered hooks at teardown. Add
+session identity and an explicit disposal contract to the shared
+registry before replacing the binder, or keep the session-owned binder
+and only ship the emit fold.
 
 ## Open questions
 
