@@ -13,6 +13,8 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import xtermStyles from '@xterm/xterm/css/xterm.css?inline';
 
+import { resolveXtermTheme } from '@shared/wa/xtermTheme';
+
 import { getDesktopChromeFontSize } from './desktopTypography';
 
 export interface TerminalPaneCallbacks {
@@ -65,23 +67,6 @@ function injectXtermStyles(): void {
   stylesInjected = true;
 }
 
-/**
- * Reads terminal colors from the app's own token layer so the terminal matches
- * the active theme instead of shipping a second hardcoded palette. The tokens
- * are the `--wa-color-*` promotions documented in themeTokens.css.
- */
-function themeFromTokens(): Record<string, string> {
-  const styles = getComputedStyle(document.body);
-  const token = (name: string, fallback: string): string =>
-    styles.getPropertyValue(name).trim() || fallback;
-  return {
-    background: token('--wa-color-surface-default', '#1e1e1e'),
-    foreground: token('--wa-color-text-normal', '#d4d4d4'),
-    cursor: token('--wa-color-text-normal', '#d4d4d4'),
-    selectionBackground: token('--wa-color-terminal-selection-bg', '#264f78'),
-  };
-}
-
 export function createTerminalPane(
   callbacks: TerminalPaneCallbacks,
 ): TerminalPane {
@@ -98,14 +83,12 @@ export function createTerminalPane(
     host.className = 'desktop-terminal-surface';
     element.append(host);
 
+    const { theme, fontFamily } = resolveXtermTheme(document.body);
     const terminal = new Terminal({
       allowProposedApi: true,
       convertEol: false,
       cursorBlink: true,
-      fontFamily:
-        getComputedStyle(document.body)
-          .getPropertyValue('--wa-font-family-mono')
-          .trim() || 'monospace',
+      fontFamily,
       fontSize: getDesktopChromeFontSize(),
       // Build logs and test output are long; a shallow buffer would discard the
       // beginning of exactly the runs users need to read.
@@ -113,7 +96,7 @@ export function createTerminalPane(
       // Pty output is canvas-only without this; screen reader mode exposes the
       // buffer (including the in-band exit/error lines) as text.
       screenReaderMode: true,
-      theme: themeFromTokens(),
+      theme,
     });
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);

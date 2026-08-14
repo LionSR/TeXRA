@@ -4,33 +4,9 @@ import { customElement, property, query } from 'lit/decorators.js';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import xtermStyles from '@xterm/xterm/css/xterm.css?inline';
+
+import { resolveXtermTheme } from '@shared/wa/xtermTheme';
 import { clamp } from '@utils/core';
-
-const DEFAULT_THEME = {
-  background: '#1e1e1e',
-  foreground: '#cccccc',
-  fontFamily: 'monospace',
-} as const;
-
-/** Web Awesome terminal ANSI color tokens mapped to xterm.js theme keys. */
-const ANSI_COLOR_MAP = [
-  ['black', '--wa-color-terminal-ansi-black'],
-  ['red', '--wa-color-terminal-ansi-red'],
-  ['green', '--wa-color-terminal-ansi-green'],
-  ['yellow', '--wa-color-terminal-ansi-yellow'],
-  ['blue', '--wa-color-terminal-ansi-blue'],
-  ['magenta', '--wa-color-terminal-ansi-magenta'],
-  ['cyan', '--wa-color-terminal-ansi-cyan'],
-  ['white', '--wa-color-terminal-ansi-white'],
-  ['brightBlack', '--wa-color-terminal-ansi-bright-black'],
-  ['brightRed', '--wa-color-terminal-ansi-bright-red'],
-  ['brightGreen', '--wa-color-terminal-ansi-bright-green'],
-  ['brightYellow', '--wa-color-terminal-ansi-bright-yellow'],
-  ['brightBlue', '--wa-color-terminal-ansi-bright-blue'],
-  ['brightMagenta', '--wa-color-terminal-ansi-bright-magenta'],
-  ['brightCyan', '--wa-color-terminal-ansi-bright-cyan'],
-  ['brightWhite', '--wa-color-terminal-ansi-bright-white'],
-] as const;
 
 const MIN_SCROLLBACK = 4_000;
 
@@ -138,7 +114,7 @@ export class TerminalOutput extends LitElement {
   };
 
   override firstUpdated(): void {
-    const { theme, fontFamily } = this.resolveTerminalOptions();
+    const { theme, fontFamily } = resolveXtermTheme(this);
     this.terminal = new Terminal({
       disableStdin: true,
       convertEol: true,
@@ -290,42 +266,6 @@ export class TerminalOutput extends LitElement {
       terminal.write(text, () => resolve());
       setTimeout(() => resolve(), 100);
     });
-  }
-
-  /** Resolve theme colors and font family from `--wa-*` tokens in a single getComputedStyle call. */
-  private resolveTerminalOptions(): {
-    theme: Record<string, string>;
-    fontFamily: string;
-  } {
-    const styles = getComputedStyle(this);
-
-    const theme: Record<string, string> = {
-      background:
-        styles.getPropertyValue('--wa-color-surface-default').trim() ||
-        DEFAULT_THEME.background,
-      foreground:
-        styles.getPropertyValue('--wa-color-text-normal').trim() ||
-        DEFAULT_THEME.foreground,
-    };
-
-    for (const [key, cssVar] of ANSI_COLOR_MAP) {
-      const value = styles.getPropertyValue(cssVar).trim();
-      if (value) theme[key] = value;
-    }
-
-    const cursor = styles.getPropertyValue('--wa-color-terminal-cursor').trim();
-    if (cursor) theme['cursor'] = cursor;
-
-    const selectionBg = styles
-      .getPropertyValue('--wa-color-terminal-selection-bg')
-      .trim();
-    if (selectionBg) theme['selectionBackground'] = selectionBg;
-
-    const fontFamily =
-      styles.getPropertyValue('--wa-font-family-mono').trim() ||
-      DEFAULT_THEME.fontFamily;
-
-    return { theme, fontFamily };
   }
 
   override render() {

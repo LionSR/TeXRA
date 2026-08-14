@@ -1,0 +1,66 @@
+/**
+ * Resolve an xterm.js theme from Web Awesome CSS tokens on a host element.
+ * Extension and desktop both call this with their own DOM target so the
+ * terminal matches the active theme instead of a second hardcoded palette.
+ */
+
+export const XTERM_THEME_FALLBACKS = {
+  background: '#1e1e1e',
+  foreground: '#cccccc',
+  fontFamily: 'monospace',
+} as const;
+
+/** Web Awesome terminal ANSI color tokens mapped to xterm.js theme keys. */
+export const XTERM_ANSI_COLOR_TOKENS = [
+  ['black', '--wa-color-terminal-ansi-black'],
+  ['red', '--wa-color-terminal-ansi-red'],
+  ['green', '--wa-color-terminal-ansi-green'],
+  ['yellow', '--wa-color-terminal-ansi-yellow'],
+  ['blue', '--wa-color-terminal-ansi-blue'],
+  ['magenta', '--wa-color-terminal-ansi-magenta'],
+  ['cyan', '--wa-color-terminal-ansi-cyan'],
+  ['white', '--wa-color-terminal-ansi-white'],
+  ['brightBlack', '--wa-color-terminal-ansi-bright-black'],
+  ['brightRed', '--wa-color-terminal-ansi-bright-red'],
+  ['brightGreen', '--wa-color-terminal-ansi-bright-green'],
+  ['brightYellow', '--wa-color-terminal-ansi-bright-yellow'],
+  ['brightBlue', '--wa-color-terminal-ansi-bright-blue'],
+  ['brightMagenta', '--wa-color-terminal-ansi-bright-magenta'],
+  ['brightCyan', '--wa-color-terminal-ansi-bright-cyan'],
+  ['brightWhite', '--wa-color-terminal-ansi-bright-white'],
+] as const;
+
+export interface ResolvedXtermTheme {
+  readonly theme: Record<string, string>;
+  readonly fontFamily: string;
+}
+
+/** Read `--wa-*` tokens from `target` in one getComputedStyle call. */
+export function resolveXtermTheme(target: Element): ResolvedXtermTheme {
+  const styles = getComputedStyle(target);
+  const token = (name: string): string => styles.getPropertyValue(name).trim();
+
+  const theme: Record<string, string> = {
+    background:
+      token('--wa-color-surface-default') || XTERM_THEME_FALLBACKS.background,
+    foreground:
+      token('--wa-color-text-normal') || XTERM_THEME_FALLBACKS.foreground,
+  };
+
+  for (const [key, cssVar] of XTERM_ANSI_COLOR_TOKENS) {
+    const value = token(cssVar);
+    if (value) theme[key] = value;
+  }
+
+  const cursor = token('--wa-color-terminal-cursor');
+  theme.cursor = cursor || theme.foreground;
+
+  const selectionBackground = token('--wa-color-terminal-selection-bg');
+  if (selectionBackground) theme.selectionBackground = selectionBackground;
+
+  return {
+    theme,
+    fontFamily:
+      token('--wa-font-family-mono') || XTERM_THEME_FALLBACKS.fontFamily,
+  };
+}
