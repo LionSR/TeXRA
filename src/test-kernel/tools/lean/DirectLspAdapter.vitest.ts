@@ -23,6 +23,10 @@ import { splitOutputLines } from '@utils/text/stringUtils';
 const FAKE_LAKE = `#!/usr/bin/env node
 const fs = require('node:fs');
 
+if (!process.argv.includes('--server')) {
+  process.exit(0);
+}
+
 const countPath = process.env.TEXRA_FAKE_LEAN_COUNT;
 if (countPath) fs.appendFileSync(countPath, 'start\\n');
 
@@ -152,15 +156,12 @@ describe('createDirectLspLeanAdapter', () => {
     await session.ensureReady();
 
     const pendingDiagnostics = session.fetchDiagnostics(filePath);
+    const settled = expect(pendingDiagnostics).rejects.toThrow(
+      'Lean session has been disposed.',
+    );
     await delay(100);
     await session.dispose();
-
-    await expect(
-      Promise.race([
-        pendingDiagnostics.then(() => 'settled'),
-        delay(500).then(() => 'timed out'),
-      ]),
-    ).resolves.toBe('settled');
+    await settled;
   });
 
   fakeLakeIt(
@@ -275,6 +276,97 @@ describe('createDirectLspLeanAdapter', () => {
       await adapter.fetchDiagnosticsForFile(second.filePath);
       expect(await countStarts()).toBe(2);
       expect(activeServerRoots()).toEqual([second.projectRoot]);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
+  fakeLakeIt(
+    'does not stop a session while a diagnostics request is in flight',
+    async () => {
+      vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        idleTimeoutMs: 50,
+      });
+      const pending = adapter.fetchDiagnosticsForFile(filePath);
+      try {
+        await delay(700);
+        expect(activeServerRoots()).toEqual([projectRoot]);
+        await delay(150);
+        expect(activeServerRoots()).toEqual([projectRoot]);
+        await adapter.dispose();
+        await expect(pending).resolves.toMatchObject({
+          ok: false,
+          kind: 'toolchain_unavailable',
+        });
+      } finally {
+        await adapter.dispose();
+        await Promise.allSettled([pending]);
+      }
+    },
+  );
+
+  fakeLakeIt(
+    'does not evict a workspace that still has an in-flight request',
+    async () => {
+      vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
+      const second = makeLakeProject(tempRoot, 'project-b');
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        maxSessions: 1,
+        idleTimeoutMs: 0,
+      });
+      const pendingFirst = adapter.fetchDiagnosticsForFile(filePath);
+      try {
+        await delay(100);
+        const pendingSecond = adapter.fetchDiagnosticsForFile(second.filePath);
+        await delay(100);
+        expect(activeServerRoots()).toEqual([projectRoot]);
+        await adapter.dispose();
+        await Promise.allSettled([pendingFirst, pendingSecond]);
+      } finally {
+        await adapter.dispose();
+        await Promise.allSettled([pendingFirst]);
+      }
+    },
+  );
+
+  fakeLakeIt('does not start queued servers after dispose', async () => {
+    const second = makeLakeProject(tempRoot, 'project-b');
+    const third = makeLakeProject(tempRoot, 'project-c');
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 0,
+    });
+    const pending = Promise.allSettled([
+      adapter.fetchDiagnosticsForFile(filePath),
+      adapter.fetchDiagnosticsForFile(second.filePath),
+      adapter.fetchDiagnosticsForFile(third.filePath),
+    ]);
+    await adapter.dispose();
+    await pending;
+    expect(activeServerRoots()).toEqual([]);
+    const starts = await countStarts();
+    await delay(100);
+    expect(await countStarts()).toBe(starts);
+  });
+
+  fakeLakeIt('treats project commands as session activity', async () => {
+    const second = makeLakeProject(tempRoot, 'project-b');
+    let clock = 0;
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      maxSessions: 2,
+      idleTimeoutMs: 1_000,
+      now: () => clock,
+    });
+    try {
+      await adapter.fetchDiagnosticsForFile(filePath);
+      clock = 2_000;
+      await adapter.executeProjectCommand('build');
+      await adapter.fetchDiagnosticsForFile(second.filePath);
+      expect(activeServerRoots()).toEqual([projectRoot, second.projectRoot]);
     } finally {
       await adapter.dispose();
     }

@@ -106,12 +106,17 @@ export class LeanSession {
       if (!child.killed) {
         child.kill();
       }
+      await waitForProcessClose(child);
     }
   }
 
   async fetchDiagnostics(filePath: string): Promise<LeanDiagnostic[]> {
     const absolute = await this.openAndSettle(filePath);
-    return this.openFiles.get(absolute)?.diagnostics ?? [];
+    const diagnostics = this.openFiles.get(absolute)?.diagnostics;
+    if (this.disposed || diagnostics == null) {
+      throw new Error('Lean session has been disposed.');
+    }
+    return diagnostics;
   }
 
   async restartFile(filePath: string): Promise<void> {
@@ -335,7 +340,9 @@ export class LeanSession {
     if (!state) return;
     const start = Date.now();
     while (Date.now() - start < DIAGNOSTICS_WAIT_MS) {
-      if (this.disposed || this.openFiles.get(absolute) !== state) return;
+      if (this.disposed || this.openFiles.get(absolute) !== state) {
+        throw new Error('Lean session has been disposed.');
+      }
       const sinceLast = state.lastDiagnosticsAt
         ? Date.now() - state.lastDiagnosticsAt
         : 0;
@@ -405,6 +412,29 @@ function lspSeverityToVsCode(severity: number): DiagnosticSeverity {
   // unexpected out-of-range value is still dropped by SEVERITY_CONFIG's
   // numeric lookup downstream, exactly as before).
   return Math.max(0, severity - 1) as DiagnosticSeverity;
+}
+
+async function waitForProcessClose(
+  child: ChildProcessWithoutNullStreams,
+): Promise<void> {
+  if (child.exitCode != null || child.signalCode != null) return;
+  const closed = new Promise<void>((resolve) => {
+    child.once('close', () => resolve());
+  });
+  try {
+    await pTimeout(closed, {
+      milliseconds: SHUTDOWN_TIMEOUT_MS,
+      message: 'Lean process close timeout',
+    });
+  } catch {
+    if (!child.killed) {
+      child.kill('SIGKILL');
+    }
+    await pTimeout(closed, {
+      milliseconds: SHUTDOWN_TIMEOUT_MS,
+      message: 'Lean process close timeout after SIGKILL',
+    }).catch(() => undefined);
+  }
 }
 
 function pathToUri(absolute: string): string {
