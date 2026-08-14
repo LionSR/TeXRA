@@ -93,8 +93,12 @@ jobs:
 
           # Self-test the classifiers before trusting them on real input, so a
           # shell/awk regression fails CI instead of silently misrouting it.
-          if ! printf 'M\tdocs/supabase/remote-agents.config.json\nR100\tdocs/supabase/SYNC_REMOTE_AGENTS.sql\tdocs/supabase/SYNC_REMOTE_AGENTS.sql\n' | drift_gate_match; then
+          if ! printf 'M\tdocs/supabase/remote-agents.config.json\nR100\tdocs/supabase/remote-agents.config.json.old\tdocs/supabase/remote-agents.config.json\n' | drift_gate_match; then
             echo 'drift-gate classifier self-test failed' >&2
+            exit 1
+          fi
+          if printf 'M\tdocs/guide.md\n' | drift_gate_match; then
+            echo 'drift-gate classifier self-test failed (must not match non-gate docs)' >&2
             exit 1
           fi
           if ! printf 'M\tdocs/guide.md\nR100\tsrc/foo.ts\tdocs/foo.ts\n' | code_change_match; then
@@ -103,6 +107,10 @@ jobs:
           fi
           if printf 'M\tdocs/guide.md\n' | code_change_match; then
             echo 'code-change classifier self-test failed (docs-only)' >&2
+            exit 1
+          fi
+          if printf 'M\tREADME.md\n' | code_change_match; then
+            echo 'code-change classifier self-test failed (markdown outside docs)' >&2
             exit 1
           fi
 
