@@ -13,6 +13,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { fileUriToPath, LeanSession } from '@tools/lean/direct/leanSession';
+import {
+  isLeanServerActive,
+  listLeanServers,
+} from '@tools/lean/leanServerRegistry';
 import { delay } from '@utils/core';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
@@ -213,4 +217,63 @@ describe('createDirectLspLeanAdapter', () => {
       }
     },
   );
+
+  fakeLakeIt(
+    'evicts the least-recent workspace when the session cap is reached',
+    async () => {
+      const second = makeLakeProject(tempRoot, 'project-b');
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        maxSessions: 1,
+        idleTimeoutMs: 0,
+      });
+      try {
+        await adapter.fetchDiagnosticsForFile(filePath);
+        await adapter.fetchDiagnosticsForFile(second.filePath);
+        expect(await countStarts()).toBe(2);
+        expect(activeServerRoots()).toEqual([second.projectRoot]);
+      } finally {
+        await adapter.dispose();
+      }
+    },
+  );
+
+  fakeLakeIt('stops an idle workspace before opening another', async () => {
+    const second = makeLakeProject(tempRoot, 'project-b');
+    let clock = 0;
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      maxSessions: 2,
+      idleTimeoutMs: 1_000,
+      now: () => clock,
+    });
+    try {
+      await adapter.fetchDiagnosticsForFile(filePath);
+      clock = 2_000;
+      await adapter.fetchDiagnosticsForFile(second.filePath);
+      expect(await countStarts()).toBe(2);
+      expect(activeServerRoots()).toEqual([second.projectRoot]);
+    } finally {
+      await adapter.dispose();
+    }
+  });
 });
+
+function makeLakeProject(
+  root: string,
+  name: string,
+): { projectRoot: string; filePath: string } {
+  const projectRoot = path.join(root, name);
+  mkdirSync(projectRoot);
+  writeFileSync(path.join(projectRoot, 'lakefile.toml'), `name = "${name}"\n`);
+  const filePath = path.join(projectRoot, 'Test.lean');
+  writeFileSync(filePath, 'example : True := by trivial\n');
+  return { projectRoot, filePath };
+}
+
+function activeServerRoots(): string[] {
+  return listLeanServers()
+    .filter(isLeanServerActive)
+    .map((info) => info.workspaceRoot)
+    .toSorted((a, b) => a.localeCompare(b));
+}
