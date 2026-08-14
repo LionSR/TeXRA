@@ -517,4 +517,23 @@ describe('CLI workflow output resolution', () => {
 
     expect(formatWorkflowTextResult(result)).toBe('/run/r2/appendix.tex');
   });
+
+  it('reports run storage instead of one provisional file after cancellation', () => {
+    const result: CliWorkflowRunResult = {
+      ...workflowResult(
+        [
+          { absolutePath: '/run/r0/main.tex', relativePath: 'r0/main.tex' },
+          {
+            absolutePath: '/run/r0/appendix.tex',
+            relativePath: 'r0/appendix.tex',
+          },
+        ],
+        RUN_OUTCOME.CANCELLED,
+      ),
+      workingDirectory: '/workspace',
+      runDirectory: '/run',
+    };
+
+    expect(formatWorkflowTextResult(result)).toBe('/run');
+  });
 });
