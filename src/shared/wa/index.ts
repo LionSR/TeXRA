@@ -12,6 +12,7 @@
 
 import '@awesome.me/webawesome/dist/styles/themes/default.css';
 
+import './spinner';
 import { registerTeXRAWebAwesomeIcons } from './webAwesomeIcons';
 import { applyInitialWaColorScheme } from './waColorScheme';
 
