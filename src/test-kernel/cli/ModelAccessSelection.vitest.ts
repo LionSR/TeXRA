@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
   signInCliChatGpt: vi.fn(),
   signInCliGrok: vi.fn(),
   updateGlobalState: vi.fn(),
-  apiKeyExists: vi.fn(),
+  hasUsableApiKey: vi.fn(),
   lookupApiKeyOrigin: vi.fn(),
   getPreferKimiCode: vi.fn(),
   setPreferKimiCode: vi.fn(),
@@ -81,7 +81,7 @@ vi.mock('@model/apiProviders', () => {
   ];
   return {
     API_PROVIDERS: providers,
-    apiKeyExists: mocks.apiKeyExists,
+    hasUsableApiKey: mocks.hasUsableApiKey,
     lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
     configuredApiKeyProviders: async () => {
       const origins = await Promise.all(
@@ -194,7 +194,7 @@ beforeEach(() => {
     openRouterDisabled: false,
   }));
   mocks.shouldUseSubscriptionDeviceCode.mockReturnValue(false);
-  mocks.apiKeyExists.mockResolvedValue(false);
+  mocks.hasUsableApiKey.mockResolvedValue(false);
   mocks.lookupApiKeyOrigin.mockResolvedValue('none');
   mocks.getPreferKimiCode.mockReturnValue(false);
   mocks.setPreferKimiCode.mockResolvedValue(undefined);
@@ -384,7 +384,7 @@ describe('CLI model access routes', () => {
   });
 
   it('reports the Kimi preference independently of key and fallback', async () => {
-    mocks.apiKeyExists.mockImplementation(
+    mocks.hasUsableApiKey.mockImplementation(
       async (_secrets, provider) => provider === 'kimiCode',
     );
     mocks.getPreferKimiCode.mockReturnValue(true);
@@ -407,7 +407,7 @@ describe('CLI model access routes', () => {
       codingPlans: { kimiCode: { preferred: true, keySet: true } },
     });
 
-    mocks.apiKeyExists.mockResolvedValue(false);
+    mocks.hasUsableApiKey.mockResolvedValue(false);
     await expect(readCliModelAccessStatus('personal')).resolves.toMatchObject({
       apiFallback: 'personal',
       codingPlans: { kimiCode: { preferred: true, keySet: false } },
@@ -448,7 +448,7 @@ describe('CLI model access routes', () => {
   });
 
   it('enables Kimi Code routing on a personal fallback when a key exists', async () => {
-    mocks.apiKeyExists.mockResolvedValue(true);
+    mocks.hasUsableApiKey.mockResolvedValue(true);
 
     const result = await updateCliModelAccess(
       context,
@@ -482,7 +482,7 @@ describe('CLI model access routes', () => {
   });
 
   it('reports the GLM Coding Plan preference independently of key and fallback', async () => {
-    mocks.apiKeyExists.mockImplementation(
+    mocks.hasUsableApiKey.mockImplementation(
       async (_secrets, provider) => provider === 'glm',
     );
     mocks.getGLMCodingPlan.mockReturnValue(true);
@@ -507,7 +507,7 @@ describe('CLI model access routes', () => {
   });
 
   it('enables GLM Coding Plan routing on a personal fallback when a key exists', async () => {
-    mocks.apiKeyExists.mockResolvedValue(true);
+    mocks.hasUsableApiKey.mockResolvedValue(true);
 
     const result = await updateCliModelAccess(
       context,
@@ -550,7 +550,7 @@ describe('CLI model access routes', () => {
       { writeProgress: vi.fn() },
     );
 
-    expect(mocks.apiKeyExists).not.toHaveBeenCalled();
+    expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
     expect(mocks.setGLMCodingPlan).toHaveBeenCalledWith(false);
     expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
@@ -673,7 +673,7 @@ describe('CLI model access routes', () => {
     });
     mocks.isPreferCodexSubscription.mockReturnValue(true);
     mocks.getPreferKimiCode.mockReturnValue(true);
-    mocks.apiKeyExists.mockResolvedValue(true);
+    mocks.hasUsableApiKey.mockResolvedValue(true);
 
     const status = await readCliModelAccessStatus('personal');
     expect(status.preferences).toEqual({
@@ -769,7 +769,7 @@ describe('CLI model access routes', () => {
     vi.clearAllMocks();
     await updateCliModelAccess(context, selection.value);
 
-    expect(mocks.apiKeyExists).not.toHaveBeenCalled();
+    expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
     expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(false);
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
   });
