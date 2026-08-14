@@ -71,4 +71,16 @@ describe('refreshModelListStateIfNeeded', () => {
     expect(result.removed).toContain('grok4');
     expect(enabledModels(state)).not.toContain('grok4');
   });
+
+  it('restabilizes a Gemini-first list so the curated default leads', async () => {
+    const state = new FakeStateStore({
+      [GlobalStateKey.MODEL_LIST_VERSION]: MODEL_LIST_VERSION,
+      [GlobalStateKey.ENABLED_MODELS]: ['gemini31p', 'sonnet5T', 'custom'],
+    });
+
+    const result = await refreshModelListStateIfNeeded(state);
+
+    expect(result.skipped).toBe(false);
+    expect(enabledModels(state)).toEqual(['sonnet5T', 'gemini31p', 'custom']);
+  });
 });

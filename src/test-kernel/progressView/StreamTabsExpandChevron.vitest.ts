@@ -67,17 +67,34 @@ describe('stream-tab expand chevron', () => {
     expect(expandButton?.tagName).toBe('WA-BUTTON');
     expect(expandButton?.getAttribute('data-stream')).toBe('parent');
     expect(expandButton?.getAttribute('data-action')).toBe('toggle-children');
-    expect(expandButton?.hasAttribute('aria-expanded')).toBe(true);
-    const expectedLabel =
-      expandButton?.getAttribute('aria-expanded') === 'true'
-        ? 'Collapse background tasks'
-        : '1 background task';
-    expect(expandButton?.getAttribute('aria-label')).toBe(expectedLabel);
+    expect(expandButton?.getAttribute('aria-expanded')).toBe('false');
+    expect(expandButton?.getAttribute('aria-label')).toBe('1 background task');
     expect(
       parentTab?.shadowRoot
         ?.querySelector('wa-tooltip[for="stream-tab-expand-button"]')
         ?.textContent?.trim(),
-    ).toBe(expectedLabel);
+    ).toBe('1 background task');
+  });
+
+  it('expands ancestors when a child stream is the active session', async () => {
+    const tabs = await mountTabs({
+      streams: [makeStream('parent')],
+      childStreamsByParent: new Map([['parent', [makeStream('child')]]]),
+    });
+    const parentTab = tabs.shadowRoot?.querySelector('stream-tab');
+    const expandButton = parentTab?.shadowRoot?.querySelector('.tab-expand');
+    expect(expandButton?.getAttribute('aria-expanded')).toBe('false');
+
+    tabs.activeStreamId = 'child';
+    await tabs.updateComplete;
+    await settleChildRender();
+
+    expect(
+      parentTab?.shadowRoot
+        ?.querySelector('.tab-expand')
+        ?.getAttribute('aria-expanded'),
+    ).toBe('true');
+    expect(tabs.shadowRoot?.querySelectorAll('stream-tab')).toHaveLength(2);
   });
 
   it('identifies an unlabeled stream by name in the select aria-label', async () => {

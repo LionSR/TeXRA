@@ -16,31 +16,39 @@ interface StreamTreeInputs {
 
 export interface StreamTreeProjection {
   readonly expandedParents: Set<string>;
-  readonly branchActivityByStream: Map<StreamTabId, StreamBranchActivity>;
+  readonly approvalBadgeStreamIds: Set<string>;
   readonly userOverrides: Map<string, StreamTreeExpansionOverride>;
 }
 
 export function computeStreamTreeProjection(
   inputs: StreamTreeInputs & {
     readonly userOverrides: ReadonlyMap<string, StreamTreeExpansionOverride>;
+    readonly pendingApprovalStreamIds?: ReadonlySet<string>;
+    readonly activeStreamId?: string | null;
   },
 ): StreamTreeProjection {
-  const branchActivityByStream = new Map<StreamTabId, StreamBranchActivity>();
   const userOverrides = pruneStreamTreeUserOverrides(
     inputs.userOverrides,
     inputs.childStreamsByParent,
   );
+  const parentByChild = parentByChildMap(inputs.childStreamsByParent);
+  const approvalSignals = collectPendingApprovalSignals(
+    parentByChild,
+    inputs.pendingApprovalStreamIds ?? new Set(),
+  );
+  // Viewing a child (Background-tasks jump, or after an approval clears)
+  // must keep its ancestor path open. Running siblings stay collapsed.
+  const activeAncestors = collectAncestorIds(
+    parentByChild,
+    inputs.activeStreamId,
+  );
   const expandedParents = new Set<string>();
 
-  for (const [parentId, children] of inputs.childStreamsByParent) {
+  for (const parentId of inputs.childStreamsByParent.keys()) {
     if (
-      shouldExpandStreamParent(
-        inputs,
-        parentId,
-        children,
-        userOverrides,
-        branchActivityByStream,
-      )
+      userOverrides.get(parentId) === 'expanded' ||
+      approvalSignals.expandParents.has(parentId) ||
+      activeAncestors.has(parentId)
     ) {
       expandedParents.add(parentId);
     }
@@ -48,9 +56,57 @@ export function computeStreamTreeProjection(
 
   return {
     expandedParents,
-    branchActivityByStream,
+    approvalBadgeStreamIds: approvalSignals.badgeStreamIds,
     userOverrides,
   };
+}
+
+function parentByChildMap(
+  childStreamsByParent: ReadonlyMap<string, readonly StreamTabInfo[]>,
+): Map<string, string> {
+  const parentByChild = new Map<string, string>();
+  for (const [parentId, children] of childStreamsByParent) {
+    for (const child of children) {
+      parentByChild.set(child.name, parentId);
+    }
+  }
+  return parentByChild;
+}
+
+function collectAncestorIds(
+  parentByChild: ReadonlyMap<string, string>,
+  streamId: string | null | undefined,
+): Set<string> {
+  const ancestors = new Set<string>();
+  if (streamId == null || streamId === '') return ancestors;
+  const seen = new Set<string>();
+  let current = parentByChild.get(streamId);
+  while (current !== undefined && !seen.has(current)) {
+    seen.add(current);
+    ancestors.add(current);
+    current = parentByChild.get(current);
+  }
+  return ancestors;
+}
+
+/**
+ * A pending approval on a hidden descendant is still blocking. Walk from each
+ * pending stream up to the root so ancestors expand and show the same badge
+ * the child row would have shown.
+ */
+function collectPendingApprovalSignals(
+  parentByChild: ReadonlyMap<string, string>,
+  pendingApprovalStreamIds: ReadonlySet<string>,
+): { expandParents: Set<string>; badgeStreamIds: Set<string> } {
+  const expandParents = new Set<string>();
+  const badgeStreamIds = new Set(pendingApprovalStreamIds);
+  for (const pendingId of pendingApprovalStreamIds) {
+    for (const ancestor of collectAncestorIds(parentByChild, pendingId)) {
+      expandParents.add(ancestor);
+      badgeStreamIds.add(ancestor);
+    }
+  }
+  return { expandParents, badgeStreamIds };
 }
 
 function pruneStreamTreeUserOverrides(
@@ -66,8 +122,8 @@ function pruneStreamTreeUserOverrides(
 
 /**
  * Classify an entire child branch, not just the direct row. Absent entries in
- * `streamStates` are `unknown` so expansion can wait for a real lifecycle
- * signal instead of immediately treating a new child as finished.
+ * `streamStates` are `unknown` so a brand-new child is not treated as
+ * finished before it reports a lifecycle signal.
  */
 export function getStreamBranchActivity(
   inputs: StreamTreeInputs,
@@ -110,27 +166,6 @@ export function getStreamBranchActivity(
   const activity = anyUnknown ? 'unknown' : 'finished';
   cache.set(streamId, activity);
   return activity;
-}
-
-function shouldExpandStreamParent(
-  inputs: StreamTreeInputs,
-  parentId: string,
-  children: readonly StreamTabInfo[],
-  userOverrides: ReadonlyMap<string, StreamTreeExpansionOverride>,
-  cache: Map<StreamTabId, StreamBranchActivity>,
-): boolean {
-  const override = userOverrides.get(parentId);
-  if (override) return override === 'expanded';
-
-  return children.some(
-    (child) =>
-      getStreamBranchActivity(
-        inputs,
-        child.name,
-        new Set([parentId]),
-        cache,
-      ) !== 'finished',
-  );
 }
 
 function classifyStreamActivity(
