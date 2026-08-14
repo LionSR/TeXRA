@@ -28,10 +28,12 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
-- **The Follow-up chat panel is gone from workflow results** — a finished
-  workflow run no longer offers an agent/model picker and note box for
-  starting a tool-use chat from its outputs. Start a tool-use chat from the
-  New view instead. Running latexFixer on a compile failure is unchanged.
+- **Workflow runs trade the Follow-up chat panel for a Copy button** — the
+  panel that started a tool-use chat from a workflow's outputs (agent picker,
+  model picker, note box) is gone. In its place the run's header toolbar has a
+  Copy button that puts the run, its output paths, and any compile failures on
+  the clipboard as plain text, to paste into whichever chat you want. Running
+  latexFixer on a compile failure is unchanged.
 
 ### CLI and Desktop
 

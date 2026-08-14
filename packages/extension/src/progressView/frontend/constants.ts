@@ -2,10 +2,20 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 
+/**
+ * Toolbar actions the header carries out itself instead of posting to the
+ * backend. A clipboard write has no backend leg, so such a button declares
+ * `localAction` in place of `command` rather than inventing a round trip.
+ */
+type ProgressToolbarLocalAction = 'copyRunContext';
+
 export interface ProgressToolbarButton {
   id: string;
   icon: TeXRAIconName;
-  command: string;
+  /** Backend command. Omitted exactly when `localAction` is set. */
+  command?: string;
+  /** Frontend-only action. Omitted exactly when `command` is set. */
+  localAction?: ProgressToolbarLocalAction;
   title: string;
   titleActive?: string;
   /**
@@ -47,6 +57,7 @@ export const ELEMENT_IDS = {
   CLEAN_STREAM_BTN: 'cleanStreamBtn',
   PACK_STREAM_BTN: 'packStreamBtn',
   OPEN_TASK_STORAGE_BTN: 'openTaskStorageBtn',
+  COPY_RUN_CONTEXT_BTN: 'copyRunContextBtn',
   FOLLOW_UP_CONTAINER: 'followUpContainer',
   FOLLOW_UP_INPUT: 'followUpInput',
   QUEUED_FOLLOW_UPS_COLLAPSIBLE: 'queuedFollowUpsCollapsible',
@@ -93,6 +104,16 @@ const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   disabled: true,
 });
 
+const COPY_RUN_CONTEXT_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
+  icon: 'copy',
+  localAction: 'copyRunContext',
+  title:
+    'Copy run context: this run and its output paths, as text to paste into a new chat',
+  className: 'copy-run-context-button',
+  disabled: true,
+} satisfies ProgressToolbarButton);
+
 const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
   STOP_STREAM_BUTTON,
   {
@@ -113,6 +134,7 @@ const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
   },
   RESTORE_STATE_BUTTON,
   OPEN_TASK_STORAGE_BUTTON,
+  COPY_RUN_CONTEXT_BUTTON,
   {
     id: ELEMENT_IDS.DIFF_STREAM_BTN,
     icon: 'code-compare',

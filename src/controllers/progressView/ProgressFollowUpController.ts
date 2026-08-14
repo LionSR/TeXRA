@@ -11,6 +11,7 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
+import { runStorageFilePath } from '@shared/copy/workflowRunContext';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { pluralize } from '@utils/text/stringUtils';
 
@@ -363,12 +364,4 @@ export class ProgressFollowUpController {
     }
     return output.relativePath;
   }
-}
-
-/**
- * Reference to a run-storage file the way the compile-fixer prompt addresses
- * it: `/executions/<executionId>/files/<relativePath>`.
- */
-function runStorageFilePath(executionId: string, relativePath: string): string {
-  return `/executions/${executionId}/files/${relativePath}`;
 }
