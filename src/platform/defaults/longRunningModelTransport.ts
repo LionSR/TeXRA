@@ -16,9 +16,14 @@ async function normalizeModelRequest(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<[UndiciRequestInfo, UndiciRequestInit]> {
-  // Node/undici require duplex for any non-null body; SDKs omit it inconsistently.
+  // Only ReadableStream bodies require the WHATWG `duplex` hint. String,
+  // FormData, and ArrayBuffer bodies must stay free of it; undici tolerates the
+  // field on non-stream bodies today, but the Fetch spec does not.
   const requestInit = { ...(init ?? {}) } as UndiciRequestInit;
-  if (requestInit.body != null && requestInit.duplex == null) {
+  if (
+    requestInit.body instanceof ReadableStream &&
+    requestInit.duplex == null
+  ) {
     requestInit.duplex = 'half';
   }
   if (!(input instanceof Request)) {
@@ -55,9 +60,7 @@ async function normalizeModelRequest(
       headers: Object.fromEntries(request.headers.entries()),
       redirect: request.redirect,
       signal: request.signal,
-      ...(body === undefined
-        ? {}
-        : { body, duplex: requestInit.duplex ?? 'half' }),
+      ...(body === undefined ? {} : { body }),
     },
   ];
 }
