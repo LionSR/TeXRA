@@ -119,10 +119,6 @@ export function createDirectLspLeanAdapter(
     return getOrStartSession(root, generation);
   }
 
-  function trackedSession(root: string): LeanSession | undefined {
-    return sessions.get(root)?.session;
-  }
-
   function throwIfStopped(generation: number): void {
     if (startGeneration !== generation) {
       throw new Error(ADAPTER_STOPPED_MESSAGE);
@@ -154,7 +150,7 @@ export function createDirectLspLeanAdapter(
 
   function beginUse(root: string): TrackedLeanSession | undefined {
     const tracked = sessions.get(root);
-    if (!tracked) return undefined;
+    if (!tracked || tracked.disposing) return undefined;
     tracked.inFlight += 1;
     tracked.lastUsedAt = now();
     if (tracked.idleTimer) {
@@ -235,11 +231,27 @@ export function createDirectLspLeanAdapter(
   ): Promise<void> {
     const tracked = sessions.get(root);
     if (!tracked) return;
-    forgetSession(root, tracked.session);
+    if (tracked.disposing) {
+      await tracked.disposing;
+      return;
+    }
+    let settleDisposing!: () => void;
+    tracked.disposing = new Promise<void>((resolve) => {
+      settleDisposing = resolve;
+    });
+    if (tracked.idleTimer) {
+      clearTimeout(tracked.idleTimer);
+      tracked.idleTimer = undefined;
+    }
     if (reason === 'idle' || reason === 'capacity' || reason === 'exhausted') {
       info(LOG_CHANNEL, `Stopping Lean server at ${root} (${reason})`);
     }
-    await tracked.session.dispose();
+    try {
+      await tracked.session.dispose();
+    } finally {
+      forgetSession(root, tracked.session);
+      settleDisposing();
+    }
   }
 
   async function evictIdleSessions(): Promise<void> {
@@ -247,7 +259,10 @@ export function createDirectLspLeanAdapter(
     const cutoff = now() - idleTimeoutMs;
     const idleRoots = [...sessions.entries()]
       .filter(
-        ([, tracked]) => tracked.inFlight === 0 && tracked.lastUsedAt <= cutoff,
+        ([, tracked]) =>
+          !tracked.disposing &&
+          tracked.inFlight === 0 &&
+          tracked.lastUsedAt <= cutoff,
       )
       .map(([root]) => root);
     await Promise.all(idleRoots.map((root) => disposeSession(root, 'idle')));
@@ -257,7 +272,9 @@ export function createDirectLspLeanAdapter(
     let oldestRoot: string | undefined;
     let oldestAt = Number.POSITIVE_INFINITY;
     for (const [root, tracked] of sessions) {
-      if (root === exceptRoot || tracked.inFlight > 0) continue;
+      if (root === exceptRoot || tracked.disposing || tracked.inFlight > 0) {
+        continue;
+      }
       if (tracked.lastUsedAt < oldestAt) {
         oldestAt = tracked.lastUsedAt;
         oldestRoot = root;
@@ -280,6 +297,28 @@ export function createDirectLspLeanAdapter(
         continue;
       }
       await waitForSessionFreed();
+    }
+  }
+
+  async function evictOthersForExhausted(
+    exceptRoot: string,
+    generation: number,
+  ): Promise<void> {
+    while ([...sessions.keys()].some((key) => key !== exceptRoot)) {
+      throwIfStopped(generation);
+      const idleOthers = [...sessions.entries()]
+        .filter(
+          ([key, tracked]) =>
+            key !== exceptRoot && !tracked.disposing && tracked.inFlight === 0,
+        )
+        .map(([key]) => key);
+      if (idleOthers.length === 0) {
+        await waitForSessionFreed();
+        continue;
+      }
+      await Promise.all(
+        idleOthers.map((key) => disposeSession(key, 'exhausted')),
+      );
     }
   }
 
@@ -326,9 +365,14 @@ export function createDirectLspLeanAdapter(
     generation: number,
   ): Promise<LeanSession> {
     throwIfStopped(generation);
-    const existing = trackedSession(root);
+    const existing = sessions.get(root);
+    if (existing?.disposing) {
+      await existing.disposing;
+      throwIfStopped(generation);
+      return getOrStartSessionLocked(root, generation);
+    }
     if (existing) {
-      return leaseSession(root, existing);
+      return leaseSession(root, existing.session);
     }
     await evictForNewSession(root, generation);
     throwIfStopped(generation);
@@ -342,8 +386,7 @@ export function createDirectLspLeanAdapter(
         LOG_CHANNEL,
         `Lean spawn hit a full file table; stopping other servers and retrying (${toErrorMessage(error)})`,
       );
-      const others = [...sessions.keys()].filter((key) => key !== root);
-      await Promise.all(others.map((key) => disposeSession(key, 'exhausted')));
+      await evictOthersForExhausted(root, generation);
       throwIfStopped(generation);
       return startAndLease(root, generation);
     }
@@ -400,6 +443,8 @@ export function createDirectLspLeanAdapter(
       await evictForNewSession(root, generation);
       throwIfStopped(generation);
       await startFreshSession(root, generation);
+      const tracked = sessions.get(root);
+      if (tracked) armIdleTimer(root, tracked);
     });
   }
 
@@ -597,6 +642,7 @@ interface TrackedLeanSession {
   lastUsedAt: number;
   inFlight: number;
   idleTimer?: ReturnType<typeof setTimeout>;
+  disposing?: Promise<void>;
 }
 
 function isInterruptedLeanSession(message: string): boolean {

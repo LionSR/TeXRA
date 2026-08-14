@@ -352,6 +352,22 @@ describe('createDirectLspLeanAdapter', () => {
     expect(await countStarts()).toBe(starts);
   });
 
+  fakeLakeIt('stops a restarted session after it sits idle', async () => {
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 50,
+    });
+    try {
+      await adapter.fetchDiagnosticsForFile(filePath);
+      await adapter.executeProjectCommand('restart_server');
+      expect(activeServerRoots()).toEqual([projectRoot]);
+      await delay(150);
+      expect(activeServerRoots()).toEqual([]);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
   fakeLakeIt('treats project commands as session activity', async () => {
     const second = makeLakeProject(tempRoot, 'project-b');
     let clock = 0;

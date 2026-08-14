@@ -427,7 +427,7 @@ async function waitForProcessClose(
       message: 'Lean process close timeout',
     });
   } catch {
-    if (!child.killed) {
+    if (child.exitCode == null && child.signalCode == null) {
       child.kill('SIGKILL');
     }
     await pTimeout(closed, {
