@@ -6,8 +6,7 @@
 
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 import { nothing } from 'lit';
-import { AsyncDirective, directive } from 'lit/async-directive.js';
-import type { ElementPart } from 'lit/directive.js';
+import { Directive, directive, type ElementPart } from 'lit/directive.js';
 
 const REDUCED_MOTION_STYLE_ATTR = 'data-texra-reduced-motion';
 const REDUCED_MOTION_CSS = `@media (prefers-reduced-motion: reduce) {
@@ -41,12 +40,12 @@ function scheduleAdopt(host: Element): void {
   queueMicrotask(() => adoptReducedMotion(host));
 }
 
-class StopSpinnerMotionDirective extends AsyncDirective {
+class StopSpinnerMotionDirective extends Directive {
   render(): typeof nothing {
     return nothing;
   }
 
-  protected override update(part: ElementPart): typeof nothing {
+  override update(part: ElementPart): typeof nothing {
     scheduleAdopt(part.element);
     return nothing;
   }
