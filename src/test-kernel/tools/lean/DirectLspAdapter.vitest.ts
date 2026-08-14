@@ -1,3 +1,4 @@
+// Node imports
 import { EventEmitter } from 'node:events';
 import {
   chmodSync,
@@ -11,6 +12,8 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { pathToFileURL } from 'node:url';
+
+// Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { spawnOverride } = vi.hoisted(() => ({
@@ -28,6 +31,7 @@ vi.mock('node:child_process', async (importOriginal) => {
   };
 });
 
+// Local imports
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { fileUriToPath, LeanSession } from '@tools/lean/direct/leanSession';
 import {
@@ -531,6 +535,56 @@ describe('createDirectLspLeanAdapter', () => {
       expect(spawnCount).toBe(4);
       await adapter.dispose();
       await Promise.allSettled([pendingBusy]);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
+  it('awaits already-disposing sessions before retrying EMFILE', async () => {
+    const second = makeLakeProject(tempRoot, 'project-b');
+    let spawnCount = 0;
+    let firstClosed = false;
+    spawnOverride.current = () => {
+      spawnCount += 1;
+      if (spawnCount > 1 && !firstClosed) {
+        throw Object.assign(new Error('too many open files'), {
+          code: 'EMFILE',
+        });
+      }
+      const child = createFakeLeanChild({
+        closeDelayMs: spawnCount === 1 ? 200 : 0,
+      });
+      if (spawnCount === 1) {
+        child.on('close', () => {
+          firstClosed = true;
+        });
+      }
+      return child;
+    };
+
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 30,
+    });
+    try {
+      await adapter.fetchDiagnosticsForFile(filePath);
+      await delay(80);
+      const started = adapter.fetchDiagnosticsForFile(second.filePath);
+      await expect(
+        Promise.race([
+          started,
+          delay(1_000).then(() => {
+            throw new Error(
+              'EMFILE recovery did not wait for the disposing session',
+            );
+          }),
+        ]),
+      ).resolves.toMatchObject({
+        ok: true,
+        diagnostics: [{ message: 'fake diagnostic' }],
+      });
+      expect(firstClosed).toBe(true);
+      expect(spawnCount).toBe(3);
     } finally {
       await adapter.dispose();
     }

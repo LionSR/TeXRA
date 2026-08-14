@@ -303,7 +303,8 @@ export function createDirectLspLeanAdapter(
 
   /**
    * Stop currently-idle other workspaces after EMFILE/ENFILE, then return so
-   * the caller can retry the spawn. Do not wait for busy sessions: position
+   * the caller can retry the spawn. Await sessions already shutting down so
+   * their descriptors are gone first. Do not wait for busy sessions: position
    * RPCs have no timeout, so one hung hover/goal would stall the start queue.
    */
   async function evictOthersForExhausted(
@@ -311,15 +312,20 @@ export function createDirectLspLeanAdapter(
     generation: number,
   ): Promise<void> {
     throwIfStopped(generation);
-    const idleOthers = [...sessions.entries()]
-      .filter(
-        ([key, tracked]) =>
-          key !== exceptRoot && !tracked.disposing && tracked.inFlight === 0,
-      )
-      .map(([key]) => key);
-    await Promise.all(
-      idleOthers.map((key) => disposeSession(key, 'exhausted')),
-    );
+    const idleOthers: string[] = [];
+    const alreadyDisposing: Array<Promise<void>> = [];
+    for (const [key, tracked] of sessions) {
+      if (key === exceptRoot) continue;
+      if (tracked.disposing) {
+        alreadyDisposing.push(tracked.disposing);
+        continue;
+      }
+      if (tracked.inFlight === 0) idleOthers.push(key);
+    }
+    await Promise.all([
+      ...idleOthers.map((key) => disposeSession(key, 'exhausted')),
+      ...alreadyDisposing,
+    ]);
   }
 
   /** Dispose every session and reject starts that have not begun. */
