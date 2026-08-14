@@ -121,7 +121,6 @@ export function createSettingsAgentControllers(
   });
   const fileController = new SettingsAgentFileController();
   const remotePromptController = new SettingsRemoteAgentPromptController({
-    getUserTier: () => SupabaseClient.getUserTier(),
     getAccessToken: () => SupabaseClient.getAccessToken(),
     fetchPromptConfig: fetchRemoteAgentConfigYaml,
   });

@@ -34,22 +34,25 @@
     "progressCheck": { "folder": "tool-use", "visibility": ["public"] },
     "search": { "folder": "tool-use", "visibility": ["public"] },
     "simplifier": { "folder": "tool-use", "visibility": ["public"] },
-    "lean": { "folder": "tool-use-lean", "visibility": ["researcher", "lean"] },
+    "lean": {
+      "folder": "tool-use-lean",
+      "visibility": ["researcher", "lean", "public"]
+    },
     "leanBlueprint": {
       "folder": "tool-use-lean",
-      "visibility": ["researcher", "lean"]
+      "visibility": ["researcher", "lean", "public"]
     },
     "leanOrchestrator": {
       "folder": "tool-use-lean",
-      "visibility": ["researcher", "lean"]
+      "visibility": ["researcher", "lean", "public"]
     },
     "leanSearch": {
       "folder": "tool-use-lean",
-      "visibility": ["researcher", "lean"]
+      "visibility": ["researcher", "lean", "public"]
     },
     "leanSimplifier": {
       "folder": "tool-use-lean",
-      "visibility": ["researcher", "lean"]
+      "visibility": ["researcher", "lean", "public"]
     }
   }
 }

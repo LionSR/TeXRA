@@ -40,7 +40,6 @@ const ProfileUserSchema = z.object({
  */
 const RemoteAgentSchema = AgentMetadataBaseSchema.extend({
   description: z.string(), // override optional → required for display
-  visibility: z.array(z.string()),
   supportsMultipleOutput: z.boolean(),
 });
 export type RemoteAgent = z.infer<typeof RemoteAgentSchema>;

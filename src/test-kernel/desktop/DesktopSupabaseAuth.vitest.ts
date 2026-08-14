@@ -898,7 +898,6 @@ describe('desktop Supabase auth', () => {
         defaultOutputFiles: ['main.tex'],
         category: AgentCategory.Workflow,
         description: 'Remote writer',
-        visibility: ['public', 'researcher'],
       },
     ]);
 
@@ -918,7 +917,6 @@ describe('desktop Supabase auth', () => {
         {
           name: 'remoteWriter',
           description: 'Remote writer',
-          visibility: ['public', 'researcher'],
           category: 'workflow',
           supportsMultipleOutput: true,
         },

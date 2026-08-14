@@ -1,6 +1,3 @@
-// Local imports - auth
-import { ULTRA_TIER, type UserTier } from '@auth/config';
-
 type SettingsRemoteAgentPromptResult =
   | { ok: true; config: string }
   | {
@@ -9,7 +6,6 @@ type SettingsRemoteAgentPromptResult =
     };
 
 interface SettingsRemoteAgentPromptControllerDeps {
-  getUserTier(): Promise<UserTier>;
   getAccessToken(): Promise<string | null>;
   fetchPromptConfig(agentName: string, accessToken: string): Promise<string>;
 }
@@ -20,14 +16,6 @@ export class SettingsRemoteAgentPromptController {
   async getPromptConfig(
     agentName: string,
   ): Promise<SettingsRemoteAgentPromptResult> {
-    const tier = await this.deps.getUserTier();
-    if (tier !== ULTRA_TIER) {
-      return {
-        ok: false,
-        message: 'Viewing remote agent prompts requires an Ultra plan.',
-      };
-    }
-
     const token = await this.deps.getAccessToken();
     if (!token) {
       return {
