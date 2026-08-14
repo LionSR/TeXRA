@@ -117,46 +117,6 @@ describe('assembleTrace', () => {
     expect(scan).not.toHaveBeenCalled();
   });
 
-  it('projects workflow-call model ids to runtime labels at assembly (#10178)', async () => {
-    const executionId = 'exec-workflow-label' as ExecutionId;
-    const executionConfig = config({
-      agent: 'workflow',
-      model: 'gpt56-',
-      agentCategory: AgentCategory.Workflow,
-    });
-    const streamId = getStreamTabId('workflow', { executionId });
-
-    await writeExecution(
-      executionId,
-      { outcome: 'completed', streamId },
-      executionConfig,
-    );
-    const store = await StreamLogStore.open();
-    appendTranscriptEntry(store, streamId, {
-      id: 'workflow-call-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-      text: 'Summarize',
-      data: {
-        id: 'call-1',
-        label: 'Summarize',
-        status: 'completed',
-        model: 'gpt56-',
-      },
-    });
-    await store.flush();
-
-    const trace = unwrapOkTrace(await assembleTrace(executionId));
-
-    expect(trace.entries).toHaveLength(1);
-    expect(trace.entries[0]).toMatchObject({
-      id: 'workflow-call-1',
-      data: { model: 'GPT-5.6 Terra' },
-    });
-  });
-
   it('assembles a full trace document from the streamId stamped on execution metadata', async () => {
     const executionId = 'exec-happy-path' as ExecutionId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });

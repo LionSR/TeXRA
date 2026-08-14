@@ -14,7 +14,6 @@ import type { ExecutionId } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 
 import { resolveStreamForExecution } from './completedRunArchive';
-import { projectWorkflowCallEntry } from './projectWorkflowCallEntry';
 import { StreamLogStore } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 import type { TraceDocument } from './traceDocumentSchema';
@@ -62,7 +61,7 @@ export async function assembleTrace(
       streamId,
       config,
       meta,
-      entries: entries.map(projectWorkflowCallEntry),
+      entries,
       snapshot,
       terminalStatus,
     },

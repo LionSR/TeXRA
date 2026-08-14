@@ -24,6 +24,7 @@ import {
 export type { ChatExportInput };
 
 import { compileLatex2Pdf } from '@latex/texTools';
+import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import type { ExecutionId } from '@shared/schemas';
 import {
   assembleTrace,
@@ -173,6 +174,11 @@ export class ChatExportController {
     }
     const { trace } = traceResult;
 
+    const exportTrace = {
+      ...trace,
+      entries: projectWorkflowCallEntries(trace.entries),
+    };
+
     if (!(await AbsoluteFS.exists(standaloneTemplatePath))) {
       throw new Error(
         `Trace-viewer standalone bundle missing at ${standaloneTemplatePath} — ` +
@@ -180,7 +186,7 @@ export class ChatExportController {
       );
     }
     const template = await AbsoluteFS.read(standaloneTemplatePath);
-    const html = injectStandaloneTrace(template, trace);
+    const html = injectStandaloneTrace(template, exportTrace);
 
     const filename = generateExportFilename(
       {

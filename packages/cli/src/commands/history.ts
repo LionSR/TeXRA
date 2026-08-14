@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { defineCommand } from 'citty';
 
 import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
+import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { type ExecutionId } from '@shared/schemas';
 import { formatCliHistoryDeletionSummary } from '@shared/copy/executionHistory';
 import { assembleTrace, injectStandaloneTrace } from '@transcript';
@@ -154,6 +155,10 @@ export async function runHistoryExport(
     return CliExitCode.Usage;
   }
   const { trace } = traceResult;
+  const exportTrace = {
+    ...trace,
+    entries: projectWorkflowCallEntries(trace.entries),
+  };
 
   if (options.assetsDir) {
     const destDir = path.resolve(context.cwd, options.assetsDir);
@@ -161,7 +166,7 @@ export async function runHistoryExport(
       resourcesPath: context.resourcesPath,
       destDir,
     });
-    writeRawStdout(JSON.stringify(trace));
+    writeRawStdout(JSON.stringify(exportTrace));
     if (staged === 'missing') {
       writeTextStderr(
         'Note: the bundled trace-viewer assets were not found in this CLI ' +
@@ -191,7 +196,7 @@ export async function runHistoryExport(
     );
     return CliExitCode.Usage;
   }
-  writeRawStdout(injectStandaloneTrace(template, trace));
+  writeRawStdout(injectStandaloneTrace(template, exportTrace));
   return CliExitCode.Success;
 }
 
