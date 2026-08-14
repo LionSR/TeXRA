@@ -243,14 +243,18 @@ export async function resolveWorkflowOutput(
   context: CliContext,
   options: WorkflowOutputResolutionOptions,
 ): Promise<CliWorkflowRunResult> {
+  const runDirectory = options.runDirectory ?? getRunDir(result.executionId);
+  // Interrupted rounds remain inspectable in run storage, but are not final
+  // artifacts and must not replace the user's requested destination.
+  if (result.outcome === RUN_OUTCOME.CANCELLED && (outputFile || outputDir)) {
+    return {
+      ...result,
+      workingDirectory: context.cwd,
+      runDirectory,
+    };
+  }
   const terminalStatus = runOutcomeToExecutionStatus(result.outcome);
   if (result.outputs.length === 0 && (outputFile || outputDir)) {
-    if (result.outcome === RUN_OUTCOME.CANCELLED) {
-      return {
-        ...result,
-        workingDirectory: context.cwd,
-      };
-    }
     if (outputDir) {
       throw new Error(
         `Workflow ${terminalStatus} without generated outputs; nothing was copied to ${outputDir}.`,
@@ -263,7 +267,6 @@ export async function resolveWorkflowOutput(
     }
   }
 
-  const runDirectory = options.runDirectory ?? getRunDir(result.executionId);
   if (outputDir) {
     const targetRoot = joinCwdRelative(outputDir, context.cwd);
     const expectedRelativePaths = (options.expectedOutputFiles ?? []).map(
@@ -330,6 +333,14 @@ export async function resolveWorkflowOutput(
 }
 
 export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
+  if (
+    result.outcome === RUN_OUTCOME.CANCELLED &&
+    result.runDirectory &&
+    !result.copiedOutput &&
+    !result.copiedOutputs?.length
+  ) {
+    return result.runDirectory;
+  }
   if (result.copiedOutputs?.length) {
     return result.copiedOutputs.join('\n');
   }

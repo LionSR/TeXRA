@@ -96,6 +96,57 @@ describe('CLI workflow output resolution', () => {
     ).rejects.toThrow(/b\.tex/);
   });
 
+  it('does not publish cancelled workflow outputs to requested destinations', async () => {
+    const cwd = await makeTempDir();
+    const runOutput = await writeRunFile(cwd, 'r0/paper.tex', 'provisional');
+    const outputFile = join(cwd, 'out.tex');
+    const outputDirectoryFile = join(cwd, 'out', 'paper.tex');
+    await writeFile(outputFile, 'existing file');
+    await mkdir(dirname(outputDirectoryFile), { recursive: true });
+    await writeFile(outputDirectoryFile, 'existing directory file');
+
+    const resultForFile = await resolveWorkflowOutput(
+      outputFile,
+      undefined,
+      workflowResult(
+        [{ absolutePath: runOutput, relativePath: 'r0/paper.tex', round: 0 }],
+        RUN_OUTCOME.CANCELLED,
+      ),
+      testContext(cwd),
+      { runDirectory: join(cwd, 'run') },
+    );
+    const resultForDirectory = await resolveWorkflowOutput(
+      undefined,
+      join(cwd, 'out'),
+      workflowResult(
+        [{ absolutePath: runOutput, relativePath: 'r0/paper.tex', round: 0 }],
+        RUN_OUTCOME.CANCELLED,
+      ),
+      testContext(cwd),
+      {
+        expectedOutputFiles: ['paper.tex'],
+        runDirectory: join(cwd, 'run'),
+      },
+    );
+
+    for (const result of [resultForFile, resultForDirectory]) {
+      expect(result).toMatchObject({
+        outcome: RUN_OUTCOME.CANCELLED,
+        workingDirectory: cwd,
+        runDirectory: join(cwd, 'run'),
+      });
+      expect(Object.hasOwn(result, 'status')).toBe(false);
+      expect(Object.hasOwn(result, 'terminalStatus')).toBe(false);
+      expect(Object.hasOwn(result, 'endGroupStatus')).toBe(false);
+      expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
+      expect(Object.hasOwn(result, 'copiedOutputs')).toBe(false);
+    }
+    await expect(readFile(outputFile, 'utf8')).resolves.toBe('existing file');
+    await expect(readFile(outputDirectoryFile, 'utf8')).resolves.toBe(
+      'existing directory file',
+    );
+  });
+
   it('carries only the cancelled outcome for missing workflow outputs', async () => {
     const cwd = await makeTempDir();
 
@@ -104,12 +155,13 @@ describe('CLI workflow output resolution', () => {
       undefined,
       workflowResult([], RUN_OUTCOME.CANCELLED),
       testContext(cwd),
-      {},
+      { runDirectory: join(cwd, 'run') },
     );
 
     expect(result).toMatchObject({
       outcome: RUN_OUTCOME.CANCELLED,
       workingDirectory: cwd,
+      runDirectory: join(cwd, 'run'),
     });
     expect(Object.hasOwn(result, 'status')).toBe(false);
     expect(Object.hasOwn(result, 'terminalStatus')).toBe(false);
@@ -464,5 +516,48 @@ describe('CLI workflow output resolution', () => {
     };
 
     expect(formatWorkflowTextResult(result)).toBe('/run/r2/appendix.tex');
+  });
+
+  it('reports run storage instead of one provisional file after cancellation', () => {
+    const result: CliWorkflowRunResult = {
+      ...workflowResult(
+        [
+          { absolutePath: '/run/r0/main.tex', relativePath: 'r0/main.tex' },
+          {
+            absolutePath: '/run/r0/appendix.tex',
+            relativePath: 'r0/appendix.tex',
+          },
+        ],
+        RUN_OUTCOME.CANCELLED,
+      ),
+      workingDirectory: '/workspace',
+      runDirectory: '/run',
+    };
+
+    expect(formatWorkflowTextResult(result)).toBe('/run');
+  });
+
+  it('reports destinations that were copied before cancellation', () => {
+    const result: CliWorkflowRunResult = {
+      ...workflowResult(
+        [{ absolutePath: '/run/r0/main.tex', relativePath: 'r0/main.tex' }],
+        RUN_OUTCOME.CANCELLED,
+      ),
+      workingDirectory: '/workspace',
+      runDirectory: '/run',
+      copiedOutput: '/workspace/final.tex',
+    };
+
+    expect(formatWorkflowTextResult(result)).toBe('/workspace/final.tex');
+    expect(
+      formatWorkflowTextResult({
+        ...result,
+        copiedOutput: undefined,
+        copiedOutputs: [
+          '/workspace/final/main.tex',
+          '/workspace/final/appendix.tex',
+        ],
+      }),
+    ).toBe('/workspace/final/main.tex\n/workspace/final/appendix.tex');
   });
 });
