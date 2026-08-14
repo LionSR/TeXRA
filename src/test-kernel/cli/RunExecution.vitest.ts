@@ -1253,9 +1253,12 @@ describe('executeCliRequest', () => {
         }
         await runGate;
         // runAgent classifies the host output failure before it reaches the
-        // CLI boundary; the copy/missing-output error must stay the primary
-        // run failure below.
-        throw new RuntimeAgentError(outputFailure.message);
+        // CLI boundary. Emit the same prefixed AgentError finalizeFailedRun
+        // throws so this test pins the production message, not the mock's raw
+        // copy error.
+        throw new RuntimeAgentError(
+          `Error executing agent polish: ${outputFailure.message}`,
+        );
       },
     );
 
@@ -1281,7 +1284,7 @@ describe('executeCliRequest', () => {
     expect(publicationCommitted).toBe(true);
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
     expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
-      message: outputFailure.message,
+      message: `Error executing agent polish: ${outputFailure.message}`,
     });
   });
 
