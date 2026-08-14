@@ -333,7 +333,12 @@ export async function resolveWorkflowOutput(
 }
 
 export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
-  if (result.outcome === RUN_OUTCOME.CANCELLED && result.runDirectory) {
+  if (
+    result.outcome === RUN_OUTCOME.CANCELLED &&
+    result.runDirectory &&
+    !result.copiedOutput &&
+    !result.copiedOutputs?.length
+  ) {
     return result.runDirectory;
   }
   if (result.copiedOutputs?.length) {
