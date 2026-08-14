@@ -10,14 +10,7 @@ import type { ToolUseFollowUpTarget } from '@agent/runtime/executionRegistry';
 import type { LiveToolUseFlowContext } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
-
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-}
+import { createDeferred } from '@test/support/asyncTestUtils';
 
 function mockTryResume(): Mock<() => Promise<boolean>> {
   return vi.fn(async () => true);
@@ -191,7 +184,7 @@ describe('submitFollowUp', () => {
   it('claims one recovery and orders repeated submissions once', async () => {
     const streamId = id('stream:recovery');
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });
-    const barrier = deferred<boolean>();
+    const barrier = createDeferred<boolean>();
     const claimed: unknown[] = [];
     const tryResumeStream = vi.fn((_: StreamTabId, recovery: unknown) => {
       claimed.push(recovery);
@@ -441,11 +434,11 @@ describe('submitFollowUp', () => {
     const generationId = '5038fe96-7113-449a-82a9-3e58f292d1ba';
     mockPersistedExecution(session);
     const lookup =
-      deferred<Awaited<ReturnType<typeof resumability.deriveResumability>>>();
+      createDeferred<Awaited<ReturnType<typeof resumability.deriveResumability>>>();
     const deriveResumability = vi
       .spyOn(resumability, 'deriveResumability')
       .mockReturnValueOnce(lookup.promise);
-    const resumeBarrier = deferred<boolean>();
+    const resumeBarrier = createDeferred<boolean>();
     const tryResumeStream = vi.fn(() => resumeBarrier.promise);
 
     const first = submitFollowUp(streamId, 'durable inquiry', {

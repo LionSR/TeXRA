@@ -26,6 +26,7 @@ import type {
   LanguageModelPort,
 } from '@platform/languageModel';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 
@@ -86,14 +87,6 @@ function failingDiscoveryPort(): LanguageModelPort {
       throw new Error('native discovery failed');
     },
   };
-}
-
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((r) => {
-    resolve = r;
-  });
-  return { promise, resolve };
 }
 
 function resetModelCaches(): void {
@@ -261,7 +254,7 @@ describe('runtime model registry', () => {
     const port = await installModels(GEMINI_FLASH);
     await refreshRuntimeModelRegistry();
 
-    const forced = deferred<readonly LanguageModelInfo[]>();
+    const forced = createDeferred<readonly LanguageModelInfo[]>();
     vi.mocked(port.selectModels)
       .mockReturnValueOnce(forced.promise)
       .mockResolvedValueOnce([{ ...GEMINI_FLASH, access: 'unavailable' }]);
@@ -280,9 +273,9 @@ describe('runtime model registry', () => {
     const port = await installModels(GEMINI_FLASH);
     await refreshRuntimeModelRegistry();
 
-    const forced = deferred<readonly LanguageModelInfo[]>();
-    const retry = deferred<readonly LanguageModelInfo[]>();
-    const retryStarted = deferred<void>();
+    const forced = createDeferred<readonly LanguageModelInfo[]>();
+    const retry = createDeferred<readonly LanguageModelInfo[]>();
+    const retryStarted = createDeferred<void>();
     vi.mocked(port.selectModels)
       .mockReturnValueOnce(forced.promise)
       .mockImplementationOnce(() => {
@@ -304,8 +297,8 @@ describe('runtime model registry', () => {
   });
 
   it('does not let a superseded ordinary discovery overwrite forced access state', async () => {
-    const ordinary = deferred<readonly LanguageModelInfo[]>();
-    const forced = deferred<readonly LanguageModelInfo[]>();
+    const ordinary = createDeferred<readonly LanguageModelInfo[]>();
+    const forced = createDeferred<readonly LanguageModelInfo[]>();
     const port = {
       ...languageModelPort([]),
       selectModels: vi
@@ -336,7 +329,7 @@ describe('runtime model registry', () => {
     const port = await installModels(GEMINI_FLASH);
     await refreshRuntimeModelRegistry();
 
-    const discovery = deferred<readonly LanguageModelInfo[]>();
+    const discovery = createDeferred<readonly LanguageModelInfo[]>();
     vi.mocked(port.selectModels).mockReturnValueOnce(discovery.promise);
 
     const first = requestRuntimeModelAccess('gemini36f');
@@ -431,7 +424,7 @@ describe('runtime model registry', () => {
   });
 
   it('discards a discovery that an invalidation superseded mid-flight', async () => {
-    const discovery = deferred<readonly LanguageModelInfo[]>();
+    const discovery = createDeferred<readonly LanguageModelInfo[]>();
     await installPlatform(
       {},
       {
