@@ -21,6 +21,7 @@ import {
 } from '@cli/chat/tui/state/workflowDashboardModel';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import {
+  childStreamListValue,
   workflowPhaseListValue,
   workflowTaskListValue,
 } from '@cli/chat/tui/state/childListSelection';
@@ -1357,6 +1358,41 @@ describe('CLI child list display model', () => {
     expect(output).toContain(' · inquiry');
     expect(output).not.toContain('+1');
     expect(output).not.toContain('deliberately');
+    expect(
+      output.split('\n').every((line) => textDisplayWidth(line) <= 18),
+    ).toBe(true);
+  });
+
+  it('keeps the approval kind when the hidden-session count also truncates', async () => {
+    const run = 'approval-root' as StreamTabId;
+    const childOne = 'approval-child-one' as StreamTabId;
+    const childTwo = 'approval-child-two' as StreamTabId;
+    const output = await renderSubagentList(
+      {
+        keyboardActive: true,
+        listRootStreamId: run,
+        maxRows: 2,
+        pendingApprovals: new Map([[run, ['proposal', 'proposal']]]),
+        selectedValue: childStreamListValue(run),
+        sessions: [
+          {
+            id: run,
+            label: 'A deliberately long scoped root',
+            active: true,
+            slice: workflowAgentSlice(run, {
+              status: STREAM_PHASE.RUNNING,
+            }),
+          },
+          session(childOne),
+          session(childTwo),
+        ],
+      },
+      18,
+      { until: (frame) => frame.includes('proposal') },
+    );
+
+    expect(output).toContain(' · proposal');
+    expect(output).not.toContain('sessions');
     expect(
       output.split('\n').every((line) => textDisplayWidth(line) <= 18),
     ).toBe(true);
