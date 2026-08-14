@@ -169,7 +169,7 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('preserves complete inline math beside token characters', () => {
-    const examples = ['$0<p>1$5', '$0<p>1$-condition', '$a<b>c$d'];
+    const examples = ['$0<p>1$2', '$0<p>1$-condition', '$a<b>c$d', '$x<i>y$z'];
 
     for (const example of examples) {
       expect(normalizeKnownHtmlForCliMarkdown(example)).toBe(example);
@@ -182,10 +182,8 @@ describe('renderAnsiMarkdown', () => {
       width: 80,
     });
 
-    expect(plain).toContain('│ \\[');
-    expect(plain).toContain('│ a<b');
-    expect(plain).toContain('│ b>c');
-    expect(plain).toContain('│ \\]');
+    expect(plain).toContain('│ \\[\n│ a<b\n│ b>c\n│ \\]');
+    expect(plain).not.toContain('\n> a<b');
   });
 
   it('preserves comparison prose that resembles HTML attributes', () => {

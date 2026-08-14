@@ -146,7 +146,13 @@ function protectByPatterns(
       if (!shouldProtect(match, offset, source)) return match;
       // Keep Markdown blockquote prefixes visible to the parser instead of
       // collapsing an entire quoted display span into one placeholder line.
-      if (preserveBlockquotePrefixes && /\n\s*>/u.test(match)) {
+      const firstLineStart = source.lastIndexOf('\n', offset - 1) + 1;
+      const firstLinePrefix = source.slice(firstLineStart, offset);
+      const remainingLines = match.split('\n').slice(1);
+      const isQuotedSpan =
+        /^(?:[ \t]*>[ \t]?)+$/u.test(firstLinePrefix) &&
+        remainingLines.every((line) => /^(?:[ \t]*>[ \t]?)+/u.test(line));
+      if (preserveBlockquotePrefixes && isQuotedSpan) {
         return match
           .split('\n')
           .map((line, lineIndex) => {
