@@ -440,6 +440,20 @@ export function jitteredExponentialBackoffMs(
 }
 
 // ---------------------------------------------------------------------------
+// dateCore
+// ---------------------------------------------------------------------------
+
+/**
+ * Start of the given UTC month as a `Date`, e.g. `utcMonthStart(2026, 0)` is
+ * midnight UTC on 2026-01-01. `monthIndex` is 0-based and not clamped to
+ * 0-11 — pass 12 to get the start of the following year's January, which is
+ * how callers compute a month's exclusive end boundary.
+ */
+export function utcMonthStart(year: number, monthIndex: number): Date {
+  return new Date(Date.UTC(year, monthIndex, 1));
+}
+
+// ---------------------------------------------------------------------------
 // urlCore
 // ---------------------------------------------------------------------------
 
