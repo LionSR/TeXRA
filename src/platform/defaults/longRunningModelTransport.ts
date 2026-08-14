@@ -16,6 +16,11 @@ async function normalizeModelRequest(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<[UndiciRequestInfo, UndiciRequestInit]> {
+  // Node/undici require duplex for any non-null body; SDKs omit it inconsistently.
+  const requestInit = { ...(init ?? {}) } as UndiciRequestInit;
+  if (requestInit.body != null && requestInit.duplex == null) {
+    requestInit.duplex = 'half';
+  }
   if (!(input instanceof Request)) {
     if (init?.body instanceof FormData) {
       // OpenAI builds multipart bodies with the host-global FormData, while
@@ -31,17 +36,17 @@ async function normalizeModelRequest(
       return [
         input as UndiciRequestInfo,
         {
-          ...init,
+          ...requestInit,
           body,
-        } as UndiciRequestInit,
+        },
       ];
     }
-    return [input as UndiciRequestInfo, init as UndiciRequestInit];
+    return [input as UndiciRequestInfo, requestInit];
   }
 
   // OpenRouter supplies Node's native Request, while package Undici expects
   // its own branded Request. Rebuild it from interoperable primitives here.
-  const request = new Request(input, init);
+  const request = new Request(input, requestInit as RequestInit);
   const body = request.body === null ? undefined : await request.arrayBuffer();
   return [
     request.url,
@@ -50,7 +55,9 @@ async function normalizeModelRequest(
       headers: Object.fromEntries(request.headers.entries()),
       redirect: request.redirect,
       signal: request.signal,
-      ...(body === undefined ? {} : { body }),
+      ...(body === undefined
+        ? {}
+        : { body, duplex: requestInit.duplex ?? 'half' }),
     },
   ];
 }
