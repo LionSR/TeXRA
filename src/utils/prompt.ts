@@ -126,8 +126,12 @@ let promptEnvironmentPromise: Promise<import('nunjucks').Environment> | null =
   null;
 
 function promptEnvironment(): Promise<import('nunjucks').Environment> {
-  promptEnvironmentPromise ??= import('nunjucks').then(({ default: nunjucks }) =>
-    createTexraNunjucksEnvironment(nunjucks, new nunjucks.FileSystemLoader('.')),
+  promptEnvironmentPromise ??= import('nunjucks').then(
+    ({ default: nunjucks }) =>
+      createTexraNunjucksEnvironment(
+        nunjucks,
+        new nunjucks.FileSystemLoader('.'),
+      ),
   );
   return promptEnvironmentPromise;
 }
