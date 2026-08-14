@@ -143,13 +143,20 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('normalizes HTML between same-line currency amounts', () => {
-    const normalized = normalizeKnownHtmlForCliMarkdown(
+    const examples = [
       'Cost $5 <strong>today</strong>, then $10',
-    );
+      'Cost $5 <strong>today</strong>, then ($10)',
+      'Cost $5 <strong>today</strong>, then -$10',
+    ];
 
-    expect(normalized).toBe('Cost $5 **today**, then $10');
-    expect(normalized).not.toContain('<strong>');
-    expect(normalized).not.toContain('</strong>');
+    for (const example of examples) {
+      const normalized = normalizeKnownHtmlForCliMarkdown(example);
+      expect(normalized).toBe(
+        example.replace('<strong>', '**').replace('</strong>', '**'),
+      );
+      expect(normalized).not.toContain('<strong>');
+      expect(normalized).not.toContain('</strong>');
+    }
   });
 
   it('normalizes unpaired HTML between same-line currency amounts', () => {
