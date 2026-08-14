@@ -6,6 +6,7 @@ import {
   SECTION_TYPES,
 } from '@replacement/constants';
 import {
+  createPatterns,
   generateBackslashFixes,
   generateEnvironmentBracesFixes,
   generateEnvironmentLinebreakFixes,
@@ -104,20 +105,18 @@ export const EQUATION_REPLACEMENTS: NonRegexReplacementCategory = {
     // Greek letter notation fixes
     // Examples: \a_ -> a_, \a^ -> a^
     const letters = [...'abcdefghijklmnopqrstuvwyz'];
-    const letterNotationFixes = Object.fromEntries(
-      letters.flatMap((letter) => [
-        [`\\${letter}_`, `${letter}_`],
-        [`\\${letter}^`, `${letter}^`],
-      ]),
-    );
+    const letterNotationFixes = createPatterns(letters, (letter) => [
+      [`\\${letter}_`, `${letter}_`],
+      [`\\${letter}^`, `${letter}^`],
+    ]);
 
     // Environment end command fixes
     // Examples: \n\\nend{align} -> \n\end{align}
     const environments =
       'align equation itemize enumerate figure tikzpicture document'.split(' ');
-    const envEndFixes = Object.fromEntries(
-      environments.map((env) => [`\n\\\nend{${env}}`, `\n\\end{${env}}`]),
-    );
+    const envEndFixes = createPatterns(environments, (env) => [
+      [`\n\\\nend{${env}}`, `\n\\end{${env}}`],
+    ]);
 
     // Environment braces/brackets fixes
     // Examples: {\align} -> {align}
@@ -176,23 +175,19 @@ export const FONT_COMMAND_REPLACEMENTS: NonRegexReplacementCategory = {
   description: 'Normalize deprecated font commands to modern equivalents',
   isRegex: false,
   patterns: {
-    ...Object.fromEntries(
-      [...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'].flatMap(
-        (letter) => [
-          [`{\\rm ${letter}}`, `\\mathrm{${letter}}`],
-          [`{\\bf ${letter}}`, `\\mathbf{${letter}}`],
-          [`{\\it ${letter}}`, `\\mathit{${letter}}`],
-          [`{\\sf ${letter}}`, `\\mathsf{${letter}}`],
-          [`{\\tt ${letter}}`, `\\mathtt{${letter}}`],
-        ],
-      ),
+    ...createPatterns(
+      [...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'],
+      (letter) => [
+        [`{\\rm ${letter}}`, `\\mathrm{${letter}}`],
+        [`{\\bf ${letter}}`, `\\mathbf{${letter}}`],
+        [`{\\it ${letter}}`, `\\mathit{${letter}}`],
+        [`{\\sf ${letter}}`, `\\mathsf{${letter}}`],
+        [`{\\tt ${letter}}`, `\\mathtt{${letter}}`],
+      ],
     ),
-    ...Object.fromEntries(
-      [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((letter) => [
-        `{\\cal ${letter}}`,
-        `\\mathcal{${letter}}`,
-      ]),
-    ),
+    ...createPatterns([...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'], (letter) => [
+      [`{\\cal ${letter}}`, `\\mathcal{${letter}}`],
+    ]),
   },
 };
 
@@ -491,18 +486,16 @@ export const LATEX_XML_REPLACEMENTS: NonRegexReplacementCategory = {
       // Fix LaTeX tags closed as XML-style end tags with a trailing '>'; the
       // plain `\end{env>}`/`\end{env>` spellings already come from
       // generateXmlLatexConversions above.
-      ...Object.fromEntries(
-        LATEX_ENVIRONMENTS.map((env) => [`</end{${env}>`, `\\end{${env}}`]),
-      ),
+      ...createPatterns(LATEX_ENVIRONMENTS, (env) => [
+        [`</end{${env}>`, `\\end{${env}}`],
+      ]),
 
       // ===== 2. XML BRACE FIXES =====
       // Fix XML tags with extra braces that remain as XML
-      ...Object.fromEntries(
-        pureXmlTags.flatMap((tag) => [
-          [`<${tag}}`, `<${tag}>`],
-          [`</${tag}}`, `</${tag}>`],
-        ]),
-      ),
+      ...createPatterns(pureXmlTags, (tag) => [
+        [`<${tag}}`, `<${tag}>`],
+        [`</${tag}}`, `</${tag}>`],
+      ]),
 
       // ===== 3. Special Case Handling =====
       // Special cases for minipage
