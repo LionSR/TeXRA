@@ -14,7 +14,7 @@ import {
   runHelperModelCompletion,
 } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
-import { buildUserVarPassthrough } from '@agent/utils/userVars';
+import { buildUserVarPassthrough } from '@agent/prompt/userVars';
 import { createLog } from '@logger/logUtils';
 import type { AgentCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';

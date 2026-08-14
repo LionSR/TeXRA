@@ -1,6 +1,7 @@
 import nunjucks from 'nunjucks';
 
-import { buildUserVarPassthrough } from '@agent/utils/userVars';
+import { buildUserVarPassthrough } from '@agent/prompt/userVars';
+import { createTexraNunjucksEnvironment } from '@utils/prompt';
 
 export type AgentTemplateKind = 'toolUse' | 'workflowSingle';
 
@@ -9,10 +10,9 @@ export const AGENT_TEMPLATE_FILES: Record<AgentTemplateKind, string> = {
   workflowSingle: 'agentTemplate-workflowSingle.yaml',
 };
 
-// Isolated Nunjucks environment so `autoescape: false` does not leak into the
-// shared singleton that `nunjucks.configure` / `nunjucks.renderString` would
-// otherwise set for every other caller.
-const env = new nunjucks.Environment(null, { autoescape: false });
+// No loader: this environment only renders in-memory template strings, never
+// named template files, so `{% include %}`/`{% extends %}` never resolve.
+const env = createTexraNunjucksEnvironment(nunjucks);
 
 // Frozen so the shared module-level instance can't be mutated even if a
 // caller forgets to spread it before passing to nunjucks.renderString.

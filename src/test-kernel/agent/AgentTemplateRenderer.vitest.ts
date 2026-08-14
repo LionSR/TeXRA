@@ -12,7 +12,7 @@ import {
 import {
   buildUserVarPassthrough,
   USER_VAR_RUNTIME_TOKENS,
-} from '@agent/utils/userVars';
+} from '@agent/prompt/userVars';
 
 describe('renderAgentTemplateString', () => {
   it('preserves agent runtime variables for the generated agent', () => {

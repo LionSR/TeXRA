@@ -8,7 +8,7 @@ import {
   userFollowUpInstruction,
 } from '@agent/followUp/followUpMessages';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import { USER_VAR_INSTRUCTION } from '@agent/utils/userVars';
+import { USER_VAR_INSTRUCTION } from '@agent/prompt/userVars';
 import { STREAM_PHASE } from '@shared/schemas';
 import { GoalStore, setGoalSessionBashAutoApproval } from '@tools/goal';
 

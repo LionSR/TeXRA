@@ -33,7 +33,7 @@ import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
-import { buildUserVars } from '@agent/utils/userVars';
+import { buildUserVars } from '@agent/prompt/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError } from '@common/errors';
 import {

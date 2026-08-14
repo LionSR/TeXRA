@@ -108,15 +108,26 @@ async function resolveValue(value: unknown): Promise<unknown> {
   return Object.fromEntries(entries);
 }
 
+/**
+ * Build a Nunjucks environment configured the way every TeXRA template render
+ * needs: autoescape off, since prompts and generated agent YAML render raw
+ * text, not HTML. Centralized so that option isn't hand-copied at each call
+ * site — pass a loader to enable `{% include %}`/`{% extends %}`, or `null`
+ * for a renderString-only environment.
+ */
+export function createTexraNunjucksEnvironment(
+  nunjucksModule: typeof import('nunjucks'),
+  loader: import('nunjucks').ILoader | null = null,
+): import('nunjucks').Environment {
+  return new nunjucksModule.Environment(loader, { autoescape: false });
+}
+
 let promptEnvironmentPromise: Promise<import('nunjucks').Environment> | null =
   null;
 
 function promptEnvironment(): Promise<import('nunjucks').Environment> {
-  promptEnvironmentPromise ??= import('nunjucks').then(
-    ({ default: nunjucks }) =>
-      new nunjucks.Environment(new nunjucks.FileSystemLoader('.'), {
-        autoescape: false,
-      }),
+  promptEnvironmentPromise ??= import('nunjucks').then(({ default: nunjucks }) =>
+    createTexraNunjucksEnvironment(nunjucks, new nunjucks.FileSystemLoader('.')),
   );
   return promptEnvironmentPromise;
 }
