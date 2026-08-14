@@ -79,7 +79,6 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
   @property({ attribute: false }) customAgentDir = '';
   @property({ attribute: false }) customAgentDirIsDefault = true;
   @property({ attribute: false }) initialSubTab?: AgentCategory;
-  @property({ attribute: false }) userTier = 'free';
   @property({ attribute: false }) reliabilitySettings: NumberSetting[] = [];
 
   protected override updated(changed: PropertyValues): void {
@@ -156,7 +155,6 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
         <agent-selection-panel
           .agents=${agents}
           .category=${category}
-          .userTier=${this.userTier}
           .unsupportedCommands=${this.unsupportedCommands}
         ></agent-selection-panel>
       </section>

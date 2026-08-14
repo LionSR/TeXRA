@@ -425,7 +425,6 @@ export class SettingsApp extends SettingsAppBase {
             .customAgentDir=${customAgentDir.get()}
             .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
             .initialSubTab=${agentSubTab.get()}
-            .userTier=${tier.get()}
             .reliabilitySettings=${reliabilitySettings.get()}
             .unsupportedCommands=${unsupportedCommands.get()}
           ></agents-tab>

@@ -278,7 +278,7 @@ VALUES (
   'lean',
   'Lean 4 proof assistant with VS Code integration and CLI fallback.',
   'tool-use-lean/lean.yaml',
-  ARRAY['researcher', 'lean'],
+  ARRAY['researcher', 'lean', 'public'],
   'toolUse',
   ARRAY['todo_write', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'memory', 'github_subscription']
 )
@@ -294,7 +294,7 @@ VALUES (
   'leanBlueprint',
   'Creates and maintains dependency-tracked LeanBlueprint documents that bridge informal mathematics and Lean 4 formalization.',
   'tool-use-lean/leanBlueprint.yaml',
-  ARRAY['researcher', 'lean'],
+  ARRAY['researcher', 'lean', 'public'],
   'toolUse',
   ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'web_search', 'web_fetch', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'zotero_add', 'zotero_search', 'zotero_export']
 )
@@ -310,7 +310,7 @@ VALUES (
   'leanOrchestrator',
   'Lean 4 project orchestrator. Coordinates formalization, delegates to specialized Lean agents, and manages proof development workflow.',
   'tool-use-lean/leanOrchestrator.yaml',
-  ARRAY['researcher', 'lean'],
+  ARRAY['researcher', 'lean', 'public'],
   'toolUse',
   ARRAY['delegate_workflow', 'delegate_agent', 'delegate_multi_agents', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'codex', 'claude_code', 'lean_diagnostics', 'lean_inspect', 'lean_loogle', 'lean_file', 'lean_project', 'github_subscription']
 )
@@ -326,7 +326,7 @@ VALUES (
   'leanSearch',
   'Lean 4 and Mathlib research assistant. Finds lemmas, explores APIs, and answers formalization questions.',
   'tool-use-lean/leanSearch.yaml',
-  ARRAY['researcher', 'lean'],
+  ARRAY['researcher', 'lean', 'public'],
   'toolUse',
   ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'web_search', 'web_fetch', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source']
 )
@@ -342,7 +342,7 @@ VALUES (
   'leanSimplifier',
   'Simplifies Lean 4 proofs and code into clear, general, upstream-ready Mathlib style.',
   'tool-use-lean/leanSimplifier.yaml',
-  ARRAY['researcher', 'lean'],
+  ARRAY['researcher', 'lean', 'public'],
   'toolUse',
   ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle']
 )
