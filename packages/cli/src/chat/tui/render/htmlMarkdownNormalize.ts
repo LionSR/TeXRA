@@ -4,31 +4,20 @@ import { clamp } from '@utils/core';
 
 const KNOWN_HTML_TAG_RE =
   /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/i;
+
 // Formatting tags may carry ordinary name/value attributes. Boolean-like
 // prose after a comparison variable (for example `<p and y>`) is deliberately
-// not accepted as an opening tag because it can otherwise pair with an
-// unrelated closing tag later in a transcript and silently consume text.
+// not accepted as an opening tag because it is otherwise indistinguishable
+// from HTML and would be removed from mathematical prose.
 const HTML_ATTRIBUTES = String.raw`(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>]+))*\s*`;
 const HEADING_TAG_RE = new RegExp(
   `<h([1-6])${HTML_ATTRIBUTES}>([\\s\\S]*?)<\\/h\\1>`,
   'gi',
 );
-const PARAGRAPH_TAG_RE = new RegExp(
-  `<(p|div)${HTML_ATTRIBUTES}>([\\s\\S]*?)<\\/\\1>`,
-  'gi',
-);
-const STRONG_TAG_RE = new RegExp(
-  `<(strong|b)${HTML_ATTRIBUTES}>([\\s\\S]*?)<\\/\\1>`,
-  'gi',
-);
-const EMPHASIS_TAG_RE = new RegExp(
-  `<(em|i)${HTML_ATTRIBUTES}>([\\s\\S]*?)<\\/\\1>`,
-  'gi',
-);
-const CODE_TAG_RE = new RegExp(
-  `<code${HTML_ATTRIBUTES}>([\\s\\S]*?)<\\/code>`,
-  'gi',
-);
+const PARAGRAPH_OPEN_TAG_RE = new RegExp(`<(?:p|div)${HTML_ATTRIBUTES}>`, 'gi');
+const STRONG_OPEN_TAG_RE = new RegExp(`<(?:strong|b)${HTML_ATTRIBUTES}>`, 'gi');
+const EMPHASIS_OPEN_TAG_RE = new RegExp(`<(?:em|i)${HTML_ATTRIBUTES}>`, 'gi');
+const CODE_OPEN_TAG_RE = new RegExp(`<code${HTML_ATTRIBUTES}>`, 'gi');
 const BLOCKQUOTE_TAG_RE = new RegExp(
   `<blockquote${HTML_ATTRIBUTES}>([\\s\\S]*?)<\\/blockquote>`,
   'gi',
@@ -63,22 +52,13 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
         `\n\n${headingMarker(level)} ${body.trim()}\n\n`,
     )
     .replaceAll(/<br\s*\/?>/gi, '\n')
-    .replaceAll(
-      PARAGRAPH_TAG_RE,
-      (_match, _tag: string, body: string) => `\n\n${body.trim()}\n\n`,
-    )
     .replaceAll(/<\/(?:p|div)>/gi, '\n\n')
-    .replaceAll(
-      STRONG_TAG_RE,
-      (_match, _tag: string, body: string) => `**${body}**`,
-    )
+    .replaceAll(PARAGRAPH_OPEN_TAG_RE, '')
+    .replaceAll(STRONG_OPEN_TAG_RE, '**')
     .replaceAll(/<\/(?:strong|b)>/gi, '**')
-    .replaceAll(
-      EMPHASIS_TAG_RE,
-      (_match, _tag: string, body: string) => `_${body}_`,
-    )
+    .replaceAll(EMPHASIS_OPEN_TAG_RE, '_')
     .replaceAll(/<\/(?:em|i)>/gi, '_')
-    .replaceAll(CODE_TAG_RE, (_match, body: string) => `\`${body}\``)
+    .replaceAll(CODE_OPEN_TAG_RE, '`')
     .replaceAll(/<\/code>/gi, '`')
     .replaceAll(BLOCKQUOTE_TAG_RE, (_match, body: string) =>
       quoteHtmlBlock(body),

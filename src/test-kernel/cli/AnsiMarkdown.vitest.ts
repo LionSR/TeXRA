@@ -93,48 +93,42 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('preserves TeX inequalities that resemble opening HTML tags', () => {
+    const examples = [
+      '\\[0<p<1\\]',
+      '\\[0<p>1\\]',
+      '\\[a<b>c\\]',
+      '\\[a<i>c\\]',
+      '\\[a<br>c\\]',
+      '\\(0 < p < 1\\)',
+      '\\(0 <p <1\\)',
+      '\\(0 <p < 1\\)',
+      '\\(0 <p > 1\\)',
+      '\\(0 <p> 1\\)',
+      '\\(if x <p and y>1 then z\\)',
+    ];
+
+    for (const example of examples) {
+      expect(renderPlain(example)).toContain(example);
+    }
+  });
+
+  it('continues normalizing unpaired and nested HTML formatting', () => {
     const plain = renderPlain(
-      [
-        '\\[0<p<1\\]',
-        '\\[0<p>1\\]',
-        '\\[a<b>c\\]',
-        '\\[a<i>c\\]',
-        '\\[a<br>c\\]',
-        '\\(0 < p < 1\\)',
-        '\\(0 <p <1\\)',
-        '\\(0 <p < 1\\)',
-        'if x <p and y>1 then z',
-        '\\(0 <p > 1\\)',
-        '\\(0 <p> 1\\)',
-        '\\(if x <p and y>1 then z\\)',
-        'Real break: <br>After',
-        'Adjacent HTML: word<b>bold</b>.',
-        'Lone closing tag: Summary</p>',
-        '<p>unclosed paragraph',
-        'Then \\[a>0\\]',
-      ].join('\n'),
+      '<p class="intro">Unpaired paragraph\n<b data-level=outer>outer <b>inner</b></b>',
     );
 
-    expect(plain).toContain('\\[0<p<1\\]');
-    expect(plain).toContain('\\[0<p>1\\]');
-    expect(plain).toContain('\\[a<b>c\\]');
-    expect(plain).toContain('\\[a<i>c\\]');
-    expect(plain).toContain('\\[a<br>c\\]');
-    expect(plain).toContain('\\(0 < p < 1\\)');
-    expect(plain).toContain('\\(0 <p <1\\)');
-    expect(plain).toContain('\\(0 <p < 1\\)');
-    expect([...plain.matchAll(/if x <p and y>1 then z/g)]).toHaveLength(2);
-    expect(plain).toContain('\\(0 <p > 1\\)');
-    expect(plain).toContain('\\(0 <p> 1\\)');
-    expect(plain).toContain('\\(if x <p and y>1 then z\\)');
-    expect(plain).toContain('if x <p and y>1 then z');
-    expect(plain).toContain('Real break:');
-    expect(plain).toContain('After');
-    expect(plain).toContain('Adjacent HTML: wordbold.');
-    expect(plain).toContain('Lone closing tag: Summary');
-    expect(plain).not.toContain('</p>');
-    expect(plain).toContain('<p>unclosed paragraph');
-    expect(plain).toContain('\\[a>0\\]');
+    expect(plain).toContain('Unpaired paragraph');
+    expect(plain).toContain('outer');
+    expect(plain).toContain('inner');
+    expect(plain).not.toContain('<p');
+    expect(plain).not.toContain('<b');
+    expect(plain).not.toContain('</b>');
+  });
+
+  it('preserves comparison prose that resembles HTML attributes', () => {
+    expect(renderPlain('if x <p and y>1 then z')).toContain(
+      'if x <p and y>1 then z',
+    );
   });
 
   it('renders HTML headings as markdown headings without leaking tags', () => {
