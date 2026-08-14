@@ -92,6 +92,13 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('<code>');
   });
 
+  it('preserves TeX inequalities that resemble opening HTML tags', () => {
+    const plain = renderPlain('\\[0<p<1\\]\nThen \\[a>0\\]');
+
+    expect(plain).toContain('\\[0<p<1\\]');
+    expect(plain).toContain('\\[a>0\\]');
+  });
+
   it('renders HTML headings as markdown headings without leaking tags', () => {
     const plain = renderPlain(
       '<h3>Verification Report</h3>The proof is <b>fully verified</b>.',
