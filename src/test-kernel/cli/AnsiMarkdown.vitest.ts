@@ -131,15 +131,23 @@ describe('renderAnsiMarkdown', () => {
 
   it('continues normalizing standard boolean HTML attributes', () => {
     const plain = renderPlain(
-      '<p hidden>Paragraph <b hidden>bold</b> <code hidden>code</code></p>',
+      [
+        '<p hidden>Paragraph <b hidden>bold</b> <code hidden>code</code></p>',
+        '<div popover>Popover</div>',
+        '<div contenteditable>Editable</div>',
+      ].join('\n'),
     );
 
     expect(plain).toContain('Paragraph');
     expect(plain).toContain('bold');
     expect(plain).toContain('code');
+    expect(plain).toContain('Popover');
+    expect(plain).toContain('Editable');
     expect(plain).not.toContain('<p hidden>');
     expect(plain).not.toContain('<b hidden>');
     expect(plain).not.toContain('<code hidden>');
+    expect(plain).not.toContain('<div popover>');
+    expect(plain).not.toContain('<div contenteditable>');
   });
 
   it('normalizes HTML between same-line currency amounts', () => {
@@ -179,6 +187,12 @@ describe('renderAnsiMarkdown', () => {
     expect(
       normalizeKnownHtmlForCliMarkdown('<code>$$</code> and <code>$$</code>'),
     ).toBe('`$$` and `$$`');
+  });
+
+  it('normalizes HTML between code-wrapped shell special parameters', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown('<code>$_</code> and <code>$-</code>'),
+    ).toBe('`$_` and `$-`');
   });
 
   it('preserves complete inline math beside token characters', () => {
@@ -298,6 +312,16 @@ describe('renderAnsiMarkdown', () => {
     const plain = renderPlain('> first\n> second\n>\n> third');
     expect(plain).toContain('│ first\n│ second');
     expect(plain).toContain('│ third');
+  });
+
+  it('keeps multiline math inside a Markdown blockquote', () => {
+    const plain = renderPlain('> \\[\n> a+b\n> \\]', {
+      colorEnabled: false,
+      width: 80,
+    });
+
+    expect(plain).toContain('│ \\[\n│ a+b\n│ \\]');
+    expect(plain).not.toContain('\n> a+b');
   });
 
   it('renders nested blockquote prefixes once per depth', () => {

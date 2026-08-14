@@ -8,12 +8,14 @@ const DOLLAR_TOKEN_START_RE = /^[A-Za-z0-9_{?@*#!(]/u;
 const LITERAL_DOLLAR_PAIR_END_RE = /(?:[\s>]|[\s>][([{"'‘“+–—-])\$\$?$/u;
 const SHELL_PID_CODE_PAIR_RE =
   /^\$\$?<\/code>[\s\S]*<code(?:\s[^<>]*)?>\$\$?$/iu;
+const SHELL_SPECIAL_PARAMETER_CODE_PAIR_RE =
+  /^\$[_?@*#!-]<\/code>[\s\S]*?<code(?:\s[^<>]*)?>\$[_?@*#!-]<\/code>/iu;
 
 // Formatting tags may carry ordinary name/value attributes or standard HTML
 // boolean attributes. Arbitrary bare words (for example `<p and y>`) are not
 // accepted because they are otherwise indistinguishable from mathematical
 // prose and would be removed from the transcript.
-const HTML_BOOLEAN_ATTRIBUTE = String.raw`(?:allowfullscreen|async|autofocus|autoplay|checked|controls|default|defer|disabled|formnovalidate|hidden|inert|ismap|itemscope|loop|multiple|muted|nomodule|novalidate|open|playsinline|readonly|required|reversed|selected)`;
+const HTML_BOOLEAN_ATTRIBUTE = String.raw`(?:allowfullscreen|async|autofocus|autoplay|checked|contenteditable|controls|default|defer|disabled|formnovalidate|hidden|inert|ismap|itemscope|loop|multiple|muted|nomodule|novalidate|open|playsinline|popover|readonly|required|reversed|selected)`;
 const HTML_ATTRIBUTE = String.raw`(?:[A-Za-z_:][A-Za-z0-9_.:-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>]+)|${HTML_BOOLEAN_ATTRIBUTE})`;
 const HTML_ATTRIBUTES = String.raw`(?:\s+${HTML_ATTRIBUTE})*\s*`;
 const HEADING_TAG_RE = new RegExp(
@@ -64,7 +66,14 @@ function shouldProtectMathSpanDuringHtmlNormalization(
     DOLLAR_TOKEN_START_RE.test(span.slice(delimiterWidth)) &&
     LITERAL_DOLLAR_PAIR_END_RE.test(span) &&
     DOLLAR_TOKEN_START_RE.test(source.slice(offset + span.length));
-  return !(isLiteralDollarTokenPair || SHELL_PID_CODE_PAIR_RE.test(span));
+  const isShellSpecialParameterPair = SHELL_SPECIAL_PARAMETER_CODE_PAIR_RE.test(
+    source.slice(offset),
+  );
+  return !(
+    isLiteralDollarTokenPair ||
+    isShellSpecialParameterPair ||
+    SHELL_PID_CODE_PAIR_RE.test(span)
+  );
 }
 
 export function normalizeKnownHtmlForCliMarkdown(content: string): string {
