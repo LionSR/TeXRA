@@ -24,7 +24,7 @@ const HTML_CODE_SHELL_TOKEN_RE = new RegExp(
 );
 const MARKDOWN_CODE_SHELL_TOKEN_RE = new RegExp(`\`${SHELL_TOKEN}\``, 'gu');
 const CURRENCY_PAIR_RE = new RegExp(
-  `\\$${CURRENCY_AMOUNT}[^\\n$]*?(?:[\\s>]|[\\s>][([{"'‘“+–—-]|[\\s>][A-Z]{1,3})\\$${CURRENCY_AMOUNT}`,
+  `\\$${CURRENCY_AMOUNT}[^\\n$]*?(?:\\s|\\s[([{"'‘“+–—-]|\\s[A-Z]{1,3})\\$${CURRENCY_AMOUNT}`,
   'gu',
 );
 const SHELL_UNWRAPPED_TOKEN_RE = new RegExp(
@@ -33,24 +33,24 @@ const SHELL_UNWRAPPED_TOKEN_RE = new RegExp(
 );
 const LITERAL_DOLLAR_PLACEHOLDER_RE = /@@CLI-LITERAL-DOLLAR-(\d+)@@/g;
 const HEADING_TAG_RE = new RegExp(
-  `<h([1-6])${HTML_ATTRIBUTES}\\/?>([\\s\\S]*?)<\\/h\\1>`,
+  `<h([1-6])${HTML_ATTRIBUTES}\\/?\\s*>([\\s\\S]*?)<\\/h\\1>`,
   'gi',
 );
 const PARAGRAPH_OPEN_TAG_RE = new RegExp(
-  `<(?:p|div)${HTML_ATTRIBUTES}\\/?>`,
+  `<(?:p|div)${HTML_ATTRIBUTES}\\/?\\s*>`,
   'gi',
 );
 const STRONG_OPEN_TAG_RE = new RegExp(
-  `<(?:strong|b)${HTML_ATTRIBUTES}\\/?>`,
+  `<(?:strong|b)${HTML_ATTRIBUTES}\\/?\\s*>`,
   'gi',
 );
 const EMPHASIS_OPEN_TAG_RE = new RegExp(
-  `<(?:em|i)${HTML_ATTRIBUTES}\\/?>`,
+  `<(?:em|i)${HTML_ATTRIBUTES}\\/?\\s*>`,
   'gi',
 );
-const CODE_OPEN_TAG_RE = new RegExp(`<code${HTML_ATTRIBUTES}\\/?>`, 'gi');
+const CODE_OPEN_TAG_RE = new RegExp(`<code${HTML_ATTRIBUTES}\\/?\\s*>`, 'gi');
 const BLOCKQUOTE_TAG_RE = new RegExp(
-  `<blockquote${HTML_ATTRIBUTES}\\/?>([\\s\\S]*?)<\\/blockquote>`,
+  `<blockquote${HTML_ATTRIBUTES}\\/?\\s*>([\\s\\S]*?)<\\/blockquote>`,
   'gi',
 );
 
@@ -116,7 +116,7 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
       (_match, level: string, body: string) =>
         `\n\n${headingMarker(level)} ${body.trim()}\n\n`,
     )
-    .replaceAll(/<br\s*\/?>/gi, '\n')
+    .replaceAll(/<br\s*\/?\s*>/gi, '\n')
     .replaceAll(/<\/(?:p|div)>/gi, '\n\n')
     .replaceAll(PARAGRAPH_OPEN_TAG_RE, '')
     .replaceAll(STRONG_OPEN_TAG_RE, '**')

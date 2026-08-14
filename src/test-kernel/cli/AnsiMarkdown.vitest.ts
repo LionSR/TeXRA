@@ -125,6 +125,18 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('</b>');
   });
 
+  it.each([
+    ['0<p>1', '01'],
+    ['a<b>c', 'a**c'],
+    ['a<i>c', 'a_c'],
+    ['a<br>c', 'a\nc'],
+  ] as const)(
+    'retains established bare tag-shaped normalization: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
   it('continues normalizing standard boolean HTML attributes', () => {
     const plain = renderPlain(
       [
@@ -247,6 +259,7 @@ describe('renderAnsiMarkdown', () => {
     '$a<b>c$RESULT',
     '$x<i>y$_',
     '$a<br>c$-',
+    '$5 > X <p>y</p>$2',
     '$</code>0<b>1$ trailing text$',
     '$</code>0<b>1$ trailing text`',
     '$$0 <p> 1 $$10',
@@ -292,7 +305,9 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('continues normalizing self-closing HTML formatting tags', () => {
-    const plain = renderPlain('<p/>Paragraph <b/>bold <code/>code');
+    const plain = renderPlain(
+      '<p/>Paragraph <b/>bold <code/>code <p/ >spaced <strong/ >strong',
+    );
 
     expect(plain).toContain('Paragraph');
     expect(plain).toContain('bold');
@@ -300,6 +315,8 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('<p/>');
     expect(plain).not.toContain('<b/>');
     expect(plain).not.toContain('<code/>');
+    expect(plain).not.toContain('<p/ >');
+    expect(plain).not.toContain('<strong/ >');
   });
 
   it('renders HTML headings as markdown headings without leaking tags', () => {
