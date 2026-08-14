@@ -215,6 +215,23 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it.each([
+    [
+      '<code>$HOME</code> then <strong>$a<b>c$</strong>',
+      '`$HOME` then **$a<b>c$**',
+    ],
+    [
+      '<strong>$a<b>c$</strong> then <code>$HOME</code>',
+      '**$a<b>c$** then `$HOME`',
+    ],
+    ['`$HOME` then <strong>$a<b>c$</strong>', '`$HOME` then **$a<b>c$**'],
+  ] as const)(
+    'protects math adjacent to a code-wrapped shell token: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it.each([
     '$0<p>1$2',
     '$0<p>1$-condition',
     '$a<b>c$d',

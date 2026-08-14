@@ -4,43 +4,12 @@ import { clamp } from '@utils/core';
 
 const KNOWN_HTML_TAG_RE =
   /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/i;
-const CURRENCY_AMOUNT_START_RE = /^[+-]?(?:\d|\.\d)/u;
-const CURRENCY_PAIR_END_RE = /(?:[\s>]|[\s>][([{"'‘“+–—-]|[\s>][A-Z]{1,3})\$$/u;
+const CURRENCY_AMOUNT = String.raw`[+-]?(?:\d|\.\d)`;
 const SHELL_PARAMETER_NAME = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+|[?@*#!-])`;
 const SHELL_PARAMETER = String.raw`(?:${SHELL_PARAMETER_NAME}|\{${SHELL_PARAMETER_NAME}\})`;
-const SHELL_CODE_ENDPOINT = String.raw`(?:\$${SHELL_PARAMETER}|\$\$)`;
-const SHELL_CODE_COMPLETE_PAIR_SPAN_RE = new RegExp(
-  `^${SHELL_CODE_ENDPOINT}<\\/code>[\\s\\S]*<code(?:\\s[^<>]*)?>${SHELL_CODE_ENDPOINT}$`,
-  'iu',
-);
-const SHELL_CODE_LEADING_ENDPOINT_RE = new RegExp(
-  `^\\$${SHELL_PARAMETER}<\\/code>`,
-  'iu',
-);
-const SHELL_CODE_TRAILING_ENDPOINT_RE = /<code(?:\s[^<>]*)?>\$$/iu;
-const SHELL_CODE_TRAILING_SUFFIX_RE = new RegExp(
-  `^(?:${SHELL_PARAMETER}|\\$)<\\/code>`,
-  'iu',
-);
-const SHELL_MARKDOWN_LEADING_ENDPOINT_RE = new RegExp(
-  `^\\$${SHELL_PARAMETER}\``,
-  'iu',
-);
-const SHELL_MARKDOWN_TRAILING_ENDPOINT_RE = /`\$$/u;
-const SHELL_MARKDOWN_TRAILING_SUFFIX_RE = new RegExp(
-  `^(?:${SHELL_PARAMETER}|\\$)\``,
-  'iu',
-);
 const SHELL_UNWRAPPED_PARAMETER = String.raw`(?:[A-Z_][A-Z0-9_]+|\{${SHELL_PARAMETER_NAME}\}|[_?@*#!-])`;
 const SHELL_PARAMETER_BOUNDARY = String.raw`(?=[\s<.,;:!?()[\]{}'"’”]|$)`;
-const SHELL_UNWRAPPED_LEADING_ENDPOINT_RE = new RegExp(
-  `^\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
-  'u',
-);
-const SHELL_UNWRAPPED_TRAILING_SUFFIX_RE = new RegExp(
-  `^${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
-  'u',
-);
+const SHELL_TOKEN = String.raw`(?:\$\$|\$${SHELL_PARAMETER})`;
 
 // Formatting tags may carry ordinary name/value attributes or standard HTML
 // attributes whose value may be omitted. Arbitrary bare words (for example
@@ -49,6 +18,20 @@ const SHELL_UNWRAPPED_TRAILING_SUFFIX_RE = new RegExp(
 const HTML_VALUELESS_ATTRIBUTE = String.raw`(?:allowfullscreen|async|autofocus|autoplay|checked|contenteditable|controls|default|defer|disabled|formnovalidate|hidden|inert|ismap|itemscope|loop|multiple|muted|nomodule|novalidate|open|playsinline|popover|readonly|required|reversed|selected)`;
 const HTML_ATTRIBUTE = String.raw`(?:[A-Za-z_:][A-Za-z0-9_.:-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>]+)|${HTML_VALUELESS_ATTRIBUTE})`;
 const HTML_ATTRIBUTES = String.raw`(?:\s+${HTML_ATTRIBUTE})*\s*`;
+const HTML_CODE_SHELL_TOKEN_RE = new RegExp(
+  `<code${HTML_ATTRIBUTES}>${SHELL_TOKEN}<\\/code>`,
+  'giu',
+);
+const MARKDOWN_CODE_SHELL_TOKEN_RE = new RegExp(`\`${SHELL_TOKEN}\``, 'gu');
+const CURRENCY_PAIR_RE = new RegExp(
+  `\\$${CURRENCY_AMOUNT}[^\\n$]*?(?:[\\s>]|[\\s>][([{"'‘“+–—-]|[\\s>][A-Z]{1,3})\\$${CURRENCY_AMOUNT}`,
+  'gu',
+);
+const SHELL_UNWRAPPED_PAIR_RE = new RegExp(
+  `\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}[^\\n$]*?\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
+  'gu',
+);
+const LITERAL_DOLLAR_PLACEHOLDER_RE = /@@CLI-LITERAL-DOLLAR-(\d+)@@/g;
 const HEADING_TAG_RE = new RegExp(
   `<h([1-6])${HTML_ATTRIBUTES}\\/?>([\\s\\S]*?)<\\/h\\1>`,
   'gi',
@@ -86,56 +69,48 @@ function headingMarker(level: string): string {
   return '#'.repeat(depth);
 }
 
-function shouldProtectMathSpanDuringHtmlNormalization(
-  span: string,
-  offset: number,
-  source: string,
-): boolean {
-  if (!span.startsWith('$')) return true;
-  const delimiterWidth = span.startsWith('$$') ? 2 : 1;
-  const isCurrencyPair =
-    delimiterWidth === 1 &&
-    CURRENCY_AMOUNT_START_RE.test(span.slice(1)) &&
-    CURRENCY_PAIR_END_RE.test(span) &&
-    CURRENCY_AMOUNT_START_RE.test(source.slice(offset + span.length));
-  const suffix = source.slice(offset + span.length);
-  // The permissive inline-math matcher can split a shell token at either
-  // delimiter. Expose a match when either endpoint is demonstrably shell
-  // presentation so protected fragments cannot strand HTML between them.
-  const isShellParameterPair =
-    (SHELL_CODE_COMPLETE_PAIR_SPAN_RE.test(span) &&
-      suffix.startsWith('</code>')) ||
-    SHELL_CODE_LEADING_ENDPOINT_RE.test(span) ||
-    (source[offset - 1] === '$' && span.startsWith('$</code>')) ||
-    (SHELL_CODE_TRAILING_ENDPOINT_RE.test(span) &&
-      SHELL_CODE_TRAILING_SUFFIX_RE.test(suffix));
-  const isMarkdownCodeShellParameterPair =
-    (source[offset - 1] === '`' &&
-      SHELL_MARKDOWN_LEADING_ENDPOINT_RE.test(span)) ||
-    (SHELL_MARKDOWN_TRAILING_ENDPOINT_RE.test(span) &&
-      SHELL_MARKDOWN_TRAILING_SUFFIX_RE.test(suffix));
-  const isUnwrappedShellParameterPair =
-    SHELL_UNWRAPPED_LEADING_ENDPOINT_RE.test(span) &&
-    SHELL_UNWRAPPED_TRAILING_SUFFIX_RE.test(suffix);
-  return !(
-    isCurrencyPair ||
-    isShellParameterPair ||
-    isMarkdownCodeShellParameterPair ||
-    isUnwrappedShellParameterPair
+// CLI presentation owns currency and shell syntax. Mask only their dollar
+// tokens before shared math recognition so a shell token cannot pair with a
+// later formula delimiter and cause that formula's HTML-shaped TeX to leak.
+function protectLiteralDollarTokens(content: string): {
+  content: string;
+  restore: (value: string) => string;
+} {
+  const items: string[] = [];
+  const protectDollars = (match: string): string =>
+    match.replaceAll(/\$\$?/g, (dollars) => {
+      const index = items.push(dollars) - 1;
+      return `@@CLI-LITERAL-DOLLAR-${index}@@`;
+    });
+  const protectedContent = [
+    HTML_CODE_SHELL_TOKEN_RE,
+    MARKDOWN_CODE_SHELL_TOKEN_RE,
+    CURRENCY_PAIR_RE,
+    SHELL_UNWRAPPED_PAIR_RE,
+  ].reduce(
+    (value, pattern) => value.replaceAll(pattern, protectDollars),
+    content,
   );
+  return {
+    content: protectedContent,
+    restore: (value) =>
+      value.replaceAll(
+        LITERAL_DOLLAR_PLACEHOLDER_RE,
+        (match, rawIndex) => items[Number(rawIndex)] ?? match,
+      ),
+  };
 }
 
 export function normalizeKnownHtmlForCliMarkdown(content: string): string {
   const summarized = summarizeEmbeddedSubagentFollowups(content);
   if (!KNOWN_HTML_TAG_RE.test(summarized)) return summarized;
 
-  const mathProtection = protectLatexMathSpans(
-    summarized,
-    shouldProtectMathSpanDuringHtmlNormalization,
-  );
-  if (!KNOWN_HTML_TAG_RE.test(mathProtection.content)) return summarized;
+  const literalDollarProtection = protectLiteralDollarTokens(summarized);
+  const mathProtection = protectLatexMathSpans(literalDollarProtection.content);
+  const mathProtected = literalDollarProtection.restore(mathProtection.content);
+  if (!KNOWN_HTML_TAG_RE.test(mathProtected)) return summarized;
 
-  const normalized = mathProtection.content
+  const normalized = mathProtected
     .replaceAll(
       HEADING_TAG_RE,
       (_match, level: string, body: string) =>
@@ -154,5 +129,5 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
       quoteHtmlBlock(mathProtection.restore(body)),
     )
     .trim();
-  return mathProtection.restore(normalized);
+  return literalDollarProtection.restore(mathProtection.restore(normalized));
 }

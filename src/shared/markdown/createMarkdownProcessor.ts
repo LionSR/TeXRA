@@ -130,11 +130,6 @@ function protectByPatterns(
   content: string,
   patterns: readonly RegExp[],
   tag: string,
-  shouldProtect: (
-    span: string,
-    offset: number,
-    source: string,
-  ) => boolean = () => true,
   preserveBlockquotePrefixes = false,
 ): { content: string; items: string[] } {
   const items: string[] = [];
@@ -143,7 +138,6 @@ function protectByPatterns(
     out = out.replaceAll(pattern, (match, ...args: unknown[]) => {
       const offset = args.at(-2) as number;
       const source = args.at(-1) as string;
-      if (!shouldProtect(match, offset, source)) return match;
       if (preserveBlockquotePrefixes && match.includes('\n')) {
         // Keep Markdown blockquote prefixes visible to the parser instead of
         // collapsing an entire quoted display span into one placeholder line.
@@ -197,11 +191,8 @@ function restorePlaceholders(
   });
 }
 
-/** Shields selected complete LaTeX math spans while another transform runs. */
-export function protectLatexMathSpans(
-  content: string,
-  shouldProtect?: (span: string, offset: number, source: string) => boolean,
-): {
+/** Shields complete LaTeX math spans while another transform runs. */
+export function protectLatexMathSpans(content: string): {
   content: string;
   restore: (value: string) => string;
 } {
@@ -209,7 +200,6 @@ export function protectLatexMathSpans(
     content,
     MATH_SPAN_PATTERNS,
     'LATEX-MATH',
-    shouldProtect,
     true,
   );
   return {
