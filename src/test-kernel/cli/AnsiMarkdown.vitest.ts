@@ -188,6 +188,7 @@ describe('renderAnsiMarkdown', () => {
       '$a<b>c$d',
       '$x<i>y$z',
       '$a<br>c$',
+      '$a<strong>b($c',
     ];
 
     for (const example of examples) {
@@ -197,6 +198,10 @@ describe('renderAnsiMarkdown', () => {
 
   it('preserves adjacent inline math spans independently of markdown', () => {
     expect(renderPlain('$*a*$$*b*$')).toContain('$*a*$$*b*$');
+  });
+
+  it('preserves a complete inline span after an unmatched display opener', () => {
+    expect(renderPlain('x$$y*a*$z')).toContain('x$$y*a*$z');
   });
 
   it('keeps every multiline math line inside an HTML blockquote', () => {

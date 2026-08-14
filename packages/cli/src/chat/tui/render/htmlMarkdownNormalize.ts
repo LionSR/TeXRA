@@ -5,8 +5,9 @@ import { clamp } from '@utils/core';
 const KNOWN_HTML_TAG_RE =
   /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/i;
 const DOLLAR_TOKEN_START_RE = /^[A-Za-z0-9_{?@*#!(]/u;
-const LITERAL_DOLLAR_PAIR_END_RE = /[\s>(\[–—-]\$\$?$/u;
-const SHELL_PID_CODE_PAIR_RE = /^\$\$<\/code>[\s\S]*<code(?:\s[^<>]*)?>\$\$$/iu;
+const LITERAL_DOLLAR_PAIR_END_RE = /(?:[\s>]|[\s>][([{"'‘“+–—-])\$\$?$/u;
+const SHELL_PID_CODE_PAIR_RE =
+  /^\$\$?<\/code>[\s\S]*<code(?:\s[^<>]*)?>\$\$?$/iu;
 
 // Formatting tags may carry ordinary name/value attributes or standard HTML
 // boolean attributes. Arbitrary bare words (for example `<p and y>`) are not
