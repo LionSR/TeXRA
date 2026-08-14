@@ -10,8 +10,9 @@ All notable changes to this project will be documented in this file.
 
 - **Lean Project remotes are available after sign-in** — the hosted Lean
   agents no longer need a special access group.
-- **The model picker now starts with Sonnet 5 (Thinking)** — new chats use
-  that model by default, and Gemini is no longer the first entry.
+- **The model picker now starts with Sonnet 5 (Thinking)** — Gemini is no
+  longer the first entry. New installs and chats without a saved picker
+  choice use Sonnet; an already-chosen model is left as-is.
 
 ### Extension (VS Code) and Desktop
 
