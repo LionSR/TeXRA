@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 
-import { getAgent } from '@agent/index';
 import { defaultSession } from '@agent/runtime';
 import {
   validateExecutionRequest,
@@ -40,7 +39,6 @@ import {
 import { platform } from '@platform/platform';
 import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { AgentCategory } from '@shared/schemas';
 import { unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   dispatchProgressViewInbound,
@@ -188,13 +186,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         polishProgress?.report({ message });
       },
       onPolishError: (stream, error) => this.reportPolishError(stream, error),
-      loadFollowUpOptions: async () => {
-        const { agentOptions, modelOptionsByCategory } = await loadOptions();
-        return {
-          toolUseAgentsData: agentOptions.toolUse,
-          modelOptionsData: modelOptionsByCategory.workflow,
-        };
-      },
       postToRenderer: (message) => {
         this.postToActiveView(message);
       },
@@ -580,8 +571,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   private createFollowUpController(): ProgressFollowUpController {
     return new ProgressFollowUpController({
-      getAgentCategory: (agent) =>
-        getAgent(agent, AgentCategory.ToolUse)?.category,
       loadModelOptions: async () => {
         const { modelOptionsByCategory } = await loadOptions();
         return modelOptionsByCategory.workflow;
@@ -858,12 +847,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         return;
       case 'info':
         await this.host.info(plan.message);
-        return;
-      case 'restoreState':
-        await this.runViewCommand('texra.restoreState', [
-          plan.config,
-          plan.executeImmediately,
-        ]);
         return;
       case 'execute':
         // Follow-up 'execute' plans are the compile fixer (latexFixer), so run

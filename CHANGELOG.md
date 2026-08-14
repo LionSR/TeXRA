@@ -26,6 +26,15 @@ All notable changes to this project will be documented in this file.
   → Agents no longer hides View prompt behind an Ultra plan, and remote agents
   no longer show a Remote badge or access-group labels.
 
+#### Improvements
+
+- **Workflow runs trade the Follow-up chat panel for a Copy button** — the
+  panel that started a tool-use chat from a workflow's outputs (agent picker,
+  model picker, note box) is gone. In its place the run's header toolbar has a
+  Copy button that puts the run, its output paths, and any compile failures on
+  the clipboard as plain text, to paste into whichever chat you want. Running
+  latexFixer on a compile failure is unchanged.
+
 ### CLI and Desktop
 
 #### Bug Fixes

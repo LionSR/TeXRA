@@ -19,7 +19,6 @@ import type {
   TaskGroup,
 } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
-import type { FollowupOptionsState } from './store';
 
 // Local imports - progress view components
 import type { PermissionState } from './permissionState';
@@ -32,8 +31,6 @@ export interface StreamContextValue {
   isToolUse: boolean;
   /** Whether there are any streams in the current filter (for placeholder logic) */
   hasStreams: boolean;
-  /** Tool-use follow-up options for completed workflow streams. */
-  followupOptions: FollowupOptionsState | null;
   /**
    * Progress-view commands the active host's inbound registry declares
    * `unsupported(...)` (see `unsupportedCommands` in `@shared/utils/dispatcher`).
@@ -51,7 +48,6 @@ export const EMPTY_STREAM_CONTEXT: StreamContextValue = {
   streamState: null,
   isToolUse: false,
   hasStreams: false,
-  followupOptions: null,
   unsupportedCommands: null,
 };
 

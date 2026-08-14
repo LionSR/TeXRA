@@ -59,8 +59,8 @@ function updateStreamInfo(
   const newStreamById = new Map<string, StreamTabInfo>();
   // Streams with no backend metadata and no prior state yet: routed through
   // `ensureStreamState` below so their default streamStates entry and its
-  // streamLogs/followupOptionsByStream companions are created together,
-  // instead of synthesizing a bare streamStates default here.
+  // streamLogs companion are created together, instead of synthesizing a
+  // bare streamStates default here.
   const streamsNeedingDefaultState: StreamTabInfo[] = [];
   for (const stream of streams) {
     const existing = state.streamStates.get(stream.name);
@@ -258,7 +258,6 @@ export const streamLifecycleHandlers = {
         draft.streamById = new Map();
         draft.streamStates = new Map();
         draft.streamLogs = new Map();
-        draft.followupOptionsByStream = new Map();
         draft.activeStreamId = null;
         draft.pendingStreamSelection = null;
       }),

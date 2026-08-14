@@ -4,12 +4,7 @@ import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isApiProvider } from '@model/apiProviders';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  AgentOptionData,
-  AgentProposal,
-  ModelOptionData,
-  StreamTabId,
-} from '@shared/schemas';
+import type { AgentProposal, StreamTabId } from '@shared/schemas';
 import { isPlainAgentIdentity } from '@shared/schemas';
 import type {
   ProgressViewInboundHandlerRegistry,
@@ -381,11 +376,6 @@ export interface ProgressViewSecondTierActions {
     stream: StreamTabId,
     error: unknown,
   ) => void | Promise<void>;
-  /** Load follow-up option catalogs (host-specific loading paths). */
-  readonly loadFollowUpOptions: () => Promise<{
-    toolUseAgentsData?: readonly AgentOptionData[];
-    modelOptionsData?: readonly ModelOptionData[];
-  }>;
   /** Post a message to the renderer. */
   readonly postToRenderer: (message: ProgressViewOutboundMessage) => void;
   /** Restore an agent proposal config into the main view (delegates to agentProposalController). */
@@ -409,7 +399,7 @@ export interface ProgressViewSecondTierActions {
  * {@link ProgressApiKeyRetryController}, {@link ProgressFollowUpController},
  * {@link ProgressFollowUpPolishController}) plus host-injected callbacks for
  * messaging, retry settlement, state restoration, plan/polish result
- * application, follow-up option loading, recording, and proposal restore.
+ * application, recording, and proposal restore.
  *
  * Hosts create the controllers and callbacks once, call this factory, and
  * spread the result into their handler registry alongside
@@ -419,26 +409,6 @@ export function createProgressViewSecondTierHandlers(
   deps: ProgressViewSecondTierActions,
 ) {
   const CMD = PROGRESS_VIEW_COMMANDS;
-
-  const planFollowUp = async (
-    data: {
-      stream: StreamTabId;
-      agent: string;
-      model: string;
-      initialQuestion?: string;
-    },
-    executeImmediately: boolean,
-  ): Promise<void> => {
-    await deps.applyFollowUpPlan(
-      await deps.followUp.planToolUseFollowUpForStream({
-        streamId: data.stream,
-        agent: data.agent,
-        model: data.model,
-        initialQuestion: data.initialQuestion,
-        executeImmediately,
-      }),
-    );
-  };
 
   return {
     // ── Workflow toolbar (diff / pack / clean) ──
@@ -549,19 +519,7 @@ export function createProgressViewSecondTierHandlers(
       }
     },
 
-    // ── Follow-up tasks ──
-    [CMD.SETUP_FOLLOWUP]: (data) => planFollowUp(data, false),
-    [CMD.RUN_FOLLOWUP]: (data) => planFollowUp(data, true),
-    [CMD.GET_FOLLOWUP_OPTIONS]: async (data) => {
-      const { toolUseAgentsData, modelOptionsData } =
-        await deps.loadFollowUpOptions();
-      deps.postToRenderer({
-        command: CMD.SET_FOLLOWUP_OPTIONS,
-        stream: data.stream,
-        ...(toolUseAgentsData && { toolUseAgentsData: [...toolUseAgentsData] }),
-        ...(modelOptionsData && { modelOptionsData: [...modelOptionsData] }),
-      });
-    },
+    // ── Compile fixer ──
     [CMD.RUN_COMPILE_FIXER]: async (data) => {
       await deps.applyFollowUpPlan(
         await deps.followUp.planCompileFixerForStream(data.stream),

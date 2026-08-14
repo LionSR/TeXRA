@@ -197,8 +197,8 @@ export const logHandlers = {
         const streamState = draft.streamStates.get(streamId);
         if (!streamState) return;
 
-        // Backfills streamLogs (and followupOptionsByStream) if this is the
-        // first handler to observe the stream — see `ensureStreamState`.
+        // Backfills streamLogs if this is the first handler to observe the
+        // stream — see `ensureStreamState`.
         ensureStreamState(draft, streamId, streamState.category);
         // Non-null: ensureStreamState above guarantees this entry exists.
         const streamLogs: StreamLogs = draft.streamLogs.get(streamId)!;

@@ -5,7 +5,6 @@ import {
   isToolUseState,
   isWorkflowState,
   sumUsageStats,
-  type OutputFileInfo,
   type StreamTabId,
   type TokenUsageStats,
   type ToolUseStreamState,
@@ -79,12 +78,6 @@ export function removePermissionsForStream(
     (permission) =>
       !permission.data.streamId || permission.data.streamId !== streamId,
   );
-}
-
-export function hasOutputFiles(
-  filesByRound: Record<string, OutputFileInfo[]>,
-): boolean {
-  return Object.values(filesByRound).some((files) => files.length > 0);
 }
 
 /**

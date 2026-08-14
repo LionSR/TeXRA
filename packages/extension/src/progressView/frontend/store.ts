@@ -7,7 +7,6 @@ import {
   type StreamState,
   type StreamTabInfo,
   type StreamTabId,
-  type SetFollowupOptionsMessage,
   type InquiryThreadUpdatedEvent,
   type InquiryThreadId,
 } from '@shared/schemas';
@@ -16,12 +15,6 @@ import {
   type CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
 import type { Draft } from 'mutative';
-
-/** Followup options derived from schema (minus command/stream fields) */
-export type FollowupOptionsState = Omit<
-  SetFollowupOptionsMessage,
-  'command' | 'stream'
->;
 
 /**
  * Log data stored separately from stream meta state.
@@ -82,15 +75,13 @@ export interface ProgressState {
   streamStates: Map<StreamTabId, StreamState>;
   /** Log messages per stream — separated so log appends don't trigger meta context updates */
   streamLogs: Map<StreamTabId, StreamLogs>;
-  /** Workflow-result follow-up option data, keyed per stream. */
-  followupOptionsByStream: Map<StreamTabId, FollowupOptionsState>;
   /** Durable external inquiry thread summaries, keyed by thread id. */
   inquiries: Map<InquiryThreadId, InquiryThreadUpdatedEvent>;
 }
 
 /**
  * Delete one stream's entry from every per-stream map it owns
- * (`streamStates`, `streamLogs`, `followupOptionsByStream`).
+ * (`streamStates`, `streamLogs`).
  * Single owner of that key list so a removed/renamed/added map can't drift
  * out of sync between the lifecycle handlers that garbage-collect streams.
  * Does not touch `streamById` — callers that also drop the stream from the
@@ -103,13 +94,11 @@ export function deleteStreamState(
 ): void {
   draft.streamStates.delete(streamId);
   draft.streamLogs.delete(streamId);
-  draft.followupOptionsByStream.delete(streamId);
 }
 
 /**
  * Drop reloadable content while retaining the lightweight tab projection and
- * unsent tool-use draft owned by this browser surface. Follow-up option
- * catalogs are also lightweight and remain usable by an already-open panel.
+ * unsent tool-use draft owned by this browser surface.
  */
 export function releaseStreamContent(
   draft: Draft<ProgressState>,
@@ -147,12 +136,11 @@ export function detachChildStreamTabs(
 
 /**
  * Create default entries — for whichever of the same key list
- * `deleteStreamState` owns (`streamStates`, `streamLogs`,
- * `followupOptionsByStream`) a stream doesn't have one in yet. Single owner
- * of that initialization logic, mirroring `deleteStreamState`, so a stream
- * can't end up registered in some of these maps but not others depending on
- * which handler happened to observe it first. Already-present entries are
- * left untouched.
+ * `deleteStreamState` owns (`streamStates`, `streamLogs`) a stream doesn't
+ * have one in yet. Single owner of that initialization logic, mirroring
+ * `deleteStreamState`, so a stream can't end up registered in some of these
+ * maps but not others depending on which handler happened to observe it
+ * first. Already-present entries are left untouched.
  *
  * Does not touch `streamById`, for the same reason `deleteStreamState`
  * doesn't: every call site that introduces a brand-new stream already holds
@@ -175,9 +163,6 @@ export function ensureStreamState(
   if (!draft.streamLogs.has(streamId)) {
     draft.streamLogs.set(streamId, createEmptyStreamLogs());
   }
-  if (!draft.followupOptionsByStream.has(streamId)) {
-    draft.followupOptionsByStream.set(streamId, {});
-  }
   return state;
 }
 
@@ -188,7 +173,6 @@ export function createInitialState(): ProgressState {
     streamById: new Map(),
     streamStates: new Map(),
     streamLogs: new Map(),
-    followupOptionsByStream: new Map(),
     inquiries: new Map(),
   };
 }

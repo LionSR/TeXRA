@@ -18,7 +18,6 @@ import { clearInquiryDraft } from './slices/inquiryDraftState';
 import {
   APPROVE_SESSION_ACTION,
   APPROVE_ALL_DELEGATED_WORK_ACTION,
-  type FollowupCommandDetail,
   type FollowUpChangeDetail,
   type FollowUpSendDetail,
   type PermissionActionDetail,
@@ -191,29 +190,6 @@ export function runCompileFixer(): void {
   const stream = appState.get().activeStreamId;
   if (!stream) return;
   postMessage(PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER, { stream });
-}
-
-export function handleFollowupRequestOptions(): void {
-  const stream = appState.get().activeStreamId;
-  if (!stream) return;
-  postMessage(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS, { stream });
-}
-
-export function sendFollowupCommand(
-  command:
-    | typeof PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP
-    | typeof PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP,
-  event: CustomEvent<FollowupCommandDetail>,
-): void {
-  const stream = appState.get().activeStreamId;
-  if (!stream) return;
-  const { agent, model, initialQuestion } = event.detail;
-  postMessage(command, {
-    stream,
-    agent,
-    model,
-    initialQuestion,
-  });
 }
 
 /**
