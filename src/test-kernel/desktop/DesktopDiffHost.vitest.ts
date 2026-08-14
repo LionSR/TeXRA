@@ -1,12 +1,12 @@
 // Standard library imports
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Third-party imports
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports - test support
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { loadSourceModule } from './loadSourceModule.ts';
 
 type DesktopDiffHostModule = typeof import('@desktop/main/desktopDiffHost');
@@ -36,13 +36,19 @@ function expectOpenedPatchFile(openedPaths: readonly string[]): void {
   expect(path.extname(openedPaths[0])).toBe('.diff');
 }
 
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+  await cleanupTempDirs(tempDirs);
+});
+
 async function openDiffPair(
   host: DiffHost,
   title: string,
   names: [string, string] = ['a.tex', 'b.tex'],
   texts: [string, string] = ['a\n', 'b\n'],
 ): Promise<void> {
-  const tempDir = await mkdtemp(path.join(tmpdir(), 'texra-diff-host-test-'));
+  const tempDir = await makeTempDir('texra-diff-host-test-', tempDirs);
   const originalPath = path.join(tempDir, names[0]);
   const proposedPath = path.join(tempDir, names[1]);
   await Promise.all([

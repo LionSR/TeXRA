@@ -1,10 +1,9 @@
 // Node imports
-import { mkdtemp, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
 import { refresh } from '@agent/index/agentRegistry';
@@ -18,6 +17,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { AgentCategory } from '@shared/schemas';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 /**
  * A custom *workflow* agent named `assistant` shadows the bundled *tool-use*
@@ -28,8 +28,10 @@ import { installPlatform } from '@test/support/setupPlatform';
  * category-scoped launch resolver the run itself uses.
  */
 describe('CLI agent validation with a shadowed name', () => {
+  const tempDirs: string[] = [];
+
   beforeAll(async () => {
-    const customDir = await mkdtemp(resolve(tmpdir(), 'texra-cli-shadow-'));
+    const customDir = await makeTempDir('texra-cli-shadow-', tempDirs);
     await writeFile(
       resolve(customDir, 'assistant.yaml'),
       [
@@ -58,6 +60,10 @@ describe('CLI agent validation with a shadowed name', () => {
     );
 
     await refresh({ includeRemote: false });
+  });
+
+  afterAll(async () => {
+    await cleanupTempDirs(tempDirs);
   });
 
   it('validates the shadowed name against the tool-use entry launch will run', () => {
