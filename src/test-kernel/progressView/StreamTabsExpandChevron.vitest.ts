@@ -76,6 +76,27 @@ describe('stream-tab expand chevron', () => {
     ).toBe('1 background task');
   });
 
+  it('expands ancestors when a child stream is the active session', async () => {
+    const tabs = await mountTabs({
+      streams: [makeStream('parent')],
+      childStreamsByParent: new Map([['parent', [makeStream('child')]]]),
+    });
+    const parentTab = tabs.shadowRoot?.querySelector('stream-tab');
+    const expandButton = parentTab?.shadowRoot?.querySelector('.tab-expand');
+    expect(expandButton?.getAttribute('aria-expanded')).toBe('false');
+
+    tabs.activeStreamId = 'child';
+    await tabs.updateComplete;
+    await settleChildRender();
+
+    expect(
+      parentTab?.shadowRoot
+        ?.querySelector('.tab-expand')
+        ?.getAttribute('aria-expanded'),
+    ).toBe('true');
+    expect(tabs.shadowRoot?.querySelectorAll('stream-tab')).toHaveLength(2);
+  });
+
   it('identifies an unlabeled stream by name in the select aria-label', async () => {
     const tabs = await mountTabs({
       streams: [{ ...makeStream('unlabeled-stream'), label: '' }],

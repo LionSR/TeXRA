@@ -20,6 +20,8 @@ All notable changes to this project will be documented in this file.
   choice use Sonnet; an already-chosen model is left as-is.
 - **Background tasks start collapsed in Sessions** — a new sub-agent or
   nested run no longer opens the parent row; expand it to inspect children.
+  Selecting a child, or a pending approval on one, still reveals the ancestor
+  path.
 - **Remote agent prompts are available to every signed-in account** — Settings
   → Agents no longer hides View prompt behind an Ultra plan, and remote agents
   no longer show a Remote badge or access-group labels.

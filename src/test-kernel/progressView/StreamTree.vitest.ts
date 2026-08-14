@@ -183,7 +183,7 @@ describe('progress stream tree policy', () => {
     const projection = project(
       childStreamsByParent,
       new Map(),
-      new Map(),
+      new Map([['root', 'collapsed']]),
       new Set(),
       'grandchild',
     );
@@ -191,6 +191,21 @@ describe('progress stream tree policy', () => {
     assert.equal(projection.expandedParents.has('root'), true);
     assert.equal(projection.expandedParents.has('child'), true);
     assert.equal(projection.expandedParents.has('other'), false);
+    assert.equal(projection.approvalBadgeStreamIds.size, 0);
+  });
+
+  it('does not expand a parent just because it is the active stream', () => {
+    const childStreamsByParent = new Map([['root', [stream('child', 'root')]]]);
+
+    const projection = project(
+      childStreamsByParent,
+      new Map([['child', streamState(STREAM_STATUS.RUNNING)]]),
+      new Map(),
+      new Set(),
+      'root',
+    );
+
+    assert.equal(projection.expandedParents.has('root'), false);
   });
 
   it('guards cycles while preserving the stream own activity', () => {
