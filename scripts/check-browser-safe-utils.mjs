@@ -73,6 +73,13 @@ function listSourceFiles(dir) {
  * Byte ranges of comments and string/template literals. A regex match whose
  * start index falls inside one of these ranges is prose or a string value,
  * not code, so it cannot be a real import.
+ *
+ * Known limitation: a template literal is masked as one unit, including any
+ * `${...}` substitution. Dynamic imports nested inside a template substitution
+ * are therefore not traversed. That pattern does not occur in the current
+ * frontends or reachable utils; if it ever does, the webview build itself will
+ * fail on the resulting Node builtin, so this is a guard gap rather than a
+ * silent build risk.
  */
 function maskedRanges(text) {
   const ranges = [];
@@ -151,8 +158,11 @@ function candidatesFor(base) {
     join(base, 'index.ts'),
     join(base, 'index.tsx'),
   ];
-  if (base.endsWith('.js') || base.endsWith('.jsx')) {
+  if (base.endsWith('.js')) {
     const stem = base.slice(0, -3);
+    candidates.push(`${stem}.ts`, `${stem}.tsx`);
+  } else if (base.endsWith('.jsx')) {
+    const stem = base.slice(0, -4);
     candidates.push(`${stem}.ts`, `${stem}.tsx`);
   }
   return candidates;
