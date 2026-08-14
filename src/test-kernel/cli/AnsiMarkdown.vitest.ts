@@ -158,6 +158,11 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('<div contenteditable>');
   });
 
+  it('rejects a long invalid valueless attribute without changing the text', () => {
+    const source = `<p${' '.repeat(20_000)}x>`;
+    expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(source);
+  });
+
   it.each([
     'Cost $5 <strong>today</strong>, then $10',
     'Cost $5 <strong>today</strong>, then ($10)',
@@ -233,6 +238,8 @@ describe('renderAnsiMarkdown', () => {
   it.each([
     ['$HOME <strong>or</strong> $x$', '$HOME **or** $x$'],
     ['$HOME then <strong>$a<b>c$</strong>', '$HOME then **$a<b>c$**'],
+    ['$HOME then <b>$a<p>c$</b>', '$HOME then **$a<p>c$**'],
+    ['$HOME then <i>$a<p>c$</i>', '$HOME then _$a<p>c$_'],
   ] as const)(
     'keeps a lone shell token separate from later math: %s',
     (source, expected) => {
@@ -244,6 +251,14 @@ describe('renderAnsiMarkdown', () => {
     expect(
       normalizeKnownHtmlForCliMarkdown('$AB <p>1$ <strong>and</strong> $y$'),
     ).toBe('$AB <p>1$ **and** $y$');
+  });
+
+  it('normalizes a wrapped shell token before later math', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '<strong>$HOME</strong> then <strong>$a<b>c$</strong>',
+      ),
+    ).toBe('**$HOME** then **$a<b>c$**');
   });
 
   it('normalizes HTML between same-line shell PID expansions', () => {

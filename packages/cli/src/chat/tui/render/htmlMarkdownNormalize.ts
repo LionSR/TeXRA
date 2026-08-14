@@ -16,9 +16,9 @@ const CURRENCY_BOUNDARY = String.raw`(?=[\s.,;:!?()[\]{}'"’”]|<\/[A-Za-z]|$)
 // from mathematical prose and would be removed from the transcript.
 const HTML_VALUELESS_ATTRIBUTE = String.raw`(?:allowfullscreen|async|autofocus|autoplay|checked|contenteditable|controls|default|defer|disabled|formnovalidate|hidden|inert|ismap|itemscope|loop|multiple|muted|nomodule|novalidate|open|playsinline|popover|readonly|required|reversed|selected)`;
 const HTML_ATTRIBUTE = String.raw`(?:[A-Za-z_:][A-Za-z0-9_.:-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>]+)|${HTML_VALUELESS_ATTRIBUTE})`;
-const HTML_ATTRIBUTES = String.raw`(?:\s+${HTML_ATTRIBUTE})*\s*`;
+const HTML_ATTRIBUTES = String.raw`(?:\s+${HTML_ATTRIBUTE})*`;
 const HTML_CODE_ELEMENT_RE = new RegExp(
-  `<code${HTML_ATTRIBUTES}>[\\s\\S]*?<\\/code>`,
+  `<code${HTML_ATTRIBUTES}\\s*>[\\s\\S]*?<\\/code>`,
   'giu',
 );
 const MARKDOWN_CODE_SPAN_RE = /(?<!`)(`+)(?!`)[\s\S]*?\1(?!`)/gu;
@@ -42,12 +42,20 @@ const SHELL_UNWRAPPED_PAIR_RE = new RegExp(
   `(?<![A-Za-z0-9_}>])\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}[^\\n$]*?\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
   'gu',
 );
+const SHELL_BEFORE_CLOSING_TAG_RE = new RegExp(
+  `(?<![A-Za-z0-9_}])\\$${SHELL_UNWRAPPED_PARAMETER}(?=<\\/(?:blockquote|strong|b|em|i|code|p|div|h[1-6])\\s*>)`,
+  'giu',
+);
 const SHELL_UNWRAPPED_TOKEN_RE = new RegExp(
   `(?<![A-Za-z0-9_}>])\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
   'gu',
 );
 const UNAMBIGUOUS_PRESENTATION_TAG_RE = new RegExp(
   `(?:<(?:blockquote|strong|em|code|div|h[1-6])${HTML_ATTRIBUTES}\\/?\\s*>|<\\/(?:blockquote|strong|em|code|div|h[1-6])\\s*>)`,
+  'iu',
+);
+const AMBIGUOUS_PRESENTATION_OPEN_AT_END_RE = new RegExp(
+  `<(b|i|p)${HTML_ATTRIBUTES}\\s*>\\s*$`,
   'iu',
 );
 const HEADING_TAG_RE = new RegExp(
@@ -94,12 +102,21 @@ function hasPresentationHtmlBeforeNextDollar(
 ): boolean {
   const start = offset + matchLength;
   const nextDollar = source.indexOf('$', start);
-  // A later complete dollar pair supplies the math span that this literal
-  // token must not absorb. One-letter tags remain deliberately ambiguous:
-  // `<p>`, `<b>`, `<i>`, and `<br>` commonly occur inside generated TeX.
-  if (nextDollar < 0 || !source.includes('$', nextDollar + 1)) return false;
+  // Two later dollar delimiters supply the candidate math span that this
+  // literal token must not absorb. Bare one-letter tags remain deliberately
+  // ambiguous, but a matched wrapper pair is presentation markup.
+  if (nextDollar < 0) return false;
+  const closingDollar = source.indexOf('$', nextDollar + 1);
+  if (closingDollar < 0) return false;
   const between = source.slice(start, nextDollar);
-  return UNAMBIGUOUS_PRESENTATION_TAG_RE.test(between);
+  if (UNAMBIGUOUS_PRESENTATION_TAG_RE.test(between)) return true;
+  const ambiguousOpen = AMBIGUOUS_PRESENTATION_OPEN_AT_END_RE.exec(between);
+  return (
+    ambiguousOpen?.[1] !== undefined &&
+    new RegExp(`^\\s*<\\/${ambiguousOpen[1]}\\s*>`, 'iu').test(
+      source.slice(closingDollar + 1),
+    )
+  );
 }
 
 // CLI presentation owns currency and shell syntax. Mask only their dollar
@@ -125,6 +142,7 @@ function protectLiteralDollarTokens(content: string): {
     PUNCTUATED_CURRENCY_TOKEN_RE,
     CURRENCY_BEFORE_CLOSING_TAG_RE,
     SHELL_UNWRAPPED_PAIR_RE,
+    SHELL_BEFORE_CLOSING_TAG_RE,
   ].reduce(
     (value, pattern) => value.replaceAll(pattern, protectDollars),
     content,
