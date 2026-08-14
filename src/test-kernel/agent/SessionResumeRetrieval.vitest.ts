@@ -1185,6 +1185,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         flowName: 'texra',
         shared: VALID_TOOL_USE_SHARED,
         createdAt: '2026-01-01T00:00:00.000Z',
+        // Cursor present so the version bound is the only failing constraint.
+        cursor: { nextNodeId: 'start' },
         nodes: [],
       },
     },

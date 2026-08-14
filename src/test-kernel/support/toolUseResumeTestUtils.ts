@@ -10,6 +10,7 @@ export function createToolUseResumeShared(
 ): PreparedShared {
   return {
     messages: [],
+    continuationGenerationId: '9c1de2ab-58bf-4f9f-9a86-0f39be0a7c11',
     shouldSkipCycle: false,
     stateSlices: {
       runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
