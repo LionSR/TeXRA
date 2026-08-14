@@ -62,9 +62,10 @@ wa-button[hidden] {
   outline-offset: calc(-1 * var(--focus-ring-offset));
 }
 
-/* Mirrors @shared/styles/litStyles.ts's animationStyles: same keyframe name so
-   a caller can override just the duration, as taskShell.css's
-   .task-environment-refresh does. */
+/* Named `spin` so a caller can override just the duration, as taskShell.css's
+   .task-environment-refresh does. This shell chrome sits outside the Lit
+   component tree, so it defines its own keyframe rather than sharing one
+   from @shared/styles. */
 @keyframes spin {
   from {
     transform: rotate(0deg);

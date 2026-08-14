@@ -1,4 +1,5 @@
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
 import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -60,24 +61,11 @@ export class CompactionActivity extends LitElement {
 
       .activity--running .icon {
         color: var(--wa-color-chart-blue);
-        animation: compaction-spin 1.2s linear infinite;
       }
 
       .label {
         min-width: 0;
         overflow-wrap: break-word;
-      }
-
-      @keyframes compaction-spin {
-        to {
-          transform: rotate(1turn);
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        .activity--running .icon {
-          animation: none;
-        }
       }
     `,
   ];
@@ -91,7 +79,11 @@ export class CompactionActivity extends LitElement {
       role="status"
       aria-live="polite"
     >
-      ${waIcon(ACTIVITY_ICON[this.status], { className: 'icon' })}
+      ${
+        this.status === 'running'
+          ? html`<wa-spinner class="icon"></wa-spinner>`
+          : waIcon(ACTIVITY_ICON[this.status], { className: 'icon' })
+      }
       <span class="label">${label}</span>
     </div>`;
   }
