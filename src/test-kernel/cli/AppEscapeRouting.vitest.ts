@@ -776,7 +776,9 @@ describe('App foreground Escape ownership', () => {
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
       stdin.write('preserved root draft');
-      await waitFor(() => currentFrame(stdout).includes('preserved root draft'));
+      await waitFor(() =>
+        currentFrame(stdout).includes('preserved root draft'),
+      );
 
       patchStream(CHILD, (slice) => ({
         ...slice,
@@ -787,7 +789,9 @@ describe('App foreground Escape ownership', () => {
       }));
       focusStream(CHILD);
       await waitFor(() => activeStreamId.get() === CHILD);
-      await waitFor(() => !currentFrame(stdout).includes('preserved root draft'));
+      await waitFor(
+        () => !currentFrame(stdout).includes('preserved root draft'),
+      );
 
       stdin.write('ignored printable submit\r');
       await sleep(30);
@@ -812,7 +816,9 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => foregroundReader.get() === undefined);
       stdin.write(ESC);
       await waitFor(() => activeStreamId.get() === ROOT);
-      await waitFor(() => currentFrame(stdout).includes('preserved root draft'));
+      await waitFor(() =>
+        currentFrame(stdout).includes('preserved root draft'),
+      );
       stdin.write('\r');
       await waitFor(() => onSubmit.mock.calls.length === 1);
 

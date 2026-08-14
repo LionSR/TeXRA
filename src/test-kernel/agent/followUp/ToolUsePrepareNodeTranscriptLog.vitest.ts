@@ -79,9 +79,9 @@ describe('ToolUsePrepareNode transcript logging (regression #7508)', () => {
     const services = buildServices({
       initialUserMessageForTranscript: undefined,
     });
-    vi
-      .mocked(services.modelCell.handler.initializeMessages)
-      .mockRejectedValue(new Error('boom'));
+    vi.mocked(services.modelCell.handler.initializeMessages).mockRejectedValue(
+      new Error('boom'),
+    );
     const node = new ToolUsePrepareNode().setServices(services);
 
     await expect(node.exec(undefined)).rejects.toThrow('boom');

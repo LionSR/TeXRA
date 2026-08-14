@@ -78,12 +78,10 @@ function gateClearStream(backend: RecordingTarget['backend']): () => void {
   const clearGate = new Promise<void>((resolve) => {
     releaseClear = resolve;
   });
-  vi.spyOn(backend.state, 'clearStream').mockImplementation(
-    async (stream) => {
-      await clearGate;
-      return clearStream(stream);
-    },
-  );
+  vi.spyOn(backend.state, 'clearStream').mockImplementation(async (stream) => {
+    await clearGate;
+    return clearStream(stream);
+  });
   return releaseClear;
 }
 

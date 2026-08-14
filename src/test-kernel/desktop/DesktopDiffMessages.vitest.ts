@@ -2,7 +2,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { loadSourceModule } from './loadSourceModule.ts';
 
-type DesktopDiffMessagesModule = typeof import('@desktop/shared/desktopDiffMessages');
+type DesktopDiffMessagesModule =
+  typeof import('@desktop/shared/desktopDiffMessages');
 
 let DesktopShowDiffMessageSchema!: DesktopDiffMessagesModule['DesktopShowDiffMessageSchema'];
 

@@ -432,7 +432,10 @@ describe('executeCliRequest', () => {
     expect(mocks.runAgent).toHaveBeenCalledWith(
       request,
       expect.objectContaining({
-        runtimeUnavailableTools: [...DEFAULT_RUNTIME_UNAVAILABLE_TOOLS, 'custom_tool'],
+        runtimeUnavailableTools: [
+          ...DEFAULT_RUNTIME_UNAVAILABLE_TOOLS,
+          'custom_tool',
+        ],
       }),
     );
   });

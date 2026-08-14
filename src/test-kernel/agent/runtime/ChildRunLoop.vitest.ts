@@ -1005,11 +1005,11 @@ describe('childRunLoop E2E fixtures', () => {
       mocks.leaseLossListener?.();
     });
 
-    startLoop(
-      { childStreamId, executionId },
-      strategy,
-      { childStream, agentName: 'fake-cli', recordCost: interruptAfterFailure },
-    );
+    startLoop({ childStreamId, executionId }, strategy, {
+      childStream,
+      agentName: 'fake-cli',
+      recordCost: interruptAfterFailure,
+    });
 
     await waitForLiveOwner(childStreamId);
     await rejectTurn(1, new Error('turn blew up'));

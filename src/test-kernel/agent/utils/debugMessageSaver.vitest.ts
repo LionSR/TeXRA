@@ -51,9 +51,10 @@ describe('maybeSaveDebugObject', () => {
     });
 
     const expectedDir = resolveRunStoragePath('run-42' as ExecutionId);
-    expect(
-      ensureDir.mock.calls.map(([relativePath]) => relativePath),
-    ).toEqual([RUNS_STORAGE_DIR, expectedDir]);
+    expect(ensureDir.mock.calls.map(([relativePath]) => relativePath)).toEqual([
+      RUNS_STORAGE_DIR,
+      expectedDir,
+    ]);
 
     const expectedRelativePath = resolveRunStoragePath(
       'run-42' as ExecutionId,
