@@ -1,8 +1,8 @@
 // Terminal feature discovery via the DA1-sentinel pattern.
 //
 // We write a batch of capability queries (Kitty keyboard protocol, DECRQM
-// for grapheme cluster mode, DECRQM for bracketed paste, OSC color reads)
-// followed by `CSI c` (Device Attributes 1). Every terminal answers DA1, so
+// for grapheme cluster mode, OSC color reads) followed by
+// `CSI c` (Device Attributes 1). Every terminal answers DA1, so
 // any feature whose reply lands before the DA1 response is supported.
 // There are no *per-capability* timeouts — only an outer 250ms safeguard for
 // terminals that fail to answer DA1 at all, so startup never blocks.
@@ -12,7 +12,7 @@
 //
 // This module is the source of truth for the `terminalCapabilities` signal
 // consumed by the notifier (capability-gating OSC 9 / 99 / BEL) and future
-// input-layer features (Kitty keyboard, bracketed paste).
+// input-layer features (Kitty keyboard).
 
 import { signal } from '@lit-labs/signals';
 
@@ -21,20 +21,14 @@ export interface TerminalCapabilities {
   readonly kittyKeyboard: boolean;
   /** Grapheme cluster mode (DECRQM mode 2027). */
   readonly graphemeClusters: boolean;
-  /** Bracketed paste mode (DECRQM mode 2004). */
-  readonly bracketedPaste: boolean;
   /** OSC 4 (color table) is honored — proxy for OSC-family support. */
   readonly oscColorReports: boolean;
-  /** Discovery actually ran (false when stdin/stdout isn't a TTY). */
-  readonly discovered: boolean;
 }
 
 const NONE: TerminalCapabilities = {
   kittyKeyboard: false,
   graphemeClusters: false,
-  bracketedPaste: false,
   oscColorReports: false,
-  discovered: false,
 };
 
 export const terminalCapabilities = signal<TerminalCapabilities>(NONE);
@@ -44,12 +38,8 @@ export const terminalCapabilities = signal<TerminalCapabilities>(NONE);
 const QUERIES = {
   kittyKeyboard: '[?u',
   graphemeClusters: '[?2027$p',
-  bracketedPaste: '[?2004$p',
   oscColorReports: ']4;0;?',
-} as const satisfies Record<
-  keyof Omit<TerminalCapabilities, 'discovered'>,
-  string
->;
+} as const satisfies Record<keyof TerminalCapabilities, string>;
 
 const DA1_SENTINEL = '[c';
 
@@ -63,8 +53,6 @@ const RESPONSE_MARKERS = {
   kittyKeyboard: /\[\?[\d;]*u/,
   // DECRPM grapheme clusters: `CSI ? 2027 ; <value> $ y`
   graphemeClusters: /\[\?2027;[01]\$y/,
-  // DECRPM bracketed paste: `CSI ? 2004 ; <value> $ y`
-  bracketedPaste: /\[\?2004;[01]\$y/,
   // OSC 4 color: `OSC 4 ; <index> ; rgb:... BEL` (or ST)
   oscColorReports: /\]4;0;rgb:/,
 } as const satisfies Record<keyof typeof QUERIES, RegExp>;
@@ -130,10 +118,8 @@ export async function discoverTerminalCapabilities(
   if (!wasRaw) streams.stdin.setRawMode?.(false);
 
   const caps: TerminalCapabilities = {
-    discovered: true,
     kittyKeyboard: RESPONSE_MARKERS.kittyKeyboard.test(result),
     graphemeClusters: RESPONSE_MARKERS.graphemeClusters.test(result),
-    bracketedPaste: RESPONSE_MARKERS.bracketedPaste.test(result),
     oscColorReports: RESPONSE_MARKERS.oscColorReports.test(result),
   };
   terminalCapabilities.set(caps);

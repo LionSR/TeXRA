@@ -84,7 +84,7 @@ jobs:
           # webview frontends, the settings view, extension-host UI orchestration
           # (packages/extension/src/frontend/), and the shared webview base classes.
           grep_files '^(src|packages/extension/src)/(webview|settingsView|frontend)/' && labels+=('area:webview') || true
-          grep_files '^src/common/webview/' && labels+=('area:webview') || true
+          grep_files '^packages/extension/src/common/webview/' && labels+=('area:webview') || true
           grep_files '^(docs/|README\.md|CHANGELOG\.md|resources/walkthroughs/|packages/extension/resources/walkthroughs/)' && labels+=('area:docs') || true
           grep_files '^\.github/workflows/' && labels+=('area:ci') || true
           # Build/lint/tsconfig at the repo root also belong to area:ci.

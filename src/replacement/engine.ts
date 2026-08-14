@@ -240,15 +240,12 @@ export function applyReplacements(
   text: string,
   replacements: ReplacementCategory | ReplacementCategory[],
   options?: {
-    /** Whether to apply Unicode-to-LaTeX within math environments (defaults to true) */
-    processMathUnicode?: boolean;
     /** Whether to run trailing whole-document cleanup passes (defaults to true). */
     cleanupPasses?: boolean;
   },
 ): string {
-  // Apply Unicode replacements in math environments unless disabled
-  let result =
-    options?.processMathUnicode === false ? text : replaceMathUnicode(text);
+  // Apply Unicode replacements in math environments first.
+  let result = replaceMathUnicode(text);
 
   const categories = Array.isArray(replacements)
     ? replacements

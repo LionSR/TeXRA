@@ -62,8 +62,6 @@ const GhReviewSchema = z.looseObject({
 export type GhReview = z.infer<typeof GhReviewSchema>;
 
 const GhCheckRunOutputSchema = z.looseObject({
-  title: z.string().nullish(),
-  summary: z.string().nullish(),
   /** Treat undefined / null / 0 as "no annotations to fetch". */
   annotations_count: z.number().nullish(),
 });
@@ -95,8 +93,6 @@ export const GhCheckAnnotationSchema = z.looseObject({
   annotation_level: z.string().nullable(),
   title: z.string().nullish(),
   message: z.string(),
-  raw_details: z.string().nullish(),
-  blob_href: z.string().nullish(),
 });
 export type GhCheckAnnotation = z.infer<typeof GhCheckAnnotationSchema>;
 
