@@ -73,6 +73,7 @@ describe('long-running model transport', () => {
     expect(new TextDecoder().decode(init?.body as ArrayBuffer)).toBe(
       JSON.stringify({ prompt: 'hello' }),
     );
+    expect(init?.duplex).toBe('half');
     stub.composed?.dispatch(
       { method: 'GET', origin: 'https://example.test', path: '/' },
       {} as never,

@@ -12,20 +12,15 @@ const MODEL_STREAM_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MODEL_RESPONSE_HEADERS_TIMEOUT_MS = 10 * 60 * 1000;
 type UploadCompatibleFetch = typeof fetch & { Response: typeof Response };
 
-/** Node/undici require this for stream bodies; SDKs omit it inconsistently. */
-function requestInitWithDuplex(init?: RequestInit): UndiciRequestInit {
-  const next = { ...(init ?? {}) } as UndiciRequestInit;
-  if (next.body != null && next.duplex == null) {
-    next.duplex = 'half';
-  }
-  return next;
-}
-
 async function normalizeModelRequest(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<[UndiciRequestInfo, UndiciRequestInit]> {
-  const requestInit = requestInitWithDuplex(init);
+  // Node/undici require duplex for any non-null body; SDKs omit it inconsistently.
+  const requestInit = { ...(init ?? {}) } as UndiciRequestInit;
+  if (requestInit.body != null && requestInit.duplex == null) {
+    requestInit.duplex = 'half';
+  }
   if (!(input instanceof Request)) {
     if (init?.body instanceof FormData) {
       // OpenAI builds multipart bodies with the host-global FormData, while
