@@ -73,11 +73,14 @@ export class CompactionActivity extends LitElement {
       }
 
       /* wa-spinner animates inside its own shadow root, so the wildcard
-         reduced-motion rule in designTokens can't reach it; --speed is a
-         custom property and inherits through the shadow boundary instead. */
+         reduced-motion rule in designTokens can't reach it. Its rotation
+         lives on the svg exposed as ::part(base); stop it directly rather
+         than approximating "off" through the --speed duration, which would
+         leave the animation looping at an imperceptibly short but nonzero
+         duration instead of actually stopping. */
       @media (prefers-reduced-motion: reduce) {
-        wa-spinner {
-          --speed: 0.01ms;
+        wa-spinner::part(base) {
+          animation: none;
         }
       }
     `,
