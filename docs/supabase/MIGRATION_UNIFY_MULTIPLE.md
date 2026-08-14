@@ -33,10 +33,10 @@ Run all of these from a workstation logged into the production Supabase project.
 2. **Verify the generated SQL** matches the source of truth:
 
    ```bash
-   npm run sync:remote-agents -- --check
+   npm run sync:remote-agents
    ```
 
-   Should report "up to date." If it fails, run `npm run sync:remote-agents` (no flag) and commit before continuing.
+   Prints the catalog SQL to stdout. Review the upserts and any `DELETE`s before applying.
 
 3. **Build and validate the new extension locally**. Run an end-to-end test of `apply` on a 2-file input pointing at the production Supabase project (the new YAMLs are already deployed locally via `prompts/agents/remote/`). Confirm the prompt rendering is correct, all 9 unified agents work.
 
@@ -80,10 +80,11 @@ This is safe to do **before** the SQL runs because:
 
 ### Step 2 — Apply the SQL
 
-Run `docs/supabase/SYNC_REMOTE_AGENTS.sql` against the production project. Either:
+```bash
+npm run sync:remote-agents -- --apply
+```
 
-- Paste it into the Supabase Studio SQL editor and execute, OR
-- Use `mcp__supabase__execute_sql` chunk-by-chunk (each statement is independent so this works fine).
+Needs a `supabase link`ed checkout, or `SUPABASE_DB_URL`, or `SUPABASE_ACCESS_TOKEN` plus `SUPABASE_PROJECT_REF`. Alternatively, paste the generated SQL (`npm run sync:remote-agents`) into the Supabase Studio SQL editor.
 
 Verify after:
 
