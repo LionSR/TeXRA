@@ -1,14 +1,7 @@
 import { createLog } from '@logger/logUtils';
-import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
+import { projectWorkflowCallEntry } from '@model/projectWorkflowCallEntry';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
-  WorkflowCallProgressSchema,
-  type ProgressViewOutboundMessage,
-  type StreamLogEntry,
-  type StreamTabId,
-} from '@shared/schemas';
+import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
 import { StreamLogDeltaBuffer } from '@transcript/StreamLog';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { createFlushableDebounce, type FlushableDebounce } from '@utils/core';
@@ -16,30 +9,6 @@ import { createFlushableDebounce, type FlushableDebounce } from '@utils/core';
 const log = createLog('WebviewBridge');
 
 const FRAME_INTERVAL_MS = 16;
-
-/**
- * Webview-facing copy of one transcript entry. The stream-log store keeps the
- * canonical `WorkflowCallProgress.model` id; only the copy that crosses the
- * `postMessage` boundary projects it through the runtime model registry. This
- * mirrors `formatCliWorkflowCallLine` while keeping `@model/runtimeModelRegistry`
- * out of the browser frontend import graph.
- */
-function projectWorkflowCallEntry(entry: StreamLogEntry): StreamLogEntry {
-  if (
-    entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
-    entry.messageType !== MESSAGE_TYPES.WORKFLOW_TASK
-  ) {
-    return entry;
-  }
-  const data = entry.data;
-  if (typeof data !== 'object' || data === null) return entry;
-  const call = WorkflowCallProgressSchema.safeParse(data);
-  if (!call.success) return entry;
-  if (!('model' in call.data) || call.data.model === undefined) return entry;
-  const model = getRuntimeModelLabel(call.data.model);
-  if (model === call.data.model) return entry;
-  return { ...entry, data: { ...data, model } };
-}
 
 export type ProgressViewMessageSender = (
   message: ProgressViewOutboundMessage,
