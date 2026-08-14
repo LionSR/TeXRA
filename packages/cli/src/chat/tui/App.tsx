@@ -118,7 +118,7 @@ interface InputEventEmitterLike {
 // list-root row also owns session-wide (stream-less) approvals.
 function focusStreamAndPromoteApprovals(
   streamId: StreamTabId,
-  visibleListRootStreamId = rootStreamIdSignal.get(),
+  visibleListRootStreamId: StreamTabId | undefined,
 ): void {
   focusStream(streamId);
   promoteApprovalsForStream(streamId, {
