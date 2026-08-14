@@ -1324,6 +1324,37 @@ describe('CLI child list display model', () => {
     ).toBe(true);
   });
 
+  it('keeps a scoped-root approval visible when its label truncates', async () => {
+    const run = 'approval-run-with-a-deliberately-long-id' as StreamTabId;
+    const rootSlice = workflowAgentSlice(run, {
+      agent: 'A scoped conversation with a deliberately long label',
+      status: STREAM_PHASE.RUNNING,
+    });
+    const output = await renderSubagentList(
+      {
+        listRootStreamId: run,
+        maxRows: 3,
+        pendingApprovals: new Map([[run, ['externalInquiry']]]),
+        sessions: [
+          {
+            id: run,
+            label: 'A scoped conversation with a deliberately long label',
+            active: true,
+            slice: rootSlice,
+          },
+        ],
+      },
+      18,
+      { until: (frame) => frame.includes('inquiry') },
+    );
+
+    expect(output).toContain(' · inquiry');
+    expect(output).not.toContain('deliberately');
+    expect(
+      output.split('\n').every((line) => textDisplayWidth(line) <= 18),
+    ).toBe(true);
+  });
+
   it('keeps session-wide approvals visible in a workflow dashboard', async () => {
     const sessionRoot = 'session-root' as StreamTabId;
     const run = 'approval-run' as StreamTabId;
