@@ -1,15 +1,31 @@
-// Local imports - trace and types
+// Local imports - agent runtime
+//
+// Values, and types used only inside function bodies, come through the curated
+// `@agent/runtime` barrel rather than by module path, so this package stops
+// pinning the runtime's internal file layout — the same fold-in the three hosts
+// took in #10011. These never reach the emitted declarations, so they carry no
+// provider-type leak risk.
 import { createChannelTrace, type AgentEvent } from '@agent/trace';
-import type { AgentRunHandle as RuntimeAgentRunHandle } from '@agent/runtime/ExecutionHandle';
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
-import type { HostInteractions as RuntimeHostInteractions } from '@agent/runtime/HostInteractions';
+import { loadAgents, resolveAgent } from '@agent/index';
+import {
+  runAgent as runValidatedAgent,
+  SessionHandle as RuntimeSessionHandle,
+  type AgentRunHandle as RuntimeAgentRunHandle,
+  type HostInteractions as RuntimeHostInteractions,
+} from '@agent/runtime';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 
-// Local imports - runtime
+// `AgentFlowResult` is deliberately sourced from its own module rather than
+// from the `@agent/runtime` barrel above. It appears in this package's PUBLIC
+// declarations (`AgentRun.result`, and the re-export below), and declaration
+// emit follows whichever module a public type comes from: taking it from the
+// barrel pulls the barrel's whole `.d.ts` graph — model handlers included —
+// into the published type surface, which trips the provider-type leak check in
+// `scripts/validate-artifacts.mjs` (`@anthropic-ai/sdk`).
+import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+
+// Local imports - config and host services
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { loadAgents, resolveAgent } from '@agent/index/agentRegistry';
-import { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
-import { runAgent as runValidatedAgent } from '@agent/runtime/runAgent';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeHost';
 import type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
