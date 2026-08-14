@@ -59,12 +59,9 @@
       "@agent/core/definition/AgentConfig",
       "@agent/core/definition/AgentDataclass",
       "@agent/core/tools/ToolTypes",
-      "@agent/index/agentRegistry",
+      "@agent/index",
+      "@agent/runtime",
       "@agent/runtime/AgentFlowResult",
-      "@agent/runtime/ExecutionHandle",
-      "@agent/runtime/HostInteractions",
-      "@agent/runtime/runAgent",
-      "@agent/runtime/SessionHandle",
       "@agent/trace"
     ]
   }
