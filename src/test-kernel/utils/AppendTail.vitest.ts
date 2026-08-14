@@ -3,10 +3,6 @@
 import { describe, expect, it } from 'vitest';
 import { appendHead, appendTail } from '@utils/text/appendTail';
 
-// ---------------------------------------------------------------------------
-// AppendTail
-// ---------------------------------------------------------------------------
-
 describe('appendTail', () => {
   it('returns the current string when the chunk is empty', () => {
     expect(appendTail('abc', '', 10)).toBe('abc');
@@ -62,10 +58,6 @@ describe('appendTail', () => {
     expect(out.charCodeAt(0)).toBeLessThan(0xd800);
   });
 });
-
-// ---------------------------------------------------------------------------
-// AppendHead
-// ---------------------------------------------------------------------------
 
 describe('appendHead', () => {
   it('returns the current string when the chunk is empty', () => {

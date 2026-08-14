@@ -107,12 +107,7 @@ async function resolveDelegateAgent(extraTools: ToolInput[] = []) {
 
 describe('delegation agent availability', () => {
   it('formats an agent list with descriptions and per-agent tools', () => {
-    expect(
-      formatAgentList([
-        { name: 'research', description: 'Derive and verify.' },
-        { name: 'numerics', description: 'Run simulations.', tools: ['bash'] },
-      ]),
-    ).toBe(
+    expect(formatAgentList(RESEARCH_NUMERICS_AGENTS)).toBe(
       [
         '- research: Derive and verify.',
         '- numerics: Run simulations.',

@@ -17,6 +17,13 @@ import * as logger from '@logger/logUtils';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { createDeferred } from '@test/support/asyncTestUtils';
 
+const SUPABASE_URL = 'https://example.supabase.co';
+const PUBLIC_KEY = 'public-key';
+
+function initializeSupabase(secrets: SessionSecretStore): void {
+  SupabaseClient.initialize(SUPABASE_URL, PUBLIC_KEY, secrets);
+}
+
 async function withRelayTokenEnv(
   token: string,
   run: () => Promise<void>,
@@ -218,11 +225,7 @@ describe('SupabaseClient', () => {
       whenReady: () => readiness.promise,
     });
 
-    SupabaseClient.initialize(
-      'https://example.supabase.co',
-      'public-key',
-      new FakeSecrets(),
-    );
+    initializeSupabase(new FakeSecrets());
     SupabaseClient.setAuthProvider(provider);
 
     let settled = false;
@@ -246,11 +249,7 @@ describe('SupabaseClient', () => {
       },
     });
 
-    SupabaseClient.initialize(
-      'https://example.supabase.co',
-      'public-key',
-      new FakeSecrets(),
-    );
+    initializeSupabase(new FakeSecrets());
     SupabaseClient.setAuthProvider(provider);
 
     assert.equal(await SupabaseClient.isReady(), false);
@@ -291,7 +290,6 @@ describe('SupabaseClient', () => {
 });
 
 describe('SupabaseClient PKCE flow state', () => {
-  const SUPABASE_URL = 'https://example.supabase.co';
   const VERIFIER_KEY = `${SUPABASE_GOTRUE_STORAGE_KEY}-code-verifier`;
 
   afterEach(() => {
@@ -344,7 +342,7 @@ describe('SupabaseClient PKCE flow state', () => {
 
   it('persists only the flow state, never the session slot', async () => {
     const secrets = new FakeSecrets();
-    SupabaseClient.initialize(SUPABASE_URL, 'public-key', secrets);
+    initializeSupabase(secrets);
 
     await startSignIn();
 
@@ -363,7 +361,7 @@ describe('SupabaseClient PKCE flow state', () => {
 
   it('completes a callback delivered to a different client instance', async () => {
     const secrets = new FakeSecrets();
-    SupabaseClient.initialize(SUPABASE_URL, 'public-key', secrets);
+    initializeSupabase(secrets);
     await startSignIn();
     // GoTrue JSON-encodes every stored value; the slot holds the verifier
     // alone, or `verifier/redirectType` for a recovery link.
@@ -377,7 +375,7 @@ describe('SupabaseClient PKCE flow state', () => {
     // that never generated a verifier of its own.
     const exchangeBody = stubCodeExchange();
     SupabaseClient.resetForTests();
-    SupabaseClient.initialize(SUPABASE_URL, 'public-key', secrets);
+    initializeSupabase(secrets);
 
     const { data, error } =
       await SupabaseClient.getClient().auth.exchangeCodeForSession('auth-code');
@@ -408,7 +406,7 @@ describe('SupabaseClient PKCE flow state', () => {
       },
       delete: async () => {},
     };
-    SupabaseClient.initialize(SUPABASE_URL, 'public-key', secrets);
+    initializeSupabase(secrets);
 
     await startSignIn();
 

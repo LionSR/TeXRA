@@ -5,8 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { WorktreeMemento } from '@common/state/worktreeMemento';
 
 class FakeMemento {
-  readonly writes: Array<[string, unknown]> = [];
-
   constructor(private readonly values = new Map<string, unknown>()) {}
 
   keys(): readonly string[] {
@@ -20,7 +18,6 @@ class FakeMemento {
   }
 
   update(key: string, value: unknown): Thenable<void> {
-    this.writes.push([key, value]);
     if (value === undefined) {
       this.values.delete(key);
     } else {

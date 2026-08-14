@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { flowKey } from '@agent/node/persistedFlow';
@@ -101,6 +101,21 @@ async function seedSidecarFk(
     ownedExecutionId,
   );
   await snapshots.flush();
+}
+
+/**
+ * Mocks a pending workspace-storage root change, returning the commit mock so
+ * callers can assert whether it was invoked.
+ */
+function mockPendingWorkspaceChange(
+  opts: { pending?: boolean; commit?: boolean } = {},
+): Mock<() => boolean> {
+  const commitWorkspaceStorageChange = vi.fn(() => opts.commit ?? true);
+  Object.assign(platform().storage, {
+    hasPendingWorkspaceStorageChange: () => opts.pending ?? true,
+    commitWorkspaceStorageChange,
+  });
+  return commitWorkspaceStorageChange;
 }
 
 afterEach(async () => {
@@ -457,12 +472,7 @@ describe('SessionHandle restart repair', () => {
   it('does not commit a new root when the old transcript flush fails', async () => {
     const transcripts = await StreamLogStore.open();
     const session = openDeferredSession(transcripts);
-    const storage = platform().storage;
-    const commitWorkspaceStorageChange = vi.fn(() => true);
-    Object.assign(storage, {
-      hasPendingWorkspaceStorageChange: () => true,
-      commitWorkspaceStorageChange,
-    });
+    const commitWorkspaceStorageChange = mockPendingWorkspaceChange();
     const flushError = new Error('old transcript writes remain unresolved');
     vi.spyOn(transcripts, 'flush').mockRejectedValue(flushError);
     const reload = vi.spyOn(transcripts, 'reload');
@@ -478,11 +488,7 @@ describe('SessionHandle restart repair', () => {
   it('does not commit a new root after disposal during the old-root flush', async () => {
     const transcripts = await StreamLogStore.open();
     const session = openDeferredSession(transcripts);
-    const commitWorkspaceStorageChange = vi.fn(() => true);
-    Object.assign(platform().storage, {
-      hasPendingWorkspaceStorageChange: () => true,
-      commitWorkspaceStorageChange,
-    });
+    const commitWorkspaceStorageChange = mockPendingWorkspaceChange();
     let finishFlush: (() => void) | undefined;
     const flushBlocked = new Promise<void>((resolve) => {
       finishFlush = resolve;
@@ -641,11 +647,9 @@ describe('SessionHandle restart repair', () => {
   it('skips replacement when the workspace storage root is unchanged', async () => {
     const transcripts = await StreamLogStore.open();
     const session = openDeferredSession(transcripts);
-    const storage = platform().storage;
-    const commitWorkspaceStorageChange = vi.fn(() => false);
-    Object.assign(storage, {
-      hasPendingWorkspaceStorageChange: () => false,
-      commitWorkspaceStorageChange,
+    const commitWorkspaceStorageChange = mockPendingWorkspaceChange({
+      pending: false,
+      commit: false,
     });
     const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
 
@@ -659,11 +663,7 @@ describe('SessionHandle restart repair', () => {
     const liveExecutionId = 'workspace-disposed' as ExecutionId;
     const transcripts = await StreamLogStore.open();
     const session = openDeferredSession(transcripts);
-    const commitWorkspaceStorageChange = vi.fn(() => true);
-    Object.assign(platform().storage, {
-      hasPendingWorkspaceStorageChange: () => true,
-      commitWorkspaceStorageChange,
-    });
+    const commitWorkspaceStorageChange = mockPendingWorkspaceChange();
     await acquireFreshExecutionLease(liveExecutionId);
 
     try {

@@ -98,13 +98,7 @@ describe('install-github-action command', () => {
       'https://github.com/example/project.git',
     );
 
-    const result = await runCli([
-      '--cwd',
-      repo,
-      'install-github-action',
-      '--no-pr',
-      '--no-color',
-    ]);
+    const result = await runInstall(repo);
 
     expect(result.exitCode).toBe(CliExitCode.Success);
     expect(browserMocks.tryOpenBrowser).toHaveBeenCalledWith(

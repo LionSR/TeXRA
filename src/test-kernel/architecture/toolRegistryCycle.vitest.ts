@@ -56,7 +56,7 @@ function defineToolModules(): string[] {
     .filter((file) =>
       readFileSync(`${REPO_ROOT}/${file}`, 'utf8').includes('defineTool('),
     )
-    .sort();
+    .toSorted();
 }
 
 async function valueClosure(entry: string): Promise<string[]> {
@@ -104,7 +104,7 @@ describe('tool module closures', () => {
           files.includes(TOOL_REGISTRY),
       )
       .map(([entry]) => entry)
-      .sort();
+      .toSorted();
 
     expect(offenders).toEqual([]);
   });

@@ -168,12 +168,7 @@ describe('Node manual retry', () => {
   it('returns success from the single approved attempt', async () => {
     const node = new ScriptedRetryNode(
       3,
-      [
-        new Error('failure 1'),
-        new Error('failure 2'),
-        new Error('failure 3'),
-        'completed',
-      ],
+      [...failureSequence(3), 'completed'],
       [true],
     );
 

@@ -130,10 +130,9 @@ function streamEntries(): readonly ConversationEntry[] {
 }
 
 function expectOutputOrder(output: string, markers: readonly string[]): void {
-  for (const [index, marker] of markers.entries()) {
-    if (index === 0) continue;
+  for (let index = 1; index < markers.length; index++) {
     expect(output.indexOf(markers[index - 1])).toBeLessThan(
-      output.indexOf(marker),
+      output.indexOf(markers[index]),
     );
   }
 }

@@ -18,7 +18,6 @@ import {
   createOutputFile,
   createWorkflowConfig,
 } from '../support/ProgressControllerHarnesses';
-
 import type * as vscode from 'vscode';
 
 const mocks = vi.hoisted(() => ({

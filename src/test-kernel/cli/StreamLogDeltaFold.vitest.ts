@@ -376,6 +376,16 @@ function configureStreams(config: StreamConfig): void {
   }
 }
 
+/** Subscribe for the duration of `fn`, disposing even if an assertion throws. */
+function withStreamSubscription(fn: () => void): void {
+  const dispose = subscribeStreamLog();
+  try {
+    fn();
+  } finally {
+    dispose();
+  }
+}
+
 describe('transcript fold vs from-scratch oracle', () => {
   beforeEach(async () => {
     await defaultSession().transcripts.clear();
@@ -392,8 +402,7 @@ describe('transcript fold vs from-scratch oracle', () => {
   )(
     'folds identically to the oracle: $config.name (seed $seed)',
     ({ config, seed }) => {
-      const dispose = subscribeStreamLog();
-      try {
+      withStreamSubscription(() => {
         const rng = createRng(seed);
         const ops = new MirroredOps(rng);
         configureStreams(config);
@@ -434,15 +443,12 @@ describe('transcript fold vs from-scratch oracle', () => {
         // stream A folds every step after its first sync's rebuild.
         const after = transcriptFoldCountersForTest();
         expect(after.folds - before.folds).toBeGreaterThanOrEqual(STEPS - 1);
-      } finally {
-        dispose();
-      }
+      });
     },
   );
 
   it('projects the compact unfocused-workflow selection identically', () => {
-    const dispose = subscribeStreamLog();
-    try {
+    withStreamSubscription(() => {
       const rng = createRng(4242);
       const ops = new MirroredOps(rng);
       configureStreams(CONFIGS[1]);
@@ -457,14 +463,11 @@ describe('transcript fold vs from-scratch oracle', () => {
         ops.step();
         syncBothAndCompare(step, ' (compact)');
       }
-    } finally {
-      dispose();
-    }
+    });
   });
 
   it('folds a hidden workflow-attempt marker into projection state', () => {
-    const dispose = subscribeStreamLog();
-    try {
+    withStreamSubscription(() => {
       configureStreams(CONFIGS[1]);
       appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
         id: 'workflow-attempt-current',
@@ -511,9 +514,7 @@ describe('transcript fold vs from-scratch oracle', () => {
       expect(invalidSlice?.workflowAttemptId).toBeUndefined();
       expect(invalidSlice?.workflowAttemptBoundaryDeclared).toBe(true);
       expect(invalidSlice?.entries).toEqual([]);
-    } finally {
-      dispose();
-    }
+    });
   });
 
   it('does not settle a running compaction on a turn-boundary forceFinal', () => {
@@ -522,8 +523,7 @@ describe('transcript fold vs from-scratch oracle', () => {
     // from the real lifecycle phase — a forceFinal while a compaction is
     // still running must not record it as interrupted, or the later
     // completion event lands beyond the settlement boundary and is ignored.
-    const dispose = subscribeStreamLog();
-    try {
+    withStreamSubscription(() => {
       const store = defaultSession().transcripts;
       configureStreams(CONFIGS[0]);
       activeStreamId.set(undefined);
@@ -591,9 +591,7 @@ describe('transcript fold vs from-scratch oracle', () => {
       expect(done?.text).toBe('Context compacted');
       expect(done?.finalized).toBe(true);
       expect(streams.get().get(FOLD_STREAM)?.compactingActive).toBe(false);
-    } finally {
-      dispose();
-    }
+    });
   });
 
   it('recovers from a delta gap by rebuilding through the oracle path', () => {

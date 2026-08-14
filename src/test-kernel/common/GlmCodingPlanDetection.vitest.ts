@@ -24,14 +24,6 @@ const FIVE_HOUR_LIMIT_BODY = {
   },
 } as const;
 
-/** The real GLM Coding Plan error: a UTC+8 China-time reset timestamp. */
-const CST_TIMESTAMP_BODY = {
-  error: {
-    code: '1308',
-    message: '已达到 5 小时的使用上限。您的限额将在 2026-08-08 11:32:36 重置。',
-  },
-} as const;
-
 /** Build a UTC+8 reset timestamp a fixed window in the future. */
 function futureCstTimestampBody(minutesFromNow: number): {
   error: { code: string; message: string };

@@ -10,6 +10,7 @@ import { ToolUseAgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import * as AgentExecution from '@agent/runtime/executeAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import * as SessionResumeRetrieval from '@agent/runtime/SessionResumeRetrieval';
+import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import * as AgentRunner from '@agent/runtime/runAgent';
 import { ResumeAdmissionCancelledError } from '@agent/runtime/resumeAdmission';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
@@ -69,6 +70,17 @@ function completedResult(): ResultEvent {
     agentName: 'proofreader',
     category: 'workflow',
     isSubagent: false,
+  };
+}
+
+function completedRunResult(): AgentFlowResult {
+  return {
+    executionId,
+    streamId: stream,
+    category: 'workflow',
+    outcome: RUN_OUTCOME.COMPLETED,
+    outputs: [],
+    compileFailures: [],
   };
 }
 
@@ -160,14 +172,7 @@ describe('desktop process resume owner', () => {
   beforeEach(() => {
     retrieveSessionResumeData.mockReset();
     resumeToolUseFromResumeData.mockReset();
-    runAgent.mockReset().mockResolvedValue({
-      executionId,
-      streamId: stream,
-      category: 'workflow',
-      outcome: RUN_OUTCOME.COMPLETED,
-      outputs: [],
-      compileFailures: [],
-    });
+    runAgent.mockReset().mockResolvedValue(completedRunResult());
   });
 
   it('resumes while no BrowserWindow presentation exists', async () => {
@@ -328,14 +333,7 @@ describe('desktop process resume owner', () => {
       if ((await options.canAcquireResumeLease?.()) === false) {
         throw new ResumeAdmissionCancelledError(executionId);
       }
-      return {
-        executionId,
-        streamId: stream,
-        category: 'workflow',
-        outcome: RUN_OUTCOME.COMPLETED,
-        outputs: [],
-        compileFailures: [],
-      };
+      return completedRunResult();
     });
 
     await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);

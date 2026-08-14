@@ -66,6 +66,18 @@ const WORKFLOW_CONFIG: AgentConfig = {
   ...CONFIG,
   agentCategory: AgentCategory.Workflow,
 };
+
+function structuredOutputConfig(): AgentConfig {
+  return AgentConfigSchema.parse({
+    ...CONFIG,
+    outputSchema: {
+      type: 'object',
+      properties: { answer: { type: 'string' } },
+      required: ['answer'],
+    },
+  });
+}
+
 const TOOL_USE_SETTING = AgentToolUseSettingSchema.parse({});
 const TOOL_USE_PROMPT = AgentPromptSchema.parse({});
 const ACTIVE_COMPATIBILITY_KEY = 'ModelHandlerOpenAIResponse';
@@ -773,14 +785,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const executionId = 'abc-flow-terminal-tool-response' as ExecutionId;
     const streamId =
       'chat@gpt54#abc-flow-terminal-tool-response' as StreamTabId;
-    const config = AgentConfigSchema.parse({
-      ...CONFIG,
-      outputSchema: {
-        type: 'object',
-        properties: { answer: { type: 'string' } },
-        required: ['answer'],
-      },
-    });
+    const config = structuredOutputConfig();
 
     const result = await runPersistedFlow(executionId, streamId, undefined, {
       config,
@@ -1094,14 +1099,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       'chat@gpt54#abc-flow-structured-output-and-teardown-failure' as StreamTabId;
     const snapshot = {
       ...buildToolUseResumeData(executionId, streamId),
-      agentConfig: AgentConfigSchema.parse({
-        ...CONFIG,
-        outputSchema: {
-          type: 'object',
-          properties: { answer: { type: 'string' } },
-          required: ['answer'],
-        },
-      }),
+      agentConfig: structuredOutputConfig(),
     };
     // A terminal cursor makes the resumed flow exit COMPLETE without stepping
     // any node, so the run completes without a structured result.

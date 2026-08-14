@@ -42,7 +42,6 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
   const globalState = options.globalState ?? new FakeStateStore();
   const posted: unknown[] = [];
   const opened: string[] = [];
-  const revealed: string[] = [];
   const infoMessages: string[] = [];
   const errorMessages: string[] = [];
   const confirmed: string[] = [];
@@ -77,9 +76,7 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
       openPath: async (filePath) => {
         opened.push(filePath);
       },
-      revealPath: async (filePath) => {
-        revealed.push(filePath);
-      },
+      revealPath: async () => undefined,
     },
     renderer: { postToRenderer: (message) => posted.push(message) },
     prompts: {
@@ -113,7 +110,6 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
     infoMessages,
     opened,
     posted,
-    revealed,
     workspaceState,
   };
 }

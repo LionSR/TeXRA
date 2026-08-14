@@ -22,10 +22,10 @@ import {
   buildCodexMcpToolLog,
   buildCodexThreadToolLog,
   buildCodexTodoToolLog,
-  CODEX_AGENT_NAME,
-  CODEX_DISPLAY_MODEL,
   buildCodexTurnToolLog,
   buildCodexUsageStats,
+  CODEX_AGENT_NAME,
+  CODEX_DISPLAY_MODEL,
 } from '@tools/codexShared';
 
 describe('buildCodexConfig', () => {

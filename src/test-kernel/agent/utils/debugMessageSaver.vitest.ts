@@ -1,7 +1,6 @@
-import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
 
-import { describe, it, afterEach, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentTrace } from '@agent/trace';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
@@ -52,23 +51,21 @@ describe('maybeSaveDebugObject', () => {
     });
 
     const expectedDir = resolveRunStoragePath('run-42' as ExecutionId);
-    assert.deepEqual(
+    expect(
       ensureDir.mock.calls.map(([relativePath]) => relativePath),
-      [RUNS_STORAGE_DIR, expectedDir],
-    );
+    ).toEqual([RUNS_STORAGE_DIR, expectedDir]);
 
     const expectedRelativePath = resolveRunStoragePath(
       'run-42' as ExecutionId,
       'response.json',
     );
-    assert.equal(writeStorage.mock.calls.length, 1);
-    assert.equal(writeStorage.mock.calls[0]?.[0], expectedRelativePath);
-    assert.equal(writeWorkspace.mock.calls.length, 0);
+    expect(writeStorage.mock.calls.length).toBe(1);
+    expect(writeStorage.mock.calls[0]?.[0]).toBe(expectedRelativePath);
+    expect(writeWorkspace.mock.calls.length).toBe(0);
 
-    assert.equal(info.mock.calls.length, 1);
-    assert.equal(error.mock.calls.length, 0);
-    assert.equal(
-      info.mock.calls[0]?.[0],
+    expect(info.mock.calls.length).toBe(1);
+    expect(error.mock.calls.length).toBe(0);
+    expect(info.mock.calls[0]?.[0]).toBe(
       `Saved response object to ${path.join(
         '/mock/storage',
         expectedRelativePath,

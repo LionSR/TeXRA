@@ -61,6 +61,16 @@ function executionMeta(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function registrationArgs(
+  executionId: ExecutionId,
+): Parameters<typeof registerExecution>[3] {
+  return {
+    streamId: `chat@deepseekT#${executionId}` as StreamTabId,
+    identity: { kind: 'agent', agent: 'chat' },
+    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+  };
+}
+
 describe('execution lifecycle', () => {
   setupPlatform({ workspacePath: '/workspace/root' });
 
@@ -84,11 +94,12 @@ describe('execution lifecycle', () => {
 
   it('pins the active workspace path when a config has no working directory', async () => {
     const executionId = 'abc123' as ExecutionId;
-    await registerExecution(executionId, baseConfig, 'chat', {
-      streamId: 'chat@deepseekT#abc123' as StreamTabId,
-      identity: { kind: 'agent', agent: 'chat' },
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-    });
+    await registerExecution(
+      executionId,
+      baseConfig,
+      'chat',
+      registrationArgs(executionId),
+    );
 
     expect(mocks.writeRunRecord).toHaveBeenCalledWith({
       ...baseConfig,
@@ -117,11 +128,7 @@ describe('execution lifecycle', () => {
       executionId,
       { ...baseConfig, workingDirectory },
       'chat',
-      {
-        streamId: 'chat@deepseekT#workspace-whitespace' as StreamTabId,
-        identity: { kind: 'agent', agent: 'chat' },
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-      },
+      registrationArgs(executionId),
     );
 
     expect(mocks.writeRunRecord).toHaveBeenCalledWith({
@@ -152,11 +159,12 @@ describe('execution lifecycle', () => {
     fail();
 
     await expect(
-      registerExecution(executionId, baseConfig, 'chat', {
-        streamId: 'chat@deepseekT#abc124' as StreamTabId,
-        identity: { kind: 'agent', agent: 'chat' },
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-      }),
+      registerExecution(
+        executionId,
+        baseConfig,
+        'chat',
+        registrationArgs(executionId),
+      ),
     ).rejects.toThrow(error);
 
     await expect(inspectExecutionLease(executionId)).resolves.toEqual({

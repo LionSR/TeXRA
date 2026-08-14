@@ -619,6 +619,7 @@ describe('progress-check agent prompts', () => {
   const progressCheck = loadAgentYaml<ToolUseAgentYaml>(
     'prompts/agents/remote/progressCheck.yaml',
   );
+  const { systemPrompt } = progressCheck.prompts;
   const orchestrator = loadAgentYaml<ToolUseAgentYaml>(
     'prompts/agents/remote/orchestrator.yaml',
   );
@@ -627,19 +628,19 @@ describe('progress-check agent prompts', () => {
   );
 
   it('keeps self-contained read-only reviews on the narrow evidence path', () => {
-    expect(progressCheck.prompts.systemPrompt).toContain(
+    expect(systemPrompt).toContain(
       'This narrow path takes precedence even when the session is part of a standing project goal.',
     );
-    expect(progressCheck.prompts.systemPrompt).toContain(
+    expect(systemPrompt).toContain(
       'On the narrow path, evaluate only signals stated in the named execution reports.',
     );
-    expect(progressCheck.prompts.systemPrompt).toContain(
+    expect(systemPrompt).toContain(
       'On the narrow path, evaluate only the named reports and explicitly named files.',
     );
-    expect(progressCheck.prompts.systemPrompt).toContain(
+    expect(systemPrompt).toContain(
       'Otherwise, continue with the broader checks below',
     );
-    expect(progressCheck.prompts.systemPrompt).toContain(
+    expect(systemPrompt).toContain(
       'Do not call `/executions/current`, list sibling executions, or inspect unnamed reports.',
     );
   });
