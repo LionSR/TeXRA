@@ -1,5 +1,4 @@
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -45,6 +44,7 @@ import {
 } from '@platform/languageModel';
 import { installPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 // This file calls vi.resetModules(), which desyncs the statically-imported
 // factory from a freshly-imported @platform copy. Blocks that must agree with
@@ -92,6 +92,12 @@ async function inspectHandler<T>(
     handler.dispose();
   }
 }
+
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+  await cleanupTempDirs(tempDirs);
+});
 
 describe('Copilot model handler routing', () => {
   const copilotConfig = modelConfig(ModelProvider.COPILOT, {
@@ -744,9 +750,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('uses the validation compatibility key only after the validation gate passes', async () => {
-    const flagRoot = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'texra-validation-handler-'),
-    );
+    const flagRoot = await makeTempDir('texra-validation-handler-', tempDirs);
     const flagPath = path.join(flagRoot, 'flag');
     await fs.writeFile(flagPath, 'texra-cli-run-validation\n');
 
