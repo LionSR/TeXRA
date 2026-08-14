@@ -4,7 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Shared (all surfaces)
+
+#### Features
+
+- **Lean Project remotes are available after sign-in** — the hosted Lean
+  agents no longer need a special access group.
+
+### Extension (VS Code) and Desktop
+
+#### Features
+
+- **Remote agent prompts are available to every signed-in account** — Settings
+  → Agents no longer hides View prompt behind an Ultra plan, and remote agents
+  no longer show a Remote badge or access-group labels.
+
 ### CLI
+
+#### Features
+
+- **`texra agents show` omits access-group tags** — remote agent details no
+  longer print visibility labels.
 
 #### Bug Fixes
 

@@ -70,7 +70,6 @@ const SOURCE_META: Record<
   [AGENT_SOURCE.REMOTE]: {
     displayName: 'Remote',
     tone: 'remote',
-    badge: { icon: 'cloud', label: 'Remote' },
   },
   [AGENT_SOURCE.INLINE]: {
     displayName: 'Inline',
@@ -89,7 +88,6 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
 
   @property({ attribute: false }) agents: AgentSelectionItem[] = [];
   @property({ attribute: false }) category: AgentCategory = 'workflow';
-  @property({ attribute: false }) userTier = 'free';
 
   @state() private selectedKey: string | null = null;
 
@@ -337,7 +335,6 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
       {
         when:
           agent.source === AGENT_SOURCE.REMOTE &&
-          this.userTier === 'Ultra' &&
           !agent.hasPath &&
           this.supportsCommand(SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT),
         button: {

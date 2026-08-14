@@ -2,11 +2,9 @@ import { strict as assert } from 'node:assert';
 
 import { describe, it, vi } from 'vitest';
 
-import { FREE_TIER, ULTRA_TIER, type UserTier } from '@auth/config';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 
 function createController(options: {
-  tier: UserTier;
   token: string | null;
   fetchPromptConfig?: (
     agentName: string,
@@ -22,7 +20,6 @@ function createController(options: {
   );
   return {
     controller: new SettingsRemoteAgentPromptController({
-      getUserTier: async () => options.tier,
       getAccessToken: async () => options.token,
       fetchPromptConfig,
     }),
@@ -31,24 +28,8 @@ function createController(options: {
 }
 
 describe('SettingsRemoteAgentPromptController', () => {
-  it('rejects non-Ultra users before requesting a token', async () => {
+  it('rejects users without an access token', async () => {
     const { controller, fetchPromptConfig } = createController({
-      tier: FREE_TIER,
-      token: 'token',
-    });
-
-    const result = await controller.getPromptConfig('remoteWriter');
-
-    assert.deepEqual(result, {
-      ok: false,
-      message: 'Viewing remote agent prompts requires an Ultra plan.',
-    });
-    assert.equal(fetchPromptConfig.mock.calls.length, 0);
-  });
-
-  it('rejects Ultra users without an access token', async () => {
-    const { controller, fetchPromptConfig } = createController({
-      tier: ULTRA_TIER,
       token: null,
     });
 
@@ -61,9 +42,8 @@ describe('SettingsRemoteAgentPromptController', () => {
     assert.equal(fetchPromptConfig.mock.calls.length, 0);
   });
 
-  it('fetches the remote prompt config for authenticated Ultra users', async () => {
+  it('fetches the remote prompt config for any signed-in user', async () => {
     const { controller, fetchPromptConfig } = createController({
-      tier: ULTRA_TIER,
       token: 'access-token',
     });
 
