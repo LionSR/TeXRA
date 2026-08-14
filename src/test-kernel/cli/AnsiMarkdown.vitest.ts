@@ -100,6 +100,9 @@ describe('renderAnsiMarkdown', () => {
         '\\[a<b>c\\]',
         '\\[a<i>c\\]',
         '\\[a<br>c\\]',
+        '\\(0 < p < 1\\)',
+        '\\(0 <p <1\\)',
+        '\\(0 <p < 1\\)',
         'Real break: <br>After',
         'Then \\[a>0\\]',
       ].join('\n'),
@@ -110,6 +113,9 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).toContain('\\[a<b>c\\]');
     expect(plain).toContain('\\[a<i>c\\]');
     expect(plain).toContain('\\[a<br>c\\]');
+    expect(plain).toContain('\\(0 < p < 1\\)');
+    expect(plain).toContain('\\(0 <p <1\\)');
+    expect(plain).toContain('\\(0 <p < 1\\)');
     expect(plain).toContain('Real break:');
     expect(plain).toContain('After');
     expect(plain).toContain('\\[a>0\\]');

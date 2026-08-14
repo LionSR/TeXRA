@@ -26,21 +26,21 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
 
   return summarized
     .replaceAll(
-      /(?<![\p{L}\p{N}_])<h([1-6])(?=[\s/>])[^>]*>([\s\S]*?)<\/h\1>/giu,
+      /(?<![\p{L}\p{N}_])<h([1-6])(?=[\s/>])[^<>]*>([\s\S]*?)<\/h\1>/giu,
       (_match, level: string, body: string) =>
         `\n\n${headingMarker(level)} ${body.trim()}\n\n`,
     )
     .replaceAll(/(?<![\p{L}\p{N}_])<br\s*\/?>/giu, '\n')
     .replaceAll(/<\/(?:p|div)>/gi, '\n\n')
-    .replaceAll(/(?<![\p{L}\p{N}_])<(?:p|div)(?=[\s/>])[^>]*>/giu, '')
-    .replaceAll(/(?<![\p{L}\p{N}_])<(?:strong|b)(?=[\s/>])[^>]*>/giu, '**')
+    .replaceAll(/(?<![\p{L}\p{N}_])<(?:p|div)(?=[\s/>])[^<>]*>/giu, '')
+    .replaceAll(/(?<![\p{L}\p{N}_])<(?:strong|b)(?=[\s/>])[^<>]*>/giu, '**')
     .replaceAll(/<\/(?:strong|b)>/gi, '**')
-    .replaceAll(/(?<![\p{L}\p{N}_])<(?:em|i)(?=[\s/>])[^>]*>/giu, '_')
+    .replaceAll(/(?<![\p{L}\p{N}_])<(?:em|i)(?=[\s/>])[^<>]*>/giu, '_')
     .replaceAll(/<\/(?:em|i)>/gi, '_')
-    .replaceAll(/(?<![\p{L}\p{N}_])<code(?=[\s/>])[^>]*>/giu, '`')
+    .replaceAll(/(?<![\p{L}\p{N}_])<code(?=[\s/>])[^<>]*>/giu, '`')
     .replaceAll(/<\/code>/gi, '`')
     .replaceAll(
-      /(?<![\p{L}\p{N}_])<blockquote(?=[\s/>])[^>]*>([\s\S]*?)<\/blockquote>/giu,
+      /(?<![\p{L}\p{N}_])<blockquote(?=[\s/>])[^<>]*>([\s\S]*?)<\/blockquote>/giu,
       (_match, body: string) => quoteHtmlBlock(body),
     )
     .trim();
