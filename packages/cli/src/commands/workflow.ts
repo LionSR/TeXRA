@@ -227,14 +227,17 @@ export async function executeCliWorkflowConfig(
     canAdvertiseInterruptedExecution,
     expectedCategory: AgentCategory.Workflow,
     categoryMismatchMessage: options.categoryMismatchMessage,
-    openWorkflowOutput: async (result) => {
+    openWorkflowOutput: async (result, tryCommitPublication) => {
       try {
         workflowResult = await resolveWorkflowOutput(
           options.output,
           options.outputDir,
           result,
           runContext,
-          { expectedOutputFiles: options.expectedOutputFiles },
+          {
+            expectedOutputFiles: options.expectedOutputFiles,
+            tryCommitPublication,
+          },
         );
       } catch (error) {
         workflowOutputError = error;

@@ -57,6 +57,14 @@ import type { CliContext } from './cliContext';
 
 const CLI_RUN_SHUTDOWN_GRACE_MS = 5_000;
 
+type RunAgentWorkflowOutput = NonNullable<
+  RunAgentOptions['openWorkflowOutput']
+>;
+type CliWorkflowOutputHandler = (
+  result: Parameters<RunAgentWorkflowOutput>[0],
+  tryCommitPublication: () => boolean,
+) => ReturnType<RunAgentWorkflowOutput>;
+
 interface CliExecuteOptions {
   /** Forwarded to `runAgent`. */
   readonly enforceCategory?: boolean;
@@ -65,7 +73,7 @@ interface CliExecuteOptions {
   readonly stopAfterCycle?: boolean;
   /** Additional tools unavailable in this CLI runtime. */
   readonly runtimeUnavailableTools?: readonly string[];
-  readonly openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
+  readonly openWorkflowOutput?: CliWorkflowOutputHandler;
   /** Forwarded to `runAgent` on resume, pinning the original handler dialect. */
   readonly modelHandlerCompatibilityKey?: RunAgentOptions['modelHandlerCompatibilityKey'];
   /** Called during signal shutdown after CANCELLED status is durable and the
@@ -295,6 +303,7 @@ export async function executeCliRequest(
   const launchAbortController = new AbortController();
   let shutdownRequested = false;
   let shutdownInterrupted = false;
+  let workflowOutputPublicationCommitted = false;
   let runLifecycleStarted = false;
   let shutdownArtifactFailure: unknown;
   let shutdownFinalizationFailureReported = false;
@@ -325,6 +334,13 @@ export async function executeCliRequest(
     settleRecoveryNoticeStarted = resolve;
   });
   let shutdownStatusFinalized: Promise<boolean> | undefined;
+  // Both callbacks enter on this event loop, and neither yields between the
+  // check and assignment. Exactly one can therefore own the terminal verdict.
+  const tryCommitWorkflowOutputPublication = (): boolean => {
+    if (shutdownInterrupted) return false;
+    workflowOutputPublicationCommitted = true;
+    return true;
+  };
   const finalizeShutdownStatus = (): Promise<boolean> => {
     if (!shutdownInterrupted) return Promise.resolve(false);
     shutdownStatusFinalized ??= (async () => {
@@ -386,14 +402,17 @@ export async function executeCliRequest(
     async () => {
       shutdownRequested = true;
       launchAbortController.abort();
-      const interruptionAccepted = ownedExecutionId
-        ? session.executions.kill(ownedExecutionId)
-        : false;
+      const interruptionAccepted =
+        !workflowOutputPublicationCommitted && ownedExecutionId
+          ? session.executions.kill(ownedExecutionId)
+          : false;
       // Before lifecycle registration, the launch signal is the cancellation
       // authority. Afterwards, only an accepted registry stop may replace the
       // run's own terminal verdict with CANCELLED.
       shutdownInterrupted =
-        !runLifecycleStarted || interruptionAccepted || shutdownInterrupted;
+        (!workflowOutputPublicationCommitted && !runLifecycleStarted) ||
+        interruptionAccepted ||
+        shutdownInterrupted;
       let resumableCheckpoint:
         Extract<ResumabilityDecision, { resumable: true }> | undefined;
       if (shutdownInterrupted && ownedExecutionId) {
@@ -445,13 +464,18 @@ export async function executeCliRequest(
       }
     },
   );
+  const openWorkflowOutput = options.openWorkflowOutput;
   const invoke = async (): Promise<ExecuteAgentResult> => {
     try {
       return await runAgent(request, {
         session,
         enforceCategory: options.enforceCategory,
         registerExecution: options.registerExecution,
-        openWorkflowOutput: options.openWorkflowOutput,
+        openWorkflowOutput:
+          openWorkflowOutput === undefined
+            ? undefined
+            : (result) =>
+                openWorkflowOutput(result, tryCommitWorkflowOutputPublication),
         modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
         launchSignal: launchAbortController.signal,
         beforeLeaseRelease: async () => {

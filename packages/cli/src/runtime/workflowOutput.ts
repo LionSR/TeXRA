@@ -150,6 +150,7 @@ type WorkflowAgentResult = Extract<
 interface WorkflowOutputResolutionOptions {
   readonly expectedOutputFiles?: readonly string[];
   readonly runDirectory?: string;
+  readonly tryCommitPublication?: () => boolean;
 }
 
 function outputCopyRelativePath(output: OutputFileSummary): string {
@@ -247,6 +248,15 @@ export async function resolveWorkflowOutput(
   // Interrupted rounds remain inspectable in run storage, but are not final
   // artifacts and must not replace the user's requested destination.
   if (result.outcome === RUN_OUTCOME.CANCELLED && (outputFile || outputDir)) {
+    return {
+      ...result,
+      workingDirectory: context.cwd,
+      runDirectory,
+    };
+  }
+  // Commit before validation as well as copying: once output finalization owns
+  // the verdict, its missing-output and filesystem failures must stay visible.
+  if ((outputFile || outputDir) && options.tryCommitPublication?.() === false) {
     return {
       ...result,
       workingDirectory: context.cwd,
