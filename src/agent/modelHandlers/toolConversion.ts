@@ -425,8 +425,12 @@ const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
   memory_anthropic: 'memory_20250818',
 };
 
-/** Tools that support dynamic filtering via code execution. */
-const DYNAMIC_FILTERING_TOOLS = new Set(['web_search', 'web_fetch']);
+/**
+ * Web tools restricted to direct invocation (`allowed_callers: ['direct']`).
+ * This bypasses Anthropic's dynamic-filtering-via-code-execution path, which
+ * would otherwise require a code execution container (container_id).
+ */
+const DIRECT_ONLY_WEB_TOOLS = new Set(['web_search', 'web_fetch']);
 
 /**
  * Convert generic ToolDefinition objects to OpenAI ChatCompletionTool format.
@@ -516,14 +520,6 @@ interface AnthropicToolOptions {
   supportsNativeWebSearch?: boolean;
   /** Whether the model supports native web fetch. Defaults to false. */
   supportsNativeWebFetch?: boolean;
-  /**
-   * Whether to enable dynamic filtering for web_search and web_fetch.
-   * When true, Claude can write code to filter results before they enter
-   * context (requires a code execution container).
-   * When false (default), tools use allowed_callers: ['direct'] to bypass
-   * code execution, avoiding the container_id requirement.
-   */
-  useDynamicFiltering?: boolean;
 }
 
 /**
@@ -533,11 +529,8 @@ export function toAnthropicTools(
   defs: ToolDefinition[],
   options: AnthropicToolOptions = {},
 ): ToolUnion[] {
-  const {
-    supportsNativeWebSearch = false,
-    supportsNativeWebFetch = false,
-    useDynamicFiltering = false,
-  } = options;
+  const { supportsNativeWebSearch = false, supportsNativeWebFetch = false } =
+    options;
 
   /** Tools that require an explicit capability flag to use as native. */
   const CONDITIONAL_NATIVE_TOOLS: Record<string, boolean> = {
@@ -554,10 +547,9 @@ export function toAnthropicTools(
       const gated = CONDITIONAL_NATIVE_TOOLS[d.name];
       // If not gated (undefined) or explicitly enabled, use native tool
       if (gated !== false) {
-        // For web tools with dynamic filtering disabled, restrict to direct
-        // invocation to avoid requiring a code execution container.
-        const needsDirectOnly =
-          !useDynamicFiltering && DYNAMIC_FILTERING_TOOLS.has(d.name);
+        // Restrict web tools to direct invocation to avoid requiring a
+        // code execution container.
+        const needsDirectOnly = DIRECT_ONLY_WEB_TOOLS.has(d.name);
         return {
           name: d.name,
           type: remoteType,

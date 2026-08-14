@@ -55,7 +55,6 @@ const OpenAgentDirectoryMessageSchema = z.object({
 });
 
 const SettingsMessages = [
-  commandOnly(MAIN_VIEW_COMMANDS.SETTINGS_OPEN),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS),
@@ -300,9 +299,6 @@ const CleanMultipleMessageSchema = z.object({
 });
 
 const HousekeepingMessages = [
-  commandOnly(MAIN_VIEW_COMMANDS.CLEAN_OUTPUT),
-  commandOnly(MAIN_VIEW_COMMANDS.CLEAN_BUILD),
-  commandOnly(MAIN_VIEW_COMMANDS.INDENT_TEX),
   PackSingleMessageSchema,
   CleanSingleMessageSchema,
   PackMultipleMessageSchema,

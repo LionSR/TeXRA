@@ -142,10 +142,6 @@ export function useChinaRegion(provider: string): boolean {
 // Standalone toggles
 // ---------------------------------------------------------------------------
 
-export function getAnthropicDynamicFiltering(): boolean {
-  return read(GlobalStateKey.ANTHROPIC_DYNAMIC_FILTERING, false);
-}
-
 export function getGLMCodingPlan(): boolean {
   return readPlatformSetting<boolean>(GlobalStateKey.GLM_CODING_PLAN);
 }
