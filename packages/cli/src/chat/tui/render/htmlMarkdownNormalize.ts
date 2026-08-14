@@ -8,7 +8,7 @@ const CURRENCY_AMOUNT = String.raw`[+-]?(?:\d|\.\d)`;
 const SHELL_PARAMETER_NAME = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+|[?@*#!-])`;
 const SHELL_PARAMETER = String.raw`(?:${SHELL_PARAMETER_NAME}|\{${SHELL_PARAMETER_NAME}\})`;
 const SHELL_UNWRAPPED_PARAMETER = String.raw`(?:[A-Z_][A-Z0-9_]+|\{${SHELL_PARAMETER_NAME}\}|[_?@*#!-])`;
-const SHELL_PARAMETER_BOUNDARY = String.raw`(?=[\s<.,;:!?()[\]{}'"’”]|$)`;
+const SHELL_PARAMETER_BOUNDARY = String.raw`(?=[\s.,;:!?()[\]{}'"’”]|$)`;
 const SHELL_TOKEN = String.raw`(?:\$\$|\$${SHELL_PARAMETER})`;
 
 // Formatting tags may carry ordinary name/value attributes or standard HTML
@@ -27,8 +27,8 @@ const CURRENCY_PAIR_RE = new RegExp(
   `\\$${CURRENCY_AMOUNT}[^\\n$]*?(?:[\\s>]|[\\s>][([{"'‘“+–—-]|[\\s>][A-Z]{1,3})\\$${CURRENCY_AMOUNT}`,
   'gu',
 );
-const SHELL_UNWRAPPED_PAIR_RE = new RegExp(
-  `\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}[^\\n$]*?\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
+const SHELL_UNWRAPPED_TOKEN_RE = new RegExp(
+  `(?<![A-Za-z0-9_}>])\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
   'gu',
 );
 const LITERAL_DOLLAR_PLACEHOLDER_RE = /@@CLI-LITERAL-DOLLAR-(\d+)@@/g;
@@ -86,7 +86,7 @@ function protectLiteralDollarTokens(content: string): {
     HTML_CODE_SHELL_TOKEN_RE,
     MARKDOWN_CODE_SHELL_TOKEN_RE,
     CURRENCY_PAIR_RE,
-    SHELL_UNWRAPPED_PAIR_RE,
+    SHELL_UNWRAPPED_TOKEN_RE,
   ].reduce(
     (value, pattern) => value.replaceAll(pattern, protectDollars),
     content,

@@ -241,6 +241,7 @@ describe('renderAnsiMarkdown', () => {
     '$a <b> c $b',
     '$A <b> c $B',
     '$AB<p>1$',
+    '$AB<p>1$RESULT',
     '$0<p>1$-',
     '$0<p>1$RESULT',
     '$a<b>c$RESULT',
@@ -255,6 +256,15 @@ describe('renderAnsiMarkdown', () => {
       expect(normalizeKnownHtmlForCliMarkdown(example)).toBe(example);
     },
   );
+
+  it.each([
+    '$HOME and $5, then <strong>run</strong> and check $PATH',
+    '$HOME <strong>and</strong> $5, then run and check $PATH',
+  ])('normalizes HTML among three unlike dollar tokens: %s', (example) => {
+    expect(normalizeKnownHtmlForCliMarkdown(example)).toBe(
+      example.replace('<strong>', '**').replace('</strong>', '**'),
+    );
+  });
 
   it('preserves adjacent inline math spans independently of markdown', () => {
     expect(renderPlain('$*a*$$*b*$')).toContain('$*a*$$*b*$');
