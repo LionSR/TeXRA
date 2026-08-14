@@ -568,63 +568,24 @@ The extension will now use the configured credentials. Users don't need to confi
 
 ---
 
-## Part 7: Add Remote Agents
+## Part 7: Updating the hosted catalog
 
-### 1. Upload Agent YAML to Storage
+Keeping generated SQL in the repo drifts from the YAML. The catalog is only:
 
-1. Create your agent YAML file locally (e.g., `advanced-researcher.yaml`)
-2. In Supabase dashboard, go to **Storage** → `agent-configs`
-3. Create folder structure matching visibility values:
-   - `public/` - for agents visible to all authenticated users
-   - `researcher/` - for researcher access program agents
-   - `math/` - for mathematicians (custom visibility group)
-   - `cs/` - for computer scientists (custom visibility group)
-   - etc. (folder names should match the visibility value in the database)
-4. Upload your YAML file to the appropriate folder (e.g., `researcher/advanced-researcher.yaml`)
+- `prompts/agents/remote/**/*.yaml` — prompt, tools, category
+- `docs/supabase/remote-agents.config.json` — storage folder and visibility
 
-### 2. Add Agent Metadata to Database
+Apply it with:
 
-In **SQL Editor**, run:
-
-```sql
--- Agent visible to 'researcher' group only
-INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category)
-VALUES (
-  'advanced-researcher',
-  'AI-powered research assistant for academic papers',
-  'researcher/advanced-researcher.yaml',
-  ARRAY['researcher'],
-  'workflow'
-);
-
--- Agent visible to BOTH math and cs groups
-INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category)
-VALUES (
-  'proof-assistant',
-  'Helps with mathematical proofs and algorithms',
-  'math/proof-assistant.yaml',
-  ARRAY['math', 'cs'],
-  'workflow'
-);
-
--- Public agent (visible to all authenticated users)
-INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category)
-VALUES (
-  'basic-assistant',
-  'General purpose assistant',
-  'public/basic-assistant.yaml',
-  ARRAY['public'],
-  'workflow'
-);
+```bash
+npm run sync:remote-agents -- --apply
 ```
 
-Notes:
+Needs a `supabase link`ed checkout, or `SUPABASE_DB_URL` / `SUPABASE_PROJECT_REF`.
 
-- `visibility` is an array - agents can be visible to multiple groups
-- `agent_category` can be `'workflow'` (multi-turn) or `'toolUse'` (single-turn with tools)
-- `tools` is an optional array of tool names for tool-use agents (cached from YAML).
-  Populate this so orchestrator agents can see what tools remote agents have without fetching YAML.
-  Example: `ARRAY['web_search', 'arxiv_search', 'web_fetch']`
+The same command runs on merge to `main` when those files change (`.github/workflows/remote-agents-sync.yml`). PRs run `npm run sync:remote-agents` (generate only) and do not write production.
+
+YAML bodies in the `agent-configs` bucket are still uploaded separately. Folder names must match the `folder` field in `remote-agents.config.json`.
 
 ---
 
