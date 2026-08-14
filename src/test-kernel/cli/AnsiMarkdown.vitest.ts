@@ -225,6 +225,8 @@ describe('renderAnsiMarkdown', () => {
     ['$5, x<b>y$', '$5, x<b>y$'],
     ['$5, x$ <strong>and</strong> $z$', '$5, x$ **and** $z$'],
     ['$5, x<b>y$, then <strong>$z$</strong>', '$5, x<b>y$, then **$z$**'],
+    ['$5</b>1$', '$5</b>1$'],
+    ['$AB</b>1$', '$AB</b>1$'],
   ] as const)(
     'does not classify numeric inline math as currency: %s',
     (source, expected) => {
@@ -283,6 +285,10 @@ describe('renderAnsiMarkdown', () => {
     ['$HOME then <strong>$a<b>c$</strong>', '$HOME then **$a<b>c$**'],
     ['$HOME then <b>$a<p>c$</b>', '$HOME then **$a<p>c$**'],
     ['$HOME then <i>$a<p>c$</i>', '$HOME then _$a<p>c$_'],
+    [
+      'Use $HOME then <strong>$AB <p>1$</strong>',
+      'Use $HOME then **$AB <p>1$**',
+    ],
     ['$5 then <b>x and $y$</b>', '$5 then **x and $y$**'],
     ['$5 then <i>x and $y$</i>', '$5 then _x and $y$_'],
     ['$5 then <p>x and $y$</p>', '$5 then x and $y$'],
@@ -354,6 +360,14 @@ describe('renderAnsiMarkdown', () => {
     expect(
       normalizeKnownHtmlForCliMarkdown('<code>$$</code> and <code>$$</code>'),
     ).toBe('`$$` and `$$`');
+  });
+
+  it('keeps backslash math delimiters literal inside code spans', () => {
+    expect(
+      normalizeKnownHtmlForCliMarkdown(
+        '<code>\\(</code> <strong>or</strong> <code>\\)</code>',
+      ),
+    ).toBe('`\\(` **or** `\\)`');
   });
 
   it.each([
@@ -657,6 +671,16 @@ describe('renderAnsiMarkdown', () => {
 
     expect(plain).toContain('│ \\[\n│   a+b\n│ \\]');
     expect(plain).not.toContain('\n> \\]');
+  });
+
+  it('strips a partial lazy prefix inside a nested Markdown blockquote', () => {
+    const plain = renderPlain('> > \\[\n> a+b\n> > \\]', {
+      colorEnabled: false,
+      width: 80,
+    });
+
+    expect(plain).toContain('│ │ \\[\n│ │ a+b\n│ │ \\]');
+    expect(plain).not.toContain('│ │ > a+b');
   });
 
   it('keeps multiline math inside a quoted list item', () => {

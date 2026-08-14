@@ -163,6 +163,13 @@ function protectByPatterns(
         const remainingPrefixes = remainingLines.map(
           (line) => requiredPrefix.exec(line)?.[0],
         );
+        const availablePrefix = new RegExp(
+          `^(?:[ \\t]*>[ \\t]?){1,${Math.max(quoteDepth, 1)}}`,
+          'u',
+        );
+        const availablePrefixes = remainingLines.map(
+          (line) => availablePrefix.exec(line)?.[0],
+        );
         const isQuotedSpan =
           quoteDepth > 0 &&
           remainingPrefixes.at(-1) !== undefined &&
@@ -177,10 +184,12 @@ function protectByPatterns(
         }
         return lines
           .map((line, lineIndex) => {
-            const prefix =
+            const retainedPrefix =
               lineIndex === 0 ? '' : (remainingPrefixes[lineIndex - 1] ?? '');
-            const index = items.push(line.slice(prefix.length)) - 1;
-            return `${prefix}@@${selectedTag}-${index}@@`;
+            const contentPrefix =
+              lineIndex === 0 ? '' : (availablePrefixes[lineIndex - 1] ?? '');
+            const index = items.push(line.slice(contentPrefix.length)) - 1;
+            return `${retainedPrefix}@@${selectedTag}-${index}@@`;
           })
           .join('\n');
       }

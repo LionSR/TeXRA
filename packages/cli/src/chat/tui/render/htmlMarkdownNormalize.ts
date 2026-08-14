@@ -47,19 +47,15 @@ const PUNCTUATED_CURRENCY_TOKEN_RE = new RegExp(
   'gu',
 );
 const CURRENCY_BEFORE_CLOSING_TAG_RE = new RegExp(
-  `(?<![\\p{L}\\p{N}_])(?:[A-Z]{1,3})?\\$${CURRENCY_AMOUNT}(?=<\\/(?:blockquote|strong|b|em|i|code|p|div|h[1-6])\\s*>)`,
+  `(?<![\\p{L}\\p{N}_])(?:[A-Z]{1,3})?\\$${CURRENCY_AMOUNT}(?=<\\/(blockquote|strong|b|em|i|code|p|div|h[1-6])\\s*>)`,
   'giu',
 );
 const CURRENCY_TOKEN_RE = new RegExp(
   `(?<![\\p{L}\\p{N}_])(?:[A-Z]{1,3})?\\$${CURRENCY_AMOUNT}${CURRENCY_BOUNDARY}`,
   'gu',
 );
-const SHELL_UNWRAPPED_PAIR_RE = new RegExp(
-  `(?<![A-Za-z0-9_}>])\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}[^\\n$]*?\\$${SHELL_UNWRAPPED_PARAMETER}${SHELL_PARAMETER_BOUNDARY}`,
-  'gu',
-);
 const SHELL_BEFORE_CLOSING_TAG_RE = new RegExp(
-  `(?<![A-Za-z0-9_}])\\$${SHELL_UNWRAPPED_PARAMETER}(?=<\\/(?:blockquote|strong|b|em|i|code|p|div|h[1-6])\\s*>)`,
+  `(?<![A-Za-z0-9_}])\\$${SHELL_UNWRAPPED_PARAMETER}(?=<\\/(blockquote|strong|b|em|i|code|p|div|h[1-6])\\s*>)`,
   'giu',
 );
 const SHELL_UNWRAPPED_TOKEN_RE = new RegExp(
@@ -74,10 +70,6 @@ const SHELL_LITERAL_AT_START_RE = new RegExp(
 const UNAMBIGUOUS_PRESENTATION_TAG_RE = new RegExp(
   `(?:<(?:blockquote|strong|em|code|div|br|h[1-6])${HTML_ATTRIBUTES}${HTML_TAG_END}|<\\/(?:blockquote|strong|em|code|div|h[1-6])\\s*>)`,
   'iu',
-);
-const AMBIGUOUS_PRESENTATION_TAG_RE = new RegExp(
-  `(?:<(b|i|p)${HTML_ATTRIBUTES}\\s*>|<\\/(b|i|p)\\s*>)`,
-  'giu',
 );
 const AMBIGUOUS_PRESENTATION_ANY_RE = new RegExp(
   `(?:<(?:b|i|p)${HTML_ATTRIBUTES}\\s*>|<\\/(?:b|i|p)\\s*>)`,
@@ -202,10 +194,20 @@ function shouldMaskPunctuatedCurrency(
   return hasPresentationHtmlBeforeNextDollar(source, offset, matchLength);
 }
 
+function isWrappedLiteralToken(
+  source: string,
+  offset: number,
+  closingTag: string,
+): boolean {
+  return new RegExp(`<${closingTag}${HTML_ATTRIBUTES}\\s*>[^<>$]*$`, 'iu').test(
+    source.slice(0, offset),
+  );
+}
+
 /** Masks complete HTML code elements without rescanning unmatched openers. */
 function protectHtmlCodeElementDollars(
   content: string,
-  protectDollars: (match: string) => string,
+  protectSyntax: (match: string) => string,
 ): string {
   const pieces: string[] = [];
   let copiedUntil = 0;
@@ -229,7 +231,7 @@ function protectHtmlCodeElementDollars(
     if (close === null) break;
     const closeEnd = close.index + close[0].length;
     pieces.push(content.slice(copiedUntil, openStart));
-    pieces.push(protectDollars(content.slice(openStart, closeEnd)));
+    pieces.push(protectSyntax(content.slice(openStart, closeEnd)));
     copiedUntil = closeEnd;
     scanFrom = closeEnd;
   }
@@ -242,48 +244,59 @@ function protectHtmlCodeElementDollars(
 // CLI presentation owns currency and shell syntax. Mask only their dollar
 // tokens before shared math recognition so a shell token cannot pair with a
 // later formula delimiter and cause that formula's HTML-shaped TeX to leak.
-function protectLiteralDollarTokens(content: string): {
+function protectLiteralMathSyntax(content: string): {
   content: string;
   restore: (value: string) => string;
 } {
   const items: string[] = [];
-  let placeholderPrefix = '@@CLI-LITERAL-DOLLAR-';
+  let placeholderPrefix = '@@CLI-LITERAL-MATH-';
   while (content.includes(placeholderPrefix)) placeholderPrefix += '@';
   const placeholderPattern = new RegExp(`${placeholderPrefix}(\\d+)@@`, 'g');
-  const protectDollars = (match: string): string =>
-    match.replaceAll(/\$\$?/g, (dollars) => {
-      const index = items.push(dollars) - 1;
+  const protectSyntax = (match: string): string =>
+    match.replaceAll(/\$\$?|\\\(|\\\)|\\\[|\\\]/g, (syntax) => {
+      const index = items.push(syntax) - 1;
       return `${placeholderPrefix}${index}@@`;
     });
-  const codeProtected = protectHtmlCodeElementDollars(content, protectDollars);
+  const codeProtected = protectHtmlCodeElementDollars(content, protectSyntax);
   const openingTagsProtected = codeProtected.replaceAll(
     HTML_OPEN_TAG_RE,
-    protectDollars,
+    protectSyntax,
+  );
+  const closingTagProtected = [
+    CURRENCY_BEFORE_CLOSING_TAG_RE,
+    SHELL_BEFORE_CLOSING_TAG_RE,
+  ].reduce(
+    (value, pattern) =>
+      value.replaceAll(
+        pattern,
+        (match, closingTag: string, offset: number, source: string): string =>
+          isWrappedLiteralToken(source, offset, closingTag)
+            ? protectSyntax(match)
+            : match,
+      ),
+    openingTagsProtected,
   );
   const withoutCodeOrPairedTokenDollars = [
     MARKDOWN_CODE_SPAN_RE,
     CURRENCY_BEFORE_NUMERIC_MATH_RE,
     CURRENCY_PAIR_RE,
-    CURRENCY_BEFORE_CLOSING_TAG_RE,
-    SHELL_UNWRAPPED_PAIR_RE,
-    SHELL_BEFORE_CLOSING_TAG_RE,
     SHELL_PID_LABEL_RE,
   ].reduce(
-    (value, pattern) => value.replaceAll(pattern, protectDollars),
-    openingTagsProtected,
+    (value, pattern) => value.replaceAll(pattern, protectSyntax),
+    closingTagProtected,
   );
   const punctuatedCurrencyProtected =
     withoutCodeOrPairedTokenDollars.replaceAll(
       PUNCTUATED_CURRENCY_TOKEN_RE,
       (match, offset: number, source: string) =>
         shouldMaskPunctuatedCurrency(source, offset, match.length)
-          ? protectDollars(match)
+          ? protectSyntax(match)
           : match,
     );
   const protectBeforeLaterMath = (value: string, pattern: RegExp): string =>
     value.replaceAll(pattern, (match, offset: number, source: string) =>
       hasPresentationHtmlBeforeNextDollar(source, offset, match.length)
-        ? protectDollars(match)
+        ? protectSyntax(match)
         : match,
     );
   const contextProtected = [CURRENCY_TOKEN_RE, SHELL_UNWRAPPED_TOKEN_RE].reduce(
@@ -304,7 +317,7 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
   const summarized = summarizeEmbeddedSubagentFollowups(content);
   if (!KNOWN_HTML_TAG_RE.test(summarized)) return summarized;
 
-  const literalDollarProtection = protectLiteralDollarTokens(summarized);
+  const literalDollarProtection = protectLiteralMathSyntax(summarized);
   const mathProtection = protectLatexMathSpans(literalDollarProtection.content);
   const mathProtected = literalDollarProtection.restore(mathProtection.content);
   if (!KNOWN_HTML_TAG_RE.test(mathProtected)) return summarized;
