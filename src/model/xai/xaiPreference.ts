@@ -18,13 +18,7 @@ export type XaiSubscriptionPreferenceUpdate = SubscriptionPreferenceUpdate;
 const preference = createSubscriptionPreference(XAI_PREFER_SUBSCRIPTION_KEY);
 
 /** Whether the user has switched on "prefer Grok subscription". */
-export function isPreferXaiSubscription(): boolean {
-  return preference.isPrefer();
-}
+export const isPreferXaiSubscription = preference.isPrefer;
 
 /** Update the preference at the scope that currently controls its value. */
-export async function setPreferXaiSubscription(
-  enabled: boolean,
-): Promise<XaiSubscriptionPreferenceUpdate> {
-  return preference.setPrefer(enabled);
-}
+export const setPreferXaiSubscription = preference.setPrefer;
