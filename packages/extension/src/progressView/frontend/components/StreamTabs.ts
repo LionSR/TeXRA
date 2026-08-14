@@ -410,7 +410,8 @@ export class StreamTabs extends LitElement {
     if (
       !changed.has('childStreamsByParent') &&
       !changed.has('streamStates') &&
-      !changed.has('pendingApprovalStreamIds')
+      !changed.has('pendingApprovalStreamIds') &&
+      !changed.has('activeStreamId')
     ) {
       return;
     }
@@ -420,6 +421,7 @@ export class StreamTabs extends LitElement {
       childStreamsByParent: this.childStreamsByParent,
       userOverrides: this.userOverride,
       pendingApprovalStreamIds: this.pendingApprovalStreamIds,
+      activeStreamId: this.activeStreamId,
     });
 
     this.userOverride = projection.userOverrides;

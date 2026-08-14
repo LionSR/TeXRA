@@ -37,12 +37,14 @@ function project(
   streamStates: Map<string, StreamState> = new Map(),
   userOverrides: Map<string, StreamTreeExpansionOverride> = new Map(),
   pendingApprovalStreamIds: ReadonlySet<string> = new Set(),
+  activeStreamId: string | null = null,
 ): StreamTreeProjection {
   return computeStreamTreeProjection({
     streamStates,
     childStreamsByParent,
     userOverrides,
     pendingApprovalStreamIds,
+    activeStreamId,
   });
 }
 
@@ -169,6 +171,26 @@ describe('progress stream tree policy', () => {
     assert.equal(projection.approvalBadgeStreamIds.has('root'), true);
     assert.equal(projection.approvalBadgeStreamIds.has('child'), true);
     assert.equal(projection.approvalBadgeStreamIds.has('grandchild'), true);
+  });
+
+  it('expands ancestors of the viewed stream without opening sibling branches', () => {
+    const childStreamsByParent = new Map([
+      ['root', [stream('child', 'root'), stream('other', 'root')]],
+      ['child', [stream('grandchild', 'child')]],
+      ['other', [stream('other-child', 'other')]],
+    ]);
+
+    const projection = project(
+      childStreamsByParent,
+      new Map(),
+      new Map(),
+      new Set(),
+      'grandchild',
+    );
+
+    assert.equal(projection.expandedParents.has('root'), true);
+    assert.equal(projection.expandedParents.has('child'), true);
+    assert.equal(projection.expandedParents.has('other'), false);
   });
 
   it('guards cycles while preserving the stream own activity', () => {
