@@ -12,10 +12,20 @@ const MODEL_STREAM_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MODEL_RESPONSE_HEADERS_TIMEOUT_MS = 10 * 60 * 1000;
 type UploadCompatibleFetch = typeof fetch & { Response: typeof Response };
 
+/** Node/undici require this for stream bodies; SDKs omit it inconsistently. */
+function requestInitWithDuplex(init?: RequestInit): UndiciRequestInit {
+  const next = { ...(init ?? {}) } as UndiciRequestInit;
+  if (next.body != null && next.duplex == null) {
+    next.duplex = 'half';
+  }
+  return next;
+}
+
 async function normalizeModelRequest(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<[UndiciRequestInfo, UndiciRequestInit]> {
+  const requestInit = requestInitWithDuplex(init);
   if (!(input instanceof Request)) {
     if (init?.body instanceof FormData) {
       // OpenAI builds multipart bodies with the host-global FormData, while
@@ -31,17 +41,17 @@ async function normalizeModelRequest(
       return [
         input as UndiciRequestInfo,
         {
-          ...init,
+          ...requestInit,
           body,
-        } as UndiciRequestInit,
+        },
       ];
     }
-    return [input as UndiciRequestInfo, init as UndiciRequestInit];
+    return [input as UndiciRequestInfo, requestInit];
   }
 
   // OpenRouter supplies Node's native Request, while package Undici expects
   // its own branded Request. Rebuild it from interoperable primitives here.
-  const request = new Request(input, init);
+  const request = new Request(input, requestInit as RequestInit);
   const body = request.body === null ? undefined : await request.arrayBuffer();
   return [
     request.url,
@@ -50,7 +60,9 @@ async function normalizeModelRequest(
       headers: Object.fromEntries(request.headers.entries()),
       redirect: request.redirect,
       signal: request.signal,
-      ...(body === undefined ? {} : { body }),
+      ...(body === undefined
+        ? {}
+        : { body, duplex: requestInit.duplex ?? 'half' }),
     },
   ];
 }

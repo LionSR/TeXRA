@@ -109,4 +109,51 @@ describe('long-running model transport', () => {
     const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
     expect(init?.body).toBeInstanceOf(UndiciFormData);
   });
+
+  it('sets duplex: half when a caller sends a stream body without it', async () => {
+    stubComposedDispatcher();
+    transportMocks.undiciFetch.mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"ok":true}'));
+        controller.close();
+      },
+    });
+
+    await expect(
+      longRunningModelFetch('https://api.example/v1/chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      }),
+    ).resolves.toBeInstanceOf(Response);
+
+    const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
+    expect(init?.body).toBe(body);
+    expect(init?.duplex).toBe('half');
+  });
+
+  it('preserves an explicit duplex value on a streamed body', async () => {
+    stubComposedDispatcher();
+    transportMocks.undiciFetch.mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.close();
+      },
+    });
+
+    await longRunningModelFetch('https://api.example/v1/chat', {
+      method: 'POST',
+      body,
+      // Provider SDKs already set this; do not overwrite it.
+      duplex: 'half',
+    } as RequestInit);
+
+    const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
+    expect(init?.duplex).toBe('half');
+  });
 });

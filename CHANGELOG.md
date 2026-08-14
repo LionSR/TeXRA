@@ -19,6 +19,14 @@ All notable changes to this project will be documented in this file.
   → Agents no longer hides View prompt behind an Ultra plan, and remote agents
   no longer show a Remote badge or access-group labels.
 
+### CLI and Desktop
+
+#### Bug Fixes
+
+- **Leftover Lean language servers are stopped** — the CLI and desktop keep at
+  most two Lean servers at a time and stop one that has been idle for ten
+  minutes, so unused servers no longer exhaust the system file table.
+
 ### CLI
 
 #### Features
@@ -83,6 +91,8 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Delegating to a tool-use agent no longer fails on newer Node.js** —
+  launching a subagent no longer dies immediately with a request-body error.
 - **Command rejections preserve the user's actual instructions** — rejecting a
   shell-backed action without a note no longer presents generated retry
   guidance to the agent as though the user had written it.
