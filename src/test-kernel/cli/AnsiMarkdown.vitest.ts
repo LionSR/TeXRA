@@ -294,6 +294,28 @@ describe('renderAnsiMarkdown', () => {
     ).toBe('Cost $5 **today** $');
   });
 
+  it.each([
+    ['Use $HOME <br> $a<b>c$', 'Use $HOME \n $a<b>c$'],
+    ['Use $HOME <br/> $a<b>c$', 'Use $HOME \n $a<b>c$'],
+    ['Use $HOME <br /> $a<b>c$', 'Use $HOME \n $a<b>c$'],
+  ] as const)(
+    'recognizes supported line breaks before later math: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
+  it.each([
+    ['Cost $5 <b>today</b> and $y=2$', 'Cost $5 **today** and $y=2$'],
+    ['Cost $5 <i>today</i> and $y=2$', 'Cost $5 _today_ and $y=2$'],
+    ['Cost $5 <p>today</p> and $y=2$', 'Cost $5 today\n\n and $y=2$'],
+  ] as const)(
+    'normalizes a complete one-letter wrapper before later math: %s',
+    (source, expected) => {
+      expect(normalizeKnownHtmlForCliMarkdown(source)).toBe(expected);
+    },
+  );
+
   it('normalizes HTML between same-line shell PID expansions', () => {
     expect(
       normalizeKnownHtmlForCliMarkdown('<code>$$</code> and <code>$$</code>'),

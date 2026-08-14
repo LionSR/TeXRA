@@ -55,7 +55,11 @@ const SHELL_UNWRAPPED_TOKEN_RE = new RegExp(
   'gu',
 );
 const UNAMBIGUOUS_PRESENTATION_TAG_RE = new RegExp(
-  `(?:<(?:blockquote|strong|em|code|div|h[1-6])${HTML_ATTRIBUTES}${HTML_TAG_END}|<\\/(?:blockquote|strong|em|code|div|h[1-6])\\s*>)`,
+  `(?:<(?:blockquote|strong|em|code|div|br|h[1-6])${HTML_ATTRIBUTES}${HTML_TAG_END}|<\\/(?:blockquote|strong|em|code|div|h[1-6])\\s*>)`,
+  'iu',
+);
+const AMBIGUOUS_PRESENTATION_PAIR_RE = new RegExp(
+  `<(b|i|p)${HTML_ATTRIBUTES}\\s*>[\\s\\S]*?<\\/\\1\\s*>`,
   'iu',
 );
 const AMBIGUOUS_PRESENTATION_OPEN_RE = new RegExp(
@@ -117,6 +121,7 @@ function hasPresentationHtmlBeforeNextDollar(
   if (UNAMBIGUOUS_PRESENTATION_TAG_RE.test(between)) return true;
   const closingDollar = source.indexOf('$', nextDollar + 1);
   if (closingDollar < 0) return false;
+  if (AMBIGUOUS_PRESENTATION_PAIR_RE.test(between)) return true;
   const afterClosingDollar = source.slice(closingDollar + 1);
   return [...between.matchAll(AMBIGUOUS_PRESENTATION_OPEN_RE)].some(
     (ambiguousOpen) =>
