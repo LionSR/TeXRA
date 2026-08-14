@@ -7,7 +7,7 @@ import {
   type AgentFlowResult,
   type WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
-import type { RunOutcome } from '@shared/schemas';
+import { JsonValueSchema, type RunOutcome } from '@shared/schemas';
 
 /** Reference to one persisted workflow diff. */
 const ResultDiffSummarySchema = z.strictObject({
@@ -37,7 +37,7 @@ export const WorkflowAgentFinalResultSchema = WorkflowFlowResultSchema.pick({
     diffs: z.array(ResultDiffSummarySchema).prefault(() => []),
     cost: CostSchema,
     diffsUnavailable: z.string().optional(),
-    structured: z.json().optional(),
+    structured: JsonValueSchema.optional(),
   })
   .strict();
 
@@ -51,7 +51,7 @@ const ToolUseAgentFinalResultSchema = ToolUseFlowResultSchema.pick({
     response: ToolUseFlowResultSchema.shape.response.unwrap().prefault(''),
     files: ToolUseFlowResultSchema.shape.files.unwrap().prefault(() => []),
     cost: CostSchema,
-    structured: z.json().optional(),
+    structured: JsonValueSchema.optional(),
   })
   .strict();
 
