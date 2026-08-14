@@ -260,6 +260,26 @@ async function writeGeneratedOutput(root: string): Promise<string> {
   return generated;
 }
 
+/** Cancelled-run fixture: real source file plus a cancelled execution mock. */
+async function setupCancelledOutput(
+  root: string,
+  executionId: string,
+): Promise<ReturnType<typeof runOutputSummary>> {
+  const generated = await writeGeneratedOutput(root);
+  const outputSummary = runOutputSummary(
+    generated,
+    path.join(root, 'paper.tex'),
+  );
+  mockWorkflowExecution(
+    workflowExecution(executionId, {
+      outcome: RUN_OUTCOME.CANCELLED,
+      outputs: [outputSummary],
+    }),
+    true,
+  );
+  return outputSummary;
+}
+
 function expectNoModelOrInputWork(): void {
   expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
   expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
@@ -671,16 +691,9 @@ describe('CLI workflow run command', () => {
 
   it('keeps non-empty cancelled outputs in run storage without copying to --output', async () => {
     await withTempRoot(async (root) => {
-      const outputSummary = runOutputSummary(
-        path.join(root, 'run', 'r1', 'paper.tex'),
-        path.join(root, 'paper.tex'),
-      );
-      mockWorkflowExecution(
-        workflowExecution('exec-cancelled-output', {
-          outcome: RUN_OUTCOME.CANCELLED,
-          outputs: [outputSummary],
-        }),
-        true,
+      const outputSummary = await setupCancelledOutput(
+        root,
+        'exec-cancelled-output',
       );
 
       const context = cliContext({
@@ -717,16 +730,9 @@ describe('CLI workflow run command', () => {
 
   it('keeps non-empty cancelled outputs in run storage without copying to --output-dir', async () => {
     await withTempRoot(async (root) => {
-      const outputSummary = runOutputSummary(
-        path.join(root, 'run', 'r1', 'paper.tex'),
-        path.join(root, 'paper.tex'),
-      );
-      mockWorkflowExecution(
-        workflowExecution('exec-cancelled-output-dir', {
-          outcome: RUN_OUTCOME.CANCELLED,
-          outputs: [outputSummary],
-        }),
-        true,
+      const outputSummary = await setupCancelledOutput(
+        root,
+        'exec-cancelled-output-dir',
       );
 
       const context = cliContext({
@@ -768,17 +774,7 @@ describe('CLI workflow run command', () => {
     await withTempRoot(async (root) => {
       const destination = path.join(root, 'polished.tex');
       await fs.writeFile(destination, 'keep-me');
-      const outputSummary = runOutputSummary(
-        path.join(root, 'run', 'r1', 'paper.tex'),
-        path.join(root, 'paper.tex'),
-      );
-      mockWorkflowExecution(
-        workflowExecution('exec-cancelled-existing-output', {
-          outcome: RUN_OUTCOME.CANCELLED,
-          outputs: [outputSummary],
-        }),
-        true,
-      );
+      await setupCancelledOutput(root, 'exec-cancelled-existing-output');
 
       const exitCode = await runWorkflow(
         { output: 'polished.tex' },
