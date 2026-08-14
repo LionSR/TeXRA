@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
@@ -23,6 +22,7 @@ import {
 import { type TaskRunFileService } from '@utils/files/taskRunStorage';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { truncatedHexId } from '@utils/core/idHash';
 import { hasExtension } from '@utils/core/pathCore';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { getRunDir } from '@utils/files/runStorageFs';
@@ -282,10 +282,7 @@ async function compileOne(
     invalidCharPattern: /[^a-zA-Z0-9._-]/g,
     replacement: '_',
   });
-  const pathHash = createHash('sha1')
-    .update(pathForSafeName)
-    .digest('hex')
-    .slice(0, PATH_HASH_LENGTH);
+  const pathHash = truncatedHexId(pathForSafeName, PATH_HASH_LENGTH, 'sha1');
   const sanitizedStem = legacySafeName.slice(0, MAX_SANITIZED_STEM_LENGTH);
   const safeName = `${sanitizedStem}_${pathHash}`;
   const buildDir = path.join(
@@ -310,12 +307,11 @@ async function compileOne(
     invalidCharPattern: /[^a-zA-Z0-9._-]/g,
     replacement: '_',
   });
-  const rawSafeName = `${rawLegacySafeName.slice(0, MAX_SANITIZED_STEM_LENGTH)}_${createHash(
+  const rawSafeName = `${rawLegacySafeName.slice(0, MAX_SANITIZED_STEM_LENGTH)}_${truncatedHexId(
+    rawPathForSafeName,
+    PATH_HASH_LENGTH,
     'sha1',
-  )
-    .update(rawPathForSafeName)
-    .digest('hex')
-    .slice(0, PATH_HASH_LENGTH)}`;
+  )}`;
   const legacyLogPaths = [
     ...new Set([legacySafeName, rawLegacySafeName, rawSafeName]),
   ].map((name) => path.join(opts.compileRoot, `r${currentRound}_${name}.log`));
