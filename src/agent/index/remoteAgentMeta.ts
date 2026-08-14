@@ -57,7 +57,6 @@ export async function loadRemoteAgents(): Promise<AgentEntry[]> {
         path: '',
         category: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
         description: remote.description ?? undefined,
-        visibility: remote.visibility ?? undefined,
         tools: dbTools ?? cached?.tools,
         defaultOutputFiles: cached?.defaultOutputFiles,
       };
