@@ -3,10 +3,10 @@ import { isNonEmptyString } from '@utils/core';
 
 /**
  * Validate a configured helper-model choice against a candidate list, falling
- * back to the candidate list's first entry, and finally to the built-in
- * default, when the configured model isn't present in the list. The built-in
- * default is always accepted as-is because it is used for internal auxiliary
- * tasks, not user-facing generation.
+ * back to the built-in default when the configured model isn't present. The
+ * built-in default is always accepted as-is because it is used for internal
+ * auxiliary tasks, not user-facing generation — do not fall back to the
+ * first picker model, which is a premium default.
  *
  * Single source of truth for the "validate against candidates, else fall
  * back" precedence chain shared by {@link getHelperModelName} (agent runtime)
@@ -29,5 +29,5 @@ export function resolveEffectiveHelperModel(
   if (candidateModels.includes(resolved)) {
     return resolved;
   }
-  return candidateModels[0] ?? DEFAULT_HELPER_MODEL;
+  return DEFAULT_HELPER_MODEL;
 }

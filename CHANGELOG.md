@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 - **Lean Project remotes are available after sign-in** — the hosted Lean
   agents no longer need a special access group.
 
+#### Bug Fixes
+
+- **A missing helper model falls back to DeepSeek V4 Flash** — disabling or
+  removing the helper no longer silently switches auxiliary tasks to the
+  first picker model.
+
 ### Extension (VS Code) and Desktop
 
 #### Features

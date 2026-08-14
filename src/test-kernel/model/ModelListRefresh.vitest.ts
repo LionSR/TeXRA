@@ -81,6 +81,9 @@ describe('refreshModelListStateIfNeeded', () => {
     const result = await refreshModelListStateIfNeeded(state);
 
     expect(result.skipped).toBe(false);
+    expect(result.reordered).toBe(true);
+    expect(result.added).toEqual([]);
+    expect(result.removed).toEqual([]);
     expect(enabledModels(state)).toEqual(['sonnet5T', 'gemini31p', 'custom']);
   });
 });
