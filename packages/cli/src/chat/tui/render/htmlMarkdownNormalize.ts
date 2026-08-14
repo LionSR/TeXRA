@@ -1,9 +1,9 @@
 import { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
 import { clamp } from '@utils/core';
 
-// Require an HTML tag delimiter: `<p<1` is a TeX inequality, not a paragraph.
+// Compact comparisons such as `0<p>1` are TeX, not paragraph markup.
 const KNOWN_HTML_TAG_RE =
-  /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/i;
+  /(?<![\p{L}\p{N}_])<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/iu;
 
 function quoteHtmlBlock(body: string): string {
   const trimmed = body.trim();
@@ -26,21 +26,21 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
 
   return summarized
     .replaceAll(
-      /<h([1-6])(?=[\s/>])[^>]*>([\s\S]*?)<\/h\1>/gi,
+      /(?<![\p{L}\p{N}_])<h([1-6])(?=[\s/>])[^>]*>([\s\S]*?)<\/h\1>/giu,
       (_match, level: string, body: string) =>
         `\n\n${headingMarker(level)} ${body.trim()}\n\n`,
     )
     .replaceAll(/<br\s*\/?>/gi, '\n')
     .replaceAll(/<\/(?:p|div)>/gi, '\n\n')
-    .replaceAll(/<(?:p|div)(?=[\s/>])[^>]*>/gi, '')
-    .replaceAll(/<(?:strong|b)(?=[\s/>])[^>]*>/gi, '**')
+    .replaceAll(/(?<![\p{L}\p{N}_])<(?:p|div)(?=[\s/>])[^>]*>/giu, '')
+    .replaceAll(/(?<![\p{L}\p{N}_])<(?:strong|b)(?=[\s/>])[^>]*>/giu, '**')
     .replaceAll(/<\/(?:strong|b)>/gi, '**')
-    .replaceAll(/<(?:em|i)(?=[\s/>])[^>]*>/gi, '_')
+    .replaceAll(/(?<![\p{L}\p{N}_])<(?:em|i)(?=[\s/>])[^>]*>/giu, '_')
     .replaceAll(/<\/(?:em|i)>/gi, '_')
-    .replaceAll(/<code(?=[\s/>])[^>]*>/gi, '`')
+    .replaceAll(/(?<![\p{L}\p{N}_])<code(?=[\s/>])[^>]*>/giu, '`')
     .replaceAll(/<\/code>/gi, '`')
     .replaceAll(
-      /<blockquote(?=[\s/>])[^>]*>([\s\S]*?)<\/blockquote>/gi,
+      /(?<![\p{L}\p{N}_])<blockquote(?=[\s/>])[^>]*>([\s\S]*?)<\/blockquote>/giu,
       (_match, body: string) => quoteHtmlBlock(body),
     )
     .trim();

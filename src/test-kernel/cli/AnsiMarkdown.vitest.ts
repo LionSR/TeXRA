@@ -93,9 +93,20 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('preserves TeX inequalities that resemble opening HTML tags', () => {
-    const plain = renderPlain('\\[0<p<1\\]\nThen \\[a>0\\]');
+    const plain = renderPlain(
+      [
+        '\\[0<p<1\\]',
+        '\\[0<p>1\\]',
+        '\\[a<b>c\\]',
+        '\\[a<i>c\\]',
+        'Then \\[a>0\\]',
+      ].join('\n'),
+    );
 
     expect(plain).toContain('\\[0<p<1\\]');
+    expect(plain).toContain('\\[0<p>1\\]');
+    expect(plain).toContain('\\[a<b>c\\]');
+    expect(plain).toContain('\\[a<i>c\\]');
     expect(plain).toContain('\\[a>0\\]');
   });
 
