@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 #### Features
 
+- **Gemini 3.7 Flash is available** — the new Flash model replaces Gemini 3.6
+  Flash in the default model list at half the price. Existing selections of
+  older Flash models keep working while Google serves them.
 - **Lean Project remotes are available after sign-in** — the hosted Lean
   agents no longer need a special access group.
 
