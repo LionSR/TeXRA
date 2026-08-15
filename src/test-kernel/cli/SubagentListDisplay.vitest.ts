@@ -615,6 +615,100 @@ describe('CLI child list display model', () => {
     },
   );
 
+  it('renders held media in the live pending pane behind an unfinished tool', async () => {
+    const { ink, React } = await loadInk();
+    const streamId = 'media-holder' as StreamTabId;
+    const slice: StreamSlice = {
+      ...emptySlice(streamId),
+      status: STREAM_PHASE.RUNNING,
+      entries: [
+        {
+          id: 'blocking-tool',
+          role: 'tool',
+          text: '',
+          finalized: false,
+          toolUse: {
+            toolName: 'write_file',
+            errorText: '',
+            outputText: '',
+            userInstructionText: '',
+            input: { path: 'paper.tex' },
+            isError: false,
+            isUserFeedback: false,
+            headerSummary: 'Drafting paper.tex',
+            status: 'in_progress',
+          },
+        },
+        {
+          id: 'held-media',
+          role: 'media',
+          text: '',
+          finalized: true,
+          images: [{ path: '/tmp/held-plot.png', sizeBytes: 8704 }],
+        },
+      ],
+    };
+    activeStreamId.set(streamId);
+    streamsSignal.set(new Map([[streamId, slice]]));
+
+    try {
+      const output = ink.renderToString(
+        React.createElement(ConversationPane, { maxRows: 4, width: 80 }),
+        { columns: 80 },
+      );
+      expect(output).toContain('[image]');
+      expect(output).toContain('/tmp/held-plot.png');
+    } finally {
+      activeStreamId.set(undefined);
+      streamsSignal.set(new Map());
+    }
+  });
+
+  it('renders held workflow phases in the live pending pane behind an unfinished tool', async () => {
+    const { ink, React } = await loadInk();
+    const streamId = 'phase-holder' as StreamTabId;
+    const slice: StreamSlice = {
+      ...emptySlice(streamId),
+      status: STREAM_PHASE.RUNNING,
+      entries: [
+        {
+          id: 'blocking-tool',
+          role: 'tool',
+          text: '',
+          finalized: false,
+          toolUse: {
+            toolName: 'write_file',
+            errorText: '',
+            outputText: '',
+            userInstructionText: '',
+            input: { path: 'paper.tex' },
+            isError: false,
+            isUserFeedback: false,
+            headerSummary: 'Drafting paper.tex',
+            status: 'in_progress',
+          },
+        },
+        phaseEntry('held-phase', 'Verify', {
+          phaseIndex: 0,
+          phaseTotal: 2,
+        }),
+      ],
+    };
+    activeStreamId.set(streamId);
+    streamsSignal.set(new Map([[streamId, slice]]));
+
+    try {
+      const output = ink.renderToString(
+        React.createElement(ConversationPane, { maxRows: 4, width: 80 }),
+        { columns: 80 },
+      );
+      expect(output).toContain('◆ Verify (1/2)');
+    } finally {
+      activeStreamId.set(undefined);
+      streamsSignal.set(new Map());
+    }
+  });
+
   it('keeps status markers steady and status colors independent of focus', () => {
     expect(CHILD_STATUS_MARKER).toBe('● ');
     expect(childStatusColor('running')).toBe('cyan');
