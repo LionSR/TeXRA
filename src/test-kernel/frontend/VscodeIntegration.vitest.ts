@@ -15,7 +15,7 @@ const EXPECTED_MEMBERS = [
 describe('vscodeLeanLanguageServices', () => {
   it('exposes exactly the LeanLanguageServices operations as functions', () => {
     expect(Object.keys(vscodeLeanLanguageServices).sort()).toEqual(
-      [...EXPECTED_MEMBERS].sort(),
+      EXPECTED_MEMBERS.toSorted(),
     );
     for (const member of EXPECTED_MEMBERS) {
       expect(typeof vscodeLeanLanguageServices[member]).toBe('function');
