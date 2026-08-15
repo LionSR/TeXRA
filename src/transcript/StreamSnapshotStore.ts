@@ -1817,17 +1817,10 @@ export class StreamSnapshotStore {
     if (!current || current.diskState !== 'unknown') return;
     current.usage = new Map(usage.usage);
     current.usageUnparsed = new Map(usage.unparsedRuns);
-    // Replay live usage deltas that landed while the usage sidecar was being
-    // read. Leaving them in `overlays.usage` would make a later full seed
-    // double-count them, so persist the merged map immediately.
-    const usageOverlay = current.overlays.usage;
-    if (usageOverlay) {
-      for (const [storageKey, delta] of usageOverlay) {
-        this.applyUsageDeltaMemory(current, storageKey, delta);
-      }
-      current.overlays.usage = undefined;
-      this.writeUsage(streamId);
-    }
+    // Leave any live usage overlay in place: `mutateWithOverlay` has already
+    // applied it to `current.usage`, and a later full seed will replay it once
+    // on top of the freshly-read disk usage. This usage-only seed therefore
+    // performs no detached writes of its own.
     current.usageProvenance = true;
   }
 

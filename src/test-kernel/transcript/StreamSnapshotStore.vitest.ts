@@ -1071,6 +1071,10 @@ describe('StreamSnapshotStore', () => {
       cost: 0.2,
     });
     expect(warnSpy).not.toHaveBeenCalled();
+
+    // Drain the seed chain started by the live usage event so teardown cannot
+    // race an in-flight sidecar write.
+    await store.flush();
   });
 
   it('strips a retired runDescriptor sidecar without reading its FK', async () => {
