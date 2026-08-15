@@ -856,7 +856,6 @@ export class ExecutionRegistry {
           flowRecord: 'delete',
           logger,
           failedMessage: 'Failed to finalize stopped waiting execution',
-          rejectedMessage: 'Waiting-execution finalizer rejected unexpectedly',
         });
       } finally {
         if (!handle.isChildExecution) {

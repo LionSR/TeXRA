@@ -53,6 +53,7 @@ export {
   markOwnedExecutionLeaseUndurable,
   type OwnedExecutionLeaseScope,
 } from './executionLease';
+export { persistChildRunResultMeta } from './childRunPersistence';
 export { resolveChildRunOutput } from './childRunOutput';
 export {
   SessionStores,
