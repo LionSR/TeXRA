@@ -53,6 +53,17 @@ All notable changes to this project will be documented in this file.
   the clipboard as plain text, to paste into whichever chat you want. Running
   latexFixer on a compile failure is unchanged.
 
+### Desktop
+
+#### Bug Fixes
+
+- **Follow-up polish revises text again** — the desktop polish action no longer
+  silently returns the original draft; it now applies the same bundled prompt
+  template the extension uses.
+- **Temporary diff files are cleaned up** — viewing a diff in an external
+  editor no longer leaves `texra-desktop-diff` folders behind after the window
+  closes.
+
 ### CLI and Desktop
 
 #### Bug Fixes

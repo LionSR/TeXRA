@@ -1,4 +1,5 @@
 // Standard library imports
+import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -24,8 +25,10 @@ function createHost(overrides: Partial<DiffHostOptions> = {}) {
   const openPath = vi.fn(async (filePath: string) => {
     openedPaths.push(filePath);
   });
+  const host = createDesktopDiffHost({ openPath, ...overrides });
+  hosts.push(host);
   return {
-    host: createDesktopDiffHost({ openPath, ...overrides }),
+    host,
     openPath,
     openedPaths,
   };
@@ -37,8 +40,11 @@ function expectOpenedPatchFile(openedPaths: readonly string[]): void {
 }
 
 const tempDirs: string[] = [];
+const hosts: DiffHost[] = [];
 
 afterEach(async () => {
+  await Promise.all(hosts.map((host) => host.dispose()));
+  hosts.length = 0;
   await cleanupTempDirs(tempDirs);
 });
 
@@ -161,5 +167,20 @@ describe('createDesktopDiffHost', () => {
 
     expect(posted).toHaveLength(0);
     expectOpenedPatchFile(openedPaths);
+  });
+
+  it('removes external-editor patch directories when the host is disposed', async () => {
+    const { host, openedPaths } = createHost();
+
+    await openDiffPair(host, 'Compare');
+    const diffPath = openedPaths[0];
+    const diffDir = path.dirname(diffPath);
+
+    expect(existsSync(diffPath)).toBe(true);
+    expect(path.basename(diffDir)).toMatch(/^texra-desktop-diff-/);
+
+    await host.dispose();
+
+    expect(existsSync(diffDir)).toBe(false);
   });
 });

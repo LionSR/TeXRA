@@ -1,6 +1,7 @@
 import { access, constants } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { app } from 'electron';
+import { initializePolishModel } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { isFileNotFoundError } from '@common/errors';
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
@@ -163,6 +164,11 @@ export async function initializeElectronPlatform(
   // and the direct Lean language services (lake env lean --server).
   initNodeAgentRuntime(lifecycle);
   initializeNodeGoalPrompts(resourcesPath);
+  // Follow-up polish uses the same bundled template as the extension; desktop
+  // previously wired `polishTextWithAI` without setting this path.
+  initializePolishModel(
+    join(resourcesPath, 'templates', 'instructionPolish.yaml'),
+  );
   initializeNodeRuntimeSkills({
     cwd: workspacePath ?? app.getPath('home'),
     resourcesPath,

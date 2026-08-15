@@ -147,6 +147,22 @@ describe('desktop composition root and launch environment', () => {
     ]);
   });
 
+  it('initializes the bundled follow-up polish prompt from the resource bundle', async () => {
+    const source = await readDesktopPlatformIndex();
+
+    expect(namedImportSources(source, 'initializePolishModel')).toContain(
+      '@agent/runtime',
+    );
+    expect(source).toContain('initializePolishModel(');
+    expect(source).toContain(
+      "join(resourcesPath, 'templates', 'instructionPolish.yaml')",
+    );
+    expectOrderedAfter(source, 'const resourcesPath = resolveResourcesPath', [
+      'initializePolishModel(',
+      "join(resourcesPath, 'templates', 'instructionPolish.yaml')",
+    ]);
+  });
+
   it('uses the home directory as the no-workspace skill discovery fallback', async () => {
     const source = await readDesktopPlatformIndex();
 
