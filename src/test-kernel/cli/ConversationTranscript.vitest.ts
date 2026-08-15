@@ -1068,6 +1068,39 @@ describe('CLI conversation transcript', () => {
     expect(built.trimmed).toBe(false);
   });
 
+  it('reports a trim when the newest oversized entry forces a prefix drop', () => {
+    const budgets: StaticTranscriptRingBudgets = {
+      rowHighWater: 1,
+      rowLowWater: 1,
+      byteHighWater: 1024 * 1024,
+      byteLowWater: 1024 * 1024,
+    };
+    const built = buildStaticTranscriptItems({
+      currentItems: [],
+      streams: new Map([
+        [
+          STREAM_ID,
+          sliceWithEntries(STREAM_ID, [
+            entry('e0', 'assistant', 'first', true),
+            entry('e1', 'assistant', 'second', true),
+            entry('e2', 'assistant', 'x'.repeat(80), true),
+          ]),
+        ],
+      ]),
+      maxRows: 1,
+      meta: SESSION_META,
+      scrollbackStreamId: STREAM_ID,
+      width: 80,
+      ringBudgets: budgets,
+    });
+
+    expect(built.items.map((item) => item.id)).toEqual([
+      'session-header',
+      'e2',
+    ]);
+    expect(built.trimmed).toBe(true);
+  });
+
   it('trims a static tail with margin-collapse-aware row accounting', () => {
     const header: StaticTranscriptItem = {
       id: 'session-header',

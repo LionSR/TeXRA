@@ -41,6 +41,7 @@ import {
   transcriptColumns,
   transcriptEntryLayout,
   transcriptEntryLayoutRows,
+  transcriptEntryMarginBottomRows,
 } from './transcriptEntryLayout';
 
 export type StaticTranscriptItem =
@@ -224,6 +225,10 @@ function entryAbove(
 interface StaticTranscriptItemMetrics {
   readonly rows: number;
   readonly bytes: number;
+  /** Rows without margin collapse against a previous item. */
+  readonly contentRows: number;
+  readonly declaredTopRows: number;
+  readonly marginBottomRows: number;
 }
 
 /** Row count plus an estimated UTF-8 byte footprint for one static item.
@@ -233,17 +238,17 @@ interface StaticTranscriptItemMetrics {
  *  is a floor for its chrome, not a bound. Entry metrics come from the same
  *  `scrollback-budget` layout the row budget uses, so the ring never pays for
  *  a second full layout pass. */
-function staticTranscriptItemMetrics(
+function staticTranscriptItemBaseMetrics(
   item: StaticTranscriptItem,
   width?: number,
   executionLabels?: ExecutionLabels,
-  previousItem?: StaticTranscriptItem,
 ): StaticTranscriptItemMetrics {
   if (item.kind === 'header') {
+    const rows = item.compact
+      ? COMPACT_SESSION_HEADER_ROWS
+      : FULL_SESSION_HEADER_ROWS;
     return {
-      rows: item.compact
-        ? COMPACT_SESSION_HEADER_ROWS
-        : FULL_SESSION_HEADER_ROWS,
+      rows,
       bytes:
         Buffer.byteLength(item.identityLine, 'utf8') +
         Buffer.byteLength(item.meta.version, 'utf8') +
@@ -251,17 +256,72 @@ function staticTranscriptItemMetrics(
         Buffer.byteLength(item.meta.agent, 'utf8') +
         Buffer.byteLength(item.meta.cwd, 'utf8') +
         64,
+      contentRows: rows,
+      declaredTopRows: 0,
+      marginBottomRows: 0,
     };
   }
+
   const layout = transcriptEntryLayout(item.entry, {
     executionLabels,
     mode: 'scrollback-budget',
-    previousEntry: entryAbove(previousItem),
+    previousEntry: undefined,
     width,
   });
   let bytes = 0;
   for (const line of layout.lines) bytes += Buffer.byteLength(line, 'utf8');
-  return { rows: transcriptEntryLayoutRows(layout), bytes };
+  return {
+    rows: transcriptEntryLayoutRows(layout),
+    bytes,
+    contentRows: Math.max(1, layout.lines.length),
+    declaredTopRows: layout.marginTopRows,
+    marginBottomRows: layout.marginBottomRows,
+  };
+}
+
+function staticTranscriptItemMetricsForPrevious(
+  base: StaticTranscriptItemMetrics,
+  previousBase: StaticTranscriptItemMetrics | undefined,
+): StaticTranscriptItemMetrics {
+  const marginTopRows =
+    previousBase === undefined
+      ? base.declaredTopRows
+      : Math.max(0, base.declaredTopRows - previousBase.marginBottomRows);
+  return {
+    ...base,
+    rows: base.contentRows + marginTopRows + base.marginBottomRows,
+  };
+}
+
+function staticTranscriptPreviousBase(
+  previousItem: StaticTranscriptItem | undefined,
+): StaticTranscriptItemMetrics | undefined {
+  const previousEntry =
+    previousItem === undefined ? undefined : entryAbove(previousItem);
+  if (previousEntry === undefined) return undefined;
+  // Only the previous entry's bottom margin participates in collapse; laying
+  // out the whole previous item here would duplicate its layout cost.
+  return {
+    rows: 0,
+    bytes: 0,
+    contentRows: 0,
+    declaredTopRows: 0,
+    marginBottomRows: transcriptEntryMarginBottomRows(previousEntry),
+  };
+}
+
+function staticTranscriptItemMetrics(
+  item: StaticTranscriptItem,
+  width?: number,
+  executionLabels?: ExecutionLabels,
+  previousItem?: StaticTranscriptItem,
+): StaticTranscriptItemMetrics {
+  const base = staticTranscriptItemBaseMetrics(item, width, executionLabels);
+  if (item.kind === 'header') return base;
+  return staticTranscriptItemMetricsForPrevious(
+    base,
+    staticTranscriptPreviousBase(previousItem),
+  );
 }
 
 function staticTranscriptItemRowCount(
@@ -369,7 +429,9 @@ export function trimStaticTranscriptItems(
     removedAny = true;
   }
 
-  return { items: nextItems, totals, trimmed: removedAny };
+  return removedAny
+    ? { items: nextItems, totals, trimmed: true }
+    : { items, totals: options.totals, trimmed: false };
 }
 
 /**
@@ -407,28 +469,38 @@ function retainedStaticTranscriptTail(
   }
 
   const headerItem = headerCount > 0 ? items[0] : undefined;
-  const headerMetrics =
+  const headerBase =
     headerItem !== undefined
-      ? staticTranscriptItemMetrics(
+      ? staticTranscriptItemBaseMetrics(
           headerItem,
           options.width,
           options.executionLabels,
         )
-      : { rows: 0, bytes: 0 };
+      : undefined;
+
+  // Layout each item at most once in the backward walk. `previousBase` only
+  // supplies the previous entry's bottom margin, so row-collapse adjustments
+  // never trigger a second layout pass for an item that is already measured.
+  const baseFor = (item: StaticTranscriptItem): StaticTranscriptItemMetrics =>
+    staticTranscriptItemBaseMetrics(
+      item,
+      options.width,
+      options.executionLabels,
+    );
+
   let start = items.length - 1;
   const newest = items[start];
-  let firstMetrics =
-    newest === undefined
-      ? { rows: 0, bytes: 0 }
-      : staticTranscriptItemMetrics(
-          newest,
-          options.width,
-          options.executionLabels,
-          headerItem,
-        );
+  let firstBase = newest === undefined ? undefined : baseFor(newest);
+  if (firstBase === undefined) {
+    return { items, totals: { rows: 0, bytes: 0 }, trimmed: false };
+  }
+  const firstMetrics = staticTranscriptItemMetricsForPrevious(
+    firstBase,
+    headerBase,
+  );
   let totals = {
-    rows: headerMetrics.rows + firstMetrics.rows,
-    bytes: headerMetrics.bytes + firstMetrics.bytes,
+    rows: (headerBase?.rows ?? 0) + firstMetrics.rows,
+    bytes: (headerBase?.bytes ?? 0) + firstMetrics.bytes,
   };
   let trimNeeded =
     totals.rows > budgets.rowHighWater || totals.bytes > budgets.byteHighWater;
@@ -436,33 +508,31 @@ function retainedStaticTranscriptTail(
   while (!trimNeeded && start > headerCount) {
     const candidate = items[start - 1];
     if (candidate === undefined) break;
-    const candidateMetrics = staticTranscriptItemMetrics(
-      candidate,
-      options.width,
-      options.executionLabels,
-      headerItem,
-    );
+    const candidateBase = baseFor(candidate);
     const oldFirst = items[start];
     if (oldFirst === undefined) break;
-    const oldFirstAfterCandidate = staticTranscriptItemMetrics(
-      oldFirst,
-      options.width,
-      options.executionLabels,
-      candidate,
+    const oldFirstBase = firstBase;
+    const oldFirstBefore = staticTranscriptItemMetricsForPrevious(
+      oldFirstBase,
+      headerBase,
+    );
+    const candidateMetrics = staticTranscriptItemMetricsForPrevious(
+      candidateBase,
+      headerBase,
+    );
+    const oldFirstAfter = staticTranscriptItemMetricsForPrevious(
+      oldFirstBase,
+      candidateBase,
     );
     totals = {
       rows:
         totals.rows -
-        firstMetrics.rows +
-        oldFirstAfterCandidate.rows +
-        candidateMetrics.rows,
-      bytes:
-        totals.bytes -
-        firstMetrics.bytes +
-        oldFirstAfterCandidate.bytes +
-        candidateMetrics.bytes,
+        oldFirstBefore.rows +
+        candidateMetrics.rows +
+        oldFirstAfter.rows,
+      bytes: totals.bytes + candidateBase.bytes,
     };
-    firstMetrics = candidateMetrics;
+    firstBase = candidateBase;
     start -= 1;
     trimNeeded =
       totals.rows > budgets.rowHighWater ||
@@ -477,12 +547,17 @@ function retainedStaticTranscriptTail(
     headerItem !== undefined
       ? [headerItem, ...items.slice(start)]
       : items.slice(start);
-  return trimStaticTranscriptItems(candidateItems, {
+  const retained = trimStaticTranscriptItems(candidateItems, {
     budgets,
     executionLabels: options.executionLabels,
     totals,
     width: options.width,
   });
+  return {
+    items: retained.items,
+    totals: retained.totals,
+    trimmed: candidateItems.length < items.length || retained.trimmed,
+  };
 }
 
 /** The execution-label map is a `computed()` signal that can return a fresh
