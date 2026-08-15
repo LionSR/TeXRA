@@ -79,7 +79,9 @@ import {
   EMPTY_WORK_PLAN,
   emptyStreamData,
   readMeta,
+  readMetaForOwnership,
   readStreamData,
+  readUsageData,
   type StreamData,
 } from './streamSnapshotRead';
 import type { StreamSummaryMeta } from './StreamLogStore';
@@ -1391,16 +1393,6 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * Execution id from the resident snapshot record only, without the
-   * unseeded-access warning. Live-session ownership decisions need the current
-   * in-memory value even before disk provenance is established; cold streams
-   * have no resident record and simply return `undefined`.
-   */
-  getResidentExecutionId(stream: StreamTabId): ExecutionId | undefined {
-    return this.records.get(stream)?.runExecutionId;
-  }
-
-  /**
    * Canonical immutable run record projected from live facts or hydrated from
    * the execution record named by the stream sidecar. All five fields share
    * that execution owner and replacement lifecycle.
@@ -1441,27 +1433,12 @@ export class StreamSnapshotStore {
     // mint an in-memory record for a stream this caller only needs one disk
     // field from. The bounded-startup invariant (#9947) keeps cold historical
     // streams record-free until a caller actually seeds or mutates them.
-    return (await readMeta(this.kvHandles.get(stream)))?.executionId;
-  }
-
-  /**
-   * Persist the stream→execution FK into the sidecar meta, seeding the stream
-   * with the FK already staged so hydration cannot republish an executionless
-   * summary. Restart repair uses this to normalize legacy streams whose only
-   * ownership mapping lives in the summary mirror before their parked WAITING
-   * preload.
-   */
-  async persistExecutionId(
-    stream: StreamTabId,
-    executionId: ExecutionId,
-  ): Promise<void> {
-    // Stage the FK before the seed so `applyStreamData` merges it into the
-    // freshly-read meta and publishes the ownership instead of erasing it.
-    this.patchMetaMemory(stream, { executionId });
-    this.getOrCreateRecord(stream).metaOverlay = true;
-    await this.seedStreams([stream]);
-    this.writeMeta(stream, this.patchMetaMemory(stream, { executionId }));
-    await this.waitForWrites(stream);
+    //
+    // Use the strict ownership read: corrupt-present metadata must surface as
+    // an unreadable sidecar (and skip the stream) rather than masquerade as a
+    // legacy stream with no persisted FK.
+    return (await readMetaForOwnership(this.kvHandles.get(stream)))
+      ?.executionId;
   }
 
   /**
@@ -1800,9 +1777,40 @@ export class StreamSnapshotStore {
    * stream set. Use this when a host only has a partial rail snapshot at
    * startup; later mutations for other streams must still seed from disk before
    * writing.
+   *
+   * `usageOnly` hydrates only the per-stream usage sidecar. Restart repair uses
+   * it for parked WAITING streams so the status-bar usage total is correct
+   * immediately without making the full 6-file record resident for the whole
+   * session (#9947, #10520).
    */
-  async preload(streamIds: readonly StreamTabId[]): Promise<void> {
+  async preload(
+    streamIds: readonly StreamTabId[],
+    options?: { readonly usageOnly?: boolean },
+  ): Promise<void> {
+    if (options?.usageOnly) {
+      await pMap(streamIds, (streamId) => this.seedUsageOnly(streamId), {
+        concurrency: SEED_IO_CONCURRENCY,
+      });
+      return;
+    }
     await this.seedStreams(streamIds);
+  }
+
+  private async seedUsageOnly(streamId: StreamTabId): Promise<void> {
+    if (this.hasDiskProvenance(streamId)) return;
+    const version = this.streamVersion(streamId);
+    const record = this.getOrCreateRecord(streamId);
+    if (record.seedChain) {
+      await record.seedChain.catch(() => undefined);
+    }
+    if (this.streamVersion(streamId) !== version) return;
+    if (this.hasDiskProvenance(streamId)) return;
+    const usage = await readUsageData(this.kv(streamId));
+    if (this.streamVersion(streamId) !== version) return;
+    const current = this.records.get(streamId);
+    if (!current || current.diskState !== 'unknown') return;
+    current.usage = new Map(usage.usage);
+    current.usageUnparsed = new Map(usage.unparsedRuns);
   }
 
   private async seedStreams(streamIds: readonly StreamTabId[]): Promise<void> {

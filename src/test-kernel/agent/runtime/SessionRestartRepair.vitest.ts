@@ -471,6 +471,7 @@ describe('SessionHandle restart repair', () => {
 
     expect(preload).toHaveBeenCalledTimes(2);
     expect([...preload.mock.calls[1][0]]).toEqual([parkedStreamId]);
+    expect(preload.mock.calls[1][1]).toEqual({ usageOnly: true });
     expect(preload.mock.invocationCallOrder[1]).toBeLessThan(
       repair.mock.invocationCallOrder[0],
     );
@@ -511,7 +512,7 @@ describe('SessionHandle restart repair', () => {
     expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
   });
 
-  it('normalizes summary-only WAITING ownership before preload republishes its summary', async () => {
+  it('preserves summary-only WAITING ownership without rewriting the sidecar', async () => {
     const parkedExecutionId = 'b0a00011' as ExecutionId;
     const parkedStreamId = 'parked#waiting-summary-only' as StreamTabId;
 
@@ -533,15 +534,16 @@ describe('SessionHandle restart repair', () => {
     await session.waitUntilReady();
 
     // The legacy stream has no sidecar FK, only a summary mirror entry. Its
-    // preload must first persist that fallback FK, or hydration would
-    // republish the summary without `executionId` and erase the ownership.
+    // usage-only preload must not republish the summary from an empty/corrupt
+    // sidecar meta, so the summary ownership and the absent sidecar FK both
+    // stay exactly as they were.
     expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
     expect(
       session.transcripts.getSummaryMeta(parkedStreamId)?.executionId,
     ).toBe(parkedExecutionId);
     await expect(
       session.snapshots.readPersistedExecutionId(parkedStreamId),
-    ).resolves.toBe(parkedExecutionId);
+    ).resolves.toBeUndefined();
   });
 
   it('preserves mapped runs and fails only unmapped streams when resumability detection fails', async () => {

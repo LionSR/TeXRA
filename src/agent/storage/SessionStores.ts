@@ -106,8 +106,17 @@ export class SessionStores {
   }
 
   async waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void> {
-    const executionId = await this.executionIdForStream(stream);
-    if (executionId) await waitForOwnedExecutionLeaseRelease(executionId);
+    try {
+      const executionId = await this.executionIdForStream(stream);
+      if (executionId) await waitForOwnedExecutionLeaseRelease(executionId);
+    } catch (error) {
+      // The deletion path below reports the unreadable ownership as `failed`;
+      // this wait must not escape the deletion result contract as a rejection.
+      log.warn(
+        `Stream ${stream} skipped its owned-execution lease wait because ownership could not be read: ${toErrorMessage(error)}`,
+        { data: error },
+      );
+    }
   }
 
   deleteStream(stream: StreamTabId): Promise<DeleteStreamResult> {
@@ -230,7 +239,16 @@ export class SessionStores {
   ): Promise<DeleteStreamResult> {
     if (!canUseStreamDataDir(stream)) return 'deleted';
 
-    const executionId = await this.executionIdForStream(stream);
+    let executionId: ExecutionId | undefined;
+    try {
+      executionId = await this.executionIdForStream(stream);
+    } catch (error) {
+      log.warn(
+        `Stream ${stream} was retained because its execution ownership could not be read: ${toErrorMessage(error)}`,
+        { data: error },
+      );
+      return 'failed';
+    }
 
     if (!executionId) {
       try {
@@ -306,7 +324,7 @@ export class SessionStores {
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
     return (
-      this.snapshots.getResidentExecutionId(stream) ??
+      this.snapshots.getRunMetadata(stream).executionId ??
       (await this.snapshots.readPersistedExecutionId(stream)) ??
       this.streamLogs.getSummaryMeta(stream)?.executionId
     );

@@ -104,6 +104,26 @@ export async function readMeta(
 ): Promise<StreamTabMeta | undefined> {
   const raw = await tryRead(kv, STREAM_DATA_KEYS.META);
   if (raw === undefined) return undefined;
+  return parseStreamMeta(raw);
+}
+
+/**
+ * Ownership reads need to distinguish corrupt-present metadata from a
+ * genuinely absent `meta.json`. `readMeta` intentionally downgrades
+ * truncated/corrupt JSON to missing so a full seed can recover to an empty
+ * base; this strict variant lets the one-field ownership read propagate that
+ * SyntaxError so callers can skip or report the damaged stream instead of
+ * treating it as a legacy record with no FK.
+ */
+export async function readMetaForOwnership(
+  kv: KVStore,
+): Promise<StreamTabMeta | undefined> {
+  const raw = await kv.read(STREAM_DATA_KEYS.META);
+  if (raw === undefined) return undefined;
+  return parseStreamMeta(raw);
+}
+
+function parseStreamMeta(raw: unknown): StreamTabMeta | undefined {
   const parsed = StreamTabMetaSchema.safeParse(raw);
   if (parsed.success) return parsed.data;
   // Field-level tolerance: a malformed execution FK must drop only the bad
@@ -187,6 +207,13 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
     usageUnparsed,
     workPlan,
   };
+}
+
+/** Read only the per-stream usage sidecar, for usage-only hydration paths. */
+export async function readUsageData(
+  kv: KVStore,
+): Promise<ReturnType<typeof parseUsageData>> {
+  return parseUsageData(await tryRead(kv, STREAM_DATA_KEYS.USAGE_STATS));
 }
 
 /**

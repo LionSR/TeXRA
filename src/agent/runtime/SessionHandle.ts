@@ -332,7 +332,8 @@ export class SessionHandle {
     // A live-session resident record is the current authority: `run.start`
     // updates it synchronously, while the persisted sidecar FK may still name
     // the previous execution until the run-end flush.
-    const residentExecutionId = this.snapshots.getResidentExecutionId(streamId);
+    const residentExecutionId =
+      this.snapshots.getRunMetadata(streamId).executionId;
     if (residentExecutionId) {
       return this.startOrJoinWaitingRepairProbe(
         streamId,
@@ -413,9 +414,20 @@ export class SessionHandle {
     // Re-resolve through the one-file sidecar FK / summary-mirror fallback
     // rather than the synchronous snapshot record: this probe commonly runs
     // for a parked WAITING stream that was deliberately not seeded at startup.
-    const currentExecutionId =
-      (await this.snapshots.readPersistedExecutionId(streamId)) ??
-      this.transcripts.getSummaryMeta(streamId)?.executionId;
+    let currentExecutionId: string | undefined;
+    try {
+      currentExecutionId =
+        (await this.snapshots.readPersistedExecutionId(streamId)) ??
+        this.transcripts.getSummaryMeta(streamId)?.executionId;
+    } catch (error) {
+      // A transient storage failure during the recheck must not reject the
+      // follow-up command before `submitFollowUp` can route it.
+      logger.warn(
+        `Skipped waiting repair for stream ${streamId}: its execution identity could not be revalidated`,
+        { data: error },
+      );
+      return false;
+    }
     if (
       currentExecutionId !== executionId ||
       !this.status.isCurrentGeneration(streamId, statusGeneration)
@@ -645,7 +657,6 @@ export class SessionHandle {
     // seed) need the one-file sidecar read below.
     const executionIds = new Map(this.snapshots.getExecutionIdMap());
     const unresolvedStreams = new Set<StreamTabId>();
-    const fallbackOwnership = new Map<StreamTabId, ExecutionId>();
     // Bound the one-file ownership scan so startup latency does not scale
     // linearly with every non-resident stream in the transcript registry. Each
     // mapper is self-contained: one unreadable sidecar is logged and skipped,
@@ -682,7 +693,6 @@ export class SessionHandle {
           this.transcripts.getSummaryMeta(streamId)?.executionId;
         if (summaryExecutionId) {
           executionIds.set(streamId, summaryExecutionId);
-          fallbackOwnership.set(streamId, summaryExecutionId);
         }
       },
       { concurrency: RESTART_REPAIR_IO_CONCURRENCY },
@@ -719,40 +729,23 @@ export class SessionHandle {
     }
 
     // Parked WAITING streams were deliberately left out of the bounded
-    // startup seed, so seed them now — before repair publishes their WAITING
-    // status — because synchronous status readers (the extension's status-bar
-    // usage total) resolve usage from the seeded snapshot record.
-    //
-    // Two per-stream guards keep this batch isolated:
-    //  1. Legacy streams whose sidecar has no execution FK but whose summary
-    //     mirror still has the fallback id are normalized into the sidecar
-    //     first, so hydration republishes the ownership instead of erasing it.
-    //  2. One unreadable parked sidecar is skipped and logged; repair still
-    //     publishes WAITING (usage stays zero until the lazy probe or a
-    //     selection seeds it) rather than rejecting `waitUntilReady()`.
+    // startup seed, so hydrate their usage now — before repair publishes their
+    // WAITING status — because synchronous status readers (the extension's
+    // status-bar usage total) resolve usage from the snapshot record. A
+    // usage-only read keeps the full 6-file record lazy (#9947) and never
+    // republishes summary metadata, so a legacy summary-only ownership mapping
+    // stays intact. Each mapper is self-contained: one unreadable parked
+    // sidecar is logged and skipped, and repair still publishes WAITING (usage
+    // stays zero until the lazy probe or a selection seeds it) rather than
+    // rejecting `waitUntilReady()`.
     await pMap(
       [...waitingStreams],
       async (streamId) => {
-        const fallbackExecutionId = fallbackOwnership.get(streamId);
-        if (fallbackExecutionId) {
-          try {
-            await this.snapshots.persistExecutionId(
-              streamId,
-              fallbackExecutionId,
-            );
-          } catch (error) {
-            logger.warn(
-              `Skipped parked WAITING preload for stream ${streamId}: its fallback execution identity could not be persisted`,
-              { data: error },
-            );
-            return;
-          }
-        }
         try {
-          await this.snapshots.preload([streamId]);
+          await this.snapshots.preload([streamId], { usageOnly: true });
         } catch (error) {
           logger.warn(
-            `Skipped parked WAITING preload for stream ${streamId}: its sidecar could not be read`,
+            `Skipped parked WAITING usage preload for stream ${streamId}: its sidecar could not be read`,
             { data: error },
           );
         }

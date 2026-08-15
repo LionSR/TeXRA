@@ -1009,6 +1009,19 @@ describe('StreamSnapshotStore', () => {
     expect(store.getRunMetadata(STREAM).executionId).toBe(executionId);
   });
 
+  it('treats corrupt-present ownership metadata as unreadable, not missing', async () => {
+    await StorageFS.ensureDir(streamDataDir(STREAM));
+    await StorageFS.write(
+      path.join(streamDataDir(STREAM), 'meta.json'),
+      '{bad json',
+    );
+
+    const store = new StreamSnapshotStore();
+    await expect(store.readPersistedExecutionId(STREAM)).rejects.toBeInstanceOf(
+      SyntaxError,
+    );
+  });
+
   it('strips a retired runDescriptor sidecar without reading its FK', async () => {
     // Pre-FK sidecars carried a whole runDescriptor; that shape is retired.
     // The unknown key is stripped: no FK is lifted out of it, and the rest

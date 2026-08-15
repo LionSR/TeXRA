@@ -363,7 +363,7 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
     });
   });
 
-  it('propagates sidecar FK storage failures instead of deciding ownership', async () => {
+  it('returns failed rather than rejecting when ownership storage is unreadable', async () => {
     await withSession(async (session) => {
       const executionId = 'abc111' as ExecutionId;
       const stream = `flaky@model#${executionId}` as StreamTabId;
@@ -379,9 +379,7 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
         deleteExecution,
       });
 
-      await expect(stores.deleteStream(stream)).rejects.toThrow(
-        'storage read failed',
-      );
+      await expect(stores.deleteStream(stream)).resolves.toBe('failed');
       expect(deleteExecution).not.toHaveBeenCalled();
       expect(session.transcripts.has(stream)).toBe(true);
     });

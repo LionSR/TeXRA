@@ -140,6 +140,19 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
   });
 
+  it('does not reject follow-ups when the ownership recheck becomes unreadable', async () => {
+    seedCancelled();
+    mockResumable();
+    vi.spyOn(session.snapshots, 'readPersistedExecutionId').mockRejectedValue(
+      new Error('ownership recheck failed'),
+    );
+
+    await expect(repair()).resolves.toBe(false);
+
+    expect(deriveResumability).toHaveBeenCalledWith(executionId);
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+  });
+
   it('leaves the terminal phase alone when the execution is not resumable', async () => {
     seedCancelled();
     deriveResumability.mockResolvedValue({
