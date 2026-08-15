@@ -31,6 +31,7 @@ import {
   finalizeRunTerminal,
   type RunTerminalPersistence,
 } from '@agent/runtime/AgentRunLifecycle';
+import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import type {
   AgentExecutionHandle,
@@ -290,6 +291,14 @@ export interface ChildRunLoopParams<TTurn> {
   readonly recordCost?: (
     totalCostUsd: number | undefined,
   ) => void | Promise<void>;
+  /**
+   * Gate every turn through the session's shared child-run budget
+   * (`childRunBudgetFor`). Set by the detached native/workflow launch path;
+   * agent-CLI callers omit it — their children are external processes on the
+   * user's own subscription, outside both the cost contract and the budget
+   * (see `docs/proposals/2026-08-15-child-run-concurrency-budget.md`).
+   */
+  readonly budgeted?: boolean;
 }
 
 export interface ChildRunLoopHandle {
@@ -814,6 +823,27 @@ export function startChildRunLoop<TTurn>(
   // (#8093). Interim (non-terminal) turns wake inline, immediately, since no
   // finalize is pending for them.
   let pendingDelivery: PendingChildDelivery | undefined;
+  // One slot per live turn: acquired here — the single boundary that drives
+  // every detached native child turn — and nowhere above or below (design:
+  // docs/proposals/2026-08-15-child-run-concurrency-budget.md).
+  const budget = params.budgeted ? childRunBudgetFor(runSession) : undefined;
+  const gateTurn = (
+    base: (ac: AbortController) => Promise<TTurn>,
+  ): ((ac: AbortController) => Promise<TTurn>) =>
+    budget === undefined
+      ? base
+      : (ac) =>
+          budget.add(() => {
+            // A turn cancelled while awaiting a slot must not start fresh
+            // model work; the loop classifies this throw as interrupted.
+            if (loop.isInterrupted() || ac.signal.aborted) {
+              throw new Error(
+                'Child run turn cancelled while awaiting a concurrency slot.',
+              );
+            }
+            return base(ac);
+          }) as Promise<TTurn>;
+
   const run = async (): Promise<void> => {
     let runner: (ac: AbortController) => Promise<TTurn> = (ac) =>
       strategy.launch(ports, ac);
@@ -856,7 +886,7 @@ export function startChildRunLoop<TTurn>(
         const abortController = loop.startTurn();
         const attempt = await attemptTurn(
           strategy,
-          runner,
+          gateTurn(runner),
           loop,
           logger,
           abortController,

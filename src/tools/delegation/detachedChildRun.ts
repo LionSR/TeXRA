@@ -73,6 +73,9 @@ export async function startDetachedChildRunLoop<TTurn>(
       agentName: input.agentName,
       strategy,
       ...(input.recordCost !== undefined && { recordCost: input.recordCost }),
+      // Every detached native/workflow child takes one shared-budget slot per
+      // turn; in-band children ride their idle parent's slot instead.
+      budgeted: true,
     });
     if (onLoopFailed) void completion.catch(onLoopFailed);
     return {

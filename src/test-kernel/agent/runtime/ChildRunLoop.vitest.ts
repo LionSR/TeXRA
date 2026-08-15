@@ -71,6 +71,10 @@ vi.mock('@agent/followUp/childRunDelivery', () => ({
 import type { WorkflowJournalEntry } from '@agent/workflowScript';
 import { getExecutionStore } from '@agent/storage';
 import {
+  childRunBudgetFor,
+  DEFAULT_CHILD_RUN_BUDGET,
+} from '@agent/runtime/childRunBudget';
+import {
   startChildRunLoop,
   type ChildRunLoopHandle,
   type ChildRunLoopParams,
@@ -1027,6 +1031,47 @@ describe('childRunLoop E2E fixtures', () => {
     expect(mocks.finalizeExecution).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: RUN_OUTCOME.FAILED }),
     );
+  });
+
+  it('gates budgeted child turns through the session child-run budget', async () => {
+    childRunBudgetFor(session, 1);
+    try {
+      const first = loopIds('budget-first');
+      const second = loopIds('budget-second');
+      const started: string[] = [];
+      let releaseFirst: ((turn: FakeTurn) => void) | undefined;
+
+      const firstStrategy = createTerminalStrategy(
+        'Budgeted first child',
+        () =>
+          new Promise<FakeTurn>((resolve) => {
+            started.push('first');
+            releaseFirst = resolve;
+          }),
+      );
+      const secondStrategy = createTerminalStrategy(
+        'Budgeted second child',
+        async () => {
+          started.push('second');
+          return { kind: 'terminal', value: 'done' };
+        },
+      );
+
+      startLoop(first, firstStrategy, { budgeted: true });
+      startLoop(second, secondStrategy, { budgeted: true });
+
+      await vi.waitFor(() => expect(started).toEqual(['first']));
+      // One slot: the second child's turn must not start while the first
+      // holds it — even after its loop has acquired its queue lease.
+      await waitForLiveOwner(second.childStreamId);
+      expect(started).toEqual(['first']);
+
+      releaseFirst?.({ kind: 'terminal', value: 'done' });
+      await waitForLoopEnd(second.childStreamId);
+      expect(started).toEqual(['first', 'second']);
+    } finally {
+      childRunBudgetFor(session, DEFAULT_CHILD_RUN_BUDGET);
+    }
   });
 
   it('recordCost commits exactly once with the greatest observed value', async () => {
