@@ -13,7 +13,10 @@ import type {
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import {
+  testExecutionHandle,
+  testExecutionRegistry,
+} from '@test/support/executionHandleFixtures';
 import { ClaudeAgentSessions } from '@tools/agentCliSessionStores';
 
 const mocks = vi.hoisted(() => ({
@@ -476,10 +479,12 @@ describe('claude_agent tool launch and resume fallback', () => {
       childStreamId,
       agent: 'claude_code',
     });
+    const executions = testExecutionRegistry();
+    executions.track(handle);
     ClaudeAgentSessions.register('foreign-live-session', {
       childStreamId,
       executionId: foreignExecutionId,
-      executions: { getHandle: () => handle } as any,
+      executions,
     });
 
     const result = await new ClaudeAgentTool().call({
