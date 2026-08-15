@@ -37,7 +37,9 @@ What is new in this pass:
    the real multi-instance-embedding obstacle) and one residual ambient-ALS read
    in a core cycle flow. None is a defect; each is dispositioned.
 4. **Subagent boundaries remain already-drawn** (§5) — no boundary to newly
-   invent; several near-isolated relocatable units are named.
+   invent; §5 names candidate carve-out starting points, each annotated with the
+   concrete runtime coupling it would first have to convert to a port (none is a
+   pure relocation).
 
 ---
 
@@ -105,12 +107,18 @@ a change this pass makes.
 
 - **C-1 (highest-value core item): residual ambient-ALS read in the cycle flow.**
   `ResponseCycleFlow.ts:217` (`responseCycleToolsForModel`) still calls
-  `useLaunchRunContext()` (ambient `AsyncLocalStorage`) directly instead of
-  reading from injected `services.runScope`. Per the `-07-27` checkpoint this is
-  the last surviving ambient read in the cycle flows (collapsed 11 → ~1). Taking
-  `runContext` off `services` would make the core cycle flow drivable without an
-  ALS frame — exactly the property an SDK embedder wants. **Disposition:** the
-  one core item worth scheduling; small, local.
+  `useLaunchRunContext()` (ambient `AsyncLocalStorage`) directly. Per the `-07-27`
+  checkpoint this is the last surviving ambient read in the cycle flows (collapsed
+  11 → ~1). **The fix is not simply "read from `services.runScope`":** the two
+  values the filter at `ResponseCycleFlow.ts:218-223` needs —
+  `runtimeUnavailableTools` and `approvalPromptsUnavailable` — are
+  `LaunchRunContext` fields (`RunContext.ts:16-18`), not `RunScope` fields
+  (`RunScope.ts:13-22` carries identity/session/cancellation only). So C-1 means
+  injecting those specific launch-context values as explicit immutable service
+  fields (or a small injected tool-policy function), which would make the core
+  cycle flow drivable without an ALS frame — the property an SDK embedder wants.
+  **Disposition:** the one core item worth scheduling; small, but a real port
+  addition, not a one-line substitution.
 - **C-2: persisted-flow layer is storage-coupled.** The generic node engine
   (`node/index.ts`) is host-clean, but `node/persistedFlow.ts:8-9` imports the
   concrete `@agent/storage/ExecutionKVStore` and a `FlowTransition` enum value.
@@ -201,23 +209,32 @@ a change this pass makes.
 
 ### Surface (`packages/agent`, `src/agent/runtime`)
 
-- **S-1: `AgentRunStream` bundles a reinvented generic async-queue.**
+- **S-1 (retracted on the repo's own rule): `AgentRunStream`'s single-consumer
+  queue reads as generic plumbing, but do not extract it.**
   `packages/agent/src/index.ts:101-214` (~110 LoC) multiplexes (1) interrupt/
   handle-attach latching, (2) start-on-first-`next()` + failure propagation, and
-  (3) a hand-rolled single-consumer push→pull buffer (`events[]`/`readers[]`/
-  `push`/`closeIterator`/`end`). Concern (3) is a standard async-queue pattern;
-  extracting it to a small reusable util would leave `AgentRunStream` as just the
-  run-specific latch. **Disposition:** targeted simplification, not removal — the
-  class as a whole owns real run semantics and stays.
-- **T-1: `AgentFinalResult` re-declares a union parallel to `AgentFlowResult`.**
-  They are two lifecycle stages, not duplicates — `AgentFinalResult`
-  (`AgentFinalResult.ts:64`, 3 prod build sites) is the post-flow _delivery_
-  envelope, `.pick()`ed from the flow result and adding post-artifact fields
-  (`diffs`, `cost`, `structured`). The one consolidation is to model it as
-  `AgentFlowResult ⊕ post-artifact extension` rather than a re-declared union.
-  **Disposition:** low urgency, non-trivial (schema + 3 builders). `AgentRunHandle`
-  (`ExecutionHandle.ts:366`) is a `Pick<…>` read-projection, not a fourth result
-  type — no consolidation.
+  (3) a hand-rolled push→pull buffer (`events[]`/`readers[]`/`push`/
+  `closeIterator`/`end`). Concern (3) _looks_ like a standard async-queue, but it
+  has exactly one consumer and is coupled to this class's iterator-failure,
+  closure, and event-detachment state. Extracting it to a "reusable util" would
+  create a single-use abstraction — precisely the extraction the repo bans
+  (AGENTS.md "extract only when logic is repeated"; CLAUDE.md "single-caller
+  extractions are banned"). **Disposition:** leave as-is; not a tracked
+  opportunity. Retained here only as a note that the plumbing is inherent to the
+  one consumer, not evidence of duplication.
+- **T-1 (retracted — already the prescribed pattern): `AgentFinalResult` is not a
+  re-declared parallel union.** A closer read corrects the earlier claim:
+  `AgentFinalResult.ts:26-62` already _composes_ each branch from
+  `WorkflowFlowResultSchema` / `ToolUseFlowResultSchema` via `.pick()` + `.extend()`
+  and infers the type from the discriminated union — the repo's prescribed
+  schema-composition pattern (CLAUDE.md Zod §). It deliberately omits the flow
+  result's runtime-only fields and adds post-artifact ones (`diffs`, `cost`,
+  `structured`) plus category-specific defaults and the `totalCostUsd`→`cost`
+  projection. Recasting it as "`AgentFlowResult` ⊕ extension" would _reintroduce_
+  the omitted runtime fields and lose those projections — a regression, not a
+  consolidation. **Disposition:** no change; the current shape is correct.
+  `AgentRunHandle` (`ExecutionHandle.ts:366`) is likewise a `Pick<…>`
+  read-projection, not a duplicate result type.
 - Confirmed clean: the `@agent/runtime` curated-barrel-vs-direct-import split
   (no `src/agent/**` file imports the barrel; all 57 importers are the three
   hosts + the SDK package), `node.ts`/`schemas.ts` (no incidental complexity),
@@ -229,22 +246,29 @@ a change this pass makes.
 Unchanged from `-08-14 §8`. The dispatch boundary (`delegate_agent` /
 `delegate_workflow` → `executeSubagent` → `createNativeSubagentStrategy` →
 `startChildRunLoop`) is cleanly drawn and host-agnostic. The deep audit named the
-**near-isolated relocatable units** an SDK carve-out would start from. Each
-already exposes a crisp boundary, but readiness varies — the two engine
-primitives are genuinely port/options-driven, while the three auxiliary units
-still retain an ambient `currentSession()` default or a direct storage/delivery
-call that a true carve-out must first convert to a port. So promotion ranges from
-near-pure relocation to a small port extraction, called out per unit:
+candidate carve-out **starting points** — units that already expose a crisp
+boundary. **None is a pure relocation:** every one still reaches concrete runtime
+collaborators (storage, lease, delivery, persistence, lifecycle) and/or an
+ambient `currentSession()` that a real carve-out must first convert to injected
+ports. This section names the boundary and the specific coupling each would have
+to port — it is a starting map, not a claim that any unit is extraction-ready
+today:
 
 - **`childRunLoop` (`startChildRunLoop`/`ChildRunStrategy`/`ChildRunPorts`)** —
   THE generic subagent-loop engine; consumers (`nativeSubagentStrategy`,
   `detachedChildRun`, `workflowScriptStrategy`, agent-CLI adapters) all live in
   `src/tools/`, though the loop sits in `runtime/`. Boundary: one turn's
-  execution → turn result. Port/options-driven — the cleanest relocation.
+  execution → turn result. **Coupling to port first (substantial):** it imports
+  concrete `@agent/storage`, `executionLease`, `AgentRunLifecycle`,
+  `executionOwnership`, `childRunDelivery` (`deliverChildRunFollowUp`), and
+  `childRunDeliveryPersistence` helpers (`childRunLoop.ts:14-46`) and looks up
+  `currentSession()` (`:668`). Storage, session, delivery, and lifecycle ports are
+  all needed — not the cleanest relocation, the heaviest.
 - **`executeAgent` / `resumeToolUseFromResumeData`** — the single-run primitive;
   boundary `(AgentConfig, ExecutionId, SubagentRunOptions) → AgentFlowResult`
   with an `onRun(AgentRunHandle)` hook. `SubagentRunOptions` is explicitly the
-  shared subagent contract.
+  shared subagent contract — the most options-shaped entry, though it too drives
+  the runtime registry/lifecycle rather than pure injected ports.
 - **Helper-model kit** (`helperModel.ts` `createHelperModelKit` /
   `runHelperModelCompletion`; consumers `sessionDescription`, `textEnhancement`/
   `polishModel`, `textConnection`, agent-creation) — near-isolated auxiliary-LLM
@@ -262,7 +286,7 @@ executionId)`. **Residual coupling:** it hard-imports and calls `submitFollowUp`
   (`:20`, `:130`) and emits through `currentSession()` (`:139`) — the follow-up
   delivery path is the port still to inject.
 
-## 6. Do not relitigate; the one tracked structural blocker
+## 6. Do not relitigate; the tracked structural blockers
 
 - **No `runSession()` facade / SDK wrapper layer.** The `-08-12` "higher-level
   public-typed entry" proposal conflicts with north-star §5 and was corrected in
@@ -280,12 +304,18 @@ executionId)`. **Residual coupling:** it hard-imports and calls `submitFollowUp`
   still all-optional (`HostInteractions.ts:344-390`). That is a deliberate
   maintainer decision, not settled or abandoned here — don't re-file it as a
   cleanup PR, but don't read this doc as closing it either.
-- **The one genuine open structural SDK blocker is already tracked.** The
-  `@tools/delegation ↔ executeAgent` layering cycle, papered by two lazy
-  `await import('./nativeSubagentStrategy.js')` edges (`subagentExecution.ts:203`,
-  `inBandSubagentExecution.ts:400`), is ranked #1 in the live plan of record
-  [`2026-08-14-delegation-flow-substrate-consolidation.md`](./2026-08-14-delegation-flow-substrate-consolidation.md).
-  Break it there, not here.
+- **Two structural SDK blockers, distinct and both already tracked here — not one.**
+  (a) The **layering/packaging blocker:** the `@tools/delegation ↔ executeAgent`
+  cycle, papered by two lazy `await import('./nativeSubagentStrategy.js')` edges
+  (`subagentExecution.ts:203`, `inBandSubagentExecution.ts:400`), ranked #1 in the
+  live plan of record
+  [`2026-08-14-delegation-flow-substrate-consolidation.md`](./2026-08-14-delegation-flow-substrate-consolidation.md);
+  break it there, not here. (b) The **multi-instance-embedding blocker:** the
+  process-global log-sink and trust-policy singletons in `logUtils.ts` (§4 L-2),
+  which prevent two isolated agent instances in one process from holding distinct
+  sinks. These block different SDK goals (a clean import graph vs. in-process
+  multi-tenancy); neither is the sole "one blocker," and this pass resolves
+  neither.
 
 ## 7. Remaining open items (unchanged from `-08-14 §9`, none a defect)
 
@@ -302,6 +332,11 @@ executionId)`. **Residual coupling:** it hard-imports and calls `submitFollowUp`
 4. **Publication** remains gated on packaging/legal (license/history), not API
    shape.
 
-The four-area opportunities in §4 (C-1, L-1, L-3, S-1, T-1) are the concrete,
-small, behavior-preserving candidates a future pass can pick up one at a time —
-in the same land-one-increment cadence this pass followed with §3.
+The genuine small candidates a future pass can pick up one at a time — in the
+same land-one-increment cadence this pass followed with §3 — are **C-1** (inject
+the two launch-context tool-policy fields into the cycle flow), **L-1** (fold the
+two module-logger factories into one), and **L-3** (wire or delete the dead
+redaction-options branch). **S-1 and T-1 were retracted on inspection** (§4): S-1
+would be a banned single-use extraction, and T-1 misread an already-composed
+schema. L-2 and the delegation cycle are the two structural blockers (§6), each a
+maintainer-scoped design decision rather than a mechanical increment.
