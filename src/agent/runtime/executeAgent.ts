@@ -37,6 +37,7 @@ import {
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
 } from '@shared/schemas/output';
+import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
 import { ensureRunDir } from '@utils/files/runStorageFs';
 
 import {
@@ -213,6 +214,7 @@ function buildLifecycleOptions(
     userFollowUpSupport: options.userFollowUpSupport,
     onError: options.onRunError,
     onRun: options.onRun,
+    onRunEnd: (runId) => stopLeanServersForEndedRun(runId),
   };
 }
 
