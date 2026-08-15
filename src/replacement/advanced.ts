@@ -392,8 +392,18 @@ export function stripCriticizeAnnotations(content: string): {
 
   let out = '';
   let cursor = 0;
+  // Tracks the start of the line containing the current call, advanced
+  // forward as `calls` (already in ascending `start` order) are walked —
+  // avoids a `lastIndexOf` backward-scan per call, which would be
+  // O(document length) per annotation on a document with no preceding
+  // newline (e.g. one long generated/minified line).
+  let lineStart = 0;
   for (const call of calls) {
-    const lineStart = content.lastIndexOf('\n', call.start - 1) + 1;
+    let nextNewline = content.indexOf('\n', lineStart);
+    while (nextNewline !== -1 && nextNewline < call.start) {
+      lineStart = nextNewline + 1;
+      nextNewline = content.indexOf('\n', lineStart);
+    }
     const nlIndex = content.indexOf('\n', call.end);
     const lineEnd = nlIndex === -1 ? content.length : nlIndex;
     const beforeOnLine = content.slice(lineStart, call.start);
