@@ -31,7 +31,9 @@ export function resolveAgentSettingTools(
       channel,
       `Workflow-category agent declares tools: [${settings.tools
         .map((tool) => (typeof tool === 'string' ? tool : tool.name))
-        .join(', ')}]. Workflow runs never dispatch tool calls, so these are inert; remove tools: or make the agent toolUse.`,
+        .join(
+          ', ',
+        )}]. Workflow runs never dispatch tool calls, so these are inert; remove tools: or make the agent toolUse.`,
     );
   }
   return {

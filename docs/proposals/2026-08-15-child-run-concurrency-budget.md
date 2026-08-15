@@ -9,7 +9,7 @@ Date: 2026-08-15
 One **live native child model conversation** — a child `executeAgent` /
 `resumeToolUseFromResumeData` flow execution between launch and its
 terminal/WAITING boundary. That is the unit that consumes provider rate
-capacity. Explicitly *not* budgeted:
+capacity. Explicitly _not_ budgeted:
 
 - **Root runs.** The user launched each one deliberately; capping them turns
   an explicit user action into a silent queue. Roots stay uncapped.
@@ -18,8 +18,8 @@ capacity. Explicitly *not* budgeted:
   (`ChildRunPorts`): not TeXRA-billed, not TeXRA-gated.
 - **Script governance.** The workflow engine's per-run semaphore
   (`concurrency`, default 4), its lifetime call cap, and `MAX_FANOUT` shape
-  what a *script* may request; they stay where they are. The budget gates
-  what the *process* may run at once.
+  what a _script_ may request; they stay where they are. The budget gates
+  what the _process_ may run at once.
 - **Generic tool calls.** `ToolUseDispatchNode`'s `PQueue({ concurrency: 4 })`
   gates parallel-safe tool calls (`read_file`, `grep`); routing the budget
   through it would throttle file reads while leaving child lifetimes ungated
@@ -27,7 +27,7 @@ capacity. Explicitly *not* budgeted:
 
 ## Scope ruling: per session, count-based (provider-key-aware deferred)
 
-Provider rate limits are per API key, so per-provider-key is the *true*
+Provider rate limits are per API key, so per-provider-key is the _true_
 resource — but the provider key resolves inside the model handler, after
 launch assembly, and a pre-launch gate cannot read it today without moving
 credential resolution forward (a B2-class change). Deferring that, the
@@ -82,7 +82,7 @@ caller. Two acquisition call sites, one budget, zero double-charging.
   governor for scripts, and the process-level budget cannot be multiplied
   by nesting.
 
-  *Consequence:* a workflow-script run's grandchildren ride the workflow
+  _Consequence:_ a workflow-script run's grandchildren ride the workflow
   run's single slot even when the script's semaphore runs several of them
   concurrently. That is deliberate for v1 — the alternative (charging each
   grandchild) requires a reentrant lease passed through
