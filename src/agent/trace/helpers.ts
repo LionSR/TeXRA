@@ -2,8 +2,8 @@
  * TeXRA sugar over {@link AgentTrace}, as plain functions.
  *
  * Every helper takes the trace as its first argument and reduces to a
- * single primitive call (`info` / `warn` / `error` / `domain` / `emit` /
- * `contextState`). Agent code uses these instead of the bigger
+ * single primitive call (`info` / `warn` / `error` / `domain` / `emit`).
+ * Agent code uses these instead of the bigger
  * `error(msg, { data: buildErrorLogData(...), messageType })` blocks so
  * call sites stay 1 line.
  *
@@ -25,7 +25,6 @@ import {
   type WorkflowScriptDeliverySummary,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 import type { AgentTrace } from './AgentTrace';
 
@@ -185,19 +184,6 @@ export function logWebFetch(
   trace.domain({ key: 'webFetch', data, stageId });
 }
 
-export function logLatexdiff(
-  trace: AgentTrace,
-  results: unknown[],
-  stageId?: string,
-): void {
-  trace.domain({
-    key: 'latexdiff',
-    text: `Latexdiff results: ${results.length}`,
-    data: results,
-    stageId,
-  });
-}
-
 /** Files-loaded card with full {@link FileListEntry} entries. */
 export function logFilesLoaded(
   trace: AgentTrace,
@@ -248,44 +234,4 @@ export function logConversationProgress(
   stageId?: string,
 ): void {
   trace.emit({ type: 'conversation.progress', progress: data, stageId });
-}
-
-/** Payload logged by {@link logMissingOutputs} for one round's unmatched
- *  expected outputs. Distinct from `UpdateMissingOutputsPayload` (the
- *  `updateMissingOutputs` run fact) — this is the human-facing transcript log. */
-interface MissingOutputsLogInfo {
-  missing: string[];
-  xmlFile: string | null;
-}
-
-/** Missing-outputs notification — counts `missing` entries for the label. */
-export function logMissingOutputs(
-  trace: AgentTrace,
-  info: MissingOutputsLogInfo,
-  stageId?: string,
-): void {
-  trace.domain({
-    key: 'missingOutputs',
-    text: `${formatResultCount(info.missing.length, 'output file')} missing`,
-    data: info,
-    stageId,
-  });
-}
-
-// ─── Context-state snapshot ─────────────────────────────────────────────
-
-/** Emit a context-window utilization snapshot. */
-export function logContextStateSnapshot(
-  trace: AgentTrace,
-  inputTokens: number,
-  contextWindow: number,
-  stageId?: string,
-): void {
-  trace.contextState(
-    {
-      inputTokens,
-      contextWindow,
-    },
-    { stageId },
-  );
 }

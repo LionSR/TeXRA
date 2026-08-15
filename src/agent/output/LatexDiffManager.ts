@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { logLatexdiff, type AgentTrace, type StageHandle } from '@agent/trace';
+import type { AgentTrace, StageHandle } from '@agent/trace';
 import { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
@@ -246,7 +246,11 @@ export class LatexDiffManager {
       }
 
       if (aggregated.length > 0) {
-        logLatexdiff(this.logger, aggregated);
+        this.logger.domain({
+          key: 'latexdiff',
+          text: `Latexdiff results: ${aggregated.length}`,
+          data: aggregated,
+        });
       } else {
         this.logger.debug('No latexdiff results to report');
       }

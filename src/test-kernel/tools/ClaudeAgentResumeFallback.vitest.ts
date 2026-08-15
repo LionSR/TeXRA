@@ -454,9 +454,6 @@ describe('claude_agent tool launch and resume fallback', () => {
       childStreamId,
       executionId,
       executions: stubExecutions(),
-      model: 'claude-sonnet-4-6',
-      permissionMode: 'acceptEdits',
-      effort: 'high',
     });
 
     const result = await new ClaudeAgentTool().call({
@@ -474,9 +471,6 @@ describe('claude_agent tool launch and resume fallback', () => {
       childStreamId,
       executionId,
       executions: stubExecutions(),
-      model: 'claude-sonnet-4-6',
-      permissionMode: 'acceptEdits',
-      effort: 'high',
     });
     let queryIndex = 0;
     mocks.query.mockImplementation(() => {
@@ -553,9 +547,6 @@ describe('claude_agent tool launch and resume fallback', () => {
       childStreamId,
       executionId,
       executions: stubExecutions(),
-      model: 'claude-sonnet-4-6',
-      permissionMode: 'acceptEdits',
-      effort: 'high',
     });
     mocks.query.mockImplementation(() =>
       (async function* () {
@@ -630,9 +621,6 @@ describe('claude_agent tool launch and resume fallback', () => {
       executions: {
         getHandle: () => handle,
       } as any,
-      model: 'claude-sonnet-4-6',
-      permissionMode: 'acceptEdits',
-      effort: 'high',
     });
 
     const result = await new ClaudeAgentTool().call({

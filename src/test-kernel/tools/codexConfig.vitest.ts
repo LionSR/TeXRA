@@ -23,7 +23,6 @@ import {
   buildCodexThreadToolLog,
   buildCodexTodoToolLog,
   CODEX_AGENT_NAME,
-  CODEX_DISPLAY_MODEL,
   buildCodexTurnToolLog,
   buildCodexUsageStats,
 } from '@tools/codexShared';
@@ -33,7 +32,7 @@ describe('buildCodexConfig', () => {
     const config = buildCodexConfig('Inspect the failing CI job');
 
     assert.equal(config.agent, CODEX_AGENT_NAME);
-    assert.equal(config.model, CODEX_DISPLAY_MODEL);
+    assert.equal(config.model, 'gpt55');
     assert.equal(config.agentCategory, AgentCategory.ToolUse);
     assert.equal(config.instruction, 'Inspect the failing CI job');
   });
