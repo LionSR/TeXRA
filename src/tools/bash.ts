@@ -2,7 +2,8 @@
 import { z } from 'zod';
 
 // Local imports
-import { getExecutionStore, registerExecution } from '@agent/storage';
+import { registerExecution } from '@agent/storage';
+import { persistChildRunDeliveryBestEffort } from '@agent/storage/childRunDeliveryPersistence';
 import {
   captureOwnedExecutionLease,
   markOwnedExecutionLeaseUndurable,
@@ -525,14 +526,6 @@ export class BashTool extends defineTool({
       logBackgroundFailure(action, err);
     };
 
-    const persistReport = async (msg: string): Promise<void> => {
-      try {
-        await getExecutionStore(executionId).writeReport(msg);
-      } catch (err: unknown) {
-        logDurabilityFailure('persist report', err);
-      }
-    };
-
     let childFinalized = false;
     const finalizeChild = async (
       finalizeOptions: Parameters<typeof childStream.finalize>[0],
@@ -594,20 +587,19 @@ export class BashTool extends defineTool({
             toDeliveryExcerpt(stderr),
           );
 
-          const store = getExecutionStore(executionId);
-          try {
-            await store.writeResultMeta({
+          await persistChildRunDeliveryBestEffort(
+            executionId,
+            msg,
+            {
               producer: 'backgroundBash',
               exitCode: result.exitCode ?? (result.success ? 0 : 1),
               wallTimeMs,
               success: result.success,
               timedOut: result.timedOut ?? false,
               command,
-            });
-          } catch (err: unknown) {
-            logDurabilityFailure('persist result metadata', err);
-          }
-          await persistReport(msg);
+            },
+            (kind, err) => logBackgroundFailure(`persist ${kind}`, err),
+          );
 
           await deliverAndFinalize(msg, {
             wallTimeMs,
@@ -620,7 +612,12 @@ export class BashTool extends defineTool({
 
         const { error } = outcome;
         const msg = formatBashError(executionId, command, error);
-        await persistReport(msg);
+        await persistChildRunDeliveryBestEffort(
+          executionId,
+          msg,
+          undefined,
+          (kind, err) => logBackgroundFailure(`persist ${kind}`, err),
+        );
 
         await deliverAndFinalize(msg, {
           outcome: { kind: 'failed', error },

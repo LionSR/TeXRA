@@ -177,16 +177,10 @@ export async function runAgent(
           outcome: restoredOutcome,
           flowRecord: shouldRegister ? 'delete' : 'preserve',
         });
-        let finalizationError: unknown;
-        if ('thrownError' in finalization) {
-          finalizationError = finalization.thrownError;
-        } else if (finalization.finalization.status === 'failed') {
-          finalizationError = finalization.finalization.error;
-        }
-        if (finalizationError !== undefined) {
+        if (finalization.status === 'failed') {
           runFailure = {
             error: new AggregateError(
-              [error, finalizationError],
+              [error, finalization.error],
               `Execution ${executionId} failed before lifecycle startup and its terminal status could not be persisted`,
             ),
           };

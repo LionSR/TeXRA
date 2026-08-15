@@ -38,23 +38,13 @@ export async function finalizeCliExecution(
   flowRecord: FinalizeExecutionInput['flowRecord'],
   reportFailure: CliFinalizationFailureReporter,
 ): Promise<boolean> {
-  let result: Awaited<ReturnType<typeof finalizeExecution>>;
-  try {
-    result = await finalizeExecution({
-      executionId,
-      outcome,
-      flowRecord,
-    });
-  } catch (error) {
-    markOwnedExecutionLeaseUndurable(executionId);
-    reportFailure(
-      new Error(
-        `Execution finalization failed unexpectedly for ${executionId}: ${toErrorMessage(error)}`,
-        { cause: error },
-      ),
-    );
-    return false;
-  }
+  // finalizeExecution never throws: every persistence failure comes back as a
+  // 'failed' result, so this call site carries no catch arm.
+  const result = await finalizeExecution({
+    executionId,
+    outcome,
+    flowRecord,
+  });
   if (result.status === 'durable') return true;
   markOwnedExecutionLeaseUndurable(executionId);
 
