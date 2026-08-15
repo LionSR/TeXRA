@@ -784,6 +784,44 @@ return await pending`,
     expect(completion).not.toMatchObject({ stageId: stageId(events, 'Later') });
   });
 
+  it('ends a cancelled workflow phase as cancelled', async () => {
+    const { trace, events } = recordingTrace();
+    const controller = new AbortController();
+    let started = false;
+    const run = runScript(
+      trace,
+      'parent-cancel',
+      `${meta}
+return await agent('Cancel', { phase: 'Execution' })`,
+      {
+        signal: controller.signal,
+        runAgent: (invocation) =>
+          new Promise((_resolve, reject) => {
+            started = true;
+            invocation.signal.addEventListener(
+              'abort',
+              () => reject(invocation.signal.reason),
+              { once: true },
+            );
+          }),
+      },
+    );
+
+    await vi.waitFor(() => expect(started).toBe(true));
+    controller.abort(new DOMException('parent stopped', 'AbortError'));
+    await expect(run).rejects.toMatchObject({ name: 'AbortError' });
+
+    const phaseId = stageId(events, 'Execution');
+    expect(workflowCallEvent(events, 'Cancel', 'cancelled')).toMatchObject({
+      stageId: phaseId,
+    });
+    expect(events).toContainEqual({
+      type: 'stage.end',
+      id: phaseId,
+      status: RUN_OUTCOME.CANCELLED,
+    });
+  });
+
   it('preserves the exact cause when a runner aborts a started phase', async () => {
     const { trace, events } = recordingTrace();
     const activities: string[] = [];

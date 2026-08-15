@@ -4,7 +4,6 @@ import { z } from 'zod';
 // Local imports
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
-import type { ToolDefinition } from '@model/ToolDefinition';
 import { type ToolResult, ToolError } from '@shared/schemas';
 import {
   currentToolRoot,
@@ -19,7 +18,7 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { defineTool, toToolParameters } from './core/define';
+import { defineTool } from './core/define';
 
 const log = createLog('DiagnosticsTool');
 
@@ -28,16 +27,6 @@ const DiagnosticsPathSchema = z
   .trim()
   .min(1)
   .describe('Workspace-relative or absolute file path.');
-
-const DiagnosticsReadInputSchema = z.strictObject({
-  command: z
-    .enum(['list', 'count'])
-    .describe('Use "list" for full diagnostics or "count" for a summary.'),
-  path: DiagnosticsPathSchema,
-});
-
-const DIAGNOSTICS_READ_ONLY_DESCRIPTION =
-  'Inspect diagnostics for a file. Use "list" to retrieve linter diagnostics or "count" for a severity summary.';
 
 const DiagnosticsListSchema = z.strictObject({
   command: z
@@ -87,18 +76,6 @@ export const DiagnosticsInputSchema = z.discriminatedUnion('command', [
 ]);
 
 export type DiagnosticsInput = z.infer<typeof DiagnosticsInputSchema>;
-
-export function withoutDiagnosticsAddCommand(
-  tool: ToolDefinition,
-): ToolDefinition {
-  if (tool.name !== 'diagnostics') return tool;
-  return {
-    ...tool,
-    description: DIAGNOSTICS_READ_ONLY_DESCRIPTION,
-    parameters: toToolParameters(DiagnosticsReadInputSchema),
-    zodSchema: DiagnosticsReadInputSchema,
-  };
-}
 
 export class DiagnosticsTool extends defineTool({
   name: 'diagnostics',

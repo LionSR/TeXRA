@@ -96,6 +96,7 @@ export { type MemoryViewItem, type MemoryPreview } from './memoryViewMessages';
 
 export {
   HISTORY_RUN_STATUS,
+  HISTORY_RUN_STATUS_LABEL,
   resolveHistoryRunStatus,
   type HistoryItem,
   type HistoryRunStatus,

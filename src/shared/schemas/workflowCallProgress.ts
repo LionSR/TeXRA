@@ -81,6 +81,10 @@ export const WorkflowCallProgressSchema = z.discriminatedUnion('status', [
   WorkflowCallProgressBaseSchema.extend({
     status: z.literal('cached'),
   }),
+  WorkflowCallProgressBaseSchema.extend({
+    status: z.literal('cancelled'),
+    ...WorkflowCallTerminalMetadataSchema.shape,
+  }),
   WorkflowCallSkippedProgressSchema,
   WorkflowCallProgressBaseSchema.extend({
     status: z.literal('failed'),
@@ -105,6 +109,7 @@ export function isTerminalWorkflowCallProgress(
       return false;
     case 'completed':
     case 'cached':
+    case 'cancelled':
     case 'skipped':
     case 'failed':
       return true;
@@ -114,13 +119,9 @@ export function isTerminalWorkflowCallProgress(
 export const WORKFLOW_TASK_STATUS_LABEL = {
   planned: 'Planned',
   running: 'Running',
-  waiting: 'Waiting for follow-up',
   completed: 'Finished',
   cached: 'Saved result',
   skipped: 'Skipped',
   cancelled: 'Cancelled',
   failed: 'Failed',
-} as const satisfies Record<
-  WorkflowCallProgress['status'] | 'waiting' | 'cancelled',
-  string
->;
+} as const satisfies Record<WorkflowCallProgress['status'], string>;

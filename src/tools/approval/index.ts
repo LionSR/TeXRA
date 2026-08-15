@@ -122,23 +122,6 @@ export function cleanupUnscopedApprovals(
   });
 }
 
-/**
- * Session-wide reset of approval state — rejects every pending tool-edit /
- * bash / user-question approval in `session`, clears all of its bypass +
- * proposal state, and cancels its pending host interactions.
- *
- * Approval state is session-owned, so this never touches another session:
- * one desktop window's reset cannot wipe a sibling window's pending
- * approvals. For the extension and CLI the default session covers the whole
- * process.
- */
-export function cleanupAllApprovals(
-  session: SessionHandle = defaultSession(),
-): void {
-  session.approvals.clearAll();
-  session.interactions.cancel({ cause: 'All approvals cleared.' });
-}
-
 // Re-export commonly used functions from individual modules
 export {
   // Bash approval

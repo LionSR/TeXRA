@@ -45,9 +45,6 @@ export interface EmptyStateOptions {
   // (and any `iconSurfaceSize` wrapper) is not rendered; the kicker row reuses
   // only the icon name.
   readonly kicker?: string;
-  // Icon used inside the kicker. Defaults to the main `icon` prop so the
-  // helper stays minimal when callers want a simple eyebrow.
-  readonly kickerIcon?: TeXRAIconName;
   // Wraps the main icon in the shared `.icon-surface` decorative box (same
   // contract as settingsBanner.ts) at the given size, instead of the bare
   // glyph. Omit for the default bare-icon treatment. Inert when `kicker` is
@@ -69,7 +66,6 @@ export function renderEmptyState({
   className,
   headingTag = 'h2',
   kicker,
-  kickerIcon,
   iconSurfaceSize,
 }: EmptyStateOptions): TemplateResult {
   const tag = HEADING_TAGS[headingTag];
@@ -89,7 +85,7 @@ export function renderEmptyState({
   const iconOrKicker = kicker
     ? html`
         <div class="empty-state-kicker">
-          ${waIcon(kickerIcon ?? icon, {
+          ${waIcon(icon, {
             className: 'empty-state-kicker-icon',
           })}
           <span>${kicker}</span>

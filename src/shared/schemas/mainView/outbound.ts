@@ -88,7 +88,6 @@ const SetOpenedFilesMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_OPENED_FILES),
   files: FileListSchema,
   fileType: ExtendedDocumentFileTypeSchema,
-  shouldFilter: z.boolean().nullish(),
 });
 
 const InstructionTextPolishedMessageSchema = z.object({

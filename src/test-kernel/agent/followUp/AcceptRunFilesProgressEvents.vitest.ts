@@ -19,7 +19,6 @@ import { FileType, type FileStat } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
-  cleanupAllApprovals,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval';
@@ -131,7 +130,8 @@ describe('accept_run_files progress events', () => {
   beforeEach(async () => {
     testApprovalHandler = undefined;
     await installTestPlatform();
-    cleanupAllApprovals();
+    defaultSession().approvals.clearAll();
+    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
     // Shared by every test below that stubs the execution/workspace paths;
     // the test that doesn't need it (missing runtime host) fails before
     // reaching either function.
@@ -150,7 +150,8 @@ describe('accept_run_files progress events', () => {
     testApprovalHandler = undefined;
     detachHostInteractions();
     detachHostInteractions = () => {};
-    cleanupAllApprovals();
+    defaultSession().approvals.clearAll();
+    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
   });
 
   it('publishes accepted workspace files through app signals', async () => {

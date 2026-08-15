@@ -15,7 +15,6 @@ import type { StreamTabId } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { WriteFileTool } from '@tools/WriteTool';
 import {
-  cleanupAllApprovals,
   setToolEditApprovalSessionBypass,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
@@ -75,7 +74,8 @@ describe('Tool edit approval gating', () => {
     await installPlatform();
     defaultSession().setApprovalPolicy('ask');
     policyDenials = 0;
-    cleanupAllApprovals();
+    defaultSession().approvals.clearAll();
+    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
   });
 
   afterEach(() => {
@@ -83,7 +83,8 @@ describe('Tool edit approval gating', () => {
     testApprovalHandler = undefined;
     detachHostInteractions();
     detachHostInteractions = () => {};
-    cleanupAllApprovals();
+    defaultSession().approvals.clearAll();
+    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
   });
 
   it('write_file applies changes after approval', async () => {
