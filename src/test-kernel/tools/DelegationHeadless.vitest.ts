@@ -47,6 +47,8 @@ const mocks = vi.hoisted(() => ({
   getExecutionStore: vi.fn(),
   getVisibleAgents: vi.fn(),
   inspectExecutionLease: vi.fn(),
+  abandonOwnedExecutionLease: vi.fn(),
+  undurableExecutionIds: new Set<ExecutionId>(),
   isApprovalBypassedForStream: vi.fn(),
   isProposalBypassed: vi.fn(),
   registerExecution: vi.fn(),
@@ -94,15 +96,29 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
     (_executionId: ExecutionId) => (operation: () => unknown) =>
       operation(),
   inspectExecutionLease: mocks.inspectExecutionLease,
-  markOwnedExecutionLeaseUndurable: vi.fn(),
+  markOwnedExecutionLeaseUndurable: vi.fn((executionId: ExecutionId) => {
+    mocks.undurableExecutionIds.add(executionId);
+  }),
+  isOwnedExecutionLeaseDurable: vi.fn(
+    (executionId: ExecutionId) => !mocks.undurableExecutionIds.has(executionId),
+  ),
   ownsExecutionLease: vi.fn(() => true),
   // The session's one exit choreography runs for real over these inert lease
-  // verbs; the release spy observes its terminal step.
+  // verbs; completion mirrors production's explicit released/retained outcome.
   renewOwnedExecutionLease: vi.fn(async () => {}),
-  abandonOwnedExecutionLease: vi.fn(),
-  completeOwnedExecutionLease: vi.fn(async (executionId: ExecutionId) =>
-    mocks.releaseOwnedExecutionLease(executionId),
-  ),
+  abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
+  completeOwnedExecutionLease: vi.fn(async (executionId: ExecutionId) => {
+    if (mocks.undurableExecutionIds.has(executionId)) {
+      mocks.abandonOwnedExecutionLease(executionId);
+      return { status: 'retained', reason: 'undurable' } as const;
+    }
+    try {
+      await mocks.releaseOwnedExecutionLease(executionId);
+      return { status: 'released' } as const;
+    } catch (error) {
+      return { status: 'retained', reason: 'release-failed', error } as const;
+    }
+  }),
 }));
 
 // `persistChildRun*` moved to `@agent/storage/childRunPersistence`, which
@@ -301,7 +317,7 @@ function mockWaitingChildOnce(
 
 function stableAttempt(
   logicalExecutionId: ExecutionId,
-  phase: 'reserved' | 'launched' | 'retryable' = 'launched',
+  phase: 'reserved' | 'launched' | 'committed' | 'retryable' = 'launched',
 ) {
   return {
     schemaVersion: 1,
@@ -350,7 +366,9 @@ function completedChildStore(
     listKeys: vi
       .fn()
       .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
-    read: vi.fn().mockResolvedValue(stableAttempt(logicalExecutionId)),
+    read: vi
+      .fn()
+      .mockResolvedValue(stableAttempt(logicalExecutionId, 'committed')),
     readResultMeta: vi.fn().mockResolvedValue({
       producer: 'subagent',
       agentName: 'review',
@@ -391,6 +409,7 @@ describe('headless delegation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.undurableExecutionIds.clear();
     restoreAgentEngine = provideAgentEngine({
       executeAgent: mocks.executeAgent,
       resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
@@ -576,6 +595,120 @@ describe('headless delegation', () => {
     );
   });
 
+  it('commits stable success after artifact drain but before lease release', async () => {
+    const logicalExecutionId = 'cccccc666666' as ExecutionId;
+    const childStore = memoryExecutionStore();
+    const order: string[] = [];
+    const originalWrite = childStore.write.getMockImplementation();
+    childStore.write.mockImplementation(async (key, value) => {
+      await originalWrite?.(key, value);
+      const phase = (value as { phase?: string }).phase;
+      if (phase) order.push(phase);
+    });
+    const detachFlusher = defaultSession().useArtifactFlusher(async () => {
+      order.push('drain');
+    });
+    mocks.releaseOwnedExecutionLease.mockImplementationOnce(async () => {
+      order.push('release');
+    });
+    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+
+    try {
+      await runInBand(delegationOptions(), logicalExecutionId);
+    } finally {
+      detachFlusher();
+    }
+
+    expect(order).toContain('launched');
+    expect(order.lastIndexOf('drain')).toBeLessThan(order.indexOf('committed'));
+    expect(order.indexOf('committed')).toBeLessThan(order.indexOf('release'));
+    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledOnce();
+  });
+
+  it('abandons the lease when the post-drain stable commit fails', async () => {
+    const logicalExecutionId = 'cccccc777777' as ExecutionId;
+    const childStore = memoryExecutionStore();
+    const commitError = new Error('commit write failed');
+    const originalWrite = childStore.write.getMockImplementation();
+    childStore.write.mockImplementation(async (key, value) => {
+      if ((value as { phase?: string }).phase === 'committed') {
+        throw commitError;
+      }
+      await originalWrite?.(key, value);
+    });
+    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toMatchObject({
+      name: 'SubagentCommitError',
+      message: expect.stringContaining('Failed to commit durable completion'),
+      cause: commitError,
+    });
+
+    expect(mocks.abandonOwnedExecutionLease).toHaveBeenCalledWith(
+      logicalExecutionId,
+    );
+    expect(mocks.releaseOwnedExecutionLease).not.toHaveBeenCalled();
+    expect(childStore.write).toHaveBeenCalledWith(
+      'stable-subagent-attempt',
+      expect.objectContaining({ phase: 'launched' }),
+    );
+    expect(childStore.write).not.toHaveBeenCalledWith(
+      'stable-subagent-attempt',
+      expect.objectContaining({ phase: 'retryable' }),
+    );
+  });
+
+  it('does not commit or recover when required report persistence poisons the lease', async () => {
+    const logicalExecutionId = 'cccccc888888' as ExecutionId;
+    const childStore = memoryExecutionStore();
+    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+    mocks.writeReport.mockRejectedValueOnce(new Error('report write failed'));
+
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toBeInstanceOf(SubagentDurabilityError);
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+
+    expect(mocks.executeAgent).toHaveBeenCalledOnce();
+    expect(childStore.write).not.toHaveBeenCalledWith(
+      'stable-subagent-attempt',
+      expect.objectContaining({ phase: 'committed' }),
+    );
+  });
+
+  it('recovers committed success when lease deletion fails', async () => {
+    const logicalExecutionId = 'cccccc999999' as ExecutionId;
+    const childStore = memoryExecutionStore();
+    const releaseError = new Error('lease deletion failed');
+    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+    mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(releaseError);
+
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toMatchObject({
+      name: 'SubagentDurabilityError',
+      message: expect.stringContaining('committed durable completion'),
+      cause: releaseError,
+    });
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).resolves.toMatchObject({ executionId: logicalExecutionId });
+
+    expect(mocks.executeAgent).toHaveBeenCalledOnce();
+    expect(childStore.write).toHaveBeenCalledWith(
+      'stable-subagent-attempt',
+      expect.objectContaining({ phase: 'committed' }),
+    );
+    expect(childStore.write).not.toHaveBeenCalledWith(
+      'stable-subagent-attempt',
+      expect.objectContaining({ phase: 'retryable' }),
+    );
+  });
+
   it('records a failed child cost once for durable in-band execution', async () => {
     const onCost = vi.fn();
     mockExecuteAgentErrorOnce(0.61, {
@@ -734,6 +867,26 @@ describe('headless delegation', () => {
     expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 
+  it('refuses to repeat a committed child whose result manifest is missing', async () => {
+    const logicalExecutionId = 'cccccc777777' as ExecutionId;
+    const sequenceStore = stableSequenceStore(logicalExecutionId, 1);
+    useStableStores(sequenceStore, {
+      ...emptyChildStore(),
+      listKeys: vi
+        .fn()
+        .mockResolvedValue(['stable-subagent-attempt', 'config']),
+      read: vi
+        .fn()
+        .mockResolvedValue(stableAttempt(logicalExecutionId, 'committed')),
+    });
+
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.executeAgent).not.toHaveBeenCalled();
+  });
+
   it('refuses to repeat an incomplete stable child', async () => {
     const logicalExecutionId = 'dddddd444444' as ExecutionId;
     const sequenceStore = stableSequenceStore(logicalExecutionId, 1);
@@ -855,6 +1008,28 @@ describe('headless delegation', () => {
     );
   });
 
+  it('does not commit a cancelled stable child as successful', async () => {
+    const logicalExecutionId = 'eeeeee666666' as ExecutionId;
+    const childStore = memoryExecutionStore();
+    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+    mocks.executeAgent.mockResolvedValueOnce({
+      category: 'toolUse',
+      outcome: 'cancelled',
+      executionId: logicalExecutionId,
+      streamId: 'child-stream',
+      response: '',
+      files: [],
+    });
+
+    const completed = await runInBand(delegationOptions(), logicalExecutionId);
+
+    expect(completed.result.outcome).toBe('cancelled');
+    expect(childStore.write).not.toHaveBeenCalledWith(
+      'stable-subagent-attempt',
+      expect.objectContaining({ phase: 'committed' }),
+    );
+  });
+
   it('does not return a typed result when its durable manifest cannot be written', async () => {
     mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
 
@@ -891,14 +1066,20 @@ describe('headless delegation', () => {
       return await write?.(key, value);
     });
     useStableStores(stableSequenceStore(logicalExecutionId), childStore);
-    mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(cleanupFailure);
-
-    await expect(
-      runInBand(delegationOptions(), logicalExecutionId),
-    ).rejects.toMatchObject({
-      name: 'SubagentDurabilityError',
-      cause: cleanupFailure,
+    const detachFlusher = defaultSession().useArtifactFlusher(async () => {
+      throw cleanupFailure;
     });
+
+    try {
+      await expect(
+        runInBand(delegationOptions(), logicalExecutionId),
+      ).rejects.toMatchObject({
+        name: 'SubagentDurabilityError',
+        cause: cleanupFailure,
+      });
+    } finally {
+      detachFlusher();
+    }
     mocks.inspectExecutionLease.mockResolvedValueOnce({
       status: 'foreign',
       heartbeatAt: Date.now(),
@@ -908,7 +1089,50 @@ describe('headless delegation', () => {
       runInBand(delegationOptions(), logicalExecutionId),
     ).rejects.toBeInstanceOf(SubagentReconciliationError);
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
-    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledOnce();
+    expect(mocks.releaseOwnedExecutionLease).not.toHaveBeenCalled();
+  });
+
+  it('does not recover a completed manifest after restart repair removes an abandoned lease', async () => {
+    const cleanupFailure = new Error('artifact flush failed');
+    const logicalExecutionId = 'dddddd888888' as ExecutionId;
+    const childStore = memoryExecutionStore();
+    const write = childStore.write.getMockImplementation();
+    let abandonedLeasePresent = true;
+    childStore.write.mockImplementation(async (key, value) => {
+      if (
+        abandonedLeasePresent &&
+        key === 'stable-subagent-attempt' &&
+        (value as { phase?: string }).phase === 'retryable'
+      ) {
+        throw new ExecutionLeaseLostError(logicalExecutionId);
+      }
+      return await write?.(key, value);
+    });
+    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+    const detachFlusher = defaultSession().useArtifactFlusher(async () => {
+      throw cleanupFailure;
+    });
+
+    try {
+      await expect(
+        runInBand(delegationOptions(), logicalExecutionId),
+      ).rejects.toMatchObject({
+        name: 'SubagentDurabilityError',
+        cause: cleanupFailure,
+      });
+    } finally {
+      detachFlusher();
+    }
+
+    // Perform the restart repair's observable lease transition before the
+    // stable call resumes: the abandoned lease no longer fences store writes.
+    // That absence must not attest artifact-release success; only the explicit
+    // post-drain commit marker can do that.
+    abandonedLeasePresent = false;
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+    expect(mocks.executeAgent).toHaveBeenCalledOnce();
   });
 
   it('preserves the child failure when its failure manifest cannot be written', async () => {

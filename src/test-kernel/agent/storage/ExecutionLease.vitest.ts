@@ -20,6 +20,7 @@ import {
   captureOwnedExecutionLease,
   completeOwnedExecutionLease,
   inspectExecutionLease,
+  isOwnedExecutionLeaseDurable,
   markOwnedExecutionLeaseUndurable,
   onOwnedExecutionLeaseLost,
   ownsExecutionLease,
@@ -263,8 +264,32 @@ describe('cross-process execution leases', () => {
     const executionId = 'd86443' as ExecutionId;
     await acquire(executionId);
 
+    expect(isOwnedExecutionLeaseDurable(executionId)).toBe(true);
     markOwnedExecutionLeaseUndurable(executionId);
-    await completeOwnedExecutionLease(executionId);
+    expect(isOwnedExecutionLeaseDurable(executionId)).toBe(false);
+    await expect(completeOwnedExecutionLease(executionId)).resolves.toEqual({
+      status: 'retained',
+      reason: 'undurable',
+    });
+    ownedExecutionIds.delete(executionId);
+
+    expect(ownsExecutionLease(executionId)).toBe(false);
+    await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
+      status: 'foreign',
+    });
+  });
+
+  it('reports lease deletion failure while retaining its persisted record', async () => {
+    const executionId = 'd86444' as ExecutionId;
+    const deletionError = new Error('lease deletion failed');
+    await acquire(executionId);
+    vi.spyOn(StorageFS, 'delete').mockRejectedValueOnce(deletionError);
+
+    await expect(completeOwnedExecutionLease(executionId)).resolves.toEqual({
+      status: 'retained',
+      reason: 'release-failed',
+      error: deletionError,
+    });
     ownedExecutionIds.delete(executionId);
 
     expect(ownsExecutionLease(executionId)).toBe(false);

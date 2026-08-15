@@ -325,6 +325,8 @@ export interface ChildRunLoopParams<TTurn> {
     readonly isError: boolean;
     readonly error?: unknown;
   }) => void;
+  /** Publish caller-owned state after final artifacts drain, before lease release. */
+  readonly afterArtifactsDrained?: () => void | Promise<void>;
 }
 
 export interface ChildRunLoopHandle {
@@ -1147,7 +1149,10 @@ export function startChildRunLoop<TTurn>(
         );
       } finally {
         try {
-          await runSession.releaseExecutionLease(executionId);
+          await runSession.releaseExecutionLease(
+            executionId,
+            params.afterArtifactsDrained,
+          );
         } catch (error) {
           logger.warn('Failed to persist final child-run artifacts', {
             data: { executionId, error },
