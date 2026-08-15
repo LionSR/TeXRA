@@ -235,6 +235,32 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     expect(deriveResumability).toHaveBeenCalledTimes(2);
   });
 
+  it('starts a distinct probe when resident and cold authorities would revalidate differently', async () => {
+    seedCancelled();
+    const residentDeferred = createDeferredResumability();
+    const coldDeferred = createDeferredResumability();
+    deriveResumability
+      .mockImplementationOnce(() => residentDeferred.promise)
+      .mockImplementationOnce(() => coldDeferred.promise);
+
+    const resident = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
+
+    // Move the same stream to a cold sidecar while the resident probe is still
+    // in flight. The in-flight slot must not be reused: a cold probe revalidates
+    // against the sidecar, not the resident snapshot record.
+    await session.snapshots.flush();
+    session.snapshots.evictAll();
+    const cold = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(2));
+
+    coldDeferred.resolve();
+    await expect(cold).resolves.toBe(true);
+    residentDeferred.resolve();
+    await expect(resident).resolves.toBe(false);
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+  });
+
   it('shares rejection and releases the probe slot for retry', async () => {
     seedCancelled();
     const failure = new Error('resumability read failed');

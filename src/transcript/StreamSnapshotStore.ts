@@ -1403,8 +1403,13 @@ export class StreamSnapshotStore {
    * the execution record named by the stream sidecar. All five fields share
    * that execution owner and replacement lifecycle.
    */
-  getRunMetadata(stream: StreamTabId): RunMetadata {
-    this.warnIfUnseeded('getRunMetadata', stream);
+  getRunMetadata(
+    stream: StreamTabId,
+    options?: { readonly quiet?: boolean },
+  ): RunMetadata {
+    if (!options?.quiet) {
+      this.warnIfUnseeded('getRunMetadata', stream);
+    }
     const record = this.records.get(stream);
     return Object.freeze({
       executionId: record?.runExecutionId,

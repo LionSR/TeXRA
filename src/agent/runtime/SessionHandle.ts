@@ -333,9 +333,9 @@ export class SessionHandle {
     // A live-session resident record is the current authority: `run.start`
     // updates it synchronously, while the persisted sidecar FK may still name
     // the previous execution until the run-end flush.
-    const residentExecutionId = this.snapshots
-      .getExecutionIdMap()
-      .get(streamId);
+    const residentExecutionId = this.snapshots.getRunMetadata(streamId, {
+      quiet: true,
+    }).executionId;
     if (residentExecutionId) {
       return this.startOrJoinWaitingRepairProbe(
         streamId,
@@ -389,6 +389,7 @@ export class SessionHandle {
     if (
       inFlight &&
       inFlight.executionId === executionId &&
+      inFlight.ownershipSource === ownershipSource &&
       this.status.isCurrentGeneration(streamId, inFlight.statusGeneration)
     ) {
       return inFlight.result;
@@ -430,7 +431,7 @@ export class SessionHandle {
     let currentExecutionId: string | undefined;
     if (ownershipSource === 'resident') {
       currentExecutionId =
-        this.snapshots.getExecutionIdMap().get(streamId) ??
+        this.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
         this.transcripts.getSummaryMeta(streamId)?.executionId;
     } else {
       try {
