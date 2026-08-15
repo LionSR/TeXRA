@@ -9,14 +9,18 @@
 // import, a relative `./` import that pulls another utils module into the
 // closure, or prose that drifts in either file all fail the check.
 //
-// Dependency-free (bare Node): the CI guidance-references job runs it without
-// installing anything. Comments and string/template literals are masked before
-// import scanning so prose that merely mentions an import path is not mistaken
-// for a real import.
+// The import scan parses each file with the TypeScript compiler API (the
+// repo's `typescript` devDependency) rather than lexing with regexes, so a
+// comment or string literal that merely mentions an import path, an
+// identifier lookalike such as `myimport(...)` / `loader.require(...)`, and
+// a type-only edge all classify the way the compiler sees them. The ungated
+// guidance-references CI job installs devDependencies before running it.
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import ts from 'typescript';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const utilsDir = join(rootDir, 'src', 'utils');
@@ -70,182 +74,121 @@ function listSourceFiles(dir) {
 }
 
 /**
- * Byte ranges of comments and string/template literals. A regex match whose
- * start index falls inside one of these ranges is prose or a string value,
- * not code, so it cannot be a real import.
- *
- * Known limitation: a template literal is masked as one unit, including any
- * `${...}` substitution. Dynamic imports nested inside a template substitution
- * are therefore not traversed. That pattern does not occur in the current
- * frontends or reachable utils; if it ever does, the webview build itself will
- * fail on the resulting Node builtin, so this is a guard gap rather than a
- * silent build risk.
+ * Specifier text of a statically resolvable argument: a quoted string
+ * literal, or a template literal with no substitutions (a backticked
+ * argument without a `${...}` substitution is as static as a quoted string).
+ * Identifiers and substituted templates are not statically resolvable, so
+ * they contribute no edge.
  */
-function maskedRanges(text) {
-  const ranges = [];
-  let i = 0;
-  const n = text.length;
-  while (i < n) {
-    const char = text[i];
-    if (char === '/' && text[i + 1] === '/') {
-      const start = i;
-      i += 2;
-      while (i < n && text[i] !== '\n') i += 1;
-      ranges.push([start, i]);
-    } else if (char === '/' && text[i + 1] === '*') {
-      const start = i;
-      i += 2;
-      while (i < n && !(text[i] === '*' && text[i + 1] === '/')) i += 1;
-      i += 2;
-      ranges.push([start, i]);
-    } else if (char === '"' || char === "'" || char === '`') {
-      const start = i;
-      const quote = char;
-      i += 1;
-      while (i < n) {
-        if (text[i] === '\\') {
-          i += 2;
-        } else if (text[i] === quote) {
-          i += 1;
-          break;
-        } else {
-          i += 1;
-        }
-      }
-      ranges.push([start, i]);
-    } else {
-      i += 1;
-    }
-  }
-  return ranges;
-}
-
-function insideRanges(index, ranges) {
-  return ranges.some(([start, end]) => index >= start && index < end);
-}
-
-/**
- * True when the matched specifier is erased by TypeScript (`import type` /
- * `export type ... from` / a named import whose every binding is `type Foo`).
- * Mixed `{ type X, y }` stays reachable because `y` is a value import.
- * A binding named `type` (`import { type }` / `import { type as value }`) is
- * a value import — TypeScript treats `type` followed by `as` as the name.
- * `type as as Alias` is type-only: `type` is the modifier and `as` is the name.
- * `binding` is escape-decoded, so an identifier may start with any Unicode
- * ID_Start code point (`É`, `\u00c9` decoded, ...), not only ASCII.
- */
-function isTypeOnlyBinding(binding) {
-  // `type as as Alias` is a type-only import of the name `as`.
-  if (/^type\s+as\s+as\s+[\p{ID_Start}$_]/u.test(binding)) return true;
-  // `type as value` imports a runtime binding named `type`.
-  // `type as` / `type as,` is a type-only import of the name `as`.
-  if (/^type\s+as\s+[\p{ID_Start}$_]/u.test(binding)) return false;
-  return /^type\s+[\p{ID_Start}$_]/u.test(binding);
-}
-
-/** Blank comment ranges so they cannot change binding classification. */
-function withoutComments(text) {
-  const ranges = maskedRanges(text);
-  let result = '';
-  let cursor = 0;
-  for (const [start, end] of ranges) {
-    const chunk = text.slice(start, end);
-    if (chunk.startsWith('//') || chunk.startsWith('/*')) {
-      result += text.slice(cursor, start) + ' '.repeat(end - start);
-      cursor = end;
-    }
-  }
-  return result + text.slice(cursor);
-}
-
-/**
- * Decode `\uXXXX` / `\u{...}` identifier escapes. TypeScript decodes these
- * before parsing, so `\u00c9` and `É` are the same identifier and an escaped
- * `\u0074ype` / `\u0061s` still acts as the `type` / `as` keyword. Out-of-
- * range escapes are kept verbatim; that code does not compile anyway.
- */
-function decodeIdentifierEscapes(text) {
-  return text
-    .replace(/\\u\{([0-9A-Fa-f]+)\}/g, (sequence, hex) => {
-      const codePoint = Number.parseInt(hex, 16);
-      return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : sequence;
-    })
-    .replace(/\\u([0-9A-Fa-f]{4})/g, (_sequence, hex) =>
-      String.fromCharCode(Number.parseInt(hex, 16)),
-    );
-}
-
-function precedingUnmaskedClause(text, matchIndex, ranges) {
-  const before = text.slice(0, matchIndex);
-  let keywordIndex = -1;
-  for (const keyword of before.matchAll(/\b(?:import|export)\b/g)) {
-    if (!insideRanges(keyword.index, ranges)) {
-      keywordIndex = keyword.index;
-    }
-  }
-  return keywordIndex < 0 ? '' : before.slice(keywordIndex);
-}
-
-function isTypeOnlySpecifier(text, match, ranges) {
-  const matched = match[0];
-  // `import type X = require('...')` is erased. A bare require() is not.
-  if (/^require/.test(matched)) {
-    const clause = decodeIdentifierEscapes(
-      withoutComments(precedingUnmaskedClause(text, match.index, ranges)),
-    );
-    return /^(?:import|export)\s+type\s+[\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*\s*=\s*$/u.test(
-      clause,
-    );
-  }
-  if (/^(?:import\s*\(|import\.meta\.resolve)/.test(matched)) {
-    return false;
-  }
-  // Bare side-effect `import 'x'` is always a value edge. Its match includes
-  // the `import` keyword, so looking backward would see the previous clause.
-  if (/^import\s*['"]/.test(matched)) {
-    return false;
-  }
-  if (!/^from\b/.test(matched)) {
-    return false;
-  }
-
-  const clause = decodeIdentifierEscapes(
-    withoutComments(precedingUnmaskedClause(text, match.index, ranges)),
-  );
-  if (clause.length === 0) return false;
-  // `import type from` is a default binding named `type`. Type-only needs a
-  // specifier after `type` (`{`, `*`, or a name). Blanked comments are spaces,
-  // so `import /* c */ type from` stays a value import. The name check uses
-  // ID_Start on escape-decoded text, so `import type É from` stays type-only.
+function staticSpecifierText(node) {
   if (
-    /^(?:import|export)\s+type(?:\s+[\p{ID_Start}$_]|\s*[{*])/u.test(clause)
+    ts.isStringLiteral(node) ||
+    node.kind === ts.SyntaxKind.NoSubstitutionTemplateLiteral
   ) {
-    return true;
+    return node.text;
   }
-  const named = clause.match(/^(?:import|export)\s*\{([^}]*)\}\s*$/);
-  if (named == null) return false;
-  const bindings = named[1]
-    .split(',')
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-  return bindings.length > 0 && bindings.every(isTypeOnlyBinding);
+  return null;
 }
 
-/** Every module specifier in import/require/export-from positions. */
-function importSpecifiers(text) {
-  const ranges = maskedRanges(text);
-  const specifiers = new Set();
-  const pattern =
-    /(?:from\s*|import\s*(?:\(\s*)?|require(?:\.resolve)?\s*\(\s*|import\.meta\.resolve\s*\(\s*)['"]([^'"]+)['"]/g;
-  for (const match of text.matchAll(pattern)) {
-    if (insideRanges(match.index, ranges)) continue;
-    if (isTypeOnlySpecifier(text, match, ranges)) continue;
-    specifiers.add(match[1]);
+/**
+ * The runtime module specifier a node contributes, or null when the node is
+ * not a dependency edge.
+ *
+ * Type-only edges are erased by the compiler, so they contribute nothing:
+ * `import type ...`, `export type ... from`, a named list whose every binding
+ * is `type`-marked (`import { type X }`), and `import type X = require(...)`.
+ * The parser's `isTypeOnly` flags own the awkward grammar — `{ type as }`
+ * imports the name `as` type-only, `{ type as v }` aliases a value named
+ * `type`, an escaped `\u0074ype` still parses as the modifier, and Unicode
+ * names classify identically — so nothing here re-implements it. An empty
+ * `{}` list is a side-effect edge and stays reachable.
+ *
+ * Call forms counted: dynamic `import(...)`, bare `require(...)`,
+ * `require.resolve(...)`, and `import.meta.resolve(...)`. Property-access
+ * lookalikes such as `loader.require(...)` are not module dependencies, and
+ * type-position `import('...')` (an ImportType node, not a CallExpression)
+ * is erased, so neither produces an edge.
+ */
+function dependencySpecifier(node) {
+  if (ts.isImportDeclaration(node)) {
+    const clause = node.importClause;
+    if (clause != null) {
+      if (clause.isTypeOnly) return null;
+      const named = clause.namedBindings;
+      if (
+        named != null &&
+        ts.isNamedImports(named) &&
+        named.elements.length > 0 &&
+        named.elements.every((element) => element.isTypeOnly)
+      ) {
+        return null;
+      }
+    }
+    return staticSpecifierText(node.moduleSpecifier);
   }
+  if (ts.isExportDeclaration(node)) {
+    if (node.moduleSpecifier == null || node.isTypeOnly) return null;
+    const named = node.exportClause;
+    if (
+      named != null &&
+      ts.isNamedExports(named) &&
+      named.elements.length > 0 &&
+      named.elements.every((element) => element.isTypeOnly)
+    ) {
+      return null;
+    }
+    return staticSpecifierText(node.moduleSpecifier);
+  }
+  if (ts.isImportEqualsDeclaration(node)) {
+    if (node.isTypeOnly) return null;
+    const reference = node.moduleReference;
+    return ts.isExternalModuleReference(reference)
+      ? staticSpecifierText(reference.expression)
+      : null;
+  }
+  if (ts.isCallExpression(node) && node.arguments.length > 0) {
+    const callee = node.expression;
+    const isDependencyCall =
+      callee.kind === ts.SyntaxKind.ImportKeyword ||
+      (ts.isIdentifier(callee) && callee.text === 'require') ||
+      (ts.isPropertyAccessExpression(callee) &&
+        ts.isIdentifier(callee.expression) &&
+        callee.expression.text === 'require' &&
+        callee.name.text === 'resolve') ||
+      (ts.isPropertyAccessExpression(callee) &&
+        callee.expression.kind === ts.SyntaxKind.MetaProperty &&
+        callee.expression.keywordToken === ts.SyntaxKind.ImportKeyword &&
+        callee.name.text === 'resolve');
+    if (isDependencyCall) {
+      return staticSpecifierText(node.arguments[0]);
+    }
+  }
+  return null;
+}
+
+/**
+ * Every runtime module specifier in import/require/export-from positions.
+ * Parsing instead of lexing means a comment between a keyword and its
+ * specifier, a regex literal containing a quote, and a template-literal
+ * `${...}` substitution all behave the way the compiler sees them.
+ */
+function importSpecifiers(text, fileName = 'source.ts') {
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    text,
+    ts.ScriptTarget.Latest,
+  );
+  const specifiers = new Set();
+  const visit = (node) => {
+    const specifier = dependencySpecifier(node);
+    if (specifier != null) specifiers.add(specifier);
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
   return specifiers;
 }
 
-/** Fail the guard itself if type-only detection regresses. */
+/** Fail the guard itself if specifier classification regresses. */
 function selfTestImportSpecifiers() {
   const cases = [
     {
@@ -376,6 +319,63 @@ function selfTestImportSpecifiers() {
       text: `${'import type {\n'}  ${'A,\n'.repeat(80)}} from './typeOnly';\n`,
       expected: [],
     },
+    // Gap coverage from #10213: constructs the regex scanner misclassified.
+    {
+      text: "myimport('@utils/x');\n",
+      expected: [],
+    },
+    {
+      text: "loader.require('@utils/x');\n",
+      expected: [],
+    },
+    {
+      text: "registry.import('./value');\n",
+      expected: [],
+    },
+    {
+      text: "import /* note */ '@utils/x';\n",
+      expected: ['@utils/x'],
+    },
+    {
+      text: "import // note\n'./value';\n",
+      expected: ['./value'],
+    },
+    {
+      text: 'import(/* webpackChunkName: "chunk" */ \'@utils/x\');\n',
+      expected: ['@utils/x'],
+    },
+    {
+      text: "require(/* note */ './value');\n",
+      expected: ['./value'],
+    },
+    {
+      text: "const quote = /foo'/g;\nimport './value';\n",
+      expected: ['./value'],
+    },
+    {
+      text: "const url = `${import('./value')}`;\n",
+      expected: ['./value'],
+    },
+    {
+      text: "import('./value');\n",
+      expected: ['./value'],
+    },
+    {
+      text: 'import(`./value`);\n',
+      expected: ['./value'],
+    },
+    {
+      text: "import.meta.resolve('./value');\n",
+      expected: ['./value'],
+    },
+    {
+      text: "require.resolve('./value');\n",
+      expected: ['./value'],
+    },
+    {
+      text: "type Env = import('./typeOnly').Environment;\n",
+      expected: [],
+    },
   ];
   for (const { text, expected } of cases) {
     const actual = [...importSpecifiers(text)].toSorted(compareCodePoints);
@@ -459,7 +459,10 @@ function reachableUtils() {
       process.exit(1);
     }
     for (const file of listSourceFiles(dir)) {
-      for (const specifier of importSpecifiers(readFileSync(file, 'utf8'))) {
+      for (const specifier of importSpecifiers(
+        readFileSync(file, 'utf8'),
+        file,
+      )) {
         if (specifier.startsWith('@utils/')) queue.push(specifier);
       }
     }
@@ -474,7 +477,7 @@ function reachableUtils() {
       continue;
     }
     reachable.add(specifier);
-    for (const next of importSpecifiers(readFileSync(file, 'utf8'))) {
+    for (const next of importSpecifiers(readFileSync(file, 'utf8'), file)) {
       if (next.startsWith('@utils/')) {
         queue.push(next);
       } else if (next.startsWith('.')) {

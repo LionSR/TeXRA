@@ -255,23 +255,29 @@ jobs:
     # Deliberately ungated: this is the one check that must run on BOTH sides
     # of the docs/code split. A guidance-only PR (code=false) skips `checks`,
     # and that is exactly the PR most likely to introduce a stale path; a
-    # code-only PR can break the prose by renaming what it cites. The script is
-    # dependency-free bare Node, so this needs no install and costs seconds.
+    # code-only PR can break the prose by renaming what it cites. The two
+    # scripts are bare Node, but the browser-safe utils guard now imports the
+    # repo's `typescript` devDependency, so this job installs dependencies.
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '22'
-          # This job installs nothing, so there is no package-manager cache to
-          # warm. Leaving the default on makes setup-node detect pnpm-lock.yaml
-          # and shell out to `pnpm` for its cache dir, which fails here because
-          # pnpm is deliberately not set up.
-          package-manager-cache: false
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Check guidance file references resolve
         run: node scripts/check-guidance-refs.mjs
