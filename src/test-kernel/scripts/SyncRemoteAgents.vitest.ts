@@ -113,6 +113,12 @@ function readStubLog(root: string) {
   return readFileSync(join(root, 'stub.log'), 'utf8');
 }
 
+function capturedArgs(root: string): string[] {
+  return readStubLog(root)
+    .split('\n')
+    .filter((line) => line.startsWith('args:'));
+}
+
 function readStubSql(root: string, filename: string) {
   const log = readStubLog(root);
   const marker = `sql-file: ${filename}\n`;
@@ -170,9 +176,7 @@ describe.skipIf(process.platform === 'win32')(
         // SUPABASE_PROJECT_ID only steers the CLI in combination with
         // --linked; without the flag the CLI would silently fall back to
         // --local (#10412).
-        const invocations = log
-          .split('\n')
-          .filter((line) => line.startsWith('args:'));
+        const invocations = capturedArgs(root);
         expect(invocations).toHaveLength(2);
         for (const invocation of invocations) {
           expect(invocation).toContain('--linked');
@@ -201,6 +205,24 @@ describe.skipIf(process.platform === 'win32')(
       }
     });
 
+    it('rejects a whitespace-only SUPABASE_PROJECT_REF instead of spawning the CLI', () => {
+      const root = createFixtureCheckout('proj-a');
+      try {
+        const result = runSync(root, ['--apply'], {
+          SUPABASE_PROJECT_REF: '  ',
+        });
+
+        expect(result.status, result.stderr).toBe(1);
+        expect(result.stderr).toContain(
+          'SUPABASE_PROJECT_REF is set but empty after trimming',
+        );
+        expect(existsSync(join(root, 'stub.log'))).toBe(false);
+        expect(readFileSync(projectRefPath(root), 'utf8')).toBe('proj-a\n');
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
     it('never creates a project-ref file when the checkout has no link state', () => {
       const root = createFixtureCheckout();
       try {
@@ -215,9 +237,7 @@ describe.skipIf(process.platform === 'win32')(
         // the post-run existsSync checks alone would also pass if the file
         // were created and then cleaned up mid-run (#10412).
         expect(log).toContain('observed-ref: <absent>');
-        const invocations = log
-          .split('\n')
-          .filter((line) => line.startsWith('args:'));
+        const invocations = capturedArgs(root);
         expect(invocations).toHaveLength(2);
         for (const invocation of invocations) {
           expect(invocation).toContain('--linked');
@@ -322,9 +342,7 @@ describe.skipIf(process.platform === 'win32')(
           'Upload the missing YAML prompt bodies to the agent-configs bucket',
         );
         // The catalog SQL itself was never sent to the CLI.
-        const invocations = readStubLog(root)
-          .split('\n')
-          .filter((line) => line.startsWith('args:'));
+        const invocations = capturedArgs(root);
         expect(invocations).toHaveLength(1);
         expect(invocations[0]).toContain('remote-agents-preflight.sql');
         // The failed run still left the checkout's link state untouched.
@@ -356,9 +374,7 @@ describe.skipIf(process.platform === 'win32')(
         expect(result.stderr).not.toContain(
           'Upload the missing YAML prompt bodies to the agent-configs bucket',
         );
-        const invocations = readStubLog(root)
-          .split('\n')
-          .filter((line) => line.startsWith('args:'));
+        const invocations = capturedArgs(root);
         expect(invocations).toHaveLength(1);
         expect(invocations[0]).toContain('remote-agents-preflight.sql');
       } finally {
@@ -380,9 +396,7 @@ describe.skipIf(process.platform === 'win32')(
         expect(result.stderr).not.toContain(
           'Upload the missing YAML prompt bodies to the agent-configs bucket',
         );
-        const invocations = readStubLog(root)
-          .split('\n')
-          .filter((line) => line.startsWith('args:'));
+        const invocations = capturedArgs(root);
         expect(invocations).toHaveLength(1);
         expect(invocations[0]).toContain('remote-agents-preflight.sql');
         expect(readFileSync(projectRefPath(root), 'utf8')).toBe('proj-a\n');
