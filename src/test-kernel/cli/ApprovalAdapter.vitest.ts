@@ -416,18 +416,23 @@ describe('requestRetry classification (#7331)', () => {
     },
   );
 
-  it('preserves the failed handler Kimi Code route flag on the CLI retry payload', async () => {
+  it('passes the retry request payload through to the CLI retry presenter unchanged', async () => {
     const ctx = context({ approvalPolicy: 'never', mode: 'headless' });
+    const routed = {
+      ...retryRequest,
+      kimiCodeRoutedOnFailure: true,
+    };
+    const notRouted = {
+      ...retryRequest,
+      kimiCodeRoutedOnFailure: false,
+    };
 
-    await requestHeadlessRetry(ctx, { kimiCodeRoutedOnFailure: true });
-    expect(formatRetryRequestMessageMock).toHaveBeenCalledWith(
-      expect.objectContaining({ kimiCodeRoutedOnFailure: true }),
-    );
+    await createHeadlessCliHostInteractions(ctx).requestRetry?.(routed);
+    await createHeadlessCliHostInteractions(ctx).requestRetry?.(notRouted);
 
-    await requestHeadlessRetry(ctx, { kimiCodeRoutedOnFailure: false });
-    expect(formatRetryRequestMessageMock).toHaveBeenCalledWith(
-      expect.objectContaining({ kimiCodeRoutedOnFailure: false }),
-    );
+    // The payload is the exact runtime request object, not a re-built copy.
+    expect(formatRetryRequestMessageMock).toHaveBeenCalledWith(routed);
+    expect(formatRetryRequestMessageMock).toHaveBeenCalledWith(notRouted);
   });
 
   it('cancels a retry the interactive user explicitly rejects', async () => {
