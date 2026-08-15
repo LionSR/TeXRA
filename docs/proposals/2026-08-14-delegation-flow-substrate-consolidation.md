@@ -773,16 +773,23 @@ premise that failed, as a standing negative result — do not re-propose:
   `config/ratchets/host-agent-mock-baseline.json`. Inlining it into
   `SessionHandle` would force those desktop restart-timing tests onto a
   different gate — a mock-path hazard not worth 29 LoC.
-- `src/shared/streams/streamMetadata.ts` — `buildStreamMetadata` is a Zod
-  parse boundary owning the `UPDATE_STREAMS` wire shape
-  (`StreamMetadataSchema.parse`, prefault semantics documented in-file),
-  and `src/shared/` is the documented home for wire contracts. Moving it
-  into `controllers/progressView/backend/` would relocate a wire-shape
-  owner out of its layer and strand its 67-line unit test.
-- `src/shared/streams/childActivityReducer.ts` — a pure tested algorithm
-  with its own 53-line `describe` block; inlining trades a tested pure
-  function for an untested inline block — element count drops by 2,
-  coverage drops with it.
+- `src/shared/streams/streamMetadata.ts` — review correction (#10654):
+  the `UPDATE_STREAMS` wire shape is owned by `StreamMetadataSchema`
+  (`src/shared/schemas/streamState.ts`, consumed via
+  `UpdateStreamsMessageSchema`), which stays in `src/shared/` regardless;
+  `buildStreamMetadata` is the sole-consumer projection helper
+  (`ProgressStreamProjectionBuilder`) that parses through the schema so a
+  prefault added there cannot silently miss its output. The cut stands on
+  the net-gain bar: relocating a 42-line helper beside its only caller
+  moves the body, strands its 67-line unit test, and recovers only module
+  chrome.
+- `src/shared/streams/childActivityReducer.ts` — review correction
+  (#10654): the coverage is not hostage to the extraction — the
+  vanished-child behavior is exercised at the `SessionFactApplier`
+  boundary (`ProgressBackendRetainedChildren.vitest.ts`), where the
+  53-line direct `describe` block could be re-pointed. The cut stands
+  because the honest net is a 31-line pure module traded for an inline
+  block plus a test rewrite — ~2 elements for churn, not a sweep win.
 
 ### B3. Make the host-agent baseline tell the truth (−25 LoC net, −18 elements)
 
