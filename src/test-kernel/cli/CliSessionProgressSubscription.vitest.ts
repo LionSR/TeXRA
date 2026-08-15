@@ -22,13 +22,15 @@ import {
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  type ExecutionId,
-  type StorageKey,
-  type StreamTabId,
-  type UpdateStreamStatusPayload,
   AgentCategory,
+  DEFAULT_TOOL_CONFIG,
 } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import type {
+  ExecutionId,
+  StorageKey,
+  StreamTabId,
+  UpdateStreamStatusPayload,
+} from '@shared/schemas';
 import {
   STREAM_TRANSITION_CAUSE,
   type StreamTransitionCause,

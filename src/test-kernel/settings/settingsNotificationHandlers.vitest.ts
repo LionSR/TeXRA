@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { AgentCategory, AGENT_SOURCE } from '@shared/schemas';
+import type { AgentSelectionItem } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import {
@@ -9,8 +11,6 @@ import {
   buildCustomAgentDirMessage,
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
-import { AgentCategory, AGENT_SOURCE } from '@shared/schemas/agent';
-import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 import {
   buildGitAuthorSettingsMessage,
   type GitAuthorSettings,

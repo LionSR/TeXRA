@@ -11,13 +11,11 @@ import {
   SETTINGS_TAB_PANEL_NAMES,
   WebFetchPayloadSchema,
   WebSearchPayloadSchema,
-} from '@shared/schemas';
-import { planSummaryLine } from '@shared/schemas/workPlan';
-import {
+  planSummaryLine,
   parseClaudeAgentModel,
   parseCodexApprovalPolicy,
-} from '@shared/schemas/agentCliSettings';
-import { MainViewInboundMessageSchema } from '@shared/schemas/mainView';
+  MainViewInboundMessageSchema,
+} from '@shared/schemas';
 
 describe('work plan schema helpers', () => {
   it('returns a stable placeholder for whitespace-only objectives', () => {

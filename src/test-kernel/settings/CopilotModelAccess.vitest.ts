@@ -11,7 +11,7 @@ vi.mock('@shared/hostBridge', () => ({
 
 // Local imports - shared schemas
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { CopilotRouteInfo } from '@shared/schemas/settingsViewMessages';
+import type { CopilotRouteInfo } from '@shared/schemas';
 
 // Local imports - test utilities
 import {

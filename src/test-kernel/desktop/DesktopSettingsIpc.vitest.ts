@@ -6,12 +6,14 @@ import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  BASH_APPROVAL_CONFIG_KEY,
+  AGENT_SKILLS_CONFIG_KEY,
+  DEFAULT_GIT_MARK_COMMITS,
+} from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
-import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { DEFAULT_GIT_MARK_COMMITS } from '@shared/schemas/stateSettings';
 import {
   FakeScopedConfigProvider,
   FakeStateStore,

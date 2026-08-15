@@ -6,8 +6,7 @@ import {
   type AgentRosterEntry,
 } from '@agent/roster/AgentRosterController';
 import type { StateStore } from '@platform/interfaces';
-import type { AgentCategory } from '@shared/schemas/agent';
-import type { AgentModePreset } from '@shared/schemas/agentPresets';
+import type { AgentCategory, AgentModePreset } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 

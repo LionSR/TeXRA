@@ -14,9 +14,7 @@ import {
   CLI_CORE_SETTING_PATHS,
   CORE_SETTING_PATHS,
   EXTENSION_ONLY_CORE_SETTING_PATHS,
-} from '@shared/schemas/coreSettings';
-import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
-import {
+  AGENT_SKILLS_CONFIG_KEY,
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
@@ -30,13 +28,16 @@ import {
   settingEnumOptions,
   settingsViewSettingByKey,
   stateSettingByKey,
-  type SettingStore,
-  type StateSettingEntry,
-} from '@shared/schemas/stateSettings';
-import {
   API_ACCESS_MODE_OPTIONS,
   REASONING_LEVEL_OPTIONS,
-} from '@shared/schemas/settingsViewMessages';
+  CLAUDE_AGENT_DEFAULT_EFFORT,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+  CODEX_APPROVAL_POLICY_DEFAULT,
+  CODEX_REASONING_EFFORT_DEFAULT,
+  CODEX_SANDBOX_MODE_DEFAULT,
+} from '@shared/schemas';
+import type { SettingStore, StateSettingEntry } from '@shared/schemas';
 import { PROVIDER_ENDPOINT_STATE_ENTRIES } from '@shared/constants/providers';
 import {
   readSetting,
@@ -45,14 +46,6 @@ import {
   writeSetting,
   type SettingsHostKind,
 } from '@shared/config/settingsAccess';
-import {
-  CLAUDE_AGENT_DEFAULT_EFFORT,
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  CODEX_APPROVAL_POLICY_DEFAULT,
-  CODEX_REASONING_EFFORT_DEFAULT,
-  CODEX_SANDBOX_MODE_DEFAULT,
-} from '@shared/schemas/agentCliSettings';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { REPO_ROOT } from '@test/support/repoScan';

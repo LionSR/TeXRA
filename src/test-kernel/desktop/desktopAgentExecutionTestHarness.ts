@@ -3,8 +3,7 @@ import { onTestFinished } from 'vitest';
 
 // Local imports
 import type { DesktopAgentExecutionHost } from '@desktop/main/desktopAgentExecutionHost';
-import type { RunOutcome } from '@shared/schemas';
-import type { OutputFileSummary } from '@shared/schemas/output';
+import type { RunOutcome, OutputFileSummary } from '@shared/schemas';
 
 export type DesktopAgentExecutionModule =
   typeof import('@desktop/main/desktopAgentExecution');

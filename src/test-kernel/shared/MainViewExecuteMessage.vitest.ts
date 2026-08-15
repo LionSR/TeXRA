@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
+  AgentCategory,
+  MainViewExecuteInboundMessageSchema,
+  MainViewExecuteMessageSchema,
+} from '@shared/schemas';
+import {
   buildMainViewExecuteMessage,
   type MainViewExecutionFormState,
 } from '@shared/mainView/executionFormState';
-import { AgentCategory } from '@shared/schemas/agent';
-import {
-  MainViewExecuteInboundMessageSchema,
-  MainViewExecuteMessageSchema,
-} from '@shared/schemas/mainView';
 
 function formState(
   overrides: Partial<MainViewExecutionFormState>,

@@ -9,12 +9,12 @@ import {
   type ExtensionCommandActions,
   type ExtensionRegistryCommandId,
 } from '@commands/extensionCommandHandlers';
+import { SETTINGS_TAB } from '@shared/schemas';
 import {
   commandCatalog,
   type CommandCatalogEntry,
 } from '@shared/commands/catalog';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
-import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // `extensionCommandHandlers.ts` is deliberately free of `vscode` imports, so
 // the production handler map is exercised directly here. Only

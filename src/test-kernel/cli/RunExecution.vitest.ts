@@ -12,12 +12,12 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-import {
-  RUN_OUTCOME,
-  type ExecutionId,
-  type StorageKey,
-  type StreamTabId,
-  type TodoItem,
+import { RUN_OUTCOME } from '@shared/schemas';
+import type {
+  ExecutionId,
+  StorageKey,
+  StreamTabId,
+  TodoItem,
 } from '@shared/schemas';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
@@ -1389,7 +1389,7 @@ describe('executeCliConfig', () => {
 
   /** Stubs a completed tool-use run and drives executeCliToolUseConfig. */
   async function runCompletedToolUseConfig(resolvedOutcome: string) {
-    const { AgentCategory } = await import('@shared/schemas/agent');
+    const { AgentCategory } = await import('@shared/schemas');
     const { executeCliToolUseConfig } = await loadRunExecution();
     mocks.runAgent.mockResolvedValueOnce({
       category: AgentCategory.ToolUse,
@@ -1495,7 +1495,7 @@ describe('executeCliConfig', () => {
 
   /** Stubs a workflow-category result where a tool-use run was expected. */
   async function runWorkflowCategoryMismatch() {
-    const { AgentCategory } = await import('@shared/schemas/agent');
+    const { AgentCategory } = await import('@shared/schemas');
     const { executeCliConfig } = await loadRunExecution();
     mocks.runAgent.mockResolvedValueOnce({
       category: AgentCategory.Workflow,

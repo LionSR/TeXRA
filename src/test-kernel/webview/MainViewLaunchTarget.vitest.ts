@@ -3,9 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - shared IPC and schemas
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { MainViewPersistedStateSchema } from '@shared/schemas';
+import { MainViewPersistedStateSchema, AgentCategory } from '@shared/schemas';
 import type { SessionType, TeamOptionData } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas/agent';
 
 // Local imports - main-view actions, catalog slice, state, and test utilities
 import {

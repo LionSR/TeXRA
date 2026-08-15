@@ -4,10 +4,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 // Local imports
 import type { ApproveSplitButton } from '@progressView/frontend/components/ApproveSplitButton';
 import type { ProposalRequestPanel } from '@progressView/frontend/components/ProposalRequestPanel';
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
 // Local file imports

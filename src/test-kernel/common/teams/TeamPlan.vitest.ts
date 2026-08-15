@@ -18,10 +18,7 @@ import {
   type TeamPreset,
   type TeamRunPlan,
 } from '@common/teams/TeamPlan';
-import {
-  AGENT_MODE_PRESETS,
-  STARTER_AGENT_MODE_PRESET,
-} from '@shared/schemas/agentPresets';
+import { AGENT_MODE_PRESETS, STARTER_AGENT_MODE_PRESET } from '@shared/schemas';
 
 const delegateTools = ['delegate_agent'];
 

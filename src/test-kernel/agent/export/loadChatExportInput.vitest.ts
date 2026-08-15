@@ -2,8 +2,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import type { ExecutionId } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),

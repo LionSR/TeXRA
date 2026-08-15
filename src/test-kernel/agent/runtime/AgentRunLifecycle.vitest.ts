@@ -34,12 +34,11 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  type ExecutionId,
-  type RunOutcome,
-  type StreamTabId,
+  agentKey,
+  AgentCategory,
 } from '@shared/schemas';
+import type { ExecutionId, RunOutcome, StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { agentKey, AgentCategory } from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import {
   executionLeasePath,
