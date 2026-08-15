@@ -1,4 +1,5 @@
 // Third-party imports
+import pDefer from 'p-defer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -102,6 +103,25 @@ function recordSessionEvents(session: SessionHandle): SessionEvent[] {
     scope: 'session',
   });
   return events;
+}
+
+/** A deferred retry preparation that rejects when its AbortSignal fires. */
+function createDeferredPreparation() {
+  const deferred = pDefer<void>();
+  let signal: AbortSignal | undefined;
+  const prepareRetry = vi.fn(
+    async (_selection: string, abortSignal?: AbortSignal) => {
+      if (!abortSignal) return;
+      signal = abortSignal;
+      abortSignal.addEventListener(
+        'abort',
+        () => deferred.reject(abortSignal.reason ?? new Error('aborted')),
+        { once: true },
+      );
+      return deferred.promise;
+    },
+  );
+  return { deferred, prepareRetry, signal: () => signal };
 }
 
 describe('createExtensionHostInteractions', () => {
@@ -469,6 +489,177 @@ describe('createExtensionHostInteractions', () => {
       action: 'deny',
       reason: 'replacement client failed',
     });
+  });
+
+  it('does not let a stale preparation settle its replacement request', async () => {
+    const { interactions } = createInteractions({
+      session: createTestSession(),
+    });
+    const first = createDeferredPreparation();
+    const replacement = createDeferredPreparation();
+
+    const firstResult = interactions.requestRetry?.(
+      {
+        requestId: 'retry:stale-prep',
+        streamId: STREAM_A,
+        operation: 'First invocation',
+      },
+      { prepareRetry: first.prepareRetry },
+    );
+    expect(
+      interactions.submitRetryDecision(STREAM_A, 'retry:stale-prep', {
+        action: 'retry',
+      }),
+    ).toBe(true);
+    await vi.waitFor(() => expect(first.prepareRetry).toHaveBeenCalledOnce());
+
+    const replacementResult = interactions.requestRetry?.(
+      {
+        requestId: 'retry:replacement-prep',
+        streamId: STREAM_A,
+        operation: 'Replacement invocation',
+      },
+      { prepareRetry: replacement.prepareRetry },
+    );
+    await expect(firstResult).resolves.toEqual({ action: 'cancel' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The stale settle saw the abort, but must not delete or deny the newer
+    // request's preparation.
+    expect(
+      interactions.isRetryPending(STREAM_A, 'retry:replacement-prep'),
+    ).toBe(true);
+    expect(
+      interactions.submitRetryDecision(STREAM_A, 'retry:replacement-prep', {
+        action: 'retry',
+      }),
+    ).toBe(true);
+    replacement.deferred.resolve();
+    await expect(replacementResult).resolves.toEqual({ action: 'retry' });
+  });
+
+  it('rejects a conflicting personal-credential selection while a plain retry prepares', async () => {
+    const { interactions } = createInteractions({
+      session: createTestSession(),
+    });
+    const preparation = createDeferredPreparation();
+
+    const result = interactions.requestRetry?.(
+      {
+        requestId: 'retry:conflict',
+        streamId: STREAM_A,
+        operation: 'First invocation',
+      },
+      { prepareRetry: preparation.prepareRetry },
+    );
+    expect(
+      interactions.submitRetryDecision(STREAM_A, 'retry:conflict', {
+        action: 'retry',
+      }),
+    ).toBe(true);
+    await vi.waitFor(() =>
+      expect(preparation.prepareRetry).toHaveBeenCalledOnce(),
+    );
+
+    await expect(
+      interactions.submitRetryWithPersonalCredentials(
+        STREAM_A,
+        'retry:conflict',
+      ),
+    ).resolves.toBe(false);
+
+    expect(preparation.prepareRetry).toHaveBeenCalledTimes(1);
+    expect(preparation.prepareRetry).toHaveBeenCalledWith(
+      'configured',
+      expect.anything(),
+    );
+
+    preparation.deferred.resolve();
+    await expect(result).resolves.toEqual({ action: 'retry' });
+  });
+
+  it('aborts an in-flight personal preparation when the retry is dismissed', async () => {
+    const { interactions } = createInteractions({
+      session: createTestSession(),
+    });
+    const preparation = createDeferredPreparation();
+
+    const result = interactions.requestRetry?.(
+      {
+        requestId: 'retry:cancel-prep',
+        streamId: STREAM_A,
+        operation: 'First invocation',
+      },
+      { prepareRetry: preparation.prepareRetry },
+    );
+    const personal = interactions.submitRetryWithPersonalCredentials(
+      STREAM_A,
+      'retry:cancel-prep',
+    );
+    await vi.waitFor(() =>
+      expect(preparation.prepareRetry).toHaveBeenCalledOnce(),
+    );
+
+    expect(
+      interactions.submitRetryDecision(STREAM_A, 'retry:cancel-prep', {
+        action: 'cancel',
+      }),
+    ).toBe(true);
+    expect(preparation.signal()?.aborted).toBe(true);
+    await expect(personal).resolves.toBe(false);
+    await expect(result).resolves.toEqual({ action: 'cancel' });
+  });
+
+  it('does not abort preparations outside the cancellation scope', async () => {
+    const { interactions } = createInteractions({
+      session: createTestSession(),
+    });
+    const scopeA = {};
+    const scopeB = {};
+    const preparationA = createDeferredPreparation();
+    const preparationB = createDeferredPreparation();
+
+    const resultA = interactions.requestRetry?.(
+      {
+        requestId: 'retry:scope-a',
+        streamId: STREAM_A,
+        operation: 'Scoped A',
+      },
+      { prepareRetry: preparationA.prepareRetry, cancellationScope: scopeA },
+    );
+    const resultB = interactions.requestRetry?.(
+      {
+        requestId: 'retry:scope-b',
+        streamId: STREAM_B,
+        operation: 'Scoped B',
+      },
+      { prepareRetry: preparationB.prepareRetry, cancellationScope: scopeB },
+    );
+    expect(
+      interactions.submitRetryDecision(STREAM_A, 'retry:scope-a', {
+        action: 'retry',
+      }),
+    ).toBe(true);
+    expect(
+      interactions.submitRetryDecision(STREAM_B, 'retry:scope-b', {
+        action: 'retry',
+      }),
+    ).toBe(true);
+    await vi.waitFor(() =>
+      expect(preparationA.prepareRetry).toHaveBeenCalledOnce(),
+    );
+    await vi.waitFor(() =>
+      expect(preparationB.prepareRetry).toHaveBeenCalledOnce(),
+    );
+
+    interactions.cancel({ cancellationScope: scopeA });
+
+    await expect(resultA).resolves.toEqual({ action: 'cancel' });
+    expect(preparationA.signal()?.aborted).toBe(true);
+    expect(preparationB.signal()?.aborted).toBe(false);
+
+    preparationB.deferred.resolve();
+    await expect(resultB).resolves.toEqual({ action: 'retry' });
   });
 
   it('cancels pending retry requests for a removed stream', async () => {

@@ -6,6 +6,7 @@ import type {
 } from '@agent/runtime/runtimePresentationEvents';
 import {
   cancellationResultFor,
+  matchesCancelSelector,
   type BashSettlement,
   type HostApprovalBypassStateUpdate,
   type HostBashApprovalRequest,
@@ -24,6 +25,7 @@ import {
 } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
+import { warn as logWarning } from '@logger/logUtils';
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { prepareBashApprovalPrompt } from '@tools/approval/bashApproval';
@@ -123,9 +125,48 @@ export function createProgressHostInteractions(
       HostRetryInteractionOptions['prepareRetry']
     >;
     readonly controller: AbortController;
+    readonly cancellationScope?: object;
     settling: boolean;
+    selection?: 'configured' | 'personal';
+    settlement?: Promise<boolean>;
   }
   const retryPreparations = new Map<StreamTabId, PendingRetryPreparation>();
+
+  const isRetryPending = (
+    streamId: StreamTabId,
+    requestId: string,
+  ): boolean => {
+    return handlers().retry.get(streamId)?.requestId === requestId;
+  };
+
+  const isCurrentRetryPreparation = (
+    streamId: StreamTabId,
+    requestId: string,
+    preparation: PendingRetryPreparation,
+  ): boolean =>
+    retryPreparations.get(streamId) === preparation &&
+    isRetryPending(streamId, requestId);
+
+  /**
+   * Complete one retry settlement without letting a dismiss-delivery failure
+   * become an unhandled rejection. `complete` settles the request before it
+   * dismisses, so `fallback` reports the settlement the caller already made.
+   */
+  const completeRetrySettlement = (
+    streamId: StreamTabId,
+    settlement: RetryResult,
+    fallback: boolean,
+  ): boolean => {
+    try {
+      return handlers().retry.complete(streamId, settlement);
+    } catch (error) {
+      logWarning(
+        'progressView',
+        `The retry settlement could not be delivered: ${toErrorMessage(error)}`,
+      );
+      return fallback;
+    }
+  };
 
   const settlePreparedRetry = async (
     streamId: StreamTabId,
@@ -137,33 +178,64 @@ export function createProgressHostInteractions(
     const preparation = retryPreparations.get(streamId);
     if (!preparation || preparation.requestId !== requestId) {
       // No host-side preparation callback is attached, so the caller's normal
-      // retry path (rebind) stays responsible for refreshing the client.
-      retryPreparations.delete(streamId);
-      return handlers().retry.complete(streamId, {
-        action: 'retry',
-        ...(feedback !== undefined ? { feedback } : {}),
-      });
+      // retry path (rebind) stays responsible for refreshing the client. When
+      // a newer preparation exists, leave it alone: settling it here would
+      // resolve a request this caller no longer owns.
+      if (preparation) return false;
+      return completeRetrySettlement(
+        streamId,
+        {
+          action: 'retry',
+          ...(feedback !== undefined ? { feedback } : {}),
+        },
+        true,
+      );
     }
-    if (preparation.settling) return true;
+    if (preparation.settling) {
+      // A conflicting second selection (plain retry vs. personal-credential
+      // switch) cannot adopt the in-flight preparation's result, so reject it
+      // instead of pretending it settled.
+      if (preparation.selection !== selection) return false;
+      return preparation.settlement ?? true;
+    }
     preparation.settling = true;
-    try {
-      await preparation.prepareRetry(selection, preparation.controller.signal);
-    } catch (error) {
+    preparation.selection = selection;
+    const settlement = (async (): Promise<boolean> => {
+      try {
+        await preparation.prepareRetry(
+          selection,
+          preparation.controller.signal,
+        );
+      } catch (error) {
+        if (!isCurrentRetryPreparation(streamId, requestId, preparation)) {
+          return false;
+        }
+        retryPreparations.delete(streamId);
+        completeRetrySettlement(
+          streamId,
+          { action: 'deny', reason: toErrorMessage(error) },
+          denialResult,
+        );
+        // The API-key switch path reports a denied preparation as false so its
+        // controller can roll the routing changes back; a plain retry has no
+        // routing changes to undo, so it still reports that the request settled.
+        return denialResult;
+      }
+      if (!isCurrentRetryPreparation(streamId, requestId, preparation)) {
+        return false;
+      }
       retryPreparations.delete(streamId);
-      handlers().retry.complete(streamId, {
-        action: 'deny',
-        reason: toErrorMessage(error),
-      });
-      // The API-key switch path reports a denied preparation as false so its
-      // controller can roll the routing changes back; a plain retry has no
-      // routing changes to undo, so it still reports that the request settled.
-      return denialResult;
-    }
-    retryPreparations.delete(streamId);
-    return handlers().retry.complete(streamId, {
-      action: 'retry',
-      ...(feedback !== undefined ? { feedback } : {}),
-    });
+      return completeRetrySettlement(
+        streamId,
+        {
+          action: 'retry',
+          ...(feedback !== undefined ? { feedback } : {}),
+        },
+        true,
+      );
+    })();
+    preparation.settlement = settlement;
+    return settlement;
   };
 
   const cancel = (selector: HostInteractionCancelSelector = {}): void => {
@@ -171,12 +243,19 @@ export function createProgressHostInteractions(
       options.getToolEditApprovals().cancel(selector);
     }
     if (selector.kind == null || selector.kind === 'retry') {
-      if (selector.streamId === undefined) {
-        for (const preparation of retryPreparations.values()) {
+      for (const [streamId, preparation] of retryPreparations) {
+        if (
+          matchesCancelSelector(
+            {
+              kind: 'retry',
+              streamId,
+              cancellationScope: preparation.cancellationScope,
+            },
+            selector,
+          )
+        ) {
           preparation.controller.abort();
         }
-      } else if (selector.streamId !== null) {
-        retryPreparations.get(selector.streamId)?.controller.abort();
       }
     }
     cancelApprovalRequestHandlers(
@@ -184,13 +263,6 @@ export function createProgressHostInteractions(
       PROGRESS_INTERACTION_KINDS,
       selector,
     );
-  };
-
-  const isRetryPending = (
-    streamId: StreamTabId,
-    requestId: string,
-  ): boolean => {
-    return handlers().retry.get(streamId)?.requestId === requestId;
   };
 
   return {
@@ -236,6 +308,7 @@ export function createProgressHostInteractions(
     ): boolean {
       if (!isRetryPending(streamId, requestId)) return false;
       if (decision.action === 'cancel') {
+        retryPreparations.get(streamId)?.controller.abort();
         retryPreparations.delete(streamId);
         return handlers().retry.complete(streamId, decision);
       }
@@ -350,6 +423,7 @@ export function createProgressHostInteractions(
           requestId: request.requestId,
           prepareRetry: interactionOptions.prepareRetry,
           controller: new AbortController(),
+          cancellationScope: interactionOptions.cancellationScope,
           settling: false,
         });
       } else {
