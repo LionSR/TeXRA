@@ -389,7 +389,6 @@ describe('childRunLoop E2E fixtures', () => {
         runSession: SessionHandle,
       ) =>
         CodexThreads.trackInFlight({
-          thread: {} as never,
           childStreamId,
           executionId,
           executions: runSession.executions,
@@ -409,9 +408,6 @@ describe('childRunLoop E2E fixtures', () => {
           childStreamId,
           executionId,
           executions: runSession.executions,
-          model: 'claude-sonnet-4-6',
-          permissionMode: 'acceptEdits',
-          effort: 'high',
         }),
       interruptAll: () => ClaudeAgentSessions.interruptAll(),
       release: (executionId: ExecutionId) =>

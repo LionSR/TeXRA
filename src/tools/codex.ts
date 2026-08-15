@@ -408,7 +408,6 @@ function startCodexLoop(params: {
         abortController.signal,
       ),
     buildEntry: (session) => ({
-      thread,
       childStreamId,
       executionId,
       executions: session.executions,

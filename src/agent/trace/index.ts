@@ -5,8 +5,8 @@
  * `subscribe()`. Plain `debug/info/warn/error`, stages, streams, and the
  * domain helpers are sugar over `emit()`.
  *
- * TeXRA-specific helpers (`logError`/`latexDiff`/`statistics`/etc.) are
- * plain functions over this interface in `helpers.ts` / `toolUseHelpers.ts`.
+ * TeXRA-specific helpers (`logSdkError`/`logUserMessage`/etc.) are plain
+ * functions over this interface in `helpers.ts` / `toolUseHelpers.ts`.
  *
  * See `docs/proposals/2026-05-22-agent-trace-sdk-surface.md` for the design.
  */
@@ -47,9 +47,6 @@ export {
   logConversationProgress,
   logWebSearch,
   logWebFetch,
-  logLatexdiff,
   logFilesLoaded,
   logFileCategory,
-  logMissingOutputs,
-  logContextStateSnapshot,
 } from './helpers';
