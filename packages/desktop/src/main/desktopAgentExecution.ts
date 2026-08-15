@@ -545,9 +545,10 @@ export class DesktopProgressBridge {
       isRetryPending: (stream, requestId) =>
         this.hostInteractions.isRetryPending(stream, requestId),
       triggerRetry: (stream, requestId) =>
-        this.hostInteractions.submitRetryDecision(stream, requestId, {
-          action: 'retry',
-        }),
+        this.hostInteractions.submitRetryWithPersonalCredentials(
+          stream,
+          requestId,
+        ),
     });
   }
 
@@ -926,10 +927,11 @@ export class DesktopProgressBridge {
             action: 'retry',
             feedback,
           }),
-        cancel: (stream, requestId) =>
+        cancel: (stream, requestId) => {
           this.hostInteractions.submitRetryDecision(stream, requestId, {
             action: 'cancel',
-          }),
+          });
+        },
       },
     };
 

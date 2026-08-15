@@ -96,6 +96,11 @@ type TestableBridge = {
       requestId: string,
       decision: { action: 'retry' | 'cancel'; feedback?: string },
     ): boolean;
+    submitRetryWithPersonalCredentials(
+      streamId: StreamTabId,
+      requestId: string,
+      feedback?: string,
+    ): Promise<boolean>;
   };
   waitUntilReady(): Promise<void>;
   interactions: {
