@@ -218,7 +218,22 @@ export class DesktopProgressBridge {
       // screen, so there is no separate progress surface to reveal.
       requestEnsureProgressView: () => undefined,
       requestShowError: ({ message }) => {
-        void this.options.host.showErrorMessage(message);
+        // Report what the error dialog actually did: the concrete
+        // showErrorMessage awaits dialog.showMessageBox, which rejects when
+        // the window is torn down beneath it. Voiding the promise would
+        // leave that rejection unhandled, and reporting nothing would read
+        // as not-delivered even when the dialog did render (#10400).
+        return Promise.resolve(
+          this.options.host.showErrorMessage(message),
+        ).then(
+          () => true,
+          (error: unknown) => {
+            this.logger.warn('Failed to present the error dialog', {
+              data: toLogData(error),
+            });
+            return false;
+          },
+        );
       },
       requestShowInstruction: (instruction) => {
         // An instruction is actionable guidance, not a failure, so it uses
@@ -230,8 +245,24 @@ export class DesktopProgressBridge {
               .map((action) => INSTRUCTION_ACTION_HINT[action] ?? action)
               .join(', ')})`
           : '';
-        void this.options.host.showInfoMessage(`${instruction.message}${hint}`);
-        return true;
+        // Observe the dialog promise before reporting delivery (#10399): the
+        // concrete showInfoMessage awaits dialog.showMessageBox, which
+        // rejects when its window is being torn down. Reporting `true`
+        // unconditionally would mark a launch error as presented while the
+        // rejection went unhandled and nothing rendered. The desktop dialog
+        // is window-modal, so settling on dismissal does not park the
+        // launching stream the way a non-modal notification would.
+        return Promise.resolve(
+          this.options.host.showInfoMessage(`${instruction.message}${hint}`),
+        ).then(
+          () => true,
+          (error: unknown) => {
+            this.logger.warn('Failed to present the instruction dialog', {
+              data: toLogData(error),
+            });
+            return false;
+          },
+        );
       },
       showAgentConfigBanner: ({ agentName }) => {
         return (
@@ -245,13 +276,15 @@ export class DesktopProgressBridge {
       requestOpenFile: (data: RequestOpenFilePayload) => {
         // Desktop has no editor integration to preview through, so the
         // resolved path goes to the preview-with-fallback host directly.
-        this.options.host
-          .openPath(data.location.absolutePath)
-          .catch((error) => {
+        return this.options.host.openPath(data.location.absolutePath).then(
+          () => true,
+          (error: unknown) => {
             this.logger.warn('Failed to open requested file on desktop', {
               data: toLogData(error),
             });
-          });
+            return false;
+          },
+        );
       },
     };
     const presentationHost: Pick<SessionHostInteractions, 'emit'> = {

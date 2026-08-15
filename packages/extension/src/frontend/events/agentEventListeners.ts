@@ -37,14 +37,20 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'agentEventListeners';
 
-function handleRequestOpenFile(payload: RequestOpenFilePayload): void {
-  openBuildDisplayIfTex(payload.location, {
+function handleRequestOpenFile(
+  payload: RequestOpenFilePayload,
+): Promise<boolean> {
+  return openBuildDisplayIfTex(payload.location, {
     preserveFocus: payload.preserveFocus,
-  }).catch((err) =>
-    logger.warn(
-      CHANNEL,
-      `Failed to open file ${payload.location.absolutePath}: ${toErrorMessage(err)}`,
-    ),
+  }).then(
+    () => true,
+    (err) => {
+      logger.warn(
+        CHANNEL,
+        `Failed to open file ${payload.location.absolutePath}: ${toErrorMessage(err)}`,
+      );
+      return false;
+    },
   );
 }
 
@@ -97,6 +103,12 @@ async function handleRequestShowInstruction(
       payload.showSuppress,
       { deferDismissal: true },
     );
+    // The "never remind again" suppression path also reports delivered:
+    // `showInstructionWithSuppress` returns without rendering when the user
+    // previously opted out of this key, and firing the caller's generic
+    // fallback then would resurface the same notice through a toast the user
+    // cannot suppress. The launch error itself still surfaces through the
+    // failed run.
     return true;
   } catch (err) {
     logger.warn(
@@ -129,8 +141,20 @@ async function handleShowAgentConfigBanner(
   }
 }
 
-function handleRequestShowError({ message }: RequestShowErrorPayload): void {
-  void vscode.window.showErrorMessage(message);
+function handleRequestShowError({ message }: RequestShowErrorPayload): boolean {
+  try {
+    // Delivery is the toast handoff: `showErrorMessage` resolves only on
+    // dismissal, which no caller should wait on, so report once VS Code has
+    // accepted the request.
+    void vscode.window.showErrorMessage(message);
+    return true;
+  } catch (err) {
+    logger.warn(
+      CHANNEL,
+      `Failed to show the error toast: ${toErrorMessage(err)}`,
+    );
+    return false;
+  }
 }
 
 async function handleRequestEnsureProgressView(
@@ -182,9 +206,17 @@ function createPresentationEventHandlers(
     requestShowInstruction: handleRequestShowInstruction,
     showAgentConfigBanner: handleShowAgentConfigBanner,
     requestShowError: handleRequestShowError,
-    requestEnsureProgressView: (payload) => {
-      void handleRequestEnsureProgressView(payload, progressViewProvider);
-    },
+    requestEnsureProgressView: (payload) =>
+      handleRequestEnsureProgressView(payload, progressViewProvider).then(
+        () => true,
+        (err) => {
+          logger.warn(
+            CHANNEL,
+            `Failed to reveal the progress view: ${toErrorMessage(err)}`,
+          );
+          return false;
+        },
+      ),
   };
 }
 
