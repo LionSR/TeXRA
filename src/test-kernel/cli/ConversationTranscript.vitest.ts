@@ -14,6 +14,7 @@ import {
 } from '@cli/chat/tui/panes/transcriptEntryLayout';
 import { formatRenderError } from '@cli/chat/tui/panes/EntryErrorBoundary';
 import {
+  incrementalStaticTranscriptEntries,
   isInquiryContinuationText,
   splitTranscriptEntries,
   terminalVisibleTranscriptText,
@@ -21,10 +22,15 @@ import {
 } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   appendStaticTranscriptItems,
+  buildStaticTranscriptItems,
+  DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
   sessionHeaderIdentityLine,
+  trimStaticTranscriptItems,
   type StaticTranscriptItem,
+  type StaticTranscriptRingBudgets,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
 import { staticScrollbackTarget } from '@cli/chat/tui/appLayout';
+import { staticTranscriptRepaintEpoch } from '@cli/chat/tui/state/staticTranscriptRepaint';
 import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
 import {
   createTuiViewportController,
@@ -927,6 +933,166 @@ describe('CLI conversation transcript', () => {
     ).toEqual(['session-header', 'u1', 'a1', 'u2']);
   });
 
+  it('bounds the static transcript ring by rows without trimming the header', () => {
+    const entries = Array.from({ length: 20 }, (_, index) =>
+      entry(`e${index}`, 'assistant', 'x', true),
+    );
+    const budgets: StaticTranscriptRingBudgets = {
+      rowHighWater: 12,
+      rowLowWater: 8,
+      byteHighWater: 1024 * 1024,
+      byteLowWater: 1024 * 1024,
+    };
+    const built = buildStaticTranscriptItems({
+      currentItems: [],
+      streams: new Map([[STREAM_ID, sliceWithEntries(STREAM_ID, entries)]]),
+      meta: SESSION_META,
+      scrollbackStreamId: STREAM_ID,
+      width: 80,
+      ringBudgets: budgets,
+    });
+
+    expect(built.items.map((item) => item.id)).toEqual([
+      'session-header',
+      'e16',
+      'e17',
+      'e18',
+      'e19',
+    ]);
+    expect(built.rowCount).toBeLessThanOrEqual(budgets.rowLowWater);
+  });
+
+  it('bounds the static transcript ring by bytes and drops oldest non-header items', () => {
+    const entries = Array.from({ length: 3 }, (_, index) =>
+      entry(`e${index}`, 'assistant', 'x'.repeat(80), true),
+    );
+    const budgets: StaticTranscriptRingBudgets = {
+      rowHighWater: 10_000,
+      rowLowWater: 10_000,
+      byteHighWater: 160,
+      byteLowWater: 64,
+    };
+    const built = buildStaticTranscriptItems({
+      currentItems: [],
+      streams: new Map([[STREAM_ID, sliceWithEntries(STREAM_ID, entries)]]),
+      meta: SESSION_META,
+      scrollbackStreamId: STREAM_ID,
+      width: 80,
+      ringBudgets: budgets,
+    });
+
+    expect(built.items.map((item) => item.id)).toEqual([
+      'session-header',
+      'e2',
+    ]);
+  });
+
+  it('keeps a single oversized finalized entry even when it exceeds the budget', () => {
+    const oversized = entry('e0', 'assistant', 'x'.repeat(80), true);
+    const budgets: StaticTranscriptRingBudgets = {
+      rowHighWater: 2,
+      rowLowWater: 1,
+      byteHighWater: 10,
+      byteLowWater: 5,
+    };
+    const built = buildStaticTranscriptItems({
+      currentItems: [],
+      streams: new Map([[STREAM_ID, sliceWithEntries(STREAM_ID, [oversized])]]),
+      meta: SESSION_META,
+      scrollbackStreamId: STREAM_ID,
+      width: 80,
+      ringBudgets: budgets,
+    });
+
+    expect(built.items.map((item) => item.id)).toEqual([
+      'session-header',
+      'e0',
+    ]);
+  });
+
+  it('trims a static tail with margin-collapse-aware row accounting', () => {
+    const header: StaticTranscriptItem = {
+      id: 'session-header',
+      kind: 'header',
+      compact: false,
+      identityLine: 'agent: research · model: test',
+      meta: SESSION_META,
+    };
+    const user1: StaticTranscriptItem = {
+      id: 'u1',
+      kind: 'entry',
+      entry: entry('u1', 'user', 'first', true),
+    };
+    const user2: StaticTranscriptItem = {
+      id: 'u2',
+      kind: 'entry',
+      entry: entry('u2', 'user', 'second', true),
+    };
+    const beforeRows =
+      4 +
+      transcriptEntryLayoutRows(
+        transcriptEntryLayout(user1.entry, { width: 80 }),
+      ) +
+      transcriptEntryLayoutRows(
+        transcriptEntryLayout(user2.entry, {
+          previousEntry: user1.entry,
+          width: 80,
+        }),
+      );
+    const trimmed = trimStaticTranscriptItems([header, user1, user2], {
+      budgets: {
+        rowHighWater: beforeRows - 1,
+        rowLowWater: beforeRows - 1,
+        byteHighWater: Number.MAX_SAFE_INTEGER,
+        byteLowWater: Number.MAX_SAFE_INTEGER,
+      },
+      totals: { rows: beforeRows, bytes: 0 },
+      width: 80,
+    });
+
+    expect(trimmed.items.map((item) => item.id)).toEqual([
+      'session-header',
+      'u2',
+    ]);
+    expect(trimmed.totals.rows).toBeLessThanOrEqual(beforeRows);
+  });
+
+  it('appends settled entries incrementally and resumes a deferred live prompt', () => {
+    const user = entry('u1', 'user', 'what is this repo about', true);
+    const assistantPending = entry('a1', 'assistant', 'working', false);
+    const assistantSettled = { ...assistantPending, finalized: true };
+    const emptyCursor = {
+      entriesRef: undefined,
+      scannedIndex: 0,
+      lastScannedEntry: undefined,
+      status: undefined,
+    } as const;
+
+    const first = incrementalStaticTranscriptEntries(
+      [user],
+      STREAM_PHASE.RUNNING,
+      emptyCursor,
+    );
+    expect(first.appended).toEqual([]);
+    expect(first.cursor.scannedIndex).toBe(0);
+
+    const second = incrementalStaticTranscriptEntries(
+      [user, assistantPending],
+      STREAM_PHASE.RUNNING,
+      first.cursor,
+    );
+    expect(second.appended.map((item) => item.id)).toEqual(['u1']);
+    expect(second.cursor.scannedIndex).toBe(1);
+
+    const third = incrementalStaticTranscriptEntries(
+      [user, assistantSettled],
+      STREAM_PHASE.RUNNING,
+      second.cursor,
+    );
+    expect(third.appended.map((item) => item.id)).toEqual(['a1']);
+    expect(third.cursor.scannedIndex).toBe(2);
+  });
+
   it('labels preset-launched sessions with team and root identity', () => {
     expect(
       sessionHeaderIdentityLine({
@@ -1165,13 +1331,12 @@ describe('CLI conversation transcript', () => {
       },
     });
 
+    staticTranscriptRepaintEpoch.set(0);
     controller.repaintTranscript();
     controller.repaintAfterTerminalResume();
 
-    expect(calls).toEqual([
-      { clearScrollback: true, preserveStatic: false },
-      { clearScrollback: true },
-    ]);
+    expect(calls).toEqual([{ clearScrollback: true, preserveStatic: false }]);
+    expect(staticTranscriptRepaintEpoch.get()).toBe(1);
   });
 
   it('detects generated inquiry continuation rows only', () => {

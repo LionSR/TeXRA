@@ -224,3 +224,128 @@ export function splitTranscriptEntries(
   }
   return { finalized, pending };
 }
+
+export const EMPTY_TRANSCRIPT_ENTRIES: readonly ConversationEntry[] = [];
+
+/** Cursor over the settled prefix of a stream's projected entries. The static
+ *  transcript appends only entries after this cursor on ordinary syncs; a
+ *  cursor mismatch (fold rebuild, owner switch, hard reset) forces a full
+ *  rebuild through {@link orderedStaticTranscriptEntries}. */
+export interface StaticTranscriptScanCursor {
+  /** The `slice.entries` array the cursor was advanced against. */
+  readonly entriesRef: readonly ConversationEntry[] | undefined;
+  /** Number of leading entries already consumed by a previous scan. */
+  readonly scannedIndex: number;
+  /** Reference to `entriesRef[scannedIndex - 1]`, used to detect append-only
+   *  extensions without rescanning the whole history. */
+  readonly lastScannedEntry: ConversationEntry | undefined;
+  /** Stream phase at scan time; a phase change forces a rescan of the tail. */
+  readonly status: StreamPhase | undefined;
+}
+
+export interface StaticTranscriptScanResult {
+  readonly appended: readonly ConversationEntry[];
+  readonly cursor: StaticTranscriptScanCursor;
+  /** True when the caller must rebuild from scratch instead of using the
+   *  returned suffix (owner switch, hard reset, or non-append-only change). */
+  readonly rebuild: boolean;
+}
+
+function makeStaticTranscriptScanCursor(
+  entriesRef: readonly ConversationEntry[] | undefined,
+  scannedIndex: number,
+  status: StreamPhase | undefined,
+): StaticTranscriptScanCursor {
+  return {
+    entriesRef,
+    scannedIndex,
+    lastScannedEntry:
+      entriesRef !== undefined && scannedIndex > 0
+        ? entriesRef[scannedIndex - 1]
+        : undefined,
+    status,
+  };
+}
+
+/**
+ * The settled-prefix scan used by the live static transcript. Unlike
+ * {@link orderedStaticTranscriptEntries} (the full rebuild path), this walks
+ * only the suffix after `previous.scannedIndex`, so ordinary stream-sync ticks
+ * cost O(delta) instead of O(history).
+ *
+ * The suffix is exact: `hasLaterRenderable` is computed backward over just
+ * the suffix, which is all that is needed to resolve the live-user-prompt
+ * deferral rule (`userPromptAwaitsLiveContinuation`).
+ */
+export function incrementalStaticTranscriptEntries(
+  entries: readonly ConversationEntry[] | undefined,
+  status: StreamPhase | undefined,
+  previous: StaticTranscriptScanCursor | undefined,
+): StaticTranscriptScanResult {
+  const source = entries ?? EMPTY_TRANSCRIPT_ENTRIES;
+  if (previous === undefined) {
+    return {
+      appended: [],
+      cursor: makeStaticTranscriptScanCursor(source, 0, status),
+      rebuild: true,
+    };
+  }
+
+  const sameEntries = previous.entriesRef === source;
+  if (sameEntries && previous.status === status) {
+    return { appended: [], cursor: previous, rebuild: false };
+  }
+
+  const canContinue =
+    sameEntries ||
+    (source.length >= previous.scannedIndex &&
+      (previous.scannedIndex === 0 ||
+        (previous.entriesRef !== undefined &&
+          source[previous.scannedIndex - 1] === previous.lastScannedEntry)));
+  if (!canContinue) {
+    return {
+      appended: [],
+      cursor: makeStaticTranscriptScanCursor(source, 0, status),
+      rebuild: true,
+    };
+  }
+
+  const start = previous.scannedIndex;
+  const suffix = source.slice(start);
+  const hasLaterRenderable = new Array<boolean>(suffix.length);
+  let laterRenderable = false;
+  for (let index = suffix.length - 1; index >= 0; index -= 1) {
+    hasLaterRenderable[index] = laterRenderable;
+    const entry = suffix[index];
+    if (entry !== undefined && isRenderableTranscriptEntry(entry)) {
+      laterRenderable = true;
+    }
+  }
+
+  const appended: ConversationEntry[] = [];
+  let scannedIndex = start;
+  for (let index = 0; index < suffix.length; index += 1) {
+    const entry = suffix[index];
+    if (entry === undefined) break;
+    if (entry.role === 'activity' && !entry.finalized) break;
+    if (!entry.finalized) break;
+    if (!isRenderableTranscriptEntry(entry)) {
+      scannedIndex = start + index + 1;
+      continue;
+    }
+    const defersLiveUserPrompt =
+      isActivePhase(status) &&
+      entry.role === 'user' &&
+      !isInquiryContinuationText(entry.text) &&
+      !hasLaterRenderable[index];
+    if (defersLiveUserPrompt) break;
+    appended.push(entry);
+    scannedIndex = start + index + 1;
+  }
+
+  return {
+    appended,
+    cursor: makeStaticTranscriptScanCursor(source, scannedIndex, status),
+    rebuild: false,
+  };
+}
