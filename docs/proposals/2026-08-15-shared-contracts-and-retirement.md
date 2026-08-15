@@ -123,6 +123,13 @@ else becomes a filter over it:
 - Deserved and kept: the `config`/`workspaceState`/`globalState` store
   *kinds* — a real platform constraint; the fix is one slots map, not one
   backend.
+- **Maintainer ruling (2026-08-15):** for the child-work policy toggles
+  (`DETACH_SUBAGENTS_ON_STOP`, `ALLOW_ORCHESTRATOR_KILL`) the extension
+  changes to match — the toggles move onto the shared `~/.texra` state
+  store desktop and CLI already agree on, ending the Memento-vs-shared
+  split for this class. Use this as the precedent when the same question
+  recurs for other keys in the `slots` migration: prefer the shared store
+  unless a worktree-scoping need is documented on the row.
 
 This family also owns the audit doc's V1/V3 rulings (three physical stores,
 missing host argument at `desktopSettingsIpc.ts:258`) — same PR series.
@@ -462,6 +469,43 @@ B-2 +60 (declared), C ≈ −450..−550, D −180, plus §2 contract deletions
 (≈ −400..−600 across families 2.1–2.9) and §3 retirement (≈ −130 now,
 ~−120 dated) → **≈ −2,100..−2,500 net**, with the drift-elimination
 compile links as the real deliverable.
+
+## 5b. New-concept ledger (anti-reward-hack pass, 2026-08-15)
+
+Maintainer flag, verbatim intent: proposals can "reward hack" a
+consolidation directive by *inventing a new concept* that makes the design
+read cleaner while adding vocabulary. This ledger is the adversarial pass
+over every named new thing across the four docs. Verdicts: **REPLACEMENT**
+(standards shape or N→1 that deletes its N in the same PR — allowed),
+**REWORKED** (was an invented concept; replaced with call-site fixes),
+**FLAGGED** (net-positive or borderline; needs its stated justification or
+it doesn't land). Rule applied: a new name is only legitimate if the PR
+that introduces it deletes ≥2 hand-rolled equivalents and the concept
+already exists in the code's own vocabulary or the ecosystem's.
+
+| Proposed name | Doc | Verdict |
+|---|---|---|
+| `ChildStopPolicy` table | lifecycle §4 | **REWORKED** — the SSOT function already exists; fixed to 3 call-site repairs + 1 doc paragraph. No table. |
+| `DisposableStore` | lifecycle §2 | REPLACEMENT — the ecosystem-standard shape; replaces ≥10 hand-rolled registries/arrays, each deleted as it migrates; vitest leak-assert makes it self-policing. Not a coordinator. |
+| five "lifetime roots" | lifecycle §1 | REPLACEMENT — all five anchors pre-exist; the "roots" are documentation of them, zero new objects. |
+| `invalidate(streamId, slice)` | substrate §6 / contracts §2.3 | REPLACEMENT — deletes 5 port methods × 2 impls; port shrinks 22→17(→~5 under projection-zero). The `slice` key type reuses the projection shape's existing field names, no new vocabulary. |
+| `StreamContentProjectionShape` + `pickProjection` | contracts §2.3 | REPLACEMENT — declares once what 12 arms restate; every field name already exists on the wire. |
+| `StreamLogFeed` | substrate §7 | REPLACEMENT — mechanical dedup of two identical drivers (~−180). |
+| `projectTranscriptRow` / `TranscriptRow` | substrate §5 B-2 | **FLAGGED** — genuinely a new model on the webview side; honestly +60 LoC; lands only under its drift-elimination justification and the six policy rulings. B-1 (ordering key) alone is REPLACEMENT (−49 + bug fix). |
+| `SettingEntry` expanded row (`slots`/`honoredBy`/`surfaces`/`onWrite`) | contracts §2.1 | REPLACEMENT — one row absorbs six catalogs; every field renames an existing fact, and each absorbed catalog deletes in the same series. Watch: if any absorbed catalog survives "temporarily", this becomes a seventh catalog — the exact hack; land atomically per catalog. |
+| `defineTool({hosts})` | contracts §2.4 | REPLACEMENT — a field on the existing per-tool row; three rosters + `hideFromCli` delete. |
+| `SUBSCRIPTION_PROVIDERS` registry | audit C9 | REPLACEMENT — registry-as-contract is an adjudicated KEEP species; 6 restatements → 2 rows. |
+| `SET_BANNER` message | contracts §2.8 | REPLACEMENT — 12 literals delete with it. |
+| `HostInteractionRequestByKind` aliases | contracts §2.2 | REPLACEMENT — the alias pattern already exists in-file for 3 of 7 kinds; this finishes it and deletes 4 interfaces. |
+| `resumeStreamWithRecovery`, `describeResumeStateResolution`, `withUnhandledFailureReporting`, `validateOrReport`, `describeResumeFailure` | audit C1–C21 | **FLAGGED** — helper extractions; the repo's history says extract-shared net-ADDS. Each is only legitimate because it deletes byte-identical copies in ≥2 hosts in the same PR and closes a named correctness gap; any that can't show net-≤0 *plus* the bug fix doesn't land. |
+| `JsonStoreSecrets` base + `withEnvOverride` | audit C6 | **FLAGGED** — base-class extraction with 2 implementers; borderline under the LOC lesson. The non-negotiable part is the missing PQueue on Electron (a bug); the base class lands only if net-negative, else fix the bug alone. |
+| `TuiApprovalAdornments` | contracts §2.2 item 3 | FLAGGED-minor — relocates 2 existing fields out of the payload union; only worth it as part of the union unification, never alone. |
+| `TraceDocument → SessionState` hydrator | substrate §6d | REPLACEMENT — deletes the hand-built payload duplication (~−100); the hydrator's target type exists. |
+| headless `SessionRendererPort` impl | substrate §3 | REPLACEMENT — a port implementation (the port exists); deletes the hand-rolled `RenderState` fold (~−175). |
+
+Standing guard for execution agents: any PR whose "consolidation" adds a
+name not on this ledger, or lands a ledger name without its paired
+deletions, is the flagged failure mode — reject in review.
 
 ## 6. Execution shape
 
