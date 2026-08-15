@@ -43,8 +43,9 @@ All notable changes to this project will be documented in this file.
   differential shortcuts render as intended instead of unknown commands.
 - **Max-style shortcuts no longer shadow KaTeX built-ins** — the section
   sign and the legacy bold switch render as intended, `\label` no longer
-  errors in rendered math, and decorated-H effective-Hamiltonian plus
-  equilibrium/steady-state forms compact to their intended shortcuts.
+  errors in rendered math, decorated-H effective-Hamiltonian forms keep
+  their accents, equilibrium/steady-state subscripts no longer turn into
+  superscripts, and written documents with the plain-S shortcut compile.
 
 #### Features
 

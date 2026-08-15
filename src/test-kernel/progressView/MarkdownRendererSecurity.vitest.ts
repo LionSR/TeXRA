@@ -60,6 +60,21 @@ describe('processMarkdownContent renders math and code', () => {
     expect(doc.querySelector('.katex')).not.toBeNull();
   });
 
+  it('renders the max-style macro fixes without unknown-command errors', () => {
+    const label = renderToDocument('$\\label{eqn:e}$');
+    expect(label.querySelector('.katex')).not.toBeNull();
+    expect(label.querySelector('.katex-error')).toBeNull();
+
+    const section = renderToDocument('$\\text{\\S}$');
+    expect(section.querySelector('.katex')).not.toBeNull();
+    expect(section.querySelector('.katex-error')).toBeNull();
+    expect(section.querySelector('.katex')?.textContent).toContain('§');
+
+    const bold = renderToDocument('${\\bf x}$');
+    expect(bold.querySelector('.katex')).not.toBeNull();
+    expect(bold.querySelector('.katex-error')).toBeNull();
+  });
+
   const CRITERION_FORMULA =
     'c_{\\alpha\\beta}^{\\gamma}(L)=\\operatorname{Tr}(\\chi^L).';
 
