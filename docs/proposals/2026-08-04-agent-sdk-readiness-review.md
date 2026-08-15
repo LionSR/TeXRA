@@ -226,4 +226,7 @@ as the baseline to shrink.
 `@agent/runtime` barrel rather than `packages/agent/src/index.ts`, deferring
 package promotion until the module-level barrels have proven the host-boundary
 surface; see §5.1 and review `pullrequestreview-4918028384`. #10531 continued
-the fold-in behind the pre-existing module-level `@agent/storage` barrel.
+the fold-in behind the pre-existing module-level `@agent/storage` barrel, and
+#10650 folded the `followUp` cluster behind a new curated
+`src/agent/followUp/index.ts` barrel; `core/definition/AgentConfig` is the
+only remaining open cluster under #10024.

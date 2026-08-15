@@ -12,6 +12,10 @@
  * (`config/ratchets/host-agent-import-baseline.json`) records each host's
  * single `@agent/followUp` specifier; the former `ToolUseFollowUp` and
  * `ToolUseFollowUpQueueManager` deep imports collapsed to this door.
+ *
+ * Internal follow-up modules keep importing each other by direct path;
+ * nothing inside `src/agent` imports this barrel, so it introduces no import
+ * cycle.
  */
 
 export {
