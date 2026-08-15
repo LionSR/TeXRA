@@ -1,6 +1,6 @@
 import { z, type ZodIssue } from 'zod';
 
-import { LineChangesSchema, LineCountSchema } from './lineChanges';
+import { LineChangesSchema } from './lineChanges';
 
 /**
  * Base schema for file references (metadata only, no binary data).
@@ -38,26 +38,6 @@ const EditRecordSchema = z.object({
   startLine: z.int().positive().optional(),
 });
 export type EditRecord = z.infer<typeof EditRecordSchema>;
-
-const EditedFileRecordSchema = z.object({
-  path: z.string(),
-  ok: z.boolean(),
-  source: z.string(),
-  sourceDisplay: z.string(),
-});
-
-/**
- * Schema for flattened edit records used in state snapshots.
- * Unlike EditRecordSchema (which nests lineChanges), this schema flattens
- * added/removed directly on the object for simpler serialization.
- *
- * Used by: FileInteractionStateSnapshotSchema in AgentWorkspaceState.ts
- */
-export const FlattenedEditRecordSchema = z.object({
-  path: z.string(),
-  added: LineCountSchema.prefault(0),
-  removed: LineCountSchema.prefault(0),
-});
 
 // ============================================================================
 // Diagnostics Types (not Zod - these are complex unions with external types)
@@ -180,8 +160,6 @@ const ExecutedToolResultSchema = z.object({
   edits: z.array(EditRecordSchema).optional(),
   /** File attachments (may contain binary data) */
   files: z.array(ToolFileAttachmentSchema).optional(),
-  /** Files edited during tool execution (for logging/tracking) */
-  editedFiles: z.array(EditedFileRecordSchema).optional(),
   ...ToolResultSharedFields,
 });
 
@@ -195,7 +173,6 @@ const ErrorToolResultSchema = z.object({
   lineChanges: z.undefined().optional(),
   edits: z.undefined().optional(),
   files: z.undefined().optional(),
-  editedFiles: z.undefined().optional(),
   ...ToolResultSharedFields,
 });
 
