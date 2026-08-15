@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { noopTrace } from '@agent/trace';
-import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
+import {
+  createToolPolicy,
+  type AgentCore,
+  type ToolPolicy,
+} from '@agent/core/flows/BaseFlowServices';
 import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
 import type { ResponseCycleServices } from '@agent/core/flows/CycleServices';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
@@ -16,11 +20,14 @@ function toolNames(tools: readonly { name: string }[] | undefined): string[] {
 
 function responseServices({
   supportsFunctionCalling = true,
+  toolPolicy = createToolPolicy(),
 }: {
   supportsFunctionCalling?: boolean;
+  toolPolicy?: ToolPolicy;
 } = {}): Parameters<typeof responseCycleToolsForModel>[0] {
   return {
     toolRegistry: getDefaultToolRegistry(),
+    toolPolicy,
     modelCell: testModelCell({
       config: { provider: 'openai', fullName: 'test-model' },
       getClient: async () => ({}),
@@ -45,39 +52,33 @@ describe('response cycle tool visibility', () => {
   it.each([
     {
       name: 'filters approval-gated workflow tools when prompts are unavailable',
-      services: { approvalPromptsUnavailable: true },
+      toolPolicy: createToolPolicy({ approvalPromptsUnavailable: true }),
       expected: ['grep'],
     },
     {
       name: 'keeps workflow tools when approval prompts are available',
-      services: { approvalPromptsUnavailable: false },
+      toolPolicy: createToolPolicy({ approvalPromptsUnavailable: false }),
       expected: ['bash', 'grep', 'inquiry', 'write_file', 'wolfram'],
     },
     {
       name: 'filters runtime-unavailable workflow tools without hiding approvals',
-      services: {
+      toolPolicy: createToolPolicy({
         approvalPromptsUnavailable: false,
         runtimeUnavailableTools: ['inquiry'],
-      },
+      }),
       expected: ['bash', 'grep', 'write_file', 'wolfram'],
     },
-  ])('$name', async ({ services, expected }) => {
-    const tools = await withTestRunContext(
-      testRunScope('response-cycle-stream'),
-      async () => responseCycleToolsForModel(responseServices()),
-      services,
-    );
+  ])('$name', ({ toolPolicy, expected }) => {
+    // No AsyncLocalStorage frame is installed: the tool policy is read from
+    // the injected `services.toolPolicy`, not from the ambient RunContext.
+    const tools = responseCycleToolsForModel(responseServices({ toolPolicy }));
 
     expect(toolNames(tools)).toEqual(expected);
   });
 
-  it('omits workflow tools when the model handler cannot call functions', async () => {
-    const tools = await withTestRunContext(
-      testRunScope('response-cycle-stream'),
-      async () =>
-        responseCycleToolsForModel(
-          responseServices({ supportsFunctionCalling: false }),
-        ),
+  it('omits workflow tools when the model handler cannot call functions', () => {
+    const tools = responseCycleToolsForModel(
+      responseServices({ supportsFunctionCalling: false }),
     );
 
     expect(tools).toBeUndefined();

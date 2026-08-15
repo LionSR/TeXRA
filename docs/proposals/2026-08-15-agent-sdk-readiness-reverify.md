@@ -122,8 +122,10 @@ a change this pass makes.
   injecting those specific launch-context values as explicit immutable service
   fields (or a small injected tool-policy function), which would make the core
   cycle flow drivable without an ALS frame — the property an SDK embedder wants.
-  **Disposition:** the one core item worth scheduling; small, but a real port
-  addition, not a one-line substitution.
+  **Disposition:** landed — #10594 injected the three tool-policy values
+  (`approvalPromptsUnavailable`, `runtimeUnavailableTools`, `stopAfterCycle`) as
+  an immutable `ToolPolicy` service field (`AgentCore.toolPolicy`), making both
+  the response-cycle and tool-use cycle flows drivable without an ALS frame.
 - **C-2: persisted-flow layer is storage-coupled.** The generic node engine
   (`node/index.ts`) is host-clean, but `node/persistedFlow.ts:8-9` imports the
   concrete `@agent/storage/ExecutionKVStore` and a `FlowTransition` enum value.
@@ -364,12 +366,13 @@ executionId)`. **Residual coupling:** it hard-imports and calls `submitFollowUp`
    shape.
 
 The genuine small candidates a future pass can pick up one at a time — in the
-same land-one-increment cadence this pass followed with §3 — are **C-1** (inject
-the launch-context tool-policy fields so the cycle flow — and the tool-use flow's
-own ALS reads — run without an ALS frame), **L-1** (narrow the individual
-log-only `createChannelTrace` callers onto `createLog` — a per-caller change, not
-a factory merge, since the two have different return contracts), and **L-3**
-(wire or delete the dead redaction-options branch — the one small defect).
+same land-one-increment cadence this pass followed with §3 — are **L-1** (narrow
+the individual log-only `createChannelTrace` callers onto `createLog` — a
+per-caller change, not a factory merge, since the two have different return
+contracts) and **L-3** (wire or delete the dead redaction-options branch — the
+one small defect). **C-1** is closed: #10594 injected the three launch-context
+tool-policy values as an immutable `ToolPolicy` service field, so the cycle flow
+and the tool-use flow's own ALS reads now run without an ALS frame.
 **S-1 and T-1 were retracted on inspection** (§4): S-1 would be a banned
 single-use extraction, and T-1 misread an already-composed schema. The two
 structural blockers (§6) — the delegation-layer cycle and the process-wide
