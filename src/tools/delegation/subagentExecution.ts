@@ -8,7 +8,6 @@
  */
 
 // Local imports
-import { createChannelTrace } from '@agent/trace';
 import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
 import {
   AgentConfigSchema,
@@ -21,6 +20,7 @@ import {
 } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { getStreamTabId } from '@agent/runtime/streamTab';
+import { createLog } from '@logger/logUtils';
 import {
   AgentCategory,
   TODO_STATUS,
@@ -234,7 +234,7 @@ export async function executeSubagent(
       buildLaunch: async () => ({
         strategy: createNativeSubagentStrategy(strategyParams),
         onLoopFailed: (error: unknown): void => {
-          createChannelTrace('childRunLoop').error(
+          createLog('childRunLoop').error(
             `Subagent '${agentName}' run loop failed after launch`,
             { data: error },
           );

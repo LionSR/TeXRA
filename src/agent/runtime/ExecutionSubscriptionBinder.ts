@@ -11,19 +11,19 @@
  * from the registry) and when the subscriber stream's queue is released.
  */
 
-import { createChannelTrace } from '@agent/trace';
 import type {
   AgentExecutionHandle,
   ExecutionStatusInfo,
 } from '@agent/runtime/ExecutionHandle';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { deliverLiveNotification } from '@agent/followUp/liveNotification';
+import { createLog } from '@logger/logUtils';
 import type { StreamTabId } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
 import { currentSession, type SessionHandle } from './SessionHandle';
 
-const logger = createChannelTrace('ExecutionSubscriptionBinder');
+const logger = createLog('ExecutionSubscriptionBinder');
 
 const TAG = DELIVERY_TAG.executionActivity;
 

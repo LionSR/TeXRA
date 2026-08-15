@@ -1,6 +1,6 @@
-import { createChannelTrace } from '@agent/trace';
 import type { ReviewIssueReport } from '@agent/review/reviewIssues';
 import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
+import { createLog } from '@logger/logUtils';
 import type {
   AgentProposal,
   FileLocation,
@@ -28,7 +28,7 @@ import type {
 
 export type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
 
-const logger = createChannelTrace('SessionHostInteractions');
+const logger = createLog('SessionHostInteractions');
 
 /**
  * Ceiling on presentation notices queued while no host is attached. A session

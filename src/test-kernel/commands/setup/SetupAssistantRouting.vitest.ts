@@ -91,7 +91,7 @@ vi.mock('@frontend/secretManager', () => ({
 // The guard's sole touchpoint is `defaultSession().executions.getAgentHandles()`
 // — a full stub replacement (not `importOriginal`) keeps this suite's
 // isolation: the real module eagerly constructs a `createChannelTrace`
-// logger at import time (`ToolUseFollowUpQueueManager.ts`), which needs more
+// logger at import time (`SessionHandle.ts`), which needs more
 // of `@logger/logUtils` than this suite's minimal mock provides. No other
 // module in this test's import graph (all deps otherwise mocked away, and
 // `apiKeyCommands`/`codexSubscriptionSignIn` don't import SessionHandle)
