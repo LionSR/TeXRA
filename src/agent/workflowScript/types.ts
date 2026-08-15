@@ -319,7 +319,7 @@ export interface WorkflowJournalEntry {
 }
 
 /** Identity used only to correlate one changing progress record in a run. */
-export type WorkflowScriptProgressId = WorkflowCallIdentity['id'];
+type WorkflowScriptProgressId = WorkflowCallIdentity['id'];
 
 /**
  * The facts the canonical execution snapshot cannot carry. Everything else a

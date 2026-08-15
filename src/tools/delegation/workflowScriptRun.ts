@@ -373,20 +373,20 @@ export async function runPersistedWorkflowScriptWithProgress(
         : {}),
     };
     switch (status) {
-      case 'failed':
+      case 'failed': {
         // A call `finish()` reclassified (stamped with the unfinished note)
         // never reached its own settlement: its card carries spend but no
         // model/duration, the same shape the settle sweep emits.
+        const reclassified = call.error === WORKFLOW_CALL_UNFINISHED_NOTE;
+        const spentOnly =
+          call.costUsd !== undefined ? { totalCostUsd: call.costUsd } : {};
         return {
           ...identity,
           status,
           error: call.error ?? WORKFLOW_CALL_UNFINISHED_NOTE,
-          ...(call.error === WORKFLOW_CALL_UNFINISHED_NOTE
-            ? call.costUsd !== undefined
-              ? { totalCostUsd: call.costUsd }
-              : {}
-            : terminalMetadata(call)),
+          ...(reclassified ? spentOnly : terminalMetadata(call)),
         };
+      }
       case 'completed':
         return { ...identity, status, ...terminalMetadata(call) };
       case 'skipped':
