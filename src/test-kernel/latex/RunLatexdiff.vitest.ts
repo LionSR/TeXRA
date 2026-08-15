@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LaTeXdiffService } from '@latex/latexdiff';
 import type { LatexExecutionDiscoveryPort } from '@latex/latexdiff/executionDiscovery';
 import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/runLatexdiff';
+import * as logger from '@logger/logUtils';
 import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
 import { createOutputFile } from '../support/ProgressControllerHarnesses';
 
@@ -153,6 +154,54 @@ describe('runLatexdiffForExecution', () => {
         model: 'claude-opus-4-8',
         inputFile: 'paper.tex',
       }),
+    );
+  });
+});
+
+// #10635: runLatexdiffForExecution resolves its logger per call from the
+// latexdiff runtime channel — a logger-namespace spy must observe that channel.
+describe('runLatexdiffForExecution logger seam', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.runLatexdiffFromMetadata.mockResolvedValue(METADATA_OUTCOME);
+    mocks.runLatexdiffViaWorkspaceScan.mockResolvedValue(SCAN_OUTCOME);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('logs the run-dir scan resolution on the latexdiff runtime channel', async () => {
+    mocks.scanRunDirForOutputs.mockResolvedValue(roundMap());
+    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+
+    const result = await runLatexdiffForExecution({
+      ...baseRequest,
+      runId: 'abc123',
+    });
+
+    expect(result.source).toBe('run-dir-scan');
+    expect(debug).toHaveBeenCalledWith(
+      'test',
+      expect.stringContaining(
+        'Using run-dir scan outputs from execution abc123',
+      ),
+    );
+  });
+
+  it('logs the metadata discovery resolution on the latexdiff runtime channel', async () => {
+    mocks.discoverLatestExecutionOutputs.mockResolvedValue({
+      executionId: 'def456',
+      rounds: roundMap(),
+    });
+    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+
+    const result = await runLatexdiffForExecution({ ...baseRequest });
+
+    expect(result.source).toBe('metadata');
+    expect(debug).toHaveBeenCalledWith(
+      'test',
+      expect.stringContaining('Using metadata outputs from execution def456'),
     );
   });
 });

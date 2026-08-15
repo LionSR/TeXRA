@@ -18,16 +18,13 @@ import {
   type SessionHandle,
   type SessionHostInteractions,
 } from '@agent/runtime';
+import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   validateExecutionRequest,
   type ExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import {
-  presentFollowUpResult,
-  submitFollowUp,
-} from '@agent/followUp/ToolUseFollowUp';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';

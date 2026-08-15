@@ -414,92 +414,95 @@ export async function executeAgent(
       modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
       copilotRouteOverride: options.copilotRouteOverride,
       signal: options.launchSignal,
+      toolPolicy: {
+        approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+        runtimeUnavailableTools: options.runtimeUnavailableTools,
+        stopAfterCycle: options.stopAfterCycle,
+      },
     });
-    const runContextOptions = {
-      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-      onApprovalPolicyDenial: options.onApprovalPolicyDenial,
-      runtimeUnavailableTools: options.runtimeUnavailableTools,
-      stopAfterCycle: options.stopAfterCycle,
-    };
-    return withExecutionRunContext(ctx, runContextOptions, async () => {
-      const { setting, config } = ctx;
-      const {
-        streamId: runStreamId,
-        executionId: runExecutionId,
-        session: runSession,
-      } = ctx.runScope;
-      const { isSubagent } = options;
+    return withExecutionRunContext(
+      ctx,
+      { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
+      async () => {
+        const { setting, config } = ctx;
+        const {
+          streamId: runStreamId,
+          executionId: runExecutionId,
+          session: runSession,
+        } = ctx.runScope;
+        const { isSubagent } = options;
 
-      // Start description generation concurrently with the run, but join it
-      // before the owner can release its execution lease. This prevents the
-      // metadata write from recreating an execution deleted by another host.
-      const sessionDescription = generateSessionDescription(
-        runExecutionId,
-        runStreamId,
-        config,
-        runSession,
-        ctx.runScope.signal,
-      );
-      try {
-        const result = await runFlowWithLifecycle(
-          ctx,
-          async (handle, lifecycle) => {
-            // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
-            await ensureRunDir(executionId);
-            logger.info(`Starting task execution (streamId: ${runStreamId})`);
-            logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
-            logger.debug('Task execution details', {
-              data: {
-                streamId: runStreamId,
-                agent: config.agent,
-                model: config.model,
-              },
-            });
-            logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
-            // Subagents don't need to force-open the progress board or show notifications —
-            // the orchestrator's stream is already visible.
-            if (!isSubagent) {
-              runSession.interactions.emit(
-                'requestEnsureProgressView',
-                { fallbackNotification: buildFallbackNotification(config) },
-                { replayWhenAttached: true },
-              );
-            }
-            logger.info('Executing agent', {
-              data: { agent: config.agent, model: config.model },
-            });
-
-            if (setting.agentCategory === AgentCategory.ToolUse) {
-              return launchToolUseRun(
-                ctx,
-                handle,
-                lifecycle,
-                { ...options, setting, isSubagent },
-                { kind: 'fresh', onIdle: options.onIdle },
-              );
-            }
-            const result = await runReflectionAgent(ctx, setting);
-            if (result.error) return result;
-            const outputOutcome = await options.openWorkflowOutput?.(result);
-            return outputOutcome === undefined
-              ? result
-              : { ...result, outcome: outputOutcome };
-          },
-          buildLifecycleOptions(options, isSubagent),
+        // Start description generation concurrently with the run, but join it
+        // before the owner can release its execution lease. This prevents the
+        // metadata write from recreating an execution deleted by another host.
+        const sessionDescription = generateSessionDescription(
+          runExecutionId,
+          runStreamId,
+          config,
+          runSession,
+          ctx.runScope.signal,
         );
-        if (
-          isWaitingFlowResult(result) &&
-          options.allowWaitingResult !== true
-        ) {
-          throw new Error(
-            'executeAgent received a non-terminal WAITING result without allowWaitingResult.',
+        try {
+          const result = await runFlowWithLifecycle(
+            ctx,
+            async (handle, lifecycle) => {
+              // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
+              await ensureRunDir(executionId);
+              logger.info(`Starting task execution (streamId: ${runStreamId})`);
+              logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
+              logger.debug('Task execution details', {
+                data: {
+                  streamId: runStreamId,
+                  agent: config.agent,
+                  model: config.model,
+                },
+              });
+              logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
+              // Subagents don't need to force-open the progress board or show notifications —
+              // the orchestrator's stream is already visible.
+              if (!isSubagent) {
+                runSession.interactions.emit(
+                  'requestEnsureProgressView',
+                  { fallbackNotification: buildFallbackNotification(config) },
+                  { replayWhenAttached: true },
+                );
+              }
+              logger.info('Executing agent', {
+                data: { agent: config.agent, model: config.model },
+              });
+
+              if (setting.agentCategory === AgentCategory.ToolUse) {
+                return launchToolUseRun(
+                  ctx,
+                  handle,
+                  lifecycle,
+                  { ...options, setting, isSubagent },
+                  { kind: 'fresh', onIdle: options.onIdle },
+                );
+              }
+              const result = await runReflectionAgent(ctx, setting);
+              if (result.error) return result;
+              const outputOutcome = await options.openWorkflowOutput?.(result);
+              return outputOutcome === undefined
+                ? result
+                : { ...result, outcome: outputOutcome };
+            },
+            buildLifecycleOptions(options, isSubagent),
           );
+          if (
+            isWaitingFlowResult(result) &&
+            options.allowWaitingResult !== true
+          ) {
+            throw new Error(
+              'executeAgent received a non-terminal WAITING result without allowWaitingResult.',
+            );
+          }
+          return result;
+        } finally {
+          await sessionDescription;
         }
-        return result;
-      } finally {
-        await sessionDescription;
-      }
-    });
+      },
+    );
   });
 }
 
@@ -569,6 +572,10 @@ export async function resumeToolUseFromResumeData(
         // skip the bus-level error to avoid double-notifying.
         suppressErrorNotification: true,
         session: options.session,
+        toolPolicy: {
+          approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+          runtimeUnavailableTools: options.runtimeUnavailableTools,
+        },
       });
     } catch (error) {
       throw await releaseOwnedExecutionLeaseAfterFailure(
@@ -576,11 +583,6 @@ export async function resumeToolUseFromResumeData(
         error,
       );
     }
-    const runContextOptions = {
-      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-      onApprovalPolicyDenial: options.onApprovalPolicyDenial,
-      runtimeUnavailableTools: options.runtimeUnavailableTools,
-    };
     const { setting } = ctx;
     const { streamId: runStreamId, session: runSession } = ctx.runScope;
 
@@ -590,7 +592,7 @@ export async function resumeToolUseFromResumeData(
     try {
       result = await withExecutionRunContext(
         ctx,
-        runContextOptions,
+        { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
         async () => {
           if (setting.agentCategory !== AgentCategory.ToolUse) {
             // Keep this historical diagnostic byte-for-byte for external monitors.

@@ -68,7 +68,7 @@ interface CreateBareRunContextOptions
   runScope?: undefined;
 }
 
-export interface CreateLaunchRunContextOptions extends CreateRunContextCommon {
+interface CreateLaunchRunContextOptions extends CreateRunContextCommon {
   runScope: RunScope;
 }
 
@@ -223,25 +223,4 @@ export function getRunContextSession(
   context: RunContext | undefined = tryUseRunContext(),
 ): SessionHandle | undefined {
   return getRunContextField('session', context);
-}
-
-/**
- * Return the active run context, asserting it is a `launch` context (i.e.
- * `streamId`/`executionId`/`session` are guaranteed present).
- *
- * Flow nodes only ever execute inside `withExecutionRunContext` (in
- * `AgentLaunchContext.ts`), which always projects a `launch` context — the
- * `bare` variant of `createRunContext` is exclusively for manually
- * constructed test/one-shot tool contexts.
- *
- * Code holding a flow-service bag reads `services.runScope` directly (the same
- * frozen object, declared on `AgentCore`); this accessor is the fallback for
- * code that holds no bag, chiefly the `src/tools/` layer.
- */
-export function useLaunchRunContext(): LaunchRunContext {
-  const context = useRunContext();
-  if (context.kind !== 'launch') {
-    throw new Error('useLaunchRunContext() called outside a launch RunContext');
-  }
-  return context;
 }

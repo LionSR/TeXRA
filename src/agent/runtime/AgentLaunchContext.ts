@@ -16,7 +16,11 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
-import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
+import {
+  createToolPolicy,
+  type AgentCore,
+  type ToolPolicy,
+} from '@agent/core/flows/BaseFlowServices';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import {
@@ -62,11 +66,7 @@ import { createRunTrace, type RunTrace } from '@transcript';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  createRunContext,
-  withRunContext,
-  type CreateLaunchRunContextOptions,
-} from './RunContext';
+import { createRunContext, withRunContext } from './RunContext';
 import { createRunScope } from './RunScope';
 import {
   countMediaFilesNeedingVision,
@@ -117,6 +117,8 @@ export interface AgentLaunchInput {
   copilotRouteOverride?: CopilotRouteOverride;
   /** Cancel launch preparation and the resulting live run. */
   signal?: AbortSignal;
+  /** Immutable per-run tool policy carried on the launch context for cycle flows. */
+  toolPolicy?: ToolPolicy;
 }
 
 const STATUS_MESSAGES: Record<string, string> = {
@@ -131,27 +133,26 @@ const STATUS_MESSAGES: Record<string, string> = {
 
 export async function withExecutionRunContext<T>(
   ctx: AgentLaunchContext,
-  options: Pick<
-    CreateLaunchRunContextOptions,
-    | 'approvalPromptsUnavailable'
-    | 'onApprovalPolicyDenial'
-    | 'runtimeUnavailableTools'
-    | 'stopAfterCycle'
-  >,
+  options: { onApprovalPolicyDenial?: () => void } = {},
   fn: () => T | Promise<T>,
 ): Promise<T> {
-  // Single owner of the launch-context → ambient-context mapping, so new
-  // per-run flags (e.g. `stopAfterCycle`, `approvalPromptsUnavailable`,
-  // `runtimeUnavailableTools`) live in one place and are never silently
-  // dropped. Run identity (`streamId`/`executionId`/`agentName`/
-  // `workingDirectory`) travels via `ctx.runScope` unchanged, and the model
-  // via the run's `ModelCell`, so tools observe a mid-session model switch
-  // without depending on the `AgentConfig.model` mirror.
+  // Single owner of the launch-context → ambient-context mapping. The
+  // tool-policy fields (`approvalPromptsUnavailable`, `runtimeUnavailableTools`,
+  // `stopAfterCycle`) are projected straight from `ctx.toolPolicy` so callers
+  // can't drift a hand-maintained copy of the same values; only
+  // `onApprovalPolicyDenial` (a callback that is not part of ToolPolicy) is
+  // still supplied explicitly. Run identity (`streamId`/`executionId`/
+  // `agentName`/`workingDirectory`) travels via `ctx.runScope` unchanged, and
+  // the model via the run's `ModelCell`, so tools observe a mid-session model
+  // switch without depending on the `AgentConfig.model` mirror.
   return await withRunContext(
     createRunContext({
       runScope: ctx.runScope,
       modelCell: ctx.modelCell,
-      ...options,
+      approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
+      runtimeUnavailableTools: ctx.toolPolicy.runtimeUnavailableTools,
+      stopAfterCycle: ctx.toolPolicy.stopAfterCycle,
+      onApprovalPolicyDenial: options.onApprovalPolicyDenial,
     }),
     fn,
   );
@@ -507,6 +508,7 @@ async function assembleAgentLaunchContext(
     setting,
     prompt,
     modelCell,
+    toolPolicy: createToolPolicy(input.toolPolicy),
     logger: agentLogger,
     parentStage,
     storageKey,

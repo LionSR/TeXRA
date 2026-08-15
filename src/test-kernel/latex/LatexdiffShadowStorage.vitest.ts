@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as logger from '@logger/logUtils';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
@@ -318,5 +319,30 @@ describe('LaTeXdiffService shadow output', () => {
         'utf8',
       ),
     ).resolves.toBe('\\newcommand{\\RR}{\\mathbb{R}}\n');
+  });
+});
+
+describe('LaTeXdiffService logger channel', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Spy seam (#10635): the owner getter binds the constructor channel through
+  // createLog per call, so a logger-namespace spy must observe that channel.
+  it('binds log lines to the constructor channel', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const { LaTeXdiffService } = await import('@latex/latexdiff');
+    const service = new LaTeXdiffService('pinnedLatexdiffChannel');
+
+    const result = await service.runDiff(
+      createExternalLocation('/missing/base.tex'),
+      createExternalLocation('/missing/revised.tex'),
+    );
+
+    expect(result.success).toBe(false);
+    expect(warn).toHaveBeenCalledWith(
+      'pinnedLatexdiffChannel',
+      expect.stringContaining('One or both files do not exist'),
+    );
   });
 });
