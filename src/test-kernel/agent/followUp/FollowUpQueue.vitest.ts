@@ -97,10 +97,12 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
     expect(queues.release(child, 'terminal')).toBe(false);
     expect(queues.getAll(id)).toEqual(['before handoff', 'during recovery']);
-    expect(queues.queue(recovery).drainItems().map((item) => item.text)).toEqual([
-      'before handoff',
-      'during recovery',
-    ]);
+    expect(
+      queues
+        .queue(recovery)
+        .drainItems()
+        .map((item) => item.text),
+    ).toEqual(['before handoff', 'during recovery']);
   });
 
   it('enqueues live_owner notifications on a recoverable entry without claiming', () => {
@@ -132,8 +134,18 @@ describe('ToolUseFollowUpQueue ownership', () => {
     a.queue(aLease).enqueue({ text: 'a' });
     b.queue(bLease).enqueue({ text: 'b' });
 
-    expect(a.queue(aLease).drainItems().map((item) => item.text)).toEqual(['a']);
-    expect(b.queue(bLease).drainItems().map((item) => item.text)).toEqual(['b']);
+    expect(
+      a
+        .queue(aLease)
+        .drainItems()
+        .map((item) => item.text),
+    ).toEqual(['a']);
+    expect(
+      b
+        .queue(bLease)
+        .drainItems()
+        .map((item) => item.text),
+    ).toEqual(['b']);
   });
 
   it('never reopens a terminal stream', () => {
@@ -276,9 +288,12 @@ describe('ToolUseFollowUpQueue ownership', () => {
     ).toBeDefined();
     expect(recovery.generationId).toBe('persisted-generation');
     expect(queues.currentGenerationId(id)).toBe('persisted-generation');
-    expect(queues.queue(recovery).drainItems().map((item) => item.text)).toEqual([
-      'continue',
-    ]);
+    expect(
+      queues
+        .queue(recovery)
+        .drainItems()
+        .map((item) => item.text),
+    ).toEqual(['continue']);
   });
 
   it('rebinds a released provisional recovery queue from persisted state', () => {

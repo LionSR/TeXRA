@@ -98,7 +98,10 @@ describe('submitFollowUp', () => {
 
     expect(tryResumeStream).not.toHaveBeenCalled();
     expect(
-      session.followUps.queue(child).drainItems().map((item) => item.text),
+      session.followUps
+        .queue(child)
+        .drainItems()
+        .map((item) => item.text),
     ).toEqual(['while waiting', 'between turns', 'during turn']);
   });
 

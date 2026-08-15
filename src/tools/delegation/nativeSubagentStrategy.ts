@@ -366,12 +366,17 @@ export function createNativeSubagentStrategy(
     formatDelivery: async (turn) => {
       if (cachedDelivery === undefined) {
         const built = await buildResult(turn);
-        cachedDelivery = formatSubagentDelivery(params.agentName, built.result, {
-          executionId: params.executionId,
-          memoryMisses: toDeliveryResult(turn, params.executionId).memoryMisses,
-          wallTimeMs: built.wallTimeMs,
-          workingDirectory: params.workingDirectory,
-        });
+        cachedDelivery = formatSubagentDelivery(
+          params.agentName,
+          built.result,
+          {
+            executionId: params.executionId,
+            memoryMisses: toDeliveryResult(turn, params.executionId)
+              .memoryMisses,
+            wallTimeMs: built.wallTimeMs,
+            workingDirectory: params.workingDirectory,
+          },
+        );
       }
       return cachedDelivery;
     },
