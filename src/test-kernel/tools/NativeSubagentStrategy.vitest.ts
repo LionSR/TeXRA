@@ -70,7 +70,9 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
       operation(),
   renewOwnedExecutionLease: vi.fn(async () => {}),
   abandonOwnedExecutionLease: vi.fn(),
-  completeOwnedExecutionLease: vi.fn(async () => {}),
+  completeOwnedExecutionLease: vi.fn(async () => ({
+    status: 'released' as const,
+  })),
 }));
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({

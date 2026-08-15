@@ -89,7 +89,7 @@ describe('runAgent execution ownership', () => {
       previousOutcome: undefined,
       streamId: 'assistant#run-agent-owner',
     });
-    mocks.completeOwnedExecutionLease.mockResolvedValue(undefined);
+    mocks.completeOwnedExecutionLease.mockResolvedValue({ status: 'released' });
     mocks.renewOwnedExecutionLease.mockResolvedValue(undefined);
     flushArtifacts.mockResolvedValue(undefined);
     mocks.finalizeExecution.mockResolvedValue(FINALIZE_RESULT);
@@ -203,6 +203,7 @@ describe('runAgent execution ownership', () => {
     });
     mocks.completeOwnedExecutionLease.mockImplementationOnce(async () => {
       order.push('release');
+      return { status: 'released' } as const;
     });
     await expect(launch({ registerExecution: true })).rejects.toBe(launchError);
 
@@ -278,6 +279,7 @@ describe('runAgent execution ownership', () => {
     });
     mocks.completeOwnedExecutionLease.mockImplementationOnce(async () => {
       order.push('release');
+      return { status: 'released' } as const;
     });
     flushArtifacts.mockImplementationOnce(async () => {
       order.push('session-artifacts');

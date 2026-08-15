@@ -141,7 +141,7 @@ describe('native agent launch activation', () => {
     mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
       async (_executionId: ExecutionId, error: unknown) => error,
     );
-    mocks.completeOwnedExecutionLease.mockResolvedValue(undefined);
+    mocks.completeOwnedExecutionLease.mockResolvedValue({ status: 'released' });
   });
 
   it.each([

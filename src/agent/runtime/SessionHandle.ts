@@ -40,6 +40,7 @@ import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
   abandonOwnedExecutionLease,
   completeOwnedExecutionLease,
+  isOwnedExecutionLeaseDurable,
   renewOwnedExecutionLease,
   runWithOwnedExecutionLeaseQuiescence,
 } from '@agent/storage/executionLease';
@@ -883,20 +884,34 @@ export class SessionHandle {
    * writer has drained. Session artifacts persist between two short
    * owner-token validations — the durable lease remains fresh while the
    * session drains, so no file lock needs to cover unrelated transcript and
-   * snapshot I/O. A drain failure abandons the lease (record retained,
-   * renewal stopped) and rethrows; a poisoned lease completes as abandon.
+   * snapshot I/O. An optional post-drain operation may publish lifecycle state
+   * that is valid only once those artifacts are durable; it still runs before
+   * the lease record is deleted. A drain or post-drain failure abandons the
+   * lease (record retained, renewal stopped) and rethrows. A poisoned lease or
+   * failed lease deletion also retains the record and rejects this boundary.
    * This is the one exit choreography every run driver calls.
    */
-  async releaseExecutionLease(executionId: ExecutionId): Promise<void> {
+  async releaseExecutionLease(
+    executionId: ExecutionId,
+    afterArtifactsDrained?: () => void | Promise<void>,
+  ): Promise<void> {
     try {
       await renewOwnedExecutionLease(executionId);
       await this.flushArtifacts(executionId);
       await renewOwnedExecutionLease(executionId);
+      if (afterArtifactsDrained && isOwnedExecutionLeaseDurable(executionId)) {
+        await afterArtifactsDrained();
+      }
     } catch (error) {
       abandonOwnedExecutionLease(executionId);
       throw error;
     }
-    await completeOwnedExecutionLease(executionId);
+    const completion = await completeOwnedExecutionLease(executionId);
+    if (completion.status === 'released') return;
+    if (completion.reason === 'release-failed') throw completion.error;
+    throw new Error(
+      `Execution ${executionId} retained its lease because required artifacts are not durable.`,
+    );
   }
 
   /** Persist one execution's trace plus the session's shared artifact stores. */
