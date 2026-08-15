@@ -6,7 +6,7 @@ import {
   WORKSPACE_SIDECAR_FILE,
   WORKSPACE_STORAGE_LAYOUT,
 } from '@common/storage/storageLayout';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { truncatedHexId } from '@utils/core/idHash';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -14,6 +14,8 @@ import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 // Local imports - platform
 import type { StorageProvider } from '../interfaces';
+
+const log = createLog('WorkspaceStorage');
 
 const STORAGE_LAYOUT = {
   global: 'global-storage',
@@ -157,8 +159,7 @@ function migrateLegacyWorkspaceStorage(
   try {
     renameSync(legacyPath, currentPath);
   } catch (error) {
-    logger.warn(
-      'WorkspaceStorage',
+    log.warn(
       `Could not migrate legacy workspace storage; continuing with the current storage directory. Cause: ${toErrorMessage(error)}`,
     );
   }

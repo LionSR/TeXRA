@@ -7,7 +7,7 @@ import { imageSize } from 'image-size';
 import { fromPath } from 'pdf2pic';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { generateShortId } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { getMimeType } from '@utils/files/mimeUtils';
@@ -21,6 +21,7 @@ import { executeCommand } from '@utils/system/execUtils';
 import { countPdfPagesInBuffer } from './pdfPageCount';
 
 const CHANNEL = 'ImgUtils';
+const log = createLog(CHANNEL);
 
 /** DPI/density used when rasterizing a PDF page to PNG. */
 const PDF_RASTER_DENSITY = 300;
@@ -40,8 +41,7 @@ async function removeConversionTempDir(tempDir: string): Promise<void> {
   try {
     await AbsoluteFS.delete(tempDir, { recursive: true });
   } catch (err) {
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Failed to remove temporary directory ${tempDir}: ${toErrorMessage(err)}`,
     );
   }
@@ -102,8 +102,7 @@ async function resizeImageIfNeeded(imagePath: string): Promise<string> {
     throw new Error(result.stderr || 'Failed to resize image');
   }
 
-  logger.debug(
-    CHANNEL,
+  log.debug(
     `Resized image ${imagePath} (${width}x${height}) to fit within ${maxDimension}px`,
   );
   return tempPath;
@@ -134,15 +133,14 @@ export async function getBase64EncodedMedia(
       throw new Error(`File is empty: ${mediaPath}`);
     }
 
-    logger.debug(CHANNEL, `Successfully encoded image: ${mediaPath}`);
+    log.debug(`Successfully encoded image: ${mediaPath}`);
     return mediaBytes.toString('base64');
   } finally {
     if (tempPath) {
       try {
         AbsoluteFS.deleteSync(tempPath);
       } catch (err) {
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Failed to remove temporary file ${tempPath}: ${toErrorMessage(err)}`,
         );
       }
@@ -155,12 +153,12 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
   try {
     const absolutePath = await resolveFile(pdfPath);
     if (!absolutePath) {
-      logger.debug(CHANNEL, `PDF file not found: ${pdfPath}`);
+      log.debug(`PDF file not found: ${pdfPath}`);
       return 0;
     }
     return await countPdfPagesInBuffer(AbsoluteFS.readBytesSync(absolutePath));
   } catch (err) {
-    logger.error(CHANNEL, `Error counting PDF pages: ${toErrorMessage(err)}`);
+    log.error(`Error counting PDF pages: ${toErrorMessage(err)}`);
     return 0;
   }
 }
@@ -195,10 +193,7 @@ async function singlePagePdf2Png(
   }
 
   const imageBuffer = AbsoluteFS.readBytesSync(result.path);
-  logger.debug(
-    CHANNEL,
-    `Successfully converted page ${pageNum} of ${absolutePath} to PNG`,
-  );
+  log.debug(`Successfully converted page ${pageNum} of ${absolutePath} to PNG`);
   return imageBuffer.toString('base64');
 }
 
@@ -212,7 +207,7 @@ export async function processPdf2Png(
   try {
     const absolutePath = await resolveFile(pdfPath);
     if (!absolutePath) {
-      logger.debug(CHANNEL, `PDF file not found: ${pdfPath}`);
+      log.debug(`PDF file not found: ${pdfPath}`);
       return null;
     }
 
@@ -238,8 +233,7 @@ export async function processPdf2Png(
           await singlePagePdf2Png(absolutePath, pageNum, tempDir),
         );
       }
-      logger.debug(
-        CHANNEL,
+      log.debug(
         `Successfully converted ${base64Images.length} pages from ${pdfPath}`,
       );
       return base64Images;
@@ -247,7 +241,7 @@ export async function processPdf2Png(
       await removeConversionTempDir(tempDir);
     }
   } catch (err) {
-    logger.error(CHANNEL, `Error processing PDF input: ${toErrorMessage(err)}`);
+    log.error(`Error processing PDF input: ${toErrorMessage(err)}`);
     return null;
   }
 }

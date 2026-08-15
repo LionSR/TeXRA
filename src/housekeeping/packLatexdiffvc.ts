@@ -1,10 +1,12 @@
 import * as path from 'node:path';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 import { CHANNEL, TEMP_EXTENSIONS } from './constants';
 import { collectFilesFromPatterns, generateTimestamp } from './utils';
+
+const log = createLog(CHANNEL);
 
 export type LatexdiffPackResult =
   | {
@@ -45,7 +47,7 @@ export async function runPackLatexdiffvc(
   );
 
   if (mainFiles.size === 0 && tempFiles.size === 0) {
-    logger.warn(CHANNEL, 'No LaTeX diff files found to process');
+    log.warn('No LaTeX diff files found to process');
     return { status: 'no-files', inputFile };
   }
 
@@ -53,7 +55,7 @@ export async function runPackLatexdiffvc(
     for (const file of [...mainFiles, ...tempFiles]) {
       await WorkspaceFS.delete(file);
     }
-    logger.info(CHANNEL, 'Cleanup complete.');
+    log.info('Cleanup complete.');
     return { status: 'cleaned', inputFile };
   }
 
@@ -79,7 +81,7 @@ export async function runPackLatexdiffvc(
   }
 
   if (mainFiles.size > 0) {
-    logger.info(CHANNEL, `Files packed into ${outputFolder}`);
+    log.info(`Files packed into ${outputFolder}`);
     return { status: 'packed', inputFile, outputFolder };
   }
 
