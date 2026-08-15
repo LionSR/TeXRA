@@ -61,6 +61,8 @@ const NOTICE = '[format-staged]';
 
 const CRLF = Buffer.from('\r\n');
 
+const JS_CONFIG_EXTENSIONS = ['.js', '.cjs', '.mjs'];
+
 /** Intentional skip: logged loudly as a notice and never treated as a crash. */
 class SkipError extends Error {}
 
@@ -75,6 +77,15 @@ function git(args, { input } = {}) {
     throw new Error(`git ${args.join(' ')} failed: ${result.stderr}`);
   }
   return result.stdout;
+}
+
+/** True when `core.autocrlf=true`, so Git checks out the index's LF blobs
+ * as CRLF and a CRLF worktree convention must be preserved. */
+function isAutocrlfCheckout() {
+  const result = spawnSync('git', ['config', '--get', 'core.autocrlf'], {
+    encoding: 'utf8',
+  });
+  return result.status === 0 && result.stdout.trim() === 'true';
 }
 
 /** Return a tracked path's index blob, or null when it is not tracked. */
@@ -169,9 +180,17 @@ function isJsConfig(path) {
   return /\.(?:c?js|mjs)$/.test(path);
 }
 
-/** True for `./x` and `../x` dependency specifiers. */
+/** Normalize Windows-style separator backslashes in a config specifier to
+ * forward slashes, so `./x`/`../x` and `.\x`/`..\x` classify the same way and
+ * POSIX path resolution treats them identically. */
+function normalizeSpecifier(spec) {
+  return spec.replace(/\\/g, '/');
+}
+
+/** True for `./x` and `../x` dependency specifiers, in either slash style. */
 function isRelativeSpecifier(spec) {
-  return spec.startsWith('./') || spec.startsWith('../');
+  const normalized = normalizeSpecifier(spec);
+  return normalized.startsWith('./') || normalized.startsWith('../');
 }
 
 /** True for filesystem paths Prettier accepts as a package.json `prettier`
@@ -181,9 +200,78 @@ function isConfigPointerPath(spec) {
   return isRelativeSpecifier(spec) || isAbsolute(spec);
 }
 
+/** True when `path` is a regular file in the working tree. */
+function isWorktreeFile(path) {
+  return lstatSync(path, { throwIfNoEntry: false })?.isFile() === true;
+}
+
+/** Return the `main` entry of a dependency directory's package.json,
+ * preferring the staged index blob so an unstaged manifest cannot redirect
+ * extensionless resolution. Returns null when there is no usable manifest. */
+function readPackageMain(dir) {
+  const pkgPath = join(dir, 'package.json');
+  const pkgRel = relToCwd(pkgPath);
+  if (!pkgRel) return null;
+  let blob = readIndexFile(pkgRel);
+  if (!blob && existsSync(pkgPath)) blob = readFileSync(pkgPath);
+  if (!blob) return null;
+  try {
+    const main = JSON.parse(stripBom(blob.toString('utf8'))).main;
+    return typeof main === 'string' ? main : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Resolve a relative config dependency specifier to the tracked file
+ * Node/Prettier would load, without executing any config. Exact specifiers
+ * (anything with an extension) are kept verbatim. Extensionless specifiers
+ * follow Node-style precedence: the literal path, then the supported config
+ * extensions (`.js`/`.cjs`/`.mjs`), then a directory's package.json `main`,
+ * then `index.js`/`index.cjs`/`index.mjs`. Multiple existing candidates are
+ * treated as ambiguous and skipped rather than guessing which module system
+ * Prettier will use. */
+function resolveConfigDepPath(configDir, spec) {
+  const normalized = normalizeSpecifier(spec);
+  const base = resolve(configDir, normalized);
+  if (parse(normalized).ext !== '') return base;
+
+  const candidates = [];
+  const push = (candidate) => {
+    const candidateRel = relToCwd(candidate);
+    const present =
+      isWorktreeFile(candidate) ||
+      (candidateRel !== null && readIndexFile(candidateRel) !== null);
+    if (present && !candidates.includes(candidate)) candidates.push(candidate);
+  };
+
+  push(base);
+  for (const ext of JS_CONFIG_EXTENSIONS) push(`${base}${ext}`);
+
+  if (lstatSync(base, { throwIfNoEntry: false })?.isDirectory()) {
+    const main = readPackageMain(base);
+    if (main) push(resolve(base, normalizeSpecifier(main)));
+    for (const ext of JS_CONFIG_EXTENSIONS) {
+      push(join(base, `index${ext}`));
+    }
+  }
+
+  if (candidates.length === 1) return candidates[0];
+  if (candidates.length > 1) {
+    const listed = candidates
+      .map((candidate) => relToCwd(candidate) ?? candidate)
+      .join(', ');
+    throw new SkipError(
+      `config dependency ${normalized} is ambiguous (${listed}); skipped ` +
+        'auto-staging.',
+    );
+  }
+  return base;
+}
+
 /** Verify one relative config dependency against its index blob. */
 function verifyConfigDep(configDir, spec) {
-  const depPath = resolve(configDir, spec);
+  const depPath = resolveConfigDepPath(configDir, spec);
   const depRel = relToCwd(depPath);
   if (!depRel) {
     throw new SkipError(
@@ -292,18 +380,13 @@ function verifyConfigDeps(configPath, configBlob, strict) {
       return;
     }
   } else if (ext === '') {
-    // Prettier's extensionless loader accepts YAML as well as JSON; mirror
-    // that order (JSON first, then YAML) so a diverged YAML `.prettierrc` is
-    // still verified/snapshotted instead of declared unparsable.
+    // Prettier parses an extensionless `.prettierrc` with its YAML loader,
+    // and JSON is a YAML subset, so one YAML parse covers both forms.
     try {
-      value = JSON.parse(text);
+      value = parseYaml(text);
     } catch {
-      try {
-        value = parseYaml(text);
-      } catch {
-        if (strict) unparsable();
-        return;
-      }
+      if (strict) unparsable();
+      return;
     }
   } else if (ext === '.yaml' || ext === '.yml') {
     try {
@@ -323,17 +406,6 @@ function verifyConfigDeps(configPath, configBlob, strict) {
   verifyDepSpecs(value, dirname(configPath));
 }
 
-/** Verify relative dependencies of a config reached through a package.json
- * `prettier` string pointer. JavaScript targets need the JS import scan;
- * other shapes go through the generic verifier. */
-function verifyConfigTargetDeps(configPath, configBlob) {
-  if (isJsConfig(configPath)) {
-    verifyJsConfigDeps(configPath, configBlob);
-    return;
-  }
-  verifyConfigDeps(configPath, configBlob, false);
-}
-
 /** Fold the staged→formatted rewrite into the working tree, if safe. */
 function mergeWorktree(path, stagedBlob, formatted) {
   const stat = lstatSync(path, { throwIfNoEntry: false });
@@ -346,12 +418,15 @@ function mergeWorktree(path, stagedBlob, formatted) {
   // the tree's newlines are mixed. With no unstaged lines to protect, write
   // the formatted output back so the commit doesn't leave the whole file as a
   // new unstaged change. The index has just been staged with `formatted`
-  // verbatim, so a mixed-EOL tree gets that same blob; a uniform tree keeps
-  // its own line-ending convention.
+  // verbatim, so write those exact bytes back — even when Prettier chose a
+  // different EOL than the worktree's uniform convention. The one exception
+  // is an autocrlf=true checkout, where Git checks the index's LF blob out as
+  // CRLF; preserve the tree's CRLF convention there.
   if (worktreeLf.equals(stagedLf)) {
-    const content = hasMixedEol(worktree)
-      ? formatted
-      : withWorktreeEol(formatted, worktree);
+    const content =
+      isAutocrlfCheckout() && worktree.includes(CRLF)
+        ? withWorktreeEol(formatted, worktree)
+        : formatted;
     writeIfUnchanged(path, worktree, content);
     return;
   }
@@ -452,6 +527,14 @@ function configSnapshotFor(worktreeConfigPath, stagedConfig, depth = 0) {
   const worktreeConfig = readFileSync(worktreeConfigPath);
   const configEqualsIndex = normalizedEquals(worktreeConfig, stagedConfig);
 
+  // Provenance policy for config dependencies: verify relative
+  // plugins/extends/imports only when this function is about to hand Prettier
+  // a config path it derived from index content — a snapshot, or a pointer
+  // target resolved from a staged package.json/package.yaml. Clean configs
+  // returned as `null` are deliberately left to Prettier's own working-tree
+  // loader (#10504), except package.yaml object configs, which can never be
+  // snapshotted and are verified before being returned as `null`.
+
   if (base === 'package.json') {
     const stagedValue =
       JSON.parse(stripBom(stagedConfig.toString('utf8'))).prettier ?? null;
@@ -475,8 +558,12 @@ function configSnapshotFor(worktreeConfigPath, stagedConfig, depth = 0) {
 
       // `"prettier": "<path>"` points at another config file. Follow the
       // pointer with the same index-snapshot rules instead of letting
-      // Prettier load the worktree copy of the pointed-to file.
-      const targetPath = resolve(dirname(worktreeConfigPath), stagedValue);
+      // Prettier load the worktree copy of the pointed-to file. Normalize
+      // Windows-style backslash separators before resolution.
+      const targetPath = resolve(
+        dirname(worktreeConfigPath),
+        normalizeSpecifier(stagedValue),
+      );
       const targetRel = relToCwd(targetPath);
       if (!targetRel) {
         throw new SkipError(
@@ -500,7 +587,11 @@ function configSnapshotFor(worktreeConfigPath, stagedConfig, depth = 0) {
       if (!normalizedEquals(readFileSync(targetPath), stagedTarget)) {
         return configSnapshotFor(targetPath, stagedTarget, depth + 1);
       }
-      verifyConfigTargetDeps(targetPath, stagedTarget);
+      if (isJsConfig(targetPath)) {
+        verifyJsConfigDeps(targetPath, stagedTarget);
+      } else {
+        verifyConfigDeps(targetPath, stagedTarget, false);
+      }
       return { config: targetPath, snapshotPath: null };
     }
 
@@ -511,22 +602,82 @@ function configSnapshotFor(worktreeConfigPath, stagedConfig, depth = 0) {
   }
 
   if (base === 'package.yaml') {
+    let stagedValue = null;
+    try {
+      stagedValue =
+        parseYaml(stripBom(stagedConfig.toString('utf8')))?.prettier ?? null;
+    } catch {
+      if (!configEqualsIndex) {
+        throw new SkipError(
+          `staged ${configRel} differs from the worktree copy and package.yaml ` +
+            'configs cannot be snapshotted; skipped auto-staging.',
+        );
+      }
+      // Prettier will report the YAML error when it loads the clean file.
+      return { config: null, snapshotPath: null };
+    }
+
+    if (typeof stagedValue === 'string') {
+      if (!isConfigPointerPath(stagedValue)) {
+        // Bare package name (e.g. `@company/prettier-config`): Prettier
+        // resolves it from node_modules. A clean manifest is left alone; a
+        // diverged manifest cannot be snapshotted, so skip loudly.
+        if (!configEqualsIndex) {
+          throw new SkipError(
+            `package.yaml's prettier key names the shareable config ` +
+              `"${stagedValue}" but package.yaml has unstaged edits; skipped ` +
+              'auto-staging so the uncommitted pointer stays out of the commit.',
+          );
+        }
+        return { config: null, snapshotPath: null };
+      }
+
+      // Mirror the package.json string-pointer path: resolve the pointer
+      // against the staged package.yaml, then source the pointed-to config
+      // from the index (snapshotting it when it diverges).
+      const targetPath = resolve(
+        dirname(worktreeConfigPath),
+        normalizeSpecifier(stagedValue),
+      );
+      const targetRel = relToCwd(targetPath);
+      if (!targetRel) {
+        throw new SkipError(
+          `package.yaml's prettier key points outside the repository ` +
+            `(${stagedValue}); skipped auto-staging.`,
+        );
+      }
+      const stagedTarget = readIndexFile(targetRel);
+      if (!stagedTarget) {
+        throw new SkipError(
+          `${targetRel} is not staged but package.yaml's prettier key ` +
+            'points to it; skipped auto-staging so its uncommitted rules ' +
+            'stay out of the commit. Stage or remove it and retry.',
+        );
+      }
+      if (!existsSync(targetPath)) {
+        throw new SkipError(
+          `${targetRel} vanished from the working tree; skipped auto-staging.`,
+        );
+      }
+      if (!normalizedEquals(readFileSync(targetPath), stagedTarget)) {
+        return configSnapshotFor(targetPath, stagedTarget, depth + 1);
+      }
+      if (isJsConfig(targetPath)) {
+        verifyJsConfigDeps(targetPath, stagedTarget);
+      } else {
+        verifyConfigDeps(targetPath, stagedTarget, false);
+      }
+      return { config: targetPath, snapshotPath: null };
+    }
+
     if (!configEqualsIndex) {
       throw new SkipError(
         `staged ${configRel} differs from the worktree copy and package.yaml ` +
           'configs cannot be snapshotted; skipped auto-staging.',
       );
     }
-    // package.yaml has no snapshot path, so verify its relative dependencies
-    // before handing the working-tree copy back to Prettier. Parse errors are
-    // left to Prettier's own loader (this check is non-strict).
-    let stagedValue = null;
-    try {
-      stagedValue =
-        parseYaml(stripBom(stagedConfig.toString('utf8')))?.prettier ?? null;
-    } catch {
-      // ignored: Prettier will report the YAML error when it loads the file.
-    }
+    // Object-valued package.yaml has no snapshot path, so verify its relative
+    // dependencies before handing the working-tree copy back to Prettier.
     verifyDepSpecs(stagedValue, dirname(worktreeConfigPath));
     return { config: null, snapshotPath: null };
   }
