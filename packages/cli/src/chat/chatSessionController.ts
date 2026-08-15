@@ -19,7 +19,7 @@ import {
 import type {
   FollowUpQueueInput,
   FollowUpRecoveryLease,
-} from '@agent/followUp/ToolUseFollowUpQueueManager';
+} from '@agent/followUp';
 import {
   AgentConfigSchema,
   type AgentConfig,
