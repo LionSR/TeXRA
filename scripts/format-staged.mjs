@@ -43,7 +43,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join, relative } from 'node:path';
+import { basename, dirname, join, parse, relative } from 'node:path';
 
 import ignore from 'ignore';
 import prettier from 'prettier';
@@ -117,12 +117,29 @@ function withWorktreeEol(content, worktree) {
   return Buffer.from(lf.toString('utf8').replace(/\n/g, '\r\n'), 'utf8');
 }
 
+/** True when `buffer` mixes CRLF and bare-LF newlines. */
+function hasMixedEol(buffer) {
+  if (!buffer.includes(CRLF)) return false;
+  const text = buffer.toString('utf8');
+  return text.replace(/\r\n/g, '').includes('\n');
+}
+
 /** Fold the staged→formatted rewrite into the working tree, if safe. */
 function mergeWorktree(path, stagedBlob, formatted) {
   const stat = lstatSync(path, { throwIfNoEntry: false });
   // Unstaged deletion or a symlink replacing the file: leave the tree alone.
   if (!stat?.isFile()) return;
   const worktree = readFileSync(path);
+  // A mixed-EOL working tree has no single convention to re-apply, and
+  // rewriting every newline would flip the bytes of unrelated unstaged
+  // lines. Leave it byte-identical; the staged output is already staged.
+  if (hasMixedEol(worktree)) {
+    console.log(
+      `${NOTICE} ${path}: mixed LF/CRLF line endings; kept the working-tree ` +
+        'copy. Run `npm run format` after committing to sync.',
+    );
+    return;
+  }
   // autocrlf checks out CRLF files whose index blobs are LF. Normalize both
   // sides before comparing/merging, then re-apply the tree's EOL on write so
   // CRLF worktrees don't take a spurious conflict and don't get flipped to LF.
@@ -166,6 +183,29 @@ function mergeWorktree(path, stagedBlob, formatted) {
   }
 }
 
+/** Write the staged config blob beside the worktree config it shadows,
+ * under a scratch name that keeps the config's own directory and extension.
+ * Overrides, relative plugins, and relative imports in the staged config then
+ * resolve exactly as they do for the worktree file. */
+function writeConfigSnapshot(worktreeConfigPath, stagedConfig) {
+  const base = basename(worktreeConfigPath);
+  // package.json contributes only its `prettier` key, so the snapshot holds
+  // just that key; every other config file is its own config.
+  const content =
+    base === 'package.json'
+      ? JSON.stringify(
+          JSON.parse(stagedConfig.toString('utf8')).prettier ?? null,
+        )
+      : stagedConfig;
+  const { name, ext } = parse(base);
+  const snapshotPath = join(
+    dirname(worktreeConfigPath),
+    `${name}-format-staged-${process.pid}${ext}`,
+  );
+  writeFileSync(snapshotPath, content);
+  return snapshotPath;
+}
+
 /** Format one staged path's index blob and stage the result. */
 async function formatStagedFile(path) {
   const entries = git(['ls-files', '-s', '-z', '--', path])
@@ -173,7 +213,8 @@ async function formatStagedFile(path) {
     .split('\0')
     .filter(Boolean);
   if (entries.length !== 1) return; // unmerged or otherwise unusual state
-  const match = /^(\d{6}) ([0-9a-f]{40}) (\d)\t/.exec(entries[0]);
+  // 40-hex (SHA-1) or 64-hex (SHA-256) object names; git validates the rest.
+  const match = /^(\d{6}) ([0-9a-f]{40}|[0-9a-f]{64}) (\d)\t/.exec(entries[0]);
   if (!match) return;
   const [, mode, sha, stage] = match;
   if (stage !== '0') return; // unmerged
@@ -185,11 +226,15 @@ async function formatStagedFile(path) {
 
   if (isIgnored(path)) return;
 
-  // Prettier reads .prettierrc/.prettierignore from the working tree, but the
-  // content being formatted comes from the index. When those config files are
-  // tracked, use their index blobs so unstaged edits to them don't change how
-  // the staged content is formatted (or whether it is ignored).
-  const snapDir = mkdtempSync(join(tmpdir(), 'format-staged-config-'));
+  // Prettier reads .prettierrc/.prettierignore from the working tree, but
+  // the content being formatted comes from the index. The applicable config
+  // must come from the index too: an untracked worktree config is not part of
+  // the commit, so skip loudly rather than let its rules shape the staged
+  // blob. When the tracked config has unstaged edits, resolve against a
+  // snapshot of its index blob written beside the worktree copy, so
+  // directory-relative overrides, plugins, and imports keep resolving against
+  // the config's real location.
+  let configSnapshot = null;
   try {
     let resolveConfigOptions = {};
     const worktreeConfigPath = await prettier.resolveConfigFile(path);
@@ -200,10 +245,28 @@ async function formatStagedFile(path) {
       );
       if (!configRel.startsWith('../') && configRel !== '..') {
         const stagedConfig = readIndexFile(configRel);
-        if (stagedConfig) {
-          const configFile = join(snapDir, basename(configRel));
-          writeFileSync(configFile, stagedConfig);
-          resolveConfigOptions = { config: configFile };
+        if (!stagedConfig) {
+          console.log(
+            `${NOTICE} ${path}: ${configRel} is not staged; skipped ` +
+              'auto-staging so its uncommitted rules stay out of the commit. ' +
+              'Stage or remove it and retry.',
+          );
+          return;
+        }
+        if (!readFileSync(worktreeConfigPath).equals(stagedConfig)) {
+          if (basename(worktreeConfigPath) === 'package.yaml') {
+            console.log(
+              `${NOTICE} ${path}: staged ${configRel} differs from the ` +
+                'worktree copy and package.yaml configs cannot be ' +
+                'snapshotted; skipped auto-staging.',
+            );
+            return;
+          }
+          configSnapshot = writeConfigSnapshot(
+            worktreeConfigPath,
+            stagedConfig,
+          );
+          resolveConfigOptions = { config: configSnapshot };
         }
       }
     }
@@ -224,7 +287,7 @@ async function formatStagedFile(path) {
 
     mergeWorktree(path, stagedBlob, formatted);
   } finally {
-    rmSync(snapDir, { recursive: true, force: true });
+    if (configSnapshot) rmSync(configSnapshot, { force: true });
   }
 }
 
