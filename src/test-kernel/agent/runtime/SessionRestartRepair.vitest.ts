@@ -511,6 +511,39 @@ describe('SessionHandle restart repair', () => {
     expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
   });
 
+  it('normalizes summary-only WAITING ownership before preload republishes its summary', async () => {
+    const parkedExecutionId = 'b0a00011' as ExecutionId;
+    const parkedStreamId = 'parked#waiting-summary-only' as StreamTabId;
+
+    const transcripts = await StreamLogStore.open();
+    transcripts.ensureStream(parkedStreamId);
+    transcripts.recordSummaryMeta(parkedStreamId, {
+      executionId: parkedExecutionId,
+    });
+    await transcripts.flush();
+
+    const executionStore = getExecutionStore(parkedExecutionId);
+    await executionStore.writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await executionStore.write(flowKey(parkedExecutionId), validFlowRecord);
+
+    const session = openDeferredSession(transcripts);
+    await session.waitUntilReady();
+
+    // The legacy stream has no sidecar FK, only a summary mirror entry. Its
+    // preload must first persist that fallback FK, or hydration would
+    // republish the summary without `executionId` and erase the ownership.
+    expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
+    expect(
+      session.transcripts.getSummaryMeta(parkedStreamId)?.executionId,
+    ).toBe(parkedExecutionId);
+    await expect(
+      session.snapshots.readPersistedExecutionId(parkedStreamId),
+    ).resolves.toBe(parkedExecutionId);
+  });
+
   it('preserves mapped runs and fails only unmapped streams when resumability detection fails', async () => {
     const degradedExecutionId = 'decade123' as ExecutionId;
     const degradedStreamId = `degraded#${degradedExecutionId}` as StreamTabId;
