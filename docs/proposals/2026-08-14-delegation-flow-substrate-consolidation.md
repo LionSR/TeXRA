@@ -762,7 +762,9 @@ imports, exports, and re-export rows; the element count still lands above
 the estimate because the write-only-field item deletes more type-level
 constructs than the estimate credited. Three of the nine surfaces failed
 re-verification at PR time and were cut; each is recorded here with the
-premise that failed, as a standing negative result — do not re-propose:
+premise that failed, as a measured negative result: do not re-propose them
+as the same mechanical B2 deletion absent new net benefit — a separately
+justified refactor is not frozen by this record:
 
 - `detectWaitingStreams` — the one-production-consumer premise held, but
   the module path itself is a live mock seam: `vi.doMock` in
@@ -773,23 +775,29 @@ premise that failed, as a standing negative result — do not re-propose:
   `config/ratchets/host-agent-mock-baseline.json`. Inlining it into
   `SessionHandle` would force those desktop restart-timing tests onto a
   different gate — a mock-path hazard not worth 29 LoC.
-- `src/shared/streams/streamMetadata.ts` — review correction (#10654):
+- `src/shared/streams/streamMetadata.ts` — review corrections (#10654):
   the `UPDATE_STREAMS` wire shape is owned by `StreamMetadataSchema`
   (`src/shared/schemas/streamState.ts`, consumed via
-  `UpdateStreamsMessageSchema`), which stays in `src/shared/` regardless;
-  `buildStreamMetadata` is the sole-consumer projection helper
-  (`ProgressStreamProjectionBuilder`) that parses through the schema so a
-  prefault added there cannot silently miss its output. The cut stands on
-  the net-gain bar: relocating a 42-line helper beside its only caller
-  moves the body, strands its 67-line unit test, and recovers only module
-  chrome.
+  `UpdateStreamsMessageSchema`) and stays in `src/shared/` regardless;
+  `buildStreamMetadata` is the 42-line sole-consumer projection helper
+  behind the public `ProgressStreamProjectionBuilder.streamMetadata()`
+  boundary. Its parse-through keeps backend-owned prefaults honest only
+  partially: `substate`, `userFollowUpSupport`, `lastTimestamp`, and
+  `category` are overwritten after the spread with possibly-undefined
+  inputs, so a prefault later added to one of those four would be
+  silently missed. Its 67-line direct test is likewise an
+  implementation-detail test that could be retargeted through the
+  projection boundary or dropped, not stranded. The cut stands on the
+  measured net alone: the move recovers only module chrome, no LoC or
+  element win.
 - `src/shared/streams/childActivityReducer.ts` — review correction
   (#10654): the coverage is not hostage to the extraction — the
   vanished-child behavior is exercised at the `SessionFactApplier`
-  boundary (`ProgressBackendRetainedChildren.vitest.ts`), where the
-  53-line direct `describe` block could be re-pointed. The cut stands
-  because the honest net is a 31-line pure module traded for an inline
-  block plus a test rewrite — ~2 elements for churn, not a sweep win.
+  boundary (`ProgressBackendRetainedChildren.vitest.ts`), and the 53-line
+  direct `describe` block is an implementation-detail test that could be
+  re-pointed there or dropped. The cut stands on the measured net alone:
+  a 31-line pure module traded for an inline block, ~2 elements for the
+  churn.
 
 ### B3. Make the host-agent baseline tell the truth (−25 LoC net, −18 elements)
 
