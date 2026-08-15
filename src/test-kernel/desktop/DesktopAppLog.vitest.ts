@@ -131,4 +131,129 @@ describe('desktop app log', () => {
 
     expect(snapshot.text).toBe('Opened [path]/paper.tex');
   });
+
+  // Guard tests for the redactPathPrefixes contract (issue #10613). The
+  // function stays module-private, so these exercise it through
+  // readDesktopLogSnapshot, its only production call path: log text is
+  // scrubbed with (workspacePath, homedir()) and then redactSecrets.
+  describe('path prefix redaction', () => {
+    it('redacts the longest nested prefix first so workspace contents stay hidden', async () => {
+      const workspacePath = join(homedir(), 'texra-project');
+      await writeDesktopLog(
+        `Opened ${workspacePath}/paper.tex; also ${homedir()}/.config/texra/settings.json`,
+      );
+      const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
+
+      const snapshot = readDesktopLogSnapshot({ workspacePath });
+
+      // Shortest-first would leak the project directory name as
+      // '[path]/texra-project/paper.tex'.
+      expect(snapshot.text).toBe(
+        'Opened [path]/paper.tex; also [path]/.config/texra/settings.json',
+      );
+      expect(snapshot.text).not.toContain('texra-project');
+    });
+
+    it('redacts home paths before a shorter workspace prefix that contains them', async () => {
+      await writeDesktopLog(`home ${homedir()}/a.txt; other /Users/bob/b.txt`);
+      const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
+
+      const snapshot = readDesktopLogSnapshot({ workspacePath: '/Users' });
+
+      // Shortest-first would leak the account name as '[path]/<user>/a.txt'
+      // on hosts whose home directory sits under /Users.
+      expect(snapshot.text).toBe('home [path]/a.txt; other [path]/bob/b.txt');
+    });
+
+    it('treats regex metacharacters in a Windows workspace path literally', async () => {
+      const workspacePath = 'C:\\work\\proj.ec';
+      await writeDesktopLog(
+        `dir ${workspacePath}\\a.tex and C:\\work\\projXec\\b.tex`,
+      );
+      const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
+
+      const snapshot = readDesktopLogSnapshot({ workspacePath });
+
+      // An unescaped pattern would let '.' match 'X' and redact the sibling.
+      expect(snapshot.text).toBe(
+        'dir [path]\\a.tex and C:\\work\\projXec\\b.tex',
+      );
+    });
+
+    it('redacts Windows paths at end of string and before mixed separators', async () => {
+      const workspacePath = 'C:\\work\\project';
+      await writeDesktopLog(
+        `copy ${workspacePath}/src/main.tex; cd ${workspacePath}`,
+      );
+      const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
+
+      const snapshot = readDesktopLogSnapshot({ workspacePath });
+
+      expect(snapshot.text).toBe('copy [path]/src/main.tex; cd [path]');
+    });
+
+    it('redacts descendants of a trailing-backslash Windows prefix without requiring a boundary', async () => {
+      const workspacePath = 'D:\\build\\out\\';
+      await writeDesktopLog(
+        `wrote ${workspacePath}app.log; list ${workspacePath}`,
+      );
+      const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
+
+      const snapshot = readDesktopLogSnapshot({ workspacePath });
+
+      // A boundary lookahead after the trailing separator would reject the
+      // 'app.log' follower and leave the prefix visible.
+      expect(snapshot.text).toBe('wrote [path]app.log; list [path]');
+    });
+
+    it('redacts repeated descendants of a trailing-slash POSIX prefix only', async () => {
+      const workspacePath = '/Users/alice/';
+      await writeDesktopLog(
+        `a ${workspacePath}docs/one.tex; b ${workspacePath}drafts/two.tex; keep /Users/alice-other/c.tex`,
+      );
+      const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
+
+      const snapshot = readDesktopLogSnapshot({ workspacePath });
+
+      expect(snapshot.text).toBe(
+        'a [path]docs/one.tex; b [path]drafts/two.tex; keep /Users/alice-other/c.tex',
+      );
+    });
+
+    it('redacts a POSIX-root workspace at string start and after quotes, preserving drive and URL separators', async () => {
+      await writeDesktopLog(
+        `/Users/alice/x.tex; ("C:/work/project"); fetch https://example.com/a; log "/etc/hosts"`,
+      );
+      const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
+
+      const snapshot = readDesktopLogSnapshot({ workspacePath: '/' });
+
+      expect(snapshot.text).toBe(
+        `[path]Users/alice/x.tex; ("C:/work/project"); fetch https://example.com/a; log "[path]etc/hosts"`,
+      );
+    });
+
+    it('still redacts secrets after scrubbing path prefixes', async () => {
+      const workspacePath = 'C:\\work\\project';
+      await writeDesktopLog(
+        `OPENAI_API_KEY=sk-1234567890abcdef saved to ${workspacePath}\\config.env`,
+      );
+      const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
+
+      const snapshot = readDesktopLogSnapshot({ workspacePath });
+
+      expect(snapshot.text).toBe(
+        'OPENAI_API_KEY=[redacted] saved to [path]\\config.env',
+      );
+    });
+
+    it('scrubs the home directory when no workspace path is provided', async () => {
+      await writeDesktopLog(`config ${homedir()}/.config/texra/app.json`);
+      const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
+
+      const snapshot = readDesktopLogSnapshot({});
+
+      expect(snapshot.text).toBe('config [path]/.config/texra/app.json');
+    });
+  });
 });
