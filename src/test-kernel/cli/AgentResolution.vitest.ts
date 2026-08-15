@@ -1,10 +1,7 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  agentCatalogMock,
-  resetAgentCatalogMock,
-} from '@test/support/agentCatalogMock';
+import { agentCatalogMock } from '@test/support/agentCatalogMock';
 import type { AgentEntry, ResolvedAgent } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
@@ -39,7 +36,7 @@ function resolution(entry: AgentEntry): ResolvedAgent {
 
 describe('CLI agent resolution', () => {
   beforeEach(() => {
-    resetAgentCatalogMock();
+    for (const mock of Object.values(agentCatalogMock)) mock.mockReset();
     isAuthenticatedSpy.mockReset().mockResolvedValue(false);
     canAccessRemoteAgentCatalogSpy.mockReset().mockResolvedValue(false);
   });

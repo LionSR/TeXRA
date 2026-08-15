@@ -1,14 +1,19 @@
+/* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { CliContext } from '@cli/runtime/cliContext';
-import { CliExitCode } from '@cli/runtime/exitCodes';
-import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
-import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
+// Shared mock registrations must evaluate before anything that loads
+// the mocked modules — keep these imports immediately after the vitest
+// import (enforced by architecture/supportMockImportOrder.vitest.ts).
 import '@test/support/agentCatalogMock';
 import '@test/support/agentStorageFinalizationMock';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';
+
+import type { CliContext } from '@cli/runtime/cliContext';
+import { CliExitCode } from '@cli/runtime/exitCodes';
+import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
+import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
   executeCliToolUseConfig: vi.fn(),

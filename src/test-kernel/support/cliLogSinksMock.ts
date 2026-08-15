@@ -13,15 +13,19 @@ import { vi } from 'vitest';
  * suite's own `beforeEach` (`vi.clearAllMocks()` covers it, and preserves the
  * `writeTextStderrAndWait` default implementation).
  *
- * Ordering: this module must evaluate before anything that loads
- * `@cli/runtime/logSinks` (see `agentCatalogMock` for the idiom).
+ * Ordering: the `vi.mock` below registers when this module evaluates, so the
+ * import must precede anything that could load `@cli/runtime/logSinks` (see
+ * `agentCatalogMock` for the idiom). The bag is `vi.hoisted`, so the mock
+ * factory can never observe it uninitialized.
  */
-export const cliLogSinksMock = {
+const cliLogSinksMock = vi.hoisted(() => ({
   writeErrorStderr: vi.fn(),
   writeNdjsonStdout: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTextStderrAndWait: vi.fn(async () => undefined),
   writeTextStdout: vi.fn(),
-};
+}));
 
 vi.mock('@cli/runtime/logSinks', () => ({ ...cliLogSinksMock }));
+
+export { cliLogSinksMock };
