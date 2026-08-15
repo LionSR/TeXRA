@@ -43,9 +43,13 @@ function isRequestLike(input: RequestInfo | URL): input is Request {
 function flattenHeaders(
   headers: UndiciRequestInit['headers'] | Headers,
 ): UndiciRequestInit['headers'] {
+  // Array-form HeadersInit ([string, string][]) has its own `entries` —
+  // index/value pairs, not header tuples — so it must fall through untouched;
+  // undici accepts the tuple form directly.
   if (
     typeof headers === 'object' &&
     headers !== null &&
+    !Array.isArray(headers) &&
     typeof (headers as { entries?: unknown }).entries === 'function'
   ) {
     return Object.fromEntries((headers as Headers).entries());
@@ -87,10 +91,17 @@ async function normalizeModelRequest(
   // property reads plus the input's own `arrayBuffer`, never
   // `new Request(input, ...)`: that constructor brand-checks its argument and
   // would reject a cross-realm Request the same way `instanceof` did.
+  //
+  // The field precedence below mirrors `new Request(input, init)`: an init
+  // header set REPLACES the input's wholesale (the constructor empties the
+  // copied list before filling it — verified against undici's constructor),
+  // so `??` here is parity, not a merge; only a non-null init body overrides
+  // (null/undefined keep the input's body); a null signal detaches where an
+  // absent one inherits.
   const headers = requestInit.headers ?? input.headers;
   let body: UndiciRequestInit['body'];
-  if (requestInit.body !== undefined) {
-    body = requestInit.body ?? undefined;
+  if (requestInit.body != null) {
+    body = requestInit.body;
   } else if (input.body !== null) {
     body = await input.arrayBuffer();
   }
@@ -100,7 +111,13 @@ async function normalizeModelRequest(
       method: requestInit.method ?? input.method,
       headers: flattenHeaders(headers),
       redirect: requestInit.redirect ?? input.redirect,
-      signal: requestInit.signal ?? input.signal,
+      signal:
+        requestInit.signal === undefined ? input.signal : requestInit.signal,
+      // Set (or defaulted) above for stream bodies; undici rejects a stream
+      // body without the hint.
+      ...(requestInit.duplex === undefined
+        ? {}
+        : { duplex: requestInit.duplex }),
       ...(body === undefined ? {} : { body }),
     },
   ];

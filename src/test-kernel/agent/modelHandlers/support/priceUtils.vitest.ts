@@ -8,11 +8,11 @@ import {
 } from '@agent/modelHandlers/support/priceUtils';
 
 // grok-4.6's documented rates: $2/$6 flat, doubling to $4/$12 past 200k
-// prompt tokens, with cached tokens at 25% of the input rate in both tiers.
+// prompt tokens, with cached tokens at 16% of the input rate in both tiers.
 const TIERED_CONFIG: StandardPricingConfig = {
   inputPrice: 2,
   outputPrice: 6,
-  cacheDiscountFactor: 0.25,
+  cacheDiscountFactor: 0.16,
   longContextTier: { thresholdTokens: 200_000, inputPrice: 4, outputPrice: 12 },
 };
 
@@ -29,7 +29,7 @@ describe('computeStandardPrice long-context tier', () => {
     );
 
     expect(price).toBeCloseTo(
-      (200_000 * 2 + 1_000 * 6 + 500 * 6 - 50_000 * 2 * 0.75) / 1e6,
+      (200_000 * 2 + 1_000 * 6 + 500 * 6 - 50_000 * 2 * 0.84) / 1e6,
       12,
     );
   });
@@ -48,7 +48,7 @@ describe('computeStandardPrice long-context tier', () => {
     // Every prompt token rebills at $4 (not just the excess), output and
     // reasoning rise to $12, and the cache rebate follows the tier's rate.
     expect(price).toBeCloseTo(
-      (200_001 * 4 + 1_000 * 12 + 500 * 12 - 50_000 * 4 * 0.75) / 1e6,
+      (200_001 * 4 + 1_000 * 12 + 500 * 12 - 50_000 * 4 * 0.84) / 1e6,
       12,
     );
   });
@@ -60,13 +60,13 @@ describe('computeStandardPrice long-context tier', () => {
       TIERED_CONFIG,
     );
 
-    expect(price).toBeCloseTo((210_000 * 4 - 60_000 * 4 * 0.75) / 1e6, 12);
+    expect(price).toBeCloseTo((210_000 * 4 - 60_000 * 4 * 0.84) / 1e6, 12);
   });
 
   it('keeps flat rates for a config without a tier, however long the prompt', () => {
     const price = computeStandardPrice(
       { inputTokens: 500_000, outputTokens: 1_000 },
-      { inputPrice: 2, outputPrice: 6, cacheDiscountFactor: 0.25 },
+      { inputPrice: 2, outputPrice: 6, cacheDiscountFactor: 0.16 },
     );
 
     expect(price).toBeCloseTo((500_000 * 2 + 1_000 * 6) / 1e6, 12);
