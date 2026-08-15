@@ -76,8 +76,12 @@ export { resolveAndResumeStream } from './resolveAndResumeStream';
 export { detachSubagentsOnStop } from './detachSubagentsOnStop';
 
 // runtimePresentationEvents
-export { dispatchPresentationEvent } from './runtimePresentationEvents';
+export {
+  dispatchPresentationEvent,
+  toPresentationDelivery,
+} from './runtimePresentationEvents';
 export type {
+  PresentationDelivery,
   PresentationEventHandlers,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,

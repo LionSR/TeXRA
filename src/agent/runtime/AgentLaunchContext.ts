@@ -37,7 +37,9 @@ import { buildUserVars } from '@agent/prompt/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError } from '@common/errors';
 import {
+  attachErrorPresentationPending,
   attachErrorPresented,
+  hasErrorPresentationPending,
   hasErrorPresentedMarker,
 } from '@common/errors/sdkError/errorMetadata';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
@@ -166,19 +168,25 @@ export async function getAgentPath(
   const result = resolveAgentForLaunch(category, agentIdentifier, source);
   if (result) return result;
 
-  interactions.emit(
+  const err = new AgentError(`Could not find agent: ${agentIdentifier}`);
+  const delivered = await interactions.emit(
     'showAgentConfigBanner',
     { agentName: agentIdentifier },
-    { replayWhenAttached: true },
+    {
+      replayWhenAttached: true,
+      onReplayScheduled: () => attachErrorPresentationPending(err),
+      onReplayDelivered: () => attachErrorPresented(err),
+      onReplayNotDelivered: (host) => {
+        host.emit?.('requestShowError', { message: toErrorMessage(err) });
+      },
+    },
   );
-  // Deliberately NOT marked via `attachErrorPresented`: `showAgentConfigBanner`
-  // is a documented no-op on both CLI presentation hosts (no persistent
-  // sidebar to render it in), so treating this as "presented" would leave CLI
-  // users with no visible failure at all once the generic `requestShowError`
-  // fallback is gated on the marker. The double-surface on hosts that DO
-  // render the banner (extension, desktop) stays open pending a banner
-  // presentation that reports whether it actually reached the user.
-  throw new AgentError(`Could not find agent: ${agentIdentifier}`);
+  // Mark "presented" only when a live host confirmed it rendered the
+  // targeted banner. A queued replay instead marks the error as presentation
+  // pending; the replay either attaches the presented marker on confirmed
+  // delivery or emits the generic fallback on non-delivery.
+  if (delivered) attachErrorPresented(err);
+  throw err;
 }
 
 async function validateModelExists(
@@ -188,7 +196,8 @@ async function validateModelExists(
   const modelConfig = await resolveRuntimeModelConfig(modelName);
   if (modelConfig) return modelConfig;
 
-  interactions.emit(
+  const err = new AgentError(`Model ${modelName} is not registered`);
+  const delivered = await interactions.emit(
     'requestShowInstruction',
     {
       key: 'modelNotRecognized',
@@ -196,10 +205,21 @@ async function validateModelExists(
       actions: [INSTRUCTION_ACTION.OPEN_MODELS_DOC],
       showSuppress: false,
     },
-    { replayWhenAttached: true },
+    {
+      replayWhenAttached: true,
+      onReplayScheduled: () => attachErrorPresentationPending(err),
+      onReplayDelivered: () => attachErrorPresented(err),
+      onReplayNotDelivered: (host) => {
+        host.emit?.('requestShowError', { message: toErrorMessage(err) });
+      },
+    },
   );
-  const err = new AgentError(`Model ${modelName} is not registered`);
-  attachErrorPresented(err);
+  // As with `getAgentPath`: mark only after a live host confirms the
+  // instruction was rendered (or let the queued replay settle the marker and
+  // fallback itself). The extension resolves its emit when the instruction is
+  // handed off to VS Code, not when the dialog is dismissed, so launch
+  // cleanup no longer waits on user interaction.
+  if (delivered) attachErrorPresented(err);
   throw err;
 }
 
@@ -629,7 +649,8 @@ export async function buildAgentLaunchContext(
     if (
       !input.suppressErrorNotification &&
       !(err instanceof ZodError) &&
-      !hasErrorPresentedMarker(err)
+      !hasErrorPresentedMarker(err) &&
+      !hasErrorPresentationPending(err)
     ) {
       interactions.emit(
         'requestShowError',
