@@ -1088,9 +1088,9 @@ export class StreamSnapshotStore {
    * `existed` checks `missingOutputs` content specifically, not merely
    * whether the stream has a record: every record defaults `missingOutputs`
    * to `{}` on creation, and a record gets created for read-only reasons
-   * too (`kv()` — used by `read()`, `readPersistedExecutionId()`, and the
-   * read-only `kv()` calls — as well as any other accumulator's own lazy
-   * creation, e.g. `setTodos`). Gating on record
+   * too (`kv()` — used by `read()` and other read-only `kv()` calls — as
+   * well as any other accumulator's own lazy creation, e.g. `setTodos`).
+   * Gating on record
    * presence alone would treat those as "missing outputs existed" and write
    * a spurious `missingOutputs.json`, resurrecting a `streamData/{id}/`
    * directory `listPersistedStreams()` would then report for a stream that
@@ -1445,7 +1445,11 @@ export class StreamSnapshotStore {
   async readPersistedExecutionId(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
-    return (await readMeta(this.kv(stream)))?.executionId;
+    // Resolve the KV handle directly rather than through `kv()`, which would
+    // mint an in-memory record for a stream this caller only needs one disk
+    // field from. The bounded-startup invariant (#9947) keeps cold historical
+    // streams record-free until a caller actually seeds or mutates them.
+    return (await readMeta(this.kvHandles.get(stream)))?.executionId;
   }
 
   /**
