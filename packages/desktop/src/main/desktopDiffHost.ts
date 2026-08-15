@@ -61,9 +61,9 @@ export function createDesktopDiffHost(
   // so the quit lifecycle also waits for the `disposed` branch below, which
   // can start its removal only after this setup finishes.
   const inFlightFallbacks = new Set<Promise<void>>();
-  // Set when dispose() starts. A fallback still in flight checks this before
-  // recording its temp directory: the set has already been snapshotted and
-  // cleared, so recording would leak the directory.
+  // Set when dispose() starts. A fallback still in flight uses this to choose
+  // the post-disposal cleanup path; `drainComplete` then decides whether the
+  // record set is still owned by the disposal removal phase.
   let disposed = false;
   // Set once drainFallbackSetups() has taken the final `externalPatchDirs`
   // snapshot. A fallback that reaches the `disposed` branch before this flag
