@@ -8,6 +8,7 @@ import {
 } from '@controllers/settingsView/SettingsModelSelectionController';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import type { CopilotModelRoute } from '@model/runtimeModelRegistry';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -235,5 +236,16 @@ describe('SettingsModelSelectionController', () => {
       ),
     ).toEqual([]);
     expect(models.filter((model) => model.name === 'sonnet46')).toHaveLength(1);
+  });
+
+  it('builds the outbound update message from its own selection data', async () => {
+    const controller = createController();
+
+    const message = await controller.buildModelSelectionMessage();
+
+    expect(message).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      ...(await controller.buildSelectionData()),
+    });
   });
 });

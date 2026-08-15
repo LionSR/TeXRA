@@ -17,7 +17,11 @@ import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { isGpt5ModelName } from '@model/modelNames';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
-import type { ModelOptionData } from '@shared/schemas';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type {
+  ModelOptionData,
+  UpdateModelSelectionMessage,
+} from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   DEFAULT_HELPER_MODEL,
@@ -49,6 +53,15 @@ export interface SettingsModelSelectionControllerDeps {
     models: readonly string[],
   ) => Promise<ModelOptionData[]>;
 }
+
+/**
+ * The host-tunable deps: everything except the persisted-state store both
+ * hosts already hold in their `SettingsStatePorts`.
+ */
+export type ModelSelectionExtras = Omit<
+  SettingsModelSelectionControllerDeps,
+  'globalState'
+>;
 
 interface SettingsModelSelectionData {
   models: ModelSelectionItem[];
@@ -99,6 +112,14 @@ export class SettingsModelSelectionController {
         false,
       ),
       copilotModels: this.buildCopilotRouteInfos(routes, preferredModels),
+    };
+  }
+
+  /** Outbound message carrying the full selection payload to the webview. */
+  async buildModelSelectionMessage(): Promise<UpdateModelSelectionMessage> {
+    return {
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      ...(await this.buildSelectionData()),
     };
   }
 

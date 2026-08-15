@@ -1,5 +1,5 @@
 // Local imports
-import { createModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
+import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import type { DesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import type { DesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
 import type {
@@ -123,7 +123,9 @@ export function createStubDesktopCredentialSettingsController(
       signOutGrok: noOp,
       setGrokPreferSubscription: noOp,
     },
-    modelSelectionController: createModelSelectionController(state),
+    modelSelectionController: new SettingsModelSelectionController({
+      globalState: state.globalState,
+    }),
     postMainModelOptionsData: noOp,
     postStartupData: noOp,
     postSubscriptionUsage: noOp,
