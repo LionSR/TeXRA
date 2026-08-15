@@ -223,11 +223,16 @@ export function createLogsPane(
     if (state.status === 'loading') {
       return renderLoadingState('Loading recent entries…');
     }
-    return renderEmptyState({
-      icon: 'file-lines',
-      title: 'No desktop log entries yet.',
-      className: 'desktop-log-viewer-empty',
-    });
+    // role="status" keeps the previous div's behavior: announce to screen
+    // readers that the requested snapshot finished loading with no entries,
+    // not just that it's still loading.
+    return html`<div role="status">
+      ${renderEmptyState({
+        icon: 'file-lines',
+        title: 'No desktop log entries yet.',
+        className: 'desktop-log-viewer-empty',
+      })}
+    </div>`;
   }
 
   function viewerTemplate(): TemplateResult {
