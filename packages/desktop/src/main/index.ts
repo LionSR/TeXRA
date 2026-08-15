@@ -1099,9 +1099,12 @@ function createWindow(options: {
     // Not fire-and-forget: every quit path (window-all-closed on Windows and
     // Linux, continueQuit, the workspace relaunch's app.quit()) reaches the
     // before-quit handler, whose lifecycle drain awaits this promise before
-    // the final quit.
-    pendingDesktopDiffHostDispose = desktopDiffHost
-      .dispose()
+    // the final quit. Chaining onto the previous value keeps a macOS
+    // dock-reopen from discarding an earlier window's still-running cleanup.
+    pendingDesktopDiffHostDispose = (
+      pendingDesktopDiffHostDispose ?? Promise.resolve()
+    )
+      .then(() => desktopDiffHost.dispose())
       .catch(reportAsyncError);
     executionsWatcher?.close();
     if (mainWindow === window) {
