@@ -739,20 +739,24 @@ polling verticals (real divergence, not copy-shape), the storage core
 fold-rejection annotations), and most controller `*Deps` interfaces
 (genuine two-host seams) all survive scrutiny as designed, not as debt.
 
-### B1. Empty the shared-schemas deep-import baseline (−880 LoC, −80 elements)
+### B1. Eliminate migratable shared-schemas deep imports (−880 LoC, −80 elements)
 
-The repo's largest frozen list (878 lines,
-`config/ratchets/shared-schemas-deep-import-baseline.json`) is certified
-100% gratuitous by its own classifier: `forced={}` — every one of the 387
-deep-import statements rewrites verbatim to the `@shared/schemas` barrel
-that 1,016 statements already use. A mechanical codemod plus the built-in
-baseline regen deletes the committed duplicate knowledge while the ratchet
-stays armed at zero. Folding `schemas/settingsView/{data,inbound}`
-(1,138 LoC) into the 49-line pure re-export shim that all ~81 importers
-already use deletes the dual organizational scheme. Verifier corrections:
-the ratchet's own sanity assertion (`totals > 0`) needs a ~5-line edit; a
-~20-statement scope cut in the low layers (logger/utils/transcript/…) where
-the barrel would invert layering.
+The repo's largest frozen list
+(`config/ratchets/shared-schemas-deep-import-baseline.json`) records imports
+that reach past the published `@shared/schemas` barrel. Re-verification at
+implementation time found 281 migratable statements rather than the original
+387 estimate. A mechanical codemod plus the built-in baseline regen removes
+all of them, while folding `schemas/settingsView/{data,inbound}` (1,138 LoC)
+into the re-export shim all external consumers already use deletes the dual
+organizational scheme.
+
+The measured low-layer scope cut is one statement, not ~20:
+`src/logger/logUtils.ts` must import `@shared/schemas/log` directly because the
+barrel reaches `logUtils` through `stateSettings` → `@shared/approvalPolicy` →
+`@logger/logUtils`; using the barrel would create a cycle. The ratchet records
+that exact row as its forced layering floor and rejects every new migratable
+entry, including a new import of the same leaf. Because the baseline therefore
+remains nonempty, its `totals > 0` sanity assertion stays in place.
 
 ### B2. Single-caller extraction sweep (−190 LoC, −24 elements)
 

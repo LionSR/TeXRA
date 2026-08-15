@@ -1,27 +1,13 @@
 {
-  "semantics": "Production and test-kernel statements that reach past the published '@shared/schemas' barrel into a leaf module, keyed by specifier, valued by the importing file ('(type-only)' marks an `import type` statement, so a file that splits its value and type imports contributes two distinct entries). 'forced' statements name at least one symbol the barrel does not re-export: they are a report that a leaf module is missing from the published surface, and only a NEW off-surface specifier fails the ratchet. 'gratuitous' statements could have used the barrel verbatim; their per-specifier count may not grow. Classification is computed against src/shared/schemas/index.ts at test time, so widening the barrel reclassifies statements automatically (and requires regenerating this file in the same PR). The leaf-aware published-surface snapshot preserves the exact type/value bindings used by baseline gratuitous imports, so those bindings may not contract even if their importers move. Scan covers repo-root src/ and every packages/*/src directory, excluding only the surface interior src/shared/schemas/ (test-kernel files are ratcheted like production).",
+  "semantics": "Production and test-kernel statements that reach past the published '@shared/schemas' barrel into a leaf module, keyed by specifier, valued by the importing file ('(type-only)' marks an `import type` statement, so a file that splits its value and type imports contributes two distinct entries). 'forced' statements either name a symbol the barrel does not re-export, or are exact documented layering-floor entries that cannot use the barrel without creating a cycle. A new off-surface specifier or layering-floor entry fails the ratchet. 'gratuitous' statements could use the barrel verbatim and have no documented layering constraint; any new entry fails. Classification is computed against src/shared/schemas/index.ts at test time, so widening the barrel reclassifies statements automatically (and requires regenerating this file in the same PR). The leaf-aware published-surface snapshot preserves the exact type/value bindings used by published deep imports, so those bindings may not contract even if their importers move. Scan covers repo-root src/ and every packages/*/src directory, excluding only the surface interior src/shared/schemas/ (test-kernel files are ratcheted like production).",
   "surface": {
     "@shared/schemas/log": {
       "type": ["LogLevel"],
       "value": ["LOG_LEVELS"]
-    },
-    "@shared/schemas/todo": {
-      "type": [],
-      "value": ["TODO_STATUS"]
-    },
-    "@shared/schemas/todoDisplay": {
-      "type": [],
-      "value": ["STATUS_DISPLAY", "STATUS_ICONS"]
     }
   },
-  "forced": {},
-  "gratuitous": {
-    "@shared/schemas/log": ["src/logger/logUtils.ts"],
-    "@shared/schemas/todo": [
-      "src/test-kernel/architecture/SharedLiteralImmutability.vitest.ts"
-    ],
-    "@shared/schemas/todoDisplay": [
-      "src/test-kernel/architecture/SharedLiteralImmutability.vitest.ts"
-    ]
-  }
+  "forced": {
+    "@shared/schemas/log": ["src/logger/logUtils.ts"]
+  },
+  "gratuitous": {}
 }

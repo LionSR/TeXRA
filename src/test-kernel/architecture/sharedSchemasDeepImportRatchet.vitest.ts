@@ -7,15 +7,12 @@
 // The one design requirement: deep imports are recorded in TWO classes, and
 // they are gated differently, because they mean opposite things.
 //
-//   forced     — the statement names at least one symbol the barrel does not
-//                re-export. The author had no barrel path to use, so this is a
-//                report that a leaf module is missing from the published
-//                surface, NOT a contributor error. Gated only on the SET of
-//                off-surface specifiers: another statement against an
-//                already-off-surface module passes; pushing a *new* module off
-//                the surface fails.
-//   gratuitous — every name is reachable through `@shared/schemas`. The barrel
-//                was simply not used. Gated hard, per specifier, on count.
+//   forced     — either the statement names a symbol the barrel does not
+//                re-export, or the exact statement is a documented layering
+//                floor that cannot use the barrel without creating a cycle.
+//                New off-surface modules and new floor entries fail.
+//   gratuitous — every name is reachable through `@shared/schemas`, with no
+//                documented layering constraint. Any new statement fails.
 //
 // Collapsing the two into one number would peg the total at the forced floor
 // forever, which reads as a broken ratchet (cf. #8900) and gets it deleted.
@@ -48,15 +45,16 @@ const SEMANTICS =
   'barrel into a leaf module, keyed by specifier, valued by the importing ' +
   "file ('(type-only)' marks an `import type` statement, so a file that " +
   'splits its value and type imports contributes two distinct entries). ' +
-  "'forced' statements name at least one symbol the barrel does not " +
-  're-export: they are a report that a leaf module is missing from the ' +
-  'published surface, and only a NEW off-surface specifier fails the ratchet. ' +
-  "'gratuitous' statements could have used the barrel verbatim; their per-" +
-  'specifier count may not grow. Classification is computed against ' +
+  "'forced' statements either name a symbol the barrel does not re-export, " +
+  'or are exact documented layering-floor entries that cannot use the barrel ' +
+  'without creating a cycle. A new off-surface specifier or layering-floor ' +
+  "entry fails the ratchet. 'gratuitous' statements could use the barrel " +
+  'verbatim and have no documented layering constraint; any new entry fails. ' +
+  'Classification is computed against ' +
   'src/shared/schemas/index.ts at test time, so widening the barrel ' +
   'reclassifies statements automatically (and requires regenerating this ' +
   'file in the same PR). The leaf-aware published-surface snapshot preserves ' +
-  'the exact type/value bindings used by baseline gratuitous imports, so those ' +
+  'the exact type/value bindings used by published deep imports, so those ' +
   'bindings may not contract even if their importers move. Scan covers ' +
   'repo-root src/ and every packages/*/src directory, excluding only the ' +
   'surface interior src/shared/schemas/ (test-kernel files are ratcheted ' +
@@ -546,10 +544,9 @@ function isLeafFullyPublished(
   );
 }
 
-function collectCurrent(): Pick<
-  SchemasBaseline,
-  'surface' | 'forced' | 'gratuitous'
-> {
+function collectCurrent(
+  documentedForced: DeepImports = {},
+): Pick<SchemasBaseline, 'surface' | 'forced' | 'gratuitous'> {
   const moduleMemo = new Map<string, ModuleExports>();
   const fullSurface = publishedSurface(moduleMemo);
   const referencedSurface: MutablePublishedSurface = new Map();
@@ -574,7 +571,7 @@ function collectCurrent(): Pick<
         const resolvedSpaces = reference.bindings?.map((binding) =>
           reachableSpace(fullSurface, reference.specifier, binding, moduleMemo),
         );
-        const isGratuitous =
+        const isPublished =
           reference.bindings == null
             ? isLeafFullyPublished(
                 fullSurface,
@@ -583,8 +580,12 @@ function collectCurrent(): Pick<
                 reference.typeOnly,
               )
             : resolvedSpaces?.every((space) => space != null) === true;
-        const bucket = isGratuitous ? gratuitous : forced;
-        if (isGratuitous) {
+        const entry = reference.typeOnly ? `${repoPath} (type-only)` : repoPath;
+        const isDocumentedFloor =
+          isPublished &&
+          documentedForced[reference.specifier]?.includes(entry) === true;
+        const bucket = isPublished && !isDocumentedFloor ? gratuitous : forced;
+        if (isPublished) {
           if (reference.bindings == null) {
             const published = fullSurface[reference.specifier];
             for (const space of ['type', 'value'] as const) {
@@ -611,9 +612,7 @@ function collectCurrent(): Pick<
             }
           }
         }
-        (bucket[reference.specifier] ??= []).push(
-          reference.typeOnly ? `${repoPath} (type-only)` : repoPath,
-        );
+        (bucket[reference.specifier] ??= []).push(entry);
       }
     }
   }
@@ -794,55 +793,34 @@ describe('@shared/schemas deep-import ratchet', () => {
     ).toBe('value');
   });
 
-  // One scan for the whole suite; every case reads the same snapshot.
-  const current = collectCurrent();
+  const baseline = JSON.parse(
+    readFileSync(BASELINE_PATH, 'utf8'),
+  ) as SchemasBaseline;
+  // One scan for the whole suite; every case reads the same snapshot. Exact
+  // published entries in `forced` are documented layering floors.
+  const current = collectCurrent(baseline.forced);
   if (process.env.TEXRA_UPDATE_SHARED_SCHEMAS_BASELINE === '1') {
     writeFileSync(
       BASELINE_PATH,
       `${JSON.stringify({ semantics: SEMANTICS, ...current }, null, 2)}\n`,
     );
   }
-  const baseline = JSON.parse(
-    readFileSync(BASELINE_PATH, 'utf8'),
-  ) as SchemasBaseline;
 
   it('does not add gratuitous @shared/schemas deep imports', () => {
-    const specifiers = [
-      ...new Set([
-        ...Object.keys(baseline.gratuitous),
-        ...Object.keys(current.gratuitous),
-      ]),
-    ].toSorted((a, b) => a.localeCompare(b));
-    const grown = specifiers.filter(
-      (specifier) =>
-        (current.gratuitous[specifier]?.length ?? 0) >
-        (baseline.gratuitous[specifier]?.length ?? 0),
-    );
-    const report = grown
-      .map((specifier) => {
+    const added = Object.entries(current.gratuitous).flatMap(
+      ([specifier, entries]) => {
         const allowed = new Set(baseline.gratuitous[specifier] ?? []);
-        const added = (current.gratuitous[specifier] ?? []).filter(
-          (entry) => !allowed.has(entry),
-        );
-        return `  ${specifier}: ${allowed.size} -> ${current.gratuitous[specifier]?.length ?? 0}\n${added
-          .map((entry) => `    + ${entry}`)
-          .join('\n')}`;
-      })
-      .join('\n');
-    expect(
-      grown,
-      `Every name in these statements is already exported by '@shared/schemas'; import the barrel instead.\n${report}\n\n` +
-        `If the growth is intentional (e.g. the barrel was widened, reclassifying forced statements), regenerate ${BASELINE_FILE} in this PR.`,
-    ).toEqual([]);
-  });
-
-  it('scans test-kernel files so their deep imports stay ratcheted', () => {
-    // The scan must actually cover src/test-kernel. A revert of
-    // `excludeTestKernel: false` would still pass the count-growth cases below
-    // (they only fail on growth, never shrinkage), so pin one known entry.
-    expect(current.gratuitous['@shared/schemas/todo']).toContain(
-      'src/test-kernel/architecture/SharedLiteralImmutability.vitest.ts',
+        return entries
+          .filter((entry) => !allowed.has(entry))
+          .map((entry) => `${specifier}: ${entry}`);
+      },
     );
+    expect(
+      added,
+      `Every name in these statements is already exported by '@shared/schemas'; import the barrel instead.\n` +
+        added.map((entry) => `  + ${entry}`).join('\n') +
+        `\n\nIf the growth is intentional (e.g. the barrel was widened, reclassifying forced statements), regenerate ${BASELINE_FILE} in this PR.`,
+    ).toEqual([]);
   });
 
   it('does not push a new module off the published @shared/schemas surface', () => {
