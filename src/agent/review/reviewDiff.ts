@@ -11,7 +11,7 @@
 // Third-party imports
 import simpleGit, { type SimpleGit } from 'simple-git';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
@@ -19,6 +19,8 @@ import { splitOutputLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { normalizeReviewFilePath } from './reviewIssues';
+
+const log = createLog('reviewDiff');
 
 const GIT_TIMEOUT_MS = 30_000;
 
@@ -78,10 +80,7 @@ async function rawGit(sg: SimpleGit, args: string[]): Promise<string | null> {
   try {
     return await sg.raw(args);
   } catch (err) {
-    logger.debug(
-      'reviewDiff',
-      `git ${args.join(' ')} failed: ${toErrorMessage(err)}`,
-    );
+    log.debug(`git ${args.join(' ')} failed: ${toErrorMessage(err)}`);
     return null;
   }
 }

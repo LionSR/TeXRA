@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { sync as globSync } from 'glob';
 
 import { isFileNotFoundError } from '@common/errors';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { delay } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -11,6 +11,8 @@ import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
+
+const log = createLog(CHANNEL);
 
 export const LATEXINDENT_CONFIG_KEY = 'texra.latex.latexindentConfig';
 
@@ -25,12 +27,12 @@ let missingLatexindentReported = false;
 async function cleanupIndentLog(logPath: string): Promise<void> {
   try {
     await AbsoluteFS.delete(logPath);
-    logger.debug(CHANNEL, `Removed ${logPath}`);
+    log.debug(`Removed ${logPath}`);
   } catch (err) {
     if (isFileNotFoundError(err)) {
-      logger.debug(CHANNEL, `No indent.log to remove at ${logPath}`);
+      log.debug(`No indent.log to remove at ${logPath}`);
     } else {
-      logger.warn(CHANNEL, `Error removing indent.log: ${toErrorMessage(err)}`);
+      log.warn(`Error removing indent.log: ${toErrorMessage(err)}`);
     }
   }
 }
@@ -52,11 +54,10 @@ async function cleanupBackupFiles(
   for (const backupFile of backupFiles) {
     try {
       await AbsoluteFS.delete(backupFile);
-      logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
+      log.debug(`Removed backup file: ${backupFile}`);
     } catch (err) {
       if (!isFileNotFoundError(err)) {
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Error removing backup file ${backupFile}: ${toErrorMessage(err)}`,
         );
       }
@@ -106,11 +107,11 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     }
 
     if (success) {
-      logger.info(CHANNEL, `Indented ${absolutePath}`);
+      log.info(`Indented ${absolutePath}`);
     }
     return success;
   } catch (err) {
-    logger.error(CHANNEL, `Error running LaTeX indent: ${toErrorMessage(err)}`);
+    log.error(`Error running LaTeX indent: ${toErrorMessage(err)}`);
     return false;
   }
 }

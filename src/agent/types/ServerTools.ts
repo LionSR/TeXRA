@@ -10,7 +10,7 @@
 
 import { z } from 'zod';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { isObject, tryParseUrl } from '@utils/core';
 
 // SDK type imports - using native types for better type safety
@@ -28,6 +28,8 @@ import type {
   ResponseFunctionWebSearch,
   ResponseReasoningItem,
 } from 'openai/resources/responses/responses';
+
+const log = createLog('ServerTools');
 
 // ============================================================================
 // Web Search Result Schemas - Single Source of Truth
@@ -560,6 +562,6 @@ function extractDomain(url: string): string {
   if (parsed) return parsed.hostname;
   // Contract: return '' for unparseable URLs. Log so malformed source data
   // isn't silently rendered as an empty domain.
-  logger.debug('ServerTools', `extractDomain: unparseable URL "${url}"`);
+  log.debug(`extractDomain: unparseable URL "${url}"`);
   return '';
 }

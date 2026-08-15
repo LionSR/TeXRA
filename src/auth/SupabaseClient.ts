@@ -4,7 +4,7 @@ import {
   User,
   type SupportedStorage,
 } from '@supabase/supabase-js';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   SUPABASE_GOTRUE_STORAGE_KEY,
@@ -23,6 +23,8 @@ import type {
   SessionTokens,
   StoredSessionState,
 } from './TokenProvider';
+
+const log = createLog('SupabaseClient');
 
 /**
  * GoTrue storage for the shared client.
@@ -71,8 +73,7 @@ function gotrueStorage(secrets: SessionSecretStore): SupportedStorage {
     try {
       return await run();
     } catch (error) {
-      logger.warn(
-        'SupabaseClient',
+      log.warn(
         `Could not ${action} PKCE flow state (${key}); sign-in will only be ` +
           `completable in this window: ${toErrorMessage(error)}`,
       );
@@ -175,10 +176,7 @@ export class SupabaseClient {
       return true;
     } catch (error) {
       this.readinessError = ensureError(error);
-      logger.error(
-        'SupabaseClient',
-        `Auth provider not ready: ${toErrorMessage(error)}`,
-      );
+      log.error(`Auth provider not ready: ${toErrorMessage(error)}`);
       return false;
     }
   }
@@ -251,10 +249,7 @@ export class SupabaseClient {
     try {
       return await this.authProvider.ensureFreshToken(forceRefresh);
     } catch (error) {
-      logger.error(
-        'SupabaseClient',
-        `Error getting access token: ${toErrorMessage(error)}`,
-      );
+      log.error(`Error getting access token: ${toErrorMessage(error)}`);
       return null;
     }
   }
@@ -299,10 +294,7 @@ export class SupabaseClient {
     try {
       return await this.authProvider.getSessionTokens();
     } catch (error) {
-      logger.error(
-        'SupabaseClient',
-        `Error getting session tokens: ${toErrorMessage(error)}`,
-      );
+      log.error(`Error getting session tokens: ${toErrorMessage(error)}`);
       return null;
     }
   }
@@ -319,10 +311,7 @@ export class SupabaseClient {
       if (error || !data.user) return null;
       return data.user;
     } catch (error) {
-      logger.error(
-        'SupabaseClient',
-        `Error getting user: ${toErrorMessage(error)}`,
-      );
+      log.error(`Error getting user: ${toErrorMessage(error)}`);
       return null;
     }
   }
@@ -375,10 +364,7 @@ export class SupabaseClient {
         .single();
 
       if (error || !data) {
-        logger.error(
-          'SupabaseClient',
-          `Error fetching profile: ${error?.message || 'No data'}`,
-        );
+        log.error(`Error fetching profile: ${error?.message || 'No data'}`);
         return defaultTier;
       }
 
@@ -387,10 +373,7 @@ export class SupabaseClient {
       // it before conservatively returning the default tier.
       return UserTierSchema.parse(data.tier ?? defaultTier);
     } catch (error) {
-      logger.error(
-        'SupabaseClient',
-        `Error getting user tier: ${toErrorMessage(error)}`,
-      );
+      log.error(`Error getting user tier: ${toErrorMessage(error)}`);
       return defaultTier;
     }
   }
@@ -452,10 +435,7 @@ export class SupabaseClient {
     } catch (error) {
       // Callers render "N/A" for null, so a failed read would otherwise be
       // indistinguishable from "no session stored".
-      logger.warn(
-        'SupabaseClient',
-        `Error reading stored account label: ${toErrorMessage(error)}`,
-      );
+      log.warn(`Error reading stored account label: ${toErrorMessage(error)}`);
       return null;
     }
   }

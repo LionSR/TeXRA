@@ -16,12 +16,14 @@ import { extractToolNames } from '@agent/index/agentYamlScanner';
 import { resolveAgentSettingTools } from '@agent/runtime/agentSettingTools';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { fetchRemoteAgentConfigYaml } from './remoteAgentConfigClient';
 import { CHANNEL } from './remoteAgentList';
 import type { RemoteAgentConfig } from './types';
+
+const log = createLog(CHANNEL);
 
 /** Load a remote agent configuration by name. */
 export async function loadRemoteAgent(
@@ -33,7 +35,7 @@ export async function loadRemoteAgent(
     );
   }
 
-  logger.info(CHANNEL, `Loading remote agent: ${agentName}`);
+  log.info(`Loading remote agent: ${agentName}`);
 
   try {
     const token = await SupabaseClient.getAccessToken();
@@ -45,7 +47,7 @@ export async function loadRemoteAgent(
 
     const configYaml = await fetchRemoteAgentConfigYaml(agentName, token);
 
-    logger.debug(CHANNEL, `Parsing YAML for remote agent: ${agentName}`);
+    log.debug(`Parsing YAML for remote agent: ${agentName}`);
     const parsedYaml = parseYamlWith(configYaml, AgentDefinitionSchema);
     if (parsedYaml.isErr()) {
       throw new Error(
@@ -76,13 +78,12 @@ export async function loadRemoteAgent(
         : undefined,
     });
 
-    logger.info(CHANNEL, `Successfully loaded remote agent: ${agentName}`);
+    log.info(`Successfully loaded remote agent: ${agentName}`);
 
     return config;
   } catch (error) {
     const lastError = ensureError(error);
-    logger.error(
-      CHANNEL,
+    log.error(
       `Failed to load remote agent "${agentName}": ${lastError.message}`,
     );
     throw lastError;
