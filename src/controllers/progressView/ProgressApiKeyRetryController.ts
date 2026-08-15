@@ -150,11 +150,8 @@ export class ProgressApiKeyRetryController {
     return this.hasAnyUsableKey(providersToCheck);
   }
 
-  /**
-   * ChatGPT/Codex subscription exhaustion always means the OpenAI key is the
-   * fallback credential — that auth mode is OpenAI-only (see
-   * `providerCapabilities.ts`) — regardless of how the error tagged provider.
-   */
+  // chatgpt-subscription auth is OpenAI-only (providerCapabilities.ts), so
+  // that exhaustion reason always means the OpenAI key, regardless of provider.
   private resolveProvider(
     request: Pick<ProgressApiKeyRetryRequest, 'provider' | 'exhaustionReason'>,
   ): ApiProvider | undefined {
