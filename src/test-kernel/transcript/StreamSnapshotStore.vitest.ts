@@ -620,12 +620,7 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     // Force a seed + a write for an unrelated run so writeUsage() actually
     // rewrites usageStats.json from the in-memory accumulators.
-    const pending = snapshotFacts(store).addUsage(
-      STREAM,
-      RUN_2,
-      usage(50, 10, 0.25),
-    );
-    await Promise.resolve(pending);
+    snapshotFacts(store).addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
     await store.flush();
 
     expect(warnSpy).toHaveBeenCalled();
