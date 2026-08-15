@@ -34,6 +34,10 @@ All notable changes to this project will be documented in this file.
   background and text follow the dedicated terminal tokens instead of the
   generic surface palette.
 
+- **Every max-style shortcut now resolves in the progress view** — math
+  operators, text labels, mathcal/mathbb letters, and tilde/hat/
+  differential shortcuts render as intended instead of unknown commands.
+
 #### Features
 
 - **The model picker now starts with Sonnet 5 (Thinking)** — Gemini is no
