@@ -557,6 +557,45 @@ const PAREN_CREF_EQN = `\\(${CREF_EQN}\\)`;
 const PAREN_EQREF_EQN = `\\(${EQREF_EQN}\\)`;
 const CREF_FIG = '\\\\cref\\{(fig:[^,}]+)\\}';
 
+/**
+ * Legacy unbraced `_\S`/`^\S` plain-S shortcut migration.
+ *
+ * Introduced 2026-08-15 (#10507) to migrate persisted pre-#10439
+ * `symbolOperators` output, which used the unbraced S destination before the
+ * plain-S shortcut was renamed to `\sS`. Retire after 2026-11-15, three
+ * months after the replacement shipped; delete the MAX_REGEX spread below,
+ * the max-style-gated engine call in `applyAll`, and the drift assertions
+ * together.
+ *
+ * The negative lookbehind keeps escaped script markers (`\_\S`, `\^\S`)
+ * intact, and the right-side boundary keeps S-prefixed commands such as
+ * `\Strat`/`\Sig` intact. A `\S` followed by a digit remains ambiguous —
+ * legacy `\S0` migration versus a genuine `^\S2` — and is still migrated.
+ */
+export const LEGACY_UNBRACED_S_MIGRATION: RegexReplacementCategory = {
+  name: 'legacy_unbraced_s_migration',
+  description:
+    'Legacy unbraced plain-S shortcut migration for persisted pre-rename output',
+  isRegex: true,
+  flags: 'gms',
+  patterns: {
+    '(?<!\\\\)([_^])\\\\S(?![A-Za-z])': '$1\\sS',
+  },
+};
+
+/**
+ * Convert the KaTeX-only `\sS` plain-S destination back to LaTeX's built-in
+ * `\S` section sign when writing `.tex` files. `\sS` is defined only by the
+ * progress-view KaTeX macro table; project documents compile against the
+ * user's own preamble, where `\sS` is undefined. `\S` compiles everywhere.
+ *
+ * Boundary-aware for the same reason as the migration rule: a literal
+ * `_\sS` prefix replacement would corrupt `_\sStrat`-style commands.
+ */
+export function restoreLatexSectionSign(text: string): string {
+  return text.replaceAll(/([_^])\\sS(?![A-Za-z])/g, '$1\\S');
+}
+
 export const MAX_REGEX_REPLACEMENTS: RegexReplacementCategory = {
   name: 'max_style_regex' satisfies RegexReplacementCategoryName,
   description:
@@ -580,11 +619,11 @@ export const MAX_REGEX_REPLACEMENTS: RegexReplacementCategory = {
     // '([,;])\\s*\\.\\.\\.\\s*([,;])': '$1\\ldots$2',
     // Max like ,..,
 
-    // Legacy unbraced '\S' plain-S shortcut migration. The non-regex
-    // table handles the braced source forms; these boundary-aware rules
-    // catch the pre-rename persisted unbraced output without turning
-    // '\Strat'/'\Sig' into '\sStrat'/'\sSig'.
-    '([_^])\\\\S(?![A-Za-z])': '$1\\sS',
+    // Legacy unbraced '\S' plain-S shortcut migration: introduced
+    // 2026-08-15 (#10507), retire after 2026-11-15 (three months after the
+    // replacement shipped). See LEGACY_UNBRACED_S_MIGRATION for the
+    // boundary-aware details and remaining digit ambiguity.
+    ...LEGACY_UNBRACED_S_MIGRATION.patterns,
 
     // PUNCTUATION AND SPACING
 
