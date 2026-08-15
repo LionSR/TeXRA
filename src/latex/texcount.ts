@@ -1,4 +1,4 @@
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { filterNotNull, filterNotNullish, ensureArray } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -7,6 +7,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
+
+const log = createLog(CHANNEL);
 
 const CHINESE_PACKAGES = [
   'xeCJK',
@@ -28,10 +30,7 @@ async function hasChinesePackages(
         content.includes(`\\documentclass{${pkg}}`),
     );
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error checking Chinese packages: ${toErrorMessage(err)}`,
-    );
+    log.error(`Error checking Chinese packages: ${toErrorMessage(err)}`);
     return false;
   }
 }
@@ -54,15 +53,16 @@ async function rejectionReason(
   channel: string,
 ): Promise<string | null> {
   const filePath = fileLocation.absolutePath;
+  const log = createLog(channel);
   if (!(await AbsoluteFS.exists(filePath))) {
     const reason = `File ${filePath} does not exist.`;
-    logger.warn(channel, reason);
+    log.warn(reason);
     return reason;
   }
 
   if (!hasExtension(filePath, '.tex')) {
     const reason = `Error: File ${filePath} is not a LaTeX file. Skipping.`;
-    logger.warn(channel, reason);
+    log.warn(reason);
     return reason;
   }
 
@@ -75,6 +75,7 @@ async function runTexcount(
   context: string,
   signal?: AbortSignal,
 ): Promise<{ stdout: string | null; error?: string }> {
+  const log = createLog(channel);
   const result = await runToolWithCheck('texcount', args, {
     channel,
     truncate: false,
@@ -90,16 +91,16 @@ async function runTexcount(
   }
 
   if (result.success && result.stdout) {
-    logger.debug(channel, `Successfully counted ${context}`);
+    log.debug(`Successfully counted ${context}`);
     return { stdout: result.stdout };
   }
 
-  logger.error(channel, `Error getting tex count for ${context}`);
+  log.error(`Error getting tex count for ${context}`);
   if (result.stdout) {
-    logger.error(channel, `Stdout: ${result.stdout}`);
+    log.error(`Stdout: ${result.stdout}`);
   }
   if (result.stderr) {
-    logger.error(channel, `Stderr: ${result.stderr}`);
+    log.error(`Stderr: ${result.stderr}`);
   }
 
   return {
@@ -156,6 +157,7 @@ async function getSummedCount(
   channel: string,
   signal?: AbortSignal,
 ): Promise<{ output: string | null; errors: string[] }> {
+  const log = createLog(channel);
   const validPaths: string[] = [];
   const errors: string[] = [];
   let enableChineseMode = false;
@@ -172,8 +174,7 @@ async function getSummedCount(
 
     if (!enableChineseMode && (await hasChinesePackages(fileLocation))) {
       enableChineseMode = true;
-      logger.debug(
-        channel,
+      log.debug(
         `Chinese packages detected in ${filePath}, enabling Chinese character counting`,
       );
     }
@@ -225,6 +226,7 @@ export async function getTeXCount(
   }: TexcountOptions & { signal?: AbortSignal } = {},
 ): Promise<TexcountResult> {
   const resolvedChannel = channel ?? CHANNEL;
+  const log = createLog(resolvedChannel);
 
   try {
     const paths = ensureArray(filePaths);
@@ -234,7 +236,7 @@ export async function getTeXCount(
 
     if (trimmedPaths.length === 0) {
       const message = 'No LaTeX files provided for texcount.';
-      logger.warn(resolvedChannel, message);
+      log.warn(message);
       return { output: null, errors: [message] };
     }
 
@@ -245,7 +247,7 @@ export async function getTeXCount(
         signal,
       );
       if (output) {
-        logger.info(resolvedChannel, `Combined TeX Count Results:\n${output}`);
+        log.info(`Combined TeX Count Results:\n${output}`);
       }
       return { output, errors };
     }
@@ -265,14 +267,11 @@ export async function getTeXCount(
     }
 
     const combinedOutput = outputs.join('\n\n');
-    logger.info(
-      resolvedChannel,
-      `Combined TeX Count Results:\n${combinedOutput}`,
-    );
+    log.info(`Combined TeX Count Results:\n${combinedOutput}`);
     return { output: combinedOutput, errors };
   } catch (err) {
     const errorMessage = `Error in getTeXCount: ${toErrorMessage(err)}`;
-    logger.error(resolvedChannel, errorMessage);
+    log.error(errorMessage);
     return { output: null, errors: [errorMessage] };
   }
 }
