@@ -32,14 +32,15 @@ const SHIM = `#!/bin/sh
 # ${MARKER}: stage Prettier output, then chain to pre-commit (issue #9955).
 # Installed by scripts/install-local-hooks.mjs; re-run \`npm run hooks:install\`
 # after any manual \`pre-commit install\` (which does not know about this hook).
-node scripts/format-staged.mjs
-# A manual \`pre-commit install\` moves this shim to pre-commit.legacy
-# (migration mode). In that case pre-commit's hook-impl is already running
-# and executes its hooks after the legacy hook returns — chaining again
-# would recurse, so just stop here.
+#
+# A manual \`pre-commit install\` moves this shim to pre-commit.legacy and
+# runs it inside pre-commit's stash lifecycle. In that migration mode the
+# engine must not touch the index or the working tree, so stop here and let
+# the regular npm-format hook apply the previous write-and-fail behaviour.
 if [ -n "$PRE_COMMIT_RUNNING_LEGACY" ]; then
   exit 0
 fi
+node scripts/format-staged.mjs
 chain="$(git rev-parse --git-path hooks)/pre-commit.chain"
 if [ -x "$chain" ]; then
   exec "$chain" "$@"

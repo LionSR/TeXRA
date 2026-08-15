@@ -50,6 +50,8 @@ import prettier from 'prettier';
 
 const NOTICE = '[format-staged]';
 
+const CRLF = Buffer.from('\r\n');
+
 /** Run a git command, returning stdout as a Buffer; throw on failure. */
 function git(args, { input } = {}) {
   const result = spawnSync('git', args, {
@@ -101,15 +103,34 @@ function writeIfUnchanged(path, expected, content) {
   writeFileSync(path, content);
 }
 
+/** Normalize CRLF line endings to LF for index/worktree comparison and
+ * merge-file inputs. */
+function normalizeLf(buffer) {
+  if (!buffer.includes(CRLF)) return buffer;
+  return Buffer.from(buffer.toString('utf8').replace(/\r\n/g, '\n'), 'utf8');
+}
+
+/** Return `content` using the working-tree copy's line-ending convention. */
+function withWorktreeEol(content, worktree) {
+  const lf = normalizeLf(content);
+  if (!worktree.includes(CRLF)) return lf;
+  return Buffer.from(lf.toString('utf8').replace(/\n/g, '\r\n'), 'utf8');
+}
+
 /** Fold the staged→formatted rewrite into the working tree, if safe. */
 function mergeWorktree(path, stagedBlob, formatted) {
   const stat = lstatSync(path, { throwIfNoEntry: false });
   // Unstaged deletion or a symlink replacing the file: leave the tree alone.
   if (!stat?.isFile()) return;
   const worktree = readFileSync(path);
+  // autocrlf checks out CRLF files whose index blobs are LF. Normalize both
+  // sides before comparing/merging, then re-apply the tree's EOL on write so
+  // CRLF worktrees don't take a spurious conflict and don't get flipped to LF.
+  const stagedLf = normalizeLf(stagedBlob);
+  const worktreeLf = normalizeLf(worktree);
   // Fully staged file: the rewrite applies cleanly by construction.
-  if (worktree.equals(stagedBlob)) {
-    writeIfUnchanged(path, worktree, formatted);
+  if (worktreeLf.equals(stagedLf)) {
+    writeIfUnchanged(path, worktree, withWorktreeEol(formatted, worktree));
     return;
   }
   // Unstaged edits exist. Three-way merge (base = staged blob) so they ride
@@ -119,16 +140,20 @@ function mergeWorktree(path, stagedBlob, formatted) {
     const base = join(dir, 'base');
     const ours = join(dir, 'ours');
     const theirs = join(dir, 'theirs');
-    writeFileSync(base, stagedBlob);
-    writeFileSync(ours, worktree);
-    writeFileSync(theirs, formatted);
+    writeFileSync(base, stagedLf);
+    writeFileSync(ours, worktreeLf);
+    writeFileSync(theirs, normalizeLf(formatted));
     // merge-file exits with the conflict count, so any nonzero status means
     // the merge is not clean and the working tree must stay as it is.
     const result = spawnSync('git', ['merge-file', '-p', ours, base, theirs], {
       maxBuffer: 64 * 1024 * 1024,
     });
     if (result.status === 0) {
-      writeIfUnchanged(path, worktree, result.stdout);
+      writeIfUnchanged(
+        path,
+        worktree,
+        withWorktreeEol(result.stdout, worktree),
+      );
     } else {
       console.log(
         `${NOTICE} ${path}: Prettier output overlaps your unstaged edits; ` +

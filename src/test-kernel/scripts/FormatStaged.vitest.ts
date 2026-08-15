@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -26,6 +27,8 @@ const BASE = 'export const x = 1;\n';
 const STAGED = 'export const x = {a:1,b:2};\n';
 const UNSTAGED = 'export const x = {a:1,b:2,c:3};\n';
 const FORMATTED = 'export const x = { a: 1, b: 2 };\n';
+
+const toCrlf = (text: string) => text.replaceAll('\n', '\r\n');
 
 const MULTI_STAGED = [
   'const a={x:1,y:2};',
@@ -49,12 +52,26 @@ const MULTI_MERGED = MULTI_FORMATTED.replace(
 );
 
 let dir: string;
+let emptyGitConfig = '';
+let gitEnv = process.env;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'format-staged-'));
+  emptyGitConfig = join(dir, 'empty-gitconfig');
+  writeFileSync(emptyGitConfig, '');
+  // Isolate git from host global/system config so the fixture does not
+  // inherit commit signing or a non-default core.hooksPath. This also keeps
+  // `pre-commit install` happy, since it refuses to run when hooksPath is
+  // set to any non-empty value.
+  gitEnv = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: emptyGitConfig,
+    GIT_CONFIG_SYSTEM: emptyGitConfig,
+  };
   git(['init', '-q', '-b', 'main']);
   git(['config', 'user.email', 'test@example.com']);
   git(['config', 'user.name', 'test']);
+  git(['config', 'commit.gpgsign', 'false']);
   writeFileSync(join(dir, '.prettierrc'), '{}\n');
 });
 
@@ -63,12 +80,16 @@ afterEach(() => {
 });
 
 function git(args: string[]): string {
-  const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+  const result = spawnSync('git', args, {
+    cwd: dir,
+    encoding: 'utf8',
+    env: gitEnv,
+  });
   expect(result.status, result.stderr).toBe(0);
   return result.stdout;
 }
 
-function runFormat(env = process.env) {
+function runFormat(env = gitEnv) {
   return spawnSync(process.execPath, [formatScript], {
     cwd: dir,
     encoding: 'utf8',
@@ -133,6 +154,42 @@ describe('format-staged', () => {
     expect(git(['diff', '--stat', 'c.ts'])).toContain('1 insertion');
   });
 
+  it('keeps a CRLF worktree intact when core.autocrlf is on', () => {
+    git(['config', 'core.autocrlf', 'true']);
+    writeFileSync(join(dir, 'a.ts'), toCrlf(STAGED));
+    git(['add', 'a.ts']);
+    // autocrlf stores the LF blob even though the checkout is CRLF.
+    expect(stagedBlob('a.ts')).toBe(STAGED);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('staged Prettier output for a.ts');
+    expect(stagedBlob('a.ts')).toBe(FORMATTED);
+    expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(toCrlf(FORMATTED));
+    expect(git(['diff', '--name-only', '--', 'a.ts'])).toBe('');
+  });
+
+  it('folds non-overlapping CRLF edits without a spurious merge conflict', () => {
+    git(['config', 'core.autocrlf', 'true']);
+    writeFileSync(
+      join(dir, 'c.ts'),
+      toCrlf(MULTI_STAGED.replace('{x:1,y:2}', '{x:1}')),
+    );
+    git(['add', 'c.ts']);
+    git(['commit', '-qm', 'base']);
+    writeFileSync(join(dir, 'c.ts'), toCrlf(MULTI_STAGED));
+    git(['add', 'c.ts']);
+    writeFileSync(join(dir, 'c.ts'), toCrlf(MULTI_UNSTAGED));
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(stagedBlob('c.ts')).toBe(MULTI_FORMATTED);
+    expect(readFileSync(join(dir, 'c.ts'), 'utf8')).toBe(toCrlf(MULTI_MERGED));
+    expect(git(['diff', '--stat', 'c.ts'])).toContain('1 insertion');
+  });
+
   it.skipIf(process.platform === 'win32')(
     'keeps newer worktree content if it appears during the merge-file write',
     () => {
@@ -165,7 +222,7 @@ describe('format-staged', () => {
       chmodSync(fakeGit, 0o755);
 
       const result = runFormat({
-        ...process.env,
+        ...gitEnv,
         PATH: `${bin}${delimiter}${process.env.PATH}`,
         REAL_GIT: realGit,
         WORKTREE_FILE: join(dir, 'c.ts'),
@@ -282,6 +339,7 @@ describe('install-local-hooks', () => {
     return spawnSync(process.execPath, [installScript], {
       cwd: dir,
       encoding: 'utf8',
+      env: gitEnv,
     });
   }
 
@@ -294,6 +352,13 @@ describe('install-local-hooks', () => {
       'pre-commit',
     );
     expect(existsSync(hookPath)).toBe(true);
+    // Pin the commit to the fixture's own hooks dir now that pre-commit has
+    // already been installed (it refuses to install while hooksPath is set).
+    git([
+      'config',
+      'core.hooksPath',
+      resolve(dir, git(['rev-parse', '--git-path', 'hooks']).trim()),
+    ]);
 
     writeFileSync(join(dir, 'a.ts'), BASE);
     git(['add', 'a.ts']);
@@ -305,12 +370,42 @@ describe('install-local-hooks', () => {
     const commit = spawnSync('git', ['commit', '-m', 'test'], {
       cwd: dir,
       encoding: 'utf8',
+      env: gitEnv,
     });
 
     expect(commit.status, commit.stderr).toBe(0);
     expect(git(['show', 'HEAD:a.ts'])).toBe(FORMATTED);
     expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(UNSTAGED);
   }, 60_000);
+
+  it.skipIf(process.platform === 'win32')(
+    'does not touch the index when pre-commit runs the legacy shim',
+    () => {
+      const hooksDir = resolve(
+        dir,
+        git(['rev-parse', '--git-path', 'hooks']).trim(),
+      );
+      const hookPath = join(hooksDir, 'pre-commit');
+      const legacyPath = join(hooksDir, 'pre-commit.legacy');
+
+      expect(runInstall().status).toBe(0);
+      renameSync(hookPath, legacyPath);
+
+      writeFileSync(join(dir, 'a.ts'), STAGED);
+      git(['add', 'a.ts']);
+
+      const legacy = spawnSync(legacyPath, [], {
+        cwd: dir,
+        encoding: 'utf8',
+        env: { ...gitEnv, PRE_COMMIT_RUNNING_LEGACY: '1' },
+      });
+
+      expect(legacy.status, legacy.stderr).toBe(0);
+      expect(stagedBlob('a.ts')).toBe(STAGED);
+      expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(STAGED);
+    },
+    30_000,
+  );
 
   it.skipIf(!hasPreCommit)(
     'refreshes the chained pre-commit shim on reinstall',
