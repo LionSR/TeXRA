@@ -32,20 +32,9 @@ import {
   currentApproval,
 } from '@cli/chat/tui/state/approvalQueue';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
-import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { AgentCategory, type AgentProposal, type Plan } from '@shared/schemas';
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-
-function context(): CliContext {
-  return createTestCliContext({
-    cwd: '/work',
-    mode: 'interactive',
-    approvalPolicy: 'ask',
-    version: 'test',
-    resourcesPath: '/resources',
-  });
-}
+import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 
 function host(): CliRuntimeHost {
   return { emit: vi.fn() } as unknown as CliRuntimeHost;
@@ -53,7 +42,7 @@ function host(): CliRuntimeHost {
 
 /** Interactions bound to a fresh host, disposed when the test finishes. */
 function tuiInteractions(): HostInteractions {
-  const interactions = createTuiHostInteractions(host(), context());
+  const interactions = createTuiHostInteractions(host(), createTuiCliContext());
   onTestFinished(() => interactions.dispose?.());
   return interactions;
 }
@@ -83,7 +72,10 @@ afterEach(() => {
 describe('createTuiHostInteractions', () => {
   it('forwards presentation events to the attached CLI presenter', () => {
     const presentationHost = host();
-    const interactions = createTuiHostInteractions(presentationHost, context());
+    const interactions = createTuiHostInteractions(
+      presentationHost,
+      createTuiCliContext(),
+    );
     onTestFinished(() => interactions.dispose?.());
 
     interactions.emit?.('requestShowError', { message: 'Run failed.' });

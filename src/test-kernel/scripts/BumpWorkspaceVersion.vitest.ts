@@ -1,10 +1,11 @@
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
+
+import { withTempDir } from '@test/support/tempDirPlatform';
 
 const repoRoot = process.cwd();
 const scriptPath = path.join(repoRoot, 'scripts/bump-workspace-version.mjs');
@@ -39,8 +40,7 @@ const TAG_FORMAT_ERROR =
 
 describe('bump-workspace-version script', () => {
   it('accepts CLI release tags when computing the next workspace version', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'texra-version-bump-'));
-    try {
+    await withTempDir('texra-version-bump-', async (root) => {
       await writeWorkspaceManifests(root, '0.38.10');
 
       const result = runVersionBump(['--from', 'cli-v0.38.9', '--check'], root);
@@ -48,9 +48,7 @@ describe('bump-workspace-version script', () => {
       expect(result.status).toBe(0);
       expect(result.stdout).toBe('0.38.10\n');
       expect(result.stderr).toBe('');
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('documents the accepted release tag prefixes in parse errors', () => {

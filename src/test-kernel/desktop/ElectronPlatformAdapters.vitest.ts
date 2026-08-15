@@ -1,5 +1,4 @@
 // Node imports
-import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
@@ -11,6 +10,7 @@ import type { JsonStore } from '@platform/defaults/jsonStore';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
+import { pathExists } from '@test/support/fsTestUtils';
 import {
   cleanupTempDirs,
   makeTempDir as makeSharedTempDir,
@@ -33,16 +33,6 @@ async function loadJsonStore(): Promise<
 > {
   const { JsonStore } = await loadSourceModule('@platform/defaults/jsonStore');
   return JsonStore;
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
-    throw error;
-  }
 }
 
 describe('desktop platform adapters', () => {

@@ -1,10 +1,10 @@
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
 import { CliSecrets, cliSecretsPath } from '@cli/runtime/cliSecrets';
+import { withTempDir } from '@test/support/tempDirPlatform';
 
 async function withSecretsRoot(
   run: (paths: {
@@ -13,14 +13,10 @@ async function withSecretsRoot(
     secretsPath: string;
   }) => Promise<void>,
 ): Promise<void> {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-secrets-'));
-  const storageRoot = path.join(root, 'storage');
-
-  try {
+  await withTempDir('texra-cli-secrets-', async (root) => {
+    const storageRoot = path.join(root, 'storage');
     await run({ root, storageRoot, secretsPath: cliSecretsPath(storageRoot) });
-  } finally {
-    await fs.rm(root, { recursive: true, force: true });
-  }
+  });
 }
 
 describe('CLI secrets', () => {

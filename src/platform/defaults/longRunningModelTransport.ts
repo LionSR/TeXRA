@@ -25,6 +25,34 @@ function isReadableStreamBody(body: unknown): boolean {
   );
 }
 
+/**
+ * Detect a WHATWG Request without `instanceof`, which a Request constructed
+ * in another realm (the worker-thread scenario above) fails. Probing `url`
+ * plus `arrayBuffer` also excludes the `string` and `URL` inputs.
+ */
+function isRequestLike(input: RequestInfo | URL): input is Request {
+  return (
+    typeof input === 'object' &&
+    input !== null &&
+    typeof (input as { url?: unknown }).url === 'string' &&
+    typeof (input as { arrayBuffer?: unknown }).arrayBuffer === 'function'
+  );
+}
+
+/** Headers from any realm flatten through their own `entries` iterator. */
+function flattenHeaders(
+  headers: UndiciRequestInit['headers'] | Headers,
+): UndiciRequestInit['headers'] {
+  if (
+    typeof headers === 'object' &&
+    headers !== null &&
+    typeof (headers as { entries?: unknown }).entries === 'function'
+  ) {
+    return Object.fromEntries((headers as Headers).entries());
+  }
+  return headers as UndiciRequestInit['headers'];
+}
+
 async function normalizeModelRequest(
   input: RequestInfo | URL,
   init?: RequestInit,
@@ -36,40 +64,43 @@ async function normalizeModelRequest(
   if (isReadableStreamBody(requestInit.body) && requestInit.duplex == null) {
     requestInit.duplex = 'half';
   }
-  if (!(input instanceof Request)) {
-    if (init?.body instanceof FormData) {
-      // OpenAI builds multipart bodies with the host-global FormData, while
-      // package Undici recognizes only its own FormData implementation.
-      const body = new UndiciFormData();
-      for (const [name, value] of init.body.entries()) {
-        if (typeof value === 'string') {
-          body.append(name, value);
-        } else {
-          body.append(name, value, value.name);
-        }
+  const initBody = init?.body;
+  if (initBody instanceof FormData) {
+    // OpenAI builds multipart bodies with the host-global FormData, while
+    // package Undici recognizes only its own FormData implementation.
+    const body = new UndiciFormData();
+    for (const [name, value] of initBody.entries()) {
+      if (typeof value === 'string') {
+        body.append(name, value);
+      } else {
+        body.append(name, value, value.name);
       }
-      return [
-        input as UndiciRequestInfo,
-        {
-          ...requestInit,
-          body,
-        },
-      ];
     }
+    requestInit.body = body;
+  }
+  if (!isRequestLike(input)) {
     return [input as UndiciRequestInfo, requestInit];
   }
 
   // OpenRouter supplies Node's native Request, while package Undici expects
-  // its own branded Request. Rebuild it from interoperable primitives here.
-  const request = new Request(input, requestInit as RequestInit);
-  const body = request.body === null ? undefined : await request.arrayBuffer();
+  // its own branded Request. Rebuild it from interoperable primitives here —
+  // property reads plus the input's own `arrayBuffer`, never
+  // `new Request(input, ...)`: that constructor brand-checks its argument and
+  // would reject a cross-realm Request the same way `instanceof` did.
+  const headers = requestInit.headers ?? input.headers;
+  let body: UndiciRequestInit['body'];
+  if (requestInit.body !== undefined) {
+    body = requestInit.body ?? undefined;
+  } else if (input.body !== null) {
+    body = await input.arrayBuffer();
+  }
   return [
-    request.url,
+    input.url,
     {
-      method: request.method,
-      headers: Object.fromEntries(request.headers.entries()),
-      redirect: request.redirect,
-      signal: request.signal,
+      method: requestInit.method ?? input.method,
+      headers: flattenHeaders(headers),
+      redirect: requestInit.redirect ?? input.redirect,
+      signal: requestInit.signal ?? input.signal,
       ...(body === undefined ? {} : { body }),
     },
   ];

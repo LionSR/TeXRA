@@ -19,6 +19,9 @@ All notable changes to this project will be documented in this file.
 - **An unknown agent name is reported once, with next-step guidance** — the
   error no longer appears twice, and command-line users now get the same
   "agent not found" hint as the other surfaces.
+- **Long Grok prompts report their true cost** — xAI raises per-token rates
+  once a prompt crosses the model's long-context threshold; usage costs for
+  those requests no longer underreport.
 
 ### Extension (VS Code) and Desktop
 
@@ -27,6 +30,9 @@ All notable changes to this project will be documented in this file.
 - **Bold Greek letters render in the progress view** — shortcuts such as
   bold alpha, eta, and sigma now display as the intended symbols instead of
   unknown commands.
+- **The Progress terminal uses the host integrated terminal colors** —
+  background and text follow the dedicated terminal tokens instead of the
+  generic surface palette.
 
 #### Features
 
@@ -37,9 +43,6 @@ All notable changes to this project will be documented in this file.
   nested run no longer opens the parent row; expand it to inspect children.
   Selecting a child, or a pending approval on one, still reveals the ancestor
   path.
-- **The Progress terminal uses the editor terminal colors** — background and
-  text follow the dedicated terminal tokens instead of the generic surface
-  palette.
 - **Remote agent prompts are available to every signed-in account** — Settings
   → Agents no longer hides View prompt behind an Ultra plan, and remote agents
   no longer show a Remote badge or access-group labels.
