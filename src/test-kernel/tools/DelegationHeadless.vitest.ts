@@ -19,11 +19,10 @@ import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
 import {
   STREAM_PHASE,
-  type ExecutionId,
-  type StreamTabId,
   AgentCategory,
+  agentMatchesIdentifier,
 } from '@shared/schemas';
-import { agentMatchesIdentifier } from '@shared/schemas/agent';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';

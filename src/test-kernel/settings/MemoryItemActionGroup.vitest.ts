@@ -12,7 +12,7 @@ vi.mock('@shared/hostBridge', () => ({
 // Local imports
 import type { MemoryItem } from '@settingsView/frontend/components/memory/MemoryItem';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { MemoryViewItem } from '@shared/schemas/memoryViewMessages';
+import type { MemoryViewItem } from '@shared/schemas';
 
 // Local file imports
 import {

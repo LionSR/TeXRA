@@ -13,13 +13,8 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import {
-  STREAM_PHASE,
-  type ExecutionId,
-  type StreamTabId,
-  type TodoItem,
-} from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { STREAM_PHASE, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
+import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import {
   cleanupTempDirs,

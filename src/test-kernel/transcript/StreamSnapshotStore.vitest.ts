@@ -14,6 +14,7 @@ import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   STREAM_TAB_META_SCHEMA_VERSION,
   USER_FOLLOW_UP_SUPPORT,
+  AgentCategory,
 } from '@shared/schemas';
 import type {
   CompileFailure,
@@ -26,7 +27,6 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas/agent';
 import {
   cleanupTempDirs,
   createTempDirPlatform,

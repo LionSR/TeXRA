@@ -45,15 +45,15 @@ import {
   type ApiKeyStatus,
   type ApiProvider,
 } from '@model/apiProviders';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { AgentCategory } from '@shared/schemas/agent';
 import {
+  AgentCategory,
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_NAME,
   SETTINGS_VIEW_CORE_SETTINGS,
   STATE_SETTINGS,
-  type StateSettingEntry,
-} from '@shared/schemas/stateSettings';
+} from '@shared/schemas';
+import type { StateSettingEntry } from '@shared/schemas';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   createDeferred,
   waitForCondition as waitFor,

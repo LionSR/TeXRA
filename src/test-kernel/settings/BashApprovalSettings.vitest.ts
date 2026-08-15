@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
+import {
+  BASH_APPROVAL_CONFIG_KEY,
+  settingsViewSettingByKey,
+} from '@shared/schemas';
 import { writeSetting } from '@shared/config/settingsAccess';
-import { settingsViewSettingByKey } from '@shared/schemas/stateSettings';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 
 describe('bash-approval settings', () => {

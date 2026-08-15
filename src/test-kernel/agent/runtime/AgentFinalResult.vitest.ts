@@ -8,8 +8,12 @@ import type {
   ToolUseFlowResult,
   WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
-import type { ExecutionId, RunOutcome, StreamTabId } from '@shared/schemas';
-import type { OutputFileSummary } from '@shared/schemas/output';
+import type {
+  ExecutionId,
+  RunOutcome,
+  StreamTabId,
+  OutputFileSummary,
+} from '@shared/schemas';
 
 const OUTPUT: OutputFileSummary = {
   round: 1,

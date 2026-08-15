@@ -28,7 +28,7 @@ vi.mock('@frontend/ui/errorHandlingUtils', async (original) => {
 
 // Local imports
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
-import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
+import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
 

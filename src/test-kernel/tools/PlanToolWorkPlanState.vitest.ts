@@ -12,8 +12,8 @@ import {
 import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
 import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import { platform, type Platform } from '@platform/platform';
-import { planSummaryLine, type Plan, type StreamTabId } from '@shared/schemas';
-import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas/goal';
+import { planSummaryLine, GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
+import type { Plan, StreamTabId } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { GoalStore } from '@tools/goal';

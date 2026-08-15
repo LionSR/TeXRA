@@ -4,7 +4,7 @@ import {
   SettingsAgentVisibilityController,
   type SettingsAgentVisibilityEntry,
 } from '@controllers/settingsView/SettingsAgentVisibilityController';
-import type { AgentCategory } from '@shared/schemas/agent';
+import type { AgentCategory } from '@shared/schemas';
 
 const AGENTS: Record<AgentCategory, SettingsAgentVisibilityEntry[]> = {
   workflow: [

@@ -3,21 +3,9 @@
   "surface": {
     "@shared/schemas/agent": {
       "type": [
-        "AGENT_CATEGORIES",
-        "AGENT_SOURCE",
         "AgentCategory",
-        "AgentCategorySchema",
-        "agentKey",
-        "agentKeyOf",
-        "agentMatchesIdentifier",
-        "AgentMetadataBaseSchema",
-        "agentName",
-        "AgentNameSchema",
         "AgentSource",
-        "AgentSourceSchema",
-        "byCategory",
-        "ByCategory",
-        "getCleanAgentName"
+        "ByCategory"
       ],
       "value": [
         "AGENT_CATEGORIES",
@@ -27,7 +15,6 @@
         "agentKey",
         "agentKeyOf",
         "agentMatchesIdentifier",
-        "AgentMetadataBaseSchema",
         "agentName",
         "AgentNameSchema",
         "AgentSourceSchema",
@@ -60,7 +47,9 @@
       ]
     },
     "@shared/schemas/agentPresets": {
-      "type": ["AgentModePreset"],
+      "type": [
+        "AgentModePreset"
+      ],
       "value": [
         "AGENT_MODE_PRESETS",
         "AGENT_MODE_PRESETS_BY_ID",
@@ -111,17 +100,22 @@
       ]
     },
     "@shared/schemas/commonViewMessages": {
-      "type": ["DesktopThemeKind", "StateRestoreMessage", "Theme"],
-      "value": ["CommonViewMessageSchema", "DESKTOP_THEME_KIND"]
+      "type": [
+        "DesktopThemeKind",
+        "StateRestoreMessage",
+        "Theme"
+      ],
+      "value": [
+        "CommonViewMessageSchema",
+        "DESKTOP_THEME_KIND"
+      ]
     },
     "@shared/schemas/coreSettings": {
       "type": [],
       "value": [
         "CLI_CORE_SETTING_PATHS",
-        "CORE_SETTING_PATHS",
         "CoreSettingsShape",
         "DEFAULT_CORE_SETTINGS",
-        "EXTENSION_ONLY_CORE_SETTING_PATHS",
         "getCoreSettingDefault",
         "LATEXDIFF_TEMP_FILE_LOCATIONS",
         "MODEL_RETRY_MAX_ATTEMPTS_SETTING",
@@ -129,17 +123,11 @@
         "TOOL_EDIT_APPROVAL_CONFIG_KEY"
       ]
     },
-    "@shared/schemas/errors": {
-      "type": ["ProviderError", "RetryErrorInfo"],
-      "value": [
-        "ErrorLogDataSchema",
-        "RetryErrorInfoSchema",
-        "toRetryErrorInfo"
-      ]
-    },
     "@shared/schemas/fileFields": {
       "type": [],
-      "value": ["NullableFileFieldsSchema"]
+      "value": [
+        "NullableFileFieldsSchema"
+      ]
     },
     "@shared/schemas/fileTypes": {
       "type": [
@@ -154,7 +142,10 @@
       ]
     },
     "@shared/schemas/goal": {
-      "type": ["Goal", "GoalStatus"],
+      "type": [
+        "Goal",
+        "GoalStatus"
+      ],
       "value": [
         "deriveGoalState",
         "formatGoalTime",
@@ -164,58 +155,83 @@
         "isGoalInFlight"
       ]
     },
-    "@shared/schemas/historyViewMessages": {
-      "type": [],
-      "value": ["HISTORY_RUN_STATUS", "resolveHistoryRunStatus"]
-    },
     "@shared/schemas/identifiers": {
-      "type": ["ExecutionId", "StreamTabId"],
-      "value": ["ExecutionIdSchema", "StreamTabIdSchema"]
+      "type": [
+        "ExecutionId",
+        "StreamTabId"
+      ],
+      "value": [
+        "ExecutionIdSchema",
+        "StreamTabIdSchema"
+      ]
     },
     "@shared/schemas/lineChanges": {
-      "type": ["DiffStats", "LineChanges"],
+      "type": [
+        "DiffStats",
+        "LineChanges"
+      ],
       "value": []
     },
     "@shared/schemas/log": {
-      "type": ["LogLevel"],
-      "value": ["LOG_LEVELS", "StreamLogEntrySchema"]
+      "type": [
+        "LogLevel"
+      ],
+      "value": [
+        "LOG_LEVELS",
+        "StreamLogEntrySchema"
+      ]
     },
     "@shared/schemas/mainView": {
-      "type": ["MainViewInboundMessage", "MainViewMessage"],
+      "type": [
+        "MainViewInboundMessage",
+        "MainViewMessage"
+      ],
       "value": [
         "GETTING_STARTED_COMMANDS",
-        "MainViewExecuteInboundMessageSchema",
-        "MainViewExecuteMessageSchema",
         "MainViewInboundMessageSchema",
         "MainViewMessageSchema"
       ]
     },
     "@shared/schemas/mainView/executeMessage": {
-      "type": ["MainViewExecuteMessage"],
-      "value": ["MainViewExecuteInboundMessageSchema"]
+      "type": [
+        "MainViewExecuteMessage"
+      ],
+      "value": [
+        "MainViewExecuteInboundMessageSchema"
+      ]
     },
     "@shared/schemas/mainView/inbound": {
-      "type": ["FileOperationMessage", "MainViewInboundMessage"],
+      "type": [
+        "FileOperationMessage",
+        "MainViewInboundMessage"
+      ],
       "value": []
     },
     "@shared/schemas/mainView/state": {
-      "type": ["TeamOptionData"],
-      "value": ["TeamOptionDataSchema"]
-    },
-    "@shared/schemas/memoryViewMessages": {
-      "type": ["MemoryViewItem"],
+      "type": [
+        "TeamOptionData"
+      ],
       "value": []
     },
     "@shared/schemas/onboarding": {
-      "type": ["OnboardingFunnelState"],
+      "type": [
+        "OnboardingFunnelState"
+      ],
       "value": []
     },
     "@shared/schemas/opResults": {
-      "type": ["ExecResult", "FileOpResult"],
+      "type": [
+        "ExecResult",
+        "FileOpResult"
+      ],
       "value": []
     },
     "@shared/schemas/output": {
-      "type": ["AcceptCopyMeta", "FileLocation", "OutputFileSummary"],
+      "type": [
+        "AcceptCopyMeta",
+        "FileLocation",
+        "OutputFileSummary"
+      ],
       "value": [
         "AcceptCopyMetaSchema",
         "CompileFailureSummarySchema",
@@ -242,24 +258,24 @@
       ]
     },
     "@shared/schemas/prompts": {
-      "type": ["ToolEditApprovalAction"],
+      "type": [
+        "ToolEditApprovalAction"
+      ],
       "value": []
     },
     "@shared/schemas/proposalFields": {
-      "type": ["ProposalFileGroup"],
-      "value": ["getProposalFileGroups"]
-    },
-    "@shared/schemas/proposalInput": {
-      "type": [],
-      "value": ["parseDelegationToolInput"]
+      "type": [
+        "ProposalFileGroup"
+      ],
+      "value": [
+        "getProposalFileGroups"
+      ]
     },
     "@shared/schemas/roundIndexed": {
       "type": [],
-      "value": ["roundIndexedEntries"]
-    },
-    "@shared/schemas/settingsView/data": {
-      "type": ["AgentSelectionItem"],
-      "value": []
+      "value": [
+        "roundIndexedEntries"
+      ]
     },
     "@shared/schemas/settingsViewMessages": {
       "type": [
@@ -325,7 +341,11 @@
       ]
     },
     "@shared/schemas/spendingStatus": {
-      "type": ["SpendingQuotaState", "SpendingStatus", "SpendingStatusError"],
+      "type": [
+        "SpendingQuotaState",
+        "SpendingStatus",
+        "SpendingStatusError"
+      ],
       "value": [
         "isSpendingQuotaExceeded",
         "spendingQuotaRemainingPercent",
@@ -354,10 +374,7 @@
         "settingIsBoolean",
         "settingIsNumber",
         "settingIsString",
-        "SETTINGS_VIEW_CORE_SETTINGS",
         "settingsViewSettingByKey",
-        "STATE_SETTING_KEYS",
-        "STATE_SETTINGS",
         "stateSettingByKey"
       ]
     },
@@ -378,31 +395,54 @@
     },
     "@shared/schemas/streamSnapshot": {
       "type": [],
-      "value": ["STREAM_SNAPSHOT_SCHEMA_VERSION", "StreamSnapshotSchema"]
+      "value": [
+        "STREAM_SNAPSHOT_SCHEMA_VERSION",
+        "StreamSnapshotSchema"
+      ]
     },
     "@shared/schemas/todo": {
       "type": [],
-      "value": ["TODO_STATUS"]
+      "value": [
+        "TODO_STATUS"
+      ]
     },
     "@shared/schemas/todoDisplay": {
       "type": [],
-      "value": ["countByStatus", "STATUS_DISPLAY", "STATUS_ICONS"]
+      "value": [
+        "countByStatus",
+        "STATUS_DISPLAY",
+        "STATUS_ICONS"
+      ]
     },
     "@shared/schemas/toolConfig": {
-      "type": ["ToolConfig"],
-      "value": ["DEFAULT_TOOL_CONFIG", "ToolConfigSchema"]
+      "type": [
+        "ToolConfig"
+      ],
+      "value": [
+        "DEFAULT_TOOL_CONFIG",
+        "ToolConfigSchema"
+      ]
     },
     "@shared/schemas/usage": {
       "type": [],
-      "value": ["UsageProviderSchema", "UsageRouteSchema"]
+      "value": [
+        "UsageProviderSchema",
+        "UsageRouteSchema"
+      ]
     },
     "@shared/schemas/workflowScriptFiles": {
-      "type": ["WorkflowScriptFiles"],
-      "value": ["WorkflowScriptFilesSchema"]
+      "type": [
+        "WorkflowScriptFiles"
+      ],
+      "value": [
+        "WorkflowScriptFilesSchema"
+      ]
     },
     "@shared/schemas/workPlan": {
       "type": [],
-      "value": ["planSummaryLine"]
+      "value": [
+        "planSummaryLine"
+      ]
     }
   },
   "forced": {},
@@ -455,34 +495,6 @@
       "src/model/ToolDefinition.ts",
       "src/shared/constants/workflowOutput.ts",
       "src/telemetry/UsageLogTypes.ts",
-      "src/test-kernel/agent/modelHandlers/CodexEncryptedReasoning.vitest.ts",
-      "src/test-kernel/agent/modelHandlers/CodexSubscriptionFallback.vitest.ts",
-      "src/test-kernel/agent/modelHandlers/ModelHandlerOpenRouterNative.vitest.ts",
-      "src/test-kernel/agent/runtime/AgentRunLifecycle.vitest.ts",
-      "src/test-kernel/cli/ConfigForm.vitest.ts",
-      "src/test-kernel/cli/RunExecution.vitest.ts",
-      "src/test-kernel/cli/SlashRegistry.vitest.ts",
-      "src/test-kernel/controllers/AgentRosterController.vitest.ts (type-only)",
-      "src/test-kernel/controllers/SettingsAgentCatalogController.vitest.ts (type-only)",
-      "src/test-kernel/controllers/SettingsAgentControllerFactory.vitest.ts (type-only)",
-      "src/test-kernel/controllers/SettingsAgentVisibilityController.vitest.ts (type-only)",
-      "src/test-kernel/desktop/DesktopAgentSettingsController.vitest.ts (type-only)",
-      "src/test-kernel/desktop/DesktopCommandPalette.vitest.ts",
-      "src/test-kernel/desktop/DesktopHistoryHandlers.vitest.ts",
-      "src/test-kernel/desktop/DesktopIpcAdapters.vitest.ts",
-      "src/test-kernel/desktop/ElectronMainViewIpc.vitest.ts",
-      "src/test-kernel/settings/AgentSelectionPanelToggle.vitest.ts",
-      "src/test-kernel/settings/ExtensionAgentHandlers.vitest.ts (type-only)",
-      "src/test-kernel/settings/HistoryHandlers.vitest.ts",
-      "src/test-kernel/settings/settingsNotificationHandlers.vitest.ts",
-      "src/test-kernel/shared/MainViewExecuteMessage.vitest.ts",
-      "src/test-kernel/shared/ParseDelegationToolInput.vitest.ts",
-      "src/test-kernel/support/executionHandleFixtures.ts",
-      "src/test-kernel/tools/DelegationAgentScope.vitest.ts",
-      "src/test-kernel/tools/DelegationHeadless.vitest.ts",
-      "src/test-kernel/transcript/completedRunArchive.vitest.ts",
-      "src/test-kernel/transcript/StreamSnapshotStore.vitest.ts",
-      "src/test-kernel/webview/MainViewLaunchTarget.vitest.ts",
       "src/tools/delegation/delegationAvailability.ts (type-only)",
       "src/tools/executionFormatters.ts (type-only)",
       "src/tools/setup/ApplyTeamTool.ts"
@@ -491,12 +503,6 @@
       "packages/extension/src/settingsView/frontend/settingsState.ts",
       "packages/extension/src/settingsView/frontend/tabs/AIAgentsTab.ts",
       "src/shared/settingsView/handlers/approvalHandlers.ts",
-      "src/test-kernel/desktop/DesktopSettingsIpc.vitest.ts",
-      "src/test-kernel/schemas/SharedSchemas.vitest.ts",
-      "src/test-kernel/shared/stateSettings.vitest.ts",
-      "src/test-kernel/shared/StateSettingWrite.vitest.ts",
-      "src/test-kernel/tools/BashToolErrorFeedback.vitest.ts",
-      "src/test-kernel/tools/setup/SendToTerminalTool.vitest.ts",
       "src/tools/approval/bashApproval.ts",
       "src/tools/claudeAgentConfig.ts",
       "src/tools/codex.ts",
@@ -516,12 +522,6 @@
       "src/controllers/settingsView/SettingsAgentCatalogController.ts (type-only)",
       "src/controllers/settingsView/SettingsAgentControllerFactory.ts",
       "src/shared/settingsView/handlers/agentSelectionHandlers.ts (type-only)",
-      "src/test-kernel/common/teams/TeamPlan.vitest.ts",
-      "src/test-kernel/controllers/AgentRosterController.vitest.ts (type-only)",
-      "src/test-kernel/controllers/SettingsAgentCatalogController.vitest.ts",
-      "src/test-kernel/settings/MultiAgentTab.vitest.ts",
-      "src/test-kernel/settings/TeamRosterApplication.vitest.ts (type-only)",
-      "src/test-kernel/shared/AgentPresetHostedMetadata.vitest.ts",
       "src/tools/setup/ApplyTeamTool.ts"
     ],
     "@shared/schemas/agentRoster": [
@@ -535,7 +535,6 @@
       "src/agent/runtime/RunScope.ts (type-only)",
       "src/common/teams/TeamPlan.ts (type-only)",
       "src/controllers/mainView/MainViewExecutionController.ts (type-only)",
-      "src/test-kernel/tools/setup/ApplyTeamTool.vitest.ts (type-only)",
       "src/tools/delegation/delegationAvailability.ts (type-only)",
       "src/tools/delegation/proposalFlow.ts (type-only)"
     ],
@@ -543,18 +542,11 @@
       "packages/extension/src/settingsView/frontend/settingsState.ts",
       "packages/extension/src/settingsView/frontend/tabs/ToolsTab.ts",
       "src/agent/prompt/userVars.ts",
-      "src/shared/settingsView/handlers/agentSkillsHandlers.ts",
-      "src/test-kernel/desktop/DesktopSettingsIpc.vitest.ts",
-      "src/test-kernel/settings/AgentSkillsSettings.vitest.ts",
-      "src/test-kernel/settings/AgentSkillsWorkspaceGuard.vitest.ts",
-      "src/test-kernel/settings/ToolsTab.vitest.ts",
-      "src/test-kernel/shared/stateSettings.vitest.ts"
+      "src/shared/settingsView/handlers/agentSkillsHandlers.ts"
     ],
     "@shared/schemas/codex": [
       "packages/extension/src/progressView/frontend/formatters/logFormatters/codexToolTemplates.ts",
       "packages/extension/src/progressView/frontend/formatters/logFormatters/toolFormatters/toolSections.ts",
-      "src/test-kernel/agent/followUp/CodexProgressEvents.vitest.ts",
-      "src/test-kernel/tools/codexConfig.vitest.ts",
       "src/tools/codexShared.ts",
       "src/tools/codexShared.ts (type-only)"
     ],
@@ -564,9 +556,7 @@
       "packages/extension/src/webview/frontend/MainApp.ts (type-only)",
       "packages/extension/src/webview/frontend/persistence.ts (type-only)",
       "src/shared/BaseWebviewApp.ts",
-      "src/shared/wa/hostTheme.ts (type-only)",
-      "src/test-kernel/desktop/DesktopReviewPane.vitest.ts",
-      "src/test-kernel/desktop/TexraDiffView.vitest.ts"
+      "src/shared/wa/hostTheme.ts (type-only)"
     ],
     "@shared/schemas/coreSettings": [
       "packages/cli/src/schemas/knownKeys.ts",
@@ -582,16 +572,11 @@
       "src/shared/settingsView/handlers/approvalHandlers.ts",
       "src/shared/settingsView/handlers/telemetrySettingsHandlers.ts",
       "src/telemetry/UsageLogService.ts",
-      "src/test-kernel/agent/runtime/RetryState.vitest.ts",
-      "src/test-kernel/controllers/SettingsProfileController.vitest.ts",
-      "src/test-kernel/shared/stateSettings.vitest.ts",
       "src/tools/approval/latexPreview.ts"
     ],
-    "@shared/schemas/errors": [
-      "src/test-kernel/common/SdkErrorUtils.vitest.ts",
-      "src/test-kernel/common/SdkErrorUtils.vitest.ts (type-only)"
+    "@shared/schemas/fileFields": [
+      "src/agent/core/definition/AgentConfig.ts"
     ],
-    "@shared/schemas/fileFields": ["src/agent/core/definition/AgentConfig.ts"],
     "@shared/schemas/fileTypes": [
       "packages/extension/src/frontend/files/fileSelectionRegistry.ts (type-only)",
       "packages/extension/src/webview/frontend/slices/documentSlice.ts",
@@ -603,21 +588,13 @@
       "packages/extension/src/progressView/frontend/slices/permissionSlice.ts",
       "src/agent/goal/maybeBuildGoalContinuation.ts",
       "src/controllers/progressView/backend/WebviewUpdater.ts (type-only)",
-      "src/test-kernel/agent/GoalContinuation.vitest.ts",
-      "src/test-kernel/tools/PlanToolWorkPlanState.vitest.ts",
       "src/tools/goal/goalFeatureFlag.ts",
       "src/tools/goal/goalStore.ts",
       "src/tools/plan/PlanTool.ts"
     ],
-    "@shared/schemas/historyViewMessages": [
-      "src/test-kernel/cli/HistoryStatus.vitest.ts",
-      "src/test-kernel/settings/HistoryHandlers.vitest.ts",
-      "src/test-kernel/settings/HistorySearchPrefilter.vitest.ts"
-    ],
     "@shared/schemas/identifiers": [
       "packages/extension/src/commands/extensionCommandHandlers.ts",
       "src/agent/goal/maybeBuildGoalContinuation.ts (type-only)",
-      "src/test-kernel/desktop/DesktopHistoryHandlers.vitest.ts (type-only)",
       "src/tools/goal/goalAutoApproval.ts (type-only)",
       "src/tools/goal/goalStore.ts (type-only)",
       "src/transcript/traceDocumentSchema.ts"
@@ -634,9 +611,7 @@
       "packages/desktop/src/main/desktopShellIpc.ts",
       "packages/desktop/src/main/hostBridge.ts",
       "packages/extension/src/progressView/ProgressViewMessageHandler.ts",
-      "packages/extension/src/webview/managers/BaseWebviewManager.ts",
-      "src/test-kernel/schemas/SharedSchemas.vitest.ts",
-      "src/test-kernel/shared/MainViewExecuteMessage.vitest.ts"
+      "packages/extension/src/webview/managers/BaseWebviewManager.ts"
     ],
     "@shared/schemas/mainView/executeMessage": [
       "packages/desktop/src/main/desktopAgentExecution.ts (type-only)",
@@ -651,11 +626,7 @@
       "packages/extension/src/webview/managers/executionHandlers.ts (type-only)"
     ],
     "@shared/schemas/mainView/state": [
-      "src/common/teams/TeamPlan.ts (type-only)",
-      "src/test-kernel/desktop/DesktopAgentSettingsController.vitest.ts"
-    ],
-    "@shared/schemas/memoryViewMessages": [
-      "src/test-kernel/settings/MemoryItemActionGroup.vitest.ts (type-only)"
+      "src/common/teams/TeamPlan.ts (type-only)"
     ],
     "@shared/schemas/onboarding": [
       "src/controllers/onboarding/onboardingFunnel.ts (type-only)"
@@ -682,8 +653,6 @@
       "src/agent/runtime/AgentFlowResult.ts",
       "src/agent/runtime/executeAgent.ts",
       "src/agent/runtime/selectAutoOpenFinalOutput.ts (type-only)",
-      "src/test-kernel/agent/runtime/AgentFinalResult.vitest.ts (type-only)",
-      "src/test-kernel/desktop/desktopAgentExecutionTestHarness.ts (type-only)",
       "src/tools/delegation/subagentDiffs.ts (type-only)",
       "src/tools/delegation/subagentResults.ts (type-only)",
       "src/utils/text/xmlExtraction.ts"
@@ -694,10 +663,7 @@
       "packages/extension/src/progressView/ProgressViewMessageHandler.ts",
       "packages/trace-viewer/src/replayTrace.ts (type-only)",
       "src/controllers/progressView/ProgressAgentProposalController.ts (type-only)",
-      "src/controllers/progressView/ProgressViewCommandHandlers.ts (type-only)",
-      "src/test-kernel/controllers/ProgressViewCommandHandlers.vitest.ts",
-      "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts (type-only)",
-      "src/test-kernel/desktop/DesktopProgressIpc.vitest.ts (type-only)"
+      "src/controllers/progressView/ProgressViewCommandHandlers.ts (type-only)"
     ],
     "@shared/schemas/prompts": [
       "src/controllers/approval/ToolEditApprovalController.ts (type-only)"
@@ -706,14 +672,8 @@
       "packages/extension/src/progressView/frontend/components/ProposalRequestPanel.ts",
       "packages/extension/src/progressView/frontend/formatters/logFormatters/toolFormatters/toolSections.ts"
     ],
-    "@shared/schemas/proposalInput": [
-      "src/test-kernel/shared/ParseDelegationToolInput.vitest.ts"
-    ],
     "@shared/schemas/roundIndexed": [
       "packages/extension/src/progressView/frontend/components/FileList.ts"
-    ],
-    "@shared/schemas/settingsView/data": [
-      "src/test-kernel/settings/AgentSelectionPanelToggle.vitest.ts (type-only)"
     ],
     "@shared/schemas/settingsViewMessages": [
       "packages/cli/src/chat/tui/commands/handlers/apiModeCommands.ts (type-only)",
@@ -779,19 +739,6 @@
       "src/shared/settingsView/handlers/approvalHandlers.ts (type-only)",
       "src/shared/settingsView/handlers/superYoloHandlers.ts (type-only)",
       "src/shared/tools/toolStatusLabels.ts (type-only)",
-      "src/test-kernel/commands/ExtensionCommandRegistry.vitest.ts",
-      "src/test-kernel/controllers/LatexToolingController.vitest.ts",
-      "src/test-kernel/desktop/DesktopCommandPalette.vitest.ts",
-      "src/test-kernel/desktop/DesktopCommandSurface.vitest.ts",
-      "src/test-kernel/desktop/DesktopIpcAdapters.vitest.ts",
-      "src/test-kernel/desktop/DesktopToolingSettingsController.vitest.ts (type-only)",
-      "src/test-kernel/desktop/ElectronMainViewIpc.vitest.ts",
-      "src/test-kernel/settings/CopilotModelAccess.vitest.ts (type-only)",
-      "src/test-kernel/settings/ModelSelectionProviderKeys.vitest.ts (type-only)",
-      "src/test-kernel/settings/ProviderKeyRows.vitest.ts (type-only)",
-      "src/test-kernel/settings/settingsNotificationHandlers.vitest.ts (type-only)",
-      "src/test-kernel/settings/ToolsTab.vitest.ts (type-only)",
-      "src/test-kernel/shared/stateSettings.vitest.ts",
       "src/tools/externalToolDefs.ts (type-only)",
       "src/utils/system/gitAuthorSettings.ts (type-only)"
     ],
@@ -800,9 +747,7 @@
       "packages/extension/src/settingsView/frontend/slices/profileSlice.ts",
       "packages/extension/src/settingsView/frontend/tabs/AccountTab.ts (type-only)",
       "src/auth/serverKeys/ServerSideKeyService.ts (type-only)",
-      "src/auth/serverKeys/TierService.ts",
-      "src/test-kernel/controllers/SettingsProfileController.vitest.ts (type-only)",
-      "src/test-kernel/shared/SpendingQuota.vitest.ts"
+      "src/auth/serverKeys/TierService.ts"
     ],
     "@shared/schemas/stateSettings": [
       "packages/cli/src/chat/tui/forms/CliConfigForm.tsx",
@@ -817,17 +762,11 @@
       "src/shared/config/settingsAccess.ts (type-only)",
       "src/shared/settingsView/handlers/approvalHandlers.ts",
       "src/shared/settingsView/handlers/stateSettingWrite.ts",
-      "src/test-kernel/cli/ConfigForm.vitest.ts",
-      "src/test-kernel/desktop/DesktopSettingsIpc.vitest.ts",
-      "src/test-kernel/settings/AgentSkillsSettings.vitest.ts",
-      "src/test-kernel/settings/BashApprovalSettings.vitest.ts",
-      "src/test-kernel/shared/stateSettings.vitest.ts",
       "src/utils/config/platformSettings.ts",
       "src/utils/system/gitAuthorSettings.ts"
     ],
     "@shared/schemas/stream": [
       "src/shared/streams/streamStatus.ts",
-      "src/test-kernel/settings/HistoryHandlers.vitest.ts",
       "src/transcript/traceDocumentSchema.ts"
     ],
     "@shared/schemas/streamSnapshot": [
@@ -844,18 +783,7 @@
     "@shared/schemas/toolConfig": [
       "src/agent/core/definition/AgentConfig.ts",
       "src/controllers/mainView/MainViewExecutionController.ts",
-      "src/latex/LatexMediaManager.ts",
-      "src/test-kernel/agent/core/ConfigSchemas.vitest.ts",
-      "src/test-kernel/agent/export/loadChatExportInput.vitest.ts",
-      "src/test-kernel/cli/AgentProposal.vitest.ts",
-      "src/test-kernel/cli/CliSessionProgressSubscription.vitest.ts",
-      "src/test-kernel/controllers/ChatExportController.vitest.ts",
-      "src/test-kernel/controllers/ChatExportControllerHtml.vitest.ts",
-      "src/test-kernel/controllers/ProgressAgentProposalController.vitest.ts",
-      "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts",
-      "src/test-kernel/latex/LatexProcessingHelpers.vitest.ts (type-only)",
-      "src/test-kernel/progressView/ProposalRequestPanel.vitest.ts",
-      "src/test-kernel/tools/ExecutionsToolWorkspaceFiles.vitest.ts"
+      "src/latex/LatexMediaManager.ts"
     ],
     "@shared/schemas/usage": [
       "src/agent/utils/UsageMonitor.ts",
@@ -866,13 +794,11 @@
       "src/agent/workflowScript/persistence.ts",
       "src/agent/workflowScript/runWorkflowScript.ts",
       "src/agent/workflowScript/types.ts (type-only)",
-      "src/test-kernel/tools/WorkflowScriptTool.vitest.ts (type-only)",
       "src/tools/delegation/workflowScriptStrategy.ts (type-only)",
       "src/tools/delegation/WorkflowScriptTool.ts"
     ],
     "@shared/schemas/workPlan": [
-      "src/shared/subagentFollowup.ts",
-      "src/test-kernel/schemas/SharedSchemas.vitest.ts"
+      "src/shared/subagentFollowup.ts"
     ]
   }
 }

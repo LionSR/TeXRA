@@ -5,10 +5,10 @@ import {
   type SettingsProfileConfigValue,
 } from '@controllers/settingsView/SettingsProfileController';
 import type { StateStore } from '@platform/interfaces';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas';
+import type { SpendingStatus } from '@shared/schemas';
 import type { ProviderSettingDef } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
-import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
 const MAX_ATTEMPTS_KEY = 'texra.model.retry.maxAttempts';

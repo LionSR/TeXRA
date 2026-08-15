@@ -4,7 +4,7 @@ import {
   applyTeamRosterWithPreflight,
   type TeamRosterApplicationDeps,
 } from '@common/teams/TeamRosterApplication';
-import type { AgentModePreset } from '@shared/schemas/agentPresets';
+import type { AgentModePreset } from '@shared/schemas';
 
 const preset: AgentModePreset = {
   id: 'research',

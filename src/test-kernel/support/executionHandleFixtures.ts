@@ -7,8 +7,8 @@ import {
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { AgentCategory } from '@shared/schemas';
 import type { ExecutionId, RunIdentity, StreamTabId } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas/agent';
 
 /**
  * A live execution handle for tests.

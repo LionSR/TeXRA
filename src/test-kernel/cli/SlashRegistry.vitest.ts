@@ -38,7 +38,7 @@ import {
   type CliModelAccessSelection,
 } from '@cli/runtime/modelAccessRoute';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import { AgentCategory } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import {
   createDeferred,

@@ -9,9 +9,9 @@ import {
 import {
   AgentCategory,
   agentProposalCategoryLabel,
-  type AgentProposalPermission,
+  DEFAULT_TOOL_CONFIG,
 } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import type { AgentProposalPermission } from '@shared/schemas';
 
 const LONG_AGENT_PROMPT = [
   'Review the mathematical proof in triangular_square_mod5.tex for correctness, completeness, and rigor.',

@@ -12,13 +12,12 @@ import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
-import {
-  RUN_OUTCOME,
-  USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
-  type StreamTabId,
+import { RUN_OUTCOME, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
+import type {
+  ExecutionId,
+  StreamTabId,
+  WorkflowScriptFiles,
 } from '@shared/schemas';
-import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
 import {
   DELEGATION_TOOL_CATEGORY,
   DELEGATION_TOOLS,
