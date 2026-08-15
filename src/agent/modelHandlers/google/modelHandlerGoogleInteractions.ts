@@ -2155,7 +2155,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         thinking,
         output,
         response,
-        this.extractResponse(response, endTag ?? '').text,
+        () => this.extractResponse(response, endTag ?? '').text,
       );
       streamsFinalized = true;
 
