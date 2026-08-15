@@ -521,22 +521,23 @@ function createWindow(options: {
     window.close();
   };
   attachRendererConsoleLog(window.webContents);
+  const desktopDiffHost = createDesktopDiffHost({
+    openPath: previewHost.openPath,
+    // Prefer the in-app overlay (<texra-diff-view> inside a wa-dialog).
+    // Returning `false` when the IPC bridge is not yet wired (startup race)
+    // or the BrowserWindow has been destroyed falls the host back to the
+    // external-editor flow, so diffs never silently disappear.
+    postToRenderer: (message) => {
+      const ipc = ipcRef.current;
+      if (!ipc || window.isDestroyed()) return false;
+      ipc.postToRenderer(message);
+      return true;
+    },
+  });
   const agentExecutionHost: DesktopAgentExecutionHost = {
     openPath: previewHost.openPath,
     openBuildDisplay: previewHost.openBuildDisplay,
-    openDiff: createDesktopDiffHost({
-      openPath: previewHost.openPath,
-      // Prefer the in-app overlay (<texra-diff-view> inside a wa-dialog).
-      // Returning `false` when the IPC bridge is not yet wired (startup race)
-      // or the BrowserWindow has been destroyed falls the host back to the
-      // external-editor flow, so diffs never silently disappear.
-      postToRenderer: (message) => {
-        const ipc = ipcRef.current;
-        if (!ipc || window.isDestroyed()) return false;
-        ipc.postToRenderer(message);
-        return true;
-      },
-    }).openDiff,
+    openDiff: desktopDiffHost.openDiff,
     confirmAcceptFile: (message) =>
       confirmDialog({ message, confirmLabel: 'Replace file' }),
     chooseTeamAvailability,
@@ -1091,6 +1092,7 @@ function createWindow(options: {
     continueQuitAfterWindowClose = undefined;
     disposeWindowTitle();
     presentationAbort.abort();
+    void desktopDiffHost.dispose().catch(reportAsyncError);
     executionsWatcher?.close();
     if (mainWindow === window) {
       mainWindow = null;

@@ -8,6 +8,7 @@ import {
   type OAuthFormEndpoint,
 } from '@auth/oauth/formTokenClient';
 import { decodeJwtClaimsWithSchema } from '@auth/oauth/jwtDecode';
+import { stubJsonFetch } from '@test/support/fetchTestUtils';
 
 class TestAuthError extends Error {
   readonly kind: 'fatal' | 'expired' | 'transient' | 'config' | 'pending';
@@ -47,14 +48,8 @@ describe('form token endpoint (declarative)', () => {
     vi.restoreAllMocks();
   });
 
-  function stubFetchJson(payload: unknown) {
-    const fetchMock = vi.fn<typeof fetch>(async () => Response.json(payload));
-    vi.stubGlobal('fetch', fetchMock);
-    return fetchMock;
-  }
-
   it('exchanges an authorization code via form body', async () => {
-    const fetchMock = stubFetchJson({
+    const fetchMock = stubJsonFetch({
       access_token: 'access',
       refresh_token: 'refresh',
       expires_in: 3600,
@@ -80,7 +75,7 @@ describe('form token endpoint (declarative)', () => {
   });
 
   it('refreshes with the refresh_token grant', async () => {
-    const fetchMock = stubFetchJson({
+    const fetchMock = stubJsonFetch({
       access_token: 'new-access',
       expires_in: 1800,
     });

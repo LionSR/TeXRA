@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 // Local imports - storage
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
+import { JsonValueSchema } from '@shared/schemas';
 import {
   WorkflowScriptFilesSchema,
   type WorkflowScriptFiles,
@@ -21,7 +22,6 @@ import {
 } from './types';
 
 const WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION = 3;
-const JsonValueSchema = z.json();
 
 const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('undefined') }),

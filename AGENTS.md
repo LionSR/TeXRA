@@ -22,13 +22,20 @@ When updating CHANGELOG.md:
 
 1. **Install dependencies**: run `corepack pnpm install` if needed.
 2. **Install the local hooks (recommended)**: install `pre-commit` with
-   `python -m pip install pre-commit`, then run `pre-commit install`. The
-   formatting hook rewrites supported staged files; if it changes a file,
-   review the diff and stage only the intended hunks before retrying. For a
-   partially staged file, use `git add -p` so unrelated unstaged edits stay
-   out. If the retry aborts again with nothing new to stage, the rewrite
-   conflicted with your unstaged edits and pre-commit discarded it -- commit
-   or stash those edits separately first, then retry.
+   `python -m pip install pre-commit`, then run `npm run hooks:install`. That
+   runs `pre-commit install` and chains a git hook (`scripts/format-staged.mjs`)
+   ahead of it which stages Prettier's output automatically: when staged
+   content needs formatting, the hook formats the staged blob, stages the
+   result, and folds the same formatting into the working tree, so the commit
+   proceeds without a manual re-stage. Unstaged edits are never overwritten --
+   if Prettier's rewrite overlaps them, the hook keeps the working-tree copy
+   and prints a notice to run `npm run format` after committing to sync.
+   Without the chained hook, the `npm-format` pre-commit hook rewrites
+   supported staged files and aborts; review the diff and stage only the
+   intended hunks before retrying. For a partially staged file, use
+   `git add -p` so unrelated unstaged edits stay out. Re-run
+   `npm run hooks:install` after any manual `pre-commit install`, which does
+   not know about the chained hook.
 3. **Run checks before committing**:
    - Format code using `npm run format`.
    - Build the extension bundle with `npm run compile:fast`.

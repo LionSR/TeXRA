@@ -7,10 +7,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { RUN_OUTCOME } from '@shared/schemas';
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
+import { agentCatalogMock } from '@test/support/agentCatalogMock';
+import '@test/support/agentStorageFinalizationMock';
+import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
+import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
+import { cliOutputMock } from '@test/support/cliOutputMock';
 
 const mocks = vi.hoisted(() => ({
-  emitCliResult: vi.fn(),
   executeCliToolUseConfig: vi.fn(),
   withExpandedRunInputs: vi.fn(),
   teamPlanHasGaps: vi.fn(),
@@ -27,47 +31,8 @@ const mocks = vi.hoisted(() => ({
   })),
   formatCliMultiAgentPresetRunWarnings: vi.fn(),
   formatCliMultiAgentTeamLaunchBlockMessage: vi.fn(),
-  getAgent: vi.fn(),
-  getAgentsByCategory: vi.fn(),
-  getVisibleAgents: vi.fn(),
-  initCliPlatform: vi.fn(),
-  loadAgents: vi.fn(),
-  refreshAgents: vi.fn(),
   planTeamRuns: vi.fn(),
   planTeamRun: vi.fn(),
-  writeTextStderr: vi.fn(),
-  writeTextStdout: vi.fn(),
-}));
-
-vi.mock('@agent/index', () => ({
-  getAgent: mocks.getAgent,
-  getAgentsByCategory: mocks.getAgentsByCategory,
-  getVisibleAgents: mocks.getVisibleAgents,
-  loadAgents: mocks.loadAgents,
-  refresh: mocks.refreshAgents,
-}));
-
-vi.mock('@agent/storage', () => ({
-  finalizeExecution: vi.fn().mockResolvedValue({
-    status: 'durable',
-    terminalStatusPersisted: true,
-    flowRecord: 'deleted',
-  }),
-}));
-
-vi.mock('@cli/runtime/initPlatform', () => ({
-  initCliPlatform: mocks.initCliPlatform,
-  initLocalCliPlatform: vi.fn(),
-}));
-
-vi.mock('@cli/runtime/logSinks', () => ({
-  writeNdjsonStdout: vi.fn(),
-  writeTextStderr: mocks.writeTextStderr,
-  writeTextStdout: mocks.writeTextStdout,
-}));
-
-vi.mock('@cli/commands/_helpers/output', () => ({
-  emitCliResult: mocks.emitCliResult,
 }));
 
 vi.mock('@cli/runtime/multiAgentPresets', () => ({
@@ -164,16 +129,9 @@ function teamPlan(overrides: Partial<TeamPlan> = {}): TeamPlan {
   };
 }
 
-function cliContext(overrides: Partial<CliContext> = {}): CliContext {
-  return createTestCliContext({
-    renderRunProgress: true,
-    ...overrides,
-  });
-}
-
 function runPreset(
   init: Partial<MultiAgentRunInit> & Pick<MultiAgentRunInit, 'instruction'>,
-  context: CliContext = cliContext(),
+  context: CliContext = createRunCommandCliContext(),
 ): Promise<number> {
   return runMultiAgentPreset(context, {
     preset: 'mathematician',
@@ -202,7 +160,7 @@ async function expectBlockedLaunch(options: {
 
   expect(exitCode).toBe(2);
   expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
-  expect(mocks.writeTextStderr).toHaveBeenCalledWith(options.message);
+  expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(options.message);
   expect(mocks.formatCliMultiAgentTeamLaunchBlockMessage).toHaveBeenCalledWith(
     options.plan,
     {
@@ -210,7 +168,7 @@ async function expectBlockedLaunch(options: {
       followUpAdvice: options.followUpAdvice,
     },
   );
-  expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
+  expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalledWith(
     expect.stringContaining(options.unexpectedWarning),
   );
 }
@@ -276,14 +234,15 @@ describe('CLI multi-agent run command', () => {
       presets.map((preset: unknown) =>
         mocks.planTeamRun(preset, {
           agents: {
-            workflow: mocks.getAgentsByCategory('workflow'),
-            toolUse: mocks.getAgentsByCategory('toolUse'),
+            workflow: agentCatalogMock.getAgentsByCategory('workflow'),
+            toolUse: agentCatalogMock.getAgentsByCategory('toolUse'),
           },
         }),
       ),
     );
-    mocks.getAgentsByCategory.mockImplementation((category: string) =>
-      category === 'toolUse' ? [ORCHESTRATOR_AGENT] : [],
+    agentCatalogMock.getAgentsByCategory.mockImplementation(
+      (category: string) =>
+        category === 'toolUse' ? [ORCHESTRATOR_AGENT] : [],
     );
     mocks.planTeamRun.mockReturnValue(teamPlan());
     isAuthenticatedSpy.mockResolvedValue(false);
@@ -339,7 +298,7 @@ describe('CLI multi-agent run command', () => {
     expect(config?.instruction).toContain(
       'Do not end by asking the user whether to perform more work',
     );
-    const emission = mocks.emitCliResult.mock.calls[0]?.[1];
+    const emission = cliOutputMock.emitCliResult.mock.calls[0]?.[1];
     expect(emission?.json.result).toEqual({
       category: 'toolUse',
       executionId: 'exec-team',
@@ -387,12 +346,14 @@ describe('CLI multi-agent run command', () => {
 
     expect(result.remoteCatalogRefreshAttempted).toBe(true);
     expect(result.plan.rootAgent?.name).toBe('orchestrator');
-    expect(mocks.loadAgents).toHaveBeenNthCalledWith(1, {
+    expect(agentCatalogMock.loadAgents).toHaveBeenNthCalledWith(1, {
       includeRemote: false,
     });
     // The remote-inclusive reload goes through `refresh()`, not a second
     // `loadAgents()`.
-    expect(mocks.refreshAgents).toHaveBeenCalledWith({ includeRemote: true });
+    expect(agentCatalogMock.refresh).toHaveBeenCalledWith({
+      includeRemote: true,
+    });
     expect(mocks.planTeamRun).toHaveBeenCalledTimes(2);
   });
 
@@ -406,9 +367,11 @@ describe('CLI multi-agent run command', () => {
     });
 
     expect(result.remoteCatalogRefreshAttempted).toBe(false);
-    expect(mocks.loadAgents).toHaveBeenCalledOnce();
-    expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
-    expect(mocks.refreshAgents).not.toHaveBeenCalled();
+    expect(agentCatalogMock.loadAgents).toHaveBeenCalledOnce();
+    expect(agentCatalogMock.loadAgents).toHaveBeenCalledWith({
+      includeRemote: false,
+    });
+    expect(agentCatalogMock.refresh).not.toHaveBeenCalled();
     expect(isAuthenticatedSpy).not.toHaveBeenCalled();
     expect(mocks.planTeamRun).toHaveBeenCalledTimes(1);
   });
@@ -432,10 +395,12 @@ describe('CLI multi-agent run command', () => {
     ]);
 
     expect(result.remoteCatalogRefreshAttempted).toBe(true);
-    expect(mocks.loadAgents).toHaveBeenNthCalledWith(1, {
+    expect(agentCatalogMock.loadAgents).toHaveBeenNthCalledWith(1, {
       includeRemote: false,
     });
-    expect(mocks.refreshAgents).toHaveBeenCalledWith({ includeRemote: true });
+    expect(agentCatalogMock.refresh).toHaveBeenCalledWith({
+      includeRemote: true,
+    });
     expect(mocks.planTeamRun).toHaveBeenCalledTimes(2);
   });
 
@@ -451,8 +416,10 @@ describe('CLI multi-agent run command', () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(remoteLoadMessage);
-    expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
+    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
+      remoteLoadMessage,
+    );
+    expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalledWith(
       expect.stringContaining('not available locally'),
     );
   });
@@ -464,7 +431,7 @@ describe('CLI multi-agent run command', () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
       approvalUnavailableWarning,
     );
   });
@@ -475,14 +442,18 @@ describe('CLI multi-agent run command', () => {
         inputFiles: ['problem.tex'],
         instruction: 'Solve the problem with the team.',
       },
-      cliContext({ approvalPolicy: 'ask' }),
+      createRunCommandCliContext({ approvalPolicy: 'ask' }),
     );
 
     expect(exitCode).toBe(2);
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(headlessAskError);
-    expect(mocks.initCliPlatform).toHaveBeenCalledOnce();
-    expect(mocks.loadAgents).toHaveBeenCalledOnce();
-    expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
+    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
+      headlessAskError,
+    );
+    expect(cliInitPlatformMock.initCliPlatform).toHaveBeenCalledOnce();
+    expect(agentCatalogMock.loadAgents).toHaveBeenCalledOnce();
+    expect(agentCatalogMock.loadAgents).toHaveBeenCalledWith({
+      includeRemote: false,
+    });
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
     expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
   });
@@ -493,11 +464,11 @@ describe('CLI multi-agent run command', () => {
         inputFiles: ['problem.tex'],
         instruction: 'Solve the problem with the team.',
       },
-      cliContext({ approvalPolicy: 'yolo' }),
+      createRunCommandCliContext({ approvalPolicy: 'yolo' }),
     );
 
     expect(exitCode).toBe(0);
-    expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
+    expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalledWith(
       expect.stringContaining('may run without subagent delegation'),
     );
   });
@@ -594,7 +565,7 @@ describe('CLI multi-agent run command', () => {
           instruction: 'Then summarize the plan.',
           instructionFile: 'prompt.txt',
         },
-        cliContext({ cwd: root }),
+        createRunCommandCliContext({ cwd: root }),
       );
 
       expect(exitCode).toBe(0);
@@ -679,7 +650,7 @@ describe('CLI multi-agent run command', () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(warning);
+    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(warning);
   });
 
   it('refuses a delegating root with no available team members', async () => {

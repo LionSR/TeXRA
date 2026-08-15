@@ -21,7 +21,7 @@ import {
 } from '@agent/types/ProviderMessage';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import { RetryErrorInfoSchema } from '@shared/schemas';
+import { JsonValueSchema, RetryErrorInfoSchema } from '@shared/schemas';
 
 import { currentModelFromUserChannels } from '../modelSwitchState';
 
@@ -61,7 +61,7 @@ const ToolUseRunSharedSchema = z.looseObject({
   /** Last assistant response without the full assembly buffers. */
   lastResponse: z.string().optional(),
   /** Validated terminal-tool result retained across interrupt and resume. */
-  structured: z.json().optional(),
+  structured: JsonValueSchema.optional(),
 });
 
 /** Per-step schema after the one-time legacy workspace migration. */

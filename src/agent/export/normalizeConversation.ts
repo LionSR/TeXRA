@@ -25,6 +25,7 @@ import { CONVERSATION_BLOCK_TYPES } from '@agent/types/ConversationBlockTypes';
 import {
   ANTHROPIC_SERVER_TOOL_BLOCK_TYPES,
   extractWebFetchResultFields,
+  WebSearchResultEntrySchema,
 } from '@agent/types/ServerTools';
 import { isObject } from '@utils/core';
 import type { Part } from '@google/genai';
@@ -39,12 +40,18 @@ import type { ExportNode, UserPart } from './schemas';
 // Input schemas (implementation detail — not exported publicly)
 // ============================================================
 
-/** One entry inside a `web_search_tool_result` block's `content` array. */
-const WebSearchResultItemSchema = z.object({
-  type: z.string(),
-  title: z.string().optional(),
-  url: z.string().optional(),
-});
+/**
+ * One entry inside a `web_search_tool_result` block's `content` array: the
+ * provider wire shape of the canonical {@link WebSearchResultEntrySchema},
+ * read permissively (`title`/`url` optional on the wire) and tagged with the
+ * block's `type` string.
+ */
+const WebSearchResultItemSchema = WebSearchResultEntrySchema.pick({
+  title: true,
+  url: true,
+})
+  .partial()
+  .extend({ type: z.string() });
 
 /**
  * Discriminated union of API content blocks across the four provider shapes

@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file.
 - **A missing helper model falls back to DeepSeek V4 Flash** — disabling or
   removing the helper no longer silently switches auxiliary tasks to the
   first picker model.
+- **Long Grok prompts report their true cost** — xAI raises per-token rates
+  once a prompt crosses the model's long-context threshold; usage costs for
+  those requests no longer underreport.
 
 ### Extension (VS Code) and Desktop
 
@@ -24,6 +27,9 @@ All notable changes to this project will be documented in this file.
 - **Bold Greek letters render in the progress view** — shortcuts such as
   bold alpha, eta, and sigma now display as the intended symbols instead of
   unknown commands.
+- **The Progress terminal uses the host integrated terminal colors** —
+  background and text follow the dedicated terminal tokens instead of the
+  generic surface palette.
 
 #### Features
 
@@ -34,9 +40,6 @@ All notable changes to this project will be documented in this file.
   nested run no longer opens the parent row; expand it to inspect children.
   Selecting a child, or a pending approval on one, still reveals the ancestor
   path.
-- **The Progress terminal uses the editor terminal colors** — background and
-  text follow the dedicated terminal tokens instead of the generic surface
-  palette.
 - **Remote agent prompts are available to every signed-in account** — Settings
   → Agents no longer hides View prompt behind an Ultra plan, and remote agents
   no longer show a Remote badge or access-group labels.
@@ -49,6 +52,17 @@ All notable changes to this project will be documented in this file.
   Copy button that puts the run, its output paths, and any compile failures on
   the clipboard as plain text, to paste into whichever chat you want. Running
   latexFixer on a compile failure is unchanged.
+
+### Desktop
+
+#### Bug Fixes
+
+- **Follow-up polish revises text again** — the desktop polish action no longer
+  silently returns the original draft; it now applies the same bundled prompt
+  template the extension uses.
+- **Temporary diff files are cleaned up** — viewing a diff in an external
+  editor no longer leaves `texra-desktop-diff` folders behind after the window
+  closes.
 
 ### CLI and Desktop
 
