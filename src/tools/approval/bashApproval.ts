@@ -15,18 +15,13 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import {
-  StreamTabIdSchema,
-  type BashPermission,
-  type StreamTabId,
-} from '@shared/schemas';
+import type { BashPermission, StreamTabId, ToolResult } from '@shared/schemas';
+import { BASH_APPROVAL_CONFIG_KEY, StreamTabIdSchema } from '@shared/schemas';
 import {
   decideTexraApproval,
   isTexraApprovalDenied,
   texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
-import { type ToolResult } from '@shared/schemas';
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { requireInteractions } from '@tools/contextHelpers';
 import { errorResult } from '@tools/core/result';
 import { generateShortId } from '@utils/core';

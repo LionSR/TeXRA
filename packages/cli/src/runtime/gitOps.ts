@@ -1,6 +1,6 @@
 // Thin wrappers over `git` and `gh` for the `install-github-action` command.
 // Every call captures output and never throws — callers branch on `success`.
-import type { ExecResult } from '@shared/schemas/opResults';
+import type { ExecResult } from '@shared/schemas';
 import { executeCommandSync } from '@utils/system/execUtils';
 
 export function git(cwd: string, ...args: readonly string[]): ExecResult {

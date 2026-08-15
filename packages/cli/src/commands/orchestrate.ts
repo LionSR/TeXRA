@@ -10,9 +10,9 @@ import {
 import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
-import { byCategory, AgentCategory } from '@shared/schemas';
+import type { ApiAccessMode } from '@shared/schemas';
+import { AgentCategory, byCategory } from '@shared/schemas';
 import { getFirstRunDone } from '@shared/state/onboardingState';
-import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 
 import {
   firstRunSetupAgentOverride,

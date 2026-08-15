@@ -51,7 +51,7 @@ import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas';
 import { clamp, filterNotNullish } from '@utils/core';
 import { getWebSocketEnabled } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';

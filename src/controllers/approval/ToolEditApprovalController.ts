@@ -16,8 +16,11 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { withEventErrorHandling } from '@controllers/session/eventErrorHandling';
-import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
-import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
+import type {
+  StreamTabId,
+  ToolEditApprovalAction,
+  ToolEditPermission,
+} from '@shared/schemas';
 import {
   previewProposedLatex,
   runLatexdiff,

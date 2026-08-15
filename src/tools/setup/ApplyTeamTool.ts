@@ -27,13 +27,14 @@ import {
   type TeamRosterCatalog,
 } from '@common/teams/TeamRoster';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
-import { ToolError, type ToolResult } from '@shared/schemas';
-import { agentName } from '@shared/schemas/agent';
+import type { ToolResult } from '@shared/schemas';
 import {
   AGENT_MODE_PRESETS,
   AGENT_MODE_PRESETS_BY_ID,
+  agentName,
   STARTER_AGENT_MODE_PRESET,
-} from '@shared/schemas/agentPresets';
+  ToolError,
+} from '@shared/schemas';
 
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';

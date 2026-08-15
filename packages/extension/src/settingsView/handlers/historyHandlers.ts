@@ -13,10 +13,7 @@ import {
 import { confirmModal } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import {
-  SETTINGS_VIEW_CMD,
-  type SettingsMessageFor,
-} from '@shared/schemas/settingsViewMessages';
+import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
 
 import {
   type SettingsHandlerContext,

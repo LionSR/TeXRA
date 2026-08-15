@@ -1,7 +1,7 @@
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
-import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
+import type { ApiAccessMode } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 export interface CliApiModeUpdate {

@@ -32,13 +32,8 @@ import {
   type CurrentToolContexts,
 } from '@agent/followUp/ToolFileInteractionContext';
 import { createLog } from '@logger/logUtils';
-import type { Plan, ToolResult } from '@shared/schemas';
-import {
-  formatGoalTime,
-  goalElapsedMs,
-  isGoalInFlight,
-  type Goal,
-} from '@shared/schemas/goal';
+import type { Goal, Plan, ToolResult } from '@shared/schemas';
+import { formatGoalTime, goalElapsedMs, isGoalInFlight } from '@shared/schemas';
 import { requireStreamId } from '@tools/contextHelpers';
 import {
   GoalStore,

@@ -24,17 +24,15 @@ import type {
   ExecutionStatusInfo,
 } from '@agent/runtime/ExecutionHandle';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import {
-  STATUS_DISPLAY,
-  TODO_STATUS,
-  runIdentityName,
-  type ExecutionId,
-  type ExecutionMeta,
-  type RunIdentity,
-  type RunOutcome,
-  type TodoStatus,
+import type {
+  AgentCategory,
+  ExecutionId,
+  ExecutionMeta,
+  RunIdentity,
+  RunOutcome,
+  TodoStatus,
 } from '@shared/schemas';
-import type { AgentCategory } from '@shared/schemas/agent';
+import { runIdentityName, STATUS_DISPLAY, TODO_STATUS } from '@shared/schemas';
 import { formatTimestamp } from '@utils/text/stringUtils';
 
 /**

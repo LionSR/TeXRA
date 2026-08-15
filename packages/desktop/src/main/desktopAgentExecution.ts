@@ -75,24 +75,23 @@ import {
   MAIN_VIEW_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
 } from '@shared/ipc';
-import {
-  INSTRUCTION_ACTION,
-  SETTINGS_TAB,
-  type InstructionAction,
-  type MainViewPersistedState,
-  type ExecutionId,
-  type RequestOpenFilePayload,
-  type SettingsTab,
-  type StreamTabId,
+import type {
+  ExecutionId,
+  FileOpResult,
+  InstructionAction,
+  MainViewExecuteMessage,
+  MainViewPersistedState,
+  RequestOpenFilePayload,
+  SettingsTab,
+  StreamTabId,
 } from '@shared/schemas';
+import { INSTRUCTION_ACTION, SETTINGS_TAB } from '@shared/schemas';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   formatActiveStreamRetention,
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
-import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
-import type { FileOpResult } from '@shared/schemas/opResults';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { cleanupUnscopedApprovals } from '@tools/approval';
 import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';

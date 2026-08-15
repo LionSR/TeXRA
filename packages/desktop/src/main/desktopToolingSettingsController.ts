@@ -3,12 +3,12 @@ import { LatexConfigPersistenceController } from '@controllers/settingsView/Late
 import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 import { platform } from '@platform/platform';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { SettingsStatePorts } from '@shared/settingsView/types';
 import type {
   SettingsViewInboundHandlerRegistry,
   ToolCommandKind,
   ToolDashboardItem,
-} from '@shared/schemas/settingsViewMessages';
+} from '@shared/schemas';
+import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 import { setToolEnabled } from '@utils/config/constants';

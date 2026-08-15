@@ -15,7 +15,7 @@
  * `platform().globalState`.
  */
 
-import type { OnboardingFunnelState } from '@shared/schemas/onboarding';
+import type { OnboardingFunnelState } from '@shared/schemas';
 
 export type { OnboardingFunnelState };
 

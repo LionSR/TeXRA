@@ -1,6 +1,6 @@
 // Local imports - shared webview commands
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type { MultipleDocumentFileType } from '@shared/schemas/fileTypes';
+import type { MultipleDocumentFileType } from '@shared/schemas';
 
 export const FILE_SELECTION_COMMAND_IDS = {
   selectInputFiles: 'texra.selectInputFiles',

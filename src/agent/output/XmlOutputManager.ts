@@ -8,10 +8,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
-import {
-  OUTPUT_DOCUMENT_TAG,
-  OUTPUT_DOCUMENTS_TAG,
-} from '@shared/schemas/output';
+import { OUTPUT_DOCUMENT_TAG, OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
 import { getExtractedDocOutputFileName } from '@utils/files/outputFileUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {

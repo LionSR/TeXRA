@@ -10,38 +10,38 @@ import { SignalWatcher } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
 import { designTokens, commonViewStyles, viewTabStyles } from '@shared/styles';
-import {
-  dispatchMainView,
-  type ActionDetail,
-  type AgentChangeDetail,
-  type AgentConfigBannerActionDetail,
-  type ApiKeyBannerActionDetail,
-  type BaseFileChangeDetail,
-  type CheckboxChangeDetail,
-  type CommitChangeDetail,
-  type EditedFileChangeDetail,
-  type FileActionDetail,
-  type FocusInstructionDetail,
-  type GettingStartedActionDetail,
-  type InstallGuideDetail,
-  type InstructionChangeDetail,
-  type LatexDiffsActionDetail,
-  type LatexDiffsToggleDetail,
-  type LaunchTargetChangeDetail,
-  type ModelChangeDetail,
-  type MultipleFilesActionDetail,
-  type MultipleFilesTypeActionDetail,
-  type ReorderFilesDetail,
-  type RemoveFileDetail,
-  type SessionTypeChangeDetail,
-  type TeamChangeDetail,
-  type WorkingDirectoryChangeDetail,
+import type {
+  ActionDetail,
+  AgentChangeDetail,
+  AgentConfigBannerActionDetail,
+  ApiKeyBannerActionDetail,
+  BaseFileChangeDetail,
+  CheckboxChangeDetail,
+  CommitChangeDetail,
+  EditedFileChangeDetail,
+  FileActionDetail,
+  FocusInstructionDetail,
+  GettingStartedActionDetail,
+  InstallGuideDetail,
+  InstructionChangeDetail,
+  LatexDiffsActionDetail,
+  LatexDiffsToggleDetail,
+  LaunchTargetChangeDetail,
+  ModelChangeDetail,
+  MultipleFilesActionDetail,
+  MultipleFilesTypeActionDetail,
+  RemoveFileDetail,
+  ReorderFilesDetail,
+  SessionTypeChangeDetail,
+  StateRestoreMessage,
+  TeamChangeDetail,
+  WorkingDirectoryChangeDetail,
 } from '@shared/schemas';
+import { dispatchMainView } from '@shared/schemas';
 import {
   registerTeXRAWebAwesomeIcons,
   waIcon,
 } from '@shared/wa/webAwesomeIcons';
-import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { renderViewHeader } from '@shared/wa/viewHeader';
 import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 import '@shared/wa/tabs';

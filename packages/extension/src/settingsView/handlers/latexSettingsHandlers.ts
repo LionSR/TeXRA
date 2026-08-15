@@ -12,10 +12,7 @@ import { LatexRecommendedSettingsController } from '@controllers/settingsView/La
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { platform } from '@platform/platform';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  SETTINGS_VIEW_CMD,
-  type SettingsMessageFor,
-} from '@shared/schemas/settingsViewMessages';
+import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
 import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,

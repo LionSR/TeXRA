@@ -2,7 +2,7 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   MainViewExecuteInboundMessageSchema,
   type MainViewExecuteMessage,
-} from '@shared/schemas/mainView/executeMessage';
+} from '@shared/schemas';
 import {
   createCommandHandler,
   createDesktopErrorReporter,

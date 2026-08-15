@@ -7,10 +7,7 @@
  */
 
 // Local imports
-import type {
-  ToolCommandKind,
-  ToolDashboardItem,
-} from '@shared/schemas/settingsViewMessages';
+import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 import type { RegisteredToolName } from '@tools/registry';
 import {

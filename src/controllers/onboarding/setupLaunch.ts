@@ -14,10 +14,10 @@ import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
-import { AgentCategory } from '@shared/schemas/agent';
+import type { MainViewExecuteMessage } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
-import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import { isNonEmptyString } from '@utils/core';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 

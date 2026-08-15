@@ -20,6 +20,11 @@ import {
 } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import type { LatexConfigValues, LatexSettingsStatus } from '@shared/schemas';
+import {
+  CoreSettingsShape,
+  DEFAULT_LATEX_SETTINGS_STATUS,
+} from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
@@ -36,14 +41,6 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 // Web Awesome button + icon bundles (side-effect imports)
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-
-// Local imports - shared schemas
-import { CoreSettingsShape } from '@shared/schemas/coreSettings';
-import {
-  DEFAULT_LATEX_SETTINGS_STATUS,
-  type LatexConfigValues,
-  type LatexSettingsStatus,
-} from '@shared/schemas/settingsViewMessages';
 
 // Local imports - LaTeX config constants (shared with backend + readers)
 import {

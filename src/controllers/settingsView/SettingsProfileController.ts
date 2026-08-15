@@ -2,26 +2,27 @@ import { createLog } from '@logger/logUtils';
 import { API_PROVIDERS } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
-import { isSpendingQuotaExceeded, type SpendingStatus } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
   ApiAccessMode,
   NumberSetting,
   ProviderKeyStatus,
   ProviderSetting,
+  SpendingStatus,
   UpdateProfileMessage,
-} from '@shared/schemas/settingsViewMessages';
+} from '@shared/schemas';
+import {
+  DEFAULT_CORE_SETTINGS,
+  isSpendingQuotaExceeded,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  ModelRetryMaxAttemptsSchema,
+} from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_SETTINGS,
   PROVIDER_URLS,
   type ProviderSettingDef,
 } from '@shared/constants/providers';
-import {
-  DEFAULT_CORE_SETTINGS,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  ModelRetryMaxAttemptsSchema,
-} from '@shared/schemas/coreSettings';
 import {
   getProviderDisplayName,
   getProviderEndpoint,

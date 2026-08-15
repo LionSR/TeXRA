@@ -4,7 +4,7 @@ import {
   ProgressViewInboundMessageSchema,
   type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
-} from '@shared/schemas/progressView';
+} from '@shared/schemas';
 import { UnsupportedCommandError } from '@shared/utils/dispatcher';
 
 import {

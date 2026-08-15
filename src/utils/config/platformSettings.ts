@@ -1,6 +1,6 @@
 import { tryPlatform } from '@platform/platform';
+import { stateSettingByKey } from '@shared/schemas';
 import { readSetting, settingDefault } from '@shared/config/settingsAccess';
-import { stateSettingByKey } from '@shared/schemas/stateSettings';
 
 /**
  * Read a catalog-modeled state setting from the live platform, resolving its

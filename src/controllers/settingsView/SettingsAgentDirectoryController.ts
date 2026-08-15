@@ -1,5 +1,5 @@
 // Local imports - shared
-import type { AgentSource } from '@shared/schemas/agent';
+import type { AgentSource } from '@shared/schemas';
 
 export interface SettingsAgentDirectoryEntry {
   path?: string;

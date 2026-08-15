@@ -4,7 +4,7 @@ import { MODELS } from 'llm-zoo';
 
 // Internal imports
 import * as logger from '@logger/logUtils';
-import type { FileOpResult } from '@shared/schemas/opResults';
+import type { FileOpResult } from '@shared/schemas';
 import { EXCLUDED_DIRS } from '@shared/constants/latexTiming';
 import { unique } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';

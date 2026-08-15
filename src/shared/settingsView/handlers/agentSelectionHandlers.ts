@@ -9,14 +9,14 @@
  * imports, per `SharedSettingsViewBoundary.vitest.ts`.
  */
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { ByCategory } from '@shared/schemas';
-import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import type {
+  AgentModePreset,
   AgentSelectionItem,
+  ByCategory,
+  UpdateAgentModePresetsMessage,
   UpdateAgentSelectionMessage,
   UpdateCustomAgentDirMessage,
-  UpdateAgentModePresetsMessage,
-} from '@shared/schemas/settingsViewMessages';
+} from '@shared/schemas';
 
 export interface AgentSelectionPorts {
   loadAgents(): Promise<void>;

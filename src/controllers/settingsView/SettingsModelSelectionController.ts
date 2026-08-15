@@ -19,21 +19,19 @@ import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
+  CopilotRouteInfo,
   ModelOptionData,
+  ModelSelectionItem,
+  ReasoningLevel,
   UpdateModelSelectionMessage,
 } from '@shared/schemas';
+import { ReasoningLevelSchema } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   DEFAULT_HELPER_MODEL,
   MODEL_SOURCE_ORDER,
   isFastFirstResponseModel,
 } from '@shared/constants/providers';
-import {
-  ReasoningLevelSchema,
-  type CopilotRouteInfo,
-  type ModelSelectionItem,
-  type ReasoningLevel,
-} from '@shared/schemas/settingsViewMessages';
 import { byName } from '@utils/core';
 
 export interface SettingsModelSelectionControllerDeps {

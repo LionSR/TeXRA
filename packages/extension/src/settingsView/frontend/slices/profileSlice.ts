@@ -7,7 +7,7 @@ import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 import {
   SpendingStatusErrorSchema,
   SpendingStatusSchema,
-} from '@shared/schemas/spendingStatus';
+} from '@shared/schemas';
 
 import {
   apiAccessMode,

@@ -8,7 +8,7 @@ import { parse as shellParse } from 'shell-quote';
 // Local imports
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import type { ExecResult } from '@shared/schemas/opResults';
+import type { ExecResult } from '@shared/schemas';
 import {
   PDFLATEX_INSTALL_GUIDE,
   LATEXDIFF_INSTALL_GUIDE,

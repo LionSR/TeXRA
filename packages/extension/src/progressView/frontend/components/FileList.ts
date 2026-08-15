@@ -17,11 +17,10 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { getEffectiveDiffBase } from '@shared/schemas';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
+import { getEffectiveDiffBase, roundIndexedEntries } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
-import { roundIndexedEntries } from '@shared/schemas/roundIndexed';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';

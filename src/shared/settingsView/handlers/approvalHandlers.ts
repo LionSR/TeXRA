@@ -7,10 +7,7 @@
 import type { ConfigProvider } from '@platform/interfaces';
 import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { DEFAULT_TOOL_PATH_PROTECTION_ENABLED } from '@shared/schemas/stateSettings';
-import { TOOL_EDIT_APPROVAL_CONFIG_KEY } from '@shared/schemas/coreSettings';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { UpdateApprovalAndSafetySettingsMessage } from '@shared/schemas/settingsViewMessages';
+import type { UpdateApprovalAndSafetySettingsMessage } from '@shared/schemas';
 import {
   BASH_APPROVAL_CONFIG_KEY,
   CLAUDE_AGENT_DEFAULT_EFFORT,
@@ -19,13 +16,16 @@ import {
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
+  DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
   parseClaudeAgentEffort,
   parseClaudeAgentModel,
   parseClaudeAgentPermissionMode,
   parseCodexApprovalPolicy,
   parseCodexReasoningEffort,
   parseCodexSandboxMode,
-} from '@shared/schemas/agentCliSettings';
+  TOOL_EDIT_APPROVAL_CONFIG_KEY,
+} from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 
 export interface ApprovalHandlerPorts extends SettingsStatePorts {

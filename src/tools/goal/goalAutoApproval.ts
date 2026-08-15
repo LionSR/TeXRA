@@ -1,5 +1,5 @@
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { StreamTabId } from '@shared/schemas/identifiers';
+import type { StreamTabId } from '@shared/schemas';
 
 /**
  * Engage or clear the per-stream bash approval bypass for an autonomous goal.

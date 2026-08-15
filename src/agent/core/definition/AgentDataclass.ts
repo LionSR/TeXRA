@@ -5,8 +5,8 @@ import {
   AgentCategory,
   AgentCategorySchema,
   AgentNameSchema,
-} from '@shared/schemas/agent';
-import { OUTPUT_END_TAG } from '@shared/schemas/output';
+  OUTPUT_END_TAG,
+} from '@shared/schemas';
 
 /**
  * Field validators shared between `AgentSettingBaseSchema` (materialised

@@ -1,13 +1,15 @@
+import type {
+  AgentCategory,
+  AgentModePreset,
+  AgentSource,
+  ByCategory,
+} from '@shared/schemas';
 import {
+  AGENT_CATEGORIES,
   agentKeyOf,
   agentMatchesIdentifier,
   byCategory,
-  AGENT_CATEGORIES,
-  type AgentCategory,
-  type AgentSource,
-  type ByCategory,
-} from '@shared/schemas/agent';
-import type { AgentModePreset } from '@shared/schemas/agentPresets';
+} from '@shared/schemas';
 
 export interface TeamRosterState {
   getAgents(category: AgentCategory): { name: string; source: AgentSource }[];

@@ -3,8 +3,7 @@ import { getStreamTabDisplayName } from '@agent/runtime/streamTab';
 import type { SessionStreamMetadata } from '@controllers/session/SessionState';
 import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
-import { runIdentityName } from '@shared/schemas';
-import { getCleanAgentName } from '@shared/schemas/agent';
+import { getCleanAgentName, runIdentityName } from '@shared/schemas';
 
 export interface StreamTabInfoInputs {
   streamId: string;

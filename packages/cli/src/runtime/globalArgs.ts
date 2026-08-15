@@ -1,5 +1,5 @@
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
+import type { ApiAccessMode } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import type { CliOutputFormat } from '../schemas/cliSettings';

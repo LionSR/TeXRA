@@ -1,6 +1,6 @@
 // Internal imports
 import * as logger from '@logger/logUtils';
-import type { ExecResult } from '@shared/schemas/opResults';
+import type { ExecResult } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { executeCommand } from '@utils/system/execUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
