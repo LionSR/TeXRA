@@ -8,7 +8,6 @@ import {
   WorkflowScriptParseError,
   type WorkflowAgentInvocation,
   type WorkflowScriptControl,
-  type WorkflowScriptEvent,
   type WorkflowScriptRunResult,
 } from '@agent/workflowScript';
 import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
@@ -223,9 +222,9 @@ return null`),
 
 describe('runWorkflowScript', () => {
   it('uses meta.tasks as the single source for task labels and phases', async () => {
-    const events: WorkflowScriptEvent[] = [];
+    const transitions: WorkflowScriptRunResult['snapshot'][] = [];
     const runner = vi.fn(echoRunner);
-    await runWorkflowScript({
+    const run = await runWorkflowScript({
       script: `export const meta = {
   name: 'planned-run',
   description: 'runs a declared plan',
@@ -234,26 +233,31 @@ describe('runWorkflowScript', () => {
 }
 return await agent('Inspect src', { id: 'core' })`,
       runAgent: runner,
-      onEvent: (event) => events.push(event),
+      onTransition: (snapshot) => transitions.push(structuredClone(snapshot)),
     });
 
-    expect(events[0]).toEqual({
-      type: 'plan',
-      tasks: [{ id: 'core', label: 'Audit core', phase: 'Audit' }],
-    });
+    // The declared plan is published before the script issues any call.
+    expect(transitions[0]?.calls).toMatchObject([
+      {
+        id: 'core',
+        label: 'Audit core',
+        stageTitle: 'Audit',
+        status: 'stageBlocked',
+      },
+    ]);
     expect(runner.mock.calls[0][0].options).toMatchObject({
       id: 'core',
       label: 'Audit core',
       phase: 'Audit',
     });
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'agent:start',
-        progressId: 'core',
+    expect(run.snapshot.calls).toMatchObject([
+      {
+        id: 'core',
         label: 'Audit core',
-        phase: 'Audit',
-      }),
-    );
+        stageTitle: 'Audit',
+        status: 'completed',
+      },
+    ]);
   });
 
   it('rejects calls outside a declared plan and conflicting presentation data', async () => {
@@ -345,12 +349,10 @@ return await agent('inspect', {
       runEmptyPlan(`return await agent('undeclared')`),
     ).rejects.toThrow(/Every agent\(\) call must reference a task/);
 
-    const events: WorkflowScriptEvent[] = [];
-    const result = await runEmptyPlan(`return 'done'`, {
-      onEvent: (event) => events.push(event),
-    });
+    const result = await runEmptyPlan(`return 'done'`);
     expect(result.result).toBe('done');
-    expect(events).toContainEqual({ type: 'plan', tasks: [] });
+    // An explicitly empty plan owns no calls, and none may be added.
+    expect(result.snapshot.calls).toEqual([]);
   });
 
   it('runs a script end-to-end with agent calls and args', async () => {
@@ -621,6 +623,7 @@ return await parallel([
 
   it('awaits durable journal hooks and excludes failed calls from them', async () => {
     const order: string[] = [];
+    const settled = new Set<string>();
     const run = await runWorkflowScript({
       script: `${META}return [await agent('boom'), await agent('saved')]`,
       runAgent: async ({ prompt }) => {
@@ -632,19 +635,23 @@ return await parallel([
         await delay(5);
         order.push(`checkpoint:${entry.index}`);
       },
-      onEvent: (event) => {
-        if (event.type === 'agent:end' && event.outcome !== 'failed') {
-          order.push(`end:${event.index}`);
+      // The checkpoint is awaited before the call is observably completed, and
+      // the failed call never reaches a checkpoint at all.
+      onTransition: (snapshot) => {
+        for (const call of snapshot.calls) {
+          if (call.status !== 'completed' || settled.has(call.id)) continue;
+          settled.add(call.id);
+          order.push(`completed:${call.id}`);
         }
       },
     });
 
     expect(run.result).toEqual([null, 'saved result']);
-    expect(order).toEqual(['runner', 'checkpoint:1', 'end:1']);
+    expect(order).toEqual(['runner', 'checkpoint:1', 'completed:call-1']);
   });
 
   it('surfaces a late checkpoint failure from an abandoned agent call', async () => {
-    const events: WorkflowScriptEvent[] = [];
+    const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
     await expect(
       runWorkflowScript({
         script: `${META}agent('abandoned', { phase: 'Work' }); return 'guest success'`,
@@ -657,21 +664,25 @@ return await parallel([
           await delay(5);
           throw new Error('checkpoint offline');
         },
-        onEvent: (event) => events.push(event),
+        onSnapshot: (snapshot) => {
+          snapshots.push(snapshot);
+        },
       }),
     ).rejects.toMatchObject({ name: 'WorkflowRunAbortError' });
-    expect(events.at(-1)).toMatchObject({
-      type: 'agent:end',
-      phase: 'Work',
-      phaseIndex: 0,
-      phaseTotal: 1,
-      error: expect.stringContaining('checkpoint offline'),
-      model: 'checkpoint-model',
-      durationMs: expect.any(Number),
-    });
-    expect(events.filter((event) => event.type === 'agent:end')).toHaveLength(
-      1,
-    );
+    // The one call the script issued carries the checkpoint failure, keeps the
+    // model the runner reported, and stays inside its declared stage.
+    expect(snapshots.at(-1)?.calls).toMatchObject([
+      {
+        stageId: 'stage-1',
+        stageTitle: 'Work',
+        status: 'failed',
+        error: expect.stringContaining('checkpoint offline'),
+        model: 'checkpoint-model',
+      },
+    ]);
+    expect(snapshots.at(-1)?.stages).toMatchObject([
+      { id: 'stage-1', title: 'Work', order: 0, lifecycle: 'failed' },
+    ]);
   });
 
   it('does not let a guest error mask a late checkpoint failure', async () => {
@@ -767,7 +778,6 @@ return await agent('Inspect src', { id: 'inspect' })`,
       runAgent: echoRunner,
     });
     const cachedRunner = vi.fn(echoRunner);
-    const events: WorkflowScriptEvent[] = [];
 
     const resumed = await runWorkflowScript({
       script: `export const meta = {
@@ -779,21 +789,20 @@ return await agent('Inspect src', { id: 'inspect' })`,
 return await agent('Inspect src', { id: 'inspect' })`,
       runAgent: cachedRunner,
       journal: first.journal,
-      onEvent: (event) => events.push(event),
     });
 
     expect(resumed.result).toBe(first.result);
     expect(cachedRunner).not.toHaveBeenCalled();
-    expect(events).toContainEqual({
-      type: 'agent:end',
-      progressId: 'inspect',
-      index: 0,
-      label: 'Audit implementation',
-      phase: 'Audit',
-      phaseIndex: 0,
-      phaseTotal: 1,
-      outcome: 'cached',
-    });
+    // The call replays from cache under the revised presentation.
+    expect(resumed.snapshot.calls).toMatchObject([
+      {
+        id: 'inspect',
+        label: 'Audit implementation',
+        stageId: 'stage-1',
+        stageTitle: 'Audit',
+        status: 'cached',
+      },
+    ]);
   });
 
   it('invalidates cached calls when referenced file contents change', async () => {
@@ -965,7 +974,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
   it('ends a cached call with an error when its journal value is invalid', async () => {
     const script = `${META}return await agent('cached')`;
     const first = await runWorkflowScript({ script, runAgent: echoRunner });
-    const events: WorkflowScriptEvent[] = [];
+    const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
     const runner = vi.fn(echoRunner);
 
     await expect(
@@ -973,22 +982,29 @@ return await agent('Inspect src', { id: 'inspect' })`,
         script,
         runAgent: runner,
         journal: [{ ...first.journal[0], result: () => undefined }],
-        onEvent: (event) => events.push(event),
+        onSnapshot: (snapshot) => {
+          snapshots.push(snapshot);
+        },
       }),
     ).rejects.toThrow(/Cached agent\(\) result must be JSON-serializable/i);
 
     expect(runner).not.toHaveBeenCalled();
-    expect(events).toEqual([
+    // A cached call that fails validation settles as failed with the real
+    // cause; the terminal pass must not reclassify it as never-reached.
+    const terminal = snapshots.at(-1);
+    expect(terminal?.lifecycle).toBe('failed');
+    expect(terminal?.calls).toMatchObject([
       {
-        type: 'agent:end',
-        progressId: 'call-0',
-        index: 0,
+        id: 'call-0',
         label: 'cached',
-        phase: undefined,
-        outcome: 'failed',
+        status: 'failed',
         error: expect.stringMatching(/must be JSON-serializable/i),
       },
     ]);
+    expect(deriveWorkflowCounts(terminal?.calls ?? [])).toMatchObject({
+      failed: 1,
+      skipped: 0,
+    });
   });
 
   it('blocks Date.now() and Math.random() inside scripts', async () => {
@@ -1035,39 +1051,33 @@ return await agent('three:' + a + b)`,
     expect(resumed.result).toBe('result:three:result:oneresult:two');
   });
 
-  it('defaults agent phase to the active phase() and emits events', async () => {
+  it('defaults agent phase to the active phase() and records it on the snapshot', async () => {
     const invocations: WorkflowAgentInvocation[] = [];
-    const events: WorkflowScriptEvent[] = [];
-    await runWorkflowScript({
+    const run = await runWorkflowScript({
       script: `${META}
 phase('Work')
 await agent('inside', { label: 'labelled' })
 return null`,
       runAgent: collectingRunner(invocations),
-      onEvent: (event) => events.push(event),
     });
     expect(invocations[0].options.phase).toBe('Work');
-    expect(events).toContainEqual({
-      type: 'phase',
-      title: 'Work',
-      index: 0,
-      total: 1,
-    });
-    expect(events).toContainEqual({
-      type: 'agent:start',
-      progressId: 'call-0',
-      index: 0,
-      label: 'labelled',
-      phase: 'Work',
-      phaseIndex: 0,
-      phaseTotal: 1,
-    });
+    expect(run.snapshot.stages).toMatchObject([
+      { id: 'stage-1', title: 'Work', order: 0, lifecycle: 'completed' },
+    ]);
+    expect(run.snapshot.calls).toMatchObject([
+      {
+        id: 'call-0',
+        label: 'labelled',
+        stageId: 'stage-1',
+        stageTitle: 'Work',
+        status: 'completed',
+      },
+    ]);
   });
 
   it('normalizes executable phase titles to the declared metadata title', async () => {
     const invocations: WorkflowAgentInvocation[] = [];
-    const events: WorkflowScriptEvent[] = [];
-    await runWorkflowScript({
+    const run = await runWorkflowScript({
       script: `export const meta = {
   name: 'trimmed-phase',
   description: 'normalizes phase titles',
@@ -1078,37 +1088,20 @@ phase('  Work  ')
 await early
 return await agent('active', { label: 'Active' })`,
       runAgent: collectingRunner(invocations),
-      onEvent: (event) => events.push(event),
     });
 
     expect(invocations.map((invocation) => invocation.options.phase)).toEqual([
       'Work',
       'Work',
     ]);
-    expect(events).toContainEqual({
-      type: 'phase',
-      title: 'Work',
-      index: 0,
-      total: 1,
-    });
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'agent:start',
-        label: 'Early',
-        phase: 'Work',
-        phaseIndex: 0,
-        phaseTotal: 1,
-      }),
-    );
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'agent:start',
-        label: 'Active',
-        phase: 'Work',
-        phaseIndex: 0,
-        phaseTotal: 1,
-      }),
-    );
+    // One normalized stage owns both calls, whichever spelling reached it.
+    expect(run.snapshot.stages).toMatchObject([
+      { id: 'stage-1', title: 'Work', order: 0 },
+    ]);
+    expect(run.snapshot.calls).toMatchObject([
+      { label: 'Early', stageId: 'stage-1', stageTitle: 'Work' },
+      { label: 'Active', stageId: 'stage-1', stageTitle: 'Work' },
+    ]);
   });
 
   it('rejects invalid primitive usage with clear errors', async () => {
@@ -1598,7 +1591,7 @@ while (true) {}`,
   });
 
   it('rejects non-serializable agent results instead of journaling null', async () => {
-    const events: WorkflowScriptEvent[] = [];
+    const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
     await expect(
       runWorkflowScript({
         script: `${META}return await agent('function-result')`,
@@ -1606,27 +1599,20 @@ while (true) {}`,
           invocation.report?.({ model: 'serialization-model' });
           return () => undefined;
         },
-        onEvent: (event) => events.push(event),
+        onSnapshot: (snapshot) => {
+          snapshots.push(snapshot);
+        },
       }),
     ).rejects.toThrow(/agent\(\) result must be JSON-serializable/i);
-    expect(events).toEqual([
+    // The call ran once and settled failed with the serialization cause.
+    expect(snapshots.at(-1)?.calls).toMatchObject([
       {
-        type: 'agent:start',
-        progressId: 'call-0',
-        index: 0,
+        id: 'call-0',
         label: 'function-result',
-        phase: undefined,
-      },
-      {
-        type: 'agent:end',
-        progressId: 'call-0',
-        index: 0,
-        label: 'function-result',
-        phase: undefined,
-        outcome: 'failed',
+        status: 'failed',
         error: expect.stringMatching(/must be JSON-serializable/i),
         model: 'serialization-model',
-        durationMs: expect.any(Number),
+        attempts: [{ number: 1, completedAt: expect.any(String) }],
       },
     ]);
   });
@@ -1750,7 +1736,7 @@ return 'done'`,
   });
 
   it('stops the workflow when a runner surfaces the run abort', async () => {
-    const events: WorkflowScriptEvent[] = [];
+    const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
     const runner = (invocation: WorkflowAgentInvocation) => {
       invocation.report?.({ model: 'abort-model' });
       const abortError = new Error('runner observed abort');
@@ -1761,23 +1747,23 @@ return 'done'`,
       runScript(
         `
 return await parallel([() => agent('x')])`,
-        { runAgent: runner, onEvent: (event) => events.push(event) },
+        {
+          runAgent: runner,
+          onSnapshot: (snapshot) => {
+            snapshots.push(snapshot);
+          },
+        },
       ),
     ).rejects.toThrow(/runner observed abort/);
-    expect(events).toContainEqual({
-      type: 'agent:end',
-      progressId: 'call-0',
-      index: 0,
-      label: 'x',
-      phase: undefined,
-      outcome: 'failed',
-      error: 'runner observed abort',
-      model: 'abort-model',
-      durationMs: expect.any(Number),
-    });
-    expect(events.filter((event) => event.type === 'agent:end')).toHaveLength(
-      1,
-    );
+    expect(snapshots.at(-1)?.calls).toMatchObject([
+      {
+        id: 'call-0',
+        label: 'x',
+        status: 'failed',
+        error: 'runner observed abort',
+        model: 'abort-model',
+      },
+    ]);
   });
 
   it('does not let script code suppress a fatal runner abort', async () => {
@@ -1886,7 +1872,7 @@ return 'done'`,
   });
 
   it('reports the timeout, not the queued call the timeout cancelled', async () => {
-    const events: WorkflowScriptEvent[] = [];
+    const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
     await expect(
       runScript(
         `
@@ -1898,7 +1884,9 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
             await delay(200);
             return invocation.prompt;
           },
-          onEvent: (event) => events.push(event),
+          onSnapshot: (snapshot) => {
+            snapshots.push(snapshot);
+          },
         },
       ),
     ).rejects.toThrow(/timed out/);
@@ -1906,15 +1894,11 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     // reason that stopped the run, and that reason does not outrank the
     // sandbox's timeout error.
     expect(
-      events.filter(
-        (event) => event.type === 'agent:end' && event.outcome === 'failed',
-      ),
-    ).toContainEqual(
-      expect.objectContaining({
-        label: 'queued',
-        error: expect.stringContaining('wall clock'),
-      }),
-    );
+      snapshots.at(-1)?.calls.find((call) => call.label === 'queued'),
+    ).toMatchObject({
+      status: 'failed',
+      error: expect.stringContaining('wall clock'),
+    });
   });
 
   it('aborts guest execution and the active child from a parent signal', async () => {
@@ -1948,7 +1932,6 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
   it('skip(childExecutionId) skips only that call: SKIPPED result, no journal, siblings finish', async () => {
     const started = new Set<number>();
     const release = new Map<number, () => void>();
-    const events: WorkflowScriptEvent[] = [];
     let control!: WorkflowScriptControl;
     const runner = (invocation: WorkflowAgentInvocation) =>
       new Promise<string>((resolve, reject) => {
@@ -1974,7 +1957,6 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
       onControl: (handle) => {
         control = handle;
       },
-      onEvent: (event) => events.push(event),
     });
 
     await vi.waitFor(() => expect(started.size).toBe(3));
@@ -1990,17 +1972,11 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     expect(result[2]).toBe('done:2');
     // Skipped call is NOT journaled (resume re-runs it); siblings are.
     expect(run.journal.map((entry) => entry.index).toSorted()).toEqual([0, 2]);
-    expect(events).toContainEqual({
-      type: 'agent:end',
-      progressId: 'b',
-      index: 1,
-      label: 'b',
-      phase: undefined,
-      outcome: 'skipped',
-      reason: 'user',
-      model: 'skip-model',
-      durationMs: expect.any(Number),
-    });
+    expect(run.snapshot.calls).toMatchObject([
+      { id: 'a', status: 'completed' },
+      { id: 'b', label: 'b', status: 'skipped', model: 'skip-model' },
+      { id: 'c', status: 'completed' },
+    ]);
   });
 
   it('makes a call controllable the moment its child id is reported', async () => {
@@ -2141,31 +2117,38 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     expect(run.result).toBe('recovered-result');
   });
 
-  it('keeps a journaled completed call completed when the completed emit throws', async () => {
+  it('keeps a journaled completed call completed when a transition observer throws', async () => {
+    const journaled: number[] = [];
     const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
+    let exploded = false;
     const runPromise = runWorkflowScript({
       script: `${META}return await agent('go')`,
       runAgent: async () => 'done',
+      onJournalEntry: (entry) => {
+        journaled.push(entry.index);
+      },
       onSnapshot: (snapshot) => {
         snapshots.push(snapshot);
       },
-      onEvent: (event) => {
-        // The call is already journaled and settled COMPLETED when this
-        // event fires; a throwing host handler must not rewrite it.
-        if (event.type === 'agent:end' && event.outcome === 'completed') {
-          throw new Error('host event handler exploded');
-        }
+      onTransition: (snapshot) => {
+        // The call is already journaled when it first transitions to
+        // COMPLETED; a throwing host observer must not rewrite it.
+        if (exploded || snapshot.calls[0]?.status !== 'completed') return;
+        exploded = true;
+        throw new Error('host transition observer exploded');
       },
     });
 
-    await expect(runPromise).rejects.toThrow('host event handler exploded');
-    const terminal = snapshots.at(-1);
-    expect(terminal?.calls[0]).toMatchObject({ status: 'completed' });
+    await expect(runPromise).rejects.toThrow(
+      'host transition observer exploded',
+    );
+    expect(journaled).toEqual([0]);
+    expect(snapshots.at(-1)?.calls[0]).toMatchObject({ status: 'completed' });
   });
 
   it('charges every retry attempt against the live-call cap', async () => {
     let control!: WorkflowScriptControl;
-    const events: WorkflowScriptEvent[] = [];
+    const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
     let attempts = 0;
     const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
       attempts += 1;
@@ -2184,7 +2167,9 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
       onControl: (handle) => {
         control = handle;
       },
-      onEvent: (event) => events.push(event),
+      onSnapshot: (snapshot) => {
+        snapshots.push(snapshot);
+      },
     });
 
     await vi.waitFor(() => expect(runner).toHaveBeenCalledTimes(1));
@@ -2194,20 +2179,19 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
 
     await expect(run).rejects.toThrow(/agent-call cap/);
     expect(runner).toHaveBeenCalledTimes(2);
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'agent:end',
-        progressId: 'call-0',
-        index: 0,
-        outcome: 'failed',
+    // Both physical attempts were charged, and the third never launched: the
+    // one logical call settles failed with the cap as its cause.
+    expect(snapshots.at(-1)?.calls).toMatchObject([
+      {
+        id: 'call-0',
+        status: 'failed',
         error: expect.stringContaining('agent-call cap'),
-        model: 'retry-model',
-        durationMs: expect.any(Number),
-      }),
-    );
-    expect(events.filter((event) => event.type === 'agent:end')).toHaveLength(
-      1,
-    );
+        attempts: [
+          { number: 1, model: 'retry-model' },
+          { number: 2, model: 'retry-model' },
+        ],
+      },
+    ]);
   });
 
   it('a whole-run abort cascades to every in-flight per-call controller', async () => {

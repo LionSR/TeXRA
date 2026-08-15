@@ -318,90 +318,19 @@ export interface WorkflowJournalEntry {
   result: unknown;
 }
 
-export interface WorkflowScriptPhaseContext {
-  phase?: string;
-  /** Zero-based position in meta.phases, when phase is declared. */
-  phaseIndex?: number;
-  /** Number of phases declared in meta.phases. */
-  phaseTotal?: number;
-}
-
 /** Identity used only to correlate one changing progress record in a run. */
 export type WorkflowScriptProgressId = WorkflowCallIdentity['id'];
 
-interface WorkflowScriptAgentEventBase extends WorkflowScriptPhaseContext {
-  /**
-   * Declarative task id, or a unique run-local id for an undeclared dynamic
-   * call. Distinct from the optional journal disambiguator on agent options.
-   */
-  progressId: WorkflowScriptProgressId;
-  index: number;
-  label: string;
-  childStreamId?: StreamTabId;
-}
-
-export type WorkflowScriptEvent =
-  | {
-      type: 'plan';
-      tasks: readonly WorkflowCallIdentity[];
-    }
-  | {
-      type: 'phase';
-      title: string;
-      /** Zero-based position in meta.phases, when the phase is declared. */
-      index?: number;
-      /** Number of phases declared in meta.phases. */
-      total?: number;
-    }
-  | { type: 'log'; message: string }
-  | (WorkflowScriptAgentEventBase & {
-      type: 'agent:start';
-    })
-  | (WorkflowScriptAgentEventBase & {
-      type: 'agent:stream';
-      childStreamId: StreamTabId;
-    })
-  | (WorkflowScriptAgentEventBase & {
-      type: 'agent:end';
-      outcome: 'cached';
-    })
-  | (WorkflowScriptAgentEventBase & {
-      type: 'agent:end';
-      outcome: 'completed';
-      /** Child model resolved by the runner (live calls only). */
-      model?: string;
-      /**
-       * Spend the execution snapshot has recorded for this call across every
-       * physical attempt it made. The snapshot is the one owner of per-call
-       * cost; this restates it on the event so a progress projection never
-       * accumulates a second, divergent total.
-       */
-      costUsd?: number;
-      /** Host-measured wall time of the agent() call (live calls only). */
-      durationMs: number;
-    })
-  | (WorkflowScriptAgentEventBase & {
-      type: 'agent:end';
-      outcome: 'failed';
-      error: string;
-      /** Child model resolved by the runner, when resolution succeeded. */
-      model?: string;
-      /** Snapshot-recorded spend for this call, when an attempt reported any. */
-      costUsd?: number;
-      /** Host-measured wall time, when an agent attempt began. */
-      durationMs?: number;
-    })
-  | (WorkflowScriptAgentEventBase & {
-      type: 'agent:end';
-      outcome: 'skipped';
-      reason: 'user';
-      /** Child model resolved before the user stopped the attempt, if known. */
-      model?: string;
-      /** Snapshot-recorded spend for the attempt the user stopped. */
-      costUsd?: number;
-      /** Host-measured wall time before the user stopped the attempt. */
-      durationMs: number;
-    });
+/**
+ * The facts the canonical execution snapshot cannot carry. Everything else a
+ * progress projection needs — plan, phases, per-call status, stream identity,
+ * model, cost, timing, errors — lives on {@link WorkflowExecutionSnapshot}
+ * and arrives through {@link WorkflowScriptRunOptions.onTransition}; the
+ * event stream no longer restates it (that dual-stamping is exactly the sync
+ * tax A7 retired). `log` remains an event because a script's `log()` line is
+ * transient activity, not run state.
+ */
+export type WorkflowScriptEvent = { type: 'log'; message: string };
 
 /**
  * Guest-visible result of a call cancelled via `control(childExecutionId,
@@ -455,8 +384,20 @@ export interface WorkflowScriptRunOptions {
    * host restart cannot expose work whose journal entry was never persisted.
    */
   onJournalEntry?: (entry: WorkflowJournalEntry) => void | Promise<void>;
-  /** Receives each canonical snapshot after the transition has been applied. */
+  /**
+   * Durable-persistence hook: receives an isolated copy of the canonical
+   * snapshot after a transition, with writes coalesced under backpressure —
+   * intermediate states may be skipped, the latest always lands.
+   */
   onSnapshot?: (snapshot: WorkflowExecutionSnapshot) => void | Promise<void>;
+  /**
+   * Synchronous per-transition observer for live projections: fires on every
+   * state transition, never coalesced, with the LIVE snapshot reference —
+   * read it synchronously and never retain it (clone if you must). A throw
+   * propagates into the engine and aborts the run, so consumers guard their
+   * own folds.
+   */
+  onTransition?: (snapshot: WorkflowExecutionSnapshot) => void;
   onEvent?: (event: WorkflowScriptEvent) => void;
   /**
    * Handed the per-call control handle once, synchronously, before the script

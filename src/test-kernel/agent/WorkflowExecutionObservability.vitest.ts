@@ -476,50 +476,6 @@ return await agent('cancel secret', { label: 'Cancelled task' })`,
         terminalCounts.cached,
     ).toBe(terminal.calls.length);
   });
-  it('settles the snapshot as failed wherever it emits a failed agent:end', async () => {
-    const cachedScript = `export const meta = {
-  name: 'cached-replay-failure',
-  description: 'cached replay serialization failure',
-}
-return await agent('cached call', { id: 'task' })`;
-    // Take the journal identity from a real run so the replay actually hits
-    // the cached branch, then corrupt only the stored value.
-    const priorRun = await runWorkflowScript({
-      script: cachedScript,
-      runAgent: async () => 'first result',
-    });
-    const prior = priorRun.journal[0]!;
-    const circular: Record<string, unknown> = {};
-    circular.self = circular;
-
-    const { snapshots, onSnapshot } = recordingSnapshots();
-    const endOutcomes: string[] = [];
-    await expect(
-      runWorkflowScript({
-        script: cachedScript,
-        journal: [{ ...prior, result: circular }],
-        runAgent: async () => 'must not re-execute',
-        onEvent: (event) => {
-          if (event.type === 'agent:end') endOutcomes.push(event.outcome);
-        },
-        onSnapshot,
-      }),
-    ).rejects.toThrow(/JSON-serializable/);
-
-    // The event stream said failed; the terminal snapshot must not reclassify
-    // the same call as skipped/not-reached, and it keeps the real cause.
-    expect(endOutcomes).toEqual(['failed']);
-    const terminal = finalSnapshot(snapshots);
-    expect(terminal.lifecycle).toBe('failed');
-    expect(terminal.calls).toMatchObject([
-      { id: 'task', status: 'failed', error: expect.stringMatching(/JSON/) },
-    ]);
-    expect(deriveWorkflowCounts(terminal.calls)).toMatchObject({
-      failed: 1,
-      skipped: 0,
-    });
-  });
-
   it('stops after a first snapshot write failure and preserves its cause', async () => {
     const failure = new Error('initial snapshot disk full');
     const runner = vi.fn(async () => 'unused');
