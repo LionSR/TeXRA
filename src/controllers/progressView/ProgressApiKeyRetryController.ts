@@ -1,8 +1,11 @@
+import PQueue from 'p-queue';
+
 // Local imports
 import type { ApiProvider } from '@model/apiProviders';
 import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import type { ExhaustionReason, StreamTabId } from '@shared/schemas';
+import { isKimiCodeExclusiveRetryModel } from '@shared/model/kimiCodeRetryGate';
 import { isNonEmptyString } from '@utils/core';
 
 export interface ProgressApiKeyRetryRequest {
@@ -85,6 +88,8 @@ export interface ProgressApiKeyRetryControllerDeps {
  * the credential/retry rules testable without depending on VS Code APIs.
  */
 export class ProgressApiKeyRetryController {
+  private readonly routingCommitQueue = new PQueue({ concurrency: 1 });
+
   constructor(private readonly deps: ProgressApiKeyRetryControllerDeps) {}
 
   private get codingPlanToggles(): readonly CodingPlanToggle[] {
@@ -102,6 +107,11 @@ export class ProgressApiKeyRetryController {
   async useOwnApiKey(
     request: ProgressApiKeyRetryRequest,
   ): Promise<ProgressApiKeyRetryResult> {
+    // Kimi Code-exclusive models are served only by the coding endpoint, so a
+    // personal-key switch cannot reroute them; keep the request untouched
+    // rather than disabling routing around an already-swapped client.
+    if (isKimiCodeExclusiveRetryModel(request.model)) return noRetryResult();
+
     const proceeded = await this.ensureOwnApiKey(request);
     if (
       !proceeded ||
@@ -110,20 +120,22 @@ export class ProgressApiKeyRetryController {
       return noRetryResult();
     }
 
-    const routingBefore = this.routingSnapshot();
-    const prepared = await this.applyOwnApiKeyRouting(request);
-    const retried = await this.deps.triggerRetry(
-      request.stream,
-      request.requestId,
-    );
-    if (!retried) {
-      await this.restoreOwnApiKeyRouting(routingBefore, prepared);
-      return noRetryResult();
-    }
-    return {
-      ...prepared,
-      retried: true,
-    };
+    return this.routingCommitQueue.add(async () => {
+      const routingBefore = this.routingSnapshot();
+      const prepared = await this.applyOwnApiKeyRouting(request);
+      const retried = await this.deps.triggerRetry(
+        request.stream,
+        request.requestId,
+      );
+      if (!retried) {
+        await this.restoreOwnApiKeyRouting(routingBefore, prepared);
+        return noRetryResult();
+      }
+      return {
+        ...prepared,
+        retried: true,
+      };
+    });
   }
 
   async ensureOwnApiKey(
@@ -234,18 +246,20 @@ export class ProgressApiKeyRetryController {
     request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
     start: (copilotRouteOverride: CopilotRouteOverride) => Promise<boolean>,
   ): Promise<boolean> {
-    const before = this.routingSnapshot();
-    const prepared = await this.applyOwnApiKeyRouting(request);
-    // The user chose "use own API key" for this retry. The direct-route
-    // override travels only with the replacement launch; the standing
-    // preference remains visible to concurrent and future runs.
-    let started = false;
-    try {
-      started = await start('direct');
-      return started;
-    } finally {
-      if (!started) await this.restoreOwnApiKeyRouting(before, prepared);
-    }
+    return this.routingCommitQueue.add(async () => {
+      const before = this.routingSnapshot();
+      const prepared = await this.applyOwnApiKeyRouting(request);
+      // The user chose "use own API key" for this retry. The direct-route
+      // override travels only with the replacement launch; the standing
+      // preference remains visible to concurrent and future runs.
+      let started = false;
+      try {
+        started = await start('direct');
+        return started;
+      } finally {
+        if (!started) await this.restoreOwnApiKeyRouting(before, prepared);
+      }
+    });
   }
 
   private routingSnapshot(): ProgressApiRoutingSnapshot {

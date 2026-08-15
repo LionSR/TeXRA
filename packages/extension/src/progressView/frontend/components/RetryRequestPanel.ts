@@ -23,6 +23,7 @@ import {
   type ProviderErrorPartial,
 } from '@shared/schemas';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
+import { isKimiCodeExclusiveRetryModel } from '@shared/model/kimiCodeRetryGate';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
 import { tailWithEllipsis, toGraphemes } from '@utils/text/stringUtils';
@@ -50,7 +51,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
         this.emitAction({ action: 'retry' });
         return true;
       case 'k':
-        if (isCredentialExhausted(data.errorDetails)) {
+        if (this.canUseOwnApiKey()) {
           this.emitAction({ action: 'useOwnApiKey' });
           return true;
         }
@@ -66,7 +67,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
   override render(): TemplateResult {
     const data = this.permission.data;
     const isRelay = data.errorDetails?.isRelayError === true;
-    const credentialExhausted = isCredentialExhausted(data.errorDetails);
+    const canUseOwnApiKey = this.canUseOwnApiKey();
     const copilotQuotaExhausted =
       data.errorDetails?.exhaustionReason === 'copilot-subscription';
     const userRetryable = data.errorDetails?.userRetryable !== false;
@@ -114,7 +115,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
           }
         </div>
         <div class="retry-request__actions">
-          ${when(credentialExhausted, () =>
+          ${when(canUseOwnApiKey, () =>
             renderLabeledActionButton({
               icon: 'key',
               text: copilotQuotaExhausted
@@ -152,6 +153,14 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
   // ===========================================================================
   // Utilities
   // ===========================================================================
+
+  private canUseOwnApiKey(): boolean {
+    const data = this.permission.data;
+    return (
+      isCredentialExhausted(data.errorDetails) &&
+      !isKimiCodeExclusiveRetryModel(data.model)
+    );
+  }
 
   private formatRetryDetails(
     details: ProviderErrorPartial | undefined,

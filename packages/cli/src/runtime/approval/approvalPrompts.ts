@@ -3,8 +3,6 @@ import PQueue from 'p-queue';
 import { defaultSession } from '@agent/runtime';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkError/relayDetection';
 import { warn as logWarning } from '@logger/logUtils';
-import { isKimiCodeExclusiveModel } from '@model/kimiCodeSubscriptionRouting';
-import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
@@ -18,6 +16,7 @@ import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscriptionId,
 } from '@shared/codingPlanSubscriptions';
+import { isKimiCodeExclusiveRetryModel } from '@shared/model/kimiCodeRetryGate';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
@@ -109,20 +108,6 @@ export type CliRetryAction =
   | `disable-coding-plan:${CodingPlanSubscriptionId}`
   | 'switch-to-personal'
   | 'none';
-
-/**
- * Whether the retrying model is served ONLY by the Kimi Code coding endpoint
- * (`kimi-for-coding` aliases pin its `baseUrl` in the registry). Unknown or
- * non-Kimi models are not exclusive, so a missing `model` never blocks the
- * GLM/Kimi dual-backend switch.
- */
-export function isKimiCodeExclusiveRetryModel(
-  model: string | undefined,
-): boolean {
-  if (model === undefined) return false;
-  const config = getRuntimeModelConfig(model);
-  return config !== undefined && isKimiCodeExclusiveModel(config);
-}
 
 export function classifyCliRetryAction(
   payload: RetryPermission,
