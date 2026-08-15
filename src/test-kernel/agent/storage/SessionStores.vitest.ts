@@ -199,6 +199,12 @@ describe('SessionStores deletion coordination', () => {
       const snapshots = new StreamSnapshotStore();
       // Ownership is the sidecar FK, never the stream-name suffix.
       ownExecution(snapshots, stream, 'abc001' as ExecutionId);
+      // In production this sidecar fact is mirrored into the always-resident
+      // summary by the session-attached snapshot store; the isolated store
+      // fixture records that same fact directly.
+      session.transcripts.recordSummaryMeta(stream, {
+        executionId: 'abc001' as ExecutionId,
+      });
       const stores = new SessionStores({
         streamLogs: session.transcripts,
         snapshots,
@@ -232,6 +238,12 @@ describe('SessionStores deletion coordination', () => {
       // The retained stream owns its execution through the sidecar FK; the
       // deleted stream has none and only its adjacent state is removed.
       ownExecution(snapshots, retained, 'ac71e1' as ExecutionId);
+      // In production this sidecar fact is mirrored into the always-resident
+      // summary by the session-attached snapshot store; the isolated store
+      // fixture records that same fact directly.
+      session.transcripts.recordSummaryMeta(retained, {
+        executionId: 'ac71e1' as ExecutionId,
+      });
       const stores = new SessionStores({
         streamLogs: session.transcripts,
         snapshots,
