@@ -1,7 +1,10 @@
 import path from 'node:path';
 
-import { type AgentRosterController, getAgent } from '@agent/index';
-import type { AgentEntry } from '@agent/index/agentEntry';
+import {
+  type AgentEntry,
+  type AgentRosterController,
+  getAgent,
+} from '@agent/index';
 import type {
   computeAgentOptionsData,
   loadAgents,
