@@ -1,6 +1,5 @@
 // Node imports
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -15,20 +14,14 @@ import {
 } from '@agent/review/reviewDiff';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  cleanupTempDirs,
+  makeTempDir,
+  withTempDir,
+} from '@test/support/tempDirPlatform';
 import { executeCommand } from '@utils/system/execUtils';
 
 setupPlatform({ workspacePath: process.cwd() }, { fs: nodeFilesystem });
-
-async function withPlainDir(
-  run: (dir: string) => Promise<void>,
-): Promise<void> {
-  const plain = await mkdtemp(path.join(tmpdir(), 'texra-plain-'));
-  try {
-    await run(plain);
-  } finally {
-    await rm(plain, { recursive: true, force: true });
-  }
-}
 
 describe('isPathInChangeSet', () => {
   it('matches exact files and paths under changed directories', () => {
@@ -42,6 +35,7 @@ describe('isPathInChangeSet', () => {
 });
 
 describe('collectReviewDiff (real git repository)', () => {
+  const tempDirs: string[] = [];
   let repo: string;
 
   async function git(...args: string[]): Promise<string> {
@@ -53,7 +47,7 @@ describe('collectReviewDiff (real git repository)', () => {
   }
 
   beforeEach(async () => {
-    repo = await mkdtemp(path.join(tmpdir(), 'texra-review-'));
+    repo = await makeTempDir('texra-review-', tempDirs);
     await git('init', '-b', 'main');
     await git('config', 'user.email', 'test@example.com');
     await git('config', 'user.name', 'Test');
@@ -66,7 +60,7 @@ describe('collectReviewDiff (real git repository)', () => {
   });
 
   afterEach(async () => {
-    await rm(repo, { recursive: true, force: true });
+    await cleanupTempDirs(tempDirs);
   });
 
   async function collectDiff(options: Partial<CollectReviewDiffOptions> = {}) {
@@ -243,7 +237,7 @@ describe('collectReviewDiff (real git repository)', () => {
   });
 
   it('fails with a reason outside a git repository', async () => {
-    await withPlainDir(async (plain) => {
+    await withTempDir('texra-plain-', async (plain) => {
       const result = await collectDiff({ cwd: plain });
       expect(result).toEqual({
         ok: false,
@@ -270,7 +264,7 @@ describe('collectReviewDiff (real git repository)', () => {
   });
 
   it('returns no branch candidates outside a git repository', async () => {
-    await withPlainDir(async (plain) => {
+    await withTempDir('texra-plain-', async (plain) => {
       expect(await listBaseBranchCandidates(plain)).toEqual([]);
     });
   });

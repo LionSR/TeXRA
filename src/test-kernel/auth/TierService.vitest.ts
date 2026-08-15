@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - auth
 import { TierService } from '@auth/serverKeys/TierService';
+import { jsonResponse, stubJsonFetch } from '@test/support/fetchTestUtils';
 
 interface PendingFetch {
   readonly hasAuth: boolean;
@@ -23,27 +24,12 @@ function tierConfig(
   };
 }
 
-function jsonResponse(data: unknown): Response {
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
 function spendingStatus(
   currentSpend: number,
   remaining: number,
   percentUsed: number,
 ): Record<string, unknown> {
   return { currentSpend, limit: 300, remaining, percentUsed };
-}
-
-/** Stubs `fetch` to immediately resolve every call with `data` as JSON. */
-function stubFetchResponse(data: unknown): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(() => Promise.resolve(jsonResponse(data))),
-  );
 }
 
 /**
@@ -142,9 +128,7 @@ describe('TierService', () => {
   });
 
   it('clears the synchronous snapshots on clearCache', async () => {
-    stubFetchResponse(
-      tierConfig({ spendingStatus: spendingStatus(100, 200, 33) }),
-    );
+    stubJsonFetch(tierConfig({ spendingStatus: spendingStatus(100, 200, 33) }));
 
     const service = new TierService('https://example.test');
 
@@ -185,9 +169,7 @@ describe('TierService', () => {
   it('invalidates spending status when an authoritative refresh loses authentication', async () => {
     const service = new TierService('https://example.test');
 
-    stubFetchResponse(
-      tierConfig({ spendingStatus: spendingStatus(300, 0, 100) }),
-    );
+    stubJsonFetch(tierConfig({ spendingStatus: spendingStatus(300, 0, 100) }));
     await service.getConfig('token');
     expect(service.isQuotaExceeded()).toBe(true);
 
@@ -275,7 +257,7 @@ describe('TierService', () => {
   });
 
   it('parses and reports an authenticated spend-check failure', async () => {
-    stubFetchResponse(
+    stubJsonFetch(
       tierConfig({
         spendingStatus: null,
         spendingStatusError: {

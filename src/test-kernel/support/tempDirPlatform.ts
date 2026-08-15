@@ -57,6 +57,25 @@ export async function createTempDirPlatform(
   );
 }
 
+/**
+ * Runs `run` against a fresh temp directory and always removes the directory
+ * when the scope exits — the scoped form of the `tempDirs` registry for
+ * suites that create and tear down a directory within a single test (or a
+ * file-local `withX` fixture). Like {@link makeTempDir}, the path handed to
+ * `run` is realpath-canonicalized.
+ */
+export async function withTempDir<T>(
+  prefix: string,
+  run: (tempDir: string) => Promise<T>,
+): Promise<T> {
+  const tempDirs: string[] = [];
+  try {
+    return await run(await makeTempDir(prefix, tempDirs));
+  } finally {
+    await cleanupTempDirs(tempDirs);
+  }
+}
+
 /** Removes every directory recorded by `createTempDirPlatform` (or pushed manually), then clears the list. */
 export async function cleanupTempDirs(tempDirs: string[]): Promise<void> {
   const uniqueDirs = [...new Set(tempDirs.splice(0))];

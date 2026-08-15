@@ -22,6 +22,7 @@ import {
   createFakePlatform,
   FakeScopedConfigProvider,
 } from '@test/support/FakePlatform';
+import { jsonResponse } from '@test/support/fetchTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 function usageEntry(model: string) {
@@ -43,10 +44,6 @@ function batchModels(batch: unknown): string[] {
 
 function batchId(batch: unknown): string {
   return (batch as { batchId: string }).batchId;
-}
-
-function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), { status: 200 });
 }
 
 function stubRelayToken(): void {
