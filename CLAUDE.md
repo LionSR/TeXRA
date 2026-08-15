@@ -185,6 +185,13 @@ not exist here — read the file rather than upstream docs.
 - **Exports are contracts.** A new export needs a consumer in the same PR;
   `npm run check:dead-code-ratchet` enforces it against
   `config/ratchets/knip-baseline.json`.
+- **Tests are a budget, not proof of work.** Internal interfaces here break
+  often by design, so every test pinned to a churning seam is merge friction,
+  not safety. Default for a PR is zero new tests: a behavior-preserving
+  refactor adds none, a bug fix gets at most one regression test and only if
+  it earns its place, a feature gets a few at its durable boundary. Extend
+  existing suites instead of adding files, and don't demand tests in review
+  beyond this bar. Full rules: AGENTS.md "Testing discipline".
 - **Serialize async work with `p-queue`**, never a hand-rolled promise chain.
 
 Full rationale and the evidence behind each: AGENTS.md "Design and
