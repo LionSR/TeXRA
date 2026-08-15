@@ -9,11 +9,9 @@ import { spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdtempSync,
-  mkdirSync,
   readdirSync,
   readFileSync,
   rmSync,
-  rmdirSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -320,6 +318,12 @@ function generateRemoteAgentsSql() {
 // agent-configs bucket, so --apply refuses to publish while any storage_path
 // is missing (#10317). The check runs as SQL over the same connection as the
 // apply itself; the RAISE makes the CLI exit non-zero.
+// Distinctive text in the preflight RAISE when catalog storage paths are
+// missing. The apply error path matches this marker so it can tell missing
+// objects apart from every other preflight failure (#10332).
+const STORAGE_PREFLIGHT_MISSING_MARKER =
+  'catalog storage path(s) missing from the agent-configs bucket';
+
 function buildStoragePreflightSql(agents) {
   const values = agents
     .map((agent) => `    (${sqlString(agent.storagePath)})`)
@@ -346,7 +350,7 @@ function buildStoragePreflightSql(agents) {
     '  );',
     '',
     '  IF missing IS NOT NULL THEN',
-    "    RAISE EXCEPTION 'sync-remote-agents: % catalog storage path(s) missing from the agent-configs bucket: %. Upload the YAML prompt bodies first (docs/supabase/SUPABASE_SETUP.md, Part 7).',",
+    `    RAISE EXCEPTION 'sync-remote-agents: % ${STORAGE_PREFLIGHT_MISSING_MARKER}: %. Upload the YAML prompt bodies first (docs/supabase/SUPABASE_SETUP.md, Part 7).',`,
     "      array_length(missing, 1), array_to_string(missing, ', ');",
     '  END IF;',
     'END;',
@@ -355,11 +359,27 @@ function buildStoragePreflightSql(agents) {
   ].join('\n');
 }
 
-function runSupabaseQuery(args) {
+function runSupabaseQuery(args, options = {}) {
+  const { captureOutput = false, env = {} } = options;
   const result = spawnSync('supabase', args, {
-    stdio: 'inherit',
+    stdio: captureOutput ? ['inherit', 'pipe', 'pipe'] : 'inherit',
     cwd: rootDir,
+    env: { ...process.env, ...env },
+    encoding: 'utf8',
   });
+
+  const output = captureOutput
+    ? `${result.stdout ?? ''}${result.stderr ?? ''}`
+    : '';
+
+  if (captureOutput) {
+    if (result.stdout) {
+      process.stdout.write(result.stdout);
+    }
+    if (result.stderr) {
+      process.stderr.write(result.stderr);
+    }
+  }
 
   if (result.error) {
     if (result.error.code === 'ENOENT') {
@@ -372,15 +392,19 @@ function runSupabaseQuery(args) {
         result.error,
       );
     }
-    return 1;
+    return { status: 1, output };
   }
   if (result.signal) {
     console.error(
       `sync-remote-agents: supabase CLI was killed by signal ${result.signal}`,
     );
-    return 1;
+    return { status: 1, output };
   }
-  return result.status ?? 1;
+  return { status: result.status ?? 1, output };
+}
+
+function isMissingStoragePreflightFailure(output) {
+  return output.includes(STORAGE_PREFLIGHT_MISSING_MARKER);
 }
 
 function applyRemoteAgentsSql() {
@@ -388,44 +412,18 @@ function applyRemoteAgentsSql() {
   const projectRef = process.env.SUPABASE_PROJECT_REF;
   const projectRefFile = resolve(rootDir, 'supabase/.temp/project-ref');
   const args = ['--yes', 'db', 'query', '-o', 'table'];
-  // `supabase db query --linked` reads its target from
-  // supabase/.temp/project-ref. When SUPABASE_PROJECT_REF is set we overwrite
-  // that file, so back up the prior link state first and restore it on the way
-  // out, leaving the checkout as we found it (#10316).
-  let restoreProjectRef;
+  const queryEnv = {};
 
   if (dbUrl) {
     args.push('--db-url', dbUrl);
   } else {
     if (projectRef) {
-      const previousContents = existsSync(projectRefFile)
-        ? readFileSync(projectRefFile)
-        : null;
-      const previousRef = previousContents?.toString('utf8').trim();
-      if (previousRef && previousRef !== projectRef) {
-        console.error(
-          `sync-remote-agents: substituting SUPABASE_PROJECT_REF=${projectRef} ` +
-            `over this checkout's linked project (${previousRef}); ` +
-            'the link state is restored when the run ends.',
-        );
-      }
-      const tempDirExisted = existsSync(dirname(projectRefFile));
-      mkdirSync(dirname(projectRefFile), { recursive: true });
-      writeFileSync(projectRefFile, `${projectRef}\n`);
-      restoreProjectRef = () => {
-        if (previousContents !== null) {
-          writeFileSync(projectRefFile, previousContents);
-          return;
-        }
-        rmSync(projectRefFile, { force: true });
-        if (!tempDirExisted) {
-          try {
-            rmdirSync(dirname(projectRefFile));
-          } catch {
-            // The CLI left its own cache files behind; keep them.
-          }
-        }
-      };
+      // `supabase db query --linked` reads its target from
+      // supabase/.temp/project-ref unless SUPABASE_PROJECT_ID is set. Pass the
+      // requested ref through that env var instead of rewriting the checkout's
+      // link file, so there is nothing to restore even if the process is
+      // killed mid-query (#10316, #10329).
+      queryEnv.SUPABASE_PROJECT_ID = projectRef;
     } else if (!existsSync(projectRefFile)) {
       console.error(
         'sync-remote-agents: set SUPABASE_DB_URL or SUPABASE_PROJECT_REF, ' +
@@ -443,23 +441,32 @@ function applyRemoteAgentsSql() {
     if (agents.length > 0) {
       const preflightPath = join(sqlDir, 'remote-agents-preflight.sql');
       writeFileSync(preflightPath, buildStoragePreflightSql(agents));
-      const preflightStatus = runSupabaseQuery([...args, '-f', preflightPath]);
-      if (preflightStatus !== 0) {
-        console.error(
-          'sync-remote-agents: Storage preflight failed; catalog metadata was NOT applied. ' +
-            'Upload the missing YAML prompt bodies to the agent-configs bucket ' +
-            'first (docs/supabase/SUPABASE_SETUP.md, Part 7).',
-        );
-        return preflightStatus;
+      const preflight = runSupabaseQuery([...args, '-f', preflightPath], {
+        captureOutput: true,
+        env: queryEnv,
+      });
+      if (preflight.status !== 0) {
+        if (isMissingStoragePreflightFailure(preflight.output)) {
+          console.error(
+            'sync-remote-agents: Storage preflight failed; catalog metadata was NOT applied. ' +
+              'Upload the missing YAML prompt bodies to the agent-configs bucket ' +
+              'first (docs/supabase/SUPABASE_SETUP.md, Part 7).',
+          );
+        } else {
+          console.error(
+            'sync-remote-agents: Storage preflight failed; catalog metadata was NOT applied. ' +
+              'The error above describes the failure.',
+          );
+        }
+        return preflight.status;
       }
     }
 
     const sqlPath = join(sqlDir, 'remote-agents.sql');
     writeFileSync(sqlPath, buildSql(agents));
-    return runSupabaseQuery([...args, '-f', sqlPath]);
+    return runSupabaseQuery([...args, '-f', sqlPath], { env: queryEnv }).status;
   } finally {
     rmSync(sqlDir, { recursive: true, force: true });
-    restoreProjectRef?.();
   }
 }
 
