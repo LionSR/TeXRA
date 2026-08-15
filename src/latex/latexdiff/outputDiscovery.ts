@@ -8,12 +8,6 @@
 import * as path from 'node:path';
 
 // Local imports
-import {
-  getExecutionStore,
-  isAgentRunEntry,
-  listExecutions,
-  type AgentExecutionListingEntry,
-} from '@agent/storage';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
@@ -41,6 +35,7 @@ import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
 // Local file imports
 import { hasBetweenRoundDiffSuffix } from './diffFileNameManager';
+import type { LatexExecutionDiscoveryPort } from './executionDiscovery';
 
 /**
  * Recursively collect all `.tex` file paths under `dir`, returned as paths
@@ -209,6 +204,7 @@ export async function scanRunDirForOutputs(
  * when no matching execution exists.
  */
 export async function discoverLatestExecutionOutputs(
+  discovery: LatexExecutionDiscoveryPort,
   query: {
     agent: string;
     model: string;
@@ -220,22 +216,18 @@ export async function discoverLatestExecutionOutputs(
   rounds: RoundIndexed<OutputFileInfo>;
 } | null> {
   try {
-    const executions = await listExecutions();
+    const executions = await discovery.listAgentRuns();
     // Normalize both sides so trivial path-format differences (duplicate
     // separators, `./`, mixed forward/backslash) don't silently miss a
     // matching execution.
     const normalizedInput = path.normalize(query.inputFile);
 
     const candidates = toNewestFirstByTimestamp(
-      executions.filter((entry): entry is AgentExecutionListingEntry => {
-        if (
-          !isAgentRunEntry(entry) ||
-          entry.record.agent !== query.agent ||
-          entry.record.model !== query.model
-        ) {
+      executions.filter((entry) => {
+        if (entry.agent !== query.agent || entry.model !== query.model) {
           return false;
         }
-        const entryInput = entry.record.inputFiles[0];
+        const entryInput = entry.inputFiles[0];
         return (
           typeof entryInput === 'string' &&
           path.normalize(entryInput) === normalizedInput
@@ -249,8 +241,7 @@ export async function discoverLatestExecutionOutputs(
       // The stream stamped on execution metadata addresses its snapshot
       // directly; identity is never rebuilt from agent/model configuration.
       // Records without one go straight to the run-directory scan below.
-      const streamId = (await getExecutionStore(candidate.id).readMeta())
-        ?.streamId;
+      const streamId = await discovery.readStreamId(candidate.id);
       if (streamId !== undefined) {
         const rounds = await snapshots.readOutputFiles(streamId);
         if (rounds && Object.keys(rounds).length > 0) {
@@ -270,7 +261,7 @@ export async function discoverLatestExecutionOutputs(
       const scanned = await scanRunDirForOutputs(
         candidate.id,
         query.inputFile,
-        candidate.record.inputFiles.slice(1),
+        candidate.inputFiles.slice(1),
         channel,
       );
       if (scanned) {
