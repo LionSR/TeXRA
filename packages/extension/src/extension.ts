@@ -54,7 +54,10 @@ import { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
 import { registerLanguageModelTools } from '@frontend/lm/registerLanguageModelTools';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
-import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
+import {
+  clearVscodeLeanServerEntries,
+  vscodeLeanLanguageServices,
+} from '@frontend/lean/VscodeIntegration';
 import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 import { resolveGitCommonRoot } from '@frontend/git/resolveGitRoot';
 import { registerInlineCriticism } from '@frontend/latex/inlineCriticism';
@@ -546,7 +549,7 @@ export async function activate(context: vscode.ExtensionContext) {
   mainViewProvider.setProgressViewProvider(progressViewProvider);
   registerFileDecorations(context);
 
-  setLeanLanguageServices(leanVscodeIntegration);
+  setLeanLanguageServices(vscodeLeanLanguageServices);
   setSetupPlatform({
     host: 'extension',
     signIn: async () =>
@@ -795,7 +798,7 @@ export async function deactivate() {
   const host = lifecycleHost;
   lifecycleHost = undefined;
   try {
-    leanVscodeIntegration.clearVscodeLeanServerEntries();
+    clearVscodeLeanServerEntries();
     await host?.runShutdown();
   } finally {
     teardownDefaultSession();
