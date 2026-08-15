@@ -96,6 +96,15 @@ export type UserVars = {
 export type TemplateVars = Partial<UserVars> & Record<string, unknown>;
 
 /**
+ * `buildUserVars`' product: the complete fixed {@link UserVars} vocabulary
+ * plus the agent-defined `requiredFilesInternal` `X_FILE`/`X_CONTENT` string
+ * pairs beside it. TypeScript has no index signature that excludes the fixed
+ * keys, so the custom keys are admitted as unknown — the same view
+ * {@link TemplateVars} gives render-boundary readers.
+ */
+export type BuiltUserVars = UserVars & Record<string, unknown>;
+
+/**
  * Runtime validators for the fixed {@link UserVars} keys. Known keys are
  * optional here because persisted checkpoints may have dropped variables; the
  * `satisfies` clause keeps this map in lockstep with the vocabulary. Custom
