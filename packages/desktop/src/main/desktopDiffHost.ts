@@ -189,15 +189,9 @@ export function createDesktopDiffHost(
           await removeTempDir(tempDir);
           externalPatchDirs.delete(tempDir);
         } catch (cleanupError) {
-          if (drainComplete) {
-            console.warn(
-              `[desktop] Failed to remove the temporary diff directory after the window closed; leaving it for OS temp cleanup: ${toErrorMessage(cleanupError)}`,
-            );
-          } else {
-            console.warn(
-              `[desktop] Failed to remove the temporary diff directory after the window closed; will retry during disposal: ${toErrorMessage(cleanupError)}`,
-            );
-          }
+          console.warn(
+            `[desktop] Failed to remove the temporary diff directory after the window closed; cleanup will continue through disposal if still tracked, otherwise it is left to OS temp cleanup: ${toErrorMessage(cleanupError)}`,
+          );
         }
         throw new Error(
           'Desktop window closed before the diff could be opened.',
