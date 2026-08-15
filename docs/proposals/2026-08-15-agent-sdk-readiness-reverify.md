@@ -34,8 +34,8 @@ What is new in this pass:
 3. **The deep audit surfaced a short list of genuine, small opportunities** (§4)
    that earlier measurement-only passes had not itemized — chiefly two logger
    observations (parallel module-logger factories; process-global sink state as
-   the real multi-instance-embedding obstacle) and one residual ambient-ALS read
-   in a core cycle flow. None is a defect; each is dispositioned.
+   one facet of the process-wide once-at-startup constraint) and one residual
+   ambient-ALS read in a core cycle flow. None is a defect; each is dispositioned.
 4. **Subagent boundaries remain already-drawn** (§5) — no boundary to newly
    invent; §5 names candidate carve-out starting points, each annotated with the
    concrete runtime coupling it would first have to convert to a port (none is a
@@ -149,17 +149,26 @@ a change this pass makes.
   channel abstraction earns its keep for the **agent-run** path
   (`attachChannelSubscriber`, per-run disposable output channel), but for the ~28
   module-level singletons it is `createLog` wearing an `AgentTrace` type.
-  **Disposition:** a real consolidation candidate the earlier "minimal and
-  single-owner" summaries did not itemize — the sink is single-owner, but there
-  are two doors to it. Non-urgent; behavior-preserving if done.
-- **L-2: process-global sink state is the real multi-instance-embedding obstacle
+  **Disposition:** a real duplication the earlier "minimal and single-owner"
+  summaries did not itemize — but not a clean factory merge, and **not
+  behavior-preserving if done naively.** The two have different return contracts
+  (`createChannelTrace` returns a full `AgentTrace` — spreading `noopTrace`,
+  suppressing `INTERNAL`, and used by some callers as an `AgentTrace`-typed
+  fallback; `createLog` exposes four methods and routes through the module
+  namespace so test spies can intercept module-level loggers). The sink is
+  already shared through `createChannelWriter`, so the only safe move is
+  narrowing the individual `createChannelTrace` callers that use log methods only
+  onto `createLog` — a per-caller change, not a merge of the two factories. Low
+  value; listed for completeness.
+- **L-2: process-global sink state, one facet of the multi-tenancy constraint
   (SDK gap).** `logUtils.ts:50-53`: `channels`, `mainOutputChannel`,
   `outputChannelFactory`, `outputSinksTrusted` are module singletons;
   `setOutputChannelFactory` (`:183`) mutates them process-wide and disposes all
   sinks. Two isolated agent instances in one process cannot hold distinct log
-  sinks or distinct trust policy. This — not the trace layer, which is per-
-  instance and clean — is the structural blocker to a fully embeddable
-  multi-instance SDK. It also confirms the standing note that **there is no
+  sinks or distinct trust policy. The trace layer itself is per-instance and
+  clean; this is a logging-side instance of the broader once-at-startup
+  constraint that also makes the platform/registry process-global (§6(b)) — not
+  independently "the" blocker. It also confirms the standing note that **there is no
   `platform().log` port** (`platform.ts:31-34` documents channel logging as
   _not_ a platform member; hosts wire it via `logUtils.setOutputChannelFactory`).
   **Disposition:** a maintainer design decision (per-instance sink registry),
@@ -198,8 +207,12 @@ a change this pass makes.
   port members on `IModelHandler`. Genuinely shared behavior (compaction,
   continuation, media, usage), but the concentration is the main "smaller verb
   set" liability for an SDK-ideal port. **Disposition:** not a discrete removal;
-  a long-horizon port-narrowing note. Minor: `support/sdkErrorMetadata.ts:9` uses
-  `abstract new (...args: any[])` — prefer `unknown[]` at that provider boundary.
+  a long-horizon port-narrowing note. (An earlier draft suggested changing
+  `support/sdkErrorMetadata.ts:9`'s `abstract new (...args: any[]) => Error` to
+  `unknown[]`; that is **retracted** — the type is used only as an `instanceof`
+  right-hand side, and `unknown[]` would make the concrete provider error classes
+  non-assignable to it by constructor-parameter contravariance. `any[]` is the
+  correct spelling here; there is no cleanup.)
 - Confirmed load-bearing: `IModelHandler` as a `Pick<ModelHandler,…>` + one
   optional method (structurally cannot drift; erases the client generic to
   `unknown` via `RunModelHandler`), the four per-provider SDK-error taggers (each
@@ -310,12 +323,19 @@ executionId)`. **Residual coupling:** it hard-imports and calls `submitFollowUp`
   (`subagentExecution.ts:203`, `inBandSubagentExecution.ts:400`), ranked #1 in the
   live plan of record
   [`2026-08-14-delegation-flow-substrate-consolidation.md`](./2026-08-14-delegation-flow-substrate-consolidation.md);
-  break it there, not here. (b) The **multi-instance-embedding blocker:** the
-  process-global log-sink and trust-policy singletons in `logUtils.ts` (§4 L-2),
-  which prevent two isolated agent instances in one process from holding distinct
-  sinks. These block different SDK goals (a clean import graph vs. in-process
-  multi-tenancy); neither is the sole "one blocker," and this pass resolves
-  neither.
+  break it there, not here. (b) The **in-process multi-tenancy constraint.** Two
+  isolated agent instances with _distinct_ platforms or agent registries in one
+  process is **out of the current design**, not merely blocked by a fixable seam:
+  `runAgent` documents the platform and agent registry as process-wide and throws
+  if a second platform is introduced (`packages/agent/src/index.ts:219-220`,
+  `:234-240`), and the platform lives in the module-global `_platform`
+  (`platform.ts:59-66`) under the repo's once-at-startup composition rule. The
+  process-global log-sink and trust-policy singletons in `logUtils.ts` (§4 L-2)
+  are one instance of the same constraint. So the honest scope is: **concurrent
+  runs sharing one platform** are supported; **isolated instances with distinct
+  platforms** would require revisiting the once-at-startup rule — a deliberate
+  architecture decision, not a cleanup. These are distinct from (a); neither is
+  the sole "one blocker," and this pass resolves none of them.
 
 ## 7. Remaining open items (unchanged from `-08-14 §9`, none a defect)
 
