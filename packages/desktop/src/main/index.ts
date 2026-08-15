@@ -12,6 +12,7 @@ import {
   session,
   shell,
 } from 'electron';
+import PQueue from 'p-queue';
 
 import type { SessionStores } from '@agent/storage';
 import {
@@ -68,7 +69,6 @@ import {
 import { launchDesktopAgent } from './desktopAgentLaunch.js';
 import { DesktopProcessResumeOwner } from './desktopAgentResume.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
-import { createDesktopDiffHostDisposeQueue } from './desktopDiffHostDispose.js';
 import { initializeDesktopProcessStores } from './desktopProcessStores.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
@@ -162,7 +162,7 @@ let continueQuitAfterWindowClose: (() => void) | undefined;
 // disposal. The disposal call itself still starts synchronously in the
 // `closed` handler; only the returned completion promise is queued, so a
 // window's `disposed` flag flips before earlier cleanup settles.
-const enqueueDesktopDiffHostDispose = createDesktopDiffHostDisposeQueue();
+const diffHostDisposeQueue = new PQueue({ concurrency: 1 });
 // Set by the window's closed handler and awaited by the lifecycle shutdown
 // drain registered below, so recursive temp-dir removals finish before the
 // process exits instead of racing the quit flow.
@@ -1113,10 +1113,8 @@ function createWindow(options: {
     // here (so `disposed` flips immediately); the queue only orders when this
     // window's completion promise resolves, keeping a macOS dock-reopen from
     // discarding an earlier window's still-running cleanup.
-    pendingDesktopDiffHostDispose = enqueueDesktopDiffHostDispose(
-      () => desktopDiffHost.dispose(),
-      reportAsyncError,
-    );
+    const current = desktopDiffHost.dispose().catch(reportAsyncError);
+    pendingDesktopDiffHostDispose = diffHostDisposeQueue.add(() => current);
     executionsWatcher?.close();
     if (mainWindow === window) {
       mainWindow = null;

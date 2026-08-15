@@ -227,12 +227,11 @@ export function createDesktopDiffHost(
     const stillFailed = firstFailures.filter(
       (_, index) => retryResults[index].status === 'rejected',
     );
-    // Keep directories whose retry also failed recorded so another dispose can
-    // try again instead of leaking them permanently.
-    for (const tempDir of stillFailed) {
-      externalPatchDirs.add(tempDir);
-    }
     if (stillFailed.length > 0) {
+      // `dispose()` runs once per host, so there is no later cleanup pass that
+      // can read a re-recorded directory. Surface the failure loudly and leave
+      // the directories to the OS temp-directory cleanup instead of
+      // pretending another dispose will retry them.
       throw new AggregateError(
         retryResults
           .filter(
@@ -242,7 +241,7 @@ export function createDesktopDiffHost(
           .map((failure) => failure.reason),
         `Failed to remove ${stillFailed.length} diff temp ${
           stillFailed.length === 1 ? 'directory' : 'directories'
-        }.`,
+        }; the directories are left for OS temp cleanup.`,
       );
     }
   }
