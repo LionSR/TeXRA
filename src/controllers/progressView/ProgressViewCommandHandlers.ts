@@ -51,9 +51,11 @@ export async function resolveNativeAgentRun(
   stream: StreamTabId,
   showInfo: (message: string) => void | PromiseLike<unknown>,
   action: string,
+  preload?: (stream: StreamTabId) => Promise<void>,
 ): Promise<
   (RunMetadata & { config: NonNullable<RunMetadata['config']> }) | null
 > {
+  await preload?.(stream);
   const metadata = getRunMetadata(stream);
   if (!isPlainAgentIdentity(metadata.identity)) {
     await showInfo(
@@ -352,6 +354,11 @@ export interface ProgressViewSecondTierActions {
   /** Single-field lookup used only by follow-up polishing. */
   readonly getRunConfig: (stream: StreamTabId) => AgentConfig | undefined;
   /**
+   * Warm a webview-selected stream before the synchronous metadata and
+   * artifact readers above run. Production hosts always provide it.
+   */
+  readonly preload?: (stream: StreamTabId) => Promise<void>;
+  /**
    * Restore the run config of a completed run into the main view (the extension
    * routes through `texra.restoreState`; the desktop calls
    * `buildMainViewState` / `prepareMainViewExecutionLaunch` directly).
@@ -466,6 +473,7 @@ export function createProgressViewSecondTierHandlers(
         data.stream,
         deps.host.showInfo,
         'restored',
+        deps.preload,
       );
       if (!metadata) return;
       await deps.restoreRunConfig(metadata.config);
@@ -503,6 +511,7 @@ export function createProgressViewSecondTierHandlers(
 
     // ── Follow-up polish ──
     [CMD.POLISH_FOLLOW_UP]: async (data) => {
+      await deps.preload?.(data.stream);
       const config = deps.getRunConfig(data.stream);
       if (!config) return;
       try {
