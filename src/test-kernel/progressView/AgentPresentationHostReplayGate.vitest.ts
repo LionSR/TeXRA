@@ -313,6 +313,41 @@ describe('extension presentation delivery truthfulness (#10400)', () => {
     }
   });
 
+  it('keeps the fallback notification delivered when the retry reveal throws', async () => {
+    // The toast handoff is already the delivered surface, so a failed retry
+    // is warn-logged without downgrading the event (#10535).
+    const executeCommand = vi
+      .spyOn(vscode.commands, 'executeCommand')
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('no view container'));
+    const showInformationMessage = vi
+      .spyOn(vscode.window, 'showInformationMessage')
+      .mockImplementation(async () => 'Show Progress View' as never);
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    try {
+      const host = presentationHost({ isViewVisible: () => false });
+      await expect(
+        host.emit('requestEnsureProgressView', {
+          fallbackNotification: {
+            agentName: 'writer',
+            modelName: 'test-model',
+            inputName: 'paper.tex',
+            outputInfo: 'to paper.out.tex',
+          },
+        }),
+      ).resolves.toBe(true);
+      expect(showInformationMessage).toHaveBeenCalledOnce();
+      expect(warn).toHaveBeenCalledWith(
+        'agentEventListeners',
+        expect.stringContaining('retry the progress-view reveal'),
+      );
+    } finally {
+      executeCommand.mockRestore();
+      showInformationMessage.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
   it('reports a rendered instruction as delivered once VS Code accepts it', async () => {
     const showInformationMessage = vi
       .spyOn(vscode.window, 'showInformationMessage')

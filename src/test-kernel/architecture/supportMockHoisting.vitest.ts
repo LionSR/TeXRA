@@ -12,7 +12,8 @@ import {
  * shared `@test/support/*Mock` modules rely on this so their `vi.mock`
  * factories can close over a bag that is initialized before the mock is
  * registered. If a future Vitest version stops hoisting imported modules,
- * this test fails with `['before', 'hoisted-factory', 'after']` instead of
+ * in-place evaluation resets the pre-hoisted `'before'` marker inside the
+ * factory, so this test fails with `['hoisted-factory', 'after']` instead of
  * hoisting the factory ahead of the module body.
  */
 describe('shared test-kernel mock hoisting', () => {
