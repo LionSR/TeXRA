@@ -326,7 +326,7 @@ export class SessionStores {
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
     return (
-      this.snapshots.getRunMetadata(stream).executionId ??
+      this.snapshots.getExecutionIdMap().get(stream) ??
       (await this.snapshots.readPersistedExecutionId(stream)) ??
       this.streamLogs.getSummaryMeta(stream)?.executionId
     );

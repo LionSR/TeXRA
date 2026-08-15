@@ -108,19 +108,26 @@ export async function readMeta(
 }
 
 /**
- * Ownership reads need to distinguish corrupt-present metadata from a
- * genuinely absent `meta.json`. `readMeta` intentionally downgrades
- * truncated/corrupt JSON to missing so a full seed can recover to an empty
- * base; this strict variant lets the one-field ownership read propagate that
- * SyntaxError so callers can skip or report the damaged stream instead of
- * treating it as a legacy record with no FK.
+ * Ownership reads need to distinguish any present-but-invalid metadata from a
+ * genuinely absent `meta.json`. `readMeta` intentionally downgrades truncated
+ * or schema-invalid JSON so a full seed can recover; this strict variant lets
+ * the one-field ownership read propagate both JSON `SyntaxError` and
+ * schema-invalid present metadata, so callers can skip or report the damaged
+ * stream instead of treating it as a legacy record with no FK.
  */
 export async function readMetaForOwnership(
   kv: KVStore,
 ): Promise<StreamTabMeta | undefined> {
   const raw = await kv.read(STREAM_DATA_KEYS.META);
   if (raw === undefined) return undefined;
-  return parseStreamMeta(raw);
+  const parsed = StreamTabMetaSchema.safeParse(raw);
+  if (!parsed.success) {
+    log.warn('Discarding unreadable persisted stream metadata for ownership.', {
+      data: parsed.error,
+    });
+    throw new Error('Invalid persisted stream metadata ownership');
+  }
+  return parsed.data;
 }
 
 function parseStreamMeta(raw: unknown): StreamTabMeta | undefined {

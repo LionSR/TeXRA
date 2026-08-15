@@ -1022,6 +1022,57 @@ describe('StreamSnapshotStore', () => {
     );
   });
 
+  it('rejects valid-JSON ownership metadata with an invalid execution FK', async () => {
+    await StorageFS.ensureDir(streamDataDir(STREAM));
+    await StorageFS.write(
+      path.join(streamDataDir(STREAM), 'meta.json'),
+      JSON.stringify({ schemaVersion: 1, executionId: 42 }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await expect(store.readPersistedExecutionId(STREAM)).rejects.toThrow(
+      'Invalid persisted stream metadata ownership',
+    );
+  });
+
+  it('rejects non-object ownership metadata instead of treating it as missing', async () => {
+    await StorageFS.ensureDir(streamDataDir(STREAM));
+    await StorageFS.write(
+      path.join(streamDataDir(STREAM), 'meta.json'),
+      JSON.stringify(['not', 'a', 'meta']),
+    );
+
+    const store = new StreamSnapshotStore();
+    await expect(store.readPersistedExecutionId(STREAM)).rejects.toThrow(
+      'Invalid persisted stream metadata ownership',
+    );
+  });
+
+  it('usage-only preload supplies usage without warning and preserves live deltas', async () => {
+    await writeStreamFile(STREAM, 'usageStats.json', {
+      [RUN]: usage(1, 2, 0.1),
+    });
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM], { usageOnly: true });
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+
+    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject({
+      inputTokens: 1,
+      outputTokens: 2,
+      cost: 0.1,
+    });
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    snapshotFacts(store).addUsage(STREAM, RUN_2, usage(3, 4, 0.2));
+    expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject({
+      inputTokens: 3,
+      outputTokens: 4,
+      cost: 0.2,
+    });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
   it('strips a retired runDescriptor sidecar without reading its FK', async () => {
     // Pre-FK sidecars carried a whole runDescriptor; that shape is retired.
     // The unknown key is stripped: no FK is lifted out of it, and the rest

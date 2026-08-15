@@ -315,6 +315,8 @@ interface StreamRecord {
    * lossy read permanently deleting them on the next save (#7464).
    */
   usageUnparsed: Map<string, unknown>;
+  /** Usage was hydrated by a usage-only seed; `getRunUsage` needs no warning. */
+  usageProvenance: boolean;
   workPlan: WorkPlanSnapshot;
   meta: StreamTabMeta | undefined;
   /**
@@ -379,6 +381,7 @@ export class StreamSnapshotStore {
     compileFailures: {},
     usage: new Map(),
     usageUnparsed: new Map(),
+    usageProvenance: false,
     workPlan: EMPTY_WORK_PLAN,
     meta: undefined,
     runExecutionId: undefined,
@@ -1038,8 +1041,11 @@ export class StreamSnapshotStore {
   }
 
   getRunUsage(stream: StreamTabId): Map<string, TokenUsageStats> {
-    this.warnIfUnseeded('getRunUsage', stream);
-    return new Map(this.records.get(stream)?.usage ?? []);
+    const record = this.records.get(stream);
+    if (!record?.usageProvenance) {
+      this.warnIfUnseeded('getRunUsage', stream);
+    }
+    return new Map(record?.usage ?? []);
   }
 
   /** Flattened set of known output-file paths for a stream. */
@@ -1811,6 +1817,18 @@ export class StreamSnapshotStore {
     if (!current || current.diskState !== 'unknown') return;
     current.usage = new Map(usage.usage);
     current.usageUnparsed = new Map(usage.unparsedRuns);
+    // Replay live usage deltas that landed while the usage sidecar was being
+    // read. Leaving them in `overlays.usage` would make a later full seed
+    // double-count them, so persist the merged map immediately.
+    const usageOverlay = current.overlays.usage;
+    if (usageOverlay) {
+      for (const [storageKey, delta] of usageOverlay) {
+        this.applyUsageDeltaMemory(current, storageKey, delta);
+      }
+      current.overlays.usage = undefined;
+      this.writeUsage(streamId);
+    }
+    current.usageProvenance = true;
   }
 
   private async seedStreams(streamIds: readonly StreamTabId[]): Promise<void> {

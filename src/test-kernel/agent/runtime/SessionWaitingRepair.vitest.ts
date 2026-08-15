@@ -126,8 +126,11 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
 
   it('prefers the persisted sidecar FK over a divergent summary mirror', async () => {
     seedCancelled();
-    // Flush the run.start fact so the sidecar carries the authoritative FK.
+    // Flush the run.start fact so the sidecar carries the authoritative FK,
+    // then evict the resident record so the probe is forced to read the cold
+    // sidecar instead of answering from the always-resident snapshot.
     await session.snapshots.flush();
+    session.snapshots.evictAll();
     const divergentExecutionId = `c${executionId.slice(1)}` as ExecutionId;
     session.transcripts.recordSummaryMeta(streamId, {
       executionId: divergentExecutionId,
@@ -142,10 +145,14 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
 
   it('does not reject follow-ups when the ownership recheck becomes unreadable', async () => {
     seedCancelled();
+    // Start from a cold sidecar so the probe's initial ownership read and its
+    // recheck both go through `readPersistedExecutionId`.
+    await session.snapshots.flush();
+    session.snapshots.evictAll();
     mockResumable();
-    vi.spyOn(session.snapshots, 'readPersistedExecutionId').mockRejectedValue(
-      new Error('ownership recheck failed'),
-    );
+    vi.spyOn(session.snapshots, 'readPersistedExecutionId')
+      .mockResolvedValueOnce(executionId)
+      .mockRejectedValueOnce(new Error('ownership recheck failed'));
 
     await expect(repair()).resolves.toBe(false);
 

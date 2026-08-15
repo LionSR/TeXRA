@@ -106,6 +106,7 @@ describe('SessionStores deletion coordination', () => {
       const snapshots = new StreamSnapshotStore();
       ownExecution(snapshots, stream, sidecarExecutionId);
       await snapshots.flush();
+      snapshots.evictAll();
       const deleteExecution = deletionSpy();
       const stores = new SessionStores({
         streamLogs: session.transcripts,

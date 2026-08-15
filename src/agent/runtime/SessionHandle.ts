@@ -88,6 +88,7 @@ const RESTART_REPAIR_IO_CONCURRENCY = 8;
 interface WaitingRepairProbe {
   readonly executionId: string;
   readonly statusGeneration: object | undefined;
+  readonly ownershipSource: 'resident' | 'cold';
   readonly result: Promise<boolean>;
 }
 
@@ -332,13 +333,15 @@ export class SessionHandle {
     // A live-session resident record is the current authority: `run.start`
     // updates it synchronously, while the persisted sidecar FK may still name
     // the previous execution until the run-end flush.
-    const residentExecutionId =
-      this.snapshots.getRunMetadata(streamId).executionId;
+    const residentExecutionId = this.snapshots
+      .getExecutionIdMap()
+      .get(streamId);
     if (residentExecutionId) {
       return this.startOrJoinWaitingRepairProbe(
         streamId,
         residentExecutionId,
         statusGeneration,
+        'resident',
       );
     }
 
@@ -372,6 +375,7 @@ export class SessionHandle {
       streamId,
       executionId,
       currentStatusGeneration,
+      'cold',
     );
   }
 
@@ -379,6 +383,7 @@ export class SessionHandle {
     streamId: StreamTabId,
     executionId: string,
     statusGeneration: object | undefined,
+    ownershipSource: 'resident' | 'cold',
   ): Promise<boolean> {
     const inFlight = this.waitingRepairProbes.get(streamId);
     if (
@@ -392,7 +397,13 @@ export class SessionHandle {
     const probe: WaitingRepairProbe = {
       executionId,
       statusGeneration,
-      result: this.probeWaitingRepair(streamId, executionId, statusGeneration),
+      ownershipSource,
+      result: this.probeWaitingRepair(
+        streamId,
+        executionId,
+        statusGeneration,
+        ownershipSource,
+      ),
     };
     this.waitingRepairProbes.set(streamId, probe);
     try {
@@ -408,25 +419,33 @@ export class SessionHandle {
     streamId: StreamTabId,
     executionId: string,
     statusGeneration: object | undefined,
+    ownershipSource: 'resident' | 'cold',
   ): Promise<boolean> {
     const resumability = await deriveResumability(executionId);
     if (!resumability.resumable) return false;
-    // Re-resolve through the one-file sidecar FK / summary-mirror fallback
-    // rather than the synchronous snapshot record: this probe commonly runs
-    // for a parked WAITING stream that was deliberately not seeded at startup.
+    // Revalidate through the same authority the probe started from. A
+    // resident-started probe must not compare against the still-unflushed
+    // sidecar FK after `run.start`; a cold-started probe keeps the one-file
+    // sidecar first and falls back to the summary mirror.
     let currentExecutionId: string | undefined;
-    try {
+    if (ownershipSource === 'resident') {
       currentExecutionId =
-        (await this.snapshots.readPersistedExecutionId(streamId)) ??
+        this.snapshots.getExecutionIdMap().get(streamId) ??
         this.transcripts.getSummaryMeta(streamId)?.executionId;
-    } catch (error) {
-      // A transient storage failure during the recheck must not reject the
-      // follow-up command before `submitFollowUp` can route it.
-      logger.warn(
-        `Skipped waiting repair for stream ${streamId}: its execution identity could not be revalidated`,
-        { data: error },
-      );
-      return false;
+    } else {
+      try {
+        currentExecutionId =
+          (await this.snapshots.readPersistedExecutionId(streamId)) ??
+          this.transcripts.getSummaryMeta(streamId)?.executionId;
+      } catch (error) {
+        // A transient storage failure during the recheck must not reject the
+        // follow-up command before `submitFollowUp` can route it.
+        logger.warn(
+          `Skipped waiting repair for stream ${streamId}: its execution identity could not be revalidated`,
+          { data: error },
+        );
+        return false;
+      }
     }
     if (
       currentExecutionId !== executionId ||
