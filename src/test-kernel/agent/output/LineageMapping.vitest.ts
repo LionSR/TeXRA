@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { traceFileLineage } from '@agent/output/lineageMapping';
-import { createOutputState, ensureRoundData } from '@agent/output/outputState';
+import { traceFileLineage } from '@agent/implementations/flows/reflection/output/lineageMapping';
+import {
+  createOutputState,
+  ensureRoundData,
+} from '@agent/implementations/flows/reflection/output/outputState';
 import type { ExecutionId } from '@shared/schemas';
 import {
   createRunStorageLocation,

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   appendCompileFailureRoundContext,
   formatCompileFailureRoundContext,
-} from '@agent/output/compileFailureRoundContext';
+} from '@agent/implementations/flows/reflection/output/compileFailureRoundContext';
 import type { CompileFailure, CompileResult } from '@shared/schemas';
 
 const failure: CompileFailure = {

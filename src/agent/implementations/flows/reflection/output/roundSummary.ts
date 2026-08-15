@@ -10,7 +10,6 @@ import {
   MESSAGE_TYPES,
   type FileLocation,
   type OutputFileInfo,
-  type RoundOutput,
   type StorageKey,
 } from '@shared/schemas';
 
@@ -117,25 +116,4 @@ export async function summarizeRound(
       };
     },
   );
-}
-
-export async function getRoundOutput(
-  state: OutputState,
-  baseFiles: FileLocation[],
-  round: number,
-  options?: { isRewrite?: boolean },
-): Promise<RoundOutput> {
-  const data = ensureRoundData(state, round);
-
-  if (data.outputs.length === 0) {
-    data.outputs = await computeOutputDiffStats(
-      state,
-      baseFiles,
-      round,
-      undefined,
-      options,
-    );
-  }
-
-  return data;
 }

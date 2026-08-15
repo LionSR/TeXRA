@@ -6,12 +6,13 @@ import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
 import { OutputNode } from '@agent/implementations/flows/reflection/nodes/OutputNode';
 import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
-import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import {
-  OutputFileProcessor,
-  type ProcessingContext,
-} from '@agent/output/OutputFileProcessor';
-import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
+  createOutputState,
+  ensureRoundData,
+} from '@agent/implementations/flows/reflection/output/outputState';
+import { OutputFileProcessor } from '@agent/implementations/flows/reflection/output/OutputFileProcessor';
+import type { OutputDependencies } from '@agent/implementations/flows/reflection/output/outputState';
+import type { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type {
   AgentFileLocation,
@@ -19,7 +20,6 @@ import type {
   CompileResult,
   FileLocation,
   OutputFileInfo,
-  RoundOutput,
   StorageKey,
   StreamTabId,
 } from '@shared/schemas';
@@ -49,30 +49,16 @@ const defaultWorkflowOutputPolicy = {
   shouldRejectOnCompileFailure: () => true,
 };
 
-function createRoundDataStore() {
-  const state = createOutputState();
-  function ensureRound(round: number): RoundOutput {
-    return ensureRoundData(state, round);
-  }
-  function setRoundOutputs(round: number, outputs: OutputFileInfo[]): void {
-    ensureRound(round).outputs = outputs;
-  }
-  return { rounds: state.rounds, ensureRound, setRoundOutputs };
-}
-
-function createProcessingContext(
-  logger: AgentTrace,
-  xmlManager: XmlOutputManager,
-  store: ReturnType<typeof createRoundDataStore>,
-): ProcessingContext {
+/**
+ * Minimal OutputDependencies for OutputFileProcessor tests: the processor
+ * reads only `baseFiles`, `logger`, and `runScope.streamId`.
+ */
+function processorDeps(logger: AgentTrace): OutputDependencies {
   return {
     baseFiles: [],
-    streamId: 'stream:processor',
     logger,
-    xmlManager,
-    setRoundOutputs: store.setRoundOutputs,
-    ensureRoundData: store.ensureRound,
-  };
+    runScope: { streamId: 'stream:processor' },
+  } as unknown as OutputDependencies;
 }
 
 function createCompileFailureFixture() {
@@ -346,14 +332,16 @@ describe('output progress events', () => {
   ])('$name', async ({ split, outputPath, round }) => {
     const projected = createRecordedRuntime('stream:processor');
     const { events, logger } = projected;
-    const store = createRoundDataStore();
+    const state = createOutputState();
     const xmlManager = {
       splitScratchpadMultipleOutputXml: split,
     } as unknown as XmlOutputManager;
 
     try {
       await new OutputFileProcessor(
-        createProcessingContext(logger, xmlManager, store),
+        state,
+        processorDeps(logger),
+        xmlManager,
       ).processMultipleOutputs(
         createLocation(outputPath),
         round,
@@ -366,7 +354,7 @@ describe('output progress events', () => {
           filesByRound: { [round]: [] },
         },
       ]);
-      expect(store.rounds.get(round)?.outputs).toEqual([]);
+      expect(state.rounds.get(round)?.outputs).toEqual([]);
     } finally {
       projected.dispose();
     }
@@ -394,7 +382,9 @@ describe('output progress events', () => {
       } as unknown as XmlOutputManager;
 
       await new OutputFileProcessor(
-        createProcessingContext(logger, xmlManager, createRoundDataStore()),
+        createOutputState(),
+        processorDeps(logger),
+        xmlManager,
       ).processMultipleOutputs(
         createLocation('/tmp/output.xml'),
         5,
