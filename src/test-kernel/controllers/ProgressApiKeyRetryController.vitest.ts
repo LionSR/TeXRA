@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import pDefer from 'p-defer';
+import { describe, expect, it, vi } from 'vitest';
 
-import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
+import {
+  ProgressApiKeyRetryController,
+  type ProgressApiKeyRetryControllerDeps,
+} from '@controllers/progressView/ProgressApiKeyRetryController';
 import type { ApiProvider } from '@model/apiProviders';
 import { prefersCopilotRoute } from '@model/copilotRouting';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -33,6 +37,8 @@ interface HarnessOptions {
   glmCodingPlan?: boolean;
   retryAvailable?: boolean;
   retryPending?: boolean;
+  triggerRetry?: ProgressApiKeyRetryControllerDeps['triggerRetry'];
+  isRetryPending?: ProgressApiKeyRetryControllerDeps['isRetryPending'];
 }
 
 function createHarness(options: HarnessOptions = {}): {
@@ -100,11 +106,14 @@ function createHarness(options: HarnessOptions = {}): {
       invalidateModelOptionsCache: () => {
         invalidations += 1;
       },
-      isRetryPending: () => options.retryPending ?? true,
-      triggerRetry: (stream) => {
-        retries.push(stream);
-        return options.retryAvailable ?? true;
-      },
+      isRetryPending:
+        options.isRetryPending ?? (() => options.retryPending ?? true),
+      triggerRetry:
+        options.triggerRetry ??
+        ((stream) => {
+          retries.push(stream);
+          return options.retryAvailable ?? true;
+        }),
     }),
   };
 }
@@ -491,5 +500,77 @@ describe('ProgressApiKeyRetryController', () => {
     // preference is never written, so a crash mid-launch cannot drop it.
     expect(persistedWrites).toEqual([]);
     expect(prefersCopilotRoute('sonnet46')).toBe(true);
+  });
+
+  it('serializes routing rollback across concurrent stream retries', async () => {
+    const firstTrigger = pDefer<boolean>();
+    let retryBPendingCheck = false;
+    const triggerOrder: string[] = [];
+    const harness = createHarness({
+      keys: { openai: 'stored-openai' },
+      isRetryPending: (_stream, requestId) => {
+        if (requestId === 'retry-b') retryBPendingCheck = true;
+        return true;
+      },
+      triggerRetry: (stream) => {
+        triggerOrder.push(stream);
+        return stream === 'stream-a' ? firstTrigger.promise : true;
+      },
+    });
+
+    const first = harness.controller.useOwnApiKey({
+      stream: 'stream-a',
+      requestId: 'retry-a',
+      provider: 'openai',
+      exhaustionReason: 'chatgpt-subscription',
+    });
+    await vi.waitFor(() =>
+      expect(harness.includedAccessValues).toStrictEqual([false]),
+    );
+    const second = harness.controller.useOwnApiKey({
+      stream: 'stream-b',
+      requestId: 'retry-b',
+      provider: 'openai',
+      exhaustionReason: 'chatgpt-subscription',
+    });
+    await vi.waitFor(() => expect(retryBPendingCheck).toBe(true));
+
+    // Retry B is queued behind retry A; its routing transaction must not start
+    // while A's trigger is still pending.
+    expect(harness.chatGptSubscriptionValues).toStrictEqual([false]);
+    expect(triggerOrder).toStrictEqual(['stream-a']);
+
+    firstTrigger.resolve(false);
+    await expect(first).resolves.toStrictEqual(IDLE_RESULT);
+    await expect(second).resolves.toStrictEqual({
+      proceeded: true,
+      retried: true,
+      disabledIncludedModelAccess: true,
+      disabledChatGptSubscription: true,
+      disabledCodingPlans: [],
+    });
+    expect(harness.includedAccessValues).toStrictEqual([false, true, false]);
+    expect(harness.chatGptSubscriptionValues).toStrictEqual([
+      false,
+      true,
+      false,
+    ]);
+    expect(triggerOrder).toStrictEqual(['stream-a', 'stream-b']);
+  });
+
+  it('refuses the API-key switch for a Kimi Code-exclusive model', async () => {
+    const harness = createHarness({ keys: { openai: 'stored-openai' } });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-kimi-exclusive',
+      requestId: 'retry-kimi-exclusive',
+      model: 'kimiCoding',
+      exhaustionReason: 'kimi-code-subscription',
+    });
+
+    expect(result).toStrictEqual(IDLE_RESULT);
+    expect(harness.prompts).toStrictEqual([]);
+    expect(harness.includedAccessValues).toStrictEqual([]);
+    expect(harness.retries).toStrictEqual([]);
   });
 });
