@@ -40,7 +40,7 @@ export interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
  * before proceeding to remove already-recorded temp directories. A hung
  * read of an arbitrary path must not block app quit indefinitely.
  */
-export const DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS = 5_000;
+const DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS = 5_000;
 
 export function createDesktopDiffHost(
   options: DesktopDiffHostOptions,

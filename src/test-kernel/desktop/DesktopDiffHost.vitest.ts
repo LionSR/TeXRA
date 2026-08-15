@@ -62,7 +62,6 @@ type DiffHostOptions = Parameters<
 type DiffHost = ReturnType<DesktopDiffHostModule['createDesktopDiffHost']>;
 
 let createDesktopDiffHost: DesktopDiffHostModule['createDesktopDiffHost'];
-let diffHostFallbackSetupTimeoutMs: number;
 
 // Every case needs the external-editor fallback observable, so the harness owns
 // `openPath` and the paths it received.
@@ -132,10 +131,9 @@ describe('createDesktopDiffHost', () => {
   // `loadSourceModule` pulls the full desktop main graph through the module
   // runner; keep the hook timeout generous for cold combined test runs.
   beforeAll(async () => {
-    ({
-      createDesktopDiffHost,
-      DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS: diffHostFallbackSetupTimeoutMs,
-    } = await loadSourceModule('@desktop/main/desktopDiffHost'));
+    ({ createDesktopDiffHost } = await loadSourceModule(
+      '@desktop/main/desktopDiffHost',
+    ));
   }, 60_000);
 
   it('falls back to a generated patch file when no renderer is wired', async () => {
@@ -513,6 +511,9 @@ describe('createDesktopDiffHost', () => {
   });
 
   it('bounds the dispose wait for in-flight fallback setup', async () => {
+    // Mirrors the file-local timeout in `desktopDiffHost.ts` so the fake
+    // timers advance to the exact bound without publishing that detail.
+    const diffHostFallbackSetupTimeoutMs = 5_000;
     vi.useFakeTimers();
     try {
       const { host, openPath } = createHost();
