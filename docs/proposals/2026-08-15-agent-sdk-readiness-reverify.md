@@ -35,7 +35,8 @@ What is new in this pass:
    that earlier measurement-only passes had not itemized — chiefly two logger
    observations (parallel module-logger factories; process-global sink state as
    one facet of the process-wide once-at-startup constraint) and one residual
-   ambient-ALS read in a core cycle flow. None is a defect; each is dispositioned.
+   ambient-ALS read in a core cycle flow. Only L-3 (a dead redaction-options
+   branch) is a small defect; the rest are opportunities. Each is dispositioned.
 4. **Subagent boundaries remain already-drawn** (§5) — no boundary to newly
    invent; §5 names candidate carve-out starting points, each annotated with the
    concrete runtime coupling it would first have to convert to a port (none is a
@@ -108,8 +109,12 @@ a change this pass makes.
 - **C-1 (highest-value core item): residual ambient-ALS read in the cycle flow.**
   `ResponseCycleFlow.ts:217` (`responseCycleToolsForModel`) still calls
   `useLaunchRunContext()` (ambient `AsyncLocalStorage`) directly. Per the `-07-27`
-  checkpoint this is the last surviving ambient read in the cycle flows (collapsed
-  11 → ~1). **The fix is not simply "read from `services.runScope`":** the two
+  checkpoint this is the last surviving ambient read in the **response-cycle**
+  flow specifically (that path collapsed 11 → ~1); the **tool-use** flow is not
+  ALS-free and its reads must be ported in the same work —
+  `runToolUseFlow.ts:181-202` reads both tool-policy fields and
+  `ToolUseWaitNode.ts:59` reads `stopAfterCycle` from `useLaunchRunContext()`.
+  **The fix is not simply "read from `services.runScope`":** the two
   values the filter at `ResponseCycleFlow.ts:218-223` needs —
   `runtimeUnavailableTools` and `approvalPromptsUnavailable` — are
   `LaunchRunContext` fields (`RunContext.ts:16-18`), not `RunScope` fields
@@ -193,12 +198,16 @@ a change this pass makes.
 - **M-2: leak protection is load-bearing on two non-structural invariants.**
   `packages/agent/scripts/validate-artifacts.mjs:120-132` bans the four provider
   SDKs only from the declaration graph reachable from the main entry. The frozen
-  surface stays clean because (a) nothing statically imports the provider
-  handlers — they are reached only through dynamic `import()` in `ModelFactory`
-  — and (b) `ModelHandler.ts` deliberately keeps itself SDK-free (using a
+  surface stays clean because (a) nothing **main-entry-reachable** statically
+  imports the provider handlers — the main-entry path reaches them only through
+  dynamic `import()` in `ModelFactory`. (Host-only static value imports do exist
+  — e.g. `src/tools/media/audio.ts:6` imports `ModelHandlerOpenAI` — but they sit
+  outside the package's main-entry graph, which is exactly why the invariant is
+  "absent from the main-entry-reachable graph," not "never statically imported.")
+  And (b) `ModelHandler.ts` deliberately keeps itself SDK-free (using a
   `SdkErrorTagger` function type rather than importing SDK error classes). Any
-  new static import of a `modelHandler*` file from a main-entry-reachable module,
-  or a provider SDK type added to `ModelHandler.ts`/`IModelHandler.ts`/
+  new static import of a `modelHandler*` file **into a main-entry-reachable
+  module**, or a provider SDK type added to `ModelHandler.ts`/`IModelHandler.ts`/
   `ModelHandlerContracts.ts`, would leak and be caught only post-build.
   **Disposition:** enforcement fragility, not a current leak; the §3 relocation
   removed the closest existing hazard. A future lint edge (no provider-SDK import
@@ -225,8 +234,10 @@ a change this pass makes.
 - **S-1 (retracted on the repo's own rule): `AgentRunStream`'s single-consumer
   queue reads as generic plumbing, but do not extract it.**
   `packages/agent/src/index.ts:101-214` (~110 LoC) multiplexes (1) interrupt/
-  handle-attach latching, (2) start-on-first-`next()` + failure propagation, and
-  (3) a hand-rolled push→pull buffer (`events[]`/`readers[]`/`push`/
+  handle-attach latching, (2) start-**immediately** (the constructor calls
+  `start(this)` at `:117-121`) with event _delivery_ beginning on the first
+  `next()` — not lazy run start — plus failure propagation, and (3) a hand-rolled
+  push→pull buffer (`events[]`/`readers[]`/`push`/
   `closeIterator`/`end`). Concern (3) _looks_ like a standard async-queue, but it
   has exactly one consumer and is coupled to this class's iterator-failure,
   closure, and event-detachment state. Extracting it to a "reusable util" would
@@ -354,9 +365,13 @@ executionId)`. **Residual coupling:** it hard-imports and calls `submitFollowUp`
 
 The genuine small candidates a future pass can pick up one at a time — in the
 same land-one-increment cadence this pass followed with §3 — are **C-1** (inject
-the two launch-context tool-policy fields into the cycle flow), **L-1** (fold the
-two module-logger factories into one), and **L-3** (wire or delete the dead
-redaction-options branch). **S-1 and T-1 were retracted on inspection** (§4): S-1
-would be a banned single-use extraction, and T-1 misread an already-composed
-schema. L-2 and the delegation cycle are the two structural blockers (§6), each a
-maintainer-scoped design decision rather than a mechanical increment.
+the launch-context tool-policy fields so the cycle flow — and the tool-use flow's
+own ALS reads — run without an ALS frame), **L-1** (narrow the individual
+log-only `createChannelTrace` callers onto `createLog` — a per-caller change, not
+a factory merge, since the two have different return contracts), and **L-3**
+(wire or delete the dead redaction-options branch — the one small defect).
+**S-1 and T-1 were retracted on inspection** (§4): S-1 would be a banned
+single-use extraction, and T-1 misread an already-composed schema. The two
+structural blockers (§6) — the delegation-layer cycle and the process-wide
+platform/registry multi-tenancy constraint (of which L-2's logger globals are one
+facet) — are maintainer-scoped design decisions, not mechanical increments.
