@@ -2,11 +2,16 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it } from 'vitest';
+import { describe, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
 
 // Local imports
-import { UserVariableChannelsSchema } from '@agent/core/definition/AgentCycleOptions';
+import {
+  UserVariableChannelsSchema,
+  type BuiltUserVars,
+  type TemplateVars,
+  type UserVariableChannels,
+} from '@agent/core/definition/AgentCycleOptions';
 
 describe('UserVariableChannelsSchema', () => {
   it('validates known fixed keys while preserving custom keys', () => {
@@ -49,5 +54,26 @@ describe('UserVariableChannelsSchema', () => {
         }),
       z.ZodError,
     );
+  });
+
+  // A custom required file named MEDIA generates a string MEDIA_CONTENT;
+  // getRequiredFileVars rejects that name at variable-build time, and this
+  // boundary keeps rejecting such checkpoints.
+  it('rejects a string MEDIA_CONTENT — the collision shape the required-file guard prevents', () => {
+    assert.throws(
+      () =>
+        UserVariableChannelsSchema.parse({
+          input: {},
+          transient: { MEDIA_CONTENT: 'custom file content' },
+        }),
+      z.ZodError,
+    );
+  });
+
+  it('accepts the buildUserVars product at the channel boundary', () => {
+    expectTypeOf<BuiltUserVars>().toMatchTypeOf<TemplateVars>();
+    expectTypeOf<BuiltUserVars>().toMatchTypeOf<
+      UserVariableChannels['input']
+    >();
   });
 });
