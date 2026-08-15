@@ -147,19 +147,17 @@ describe('desktop composition root and launch environment', () => {
     ]);
   });
 
-  it('initializes the bundled follow-up polish prompt from the resource bundle', async () => {
+  // Desktop once wired `polishTextWithAI` while initializing only the goal
+  // prompt, so every follow-up polish failed (#10365). The single table-driven
+  // initializer is what makes that unrepeatable — assert desktop calls it.
+  it('initializes every bundled prompt from the resource bundle', async () => {
     const source = await readDesktopPlatformIndex();
 
-    expect(namedImportSources(source, 'initializePolishModel')).toContain(
+    expect(namedImportSources(source, 'initializeBundledPrompts')).toContain(
       '@agent/runtime',
     );
-    expect(source).toContain('initializePolishModel(');
-    expect(source).toContain(
-      "join(resourcesPath, 'templates', 'instructionPolish.yaml')",
-    );
     expectOrderedAfter(source, 'const resourcesPath = resolveResourcesPath', [
-      'initializePolishModel(',
-      "join(resourcesPath, 'templates', 'instructionPolish.yaml')",
+      'initializeBundledPrompts(resourcesPath)',
     ]);
   });
 

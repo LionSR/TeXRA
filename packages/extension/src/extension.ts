@@ -12,11 +12,10 @@ import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import {
   defaultSession,
+  initializeBundledPrompts,
   initializeDefaultSession,
-  initializePolishModel,
   teardownDefaultSession,
 } from '@agent/runtime';
-import { initializeGoalPrompts } from '@agent/goal/promptLoader';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import {
   getAuthCallbackUri,
@@ -181,17 +180,7 @@ export async function activate(context: vscode.ExtensionContext) {
   logger.setOutputChannelFactory((name) =>
     vscode.window.createOutputChannel(name),
   );
-  initializePolishModel(
-    path.join(
-      context.extensionPath,
-      'resources',
-      'templates',
-      'instructionPolish.yaml',
-    ),
-  );
-  initializeGoalPrompts(
-    path.join(context.extensionPath, 'resources', 'goal', 'goal.yaml'),
-  );
+  initializeBundledPrompts(path.join(context.extensionPath, 'resources'));
   initializeStateManagers(context, gitRepoRoot);
   const lifecycle = createLifecycleHost({
     onError: (phase, error) =>

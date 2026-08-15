@@ -2,7 +2,11 @@
 import * as nodePath from 'node:path';
 
 // Local imports
-import { teardownDefaultSession, tryDefaultSession } from '@agent/runtime';
+import {
+  initializeBundledPrompts,
+  teardownDefaultSession,
+  tryDefaultSession,
+} from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -19,7 +23,6 @@ import {
   bootstrapNodeAgentDirectories,
   createNodePlatform,
   initNodeAgentRuntime,
-  initializeNodeGoalPrompts,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
 import {
@@ -398,7 +401,7 @@ export async function initCliPlatform(
     await getServerSideKeyService().setUseIncludedModelAccess(true);
   }
   await setCliHelperModel(context.helperModel);
-  initializeNodeGoalPrompts(context.resourcesPath);
+  initializeBundledPrompts(context.resourcesPath);
 
   await bootstrapNodeAgentDirectories({
     channel: 'cli',

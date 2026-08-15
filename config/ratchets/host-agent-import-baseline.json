@@ -39,7 +39,6 @@
       "@agent/core/state/executionRequests",
       "@agent/features",
       "@agent/followUp/ToolUseFollowUp",
-      "@agent/goal/promptLoader",
       "@agent/implementations/agentCreator/agentCreatorFlow",
       "@agent/index",
       "@agent/index/AgentDirectorySync",

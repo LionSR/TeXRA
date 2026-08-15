@@ -13,12 +13,8 @@
  * Nothing in `@agent` / `@tools` imports it back, so there is no cycle.
  */
 
-// Node imports
-import { join } from 'node:path';
-
 // Local imports
 import { registerAgentFeatures } from '@agent/features';
-import { initializeGoalPrompts } from '@agent/goal/promptLoader';
 import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
@@ -133,17 +129,6 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
 export function initNodeAgentRuntime(lifecycle: LifecycleHost): void {
   registerAgentFeatures();
   registerDirectLeanLanguageServices(lifecycle);
-}
-
-/**
- * Point host-neutral Goal prompts at the active packaged resource bundle.
- *
- * Safe to call repeatedly: the loader replaces the path and clears its cache.
- * CLI validation can re-enter platform init with a different resources path in
- * the same process, so this stays separate from one-shot runtime registration.
- */
-export function initializeNodeGoalPrompts(resourcesPath: string): void {
-  initializeGoalPrompts(join(resourcesPath, 'goal', 'goal.yaml'));
 }
 
 /**

@@ -70,7 +70,10 @@ export {
 } from './terminalResultToast';
 
 // resolveAndResumeStream
-export { resolveAndResumeStream } from './resolveAndResumeStream';
+export {
+  resolveAndResumeStream,
+  resolveResumeStateFromSnapshots,
+} from './resolveAndResumeStream';
 
 // detachSubagentsOnStop
 export { detachSubagentsOnStop } from './detachSubagentsOnStop';
@@ -113,8 +116,8 @@ export { getHelperModelName } from './helperModelName';
 // ExecutionHandle
 export type { AgentRunHandle } from './ExecutionHandle';
 
-// polishModel
-export { initializePolishModel } from './polishModel';
+// bundledPrompts
+export { initializeBundledPrompts } from './bundledPrompts';
 
 // AgentFlowResult
 export type { WorkflowFlowResult } from './AgentFlowResult';

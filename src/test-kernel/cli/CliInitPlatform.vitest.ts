@@ -1,3 +1,7 @@
+// Node imports
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +16,7 @@ import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import type { StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { REPO_ROOT } from '@test/support/repoScan';
 import {
   ClaudeAgentSessions,
   CodexThreads,
@@ -67,7 +72,6 @@ const mocks = vi.hoisted(() => ({
   })),
   createNodePlatform: vi.fn(() => ({})),
   initializeCliSupabaseAuth: vi.fn(),
-  initializeNodeGoalPrompts: vi.fn(),
   initializeNodeRuntimeSkills: vi.fn(),
   initNodeAgentRuntime: vi.fn(),
   serverSideKeyService: {
@@ -129,7 +133,6 @@ vi.mock('@platform/defaults/nodeHost', () => ({
   bootstrapNodeAgentDirectories: mocks.bootstrapNodeAgentDirectories,
   createNodePlatform: mocks.createNodePlatform,
   initNodeAgentRuntime: mocks.initNodeAgentRuntime,
-  initializeNodeGoalPrompts: mocks.initializeNodeGoalPrompts,
   initializeNodeRuntimeSkills: mocks.initializeNodeRuntimeSkills,
 }));
 
@@ -386,6 +389,21 @@ describe('CLI platform init', () => {
     }
   });
 
+  // Every host registers the bundled prompt table itself. Desktop once wired a
+  // prompt consumer while forgetting one of the two per-prompt initializers
+  // (#10365); one initializer per host is what makes that unrepeatable, so
+  // each composition root is pinned to calling it. Asserted on the source
+  // because `@platform/platform` is mocked here without an `fs` port, so a
+  // real load would fall back and pass either way.
+  it('registers bundled prompts from the CLI resource bundle', async () => {
+    const source = await readFile(
+      resolve(REPO_ROOT, 'packages/cli/src/runtime/initPlatform.ts'),
+      'utf8',
+    );
+
+    expect(source).toContain('initializeBundledPrompts(context.resourcesPath)');
+  });
+
   it('bootstraps bundled agents with the CLI version store', async () => {
     mocks.tryPlatform.mockReturnValue({
       globalState: stubGlobalState((key, defaultValue) =>
@@ -402,9 +420,6 @@ describe('CLI platform init', () => {
       }),
     );
 
-    expect(mocks.initializeNodeGoalPrompts).toHaveBeenCalledWith(
-      '/tmp/resources-versioned',
-    );
     expect(mocks.bootstrapNodeAgentDirectories).toHaveBeenCalledWith({
       channel: 'cli',
       resourcesPath: '/tmp/resources-versioned',
