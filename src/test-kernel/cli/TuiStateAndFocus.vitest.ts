@@ -3036,7 +3036,7 @@ describe('CLI transcript state', () => {
     ).toEqual(['Available commands: /help', 'Available commands: /help']);
   });
 
-  it('keeps a model response live when local output follows it', () => {
+  it('keeps local output live behind an unfinished model response', () => {
     const { finalized, pending } = splitTranscriptEntries(
       [
         {
@@ -3056,8 +3056,11 @@ describe('CLI transcript state', () => {
       STREAM_PHASE.RUNNING,
     );
 
-    expect(pending.map((entry) => entry.id)).toEqual(['model-response']);
-    expect(finalized.map((entry) => entry.id)).toEqual(['local-help']);
+    expect(pending.map((entry) => entry.id)).toEqual([
+      'model-response',
+      'local-help',
+    ]);
+    expect(finalized).toEqual([]);
   });
 
   it('estimates finalized assistant rows from rendered markdown', () => {
