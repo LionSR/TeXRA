@@ -25,7 +25,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 import { ApprovalRequestHandler } from './ApprovalRequestHandler';
 import { ExternalInquiryRequestHandler } from './ExternalInquiryRequestHandler';
-import type { WebviewUpdater } from './WebviewUpdater';
+import type { LitSessionRenderer } from './LitSessionRenderer';
 
 /**
  * The seven pending-approval handlers a progress backend wires. Hosts build
@@ -141,7 +141,7 @@ interface ApprovalRequestHandlerOverrides {
 }
 
 export interface BuildApprovalRequestHandlerSetParams {
-  webviewUpdater: WebviewUpdater;
+  renderer: LitSessionRenderer;
   /** Gate passed to every handler; an empty/false gate keeps it pending-only. */
   canSend: () => boolean;
   logger?: Pick<AgentTrace, 'debug'>;
@@ -158,7 +158,7 @@ function webviewPermissionHandler<
   IdField extends keyof PermissionData<K>,
   Result = never,
 >(
-  webviewUpdater: WebviewUpdater,
+  renderer: LitSessionRenderer,
   canSend: () => boolean,
   kind: K,
   idField: IdField,
@@ -166,11 +166,11 @@ function webviewPermissionHandler<
   return new ApprovalRequestHandler(
     idField,
     (data) =>
-      webviewUpdater.showPermission({
+      renderer.showPermission({
         kind,
         data,
       } as Extract<PermissionPayload, { kind: K }>),
-    (id) => webviewUpdater.resolvePermission(kind, id),
+    (id) => renderer.resolvePermission(kind, id),
     canSend,
   );
 }
@@ -178,10 +178,10 @@ function webviewPermissionHandler<
 export function buildApprovalRequestHandlerSet(
   params: BuildApprovalRequestHandlerSetParams,
 ): ApprovalRequestHandlerSet {
-  const { webviewUpdater, canSend, overrides } = params;
+  const { renderer, canSend, overrides } = params;
   return {
     toolEdit: webviewPermissionHandler(
-      webviewUpdater,
+      renderer,
       canSend,
       PERMISSION_KIND.TOOL_EDIT,
       'requestId',
@@ -190,21 +190,21 @@ export function buildApprovalRequestHandlerSet(
       typeof PERMISSION_KIND.BASH,
       'requestId',
       BashSettlement
-    >(webviewUpdater, canSend, PERMISSION_KIND.BASH, 'requestId'),
+    >(renderer, canSend, PERMISSION_KIND.BASH, 'requestId'),
     planApproval: webviewPermissionHandler<
       typeof PERMISSION_KIND.PLAN_APPROVAL,
       'approvalId',
       PlanApprovalResult
-    >(webviewUpdater, canSend, PERMISSION_KIND.PLAN_APPROVAL, 'approvalId'),
+    >(renderer, canSend, PERMISSION_KIND.PLAN_APPROVAL, 'approvalId'),
     externalInquiry: new ExternalInquiryRequestHandler({
       show: (data) =>
-        webviewUpdater.showPermission({
+        renderer.showPermission({
           kind: PERMISSION_KIND.EXTERNAL_INQUIRY,
           data,
         }),
       dismiss: (id) =>
-        webviewUpdater.resolvePermission(PERMISSION_KIND.EXTERNAL_INQUIRY, id),
-      syncThreads: (threads) => webviewUpdater.syncInquiryThreads(threads),
+        renderer.resolvePermission(PERMISSION_KIND.EXTERNAL_INQUIRY, id),
+      syncThreads: (threads) => renderer.syncInquiryThreads(threads),
       canSend,
       logger: params.logger,
     }),
@@ -212,7 +212,7 @@ export function buildApprovalRequestHandlerSet(
       typeof PERMISSION_KIND.USER_QUESTION,
       'requestId',
       UserQuestionSettlement
-    >(webviewUpdater, canSend, PERMISSION_KIND.USER_QUESTION, 'requestId'),
+    >(renderer, canSend, PERMISSION_KIND.USER_QUESTION, 'requestId'),
     retry: new ApprovalRequestHandler<RetryPermission, 'streamId', RetryResult>(
       'streamId',
       overrides.retry.show,
@@ -234,7 +234,7 @@ export function buildApprovalRequestHandlerSet(
           typeof PERMISSION_KIND.PROPOSAL,
           'proposalId',
           ProposalResult
-        >(webviewUpdater, canSend, PERMISSION_KIND.PROPOSAL, 'proposalId'),
+        >(renderer, canSend, PERMISSION_KIND.PROPOSAL, 'proposalId'),
   };
 }
 
@@ -254,7 +254,7 @@ interface ProgressBackendUiConfig {
 interface ProgressBackendUiConfigParams {
   handlers: ApprovalRequestHandlerSet;
   /** Transport for approval-bypass state (handlers own their own transport). */
-  webviewUpdater: WebviewUpdater;
+  renderer: LitSessionRenderer;
   /** Gate shared with the handlers; also guards the bypass-state pushes. */
   canSend: () => boolean;
 }
@@ -270,11 +270,11 @@ interface ProgressBackendUiConfigParams {
 export function createProgressBackendUiConfig(
   params: ProgressBackendUiConfigParams,
 ): ProgressBackendUiConfig {
-  const { handlers, webviewUpdater, canSend } = params;
+  const { handlers, renderer, canSend } = params;
   return {
     setApprovalBypassState: ({ streamId, kind, bypassActive }) => {
       if (canSend()) {
-        webviewUpdater.updateBypassState(streamId, kind, bypassActive);
+        renderer.updateBypassState(streamId, kind, bypassActive);
       }
     },
     hasPendingPermissions: (streamId) =>

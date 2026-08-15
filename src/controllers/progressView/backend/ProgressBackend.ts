@@ -12,7 +12,6 @@ import {
   WebviewBridge,
   type ProgressViewMessageSender,
 } from '@controllers/progressView/backend/WebviewBridge';
-import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import { LitSessionRenderer } from '@controllers/progressView/backend/LitSessionRenderer';
 import { ProgressPresentationState } from '@controllers/progressView/backend/ProgressPresentationState';
 import { ProgressStreamProjectionBuilder } from '@controllers/progressView/backend/ProgressStreamProjectionBuilder';
@@ -46,7 +45,7 @@ const log = createLog('ProgressBackend');
 
 type ProgressBackendApprovalOptions = Omit<
   BuildApprovalRequestHandlerSetParams,
-  'webviewUpdater'
+  'renderer'
 >;
 
 interface ProgressBackendLifecycleOptions {
@@ -83,7 +82,7 @@ export interface ProgressBackendOptions {
   /**
    * Commands this host's progressView inbound registry declares
    * `unsupported(...)` — pass `() => unsupportedCommands(registry)`. Threaded
-   * to {@link WebviewUpdater} so the frontend's capability gating stays a
+   * to {@link LitSessionRenderer} so the frontend's capability gating stays a
    * projection of the registry.
    */
   getUnsupportedCommands?: () => readonly string[];
@@ -99,7 +98,8 @@ export interface ProgressBackendOptions {
 export class ProgressBackend {
   readonly state: SessionState;
   readonly presentation: ProgressPresentationState;
-  readonly webviewUpdater: WebviewUpdater;
+  /** The single owner of Lit/progress-view delivery for this backend. */
+  readonly renderer: LitSessionRenderer;
   readonly webviewBridge: WebviewBridge;
   readonly projections: ProgressStreamProjectionBuilder;
   readonly approvalHandlers: ApprovalRequestHandlerSet;
@@ -107,7 +107,6 @@ export class ProgressBackend {
     update: HostApprovalBypassStateUpdate,
   ) => void;
   private readonly factApplier: SessionFactApplier;
-  private readonly litRenderer: LitSessionRenderer;
   private readonly session: SessionHandle;
   private readonly lifecycle: ProgressBackendLifecycleOptions;
   private readonly reportTranscriptLoadError: ProgressBackendOptions['reportTranscriptLoadError'];
@@ -145,11 +144,6 @@ export class ProgressBackend {
     };
     this.state = new SessionState(this.session, options.stores);
     this.presentation = new ProgressPresentationState(options.storage);
-    this.webviewUpdater = new WebviewUpdater(
-      this.postMessage,
-      options.hasTarget,
-      options.getUnsupportedCommands,
-    );
     this.projections = new ProgressStreamProjectionBuilder(
       this.state,
       options.getStreamControls,
@@ -159,37 +153,31 @@ export class ProgressBackend {
       options.sendMessage,
       () => this.presentation.activeStream || null,
     );
-
-    this.approvalHandlers = buildApprovalRequestHandlerSet({
-      ...options.approvals,
-      webviewUpdater: this.webviewUpdater,
-    });
-    const ui = createProgressBackendUiConfig({
-      handlers: this.approvalHandlers,
-      webviewUpdater: this.webviewUpdater,
-      canSend: options.approvals.canSend,
-    });
-    this.hasPendingPermissions = ui.hasPendingPermissions;
-    this.litRenderer = new LitSessionRenderer(
+    this.renderer = new LitSessionRenderer(
       this.projections,
       this.state.snapshots,
       this.state.followUps,
-      this.webviewUpdater,
       this.webviewBridge,
+      this.postMessage,
+      options.hasTarget,
       () => this.presentation.activeStream,
+      options.getUnsupportedCommands,
     );
-    this.factApplier = new SessionFactApplier(this.state, this.litRenderer, {
+
+    this.approvalHandlers = buildApprovalRequestHandlerSet({
+      ...options.approvals,
+      renderer: this.renderer,
+    });
+    const ui = createProgressBackendUiConfig({
+      handlers: this.approvalHandlers,
+      renderer: this.renderer,
+      canSend: options.approvals.canSend,
+    });
+    this.hasPendingPermissions = ui.hasPendingPermissions;
+    this.factApplier = new SessionFactApplier(this.state, this.renderer, {
       deleteStream: (stream) => this.deleteStream(stream),
     });
     this.setApprovalBypassState = ui.setApprovalBypassState;
-  }
-
-  /** Full active-viewport rebuild for the Lit progress surface. */
-  syncStreamContent(
-    stream: Parameters<LitSessionRenderer['syncStreamContent']>[0],
-    options?: Parameters<LitSessionRenderer['syncStreamContent']>[1],
-  ): void {
-    this.litRenderer.syncStreamContent(stream, options);
   }
 
   /** Rebuild stream tabs and, when requested, rehydrate the active viewport. */
@@ -213,7 +201,7 @@ export class ProgressBackend {
     if (options.syncActiveStream && pendingSelectableActivation) {
       projectedStream = this.latestActivationTarget;
     }
-    this.webviewUpdater.sendStreamMetadata(
+    this.renderer.sendStreamMetadata(
       this.projections.streamRoster(
         projectedStream,
         this.state.streamStatus.getAllStreamStates(),
@@ -248,7 +236,7 @@ export class ProgressBackend {
       this.activationGeneration += 1;
       this.latestActivationTarget = stream;
       if (requestId) {
-        this.webviewUpdater.settleStreamSelection(
+        this.renderer.settleStreamSelection(
           requestId,
           'rejected',
           this.presentation.activeStream,
@@ -262,7 +250,7 @@ export class ProgressBackend {
       });
       if (!committed) await this.recoverFromFailedActivation(stream);
       if (requestId) {
-        this.webviewUpdater.settleStreamSelection(
+        this.renderer.settleStreamSelection(
           requestId,
           committed ? 'accepted' : 'superseded',
           this.presentation.activeStream,
@@ -272,7 +260,7 @@ export class ProgressBackend {
       this.reportTranscriptLoadError(error, stream);
       await this.recoverFromFailedActivation(stream);
       if (requestId) {
-        this.webviewUpdater.settleStreamSelection(
+        this.renderer.settleStreamSelection(
           requestId,
           'rejected',
           this.presentation.activeStream,
@@ -326,16 +314,16 @@ export class ProgressBackend {
       const previousStream = this.presentation.activeStream;
       this.presentation.select('');
       this.releasePresentationLeases();
-      if (this.litRenderer.isAvailable()) {
-        this.litRenderer.onActiveStreamChanged('');
-        this.litRenderer.syncStreamContent('', { includeActiveState: true });
+      if (this.renderer.isAvailable()) {
+        this.renderer.onActiveStreamChanged('');
+        this.renderer.syncStreamContent('', { includeActiveState: true });
         if (previousStream) {
-          this.webviewUpdater.releaseStreamContent(previousStream);
+          this.renderer.releaseStreamContent(previousStream);
         }
       }
       return true;
     }
-    if (!this.litRenderer.isAvailable()) {
+    if (!this.renderer.isAvailable()) {
       this.presentation.select(stream);
       this.releasePresentationLeases();
       return true;
@@ -383,11 +371,10 @@ export class ProgressBackend {
     const previousTranscriptLease = this.transcriptPresentationLease;
     this.transcriptPresentationLease = transcriptLeaseResult.value;
     this.presentation.select(stream);
-    if (options.notifyActivation)
-      this.litRenderer.onActiveStreamChanged(stream);
-    this.litRenderer.syncStreamContent(stream, { includeActiveState: true });
+    if (options.notifyActivation) this.renderer.onActiveStreamChanged(stream);
+    this.renderer.syncStreamContent(stream, { includeActiveState: true });
     if (previousStream && previousStream !== stream) {
-      this.webviewUpdater.releaseStreamContent(previousStream);
+      this.renderer.releaseStreamContent(previousStream);
     }
     if (previousTranscriptLease !== transcriptLeaseResult.value)
       previousTranscriptLease?.close();
