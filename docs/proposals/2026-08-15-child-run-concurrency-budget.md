@@ -42,9 +42,9 @@ ruling is:
   fan-out from opening unbounded model conversations. v1 ships this as a
   module constant; the user-facing core setting (Zod schema + native
   settings view wiring) is recorded follow-up, not part of this change.
-  Per-provider-key partitioning is likewise a recorded refinement: when
-  credential resolution is exposed pre-launch, the single session budget
-  becomes `max(perKeyBudgets)` without moving the acquisition site.
+  Per-provider-key partitioning is **rejected** (maintainer ruling,
+  2026-08-15: overengineering). The per-session count budget is the final
+  shape; do not re-propose provider-key partitioning.
 
 ## Single owner per physical execution
 
@@ -107,6 +107,7 @@ execution, and a queued launch aborts cleanly if its parent is cancelled
 ## Non-goals
 
 - No change to `ToolUseDispatchNode`'s queue/barrier split.
-- No provider-key partitioning in this change (recorded refinement above).
+- No provider-key partitioning — ever (maintainer-rejected as
+  overengineering; see the scope ruling above).
 - No cap on root runs or agent-CLI children.
 - No change to engine semaphore, lifetime call cap, or fan-out caps.

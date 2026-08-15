@@ -109,6 +109,16 @@ function resumeDesktopStream(
               data: toLogData(resolution.error),
             },
           );
+          // A failed read is not proof of absence: falling through would tell
+          // the user no run state exists (a false data-loss diagnosis) when
+          // the state may be intact behind a transient storage error.
+          if (!isResumeInvalidated()) {
+            await context.session.interactions.showInfoMessage(
+              `Persisted run state could not be read (${toErrorMessage(resolution.error)}). The resume was not started; retry once the storage issue is resolved.`,
+              { replayWhenAttached: true },
+            );
+          }
+          return undefined;
         }
         if (isResumeInvalidated()) return undefined;
         if (resolution.status === 'resolved') return resolution.state;

@@ -872,18 +872,31 @@ export function startChildRunLoop<TTurn>(
     budget === undefined
       ? base
       : (ac) =>
-          budget.add(() => {
-            // A turn cancelled while awaiting a slot must not start fresh
-            // model work; the loop classifies this throw as interrupted.
-            if (loop.isInterrupted() || ac.signal.aborted) {
-              throw new Error(
-                'Child run turn cancelled while awaiting a concurrency slot.',
-              );
-            }
-            return base(ac);
-          }) as Promise<TTurn>;
+          budget.add(
+            () => {
+              // A turn cancelled while awaiting a slot must not start fresh
+              // model work; the loop classifies this throw as interrupted.
+              if (loop.isInterrupted() || ac.signal.aborted) {
+                throw new Error(
+                  'Child run turn cancelled while awaiting a concurrency slot.',
+                );
+              }
+              return base(ac);
+            },
+            // Settle a queued turn the moment it is cancelled: without the
+            // signal, an aborted task blocks here until a budget slot frees
+            // and only then observes the abort above.
+            { signal: ac.signal },
+          ) as Promise<TTurn>;
 
   const run = async (): Promise<void> => {
+    // A release failure after a clean run must reach awaited callers: the
+    // child's artifacts did not drain and its lease was abandoned, so a
+    // required-result parent must not journal the turn as durably settled.
+    // Recorded here and thrown after the terminal choreography so it never
+    // masks a primary body or finalize failure (which stays the thrown
+    // error, with the release failure logged as secondary).
+    let releaseFailure: unknown;
     let runner: (ac: AbortController) => Promise<TTurn> = (ac) =>
       strategy.launch(ports, ac);
     // Turn identity (#9531): each accepted turn mints a stable token/delivery
@@ -1132,12 +1145,16 @@ export function startChildRunLoop<TTurn>(
           logger.warn('Failed to persist final child-run artifacts', {
             data: { executionId, error },
           });
+          releaseFailure = error;
         } finally {
           stopWatchingLease?.();
           releaseChildActivation();
         }
       }
     }
+    // Reached only when neither the loop body nor the terminal choreography
+    // threw: the lease drain failure is then the run's failure.
+    if (releaseFailure !== undefined) throw releaseFailure;
   };
   try {
     const completion = Promise.resolve(

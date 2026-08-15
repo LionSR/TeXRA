@@ -26,14 +26,15 @@ import { assertNever, generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
- * `onEvent` is omitted deliberately: this projection owns the engine's event
- * slot outright, so a caller cannot pass a handler that would be silently
- * discarded. Callers that need the run's own account of what happened read the
- * canonical execution snapshot instead.
+ * `onEvent` and `onTransition` are omitted deliberately: this projection owns
+ * the engine's event and transition slots outright, so a caller cannot pass a
+ * handler that would be silently discarded. Callers that need the run's own
+ * account of what happened read the canonical execution snapshot instead
+ * (`onSnapshot` remains open and is composed, not replaced).
  */
 type WorkflowScriptRunWithProgressOptions = Omit<
   PersistedWorkflowScriptRunOptions,
-  'onEvent'
+  'onEvent' | 'onTransition'
 > & {
   /**
    * Receives every progress line also written to the trace (phases, script
@@ -212,6 +213,16 @@ export async function runPersistedWorkflowScriptWithProgress(
   let lastSnapshot: WorkflowExecutionSnapshot | undefined;
   let currentPhase: string | undefined;
   let closed = false;
+  // Calls that were already terminal when a retry's hydrated state first
+  // emitted (see the fold): historical facts, projected only on change.
+  const hydratedBaseline = new Map<
+    WorkflowCallProgress['id'],
+    {
+      status: WorkflowCallProgress['status'];
+      childStreamId: WorkflowCallProgress['childStreamId'];
+    }
+  >();
+  let constructionEmissionSeen = false;
   let runOutcome: RunOutcome = RUN_OUTCOME.FAILED;
 
   /**
@@ -434,6 +445,38 @@ export async function runPersistedWorkflowScriptWithProgress(
         if (status === 'planned' && projected?.status === 'running') {
           status = 'running';
         }
+        // A call already terminal in the construction emission is hydrated
+        // history, not this attempt's activity: record it silently and
+        // project it only once the run changes it (a cache reclassification
+        // or a fresh child stream). Emitting it here would freeze its card
+        // identity from the historical snapshot — hydration strips the phase
+        // from dynamic calls, so the card would stay grouped under the parent
+        // after `issueCall` restores the phase — and would double-report the
+        // old result in the run log (completed now, cached on reissue).
+        if (
+          !constructionEmissionSeen &&
+          !projected &&
+          (status === 'completed' ||
+            status === 'failed' ||
+            status === 'skipped' ||
+            status === 'cached')
+        ) {
+          hydratedBaseline.set(call.id, {
+            status,
+            childStreamId: call.childStreamId,
+          });
+          continue;
+        }
+        const baseline = projected ? undefined : hydratedBaseline.get(call.id);
+        if (baseline !== undefined) {
+          if (
+            baseline.status === status &&
+            baseline.childStreamId === call.childStreamId
+          ) {
+            continue;
+          }
+          hydratedBaseline.delete(call.id);
+        }
         const streamChanged =
           call.childStreamId !== undefined &&
           projected?.childStreamId !== call.childStreamId;
@@ -467,7 +510,9 @@ export async function runPersistedWorkflowScriptWithProgress(
           recordTerminalActivity(card as WorkflowCallTerminalProgress);
         }
       }
+      constructionEmissionSeen = true;
     } catch (error) {
+      constructionEmissionSeen = true;
       trace.warn(
         `Workflow progress projection failed for one transition: ${toErrorMessage(error)}`,
         { data: error },

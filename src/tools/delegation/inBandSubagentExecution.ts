@@ -15,7 +15,11 @@
 // Local imports
 import { getExecutionStore, type ResultMeta } from '@agent/storage';
 import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
-import type { OwnedExecutionLeaseScope } from '@agent/storage/executionLease';
+import {
+  ExecutionLeaseLostError,
+  runWithInactiveExecutionLease,
+  type OwnedExecutionLeaseScope,
+} from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -190,6 +194,46 @@ async function inspectStableAttempt(
   }
   if (!resultMeta) {
     if (attempt.phase !== 'launched') return { kind: 'advance' };
+    // A launched attempt without a manifest is unsafe to repeat only if the
+    // child may have finished side-effectful work whose manifest was lost:
+    // a recorded completed turn or a persisted COMPLETED outcome proves the
+    // settle path ran, so those stay irreconcilable. Otherwise the child
+    // never reached terminal persistence (interrupted, or its artifact drain
+    // failed and the parent's failure-time retryable write was refused as
+    // lease-lost) — repair the marker here, under the inactive-lease fence
+    // so a live child's still-held lease keeps refusing the write.
+    let settledEvidence: boolean;
+    try {
+      const [turnState, meta] = await Promise.all([
+        store.readTurnState(),
+        store.readMeta(),
+      ]);
+      settledEvidence =
+        turnState?.lastCompletedTurn !== undefined ||
+        meta?.outcome === RUN_OUTCOME.COMPLETED;
+    } catch (error) {
+      throw new SubagentReconciliationError(
+        `Failed to inspect persisted subagent ${executionId}.`,
+        { cause: error },
+      );
+    }
+    if (!settledEvidence) {
+      const repair = await runWithInactiveExecutionLease(executionId, () =>
+        writeStableSubagentAttempt(store, {
+          ...attempt,
+          phase: 'retryable',
+        }),
+      ).catch((error: unknown) => {
+        throw new SubagentReconciliationError(
+          `Failed to repair the unsettled launched subagent ${executionId}.`,
+          { cause: error },
+        );
+      });
+      if (repair.status === 'performed') return { kind: 'advance' };
+      throw new SubagentReconciliationError(
+        `Subagent ${executionId} is still running under a live lease; refusing to repeat it.`,
+      );
+    }
     throw new SubagentReconciliationError(
       `Cannot reconcile incomplete persisted subagent ${executionId}; refusing to repeat it.`,
     );
@@ -223,12 +267,33 @@ async function throwRetryableDurabilityError(
   error: SubagentDurabilityError,
 ): Promise<never> {
   if (!stableAttempt) throw error;
+  const marker = { ...stableAttempt, phase: 'retryable' as const };
   try {
-    await writeStableSubagentAttempt(getExecutionStore(executionId), {
-      ...stableAttempt,
-      phase: 'retryable',
-    });
+    await writeStableSubagentAttempt(getExecutionStore(executionId), marker);
   } catch (cause) {
+    // A child whose artifact drain failed abandons its lease with the record
+    // retained, so this parent-side write is refused as lease-lost until the
+    // stale horizon. The refusal is not a recovery failure: reconciliation
+    // repairs an unsettled launched attempt on the next resume (see
+    // inspectStableAttempt), so surface the original durability error alone.
+    if (cause instanceof ExecutionLeaseLostError) {
+      const repair = await runWithInactiveExecutionLease(executionId, () =>
+        writeStableSubagentAttempt(getExecutionStore(executionId), marker),
+      ).catch((repairError: unknown) => {
+        logger.warn(LOG_CHANNEL, 'Retryable-marker repair write failed', {
+          data: { executionId, error: repairError },
+        });
+        return undefined;
+      });
+      if (repair?.status !== 'performed') {
+        logger.warn(
+          LOG_CHANNEL,
+          'Deferred retryable marker to resume-time reconciliation: the child lease is still held',
+          { data: { executionId } },
+        );
+      }
+      throw error;
+    }
     throw new SubagentDurabilityError(
       `${error.message} Failed to mark the stable attempt as retryable.`,
       {
