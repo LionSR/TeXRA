@@ -37,7 +37,7 @@ import type {
  * Schema for a single web search result entry.
  * Normalized across all providers.
  */
-const WebSearchResultEntrySchema = z.object({
+export const WebSearchResultEntrySchema = z.object({
   /** URL of the search result */
   url: z.string(),
   /** Title of the page */

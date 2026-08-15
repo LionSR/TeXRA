@@ -114,7 +114,16 @@ export type NormalizedToolUse = {
 /** URL field for tool payloads that will be rendered as live links. */
 const SafeUrlSchema = z.string().transform(sanitizeLiveLinkUrl);
 
-const WebSearchResultItemSchema = z.object({
+/**
+ * Render-boundary projection of the canonical provider web-search entry
+ * (`WebSearchResultEntrySchema` in `@agent/types/ServerTools` — not imported
+ * here because the shared layer must not depend on the agent layer). Keeps
+ * only the rendered fields, all optional because persisted archives may be
+ * partial, and applies the SafeUrl sanitization transform to `url` at this
+ * boundary (#7230). Named for its payload so it no longer collides with the
+ * agent layer's same-name schemas (#10279).
+ */
+const WebSearchPayloadItemSchema = z.object({
   url: SafeUrlSchema.optional(),
   title: z.string().optional(),
   domain: z.string().optional(),
@@ -122,7 +131,7 @@ const WebSearchResultItemSchema = z.object({
 
 export const WebSearchPayloadSchema = z.object({
   query: z.string().optional(),
-  results: z.array(WebSearchResultItemSchema).optional(),
+  results: z.array(WebSearchPayloadItemSchema).optional(),
   provider: z.string().optional(),
   status: z.string().optional(),
 });

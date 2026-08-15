@@ -46,7 +46,7 @@ export function formatWebSearchTemplate(message: LogMessageData): FormatResult {
   const { data } = message;
   if (!data || typeof data !== 'object') return null;
 
-  // Parsed (not merely cast) so `WebSearchResultItemSchema` actually
+  // Parsed (not merely cast) so `WebSearchPayloadItemSchema` actually
   // sanitizes each result's `url` — a `javascript:`/`data:` scheme from a
   // web_search tool result must never reach the `<a href>` below.
   const { query, results, provider, status } =
@@ -67,7 +67,7 @@ export function formatWebSearchTemplate(message: LogMessageData): FormatResult {
   const sections: TemplateResult[] = [];
 
   if (resultCount > 0) {
-    // `r.url` is already schema-sanitized (`WebSearchResultItemSchema`) to
+    // `r.url` is already schema-sanitized (`WebSearchPayloadItemSchema`) to
     // either a safe URL or `undefined` — never render an `<a>` without a
     // real href (an empty/missing href is not itself dangerous, but a
     // result with no safe URL should read as inert text, not a dead link).
