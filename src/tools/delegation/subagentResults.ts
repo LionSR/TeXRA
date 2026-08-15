@@ -347,6 +347,9 @@ const LARGE_CHANGE_DIFF_LINES = 80;
 const LARGE_CHANGE_RATIO = 0.4;
 
 const LOG_CHANNEL = 'subagentDiffs';
+// The boundary warn in `buildSubagentResult` predates the A4 file merge and
+// stays on its historical channel so log ingestion keyed on it keeps seeing it.
+const DELIVERY_LOG_CHANNEL = 'subagentDelivery';
 
 const DIFF_LINE_PREFIX: Readonly<Record<number, string>> = Object.freeze({
   [DIFF_INSERT]: '+',
@@ -521,7 +524,7 @@ export async function buildSubagentResult(
       // the orchestrator to read the output files directly.
       diffsUnavailable = toErrorMessage(err);
       logger.warn(
-        LOG_CHANNEL,
+        DELIVERY_LOG_CHANNEL,
         `Diff computation failed for ${executionId}: ${diffsUnavailable}`,
       );
     }

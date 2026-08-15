@@ -10,7 +10,7 @@
  */
 import type { AgentSettingInput } from '@agent/core/definition/AgentDataclass';
 import * as logger from '@logger/logUtils';
-import { AgentCategory } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas';
 import { resolveToolDefinitions } from '@tools/registry';
 
 export function resolveAgentSettingTools(

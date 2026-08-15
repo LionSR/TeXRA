@@ -40,6 +40,7 @@ import {
 const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
   executeAgent: vi.fn(),
+  resumeToolUseFromResumeData: vi.fn(),
   getExecutionStore: vi.fn(),
   getVisibleAgents: vi.fn(),
   isApprovalBypassedForStream: vi.fn(),
@@ -383,6 +384,7 @@ describe('headless delegation', () => {
     vi.clearAllMocks();
     provideAgentEngine({
       executeAgent: mocks.executeAgent,
+      resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
     } as unknown as AgentEngine);
     mocks.getVisibleAgents.mockReturnValue([
       {

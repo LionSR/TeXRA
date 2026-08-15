@@ -611,7 +611,6 @@
       "src/agent/runtime/AgentFlowResult.ts",
       "src/agent/runtime/executeAgent.ts",
       "src/agent/runtime/selectAutoOpenFinalOutput.ts (type-only)",
-      "src/tools/delegation/subagentDiffs.ts (type-only)",
       "src/tools/delegation/subagentResults.ts (type-only)",
       "src/utils/text/xmlExtraction.ts"
     ],
