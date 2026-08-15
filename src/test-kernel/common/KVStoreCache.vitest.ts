@@ -15,6 +15,9 @@ describe('KVStoreCache', () => {
     2 ** 53,
     2 ** 32 - 1,
     2 ** 32,
+    // One past the application ceiling. Keep in sync with
+    // MAX_BOUNDED_HANDLES in KVStoreCache.ts.
+    100_001,
   ])('throws the KVStoreCache RangeError for max=%s', (max) => {
     let caught: unknown;
     try {
@@ -26,6 +29,12 @@ describe('KVStoreCache', () => {
     expect((caught as RangeError).message).toMatch(
       /^KVStoreCache max must be a positive safe integer/,
     );
+  });
+
+  it('accepts the largest bounded max without preallocating OOM-sized lists', () => {
+    // The ceiling is the boundary pin on the accepted side; keep this literal
+    // in sync with MAX_BOUNDED_HANDLES in KVStoreCache.ts.
+    expect(() => new KVStoreCache(create, { max: 100_000 })).not.toThrow();
   });
 
   it('keeps every cached handle when max is unset (unbounded)', () => {

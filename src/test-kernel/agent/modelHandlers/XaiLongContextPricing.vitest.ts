@@ -119,13 +119,16 @@ describe('catalog cache-factor pin', () => {
 });
 
 describe('xaiLongContextTierGap', () => {
-  it('flags a live xAI model whose window clears the documented threshold', () => {
+  it('flags a live unlisted xAI model at exactly the documented threshold', () => {
+    // The pricing switch is inclusive at 200_000, so the drift tripwire must
+    // trip on equality too — a 200_000-window model bills tiered but has no
+    // row here.
     expect(
       xaiLongContextTierGap(
         buildTestModelConfig({
           provider: ModelProvider.XAI,
           fullName: 'grok-9',
-          contextWindow: 1_000_000,
+          contextWindow: 200_000,
         }),
       ),
     ).toBe(true);
@@ -138,8 +141,8 @@ describe('xaiLongContextTierGap', () => {
       // No longer served; xAI will not publish new tiers for these.
       { fullName: 'grok-legacy', contextWindow: 500_000, deprecated: true },
       { fullName: 'grok-dead', contextWindow: 500_000, retired: true },
-      // A 200k+ tier cannot fit a short window.
-      { fullName: 'grok-small', contextWindow: 131_072 },
+      // One token below the inclusive threshold.
+      { fullName: 'grok-small', contextWindow: 199_999 },
     ] as const;
     for (const overrides of cases) {
       expect(
@@ -255,6 +258,7 @@ describe('ModelHandlerXAI tier-gap warning', () => {
     handler.computePrice(usage);
 
     expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0]?.[0]).toContain('grok-9');
     expect(warn.mock.calls[0]?.[1]).toMatchObject({
       data: { fullName: 'grok-9', contextWindow: 1_000_000 },
     });
