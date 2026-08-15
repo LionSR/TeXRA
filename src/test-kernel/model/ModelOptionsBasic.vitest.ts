@@ -40,13 +40,13 @@ describe('default agent model', () => {
 });
 
 describe('default model list', () => {
-  it('includes Gemini 3.6 Flash as a free-tier relay model', () => {
-    const config = MODEL_CONFIGS.gemini36f;
+  it('includes Gemini 3.7 Flash as the active default Google Flash model', () => {
+    const config = MODEL_CONFIGS.gemini37f;
 
-    expect(DEFAULT_MODELS).toContain('gemini36f');
+    expect(DEFAULT_MODELS).toContain('gemini37f');
     expect(config).toMatchObject({
-      fullName: 'gemini-3.6-flash',
-      label: 'Gemini 3.6 Flash',
+      fullName: 'gemini-3.7-flash',
+      label: 'Gemini 3.7 Flash',
       provider: 'google',
       openRouterOnly: false,
     });
@@ -150,7 +150,7 @@ describe('computeModelListVersion', () => {
   });
 
   it('preserves the established hash for the current preferred set', () => {
-    expect(MODEL_LIST_VERSION).toBe(494_338_219);
+    expect(MODEL_LIST_VERSION).toBe(80_458_026);
   });
 
   it('does not change when a non-preferred catalogue model retires', () => {
