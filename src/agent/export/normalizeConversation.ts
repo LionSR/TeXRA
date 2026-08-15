@@ -21,7 +21,10 @@ import {
   isFunctionCallOutputItem,
   isResponseFunctionToolCallItem,
 } from '@agent/modelHandlers/openai/responsesShapeGuards';
-import { CONVERSATION_BLOCK_TYPES } from '@agent/types/ConversationBlockTypes';
+import {
+  classifyProviderMessageBlockType,
+  CONVERSATION_BLOCK_TYPES,
+} from '@agent/types/ConversationBlockTypes';
 import {
   ANTHROPIC_SERVER_TOOL_BLOCK_TYPES,
   extractWebFetchResultFields,
@@ -235,20 +238,19 @@ function googlePartToBlocks(part: Part): ContentBlock[] {
 function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
   const parts: UserPart[] = [];
   for (const b of blocks) {
-    switch (b.type) {
-      // Anthropic: 'text', OpenAI Response API: 'input_text'
-      case 'text':
-      case 'input_text':
-        if (b.text) parts.push({ type: 'text', text: b.text });
-        break;
-      case CONVERSATION_BLOCK_TYPES.image:
-      case CONVERSATION_BLOCK_TYPES.inputImage:
-      case CONVERSATION_BLOCK_TYPES.imageUrl:
+    // Anthropic: 'text', OpenAI Response API: 'input_text'. Text tags stay
+    // per-literal (user text is 'text'/'input_text' here but assistant text
+    // is 'text'/'output_text' in `assistantBlockToNode`), so they are not in
+    // the shared classifier — see `@agent/types/ConversationBlockTypes`.
+    if (b.type === 'text' || b.type === 'input_text') {
+      if (b.text) parts.push({ type: 'text', text: b.text });
+      continue;
+    }
+    switch (classifyProviderMessageBlockType(b.type)) {
+      case 'image-attachment':
         parts.push({ type: 'attachment', attachmentType: 'image' });
         break;
-      case CONVERSATION_BLOCK_TYPES.document:
-      case CONVERSATION_BLOCK_TYPES.inputFile:
-      case CONVERSATION_BLOCK_TYPES.file:
+      case 'document-attachment':
         parts.push({ type: 'attachment', attachmentType: 'document' });
         break;
       default:
@@ -259,76 +261,102 @@ function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
 }
 
 function extractToolResultText(block: ContentBlock): string | undefined {
-  switch (block.type) {
-    case CONVERSATION_BLOCK_TYPES.toolResult:
-      return typeof block.content === 'string'
-        ? block.content
-        : prettyJson(block.content);
-    // Anthropic: 'text', OpenAI Response API: 'input_text'
-    case 'text':
-    case 'input_text':
-      return block.text || undefined;
-    default:
-      return undefined;
+  // Anthropic: 'text', OpenAI Response API: 'input_text'
+  if (block.type === 'text' || block.type === 'input_text') {
+    return block.text || undefined;
   }
+  if (classifyProviderMessageBlockType(block.type) !== 'tool-result') {
+    return undefined;
+  }
+  const toolResult =
+    asClassifiedBlock<typeof CONVERSATION_BLOCK_TYPES.toolResult>(block);
+  return typeof toolResult.content === 'string'
+    ? toolResult.content
+    : prettyJson(toolResult.content);
 }
 
-// Non-text tags are shared with the `formatConversationBlock` switch in
-// `@agent/storage/conversationFormat` via `CONVERSATION_BLOCK_TYPES`
-// (`@agent/types/ConversationBlockTypes`) and `ANTHROPIC_SERVER_TOOL_BLOCK_TYPES`
-// (`@agent/types/ServerTools`) — both switches must recognize the same
-// tags, just into different output shapes (a structured `ExportNode` here
-// vs. a truncated marker string there).
+/**
+ * Re-narrow a `ContentBlock` to the variant behind a tag the shared
+ * classifier recognized. The classifier establishes tag → category; inside a
+ * category case the tag is known, but TypeScript cannot propagate that back
+ * to the block's variant, so each case re-anchors it here.
+ */
+function asClassifiedBlock<T extends ContentBlock['type']>(
+  block: ContentBlock,
+): Extract<ContentBlock, { type: T }> {
+  return block as Extract<ContentBlock, { type: T }>;
+}
+
+// Non-text tag classification is shared with `formatConversationBlock` in
+// `@agent/storage/conversationFormat` via `classifyProviderMessageBlockType`
+// (`@agent/types/ConversationBlockTypes`) — one switch recognizes the tags;
+// each module maps the category into its own output shape (a structured
+// `ExportNode` here vs. a truncated marker string there).
 function assistantBlockToNode(block: ContentBlock): ExportNode | null {
-  switch (block.type) {
-    case CONVERSATION_BLOCK_TYPES.thinking:
-    case CONVERSATION_BLOCK_TYPES.redactedThinking:
+  // Anthropic: 'text', OpenAI Response API: 'output_text'. Text tags stay
+  // per-literal (see `blocksToUserParts` for the user-side split).
+  if (block.type === 'text' || block.type === 'output_text') {
+    return block.text?.trim()
+      ? { kind: 'assistant-text', text: block.text }
+      : null;
+  }
+
+  switch (classifyProviderMessageBlockType(block.type)) {
+    case 'thinking':
       return null;
 
-    // Anthropic: 'text', OpenAI Response API: 'output_text'
-    case 'text':
-    case 'output_text':
-      return block.text?.trim()
-        ? { kind: 'assistant-text', text: block.text }
-        : null;
-
-    case CONVERSATION_BLOCK_TYPES.toolUse:
+    case 'tool-use': {
+      const toolUse =
+        asClassifiedBlock<typeof CONVERSATION_BLOCK_TYPES.toolUse>(block);
       return {
         kind: 'tool-call',
-        name: block.name ?? 'unknown',
-        input: prettyJson(block.input ?? {}),
+        name: toolUse.name ?? 'unknown',
+        input: prettyJson(toolUse.input ?? {}),
       };
+    }
 
-    case CONVERSATION_BLOCK_TYPES.toolResult:
+    case 'tool-result': {
+      const toolResult =
+        asClassifiedBlock<typeof CONVERSATION_BLOCK_TYPES.toolResult>(block);
       return {
         kind: 'tool-result',
         text:
-          typeof block.content === 'string'
-            ? block.content
-            : prettyJson(block.content ?? ''),
+          typeof toolResult.content === 'string'
+            ? toolResult.content
+            : prettyJson(toolResult.content ?? ''),
       };
+    }
 
     // Anthropic server-side tool blocks (the provider executes these, not a
     // local tool handler).
-    case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.serverToolUse:
-      if (block.name === 'web_search') {
+    case 'server-tool-use': {
+      const serverToolUse =
+        asClassifiedBlock<
+          typeof ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.serverToolUse
+        >(block);
+      if (serverToolUse.name === 'web_search') {
         const query =
-          block.input && typeof block.input === 'object'
-            ? (block.input as { query?: string }).query
+          serverToolUse.input && typeof serverToolUse.input === 'object'
+            ? (serverToolUse.input as { query?: string }).query
             : undefined;
         return query ? { kind: 'web-search', query } : null;
       }
       return null;
+    }
 
-    case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webSearchToolResult: {
-      if (!Array.isArray(block.content)) return null;
-      const results = block.content
+    case 'web-search-tool-result': {
+      const webSearchResult =
+        asClassifiedBlock<
+          typeof ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webSearchToolResult
+        >(block);
+      if (!Array.isArray(webSearchResult.content)) return null;
+      const results = webSearchResult.content
         .filter((e) => e.type === 'web_search_result' && e.url)
         .map((e) => ({ title: e.title ?? e.url!, url: e.url! }));
       return results.length ? { kind: 'web-search-results', results } : null;
     }
 
-    case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webFetchToolResult: {
+    case 'web-fetch-tool-result': {
       const result = extractWebFetchResultFields(block);
       if (!result) return null;
       return {

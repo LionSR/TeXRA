@@ -22,11 +22,11 @@
  * truncation for the CLI). Provider-native message and content recognition is
  * shared here.
  */
-import { CONVERSATION_BLOCK_TYPES } from '@agent/types/ConversationBlockTypes';
 import {
-  ANTHROPIC_SERVER_TOOL_BLOCK_TYPES,
-  extractWebFetchResultFields,
-} from '@agent/types/ServerTools';
+  classifyProviderMessageBlockType,
+  CONVERSATION_BLOCK_TYPES,
+} from '@agent/types/ConversationBlockTypes';
+import { extractWebFetchResultFields } from '@agent/types/ServerTools';
 import { isObject } from '@utils/core';
 
 const DEFAULT_TRUNCATION_MARKER = '...';
@@ -260,29 +260,26 @@ function formatConversationBlock(
     );
   }
 
-  // Non-text tags are shared with the `assistantBlockToNode` switch in
-  // `@agent/export/normalizeConversation` via `CONVERSATION_BLOCK_TYPES`
-  // (`@agent/types/ConversationBlockTypes`) and `ANTHROPIC_SERVER_TOOL_BLOCK_TYPES`
-  // (`@agent/types/ServerTools`) — both switches must recognize the same
-  // tags, just into different output shapes (a truncated marker string here
-  // vs. a structured `ExportNode` there). `text`/`input_text`/`output_text`
-  // are the exception: they're caught by the duck-typed `block.text` check
-  // above, not by an explicit case here.
-  switch (block.type) {
-    case 'text':
-      // A recognized text block whose `text` failed the duck-type check
-      // above (missing/non-string) — render empty, not its JSON form.
-      return truncate(asText(block.text), options.textLimit, options);
-    case CONVERSATION_BLOCK_TYPES.image:
-    case CONVERSATION_BLOCK_TYPES.imageUrl:
-    case CONVERSATION_BLOCK_TYPES.inputImage:
+  // A recognized text block whose `text` failed the duck-type check above
+  // (missing/non-string) — render empty, not its JSON form. Only the literal
+  // `text` tag gets this treatment: `input_text`/`output_text` are not
+  // classified (see `@agent/types/ConversationBlockTypes`) and fall through
+  // to the JSON dump below.
+  if (block.type === 'text') {
+    return truncate(asText(block.text), options.textLimit, options);
+  }
+
+  // Non-text tag classification is shared with `assistantBlockToNode` in
+  // `@agent/export/normalizeConversation` via `classifyProviderMessageBlockType`
+  // (`@agent/types/ConversationBlockTypes`) — one switch recognizes the tags;
+  // each module maps the category into its own output shape (a truncated
+  // marker string here vs. a structured `ExportNode` there).
+  switch (classifyProviderMessageBlockType(block.type)) {
+    case 'image-attachment':
       return '[image attachment]';
-    case CONVERSATION_BLOCK_TYPES.document:
-    case CONVERSATION_BLOCK_TYPES.file:
-    case CONVERSATION_BLOCK_TYPES.inputFile:
+    case 'document-attachment':
       return '[document attachment]';
-    case CONVERSATION_BLOCK_TYPES.thinking:
-    case CONVERSATION_BLOCK_TYPES.redactedThinking:
+    case 'thinking':
       return options.hideProviderReasoning
         ? ''
         : truncate(
@@ -290,25 +287,25 @@ function formatConversationBlock(
             options.toolBlockLimit,
             options,
           );
-    case CONVERSATION_BLOCK_TYPES.toolUse:
+    case 'tool-use':
       return formatToolUseMarker(
         asText(block.name) || 'unknown',
         block.input,
         options,
       );
-    case CONVERSATION_BLOCK_TYPES.toolResult:
+    case 'tool-result':
       return formatToolResultMarker(block.content, options);
     // Anthropic server-side tool blocks (the provider executes these, not a
     // local tool handler).
-    case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.serverToolUse:
+    case 'server-tool-use':
       return formatToolUseMarker(
         asText(block.name) || 'unknown',
         block.input,
         options,
       );
-    case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webSearchToolResult:
+    case 'web-search-tool-result':
       return formatWebSearchResultMarker(block.content, options);
-    case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webFetchToolResult:
+    case 'web-fetch-tool-result':
       return formatWebFetchResultMarker(block, options);
     default:
       return truncate(
