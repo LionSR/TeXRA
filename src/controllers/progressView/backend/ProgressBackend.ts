@@ -482,9 +482,11 @@ export class ProgressBackend {
 
   /** Whether local durable state exists for `stream` (log or task snapshot). */
   private hasDeletableStreamData(stream: StreamTabId): boolean {
+    // Read config presence from the always-resident summary mirror: deletion
+    // sweeps over historical streams must not force per-stream sidecar reads.
     return (
       this.state.streamLogs.has(stream) ||
-      Boolean(this.state.snapshots.getRunMetadata(stream).config)
+      Boolean(this.state.getStreamMetadata(stream).config)
     );
   }
 

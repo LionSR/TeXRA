@@ -23,12 +23,21 @@ vi.mock('@tools/goal', async (importOriginal) => {
 
 import { getExecutionStore } from '@agent/storage';
 import * as logger from '@logger/logUtils';
-import { type ExecutionId, type StreamTabId } from '@shared/schemas';
+import {
+  LOG_LEVELS,
+  MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import {
   executionLeasePath,
   writeForeignLease,
 } from '@test/support/executionLeaseFixtures';
-import { snapshotFacts } from '@test/support/storeTestDrivers';
+import {
+  appendTranscriptEntry,
+  snapshotFacts,
+} from '@test/support/storeTestDrivers';
 import { GoalStore } from '@tools/goal';
 import { streamDataDir, StreamSnapshotStore } from '@transcript';
 import {
@@ -663,9 +672,9 @@ describe('ProgressBackend cleanup', () => {
       await second.backend.state.load();
 
       expect(second.backend.state.streamLogs.has(stream)).toBe(true);
-      expect(
-        second.backend.state.snapshots.getRunMetadata(stream).executionId,
-      ).toBe(executionId);
+      await expect(
+        second.backend.state.snapshots.readPersistedExecutionId(stream),
+      ).resolves.toBe(executionId);
       await expectStored(streamDataDir(stream), true);
       await expectStored(`executions/${executionId}`, true);
     } finally {
@@ -685,11 +694,30 @@ describe('ProgressBackend cleanup', () => {
 
     try {
       registerStream(first.backend, shell);
+      snapshotFacts(first.backend.state.snapshots).setRunStart({
+        streamId: shell.stream,
+        executionId: shell.executionId,
+        identity: { kind: 'process', tool: 'bash' },
+      });
+      appendTranscriptEntry(first.backend.state.streamLogs, shell.stream, {
+        id: 'shell-output',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 1_000,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'background shell output',
+        data: {},
+      });
       await writeExecutionConfig(shell.executionId, {
         streamId: shell.stream,
         identity: { kind: 'process', tool: 'bash' },
       });
       registerStream(first.backend, session);
+      snapshotFacts(first.backend.state.snapshots).setRunStart({
+        streamId: session.stream,
+        executionId: session.executionId,
+        identity: { kind: 'agent', agent: 'search' },
+      });
       await writeExecutionConfig(session.executionId, {
         streamId: session.stream,
         identity: { kind: 'agent', agent: 'search' },

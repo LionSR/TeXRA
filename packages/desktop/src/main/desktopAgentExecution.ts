@@ -507,6 +507,7 @@ export class DesktopProgressBridge {
           this.state.snapshots.getKnownFilePaths(stream, {
             workspaceOnly: true,
           }),
+        preload: (stream) => this.state.snapshots.preload([stream]),
       },
       runDiff: (request) => this.runWorkflowDiff(request),
       runFileOperation: (operation, request) =>
@@ -564,6 +565,7 @@ export class DesktopProgressBridge {
         getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
         getCompileFailures: (stream) =>
           this.state.snapshots.getCompileFailures(stream),
+        preload: (stream) => this.state.snapshots.preload([stream]),
       },
       workspace: {
         locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
@@ -737,6 +739,7 @@ export class DesktopProgressBridge {
       run: {
         state: {
           getRunMetadata: (stream) => this.getRunMetadata(stream),
+          preload: (stream) => this.state.snapshots.preload([stream]),
         },
         runExecutionRequest: async (request) => {
           await this.runValidatedExecutionRequest(request);
@@ -748,6 +751,7 @@ export class DesktopProgressBridge {
           getRunMetadata: (stream) => this.getRunMetadata(stream),
           getOutputFiles: (stream) =>
             this.state.snapshots.getOutputFiles(stream),
+          preload: (stream) => this.state.snapshots.preload([stream]),
         },
         host: {
           compareFiles: (baseFile, editedFile) =>
@@ -880,6 +884,7 @@ export class DesktopProgressBridge {
   private createProgressViewInboundHandlers(): DesktopProgressInboundHandlerRegistry {
     const secondTierActions: ProgressViewSecondTierActions = {
       getRunMetadata: (stream) => this.getRunMetadata(stream),
+      preload: (stream) => this.state.snapshots.preload([stream]),
       workflowActions: this.workflowActions,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
@@ -1019,12 +1024,13 @@ export class DesktopProgressBridge {
   }
 
   private getRunMetadata(streamId: StreamTabId): RunMetadata {
+    // Summary first for the execution edge (#9947), sidecar-backed record for
+    // the full config/identity fields the summary intentionally does not carry.
+    const summary = this.state.getStreamMetadata(streamId);
     const metadata = this.state.snapshots.getRunMetadata(streamId);
     return {
       ...metadata,
-      executionId:
-        metadata.executionId ??
-        this.state.getStreamMetadata(streamId).executionId,
+      executionId: summary.executionId ?? metadata.executionId,
     };
   }
 
@@ -1118,7 +1124,7 @@ export class DesktopProgressBridge {
     baseFile: string,
     editedFile: string,
   ): Promise<void> {
-    const context = this.getActiveLatexdiffRunContext(editedFile);
+    const context = await this.getActiveLatexdiffRunContext(editedFile);
     if (!context) {
       await this.fileActions.runLatexdiffFile(baseFile, editedFile);
       return;
@@ -1127,11 +1133,12 @@ export class DesktopProgressBridge {
     await this.fileActions.diffAcceptedFilePair(baseFile, editedFile, context);
   }
 
-  private getActiveLatexdiffRunContext(
+  private async getActiveLatexdiffRunContext(
     editedFile: string,
-  ): DesktopLatexdiffRunContext | undefined {
+  ): Promise<DesktopLatexdiffRunContext | undefined> {
     const stream = this.backend.presentation.activeStream;
     if (!stream) return undefined;
+    await this.state.snapshots.preload([stream]);
 
     // Round keys are non-negative integers BY CONSTRUCTION: every write path
     // into StreamSnapshotStore's outputFiles accumulator (both the live

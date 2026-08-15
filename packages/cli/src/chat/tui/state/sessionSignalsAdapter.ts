@@ -104,7 +104,10 @@ class TuiSessionRenderer implements SessionRendererPort {
     if (this.isStaleDispatch(streamId)) return;
     if (isChildStreamRemoved(streamId)) return;
     const metadata = this.state.getStreamMetadata(streamId);
-    const config = this.state.snapshots.getRunMetadata(streamId).config;
+    // Display config comes from the always-resident summary mirror, never from
+    // a synchronous per-stream sidecar read (#9947). File lists are artifacts
+    // hydrated separately by the focused-stream artifact subscription.
+    const config = metadata.config;
     // Parent-only metadata refreshes must not mint a StreamSlice: an edge
     // alone is not focusable until attachment (`setActiveStream`) creates one.
     const hasDisplayFields =
@@ -129,20 +132,9 @@ class TuiSessionRenderer implements SessionRendererPort {
       ...slice,
       identity: metadata.identity ?? slice.identity,
       userFollowUpSupport: metadata.userFollowUpSupport,
-      agent: config?.agent ?? identityAgent ?? slice.agent,
+      agent: identityAgent ?? slice.agent,
       model: config?.model ?? slice.model,
-      category:
-        metadata.agentCategory ?? config?.agentCategory ?? slice.category,
-      ...(config
-        ? {
-            files: {
-              input: config.inputFiles,
-              context: config.contextFiles,
-              media: config.mediaFiles,
-              output: config.outputFiles,
-            },
-          }
-        : {}),
+      category: metadata.agentCategory ?? slice.category,
       ...(metadata.description !== undefined
         ? { description: metadata.description }
         : {}),

@@ -53,6 +53,7 @@ export class ProgressWorkflowFileActionsController {
 
   async openTaskStorage(stream: StreamTabId): Promise<void> {
     try {
+      await this.deps.state.preload?.(stream);
       const { executionId } = this.deps.state.getRunMetadata(stream);
       const runOutputs = this.deps.state.getOutputFiles(stream);
       let directoryToReveal: string | undefined;
@@ -128,6 +129,8 @@ export class ProgressWorkflowFileActionsController {
         );
       }
     }
+
+    if (activeStream && file) await this.deps.state.preload?.(activeStream);
 
     const copyMeta =
       activeStream && file ? this.buildCopyMeta(activeStream, file) : undefined;
