@@ -1,13 +1,33 @@
 # Delegation and flow substrate consolidation: the remaining ten debts
 
-Status: Wave 1 implemented (items 1, 6, 9) plus A4, 2026-08-15 — the cycle
-break landed via an engine-provided `AgentEngine` slot in
-`nativeSubagentStrategy.ts` (both lazy imports retired; the
-`toolRegistryCycle` closure guard's agent-launching allowlist is now empty);
-item 9's relocations follow the single-consumer test (`CycleServices` and
-`IToolUseSession` stayed — both families consume them; `toolCallParsing`
-moved up to `core/flows/`, four model handlers consume it); A4 landed minus
-the verifier-cut sub-items. Waves 2-4 remain.
+Status: Waves 1-4 implemented 2026-08-15 (PR #10475), with two amendments
+below. Wave 1 (items 1, 6, 9) + A4: the cycle break landed via an
+engine-provided `AgentEngine` slot in `nativeSubagentStrategy.ts` (both lazy
+imports retired; the `toolRegistryCycle` closure guard's agent-launching
+allowlist is now pinned empty); item 9's relocations follow the
+single-consumer test (`CycleServices` and `IToolUseSession` stayed;
+`toolCallParsing` moved up to `core/flows/`). Wave 2: item 2's cost
+contract written at `ChildRunPorts` (no site violated it; agent-CLI
+children's absent observer recorded as deliberate — open question 1
+answered); item 3's notify sink threads to the parent trace (workflow-YAML
+`tools:` warn folded in); item 10 decided result-only as contract (open
+question 3 audited: only the `report` action's copy assumed otherwise).
+Wave 3: item 5/A7 executed — one label derivation, delivery summary reads
+only persisted snapshots, `WorkflowScriptEvent` narrowed to `log` with the
+projection folding per-transition snapshots (`onTransition`). Wave 4:
+item 4 landed per `2026-08-15-child-run-concurrency-budget.md` (open
+question 2 answered there: per-session count budget, loop-owned single
+acquisition, in-band inherits, default 16; setting + per-provider-key
+recorded follow-ups).
+
+**Amendment (item 8, 2026-08-15): the hydration premise is stale.** The
+read + stamp spine was already consolidated in `@agent/node/persistedFlow`
+(#10286/#9990/#9966); the sole remaining duplication is a 5-line throw-idiom, and a
+measured extraction honoring the caller-owned-write constraint nets
+**+35 production LoC** for +2 exports. Item 8's hydration sub-item is
+closed as fails-net-gain; do not re-attempt. The real residual divergence
+is the honorable-mention schema-strictness asymmetry
+(`ToolUseRunSharedSchema` loose vs reflection strict), a behavior question.
 Date: 2026-08-14
 
 ## Framing
