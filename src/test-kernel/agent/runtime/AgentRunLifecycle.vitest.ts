@@ -52,10 +52,6 @@ import {
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
 import { withTranscriptWriter } from '@test/support/storeTestDrivers';
-import {
-  setLeanLanguageServices,
-  type LeanLanguageServices,
-} from '@tools/lean/leanLanguageServices';
 import { StorageFS } from '@utils/files/storageFS';
 
 import {
@@ -310,19 +306,12 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-lean-server-stop',
     );
     const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
-    setLeanLanguageServices({
-      executeFileCommand: vi.fn(),
-      getGoalState: vi.fn(),
-      getTermGoal: vi.fn(),
-      getHoverInfo: vi.fn(),
-      fetchDiagnosticsForFile: vi.fn(),
-      executeProjectCommand: vi.fn(),
-      stopSessionsForRun,
-    } as LeanLanguageServices);
 
     try {
-      const result = await runFlowWithLifecycle(ctx, async () =>
-        toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+        { onRunEnd: stopSessionsForRun },
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
@@ -337,21 +326,16 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-lean-server-stop-failed',
     );
     const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
-    setLeanLanguageServices({
-      executeFileCommand: vi.fn(),
-      getGoalState: vi.fn(),
-      getTermGoal: vi.fn(),
-      getHoverInfo: vi.fn(),
-      fetchDiagnosticsForFile: vi.fn(),
-      executeProjectCommand: vi.fn(),
-      stopSessionsForRun,
-    } as LeanLanguageServices);
 
     try {
       await expect(
-        runFlowWithLifecycle(ctx, async () => {
-          throw new Error('flow exploded');
-        }),
+        runFlowWithLifecycle(
+          ctx,
+          async () => {
+            throw new Error('flow exploded');
+          },
+          { onRunEnd: stopSessionsForRun },
+        ),
       ).rejects.toThrow('flow exploded');
 
       expect(stopSessionsForRun).toHaveBeenCalledWith(executionId);
@@ -365,19 +349,12 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-lean-server-stop-waiting',
     );
     const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
-    setLeanLanguageServices({
-      executeFileCommand: vi.fn(),
-      getGoalState: vi.fn(),
-      getTermGoal: vi.fn(),
-      getHoverInfo: vi.fn(),
-      fetchDiagnosticsForFile: vi.fn(),
-      executeProjectCommand: vi.fn(),
-      stopSessionsForRun,
-    } as LeanLanguageServices);
 
     try {
-      const result = await runFlowWithLifecycle(ctx, async () =>
-        waitingResult(executionId, streamId),
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => waitingResult(executionId, streamId),
+        { onRunEnd: stopSessionsForRun },
       );
 
       // WAITING is a suspension, not a terminal run end: the server must
@@ -396,21 +373,12 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-lean-server-stop-subagent',
     );
     const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
-    setLeanLanguageServices({
-      executeFileCommand: vi.fn(),
-      getGoalState: vi.fn(),
-      getTermGoal: vi.fn(),
-      getHoverInfo: vi.fn(),
-      fetchDiagnosticsForFile: vi.fn(),
-      executeProjectCommand: vi.fn(),
-      stopSessionsForRun,
-    } as LeanLanguageServices);
 
     try {
       const result = await runFlowWithLifecycle(
         ctx,
         async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-        { isSubagent: true },
+        { isSubagent: true, onRunEnd: stopSessionsForRun },
       );
 
       // The parent run owns the worktree, so a subagent's own terminal
