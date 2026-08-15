@@ -79,7 +79,9 @@ import {
   EMPTY_WORK_PLAN,
   emptyStreamData,
   readMeta,
+  readMetaForOwnership,
   readStreamData,
+  readUsageData,
   type StreamData,
 } from './streamSnapshotRead';
 import type { StreamSummaryMeta } from './StreamLogStore';
@@ -313,6 +315,8 @@ interface StreamRecord {
    * lossy read permanently deleting them on the next save (#7464).
    */
   usageUnparsed: Map<string, unknown>;
+  /** Usage was hydrated by a usage-only seed; `getRunUsage` needs no warning. */
+  usageProvenance: boolean;
   workPlan: WorkPlanSnapshot;
   meta: StreamTabMeta | undefined;
   /**
@@ -377,6 +381,7 @@ export class StreamSnapshotStore {
     compileFailures: {},
     usage: new Map(),
     usageUnparsed: new Map(),
+    usageProvenance: false,
     workPlan: EMPTY_WORK_PLAN,
     meta: undefined,
     runExecutionId: undefined,
@@ -1036,8 +1041,11 @@ export class StreamSnapshotStore {
   }
 
   getRunUsage(stream: StreamTabId): Map<string, TokenUsageStats> {
-    this.warnIfUnseeded('getRunUsage', stream);
-    return new Map(this.records.get(stream)?.usage ?? []);
+    const record = this.records.get(stream);
+    if (!record?.usageProvenance) {
+      this.warnIfUnseeded('getRunUsage', stream);
+    }
+    return new Map(record?.usage ?? []);
   }
 
   /** Flattened set of known output-file paths for a stream. */
@@ -1395,8 +1403,13 @@ export class StreamSnapshotStore {
    * the execution record named by the stream sidecar. All five fields share
    * that execution owner and replacement lifecycle.
    */
-  getRunMetadata(stream: StreamTabId): RunMetadata {
-    this.warnIfUnseeded('getRunMetadata', stream);
+  getRunMetadata(
+    stream: StreamTabId,
+    options?: { readonly quiet?: boolean },
+  ): RunMetadata {
+    if (!options?.quiet) {
+      this.warnIfUnseeded('getRunMetadata', stream);
+    }
     const record = this.records.get(stream);
     return Object.freeze({
       executionId: record?.runExecutionId,
@@ -1431,7 +1444,12 @@ export class StreamSnapshotStore {
     // mint an in-memory record for a stream this caller only needs one disk
     // field from. The bounded-startup invariant (#9947) keeps cold historical
     // streams record-free until a caller actually seeds or mutates them.
-    return (await readMeta(this.kvHandles.get(stream)))?.executionId;
+    //
+    // Use the strict ownership read: corrupt-present metadata must surface as
+    // an unreadable sidecar (and skip the stream) rather than masquerade as a
+    // legacy stream with no persisted FK.
+    return (await readMetaForOwnership(this.kvHandles.get(stream)))
+      ?.executionId;
   }
 
   /**
@@ -1770,9 +1788,50 @@ export class StreamSnapshotStore {
    * stream set. Use this when a host only has a partial rail snapshot at
    * startup; later mutations for other streams must still seed from disk before
    * writing.
+   *
+   * `usageOnly` hydrates only the per-stream usage sidecar. Restart repair uses
+   * it for parked WAITING streams so the status-bar usage total is correct
+   * immediately without making the full 6-file record resident for the whole
+   * session (#9947, #10520).
    */
-  async preload(streamIds: readonly StreamTabId[]): Promise<void> {
+  async preload(
+    streamIds: readonly StreamTabId[],
+    options?: { readonly usageOnly?: boolean },
+  ): Promise<void> {
+    if (options?.usageOnly) {
+      await pMap(streamIds, (streamId) => this.seedUsageOnly(streamId), {
+        concurrency: SEED_IO_CONCURRENCY,
+      });
+      return;
+    }
     await this.seedStreams(streamIds);
+  }
+
+  private async seedUsageOnly(streamId: StreamTabId): Promise<void> {
+    if (this.hasDiskProvenance(streamId)) return;
+    const version = this.streamVersion(streamId);
+    const record = this.getOrCreateRecord(streamId);
+    if (record.seedChain) {
+      await record.seedChain.catch(() => undefined);
+    }
+    if (this.streamVersion(streamId) !== version) return;
+    if (this.hasDiskProvenance(streamId)) return;
+    const usage = await readUsageData(this.kv(streamId));
+    if (this.streamVersion(streamId) !== version) return;
+    const current = this.records.get(streamId);
+    if (!current || current.diskState !== 'unknown') return;
+    current.usage = new Map(usage.usage);
+    current.usageUnparsed = new Map(usage.unparsedRuns);
+    // Replay any eager live usage delta that landed while the disk read was
+    // pending. The overlay stays in place so a later full seed replays it once
+    // on top of freshly-read disk usage; this seed performs no writes itself.
+    const usageOverlay = current.overlays.usage;
+    if (usageOverlay) {
+      for (const [storageKey, delta] of usageOverlay) {
+        this.applyUsageDeltaMemory(current, storageKey, delta);
+      }
+    }
+    current.usageProvenance = true;
   }
 
   private async seedStreams(streamIds: readonly StreamTabId[]): Promise<void> {

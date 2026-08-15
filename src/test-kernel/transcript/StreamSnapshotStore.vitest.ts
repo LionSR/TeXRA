@@ -1009,6 +1009,127 @@ describe('StreamSnapshotStore', () => {
     expect(store.getRunMetadata(STREAM).executionId).toBe(executionId);
   });
 
+  it('treats corrupt-present ownership metadata as unreadable, not missing', async () => {
+    await StorageFS.ensureDir(streamDataDir(STREAM));
+    await StorageFS.write(
+      path.join(streamDataDir(STREAM), 'meta.json'),
+      '{bad json',
+    );
+
+    const store = new StreamSnapshotStore();
+    await expect(store.readPersistedExecutionId(STREAM)).rejects.toBeInstanceOf(
+      SyntaxError,
+    );
+  });
+
+  it('rejects valid-JSON ownership metadata with an invalid execution FK', async () => {
+    await StorageFS.ensureDir(streamDataDir(STREAM));
+    await StorageFS.write(
+      path.join(streamDataDir(STREAM), 'meta.json'),
+      JSON.stringify({ schemaVersion: 1, executionId: 42 }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await expect(store.readPersistedExecutionId(STREAM)).rejects.toThrow(
+      'Invalid persisted stream metadata ownership',
+    );
+  });
+
+  it('rejects non-object ownership metadata instead of treating it as missing', async () => {
+    await StorageFS.ensureDir(streamDataDir(STREAM));
+    await StorageFS.write(
+      path.join(streamDataDir(STREAM), 'meta.json'),
+      JSON.stringify(['not', 'a', 'meta']),
+    );
+
+    const store = new StreamSnapshotStore();
+    await expect(store.readPersistedExecutionId(STREAM)).rejects.toThrow(
+      'Invalid persisted stream metadata ownership',
+    );
+  });
+
+  it('usage-only preload supplies usage without warning and preserves live deltas', async () => {
+    await writeStreamFile(STREAM, 'usageStats.json', {
+      [RUN]: usage(1, 2, 0.1),
+    });
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM], { usageOnly: true });
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+
+    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject({
+      inputTokens: 1,
+      outputTokens: 2,
+      cost: 0.1,
+    });
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    snapshotFacts(store).addUsage(STREAM, RUN_2, usage(3, 4, 0.2));
+    expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject({
+      inputTokens: 3,
+      outputTokens: 4,
+      cost: 0.2,
+    });
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    // Drain the seed chain started by the live usage event so teardown cannot
+    // race an in-flight sidecar write.
+    await store.flush();
+  });
+
+  it('usage-only preload replays an eager usage delta that lands during the read', async () => {
+    await writeStreamFile(STREAM, 'usageStats.json', {
+      [RUN]: usage(1, 2, 0.1),
+    });
+
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const originalRead = StorageFS.read.bind(StorageFS);
+    const readUsageFile = vi
+      .spyOn(StorageFS, 'read')
+      .mockImplementation(async (filePath) => {
+        if (filePath.endsWith('usageStats.json')) {
+          await readGate;
+        }
+        return originalRead(filePath);
+      });
+
+    const store = new StreamSnapshotStore();
+    const preload = store.preload([STREAM], { usageOnly: true });
+    snapshotFacts(store).addUsage(STREAM, RUN_2, usage(3, 4, 0.2));
+    releaseRead();
+    await preload;
+
+    expect(readUsageFile).toHaveBeenCalled();
+    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject({
+      inputTokens: 1,
+      outputTokens: 2,
+      cost: 0.1,
+    });
+    expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject({
+      inputTokens: 3,
+      outputTokens: 4,
+      cost: 0.2,
+    });
+
+    await store.flush();
+  });
+
+  it('usage-only preload rejects corrupt-present usageStats instead of zeroing', async () => {
+    await StorageFS.ensureDir(streamDataDir(STREAM));
+    await StorageFS.write(
+      path.join(streamDataDir(STREAM), 'usageStats.json'),
+      '{bad json',
+    );
+
+    const store = new StreamSnapshotStore();
+    await expect(
+      store.preload([STREAM], { usageOnly: true }),
+    ).rejects.toBeInstanceOf(SyntaxError);
+  });
+
   it('strips a retired runDescriptor sidecar without reading its FK', async () => {
     // Pre-FK sidecars carried a whole runDescriptor; that shape is retired.
     // The unknown key is stripped: no FK is lifted out of it, and the rest

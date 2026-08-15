@@ -122,7 +122,18 @@ export class SessionStores {
     return this.trackStreamDeletion(stream, async () => {
       // Track the whole wait so a presentation attaching during terminal
       // artifact persistence cannot replay a stream already marked removed.
-      await this.waitForOwnedExecutionRelease(stream);
+      // If the ownership read fails here, report `failed` immediately rather
+      // than enqueueing a second read that could decide the stream has no
+      // execution and delete it.
+      try {
+        await this.waitForOwnedExecutionRelease(stream);
+      } catch (error) {
+        log.warn(
+          `Stream ${stream} was retained because its execution ownership could not be read: ${toErrorMessage(error)}`,
+          { data: error },
+        );
+        return 'failed';
+      }
       return this.enqueueDeletion(() => this.deleteStreamAndNotify(stream));
     });
   }
@@ -230,7 +241,16 @@ export class SessionStores {
   ): Promise<DeleteStreamResult> {
     if (!canUseStreamDataDir(stream)) return 'deleted';
 
-    const executionId = await this.executionIdForStream(stream);
+    let executionId: ExecutionId | undefined;
+    try {
+      executionId = await this.executionIdForStream(stream);
+    } catch (error) {
+      log.warn(
+        `Stream ${stream} was retained because its execution ownership could not be read: ${toErrorMessage(error)}`,
+        { data: error },
+      );
+      return 'failed';
+    }
 
     if (!executionId) {
       try {
@@ -292,17 +312,23 @@ export class SessionStores {
   }
 
   /**
-   * The stream→execution reverse edge: the always-resident summary mirror
-   * first, then the persisted sidecar FK. A stream without either has no
-   * owned execution — name resemblance is never ownership, so no suffix
-   * derivation exists.
+   * The stream→execution reverse edge. Live deletion paths resolve the current
+   * execution from the resident snapshot record first: `run.start` updates the
+   * in-memory record and the summary mirror synchronously, while the persisted
+   * sidecar FK is written asynchronously and may still name the previous
+   * execution until the run-end flush. For streams with no resident record the
+   * persisted sidecar FK is authoritative (settled streams, #10518), then the
+   * always-resident summary mirror for legacy streams without a persisted FK.
+   * A stream with neither has no owned execution — name resemblance is never
+   * ownership, so no suffix derivation exists.
    */
   private async executionIdForStream(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
     return (
-      this.streamLogs.getSummaryMeta(stream)?.executionId ??
-      (await this.snapshots.readPersistedExecutionId(stream))
+      this.snapshots.getRunMetadata(stream, { quiet: true }).executionId ??
+      (await this.snapshots.readPersistedExecutionId(stream)) ??
+      this.streamLogs.getSummaryMeta(stream)?.executionId
     );
   }
 
@@ -356,6 +382,7 @@ export class SessionStores {
       failed.add(stream);
     };
     for (const stream of snapshotStreams) {
+      if (executionIdsByStream.has(stream)) continue;
       try {
         const executionId =
           await this.snapshots.readPersistedExecutionId(stream);
