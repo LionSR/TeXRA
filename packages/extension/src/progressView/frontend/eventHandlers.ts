@@ -306,12 +306,7 @@ export function handlePermissionAction(
           requestId: data.requestId,
           model: data.model,
           exhaustionReason,
-          // Subscription quota exhaustion always means the OpenAI key is the
-          // fallback credential, regardless of how the error tagged provider.
-          provider:
-            exhaustionReason === 'chatgpt-subscription'
-              ? 'openai'
-              : data.errorDetails?.provider,
+          provider: data.errorDetails?.provider,
           viaRelay: data.errorDetails?.isRelayError === true || undefined,
           kimiCodeRoutedOnFailure: data.kimiCodeRoutedOnFailure,
         });
