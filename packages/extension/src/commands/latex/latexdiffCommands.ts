@@ -1,6 +1,3 @@
-// Node imports
-import * as path from 'node:path';
-
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -8,10 +5,6 @@ import * as vscode from 'vscode';
 import { createLatexExecutionDiscovery } from '@agent/storage';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { workspaceSM } from '@common/state';
-import {
-  prepareBuildDisplay,
-  scheduleViewerDisplay,
-} from '@frontend/latex/openBuild';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
@@ -38,8 +31,6 @@ import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
@@ -48,6 +39,10 @@ import {
   getLatexdiffPackNotifications,
   showLatexHousekeepingNotification,
 } from './latexHousekeepingNotifications';
+import {
+  openLatexdiffResult,
+  prepareLatexdiffResultsAndScheduleViewer,
+} from './latexdiffResultDelivery';
 
 type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
 
@@ -106,72 +101,6 @@ async function promptForLatexdiffMathMarkup(): Promise<
     logger.debug(CHANNEL, 'Math markup selection cancelled by user');
   }
   return pick?.value;
-}
-
-async function openLatexdiffResult(
-  base: FileLocation,
-  diffFileName: string,
-  options: { scheduleViewer?: boolean } = {},
-): Promise<
-  | {
-      diffFilePath: string;
-      diffLocation: FileLocation;
-      viewerReady: boolean;
-    }
-  | undefined
-> {
-  const baseDirectory = path.extname(base.absolutePath)
-    ? path.dirname(base.absolutePath)
-    : base.absolutePath;
-  const diffFilePath = path.join(baseDirectory, diffFileName);
-
-  const diffLocation = pathToLocation(diffFilePath);
-
-  if (!(await AbsoluteFS.exists(diffLocation.absolutePath))) {
-    await showLoggedMessage(
-      CHANNEL,
-      `Diff file could not be found. Expected path: ${diffFilePath}`,
-    );
-    return undefined;
-  }
-
-  // Await the file-open/build phase so multi-round latexdiff runs keep their
-  // sequential build/show ordering and failures still propagate to
-  // `withLatexdiffTool`. The caller decides whether to schedule a viewer from
-  // the returned `viewerReady` outcome; a generated path alone is not enough
-  // when external compilation failed (#10553).
-  const viewerReady = await prepareBuildDisplay(diffLocation, {
-    preserveFocus: true,
-    scheduleViewer: options.scheduleViewer,
-  });
-  return { diffFilePath, diffLocation, viewerReady };
-}
-
-/**
- * Restore the last successfully prepared diff as the active LaTeX document
- * before scheduling the argument-free viewer. Only used when a later diff
- * setup rejected after an earlier diff was prepared, so LaTeX Workshop's
- * current document/root still points at the intended final viewer target.
- */
-async function restorePreparedViewerTarget(
-  diffLocation: FileLocation,
-): Promise<void> {
-  try {
-    const doc = await vscode.workspace.openTextDocument(
-      vscode.Uri.file(diffLocation.absolutePath),
-    );
-    await vscode.window.showTextDocument(doc, {
-      preview: true,
-      preserveFocus: true,
-    });
-  } catch (err) {
-    // The original setup error still propagates; this is a best-effort viewer
-    // target restore, not a second error path.
-    logger.warn(
-      CHANNEL,
-      `Failed to restore the last prepared diff before viewer handoff: ${toErrorMessage(err)}`,
-    );
-  }
 }
 
 /**
@@ -402,49 +331,7 @@ async function handleRunLatexdiff(
         );
       }
 
-      let lastViewerLocation: FileLocation | undefined;
-      let viewerPrepared = false;
-      let completedSetup = false;
-
-      try {
-        for (const result of results) {
-          const suffix = result.description ? ` (${result.description})` : '';
-
-          if (result.success && result.basePath && result.diffFileName) {
-            const opened = await openLatexdiffResult(
-              pathToLocation(result.basePath),
-              result.diffFileName,
-              { scheduleViewer: false },
-            );
-            if (opened) {
-              logger.debug(
-                CHANNEL,
-                `Successfully generated diff: ${opened.diffFilePath}${suffix}`,
-              );
-              if (opened.viewerReady) {
-                lastViewerLocation = opened.diffLocation;
-                viewerPrepared = true;
-              }
-            }
-          } else if (!result.success) {
-            logger.warn(
-              CHANNEL,
-              `Failed to generate diff${suffix}: ${result.message ?? 'Unknown error'}`,
-            );
-          }
-        }
-        completedSetup = true;
-      } finally {
-        // Schedule exactly one detached viewer handoff for the last
-        // successfully prepared/ready diff, even if a later setup rejected.
-        // The original setup error still propagates to `withLatexdiffTool`.
-        if (viewerPrepared && lastViewerLocation) {
-          if (!completedSetup) {
-            await restorePreparedViewerTarget(lastViewerLocation);
-          }
-          void scheduleViewerDisplay();
-        }
-      }
+      await prepareLatexdiffResultsAndScheduleViewer(results);
     },
   );
 }
