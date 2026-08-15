@@ -597,6 +597,7 @@ describe('headless delegation', () => {
     );
     expect(launchedWrite).toBeGreaterThanOrEqual(0);
     expect(committedWrite).toBeGreaterThan(launchedWrite);
+    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledOnce();
     expect(
       childStore.write.mock.invocationCallOrder[committedWrite],
     ).toBeGreaterThan(
@@ -762,6 +763,26 @@ describe('headless delegation', () => {
     expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 
+  it('refuses to repeat a committed child whose result manifest is missing', async () => {
+    const logicalExecutionId = 'cccccc777777' as ExecutionId;
+    const sequenceStore = stableSequenceStore(logicalExecutionId, 1);
+    useStableStores(sequenceStore, {
+      ...emptyChildStore(),
+      listKeys: vi
+        .fn()
+        .mockResolvedValue(['stable-subagent-attempt', 'config']),
+      read: vi
+        .fn()
+        .mockResolvedValue(stableAttempt(logicalExecutionId, 'committed')),
+    });
+
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.executeAgent).not.toHaveBeenCalled();
+  });
+
   it('refuses to repeat an incomplete stable child', async () => {
     const logicalExecutionId = 'dddddd444444' as ExecutionId;
     const sequenceStore = stableSequenceStore(logicalExecutionId, 1);
@@ -880,6 +901,28 @@ describe('headless delegation', () => {
         parentExecutionId: STABLE_PARENT_EXECUTION_ID,
         streamId: expect.stringContaining(`#${completed.executionId}`),
       }),
+    );
+  });
+
+  it('does not commit a cancelled stable child as successful', async () => {
+    const logicalExecutionId = 'eeeeee666666' as ExecutionId;
+    const childStore = memoryExecutionStore();
+    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+    mocks.executeAgent.mockResolvedValueOnce({
+      category: 'toolUse',
+      outcome: 'cancelled',
+      executionId: logicalExecutionId,
+      streamId: 'child-stream',
+      response: '',
+      files: [],
+    });
+
+    const completed = await runInBand(delegationOptions(), logicalExecutionId);
+
+    expect(completed.result.outcome).toBe('cancelled');
+    expect(childStore.write).not.toHaveBeenCalledWith(
+      'stable-subagent-attempt',
+      expect.objectContaining({ phase: 'committed' }),
     );
   });
 

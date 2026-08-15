@@ -193,6 +193,11 @@ async function inspectStableAttempt(
     );
   }
   if (!resultMeta) {
+    if (attempt.phase === 'committed') {
+      throw new SubagentReconciliationError(
+        `Committed subagent ${executionId} is missing its result manifest; refusing to repeat it.`,
+      );
+    }
     if (attempt.phase !== 'launched') return { kind: 'advance' };
     // A launched attempt without a manifest is unsafe to repeat only if the
     // child may have finished side-effectful work whose manifest was lost:
@@ -542,7 +547,7 @@ async function executeInBand(
     };
   });
 
-  if (stableAttempt) {
+  if (stableAttempt && completed.result.outcome === RUN_OUTCOME.COMPLETED) {
     try {
       await writeStableSubagentAttempt(getExecutionStore(executionId), {
         ...stableAttempt,
