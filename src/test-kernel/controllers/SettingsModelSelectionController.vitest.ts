@@ -5,12 +5,14 @@ import { MAX_TIER } from '@auth/config';
 import {
   SettingsModelSelectionController,
   type SettingsModelSelectionControllerDeps,
-  type SettingsModelSelectionState,
 } from '@controllers/settingsView/SettingsModelSelectionController';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import type { CopilotModelRoute } from '@model/runtimeModelRegistry';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 // Stub the injected availability resolver so the controller stays decoupled
 // from the global platform / server-side key service in unit tests.
@@ -25,45 +27,11 @@ const resolveModelOptions = async (
     disabled: false,
   }));
 
-function createState(
-  initial: Partial<{
-    enabledModels: readonly string[];
-    helperModel: string;
-    reasoningLevelOverrides: Record<string, string>;
-    preferShortModelNames: boolean;
-  }> = {},
-): SettingsModelSelectionState {
-  const state = {
-    enabledModels: initial.enabledModels,
-    helperModel: initial.helperModel,
-    reasoningLevelOverrides: initial.reasoningLevelOverrides,
-    preferShortModelNames: initial.preferShortModelNames,
-  };
-  return {
-    getEnabledModels: () => state.enabledModels,
-    setEnabledModels: async (models) => {
-      state.enabledModels = models;
-    },
-    getHelperModel: () => state.helperModel,
-    setHelperModel: async (model) => {
-      state.helperModel = model;
-    },
-    getReasoningLevelOverrides: () => state.reasoningLevelOverrides,
-    setReasoningLevelOverrides: async (overrides) => {
-      state.reasoningLevelOverrides = overrides;
-    },
-    getPreferShortModelNames: () => state.preferShortModelNames,
-    setPreferShortModelNames: async (enabled) => {
-      state.preferShortModelNames = enabled;
-    },
-  };
-}
-
 function createController(
   overrides: Partial<SettingsModelSelectionControllerDeps> = {},
 ): SettingsModelSelectionController {
   return new SettingsModelSelectionController({
-    state: createState(),
+    globalState: new FakeStateStore(),
     resolveModelOptions,
     getCopilotRoutes: async () => new Map(),
     getPreferredCopilotRouteModels: () => [],
@@ -113,7 +81,9 @@ describe('SettingsModelSelectionController', () => {
 
   it('does not expose a reasoning selector for Kimi K3 fixed max effort', async () => {
     const controller = createController({
-      state: createState({ reasoningLevelOverrides: { kimi3: 'low' } }),
+      globalState: new FakeStateStore({
+        [GlobalStateKey.REASONING_LEVELS]: { kimi3: 'low' },
+      }),
     });
 
     const { models } = await controller.buildSelectionData();
@@ -163,23 +133,27 @@ describe('SettingsModelSelectionController', () => {
   });
 
   it('pins a disabled helper to the built-in default', async () => {
-    const state = createState({
-      enabledModels: ['gpt55', 'sonnet46T'],
-      helperModel: 'gpt55',
+    const globalState = new FakeStateStore({
+      [GlobalStateKey.ENABLED_MODELS]: ['gpt55', 'sonnet46T'],
+      [GlobalStateKey.HELPER_MODEL]: 'gpt55',
     });
-    const controller = createController({ state });
+    const controller = createController({ globalState });
 
     expect((await controller.buildSelectionData()).helperModel).toBe('gpt55');
 
     await controller.setModelEnabled({ modelName: 'gpt55', enabled: false });
 
-    expect(state.getEnabledModels()).toEqual(['sonnet46T']);
-    expect(state.getHelperModel()).toBe(DEFAULT_HELPER_MODEL);
+    expect(globalState.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
+      'sonnet46T',
+    ]);
+    expect(globalState.get(GlobalStateKey.HELPER_MODEL)).toBe(
+      DEFAULT_HELPER_MODEL,
+    );
   });
 
   it('falls back to default models when the persisted enabled list is empty', async () => {
     const controller = createController({
-      state: createState({ enabledModels: [] }),
+      globalState: new FakeStateStore({ [GlobalStateKey.ENABLED_MODELS]: [] }),
     });
 
     const { models } = await controller.buildSelectionData();
@@ -191,7 +165,9 @@ describe('SettingsModelSelectionController', () => {
 
   it('uses the runtime helper default when no helper model is configured', async () => {
     const controller = createController({
-      state: createState({ enabledModels: ['gpt55', 'sonnet46T'] }),
+      globalState: new FakeStateStore({
+        [GlobalStateKey.ENABLED_MODELS]: ['gpt55', 'sonnet46T'],
+      }),
     });
 
     expect((await controller.buildSelectionData()).helperModel).toBe(
@@ -260,5 +236,16 @@ describe('SettingsModelSelectionController', () => {
       ),
     ).toEqual([]);
     expect(models.filter((model) => model.name === 'sonnet46')).toHaveLength(1);
+  });
+
+  it('builds the outbound update message from its own selection data', async () => {
+    const controller = createController();
+
+    const message = await controller.buildModelSelectionMessage();
+
+    expect(message).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      ...(await controller.buildSelectionData()),
+    });
   });
 });

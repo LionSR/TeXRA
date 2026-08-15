@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agent/storage/resumability', () => ({
   deriveResumability: mocks.deriveResumability,
 }));
-vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
+vi.mock('@agent/followUp', () => ({
   presentFollowUpResult: vi.fn(),
   submitFollowUp: mocks.submitFollowUp,
 }));

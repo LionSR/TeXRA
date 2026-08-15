@@ -1260,6 +1260,99 @@ describe('format-staged', () => {
     expect(stagedBlob('a.ts')).toBe('export const x = 1\n');
   });
 
+  it('skips when an extensionless package main target has unstaged edits (#10591)', () => {
+    mkdirSync(join(dir, 'config/opts'), { recursive: true });
+    writeFileSync(join(dir, 'config/opts/package.json'), '{"main":"main"}\n');
+    writeFileSync(
+      join(dir, 'config/opts/main.js'),
+      'module.exports = { semi: true };\n',
+    );
+    writeFileSync(
+      join(dir, 'config/opts/index.js'),
+      'module.exports = { semi: true };\n',
+    );
+    writeFileSync(
+      join(dir, 'config/prettier.cjs'),
+      'const opts = require("./opts");\nmodule.exports = opts;\n',
+    );
+    writeFileSync(
+      join(dir, 'package.json'),
+      '{"prettier":"./config/prettier.cjs"}\n',
+    );
+    git([
+      'add',
+      'config/prettier.cjs',
+      'config/opts/package.json',
+      'config/opts/main.js',
+      'config/opts/index.js',
+      'package.json',
+    ]);
+    git(['commit', '-qm', 'config base']);
+    // The real main target (`main.js`, via Node's LOAD_AS_FILE on the
+    // extensionless main) is edited in the working tree; the package-level
+    // index.js fallback stays clean. The hook must resolve the main target
+    // and skip rather than format with the uncommitted semi:false rules.
+    writeFileSync(
+      join(dir, 'config/opts/main.js'),
+      'module.exports = { semi: false };\n',
+    );
+    writeFileSync(join(dir, 'a.ts'), 'export const x = 1;\n');
+    git(['add', 'a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('config/opts/main.js has unstaged edits');
+    expect(result.stdout).not.toContain('config/opts/index.js has unstaged');
+    expect(stagedBlob('a.ts')).toBe('export const x = 1;\n');
+  });
+
+  it('skips when a directory package main target has unstaged edits (#10591)', () => {
+    mkdirSync(join(dir, 'config/opts/dist'), { recursive: true });
+    writeFileSync(join(dir, 'config/opts/package.json'), '{"main":"dist"}\n');
+    writeFileSync(
+      join(dir, 'config/opts/dist/index.js'),
+      'module.exports = { semi: true };\n',
+    );
+    writeFileSync(
+      join(dir, 'config/opts/index.js'),
+      'module.exports = { semi: true };\n',
+    );
+    writeFileSync(
+      join(dir, 'config/prettier.cjs'),
+      'const opts = require("./opts");\nmodule.exports = opts;\n',
+    );
+    writeFileSync(
+      join(dir, 'package.json'),
+      '{"prettier":"./config/prettier.cjs"}\n',
+    );
+    git([
+      'add',
+      'config/prettier.cjs',
+      'config/opts/package.json',
+      'config/opts/dist/index.js',
+      'config/opts/index.js',
+      'package.json',
+    ]);
+    git(['commit', '-qm', 'config base']);
+    // The real main target (`dist/index.js`, via Node's LOAD_INDEX on the
+    // directory main) is edited; the package-level index.js stays clean.
+    writeFileSync(
+      join(dir, 'config/opts/dist/index.js'),
+      'module.exports = { semi: false };\n',
+    );
+    writeFileSync(join(dir, 'a.ts'), 'export const x = 1;\n');
+    git(['add', 'a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain(
+      'config/opts/dist/index.js has unstaged edits',
+    );
+    expect(stagedBlob('a.ts')).toBe('export const x = 1;\n');
+  });
+
   it('does not append extensions for an extensionless ESM import (#10502)', () => {
     mkdirSync(join(dir, 'config'));
     writeFileSync(

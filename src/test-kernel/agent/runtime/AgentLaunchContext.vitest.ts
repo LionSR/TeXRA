@@ -30,6 +30,7 @@ import { createRunScope } from '@agent/runtime/RunScope';
 import { useRunContext } from '@agent/runtime/RunContext';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   buildAgentLaunchContext,
@@ -369,42 +370,73 @@ describe('AgentLaunchContext', () => {
       signal: new AbortController().signal,
     });
     const modelCell = testModelCell({ dispose: vi.fn() }, 'deepseekT');
+    const onApprovalPolicyDenial = vi.fn();
     const ctx = {
       runScope,
       logger: noopTrace,
       modelCell,
+      toolPolicy: createToolPolicy({
+        approvalPromptsUnavailable: true,
+        runtimeUnavailableTools: ['inquiry'],
+        stopAfterCycle: true,
+      }),
       config: {
         agent: runScope.agentName,
         model: 'deepseekT',
       },
     } as unknown as AgentLaunchContext;
 
-    await withExecutionRunContext(
-      ctx,
-      {
-        approvalPromptsUnavailable: true,
-        runtimeUnavailableTools: ['inquiry'],
-        stopAfterCycle: true,
-      },
-      async () => {
-        const context = useRunContext();
-        expect(context.model).toBe('deepseekT');
-        expect(context.kind).toBe('launch');
-        if (context.kind !== 'launch') {
-          throw new Error('expected launch context');
-        }
-        expect(context.runScope).toBe(runScope);
-        expect(context.approvalPromptsUnavailable).toBe(true);
-        expect(context.runtimeUnavailableTools).toEqual(['inquiry']);
-        expect(context.stopAfterCycle).toBe(true);
+    await withExecutionRunContext(ctx, { onApprovalPolicyDenial }, async () => {
+      const context = useRunContext();
+      expect(context.model).toBe('deepseekT');
+      expect(context.kind).toBe('launch');
+      if (context.kind !== 'launch') {
+        throw new Error('expected launch context');
+      }
+      expect(context.runScope).toBe(runScope);
+      // `withExecutionRunContext` projects `ctx.toolPolicy` into the ambient
+      // RunContext; the only explicit option left is `onApprovalPolicyDenial`.
+      expect(context.approvalPromptsUnavailable).toBe(true);
+      expect(context.runtimeUnavailableTools).toEqual(['inquiry']);
+      expect(context.stopAfterCycle).toBe(true);
+      expect(context.onApprovalPolicyDenial).toBe(onApprovalPolicyDenial);
 
-        // The cell is the run's live model, so a swap alone moves the run
-        // context; the `AgentConfig.model` mirror does not drive it.
-        modelCell.swap({ dispose: vi.fn() } as never, 'sonnet46T');
+      // The cell is the run's live model, so a swap alone moves the run
+      // context; the `AgentConfig.model` mirror does not drive it.
+      modelCell.swap({ dispose: vi.fn() } as never, 'sonnet46T');
 
-        expect(useRunContext().model).toBe('sonnet46T');
-      },
-    );
+      expect(useRunContext().model).toBe('sonnet46T');
+    });
+  });
+
+  it('projects an empty tool policy as absent ambient fields', async () => {
+    const session = {} as SessionHandle;
+    const runScope = createRunScope({
+      streamId: 'launch-context-defaults',
+      executionId: 'launch-context-defaults-execution',
+      agentName: 'chat',
+      session,
+      signal: new AbortController().signal,
+    });
+    const modelCell = testModelCell({ dispose: vi.fn() }, 'deepseekT');
+    const ctx = {
+      runScope,
+      logger: noopTrace,
+      modelCell,
+      toolPolicy: createToolPolicy(),
+      config: { agent: runScope.agentName, model: 'deepseekT' },
+    } as unknown as AgentLaunchContext;
+
+    await withExecutionRunContext(ctx, {}, async () => {
+      const context = useRunContext();
+      if (context.kind !== 'launch') {
+        throw new Error('expected launch context');
+      }
+      expect(context.approvalPromptsUnavailable).toBeUndefined();
+      expect(context.runtimeUnavailableTools).toBeUndefined();
+      expect(context.stopAfterCycle).toBeUndefined();
+      expect(context.onApprovalPolicyDenial).toBeUndefined();
+    });
   });
 
   it('compensates a late launch-assembly failure before trace disposal', async () => {

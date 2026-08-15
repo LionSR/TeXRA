@@ -58,6 +58,15 @@ export type ExecutionLeasePresence =
   | { readonly status: 'owned'; readonly heartbeatAt: number }
   | { readonly status: 'foreign'; readonly heartbeatAt: number };
 
+export type OwnedExecutionLeaseCompletion =
+  | { readonly status: 'released' }
+  | { readonly status: 'retained'; readonly reason: 'undurable' }
+  | {
+      readonly status: 'retained';
+      readonly reason: 'release-failed';
+      readonly error: unknown;
+    };
+
 export type OwnedExecutionLeaseScope = <T>(
   operation: () => T | Promise<T>,
 ) => T | Promise<T>;
@@ -474,13 +483,6 @@ async function runWithValidatedOwnership<T>(
  * A continuation from a displaced owner keeps its original token and cannot
  * borrow a later local owner's lease for the same execution id.
  */
-export function runWithOwnedExecutionLease<T>(
-  executionId: ExecutionId,
-  operation: () => T | Promise<T>,
-): T | Promise<T> {
-  return captureOwnedExecutionLease(executionId)(operation);
-}
-
 /** Capture the current generation so a delayed lifecycle root cannot borrow its successor. */
 export function captureOwnedExecutionLease(
   executionId: ExecutionId,
@@ -709,21 +711,32 @@ export function markOwnedExecutionLeaseUndurable(
   }
 }
 
+/** Whether the current owned generation may publish post-drain durable state. */
+export function isOwnedExecutionLeaseDurable(
+  executionId: ExecutionId,
+): boolean {
+  const leases = currentOwnedLeases(executionId);
+  if (leases.length === 0) throw new ExecutionLeaseLostError(executionId);
+  return leases.every((lease) => !lease.durabilityFailed);
+}
+
 /** Release a durable execution; otherwise stop renewal and retain its record. */
 export async function completeOwnedExecutionLease(
   executionId: ExecutionId,
-): Promise<void> {
+): Promise<OwnedExecutionLeaseCompletion> {
   if (currentOwnedLeases(executionId).some((lease) => lease.durabilityFailed)) {
     abandonOwnedExecutionLease(executionId);
-    return;
+    return { status: 'retained', reason: 'undurable' };
   }
   try {
     await releaseOwnedExecutionLease(executionId);
+    return { status: 'released' };
   } catch (error) {
     log.warn(
       `Failed to release execution ${executionId}; its lease will expire after the stale horizon: ${toErrorMessage(error)}`,
       { data: error },
     );
+    return { status: 'retained', reason: 'release-failed', error };
   }
 }
 

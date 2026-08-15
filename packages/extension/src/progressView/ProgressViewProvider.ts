@@ -77,7 +77,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   public readonly backend: ProgressBackend;
   public readonly toolEditApprovals: ToolEditApprovalController;
   public readonly state: ProgressBackend['state'];
-  public readonly webviewUpdater: ProgressBackend['webviewUpdater'];
+  public readonly renderer: ProgressBackend['renderer'];
 
   protected readonly contentProvider: BundledViewContentProvider;
   protected readonly messageHandler: ProgressViewMessageHandler;
@@ -117,15 +117,15 @@ export class ProgressViewProvider extends BaseWebviewProvider {
         overrides: {
           retry: {
             show: (p) =>
-              this.webviewUpdater.showPermission({
+              this.renderer.showPermission({
                 kind: PERMISSION_KIND.RETRY,
                 data: p,
               }),
             dismiss: (id) =>
-              this.webviewUpdater.resolvePermission(PERMISSION_KIND.RETRY, id),
+              this.renderer.resolvePermission(PERMISSION_KIND.RETRY, id),
           },
           proposal: createAgentProposalTransport({
-            getWebviewUpdater: () => this.backend.webviewUpdater,
+            getRenderer: () => this.backend.renderer,
             isPending: (proposalId) =>
               this.backend.approvalHandlers.proposal.get(proposalId) !==
               undefined,
@@ -150,7 +150,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       },
     });
     this.state = this.backend.state;
-    this.webviewUpdater = this.backend.webviewUpdater;
+    this.renderer = this.backend.renderer;
 
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -231,7 +231,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
         // onThemeChange swaps the body class); rebuilding metadata for every
         // persisted stream on a theme flip is pure waste (#9959).
         if (!this.isViewVisible() || !this.canSendToWebview()) return;
-        this.webviewUpdater.setTheme(
+        this.renderer.setTheme(
           kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light',
         );
       }),
@@ -312,7 +312,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
         ? 'dark'
         : 'light';
 
-    this.webviewUpdater.setPlacement(target.placement);
+    this.renderer.setPlacement(target.placement);
 
     return this.backend.syncRenderedStreams({ syncActiveStream, theme });
   }
@@ -332,7 +332,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   }
 
   private async replayPendingPrompts(): Promise<void> {
-    if (!this.webviewUpdater.isAvailable()) return;
+    if (!this.renderer.isAvailable()) return;
 
     await replayApprovalRequestHandlers(this.backend.approvalHandlers);
     // YOLO / Super YOLO state is already sent by syncFullView() before replay.
@@ -345,7 +345,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   }
 
   private canSendToWebview(): boolean {
-    return this.target?.ready === true && this.webviewUpdater.isAvailable();
+    return this.target?.ready === true && this.renderer.isAvailable();
   }
 
   public isViewVisible(): boolean {

@@ -70,8 +70,11 @@ vi.mock('@agent/implementations/flows/tooluse/runToolUseFlow', () => ({
 // Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
-import { ResumeAdmissionCancelledError } from '@agent/runtime/resumeAdmission';
+import {
+  resumeToolUseFromResumeData,
+  ResumeAdmissionCancelledError,
+} from '@agent/runtime/executeAgent';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
@@ -112,6 +115,10 @@ function buildResumeContext(
         status: {},
         transcripts: { ensureLoaded: vi.fn(async () => {}) },
         flushArtifacts: vi.fn(async () => {}),
+        // The real exit choreography over the fake's flushArtifacts and the
+        // mocked lease verbs, so the completeOwnedExecutionLease assertion
+        // keeps observing the drain through its one owner.
+        releaseExecutionLease: SessionHandle.prototype.releaseExecutionLease,
       },
       signal: abortController.signal,
     },
@@ -145,7 +152,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
       async (_executionId: ExecutionId, error: unknown) => error,
     );
-    mocks.completeOwnedExecutionLease.mockResolvedValue(undefined);
+    mocks.completeOwnedExecutionLease.mockResolvedValue({ status: 'released' });
     // Default: the lifecycle wrapper just runs the flow against a no-op
     // handle. Tests that need a real handle override with
     // mockImplementationOnce, which takes precedence for their single call.
@@ -281,7 +288,10 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       runScope: {
         executionId: resume.executionId,
         streamId: resume.streamId,
-        session: { flushArtifacts: vi.fn() },
+        session: {
+          flushArtifacts: vi.fn(),
+          releaseExecutionLease: vi.fn(async () => {}),
+        },
       },
     } as unknown as AgentLaunchContext);
 

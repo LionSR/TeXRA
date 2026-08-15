@@ -9,7 +9,7 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import type { ToolUseFollowUpTarget } from '@agent/runtime/executionRegistry';
 import type { LiveToolUseFlowContext } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { StreamTabId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 
 function mockTryResume(): Mock<() => Promise<boolean>> {
@@ -49,11 +49,11 @@ function activeTarget(
 
 const id = (value: string) => value as StreamTabId;
 
-/** Stub the summary-mirror execution-id read the durable-producer path performs. */
+/** Stub the persisted sidecar FK the durable-producer path reads first. */
 function mockPersistedExecution(session: SessionHandle): void {
-  vi.spyOn(session.transcripts, 'getSummaryMeta').mockReturnValue({
-    executionId: 'persisted-execution',
-  } as never);
+  vi.spyOn(session.snapshots, 'readPersistedExecutionId').mockResolvedValue(
+    'persisted-execution' as ExecutionId,
+  );
 }
 
 /**
@@ -101,7 +101,10 @@ describe('submitFollowUp', () => {
 
     expect(tryResumeStream).not.toHaveBeenCalled();
     expect(
-      session.followUps.drainItems(child).map((item) => item.text),
+      session.followUps
+        .queue(child)
+        .drainItems()
+        .map((item) => item.text),
     ).toEqual(['while waiting', 'between turns', 'during turn']);
   });
 
@@ -121,7 +124,7 @@ describe('submitFollowUp', () => {
 
     expect(tryResumeStream).not.toHaveBeenCalled();
     expect(appendFollowUp).not.toHaveBeenCalled();
-    expect(session.followUps.drainItems(flow)).toMatchObject([
+    expect(session.followUps.queue(flow).drainItems()).toMatchObject([
       { text: 'during active turn' },
     ]);
     expect(session.events.emit).toHaveBeenCalledWith({
@@ -149,7 +152,7 @@ describe('submitFollowUp', () => {
       continuation: 'live',
     });
 
-    expect(session.followUps.drainItems(flow)).toMatchObject([
+    expect(session.followUps.queue(flow).drainItems()).toMatchObject([
       { text: 'child progress' },
     ]);
     expect(session.events.emit).not.toHaveBeenCalled();
@@ -429,6 +432,37 @@ describe('submitFollowUp', () => {
       continuation: 'resumed',
     });
     expect(session.followUps.currentGenerationId(streamId)).toBe(generationId);
+  });
+
+  it('prefers quiet resident ownership before the persisted sidecar FK', async () => {
+    const streamId = id('stream:resident-generation');
+    const residentExecutionId = 'resident-execution' as ExecutionId;
+    const session = fakeSession({ kind: 'queue', reason: 'waiting' });
+    session.snapshots.getRunMetadata = vi.fn(() => ({
+      executionId: residentExecutionId,
+    }));
+    vi.spyOn(session.snapshots, 'readPersistedExecutionId').mockResolvedValue(
+      'persisted-execution' as ExecutionId,
+    );
+    const generationId = '04d3201e-5df0-45a8-9f8b-76b2097ce574';
+    const deriveResumability = vi
+      .spyOn(resumability, 'deriveResumability')
+      .mockResolvedValue(durableResumabilityDecision(generationId));
+    const tryResumeStream = mockTryResume();
+
+    await expect(
+      submitFollowUp(streamId, 'resident generation answer', {
+        session,
+        resumePort: { tryResumeStream },
+        expectedGenerationId: generationId,
+      }),
+    ).resolves.toMatchObject({
+      status: 'queued',
+      continuation: 'resumed',
+    });
+
+    expect(deriveResumability).toHaveBeenCalledWith(residentExecutionId);
+    expect(session.snapshots.readPersistedExecutionId).not.toHaveBeenCalled();
   });
 
   it('serializes durable generation lookup before later ordinary admission', async () => {

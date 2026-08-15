@@ -52,6 +52,20 @@ export interface RestartRepairOptions {
   now?: number;
   /** Stop before beginning another repair mutation after session teardown. */
   signal?: AbortSignal;
+  /**
+   * Status generation captured before the async ownership/detection pass.
+   * Used with {@link isRepairCandidateCurrent} to drop candidates reused after
+   * discovery but before their turn in this sequential repair loop.
+   */
+  expectedStatusGenerations?: ReadonlyMap<StreamTabId, object | undefined>;
+  /**
+   * Revalidate one candidate under its execution lease, immediately before
+   * settlement/mutation. Return `false` to skip the stale candidate.
+   */
+  isRepairCandidateCurrent?: (
+    streamId: StreamTabId,
+    executionId: ExecutionId | undefined,
+  ) => boolean;
 }
 
 export interface RestartRepairResult {
@@ -233,6 +247,12 @@ export async function repairRestartedStreams(
     try {
       const repair = async () => {
         repairStarted = true;
+        if (
+          options.isRepairCandidateCurrent &&
+          !options.isRepairCandidateCurrent(streamId, executionId)
+        ) {
+          return { kind: 'skipped' as const };
+        }
         if (executionId) {
           const settlement = await readExecutionSettlement(executionId);
           if (options.signal?.aborted) {
@@ -277,6 +297,12 @@ export async function repairRestartedStreams(
         continue;
       }
       if (repaired.value.kind === 'cancelled') break;
+      if (repaired.value.kind === 'skipped') {
+        options.logger?.debug(
+          `Skipped restart repair for stream ${streamId}: it was reused during discovery`,
+        );
+        continue;
+      }
       if (repaired.value.kind === 'settled') {
         options.logger?.debug(
           `Skipped restart repair for terminal execution ${executionId}`,

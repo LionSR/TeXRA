@@ -12,7 +12,6 @@ import {
 import { warn as logWarning } from '@logger/logUtils';
 import {
   type ApprovalDecision,
-  type RetryPermission,
   type UserQuestionAnswers,
 } from '@shared/schemas';
 import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
@@ -293,16 +292,8 @@ export function createHeadlessCliHostInteractions(
       });
     },
     async requestRetry(request: HostRetryRequest) {
-      const payload: RetryPermission = {
-        requestId: request.requestId,
-        streamId: request.streamId,
-        operation: request.operation,
-        ...(request.model ? { model: request.model } : {}),
-        ...(request.errorMessage ? { errorMessage: request.errorMessage } : {}),
-        ...(request.errorDetails ? { errorDetails: request.errorDetails } : {}),
-      };
       const { decision, prompted } = await decideApprovalEvent(
-        { type: 'showRetryRequest', payload },
+        { type: 'showRetryRequest', payload: request },
         context,
         hooks,
         { writeRejectionToStderr: true },

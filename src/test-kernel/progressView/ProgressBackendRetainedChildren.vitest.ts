@@ -241,19 +241,16 @@ describe('retained finished children', () => {
     // A structural rebuild (view reopen, theme change, filter switch) is the
     // frontend's other writer of `subagents`; it must overlay the stale row
     // with the authoritative status-machine outcome.
-    backend.webviewUpdater.sendStreamMetadata(
+    backend.renderer.sendStreamMetadata(
       backend.projections.streamRoster(
         backend.presentation.activeStream,
         backend.state.streamStatus.getAllStreamStates(),
       ),
       backend.presentation.activeStream,
     );
-    backend.webviewUpdater.updateStreamMetadata(
-      backend.projections.streamMetadata(
-        PARENT,
-        backend.state.streamStatus.getAllStreamStates(),
-        backend.presentation.activeStream,
-      ),
+    backend.renderer.updateStreamMetadata(
+      PARENT,
+      backend.state.streamStatus.getAllStreamStates(),
     );
 
     const rosters = messages.flatMap((message) => {

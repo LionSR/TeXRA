@@ -6,7 +6,7 @@ import { classifyAgentError } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import type { ResponseTextConnector } from '@latex/texraResponseTextProcessing';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 
 interface ConnectionResult {
   connector: string;
@@ -23,6 +23,8 @@ const DEFAULT_RESULT: ConnectionResult = {
   connector: CASE_CONNECTORS.B,
   choice: 'B',
 };
+
+const log = createLog(CHANNEL);
 
 function buildPrompt(str1: string, str2: string): string {
   return (
@@ -48,8 +50,7 @@ export async function bestConnectionMethod(
   try {
     const helperResult = await createHelperModelKit();
     if (!helperResult.kit) {
-      logger.debug(
-        CHANNEL,
+      log.debug(
         `Skipping bestConnectionMethod helper call: ${helperResult.reason}`,
       );
       return DEFAULT_RESULT;
@@ -62,16 +63,14 @@ export async function bestConnectionMethod(
     const choice = text.trim();
     const connector = CASE_CONNECTORS[choice];
     if (connector === undefined) {
-      logger.debug(CHANNEL, `Invalid choice: ${choice}. Defaulting to space.`);
+      log.debug(`Invalid choice: ${choice}. Defaulting to space.`);
       return DEFAULT_RESULT;
     }
     return { connector, choice };
   } catch (err) {
-    const log =
-      classifyAgentError(err) === 'missing-api-key'
-        ? logger.debug
-        : logger.error;
-    log(CHANNEL, `Error in bestConnectionMethod: ${getSdkErrorMessage(err)}`);
+    const write =
+      classifyAgentError(err) === 'missing-api-key' ? log.debug : log.error;
+    write(`Error in bestConnectionMethod: ${getSdkErrorMessage(err)}`);
     return DEFAULT_RESULT;
   }
 }

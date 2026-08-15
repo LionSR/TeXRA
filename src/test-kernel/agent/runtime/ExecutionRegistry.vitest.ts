@@ -132,6 +132,7 @@ function createRegistry(
   const registry = new ExecutionRegistry({
     streamStatus,
     events,
+    releaseRootExecutionLease: async () => {},
     ...options,
   });
   return { events, streamStatus, registry };
@@ -201,6 +202,9 @@ describe('executionRegistry', () => {
         executionId,
         parentStreamId,
         childStreamId,
+        interrupt: vi.fn(),
+        detach: vi.fn(),
+        isDetached: () => false,
       });
       expect(activationEvents).toEqual([true]);
 
@@ -211,6 +215,38 @@ describe('executionRegistry', () => {
       expect(activationEvents).toEqual([true, false]);
     } finally {
       detach();
+      registry.dispose();
+    }
+  });
+
+  it('retains and detaches a parent whose child is still activating', () => {
+    const { registry } = createRegistry();
+    const executionId = 'queued-child-exec' as ExecutionId;
+    const parentStreamId = 'queued-parent' as StreamTabId;
+    const childStreamId = 'queued-child' as StreamTabId;
+    let detached = false;
+
+    try {
+      registry.reserveChildActivation({
+        executionId,
+        parentStreamId,
+        childStreamId,
+        interrupt: vi.fn(),
+        detach: () => {
+          detached = true;
+        },
+        isDetached: () => detached,
+      });
+
+      expect(registry.hasActiveChildren(parentStreamId)).toBe(true);
+      registry.detachActiveChildren(parentStreamId);
+      expect(registry.hasActiveChildren(parentStreamId)).toBe(false);
+
+      const handle = createHandle(executionId, parentStreamId, childStreamId);
+      registry.track(handle);
+      expect(handle.parentStreamId).toBe(childStreamId);
+      expect(handle.deliveryTargetStreamId).toBeUndefined();
+    } finally {
       registry.dispose();
     }
   });
@@ -953,8 +989,17 @@ describe('executionRegistry', () => {
     const childStreamId = 'child-stop-policy-test' as StreamTabId;
     const rootInterrupt = vi.fn();
     const childInterrupt = vi.fn();
+    const queuedChildInterrupt = vi.fn();
 
     try {
+      registry.reserveChildActivation({
+        executionId: 'exec-queued-child-stop-policy-test' as ExecutionId,
+        parentStreamId: rootStreamId,
+        childStreamId: 'queued-child-stop-policy-test' as StreamTabId,
+        interrupt: queuedChildInterrupt,
+        detach: vi.fn(),
+        isDetached: () => false,
+      });
       trackInterruptibleHandle(
         registry,
         {
@@ -979,6 +1024,7 @@ describe('executionRegistry', () => {
 
       expect(rootInterrupt).toHaveBeenCalledOnce();
       expect(childInterrupt).toHaveBeenCalledOnce();
+      expect(queuedChildInterrupt).toHaveBeenCalledOnce();
       expect(streamStatus.get(rootStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(sessionFactsOfType(recorded.events, 'status')).toEqual(

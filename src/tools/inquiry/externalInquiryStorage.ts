@@ -2,9 +2,9 @@ import * as path from 'node:path';
 
 import { z } from 'zod';
 
-import { createChannelTrace } from '@agent/trace';
 import { isFileNotFoundError } from '@common/errors';
 import { EXTERNAL_INQUIRY_THREADS_DIR } from '@common/storage/storageLayout';
+import { createLog } from '@logger/logUtils';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
@@ -33,7 +33,7 @@ import { isDirectory, isFile } from '@utils/files/fsEntryType';
 const THREADS_DIR = EXTERNAL_INQUIRY_THREADS_DIR;
 const EXEC_DIR = 'ei';
 const QUESTION_PREVIEW_CHARS = 200;
-const logger = createChannelTrace('ExternalInquiryStorage');
+const logger = createLog('ExternalInquiryStorage');
 
 // ============================================================================
 // Schemas

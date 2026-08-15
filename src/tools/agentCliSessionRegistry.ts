@@ -1,9 +1,9 @@
 import { getExecutionStore } from '@agent/storage';
-import { createChannelTrace } from '@agent/trace';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
+import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
-const logger = createChannelTrace('AgentCliSessionRegistry');
+const logger = createLog('AgentCliSessionRegistry');
 
 interface AgentCliSessionRegistryDependencies {
   persistSessionId(
@@ -24,23 +24,29 @@ const DEFAULT_DEPENDENCIES: AgentCliSessionRegistryDependencies = {
   },
 };
 
+/**
+ * Everything the registry tracks about one live agent-CLI session. Provider
+ * specifics (codex thread, claude model/permission mode/…) stay with the
+ * provider's own loop closure — the registry only ever needs the identity it
+ * interrupts and looks up by.
+ */
 export interface AgentCliSessionEntry {
   childStreamId: StreamTabId;
   executionId: ExecutionId;
   executions: ExecutionRegistry;
 }
 
-type AgentCliSessionState<T> =
+type AgentCliSessionState =
   | {
       kind: 'reserved';
-      ready: Promise<T | undefined>;
-      resolve: (entry: T | undefined) => void;
+      ready: Promise<AgentCliSessionEntry | undefined>;
+      resolve: (entry: AgentCliSessionEntry | undefined) => void;
     }
-  | { kind: 'active'; entry: T };
+  | { kind: 'active'; entry: AgentCliSessionEntry };
 
-export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
-  private readonly sessions = new Map<string, AgentCliSessionState<T>>();
-  private readonly inFlight = new Map<ExecutionId, T>();
+export class AgentCliSessionRegistry {
+  private readonly sessions = new Map<string, AgentCliSessionState>();
+  private readonly inFlight = new Map<ExecutionId, AgentCliSessionEntry>();
 
   constructor(
     private readonly persistedSessionKey: string,
@@ -55,11 +61,12 @@ export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
   claim(sessionId: string): (() => void) | undefined {
     if (this.sessions.has(sessionId)) return undefined;
 
-    let settleReservation: ((entry: T | undefined) => void) | undefined;
-    const ready = new Promise<T | undefined>((settle) => {
+    let settleReservation:
+      ((entry: AgentCliSessionEntry | undefined) => void) | undefined;
+    const ready = new Promise<AgentCliSessionEntry | undefined>((settle) => {
       settleReservation = settle;
     });
-    const reservation: AgentCliSessionState<T> = {
+    const reservation: AgentCliSessionState = {
       kind: 'reserved',
       ready,
       resolve: (entry) => settleReservation?.(entry),
@@ -78,7 +85,7 @@ export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
    * the id was reserved, registration also wakes callers waiting to enqueue a
    * follow-up on the new loop.
    */
-  register(sessionId: string, entry: T): void {
+  register(sessionId: string, entry: AgentCliSessionEntry): void {
     const previous = this.sessions.get(sessionId);
     this.sessions.set(sessionId, { kind: 'active', entry });
     if (previous?.kind === 'reserved') previous.resolve(entry);
@@ -100,17 +107,19 @@ export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
   }
 
   /** Track a launched loop before its SDK session id is safe to publish. */
-  trackInFlight(entry: T): void {
+  trackInFlight(entry: AgentCliSessionEntry): void {
     this.inFlight.set(entry.executionId, entry);
   }
 
-  lookup(sessionId: string): T | undefined {
+  lookup(sessionId: string): AgentCliSessionEntry | undefined {
     const state = this.sessions.get(sessionId);
     return state?.kind === 'active' ? state.entry : undefined;
   }
 
   /** Wait for a reserved id to become active, or for its owner to release it. */
-  async waitForActive(sessionId: string): Promise<T | undefined> {
+  async waitForActive(
+    sessionId: string,
+  ): Promise<AgentCliSessionEntry | undefined> {
     const state = this.sessions.get(sessionId);
     if (state?.kind === 'active') return state.entry;
     return state?.ready;
@@ -139,7 +148,7 @@ export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
    */
   interruptAll(ownedBy?: ExecutionRegistry): void {
     const interrupted = new Set<ExecutionId>();
-    const interrupt = (entry: T): void => {
+    const interrupt = (entry: AgentCliSessionEntry): void => {
       if (ownedBy && entry.executions !== ownedBy) return;
       if (interrupted.has(entry.executionId)) return;
       const { childStreamId, executions } = entry;

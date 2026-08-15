@@ -3,7 +3,7 @@ import { createLog } from '@logger/logUtils';
 import { isNonEmptyString } from '@utils/core';
 
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
-import { renderPolishPrompt } from './polishModel';
+import { renderPolishPrompt } from './bundledPrompts';
 import { createHelperModelKit, runHelperModelCompletion } from './helperModel';
 import type { SessionHandle } from './SessionHandle';
 

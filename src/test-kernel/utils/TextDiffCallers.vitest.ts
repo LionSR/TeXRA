@@ -11,7 +11,7 @@ import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { ExecutionId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
-import { computeAndWriteWorkflowDiffs } from '@tools/delegation/subagentDiffs';
+import { computeAndWriteWorkflowDiffs } from '@tools/delegation/subagentResults';
 import {
   computeLineChangeSummary,
   computeUserPatch,

@@ -7,7 +7,6 @@ import {
   WorkflowScriptPersistenceError,
   writeWorkflowScriptCheckpoint,
   type WorkflowScriptControl,
-  type WorkflowScriptEvent,
 } from '@agent/workflowScript';
 import {
   clearStoreCache,
@@ -565,10 +564,9 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
     }
   });
 
-  it('clears event metadata before an interactive replacement fails early', async () => {
+  it('clears abandoned attempt metadata before an interactive replacement fails early', async () => {
     let control!: WorkflowScriptControl;
     let attempt = 0;
-    const events: WorkflowScriptEvent[] = [];
     const run = runWorkflowScript({
       script: `export const meta = {
   name: 'retry-metadata',
@@ -596,23 +594,24 @@ return await agent('retry metadata')`,
       onControl: (value) => {
         control = value;
       },
-      onEvent: (event) => events.push(event),
     });
 
     await vi.waitFor(() => expect(attempt).toBe(1));
     control('attempt-1' as ExecutionId, 'retry');
     await vi.waitFor(() => expect(attempt).toBe(2));
     const result = await run;
-    const end = events.findLast((event) => event.type === 'agent:end');
+    const call = result.snapshot.calls[0];
 
-    expect(end).toMatchObject({
-      type: 'agent:end',
-      outcome: 'failed',
+    // The replacement attempt reported no model or stream, so the abandoned
+    // attempt's values must not survive on the call it replaced.
+    expect(call).toMatchObject({
+      status: 'failed',
       error: 'replacement failed early',
     });
-    expect(end).not.toHaveProperty('model');
-    expect(end).not.toHaveProperty('childStreamId');
-    expect(result.snapshot.calls[0]?.attempts).toMatchObject([
+    expect(call?.model).toBeUndefined();
+    expect(call?.childStreamId).toBeUndefined();
+    // The abandoned attempt keeps its own record.
+    expect(call?.attempts).toMatchObject([
       {
         number: 1,
         model: 'abandoned-model',

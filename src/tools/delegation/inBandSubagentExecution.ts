@@ -14,41 +14,34 @@
 
 // Local imports
 import { getExecutionStore, type ResultMeta } from '@agent/storage';
-import { persistChildRunDeliveryBestEffort } from '@agent/storage/childRunDeliveryPersistence';
-import {
-  persistChildRunReport,
-  persistChildRunResultMeta,
-} from '@agent/storage/childRunPersistence';
 import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
 import {
-  markOwnedExecutionLeaseUndurable,
-  ownsExecutionLease,
+  ExecutionLeaseLostError,
+  runWithInactiveExecutionLease,
   type OwnedExecutionLeaseScope,
-  runWithOwnedExecutionLeaseLaunchGuard,
 } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
-import * as logger from '@logger/logUtils';
-import { USER_FOLLOW_UP_SUPPORT, type ExecutionId } from '@shared/schemas';
-import { generateExecutionId, KeyedMutex } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { deriveExecutionId } from '@utils/core/idHash';
+import { createLog } from '@logger/logUtils';
 import {
-  buildSubagentFailureResultMeta,
-  formatSubagentError,
-} from './subagentResults';
+  RUN_OUTCOME,
+  USER_FOLLOW_UP_SUPPORT,
+  type ExecutionId,
+  type SubagentProgressUpdate,
+} from '@shared/schemas';
+import { generateExecutionId, KeyedMutex } from '@utils/core';
+import { deriveExecutionId } from '@utils/core/idHash';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-// Type-only: the strategy module pulls in `@agent/runtime/executeAgent` at
-// runtime (see the lazy import below), but a type import is erased at build.
-import { type BuiltSubagentResult } from './subagentDeliveryFormat';
+import {
+  startDetachedChildRunLoop,
+  type DetachedChildRunInput,
+} from './detachedChildRun';
 import {
   readStableSubagentAttempt,
   readStableSubagentSequence,
@@ -58,13 +51,26 @@ import {
   type StableSubagentAttempt,
   type StableSubagentSequence,
 } from './stableSubagentAttempt';
-import type { ChildRunLaunchOptions } from './nativeSubagentStrategy';
+import {
+  createNativeSubagentStrategy,
+  type ChildRunLaunchOptions,
+} from './nativeSubagentStrategy';
 
 const LOG_CHANNEL = 'inBandSubagentExecution';
+const log = createLog(LOG_CHANNEL);
 
 interface InBandSubagentExecutionBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
   readonly onCost?: (totalCostUsd: number | undefined) => void | Promise<void>;
+  /**
+   * Live progress sink for the in-band child. An in-band parent is mid-cycle,
+   * so follow-up delivery cannot reach it — each caller degrades deliberately:
+   * the headless delegation arm projects progress onto the parent run's trace,
+   * and the workflow-script arm omits this because the engine already carries
+   * grandchild progress on its own channel (`WorkflowScriptEvent`). Absent
+   * therefore means deliberately silent, not accidentally dropped.
+   */
+  readonly notify?: (update: SubagentProgressUpdate) => void;
 }
 
 /** Options for the typed child API. Direct persisted parentage is required. */
@@ -109,9 +115,13 @@ export interface InBandSubagentDeliveryResult extends InBandSubagentExecutionRes
 
 type PersistenceMode = 'required-result' | 'best-effort-delivery';
 
+type SettledInBandTurn = Parameters<
+  NonNullable<DetachedChildRunInput<never>['onTurnSettled']>
+>[0];
+
 interface CompletedInBandSubagent {
   readonly executionId: ExecutionId;
-  readonly built: BuiltSubagentResult;
+  readonly result: AgentFinalResult;
   readonly delivery?: string;
 }
 
@@ -137,39 +147,18 @@ export class SubagentReconciliationError extends SubagentDurabilityError {
   }
 }
 
+class SubagentCommitError extends SubagentDurabilityError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'SubagentCommitError';
+  }
+}
+
 const MAX_STABLE_ATTEMPTS = 1_024;
 
 // Parent execution ownership is process-local. Serialize duplicate dispatches
 // within that owner while durable manifests handle later restart recovery.
 const stableExecutionMutex = new KeyedMutex<ExecutionId>();
-
-interface InBandExecutionFailure {
-  readonly error: unknown;
-}
-
-/** Release final ownership without letting cleanup replace the run failure. */
-async function releaseInBandExecutionLease(
-  session: SessionHandle,
-  executionId: ExecutionId,
-  executionFailure?: InBandExecutionFailure,
-): Promise<void> {
-  if (!ownsExecutionLease(executionId)) return;
-  try {
-    await releaseExecutionLeaseAfterArtifacts(session, executionId);
-  } catch (releaseError) {
-    if (!executionFailure) throw releaseError;
-    logger.warn(
-      LOG_CHANNEL,
-      `Failed to persist final artifacts for failed subagent ${executionId}: ${toErrorMessage(releaseError)}`,
-      {
-        data: {
-          executionError: executionFailure.error,
-          releaseError,
-        },
-      },
-    );
-  }
-}
 
 function stableAttemptExecutionId(
   logicalExecutionId: ExecutionId,
@@ -212,7 +201,52 @@ async function inspectStableAttempt(
     );
   }
   if (!resultMeta) {
+    if (attempt.phase === 'committed') {
+      throw new SubagentReconciliationError(
+        `Committed subagent ${executionId} is missing its result manifest; refusing to repeat it.`,
+      );
+    }
     if (attempt.phase !== 'launched') return { kind: 'advance' };
+    // A launched attempt without a manifest is unsafe to repeat only if the
+    // child may have finished side-effectful work whose manifest was lost:
+    // a recorded completed turn or a persisted COMPLETED outcome proves the
+    // settle path ran, so those stay irreconcilable. Otherwise the child
+    // never reached terminal persistence (interrupted, or its artifact drain
+    // failed and the parent's failure-time retryable write was refused as
+    // lease-lost) — repair the marker here, under the inactive-lease fence
+    // so a live child's still-held lease keeps refusing the write.
+    let settledEvidence: boolean;
+    try {
+      const [turnState, meta] = await Promise.all([
+        store.readTurnState(),
+        store.readMeta(),
+      ]);
+      settledEvidence =
+        turnState?.lastCompletedTurn !== undefined ||
+        meta?.outcome === RUN_OUTCOME.COMPLETED;
+    } catch (error) {
+      throw new SubagentReconciliationError(
+        `Failed to inspect persisted subagent ${executionId}.`,
+        { cause: error },
+      );
+    }
+    if (!settledEvidence) {
+      const repair = await runWithInactiveExecutionLease(executionId, () =>
+        writeStableSubagentAttempt(store, {
+          ...attempt,
+          phase: 'retryable',
+        }),
+      ).catch((error: unknown) => {
+        throw new SubagentReconciliationError(
+          `Failed to repair the unsettled launched subagent ${executionId}.`,
+          { cause: error },
+        );
+      });
+      if (repair.status === 'performed') return { kind: 'advance' };
+      throw new SubagentReconciliationError(
+        `Subagent ${executionId} is still running under a live lease; refusing to repeat it.`,
+      );
+    }
     throw new SubagentReconciliationError(
       `Cannot reconcile incomplete persisted subagent ${executionId}; refusing to repeat it.`,
     );
@@ -232,36 +266,24 @@ async function inspectStableAttempt(
       `Persisted subagent ${executionId} has different parent lineage; refusing to reuse or repeat it.`,
     );
   }
+  if (attempt.phase === 'retryable') return { kind: 'advance' };
   if (resultMeta.result.outcome !== 'completed') return { kind: 'advance' };
+  if (attempt.phase !== 'committed') {
+    // A completed manifest proves only that the child turn settled. Recovery
+    // additionally requires the marker written after the child artifact drain
+    // and before its lease record is deleted. Lease absence is not an
+    // attestation: restart repair may already have removed an
+    // abandoned lease from a failed drain. This ambiguity deliberately stays
+    // irreconcilable rather than risking repeated side-effectful work.
+    throw new SubagentReconciliationError(
+      `Cannot attest durable completion for persisted subagent ${executionId}; refusing to recover its result.`,
+    );
+  }
   options.signal?.throwIfAborted();
   return {
     kind: 'recovered',
     result: { executionId, result: resultMeta.result },
   };
-}
-
-function logPersistenceFailure(
-  kind: 'report' | 'result manifest',
-  executionId: ExecutionId,
-  error: unknown,
-): void {
-  logger.warn(
-    LOG_CHANNEL,
-    `Failed to persist subagent ${kind} for ${executionId}: ${toErrorMessage(error)}`,
-  );
-}
-
-async function persistResultMetaRequired(
-  executionId: ExecutionId,
-  resultMeta: ResultMeta,
-): Promise<void> {
-  const result = await persistChildRunResultMeta(executionId, resultMeta);
-  if (result.kind === 'failed') {
-    throw new SubagentDurabilityError(
-      `Failed to persist result for subagent ${executionId}.`,
-      { cause: result.err },
-    );
-  }
 }
 
 async function throwRetryableDurabilityError(
@@ -270,12 +292,32 @@ async function throwRetryableDurabilityError(
   error: SubagentDurabilityError,
 ): Promise<never> {
   if (!stableAttempt) throw error;
+  const marker = { ...stableAttempt, phase: 'retryable' as const };
   try {
-    await writeStableSubagentAttempt(getExecutionStore(executionId), {
-      ...stableAttempt,
-      phase: 'retryable',
-    });
+    await writeStableSubagentAttempt(getExecutionStore(executionId), marker);
   } catch (cause) {
+    // A child whose artifact drain failed abandons its lease with the record
+    // retained, so this parent-side write is refused as lease-lost until the
+    // stale horizon. The refusal is not a recovery failure: reconciliation
+    // repairs an unsettled launched attempt on the next resume (see
+    // inspectStableAttempt), so surface the original durability error alone.
+    if (cause instanceof ExecutionLeaseLostError) {
+      const repair = await runWithInactiveExecutionLease(executionId, () =>
+        writeStableSubagentAttempt(getExecutionStore(executionId), marker),
+      ).catch((repairError: unknown) => {
+        log.warn('Retryable-marker repair write failed', {
+          data: { executionId, error: repairError },
+        });
+        return undefined;
+      });
+      if (repair?.status !== 'performed') {
+        log.warn(
+          'Deferred retryable marker to resume-time reconciliation: the child lease is still held',
+          { data: { executionId } },
+        );
+      }
+      throw error;
+    }
     throw new SubagentDurabilityError(
       `${error.message} Failed to mark the stable attempt as retryable.`,
       {
@@ -296,95 +338,32 @@ function recordCost(
   try {
     const observed = onCost?.(totalCostUsd);
     void Promise.resolve(observed).catch((error: unknown) => {
-      logger.warn(LOG_CHANNEL, 'Subagent cost observer rejected', {
+      log.warn('Subagent cost observer rejected', {
         data: error,
       });
     });
   } catch (error) {
-    logger.warn(LOG_CHANNEL, 'Subagent cost observer failed', {
+    log.warn('Subagent cost observer failed', {
       data: error,
     });
   }
 }
 
-async function persistFailure(
-  mode: PersistenceMode,
-  executionId: ExecutionId,
-  stableAttempt: StableSubagentAttempt | undefined,
-  agentName: string,
-  parentExecutionId: ExecutionId | undefined,
-  fallbackCategory: AgentFlowResult['category'],
-  error: unknown,
-  result: AgentFlowResult | undefined,
-  startedAt: number,
-  workingDirectory: string | undefined,
-): Promise<void> {
-  const wallTimeMs = Date.now() - startedAt;
-  let resultMeta: ResultMeta;
-  try {
-    resultMeta = buildSubagentFailureResultMeta(
-      agentName,
-      fallbackCategory,
-      result,
-      wallTimeMs,
-      { parentExecutionId },
-    );
-  } catch (cause) {
-    if (mode === 'required-result') {
-      await throwRetryableDurabilityError(
-        executionId,
-        stableAttempt,
-        new SubagentDurabilityError(
-          `Subagent ${executionId} failed (${toErrorMessage(error)}), and its failure result could not be constructed.`,
-          {
-            cause: new AggregateError(
-              [error, cause],
-              `Subagent ${executionId} execution and result construction both failed.`,
-            ),
-          },
-        ),
-      );
-    }
-    throw cause;
-  }
-  if (mode === 'required-result') {
-    try {
-      await persistResultMetaRequired(executionId, resultMeta);
-    } catch (cause) {
-      await throwRetryableDurabilityError(
-        executionId,
-        stableAttempt,
-        new SubagentDurabilityError(
-          `Subagent ${executionId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
-          {
-            cause: new AggregateError(
-              [error, cause],
-              `Subagent ${executionId} execution and persistence both failed.`,
-            ),
-          },
-        ),
-      );
-    }
-    return;
-  }
-  const delivery = formatSubagentError(executionId, agentName, error, {
-    wallTimeMs,
-    workingDirectory,
-    memoryMisses: result?.memoryMisses,
-  });
-  await persistChildRunDeliveryBestEffort(
-    executionId,
-    delivery,
-    resultMeta,
-    (kind, failure) => logPersistenceFailure(kind, executionId, failure),
-  );
-}
-
 /**
- * Execute one child and construct its terminal typed result. Once
- * `executeAgent` returns, the child's outcome is fixed: later caller
- * cancellation may reject the waiting workflow stage, but it never rewrites
- * the completed child's manifest.
+ * Execute one child through the one shared driver and read its typed result
+ * back from the durable record. The child runs under the same detached
+ * child-run loop every native child uses (single-cycle strategy, persist-only
+ * delivery); "in-band" is only this caller awaiting the loop's completion.
+ * Once the run reaches its own terminal persistence, later caller
+ * cancellation rejects the awaiting stage but never rewrites the record.
+ *
+ * Failure taxonomy at the read-back boundary:
+ * - completion rejected, or no result manifest exists afterwards → the
+ *   infrastructure failed before the child's terminal persistence; durable
+ *   callers mark the stable attempt retryable (SubagentDurabilityError).
+ * - manifest present with a failed outcome → the child itself failed; the
+ *   persisted terminal error message is the thrown message.
+ * - manifest present with completed/cancelled outcome → returned typed.
  */
 async function executeInBand(
   options: InBandSubagentDeliveryOptions,
@@ -394,13 +373,10 @@ async function executeInBand(
 ): Promise<CompletedInBandSubagent> {
   options.signal?.throwIfAborted();
 
-  // Lazy import: the strategy imports executeAgent, whose runtime registry
-  // loads delegation tools. Keeping this edge lazy avoids closing that cycle.
-  const { createNativeSubagentStrategy } =
-    await import('./nativeSubagentStrategy.js');
   const config = AgentConfigSchema.parse(options.configPayload);
   const startedAt = Date.now();
   const workingDirectory = config.workingDirectory ?? undefined;
+  const childStreamId = getStreamTabId(config.agent, { executionId });
 
   let runWithOwnership: OwnedExecutionLeaseScope;
   try {
@@ -409,7 +385,7 @@ async function executeInBand(
       config,
       options.agentName,
       {
-        streamId: getStreamTabId(config.agent, { executionId }),
+        streamId: childStreamId,
         identity: { kind: 'agent', agent: config.agent },
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
         parentExecutionId: options.parentExecutionId,
@@ -424,11 +400,63 @@ async function executeInBand(
     }
     throw cause;
   }
-  return await runWithOwnership(async () => {
-    let executionFailure: InBandExecutionFailure | undefined;
-    try {
-      if (stableAttempt) {
-        await runWithOwnedExecutionLeaseLaunchGuard(executionId, async () => {
+  let stableCompletionCommitted = false;
+  const completed = await runWithOwnership(async () => {
+    let settledTurn: SettledInBandTurn | undefined;
+    const { completion } = await startDetachedChildRunLoop({
+      executionId,
+      parentStreamId: options.parentStreamId,
+      childStreamId,
+      agentName: options.agentName,
+      recordCost: (totalCostUsd) => recordCost(options.onCost, totalCostUsd),
+      // The parent is blocked awaiting this child, so it rides the parent's
+      // budget slot (child-run budget design note).
+      budgeted: false,
+      ...(options.notify !== undefined && { notify: options.notify }),
+      onTurnSettled: (settled) => {
+        settledTurn = settled;
+      },
+      afterArtifactsDrained: async () => {
+        const settledResultMeta = settledTurn?.resultMeta;
+        if (
+          !stableAttempt ||
+          settledTurn?.isError === true ||
+          settledResultMeta?.producer !== 'subagent' ||
+          settledResultMeta.result.outcome !== RUN_OUTCOME.COMPLETED
+        ) {
+          return;
+        }
+        let persisted: ResultMeta | null;
+        try {
+          persisted = await getExecutionStore(executionId).readResultMeta();
+        } catch (cause) {
+          throw new SubagentCommitError(
+            `Failed to verify durable completion for subagent ${executionId}.`,
+            { cause },
+          );
+        }
+        if (!persisted || persisted.producer !== 'subagent') {
+          throw new SubagentCommitError(
+            `Failed to persist result for subagent ${executionId}.`,
+          );
+        }
+        try {
+          await writeStableSubagentAttempt(getExecutionStore(executionId), {
+            ...stableAttempt,
+            phase: 'committed',
+          });
+          stableCompletionCommitted = true;
+        } catch (cause) {
+          throw new SubagentCommitError(
+            `Failed to commit durable completion for subagent ${executionId}.`,
+            { cause },
+          );
+        }
+      },
+      buildLaunch: async () => {
+        // Inside the loop's lease launch guard, like every attempt-scoped
+        // setup: a throw here releases the owned-execution lease.
+        if (stableAttempt) {
           try {
             await writeStableSubagentAttempt(getExecutionStore(executionId), {
               ...stableAttempt,
@@ -440,130 +468,143 @@ async function executeInBand(
               { cause },
             );
           }
-        });
-      }
+        }
+        return {
+          strategy: createNativeSubagentStrategy({
+            ...options,
+            config,
+            agentCategoryExplicit: true,
+            executionId,
+            startedAt,
+            workingDirectory,
+            executionMode: 'single-cycle',
+            resultOnly: mode === 'required-result',
+            onStreamResolved: options.onStreamResolved ?? (() => {}),
+          }),
+        };
+      },
+    });
 
-      // The base options carry the shared ChildRunLaunchOptions fields, so a
-      // spread forwards every launch option to the strategy automatically — a
-      // new shared option needs a single declaration, not a second mapping.
-      const strategy = createNativeSubagentStrategy({
-        ...options,
-        config,
-        agentCategoryExplicit: true,
-        executionId,
-        startedAt,
-        workingDirectory,
-        executionMode: 'single-cycle',
-        onStreamResolved: options.onStreamResolved ?? (() => {}),
-      });
-      let flowResult: AgentFlowResult;
-      try {
-        const turn = await strategy.launch(
-          {
-            notify: () => {},
-            recordCost: (totalCostUsd) =>
-              recordCost(options.onCost, totalCostUsd),
-          },
-          new AbortController(),
-        );
-        if (turn.outcome === 'waiting') {
-          throw new Error(
-            `Single-cycle subagent ${executionId} unexpectedly suspended.`,
-          );
-        }
-        if (turn.outcome === 'failed') {
-          throw (
-            strategy.getTurnError() ??
-            new Error('Subagent ended with failed outcome.')
-          );
-        }
-        flowResult = turn;
-      } catch (error) {
-        await persistFailure(
-          mode,
+    let loopFailure: unknown;
+    try {
+      await completion;
+    } catch (error) {
+      loopFailure = error;
+    }
+
+    // The loop handed this caller the settled turn's facts in memory
+    // (persistence stays best-effort loop-side); no turn settling means the
+    // run was interrupted or the infrastructure failed before terminal
+    // persistence — durable callers mark the attempt retryable.
+    const resultMeta = settledTurn?.resultMeta;
+    if (!settledTurn || !resultMeta || resultMeta.producer !== 'subagent') {
+      const failure = new SubagentDurabilityError(
+        `Subagent ${executionId} ended without a settled typed result (interrupted before terminal persistence, or the run loop failed).`,
+        loopFailure !== undefined ? { cause: loopFailure } : undefined,
+      );
+      if (mode === 'required-result') {
+        await throwRetryableDurabilityError(
           executionId,
           stableAttempt,
-          options.agentName,
-          options.parentExecutionId,
-          config.agentCategory,
-          error,
-          strategy.getTurnResult(),
-          startedAt,
-          workingDirectory,
-        );
-        throw error;
-      }
-
-      let built: BuiltSubagentResult;
-      try {
-        built = await strategy.buildResult(flowResult);
-      } catch (error) {
-        // The runtime has already finalized this child. A post-flow construction
-        // error must not rewrite a completed execution as failed or try to parse
-        // the same invalid flow data again through the failure-result builder.
-        if (mode === 'required-result') {
-          throw new SubagentDurabilityError(
-            `Failed to construct result for subagent ${executionId}.`,
-            { cause: error },
-          );
-        }
-        const reportResult = await persistChildRunReport(
-          executionId,
-          formatSubagentError(executionId, options.agentName, error, {
-            wallTimeMs: Date.now() - startedAt,
-            workingDirectory,
-            memoryMisses: flowResult.memoryMisses,
-          }),
-        );
-        if (reportResult.kind === 'failed') {
-          logPersistenceFailure('report', executionId, reportResult.err);
-        }
-        throw error;
-      }
-
-      let delivery: string | undefined;
-      if (mode === 'required-result') {
-        await persistResultMetaRequired(executionId, built.resultMeta);
-      } else {
-        try {
-          delivery = await strategy.formatDelivery(
-            flowResult,
-            built.wallTimeMs,
-          );
-        } catch (error) {
-          await persistChildRunDeliveryBestEffort(
-            executionId,
-            await strategy.formatError(flowResult, error),
-            built.resultMeta,
-            (kind, failure) =>
-              logPersistenceFailure(kind, executionId, failure),
-          );
-          throw error;
-        }
-        await persistChildRunDeliveryBestEffort(
-          executionId,
-          delivery,
-          built.resultMeta,
-          (kind, error) => logPersistenceFailure(kind, executionId, error),
+          failure,
         );
       }
+      throw failure;
+    }
 
-      // Post-flow artifact construction deliberately reaches a terminal record.
-      // Cancellation observed here rejects the caller without changing that record.
-      options.signal?.throwIfAborted();
-      return { executionId, built, delivery };
-    } catch (error) {
-      markOwnedExecutionLeaseUndurable(executionId);
-      executionFailure = { error };
-      throw error;
-    } finally {
-      await releaseInBandExecutionLease(
-        options.session,
-        executionId,
-        executionFailure,
+    const result = resultMeta.result;
+    const childFailed =
+      settledTurn.isError || result.outcome === RUN_OUTCOME.FAILED;
+
+    if (loopFailure instanceof SubagentCommitError) throw loopFailure;
+    if (loopFailure !== undefined && stableCompletionCommitted) {
+      throw new SubagentDurabilityError(
+        `Subagent ${executionId} committed durable completion but failed to release its execution lease.`,
+        { cause: loopFailure },
       );
     }
+
+    if (mode === 'required-result') {
+      // The ledger recovers restarts by inspecting the persisted manifest, so
+      // the in-memory copy is not enough here: verify the write landed. A
+      // FAILED child's attempt is marked retryable (re-running a failed child
+      // is safe); a COMPLETED child whose manifest did not persist keeps its
+      // 'launched' marker, so a later run refuses to repeat side-effectful
+      // work rather than executing it twice.
+      let persisted: ResultMeta | null;
+      try {
+        persisted = await getExecutionStore(executionId).readResultMeta();
+      } catch (cause) {
+        persisted = null;
+        void cause;
+      }
+      if (!persisted) {
+        if (childFailed) {
+          const childError =
+            settledTurn.error ??
+            new Error(
+              result.error?.message ??
+                `Subagent ${executionId} ended with failed outcome.`,
+            );
+          await throwRetryableDurabilityError(
+            executionId,
+            stableAttempt,
+            new SubagentDurabilityError(
+              `Subagent ${executionId} failed (${toErrorMessage(childError)}), and its failure result could not be persisted.`,
+              {
+                cause: new AggregateError(
+                  [childError],
+                  `Subagent ${executionId} execution and persistence both failed.`,
+                ),
+              },
+            ),
+          );
+        }
+        throw new SubagentDurabilityError(
+          `Failed to persist result for subagent ${executionId}.`,
+        );
+      }
+    }
+
+    if (
+      mode === 'required-result' &&
+      loopFailure !== undefined &&
+      !childFailed
+    ) {
+      await throwRetryableDurabilityError(
+        executionId,
+        stableAttempt,
+        new SubagentDurabilityError(
+          `Subagent ${executionId} failed to persist its final artifacts.`,
+          { cause: loopFailure },
+        ),
+      );
+    }
+
+    if (childFailed) {
+      // The raw application error when the turn threw; otherwise the typed
+      // result's own structured error (the result-only contract).
+      throw (
+        settledTurn.error ??
+        new Error(
+          result.error?.message ??
+            `Subagent ${executionId} ended with failed outcome.`,
+        )
+      );
+    }
+
+    return {
+      executionId,
+      result,
+      ...(mode === 'best-effort-delivery' && { delivery: settledTurn.message }),
+    };
   });
+
+  // Post-run cancellation deliberately observes a terminal record: stable
+  // success was committed inside the post-drain/pre-release lease boundary,
+  // then the awaiting caller rejects without rewriting the child.
+  options.signal?.throwIfAborted();
+  return completed;
 }
 
 /** Recover a logical child first; resolve launch-only state only when needed. */
@@ -698,7 +739,7 @@ export async function executeStableSubagentInBand(
     );
     return {
       executionId: completed.executionId,
-      result: completed.built.result,
+      result: completed.result,
     };
   });
 }
@@ -718,7 +759,7 @@ export async function executeSubagentForDeliveryInBand(
   }
   return {
     executionId: completed.executionId,
-    result: completed.built.result,
+    result: completed.result,
     delivery: completed.delivery,
   };
 }

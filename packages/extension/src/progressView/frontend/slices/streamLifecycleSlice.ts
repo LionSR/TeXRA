@@ -118,7 +118,7 @@ function updateStreamInfo(
 }
 
 // Backend is sole source of truth for activeStream selection (see
-// WebviewUpdater.sendStreamMetadata); pass its value through unchanged and
+// LitSessionRenderer.sendStreamMetadata); pass its value through unchanged and
 // warn rather than silently re-deriving one if it's locally unknown.
 function assertKnownActiveStreamId(
   activeStream: StreamTabId | '',

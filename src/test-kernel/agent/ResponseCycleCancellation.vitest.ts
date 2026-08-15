@@ -13,7 +13,7 @@ const flowState = vi.hoisted(() => ({
 
 // Stub the inner cycle flow to apply the scripted flags, isolating the node's
 // outcome classification from the model-invocation pipeline.
-vi.mock('@agent/core/flows/ResponseCycleFlow', () => ({
+vi.mock('@agent/implementations/flows/reflection/ResponseCycleFlow', () => ({
   createResponseCycleFlow: () => ({
     setServices() {},
     async run(shared: {

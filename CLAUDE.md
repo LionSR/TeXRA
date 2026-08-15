@@ -53,7 +53,7 @@ Things the tree won't tell you:
   modules are browser-reachable today: `@utils/core`,
   `@utils/core/boundedIdSet`, `@utils/core/keyedMutex`,
   `@utils/errors/errorMessage`, `@utils/files/pastedImageName`,
-  `@utils/text/diff`, and `@utils/text/stringUtils`. The other 54
+  `@utils/text/diff`, and `@utils/text/stringUtils`. The other 55
   TypeScript modules are not browser-reachable and must not be assumed
   browser-safe. Side-specific helpers still belong in `frontend/` or `common/`.
   (`scripts/check-browser-safe-utils.mjs` enforces the count and reachable set.)
@@ -141,9 +141,11 @@ Full patterns: AGENTS.md "Zod v4 Schema Patterns".
 
 Core lives in `src/agent/`: `core/` is the host-agnostic domain model (see
 `src/agent/core/README.md`), `implementations/flows/` holds the two PocketFlow
-flows (`reflection`, `tooluse`) plus `agentCreator/`, which despite the
-directory and filename is _not_ a flow — it is one linear async function
-(`runAgentCreator`) with a single production caller. `modelHandlers/` abstracts
+flows (`reflection`, `tooluse`) — each owning its own cycle/round flow, with
+`core/flows/` keeping only the kernel both families use. Beside them,
+`implementations/agentCreator/` is _not_ a flow despite the filename: it is one
+linear async function (`runAgentCreator`) with a single production caller.
+`modelHandlers/` abstracts
 provider APIs. Agents are configured by YAML in
 `packages/extension/resources/agents/`, one unified YAML per agent covering
 single and multi-document output.

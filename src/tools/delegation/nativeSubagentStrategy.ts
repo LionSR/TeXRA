@@ -32,10 +32,6 @@ import {
   type AgentFlowResult,
   type AgentRuntimeFlowResult,
 } from '@agent/runtime/AgentFlowResult';
-import {
-  executeAgent,
-  resumeToolUseFromResumeData,
-} from '@agent/runtime/executeAgent';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
@@ -57,14 +53,55 @@ import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { onAbort, unique } from '@utils/core';
 import {
   buildSubagentFailureResultMeta,
+  buildSubagentResult,
+  formatSubagentDelivery,
   formatSubagentError,
+  type BuiltSubagentResult,
 } from './subagentResults';
 
-import {
-  buildSubagentResult,
-  formatBuiltSubagentDelivery,
-  type BuiltSubagentResult,
-} from './subagentDeliveryFormat';
+/**
+ * The two engine entry points a native child run needs. Provided by
+ * `@agent/runtime/executeAgent` at its module load rather than imported: a
+ * static import here would close the
+ * registry -> DelegationTools -> proposalFlow -> subagentExecution ->
+ * nativeSubagentStrategy -> executeAgent -> runToolUseFlow -> registry cycle,
+ * because the engine's flow driver statically imports the tool registry (a
+ * kept edge). Agents launching agents is inherently recursive; this slot is
+ * the single, typed point where that recursion closes at runtime.
+ */
+export interface AgentEngine {
+  readonly executeAgent: typeof import('@agent/runtime/executeAgent').executeAgent;
+  readonly resumeToolUseFromResumeData: typeof import('@agent/runtime/executeAgent').resumeToolUseFromResumeData;
+}
+
+let agentEngine: AgentEngine | undefined;
+
+/**
+ * Scoped provider for the engine slot. Production has exactly one caller —
+ * `@agent/runtime/executeAgent` at its own module load, guaranteed before any
+ * strategy call because a subagent only launches from inside an engine-driven
+ * run. Tests dispose their override after each case so a fake cannot leak into
+ * another consumer of this module graph. Passing the engine as an explicit
+ * parameter instead is not available: the strategy's callers are the
+ * delegation tools, whose static import of the engine is the exact cycle this
+ * slot exists to sever.
+ */
+export function provideAgentEngine(engine: AgentEngine): () => void {
+  const previous = agentEngine;
+  agentEngine = engine;
+  return () => {
+    if (agentEngine === engine) agentEngine = previous;
+  };
+}
+
+function engine(): AgentEngine {
+  if (!agentEngine) {
+    throw new Error(
+      'Native subagent launch requires the agent engine, but @agent/runtime/executeAgent has not been loaded.',
+    );
+  }
+  return agentEngine;
+}
 
 /**
  * The launch fields every native child run needs, shared between the two
@@ -101,6 +138,8 @@ export interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
   readonly workingDirectory?: string;
   /** Omit for ordinary interactive delegation; durable calls end after one cycle. */
   readonly executionMode?: 'single-cycle';
+  /** Persist the typed result without constructing fallible prose delivery. */
+  readonly resultOnly?: boolean;
   /** Fires with the resolved child stream id — the caller inherits approvals onto it. */
   readonly onStreamResolved: (streamId: StreamTabId) => void;
 }
@@ -232,10 +271,19 @@ export function createNativeSubagentStrategy(
         ? 'Native tool-use subagent'
         : 'Native workflow subagent',
 
+    // A single-cycle child has no later turn to consume a follow-up delivery;
+    // its awaiting caller reads the persisted report/result instead.
+    ...(params.executionMode === 'single-cycle' && {
+      deliveryMode: 'persistOnly' as const,
+    }),
+
     launch: (ports, abortController) =>
       runNative(ports, abortController, async (onRun) => {
         const executeOptions = {
           session: params.session,
+          // True by construction: this strategy only ever launches child runs
+          // (`parentStreamId` is required), matching `handle.isChildExecution`
+          // once the run handle exists.
           isSubagent: true,
           enforceCategory: params.agentCategoryExplicit,
           parentStreamId: params.parentStreamId,
@@ -251,18 +299,38 @@ export function createNativeSubagentStrategy(
           },
           onRun,
         };
-        return executeAgent(params.config, params.executionId, {
-          ...executeOptions,
-          allowWaitingResult: true,
-          userFollowUpSupport:
-            params.executionMode !== 'single-cycle' &&
-            params.config.agentCategory === AgentCategory.ToolUse
-              ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
-              : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-          ...(params.executionMode === 'single-cycle'
-            ? { stopAfterCycle: true }
-            : {}),
-        });
+        const turn = await engine().executeAgent(
+          params.config,
+          params.executionId,
+          {
+            ...executeOptions,
+            allowWaitingResult: true,
+            userFollowUpSupport:
+              params.executionMode !== 'single-cycle' &&
+              params.config.agentCategory === AgentCategory.ToolUse
+                ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
+                : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+            ...(params.executionMode === 'single-cycle'
+              ? { stopAfterCycle: true }
+              : {}),
+          },
+        );
+        // A single-cycle run must end its cycle: a WAITING turn here is an
+        // invariant violation, surfaced loudly as this turn's failure rather
+        // than parked on a queue no follow-up will ever reach. Record the
+        // turn's facts first so the failure meta and the parent's cost
+        // accounting keep what the run actually spent.
+        if (
+          params.executionMode === 'single-cycle' &&
+          isWaitingFlowResult(turn)
+        ) {
+          lastResult = toDeliveryResult(turn, params.executionId);
+          ports.recordCost(turn.totalCostUsd);
+          throw new Error(
+            `Single-cycle subagent ${params.executionId} unexpectedly suspended.`,
+          );
+        }
+        return turn;
       }),
 
     runTurn: (followUps, ports, abortController) =>
@@ -303,7 +371,7 @@ export function createNativeSubagentStrategy(
           STREAM_TRANSITION_CAUSE.RESUME,
           { substate: STREAM_SUBSTATE.RESUMING },
         );
-        return await resumeToolUseFromResumeData(resume, {
+        return await engine().resumeToolUseFromResumeData(resume, {
           session: params.session,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
           onApprovalPolicyDenial: params.onApprovalPolicyDenial,
@@ -337,17 +405,26 @@ export function createNativeSubagentStrategy(
     buildResult,
 
     formatDelivery: async (turn) => {
-      cachedDelivery ??= formatBuiltSubagentDelivery(
-        params.executionId,
-        params.agentName,
-        toDeliveryResult(turn, params.executionId),
-        await buildResult(turn),
-        params.workingDirectory,
-      );
+      if (cachedDelivery === undefined) {
+        const built = await buildResult(turn);
+        if (params.resultOnly) return '';
+        cachedDelivery = formatSubagentDelivery(
+          params.agentName,
+          built.result,
+          {
+            executionId: params.executionId,
+            memoryMisses: toDeliveryResult(turn, params.executionId)
+              .memoryMisses,
+            wallTimeMs: built.wallTimeMs,
+            workingDirectory: params.workingDirectory,
+          },
+        );
+      }
       return cachedDelivery;
     },
 
     formatError: (turn, err) => {
+      if (params.resultOnly) return '';
       const wallTimeMs = Date.now() - params.startedAt;
       const result = turn
         ? toDeliveryResult(turn, params.executionId)
@@ -364,20 +441,37 @@ export function createNativeSubagentStrategy(
       );
     },
 
-    buildResultMeta: async (turn, isError) => {
+    buildResultMeta: async (turn, isError, _wallTimeMs, error) => {
       if (isError || turn === null) {
         // Overwrite any interim success manifest from an earlier turn so
         // /executions/{id}/result never claims success for a failed run.
         const result = turn
           ? toDeliveryResult(turn, params.executionId)
           : lastResult;
-        return buildSubagentFailureResultMeta(
-          params.agentName,
-          params.config.agentCategory,
-          result,
-          Date.now() - params.startedAt,
-          { parentExecutionId: params.parentExecutionId },
-        );
+        const failureOptions = {
+          parentExecutionId: params.parentExecutionId,
+          cause: lastErr ?? error,
+        };
+        try {
+          return buildSubagentFailureResultMeta(
+            params.agentName,
+            params.config.agentCategory,
+            result,
+            Date.now() - params.startedAt,
+            failureOptions,
+          );
+        } catch {
+          // Even an unconstructable failure result must leave a durable
+          // failure manifest (with the child's real error), never a stale
+          // interim record. The category-only form cannot throw.
+          return buildSubagentFailureResultMeta(
+            params.agentName,
+            params.config.agentCategory,
+            undefined,
+            Date.now() - params.startedAt,
+            failureOptions,
+          );
+        }
       }
       return (await buildResult(turn)).resultMeta;
     },

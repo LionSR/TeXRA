@@ -30,6 +30,7 @@ import {
   unregisterLeanServer,
   updateLeanServer,
 } from '@tools/lean/leanServerRegistry';
+import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -191,7 +192,7 @@ function getDiagnostics(filePath: string): LeanDiagnostic[] {
   return [];
 }
 
-export async function executeFileCommand(
+async function executeFileCommand(
   command: LeanFileCommand,
   filePath: string,
 ): Promise<boolean> {
@@ -303,7 +304,7 @@ async function sendPositionRequest<T>(
  * @param line - 0-indexed line number
  * @param column - 0-indexed column number
  */
-export async function getGoalState(
+async function getGoalState(
   filePath: string,
   line: number,
   column: number,
@@ -321,7 +322,7 @@ export async function getGoalState(
  * @param line - 0-indexed line number
  * @param column - 0-indexed column number
  */
-export async function getTermGoal(
+async function getTermGoal(
   filePath: string,
   line: number,
   column: number,
@@ -339,7 +340,7 @@ export async function getTermGoal(
  * @param line - 0-indexed line number
  * @param column - 0-indexed column number
  */
-export async function getHoverInfo(
+async function getHoverInfo(
   filePath: string,
   line: number,
   column: number,
@@ -356,7 +357,7 @@ export async function getHoverInfo(
  * Open a Lean file, wait for diagnostics, and return them.
  * Returns null if the file could not be opened.
  */
-export async function fetchDiagnosticsForFile(
+async function fetchDiagnosticsForFile(
   file: string,
 ): Promise<FetchDiagnosticsResult> {
   const absolutePath = WorkspaceFS.toAbsolute(file);
@@ -382,7 +383,7 @@ export async function fetchDiagnosticsForFile(
 }
 
 /** Navigate editor to first error location if present. */
-export async function navigateToFirstError(
+async function navigateToFirstError(
   filePath: string,
   diagnostics: LeanDiagnostic[],
 ): Promise<void> {
@@ -394,7 +395,7 @@ export async function navigateToFirstError(
   }
 }
 
-export async function executeProjectCommand(
+async function executeProjectCommand(
   command: LeanProjectCommand,
 ): Promise<void> {
   if (LEAN_FEATURE_PROJECT_COMMANDS.has(command)) {
@@ -410,3 +411,21 @@ export async function executeProjectCommand(
   }
   await vscode.commands.executeCommand(PROJECT_COMMAND_VSCODE_IDS[command]);
 }
+
+/**
+ * The VS Code-mediated `LeanLanguageServices` adapter, installed by
+ * `extension.ts` via `setLeanLanguageServices`. The single exported surface
+ * of this module's language operations: the implementing functions above are
+ * module-private so the export list states exactly what the host consumes.
+ * Frozen because the object is a shared module-level singleton handed across
+ * a package boundary — no consumer may reassign a member.
+ */
+export const vscodeLeanLanguageServices = Object.freeze({
+  executeFileCommand,
+  getGoalState,
+  getTermGoal,
+  getHoverInfo,
+  fetchDiagnosticsForFile,
+  navigateToFirstError,
+  executeProjectCommand,
+} satisfies LeanLanguageServices);

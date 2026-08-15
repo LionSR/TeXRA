@@ -6,7 +6,7 @@ import { globIterate } from 'glob';
 
 // Local imports
 import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import {
   workflowOutputCopyStem,
   midEraWorkflowOutputStem,
@@ -16,6 +16,8 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 
 import { CHANNEL, DEFAULT_MAX_ROUNDS } from './constants';
+
+const log = createLog(CHANNEL);
 
 /**
  * Produce an ISO-8601 timestamp stripped of separators, suitable for use in
@@ -119,8 +121,7 @@ export function resolveHousekeepingTargets(
   agent: string,
 ): HousekeepingTargets | null {
   if (!inputFile || !model || !agent) {
-    logger.error(
-      CHANNEL,
+    log.error(
       `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
     );
     return null;
@@ -128,16 +129,13 @@ export function resolveHousekeepingTargets(
 
   const baseName = path.parse(inputFile).name;
   const inputDir = path.dirname(inputFile);
-  logger.debug(
-    CHANNEL,
-    `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
-  );
+  log.debug(`Parsed paths: baseName=${baseName}, inputDir=${inputDir}`);
 
   const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
   // Pass the raw agent; getFilePatterns derives both the legacy chunk and
   // the new clean-agent forms internally so both disk layouts are matched.
   const filePatterns = getFilePatterns(baseName, model, agent, maxRounds);
-  logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
+  log.debug(`Generated patterns: ${filePatterns}`);
 
   return { baseName, inputDir, filePatterns };
 }
@@ -154,8 +152,7 @@ export async function* findFilesFromPatterns(
   patterns: string[],
   extensions: string[],
 ): AsyncGenerator<string, void, void> {
-  logger.debug(
-    CHANNEL,
+  log.debug(
     `Finding files in ${inputDir} using patterns ${patterns} and extensions ${extensions}`,
   );
 
@@ -179,7 +176,7 @@ export async function* findFilesFromPatterns(
           { nodir: true },
         )) {
           const relativePath = WorkspaceFS.relativePath(match);
-          logger.debug(CHANNEL, `Found file: ${relativePath}`);
+          log.debug(`Found file: ${relativePath}`);
           yield relativePath;
 
           if (!isGlob) {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { noopTrace } from '@agent/trace';
+import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import {
   AgentPromptSchema,
   AgentToolUseSettingSchema,
@@ -37,6 +38,10 @@ function tool(name: string): ITool {
     definition: { name, description: name, parameters: {} },
     call: vi.fn(),
   };
+}
+
+function approvalGatedTool(name: string): ITool {
+  return { ...tool(name), requiresApproval: true };
 }
 
 describe('run-scoped tool overlay', () => {
@@ -102,6 +107,7 @@ describe('run-scoped tool overlay', () => {
               transient: {},
             },
             modelCell,
+            toolPolicy: createToolPolicy(),
             onModelChanged: () => {},
             interrupt: () => {},
             onRoundFinalized: () => {},
@@ -126,6 +132,96 @@ describe('run-scoped tool overlay', () => {
       expect(warn).toHaveBeenCalledWith(
         'Run-scoped tool "first" shadows an existing tool.',
       );
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('filters approval-gated and runtime-unavailable declared tools without a run context', async () => {
+    const executionId = '9329abce' as ExecutionId;
+    const streamId = `chat#${executionId}` as StreamTabId;
+    const session = createTestSession();
+    const runScope = createRunScope({
+      executionId,
+      streamId,
+      agentName: 'chat',
+      session,
+      signal: new AbortController().signal,
+    });
+    const observedTools: { name: string }[][] = [];
+    const stopAfterObservation = Object.assign(
+      new Error('Tool list observed'),
+      { status: 401 },
+    );
+    const modelHandler = {
+      capabilities: { supportsFunctionCalling: true, supportsVision: false },
+      config: { provider: 'test' },
+      supportsForcedToolChoice: false,
+      requiresPerCallSystemPrompt: false,
+      initializeMessages: async () => [{ role: 'user', content: 'test' }],
+      consumeInsertedAttachmentKinds: () => [],
+      getClient: async () => ({}),
+      getCredentialRouteForClient: () => undefined,
+      setOutputStreaming: () => {},
+      getWireRouteKey: () => 'test',
+      getModelRetryRouteKey: () => 'test:model',
+      extractAssistantText: () => undefined,
+      createResponse: async (options: { tools?: { name: string }[] }) => {
+        observedTools.push(options.tools ?? []);
+        throw stopAfterObservation;
+      },
+    };
+    const modelCell = testModelCell(modelHandler, 'test-model');
+    const config = AgentConfigSchema.parse({
+      agent: 'chat',
+      model: 'test-model',
+      agentCategory: AgentCategory.ToolUse,
+      workingDirectory: process.cwd(),
+    });
+
+    try {
+      // No `withRunContext` frame: `runToolUseFlow` reads `approvalPromptsUnavailable`
+      // and `runtimeUnavailableTools` from the injected `toolPolicy`, not the ALS.
+      const result = await runToolUseFlow(
+        {
+          config,
+          runScope,
+          setting: AgentToolUseSettingSchema.parse({
+            tools: [
+              { name: 'bash' },
+              { name: 'grep' },
+              { name: 'inquiry' },
+              { name: 'write_file' },
+              { name: 'wolfram' },
+            ],
+          }),
+          prompt: AgentPromptSchema.parse({}),
+          logger: noopTrace,
+          userVarChannels: {
+            input: Object.freeze({ MODEL: config.model }),
+            transient: {},
+          },
+          modelCell,
+          toolPolicy: createToolPolicy({
+            approvalPromptsUnavailable: true,
+            runtimeUnavailableTools: ['inquiry'],
+          }),
+          onModelChanged: () => {},
+          interrupt: () => {},
+          onRoundFinalized: () => {},
+          isSubagent: true,
+        },
+        new MapToolRegistry({
+          bash: approvalGatedTool('bash'),
+          grep: tool('grep'),
+          inquiry: approvalGatedTool('inquiry'),
+          write_file: approvalGatedTool('write_file'),
+          wolfram: approvalGatedTool('wolfram'),
+        }),
+      );
+
+      expect(result.outcome).toBe('failed');
+      expect(observedTools[0]?.map(({ name }) => name)).toEqual(['grep']);
     } finally {
       session.dispose();
     }

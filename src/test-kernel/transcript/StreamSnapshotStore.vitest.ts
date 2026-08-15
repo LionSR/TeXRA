@@ -1009,6 +1009,127 @@ describe('StreamSnapshotStore', () => {
     expect(store.getRunMetadata(STREAM).executionId).toBe(executionId);
   });
 
+  it('treats corrupt-present ownership metadata as unreadable, not missing', async () => {
+    await StorageFS.ensureDir(streamDataDir(STREAM));
+    await StorageFS.write(
+      path.join(streamDataDir(STREAM), 'meta.json'),
+      '{bad json',
+    );
+
+    const store = new StreamSnapshotStore();
+    await expect(store.readPersistedExecutionId(STREAM)).rejects.toBeInstanceOf(
+      SyntaxError,
+    );
+  });
+
+  it('rejects valid-JSON ownership metadata with an invalid execution FK', async () => {
+    await StorageFS.ensureDir(streamDataDir(STREAM));
+    await StorageFS.write(
+      path.join(streamDataDir(STREAM), 'meta.json'),
+      JSON.stringify({ schemaVersion: 1, executionId: 42 }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await expect(store.readPersistedExecutionId(STREAM)).rejects.toThrow(
+      'Invalid persisted stream metadata ownership',
+    );
+  });
+
+  it('rejects non-object ownership metadata instead of treating it as missing', async () => {
+    await StorageFS.ensureDir(streamDataDir(STREAM));
+    await StorageFS.write(
+      path.join(streamDataDir(STREAM), 'meta.json'),
+      JSON.stringify(['not', 'a', 'meta']),
+    );
+
+    const store = new StreamSnapshotStore();
+    await expect(store.readPersistedExecutionId(STREAM)).rejects.toThrow(
+      'Invalid persisted stream metadata ownership',
+    );
+  });
+
+  it('usage-only preload supplies usage without warning and preserves live deltas', async () => {
+    await writeStreamFile(STREAM, 'usageStats.json', {
+      [RUN]: usage(1, 2, 0.1),
+    });
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM], { usageOnly: true });
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+
+    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject({
+      inputTokens: 1,
+      outputTokens: 2,
+      cost: 0.1,
+    });
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    snapshotFacts(store).addUsage(STREAM, RUN_2, usage(3, 4, 0.2));
+    expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject({
+      inputTokens: 3,
+      outputTokens: 4,
+      cost: 0.2,
+    });
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    // Drain the seed chain started by the live usage event so teardown cannot
+    // race an in-flight sidecar write.
+    await store.flush();
+  });
+
+  it('usage-only preload replays an eager usage delta that lands during the read', async () => {
+    await writeStreamFile(STREAM, 'usageStats.json', {
+      [RUN]: usage(1, 2, 0.1),
+    });
+
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const originalRead = StorageFS.read.bind(StorageFS);
+    const readUsageFile = vi
+      .spyOn(StorageFS, 'read')
+      .mockImplementation(async (filePath) => {
+        if (filePath.endsWith('usageStats.json')) {
+          await readGate;
+        }
+        return originalRead(filePath);
+      });
+
+    const store = new StreamSnapshotStore();
+    const preload = store.preload([STREAM], { usageOnly: true });
+    snapshotFacts(store).addUsage(STREAM, RUN_2, usage(3, 4, 0.2));
+    releaseRead();
+    await preload;
+
+    expect(readUsageFile).toHaveBeenCalled();
+    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject({
+      inputTokens: 1,
+      outputTokens: 2,
+      cost: 0.1,
+    });
+    expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject({
+      inputTokens: 3,
+      outputTokens: 4,
+      cost: 0.2,
+    });
+
+    await store.flush();
+  });
+
+  it('usage-only preload rejects corrupt-present usageStats instead of zeroing', async () => {
+    await StorageFS.ensureDir(streamDataDir(STREAM));
+    await StorageFS.write(
+      path.join(streamDataDir(STREAM), 'usageStats.json'),
+      '{bad json',
+    );
+
+    const store = new StreamSnapshotStore();
+    await expect(
+      store.preload([STREAM], { usageOnly: true }),
+    ).rejects.toBeInstanceOf(SyntaxError);
+  });
+
   it('strips a retired runDescriptor sidecar without reading its FK', async () => {
     // Pre-FK sidecars carried a whole runDescriptor; that shape is retired.
     // The unknown key is stripped: no FK is lifted out of it, and the rest
@@ -2606,6 +2727,7 @@ describe('StreamSnapshotStore', () => {
 
   it('degrades gracefully when workPlan.json is valid JSON but the wrong shape', async () => {
     // Corrupt-but-parseable payload must NOT throw and abort read()/resume.
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     await writeStreamFile(STREAM, 'workPlan.json', {
       todos: 'not-an-array',
       plan: 42,
@@ -2613,6 +2735,43 @@ describe('StreamSnapshotStore', () => {
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.todos).toEqual([]);
     expect(snap.plan).toBeNull();
+    // Each defaulted field must be logged loudly, not silently absorbed by
+    // PersistedWorkPlanSchema's per-field `.catch` (see #7464-style trap).
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('"todos"'),
+      expect.anything(),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('"plan"'),
+      expect.anything(),
+    );
+    // planSummary was never written (not present, not malformed) — must not
+    // be misreported as corrupted.
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('"planSummary"'),
+      expect.anything(),
+    );
+  });
+
+  it('logs loudly when workPlan.json has a malformed schemaVersion', async () => {
+    // A non-numeric schemaVersion also falls through PersistedWorkPlanSchema's
+    // per-field `.catch`, silently defaulting to the current version — must
+    // be logged like the other three fields, not swallowed.
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    await writeStreamFile(STREAM, 'workPlan.json', {
+      schemaVersion: 'not-a-number',
+      todos: [TODO],
+    });
+    const snap = await new StreamSnapshotStore().read(STREAM);
+    expect(snap.todos).toEqual([TODO]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('"schemaVersion"'),
+      expect.anything(),
+    );
   });
 
   it('ignores a workPlan.json stamped with a newer schemaVersion (forward-compat gate)', async () => {

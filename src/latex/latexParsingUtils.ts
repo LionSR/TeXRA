@@ -8,10 +8,12 @@
 
 import * as path from 'node:path';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
+
+const log = createLog('LatexParsing');
 
 /** Strips everything after an unescaped % on each line. */
 const COMMENT_PATTERN = /(^|[^\\])%.*$/gm;
@@ -38,8 +40,7 @@ export async function resolveLatexDir(absolutePath: string): Promise<string> {
   const resolved = await platform()
     .fs.realPath(absolutePath)
     .catch((error: unknown) => {
-      logger.debug(
-        'LatexParsing',
+      log.debug(
         `realPath failed for ${absolutePath}; falling back to literal dirname`,
         { data: error },
       );

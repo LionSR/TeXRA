@@ -9,7 +9,7 @@ import * as path from 'node:path';
 
 // Local imports
 import { isFileNotFoundError } from '@common/errors';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import {
   type ExecutionId,
@@ -47,6 +47,7 @@ async function collectTexFiles(
   prefix = '',
 ): Promise<string[]> {
   const fs = platform().fs;
+  const log = createLog(channel);
   let entries: [string, number][];
   try {
     entries = await fs.readDirectory(dir);
@@ -54,7 +55,7 @@ async function collectTexFiles(
     // This is a recovery scan: a missing/unreadable subtree means this subtree
     // contributes no outputs, but other rounds/subtrees may still be useful.
     if (isFileNotFoundError(error)) return [];
-    logger.warn(channel, `Skipping unreadable directory '${dir}': ${error}`);
+    log.warn(`Skipping unreadable directory '${dir}': ${error}`);
     return [];
   }
   const results: string[] = [];
@@ -89,6 +90,7 @@ export async function scanRunDirForOutputs(
   extraBaseFiles: string[] | undefined,
   channel: string,
 ): Promise<RoundIndexed<OutputFileInfo> | null> {
+  const log = createLog(channel);
   try {
     const runDirAbsolute = await findRunDir(executionId);
     if (!runDirAbsolute) return null;
@@ -189,10 +191,10 @@ export async function scanRunDirForOutputs(
 
     return Object.keys(rounds).length > 0 ? rounds : null;
   } catch (error) {
-    logger.debug(
-      channel,
-      `RunDir scan for ${executionId} failed: ${toErrorMessage(error)}`,
-    );
+    // A failed run-storage read degrades a pinned-runId invocation to the
+    // plain workspace scan — a behavior-changing fallback, so fallback
+    // discipline (review checklist §15) forbids logging it below warn.
+    log.warn(`RunDir scan for ${executionId} failed: ${toErrorMessage(error)}`);
     return null;
   }
 }
@@ -215,6 +217,7 @@ export async function discoverLatestExecutionOutputs(
   executionId: ExecutionId;
   rounds: RoundIndexed<OutputFileInfo>;
 } | null> {
+  const log = createLog(channel);
   try {
     const executions = await discovery.listAgentRuns();
     // Normalize both sides so trivial path-format differences (duplicate
@@ -269,8 +272,9 @@ export async function discoverLatestExecutionOutputs(
       }
     }
   } catch (error) {
-    logger.debug(
-      channel,
+    // Same discipline as scanRunDirForOutputs above: a failed persisted
+    // metadata read drops the invocation to the workspace scan, so warn.
+    log.warn(
       `Metadata-driven latexdiff discovery failed: ${toErrorMessage(error)}`,
     );
   }
