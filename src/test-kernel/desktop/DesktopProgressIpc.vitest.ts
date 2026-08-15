@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
+import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas';
 import { unsupported } from '@shared/utils/dispatcher';
 
 import { loadSourceModule } from './loadSourceModule.ts';

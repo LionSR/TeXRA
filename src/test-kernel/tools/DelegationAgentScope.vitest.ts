@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { agentMatchesIdentifier } from '@shared/schemas/agent';
+import { agentMatchesIdentifier } from '@shared/schemas';
 
 const remoteReview = {
   category: 'toolUse',

@@ -16,11 +16,10 @@ import {
 import {
   EXECUTION_META_SCHEMA_VERSION,
   EXECUTION_STATUS,
-  type ExecutionId,
-  type StreamTabId,
   AgentCategory,
+  resolveHistoryRunStatus,
 } from '@shared/schemas';
-import { resolveHistoryRunStatus } from '@shared/schemas/historyViewMessages';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 const TOOL_USE_CONFIG: AgentConfig = AgentConfigSchema.parse({

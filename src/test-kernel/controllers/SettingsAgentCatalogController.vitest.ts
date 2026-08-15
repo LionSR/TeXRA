@@ -11,11 +11,8 @@ import {
   SettingsAgentCatalogController,
   type SettingsAgentCatalogEntry,
 } from '@controllers/settingsView/SettingsAgentCatalogController';
-import type { AgentCategory } from '@shared/schemas/agent';
-import {
-  AGENT_MODE_PRESETS_BY_ID,
-  type AgentModePreset,
-} from '@shared/schemas/agentPresets';
+import { AGENT_MODE_PRESETS_BY_ID } from '@shared/schemas';
+import type { AgentCategory, AgentModePreset } from '@shared/schemas';
 
 const AGENTS: Record<AgentCategory, SettingsAgentCatalogEntry[]> = {
   workflow: [

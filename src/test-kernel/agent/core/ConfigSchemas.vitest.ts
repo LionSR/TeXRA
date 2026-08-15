@@ -11,8 +11,7 @@ import {
   ToolUseAgentConfigSchema,
   WorkflowAgentConfigSchema,
 } from '@agent/core/definition/AgentConfig';
-import { AGENT_SOURCE, AgentCategory } from '@shared/schemas';
-import { ToolConfigSchema } from '@shared/schemas/toolConfig';
+import { AGENT_SOURCE, AgentCategory, ToolConfigSchema } from '@shared/schemas';
 
 describe('ToolConfigSchema', () => {
   it('ignores unknown toolConfig keys', () => {

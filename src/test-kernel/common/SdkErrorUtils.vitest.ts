@@ -41,12 +41,12 @@ import {
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
 import { sdkErrorKindFromStatusCode } from '@common/errors/sdkError/sdkErrorKinds';
-import type { ProviderError, RetryErrorInfo } from '@shared/schemas/errors';
 import {
   ErrorLogDataSchema,
   RetryErrorInfoSchema,
   toRetryErrorInfo,
-} from '@shared/schemas/errors';
+} from '@shared/schemas';
+import type { ProviderError, RetryErrorInfo } from '@shared/schemas';
 
 class APIError extends Error {}
 

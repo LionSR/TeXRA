@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   spendingQuotaRemainingPercent,
   spendingQuotaState,
-  type SpendingStatus,
-} from '@shared/schemas/spendingStatus';
+} from '@shared/schemas';
+import type { SpendingStatus } from '@shared/schemas';
 
 function status(overrides: Partial<SpendingStatus> = {}): SpendingStatus {
   return {

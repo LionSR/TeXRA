@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
+import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSettingWrite';
 

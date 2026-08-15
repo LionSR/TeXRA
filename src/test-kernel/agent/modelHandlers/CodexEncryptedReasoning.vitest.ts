@@ -4,7 +4,7 @@ import { type ModelConfig, ModelProvider, ReasoningEffort } from 'llm-zoo';
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
-import { AgentCategory } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import type { Response } from 'openai/resources/responses/responses';
