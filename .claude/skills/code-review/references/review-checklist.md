@@ -50,7 +50,7 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 `AGENTS.md` → "UI anti-patterns" already lists the anti-patterns. Greps for the diff:
 
 - **`Date.now()` or synthetic IDs inside render functions** → move ID/timestamp creation to the producer.
-- **Lit components mutating shared state** → dispatch events; let the manager handle (`StreamTabs`, `LogList`, `OutputFilesManager`, `WebviewUpdater`, `UsageStatsManager`).
+- **Lit components mutating shared state** → dispatch events; let the manager handle (`StreamTabs`, `LogList`, `OutputFilesManager`, `LitSessionRenderer`, `UsageStatsManager`).
 - **Direct DOM manipulation alongside Lit components** → extend the existing component instead.
 - **Webview providers/handlers not extending `BaseViewContentProvider` / `BaseViewMessageHandler`** (`packages/extension/src/common/webview/`).
 - **String literals for webview commands** → constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`, `MAIN_VIEW_COMMANDS`, …).

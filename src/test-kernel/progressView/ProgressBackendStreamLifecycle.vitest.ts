@@ -1095,15 +1095,14 @@ describe('ProgressBackend', () => {
       }),
     );
 
-    backend.webviewUpdater.updateTodos('alpha' as StreamTabId, []);
+    backend.renderer.releaseStreamContent('alpha' as StreamTabId);
     expect(sent).not.toHaveBeenCalled();
 
     hasTarget = true;
-    backend.webviewUpdater.updateTodos('alpha' as StreamTabId, []);
+    backend.renderer.releaseStreamContent('alpha' as StreamTabId);
     expect(sent).toHaveBeenCalledWith({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
+      command: PROGRESS_VIEW_COMMANDS.RELEASE_STREAM_CONTENT,
       stream: 'alpha',
-      todos: [],
     });
   });
 
@@ -1128,9 +1127,9 @@ describe('ProgressBackend', () => {
     );
 
     expect(() =>
-      backend.webviewUpdater.updateTodos('alpha' as StreamTabId, []),
+      backend.renderer.releaseStreamContent('alpha' as StreamTabId),
     ).not.toThrow();
-    backend.webviewUpdater.updateTodos('alpha' as StreamTabId, []);
+    backend.renderer.releaseStreamContent('alpha' as StreamTabId);
 
     expect(sent).toHaveBeenCalledTimes(2);
     await vi.waitFor(() => expect(debug).toHaveBeenCalledTimes(2));
@@ -1139,7 +1138,7 @@ describe('ProgressBackend', () => {
       'Failed to deliver message to webview',
       expect.objectContaining({
         data: expect.objectContaining({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
+          command: PROGRESS_VIEW_COMMANDS.RELEASE_STREAM_CONTENT,
         }),
       }),
     );

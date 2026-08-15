@@ -130,7 +130,7 @@ describe('ProgressBackend', () => {
 
     seedHistoryStreams(backend, 20);
 
-    backend.webviewUpdater.sendStreamMetadata(
+    backend.renderer.sendStreamMetadata(
       backend.projections.streamRoster(
         backend.presentation.activeStream,
         backend.state.streamStatus.getAllStreamStates(),
@@ -304,7 +304,7 @@ describe('ProgressBackend', () => {
     const patch = metadataPatchFor([...messages].reverse(), 'child');
     messages.length = 0;
 
-    backend.webviewUpdater.sendStreamMetadata(
+    backend.renderer.sendStreamMetadata(
       backend.projections.streamRoster(
         backend.presentation.activeStream,
         backend.state.streamStatus.getAllStreamStates(),
@@ -529,19 +529,7 @@ describe('ProgressBackend', () => {
 
   it('applies session run facts through the fact-native handler', async () => {
     const target = createListeningBackend();
-    const { backend } = target;
-    const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
-    const updateMissingOutputs = vi.spyOn(
-      backend.webviewUpdater,
-      'updateMissingOutputs',
-    );
-    const updateCompileFailures = vi.spyOn(
-      backend.webviewUpdater,
-      'updateCompileFailures',
-    );
-    const updateRunUsage = vi.spyOn(backend.webviewUpdater, 'updateRunUsage');
-    const updateTodos = vi.spyOn(backend.webviewUpdater, 'updateTodos');
-    const updatePlan = vi.spyOn(backend.webviewUpdater, 'updatePlan');
+    const { backend, messages } = target;
     const streamId = 'session:output-files' as StreamTabId;
     const storageKey = 'run:session-usage' as StorageKey;
     const outputFile = paperOutputFile();
@@ -588,16 +576,7 @@ describe('ProgressBackend', () => {
     await vi.waitFor(() =>
       expect(backend.presentation.activeStream).toBe(streamId),
     );
-    for (const spy of [
-      updateFiles,
-      updateMissingOutputs,
-      updateCompileFailures,
-      updateRunUsage,
-      updateTodos,
-      updatePlan,
-    ]) {
-      spy.mockClear();
-    }
+    messages.length = 0;
 
     emitRunEvent(target, streamId, {
       type: 'addOutputFiles',
@@ -638,25 +617,45 @@ describe('ProgressBackend', () => {
       streamId,
     });
 
-    expect(updateFiles).toHaveBeenCalledTimes(1);
-    expect(updateFiles).toHaveBeenCalledWith(streamId, {
-      rounds: { 1: [outputFile] },
-    });
-    expect(updateMissingOutputs).toHaveBeenCalledWith(streamId, {
+    expect(
+      messages.filter(
+        (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
+      ),
+    ).toEqual([
+      {
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
+        stream: streamId,
+        rounds: { 1: [outputFile] },
+      },
+    ]);
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
+      stream: streamId,
       rounds: { 1: ['paper.pdf'] },
     });
-    expect(updateCompileFailures).toHaveBeenCalledWith(streamId, {
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
+      stream: streamId,
       rounds: { 1: [compileFailure] },
       reset: true,
     });
-    expect(updateTodos).toHaveBeenCalledWith(streamId, todos);
-    expect(updatePlan).toHaveBeenCalledWith(streamId, plan);
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
+      stream: streamId,
+      todos,
+    });
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PLAN,
+      stream: streamId,
+      plan,
+    });
     await vi.waitFor(() =>
-      expect(updateRunUsage).toHaveBeenCalledWith(
-        streamId,
-        storageKey,
-        expectedUsage,
-      ),
+      expect(messages).toContainEqual({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
+        stream: streamId,
+        runId: storageKey,
+        usage: expectedUsage,
+      }),
     );
     expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual({
       1: [outputFile],
@@ -678,9 +677,7 @@ describe('ProgressBackend', () => {
 
   it('drops malformed updateTodos/updatePlan run facts instead of forwarding them unchecked (#7562)', async () => {
     const target = createListeningBackend();
-    const { backend } = target;
-    const updateTodos = vi.spyOn(backend.webviewUpdater, 'updateTodos');
-    const updatePlan = vi.spyOn(backend.webviewUpdater, 'updatePlan');
+    const { backend, messages } = target;
     const streamId = 'session:malformed-todos-plan' as StreamTabId;
 
     await backend.state.snapshots.load([]);
@@ -688,8 +685,7 @@ describe('ProgressBackend', () => {
       streamId,
       agentCategory: AgentCategory.Workflow,
     });
-    updateTodos.mockClear();
-    updatePlan.mockClear();
+    messages.length = 0;
 
     emitRunEvent(target, streamId, {
       type: 'domain',
@@ -702,14 +698,19 @@ describe('ProgressBackend', () => {
       data: { streamId, plan: { steps: ['legacy shape'] } },
     });
 
-    expect(updateTodos).not.toHaveBeenCalled();
-    expect(updatePlan).not.toHaveBeenCalled();
+    expect(messages).not.toContainEqual(
+      expect.objectContaining({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
+      }),
+    );
+    expect(messages).not.toContainEqual(
+      expect.objectContaining({ command: PROGRESS_VIEW_COMMANDS.UPDATE_PLAN }),
+    );
   });
 
   it('no-ops session output-file run facts after dispose', async () => {
     const target = createListeningBackend();
-    const { backend } = target;
-    const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
+    const { backend, messages } = target;
     const streamId = 'session:output-files-after-dispose' as StreamTabId;
     const outputFile = paperOutputFile();
 
@@ -718,7 +719,7 @@ describe('ProgressBackend', () => {
       streamId,
       agentCategory: AgentCategory.Workflow,
     });
-    updateFiles.mockClear();
+    messages.length = 0;
     backend.dispose();
 
     emitRunEvent(target, streamId, {
@@ -727,7 +728,9 @@ describe('ProgressBackend', () => {
       filesByRound: { 1: [outputFile] },
     });
 
-    expect(updateFiles).not.toHaveBeenCalled();
+    expect(messages).not.toContainEqual(
+      expect.objectContaining({ command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES }),
+    );
     // The presentation no-ops, but the sidecar store is session-owned, so it
     // keeps recording: disposing one window/webview must not stop the runtime
     // persisting an in-flight run's outputs. The desktop already behaved this
@@ -1167,7 +1170,7 @@ describe('ProgressBackend', () => {
       executionId,
     });
 
-    backend.syncStreamContent(stream);
+    backend.renderer.syncStreamContent(stream);
     const sync = messages.find(
       (message) =>
         message.command === PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
