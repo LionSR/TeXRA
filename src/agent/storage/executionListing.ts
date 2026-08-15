@@ -13,10 +13,15 @@ import {
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
 import { isFileNotFoundError } from '@common/errors';
+import type {
+  LatexAgentRunEntry,
+  LatexExecutionDiscoveryPort,
+} from '@latex/latexdiff/executionDiscovery';
 import { createLog } from '@logger/logUtils';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type {
   ExecutionId,
+  ExecutionMeta,
   RunIdentity,
   RunOutcome,
   StreamTabId,
@@ -74,7 +79,7 @@ export type ExecutionListingEntry =
 
 /** Narrow to the agent arm; nested `identity.kind` cannot discriminate the
  *  entry union for TypeScript, so this is the one spelled-out guard. */
-export function isAgentRunEntry(
+function isAgentRunEntry(
   entry: ExecutionListingEntry,
 ): entry is AgentExecutionListingEntry {
   return entry.kind === 'run' && entry.identity.kind === 'agent';
@@ -235,6 +240,46 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     results.filter(filterNotNull),
     (item) => item.timestamp,
   );
+}
+
+interface LatexExecutionDiscoveryDependencies {
+  readonly listExecutions: typeof listExecutions;
+  readonly readStreamMeta: (
+    executionId: ExecutionId,
+  ) => Promise<ExecutionMeta | null>;
+}
+
+const DEFAULT_LATEX_EXECUTION_DISCOVERY_DEPENDENCIES = Object.freeze({
+  listExecutions,
+  readStreamMeta: (executionId: ExecutionId) =>
+    getExecutionStore(executionId).readMeta(),
+} as const satisfies LatexExecutionDiscoveryDependencies);
+
+/**
+ * Adapter from the agent storage surface to the latex-owned execution
+ * discovery port. Hosts inject this into latexdiff orchestration.
+ *
+ * Dependencies are injectable so the projection/filter contract can be unit
+ * tested without scanning real execution storage.
+ */
+export function createLatexExecutionDiscovery(
+  dependencies: LatexExecutionDiscoveryDependencies = DEFAULT_LATEX_EXECUTION_DISCOVERY_DEPENDENCIES,
+): LatexExecutionDiscoveryPort {
+  return {
+    async listAgentRuns(): Promise<readonly LatexAgentRunEntry[]> {
+      const executions = await dependencies.listExecutions();
+      return executions.filter(isAgentRunEntry).map((entry) => ({
+        id: entry.id,
+        timestamp: entry.timestamp,
+        agent: entry.record.agent,
+        model: entry.record.model,
+        inputFiles: entry.record.inputFiles,
+      }));
+    },
+    async readStreamId(executionId) {
+      return (await dependencies.readStreamMeta(executionId))?.streamId;
+    },
+  };
 }
 
 /**

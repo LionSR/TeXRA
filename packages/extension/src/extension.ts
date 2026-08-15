@@ -11,6 +11,7 @@ import { loadAgents } from '@agent/index';
 import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import {
+  agentResponseTextConnector,
   defaultSession,
   initializeBundledPrompts,
   initializeDefaultSession,
@@ -63,7 +64,7 @@ import {
 import { migrateLegacyVscodeStorage } from '@frontend/vscode/sharedStorageRoot';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
-import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import * as logger from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
@@ -258,7 +259,9 @@ export async function activate(context: vscode.ExtensionContext) {
   }
   const runtimeSession = initializeDefaultSession({
     transcripts,
-    responseTextProcessing: texraResponseTextProcessing,
+    responseTextProcessing: createTexraResponseTextProcessing(
+      agentResponseTextConnector,
+    ),
   });
   await runtimeSession.waitUntilReady();
   runtimeSession.setApprovalPolicy(
@@ -377,6 +380,7 @@ export async function activate(context: vscode.ExtensionContext) {
           previousVersion,
           removed,
           reordered,
+          routePreferencesCleared,
           skipped,
         } = await refreshModelListStateIfNeeded(globalSM);
         if (!skipped) {
@@ -387,12 +391,25 @@ export async function activate(context: vscode.ExtensionContext) {
             );
           }
           logger.info('extension', 'Model list refresh completed successfully');
-          if (added.length > 0 || removed.length > 0 || reordered) {
+          if (
+            added.length > 0 ||
+            removed.length > 0 ||
+            reordered ||
+            routePreferencesCleared.length > 0
+          ) {
             invalidateModelOptionsCache();
-            logger.info(
-              'extension',
-              `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
-            );
+            if (added.length > 0 || removed.length > 0 || reordered) {
+              logger.info(
+                'extension',
+                `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
+              );
+            }
+            if (routePreferencesCleared.length > 0) {
+              logger.info(
+                'extension',
+                `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
+              );
+            }
           }
         }
       } catch (err) {

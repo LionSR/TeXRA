@@ -294,16 +294,29 @@ export async function initCliPlatform(
     // lives in shared `~/.texra` state. Preferred defaults reconcile when
     // MODEL_LIST_VERSION changes; retired entries are swept on every startup.
     try {
-      const { added, removed, reordered } = await refreshModelListStateIfNeeded(
-        stateStores.globalState,
-      );
-      if (added.length > 0 || removed.length > 0 || reordered) {
+      const { added, removed, reordered, routePreferencesCleared } =
+        await refreshModelListStateIfNeeded(stateStores.globalState);
+      if (
+        added.length > 0 ||
+        removed.length > 0 ||
+        reordered ||
+        routePreferencesCleared.length > 0
+      ) {
         invalidateModelOptionsCache();
-        logAt(
-          'info',
-          'cli.models',
-          `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
-        );
+        if (added.length > 0 || removed.length > 0 || reordered) {
+          logAt(
+            'info',
+            'cli.models',
+            `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
+          );
+        }
+        if (routePreferencesCleared.length > 0) {
+          logAt(
+            'info',
+            'cli.models',
+            `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
+          );
+        }
       }
     } catch (error) {
       logAt(

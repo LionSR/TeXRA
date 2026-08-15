@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import pMap from 'p-map';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { platform } from '@platform/platform';
 import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas/toolConfig';
@@ -51,12 +50,29 @@ export interface MediaWorkspaceState {
   media: { addMediaFiles(locations: readonly FileLocation[]): void };
 }
 
+/** Options accepted by the logging slice of {@link LatexTrace}. */
+interface LatexLogOptions {
+  readonly data?: unknown;
+}
+
+/**
+ * The logging slice `LatexMediaManager` actually calls. Structurally
+ * satisfied by `AgentTrace`; declared here so LaTeX processing stays
+ * independent of agent execution internals.
+ */
+export interface LatexTrace {
+  debug(message: string, options?: LatexLogOptions): void;
+  info(message: string, options?: LatexLogOptions): void;
+  warn(message: string, options?: LatexLogOptions): void;
+  error(message: string, options?: LatexLogOptions): void;
+}
+
 /**
  * Handles LaTeX related media extraction and compilation for agents.
  */
 export class LatexMediaManager {
   constructor(
-    private readonly logger: AgentTrace,
+    private readonly logger: LatexTrace,
     private readonly fileService?: TaskRunFileService,
   ) {}
 

@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
@@ -329,6 +330,45 @@ describe('CLI platform init', () => {
       GlobalStateKey.MODEL_LIST_VERSION,
       MODEL_LIST_VERSION,
     );
+  });
+
+  it('invalidates and logs when only Copilot route preferences are cleared', async () => {
+    expect(MODEL_CONFIGS.gemini36f?.deprecated).toBe(true);
+    mocks.tryPlatform.mockReturnValueOnce(undefined);
+    mocks.cliGlobalState.get.mockImplementation((key: string) => {
+      if (key === GlobalStateKey.MODEL_LIST_VERSION) return MODEL_LIST_VERSION;
+      if (key === GlobalStateKey.ENABLED_MODELS) return ['sonnet5T'];
+      if (key === GlobalStateKey.COPILOT_ROUTE_MODELS) {
+        return ['gemini36f', 'gemini31p'];
+      }
+      return undefined;
+    });
+    mocks.cliGlobalState.update.mockResolvedValue(undefined);
+    const stderrWrite = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true);
+
+    try {
+      await initCliPlatform(
+        cliContext({ quietLogs: false, installSignalHandlers: false }),
+      );
+
+      expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
+      expect(mocks.cliGlobalState.update).toHaveBeenCalledWith(
+        GlobalStateKey.COPILOT_ROUTE_MODELS,
+        ['gemini31p'],
+      );
+      expect(stderrWrite).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'Cleared stale Copilot route preferences: [gemini36f]',
+        ),
+        expect.any(Function),
+      );
+    } finally {
+      stderrWrite.mockRestore();
+      mocks.cliGlobalState.get.mockReset();
+      mocks.cliGlobalState.update.mockReset();
+    }
   });
 
   it('marks the operator-terminal console sink as trusted', async () => {

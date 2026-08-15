@@ -171,6 +171,17 @@ describe('Shared layer dependency direction', () => {
   });
 });
 
+describe('Latex layer dependency direction', () => {
+  it('does not grow latex-to-agent imports', () => {
+    const offenders = sourceFilesUnder('src/latex')
+      .filter((file) => importsMatching(file, AGENT_IMPORT_PATTERNS))
+      .map(toRepoPath)
+      .toSorted();
+
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe('Production core never imports host layers', () => {
   it('has no imports from extension, CLI, or desktop aliases', () => {
     const offenders = productionSrcFiles()

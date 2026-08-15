@@ -14,7 +14,6 @@ const ERROR_PAYLOAD_STRIPPED_KEYS = new Set([
   'lineChanges',
   'edits',
   'files',
-  'editedFiles',
 ]);
 
 /**

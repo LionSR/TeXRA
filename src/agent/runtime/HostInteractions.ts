@@ -6,7 +6,7 @@ import type {
   FileLocation,
   Plan,
   ProgressPermissionKind as PendingInteractionKind,
-  ProviderErrorPartial,
+  RetryPermission,
   StreamTabId,
   UserQuestionAnswers,
   ExternalInquiryPermission,
@@ -190,14 +190,13 @@ export type HostAgentProposalRequest = AgentProposal & {
   readonly streamId: StreamTabId;
 };
 
-export interface HostRetryRequest {
-  readonly requestId: string;
-  readonly streamId: StreamTabId;
-  readonly operation: string;
-  readonly model?: string;
-  readonly errorMessage?: string;
-  readonly errorDetails?: ProviderErrorPartial;
-}
+/**
+ * The retry payload the runtime hands to hosts. This is deliberately an alias
+ * of the shared {@link RetryPermission} schema so the runtime and every host
+ * render the same contract; a field added to the permission payload is
+ * available here without a hand-maintained mirror.
+ */
+export type HostRetryRequest = RetryPermission;
 
 export type HostUserQuestionRequest = UserQuestionPermission;
 
@@ -234,6 +233,37 @@ export type UserQuestionSettlement =
       readonly action: 'reject';
       readonly answers?: never;
     } & RejectionProvenance);
+
+/**
+ * Every "reject" result variant above shares this same field-presence
+ * encoding: a `cause` key means the host cancelled the request, a `reason`
+ * key means a policy denied it, and only a `feedback` key means the user
+ * actually rejected it. {@link classifyRejection} is the one place that
+ * reads the field presence, so consumers switch on `kind` instead of each
+ * re-deriving the `'cause' in result` / `'reason' in result` cascade.
+ */
+type RejectionClassification =
+  | { readonly kind: 'cancelled'; readonly cause: string | undefined }
+  | { readonly kind: 'policy'; readonly reason: string }
+  | { readonly kind: 'feedback'; readonly feedback?: string };
+
+export function classifyRejection(result: {
+  readonly feedback?: string;
+  readonly reason?: string;
+  readonly cause?: string;
+}): RejectionClassification {
+  if ('cause' in result) return { kind: 'cancelled', cause: result.cause };
+  // Nullish, not presence: the four concrete result unions above type
+  // `reason` as a required, non-optional `string` on the policy variant,
+  // but this function's parameter type is intentionally looser (shared
+  // across all four) and `HostInteractions` is an extension boundary —
+  // JS/headless embedders can hand back `{ reason: undefined }`. Treating
+  // that as "policy" would need a fake value (every consumer calls
+  // `.trim()` on `reason` unconditionally); falling through to `feedback`
+  // instead matches what the pre-refactor sites did with this shape.
+  if (result.reason != null) return { kind: 'policy', reason: result.reason };
+  return { kind: 'feedback', feedback: result.feedback };
+}
 
 export type SettledInteractionKind = keyof HostInteractionResultByKind;
 

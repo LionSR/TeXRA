@@ -119,6 +119,7 @@ interface TestRetryServices {
 function testRetryModelCell(
   rebind: TestRebind = async () => undefined,
   route?: ModelCredentialRoute,
+  handlerConfig: object = {},
 ): TestRetryServices['modelCell'] {
   // The handler stub only feeds the Kimi Code fallback probe, which reads
   // `config` and finds no Kimi fields on it, so a swap never fires here.
@@ -126,7 +127,9 @@ function testRetryModelCell(
     getClient: async () => ({}),
     rebind,
     route,
-    handler: { config: {} } as TestRetryServices['modelCell']['handler'],
+    handler: {
+      config: handlerConfig,
+    } as TestRetryServices['modelCell']['handler'],
     swap: () => {},
   };
 }
@@ -207,6 +210,7 @@ function createRetryNode(
   // The node reads its session from `services.runScope`, so a test driving a
   // real session's host interactions must hand that same session in here.
   sessionOverride?: SessionHandle,
+  handlerConfig?: object,
 ): RetryNodeKit {
   const requestRetry = vi.fn<RetryNodeKit['requestRetry']>();
   const session =
@@ -220,7 +224,7 @@ function createRetryNode(
     retryServices(streamId, {
       config: { model: 'sonnet46', agentCategory: AgentCategory.ToolUse },
       session,
-      modelCell: testRetryModelCell(rebind, route),
+      modelCell: testRetryModelCell(rebind, route, handlerConfig),
     }) as never,
   );
   return { node, session, streamStatus, requestRetry };
@@ -1394,6 +1398,68 @@ describe('ModelInvocationNode retry', () => {
         // Every run carries a model cell, so the host is always offered the
         // credential-selecting retry preparation.
         expect.objectContaining({ prepareRetry: expect.any(Function) }),
+      );
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('marks a Kimi Code-routed failed handler on the retry request', async () => {
+    const streamId = 'retry-state-kimi-code-routed' as StreamTabId;
+    const { node, session, streamStatus, requestRetry } = createRetryNode(
+      streamId,
+      undefined,
+      undefined,
+      undefined,
+      {
+        provider: 'moonshot',
+        kimiSubscription: true,
+        baseUrl: KIMI_CODE_BASE_URL,
+      },
+    );
+    requestRetry.mockResolvedValueOnce({ action: 'retry' });
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
+
+      await withRetryRunContext(streamId, session, () =>
+        node.promptFor(new Error('temporary provider failure')),
+      );
+
+      expect(requestRetry).toHaveBeenCalledWith(
+        expect.objectContaining({ kimiCodeRoutedOnFailure: true }),
+        expect.anything(),
+      );
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('marks a non-Kimi-Code kimi3 failed handler as not routed', async () => {
+    const streamId = 'retry-state-kimi3-open-platform' as StreamTabId;
+    const { node, session, streamStatus, requestRetry } = createRetryNode(
+      streamId,
+      undefined,
+      undefined,
+      undefined,
+      { provider: 'moonshot', kimiSubscription: true },
+    );
+    requestRetry.mockResolvedValueOnce({ action: 'retry' });
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
+
+      await withRetryRunContext(streamId, session, () =>
+        node.promptFor(new Error('temporary provider failure')),
+      );
+
+      expect(requestRetry).toHaveBeenCalledWith(
+        expect.objectContaining({ kimiCodeRoutedOnFailure: false }),
+        expect.anything(),
       );
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);

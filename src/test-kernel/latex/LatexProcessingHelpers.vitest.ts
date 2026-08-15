@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   LatexMediaManager,
+  type LatexTrace,
   type MediaWorkspaceState,
 } from '@latex/LatexMediaManager';
 import { DiffFileProcessor } from '@latex/latexdiff/diffFileProcessor';
@@ -56,7 +57,7 @@ const compilePdfConfig: ToolConfig = {
   autoCompileInputPdf: true,
 };
 
-const logger = spiedTrace();
+const logger: LatexTrace = spiedTrace();
 
 const tempDirs: string[] = [];
 

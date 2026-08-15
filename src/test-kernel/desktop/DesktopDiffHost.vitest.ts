@@ -3,6 +3,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 // Third-party imports
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -17,7 +18,41 @@ import { loadSourceModule } from './loadSourceModule.ts';
 // Vitest's module runner.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const original = await importOriginal<typeof import('node:fs/promises')>();
-  return { ...original, rm: vi.fn(original.rm) };
+  return {
+    ...original,
+    readFile: vi.fn(original.readFile),
+    rm: vi.fn(original.rm),
+  };
+});
+
+// Route `node:timers/promises` through the global timer functions so
+// `vi.useFakeTimers()` can drive the source module's timeout bound without a
+// real multi-second wait.
+vi.mock('node:timers/promises', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('node:timers/promises')>();
+  return {
+    ...original,
+    setTimeout: vi.fn(
+      (_delay: number, _value?: unknown, options?: { signal?: AbortSignal }) =>
+        new Promise<void>((resolve, reject) => {
+          const signal = options?.signal;
+          if (signal?.aborted) {
+            reject(signal.reason ?? new Error('Aborted'));
+            return;
+          }
+          const timer = setTimeout(() => resolve(), _delay);
+          signal?.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timer);
+              reject(signal.reason ?? new Error('Aborted'));
+            },
+            { once: true },
+          );
+        }),
+    ),
+  } as typeof import('node:timers/promises');
 });
 
 type DesktopDiffHostModule = typeof import('@desktop/main/desktopDiffHost');
@@ -93,11 +128,13 @@ function listDiffTempDirs(): string[] {
 }
 
 describe('createDesktopDiffHost', () => {
+  // `loadSourceModule` pulls the full desktop main graph through the module
+  // runner; keep the hook timeout generous for cold combined test runs.
   beforeAll(async () => {
     ({ createDesktopDiffHost } = await loadSourceModule(
       '@desktop/main/desktopDiffHost',
     ));
-  });
+  }, 60_000);
 
   it('falls back to a generated patch file when no renderer is wired', async () => {
     const { host, openedPaths } = createHost();
@@ -266,11 +303,126 @@ describe('createDesktopDiffHost', () => {
     expect(listDiffTempDirs()).toEqual(diffDirsBefore);
   });
 
-  it('settles every removal before dispose rejects when one rm fails', async () => {
+  it('rechecks the drain before snapshotting a late fallback registration', async () => {
+    // A fallback registered after `dispose()` starts but before the record
+    // snapshot must still be awaited: the drain rechecks after yielding, so the
+    // quit lifecycle cannot resolve before the `disposed` branch cleans up.
+    const { host, openPath } = createHost();
+    const [original, proposed] = await prepareDiffPair();
+    const diffDirsBefore = listDiffTempDirs();
+
+    let markReadStarted!: () => void;
+    const readStarted = new Promise<void>((resolve) => {
+      markReadStarted = resolve;
+    });
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    vi.mocked(readFile).mockImplementationOnce(async () => {
+      markReadStarted();
+      await readGate;
+      return 'a\n';
+    });
+
+    const disposePromise = host.dispose();
+    const openPromise = host.openDiff(original, proposed, 'Compare');
+
+    await readStarted;
+    let disposeSettled = false;
+    void disposePromise.then(() => {
+      disposeSettled = true;
+    });
+    await Promise.resolve();
+    expect(disposeSettled).toBe(false);
+
+    releaseRead();
+    await expect(openPromise).rejects.toThrow(
+      'Desktop window closed before the diff could be opened.',
+    );
+    await disposePromise;
+    expect(disposeSettled).toBe(true);
+    expect(openPath).not.toHaveBeenCalled();
+    expect(listDiffTempDirs()).toEqual(diffDirsBefore);
+  });
+
+  it('keeps a disposed-branch removal failure tracked for the removal phase', async () => {
+    // When the fallback still belongs to the disposal drain, a transient
+    // EBUSY/EPERM on its self-cleanup must leave the directory tracked so the
+    // removal phase retries it instead of dropping it after one warning.
+    const consoleSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    try {
+      const { host, openPath } = createHost();
+      const [original, proposed] = await prepareDiffPair();
+      const diffDirsBefore = listDiffTempDirs();
+
+      let markReadStarted!: () => void;
+      const readStarted = new Promise<void>((resolve) => {
+        markReadStarted = resolve;
+      });
+      let releaseRead!: () => void;
+      const readGate = new Promise<void>((resolve) => {
+        releaseRead = resolve;
+      });
+      vi.mocked(readFile).mockImplementationOnce(async () => {
+        markReadStarted();
+        await readGate;
+        return 'a\n';
+      });
+
+      const openPromise = host.openDiff(original, proposed, 'Compare');
+      await readStarted;
+
+      const disposePromise = host.dispose();
+      let removalTarget: string | undefined;
+      vi.mocked(rm).mockImplementationOnce(async (target) => {
+        removalTarget = String(target);
+        throw new Error('simulated EBUSY removal failure');
+      });
+
+      releaseRead();
+
+      await expect(openPromise).rejects.toThrow(
+        'Desktop window closed before the diff could be opened.',
+      );
+      await disposePromise;
+
+      const targetCalls = vi
+        .mocked(rm)
+        .mock.calls.filter(([target]) => String(target) === removalTarget);
+      expect(targetCalls).toHaveLength(2);
+      expect(existsSync(removalTarget!)).toBe(false);
+      expect(openPath).not.toHaveBeenCalled();
+      expect(listDiffTempDirs()).toEqual(diffDirsBefore);
+      expect(consoleSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      consoleSpy.mockRestore();
+    }
+  });
+
+  it('retries a failed removal once during dispose', async () => {
+    // A transient OS-level failure during dispose() must be retried, not just
+    // logged: the record set has already been cleared, so a single failed
+    // attempt would otherwise leak the directory permanently.
+    const { host, openedPaths } = createHost();
+
+    await openDiffPair(host, 'Compare');
+    const diffDir = path.dirname(openedPaths[0]);
+
+    vi.mocked(rm).mockRejectedValueOnce(new Error('simulated removal failure'));
+
+    await host.dispose();
+
+    expect(existsSync(diffDir)).toBe(false);
+  });
+
+  it('settles every removal before dispose rejects when a removal keeps failing', async () => {
     // `Promise.all` would reject at the first failed `rm` while its siblings
     // are still running; the quit drain could then proceed to `app.quit()`
-    // before those siblings finish. `dispose()` must settle all of them and
-    // only then surface the failure.
+    // before those siblings finish. `dispose()` must settle all of them, retry
+    // the failure once, and only then surface the failure.
     const { host, openedPaths } = createHost();
 
     await openDiffPair(host, 'Compare 1', ['a.tex', 'b.tex']);
@@ -279,17 +431,37 @@ describe('createDesktopDiffHost', () => {
       path.dirname(openedPath),
     );
     // Record both so afterEach removes whichever directory dispose() leaves
-    // behind after the one-shot removal failure below.
+    // behind after the removal failure below.
     tempDirs.push(firstDir, secondDir);
 
-    vi.mocked(rm).mockRejectedValueOnce(new Error('simulated removal failure'));
+    const actualFs =
+      await vi.importActual<typeof import('node:fs/promises')>(
+        'node:fs/promises',
+      );
+    let firstDirAttempts = 0;
+    vi.mocked(rm).mockImplementation(async (target, options) => {
+      if (String(target) === firstDir) {
+        firstDirAttempts += 1;
+        throw new Error('simulated removal failure');
+      }
+      await actualFs.rm(
+        target as string,
+        options as Parameters<typeof actualFs.rm>[1],
+      );
+    });
 
-    await expect(host.dispose()).rejects.toBeInstanceOf(AggregateError);
+    try {
+      await expect(host.dispose()).rejects.toBeInstanceOf(AggregateError);
 
-    // The failed removal leaves its directory behind (afterEach cleans it
-    // up), but the sibling removal has already settled before dispose() threw.
-    expect(existsSync(firstDir)).toBe(true);
-    expect(existsSync(secondDir)).toBe(false);
+      // The failed removal leaves its directory behind (afterEach cleans it
+      // up), but the sibling removal has already settled before dispose()
+      // threw, and the failed directory got exactly one immediate retry.
+      expect(firstDirAttempts).toBe(2);
+      expect(existsSync(firstDir)).toBe(true);
+      expect(existsSync(secondDir)).toBe(false);
+    } finally {
+      vi.mocked(rm).mockImplementation(actualFs.rm);
+    }
   });
 
   it('keeps dispose pending until an in-flight fallback removes its post-disposal directory', async () => {
@@ -330,7 +502,7 @@ describe('createDesktopDiffHost', () => {
     void disposePromise.then(() => {
       disposeSettled = true;
     });
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await sleep(25);
     expect(disposeSettled).toBe(false);
 
     releaseRemoval();
@@ -379,7 +551,7 @@ describe('createDesktopDiffHost', () => {
     // Give dispose() time to snapshot the still-recorded directory and request
     // its removal. The per-path memo must return the gated removal above
     // instead of issuing a second `rm`.
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await sleep(25);
     const targetCalls = vi
       .mocked(rm)
       .mock.calls.filter(([target]) => String(target) === removalTarget);
@@ -390,5 +562,100 @@ describe('createDesktopDiffHost', () => {
     await disposePromise;
 
     expect(existsSync(removalTarget!)).toBe(false);
+  });
+
+  it('retries a shared in-flight error-path removal when it fails during dispose', async () => {
+    // The error-path removal and dispose() share one per-path promise. When
+    // the window closes while that shared removal is still in flight and the
+    // shared `rm` rejects, dispose() must retry it after the memo clears;
+    // otherwise the directory leaves the record set on the failed attempt and
+    // leaks.
+    const consoleSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    try {
+      const { host, openPath } = createHost();
+      openPath.mockRejectedValue(new Error('editor unavailable'));
+
+      let releaseRemoval!: () => void;
+      const removalGate = new Promise<void>((resolve) => {
+        releaseRemoval = resolve;
+      });
+      let removalTarget: string | undefined;
+      vi.mocked(rm).mockImplementationOnce(async (target) => {
+        removalTarget = String(target);
+        await removalGate;
+        throw new Error('simulated removal failure');
+      });
+
+      const openPromise = openDiffPair(host, 'Compare');
+      await vi.waitFor(() => {
+        expect(removalTarget).toBeDefined();
+      });
+
+      const disposePromise = host.dispose();
+      releaseRemoval();
+
+      await expect(openPromise).rejects.toThrow('editor unavailable');
+      await disposePromise;
+
+      const targetCalls = vi
+        .mocked(rm)
+        .mock.calls.filter(([target]) => String(target) === removalTarget);
+      expect(targetCalls).toHaveLength(2);
+      expect(existsSync(removalTarget!)).toBe(false);
+    } finally {
+      consoleSpy.mockRestore();
+    }
+  });
+
+  it('bounds the dispose wait for in-flight fallback setup', async () => {
+    // Mirrors the file-local timeout in `desktopDiffHost.ts` so the fake
+    // timers advance to the exact bound without publishing that detail.
+    const diffHostFallbackSetupTimeoutMs = 5_000;
+    vi.useFakeTimers();
+    try {
+      const { host, openPath } = createHost();
+      const [original, proposed] = await prepareDiffPair();
+
+      let markReadStarted!: () => void;
+      const readStarted = new Promise<void>((resolve) => {
+        markReadStarted = resolve;
+      });
+      let releaseRead!: () => void;
+      const readGate = new Promise<void>((resolve) => {
+        releaseRead = resolve;
+      });
+      vi.mocked(readFile).mockImplementationOnce(async () => {
+        markReadStarted();
+        await readGate;
+        return 'a\n';
+      });
+
+      const openPromise = host.openDiff(original, proposed, 'Compare');
+      await readStarted;
+
+      const disposePromise = host.dispose();
+      let disposeSettled = false;
+      void disposePromise.then(() => {
+        disposeSettled = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(diffHostFallbackSetupTimeoutMs - 1);
+      expect(disposeSettled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await disposePromise;
+      expect(disposeSettled).toBe(true);
+
+      // The hung setup is abandoned after the bound. Once it resumes, the
+      // `disposed` branch still removes its own temp directory.
+      releaseRead();
+      await expect(openPromise).rejects.toThrow(
+        'Desktop window closed before the diff could be opened.',
+      );
+      expect(openPath).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

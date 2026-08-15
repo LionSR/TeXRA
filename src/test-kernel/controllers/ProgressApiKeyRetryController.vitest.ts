@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import pDefer from 'p-defer';
+import { describe, expect, it, vi } from 'vitest';
 
-import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
+import {
+  ProgressApiKeyRetryController,
+  type ProgressApiKeyRetryControllerDeps,
+} from '@controllers/progressView/ProgressApiKeyRetryController';
 import type { ApiProvider } from '@model/apiProviders';
 import { prefersCopilotRoute } from '@model/copilotRouting';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -31,8 +35,11 @@ interface HarnessOptions {
   keys?: Partial<Record<ApiProvider, string | undefined>>;
   prompt?(keys: Map<ApiProvider, string | undefined>): void;
   glmCodingPlan?: boolean;
+  kimiCode?: boolean;
   retryAvailable?: boolean;
   retryPending?: boolean;
+  triggerRetry?: ProgressApiKeyRetryControllerDeps['triggerRetry'];
+  isRetryPending?: ProgressApiKeyRetryControllerDeps['isRetryPending'];
 }
 
 function createHarness(options: HarnessOptions = {}): {
@@ -42,6 +49,7 @@ function createHarness(options: HarnessOptions = {}): {
   includedAccessValues: boolean[];
   chatGptSubscriptionValues: boolean[];
   glmCodingPlanValues: boolean[];
+  kimiCodeValues: boolean[];
   invalidations: number;
   retries: string[];
 } {
@@ -54,8 +62,10 @@ function createHarness(options: HarnessOptions = {}): {
   const includedAccessValues: boolean[] = [];
   const chatGptSubscriptionValues: boolean[] = [];
   const glmCodingPlanValues: boolean[] = [];
+  const kimiCodeValues: boolean[] = [];
   let preferChatGptSubscription = true;
   let glmCodingPlan = options.glmCodingPlan ?? true;
+  let kimiCode = options.kimiCode ?? true;
   let invalidations = 0;
   const retries: string[] = [];
 
@@ -65,6 +75,7 @@ function createHarness(options: HarnessOptions = {}): {
     includedAccessValues,
     chatGptSubscriptionValues,
     glmCodingPlanValues,
+    kimiCodeValues,
     get invalidations() {
       return invalidations;
     },
@@ -96,15 +107,26 @@ function createHarness(options: HarnessOptions = {}): {
             glmCodingPlanValues.push(enabled);
           },
         },
+        {
+          exhaustionReason: 'kimi-code-subscription',
+          getEnabled: () => kimiCode,
+          setEnabled: async (enabled) => {
+            kimiCode = enabled;
+            kimiCodeValues.push(enabled);
+          },
+        },
       ],
       invalidateModelOptionsCache: () => {
         invalidations += 1;
       },
-      isRetryPending: () => options.retryPending ?? true,
-      triggerRetry: (stream) => {
-        retries.push(stream);
-        return options.retryAvailable ?? true;
-      },
+      isRetryPending:
+        options.isRetryPending ?? (() => options.retryPending ?? true),
+      triggerRetry:
+        options.triggerRetry ??
+        ((stream) => {
+          retries.push(stream);
+          return options.retryAvailable ?? true;
+        }),
     }),
   };
 }
@@ -387,7 +409,12 @@ describe('ProgressApiKeyRetryController', () => {
     expect(harness.includedAccessValues).toStrictEqual([]);
 
     const started = await harness.controller.runCopilotFallbackWithRouting(
-      { provider: 'anthropic', exhaustionReason: 'copilot-subscription' },
+      {
+        stream: 'stream-a',
+        requestId: 'retry-a',
+        provider: 'anthropic',
+        exhaustionReason: 'copilot-subscription',
+      },
       async () => true,
     );
 
@@ -404,7 +431,11 @@ describe('ProgressApiKeyRetryController', () => {
     const harness = createHarness();
 
     const started = await harness.controller.runCopilotFallbackWithRouting(
-      { exhaustionReason: 'copilot-subscription' },
+      {
+        stream: 'stream-a',
+        requestId: 'retry-a',
+        exhaustionReason: 'copilot-subscription',
+      },
       async () => false,
     );
 
@@ -418,6 +449,8 @@ describe('ProgressApiKeyRetryController', () => {
 
     const started = await harness.controller.runCopilotFallbackWithRouting(
       {
+        stream: 'stream-a',
+        requestId: 'retry-a',
         exhaustionReason: 'copilot-subscription',
         chatGptSubscriptionEligible: true,
       },
@@ -435,6 +468,8 @@ describe('ProgressApiKeyRetryController', () => {
 
     const started = await harness.controller.runCopilotFallbackWithRouting(
       {
+        stream: 'stream-a',
+        requestId: 'retry-a',
         exhaustionReason: 'copilot-subscription',
         chatGptSubscriptionEligible: true,
       },
@@ -451,7 +486,11 @@ describe('ProgressApiKeyRetryController', () => {
     const harness = createHarness();
 
     const started = await harness.controller.runCopilotFallbackWithRouting(
-      { exhaustionReason: 'copilot-subscription' },
+      {
+        stream: 'stream-a',
+        requestId: 'retry-a',
+        exhaustionReason: 'copilot-subscription',
+      },
       async () => true,
     );
 
@@ -476,7 +515,12 @@ describe('ProgressApiKeyRetryController', () => {
 
     expect(prefersCopilotRoute('sonnet46')).toBe(true);
     const started = await harness.controller.runCopilotFallbackWithRouting(
-      { model: 'sonnet46', exhaustionReason: 'copilot-subscription' },
+      {
+        stream: 'stream-a',
+        requestId: 'retry-a',
+        model: 'sonnet46',
+        exhaustionReason: 'copilot-subscription',
+      },
       async (copilotRouteOverride) => {
         expect(copilotRouteOverride).toBe('direct');
         // A concurrent launch still sees the user's standing preference; only
@@ -491,5 +535,264 @@ describe('ProgressApiKeyRetryController', () => {
     // preference is never written, so a crash mid-launch cannot drop it.
     expect(persistedWrites).toEqual([]);
     expect(prefersCopilotRoute('sonnet46')).toBe(true);
+  });
+
+  it('serializes routing rollback across concurrent stream retries', async () => {
+    const firstTrigger = pDefer<boolean>();
+    let retryBPendingCheck = false;
+    const triggerOrder: string[] = [];
+    const harness = createHarness({
+      keys: { openai: 'stored-openai' },
+      isRetryPending: (_stream, requestId) => {
+        if (requestId === 'retry-b') retryBPendingCheck = true;
+        return true;
+      },
+      triggerRetry: (stream) => {
+        triggerOrder.push(stream);
+        return stream === 'stream-a' ? firstTrigger.promise : true;
+      },
+    });
+
+    const first = harness.controller.useOwnApiKey({
+      stream: 'stream-a',
+      requestId: 'retry-a',
+      provider: 'openai',
+      exhaustionReason: 'chatgpt-subscription',
+    });
+    await vi.waitFor(() =>
+      expect(harness.includedAccessValues).toStrictEqual([false]),
+    );
+    const second = harness.controller.useOwnApiKey({
+      stream: 'stream-b',
+      requestId: 'retry-b',
+      provider: 'openai',
+      exhaustionReason: 'chatgpt-subscription',
+    });
+    await vi.waitFor(() => expect(retryBPendingCheck).toBe(true));
+
+    // Retry B is queued behind retry A; its routing transaction must not start
+    // while A's trigger is still pending.
+    expect(harness.chatGptSubscriptionValues).toStrictEqual([false]);
+    expect(triggerOrder).toStrictEqual(['stream-a']);
+
+    firstTrigger.resolve(false);
+    await expect(first).resolves.toStrictEqual(IDLE_RESULT);
+    await expect(second).resolves.toStrictEqual({
+      proceeded: true,
+      retried: true,
+      disabledIncludedModelAccess: true,
+      disabledChatGptSubscription: true,
+      disabledCodingPlans: [],
+    });
+    expect(harness.includedAccessValues).toStrictEqual([false, true, false]);
+    expect(harness.chatGptSubscriptionValues).toStrictEqual([
+      false,
+      true,
+      false,
+    ]);
+    expect(triggerOrder).toStrictEqual(['stream-a', 'stream-b']);
+  });
+
+  it('refuses the API-key switch for a Kimi Code-exclusive model', async () => {
+    const harness = createHarness({ keys: { openai: 'stored-openai' } });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-kimi-exclusive',
+      requestId: 'retry-kimi-exclusive',
+      model: 'kimiCoding',
+      exhaustionReason: 'kimi-code-subscription',
+    });
+
+    expect(result).toStrictEqual(IDLE_RESULT);
+    expect(harness.prompts).toStrictEqual([]);
+    expect(harness.includedAccessValues).toStrictEqual([]);
+    expect(harness.retries).toStrictEqual([]);
+  });
+
+  it('rechecks retry identity after the routing queue admits the request', async () => {
+    let pendingChecks = 0;
+    const harness = createHarness({
+      keys: { openai: 'stored-openai' },
+      isRetryPending: () => {
+        pendingChecks += 1;
+        // The pre-queue check passes; the request is dismissed before the
+        // serialized callback starts, so the in-queue recheck must fail.
+        return pendingChecks === 1;
+      },
+    });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-stale-queue',
+      requestId: 'retry-stale-queue',
+      provider: 'openai',
+      exhaustionReason: 'chatgpt-subscription',
+    });
+
+    expect(result).toStrictEqual(IDLE_RESULT);
+    expect(harness.includedAccessValues).toStrictEqual([]);
+    expect(harness.chatGptSubscriptionValues).toStrictEqual([]);
+    expect(harness.retries).toStrictEqual([]);
+    expect(pendingChecks).toBe(2);
+  });
+
+  it('prompts for the kimiCode credential when an exclusive model rebinds on credit depletion', async () => {
+    const harness = createHarness({
+      keys: { kimiCode: 'old-kimi', moonshot: 'old-moonshot' },
+      prompt: (keys) => {
+        keys.set('kimiCode', 'new-kimi');
+      },
+      kimiCode: true,
+    });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-kimi-credit',
+      requestId: 'retry-kimi-credit',
+      model: 'kimiCoding',
+      provider: 'moonshot',
+      exhaustionReason: 'upstream-credit',
+      kimiCodeRoutedOnFailure: true,
+    });
+
+    expect(result).toStrictEqual({
+      proceeded: true,
+      retried: true,
+      disabledIncludedModelAccess: false,
+      disabledChatGptSubscription: false,
+      disabledCodingPlans: [],
+    });
+    // The SDK error identifies the open-platform Moonshot provider, but the
+    // exclusive handler rebinds with `kimiCode`; the prompt and key check must
+    // target the same credential or the retry repeats the same failure.
+    expect(harness.prompts).toStrictEqual(['kimiCode']);
+    expect(harness.keys.get('kimiCode')).toBe('new-kimi');
+    expect(harness.keys.get('moonshot')).toBe('old-moonshot');
+    expect(harness.kimiCodeValues).toStrictEqual([]);
+    expect(harness.retries).toStrictEqual(['stream-kimi-credit']);
+  });
+
+  it('disables the Kimi Code preference for a dual-backend Kimi credit retry even when live routing would say not coding', async () => {
+    const harness = createHarness({
+      keys: { moonshot: 'old-moonshot', kimiCode: 'old-kimi' },
+      prompt: (keys) => {
+        keys.set('moonshot', 'new-moonshot');
+      },
+      kimiCode: true,
+    });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-kimi-dual',
+      requestId: 'retry-kimi-dual',
+      model: 'kimi3',
+      provider: 'moonshot',
+      exhaustionReason: 'upstream-credit',
+      kimiCodeRoutedOnFailure: true,
+    });
+
+    expect(result).toStrictEqual({
+      proceeded: true,
+      retried: true,
+      disabledIncludedModelAccess: false,
+      disabledChatGptSubscription: false,
+      disabledCodingPlans: ['kimi-code-subscription'],
+    });
+    // The forwarded SDK provider is `moonshot`, so that is the credential the
+    // panel asks to replace; the routing step then turns off "Prefer Kimi
+    // Code" so the rebuilt handler actually uses the new Moonshot key. The
+    // controller does not consult the live route resolver here: the failed
+    // handler was dispatched under `ModelHandlerKimi`, and the rebuild pins
+    // that key, so a later OpenRouter preference change must not keep the
+    // exhausted coding route selected.
+    expect(harness.prompts).toStrictEqual(['moonshot']);
+    expect(harness.keys.get('moonshot')).toBe('new-moonshot');
+    expect(harness.keys.get('kimiCode')).toBe('old-kimi');
+    expect(harness.kimiCodeValues).toStrictEqual([false]);
+    expect(harness.invalidations).toBe(1);
+    expect(harness.retries).toStrictEqual(['stream-kimi-dual']);
+  });
+
+  it('leaves the Kimi Code preference untouched for a non-Kimi-Code kimi3 credit retry', async () => {
+    const harness = createHarness({
+      keys: { moonshot: 'old-moonshot', kimiCode: 'old-kimi' },
+      prompt: (keys) => {
+        keys.set('moonshot', 'new-moonshot');
+      },
+      kimiCode: true,
+    });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-kimi-moonshot',
+      requestId: 'retry-kimi-moonshot',
+      model: 'kimi3',
+      provider: 'moonshot',
+      exhaustionReason: 'upstream-credit',
+      kimiCodeRoutedOnFailure: false,
+    });
+
+    expect(result).toStrictEqual({
+      proceeded: true,
+      retried: true,
+      disabledIncludedModelAccess: false,
+      disabledChatGptSubscription: false,
+      disabledCodingPlans: [],
+    });
+    // A canonical `kimi3` can also fail through OpenRouter, Moonshot, or the
+    // relay. Those failed handlers were not dispatched onto the Kimi Code
+    // endpoint, so the retry must not turn off the user's coding preference.
+    expect(harness.prompts).toStrictEqual(['moonshot']);
+    expect(harness.keys.get('moonshot')).toBe('new-moonshot');
+    expect(harness.keys.get('kimiCode')).toBe('old-kimi');
+    expect(harness.kimiCodeValues).toStrictEqual([]);
+    expect(harness.invalidations).toBe(0);
+    expect(harness.retries).toStrictEqual(['stream-kimi-moonshot']);
+  });
+
+  it('rechecks Copilot fallback retry identity after the routing queue admits it', async () => {
+    const firstStart = pDefer<boolean>();
+    let stalePending = true;
+    const startCalls: string[] = [];
+    const harness = createHarness({
+      isRetryPending: (_stream, requestId) =>
+        requestId === 'retry-stale' ? stalePending : true,
+    });
+
+    const holder = harness.controller.runCopilotFallbackWithRouting(
+      {
+        stream: 'stream-holder',
+        requestId: 'retry-holder',
+        exhaustionReason: 'copilot-subscription',
+      },
+      async () => {
+        startCalls.push('holder');
+        return firstStart.promise;
+      },
+    );
+    await vi.waitFor(() =>
+      expect(harness.includedAccessValues).toStrictEqual([false]),
+    );
+    await vi.waitFor(() => expect(startCalls).toStrictEqual(['holder']));
+
+    const stale = harness.controller.runCopilotFallbackWithRouting(
+      {
+        stream: 'stream-stale',
+        requestId: 'retry-stale',
+        exhaustionReason: 'copilot-subscription',
+      },
+      async () => {
+        startCalls.push('stale');
+        return true;
+      },
+    );
+
+    // The stale request is queued behind the holder; dismissing it before the
+    // queue admits it must make the in-queue recheck fail and prevent any
+    // routing write or launch from the stale request.
+    stalePending = false;
+    firstStart.resolve(true);
+
+    await expect(holder).resolves.toBe(true);
+    await expect(stale).resolves.toBe(false);
+    expect(startCalls).toStrictEqual(['holder']);
+    expect(harness.includedAccessValues).toStrictEqual([false]);
+    expect(harness.invalidations).toBe(1);
   });
 });

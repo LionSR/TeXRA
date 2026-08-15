@@ -7,13 +7,13 @@ import {
   internalValidationModelHandlerEnvName,
   shouldUseInternalValidationModelHandler,
 } from '@agent/runtime/internalValidationOverride';
-import type { ResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
 import {
   CodexAuthError,
   formatCodexAuthUnavailableMessage,
   isCodexSessionRoutable,
 } from '@auth/codex';
 import { AgentError } from '@common/errors';
+import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import {
   copilotRouteUnavailableReason,
@@ -22,11 +22,8 @@ import {
 } from '@model/copilotRouting';
 import { resolveCodexSubscriptionCapabilities } from '@model/providerCapabilities';
 import {
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
   kimiCodeEffectiveConfig,
   resolveKimiCodeRoutingFacts,
-  type KimiSubscriptionModelFields,
 } from '@model/kimiCodeSubscriptionRouting';
 import { isGpt5ModelName } from '@model/modelNames';
 import {
@@ -44,6 +41,11 @@ import {
 } from '@platform/languageModel';
 import { platform } from '@platform/platform';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
+import {
+  isKimiCodeExclusiveModel,
+  isKimiSubscriptionEligible,
+  type KimiSubscriptionModelFields,
+} from '@shared/model/kimiCodeRetryGate';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { getUseOpenRouter } from '@utils/config/providerConfig';

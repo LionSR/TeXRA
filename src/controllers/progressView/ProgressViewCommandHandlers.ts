@@ -460,9 +460,11 @@ export function createProgressViewSecondTierHandlers(
       const result = await deps.apiKeyRetry.useOwnApiKey({
         stream: data.stream,
         requestId: data.requestId,
+        model: data.model,
         provider: providerArg,
         exhaustionReason: data.exhaustionReason,
         viaRelay: data.viaRelay,
+        kimiCodeRoutedOnFailure: data.kimiCodeRoutedOnFailure,
       });
       if (result.proceeded && !result.retried) {
         await deps.host.showInfo(

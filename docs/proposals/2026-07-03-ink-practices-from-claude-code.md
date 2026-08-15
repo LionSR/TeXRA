@@ -336,8 +336,9 @@ one ~60fps frame and the microtask defer ensures layout effects commit first (cu
 a keystroke).
 Evidence: `ink/ink.tsx:203-216,237-238`, `ink/constants.ts:1-2`, `ink/reconciler.ts:303-315`.
 **TeXRA:** Inherited from Ink's scheduler; TeXRA additionally avoids unnecessary ticks
-(`useLiveNowMs.ts:1-14` ticks 1s only when needed; `appendStaticTranscriptItems` returns the
-same array ref when nothing appended — `StaticConversationTranscript.tsx:220-222`). TeXRA's
+(`useLiveNowMs.ts:1-14` ticks 1s only when needed; `buildStaticTranscriptItems` /
+`advanceStaticTranscriptState` keep the retained items stable when nothing appended —
+`StaticConversationTranscript.tsx`). TeXRA's
 instinct here is correct.
 
 **Peephole-optimize the patch stream before writing (merge cursor moves, dedupe hyperlinks, cancel hide/show).**

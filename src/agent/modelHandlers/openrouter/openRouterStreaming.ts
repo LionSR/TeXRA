@@ -1,6 +1,6 @@
 // Local file imports
 import { ChannelStreamAggregator } from '../utils/channelStreamAggregator';
-import { extractTextFromReasoningDetails } from '../utils/openRouterReasoning';
+import { extractTextFromReasoningDetails } from './openRouterReasoning';
 import type {
   ChatAssistantMessage,
   ChatFinishReasonEnum,

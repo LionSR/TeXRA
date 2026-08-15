@@ -11,6 +11,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { setTimeout } from 'node:timers/promises';
 
 import { render } from 'ink';
 import { nanoid } from 'nanoid';
@@ -21,6 +22,7 @@ import {
   getVisibleAgents,
   loadAgents,
 } from '@agent/index';
+import { agentResponseTextConnector } from '@agent/runtime';
 import type { RetryResult } from '@agent/runtime/HostInteractions';
 import {
   defaultSession,
@@ -29,7 +31,7 @@ import {
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
-import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { platform, tryPlatform } from '@platform/platform';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
@@ -444,7 +446,9 @@ if (HARNESS_MEMORY_FILES.length > 0) {
 }
 const harnessRuntimeSession = initializeDefaultSession({
   transcripts: await StreamLogStore.open(),
-  responseTextProcessing: texraResponseTextProcessing,
+  responseTextProcessing: createTexraResponseTextProcessing(
+    agentResponseTextConnector,
+  ),
 });
 harnessRuntimeSession.setApprovalPolicy(HARNESS_INITIAL_APPROVAL_POLICY);
 const harnessFollowUpLease = defaultSession().followUps.claimLive(
@@ -1923,7 +1927,7 @@ if (SHOW_EDIT_APPROVAL) {
     );
 
   if (EDIT_APPROVAL_DELAY_MS > 0) {
-    setTimeout(showApproval, EDIT_APPROVAL_DELAY_MS);
+    globalThis.setTimeout(showApproval, EDIT_APPROVAL_DELAY_MS);
   } else {
     showApproval();
   }
@@ -2473,12 +2477,17 @@ if (SHOW_TERMINAL_RESUME_REPAINT) {
     // Let the first static-transcript commit flush, then exercise the same
     // SIGCONT repair path the real session-exit controller uses. The epoch
     // remounts <Static> and repaints with replace semantics.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await setTimeout(0);
     await ink.waitUntilRenderFlush();
     viewportController.repaintAfterTerminalResume();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await setTimeout(0);
     await ink.waitUntilRenderFlush();
-  })();
+  })().catch((error) => {
+    process.stderr.write(
+      `[tui-harness] HARNESS_TERMINAL_RESUME_REPAINT failed: ${toErrorMessage(error)}\n`,
+    );
+    void exitHarness(1);
+  });
 }
 
 if (CHILD_EVENT_ORDER || SHOW_WORKFLOW_TIMELINE || SHOW_WORKFLOW_RUNNING) {

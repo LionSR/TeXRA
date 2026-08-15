@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { ServerToolContentBlock } from '@agent/types/ServerTools';
 import {
   FileLocationSchema,
-  FlattenedEditRecordSchema,
+  LineCountSchema,
   PlanSchema,
   planSummaryLine,
   TodoItemSchema,
@@ -38,10 +38,17 @@ const ResponseAssemblyStateSchema = z.object({
 
 type ResponseAssemblyState = z.output<typeof ResponseAssemblyStateSchema>;
 
+/** File-local snapshot schema for flattened file-edit records. */
+const FileEditSnapshotSchema = z.object({
+  path: z.string(),
+  added: LineCountSchema.prefault(0),
+  removed: LineCountSchema.prefault(0),
+});
+
 /** Internal schema for file interaction state snapshot. */
 const FileInteractionStateSnapshotSchema = z.object({
   readFiles: z.array(z.string()).prefault([]),
-  edits: z.array(FlattenedEditRecordSchema).prefault([]),
+  edits: z.array(FileEditSnapshotSchema).prefault([]),
   toolCallCount: z.int().nonnegative().prefault(0),
 });
 

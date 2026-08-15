@@ -40,7 +40,6 @@ import {
   classifyCliRetryAction,
   cliRetryApiSwitchDecision,
   isCliApiSwitchableRetry,
-  isKimiCodeExclusiveRetryModel,
 } from '@cli/runtime/approval/approvalPrompts';
 import {
   denyExternalInquiryIfNoHumanInput,

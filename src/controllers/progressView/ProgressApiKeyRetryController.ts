@@ -1,8 +1,17 @@
+import PQueue from 'p-queue';
+import { MODEL_CONFIGS } from 'llm-zoo';
+
 // Local imports
 import type { ApiProvider } from '@model/apiProviders';
 import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
+import { resolveDirectModelApiKeyProvider } from '@model/openRouterRouting';
 import type { ExhaustionReason, StreamTabId } from '@shared/schemas';
+import {
+  isKimiCodeExclusiveModel,
+  isKimiCodeSubscriptionRetryBlocked,
+  isKimiSubscriptionEligible,
+} from '@shared/model/kimiCodeRetryGate';
 import { isNonEmptyString } from '@utils/core';
 
 export interface ProgressApiKeyRetryRequest {
@@ -12,6 +21,10 @@ export interface ProgressApiKeyRetryRequest {
   /** Canonical base model the fallback run will launch with, when known. */
   model?: string;
   exhaustionReason?: ExhaustionReason;
+  /** True when the failed handler's effective config was pinned to the Kimi
+   * Code coding endpoint, captured from the persisted handler before the
+   * retry panel opened. */
+  kimiCodeRoutedOnFailure?: boolean;
   chatGptSubscriptionEligible?: boolean;
   viaRelay?: boolean;
 }
@@ -85,7 +98,41 @@ export interface ProgressApiKeyRetryControllerDeps {
  * the credential/retry rules testable without depending on VS Code APIs.
  */
 export class ProgressApiKeyRetryController {
+  private readonly routingCommitQueue = new PQueue({ concurrency: 1 });
+
   constructor(private readonly deps: ProgressApiKeyRetryControllerDeps) {}
+
+  private credentialProviderFor(
+    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
+  ): ApiProvider | undefined {
+    if (request.model === undefined) return request.provider;
+    const config = MODEL_CONFIGS[request.model];
+    if (config === undefined) return request.provider;
+    // The live handler rebinds through the direct-route resolver. Exclusive
+    // models bind to the `kimiCode` credential even when the SDK error labels
+    // the open-platform Moonshot provider, so prompt for and verify the key
+    // the retry will actually use; every other model keeps the forwarded
+    // provider (or the default provider sweep) unchanged.
+    return isKimiCodeExclusiveModel(config)
+      ? resolveDirectModelApiKeyProvider(config)
+      : request.provider;
+  }
+
+  /**
+   * Whether `model` is a dual-backend Kimi model (`kimi3`): eligible for the
+   * Kimi Code coding endpoint but also served by the Moonshot open platform.
+   * Exclusive coding-only aliases pin their `baseUrl`, so they must be kept
+   * out of this branch.
+   */
+  private isDualBackendKimiCodeModel(model: string | undefined): boolean {
+    if (model === undefined) return false;
+    const config = MODEL_CONFIGS[model];
+    return (
+      config !== undefined &&
+      isKimiSubscriptionEligible(config) &&
+      !isKimiCodeExclusiveModel(config)
+    );
+  }
 
   private get codingPlanToggles(): readonly CodingPlanToggle[] {
     return (
@@ -102,7 +149,19 @@ export class ProgressApiKeyRetryController {
   async useOwnApiKey(
     request: ProgressApiKeyRetryRequest,
   ): Promise<ProgressApiKeyRetryResult> {
-    const proceeded = await this.ensureOwnApiKey(request);
+    if (
+      isKimiCodeSubscriptionRetryBlocked(
+        request.model,
+        request.exhaustionReason,
+      )
+    ) {
+      return noRetryResult();
+    }
+
+    const proceeded = await this.ensureOwnApiKey({
+      ...request,
+      provider: this.credentialProviderFor(request),
+    });
     if (
       !proceeded ||
       !this.deps.isRetryPending(request.stream, request.requestId)
@@ -110,20 +169,28 @@ export class ProgressApiKeyRetryController {
       return noRetryResult();
     }
 
-    const routingBefore = this.routingSnapshot();
-    const prepared = await this.applyOwnApiKeyRouting(request);
-    const retried = await this.deps.triggerRetry(
-      request.stream,
-      request.requestId,
-    );
-    if (!retried) {
-      await this.restoreOwnApiKeyRouting(routingBefore, prepared);
-      return noRetryResult();
-    }
-    return {
-      ...prepared,
-      retried: true,
-    };
+    return this.routingCommitQueue.add(async () => {
+      // The request may have been dismissed or replaced while this callback
+      // waited behind another stream's routing commit. Re-check before touching
+      // global routing so a stale switch cannot briefly rebind credentials.
+      if (!this.deps.isRetryPending(request.stream, request.requestId)) {
+        return noRetryResult();
+      }
+      const routingBefore = this.routingSnapshot();
+      const prepared = await this.applyOwnApiKeyRouting(request);
+      const retried = await this.deps.triggerRetry(
+        request.stream,
+        request.requestId,
+      );
+      if (!retried) {
+        await this.restoreOwnApiKeyRouting(routingBefore, prepared);
+        return noRetryResult();
+      }
+      return {
+        ...prepared,
+        retried: true,
+      };
+    });
   }
 
   async ensureOwnApiKey(
@@ -211,10 +278,29 @@ export class ProgressApiKeyRetryController {
     // the regular pay-as-you-go endpoint on retry.
     const disabledCodingPlans: ExhaustionReason[] = [];
     for (const toggle of this.codingPlanToggles) {
-      if (
-        toggle.getEnabled() &&
-        request.exhaustionReason === toggle.exhaustionReason
-      ) {
+      const planExhaustion =
+        request.exhaustionReason === toggle.exhaustionReason;
+      // An `upstream-credit` failure on a dual-backend Kimi model means the
+      // broken credential is the `kimiCode` key, but the forwarded SDK
+      // provider is `moonshot`. The coding-plan quota reason does not match,
+      // so without this branch the "Prefer Kimi Code" switch would stay on
+      // and the retry rebuild would re-select the exhausted coding endpoint
+      // instead of the newly entered Moonshot key.
+      //
+      // Deliberately conservative: do not consult the live route resolver
+      // here. The failed handler was dispatched under the persisted
+      // `ModelHandlerKimi` compatibility key, and the retry rebuild pins that
+      // same key, so a later OpenRouter preference change cannot make the
+      // rebuild take a non-coding route. The request's
+      // `kimiCodeRoutedOnFailure` flag is captured from that failed handler,
+      // so unrelated `kimi3` failures through OpenRouter, Moonshot, or the
+      // relay leave the preference untouched.
+      const kimiCodeCreditReroute =
+        toggle.exhaustionReason === 'kimi-code-subscription' &&
+        request.exhaustionReason === 'upstream-credit' &&
+        request.kimiCodeRoutedOnFailure === true &&
+        this.isDualBackendKimiCodeModel(request.model);
+      if (toggle.getEnabled() && (planExhaustion || kimiCodeCreditReroute)) {
         await toggle.setEnabled(false);
         this.deps.invalidateModelOptionsCache();
         disabledCodingPlans.push(toggle.exhaustionReason);
@@ -231,21 +317,30 @@ export class ProgressApiKeyRetryController {
 
   /** Apply Copilot fallback routing only for the duration of a launch attempt. */
   async runCopilotFallbackWithRouting(
-    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
+    request: ProgressApiKeyRetryRequest,
     start: (copilotRouteOverride: CopilotRouteOverride) => Promise<boolean>,
   ): Promise<boolean> {
-    const before = this.routingSnapshot();
-    const prepared = await this.applyOwnApiKeyRouting(request);
-    // The user chose "use own API key" for this retry. The direct-route
-    // override travels only with the replacement launch; the standing
-    // preference remains visible to concurrent and future runs.
-    let started = false;
-    try {
-      started = await start('direct');
-      return started;
-    } finally {
-      if (!started) await this.restoreOwnApiKeyRouting(before, prepared);
-    }
+    return this.routingCommitQueue.add(async () => {
+      // Mirror `useOwnApiKey`: this callback may have waited behind another
+      // stream's routing commit. Re-check the exact retry identity before
+      // touching global routing so a dismissed/replaced request cannot apply
+      // a stale switch.
+      if (!this.deps.isRetryPending(request.stream, request.requestId)) {
+        return false;
+      }
+      const before = this.routingSnapshot();
+      const prepared = await this.applyOwnApiKeyRouting(request);
+      // The user chose "use own API key" for this retry. The direct-route
+      // override travels only with the replacement launch; the standing
+      // preference remains visible to concurrent and future runs.
+      let started = false;
+      try {
+        started = await start('direct');
+        return started;
+      } finally {
+        if (!started) await this.restoreOwnApiKeyRouting(before, prepared);
+      }
+    });
   }
 
   private routingSnapshot(): ProgressApiRoutingSnapshot {

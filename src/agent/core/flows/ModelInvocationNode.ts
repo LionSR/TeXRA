@@ -40,6 +40,7 @@ import {
   toRetryErrorInfo,
   type RetryErrorInfo,
 } from '@shared/schemas';
+import { isKimiCodeExclusiveModel } from '@shared/model/kimiCodeRetryGate';
 import { generateShortId } from '@utils/core';
 import { getValidatedConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -527,6 +528,14 @@ export class ModelInvocationNode<
     });
     // No timeout: the retry panel waits indefinitely for the user's decision.
     let clientPrepared = false;
+    // Capture the failed handler's effective route before the retry panel can
+    // be outlived by routing-preference changes. A dual-backend Kimi handler
+    // dispatched onto the coding endpoint carries the pinned Kimi Code
+    // `baseUrl`, so the shared field predicate is true for that runtime config
+    // even though the registry entry itself is not coding-exclusive.
+    const kimiCodeRoutedOnFailure = isKimiCodeExclusiveModel(
+      this.services.modelCell.handler.config,
+    );
     const interaction = session.interactions.requestRetry(
       {
         requestId: `retry-${generateShortId()}`,
@@ -535,6 +544,7 @@ export class ModelInvocationNode<
         model: this.services.config.model,
         errorMessage: formatted.message,
         errorDetails: formatted,
+        kimiCodeRoutedOnFailure,
       },
       {
         prepareRetry: async (selection, signal) => {

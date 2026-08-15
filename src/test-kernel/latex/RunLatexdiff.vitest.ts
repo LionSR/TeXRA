@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LaTeXdiffService } from '@latex/latexdiff';
+import type { LatexExecutionDiscoveryPort } from '@latex/latexdiff/executionDiscovery';
 import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/runLatexdiff';
 import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
 import { createOutputFile } from '../support/ProgressControllerHarnesses';
@@ -36,10 +37,16 @@ function roundMap(): RoundIndexed<OutputFileInfo> {
   return { 1: [] as OutputFileInfo[] };
 }
 
+const executionDiscovery: LatexExecutionDiscoveryPort = {
+  listAgentRuns: async () => [],
+  readStreamId: async () => undefined,
+};
+
 const baseRequest = {
   agent: 'revise',
   model: 'claude-opus-4-8',
   inputFile: 'paper.tex',
+  executionDiscovery,
   generateBetweenRoundDiffs: false,
   latexdiff,
   progress: { report: () => undefined },
@@ -123,6 +130,7 @@ describe('runLatexdiffForExecution', () => {
     expect(result.source).toBe('metadata');
     expect(result.executionId).toBe('def456');
     expect(mocks.discoverLatestExecutionOutputs).toHaveBeenCalledWith(
+      executionDiscovery,
       {
         agent: 'revise',
         model: 'claude-opus-4-8',

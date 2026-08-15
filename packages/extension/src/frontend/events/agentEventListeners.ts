@@ -168,7 +168,16 @@ async function handleRequestEnsureProgressView(
 ): Promise<boolean> {
   if (progressViewProvider.isViewVisible()) return true;
 
-  await vscode.commands.executeCommand('texra.showProgressView');
+  try {
+    await vscode.commands.executeCommand('texra.showProgressView');
+  } catch (err) {
+    // A failed reveal is a diagnostic, not non-delivery: fall through to the
+    // visibility re-check and, when provided, the toast handoff below (#10554).
+    logger.warn(
+      CHANNEL,
+      `Failed to reveal the progress view: ${toErrorMessage(err)}`,
+    );
+  }
 
   // Delivery is the reveal actually becoming visible, not the reveal command
   // resolving. Re-check after the command before treating the event as

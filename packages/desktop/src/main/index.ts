@@ -12,9 +12,14 @@ import {
   session,
   shell,
 } from 'electron';
+import PQueue from 'p-queue';
 
 import type { SessionStores } from '@agent/storage';
-import { attachTerminalResultToast, SessionHandle } from '@agent/runtime';
+import {
+  agentResponseTextConnector,
+  attachTerminalResultToast,
+  SessionHandle,
+} from '@agent/runtime';
 import {
   computeAgentOptionsData,
   getAgent,
@@ -35,7 +40,7 @@ import { LatexConfigPersistenceController } from '@controllers/settingsView/Late
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
@@ -153,6 +158,11 @@ let reopenMainWindow: (() => void) | undefined;
 let pendingWorkspaceRelaunch:
   { selectedPath: string; args: string[] } | undefined;
 let continueQuitAfterWindowClose: (() => void) | undefined;
+// Serializes the lifecycle promises returned by each window's diff-host
+// disposal. The disposal call itself still starts synchronously in the
+// `closed` handler; only the returned completion promise is queued, so a
+// window's `disposed` flag flips before earlier cleanup settles.
+const diffHostDisposeQueue = new PQueue({ concurrency: 1 });
 // Set by the window's closed handler and awaited by the lifecycle shutdown
 // drain registered below, so recursive temp-dir removals finish before the
 // process exits instead of racing the quit flow.
@@ -1099,13 +1109,12 @@ function createWindow(options: {
     // Not fire-and-forget: every quit path (window-all-closed on Windows and
     // Linux, continueQuit, the workspace relaunch's app.quit()) reaches the
     // before-quit handler, whose lifecycle drain awaits this promise before
-    // the final quit. Chaining onto the previous value keeps a macOS
-    // dock-reopen from discarding an earlier window's still-running cleanup.
-    pendingDesktopDiffHostDispose = (
-      pendingDesktopDiffHostDispose ?? Promise.resolve()
-    )
-      .then(() => desktopDiffHost.dispose())
-      .catch(reportAsyncError);
+    // the final quit. `desktopDiffHost.dispose()` is invoked synchronously
+    // here (so `disposed` flips immediately); the queue only orders when this
+    // window's completion promise resolves, keeping a macOS dock-reopen from
+    // discarding an earlier window's still-running cleanup.
+    const current = desktopDiffHost.dispose().catch(reportAsyncError);
+    pendingDesktopDiffHostDispose = diffHostDisposeQueue.add(() => current);
     executionsWatcher?.close();
     if (mainWindow === window) {
       mainWindow = null;
@@ -1207,7 +1216,9 @@ if (protocolLifecycle.shouldContinue) {
       const processSession = new SessionHandle({
         transcripts,
         restartRepair: 'deferred',
-        responseTextProcessing: texraResponseTextProcessing,
+        responseTextProcessing: createTexraResponseTextProcessing(
+          agentResponseTextConnector,
+        ),
       });
       const detachTerminalResultToast = attachTerminalResultToast(
         processSession,

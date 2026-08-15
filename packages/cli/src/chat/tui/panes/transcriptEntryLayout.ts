@@ -312,6 +312,15 @@ function entryMarginBottomRows(entry: ConversationEntry): number {
   return ROLE_GEOMETRY[entry.role].marginBottomRows;
 }
 
+/** Exposed for the static-scrollback budget walk, which needs the bottom
+ *  margin of a previous entry to collapse the next entry's top margin without
+ *  laying out that next entry a second time. */
+export function transcriptEntryMarginBottomRows(
+  entry: ConversationEntry,
+): number {
+  return entryMarginBottomRows(entry);
+}
+
 export function transcriptEntryLayout(
   entry: ConversationEntry,
   {
