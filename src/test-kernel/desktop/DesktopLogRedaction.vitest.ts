@@ -18,7 +18,7 @@ describe('desktop log redaction', () => {
     expect(redacted).not.toContain('ghp_1234567890abcdef');
     expect(redacted).toContain('OPENAI_API_KEY=[redacted]');
     expect(redacted).toContain('Bearer [redacted]');
-    // No in-repo call site ever passed LogRedactionOptions, so the old
+    // No production call site ever passed LogRedactionOptions, so the old
     // homeDir/workspacePath path-scrubbing branch was dead. Desktop hosts scrub
     // paths separately via redactPathPrefixes before redactSecrets. Pin the
     // actual redactSecrets contract: secret patterns redact, paths do not.
