@@ -851,35 +851,31 @@ describe('TUI retry approvals', () => {
     expect(currentApproval.get()).toBeUndefined();
   });
 
-  it('disables a catalogued coding plan before retrying with a personal key', async () => {
+  it('auto-switches a Kimi Code subscription limit to the stored Moonshot key', async () => {
     mocks.preferKimiCode = true;
     mocks.hasUsableApiKey.mockImplementation(
       async (_secrets, provider: ApiProvider) => provider === 'moonshot',
     );
 
-    const { interactions } = tui();
+    const { interactions, prepareRetry } = tui();
     const result = interactions.requestRetry?.(
       kimiCodeSubscriptionRetry('kimi-limit'),
     );
-    await waitForApproval('retry', {
-      streamId: 'kimi-limit',
-      personalApiKeyAvailable: true,
-    });
 
-    decideRetry({
-      accepted: true,
-      apiMode: 'personal',
-      disableCodingPlan: 'kimiCode',
+    await vi.waitFor(() => {
+      expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
     });
-
     await expect(result).resolves.toEqual({
       action: 'retry',
+      decisionSource: 'automatic',
       feedback: undefined,
     });
     expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledWith(
       'kimiCode',
       false,
     );
+    expect(prepareRetry).toHaveBeenCalledWith('personal', expect.anything());
+    expect(currentApproval.get()).toBeUndefined();
   });
 
   it('restores Kimi without overwriting a newer OpenRouter choice', async () => {
@@ -897,12 +893,6 @@ describe('TUI retry approvals', () => {
     const result = interactions.requestRetry?.(
       kimiCodeSubscriptionRetry('kimi-rollback'),
     );
-    await waitForApproval('retry', { streamId: 'kimi-rollback' });
-    decideRetry({
-      accepted: true,
-      apiMode: 'personal',
-      disableCodingPlan: 'kimiCode',
-    });
 
     await expect(result).resolves.toEqual({
       action: 'deny',

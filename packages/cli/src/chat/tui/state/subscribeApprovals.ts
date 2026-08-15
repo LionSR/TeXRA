@@ -59,6 +59,7 @@ import {
 import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
+import { type CodingPlanSubscriptionId } from '@shared/codingPlanSubscriptions';
 import {
   isUpstreamCreditDepletedError,
   type AgentProposalPermission,
@@ -102,11 +103,13 @@ import {
 // =========================================================================
 
 /**
- * When a retry is triggered by relay exhaustion and the stored personal key is
- * not the broken credential, switch to personal keys and retry without showing
- * the modal. ChatGPT-subscription limits always require an explicit decision:
- * changing credential ownership must not hide the quota warning or silently
- * spend API-key quota.
+ * When a retry is triggered by relay exhaustion or a coding-plan quota limit
+ * and the stored personal/fallback key is not the broken credential, switch to
+ * personal keys and retry without showing the modal. This is what lets
+ * delegated subagents recover from an exhausted Kimi Code or GLM Coding Plan
+ * without a human present. ChatGPT-subscription limits always require an
+ * explicit decision: changing credential ownership must not hide the quota
+ * warning or silently spend API-key quota.
  *
  * Returns the auto-switch decision, or `undefined` when the modal is needed
  * (no usable key stored, direct-key failure, or unknown provider).
@@ -114,25 +117,32 @@ import {
 function maybeAutoSwitchRetry(
   payload: TuiRetryRequest,
 ): ApprovalDecision | undefined {
-  // Only relay-exhaustion retries auto-switch; ChatGPT-subscription and
-  // coding-plan limits always require an explicit decision (see
-  // classifyCliRetryAction for the canonical precedence).
-  if (classifyCliRetryAction(payload) !== 'switch-to-personal') {
-    return undefined;
+  const action = classifyCliRetryAction(payload);
+  const details = payload.errorDetails;
+
+  if (action === 'switch-to-personal') {
+    // Upstream credit depletion means the stored direct key IS the broken
+    // credential — the user must provide a changed key, so we cannot
+    // auto-switch to the stored value.
+    if (isUpstreamCreditDepletedError(details)) return undefined;
+    if (payload.personalApiKeyAvailable !== true) return undefined;
+    return { accepted: true, apiMode: 'personal' };
   }
 
-  const details = payload.errorDetails;
-  // Upstream credit depletion means the stored direct key IS the broken
-  // credential — the user must provide a changed key, so we cannot
-  // auto-switch to the stored value.
-  if (isUpstreamCreditDepletedError(details)) return undefined;
+  // Coding-plan quotas (Kimi Code, GLM Coding Plan) have a fallback route that
+  // re-uses an already-stored key, so auto-switch when that key exists.
+  if (action.startsWith('disable-coding-plan:')) {
+    if (payload.personalApiKeyAvailable !== true) return undefined;
+    return {
+      accepted: true,
+      apiMode: 'personal',
+      disableCodingPlan: action.slice(
+        'disable-coding-plan:'.length,
+      ) as CodingPlanSubscriptionId,
+    };
+  }
 
-  if (payload.personalApiKeyAvailable !== true) return undefined;
-
-  return {
-    accepted: true,
-    apiMode: 'personal',
-  };
+  return undefined;
 }
 
 /**

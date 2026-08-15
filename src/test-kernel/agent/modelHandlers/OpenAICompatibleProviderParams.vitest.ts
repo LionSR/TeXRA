@@ -10,6 +10,7 @@ import { noopTrace } from '@agent/trace';
 import { ModelHandlerGLM } from '@agent/modelHandlers/openai/modelHandlerGLM';
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
+import { formatProviderHttpError } from '@common/errors/sdkError/providerErrorFormat';
 import { AgentCategory } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -247,6 +248,50 @@ describe('OpenAI-compatible provider request params', () => {
       handler.getLastCredentialUsageRoute(),
       'kimi-code-subscription',
     );
+  });
+
+  it('stamps the coding endpoint onto thrown OpenAI SDK errors so Kimi Code usage limits classify', async () => {
+    const handler = createKimiHandler({
+      name: 'kimi3',
+      fullName: 'kimi-k3',
+      kimiSubscription: true,
+      baseUrl: KIMI_CODE_BASE_URL,
+    });
+    const usageLimitMessage =
+      "You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle.";
+    const thrown = new Error(usageLimitMessage) as Error & {
+      status: number;
+      error: unknown;
+    };
+    thrown.status = 403;
+    thrown.error = {
+      message: usageLimitMessage,
+      type: 'invalid_request_error',
+      code: 'usage_limit_reached',
+    };
+    const client = {
+      baseURL: KIMI_CODE_BASE_URL,
+      chat: {
+        completions: {
+          create: async () => {
+            throw thrown;
+          },
+        },
+      },
+    };
+
+    await expect(
+      handler.createResponse({
+        client: client as never,
+        messages: SINGLE_TURN,
+        temperature: 0,
+      }),
+    ).rejects.toBe(thrown);
+    expect(thrown).toMatchObject({ request: { baseURL: KIMI_CODE_BASE_URL } });
+
+    const formatted = formatProviderHttpError(thrown);
+    expect(formatted.exhaustionReason).toBe('kimi-code-subscription');
+    expect(formatted.userRetryable).toBe(true);
   });
 
   it.each(KIMI_K27_CODE_ALIASES)(

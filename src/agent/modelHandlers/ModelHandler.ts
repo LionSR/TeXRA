@@ -1151,6 +1151,16 @@ export abstract class ModelHandler<
   }
 
   /**
+   * Attach the endpoint a thrown SDK error was sent to, when the client can
+   * report it. Runs at the same boundary as {@link sdkErrorTagger}; provider
+   * subclasses override it to stamp a request config so downstream error
+   * detection that keys off the wire endpoint (e.g. Kimi Code subscription
+   * usage limits) can see it even though the raw SDK error does not carry one.
+   * Defaults to a no-op for handlers whose clients don't expose a base URL.
+   */
+  protected attachSdkRequestEndpoint(_err: unknown, _client: C): void {}
+
+  /**
    * Generates a model response using the provider's API.
    *
    * Template method: runs under {@link withCreateResponseGuard}, installs
@@ -1181,6 +1191,7 @@ export abstract class ModelHandler<
         return await this.createResponseImpl(options);
       } catch (err) {
         this.sdkErrorTagger(err, this.config.provider);
+        this.attachSdkRequestEndpoint(err, options.client);
         throw err;
       } finally {
         this.activeAttemptCredentialRoute = undefined;

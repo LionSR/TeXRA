@@ -79,4 +79,23 @@ export abstract class OpenAICompatibleModelHandler<
   override getRetryEndpoint(client: OpenAI): string {
     return client.baseURL;
   }
+
+  /**
+   * Stamp the resolved request endpoint onto an OpenAI-SDK error at the
+   * boundary, because the SDK's `APIError` carries status/body/headers but no
+   * request config. Downstream endpoint-scoped detection (Kimi Code
+   * subscription usage limits) reads this stamp.
+   */
+  protected override attachSdkRequestEndpoint(
+    err: unknown,
+    client: OpenAI,
+  ): void {
+    const baseURL = this.getRetryEndpoint(client);
+    if (!baseURL) return;
+    if (typeof err !== 'object' || err === null) return;
+    const candidate = err as { request?: { baseURL?: string } | null };
+    if (candidate.request == null) {
+      candidate.request = { baseURL };
+    }
+  }
 }
