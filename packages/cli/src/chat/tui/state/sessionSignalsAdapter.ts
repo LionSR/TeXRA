@@ -105,8 +105,8 @@ class TuiSessionRenderer implements SessionRendererPort {
     if (isChildStreamRemoved(streamId)) return;
     const metadata = this.state.getStreamMetadata(streamId);
     // Display config comes from the always-resident summary mirror, never from
-    // a synchronous per-stream sidecar read (#9947). File lists are artifacts
-    // hydrated separately by the focused-stream artifact subscription.
+    // a synchronous per-stream sidecar read (#9947). Run input/context/media
+    // file lists are no longer surfaced by TUI state at all.
     const config = metadata.config;
     // Parent-only metadata refreshes must not mint a StreamSlice: an edge
     // alone is not focusable until attachment (`setActiveStream`) creates one.

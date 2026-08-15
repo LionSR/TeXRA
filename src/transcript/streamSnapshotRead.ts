@@ -104,6 +104,33 @@ export async function readMeta(
 ): Promise<StreamTabMeta | undefined> {
   const raw = await tryRead(kv, STREAM_DATA_KEYS.META);
   if (raw === undefined) return undefined;
+  return parseStreamMeta(raw);
+}
+
+/**
+ * Ownership reads need to distinguish any present-but-invalid metadata from a
+ * genuinely absent `meta.json`. `readMeta` intentionally downgrades truncated
+ * or schema-invalid JSON so a full seed can recover; this strict variant lets
+ * the one-field ownership read propagate both JSON `SyntaxError` and
+ * schema-invalid present metadata, so callers can skip or report the damaged
+ * stream instead of treating it as a legacy record with no FK.
+ */
+export async function readMetaForOwnership(
+  kv: KVStore,
+): Promise<StreamTabMeta | undefined> {
+  const raw = await kv.read(STREAM_DATA_KEYS.META);
+  if (raw === undefined) return undefined;
+  const parsed = StreamTabMetaSchema.safeParse(raw);
+  if (!parsed.success) {
+    log.warn('Discarding unreadable persisted stream metadata for ownership.', {
+      data: parsed.error,
+    });
+    throw new Error('Invalid persisted stream metadata ownership');
+  }
+  return parsed.data;
+}
+
+function parseStreamMeta(raw: unknown): StreamTabMeta | undefined {
   const parsed = StreamTabMetaSchema.safeParse(raw);
   if (parsed.success) return parsed.data;
   // Field-level tolerance: a malformed execution FK must drop only the bad
@@ -187,6 +214,25 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
     usageUnparsed,
     workPlan,
   };
+}
+
+/**
+ * Read only the per-stream usage sidecar for usage-only hydration paths.
+ *
+ * Unlike the tolerant full-stream read, this path must never turn a
+ * corrupt-present `usageStats.json` into an authoritative zero map: genuine
+ * I/O errors and JSON `SyntaxError` propagate, and a present non-object value
+ * is rejected instead of being silently treated as empty.
+ */
+export async function readUsageData(
+  kv: KVStore,
+): Promise<ReturnType<typeof parseUsageData>> {
+  const raw = await kv.read(STREAM_DATA_KEYS.USAGE_STATS);
+  if (raw === undefined) return parseUsageData(undefined);
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Invalid persisted usageStats.json');
+  }
+  return parseUsageData(raw);
 }
 
 /**
