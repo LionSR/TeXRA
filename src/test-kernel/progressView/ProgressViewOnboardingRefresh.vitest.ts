@@ -48,6 +48,7 @@ function createHostInteractions(
     submitPlanDecision: vi.fn(() => false),
     submitProposalDecision: vi.fn(() => false),
     submitRetryDecision: vi.fn(() => false),
+    submitRetryWithPersonalCredentials: vi.fn(async () => false),
     submitUserQuestionDecision: vi.fn(() => false),
     dismissExternalInquiry: vi.fn(),
     cancel: vi.fn(),
@@ -82,6 +83,7 @@ function createProgressViewProvider(): ProgressViewProviderFake {
     getOutputFiles: vi.fn(() => new Map()),
     getKnownFilePaths: vi.fn(() => new Set()),
     getCompileFailures: vi.fn(() => new Map()),
+    preload: vi.fn(async () => undefined),
   };
   const state = {
     activeStream: '',

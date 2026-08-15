@@ -1,6 +1,8 @@
 // QA-2 host-side mock ratchet (issue #7684, entry-based check #9731). Host
 // suites (CLI + desktop, in src/test-kernel/cli and src/test-kernel/desktop)
-// reach into `@agent/*` internals via `mock('@agent/...')` or
+// and the shared support modules extracted from them (#10361, in
+// src/test-kernel/support) reach into `@agent/*` internals via
+// `mock('@agent/...')` or
 // `doMock('@agent/...')` — on `vi` or on a suite's `createModuleMocks()`
 // recorder — pinning agent's current internal module layout from outside
 // src/agent.
@@ -58,6 +60,9 @@ const BASELINE_PATH = resolve(REPO_ROOT, BASELINE_FILE);
 const HOST_DIRS = [
   resolve(REPO_ROOT, 'src/test-kernel/cli'),
   resolve(REPO_ROOT, 'src/test-kernel/desktop'),
+  // The shared mock modules the host suites import; #10361 moved the last
+  // live `@agent/*` registrations here, out of the per-host dirs (#10376).
+  resolve(REPO_ROOT, 'src/test-kernel/support'),
 ];
 
 const AGENT_SPECIFIER = /^@agent(?:\/|$)/;

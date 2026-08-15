@@ -536,8 +536,8 @@ describe('ModelHandlerVscodeLm canonical route reference', () => {
     invalidateRuntimeModelRegistry();
     // The discovered editor model must track an active, Copilot-documented
     // llm-zoo base model (carries `copilotFullName`, neither deprecated nor
-    // retired) — route resolution filters everything else. gemini36f
-    // satisfies both in llm-zoo 1.25.0 (the sonnet46 pin deprecated there).
+    // retired) — route resolution filters everything else. gemini31p
+    // satisfies both in llm-zoo 1.28.0 (gemini36f, the previous pick, is deprecated there).
     await installPlatform(
       {},
       {
@@ -545,9 +545,9 @@ describe('ModelHandlerVscodeLm canonical route reference', () => {
           ...fakePort(),
           selectModels: async () => [
             {
-              id: 'gemini-3.6-flash',
-              name: 'Gemini 3.6 Flash',
-              family: 'gemini-3.6-flash',
+              id: 'gemini-3.1-pro-preview',
+              name: 'Gemini 3.1 Pro',
+              family: 'gemini-3.1-pro-preview',
               vendor: 'copilot',
               version: '2026-07',
               maxInputTokens: 160_000,
@@ -562,7 +562,7 @@ describe('ModelHandlerVscodeLm canonical route reference', () => {
     // #9635: the handler receives the canonical base model config; the exact
     // editor reference comes from the discovered Copilot route, not from an
     // overloaded config.fullName.
-    const handler = new ModelHandlerVscodeLm(MODEL_CONFIGS.gemini36f);
+    const handler = new ModelHandlerVscodeLm(MODEL_CONFIGS.gemini31p);
     const port = fakePort([{ kind: 'text', text: 'answer' }]);
 
     await handler.createResponse({
@@ -572,7 +572,7 @@ describe('ModelHandlerVscodeLm canonical route reference', () => {
     });
 
     expect(port.sendRequest).toHaveBeenCalledWith(
-      { vendor: 'copilot', id: 'gemini-3.6-flash' },
+      { vendor: 'copilot', id: 'gemini-3.1-pro-preview' },
       expect.any(Array),
       expect.any(Object),
       expect.any(AbortSignal),

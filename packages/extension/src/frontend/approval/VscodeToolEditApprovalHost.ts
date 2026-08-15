@@ -23,6 +23,7 @@ import {
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { DiffSession, DiffViewHost } from '@hosts/uiHosts';
+import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import type { ApprovalTempFiles } from '@tools/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import {
@@ -37,7 +38,9 @@ const CHANNEL = 'ToolEditApproval';
 
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost: DiffViewHost = new VscodeDiffViewHost();
-  readonly openBuildDisplay = openBuildDisplayIfTex;
+  readonly openBuildDisplay: BuildDisplayFn = async (location, options) => {
+    await openBuildDisplayIfTex(location, options);
+  };
 
   constructor(private readonly storageDirectory: string) {}
 

@@ -15,7 +15,7 @@
 // which no-ops via the `exiting` guard so the drain / hint / cleanup never run
 // twice.
 
-import { completeOwnedExecutionLease } from '@agent/storage/executionLease';
+import { completeOwnedExecutionLease } from '@agent/storage';
 import { readCliCwd } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {

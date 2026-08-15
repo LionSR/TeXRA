@@ -47,7 +47,6 @@ import {
   knownCliModelIds,
   resolveKnownCliModelId,
 } from '@cli/runtime/cliConfig';
-import type { CliContext } from '@cli/runtime/cliContext';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';

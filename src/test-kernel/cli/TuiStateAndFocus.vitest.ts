@@ -3559,6 +3559,19 @@ describe('sessionSignalsAdapter run facts', () => {
 
   it('applies direct run config and conversation progress without host emission', () => {
     withRunFacts((hub) => {
+      // `onStreamMetadataChanged` reads display config from the summary
+      // mirror (#9947), so the agent name now arrives with `run.start` while
+      // `run.config` supplies model/category through the mirror.
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'run.start',
+          streamId: root,
+          executionId: 'exec-config' as ExecutionId,
+          identity: { kind: 'agent' as const, agent: 'search' },
+        },
+      });
       emitRunConfig(hub, root, 'exec-config', {
         input: ['src/Main.lean'],
         context: ['notes/proof.md'],
@@ -3577,12 +3590,6 @@ describe('sessionSignalsAdapter run facts', () => {
         agent: 'search',
         model: 'kimi26T',
         category: AgentCategory.ToolUse,
-        files: {
-          input: ['src/Main.lean'],
-          context: ['notes/proof.md'],
-          media: [],
-          output: ['build/Main.olean'],
-        },
         conversation: { toolCallCount: 3 },
       });
     });

@@ -74,6 +74,25 @@ describe('refreshModelListStateIfNeeded', () => {
     expect(enabledModels(state)).not.toContain('grok4');
   });
 
+  it('adds Gemini 3.7 Flash while preserving Gemini 3.6 Flash from the previous model list', async () => {
+    const previousVersion = 494_338_219;
+    const state = new FakeStateStore({
+      [GlobalStateKey.MODEL_LIST_VERSION]: previousVersion,
+      [GlobalStateKey.ENABLED_MODELS]: ['gemini36f'],
+    });
+
+    const result = await refreshModelListStateIfNeeded(state);
+
+    expect(result.previousVersion).toBe(previousVersion);
+    expect(result.added).toContain('gemini37f');
+    expect(result.removed).not.toContain('gemini36f');
+    expect(enabledModels(state)).toContain('gemini37f');
+    expect(enabledModels(state)).toContain('gemini36f');
+    expect(state.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
+      MODEL_LIST_VERSION,
+    );
+  });
+
   it('restabilizes a Gemini-first list so the curated default leads', async () => {
     const state = new FakeStateStore({
       [GlobalStateKey.MODEL_LIST_VERSION]: MODEL_LIST_VERSION,

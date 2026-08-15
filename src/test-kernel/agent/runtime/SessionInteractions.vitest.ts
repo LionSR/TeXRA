@@ -439,6 +439,64 @@ describe('session.interactions immediate capabilities', () => {
     session.dispose();
   });
 
+  it('reports a synchronously throwing live-host emit as not delivered', () => {
+    // The live-host immediate-attachment branch must apply the same guard as
+    // the queued replay path: a host adapter whose emit throws synchronously
+    // (a desktop renderer post during teardown) must read as not delivered,
+    // not escape as an arbitrary host exception (#10466).
+    const session = createTestSession();
+    session.useHostInteractions({
+      emit: () => {
+        throw new Error('renderer torn down mid-post');
+      },
+      cancel: vi.fn(),
+    });
+
+    expect(
+      session.interactions.emit('requestShowError', { message: 'boom' }),
+    ).toBe(false);
+    session.dispose();
+  });
+
+  it('reports a synchronously throwing replayed emit through onReplayNotDelivered', async () => {
+    // A host adapter whose emit throws synchronously (a desktop renderer
+    // post during teardown) escapes the replay closure's promise chain; the
+    // throw must land in the same not-delivered callback as a returned
+    // `false` or a rejection, not vanish into the replay loop's warn-log
+    // (#10398).
+    const session = createTestSession();
+    const onReplayScheduled = vi.fn();
+    const onReplayDelivered = vi.fn();
+    const onReplayNotDelivered = vi.fn();
+
+    session.interactions.emit(
+      'requestShowError',
+      { message: 'queued before attach' },
+      {
+        replayWhenAttached: true,
+        onReplayScheduled,
+        onReplayDelivered,
+        onReplayNotDelivered,
+      },
+    );
+    expect(onReplayScheduled).toHaveBeenCalledOnce();
+
+    const throwingHost: HostInteractions = {
+      emit: () => {
+        throw new Error('renderer torn down mid-post');
+      },
+      cancel: vi.fn(),
+    };
+    session.useHostInteractions(throwingHost);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onReplayDelivered).not.toHaveBeenCalled();
+    expect(onReplayNotDelivered).toHaveBeenCalledOnce();
+    expect(onReplayNotDelivered).toHaveBeenCalledWith(throwingHost);
+    session.dispose();
+  });
+
   it('does not queue an opted-in notice delivered to an attached presentation', () => {
     const session = createTestSession();
     const firstInfo = vi.fn();

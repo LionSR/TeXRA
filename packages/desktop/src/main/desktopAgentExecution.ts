@@ -218,7 +218,22 @@ export class DesktopProgressBridge {
       // screen, so there is no separate progress surface to reveal.
       requestEnsureProgressView: () => undefined,
       requestShowError: ({ message }) => {
-        void this.options.host.showErrorMessage(message);
+        // Report what the error dialog actually did: the concrete
+        // showErrorMessage awaits dialog.showMessageBox, which rejects when
+        // the window is torn down beneath it. Voiding the promise would
+        // leave that rejection unhandled, and reporting nothing would read
+        // as not-delivered even when the dialog did render (#10400).
+        return Promise.resolve(
+          this.options.host.showErrorMessage(message),
+        ).then(
+          () => true,
+          (error: unknown) => {
+            this.logger.warn('Failed to present the error dialog', {
+              data: toLogData(error),
+            });
+            return false;
+          },
+        );
       },
       requestShowInstruction: (instruction) => {
         // An instruction is actionable guidance, not a failure, so it uses
@@ -230,8 +245,24 @@ export class DesktopProgressBridge {
               .map((action) => INSTRUCTION_ACTION_HINT[action] ?? action)
               .join(', ')})`
           : '';
-        void this.options.host.showInfoMessage(`${instruction.message}${hint}`);
-        return true;
+        // Observe the dialog promise before reporting delivery (#10399): the
+        // concrete showInfoMessage awaits dialog.showMessageBox, which
+        // rejects when its window is being torn down. Reporting `true`
+        // unconditionally would mark a launch error as presented while the
+        // rejection went unhandled and nothing rendered. The desktop dialog
+        // is window-modal, so settling on dismissal does not park the
+        // launching stream the way a non-modal notification would.
+        return Promise.resolve(
+          this.options.host.showInfoMessage(`${instruction.message}${hint}`),
+        ).then(
+          () => true,
+          (error: unknown) => {
+            this.logger.warn('Failed to present the instruction dialog', {
+              data: toLogData(error),
+            });
+            return false;
+          },
+        );
       },
       showAgentConfigBanner: ({ agentName }) => {
         return (
@@ -245,13 +276,15 @@ export class DesktopProgressBridge {
       requestOpenFile: (data: RequestOpenFilePayload) => {
         // Desktop has no editor integration to preview through, so the
         // resolved path goes to the preview-with-fallback host directly.
-        this.options.host
-          .openPath(data.location.absolutePath)
-          .catch((error) => {
+        return this.options.host.openPath(data.location.absolutePath).then(
+          () => true,
+          (error: unknown) => {
             this.logger.warn('Failed to open requested file on desktop', {
               data: toLogData(error),
             });
-          });
+            return false;
+          },
+        );
       },
     };
     const presentationHost: Pick<SessionHostInteractions, 'emit'> = {
@@ -474,6 +507,7 @@ export class DesktopProgressBridge {
           this.state.snapshots.getKnownFilePaths(stream, {
             workspaceOnly: true,
           }),
+        preload: (stream) => this.state.snapshots.preload([stream]),
       },
       runDiff: (request) => this.runWorkflowDiff(request),
       runFileOperation: (operation, request) =>
@@ -512,9 +546,10 @@ export class DesktopProgressBridge {
       isRetryPending: (stream, requestId) =>
         this.hostInteractions.isRetryPending(stream, requestId),
       triggerRetry: (stream, requestId) =>
-        this.hostInteractions.submitRetryDecision(stream, requestId, {
-          action: 'retry',
-        }),
+        this.hostInteractions.submitRetryWithPersonalCredentials(
+          stream,
+          requestId,
+        ),
     });
   }
 
@@ -531,6 +566,7 @@ export class DesktopProgressBridge {
         getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
         getCompileFailures: (stream) =>
           this.state.snapshots.getCompileFailures(stream),
+        preload: (stream) => this.state.snapshots.preload([stream]),
       },
       workspace: {
         locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
@@ -704,6 +740,7 @@ export class DesktopProgressBridge {
       run: {
         state: {
           getRunMetadata: (stream) => this.getRunMetadata(stream),
+          preload: (stream) => this.state.snapshots.preload([stream]),
         },
         runExecutionRequest: async (request) => {
           await this.runValidatedExecutionRequest(request);
@@ -715,6 +752,7 @@ export class DesktopProgressBridge {
           getRunMetadata: (stream) => this.getRunMetadata(stream),
           getOutputFiles: (stream) =>
             this.state.snapshots.getOutputFiles(stream),
+          preload: (stream) => this.state.snapshots.preload([stream]),
         },
         host: {
           compareFiles: (baseFile, editedFile) =>
@@ -847,6 +885,7 @@ export class DesktopProgressBridge {
   private createProgressViewInboundHandlers(): DesktopProgressInboundHandlerRegistry {
     const secondTierActions: ProgressViewSecondTierActions = {
       getRunMetadata: (stream) => this.getRunMetadata(stream),
+      preload: (stream) => this.state.snapshots.preload([stream]),
       workflowActions: this.workflowActions,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
@@ -893,10 +932,11 @@ export class DesktopProgressBridge {
             action: 'retry',
             feedback,
           }),
-        cancel: (stream, requestId) =>
+        cancel: (stream, requestId) => {
           this.hostInteractions.submitRetryDecision(stream, requestId, {
             action: 'cancel',
-          }),
+          });
+        },
       },
     };
 
@@ -986,12 +1026,13 @@ export class DesktopProgressBridge {
   }
 
   private getRunMetadata(streamId: StreamTabId): RunMetadata {
+    // Summary first for the execution edge (#9947), sidecar-backed record for
+    // the full config/identity fields the summary intentionally does not carry.
+    const summary = this.state.getStreamMetadata(streamId);
     const metadata = this.state.snapshots.getRunMetadata(streamId);
     return {
       ...metadata,
-      executionId:
-        metadata.executionId ??
-        this.state.getStreamMetadata(streamId).executionId,
+      executionId: summary.executionId ?? metadata.executionId,
     };
   }
 
@@ -1085,7 +1126,7 @@ export class DesktopProgressBridge {
     baseFile: string,
     editedFile: string,
   ): Promise<void> {
-    const context = this.getActiveLatexdiffRunContext(editedFile);
+    const context = await this.getActiveLatexdiffRunContext(editedFile);
     if (!context) {
       await this.fileActions.runLatexdiffFile(baseFile, editedFile);
       return;
@@ -1094,11 +1135,12 @@ export class DesktopProgressBridge {
     await this.fileActions.diffAcceptedFilePair(baseFile, editedFile, context);
   }
 
-  private getActiveLatexdiffRunContext(
+  private async getActiveLatexdiffRunContext(
     editedFile: string,
-  ): DesktopLatexdiffRunContext | undefined {
+  ): Promise<DesktopLatexdiffRunContext | undefined> {
     const stream = this.backend.presentation.activeStream;
     if (!stream) return undefined;
+    await this.state.snapshots.preload([stream]);
 
     // Round keys are non-negative integers BY CONSTRUCTION: every write path
     // into StreamSnapshotStore's outputFiles accumulator (both the live

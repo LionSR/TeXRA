@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 #### Features
 
+- **Gemini 3.7 Flash is available** — the new Flash model replaces Gemini 3.6
+  Flash in the default model list at half the price. Existing selections of
+  older Flash models keep working while Google serves them.
 - **Lean Project remotes are available after sign-in** — the hosted Lean
   agents no longer need a special access group.
 
@@ -22,6 +25,10 @@ All notable changes to this project will be documented in this file.
 - **Long Grok prompts report their true cost** — xAI raises per-token rates
   once a prompt crosses the model's long-context threshold; usage costs for
   those requests no longer underreport.
+- **Cached Grok tokens bill at xAI's real discount** — the cache rebate
+  previously never applied, and xAI models without documented long-context
+  rates now warn instead of silently billing flat. Rare request edge cases
+  also no longer drop a request's body, headers, or cancellation.
 
 ### Extension (VS Code) and Desktop
 
@@ -37,6 +44,11 @@ All notable changes to this project will be documented in this file.
 - **Every max-style shortcut now resolves in the progress view** — math
   operators, text labels, mathcal/mathbb letters, and tilde/hat/
   differential shortcuts render as intended instead of unknown commands.
+- **Max-style shortcuts no longer shadow KaTeX built-ins** — the section
+  sign and the legacy bold switch render as intended, `\label` no longer
+  errors in rendered math, decorated-H effective-Hamiltonian forms keep
+  their accents, and equilibrium/steady-state eq/st subscripts no longer turn
+  into superscripts.
 
 #### Features
 

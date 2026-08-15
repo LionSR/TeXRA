@@ -83,7 +83,7 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
   // prettier-ignore
   const symbolOperators = [
       'infty', 'top',
-      'N', 'M', 'S',
+      'N', 'M',
       '0','1','2',
       'tit', 'wtit', 'tif', 'ttf', 'ttauf', 'tze', 'tzero', 'tone', 'tauf', 'tf', 'ttau', 'tau',
       'bu', 'ta'
@@ -130,7 +130,10 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
   // Math font letter sets
   const upperLetters = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
   const mathbbLetters = [...'CEINPQRTV'];
-  const lowerLetters = [...'abcdefghjnpqrsuvwxyz'];
+  // 'f' stays out of lowerLetters: the MANUAL '\mathbf{f}' -> '\bbf'
+  // special case keeps '\bf' (KaTeX's legacy bold switch) out of max-style
+  // output.
+  const lowerLetters = [...'abcdeghjnpqrsuvwxyz'];
   const mathbfUpperLetters = [...'ABCDEFGIJKMQRUVWXYZ'];
   const alphabetLetters = [
     ...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
@@ -165,6 +168,15 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
       [`_\\op`, `_{\\${op}}`],
       [`^\\op`, `^{\\${op}}`],
     ]),
+    // Combined eq/st shortcuts: keep these before the textCommands block so
+    // the AUTO \text{eq} -> \eq / \text{st} -> \st rules cannot consume
+    // the fragment first (same shadowing class as \mathcal{H}^{\text{eff}}).
+    'p^{\\text{eq}}': '\\peq',
+    'q^{\\text{eq}}': '\\qeq',
+    'p^{\\text{st}}': '\\pst',
+    'q^{\\text{st}}': '\\qst',
+    '\\rho^{\\text{eq}}': '\\rhoeq',
+    '\\rho^{\\text{st}}': '\\rhost',
     // Text Commands: \text{cmd} -> \cmd
     ...createPatterns(textCommands, (cmd) => [
       [`\\text{${cmd}}`, `\\${cmd}`],
@@ -182,6 +194,10 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
       [`_{\\${op}}`, `_\\${op}`],
       [`^{\\${op}}`, `^\\${op}`],
     ]),
+    // '\S' is KaTeX's built-in section sign, so the plain-S shortcut lands
+    // on the non-conflicting '\sS' destination instead of '_\S'/'^\S'.
+    '_{\\S}': '_\\sS',
+    '^{\\S}': '^\\sS',
     ...generateDifferentialSpacing(differentialVariables, '~'),
     ...createPatterns(fractionDiffVariables, (variable) => [
       // Handle cases like {dx} -> {\\dd x}
@@ -208,9 +224,19 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
       ],
     ]),
     ...generateCommandShortcuts(GREEK_LETTER_SHORTCUTS),
-    // Combined shortcut: keep this before the \mathcal and effH component rules so
-    // \mathcal{H}^{\text{eff}} reaches \ceffH at runtime.
+    // Combined shortcuts: keep these before the \mathcal, \hat, and effH
+    // component rules so the decorated-H combinations are not consumed
+    // piecemeal first (AUTO \hat{H} -> \hH would otherwise turn
+    // \hat{H}^{\text{eff}} into \hH^{\text{eff}} and the effH rule would
+    // then fire inside it, corrupting to \h\effH).
     '\\mathcal{H}^{\\text{eff}}': '\\ceffH',
+    '\\cH^{\\text{eff}}': '\\ceffH',
+    '\\hat{H}^{\\text{eff}}': '\\hat{\\effH}',
+    '\\hH^{\\text{eff}}': '\\hat{\\effH}',
+    '\\tilde{\\mathcal{H}}^{\\text{eff}}': '\\tilde{\\ceffH}',
+    '\\tcH^{\\text{eff}}': '\\tilde{\\ceffH}',
+    '\\bar{H}^{\\text{eff}}': '\\bar{\\effH}',
+    '\\barH^{\\text{eff}}': '\\bar{\\effH}',
     // Mathcal: \mathcal{X} -> \cX
     ...generateDecoratorShortcuts('mathcal', upperLetters, 'c'),
     // Mathbb: \mathbb{X} -> \eX
@@ -345,10 +371,6 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
 
   // Physics and Statistical Mechanics
   'H^{\\text{eff}}': '\\effH',
-  'p^{\\text{eq}}': '\\peq',
-  'q^{\\text{eq}}': '\\qeq',
-  'p^{\\text{st}}': '\\pst',
-  'q^{\\text{st}}': '\\qst',
   'p^{\\text{ss}}': '\\pst',
   'q^{\\text{ss}}': '\\qst',
 
@@ -376,13 +398,15 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
   '\\tau_f': '\\tauf',
 
   // Equilibrium and steady state notation
-  '\\rho^{\\text{eq}}': '\\rhoeq',
-  '\\rho^{\\text{st}}': '\\rhost',
+  // Subscript rho eq/st stay manual: the AUTO \text{eq}/\text{st} rules
+  // consume the fragment first (preserving \rho_\eq / \rho_\st), so
+  // these entries are inert for bare sources but document the intended
+  // compaction destinations.
+  '\\rho_{\\text{eq}}': '\\rhoeq',
+  '\\rho_{\\text{st}}': '\\rhost',
   '\\rho^{\\text{ss}}': '\\rhost',
   '\\rho^{\\text{sst}}': '\\rhost',
-  '\\rho_{\\text{eq}}': '\\rhoeq',
   '\\rho_{\\text{ss}}': '\\rhost',
-  '\\rho_{\\text{st}}': '\\rhost',
   '\\rho_{\\text{sst}}': '\\rhost',
   '{\\text{ss}}': '{\\text{st}}',
   '{\\text{sst}}': '{\\text{st}}',
@@ -533,6 +557,45 @@ const PAREN_CREF_EQN = `\\(${CREF_EQN}\\)`;
 const PAREN_EQREF_EQN = `\\(${EQREF_EQN}\\)`;
 const CREF_FIG = '\\\\cref\\{(fig:[^,}]+)\\}';
 
+/**
+ * Legacy unbraced `_\S`/`^\S` plain-S shortcut migration.
+ *
+ * Introduced 2026-08-15 (#10507) to migrate persisted pre-#10439
+ * `symbolOperators` output, which used the unbraced S destination before the
+ * plain-S shortcut was renamed to `\sS`. Retire after 2026-11-15, three
+ * months after the replacement shipped; delete the MAX_REGEX spread below,
+ * the max-style-gated engine call in `applyAll`, and the drift assertions
+ * together.
+ *
+ * The negative lookbehind keeps escaped script markers (`\_\S`, `\^\S`)
+ * intact, and the right-side boundary keeps S-prefixed commands such as
+ * `\Strat`/`\Sig` intact. A `\S` followed by a digit remains ambiguous —
+ * legacy `\S0` migration versus a genuine `^\S2` — and is still migrated.
+ */
+export const LEGACY_UNBRACED_S_MIGRATION: RegexReplacementCategory = {
+  name: 'legacy_unbraced_s_migration',
+  description:
+    'Legacy unbraced plain-S shortcut migration for persisted pre-rename output',
+  isRegex: true,
+  flags: 'gms',
+  patterns: {
+    '(?<!\\\\)([_^])\\\\S(?![A-Za-z])': '$1\\sS',
+  },
+};
+
+/**
+ * Convert the KaTeX-only `\sS` plain-S destination back to LaTeX's built-in
+ * `\S` section sign when writing `.tex` files. `\sS` is defined only by the
+ * progress-view KaTeX macro table; project documents compile against the
+ * user's own preamble, where `\sS` is undefined. `\S` compiles everywhere.
+ *
+ * Boundary-aware for the same reason as the migration rule: a literal
+ * `_\sS` prefix replacement would corrupt `_\sStrat`-style commands.
+ */
+export function restoreLatexSectionSign(text: string): string {
+  return text.replaceAll(/([_^])\\sS(?![A-Za-z])/g, '$1\\S');
+}
+
 export const MAX_REGEX_REPLACEMENTS: RegexReplacementCategory = {
   name: 'max_style_regex' satisfies RegexReplacementCategoryName,
   description:
@@ -555,6 +618,12 @@ export const MAX_REGEX_REPLACEMENTS: RegexReplacementCategory = {
     // '([+\\-*\\/])\\s*\\.\\.\\.\\s*([+\\-*\\/])': '$1\\cdots$2',
     // '([,;])\\s*\\.\\.\\.\\s*([,;])': '$1\\ldots$2',
     // Max like ,..,
+
+    // Legacy unbraced '\S' plain-S shortcut migration: introduced
+    // 2026-08-15 (#10507), retire after 2026-11-15 (three months after the
+    // replacement shipped). See LEGACY_UNBRACED_S_MIGRATION for the
+    // boundary-aware details and remaining digit ambiguity.
+    ...LEGACY_UNBRACED_S_MIGRATION.patterns,
 
     // PUNCTUATION AND SPACING
 

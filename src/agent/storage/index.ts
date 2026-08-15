@@ -45,7 +45,14 @@ export {
   deriveResumability,
   type ResumabilityDecision,
 } from './resumability';
-export { inspectExecutionLease } from './executionLease';
+export { formatConversationMessage } from './conversationFormat';
+export {
+  completeOwnedExecutionLease,
+  ExecutionLeaseLostError,
+  inspectExecutionLease,
+  markOwnedExecutionLeaseUndurable,
+  type OwnedExecutionLeaseScope,
+} from './executionLease';
 export { resolveChildRunOutput } from './childRunOutput';
 export {
   SessionStores,

@@ -21,6 +21,9 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
     executions: { getToolUseFollowUpTarget: () => target },
     followUps: new ToolUseFollowUpQueue(),
     events: { emit: vi.fn() },
+    transcripts: {
+      getSummaryMeta: () => undefined,
+    },
     snapshots: {
       getRunMetadata: () => ({}),
       readPersistedExecutionId: vi.fn(async () => undefined),
@@ -46,9 +49,9 @@ function activeTarget(
 
 const id = (value: string) => value as StreamTabId;
 
-/** Stub the run-metadata read the durable-producer path performs. */
+/** Stub the summary-mirror execution-id read the durable-producer path performs. */
 function mockPersistedExecution(session: SessionHandle): void {
-  vi.spyOn(session.snapshots, 'getRunMetadata').mockReturnValue({
+  vi.spyOn(session.transcripts, 'getSummaryMeta').mockReturnValue({
     executionId: 'persisted-execution',
   } as never);
 }

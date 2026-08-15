@@ -322,7 +322,13 @@ export class SessionHandle {
    * runtime that owns the stream phase.
    */
   async repairWaitingIfResumable(streamId: StreamTabId): Promise<boolean> {
-    const executionId = this.snapshots.getRunMetadata(streamId).executionId;
+    // A parked WAITING stream is not part of the bounded startup seed, so its
+    // in-memory record may be absent. Resolve the execution id from the
+    // always-resident summary mirror first and fall back to the one-file
+    // sidecar read — never through the full synchronous snapshot record.
+    const executionId =
+      this.transcripts.getSummaryMeta(streamId)?.executionId ??
+      (await this.snapshots.readPersistedExecutionId(streamId));
     const inFlight = this.waitingRepairProbes.get(streamId);
     if (
       inFlight &&
@@ -361,8 +367,14 @@ export class SessionHandle {
   ): Promise<boolean> {
     const resumability = await deriveResumability(executionId);
     if (!resumability.resumable) return false;
+    // Re-resolve through the summary mirror / one-file sidecar read rather
+    // than the synchronous snapshot record: this probe commonly runs for a
+    // parked WAITING stream that was deliberately not seeded at startup.
+    const currentExecutionId =
+      this.transcripts.getSummaryMeta(streamId)?.executionId ??
+      (await this.snapshots.readPersistedExecutionId(streamId));
     if (
-      this.snapshots.getRunMetadata(streamId).executionId !== executionId ||
+      currentExecutionId !== executionId ||
       !this.status.isCurrentGeneration(streamId, statusGeneration)
     ) {
       return false;
@@ -416,7 +428,7 @@ export class SessionHandle {
         });
       }
       if (generation !== this.storageGeneration) return false;
-      await this.snapshots.load(this.transcripts.keys());
+      await this.snapshots.preload([...this.computeStartupSeedSet()]);
       if (
         generation !== this.storageGeneration ||
         this.restartRepairAbort.signal.aborted
@@ -473,8 +485,8 @@ export class SessionHandle {
       await transitionHooks?.afterStorageCommit();
       await this.transcripts.reload();
       this.status.clearAll();
-      const streamIds = this.transcripts.keys();
-      await this.snapshots.load(streamIds);
+      this.snapshots.evictAll();
+      await this.snapshots.preload([...this.computeStartupSeedSet()]);
       this.markUnfinishedStreamsRunning();
       await this.runRestartRepair(generation);
       storage.finalizeWorkspaceStorageChange?.();
@@ -489,7 +501,7 @@ export class SessionHandle {
       try {
         await this.transcripts.reload({ discardPendingWrites: true });
         this.snapshots.evictAll();
-        await this.snapshots.load(this.transcripts.keys());
+        await this.snapshots.preload([...this.computeStartupSeedSet()]);
         this.status.clearAll();
         for (const [streamId, state] of previousStatus) {
           if (state.phase === STREAM_PHASE.WAITING) {
@@ -557,6 +569,25 @@ export class SessionHandle {
     }
   }
 
+  /**
+   * The bounded set of streams seeded from their sidecars at startup: every
+   * transcript-unfinished stream plus the transitive parent chain behind each
+   * one, so active runs and their provenance are resident while settled
+   * history stays lazy (#9947). Parent edges come from the always-resident
+   * summary mirror, not the sidecars being seeded.
+   */
+  private computeStartupSeedSet(): ReadonlySet<StreamTabId> {
+    const seed = new Set<StreamTabId>();
+    const pending = [...this.transcripts.getUnfinishedStreamIds()];
+    for (let streamId = pending.pop(); streamId; streamId = pending.pop()) {
+      if (seed.has(streamId)) continue;
+      seed.add(streamId);
+      const parent = this.transcripts.getSummaryMeta(streamId)?.parentStreamId;
+      if (parent && !seed.has(parent)) pending.push(parent);
+    }
+    return seed;
+  }
+
   private async runRestartRepair(generation: number): Promise<void> {
     if (
       generation !== this.storageGeneration ||
@@ -569,10 +600,18 @@ export class SessionHandle {
     const unresolvedStreams = new Set<StreamTabId>();
     for (const streamId of this.transcripts.keys()) {
       if (executionIds.has(streamId)) continue;
+      // The stream→execution reverse edge is the persisted sidecar FK;
+      // name resemblance is never ownership. A stream without one stays
+      // unmapped and is skipped by repair. Read the always-resident summary
+      // mirror first; only legacy summaries that predate the mirror fall back
+      // to the one-file sidecar read.
+      const summaryExecutionId =
+        this.transcripts.getSummaryMeta(streamId)?.executionId;
+      if (summaryExecutionId) {
+        executionIds.set(streamId, summaryExecutionId);
+        continue;
+      }
       try {
-        // The stream→execution reverse edge is the persisted sidecar FK;
-        // name resemblance is never ownership. A stream without one stays
-        // unmapped and is skipped by repair.
         const persisted =
           await this.snapshots.readPersistedExecutionId(streamId);
         if (persisted) executionIds.set(streamId, persisted);

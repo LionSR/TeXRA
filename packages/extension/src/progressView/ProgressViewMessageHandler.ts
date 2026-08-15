@@ -165,6 +165,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const secondTierActions: ProgressViewSecondTierActions = {
       getRunMetadata: (stream) =>
         this.provider.state.snapshots.getRunMetadata(stream),
+      preload: (stream) => this.provider.state.snapshots.preload([stream]),
       workflowActions: this.workflowActionsController,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
@@ -212,10 +213,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             action: 'retry',
             feedback,
           }),
-        cancel: (stream, requestId) =>
+        cancel: (stream, requestId) => {
           this.interactions.submitRetryDecision(stream, requestId, {
             action: 'cancel',
-          }),
+          });
+        },
       },
     };
 
@@ -347,6 +349,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         state: {
           getRunMetadata: (stream) =>
             this.provider.state.snapshots.getRunMetadata(stream),
+          preload: (stream) => this.provider.state.snapshots.preload([stream]),
         },
         // Workflow actions intentionally wait for the run to finish.
         runExecutionRequest: (request) => this.executeValidated(request),
@@ -359,6 +362,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             this.provider.state.snapshots.getRunMetadata(stream),
           getOutputFiles: (stream) =>
             this.provider.state.snapshots.getOutputFiles(stream),
+          preload: (stream) => this.provider.state.snapshots.preload([stream]),
         },
         host: {
           compareFiles: async (baseFile, editedFile) => {
@@ -533,6 +537,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           this.provider.state.snapshots.getKnownFilePaths(stream, {
             workspaceOnly: true,
           }),
+        preload: (stream) => this.provider.state.snapshots.preload([stream]),
       },
       runDiff: async (request) => {
         await this.runViewCommand('texra.runLatexdiff', [request]);
@@ -563,9 +568,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       isRetryPending: (stream, requestId) =>
         this.interactions.isRetryPending(stream, requestId),
       triggerRetry: (stream, requestId) =>
-        this.interactions.submitRetryDecision(stream, requestId, {
-          action: 'retry',
-        }),
+        this.interactions.submitRetryWithPersonalCredentials(stream, requestId),
     });
   }
 
@@ -582,6 +585,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           this.provider.state.snapshots.getOutputFiles(stream),
         getCompileFailures: (stream) =>
           this.provider.state.snapshots.getCompileFailures(stream),
+        preload: (stream) => this.provider.state.snapshots.preload([stream]),
       },
       workspace: {
         locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
@@ -702,6 +706,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       }
     }
 
+    await this.provider.state.snapshots.preload([data.stream]);
     const { config } = this.provider.state.snapshots.getRunMetadata(
       data.stream,
     );

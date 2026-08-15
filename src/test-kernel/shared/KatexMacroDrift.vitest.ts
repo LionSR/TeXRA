@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { applyReplacements } from '@replacement/engine';
-import { MAX_STYLE_REPLACEMENTS } from '@replacement/maxRules';
+import {
+  MAX_REGEX_REPLACEMENTS,
+  MAX_STYLE_REPLACEMENTS,
+} from '@replacement/maxRules';
 import { katexMacros } from '@shared/markdown/katexMacros';
 
 const MAX_COMMAND = /\\[A-Za-z][A-Za-z0-9]*/g;
@@ -54,12 +57,13 @@ const KATEX_ONLY_SHORTCUTS = [
  * unnoticed.
  */
 const MAX_ONLY_SHORTCUTS = [
+  '\\bar',
   '\\beta',
   '\\cref',
   '\\frac',
+  '\\hat',
   '\\infty',
   '\\int',
-  '\\label',
   '\\log',
   '\\mathbf',
   '\\mathcal',
@@ -68,6 +72,7 @@ const MAX_ONLY_SHORTCUTS = [
   '\\ref',
   '\\tau',
   '\\text',
+  '\\tilde',
   '\\top',
 ] as const;
 
@@ -85,7 +90,6 @@ const RUNTIME_ONLY_SHORTCUTS = [
   '\\hat',
   '\\infty',
   '\\int',
-  '\\label',
   '\\log',
   '\\mathbf',
   '\\mathcal',
@@ -161,6 +165,125 @@ describe('katexMacros vs maxRules shortcuts', () => {
     expect(
       applyReplacements('\\boldsymbol{\\varphi}', MAX_STYLE_REPLACEMENTS),
     ).toBe('\\bvphi');
+  });
+
+  it('keeps KaTeX built-ins out of the macro table', () => {
+    // '\S' (section sign) and '\bf' (legacy bold switch) are KaTeX
+    // built-ins; as settings macros they would override the built-ins on
+    // every rendering surface, not just max-style output.
+    expect(Object.hasOwn(katexMacros, '\\S')).toBe(false);
+    expect(Object.hasOwn(katexMacros, '\\bf')).toBe(false);
+    expect(Object.hasOwn(katexMacros, '\\sS')).toBe(true);
+    expect(Object.hasOwn(katexMacros, '\\bbf')).toBe(true);
+    const { patterns } = MAX_STYLE_REPLACEMENTS;
+    expect(patterns['_{\\S}']).toBe('_\\sS');
+    expect(patterns['^{\\S}']).toBe('^\\sS');
+    expect(patterns['\\mathbf{f}']).toBe('\\bbf');
+  });
+
+  it('maps built-in-colliding sources to safe destinations at runtime', () => {
+    expect(applyReplacements('_{\\S}', MAX_STYLE_REPLACEMENTS)).toBe('_\\sS');
+    expect(applyReplacements('^{\\S}', MAX_STYLE_REPLACEMENTS)).toBe('^\\sS');
+    expect(applyReplacements('_\\S', MAX_REGEX_REPLACEMENTS)).toBe('_\\sS');
+    expect(applyReplacements('^\\S', MAX_REGEX_REPLACEMENTS)).toBe('^\\sS');
+    // The boundary-aware migration must not turn S-prefixed shortcuts such
+    // as '\Strat'/'\\Sig' into '\sStrat'/'\\sSig'.
+    expect(
+      applyReplacements('_\\Strat', [
+        MAX_STYLE_REPLACEMENTS,
+        MAX_REGEX_REPLACEMENTS,
+      ]),
+    ).toBe('_\\Strat');
+    expect(
+      applyReplacements('^\\Sig', [
+        MAX_STYLE_REPLACEMENTS,
+        MAX_REGEX_REPLACEMENTS,
+      ]),
+    ).toBe('^\\Sig');
+    // Escaped script markers (`\_\S`, `\^\S`) are not legacy unbraced
+    // output; the migration's negative lookbehind must leave them intact.
+    expect(
+      applyReplacements('\\_\\S', [
+        MAX_STYLE_REPLACEMENTS,
+        MAX_REGEX_REPLACEMENTS,
+      ]),
+    ).toBe('\\_\\S');
+    expect(
+      applyReplacements('\\^\\S', [
+        MAX_STYLE_REPLACEMENTS,
+        MAX_REGEX_REPLACEMENTS,
+      ]),
+    ).toBe('\\^\\S');
+    // `\S` followed by a digit is the documented remaining ambiguity: the
+    // migration still rewrites it because legacy `\S0` output is
+    // indistinguishable from a genuine section sign in `x^\S2`.
+    expect(
+      applyReplacements('x^\\S2', [
+        MAX_STYLE_REPLACEMENTS,
+        MAX_REGEX_REPLACEMENTS,
+      ]),
+    ).toBe('x^\\sS2');
+    expect(applyReplacements('\\mathbf{f}', MAX_STYLE_REPLACEMENTS)).toBe(
+      '\\bbf',
+    );
+    expect(applyReplacements('{\\bf f}', MAX_STYLE_REPLACEMENTS)).toBe('\\bbf');
+  });
+
+  it('keeps decorated-H eff combinations intact at runtime', () => {
+    expect(
+      applyReplacements('\\mathcal{H}^{\\text{eff}}', MAX_STYLE_REPLACEMENTS),
+    ).toBe('\\ceffH');
+    expect(
+      applyReplacements('\\cH^{\\text{eff}}', MAX_STYLE_REPLACEMENTS),
+    ).toBe('\\ceffH');
+    expect(
+      applyReplacements('\\hat{H}^{\\text{eff}}', MAX_STYLE_REPLACEMENTS),
+    ).toBe('\\hat{\\effH}');
+    expect(
+      applyReplacements('\\hH^{\\text{eff}}', MAX_STYLE_REPLACEMENTS),
+    ).toBe('\\hat{\\effH}');
+    expect(
+      applyReplacements(
+        '\\tilde{\\mathcal{H}}^{\\text{eff}}',
+        MAX_STYLE_REPLACEMENTS,
+      ),
+    ).toBe('\\tilde{\\ceffH}');
+    expect(
+      applyReplacements('\\tcH^{\\text{eff}}', MAX_STYLE_REPLACEMENTS),
+    ).toBe('\\tilde{\\ceffH}');
+    expect(
+      applyReplacements('\\bar{H}^{\\text{eff}}', MAX_STYLE_REPLACEMENTS),
+    ).toBe('\\bar{\\effH}');
+    expect(
+      applyReplacements('\\barH^{\\text{eff}}', MAX_STYLE_REPLACEMENTS),
+    ).toBe('\\bar{\\effH}');
+  });
+
+  it('fires the eq/st compaction family at runtime', () => {
+    expect(applyReplacements('p^{\\text{eq}}', MAX_STYLE_REPLACEMENTS)).toBe(
+      '\\peq',
+    );
+    expect(applyReplacements('q^{\\text{eq}}', MAX_STYLE_REPLACEMENTS)).toBe(
+      '\\qeq',
+    );
+    expect(applyReplacements('p^{\\text{st}}', MAX_STYLE_REPLACEMENTS)).toBe(
+      '\\pst',
+    );
+    expect(applyReplacements('q^{\\text{st}}', MAX_STYLE_REPLACEMENTS)).toBe(
+      '\\qst',
+    );
+    expect(
+      applyReplacements('\\rho^{\\text{eq}}', MAX_STYLE_REPLACEMENTS),
+    ).toBe('\\rhoeq');
+    expect(
+      applyReplacements('\\rho_{\\text{eq}}', MAX_STYLE_REPLACEMENTS),
+    ).toBe('\\rho_\\eq');
+    expect(
+      applyReplacements('\\rho^{\\text{st}}', MAX_STYLE_REPLACEMENTS),
+    ).toBe('\\rhost');
+    expect(
+      applyReplacements('\\rho_{\\text{st}}', MAX_STYLE_REPLACEMENTS),
+    ).toBe('\\rho_\\st');
   });
 
   it('keeps runtime max-style output resolvable by the renderer macros', () => {

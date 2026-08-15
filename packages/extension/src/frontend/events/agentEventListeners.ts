@@ -37,15 +37,18 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'agentEventListeners';
 
-function handleRequestOpenFile(payload: RequestOpenFilePayload): void {
-  openBuildDisplayIfTex(payload.location, {
+function handleRequestOpenFile(
+  payload: RequestOpenFilePayload,
+): Promise<boolean> {
+  return openBuildDisplayIfTex(payload.location, {
     preserveFocus: payload.preserveFocus,
-  }).catch((err) =>
+  }).catch((err) => {
     logger.warn(
       CHANNEL,
       `Failed to open file ${payload.location.absolutePath}: ${toErrorMessage(err)}`,
-    ),
-  );
+    );
+    return false;
+  });
 }
 
 /**
@@ -97,6 +100,12 @@ async function handleRequestShowInstruction(
       payload.showSuppress,
       { deferDismissal: true },
     );
+    // The "never remind again" suppression path also reports delivered:
+    // `showInstructionWithSuppress` returns without rendering when the user
+    // previously opted out of this key, and firing the caller's generic
+    // fallback then would resurface the same notice through a toast the user
+    // cannot suppress. The launch error itself still surfaces through the
+    // failed run.
     return true;
   } catch (err) {
     logger.warn(
@@ -129,23 +138,50 @@ async function handleShowAgentConfigBanner(
   }
 }
 
-function handleRequestShowError({ message }: RequestShowErrorPayload): void {
-  void vscode.window.showErrorMessage(message);
+function handleRequestShowError({ message }: RequestShowErrorPayload): boolean {
+  try {
+    // Delivery is the toast handoff: `showErrorMessage` resolves only on
+    // dismissal, which no caller should wait on, so report once VS Code has
+    // accepted the request. The returned Thenable is still observed so a
+    // post-handoff rejection (e.g. while the extension host is tearing down)
+    // is logged instead of becoming an unhandled rejection.
+    const toast = vscode.window.showErrorMessage(message);
+    void Promise.resolve(toast).catch((err: unknown) => {
+      logger.warn(
+        CHANNEL,
+        `Error toast failed after handoff: ${toErrorMessage(err)}`,
+      );
+    });
+    return true;
+  } catch (err) {
+    logger.warn(
+      CHANNEL,
+      `Failed to show the error toast: ${toErrorMessage(err)}`,
+    );
+    return false;
+  }
 }
 
 async function handleRequestEnsureProgressView(
   payload: RequestEnsureProgressViewPayload,
   progressViewProvider: ProgressViewProvider,
-): Promise<void> {
-  if (progressViewProvider.isViewVisible()) return;
+): Promise<boolean> {
+  if (progressViewProvider.isViewVisible()) return true;
 
   await vscode.commands.executeCommand('texra.showProgressView');
 
-  // If the view is still not visible after attempting to open it and a
-  // fallback notification was provided, show a toast as a last resort.
-  // This preserves the original two-check semantics that relied on await.
+  // Delivery is the reveal actually becoming visible, not the reveal command
+  // resolving. Re-check after the command before treating the event as
+  // presented.
+  if (progressViewProvider.isViewVisible()) return true;
+
   const fb = payload.fallbackNotification;
-  if (fb && !progressViewProvider.isViewVisible()) {
+  if (fb) {
+    // If the view is still not visible after attempting to open it and a
+    // fallback notification was provided, show a toast as a last resort.
+    // The toast itself is the delivered surface when the view cannot be made
+    // visible: a successful handoff means the event was presented even if
+    // the user dismisses it without retrying the reveal.
     const outputPart = fb.outputInfo ? ` (${fb.outputInfo})` : '';
     const selection = await vscode.window.showInformationMessage(
       `"${fb.agentName}" is processing ${fb.inputName} with ${fb.modelName}${outputPart}.`,
@@ -157,9 +193,21 @@ async function handleRequestEnsureProgressView(
       'Show Progress View',
     );
     if (selection) {
-      await vscode.commands.executeCommand('texra.showProgressView');
+      try {
+        await vscode.commands.executeCommand('texra.showProgressView');
+      } catch (err) {
+        // The toast handoff already established delivery; a failed retry is
+        // a diagnostic, not non-delivery, so it must not downgrade the event.
+        logger.warn(
+          CHANNEL,
+          `Failed to retry the progress-view reveal: ${toErrorMessage(err)}`,
+        );
+      }
     }
+    return true;
   }
+
+  return false;
 }
 
 /**
@@ -182,9 +230,16 @@ function createPresentationEventHandlers(
     requestShowInstruction: handleRequestShowInstruction,
     showAgentConfigBanner: handleShowAgentConfigBanner,
     requestShowError: handleRequestShowError,
-    requestEnsureProgressView: (payload) => {
-      void handleRequestEnsureProgressView(payload, progressViewProvider);
-    },
+    requestEnsureProgressView: (payload) =>
+      handleRequestEnsureProgressView(payload, progressViewProvider).catch(
+        (err) => {
+          logger.warn(
+            CHANNEL,
+            `Failed to reveal the progress view: ${toErrorMessage(err)}`,
+          );
+          return false;
+        },
+      ),
   };
 }
 

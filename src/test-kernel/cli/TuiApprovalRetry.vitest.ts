@@ -253,16 +253,35 @@ function chatGptSubscriptionRetry(streamId: string): RetryPermission {
   } as RetryPermission;
 }
 
-function kimiCodeSubscriptionRetry(streamId: string): RetryPermission {
+function kimiCodeSubscriptionRetry(
+  streamId: string,
+  model = 'kimi3',
+): RetryPermission {
   const message = 'Kimi Code subscription usage limit reached.';
   return {
     streamId,
     operation: 'model request',
+    model,
     errorMessage: message,
     errorDetails: {
       message,
       exhaustionReason: 'kimi-code-subscription',
       provider: 'moonshot',
+    },
+  } as RetryPermission;
+}
+
+function glmCodingPlanRetry(streamId: string): RetryPermission {
+  const message = 'GLM Coding Plan usage limit reached.';
+  return {
+    streamId,
+    operation: 'model request',
+    model: 'glm46',
+    errorMessage: message,
+    errorDetails: {
+      message,
+      exhaustionReason: 'glm-coding-plan',
+      provider: 'glm',
     },
   } as RetryPermission;
 }
@@ -840,35 +859,262 @@ describe('TUI retry approvals', () => {
     expect(currentApproval.get()).toBeUndefined();
   });
 
-  it('disables a catalogued coding plan before retrying with a personal key', async () => {
+  it('auto-switches a Kimi Code subscription limit to the stored Moonshot key', async () => {
     mocks.preferKimiCode = true;
     mocks.hasUsableApiKey.mockImplementation(
       async (_secrets, provider: ApiProvider) => provider === 'moonshot',
     );
 
-    const { interactions } = tui();
+    const { interactions, prepareRetry } = tui();
     const result = interactions.requestRetry?.(
       kimiCodeSubscriptionRetry('kimi-limit'),
     );
-    await waitForApproval('retry', {
-      streamId: 'kimi-limit',
-      personalApiKeyAvailable: true,
-    });
 
-    decideRetry({
-      accepted: true,
-      apiMode: 'personal',
-      disableCodingPlan: 'kimiCode',
+    await vi.waitFor(() => {
+      expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
     });
-
     await expect(result).resolves.toEqual({
       action: 'retry',
+      decisionSource: 'automatic',
       feedback: undefined,
     });
     expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledWith(
       'kimiCode',
       false,
     );
+    expect(prepareRetry).toHaveBeenCalledWith('personal', expect.anything());
+    // The plan must be off before the client rebuild: endpoint and credential
+    // resolution read the live preference, so rebuilding first would prepare
+    // the retry against the exhausted coding route again.
+    expect(
+      mocks.setCliCodingPlanSubscription.mock.invocationCallOrder[0],
+    ).toBeLessThan(prepareRetry.mock.invocationCallOrder[0] ?? 0);
+    // The modal's quota warning was skipped, so the terminal notification is
+    // the only signal that a persisted preference was flipped.
+    expect(mocks.notify).toHaveBeenCalledWith('credentialSwitched');
+    expect(prepareRetry.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+      mocks.notify.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(currentApproval.get()).toBeUndefined();
+  });
+
+  it('announces the credential switch only after the personal client is prepared', async () => {
+    mocks.preferKimiCode = true;
+    mocks.hasUsableApiKey.mockImplementation(
+      async (_secrets, provider: ApiProvider) => provider === 'moonshot',
+    );
+    const prepareRetry = vi.fn(async () => {
+      throw new Error('Moonshot client construction failed');
+    });
+
+    const { interactions } = tui();
+    const result = interactions.requestRetry?.(
+      kimiCodeSubscriptionRetry('kimi-notify-failure'),
+      { prepareRetry },
+    );
+
+    await expect(result).resolves.toEqual({
+      action: 'deny',
+      reason: 'Moonshot client construction failed',
+    });
+    // The automatic decision must not announce a switch that then rolled back.
+    expect(mocks.notify).not.toHaveBeenCalled();
+    expect(mocks.preferKimiCode).toBe(true);
+  });
+
+  it('keeps the modal for a Kimi Code-exclusive model with no Moonshot fallback', async () => {
+    mocks.preferKimiCode = true;
+    mocks.hasUsableApiKey.mockImplementation(
+      async (_secrets, provider: ApiProvider) => provider === 'moonshot',
+    );
+
+    const { interactions, prepareRetry } = tui();
+    const result = interactions.requestRetry?.(
+      kimiCodeSubscriptionRetry('kimi-exclusive', 'kimiCoding'),
+    );
+
+    // A stored Moonshot key must not auto-switch a kimi-for-coding model:
+    // the coding endpoint is its only route, so the switch would retry the
+    // same exhausted credential without a human decision. The modal is shown
+    // without the API-key switch affordance, so the key availability lookup is
+    // skipped as well.
+    await waitForApproval('retry', { streamId: 'kimi-exclusive' });
+    expect(
+      (
+        currentApproval.get()?.payload as
+          | {
+              personalApiKeyAvailable?: boolean;
+            }
+          | undefined
+      )?.personalApiKeyAvailable,
+    ).toBeUndefined();
+    expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
+    decideRetry({ accepted: false });
+
+    await expect(result).resolves.toEqual({ action: 'cancel' });
+    expectNoCredentialChange(prepareRetry);
+    expect(mocks.notify).not.toHaveBeenCalledWith('credentialSwitched');
+  });
+
+  it.each([
+    {
+      name: 'Kimi Code',
+      retry: () => kimiCodeSubscriptionRetry('plan-no-key'),
+    },
+    { name: 'GLM Coding Plan', retry: () => glmCodingPlanRetry('plan-no-key') },
+  ])(
+    'falls back to the modal for a $name retry without a usable fallback key',
+    async ({ retry }) => {
+      mocks.preferKimiCode = true;
+      mocks.glmCodingPlan = true;
+      mocks.hasUsableApiKey.mockResolvedValue(false);
+
+      const { interactions, prepareRetry } = tui();
+      const result = interactions.requestRetry?.(retry());
+
+      await waitForApproval('retry', {
+        streamId: 'plan-no-key',
+        personalApiKeyAvailable: false,
+      });
+      decideRetry({ accepted: false });
+
+      await expect(result).resolves.toEqual({ action: 'cancel' });
+      expectNoCredentialChange(prepareRetry);
+    },
+  );
+
+  it('auto-switches a GLM Coding Plan limit to the stored GLM key', async () => {
+    mocks.glmCodingPlan = true;
+    mocks.hasUsableApiKey.mockImplementation(
+      async (_secrets, provider: ApiProvider) => provider === 'glm',
+    );
+
+    const { interactions, prepareRetry } = tui();
+    const result = interactions.requestRetry?.(glmCodingPlanRetry('glm-limit'));
+
+    await vi.waitFor(() => {
+      expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
+    });
+    await expect(result).resolves.toEqual({
+      action: 'retry',
+      decisionSource: 'automatic',
+      feedback: undefined,
+    });
+    expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledWith(
+      'glmCodingPlan',
+      false,
+    );
+    expect(
+      mocks.setCliCodingPlanSubscription.mock.invocationCallOrder[0],
+    ).toBeLessThan(prepareRetry.mock.invocationCallOrder[0] ?? 0);
+    expect(mocks.notify).toHaveBeenCalledWith('credentialSwitched');
+    expect(currentApproval.get()).toBeUndefined();
+  });
+
+  it('restores the coding-plan preference when the fallback client cannot be prepared', async () => {
+    mocks.preferKimiCode = true;
+    mocks.hasUsableApiKey.mockImplementation(
+      async (_secrets, provider: ApiProvider) => provider === 'moonshot',
+    );
+    const prepareRetry = vi.fn(async () => {
+      throw new Error('Moonshot client construction failed');
+    });
+
+    const { interactions } = tui();
+    const result = interactions.requestRetry?.(
+      kimiCodeSubscriptionRetry('kimi-prepare-fails'),
+      { prepareRetry },
+    );
+
+    await expect(result).resolves.toEqual({
+      action: 'deny',
+      reason: 'Moonshot client construction failed',
+    });
+    // The plan was disabled before the failed preparation, so it must be put
+    // back: a retry that never ran leaves no settings behind.
+    expect(mocks.preferKimiCode).toBe(true);
+    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true, undefined, {
+      preserveOpenRouter: true,
+    });
+    expect(mocks.refreshSubscriptionPreferenceViews).toHaveBeenCalled();
+    expectNoPreferenceWrites();
+  });
+
+  it('restores the coding-plan preference when cancellation interrupts client preparation', async () => {
+    mocks.preferKimiCode = true;
+    mocks.hasUsableApiKey.mockImplementation(
+      async (_secrets, provider: ApiProvider) => provider === 'moonshot',
+    );
+    const preparation = pDefer<void>();
+    const prepareRetry = vi.fn(async () => preparation.promise);
+
+    const { interactions } = tui();
+    const result = interactions.requestRetry?.(
+      kimiCodeSubscriptionRetry('kimi-cancel-prepare'),
+      { prepareRetry },
+    );
+    await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
+    expect(mocks.preferKimiCode).toBe(false);
+
+    interactions.cancel({ streamId: 'kimi-cancel-prepare', kind: 'retry' });
+    await expect(result).resolves.toEqual({ action: 'cancel' });
+    preparation.resolve();
+    await settleRetryContinuation();
+
+    expect(mocks.preferKimiCode).toBe(true);
+    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true, undefined, {
+      preserveOpenRouter: true,
+    });
+    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+  });
+
+  it('serializes coding-plan rollback ahead of a newer coding-plan switch', async () => {
+    mocks.preferKimiCode = true;
+    mocks.hasUsableApiKey.mockImplementation(
+      async (_secrets, provider: ApiProvider) => provider === 'moonshot',
+    );
+    const firstPreparation = pDefer<void>();
+    const firstPrepare = vi.fn(async () => firstPreparation.promise);
+    const secondPrepare = vi.fn(async () => undefined);
+
+    const { interactions } = tui();
+    const first = interactions.requestRetry?.(
+      kimiCodeSubscriptionRetry('plan-race-first'),
+      { prepareRetry: firstPrepare },
+    );
+    await vi.waitFor(() => expect(firstPrepare).toHaveBeenCalledOnce());
+    expect(mocks.preferKimiCode).toBe(false);
+
+    const second = interactions.requestRetry?.(
+      kimiCodeSubscriptionRetry('plan-race-second'),
+      { prepareRetry: secondPrepare },
+    );
+    await settleRetryContinuation();
+    // The second switch must wait behind the first switch's rollback: only
+    // the first disable has committed so far.
+    expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledTimes(1);
+
+    firstPreparation.reject(new Error('first fallback failed'));
+    await expect(first).resolves.toEqual({
+      action: 'deny',
+      reason: 'first fallback failed',
+    });
+    await expect(second).resolves.toEqual({
+      action: 'retry',
+      decisionSource: 'automatic',
+      feedback: undefined,
+    });
+    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true, undefined, {
+      preserveOpenRouter: true,
+    });
+    // The stale rollback restores the plan before the newer switch disables it
+    // again, so the second retry still runs on the personal route.
+    expect(
+      mocks.setPreferKimiCode.mock.invocationCallOrder[0] ?? 0,
+    ).toBeLessThan(
+      mocks.setCliCodingPlanSubscription.mock.invocationCallOrder[1] ?? 0,
+    );
+    expect(mocks.preferKimiCode).toBe(false);
   });
 
   it('restores Kimi without overwriting a newer OpenRouter choice', async () => {
@@ -886,12 +1132,6 @@ describe('TUI retry approvals', () => {
     const result = interactions.requestRetry?.(
       kimiCodeSubscriptionRetry('kimi-rollback'),
     );
-    await waitForApproval('retry', { streamId: 'kimi-rollback' });
-    decideRetry({
-      accepted: true,
-      apiMode: 'personal',
-      disableCodingPlan: 'kimiCode',
-    });
 
     await expect(result).resolves.toEqual({
       action: 'deny',

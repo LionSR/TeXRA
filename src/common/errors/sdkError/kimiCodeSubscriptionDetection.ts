@@ -1,5 +1,4 @@
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
-import { isObject } from '@utils/core';
 
 import { formatResetDuration } from './chatgptSubscriptionDetection';
 import {
@@ -7,6 +6,7 @@ import {
   pickNumberField,
   pickStringField,
 } from './errorInspection';
+import { detectSdkRequestBaseURL } from './sdkRequestEndpoint';
 
 /**
  * Detection + formatting for the Kimi Code (Moonshot coding-subscription)
@@ -36,15 +36,11 @@ const USAGE_LIMIT_PATTERN =
   /usage limit for this billing cycle|quota will be refreshed in the next cycle/i;
 
 /** Whether the error's request targeted the Kimi Code coding endpoint. The
- *  OpenAI SDK exposes the request config (with `baseURL`) directly on the
- *  error, so this is a single field read — no cause-chain walk. */
+ *  endpoint comes from the request-config side channel
+ *  ({@link detectSdkRequestBaseURL}): the OpenAI SDK's `APIError` carries no
+ *  request config of its own, so the handler boundary records it there. */
 function isKimiCodeEndpointError(err: unknown): boolean {
-  if (!isObject(err)) return false;
-  const request = (err as { request?: { baseURL?: unknown } }).request;
-  return (
-    typeof request?.baseURL === 'string' &&
-    request.baseURL.includes(KIMI_CODE_BASE_URL)
-  );
+  return detectSdkRequestBaseURL(err)?.includes(KIMI_CODE_BASE_URL) === true;
 }
 
 /**

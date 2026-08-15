@@ -8,13 +8,11 @@ import {
 } from '@agent/runtime';
 import {
   deriveResumability,
+  ExecutionLeaseLostError,
   inspectExecutionLease,
+  type OwnedExecutionLeaseScope,
   type ResumabilityDecision,
 } from '@agent/storage';
-import {
-  ExecutionLeaseLostError,
-  type OwnedExecutionLeaseScope,
-} from '@agent/storage/executionLease';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import {
   validateExecutionRequest,

@@ -206,6 +206,86 @@ describe('AgentLaunchContext', () => {
     owner.dispose();
   });
 
+  it('emits the generic fallback when a queued banner replay throws synchronously', async () => {
+    // A host adapter whose emit throws synchronously (e.g. a desktop renderer
+    // post during teardown) escapes the replay closure's promise chain. It
+    // must still trip the not-delivered fallback — otherwise the launch
+    // error stays presentation-pending and surfaces zero times (#10398).
+    const events: Array<{ event: string; payload: unknown }> = [];
+    const owner = new SessionHostInteractions();
+    let thrown: unknown;
+
+    await getAgentPath(
+      '__queued_missing_agent_for_launch_context_test__',
+      owner,
+      AgentCategory.ToolUse,
+    ).catch((error: unknown) => {
+      thrown = error;
+    });
+    expect(String(thrown)).toContain('Could not find agent');
+    expect(hasErrorPresentedMarker(thrown)).toBe(false);
+    expect(hasErrorPresentationPending(thrown)).toBe(true);
+
+    owner.use({
+      emit: (event, payload) => {
+        if (event === 'showAgentConfigBanner') {
+          throw new Error('renderer torn down mid-post');
+        }
+        events.push({ event, payload });
+        return false;
+      },
+      cancel: () => {},
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(hasErrorPresentedMarker(thrown)).toBe(false);
+    expect(
+      events.filter((entry) => entry.event === 'requestShowError'),
+    ).toHaveLength(1);
+    owner.dispose();
+  });
+
+  it('normalizes a live-host synchronous banner throw into the generic toast fallback', async () => {
+    // A live (already attached) host whose emit throws synchronously is
+    // normalized to `false` by `SessionHostInteractions.emit`, leaving the
+    // error unmarked so the launch catch emits the generic fallback on the
+    // same host (#10466).
+    const events: Array<{ event: string; payload: unknown }> = [];
+    const owner = new SessionHostInteractions();
+    owner.use({
+      emit: (event, payload) => {
+        if (event === 'showAgentConfigBanner') {
+          throw new Error('renderer torn down mid-post');
+        }
+        events.push({ event, payload });
+        return false;
+      },
+      cancel: () => {},
+    });
+    const session = createTestSession({ interactions: owner });
+    let thrown: unknown;
+
+    try {
+      await buildAgentLaunchContext({
+        config: AgentConfigSchema.parse({ agent: '', model: '' }),
+        session,
+      }).catch((error: unknown) => {
+        thrown = error;
+      });
+    } finally {
+      session.dispose();
+    }
+
+    expect(String(thrown)).toContain('Could not find agent');
+    expect(hasErrorPresentedMarker(thrown)).toBe(false);
+    expect(hasErrorPresentationPending(thrown)).toBe(false);
+    expect(
+      events.filter((entry) => entry.event === 'requestShowError'),
+    ).toHaveLength(1);
+    owner.dispose();
+  });
+
   it('does not queue a second generic toast while a missing-agent banner replay is pending', async () => {
     const recording = createRecordingHost({ emitDelivery: false });
     const owner = new SessionHostInteractions();

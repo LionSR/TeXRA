@@ -17,6 +17,8 @@ import {
   saveCycleDebug,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { FinalTool } from '@agent/types/ModelHandlerContracts';
+import { createKimiCodeFallbackHandler } from '@agent/runtime/ModelFactory';
+import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import {
   hasContextWindowErrorMarker,
   hasMissingApiKeyErrorMarker,
@@ -185,6 +187,47 @@ export class ModelInvocationNode<
         data: rebindError,
       });
     }
+  }
+
+  /**
+   * Prepare the run's client for a credential-selecting retry. Most selections
+   * only need a rebind: the live handler re-resolves credential and endpoint
+   * from the current settings. The exception is a dual-backend Kimi model whose
+   * handler was dispatched onto the Kimi Code coding endpoint — its synthesized
+   * config pins the coding `baseUrl` and wire id, so a rebind would resolve the
+   * same exhausted Kimi Code credential again. For a 'personal' selection the
+   * host has already disabled the plan preference, so rebuild the handler from
+   * the registry config and swap it in (the mid-run replacement the model
+   * switcher also uses); the next attempt then builds its client against the
+   * Moonshot fallback.
+   */
+  private async prepareRetryForCredentialSelection(
+    selection: ModelCredentialSelection,
+    signal: AbortSignal | undefined,
+  ): Promise<void> {
+    const { modelCell } = this.services;
+    if (selection !== 'personal') {
+      await modelCell.rebind(selection, signal);
+      return;
+    }
+    const fallback = await createKimiCodeFallbackHandler(
+      modelCell.handler.config,
+      this.services.config.model,
+      this.services.runScope.session.responseTextProcessing,
+    );
+    if (!fallback) {
+      await modelCell.rebind(selection, signal);
+      return;
+    }
+    fallback.setAgentCategory(this.services.config.agentCategory);
+    fallback.setLogger(this.services.logger);
+    try {
+      signal?.throwIfAborted();
+    } catch (error) {
+      fallback.dispose();
+      throw error;
+    }
+    modelCell.swap(fallback, this.services.config.model);
   }
 
   /** Emit compact diagnostic data for durable, non-presentational recording. */
@@ -484,7 +527,6 @@ export class ModelInvocationNode<
     });
     // No timeout: the retry panel waits indefinitely for the user's decision.
     let clientPrepared = false;
-    const { modelCell } = this.services;
     const interaction = session.interactions.requestRetry(
       {
         requestId: `retry-${generateShortId()}`,
@@ -496,7 +538,7 @@ export class ModelInvocationNode<
       },
       {
         prepareRetry: async (selection, signal) => {
-          await modelCell.rebind(selection, signal);
+          await this.prepareRetryForCredentialSelection(selection, signal);
           clientPrepared = true;
         },
       },
