@@ -13,7 +13,7 @@ const StableSubagentAttemptSchema = z.strictObject({
   schemaVersion: z.literal(STABLE_SUBAGENT_STATE_SCHEMA_VERSION),
   logicalExecutionId: ExecutionIdSchema,
   parentExecutionId: ExecutionIdSchema,
-  phase: z.enum(['reserved', 'launched', 'retryable']),
+  phase: z.enum(['reserved', 'launched', 'committed', 'retryable']),
 });
 
 export type StableSubagentAttempt = z.infer<typeof StableSubagentAttemptSchema>;
@@ -76,7 +76,7 @@ export async function readStableSubagentAttempt(
   return raw === undefined ? null : StableSubagentAttemptSchema.parse(raw);
 }
 
-/** Atomically replace the stable-call marker before crossing a launch edge. */
+/** Atomically replace the stable-call marker at a durable lifecycle edge. */
 export async function writeStableSubagentAttempt(
   store: ExecutionKVStore,
   attempt: StableSubagentAttempt,

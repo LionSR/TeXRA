@@ -224,6 +224,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     }
   >();
   let constructionEmissionSeen = false;
+  const issuedCallIds = new Set<WorkflowCallProgress['id']>();
   let runOutcome: RunOutcome = RUN_OUTCOME.FAILED;
 
   /**
@@ -427,6 +428,9 @@ export async function runPersistedWorkflowScriptWithProgress(
     transition?: WorkflowExecutionTransition,
   ): void => {
     if (closed) return;
+    if (transition?.type === 'call-issued') {
+      issuedCallIds.add(transition.callId);
+    }
     try {
       declaredStageTotal ??= snapshot.stages.length;
       for (const stage of snapshot.stages) {
@@ -477,10 +481,7 @@ export async function runPersistedWorkflowScriptWithProgress(
           // hydration and reissue occur within the same clock tick. Sweep-only
           // terminalization of an omitted call therefore stays silent.
           if (baseline.status === 'planned') {
-            const reissued =
-              transition?.type === 'call-issued' &&
-              transition.callId === call.id;
-            if (!reissued) continue;
+            if (!issuedCallIds.has(call.id)) continue;
           } else if (
             baseline.status === status &&
             baseline.childStreamId === call.childStreamId
@@ -488,6 +489,7 @@ export async function runPersistedWorkflowScriptWithProgress(
             continue;
           }
           hydratedBaseline.delete(call.id);
+          issuedCallIds.delete(call.id);
         }
         const streamChanged =
           call.childStreamId !== undefined &&

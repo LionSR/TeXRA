@@ -6,13 +6,11 @@ import type {
 } from '@shared/settingsView/types';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-import {
-  buildModelSelectionMessage,
-  createModelSelectionController,
-  type ModelSelectionExtras,
-} from './SettingsModelSelectionControllerFactory';
 import { SettingsMemoryController } from './SettingsMemoryController';
-import type { SettingsModelSelectionController } from './SettingsModelSelectionController';
+import {
+  SettingsModelSelectionController,
+  type ModelSelectionExtras,
+} from './SettingsModelSelectionController';
 
 type Awaitable<T> = T | PromiseLike<T>;
 type MemoryPreviewMessage = SettingsMessageFor<
@@ -71,10 +69,10 @@ export class SettingsViewHost {
       });
     this.modelSelectionController =
       options.controllers?.modelSelection ??
-      createModelSelectionController(
-        options.state,
-        options.modelSelectionExtras,
-      );
+      new SettingsModelSelectionController({
+        ...options.modelSelectionExtras,
+        globalState: options.state.globalState,
+      });
   }
 
   async sendMemoryData(respond?: SettingsRespond): Promise<void> {
@@ -143,7 +141,7 @@ export class SettingsViewHost {
   async sendModelSelectionData(respond?: SettingsRespond): Promise<void> {
     await this.options.beforeModelSelectionMessage?.();
     await this.post(
-      await buildModelSelectionMessage(this.modelSelectionController),
+      await this.modelSelectionController.buildModelSelectionMessage(),
       respond,
     );
   }

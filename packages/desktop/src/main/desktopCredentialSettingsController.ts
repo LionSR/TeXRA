@@ -15,11 +15,9 @@ import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionU
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import {
-  buildModelSelectionMessage,
-  createModelSelectionController,
+  SettingsModelSelectionController,
   type ModelSelectionExtras,
-} from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
-import type { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
+} from '@controllers/settingsView/SettingsModelSelectionController';
 import type { ExternalOpener, PromptHost } from '@hosts/uiHosts';
 import {
   computeModelOptionsData,
@@ -156,10 +154,10 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   ) {
     this.subscriptionUsage =
       options.subscriptionUsage ?? new SubscriptionUsageService();
-    this.modelSelectionController = createModelSelectionController(
-      options,
-      options.modelSelectionExtras,
-    );
+    this.modelSelectionController = new SettingsModelSelectionController({
+      ...options.modelSelectionExtras,
+      globalState: options.globalState,
+    });
     this.profileController = new SettingsProfileController({
       globalState: options.globalState,
       loadProviderKeyStatuses: () =>
@@ -563,7 +561,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
 
   private async postModelSelectionData(): Promise<void> {
     this.options.renderer.postToRenderer(
-      await buildModelSelectionMessage(this.modelSelectionController),
+      await this.modelSelectionController.buildModelSelectionMessage(),
     );
   }
 }
