@@ -73,6 +73,10 @@ beforeEach(() => {
   git(['config', 'user.name', 'test']);
   git(['config', 'commit.gpgsign', 'false']);
   writeFileSync(join(dir, '.prettierrc'), '{}\n');
+  // The hook skips files whose worktree-selected config is untracked
+  // (#10367), so the fixture config starts out committed.
+  git(['add', '.prettierrc']);
+  git(['commit', '-qm', 'init']);
 });
 
 afterEach(() => {
@@ -190,6 +194,32 @@ describe('format-staged', () => {
     expect(git(['diff', '--stat', 'c.ts'])).toContain('1 insertion');
   });
 
+  it('leaves a mixed-EOL working tree byte-identical (#10369)', () => {
+    writeFileSync(
+      join(dir, 'c.ts'),
+      MULTI_STAGED.replace('{x:1,y:2}', '{x:1}'),
+    );
+    git(['add', 'c.ts']);
+    git(['commit', '-qm', 'base']);
+    writeFileSync(join(dir, 'c.ts'), MULTI_STAGED);
+    git(['add', 'c.ts']);
+    // Unstaged edit with mixed endings: one CRLF line among LF lines.
+    const mixed = MULTI_UNSTAGED.replace(
+      'const a={x:1,y:2};\n',
+      'const a={x:1,y:2};\r\n',
+    );
+    writeFileSync(join(dir, 'c.ts'), mixed);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('mixed LF/CRLF line endings');
+    // The staged blob is still formatted...
+    expect(stagedBlob('c.ts')).toBe(MULTI_FORMATTED);
+    // ...but no unstaged line's bytes are rewritten.
+    expect(readFileSync(join(dir, 'c.ts'), 'utf8')).toBe(mixed);
+  });
+
   it.skipIf(process.platform === 'win32')(
     'keeps newer worktree content if it appears during the merge-file write',
     () => {
@@ -271,6 +301,58 @@ describe('format-staged', () => {
     expect(stagedBlob('ignored.ts')).toBe(STAGED);
   });
 
+  it('skips auto-staging when the nearest config is untracked (#10367)', () => {
+    mkdirSync(join(dir, 'src'));
+    // A nearer, untracked config must not shape the staged blob.
+    writeFileSync(join(dir, 'src/.prettierrc'), '{"semi":false}\n');
+    writeFileSync(join(dir, 'src/a.ts'), STAGED);
+    git(['add', 'src/a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('src/.prettierrc is not staged');
+    expect(stagedBlob('src/a.ts')).toBe(STAGED);
+  });
+
+  it('applies overrides relative to a staged config with unstaged edits (#10368)', () => {
+    writeFileSync(
+      join(dir, '.prettierrc'),
+      '{"overrides":[{"files":"src/**","options":{"semi":false}}]}\n',
+    );
+    git(['add', '.prettierrc']);
+    // Unstaged edit drops the override; the staged config must still win,
+    // resolved against the config's own directory.
+    writeFileSync(join(dir, '.prettierrc'), '{}\n');
+    mkdirSync(join(dir, 'src'));
+    writeFileSync(join(dir, 'src/a.ts'), 'export const x = 1;\n');
+    git(['add', 'src/a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('staged Prettier output for src/a.ts');
+    expect(stagedBlob('src/a.ts')).toBe('export const x = 1\n');
+  });
+
+  it('resolves plugins relative to a staged config with unstaged edits (#10368)', () => {
+    writeFileSync(join(dir, 'fake-plugin.mjs'), 'export default {};\n');
+    writeFileSync(
+      join(dir, '.prettierrc'),
+      '{"plugins":["./fake-plugin.mjs"]}\n',
+    );
+    git(['add', 'fake-plugin.mjs', '.prettierrc']);
+    writeFileSync(join(dir, '.prettierrc'), '{}\n');
+    writeFileSync(join(dir, 'a.ts'), STAGED);
+    git(['add', 'a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('staged Prettier output for a.ts');
+    expect(stagedBlob('a.ts')).toBe(FORMATTED);
+  });
+
   it('leaves ignored, unknown, and already-formatted files untouched', () => {
     writeFileSync(join(dir, '.prettierignore'), 'ignored.ts\n');
     writeFileSync(join(dir, 'ignored.ts'), STAGED);
@@ -308,6 +390,26 @@ describe('format-staged', () => {
 
     expect(result.status, result.stderr).toBe(0);
     expect(stagedBlob('a.ts')).toBe(STAGED);
+  });
+
+  it('stages Prettier output in a SHA-256 object-format repo (#10370)', () => {
+    rmSync(join(dir, '.git'), { recursive: true, force: true });
+    git(['init', '-q', '-b', 'main', '--object-format=sha256']);
+    git(['config', 'user.email', 'test@example.com']);
+    git(['config', 'user.name', 'test']);
+    git(['config', 'commit.gpgsign', 'false']);
+    git(['add', '.prettierrc']);
+    git(['commit', '-qm', 'init']);
+    writeFileSync(join(dir, 'a.ts'), STAGED);
+    git(['add', 'a.ts']);
+    // SHA-256 repos carry 64-hex object names in the index.
+    expect(git(['ls-files', '-s', '--', 'a.ts'])).toMatch(/ [0-9a-f]{64} /);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('staged Prettier output for a.ts');
+    expect(stagedBlob('a.ts')).toBe(FORMATTED);
   });
 });
 
