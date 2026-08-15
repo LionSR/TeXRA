@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { createChannelTrace } from '@agent/trace';
+import { classifyRejection } from '@agent/runtime/HostInteractions';
 import {
   getRunContextSession,
   getRunContextStreamId,
@@ -66,25 +67,27 @@ The tool returns a JSON object whose keys are the original question texts and wh
     const result = await session.interactions.askUserQuestion(permission);
 
     if (result.action !== 'submit') {
-      if ('cause' in result) {
-        return executed(
-          result.cause
-            ? `The user question was cancelled: ${result.cause}`
-            : 'The user question was cancelled.',
-        );
+      const classification = classifyRejection(result);
+      switch (classification.kind) {
+        case 'cancelled':
+          return executed(
+            classification.cause
+              ? `The user question was cancelled: ${classification.cause}`
+              : 'The user question was cancelled.',
+          );
+        case 'policy':
+          return executed(
+            classification.reason
+              ? `The user question was denied: ${classification.reason}`
+              : 'The user question was denied.',
+          );
+        case 'feedback':
+          return executed(
+            classification.feedback
+              ? `The user declined to answer: ${classification.feedback}`
+              : 'The user declined to answer.',
+          );
       }
-      if ('reason' in result) {
-        return executed(
-          result.reason
-            ? `The user question was denied: ${result.reason}`
-            : 'The user question was denied.',
-        );
-      }
-      return executed(
-        result.feedback
-          ? `The user declined to answer: ${result.feedback}`
-          : 'The user declined to answer.',
-      );
     }
 
     const answers = UserQuestionAnswersSchema.parse(result.answers);

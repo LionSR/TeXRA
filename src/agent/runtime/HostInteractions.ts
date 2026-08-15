@@ -263,6 +263,31 @@ export type UserQuestionSettlement =
       readonly reason?: never;
     };
 
+/**
+ * Every "reject" result variant above shares this same field-presence
+ * encoding: a `cause` key means the host cancelled the request, a `reason`
+ * key means a policy denied it, and only a `feedback` key means the user
+ * actually rejected it. {@link classifyRejection} is the one place that
+ * reads the field presence, so consumers switch on `kind` instead of each
+ * re-deriving the `'cause' in result` / `'reason' in result` cascade.
+ */
+export type RejectionClassification =
+  | { readonly kind: 'cancelled'; readonly cause: string | undefined }
+  | { readonly kind: 'policy'; readonly reason: string }
+  | { readonly kind: 'feedback'; readonly feedback?: string };
+
+export function classifyRejection(result: {
+  readonly feedback?: string;
+  readonly reason?: string;
+  readonly cause?: string;
+}): RejectionClassification {
+  if ('cause' in result) return { kind: 'cancelled', cause: result.cause };
+  if ('reason' in result) {
+    return { kind: 'policy', reason: result.reason as string };
+  }
+  return { kind: 'feedback', feedback: result.feedback };
+}
+
 export type SettledInteractionKind = keyof HostInteractionResultByKind;
 
 type CancellationResultFactories = {

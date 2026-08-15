@@ -132,10 +132,7 @@ export const permissionHandlers = {
         // Prepend newest permissions so keyboard shortcuts target the latest request.
         // Deduplicate by id to prevent duplicate UI when replay() re-sends
         // pending items (e.g., on view visibility change).
-        const entry = {
-          kind: permission.kind,
-          data: permission.data,
-        } as PermissionState;
+        const entry: PermissionState = permission;
         const id = permissionId(entry);
         const existing = permissions$.get();
         const alreadyPresent = existing.some(

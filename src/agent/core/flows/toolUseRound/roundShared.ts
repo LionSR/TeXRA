@@ -36,10 +36,10 @@ const ToolUseRoundFieldsSchema = BaseCycleFieldsSchema.extend({
   response: z.unknown().optional(),
   /**
    * Tool calls extracted from response.
-   * Runtime type is SdkToolCall[] (discriminated union of provider-specific types).
-   * Uses z.unknown() because SdkToolCall is a complex union without a Zod schema.
+   * Uses z.custom<SdkToolCall>() because SdkToolCall is a complex discriminated
+   * union of provider-specific types without a Zod schema of its own.
    */
-  toolCalls: z.array(z.unknown()).optional(),
+  toolCalls: z.array(z.custom<SdkToolCall>()).optional(),
   /** Text content from response */
   text: z.string().optional(),
   /**
@@ -77,8 +77,6 @@ type ToolUseRoundFields = z.infer<typeof ToolUseRoundFieldsSchema>;
  * - Immutable services: `this.services` (ToolUseRoundServices)
  */
 export interface ToolUseRoundShared extends ToolUseRoundFields {
-  /** Tool calls with proper typing (schema uses z.unknown()) */
-  toolCalls?: SdkToolCall[];
   /** Latest non-empty assistant text produced anywhere in this cycle. */
   latestAssistantText?: string;
   /** Current user instruction, refreshed when the round consumes user input. */

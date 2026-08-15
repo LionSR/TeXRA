@@ -9,7 +9,10 @@
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import type { ProposalResult } from '@agent/runtime/HostInteractions';
+import {
+  classifyRejection,
+  type ProposalResult,
+} from '@agent/runtime/HostInteractions';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   AgentCategory,
@@ -111,6 +114,43 @@ function summarizeProposal(
   return parts.join(', ');
 }
 
+function proposalRejectionResult(
+  result: Extract<ProposalResult, { action: 'reject' }>,
+  agentName: string,
+  echo: string,
+): ToolResult {
+  const classification = classifyRejection(result);
+  switch (classification.kind) {
+    case 'cancelled': {
+      const detail = classification.cause?.trim()
+        ? `\n${classification.cause.trim()}`
+        : '';
+      return errorResult(
+        `Delegation approval for '${agentName}' was cancelled.\nYour delegation was: ${echo}${detail}`,
+        { summary: `Delegation approval cancelled for '${agentName}'` },
+      );
+    }
+    case 'policy': {
+      const reason = classification.reason.trim();
+      const detail = reason ? `\n${reason}` : '';
+      return errorResult(
+        `Delegation to '${agentName}' was denied.\nYour delegation was: ${echo}${detail}`,
+        { summary: `Delegation denied for '${agentName}'` },
+      );
+    }
+    case 'feedback': {
+      const feedback = classification.feedback?.trim();
+      const feedbackLine = feedback
+        ? `\nUser feedback: ${feedback}`
+        : `\n${DEFAULT_DELEGATION_REJECTION_FEEDBACK}`;
+      return errorResult(
+        `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
+        { summary: `User rejected delegation to '${agentName}'` },
+      );
+    }
+  }
+}
+
 /** Convert proposal result to ToolResult. Returns null if approved. */
 export function proposalResultToToolResult(
   result: ProposalResult,
@@ -120,32 +160,8 @@ export function proposalResultToToolResult(
   const echo = summarizeProposal(proposal);
 
   switch (result.action) {
-    case 'reject': {
-      const feedback = result.feedback?.trim();
-      const reason = result.reason?.trim();
-      const cause = result.cause?.trim();
-      if ('cause' in result) {
-        const detail = cause ? `\n${cause}` : '';
-        return errorResult(
-          `Delegation approval for '${agentName}' was cancelled.\nYour delegation was: ${echo}${detail}`,
-          { summary: `Delegation approval cancelled for '${agentName}'` },
-        );
-      }
-      if ('reason' in result) {
-        const detail = reason ? `\n${reason}` : '';
-        return errorResult(
-          `Delegation to '${agentName}' was denied.\nYour delegation was: ${echo}${detail}`,
-          { summary: `Delegation denied for '${agentName}'` },
-        );
-      }
-      const feedbackLine = feedback
-        ? `\nUser feedback: ${feedback}`
-        : `\n${DEFAULT_DELEGATION_REJECTION_FEEDBACK}`;
-      return errorResult(
-        `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
-        { summary: `User rejected delegation to '${agentName}'` },
-      );
-    }
+    case 'reject':
+      return proposalRejectionResult(result, agentName, echo);
     case 'setup':
       return executed(
         `Delegation opened for editing. The user will run it manually when ready.\nYour delegation was: ${echo}`,

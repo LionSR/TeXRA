@@ -19,7 +19,10 @@ import { z } from 'zod';
 // Local imports
 import { createChannelTrace } from '@agent/trace';
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
-import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
+import {
+  classifyRejection,
+  type PlanApprovalResult,
+} from '@agent/runtime/HostInteractions';
 import {
   getRunContextInteractions,
   getRunContextStreamId,
@@ -267,45 +270,50 @@ pause/complete only affect autonomous goals; with no goal running they return gu
     // Rejected — clear the plan from UI
     workPlanState.updatePlan(null);
 
-    const feedback = result.feedback?.trim();
-    const reason = result.reason?.trim();
-    const cause = result.cause?.trim();
-    if ('cause' in result) {
-      const message = cause
-        ? `Plan approval was cancelled.\n\n${cause}`
-        : 'Plan approval was cancelled.';
-      logger.info(
-        'Plan approval cancelled',
-        cause ? { data: cause } : undefined,
-      );
-      return errorResult(message, { summary: 'Plan approval cancelled' });
-    }
-    if ('reason' in result) {
-      const message = reason
-        ? `Plan approval was denied.\n\n${reason}`
-        : 'Plan approval was denied.';
-      logger.info(
-        'Plan approval denied',
-        reason ? { data: reason } : undefined,
-      );
-      return errorResult(message, { summary: 'Plan approval denied' });
-    }
-    const feedbackNote = feedback
-      ? `\nUser feedback: ${feedback}`
-      : '\nNo specific feedback was provided.';
+    const classification = classifyRejection(result);
+    switch (classification.kind) {
+      case 'cancelled': {
+        const cause = classification.cause?.trim();
+        const message = cause
+          ? `Plan approval was cancelled.\n\n${cause}`
+          : 'Plan approval was cancelled.';
+        logger.info(
+          'Plan approval cancelled',
+          cause ? { data: cause } : undefined,
+        );
+        return errorResult(message, { summary: 'Plan approval cancelled' });
+      }
+      case 'policy': {
+        const reason = classification.reason.trim();
+        const message = reason
+          ? `Plan approval was denied.\n\n${reason}`
+          : 'Plan approval was denied.';
+        logger.info(
+          'Plan approval denied',
+          reason ? { data: reason } : undefined,
+        );
+        return errorResult(message, { summary: 'Plan approval denied' });
+      }
+      case 'feedback': {
+        const feedback = classification.feedback?.trim();
+        const feedbackNote = feedback
+          ? `\nUser feedback: ${feedback}`
+          : '\nNo specific feedback was provided.';
 
-    logger.info(
-      'Plan rejected by user',
-      feedback ? { data: feedback } : undefined,
-    );
+        logger.info(
+          'Plan rejected by user',
+          feedback ? { data: feedback } : undefined,
+        );
 
-    return errorResult(
-      `The user rejected this plan.${feedbackNote}\nPlease revise your approach based on the feedback and create an updated plan.`,
-      {
-        summary: 'Plan rejected: revise approach',
-        ...(feedback ? { userInstruction: feedback } : {}),
-      },
-    );
+        return errorResult(
+          `The user rejected this plan.${feedbackNote}\nPlease revise your approach based on the feedback and create an updated plan.`,
+          {
+            summary: 'Plan rejected: revise approach',
+            ...(feedback ? { userInstruction: feedback } : {}),
+          },
+        );
+      }
+    }
   }
 
   /**

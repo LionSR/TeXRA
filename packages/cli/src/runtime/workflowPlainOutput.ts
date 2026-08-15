@@ -38,12 +38,45 @@ interface WorkflowStreamProjection {
   readonly complete: (outcome: RunOutcome) => void;
 }
 
+/**
+ * Calls that arrived before their stage opened, grouped by stageId. Owns the
+ * get-or-create/take bookkeeping so callers never touch the nested map shape
+ * directly.
+ */
+class PendingCallsByStage {
+  private readonly byStage = new Map<
+    string,
+    Map<string, WorkflowCallProgress>
+  >();
+
+  add(stageId: string, logId: string, call: WorkflowCallProgress): void {
+    const stage =
+      this.byStage.get(stageId) ?? new Map<string, WorkflowCallProgress>();
+    stage.set(logId, call);
+    this.byStage.set(stageId, stage);
+  }
+
+  /** Removes and returns the calls pending for `stageId`, if any. */
+  take(stageId: string): Map<string, WorkflowCallProgress> | undefined {
+    const stage = this.byStage.get(stageId);
+    if (stage) this.byStage.delete(stageId);
+    return stage;
+  }
+
+  /** Removes and returns every still-pending stage's calls. */
+  takeAll(): Array<[string, Map<string, WorkflowCallProgress>]> {
+    const all = [...this.byStage];
+    this.byStage.clear();
+    return all;
+  }
+}
+
 function createWorkflowStreamProjection(
   agentName: string,
   options: WorkflowPlainOutputOptions,
 ): WorkflowStreamProjection {
   const openedPhases = new Set<string>();
-  const pendingCalls = new Map<string, Map<string, WorkflowCallProgress>>();
+  const pendingCalls = new PendingCallsByStage();
   const lastCallLines = new Map<string, string>();
   let completed = false;
 
@@ -70,15 +103,14 @@ function createWorkflowStreamProjection(
         phaseTotal: phase.total,
       })}`,
     );
-    const pending = pendingCalls.get(stageId);
+    const pending = pendingCalls.take(stageId);
     if (!pending) return;
     for (const [logId, call] of pending) {
       writeCall(logId, call);
     }
-    pendingCalls.delete(stageId);
   };
   const flushPendingPhases = (): void => {
-    for (const [stageId, pending] of pendingCalls) {
+    for (const [stageId, pending] of pendingCalls.takeAll()) {
       if (openedPhases.has(stageId)) continue;
       const phaseLabel = pending.values().next().value?.phase;
       if (phaseLabel !== undefined) write(`◆ ${phaseLabel}`);
@@ -86,7 +118,6 @@ function createWorkflowStreamProjection(
         writeCall(logId, call);
       }
     }
-    pendingCalls.clear();
   };
 
   return {
@@ -101,11 +132,7 @@ function createWorkflowStreamProjection(
             event.stageId !== undefined &&
             !openedPhases.has(event.stageId)
           ) {
-            const pending =
-              pendingCalls.get(event.stageId) ??
-              new Map<string, WorkflowCallProgress>();
-            pending.set(event.logId, event.call);
-            pendingCalls.set(event.stageId, pending);
+            pendingCalls.add(event.stageId, event.logId, event.call);
           } else {
             writeCall(event.logId, event.call);
           }
