@@ -300,6 +300,9 @@ export function createHeadlessCliHostInteractions(
         ...(request.model ? { model: request.model } : {}),
         ...(request.errorMessage ? { errorMessage: request.errorMessage } : {}),
         ...(request.errorDetails ? { errorDetails: request.errorDetails } : {}),
+        ...(request.kimiCodeRoutedOnFailure !== undefined
+          ? { kimiCodeRoutedOnFailure: request.kimiCodeRoutedOnFailure }
+          : {}),
       };
       const { decision, prompted } = await decideApprovalEvent(
         { type: 'showRetryRequest', payload },
