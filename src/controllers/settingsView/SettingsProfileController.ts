@@ -1,4 +1,4 @@
-import { createChannelTrace } from '@agent/trace';
+import { createLog } from '@logger/logUtils';
 import { API_PROVIDERS } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
@@ -31,7 +31,7 @@ import {
 } from '@utils/config/providerConfig';
 import { buildProfileMessage } from './ProfileMessageBuilder';
 
-const logger = createChannelTrace('SettingsProfileController');
+const logger = createLog('SettingsProfileController');
 
 type SettingsReliabilitySetting = Omit<NumberSetting, 'value'> & {
   defaultValue: number;

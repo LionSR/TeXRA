@@ -1,9 +1,4 @@
-import {
-  createChannelTrace,
-  RUN_FACT_EVENT_TYPES,
-  type AgentEvent,
-  type AgentTrace,
-} from '@agent/trace';
+import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import type { SessionRendererPort } from '@controllers/session/SessionRendererPort';
@@ -68,8 +63,6 @@ export type SessionFactApplierOptions = {
  * before this host's in-memory tab map exists).
  */
 export class SessionFactApplier {
-  private readonly logger: AgentTrace;
-
   /** Streams this renderer has already received metadata for. Not reset when
    * a webview closes and reopens — `ProgressViewProvider.markWebviewReady`'s
    * resolve-time full metadata resync (`syncFullView`) re-registers every
@@ -123,9 +116,7 @@ export class SessionFactApplier {
     private readonly state: SessionState,
     private readonly renderer: SessionRendererPort,
     private readonly options: SessionFactApplierOptions,
-  ) {
-    this.logger = createChannelTrace('SessionFactApplier');
-  }
+  ) {}
 
   private handleRunningTransition(
     streamId: StreamTabId,
