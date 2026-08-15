@@ -264,4 +264,41 @@ describe('extractToolAttachments', () => {
     );
     expect(Object.hasOwn(sanitizedResult, 'summary')).toBe(false);
   });
+
+  it('drops editedFiles from executed payloads', () => {
+    const { sanitizedResult } = extractToolAttachments({
+      status: 'executed',
+      output: 'done',
+      editedFiles: [
+        {
+          path: 'paper.tex',
+          ok: true,
+          source: 'tool',
+          sourceDisplay: 'Tool use',
+        },
+      ],
+    } as never);
+
+    expect(sanitizedResult.status).toBe('executed');
+    expect(sanitizedResult.output).toBe('done');
+    expect(Object.hasOwn(sanitizedResult, 'editedFiles')).toBe(false);
+  });
+
+  it('drops editedFiles from error payloads', () => {
+    const { sanitizedResult } = extractToolAttachments({
+      status: 'error',
+      error: 'The operation failed.',
+      editedFiles: [
+        {
+          path: 'paper.tex',
+          ok: false,
+          source: 'tool',
+          sourceDisplay: 'Tool use',
+        },
+      ],
+    } as never);
+
+    expect(sanitizedResult.status).toBe('error');
+    expect(Object.hasOwn(sanitizedResult, 'editedFiles')).toBe(false);
+  });
 });
