@@ -1,9 +1,8 @@
 {
-  "semantics": "Distinct '@agent/*' deep-import specifiers (past the @agent barrel) reachable from each package (packages/cli/src, packages/desktop/src, packages/extension/src, and the @texra-ai/agent SDK package packages/agent/src), per issue #7684 R-b. Each deep import pins @agent's current internal module layout and freezes the surface a future SDK barrel would be seeded from; 'agent' is the SDK package itself, so its own list is exactly the internal-coupling width a Tier-1 barrel must re-export or seal. The ratchet fails only when a package's distinct-specifier count exceeds this baseline; a decrease (or an @agent restructor that removes the need for a deep import) is welcome and should shrink this file.",
+  "semantics": "Distinct '@agent/*' deep-import specifiers (past the @agent barrel) reachable from each package (packages/cli/src, packages/desktop/src, packages/extension/src, and the @texra-ai/agent SDK package packages/agent/src), per issue #7684 R-b. Each deep import pins @agent's current internal module layout and freezes the surface a future SDK barrel would be seeded from; 'agent' is the SDK package itself, so its own list is exactly the internal-coupling width a Tier-1 barrel must re-export or seal. The ratchet is set-based: a live specifier absent from a package's list is a new edge and fails; a listed specifier with no live import is stale headroom and also fails (remove it here). Removing a deep import (or an @agent restructor that removes the need for one) is welcome and should shrink this file.",
   "hosts": {
     "cli": [
       "@agent/core/definition/AgentConfig",
-      "@agent/core/definition/AgentDataclass",
       "@agent/core/state/executionRequests",
       "@agent/core/state/TaskState",
       "@agent/export/chatExportFormatter",
@@ -33,12 +32,10 @@
     ],
     "extension": [
       "@agent/core/definition/AgentConfig",
-      "@agent/core/definition/AgentDataclass",
       "@agent/core/state/executionRequests",
       "@agent/features",
       "@agent/followUp/ToolUseFollowUp",
-      "@agent/goal/promptLoader",
-      "@agent/implementations/flows/agentCreator/agentCreatorFlow",
+      "@agent/implementations/agentCreator/agentCreatorFlow",
       "@agent/index",
       "@agent/index/AgentDirectorySync",
       "@agent/index/platformAgentDirectories",

@@ -390,10 +390,7 @@ interface AgentCliTurnUsage {
   output_tokens?: number;
 }
 
-export interface AgentCliLoopParams<
-  TTurn,
-  TEntry extends AgentCliSessionEntry,
-> {
+export interface AgentCliLoopParams<TTurn> {
   childStream: ChildStream;
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
@@ -403,7 +400,7 @@ export interface AgentCliLoopParams<
   stageLabel: string;
   initialPrompt: string;
   /** Session/thread registry the loop tracks in-flight and successful turns in. */
-  store: AgentCliSessionRegistry<TEntry>;
+  store: AgentCliSessionRegistry;
   /**
    * The disk-based fallback session/thread id claimed synchronously before the
    * loop starts, if any. Release it if the loop exits before promoting it.
@@ -416,7 +413,7 @@ export interface AgentCliLoopParams<
     abortController: AbortController,
   ) => Promise<TTurn>;
   /** Build the store entry to register/track for the currently active session. */
-  buildEntry: (session: SessionHandle) => TEntry;
+  buildEntry: (session: SessionHandle) => AgentCliSessionEntry;
   /**
    * Session/thread ids to register as active after a successful turn. Falsy
    * entries (not-yet-known ids) are skipped.
@@ -449,10 +446,10 @@ export interface AgentCliLoopParams<
  * `ChildRunStrategy` fields (`isTerminal`, `getUsage`, `onLoopStart`,
  * `onTurnSuccess`, `publishUsage`, `releaseSessionOwnership`). Callers supply
  * only their provider-specific turn execution, usage/delivery formatting, and
- * registry entry shape.
+ * registry entry construction.
  */
-export function startAgentCliLoop<TTurn, TEntry extends AgentCliSessionEntry>(
-  params: AgentCliLoopParams<TTurn, TEntry>,
+export function startAgentCliLoop<TTurn>(
+  params: AgentCliLoopParams<TTurn>,
 ): void {
   const {
     childStream,

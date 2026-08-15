@@ -34,10 +34,7 @@ import { safeHomedir } from '@utils/system/platformPaths';
 
 // Local file imports
 import { createEnumStateGetter } from './support/enumConfig';
-import {
-  CLAUDE_AGENT_NAME,
-  CLAUDE_AGENT_DISPLAY_MODEL,
-} from './claudeAgentShared';
+import { CLAUDE_AGENT_NAME } from './claudeAgentShared';
 
 const LOG_CHANNEL = 'claudeAgent';
 
@@ -250,7 +247,8 @@ export async function buildClaudeAgentEnv(
 export function buildClaudeAgentConfig(prompt: string): AgentConfig {
   return AgentConfigSchema.parse({
     agent: CLAUDE_AGENT_NAME,
-    model: CLAUDE_AGENT_DISPLAY_MODEL,
+    // Fabricated label, not a routed model: Claude Code drives its own model.
+    model: 'claude',
     instruction: prompt,
     agentCategory: AgentCategory.ToolUse,
   });

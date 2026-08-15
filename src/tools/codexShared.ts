@@ -29,7 +29,6 @@ import type {
 } from '@openai/codex-sdk';
 
 export const CODEX_AGENT_NAME = 'codex';
-export const CODEX_DISPLAY_MODEL = 'gpt55';
 const CODEX_COMMAND_SUMMARY_MAX_LENGTH = 60;
 
 type CodexFileChange = FileChangeItem['changes'][number];

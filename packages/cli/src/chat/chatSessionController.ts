@@ -257,7 +257,7 @@ export function createChatSessionController(
     recovery: SupersededInterruptedRecovery | undefined,
     lease: FollowUpRecoveryLease,
   ): void => {
-    runtimeSession.followUps.restore(lease, recovery?.followUps ?? []);
+    runtimeSession.followUps.queue(lease).restore(recovery?.followUps ?? []);
     if (recovery?.followUps.length) {
       runtimeSession.events.emit({
         scope: 'session',
@@ -700,7 +700,6 @@ export function createChatSessionController(
           resolveAndResumeStream(
             streamId,
             {
-              interactions: runtimeSession.interactions,
               streamStatus: runtimeSession.status,
               isCancellationRequested,
               resolveResumeState: async () => ({

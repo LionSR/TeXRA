@@ -2,7 +2,7 @@ import {
   isFileNotFoundError,
   isNotADirectoryError,
 } from '@common/errors/errorPredicates';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import {
   AgentDirectoryService,
@@ -33,6 +33,7 @@ export interface PlatformAgentDirectoryBootstrapOptions {
 export function createPlatformAgentDirectories(
   options: PlatformAgentDirectoryOptions,
 ): AgentDirectoryService {
+  const log = createLog(options.channel);
   return new AgentDirectoryService({
     storage: new GlobalStorageAgentDirectoryStorage(),
     customDirectoryStore: options.customDirectoryStore,
@@ -55,16 +56,11 @@ export function createPlatformAgentDirectories(
     },
     issueReporter: options.issueReporter ?? {
       report: async (message, docsId) =>
-        logger.warn(
-          options.channel,
-          `${message}. See documentation: ${docsId}`,
-        ),
+        log.warn(`${message}. See documentation: ${docsId}`),
     },
     logger: {
-      debug: (message, data) =>
-        logger.debug(options.channel, message, { data }),
-      error: (message, data) =>
-        logger.error(options.channel, message, { data }),
+      debug: (message, data) => log.debug(message, { data }),
+      error: (message, data) => log.error(message, { data }),
     },
   });
 }
@@ -72,13 +68,14 @@ export function createPlatformAgentDirectories(
 export async function bootstrapPlatformAgentDirectories(
   options: PlatformAgentDirectoryBootstrapOptions,
 ): Promise<void> {
+  const log = createLog(options.channel);
   const sync = new BundledAgentDirectorySync({
     bundleSource: options.bundleSource,
     storage: new GlobalStorageAgentDirectoryStorage(),
     versionStore: options.versionStore,
     logger: {
-      info: (message, data) => logger.info(options.channel, message, { data }),
-      warn: (message, data) => logger.warn(options.channel, message, { data }),
+      info: (message, data) => log.info(message, { data }),
+      warn: (message, data) => log.warn(message, { data }),
     },
   });
 

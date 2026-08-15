@@ -567,11 +567,14 @@ says so.
 
 ## 4. What degrades gracefully (safe to skip)
 
-- **`initializeNodeGoalPrompts(resourcesPath)`:** Goal prompts fall back to
-  inline templates. `loadPrompts` returns `inlineTemplates` when no path was
-  registered; a broken registered YAML also falls back but logs a warning
-  (`src/agent/goal/promptLoader.ts:78-99`; registration at
-  `src/platform/defaults/nodeHost.ts:145-147`).
+- **`initializeBundledPrompts(resourcesPath)`:** Registers the packaged
+  `resources/` root for every row of the bundled-prompt table
+  (`src/agent/runtime/bundledPrompts.ts`). Degradation is per row, not global:
+  the `goal` row falls back to its inline copy when no root was registered, and
+  also on a broken YAML — logging a warning in that case; the `polish` row is
+  `required` and rejects instead, so an embedder that skips this call loses
+  follow-up polish loudly. Skipping it is safe only if the embedder renders no
+  polish prompt.
 - **`initializeNodeRuntimeSkills({…})`:** Runtime skills degrade to an empty
   catalog: `if (sources.length === 0) return { catalog: '', issues: [] };`
   (`src/skills/runtimeSkills.ts:57-59`; registration at
@@ -643,7 +646,7 @@ classification makes that distinction.
 
 ### Optional, graceful (2)
 
-- `:378` — `initializeNodeGoalPrompts(context.resourcesPath)` (§4).
+- `:378` — `initializeBundledPrompts(context.resourcesPath)` (§4).
 - `:387` — `initializeNodeRuntimeSkills({…})` (§4).
 
 ### Cross-check against desktop
@@ -676,9 +679,10 @@ desktop also calls
 2. **Feature-parity registration is once-per-process.** A second
    `initNodeAgentRuntime` throws or double-registers
    (`src/platform/defaults/nodeHost.ts:129-131`). Contrast
-   `initializeNodeGoalPrompts`, which is explicitly re-entrant
-   (`src/platform/defaults/nodeHost.ts:141-143`) because CLI validation
-   re-enters platform init in one process.
+   `initializeBundledPrompts`, which is explicitly re-entrant
+   (`src/agent/runtime/bundledPrompts.ts`: a later call replaces the resources
+   root and drops the cache) because CLI validation re-enters platform init in
+   one process.
 3. **`bootstrapNodeAgentDirectories` uses an ambiguous string guard key.** A
    module-level `Map` stores `resourcesPath` under the guard key
    `${channel}:${versionStateKey}`

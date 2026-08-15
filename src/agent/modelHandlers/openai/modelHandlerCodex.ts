@@ -41,7 +41,7 @@ import {
   codexCoordinator,
   formatCodexAuthUnavailableMessage,
 } from '@auth/codex';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import {
   codexBackendModelId,
   resolveCodexSubscriptionProfile,
@@ -55,6 +55,7 @@ import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
 const CHANNEL = 'ModelHandlerCodex';
+const log = createLog(CHANNEL);
 
 function requestUrl(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
@@ -185,10 +186,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     } catch (error) {
       // Body is not JSON we can edit; the backend will reject it because the
       // required stream and instruction fields could not be installed.
-      logger.warn(
-        CHANNEL,
-        `Could not adapt Codex request body: ${toErrorMessage(error)}`,
-      );
+      log.warn(`Could not adapt Codex request body: ${toErrorMessage(error)}`);
     }
 
     return this.longRunningModelFetch(input, init);

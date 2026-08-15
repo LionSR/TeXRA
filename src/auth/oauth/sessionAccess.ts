@@ -5,7 +5,7 @@
  * here (with the status + routability probes) so a provider does not re-copy
  * the platform dance.
  */
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { tryPlatform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -77,11 +77,11 @@ export async function getSubscriptionSessionStatus(
   displayName: string,
 ): Promise<SubscriptionSessionStatus> {
   if (!tryPlatform()) return { signedIn: false };
+  const log = createLog(channel);
   try {
     return await getCoordinator().getStatus();
   } catch (error) {
-    logger.warn(
-      channel,
+    log.warn(
       `Failed to read ${displayName} session status: ${toErrorMessage(error)}`,
     );
     return { signedIn: false };

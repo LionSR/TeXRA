@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import { formatError } from '@common/errors';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -32,6 +32,10 @@ export class LaTeXdiffService {
   private readonly fileProcessor: DiffFileProcessor;
   private readonly commandExecutor: DiffCommandExecutor;
 
+  private get log() {
+    return createLog(this.channel);
+  }
+
   constructor(private readonly channel: string) {
     this.fileProcessor = new DiffFileProcessor();
     // Pass a thunk so DiffCommandExecutor reads the current workspace value
@@ -60,7 +64,7 @@ export class LaTeXdiffService {
 
   private logDiffError(context: string, err: unknown): LaTeXdiffResult {
     const message = formatError(context, err);
-    logger.error(this.channel, message);
+    this.log.error(message);
     return { success: false, message };
   }
 
@@ -91,7 +95,7 @@ export class LaTeXdiffService {
       const editedFile = editedLocation.absolutePath;
 
       if (!inputFile) {
-        logger.warn(this.channel, 'Input file is empty or undefined');
+        this.log.warn('Input file is empty or undefined');
         return { success: false, message: 'Input file is empty or undefined' };
       }
 
@@ -101,7 +105,7 @@ export class LaTeXdiffService {
       const contents = await this.readDiffInputs(inputLocation, editedLocation);
       if (!contents) {
         const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
-        logger.warn(this.channel, message);
+        this.log.warn(message);
         return { success: false, message };
       }
       if (!contents.every(hasDocumentEnvironment)) {
@@ -116,8 +120,7 @@ export class LaTeXdiffService {
         options?.outputDirectory ?? path.dirname(inputFile);
       const outputPath = path.join(outputDirectory, diffFileName);
 
-      logger.debug(
-        this.channel,
+      this.log.debug(
         `Running latexdiff for ${inputLocation.absolutePath} and ${editedLocation.absolutePath}`,
       );
 
@@ -137,8 +140,7 @@ export class LaTeXdiffService {
       await AbsoluteFS.write(outputLocation.absolutePath, result.stdout);
       await this.fileProcessor.processDiffFile(outputLocation, editedLocation);
 
-      logger.debug(
-        this.channel,
+      this.log.debug(
         `Latexdiff succeeded: ${inputLocation.absolutePath} -> ${editedLocation.absolutePath}`,
       );
 
@@ -148,8 +150,7 @@ export class LaTeXdiffService {
         message: `LaTeXdiff completed successfully: ${diffFileName}`,
       };
     } catch (err) {
-      logger.debug(
-        this.channel,
+      this.log.debug(
         `Latexdiff failed: ${inputLocation.absolutePath} -> ${editedLocation.absolutePath}`,
       );
       return this.logDiffError('Error running LaTeX diff', err);
@@ -166,7 +167,7 @@ export class LaTeXdiffService {
       if (!(await this.validateDocumentStructure(inputLocation))) {
         const message =
           'File missing document environment (must contain \\begin{document} and \\end{document})';
-        logger.error(this.channel, message);
+        this.log.error(message);
         return { success: false, message };
       }
 
@@ -215,7 +216,7 @@ export class LaTeXdiffService {
     try {
       if (!(await this.bothFilesExist(baseLocation, outputLocation))) {
         const message = `Could not generate latexdiff for round ${round}. Files not found: ${baseLocation.absolutePath} or ${outputLocation.absolutePath}`;
-        logger.warn(this.channel, message);
+        this.log.warn(message);
         return { success: false, message };
       }
 
@@ -242,7 +243,7 @@ export class LaTeXdiffService {
     try {
       if (!(await this.bothFilesExist(firstLocation, secondLocation))) {
         const message = `Could not generate latexdiff between rounds. Files not found: ${firstLocation.absolutePath} or ${secondLocation.absolutePath}`;
-        logger.warn(this.channel, message);
+        this.log.warn(message);
         return { success: false, message };
       }
 

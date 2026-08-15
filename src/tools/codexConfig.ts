@@ -15,7 +15,7 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createEnumStateGetter } from './support/enumConfig';
-import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
+import { CODEX_AGENT_NAME } from './codexShared';
 
 // Type-only imports
 import type {
@@ -97,7 +97,8 @@ export const getCodexSandboxMode: () => SandboxMode = createEnumStateGetter(
 export function buildCodexConfig(prompt: string): AgentConfig {
   return AgentConfigSchema.parse({
     agent: CODEX_AGENT_NAME,
-    model: CODEX_DISPLAY_MODEL,
+    // Fabricated label, not a routed model: Codex drives its own model.
+    model: 'gpt55',
     instruction: prompt,
     agentCategory: AgentCategory.ToolUse,
   });

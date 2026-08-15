@@ -1,7 +1,9 @@
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 
 import { AbsoluteFS } from './absoluteFS';
 import { WorkspaceFS } from './workspaceFS';
+
+const log = createLog('VarsUtils');
 
 /**
  * Reads a file and populates user variable fields with its path and content.
@@ -21,11 +23,9 @@ export async function setVarFromFile(
     userVars[`${varName}_CONTENT`] = fileContent;
     return true;
   } catch (error) {
-    logger.debug(
-      'VarsUtils',
-      `Failed to read ${varName} from file ${filePath}`,
-      { data: error },
-    );
+    log.debug(`Failed to read ${varName} from file ${filePath}`, {
+      data: error,
+    });
     return false;
   }
 }

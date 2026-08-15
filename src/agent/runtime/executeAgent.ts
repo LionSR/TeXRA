@@ -37,6 +37,7 @@ import {
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
 } from '@shared/schemas';
+import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
 import { ensureRunDir } from '@utils/files/runStorageFs';
 
@@ -59,8 +60,6 @@ import {
   type WorkflowFlowResult,
 } from './AgentFlowResult';
 import { generateSessionDescription } from './sessionDescription';
-import { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
-import { ResumeAdmissionCancelledError } from './resumeAdmission';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
@@ -68,6 +67,14 @@ import type { ToolUseResumeData } from './SessionResumeRetrieval';
 
 const CHANNEL = 'executeAgent';
 const logger = createChannelTrace(CHANNEL);
+
+/** A resumed execution lost its canonical admission race with deletion. */
+export class ResumeAdmissionCancelledError extends Error {
+  constructor(readonly executionId: ExecutionId) {
+    super(`Resume cancelled before launch for execution ${executionId}.`);
+    this.name = 'ResumeAdmissionCancelledError';
+  }
+}
 
 /** Create the awaited round-finalized callback used by agent flows. */
 function createUsageRecordingCallback(
@@ -623,10 +630,7 @@ export async function resumeToolUseFromResumeData(
       // The run's own failure is the one the caller must see; a release failure
       // on top of it is additional information, not a replacement.
       try {
-        await releaseExecutionLeaseAfterArtifacts(
-          runSession,
-          resume.executionId,
-        );
+        await runSession.releaseExecutionLease(resume.executionId);
       } catch (releaseError) {
         throw new AggregateError(
           [error, releaseError],
@@ -637,8 +641,14 @@ export async function resumeToolUseFromResumeData(
     }
     // A WAITING result keeps the lease: the next resume owns this execution.
     if (!isWaitingFlowResult(result)) {
-      await releaseExecutionLeaseAfterArtifacts(runSession, resume.executionId);
+      await runSession.releaseExecutionLease(resume.executionId);
     }
     return result;
   });
 }
+
+// Close the delegation recursion: the delegation tools drive child runs
+// through `nativeSubagentStrategy`, whose engine calls are provided here —
+// the one direction that cannot be a static import, because this module's
+// flow drivers statically import the tool registry that includes those tools.
+provideAgentEngine({ executeAgent, resumeToolUseFromResumeData });

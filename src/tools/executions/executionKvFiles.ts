@@ -1,6 +1,6 @@
 /**
  * Internal KV metadata files stored alongside an execution's generated
- * output. Shared by run-directory listing (`runDirectoryFiles.ts`) and the
+ * output. Shared by the run-directory listing in `ExecutionsTool.ts` and the
  * CLI's history file listing (`packages/cli/src/runtime/history/generatedFiles.ts`)
  * so the two stay in sync on what counts as internal metadata.
  *

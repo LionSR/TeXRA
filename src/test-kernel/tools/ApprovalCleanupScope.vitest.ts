@@ -12,7 +12,6 @@ import {
   cleanupUnscopedApprovals,
   isBashApprovalBypassedForStream,
   proposalApprovals,
-  setDelegatedWorkApprovalBypasses,
   setBashApprovalSessionBypass,
 } from '@tools/approval';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -163,7 +162,7 @@ describe('session-owned approval state (#8144)', () => {
     const streamId = sid('s:delegated-approval-same-id');
 
     try {
-      setDelegatedWorkApprovalBypasses(streamId, true, sessionA);
+      sessionA.approvals.setDelegatedWorkBypasses(streamId, true);
 
       expect(proposalApprovals(sessionA).isBypassed(streamId)).toBe(true);
       expect(sessionA.approvals.toolEdit.bypass.isBypassed(streamId)).toBe(

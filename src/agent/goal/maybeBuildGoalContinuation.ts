@@ -3,7 +3,7 @@ import { formatGoalTime, goalElapsedMs } from '@shared/schemas';
 import { GoalStore, isGoalEnabled } from '@tools/goal';
 import { renderPrompt } from '@utils/prompt';
 
-import { getContinuationTemplate } from './promptLoader';
+import { getContinuationTemplate } from '../runtime/bundledPrompts';
 
 /**
  * Build the pre-wait Goal continuation for a stream.

@@ -5,6 +5,9 @@
  * executions.
  */
 
+// Node imports
+import * as path from 'node:path';
+
 // Third-party imports
 import { z } from 'zod';
 
@@ -20,6 +23,7 @@ import {
   listExecutions,
   resolveExecutionWorkspaceFilePath,
 } from '@agent/storage';
+import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
   currentSession,
   type SessionHandle,
@@ -65,13 +69,13 @@ import {
   readCompletedRunConversation,
   readCompletedRunTodos,
 } from '@transcript';
-import { assertNever, clamp, unique } from '@utils/core';
+import { assertNever, clamp, normalizeFilePath, unique } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { findExistingRunStoragePath } from '@utils/files/runStorageFs';
 import { getPathSegments } from '@utils/core/pathCore';
-import { splitContentLines } from '@utils/text/stringUtils';
+import { formatBytes, splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
@@ -97,13 +101,11 @@ import {
   ViewRangeSchema,
 } from './formatting';
 import { formatConversation } from './executions/conversationFormat';
-import { listRunDirectoryFiles } from './executions/runDirectoryFiles';
-import { serializeFilteredConfig } from './executions/configFieldFilter';
+import { isKVFile } from './executions/executionKvFiles';
 import {
   listenForFollowUp,
   shouldSkipWait,
 } from './executions/waitCoordination';
-import { formatSizedEntryLines } from './executions/fileListingFormat';
 
 const log = createLog('ExecutionsTool');
 
@@ -209,6 +211,126 @@ async function turnAttributionNote(
     ? `showing the latest completed turn (${completed}).`
     : 'no turn has completed yet.';
   return `[Note: ${fate}; ${showing}]`;
+}
+
+// ============================================================================
+// Run-directory listing and config serialization
+// ============================================================================
+
+interface SizedEntry {
+  readonly path: string;
+  readonly size: number;
+  readonly isDir: boolean;
+}
+
+/**
+ * Format entries as right-aligned "<size>  <path>" lines (`<dir>` for
+ * directories). `/files` and `/workspace-files` render the same shape, so each
+ * normalizes its own entry shape to `SizedEntry` first — `listFiles` and
+ * `listWorkspaceFiles` source entries with differently-named directory flags.
+ */
+function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
+  return entries.map((entry) => {
+    const sizeStr = entry.isDir ? '<dir>' : formatBytes(entry.size);
+    return `${sizeStr.padStart(8)}  ${entry.path}`;
+  });
+}
+
+async function walkRunDirectory(
+  basePath: string,
+  relativePath: string,
+  maxDepth: number,
+): Promise<SizedEntry[]> {
+  const results: SizedEntry[] = [];
+  const fullPath = relativePath ? path.join(basePath, relativePath) : basePath;
+
+  let entries: [string, number][];
+  try {
+    entries = await StorageFS.readDir(fullPath);
+  } catch {
+    // Directory doesn't exist or can't be read
+    return results;
+  }
+
+  for (const [name, type] of entries) {
+    // Build raw path for filesystem access (preserves platform separators),
+    // then normalize to forward slashes only for display output.
+    const entryRaw = path.join(relativePath, name);
+    const entryRelative = normalizeFilePath(entryRaw);
+    const entryFull = path.join(basePath, entryRaw);
+    const isDir = isDirectory(type);
+
+    try {
+      const stats = await StorageFS.stat(entryFull);
+      results.push({ path: entryRelative, size: stats.size, isDir });
+
+      if (isDir && maxDepth > 1) {
+        results.push(
+          ...(await walkRunDirectory(basePath, entryRaw, maxDepth - 1)),
+        );
+      }
+    } catch {
+      // Skip entries we can't stat
+    }
+  }
+
+  return results;
+}
+
+/**
+ * List the generated (non-KV) files under a run directory, recursing up to
+ * two levels deep — the internal KV metadata blobs live alongside generated
+ * output and are filtered out.
+ */
+async function listRunDirectoryFiles(runDir: string): Promise<SizedEntry[]> {
+  const entries = await walkRunDirectory(runDir, '', 2);
+  return entries.filter((entry) => !isKVFile(path.basename(entry.path)));
+}
+
+/** Config fields only relevant to workflow agents — hidden for toolUse. */
+const WORKFLOW_ONLY_CONFIG_FIELDS = new Set([
+  'inputFile',
+  'inputFiles',
+  'contextFile',
+  'contextFiles',
+  'mediaFile',
+  'mediaFiles',
+  'outputFiles',
+  'editedFile',
+  'editedFiles',
+]);
+
+/** Config fields only relevant to toolUse agents — hidden for workflow. */
+const TOOL_USE_ONLY_CONFIG_FIELDS = new Set(['toolConfig']);
+
+/** Per-category field-exclusion sets; unknown categories get no filtering. */
+const HIDDEN_CONFIG_FIELDS_BY_CATEGORY: Readonly<
+  Record<string, ReadonlySet<string>>
+> = {
+  toolUse: WORKFLOW_ONLY_CONFIG_FIELDS,
+  workflow: TOOL_USE_ONLY_CONFIG_FIELDS,
+};
+
+/**
+ * Serialize a run record to pretty JSON, dropping agent-config fields
+ * irrelevant to the resolved display category so the serialized config the
+ * orchestrator reads stays relevant. Records without an agent execution mode
+ * are honest by construction and serialize unchanged.
+ */
+function serializeFilteredConfig(
+  record: RunRecord,
+  category: string | undefined,
+): string {
+  const excludeSet = category
+    ? HIDDEN_CONFIG_FIELDS_BY_CATEGORY[category]
+    : undefined;
+  if (!excludeSet) {
+    return JSON.stringify(record, null, 2);
+  }
+  const filtered = Object.fromEntries(
+    Object.entries(record).filter(([key]) => !excludeSet.has(key)),
+  );
+  return JSON.stringify(filtered, null, 2);
 }
 
 // ============================================================================
@@ -1094,6 +1216,18 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       turnAttributionNote(store),
     ]);
     if (!report) {
+      // Compatibility reader introduced 2026-08-15 for workflow-scripted
+      // children created before the single driver. Remove after 2026-11-15,
+      // once the three-month internal-format window has elapsed.
+      // Those children persisted only their typed result (see
+      // src/agent/workflowScript/README.md), so point at that artifact instead
+      // of implying the run never finished.
+      const resultMeta = await store.readResultMeta();
+      if (resultMeta) {
+        return executed(
+          `Execution ${executionId} persists a typed result and no prose report. Read /executions/${executionId}/result.`,
+        );
+      }
       return executed(
         `No report found for execution ${executionId}. Reports are persisted when subagents or background processes complete.`,
       );

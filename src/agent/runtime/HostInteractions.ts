@@ -92,64 +92,67 @@ export interface HostRetryInteractionOptions extends HostInteractionOptions {
   ) => Promise<void>;
 }
 
-export type PlanApprovalResult =
-  | { action: 'approve'; feedback?: never; reason?: never; cause?: never }
+/**
+ * The human-declined channel of {@link RejectionProvenance}: optional text the
+ * user typed while declining, addressed to the agent.
+ */
+type UserDeclinedProvenance = {
+  readonly feedback?: string;
+  readonly reason?: never;
+  readonly cause?: never;
+};
+
+/**
+ * Why a settled interaction is a rejection. Exactly one channel is ever
+ * populated, which is what lets every consumer tell "the user said no" apart
+ * from "policy denied it" and "nobody was left to ask" without a second
+ * discriminator:
+ *
+ * - `feedback` — a human declined and left instructions for the agent.
+ * - `reason` — a policy/headless denial message; no human was available.
+ * - `cause` — an automatic cancellation (run ended, session disposed);
+ *   `undefined` when the canceller supplied none.
+ *
+ * Declared once and consumed by every rejectable settlement, so a new
+ * provenance channel cannot reach one settlement kind and miss another.
+ */
+export type RejectionProvenance =
+  | UserDeclinedProvenance
   | {
-      action: 'approve_and_goal';
-      feedback?: never;
-      reason?: never;
-      cause?: never;
+      readonly reason: string;
+      readonly feedback?: never;
+      readonly cause?: never;
     }
-  | { action: 'reject'; feedback?: string; reason?: never; cause?: never }
-  | { action: 'reject'; reason: string; feedback?: never; cause?: never }
   | {
-      action: 'reject';
-      cause: string | undefined;
-      feedback?: never;
-      reason?: never;
+      readonly cause: string | undefined;
+      readonly feedback?: never;
+      readonly reason?: never;
     };
 
+/** The counterpart for settlement arms that are not rejections. */
+type NoRejectionProvenance = {
+  readonly feedback?: never;
+  readonly reason?: never;
+  readonly cause?: never;
+};
+
+export type PlanApprovalResult =
+  | ({ action: 'approve' } & NoRejectionProvenance)
+  | ({ action: 'approve_and_goal' } & NoRejectionProvenance)
+  | ({ action: 'reject' } & RejectionProvenance);
+
 export type ProposalResult =
-  | {
+  | ({
       action: 'approve';
       model?: string;
       agent?: string;
-      feedback?: never;
-      reason?: never;
-      cause?: never;
-    }
-  | {
-      action: 'reject';
-      feedback?: string;
-      reason?: never;
-      cause?: never;
-      model?: never;
-      agent?: never;
-    }
-  | {
-      action: 'reject';
-      reason: string;
-      feedback?: never;
-      cause?: never;
-      model?: never;
-      agent?: never;
-    }
-  | {
-      action: 'reject';
-      cause: string | undefined;
-      feedback?: never;
-      reason?: never;
-      model?: never;
-      agent?: never;
-    }
-  | {
+    } & NoRejectionProvenance)
+  | ({ action: 'reject'; model?: never; agent?: never } & RejectionProvenance)
+  | ({
       action: 'setup';
       model?: never;
       agent?: never;
-      feedback?: never;
-      reason?: never;
-      cause?: never;
-    };
+    } & NoRejectionProvenance);
 
 export type RetrySettlement =
   | {
@@ -212,55 +215,24 @@ export interface HostExternalInquiryHandle {
 }
 
 export type BashSettlement =
-  | { readonly action: 'approve'; readonly feedback?: never }
-  | {
-      readonly action: 'reject';
-      readonly feedback?: string;
-      readonly reason?: never;
-      readonly cause?: never;
-    }
-  | {
-      readonly action: 'reject';
-      readonly reason: string;
-      readonly feedback?: never;
-      readonly cause?: never;
-    }
-  | {
-      readonly action: 'reject';
-      readonly cause: string | undefined;
-      readonly feedback?: never;
-      readonly reason?: never;
-    };
+  | ({ readonly action: 'approve' } & NoRejectionProvenance)
+  | ({ readonly action: 'reject' } & RejectionProvenance);
 
 export type UserQuestionSettlement =
-  | {
+  | ({
       readonly action: 'submit';
       readonly answers: UserQuestionAnswers;
-      readonly feedback?: never;
-      readonly reason?: never;
-      readonly cause?: never;
-    }
-  | {
+    } & NoRejectionProvenance)
+  // Skipping is always the user's own decision, so it carries no policy or
+  // cancellation provenance — only a rejection can.
+  | ({
       readonly action: 'reject' | 'skip';
-      readonly feedback?: string;
       readonly answers?: never;
-      readonly reason?: never;
-      readonly cause?: never;
-    }
-  | {
+    } & UserDeclinedProvenance)
+  | ({
       readonly action: 'reject';
-      readonly reason: string;
-      readonly feedback?: never;
       readonly answers?: never;
-      readonly cause?: never;
-    }
-  | {
-      readonly action: 'reject';
-      readonly cause: string | undefined;
-      readonly feedback?: never;
-      readonly answers?: never;
-      readonly reason?: never;
-    };
+    } & RejectionProvenance);
 
 /**
  * Every "reject" result variant above shares this same field-presence

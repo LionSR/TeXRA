@@ -15,7 +15,6 @@ import {
   isBashApprovalBypassedForStream,
   proposalApprovals,
   setBashApprovalSessionBypass,
-  setDelegatedWorkApprovalBypasses,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 
@@ -173,7 +172,7 @@ describe('child subagent stream approval inheritance', () => {
     const roundOne = 'stream:round-1' as StreamTabId;
     const roundTwo = 'stream:round-2' as StreamTabId;
 
-    setDelegatedWorkApprovalBypasses(roundOne, true);
+    currentSession().approvals.setDelegatedWorkBypasses(roundOne, true);
     currentSession().approvals.registerStreamParent(roundTwo, roundOne);
 
     expect(proposalApprovals().isBypassed(roundTwo)).toBe(true);
@@ -243,7 +242,7 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('super-YOLO on an inheriting child pins its own edit bypass', () => {
-    // `setDelegatedWorkApprovalBypasses` must write the child's own explicit
+    // `setDelegatedWorkBypasses` must write the child's own explicit
     // tool-edit entry even when `isBypassed` already reports true via
     // ancestry — otherwise the grant silently evaporates when the parent
     // later re-gates its own edits while the child's proposal/bash stay on.
@@ -252,7 +251,7 @@ describe('child subagent stream approval inheritance', () => {
     configureDelegatedChildApprovals(child, parent);
     expect(isApprovalBypassedForStream(child)).toBe(true);
 
-    setDelegatedWorkApprovalBypasses(child, true);
+    currentSession().approvals.setDelegatedWorkBypasses(child, true);
     setToolEditApprovalSessionBypass(parent, false, { silent: true });
 
     expect(isApprovalBypassedForStream(child)).toBe(true);

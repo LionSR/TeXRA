@@ -1,7 +1,10 @@
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { isApiProvider } from '@model/apiProviders';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
@@ -15,9 +18,7 @@ import { isPlainAgentIdentity } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   isApprovalBypassedForStream,
-  proposalApprovals,
   setBashApprovalSessionBypass,
-  setDelegatedWorkApprovalBypasses,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import {
@@ -289,15 +290,19 @@ export function createProgressViewCommandHandlers(
       await showInfo('Shell commands will be auto-approved for this run.');
     },
     [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: (data) => {
-      const enabled = !proposalApprovals(session).isBypassed(data.stream);
-      setDelegatedWorkApprovalBypasses(data.stream, enabled, session);
+      const { approvals } = session ?? currentSession();
+      const enabled = !approvals.proposal.isBypassed(data.stream);
+      approvals.setDelegatedWorkBypasses(data.stream, enabled);
       return reportDelegatedWorkApproval(enabled);
     },
     // The inline proposal action forces the complete delegated-task approval
     // mode on. It is idempotent, so it cannot invert a grant made from the
     // stream header while the proposal was open.
     [PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS]: async (data) => {
-      setDelegatedWorkApprovalBypasses(data.stream, true, session);
+      (session ?? currentSession()).approvals.setDelegatedWorkBypasses(
+        data.stream,
+        true,
+      );
       await approval.approvePendingDelegatedWork(
         data.stream,
         data.initiatingProposalId,

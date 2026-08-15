@@ -8,7 +8,7 @@ const roundFlowState = vi.hoisted(() => ({
   finalTool: undefined as { name: string } | undefined,
 }));
 
-vi.mock('@agent/core/flows/ToolUseRoundFlow', () => ({
+vi.mock('@agent/implementations/flows/tooluse/ToolUseRoundFlow', () => ({
   createToolUseRoundFlow: () => ({
     setServices() {},
     async run(shared: {

@@ -141,9 +141,11 @@ Full patterns: AGENTS.md "Zod v4 Schema Patterns".
 
 Core lives in `src/agent/`: `core/` is the host-agnostic domain model (see
 `src/agent/core/README.md`), `implementations/flows/` holds the two PocketFlow
-flows (`reflection`, `tooluse`) plus `agentCreator/`, which despite the
-directory and filename is _not_ a flow — it is one linear async function
-(`runAgentCreator`) with a single production caller. `modelHandlers/` abstracts
+flows (`reflection`, `tooluse`) — each owning its own cycle/round flow, with
+`core/flows/` keeping only the kernel both families use. Beside them,
+`implementations/agentCreator/` is _not_ a flow despite the filename: it is one
+linear async function (`runAgentCreator`) with a single production caller.
+`modelHandlers/` abstracts
 provider APIs. Agents are configured by YAML in
 `packages/extension/resources/agents/`, one unified YAML per agent covering
 single and multi-document output.

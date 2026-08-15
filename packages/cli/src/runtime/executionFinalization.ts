@@ -1,8 +1,4 @@
 import {
-  releaseExecutionLeaseAfterArtifacts,
-  type SessionHandle,
-} from '@agent/runtime';
-import {
   finalizeExecution,
   markOwnedExecutionLeaseUndurable,
   type FinalizeExecutionInput,
@@ -42,40 +38,17 @@ export async function finalizeCliExecution(
   flowRecord: FinalizeExecutionInput['flowRecord'],
   reportFailure: CliFinalizationFailureReporter,
 ): Promise<boolean> {
-  let result: Awaited<ReturnType<typeof finalizeExecution>>;
-  try {
-    result = await finalizeExecution({
-      executionId,
-      outcome,
-      flowRecord,
-    });
-  } catch (error) {
-    markOwnedExecutionLeaseUndurable(executionId);
-    reportFailure(
-      new Error(
-        `Execution finalization failed unexpectedly for ${executionId}: ${toErrorMessage(error)}`,
-        { cause: error },
-      ),
-    );
-    return false;
-  }
+  // finalizeExecution never throws: every persistence failure comes back as a
+  // 'failed' result, so this call site carries no catch arm.
+  const result = await finalizeExecution({
+    executionId,
+    outcome,
+    flowRecord,
+  });
   if (result.status === 'durable') return true;
   markOwnedExecutionLeaseUndurable(executionId);
 
   const message = finalizationFailureMessage(result, executionId, outcome);
   reportFailure(new Error(message, { cause: result.error }));
   return false;
-}
-
-/**
- * Drain a CLI session's artifacts before releasing its execution lease.
- * This host-local seam lets CLI lifecycle tests replace the release operation
- * without mocking the public agent-runtime barrel, which would replace every
- * runtime export consumed by the same test module.
- */
-export function releaseCliExecutionLeaseAfterArtifacts(
-  session: SessionHandle,
-  executionId: FinalizeExecutionInput['executionId'],
-): Promise<void> {
-  return releaseExecutionLeaseAfterArtifacts(session, executionId);
 }

@@ -354,6 +354,10 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   mocks.doMock('@agent/runtime/executeAgent', () => ({
     resumeToolUseFromResumeData:
       options.resumeToolUseFromResumeData ?? vi.fn(async () => {}),
+    // `resumeQueuedToolUse` narrows admission cancellation by `instanceof`
+    // against this module's error; the stubbed launcher never throws one, so a
+    // stand-in class keeps that branch false.
+    ResumeAdmissionCancelledError: class extends Error {},
   }));
   mocks.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(),
