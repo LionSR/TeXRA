@@ -265,4 +265,130 @@ describe('createDesktopDiffHost', () => {
     expect(openPath).not.toHaveBeenCalled();
     expect(listDiffTempDirs()).toEqual(diffDirsBefore);
   });
+
+  it('settles every removal before dispose rejects when one rm fails', async () => {
+    // `Promise.all` would reject at the first failed `rm` while its siblings
+    // are still running; the quit drain could then proceed to `app.quit()`
+    // before those siblings finish. `dispose()` must settle all of them and
+    // only then surface the failure.
+    const { host, openedPaths } = createHost();
+
+    await openDiffPair(host, 'Compare 1', ['a.tex', 'b.tex']);
+    await openDiffPair(host, 'Compare 2', ['c.tex', 'd.tex']);
+    const [firstDir, secondDir] = openedPaths.map((openedPath) =>
+      path.dirname(openedPath),
+    );
+    // Record both so afterEach removes whichever directory dispose() leaves
+    // behind after the one-shot removal failure below.
+    tempDirs.push(firstDir, secondDir);
+
+    vi.mocked(rm).mockRejectedValueOnce(new Error('simulated removal failure'));
+
+    await expect(host.dispose()).rejects.toBeInstanceOf(AggregateError);
+
+    // The failed removal leaves its directory behind (afterEach cleans it
+    // up), but the sibling removal has already settled before dispose() threw.
+    expect(existsSync(firstDir)).toBe(true);
+    expect(existsSync(secondDir)).toBe(false);
+  });
+
+  it('keeps dispose pending until an in-flight fallback removes its post-disposal directory', async () => {
+    // The disposal-race test above awaits `openPromise`, which hides the quit
+    // gap: a normal window close does not await the untracked `openDiff`
+    // promise. `dispose()` must instead await the fallback setup and the
+    // removal its `disposed` branch performs.
+    const { host, openPath } = createHost();
+    const [original, proposed] = await prepareDiffPair();
+    const diffDirsBefore = listDiffTempDirs();
+
+    let releaseRemoval!: () => void;
+    const removalGate = new Promise<void>((resolve) => {
+      releaseRemoval = resolve;
+    });
+    let removalTarget: string | undefined;
+    const actualFs =
+      await vi.importActual<typeof import('node:fs/promises')>(
+        'node:fs/promises',
+      );
+    vi.mocked(rm).mockImplementationOnce(async (target, options) => {
+      removalTarget = String(target);
+      await removalGate;
+      await actualFs.rm(
+        target as string,
+        options as Parameters<typeof actualFs.rm>[1],
+      );
+    });
+
+    const openPromise = host.openDiff(original, proposed, 'Compare');
+    const disposePromise = host.dispose();
+
+    await vi.waitFor(() => {
+      expect(removalTarget).toBeDefined();
+    });
+
+    let disposeSettled = false;
+    void disposePromise.then(() => {
+      disposeSettled = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(disposeSettled).toBe(false);
+
+    releaseRemoval();
+    await expect(openPromise).rejects.toThrow(
+      'Desktop window closed before the diff could be opened.',
+    );
+    await disposePromise;
+
+    expect(openPath).not.toHaveBeenCalled();
+    expect(listDiffTempDirs()).toEqual(diffDirsBefore);
+  });
+
+  it('shares an in-flight error-path removal with dispose instead of double-removing', async () => {
+    // If dispose() runs while the fallback error path is already removing its
+    // directory, both sides must await the same per-path removal promise. Two
+    // concurrent recursive `rm`s on one path can fail on Windows; the second
+    // one could also fail after dispose() has cleared the record set, leaving
+    // the directory untracked.
+    const { host, openPath } = createHost();
+    openPath.mockRejectedValue(new Error('editor unavailable'));
+
+    let releaseRemoval!: () => void;
+    const removalGate = new Promise<void>((resolve) => {
+      releaseRemoval = resolve;
+    });
+    let removalTarget: string | undefined;
+    const actualFs =
+      await vi.importActual<typeof import('node:fs/promises')>(
+        'node:fs/promises',
+      );
+    vi.mocked(rm).mockImplementationOnce(async (target, options) => {
+      removalTarget = String(target);
+      await removalGate;
+      await actualFs.rm(
+        target as string,
+        options as Parameters<typeof actualFs.rm>[1],
+      );
+    });
+
+    const openPromise = openDiffPair(host, 'Compare');
+    await vi.waitFor(() => {
+      expect(removalTarget).toBeDefined();
+    });
+
+    const disposePromise = host.dispose();
+    // Give dispose() time to snapshot the still-recorded directory and request
+    // its removal. The per-path memo must return the gated removal above
+    // instead of issuing a second `rm`.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const targetCalls = vi
+      .mocked(rm)
+      .mock.calls.filter(([target]) => String(target) === removalTarget);
+    expect(targetCalls).toHaveLength(1);
+
+    releaseRemoval();
+    await expect(openPromise).rejects.toThrow('editor unavailable');
+    await disposePromise;
+
+    expect(existsSync(removalTarget!)).toBe(false);
+  });
 });
