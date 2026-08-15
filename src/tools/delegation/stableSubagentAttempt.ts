@@ -5,6 +5,11 @@ import { z } from 'zod';
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 
+// Version stays 1 across the `committed` phase addition by decision (#10663):
+// legacy v1 markers (reserved/launched/retryable) remain readable here, while
+// pre-#10646 readers sharing this KV state reject a `committed` marker at
+// parse time — downgrade or mixed-version recovery is unsupported. A present
+// but unknown version or phase fails closed: no defaults, no coercion.
 const STABLE_SUBAGENT_STATE_SCHEMA_VERSION = 1;
 const STABLE_SUBAGENT_ATTEMPT_KV_KEY = 'stable-subagent-attempt';
 const STABLE_SUBAGENT_SEQUENCE_KEY_PREFIX = 'stable-subagent-sequence-';
