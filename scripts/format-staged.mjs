@@ -204,13 +204,25 @@ function isConfigPointerPath(spec) {
   return isRelativeSpecifier(spec) || isAbsolute(spec);
 }
 
+/** Stat `path` the way Node's module loader probes candidates: any
+ * filesystem error (ELOOP, ENOTDIR, EACCES, ...) is a non-match, not an
+ * exception, so a bad probe never aborts resolution of the later candidates
+ * Node would still try. Returns undefined when the probe fails. */
+function statProbe(path) {
+  try {
+    return statSync(path);
+  } catch {
+    return undefined;
+  }
+}
+
 /** True when `path` is a regular file in the working tree. Node's
  * LOAD_AS_FILE/tryExtensions classify with stat, so a symlink to a file
  * counts: admitting the link as a candidate makes an untracked one a loud
  * "not staged" skip instead of a silent fall-through to a fallback Node
  * would never load. */
 function isWorktreeFile(path) {
-  return statSync(path, { throwIfNoEntry: false })?.isFile() === true;
+  return statProbe(path)?.isFile() === true;
 }
 
 /** Return the `main` entry of a dependency directory's package.json. The
@@ -268,9 +280,13 @@ function pathTraversesSymlink(path) {
   let current = process.cwd();
   for (const segment of rel.split('/')) {
     current = join(current, segment);
-    if (lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink()) {
-      return true;
+    let stat;
+    try {
+      stat = lstatSync(current);
+    } catch {
+      return false;
     }
+    if (stat.isSymbolicLink()) return true;
   }
   return false;
 }
@@ -308,10 +324,7 @@ function resolveConfigDepPath(configDir, spec, kind) {
   // symlinked dependency directory too. Candidates reached through the link
   // traverse a worktree symlink, which verifyConfigDep rejects loudly, so
   // following the link here can never verify the wrong file.
-  if (
-    candidates.length === 0 &&
-    statSync(base, { throwIfNoEntry: false })?.isDirectory()
-  ) {
+  if (candidates.length === 0 && statProbe(base)?.isDirectory()) {
     const main = readPackageMain(base);
     if (main) {
       const mainTarget = resolve(base, normalizeSpecifier(main));
@@ -327,7 +340,7 @@ function resolveConfigDepPath(configDir, spec, kind) {
       // main target that links to a directory resolves to its index.*.
       // Classifying the link itself would skip those candidates and verify
       // the package-level index.* fallback Node never loads (#10602).
-      if (statSync(mainTarget, { throwIfNoEntry: false })?.isDirectory()) {
+      if (statProbe(mainTarget)?.isDirectory()) {
         for (const indexName of CJS_INDEX_EXTENSIONS) {
           push(join(mainTarget, indexName));
         }
