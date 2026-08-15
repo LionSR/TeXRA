@@ -48,9 +48,10 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Unused Lean language servers no longer accumulate** — leftover CLI and
-  desktop Lean sessions stop after they sit unused, so later Lean work is not
-  disrupted by leftover servers from earlier worktrees.
+- **Unused Lean language servers no longer accumulate** — a CLI or desktop
+  Lean session stops when the agent run that was using it ends, and at the
+  latest after it sits unused, so later Lean work is not disrupted by
+  leftover servers from earlier worktrees.
 
 ### CLI
 

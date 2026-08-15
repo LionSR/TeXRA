@@ -5,8 +5,9 @@
  * integration. Per-workspace sessions are cached: the first request that
  * targets a file in a given Lake project spawns `lake env lean --server`
  * from that project root; subsequent requests from any agent reuse the
- * same session. An unused server is stopped after thirty minutes. Sessions
- * are also torn down on platform shutdown.
+ * same session. A server stops when the agent run that started it ends;
+ * an unused one is otherwise stopped after thirty minutes. Sessions are
+ * also torn down on platform shutdown.
  */
 
 // Node imports
@@ -17,8 +18,13 @@ import * as path from 'node:path';
 import PQueue from 'p-queue';
 
 // Local imports
+import {
+  getRunContextExecutionId,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import { info, warn } from '@logger/logUtils';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
+import type { ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runLakeCommand } from './lakeCommands';
@@ -108,6 +114,9 @@ export function createDirectLspLeanAdapter(
 
   async function getSession(filePath: string): Promise<LeanSession> {
     const generation = startGeneration;
+    // Capture the run here, at the tool-call entry point: the ambient run
+    // context does not reliably survive the start queue's scheduling hop.
+    const runId = currentRunId();
     const absolute = path.resolve(filePath);
     const root = await resolveRoot(absolute);
     throwIfStopped(generation);
@@ -116,7 +125,7 @@ export function createDirectLspLeanAdapter(
         `No Lean project found for ${absolute}. Lake projects need a lakefile.lean or lakefile.toml in an ancestor directory.`,
       );
     }
-    return getOrStartSession(root, generation);
+    return getOrStartSession(root, generation, runId);
   }
 
   function throwIfStopped(generation: number): void {
@@ -228,7 +237,8 @@ export function createDirectLspLeanAdapter(
 
   async function disposeSession(
     root: string,
-    reason: 'idle' | 'capacity' | 'exhausted' | 'restart' | 'shutdown',
+    reason:
+      'idle' | 'capacity' | 'exhausted' | 'restart' | 'run-end' | 'shutdown',
   ): Promise<void> {
     const tracked = sessions.get(root);
     if (!tracked) return;
@@ -244,7 +254,12 @@ export function createDirectLspLeanAdapter(
       clearTimeout(tracked.idleTimer);
       tracked.idleTimer = undefined;
     }
-    if (reason === 'idle' || reason === 'capacity' || reason === 'exhausted') {
+    if (
+      reason === 'idle' ||
+      reason === 'capacity' ||
+      reason === 'exhausted' ||
+      reason === 'run-end'
+    ) {
       info(LOG_CHANNEL, `Stopping Lean server at ${root} (${reason})`);
     }
     try {
@@ -253,6 +268,25 @@ export function createDirectLspLeanAdapter(
       forgetSession(root, tracked.session);
       settleDisposing();
     }
+  }
+
+  /**
+   * Run-end hook: stop the servers the ended run started. A session still
+   * leased by an in-flight request (a shared worktree's other run) is left
+   * running; its last lease re-arms the idle timer, which stays the
+   * backstop. Sessions started outside any run have no attribution and are
+   * likewise left to the idle timeout.
+   */
+  async function stopSessionsForRun(runId: ExecutionId): Promise<void> {
+    const roots = [...sessions.entries()]
+      .filter(
+        ([, tracked]) =>
+          tracked.startedByRunId === runId &&
+          !tracked.disposing &&
+          tracked.inFlight === 0,
+      )
+      .map(([root]) => root);
+    await Promise.all(roots.map((root) => disposeSession(root, 'run-end')));
   }
 
   async function evictIdleSessions(): Promise<void> {
@@ -363,20 +397,22 @@ export function createDirectLspLeanAdapter(
   function getOrStartSession(
     root: string,
     generation = startGeneration,
+    runId?: ExecutionId,
   ): Promise<LeanSession> {
-    return enqueueStart(() => getOrStartSessionLocked(root, generation));
+    return enqueueStart(() => getOrStartSessionLocked(root, generation, runId));
   }
 
   async function getOrStartSessionLocked(
     root: string,
     generation: number,
+    runId?: ExecutionId,
   ): Promise<LeanSession> {
     throwIfStopped(generation);
     const existing = sessions.get(root);
     if (existing?.disposing) {
       await existing.disposing;
       throwIfStopped(generation);
-      return getOrStartSessionLocked(root, generation);
+      return getOrStartSessionLocked(root, generation, runId);
     }
     if (existing) {
       return leaseSession(root, existing.session);
@@ -384,7 +420,7 @@ export function createDirectLspLeanAdapter(
     await evictForNewSession(root, generation);
     throwIfStopped(generation);
     try {
-      return await startAndLease(root, generation);
+      return await startAndLease(root, generation, runId);
     } catch (error) {
       if (!isFileTableExhausted(error) || sessions.size === 0) {
         throw error;
@@ -395,13 +431,14 @@ export function createDirectLspLeanAdapter(
       );
       await evictOthersForExhausted(root, generation);
       throwIfStopped(generation);
-      return startAndLease(root, generation);
+      return startAndLease(root, generation, runId);
     }
   }
 
   async function startFreshSession(
     root: string,
     generation: number,
+    runId?: ExecutionId,
   ): Promise<LeanSession> {
     throwIfStopped(generation);
     const session = new LeanSession({
@@ -417,6 +454,7 @@ export function createDirectLspLeanAdapter(
       session,
       lastUsedAt: now(),
       inFlight: 0,
+      startedByRunId: runId,
     });
     if (startGeneration !== generation) {
       await disposeSession(root, 'shutdown');
@@ -438,20 +476,22 @@ export function createDirectLspLeanAdapter(
   async function startAndLease(
     root: string,
     generation: number,
+    runId?: ExecutionId,
   ): Promise<LeanSession> {
-    const session = await startFreshSession(root, generation);
+    const session = await startFreshSession(root, generation, runId);
     return leaseSession(root, session);
   }
 
   function restartSession(root: string): Promise<void> {
     const generation = startGeneration;
+    const runId = currentRunId();
     return enqueueStart(async () => {
       throwIfStopped(generation);
       await disposeSession(root, 'restart');
       throwIfStopped(generation);
       await evictForNewSession(root, generation);
       throwIfStopped(generation);
-      await startFreshSession(root, generation);
+      await startFreshSession(root, generation, runId);
       const tracked = sessions.get(root);
       if (tracked) armIdleTimer(root, tracked);
     });
@@ -630,6 +670,8 @@ export function createDirectLspLeanAdapter(
       );
     },
 
+    stopSessionsForRun,
+
     dispose: disposeAll,
   };
 
@@ -658,8 +700,15 @@ interface TrackedLeanSession {
   session: LeanSession;
   lastUsedAt: number;
   inFlight: number;
+  /** Agent run that started this server, when it started inside one. */
+  startedByRunId?: ExecutionId;
   idleTimer?: ReturnType<typeof setTimeout>;
   disposing?: Promise<void>;
+}
+
+/** The agent run the current tool call executes for, when it runs inside one. */
+function currentRunId(): ExecutionId | undefined {
+  return getRunContextExecutionId(tryUseRunContext());
 }
 
 function isInterruptedLeanSession(message: string): boolean {

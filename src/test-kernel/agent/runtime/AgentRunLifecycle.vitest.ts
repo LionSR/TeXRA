@@ -52,6 +52,10 @@ import {
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
 import { withTranscriptWriter } from '@test/support/storeTestDrivers';
+import {
+  setLeanLanguageServices,
+  type LeanLanguageServices,
+} from '@tools/lean/leanLanguageServices';
 import { StorageFS } from '@utils/files/storageFS';
 
 import {
@@ -295,6 +299,62 @@ describe('runFlowWithLifecycle', () => {
         category: 'workflow',
         agentName: 'polish',
       });
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('stops the Lean servers attributed to a run when the run ends', async () => {
+    await initLifecycleTestPlatform(true);
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-lean-server-stop',
+    );
+    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
+    setLeanLanguageServices({
+      executeFileCommand: vi.fn(),
+      getGoalState: vi.fn(),
+      getTermGoal: vi.fn(),
+      getHoverInfo: vi.fn(),
+      fetchDiagnosticsForFile: vi.fn(),
+      executeProjectCommand: vi.fn(),
+      stopSessionsForRun,
+    } as LeanLanguageServices);
+
+    try {
+      const result = await runFlowWithLifecycle(ctx, async () =>
+        toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+      );
+
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      expect(stopSessionsForRun).toHaveBeenCalledWith(executionId);
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('still stops the Lean servers when the run fails', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-lean-server-stop-failed',
+    );
+    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
+    setLeanLanguageServices({
+      executeFileCommand: vi.fn(),
+      getGoalState: vi.fn(),
+      getTermGoal: vi.fn(),
+      getHoverInfo: vi.fn(),
+      fetchDiagnosticsForFile: vi.fn(),
+      executeProjectCommand: vi.fn(),
+      stopSessionsForRun,
+    } as LeanLanguageServices);
+
+    try {
+      await expect(
+        runFlowWithLifecycle(ctx, async () => {
+          throw new Error('flow exploded');
+        }),
+      ).rejects.toThrow('flow exploded');
+
+      expect(stopSessionsForRun).toHaveBeenCalledWith(executionId);
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
     }

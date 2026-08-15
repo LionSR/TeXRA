@@ -44,6 +44,7 @@ import {
 } from '@shared/state/onboardingState';
 import { agentName as baseAgentName } from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
 
 import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
 import {
@@ -771,6 +772,19 @@ export async function runFlowWithLifecycle(
     } catch (cancelError) {
       logger.warn('Failed to cancel host interactions after the run ended', {
         data: { agentIdentifier, streamId, error: cancelError },
+      });
+    }
+    // Stop the Lean servers this run started in its worktree(s) so they do
+    // not idle until the timeout after the run is gone (CLI/desktop; a host
+    // whose Lean integration owns server lifetime no-ops here). Servers still
+    // leased by another run's in-flight request survive on the idle-timeout
+    // backstop. Guarded like the cancel above: a failing stop must not
+    // replace the result this run already published.
+    try {
+      await stopLeanServersForEndedRun(executionId);
+    } catch (leanStopError) {
+      logger.warn('Failed to stop Lean servers after the run ended', {
+        data: { agentIdentifier, streamId, error: leanStopError },
       });
     }
     // Release long-lived resources (e.g., WebSocket connections, keepalive
