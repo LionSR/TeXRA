@@ -272,13 +272,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         }
 
         const response = aggregator.buildResponse();
-        const finalOutput = response.choices?.[0]?.message?.content ?? '';
-        this.finalizeProgressStreams(
-          thinking,
-          output,
-          response,
-          typeof finalOutput === 'string' ? finalOutput : '',
-        );
+        this.finalizeProgressStreams(thinking, output, response, () => {
+          const finalOutput = response.choices?.[0]?.message?.content ?? '';
+          return typeof finalOutput === 'string' ? finalOutput : '';
+        });
 
         this.trackInputTokens(response.usage, 'streaming response');
         return { response, updatedMessages };
