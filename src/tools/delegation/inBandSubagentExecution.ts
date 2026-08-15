@@ -17,7 +17,6 @@ import { getExecutionStore, type ResultMeta } from '@agent/storage';
 import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
 import {
   ExecutionLeaseLostError,
-  inspectExecutionLease,
   runWithInactiveExecutionLease,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
@@ -256,43 +255,15 @@ async function inspectStableAttempt(
   }
   if (attempt.phase === 'retryable') return { kind: 'advance' };
   if (resultMeta.result.outcome !== 'completed') return { kind: 'advance' };
-  if (attempt.phase === 'launched') {
-    // A clean terminal release deletes the lease before recovery. A final
-    // artifact-drain failure instead abandons its persisted lease, so a fresh
-    // record means the parent's retryable-marker write was deferred. Never
-    // accept that manifest as durable success: wait while the lease is fresh,
-    // then repair the attempt once the abandoned record becomes stale.
-    let lease: Awaited<ReturnType<typeof inspectExecutionLease>>;
-    try {
-      lease = await inspectExecutionLease(executionId);
-    } catch (error) {
-      throw new SubagentReconciliationError(
-        `Failed to inspect the lease for persisted subagent ${executionId}.`,
-        { cause: error },
-      );
-    }
-    if (lease.status === 'owned' || lease.status === 'foreign') {
-      throw new SubagentReconciliationError(
-        `Subagent ${executionId} still has a live lease; refusing to recover its result.`,
-      );
-    }
-    if (lease.status === 'stale') {
-      const repair = await runWithInactiveExecutionLease(executionId, () =>
-        writeStableSubagentAttempt(store, {
-          ...attempt,
-          phase: 'retryable',
-        }),
-      ).catch((error: unknown) => {
-        throw new SubagentReconciliationError(
-          `Failed to repair the abandoned subagent ${executionId}.`,
-          { cause: error },
-        );
-      });
-      if (repair.status === 'performed') return { kind: 'advance' };
-      throw new SubagentReconciliationError(
-        `Subagent ${executionId} regained a live lease; refusing to recover its result.`,
-      );
-    }
+  if (attempt.phase !== 'committed') {
+    // A completed manifest proves only that the child turn settled. Recovery
+    // additionally requires the post-release marker written after the child
+    // loop and its artifact drain both returned successfully. Lease absence
+    // is not an attestation: restart repair may already have removed an
+    // abandoned lease from a failed drain.
+    throw new SubagentReconciliationError(
+      `Cannot attest durable completion for persisted subagent ${executionId}; refusing to recover its result.`,
+    );
   }
   options.signal?.throwIfAborted();
   return {
@@ -416,7 +387,7 @@ async function executeInBand(
     }
     throw cause;
   }
-  return await runWithOwnership(async () => {
+  const completed = await runWithOwnership(async () => {
     let settledTurn: SettledInBandTurn | undefined;
     const { completion } = await startDetachedChildRunLoop({
       executionId,
@@ -563,15 +534,31 @@ async function executeInBand(
       );
     }
 
-    // Post-run cancellation deliberately observes a terminal record:
-    // rejecting here fails the awaiting caller without rewriting the child.
-    options.signal?.throwIfAborted();
     return {
       executionId,
       result,
       ...(mode === 'best-effort-delivery' && { delivery: settledTurn.message }),
     };
   });
+
+  if (stableAttempt) {
+    try {
+      await writeStableSubagentAttempt(getExecutionStore(executionId), {
+        ...stableAttempt,
+        phase: 'committed',
+      });
+    } catch (cause) {
+      throw new SubagentDurabilityError(
+        `Failed to commit durable completion for subagent ${executionId}.`,
+        { cause },
+      );
+    }
+  }
+  // Post-run cancellation deliberately observes a terminal record: stable
+  // success is committed first, then the awaiting caller rejects without
+  // rewriting the child.
+  options.signal?.throwIfAborted();
+  return completed;
 }
 
 /** Recover a logical child first; resolve launch-only state only when needed. */

@@ -301,7 +301,7 @@ function mockWaitingChildOnce(
 
 function stableAttempt(
   logicalExecutionId: ExecutionId,
-  phase: 'reserved' | 'launched' | 'retryable' = 'launched',
+  phase: 'reserved' | 'launched' | 'committed' | 'retryable' = 'launched',
 ) {
   return {
     schemaVersion: 1,
@@ -350,7 +350,9 @@ function completedChildStore(
     listKeys: vi
       .fn()
       .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
-    read: vi.fn().mockResolvedValue(stableAttempt(logicalExecutionId)),
+    read: vi
+      .fn()
+      .mockResolvedValue(stableAttempt(logicalExecutionId, 'committed')),
     readResultMeta: vi.fn().mockResolvedValue({
       producer: 'subagent',
       agentName: 'review',
@@ -573,6 +575,32 @@ describe('headless delegation', () => {
     );
     expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.releaseOwnedExecutionLease.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('commits stable success only after final artifact release', async () => {
+    const logicalExecutionId = 'cccccc666666' as ExecutionId;
+    const childStore = memoryExecutionStore();
+    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+
+    await runInBand(delegationOptions(), logicalExecutionId);
+
+    const launchedWrite = childStore.write.mock.calls.findIndex(
+      ([key, value]) =>
+        key === 'stable-subagent-attempt' &&
+        (value as { phase?: string }).phase === 'launched',
+    );
+    const committedWrite = childStore.write.mock.calls.findIndex(
+      ([key, value]) =>
+        key === 'stable-subagent-attempt' &&
+        (value as { phase?: string }).phase === 'committed',
+    );
+    expect(launchedWrite).toBeGreaterThanOrEqual(0);
+    expect(committedWrite).toBeGreaterThan(launchedWrite);
+    expect(
+      childStore.write.mock.invocationCallOrder[committedWrite],
+    ).toBeGreaterThan(
+      mocks.releaseOwnedExecutionLease.mock.invocationCallOrder[0] ?? 0,
     );
   });
 
@@ -909,6 +937,40 @@ describe('headless delegation', () => {
     ).rejects.toBeInstanceOf(SubagentReconciliationError);
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
     expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledOnce();
+  });
+
+  it('does not recover a completed manifest after restart repair removes an abandoned lease', async () => {
+    const cleanupFailure = new Error('artifact flush failed');
+    const logicalExecutionId = 'dddddd888888' as ExecutionId;
+    const childStore = memoryExecutionStore();
+    const write = childStore.write.getMockImplementation();
+    childStore.write.mockImplementation(async (key, value) => {
+      if (
+        key === 'stable-subagent-attempt' &&
+        (value as { phase?: string }).phase === 'retryable'
+      ) {
+        throw new ExecutionLeaseLostError(logicalExecutionId);
+      }
+      return await write?.(key, value);
+    });
+    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+    mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(cleanupFailure);
+
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toMatchObject({
+      name: 'SubagentDurabilityError',
+      cause: cleanupFailure,
+    });
+
+    // Restart repair has removed the stale abandoned lease before the stable
+    // call resumes. Missing lease state must not attest that artifact release
+    // succeeded; only the explicit post-release commit marker can do that.
+    mocks.inspectExecutionLease.mockResolvedValue({ status: 'missing' });
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+    expect(mocks.executeAgent).toHaveBeenCalledOnce();
   });
 
   it('preserves the child failure when its failure manifest cannot be written', async () => {
