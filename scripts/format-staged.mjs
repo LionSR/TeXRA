@@ -279,7 +279,22 @@ function resolveConfigDepPath(configDir, spec, kind) {
 
   if (lstatSync(base, { throwIfNoEntry: false })?.isDirectory()) {
     const main = readPackageMain(base);
-    if (main) push(resolve(base, normalizeSpecifier(main)));
+    if (main) {
+      const mainTarget = resolve(base, normalizeSpecifier(main));
+      // Node applies LOAD_AS_FILE / LOAD_INDEX to the package main target
+      // too, so an extensionless main (`"main": "main"` -> main.js) or a
+      // directory main (`"main": "dist"` -> dist/index.js) resolves to the
+      // real file. Verify that target before the package-level index.*
+      // fallback below; otherwise the hook would check the wrong file and let
+      // an unstaged edit to the real main drive Prettier.
+      push(mainTarget);
+      for (const ext of CJS_FILE_EXTENSIONS) push(`${mainTarget}${ext}`);
+      if (lstatSync(mainTarget, { throwIfNoEntry: false })?.isDirectory()) {
+        for (const indexName of CJS_INDEX_EXTENSIONS) {
+          push(join(mainTarget, indexName));
+        }
+      }
+    }
     for (const indexName of CJS_INDEX_EXTENSIONS) {
       push(join(base, indexName));
     }
