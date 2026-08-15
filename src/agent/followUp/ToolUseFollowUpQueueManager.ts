@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { LRUCache } from 'lru-cache';
-import { createChannelTrace } from '@agent/trace';
+import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { KeyedMutex } from '@utils/core/keyedMutex';
@@ -11,7 +11,7 @@ import {
 } from '@utils/core/boundedIdSet';
 import { FollowUpQueue, type FollowUpQueueInput } from './FollowUpQueue';
 
-const logger = createChannelTrace('ToolUseFollowUpQueue');
+const logger = createLog('ToolUseFollowUpQueue');
 
 type QueueLifecycle = 'live' | 'recoverable' | 'recovering';
 export type FollowUpConsumerKind = 'flow' | 'child' | 'recovery';

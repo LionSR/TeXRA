@@ -1,7 +1,6 @@
 /** Tool-use follow-up routing and continuation ownership. */
 import { z } from 'zod';
 
-import { createChannelTrace } from '@agent/trace';
 import { deriveResumability } from '@agent/storage/resumability';
 import { type ToolUseFollowUpQueueReason } from '@agent/runtime/executionRegistry';
 import {
@@ -10,6 +9,7 @@ import {
   resolveEmitSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
@@ -75,7 +75,7 @@ export function presentFollowUpResult(
   return { severity: 'none' };
 }
 
-const logger = createChannelTrace('ToolUseFollowUp');
+const logger = createLog('ToolUseFollowUp');
 const PersistedContinuationGenerationSchema = z.looseObject({
   continuationGenerationId: z.uuid(),
 });
