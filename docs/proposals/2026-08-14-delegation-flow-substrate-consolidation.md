@@ -1,6 +1,13 @@
 # Delegation and flow substrate consolidation: the remaining ten debts
 
-Status: proposal (plan of record for execution ordering)
+Status: Wave 1 implemented (items 1, 6, 9) plus A4, 2026-08-15 — the cycle
+break landed via an engine-provided `AgentEngine` slot in
+`nativeSubagentStrategy.ts` (both lazy imports retired; the
+`toolRegistryCycle` closure guard's agent-launching allowlist is now empty);
+item 9's relocations follow the single-consumer test (`CycleServices` and
+`IToolUseSession` stayed — both families consume them; `toolCallParsing`
+moved up to `core/flows/`, four model handlers consume it); A4 landed minus
+the verifier-cut sub-items. Waves 2-4 remain.
 Date: 2026-08-14
 
 ## Framing
