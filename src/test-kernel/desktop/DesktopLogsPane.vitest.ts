@@ -101,6 +101,34 @@ describe('desktop logs pane', () => {
     });
   });
 
+  it('shows a status-announced loading state before the first snapshot arrives', async () => {
+    const { createLogsPane } = await loadLogsPane();
+    const controller = createLogsPane({ sendCommand: vi.fn() });
+    document.body.append(controller.element);
+
+    const loading = controller.element.querySelector('.loading-state');
+    expect(loading).not.toBeNull();
+    expect(loading?.getAttribute('role')).toBe('status');
+    expect(loading?.textContent).toContain('Loading recent entries…');
+  });
+
+  it('shows a status-announced empty state when a snapshot has no entries', async () => {
+    const { createLogsPane } = await loadLogsPane();
+    const controller = createLogsPane({ sendCommand: vi.fn() });
+    document.body.append(controller.element);
+
+    controller.applySnapshot({
+      command: DESKTOP_LOG_COMMANDS.SET_LOG,
+      log: { path: '/redacted/texra-desktop.log', text: '', truncated: false },
+    });
+
+    expect(controller.element.querySelector('.loading-state')).toBeNull();
+    const empty = controller.element.querySelector('.desktop-log-viewer-empty');
+    expect(empty).not.toBeNull();
+    expect(empty?.textContent).toContain('No desktop log entries yet.');
+    expect(empty?.closest('[role="status"]')).not.toBeNull();
+  });
+
   it('renders one expandable Web Awesome details row per parsed entry', async () => {
     const { createLogsPane } = await loadLogsPane();
     const controller = createLogsPane({ sendCommand: vi.fn() });
