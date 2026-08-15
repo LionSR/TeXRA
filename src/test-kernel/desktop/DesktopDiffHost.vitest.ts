@@ -1,6 +1,7 @@
 // Standard library imports
-import { existsSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { existsSync, readdirSync } from 'node:fs';
+import { readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 // Third-party imports
@@ -9,6 +10,15 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 // Local imports - test support
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { loadSourceModule } from './loadSourceModule.ts';
+
+// `rm` keeps its real implementation by default; tests arm one-shot failures
+// with mockRejectedValueOnce to exercise the cleanup-retry path. The source
+// module observes the same mock because loadSourceModule imports it through
+// Vitest's module runner.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const original = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...original, rm: vi.fn(original.rm) };
+});
 
 type DesktopDiffHostModule = typeof import('@desktop/main/desktopDiffHost');
 type DiffHostOptions = Parameters<
@@ -48,12 +58,13 @@ afterEach(async () => {
   await cleanupTempDirs(tempDirs);
 });
 
-async function openDiffPair(
-  host: DiffHost,
-  title: string,
+type OpenDiffArgs = Parameters<DiffHost['openDiff']>;
+type OpenDiffSources = [OpenDiffArgs[0], OpenDiffArgs[1]];
+
+async function prepareDiffPair(
   names: [string, string] = ['a.tex', 'b.tex'],
   texts: [string, string] = ['a\n', 'b\n'],
-): Promise<void> {
+): Promise<OpenDiffSources> {
   const tempDir = await makeTempDir('texra-diff-host-test-', tempDirs);
   const originalPath = path.join(tempDir, names[0]);
   const proposedPath = path.join(tempDir, names[1]);
@@ -61,11 +72,24 @@ async function openDiffPair(
     writeFile(originalPath, texts[0], 'utf8'),
     writeFile(proposedPath, texts[1], 'utf8'),
   ]);
-  await host.openDiff(
-    { filePath: originalPath },
-    { filePath: proposedPath },
-    title,
-  );
+  return [{ filePath: originalPath }, { filePath: proposedPath }];
+}
+
+async function openDiffPair(
+  host: DiffHost,
+  title: string,
+  names: [string, string] = ['a.tex', 'b.tex'],
+  texts: [string, string] = ['a\n', 'b\n'],
+): Promise<void> {
+  const [original, proposed] = await prepareDiffPair(names, texts);
+  await host.openDiff(original, proposed, title);
+}
+
+// Sorted so two snapshots compare equal when nothing was created or removed.
+function listDiffTempDirs(): string[] {
+  return readdirSync(tmpdir())
+    .filter((entry) => entry.startsWith('texra-desktop-diff-'))
+    .sort();
 }
 
 describe('createDesktopDiffHost', () => {
@@ -182,5 +206,63 @@ describe('createDesktopDiffHost', () => {
     await host.dispose();
 
     expect(existsSync(diffDir)).toBe(false);
+  });
+
+  it('removes the patch directory immediately when the editor fails to open', async () => {
+    const failure = new Error('editor unavailable');
+    const { host, openPath } = createHost();
+    openPath.mockRejectedValue(failure);
+
+    // The original failure reaches the caller, not a cleanup artifact.
+    await expect(openDiffPair(host, 'Compare')).rejects.toBe(failure);
+
+    expect(openPath).toHaveBeenCalledTimes(1);
+    const diffDir = path.dirname(openPath.mock.calls[0][0]);
+    expect(path.basename(diffDir)).toMatch(/^texra-desktop-diff-/);
+    expect(existsSync(diffDir)).toBe(false);
+  });
+
+  it('keeps a failed immediate cleanup recorded so dispose() retries it', async () => {
+    // The one-shot rm rejection simulates an OS-level removal failure: the
+    // directory must stay recorded (and the failure logged) so the dispose
+    // at window close can retry it instead of leaking it untracked.
+    const consoleSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    const { host, openPath } = createHost();
+    openPath.mockRejectedValue(new Error('editor unavailable'));
+    vi.mocked(rm).mockRejectedValueOnce(new Error('simulated removal failure'));
+
+    await expect(openDiffPair(host, 'Compare')).rejects.toThrow(
+      'editor unavailable',
+    );
+
+    const diffDir = path.dirname(openPath.mock.calls[0][0]);
+    expect(existsSync(diffDir)).toBe(true);
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+
+    await host.dispose();
+
+    expect(existsSync(diffDir)).toBe(false);
+    consoleSpy.mockRestore();
+  });
+
+  it('removes a fallback directory created after disposal instead of recording it', async () => {
+    // Destroyed-window-mid-fallback race: dispose() snapshots and clears the
+    // record set while this openDiff is still awaiting its reads, so the temp
+    // directory it creates afterwards must be removed immediately rather than
+    // recorded, where nothing would ever remove it.
+    const { host, openPath } = createHost();
+    const [original, proposed] = await prepareDiffPair();
+    const diffDirsBefore = listDiffTempDirs();
+
+    const openPromise = host.openDiff(original, proposed, 'Compare');
+    await host.dispose();
+
+    await expect(openPromise).rejects.toThrow(
+      'Desktop window closed before the diff could be opened.',
+    );
+    expect(openPath).not.toHaveBeenCalled();
+    expect(listDiffTempDirs()).toEqual(diffDirsBefore);
   });
 });

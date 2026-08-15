@@ -68,8 +68,7 @@ All notable changes to this project will be documented in this file.
   silently returns the original draft; it now applies the same bundled prompt
   template the extension uses.
 - **Temporary diff files are cleaned up** — viewing a diff in an external
-  editor no longer leaves `texra-desktop-diff` folders behind after the window
-  closes.
+  editor no longer leaves temporary files behind after the window closes.
 
 ### CLI and Desktop
 

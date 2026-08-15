@@ -153,6 +153,10 @@ let reopenMainWindow: (() => void) | undefined;
 let pendingWorkspaceRelaunch:
   { selectedPath: string; args: string[] } | undefined;
 let continueQuitAfterWindowClose: (() => void) | undefined;
+// Set by the window's closed handler and awaited by the lifecycle shutdown
+// drain registered below, so recursive temp-dir removals finish before the
+// process exits instead of racing the quit flow.
+let pendingDesktopDiffHostDispose: Promise<void> | undefined;
 
 // Playwright relaunch tests need a deterministic Electron profile so
 // app-scoped stores survive across child processes. Normal desktop launches
@@ -1092,7 +1096,13 @@ function createWindow(options: {
     continueQuitAfterWindowClose = undefined;
     disposeWindowTitle();
     presentationAbort.abort();
-    void desktopDiffHost.dispose().catch(reportAsyncError);
+    // Not fire-and-forget: every quit path (window-all-closed on Windows and
+    // Linux, continueQuit, the workspace relaunch's app.quit()) reaches the
+    // before-quit handler, whose lifecycle drain awaits this promise before
+    // the final quit.
+    pendingDesktopDiffHostDispose = desktopDiffHost
+      .dispose()
+      .catch(reportAsyncError);
     executionsWatcher?.close();
     if (mainWindow === window) {
       mainWindow = null;
@@ -1213,6 +1223,13 @@ if (protocolLifecycle.shouldContinue) {
       // ON-phase language-service disposal.
       lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
         processSession.flushArtifacts(),
+      );
+      // The window's closed handler starts diff temp-dir removal before the
+      // quit lifecycle drains; awaiting it here keeps the process alive until
+      // the directories are actually gone.
+      lifecycle.onShutdown(
+        SHUTDOWN_PHASE.BEFORE,
+        () => pendingDesktopDiffHostDispose,
       );
       lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => {
         disposeAgentResumeHandler();
