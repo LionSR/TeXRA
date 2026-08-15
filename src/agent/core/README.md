@@ -5,13 +5,13 @@
 ubiquitous language is visible in the directory layout rather than buried in a
 flat folder.
 
-| Module        | Concern                          | Contents                                                                                                                                                                       |
-| ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `definition/` | What an agent **is** (configure) | `AgentDataclass` (settings, prompts, `AgentDefinition`, `AgentCategory`), `AgentConfig` (launch/run configuration + payload), `AgentCycleOptions` (template variable channels) |
-| `state/`      | Run-state snapshots              | `AgentWorkspaceState`, `AgentState` (run/round snapshots + metrics), `TaskState` (workflow vs tool-use), `executionRequests` (request validation)                              |
-| `usage/`      | Usage value objects              | `ResponseUsage`, `RunUsageAccumulator`                                                                                                                                         |
-| `tools/`      | Tool contracts                   | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`)                                                                                                                      |
-| `flows/`      | Reusable cycle primitives        | `ResponseCycleFlow`, `ToolUseRoundFlow` (one LLM invocation + tool dispatch), and their shared services/types                                                                  |
+| Module        | Concern                          | Contents                                                                                                                                                                                                      |
+| ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `definition/` | What an agent **is** (configure) | `AgentDataclass` (settings, prompts, `AgentDefinition`, `AgentCategory`), `AgentConfig` (launch/run configuration + payload), `AgentCycleOptions` (typed template-variable vocabulary + two-channel record)   |
+| `state/`      | Run-state snapshots              | `AgentWorkspaceState`, `AgentState` (run/round snapshots + metrics), `TaskState` (workflow vs tool-use) + `agentConfigToTaskState` (its frozen CLI wire projection), `executionRequests` (request validation) |
+| `usage/`      | Usage value objects              | `ResponseUsage`, `RunUsageAccumulator`                                                                                                                                                                        |
+| `tools/`      | Tool contracts                   | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`)                                                                                                                                                     |
+| `flows/`      | Reusable cycle primitives        | `ResponseCycleFlow`, `ToolUseRoundFlow` (one LLM invocation + tool dispatch), and their shared services/types                                                                                                 |
 
 ## Dependency direction
 

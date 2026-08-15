@@ -408,6 +408,22 @@ describe('retrieveSessionResumeData', () => {
     });
   });
 
+  it('rejects a malformed legacy MODEL user variable at the shared-state boundary', () => {
+    const result = migrateSharedState({
+      messages: [],
+      continuationGenerationId: CONTINUATION_GENERATION_ID,
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices('gpt54', {
+        MODEL: 42,
+      } as unknown as Record<string, string>),
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: expect.objectContaining({ name: 'ZodError' }),
+    });
+  });
+
   it('retrieves a workflow record with the current conversation field', async () => {
     const executionId = 'workflow-current-conversation' as ExecutionId;
     const streamId =

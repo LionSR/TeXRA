@@ -1,6 +1,7 @@
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
+import type { TemplateVars } from '@agent/core/definition/AgentCycleOptions';
 
 // Local imports - utilities
 import { ensureArray } from '@utils/core';
@@ -72,7 +73,7 @@ The /memories directory is shared with the orchestrator and other subagents. Che
  */
 export async function getSystemPromptWithRules(
   systemPrompt: string,
-  userVars: Record<string, unknown>,
+  userVars: TemplateVars,
 ): Promise<string> {
   const basePrompt = await renderPrompt(systemPrompt, userVars);
   const parts = [basePrompt];
@@ -114,7 +115,7 @@ export interface InitialPrompts {
 export class PromptBuilder {
   constructor(
     private readonly agentPrompt: AgentPrompt,
-    private readonly userVars: Record<string, unknown>,
+    private readonly userVars: TemplateVars,
     private readonly logger?: AgentTrace,
   ) {}
 
@@ -176,7 +177,7 @@ export class PromptBuilder {
 
 export async function buildInitialToolUsePrompts(
   agentPrompt: AgentPrompt,
-  userVars: Record<string, unknown>,
+  userVars: TemplateVars,
   logger?: AgentTrace,
   options?: {
     resolvedToolNames?: readonly string[];

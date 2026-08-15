@@ -22,7 +22,7 @@ import type {
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import type { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/types/mediaTypes';
 import { ANTHROPIC_STOP } from '@agent/types/StopReasonTypes';
 import {
   isAnthropicServerToolContent,
