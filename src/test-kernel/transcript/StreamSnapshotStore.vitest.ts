@@ -2727,6 +2727,7 @@ describe('StreamSnapshotStore', () => {
 
   it('degrades gracefully when workPlan.json is valid JSON but the wrong shape', async () => {
     // Corrupt-but-parseable payload must NOT throw and abort read()/resume.
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     await writeStreamFile(STREAM, 'workPlan.json', {
       todos: 'not-an-array',
       plan: 42,
@@ -2734,6 +2735,43 @@ describe('StreamSnapshotStore', () => {
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.todos).toEqual([]);
     expect(snap.plan).toBeNull();
+    // Each defaulted field must be logged loudly, not silently absorbed by
+    // PersistedWorkPlanSchema's per-field `.catch` (see #7464-style trap).
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('"todos"'),
+      expect.anything(),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('"plan"'),
+      expect.anything(),
+    );
+    // planSummary was never written (not present, not malformed) — must not
+    // be misreported as corrupted.
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('"planSummary"'),
+      expect.anything(),
+    );
+  });
+
+  it('logs loudly when workPlan.json has a malformed schemaVersion', async () => {
+    // A non-numeric schemaVersion also falls through PersistedWorkPlanSchema's
+    // per-field `.catch`, silently defaulting to the current version — must
+    // be logged like the other three fields, not swallowed.
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    await writeStreamFile(STREAM, 'workPlan.json', {
+      schemaVersion: 'not-a-number',
+      todos: [TODO],
+    });
+    const snap = await new StreamSnapshotStore().read(STREAM);
+    expect(snap.todos).toEqual([TODO]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('"schemaVersion"'),
+      expect.anything(),
+    );
   });
 
   it('ignores a workPlan.json stamped with a newer schemaVersion (forward-compat gate)', async () => {
