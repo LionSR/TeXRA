@@ -20,7 +20,6 @@ const runtimeResourceEntries = [
   'templates/agentCreatorWorkflow.yaml',
   'templates/agentTemplate-toolUse.yaml',
   'templates/agentTemplate-workflowSingle.yaml',
-  'templates/instructionPolish.yaml',
   'tool_use_agents',
 ];
 
