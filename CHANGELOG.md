@@ -24,6 +24,9 @@ All notable changes to this project will be documented in this file.
 - **Bold Greek letters render in the progress view** — shortcuts such as
   bold alpha, eta, and sigma now display as the intended symbols instead of
   unknown commands.
+- **The Progress terminal uses the host integrated terminal colors** —
+  background and text follow the dedicated terminal tokens instead of the
+  generic surface palette.
 
 #### Features
 
@@ -34,9 +37,6 @@ All notable changes to this project will be documented in this file.
   nested run no longer opens the parent row; expand it to inspect children.
   Selecting a child, or a pending approval on one, still reveals the ancestor
   path.
-- **The Progress terminal uses the editor terminal colors** — background and
-  text follow the dedicated terminal tokens instead of the generic surface
-  palette.
 - **Remote agent prompts are available to every signed-in account** — Settings
   → Agents no longer hides View prompt behind an Ultra plan, and remote agents
   no longer show a Remote badge or access-group labels.

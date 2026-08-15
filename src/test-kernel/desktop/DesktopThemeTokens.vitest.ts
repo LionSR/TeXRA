@@ -74,6 +74,24 @@ describe('desktop theme tokens', () => {
     );
   });
 
+  it('pairs the terminal foreground and cursor with the terminal background', () => {
+    // In the high-contrast themes the background/foreground palette entries
+    // resolve to the Canvas/CanvasText system pair while the input entries
+    // resolve to Field/FieldText, and users can configure those pairs
+    // independently — an input-sourced terminal foreground can be unreadable
+    // on the terminal background. Assert the indirection, not the color
+    // values, which are a design choice and free to change.
+    expect(tokenValue('--wa-color-terminal-background')).toBe(
+      `var(${paletteToken('background')})`,
+    );
+    expect(tokenValue('--wa-color-terminal-foreground')).toBe(
+      `var(${paletteToken('foreground')})`,
+    );
+    expect(tokenValue('--wa-color-terminal-cursor')).toBe(
+      `var(${paletteToken('foreground')})`,
+    );
+  });
+
   it('keeps light and dark palettes in one semantic token layer', () => {
     const css = readThemeTokens();
     const darkBlock = css.match(
