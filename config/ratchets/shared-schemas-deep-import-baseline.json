@@ -604,7 +604,7 @@
       "packages/extension/src/commands/extensionCommandHandlers.ts",
       "packages/extension/src/progressView/frontend/formatters/logFormatters/dataFormatters.ts",
       "src/agent/core/definition/AgentDataclass.ts",
-      "src/agent/core/flows/ResponseCycleFlow.ts",
+      "src/agent/implementations/flows/reflection/ResponseCycleFlow.ts",
       "src/agent/modelHandlers/ModelHandler.ts",
       "src/agent/output/OutputFileProcessor.ts",
       "src/agent/output/XmlOutputManager.ts",

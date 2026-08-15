@@ -5,7 +5,7 @@ import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
 import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
 import type { ResponseCycleServices } from '@agent/core/flows/CycleServices';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
-import { responseCycleToolsForModel } from '@agent/core/flows/ResponseCycleFlow';
+import { responseCycleToolsForModel } from '@agent/implementations/flows/reflection/ResponseCycleFlow';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { testRunScope, withTestRunContext } from './progressTestUtils';
 import { testModelCell } from './modelCellTestUtils';

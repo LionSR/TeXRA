@@ -6,7 +6,7 @@ import type { BaseNode } from '@agent/node';
 import {
   createResponseCycleFlow,
   type ResponseCycleShared,
-} from '@agent/core/flows/ResponseCycleFlow';
+} from '@agent/implementations/flows/reflection/ResponseCycleFlow';
 import type { ResponseCycleServices } from '@agent/core/flows/CycleServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';

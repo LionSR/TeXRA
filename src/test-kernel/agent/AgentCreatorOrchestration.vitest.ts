@@ -10,7 +10,7 @@ import {
   type CreatorConfig,
   runAgentCreator,
   TOOL_GROUPS,
-} from '@agent/implementations/flows/agentCreator/agentCreatorFlow';
+} from '@agent/implementations/agentCreator/agentCreatorFlow';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 

@@ -40,7 +40,7 @@
       "@agent/features",
       "@agent/followUp/ToolUseFollowUp",
       "@agent/goal/promptLoader",
-      "@agent/implementations/flows/agentCreator/agentCreatorFlow",
+      "@agent/implementations/agentCreator/agentCreatorFlow",
       "@agent/index",
       "@agent/index/AgentDirectorySync",
       "@agent/index/platformAgentDirectories",
