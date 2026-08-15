@@ -229,29 +229,38 @@ a change this pass makes.
 Unchanged from `-08-14 §8`. The dispatch boundary (`delegate_agent` /
 `delegate_workflow` → `executeSubagent` → `createNativeSubagentStrategy` →
 `startChildRunLoop`) is cleanly drawn and host-agnostic. The deep audit named the
-**near-isolated relocatable units** an SDK carve-out would start from — each
-already exposes a crisp boundary and is driven by an injected port or options
-object, so promotion is relocation, not redesign:
+**near-isolated relocatable units** an SDK carve-out would start from. Each
+already exposes a crisp boundary, but readiness varies — the two engine
+primitives are genuinely port/options-driven, while the three auxiliary units
+still retain an ambient `currentSession()` default or a direct storage/delivery
+call that a true carve-out must first convert to a port. So promotion ranges from
+near-pure relocation to a small port extraction, called out per unit:
 
 - **`childRunLoop` (`startChildRunLoop`/`ChildRunStrategy`/`ChildRunPorts`)** —
   THE generic subagent-loop engine; consumers (`nativeSubagentStrategy`,
   `detachedChildRun`, `workflowScriptStrategy`, agent-CLI adapters) all live in
   `src/tools/`, though the loop sits in `runtime/`. Boundary: one turn's
-  execution → turn result.
+  execution → turn result. Port/options-driven — the cleanest relocation.
 - **`executeAgent` / `resumeToolUseFromResumeData`** — the single-run primitive;
   boundary `(AgentConfig, ExecutionId, SubagentRunOptions) → AgentFlowResult`
   with an `onRun(AgentRunHandle)` hook. `SubagentRunOptions` is explicitly the
   shared subagent contract.
 - **Helper-model kit** (`helperModel.ts` `createHelperModelKit` /
   `runHelperModelCompletion`; consumers `sessionDescription`, `textEnhancement`/
-  `polishModel`, `textConnection`, agent-creation) — a self-contained auxiliary-
-  LLM unit; boundary `(userPrompt, systemPrompt) → text`. The clearest "helper
-  subagent as a service" extraction.
-- **`resolveAndResumeStream`** — already driven entirely by injected
-  `ResumeStreamPorts`; a finished seam, hosts are thin adapters.
-- **`ExecutionSubscriptionBinder`** — self-contained observer over
-  `Pick<ExecutionRegistry,'addListener'|'getHandle'|'getStatus'>`; boundary
-  `bind(streamId, executionId)`.
+  `polishModel`, `textConnection`, agent-creation) — near-isolated auxiliary-LLM
+  unit; boundary `(userPrompt, systemPrompt) → text`. **Residual coupling to port
+  first:** `createHelperModelKit` defaults its session to `currentSession()`
+  (`helperModel.ts:35`) — the ambient default a carve-out must make explicit.
+- **`resolveAndResumeStream`** — most of its host variation already lives in
+  injected `ResumeStreamPorts`, but it is not yet a finished seam: it still calls
+  the storage-coupled `retrieveSessionResumeData` directly
+  (`resolveAndResumeStream.ts:102`), which a carve-out must move behind the ports.
+- **`ExecutionSubscriptionBinder`** — observer with injectable `registry` /
+  `releaseSource` options and a deliberate `currentSession()` fallback
+  (`ExecutionSubscriptionBinder.ts:172-173`); boundary `bind(streamId,
+executionId)`. **Residual coupling:** it hard-imports and calls `submitFollowUp`
+  (`:20`, `:130`) and emits through `currentSession()` (`:139`) — the follow-up
+  delivery path is the port still to inject.
 
 ## 6. Do not relitigate; the one tracked structural blocker
 
@@ -259,10 +268,18 @@ object, so promotion is relocation, not redesign:
   public-typed entry" proposal conflicts with north-star §5 and was corrected in
   `-08-14 §6`. The sanctioned mechanism is the barrel fold plus moving
   bookkeeping _into_ `SessionHandle`. Do not resurrect the wrapper.
-- **TD-2(a) (`HostInteractions` request methods optional) is retired, not open.**
-  The optional-with-graceful-decline shape is the tested minimal-host contract
-  the npm package depends on (`-08-03 §7`, `-08-14 §9.1`). Do not re-propose
-  making the methods required.
+- **TD-2(a) (`HostInteractions` request methods optional): the mechanical
+  auto-conversion is retired; the contract decision stays open.** Two things must
+  not be conflated. (1) Executing TD-2(a) _as a cleanup_ — flipping the request
+  methods to required — is retired: `-08-03 §7` showed it would regress the
+  package's tested minimal-host contract (`packages/agent/src/index.ts` attaches
+  only 2 of 7 methods and relies on the other 5 gracefully declining), so it is
+  not a mechanical churn edit to re-file. (2) The underlying contract-shape
+  question is **still open**: north-star §3/§6 still targets converting 6 of 7 to
+  required, `-08-14 §9.1` lists it as "Still open," and the runtime interface is
+  still all-optional (`HostInteractions.ts:344-390`). That is a deliberate
+  maintainer decision, not settled or abandoned here — don't re-file it as a
+  cleanup PR, but don't read this doc as closing it either.
 - **The one genuine open structural SDK blocker is already tracked.** The
   `@tools/delegation ↔ executeAgent` layering cycle, papered by two lazy
   `await import('./nativeSubagentStrategy.js')` edges (`subagentExecution.ts:203`,
@@ -272,9 +289,10 @@ object, so promotion is relocation, not redesign:
 
 ## 7. Remaining open items (unchanged from `-08-14 §9`, none a defect)
 
-1. **`HostInteractions` required/optional (north-star TD-2a)** — retired with
-   evidence (§6); genuine maintainer decision if ever revisited, not a mechanical
-   edit.
+1. **`HostInteractions` required/optional (north-star TD-2a)** — an open
+   maintainer decision (§6): north-star §3/§6 still targets 6-of-7 required and
+   `-08-14 §9.1` lists it open; what is retired is executing it as a mechanical
+   cleanup, which would regress the package's minimal-host contract.
 2. **Logger → event stream** — surfacing the package's bootstrap/model-routing
    logs to an embedder's `AgentRun` means _extending `AgentEvent`_ (routed through
    the event-channel ruling), a proposal not a churn PR. L-2 above is the same
