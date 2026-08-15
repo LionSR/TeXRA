@@ -418,8 +418,8 @@ function applyRemoteAgentsSql() {
     if (process.env.SUPABASE_PROJECT_REF !== undefined && !projectRef) {
       console.error(
         'sync-remote-agents: SUPABASE_PROJECT_REF is set but empty after trimming. ' +
-          'Set a non-empty SUPABASE_PROJECT_REF, set SUPABASE_DB_URL, or run ' +
-          '`supabase link` in this checkout.',
+          'Set a non-empty SUPABASE_PROJECT_REF, set SUPABASE_DB_URL, or unset ' +
+          "SUPABASE_PROJECT_REF to use this checkout's linked project.",
       );
       return 1;
     }
