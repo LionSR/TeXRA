@@ -60,6 +60,9 @@ const UseOwnApiKeyMessageSchema = StreamScopedBaseSchema.extend({
    *  must not globally disable relay access — other providers may still
    *  be served successfully by relay. */
   viaRelay: z.boolean().optional(),
+  /** True when the failed handler was dispatched onto the Kimi Code coding
+   * endpoint, captured before the retry panel opened. */
+  kimiCodeRoutedOnFailure: z.boolean().optional(),
 });
 
 /** Set-on (idempotent) delegated-work approval. */

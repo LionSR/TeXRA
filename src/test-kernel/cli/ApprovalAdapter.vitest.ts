@@ -4,11 +4,23 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn());
+const formatRetryRequestMessageMock = vi.hoisted(() => vi.fn());
 let detachHostInteractions = (): void => {};
 
 vi.mock('@tools/inquiry/inquiryActions', () => ({
   handleExternalInquiryAction: handleExternalInquiryActionMock,
 }));
+
+vi.mock('@cli/runtime/approval/approvalSummaries', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('@cli/runtime/approval/approvalSummaries')
+    >();
+  return {
+    ...actual,
+    formatRetryRequestMessage: formatRetryRequestMessageMock,
+  };
+});
 
 import { Node } from '@agent/node';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
@@ -154,12 +166,19 @@ beforeEach(async () => {
   const { initPlatform: init } = await import('@platform/platform');
   const { createFakePlatform } = await import('@test/support/FakePlatform');
   init(createFakePlatform());
+  const actual = await vi.importActual<
+    typeof import('@cli/runtime/approval/approvalSummaries')
+  >('@cli/runtime/approval/approvalSummaries');
+  formatRetryRequestMessageMock.mockImplementation(
+    actual.formatRetryRequestMessage,
+  );
 });
 
 afterEach(() => {
   detachHostInteractions();
   detachHostInteractions = () => {};
   handleExternalInquiryActionMock.mockClear();
+  formatRetryRequestMessageMock.mockReset();
   vi.restoreAllMocks();
 });
 
@@ -396,6 +415,25 @@ describe('requestRetry classification (#7331)', () => {
       });
     },
   );
+
+  it('passes the retry request payload through to the CLI retry presenter unchanged', async () => {
+    const ctx = context({ approvalPolicy: 'never', mode: 'headless' });
+    const routed = {
+      ...retryRequest,
+      kimiCodeRoutedOnFailure: true,
+    };
+    const notRouted = {
+      ...retryRequest,
+      kimiCodeRoutedOnFailure: false,
+    };
+
+    await createHeadlessCliHostInteractions(ctx).requestRetry?.(routed);
+    await createHeadlessCliHostInteractions(ctx).requestRetry?.(notRouted);
+
+    // The payload is the exact runtime request object, not a re-built copy.
+    expect(formatRetryRequestMessageMock).toHaveBeenCalledWith(routed);
+    expect(formatRetryRequestMessageMock).toHaveBeenCalledWith(notRouted);
+  });
 
   it('cancels a retry the interactive user explicitly rejects', async () => {
     const result = await requestHeadlessRetry(

@@ -723,6 +723,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const started =
       await this.apiKeyRetryController.runCopilotFallbackWithRouting(
         {
+          stream: data.stream,
+          requestId: data.requestId,
           provider: fallback.provider,
           model: fallback.model,
           exhaustionReason: data.exhaustionReason,
