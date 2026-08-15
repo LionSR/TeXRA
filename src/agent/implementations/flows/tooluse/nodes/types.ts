@@ -37,8 +37,21 @@ const StateSlicesCanonicalSchema = StateSlicesSchema.extend({
 
 export type StateSlicesSnapshot = z.output<typeof StateSlicesSchema>;
 
-/** Full persisted and live shared state for one tool-use flow. */
-const ToolUseRunSharedSchema = z.looseObject({
+/**
+ * Full persisted and live shared state for one tool-use flow.
+ *
+ * Default `z.object` semantics by decision (#10641), matching reflection's
+ * shared schema: unknown top-level keys in a persisted record are accepted
+ * but stripped at this parse boundary, and the existing deep-equal
+ * self-heal checks on both resume paths then rewrite the healed record.
+ * The heal is one-directional: an upgrade → resume-on-older-build →
+ * upgrade cycle permanently erases the newer build's unknown keys, so a
+ * future load-bearing top-level field must be added with that erasure in
+ * mind. Deliberately not `z.strictObject` — a record written by a newer
+ * build carrying keys this build does not know must still resume — and no
+ * `.catch`: malformed known fields must keep failing loudly.
+ */
+const ToolUseRunSharedSchema = z.object({
   messages: ProviderMessageArraySchema,
   /** Durable identity of the continuation attempt that owns this flow. */
   continuationGenerationId: z.uuid(),
