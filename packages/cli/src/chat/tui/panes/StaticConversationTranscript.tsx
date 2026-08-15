@@ -32,7 +32,6 @@ import { streamViewForId } from '../state/streamViews';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import {
-  EMPTY_TRANSCRIPT_ENTRIES,
   incrementalStaticTranscriptEntries,
   orderedStaticTranscriptEntries,
   type StaticTranscriptScanCursor,
@@ -58,13 +57,17 @@ export type StaticTranscriptItem =
       readonly entry: ConversationEntry;
     };
 
-interface StaticTranscriptState {
+export interface StaticTranscriptState {
   readonly ownerKey: string;
   readonly items: readonly StaticTranscriptItem[];
   /** Cumulative row/byte estimates for `items`, maintained incrementally. */
   readonly rowCount: number;
   readonly byteCount: number;
   readonly scan: StaticTranscriptScanCursor;
+  /** The layout width `rowCount`/`byteCount` were measured under. */
+  readonly layoutWidth: number | undefined;
+  /** The execution labels `rowCount`/`byteCount` were measured under. */
+  readonly executionLabels: ExecutionLabels | undefined;
   /** Incremented whenever items change non-append-only (trim, header insert,
    *  hard reset, fold rebuild) so the `<Static>` identity remounts and
    *  `onRenderKeyChange` repaints the bounded tail with replace semantics. */
@@ -223,9 +226,13 @@ interface StaticTranscriptItemMetrics {
   readonly bytes: number;
 }
 
-/** Row count plus a conservative UTF-8 byte estimate for one static item.
- *  Entry metrics come from the same `scrollback-budget` layout the row budget
- *  uses, so the ring never pays for a second full layout pass. */
+/** Row count plus an estimated UTF-8 byte footprint for one static item.
+ *  Assistant rows include the ANSI Markdown wrappers `<Static>` will render;
+ *  the other roles sum plain layout lines without those wrappers, so the byte
+ *  figure is an estimate rather than an upper bound. The header's fixed `+64`
+ *  is a floor for its chrome, not a bound. Entry metrics come from the same
+ *  `scrollback-budget` layout the row budget uses, so the ring never pays for
+ *  a second full layout pass. */
 function staticTranscriptItemMetrics(
   item: StaticTranscriptItem,
   width?: number,
@@ -318,6 +325,7 @@ export function trimStaticTranscriptItems(
   const nextItems = [...items];
   const totals = { ...options.totals };
   const headerCount = nextItems[0]?.kind === 'header' ? 1 : 0;
+  let removedAny = false;
   while (
     nextItems.length > headerCount + 1 &&
     (totals.rows > budgets.rowLowWater || totals.bytes > budgets.byteLowWater)
@@ -358,9 +366,123 @@ export function trimStaticTranscriptItems(
     } else {
       nextItems.splice(removedIndex, 1);
     }
+    removedAny = true;
   }
 
-  return { items: nextItems, totals, trimmed: true };
+  return { items: nextItems, totals, trimmed: removedAny };
+}
+
+/**
+ * Retained ring tail for a fresh rebuild without laying out the discarded
+ * prefix. Walk backward from the newest item until the candidate tail crosses
+ * the high-water mark (proving a trim is needed), then hand that bounded tail
+ * to {@link trimStaticTranscriptItems} for the low-water pass. When the whole
+ * list already fits the high-water mark this returns it unchanged and pays
+ * for its full layout, which the caller needs for the retained totals anyway.
+ */
+function retainedStaticTranscriptTail(
+  items: readonly StaticTranscriptItem[],
+  options: {
+    readonly budgets?: StaticTranscriptRingBudgets;
+    readonly executionLabels?: ExecutionLabels;
+    readonly width?: number;
+  },
+): {
+  readonly items: readonly StaticTranscriptItem[];
+  readonly totals: StaticTranscriptTotals;
+  readonly trimmed: boolean;
+} {
+  if (items.length === 0) {
+    return { items, totals: { rows: 0, bytes: 0 }, trimmed: false };
+  }
+  const budgets = options.budgets ?? DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS;
+  const headerCount = items[0]?.kind === 'header' ? 1 : 0;
+  if (items.length <= headerCount) {
+    const totals = staticTranscriptItemsTotals(
+      items,
+      options.width,
+      options.executionLabels,
+    );
+    return { items, totals, trimmed: false };
+  }
+
+  const headerItem = headerCount > 0 ? items[0] : undefined;
+  const headerMetrics =
+    headerItem !== undefined
+      ? staticTranscriptItemMetrics(
+          headerItem,
+          options.width,
+          options.executionLabels,
+        )
+      : { rows: 0, bytes: 0 };
+  let start = items.length - 1;
+  const newest = items[start];
+  let firstMetrics =
+    newest === undefined
+      ? { rows: 0, bytes: 0 }
+      : staticTranscriptItemMetrics(
+          newest,
+          options.width,
+          options.executionLabels,
+          headerItem,
+        );
+  let totals = {
+    rows: headerMetrics.rows + firstMetrics.rows,
+    bytes: headerMetrics.bytes + firstMetrics.bytes,
+  };
+  let trimNeeded =
+    totals.rows > budgets.rowHighWater || totals.bytes > budgets.byteHighWater;
+
+  while (!trimNeeded && start > headerCount) {
+    const candidate = items[start - 1];
+    if (candidate === undefined) break;
+    const candidateMetrics = staticTranscriptItemMetrics(
+      candidate,
+      options.width,
+      options.executionLabels,
+      headerItem,
+    );
+    const oldFirst = items[start];
+    if (oldFirst === undefined) break;
+    const oldFirstAfterCandidate = staticTranscriptItemMetrics(
+      oldFirst,
+      options.width,
+      options.executionLabels,
+      candidate,
+    );
+    totals = {
+      rows:
+        totals.rows -
+        firstMetrics.rows +
+        oldFirstAfterCandidate.rows +
+        candidateMetrics.rows,
+      bytes:
+        totals.bytes -
+        firstMetrics.bytes +
+        oldFirstAfterCandidate.bytes +
+        candidateMetrics.bytes,
+    };
+    firstMetrics = candidateMetrics;
+    start -= 1;
+    trimNeeded =
+      totals.rows > budgets.rowHighWater ||
+      totals.bytes > budgets.byteHighWater;
+  }
+
+  if (!trimNeeded) {
+    return { items, totals, trimmed: false };
+  }
+
+  const candidateItems =
+    headerItem !== undefined
+      ? [headerItem, ...items.slice(start)]
+      : items.slice(start);
+  return trimStaticTranscriptItems(candidateItems, {
+    budgets,
+    executionLabels: options.executionLabels,
+    totals,
+    width: options.width,
+  });
 }
 
 function shouldWaitForChildIdentity({
@@ -629,25 +751,17 @@ export function buildStaticTranscriptItems(
   }
 
   const items = nextItems ?? currentItems;
-  const totals = staticTranscriptItemsTotals(items, width, executionLabels);
-  const trimmed = trimStaticTranscriptItems(items, {
+  const retained = retainedStaticTranscriptTail(items, {
     budgets: ringBudgets,
     executionLabels,
-    totals,
     width,
   });
   return {
-    items: trimmed.items,
-    rowCount: trimmed.totals.rows,
-    byteCount: trimmed.totals.bytes,
-    trimmed: trimmed.trimmed,
+    items: retained.items,
+    rowCount: retained.totals.rows,
+    byteCount: retained.totals.bytes,
+    trimmed: retained.trimmed,
   };
-}
-
-export function appendStaticTranscriptItems(
-  options: AppendStaticTranscriptItemsOptions,
-): readonly StaticTranscriptItem[] {
-  return buildStaticTranscriptItems(options).items;
 }
 
 function StaticTranscriptItemContent({
@@ -702,7 +816,7 @@ function scanStaticTranscriptFromStart(
   }).cursor;
 }
 
-function buildStaticTranscriptState({
+export function buildStaticTranscriptState({
   childStreamEntries,
   executionLabels,
   maxRows,
@@ -710,6 +824,7 @@ function buildStaticTranscriptState({
   ownerKey,
   parentStream,
   repaintEpoch,
+  ringBudgets = DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
   scrollbackStreamId,
   streams,
   width,
@@ -721,6 +836,7 @@ function buildStaticTranscriptState({
   readonly ownerKey: string;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly repaintEpoch: number;
+  readonly ringBudgets?: StaticTranscriptRingBudgets;
   readonly scrollbackStreamId: StreamTabId | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly width?: number;
@@ -733,16 +849,18 @@ function buildStaticTranscriptState({
     meta,
     maxRows,
     parentStream,
+    ringBudgets,
     scrollbackStreamId,
     width,
   });
   const slice = scrollbackStreamId
     ? streams.get(scrollbackStreamId)
     : undefined;
-  // While a focused child has no model yet, appendStaticTranscriptItems
-  // intentionally holds both the header and entries. Keep the scan cursor at
-  // zero in that state so the entries are still pending when the model
-  // arrives; scanning them now would mark them consumed and drop them later.
+  // While a focused child has no model yet, buildStaticTranscriptItems
+  // intentionally holds neither the header nor entries. Keep the scan cursor
+  // at zero with the current entries reference so the entries are still
+  // pending when the model arrives; scanning them now would mark them
+  // consumed and drop them later.
   const waitingForChildIdentity = shouldWaitForChildIdentity({
     currentItems: [],
     parentStream,
@@ -762,7 +880,215 @@ function buildStaticTranscriptState({
     rowCount: built.rowCount,
     byteCount: built.byteCount,
     scan,
+    layoutWidth: width,
+    executionLabels,
     repaintEpoch,
+  };
+}
+
+export function advanceStaticTranscriptState(
+  current: StaticTranscriptState,
+  {
+    childStreamEntries,
+    executionLabels,
+    maxRows,
+    meta,
+    ownerKey,
+    parentStream,
+    ringBudgets = DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
+    scrollbackStreamId,
+    streams,
+    width,
+  }: {
+    readonly childStreamEntries: ChildStreamEntries;
+    readonly executionLabels?: ExecutionLabels;
+    readonly maxRows?: number;
+    readonly meta: SessionMeta;
+    readonly ownerKey: string;
+    readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+    readonly ringBudgets?: StaticTranscriptRingBudgets;
+    readonly scrollbackStreamId: StreamTabId | undefined;
+    readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+    readonly width: number;
+  },
+): StaticTranscriptState {
+  const isHardReset = streams.size === 0 && scrollbackStreamId === undefined;
+  const slice = scrollbackStreamId
+    ? streams.get(scrollbackStreamId)
+    : undefined;
+  const entries: readonly ConversationEntry[] = slice?.entries ?? [];
+  const status = slice?.status;
+
+  if (isHardReset) {
+    return buildStaticTranscriptState({
+      childStreamEntries,
+      executionLabels,
+      maxRows,
+      meta,
+      ownerKey,
+      parentStream,
+      repaintEpoch: current.repaintEpoch + 1,
+      ringBudgets,
+      scrollbackStreamId,
+      streams,
+      width,
+    });
+  }
+
+  if (current.ownerKey !== ownerKey) {
+    return buildStaticTranscriptState({
+      childStreamEntries,
+      executionLabels,
+      maxRows,
+      meta,
+      ownerKey,
+      parentStream,
+      repaintEpoch: current.repaintEpoch,
+      ringBudgets,
+      scrollbackStreamId,
+      streams,
+      width,
+    });
+  }
+
+  if (
+    shouldWaitForChildIdentity({
+      currentItems: current.items,
+      parentStream,
+      scrollbackStreamId,
+      streams,
+    })
+  ) {
+    return current;
+  }
+
+  const layoutChanged =
+    width !== current.layoutWidth ||
+    executionLabels !== current.executionLabels;
+  let nextItems = current.items;
+  let nextRowCount = current.rowCount;
+  let nextByteCount = current.byteCount;
+  let nextRepaintEpoch = current.repaintEpoch;
+  let changed = layoutChanged;
+
+  if (layoutChanged) {
+    const recomputed = staticTranscriptItemsTotals(
+      nextItems,
+      width,
+      executionLabels,
+    );
+    const trimmed = trimStaticTranscriptItems(nextItems, {
+      budgets: ringBudgets,
+      executionLabels,
+      totals: recomputed,
+      width,
+    });
+    nextItems = trimmed.items;
+    nextRowCount = trimmed.totals.rows;
+    nextByteCount = trimmed.totals.bytes;
+    if (trimmed.trimmed) {
+      nextRepaintEpoch += 1;
+    }
+  }
+
+  const plan = incrementalStaticTranscriptEntries(
+    entries,
+    status,
+    current.scan,
+  );
+  if (plan.rebuild) {
+    return buildStaticTranscriptState({
+      childStreamEntries,
+      executionLabels,
+      maxRows,
+      meta,
+      ownerKey,
+      parentStream,
+      repaintEpoch: current.repaintEpoch + 1,
+      ringBudgets,
+      scrollbackStreamId,
+      streams,
+      width,
+    });
+  }
+
+  const header = ensureStaticSessionHeader({
+    byteCount: nextByteCount,
+    childStreamEntries,
+    executionLabels,
+    items: nextItems,
+    maxRows,
+    meta,
+    parentStream,
+    rowCount: nextRowCount,
+    scrollbackStreamId,
+    streams,
+    width,
+  });
+  if (header.inserted) {
+    nextItems = header.items;
+    nextRowCount = header.rowCount;
+    nextByteCount = header.byteCount;
+    nextRepaintEpoch += 1;
+    changed = true;
+  }
+
+  let previousItem = nextItems.at(-1);
+  if (plan.appended.length > 0) {
+    const seenIds = new Set(nextItems.map((item) => item.id));
+    for (const entry of plan.appended) {
+      if (seenIds.has(entry.id)) continue;
+      const item: StaticTranscriptItem = {
+        id: entry.id,
+        kind: 'entry',
+        entry,
+      };
+      const metrics = staticTranscriptItemMetrics(
+        item,
+        width,
+        executionLabels,
+        previousItem,
+      );
+      nextRowCount += metrics.rows;
+      nextByteCount += metrics.bytes;
+      nextItems = [...nextItems, item];
+      previousItem = item;
+      seenIds.add(entry.id);
+      changed = true;
+    }
+  }
+
+  const trimmed = trimStaticTranscriptItems(nextItems, {
+    budgets: ringBudgets,
+    executionLabels,
+    totals: { rows: nextRowCount, bytes: nextByteCount },
+    width,
+  });
+  if (trimmed.trimmed) {
+    nextItems = trimmed.items;
+    nextRowCount = trimmed.totals.rows;
+    nextByteCount = trimmed.totals.bytes;
+    nextRepaintEpoch += 1;
+    changed = true;
+  }
+
+  const cursor = plan.cursor;
+  const cursorChanged =
+    cursor.entriesRef !== current.scan.entriesRef ||
+    cursor.scannedIndex !== current.scan.scannedIndex ||
+    cursor.lastScannedEntry !== current.scan.lastScannedEntry ||
+    cursor.status !== current.scan.status;
+  if (!changed && !cursorChanged) return current;
+
+  return {
+    ownerKey,
+    items: nextItems,
+    rowCount: nextRowCount,
+    byteCount: nextByteCount,
+    scan: cursor,
+    layoutWidth: width,
+    executionLabels,
+    repaintEpoch: nextRepaintEpoch,
   };
 }
 
@@ -822,144 +1148,20 @@ export function StaticConversationTranscript({
   const items = state.ownerKey === ownerKey ? state.items : buildFreshItems();
 
   useEffect(() => {
-    // On a hard reset (e.g. /clear, picker-to-chat handoff) start the
-    // items list from scratch so the header is the first thing the user
-    // sees after the scrollback was wiped. A scrollback-owner switch also
-    // starts from scratch because root and child histories must not share
-    // append-only Static state.
-    const isHardReset = streams.size === 0 && scrollbackStreamId === undefined;
-    const slice = scrollbackStreamId
-      ? streams.get(scrollbackStreamId)
-      : undefined;
-    const entries = slice?.entries ?? EMPTY_TRANSCRIPT_ENTRIES;
-    const status = slice?.status;
-
-    setState((current) => {
-      const ownerChanged = current.ownerKey !== ownerKey;
-      if (isHardReset || ownerChanged) {
-        return buildStaticTranscriptState({
-          childStreamEntries,
-          executionLabels: subagentExecutionLabels,
-          maxRows,
-          meta: sessionMeta,
-          ownerKey,
-          parentStream,
-          repaintEpoch: current.repaintEpoch + 1,
-          scrollbackStreamId,
-          streams,
-          width: normalizedWidth,
-        });
-      }
-
-      if (
-        shouldWaitForChildIdentity({
-          currentItems: current.items,
-          parentStream,
-          scrollbackStreamId,
-          streams,
-        })
-      ) {
-        return current;
-      }
-
-      const plan = incrementalStaticTranscriptEntries(
-        entries,
-        status,
-        current.scan,
-      );
-      if (plan.rebuild) {
-        return buildStaticTranscriptState({
-          childStreamEntries,
-          executionLabels: subagentExecutionLabels,
-          maxRows,
-          meta: sessionMeta,
-          ownerKey,
-          parentStream,
-          repaintEpoch: current.repaintEpoch + 1,
-          scrollbackStreamId,
-          streams,
-          width: normalizedWidth,
-        });
-      }
-
-      let nextItems = current.items;
-      let nextRowCount = current.rowCount;
-      let nextByteCount = current.byteCount;
-      let nextRepaintEpoch = current.repaintEpoch;
-      let changed = false;
-
-      const header = ensureStaticSessionHeader({
-        byteCount: nextByteCount,
+    setState((current) =>
+      advanceStaticTranscriptState(current, {
         childStreamEntries,
         executionLabels: subagentExecutionLabels,
-        items: nextItems,
         maxRows,
         meta: sessionMeta,
+        ownerKey,
         parentStream,
-        rowCount: nextRowCount,
+        ringBudgets: DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
         scrollbackStreamId,
         streams,
         width: normalizedWidth,
-      });
-      if (header.inserted) {
-        nextItems = header.items;
-        nextRowCount = header.rowCount;
-        nextByteCount = header.byteCount;
-        nextRepaintEpoch += 1;
-        changed = true;
-      }
-
-      let previousItem = nextItems.at(-1);
-      for (const entry of plan.appended) {
-        const item: StaticTranscriptItem = {
-          id: entry.id,
-          kind: 'entry',
-          entry,
-        };
-        const metrics = staticTranscriptItemMetrics(
-          item,
-          normalizedWidth,
-          subagentExecutionLabels,
-          previousItem,
-        );
-        nextRowCount += metrics.rows;
-        nextByteCount += metrics.bytes;
-        nextItems = [...nextItems, item];
-        previousItem = item;
-        changed = true;
-      }
-
-      const trimmed = trimStaticTranscriptItems(nextItems, {
-        budgets: DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
-        executionLabels: subagentExecutionLabels,
-        totals: { rows: nextRowCount, bytes: nextByteCount },
-        width: normalizedWidth,
-      });
-      if (trimmed.trimmed) {
-        nextItems = trimmed.items;
-        nextRowCount = trimmed.totals.rows;
-        nextByteCount = trimmed.totals.bytes;
-        nextRepaintEpoch += 1;
-        changed = true;
-      }
-
-      const cursor = plan.cursor;
-      const cursorChanged =
-        cursor.entriesRef !== current.scan.entriesRef ||
-        cursor.scannedIndex !== current.scan.scannedIndex ||
-        cursor.lastScannedEntry !== current.scan.lastScannedEntry ||
-        cursor.status !== current.scan.status;
-      if (!changed && !cursorChanged) return current;
-
-      return {
-        ownerKey,
-        items: nextItems,
-        rowCount: nextRowCount,
-        byteCount: nextByteCount,
-        scan: cursor,
-        repaintEpoch: nextRepaintEpoch,
-      };
-    });
+      }),
+    );
   }, [
     childStreamEntries,
     maxRows,
