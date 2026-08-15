@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file.
 - **A missing helper model falls back to DeepSeek V4 Flash** — disabling or
   removing the helper no longer silently switches auxiliary tasks to the
   first picker model.
+- **Long Grok prompts report their true cost** — xAI raises per-token rates
+  once a prompt crosses the model's long-context threshold; usage costs for
+  those requests no longer underreport.
 
 ### Extension (VS Code) and Desktop
 

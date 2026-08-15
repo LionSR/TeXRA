@@ -295,8 +295,10 @@ catalog changes made — recon only**, per the §2 non-goals.
 
 Candidate next steps, smallest first: (a) ~~refresh §3 for `grok-4.6` and track
 upstream catalogue support for the remaining model IDs~~ (done 2026-08-14;
-remaining IDs still wait on llm-zoo), (b) model long-context
-tiered pricing in `computeStandardPrice` once a rate source exists, (c) ~~revisit
+remaining IDs still wait on llm-zoo), (b) ~~model long-context
+tiered pricing in `computeStandardPrice` once a rate source exists~~ (done
+2026-08-14: tier tuples wired from xAI's documented per-model rates; llm-zoo
+still has no tier field), (c) ~~revisit
 this PRD's default-off timeline given Chat Completions' now-explicit deprecated
 status~~ (done 2026-08-14: one release behind the flag; see §4 decision 3 and
 §11 Q1).
