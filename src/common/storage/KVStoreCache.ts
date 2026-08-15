@@ -37,6 +37,14 @@ export class KVStoreCache<
     private readonly create: (id: TId) => TStore,
     { max }: { max?: number } = {},
   ) {
+    if (max !== undefined && (!Number.isInteger(max) || max < 1)) {
+      // `max: 0` would construct a zero-capacity LRUCache whose every get()
+      // recreates and immediately discards the handle — a silent no-cache
+      // mode. Fail loudly instead of degrading silently.
+      throw new RangeError(
+        `KVStoreCache max must be a positive integer (got ${max}); omit it for an unbounded cache`,
+      );
+    }
     this.handles = max === undefined ? new Map() : new LRUCache({ max });
   }
 
