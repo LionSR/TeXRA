@@ -13,7 +13,7 @@ const recipes = [
     icon: 'check',
     title: 'Fix grammar & typos',
     agent: 'correct',
-    model: 'gemini36f',
+    model: 'gemini37f',
     alts: 'deepseek, gpt56--, sonnet5',
     instruction:
       'Fix grammatical errors and typos without changing the content or technical terminology.',

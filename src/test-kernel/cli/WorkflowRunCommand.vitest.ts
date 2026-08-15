@@ -1,7 +1,15 @@
+/* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Shared mock registrations must evaluate before anything that loads
+// the mocked modules — keep these imports immediately after the vitest
+// import (enforced by architecture/supportMockImportOrder.vitest.ts).
+import '@test/support/agentCatalogMock';
+import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
+import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 
 import type { runWorkflowAgent } from '@cli/commands/workflow';
 import { formatResumeCommand } from '@cli/chat/tui/state/resumeHint';
@@ -13,10 +21,7 @@ import type {
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
-import '@test/support/agentCatalogMock';
 import { durableFinalizationResult } from '@test/support/agentStorageFixtures';
-import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
-import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { withTempDir } from '@test/support/tempDirPlatform';
 
 const mocks = vi.hoisted(() => {

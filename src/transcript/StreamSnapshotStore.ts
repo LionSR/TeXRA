@@ -128,8 +128,6 @@ function isSnapshotRunFact(event: AgentEvent): event is SnapshotRunFact {
 }
 
 type OutputFilesPatch = Map<number, OutputFileInfo[] | null>;
-type UsageUpdateResult =
-  TokenUsageStats | undefined | Promise<TokenUsageStats | undefined>;
 interface HydratedRunState {
   authorityReadComplete: boolean;
   config?: AgentConfig;
@@ -864,7 +862,7 @@ export class StreamSnapshotStore {
    * mutator goes through here, so a new one inherits that guarantee instead
    * of needing its own overlay block.
    */
-  private mutateWithOverlay<T, K extends keyof OverlayPatches>(
+  private mutateWithOverlay<K extends keyof OverlayPatches>(
     stream: StreamTabId,
     overlayKey: K,
     overlayPatch: OverlayPatches[K] | undefined,
@@ -872,14 +870,14 @@ export class StreamSnapshotStore {
       existing: OverlayPatches[K] | undefined,
       patch: OverlayPatches[K],
     ) => OverlayPatches[K],
-    applyToMemory: () => T,
+    applyToMemory: () => void,
     persist: () => void,
-  ): { result: T; pending: Promise<void> | undefined } {
-    const result = applyToMemory();
+  ): void {
+    applyToMemory();
 
     if (this.hasDiskProvenance(stream)) {
       persist();
-      return { result, pending: undefined };
+      return;
     }
 
     const version = this.streamVersion(stream);
@@ -887,10 +885,7 @@ export class StreamSnapshotStore {
       const { overlays } = this.getOrCreateRecord(stream);
       overlays[overlayKey] = mergePatch(overlays[overlayKey], overlayPatch);
     }
-    return {
-      result,
-      pending: this.queueAfterSeed(stream, version, () => undefined),
-    };
+    this.queueAfterSeed(stream, version, () => undefined);
   }
 
   private addOutputFiles(
@@ -978,14 +973,13 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * Accumulate usage per run. Returns the accumulated value for the run so
-   * callers can forward it to the UI.
+   * Accumulate usage per run.
    */
   private addUsage(
     stream: StreamTabId,
     storageKey: StorageKey,
     usage: TokenUsageStats,
-  ): UsageUpdateResult {
+  ): void {
     const parsed = TokenUsageStatsParsingBaseSchema.safeParse(usage);
     if (!parsed.success) {
       log.warn(
@@ -997,12 +991,11 @@ export class StreamSnapshotStore {
       );
     }
     const delta = parsed.success ? parsed.data : emptyUsageStats();
-    const version = this.streamVersion(stream);
     const overlayPatch = isEmptyUsage(delta)
       ? undefined
       : new Map<StorageKey, TokenUsageStats>([[storageKey, delta]]);
 
-    const { result: accumulated, pending } = this.mutateWithOverlay(
+    this.mutateWithOverlay(
       stream,
       'usage',
       overlayPatch,
@@ -1017,17 +1010,6 @@ export class StreamSnapshotStore {
         if (!isEmptyUsage(delta)) this.writeUsage(stream);
       },
     );
-
-    if (!pending) return accumulated;
-    return pending.then(() => {
-      if (
-        this.streamVersion(stream) !== version ||
-        !this.hasDiskProvenance(stream)
-      ) {
-        return undefined;
-      }
-      return this.records.get(stream)?.usage.get(storageKey);
-    });
   }
 
   // ==========================================================================
