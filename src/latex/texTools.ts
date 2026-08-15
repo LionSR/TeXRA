@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 // Local imports
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { ExecResult, FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -163,6 +163,7 @@ export async function compileLatex2Pdf(
   // Schema provides compiler default; channel defaults to module constant
   const parsed = LaTeXCompileOptionsSchema.parse(options);
   const channel = parsed.channel ?? CHANNEL;
+  const log = createLog(channel);
   const { outputDirectory, compiler, timeout, extraInputDirs } = parsed;
   const latexFile = latexLocation.absolutePath;
   const outDir = outputDirectory ?? path.dirname(latexFile);
@@ -198,7 +199,7 @@ export async function compileLatex2Pdf(
     // any inherited values. `path.delimiter` keeps it cross-platform.
     const env = buildLatexInputEnv(texInputParts, bibSearchParts);
     for (const [key, value] of Object.entries(env)) {
-      logger.debug(channel, `Setting ${key} to: ${value}`);
+      log.debug(`Setting ${key} to: ${value}`);
     }
 
     const latexmkArgs = [
@@ -233,8 +234,7 @@ export async function compileLatex2Pdf(
         showError: false, // Suppress error for latexmk to try pdflatex as fallback
       });
       if (!result) {
-        logger.warn(
-          channel,
+        log.warn(
           'latexmk not found, falling back to single-pass pdflatex — ' +
             'bibliography, cross-references, and index may be incomplete',
         );
@@ -245,13 +245,13 @@ export async function compileLatex2Pdf(
     }
 
     if (result && result.success) {
-      logger.debug(channel, `Successfully compiled ${latexFile}`);
+      log.debug(`Successfully compiled ${latexFile}`);
       return { ok: true };
     }
     return { ok: false, logTail: await readCompileLogTail(outDir, latexFile) };
   } catch (err) {
     const message = toErrorMessage(err);
-    logger.error(channel, `Error compiling LaTeX: ${message}`);
+    log.error(`Error compiling LaTeX: ${message}`);
     const tail = await readCompileLogTail(outDir, latexFile);
     return {
       ok: false,

@@ -9,7 +9,7 @@
  * rendering) and calls this with a {@link DiffProgressReporter}.
  */
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import {
   ExecutionIdSchema,
   OutputFileInfoSchema,
@@ -101,6 +101,7 @@ export async function runLatexdiffForExecution(
     progress,
   } = params;
   const runId = params.runId ?? undefined;
+  const log = createLog(latexdiff.channel);
 
   let outputsByRound = params.outputsByRound ?? null;
   let source: LatexdiffOutputsSource = outputsByRound
@@ -125,8 +126,7 @@ export async function runLatexdiffForExecution(
         outputsByRound = scanned;
         source = 'run-dir-scan';
         discoveredExecutionId = parsedRunId.data;
-        logger.debug(
-          latexdiff.channel,
+        log.debug(
           `Using run-dir scan outputs from execution ${parsedRunId.data}`,
         );
       }
@@ -152,8 +152,7 @@ export async function runLatexdiffForExecution(
       outputsByRound = discovered.rounds;
       source = 'metadata';
       discoveredExecutionId = discovered.executionId;
-      logger.debug(
-        latexdiff.channel,
+      log.debug(
         `Using metadata outputs from execution ${discovered.executionId}`,
       );
     }

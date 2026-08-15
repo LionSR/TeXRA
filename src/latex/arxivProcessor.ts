@@ -9,7 +9,7 @@ import pRetry, { AbortError } from 'p-retry';
 import pTimeout from 'p-timeout';
 import * as tar from 'tar';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
@@ -64,6 +64,10 @@ class ArxivSourceProcessor {
   // channel name — a class-identifier rename must not change this value.
   private readonly channel = 'arxivProcessor';
 
+  private get log() {
+    return createLog(this.channel);
+  }
+
   /** Best-effort delete that logs failures at debug level instead of throwing. */
   private async cleanUpBestEffort(
     target: string,
@@ -71,13 +75,9 @@ class ArxivSourceProcessor {
     options?: { recursive?: boolean },
   ): Promise<void> {
     await AbsoluteFS.delete(target, options).catch((error: unknown) => {
-      logger.debug(
-        this.channel,
-        `Failed to clean up ${description} ${target}`,
-        {
-          data: error,
-        },
-      );
+      this.log.debug(`Failed to clean up ${description} ${target}`, {
+        data: error,
+      });
     });
   }
 
@@ -147,8 +147,7 @@ class ArxivSourceProcessor {
       // Jitter the backoff so concurrent clients don't retry in lockstep.
       randomize: true,
       onFailedAttempt: ({ error, retriesLeft }) => {
-        logger.debug(
-          this.channel,
+        this.log.debug(
           `Download attempt failed (${retriesLeft} retries left): ${toErrorMessage(error)}`,
         );
       },
@@ -190,8 +189,7 @@ class ArxivSourceProcessor {
           filename = parseContentDisposition(disposition).parameters.filename;
         } catch (error) {
           // Malformed header; the content-type fallback below handles it.
-          logger.debug(
-            this.channel,
+          this.log.debug(
             'Ignoring malformed Content-Disposition header from arXiv source download',
             {
               data: {
@@ -239,7 +237,8 @@ class ArxivSourceProcessor {
     options: ExtractOptions = {},
   ): Promise<ExtractResult> {
     const channel = options.channel ?? this.channel;
-    logger.debug(channel, `Extracting tar file: ${tarPath} to ${destDir}`);
+    const log = createLog(channel);
+    log.debug(`Extracting tar file: ${tarPath} to ${destDir}`);
 
     try {
       const extraction = tar.x({ file: tarPath, cwd: destDir });
@@ -254,7 +253,7 @@ class ArxivSourceProcessor {
       return { success: true };
     } catch (err) {
       const errorMsg = toErrorMessage(err);
-      logger.error(channel, `Failed to extract tar file: ${errorMsg}`);
+      log.error(`Failed to extract tar file: ${errorMsg}`);
       return { success: false, error: errorMsg };
     }
   }
@@ -275,7 +274,7 @@ class ArxivSourceProcessor {
       throw new Error(INVALID_ARXIV_INPUT_ERROR);
     }
 
-    logger.info(this.channel, `Downloading arXiv source for ID: ${id}`);
+    this.log.info(`Downloading arXiv source for ID: ${id}`);
 
     if (!WorkspaceFS.getPath()) {
       throw new Error('No workspace folder is open');
@@ -316,7 +315,7 @@ class ArxivSourceProcessor {
 
     progressCallback?.('arXiv source downloaded successfully!', 100);
 
-    logger.info(this.channel, `arXiv source downloaded to: ${paperDirFull}`);
+    this.log.info(`arXiv source downloaded to: ${paperDirFull}`);
 
     return { path: paperDirFull, alreadyExisted: !needsDownload };
   }
@@ -337,10 +336,7 @@ class ArxivSourceProcessor {
     const entries = await WorkspaceFS.readDir(paperDirRelative);
     const hasTexFiles = entries.some(([name]) => hasExtension(name, '.tex'));
     if (hasTexFiles) {
-      logger.info(
-        this.channel,
-        `arXiv source already exists at: ${paperDirFull}`,
-      );
+      this.log.info(`arXiv source already exists at: ${paperDirFull}`);
     }
     return hasTexFiles;
   }
