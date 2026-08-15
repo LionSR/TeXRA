@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -10,7 +11,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { delimiter, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -67,10 +68,11 @@ function git(args: string[]): string {
   return result.stdout;
 }
 
-function runFormat() {
+function runFormat(env = process.env) {
   return spawnSync(process.execPath, [formatScript], {
     cwd: dir,
     encoding: 'utf8',
+    env,
   });
 }
 
@@ -131,6 +133,87 @@ describe('format-staged', () => {
     expect(git(['diff', '--stat', 'c.ts'])).toContain('1 insertion');
   });
 
+  it.skipIf(process.platform === 'win32')(
+    'keeps newer worktree content if it appears during the merge-file write',
+    () => {
+      writeFileSync(
+        join(dir, 'c.ts'),
+        MULTI_STAGED.replace('{x:1,y:2}', '{x:1}'),
+      );
+      git(['add', 'c.ts']);
+      git(['commit', '-qm', 'base']);
+      writeFileSync(join(dir, 'c.ts'), MULTI_STAGED);
+      git(['add', 'c.ts']);
+      writeFileSync(join(dir, 'c.ts'), MULTI_UNSTAGED);
+
+      // A fake git in PATH touches the worktree right before the real
+      // `git merge-file` runs, simulating a concurrent edit after the hook
+      // captured `worktree` but before it writes the merged result.
+      const bin = mkdtempSync(join(tmpdir(), 'format-staged-git-'));
+      const fakeGit = join(bin, 'git');
+      const realGit = spawnSync('which', ['git'], {
+        encoding: 'utf8',
+      }).stdout.trim();
+      writeFileSync(
+        fakeGit,
+        '#!/bin/sh\n' +
+          'if [ "$1" = "merge-file" ]; then\n' +
+          '  printf "const late = true;\\n" >> "$WORKTREE_FILE"\n' +
+          'fi\n' +
+          'exec "$REAL_GIT" "$@"\n',
+      );
+      chmodSync(fakeGit, 0o755);
+
+      const result = runFormat({
+        ...process.env,
+        PATH: `${bin}${delimiter}${process.env.PATH}`,
+        REAL_GIT: realGit,
+        WORKTREE_FILE: join(dir, 'c.ts'),
+      });
+
+      rmSync(bin, { recursive: true, force: true });
+
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toContain('changed on disk while formatting');
+      expect(stagedBlob('c.ts')).toBe(MULTI_FORMATTED);
+      expect(readFileSync(join(dir, 'c.ts'), 'utf8')).toContain(
+        'const late = true;',
+      );
+      expect(readFileSync(join(dir, 'c.ts'), 'utf8')).not.toContain(
+        'const a = { x: 1, y: 2 };',
+      );
+    },
+    60_000,
+  );
+
+  it('uses the staged .prettierrc when the worktree copy has unstaged edits', () => {
+    writeFileSync(join(dir, '.prettierrc'), '{"singleQuote":true}\n');
+    git(['add', '.prettierrc']);
+    writeFileSync(join(dir, '.prettierrc'), '{"singleQuote":false}\n');
+    writeFileSync(join(dir, 'a.ts'), 'const x = "a";\n');
+    git(['add', 'a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('staged Prettier output for a.ts');
+    expect(stagedBlob('a.ts')).toBe("const x = 'a';\n");
+  });
+
+  it('uses the staged .prettierignore when the worktree copy has unstaged edits', () => {
+    writeFileSync(join(dir, '.prettierignore'), 'ignored.ts\n');
+    git(['add', '.prettierignore']);
+    writeFileSync(join(dir, '.prettierignore'), '');
+    writeFileSync(join(dir, 'ignored.ts'), STAGED);
+    git(['add', 'ignored.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('');
+    expect(stagedBlob('ignored.ts')).toBe(STAGED);
+  });
+
   it('leaves ignored, unknown, and already-formatted files untouched', () => {
     writeFileSync(join(dir, '.prettierignore'), 'ignored.ts\n');
     writeFileSync(join(dir, 'ignored.ts'), STAGED);
@@ -172,6 +255,8 @@ describe('format-staged', () => {
 });
 
 describe('install-local-hooks', () => {
+  const hasPreCommit = spawnSync('pre-commit', ['--version']).status === 0;
+
   beforeEach(() => {
     // The engine resolves Prettier relative to its own path, so the shim's
     // `node scripts/format-staged.mjs` needs the script and a resolvable
@@ -182,6 +267,11 @@ describe('install-local-hooks', () => {
     symlinkSync(
       resolve(repoRoot, 'node_modules/prettier'),
       join(dir, 'node_modules/prettier'),
+      'junction',
+    );
+    symlinkSync(
+      resolve(repoRoot, 'node_modules/ignore'),
+      join(dir, 'node_modules/ignore'),
       'junction',
     );
     // Lets the installer chain pre-commit's shim when pre-commit is on PATH.
@@ -221,6 +311,31 @@ describe('install-local-hooks', () => {
     expect(git(['show', 'HEAD:a.ts'])).toBe(FORMATTED);
     expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(UNSTAGED);
   }, 60_000);
+
+  it.skipIf(!hasPreCommit)(
+    'refreshes the chained pre-commit shim on reinstall',
+    () => {
+      const hooksDir = resolve(
+        dir,
+        git(['rev-parse', '--git-path', 'hooks']).trim(),
+      );
+      const hookPath = join(hooksDir, 'pre-commit');
+      const chainPath = join(hooksDir, 'pre-commit.chain');
+
+      expect(runInstall().status).toBe(0);
+      expect(existsSync(chainPath)).toBe(true);
+      writeFileSync(chainPath, '#!/bin/sh\necho stale\n');
+
+      const rerun = runInstall();
+
+      expect(rerun.status, rerun.stderr).toBe(0);
+      expect(readFileSync(chainPath, 'utf8')).toContain(
+        'File generated by pre-commit',
+      );
+      expect(readFileSync(hookPath, 'utf8')).toContain('texra-format-staged');
+    },
+    30_000,
+  );
 
   it('is idempotent', () => {
     expect(runInstall().status).toBe(0);

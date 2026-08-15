@@ -47,18 +47,18 @@ fi
 exit 0
 `;
 
-function git(args) {
-  const result = spawnSync('git', args, { encoding: 'utf8' });
-  if (result.status !== 0) {
-    throw new Error(`git ${args.join(' ')} failed: ${result.stderr}`);
-  }
-  return result.stdout.trim();
-}
-
 const read = (path) => (existsSync(path) ? readFileSync(path, 'utf8') : null);
 
 function main() {
-  const hooksDir = resolve(git(['rev-parse', '--git-path', 'hooks']));
+  const gitPathResult = spawnSync('git', ['rev-parse', '--git-path', 'hooks'], {
+    encoding: 'utf8',
+  });
+  if (gitPathResult.status !== 0) {
+    throw new Error(
+      `git rev-parse --git-path hooks failed: ${gitPathResult.stderr}`,
+    );
+  }
+  const hooksDir = resolve(gitPathResult.stdout.trim());
   const hookPath = join(hooksDir, 'pre-commit');
   const chainPath = join(hooksDir, 'pre-commit.chain');
   mkdirSync(hooksDir, { recursive: true });
@@ -72,20 +72,19 @@ function main() {
   }
 
   if (hasPreCommit) {
-    // Regenerate pre-commit's shim when it is the current hook, or when the
-    // chain copy is missing (e.g. the hook was removed). pre-commit refuses
-    // to overwrite our shim, hence --overwrite in that case.
-    const shimMissing = !existsSync(chainPath);
+    // Always regenerate pre-commit's shim. The generated shim embeds the
+    // Python interpreter it was installed from, so a fresh install also
+    // refreshes a stale chain left behind by an earlier environment.
+    // pre-commit refuses to overwrite our shim, hence --overwrite in that
+    // case; the fresh shim is re-chained below.
     const hookIsOurs = hook?.includes(MARKER);
-    if (!hookIsOurs || shimMissing) {
-      const args = ['install', ...(hookIsOurs ? ['--overwrite'] : [])];
-      const install = spawnSync('pre-commit', args, { stdio: 'inherit' });
-      if (install.status !== 0) {
-        console.error('`pre-commit install` failed.');
-        process.exit(1);
-      }
-      hook = read(hookPath);
+    const args = ['install', ...(hookIsOurs ? ['--overwrite'] : [])];
+    const install = spawnSync('pre-commit', args, { stdio: 'inherit' });
+    if (install.status !== 0) {
+      console.error('`pre-commit install` failed.');
+      process.exit(1);
     }
+    hook = read(hookPath);
   }
 
   if (hook?.includes(PRE_COMMIT_MARKER)) {

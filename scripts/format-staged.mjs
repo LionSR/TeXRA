@@ -43,8 +43,9 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join, relative } from 'node:path';
 
+import ignore from 'ignore';
 import prettier from 'prettier';
 
 const NOTICE = '[format-staged]';
@@ -62,6 +63,44 @@ function git(args, { input } = {}) {
   return result.stdout;
 }
 
+/** Return a tracked path's index blob, or null when it is not tracked. */
+function readIndexFile(path) {
+  const check = spawnSync('git', ['cat-file', '-e', `:${path}`]);
+  if (check.status !== 0) return null;
+  return git(['cat-file', 'blob', `:${path}`]);
+}
+
+/** Mirror prettier's ignore handling against the staged .prettierignore. */
+function isIgnored(path) {
+  const ignoreBlob =
+    readIndexFile('.prettierignore') ??
+    (existsSync('.prettierignore') ? readFileSync('.prettierignore') : null);
+  const rules = `${ignoreBlob?.toString('utf8') ?? ''}\nnode_modules`;
+  return ignore({ allowRelativePaths: true }).add(rules).checkIgnore(path)
+    .ignored;
+}
+
+/** Write `content` only if `path` still holds `expected`, so a concurrent edit
+ * made while formatting/merging was running is never clobbered. */
+function writeIfUnchanged(path, expected, content) {
+  let current;
+  try {
+    current = readFileSync(path);
+  } catch {
+    console.log(
+      `${NOTICE} ${path}: vanished while formatting; kept the staged output.`,
+    );
+    return;
+  }
+  if (!current.equals(expected)) {
+    console.log(
+      `${NOTICE} ${path}: changed on disk while formatting; kept the working-tree copy.`,
+    );
+    return;
+  }
+  writeFileSync(path, content);
+}
+
 /** Fold the staged→formatted rewrite into the working tree, if safe. */
 function mergeWorktree(path, stagedBlob, formatted) {
   const stat = lstatSync(path, { throwIfNoEntry: false });
@@ -70,7 +109,7 @@ function mergeWorktree(path, stagedBlob, formatted) {
   const worktree = readFileSync(path);
   // Fully staged file: the rewrite applies cleanly by construction.
   if (worktree.equals(stagedBlob)) {
-    writeFileSync(path, formatted);
+    writeIfUnchanged(path, worktree, formatted);
     return;
   }
   // Unstaged edits exist. Three-way merge (base = staged blob) so they ride
@@ -89,7 +128,7 @@ function mergeWorktree(path, stagedBlob, formatted) {
       maxBuffer: 64 * 1024 * 1024,
     });
     if (result.status === 0) {
-      writeFileSync(path, result.stdout);
+      writeIfUnchanged(path, worktree, result.stdout);
     } else {
       console.log(
         `${NOTICE} ${path}: Prettier output overlaps your unstaged edits; ` +
@@ -119,27 +158,49 @@ async function formatStagedFile(path) {
   if (stagedBlob.includes(0)) return; // binary
   const stagedText = stagedBlob.toString('utf8');
 
-  // Mirror the prettier CLI: apply the repo-root .prettierignore.
-  const info = await prettier.getFileInfo(
-    path,
-    existsSync('.prettierignore') ? { ignorePath: '.prettierignore' } : {},
-  );
-  if (info.ignored || !info.inferredParser) return;
+  if (isIgnored(path)) return;
 
-  const config = (await prettier.resolveConfig(path)) ?? {};
-  const formatted = await prettier.format(stagedText, {
-    ...config,
-    filepath: path,
-  });
-  if (formatted === stagedText) return;
+  // Prettier reads .prettierrc/.prettierignore from the working tree, but the
+  // content being formatted comes from the index. When those config files are
+  // tracked, use their index blobs so unstaged edits to them don't change how
+  // the staged content is formatted (or whether it is ignored).
+  const snapDir = mkdtempSync(join(tmpdir(), 'format-staged-config-'));
+  try {
+    let resolveConfigOptions = {};
+    const worktreeConfigPath = await prettier.resolveConfigFile(path);
+    if (worktreeConfigPath) {
+      const configRel = relative(process.cwd(), worktreeConfigPath).replace(
+        /\\/g,
+        '/',
+      );
+      if (!configRel.startsWith('../') && configRel !== '..') {
+        const stagedConfig = readIndexFile(configRel);
+        if (stagedConfig) {
+          const configFile = join(snapDir, basename(configRel));
+          writeFileSync(configFile, stagedConfig);
+          resolveConfigOptions = { config: configFile };
+        }
+      }
+    }
 
-  const newSha = git(['hash-object', '-w', '--stdin'], { input: formatted })
-    .toString()
-    .trim();
-  git(['update-index', '--cacheinfo', `${mode},${newSha},${path}`]);
-  console.log(`${NOTICE} staged Prettier output for ${path}`);
+    const config =
+      (await prettier.resolveConfig(path, resolveConfigOptions)) ?? {};
+    const formatted = await prettier.format(stagedText, {
+      ...config,
+      filepath: path,
+    });
+    if (formatted === stagedText) return;
 
-  mergeWorktree(path, stagedBlob, formatted);
+    const newSha = git(['hash-object', '-w', '--stdin'], { input: formatted })
+      .toString()
+      .trim();
+    git(['update-index', '--cacheinfo', `${mode},${newSha},${path}`]);
+    console.log(`${NOTICE} staged Prettier output for ${path}`);
+
+    mergeWorktree(path, stagedBlob, formatted);
+  } finally {
+    rmSync(snapDir, { recursive: true, force: true });
+  }
 }
 
 async function main() {
