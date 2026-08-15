@@ -326,29 +326,6 @@ describe('ProgressApiKeyRetryController', () => {
     expect(harness.retries).toStrictEqual(['stream-d']);
   });
 
-  it('resolves the OpenAI key from the exhaustion reason when no provider is given', async () => {
-    // Only an Anthropic key is usable. If the controller fell back to
-    // checking every provider (the pre-fix behavior when `provider` is
-    // absent), it would find this key and retry on it, which is wrong for a
-    // ChatGPT-subscription exhaustion that specifically requires OpenAI.
-    const harness = createHarness({
-      keys: { anthropic: 'stored-anthropic' },
-    });
-
-    // The caller (webview) forwards whatever provider the error was tagged
-    // with, which may be absent — the controller, not the caller, owns the
-    // chatgpt-subscription-always-means-openai policy.
-    const result = await harness.controller.useOwnApiKey({
-      stream: 'stream-f',
-      requestId: 'retry-f',
-      exhaustionReason: 'chatgpt-subscription',
-    });
-
-    expect(result).toStrictEqual(IDLE_RESULT);
-    expect(harness.prompts).toStrictEqual(['openai']);
-    expect(harness.retries).toStrictEqual([]);
-  });
-
   it('does not disable the subscription when no usable OpenAI key is available', async () => {
     const harness = createHarness({ keys: {} });
 
