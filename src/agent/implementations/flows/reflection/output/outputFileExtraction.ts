@@ -1,8 +1,8 @@
 /**
  * Output file extraction orchestration.
  *
- * Drives the agent output pipeline: waits for workspace preparation, builds
- * a ProcessingContext, then dispatches to OutputFileProcessor to unpack
+ * Drives the agent output pipeline: waits for workspace preparation, then
+ * dispatches to OutputFileProcessor to unpack
  * <documents><document name="..."> containers from the model's XML response.
  *
  * Note: this module is about the *agent output pipeline*, not general XML
@@ -12,10 +12,7 @@
 import type { StageHandle } from '@agent/trace';
 import { MESSAGE_TYPES, type FileLocation } from '@shared/schemas';
 
-import {
-  OutputFileProcessor,
-  type ProcessingContext,
-} from './OutputFileProcessor';
+import { OutputFileProcessor } from './OutputFileProcessor';
 import {
   ensureRoundData,
   withOutputStage,
@@ -71,19 +68,7 @@ export async function extractFilesFromXml(
       data.rawOutput ??= outputLocation;
       const rawLocation = data.rawOutput;
 
-      const processingContext: ProcessingContext = {
-        baseFiles: deps.baseFiles,
-        streamId: deps.streamId,
-        logger: deps.logger,
-        xmlManager,
-        setRoundOutputs: (round: number, outputs) => {
-          const roundData = ensureRoundData(state, round);
-          roundData.outputs = outputs;
-        },
-        ensureRoundData: (round: number) => ensureRoundData(state, round),
-      };
-
-      const fileProcessor = new OutputFileProcessor(processingContext);
+      const fileProcessor = new OutputFileProcessor(state, deps, xmlManager);
 
       // The unified protocol emits <documents><document name="..."> containers
       // (N >= 1), so all agents route through the multi-document path.

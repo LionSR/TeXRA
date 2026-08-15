@@ -5,8 +5,11 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { runCompileCheck } from '@agent/output/compileCheck';
-import { createOutputState, ensureRoundData } from '@agent/output/outputState';
+import { runCompileCheck } from '@agent/implementations/flows/reflection/output/compileCheck';
+import {
+  createOutputState,
+  ensureRoundData,
+} from '@agent/implementations/flows/reflection/output/outputState';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';

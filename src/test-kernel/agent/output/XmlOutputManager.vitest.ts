@@ -2,10 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { assignByContentSimilarity } from '@agent/output/extraction/contentSimilarity';
-import { OutputFileProcessor } from '@agent/output/OutputFileProcessor';
-import { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import type { OutputFileInfo, RoundOutput } from '@shared/schemas';
+import { assignByContentSimilarity } from '@agent/implementations/flows/reflection/output/extraction/contentSimilarity';
+import { OutputFileProcessor } from '@agent/implementations/flows/reflection/output/OutputFileProcessor';
+import {
+  createOutputState,
+  ensureRoundData,
+  type OutputDependencies,
+} from '@agent/implementations/flows/reflection/output/outputState';
+import { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
+import type { FileLocation } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -27,18 +32,19 @@ interface XmlManagerOptions {
   logger?: AgentTrace;
 }
 
-function createRoundData(round: number): RoundOutput {
+/**
+ * Minimal OutputDependencies for OutputFileProcessor tests: the processor
+ * reads only `baseFiles`, `logger`, and `runScope.streamId`.
+ */
+function processorDeps(overrides: {
+  logger: AgentTrace;
+  baseFiles?: FileLocation[];
+}): OutputDependencies {
   return {
-    round,
-    rawOutput: null,
-    outputs: [],
-    compileFailures: [],
-    xmlSummary: {
-      tagContents: {},
-      singleOutputFile: null,
-      sourceLocation: null,
-    },
-  };
+    baseFiles: overrides.baseFiles ?? [],
+    logger: overrides.logger,
+    runScope: { streamId: 'stream' },
+  } as unknown as OutputDependencies;
 }
 
 function createXmlManager(
@@ -906,18 +912,12 @@ Appendix.
 </document></documents>`,
     );
     const manager = createXmlManager();
-    let roundOutputs: OutputFileInfo[] = [];
-    const roundData = createRoundData(0);
-    const processor = new OutputFileProcessor({
-      baseFiles: [],
-      streamId: 'stream',
-      logger: spiedTrace(),
-      xmlManager: manager,
-      setRoundOutputs: (_round, outputs) => {
-        roundOutputs = outputs;
-      },
-      ensureRoundData: () => roundData,
-    });
+    const state = createOutputState();
+    const processor = new OutputFileProcessor(
+      state,
+      processorDeps({ logger: spiedTrace() }),
+      manager,
+    );
 
     await processor.processMultipleOutputs(
       createExternalLocation('/tmp/run/output.xml'),
@@ -925,6 +925,7 @@ Appendix.
       createExternalLocation('/tmp/run/output.xml'),
     );
 
+    const roundOutputs = state.rounds.get(0)?.outputs ?? [];
     expect(roundOutputs).toHaveLength(2);
     expect(formatterMocks.runLatexFormatter).not.toHaveBeenCalled();
     await expectWritten('main.tex', '\\[\n  f(x)=x^4-2x^2+1.\n\\]\n');
@@ -1298,15 +1299,8 @@ Appendix.
     );
 
     const manager = createXmlManager(['appendices.tex', 'cost_section.tex']);
-    const roundDataByRound = new Map<number, RoundOutput>();
-    const ensureRound = (round: number): RoundOutput => {
-      const existing = roundDataByRound.get(round);
-      if (existing) return existing;
-      const data = createRoundData(round);
-      roundDataByRound.set(round, data);
-      return data;
-    };
-    ensureRound(0).outputs = [
+    const state = createOutputState();
+    ensureRoundData(state, 0).outputs = [
       {
         source: 'appendices.tex',
         round: 0,
@@ -1322,26 +1316,25 @@ Appendix.
         diff: null,
       },
     ];
-    let roundOutputs: OutputFileInfo[] = [];
-    const processor = new OutputFileProcessor({
-      baseFiles: [
-        createExternalLocation('/tmp/run/appendices.tex'),
-        createExternalLocation('/tmp/run/cost_section.tex'),
-      ],
-      streamId: 'stream',
-      logger: spiedTrace(),
-      xmlManager: manager,
-      setRoundOutputs: (_round, outputs) => {
-        roundOutputs = outputs;
-      },
-      ensureRoundData: ensureRound,
-    });
+    const processor = new OutputFileProcessor(
+      state,
+      processorDeps({
+        logger: spiedTrace(),
+        baseFiles: [
+          createExternalLocation('/tmp/run/appendices.tex'),
+          createExternalLocation('/tmp/run/cost_section.tex'),
+        ],
+      }),
+      manager,
+    );
 
     await processor.processMultipleOutputs(
       createExternalLocation('/tmp/run/r1/output.xml'),
       1,
       createExternalLocation('/tmp/run/r1/output.xml'),
     );
+
+    const roundOutputs = state.rounds.get(1)?.outputs ?? [];
 
     expect(roundOutputs.map((output) => output.source).sort()).toEqual([
       'appendices.tex',

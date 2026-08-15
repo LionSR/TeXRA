@@ -2,7 +2,7 @@ import { Node } from '@agent/node';
 import { ConversationRoundStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import { appendCompileFailureRoundContext } from '@agent/output/compileFailureRoundContext';
+import { appendCompileFailureRoundContext } from '../output/compileFailureRoundContext';
 
 import type {
   ReflectionFlowShared,

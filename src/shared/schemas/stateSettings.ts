@@ -208,7 +208,7 @@ const WORKFLOW_COMPILE_RUNTIME_REACHABILITY = {
   command:
     'texra run <workflow-agent> --input paper.tex --instruction "revise the paper"',
   through:
-    'packages/cli/src/commands/workflow.ts -> src/agent/output/compileCheck.ts',
+    'packages/cli/src/commands/workflow.ts -> src/agent/implementations/flows/reflection/output/compileCheck.ts',
 } satisfies CliRuntimeReachability;
 const WORKFLOW_REJECT_RUNTIME_REACHABILITY = {
   command:
@@ -538,7 +538,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'workflow',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer: 'src/agent/output/compileCheck.ts',
+    cliConsumer:
+      'src/agent/implementations/flows/reflection/output/compileCheck.ts',
     cliRuntimeReachability: WORKFLOW_COMPILE_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'latex',
   },
@@ -554,7 +555,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'workflow',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer: 'src/agent/output/compileCheck.ts',
+    cliConsumer:
+      'src/agent/implementations/flows/reflection/output/compileCheck.ts',
     cliRuntimeReachability: WORKFLOW_COMPILE_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'latex',
   },

@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { tryOperation } from '@agent/output/outputOperations';
+import { tryOperation } from '@agent/implementations/flows/reflection/output/outputOperations';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { spiedTrace } from '@test/support/spiedTrace';
 

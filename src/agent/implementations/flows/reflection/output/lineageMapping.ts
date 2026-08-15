@@ -7,10 +7,10 @@
 
 import * as path from 'node:path';
 
-import { createFileMapping } from '@agent/output/fileMapping';
 import type { FileLocation } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 import { getComparablePath } from '@utils/files/fileLocation';
+import { createFileMapping } from './fileMapping';
 
 import type { OutputState } from './outputState';
 import type { RoundFileEntry, RoundFileMapping } from './types';

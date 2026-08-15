@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { publishCompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
+import { publishCompiledPdfArtifact } from '@agent/implementations/flows/reflection/output/compiledPdfArtifacts';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
