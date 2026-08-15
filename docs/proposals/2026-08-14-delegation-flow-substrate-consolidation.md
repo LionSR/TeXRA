@@ -435,8 +435,20 @@ action to say so instead of returning nothing.
   fine. Rejection, if ever, is an explicit behavior-changing decision with
   its own validation and release treatment — not a rider on item 9's
   mechanical relocation.
-- `ToolUseRunSharedSchema` is a `z.looseObject` while reflection's shared
-  schema is strict.
+- `ToolUseRunSharedSchema` was a `z.looseObject` while reflection's shared
+  schema parses with default `z.object` semantics — resolved (#10641):
+  tooluse now matches reflection, accepting but stripping unknown top-level
+  keys at the `migrateSharedState` boundary; the existing deep-equal
+  self-heal checks on both resume paths rewrite the healed record (the
+  direct stored fallback consults `migrationResult.migrated`; the
+  retrieved handoff rewrites when the re-read record differs from the
+  stripped resume copy), so a record carrying a newer build's keys is
+  normalized on first resume instead of round-tripping them forever. The
+  heal is one-directional: an upgrade → resume-on-older-build → upgrade
+  cycle erases the newer build's unknown keys for good. Deliberately not
+  `z.strictObject` (a newer build's unknown keys must not break resume),
+  no `.catch` (malformed known fields keep failing loudly), no duplicate
+  legacy schema.
 - The `max(configuredRounds, userRequestTemplateCount)` rule duplicated
   between `agentYamlScanner` and `runReflectionFlow` — rated LOW in
   `2026-07-09-tech-debt-audit-runtime-ui.md` (B15); leave unless touched.
