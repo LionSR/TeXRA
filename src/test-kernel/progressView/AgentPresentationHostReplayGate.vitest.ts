@@ -6,6 +6,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 import type { ProgressHostInteractionsOptions } from '@controllers/progressView/backend/progressHostInteractions';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
+import * as logger from '@logger/logUtils';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { ToolEditPermission } from '@shared/schemas';
@@ -32,7 +33,7 @@ import { createRecordingApprovalHandlers } from './approvalHandlerSetHarness';
 const mocks = vi.hoisted(() => ({
   getLinterMessages: vi.fn(async () => []),
   pushManualCriticism: vi.fn(() => true),
-  openBuildDisplayIfTex: vi.fn(async () => undefined),
+  openBuildDisplayIfTex: vi.fn(async () => true),
   instructionMemento: new Map<string, unknown>(),
 }));
 
@@ -202,7 +203,34 @@ describe('extension presentation delivery truthfulness (#10400)', () => {
     }
   });
 
-  it('reports file-open delivery from the open promise', async () => {
+  it('observes an error-toast handoff rejection without reporting non-delivery', async () => {
+    // `showErrorMessage` resolves on dismissal, which callers must not wait
+    // on, so the handoff remains the delivery signal. The returned Thenable
+    // is still observed: a post-handoff rejection is warn-logged instead of
+    // surfacing as an unhandled rejection (#10467).
+    const showErrorMessage = vi
+      .spyOn(vscode.window, 'showErrorMessage')
+      .mockRejectedValueOnce(new Error('host gone'));
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    try {
+      const host = presentationHost();
+      expect(await host.emit('requestShowError', { message: 'Boom' })).toBe(
+        true,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(showErrorMessage).toHaveBeenCalledWith('Boom');
+      expect(warn).toHaveBeenCalledWith(
+        'agentEventListeners',
+        expect.stringContaining('toast'),
+      );
+    } finally {
+      showErrorMessage.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
+  it('reports file-open delivery from the open outcome', async () => {
     const host = presentationHost();
     const payload = {
       location: {
@@ -213,8 +241,11 @@ describe('extension presentation delivery truthfulness (#10400)', () => {
       preserveFocus: true,
     };
 
-    mocks.openBuildDisplayIfTex.mockResolvedValueOnce(undefined);
+    mocks.openBuildDisplayIfTex.mockResolvedValueOnce(true);
     await expect(host.emit('requestOpenFile', payload)).resolves.toBe(true);
+
+    mocks.openBuildDisplayIfTex.mockResolvedValueOnce(false);
+    await expect(host.emit('requestOpenFile', payload)).resolves.toBe(false);
 
     mocks.openBuildDisplayIfTex.mockRejectedValueOnce(new Error('no viewer'));
     await expect(host.emit('requestOpenFile', payload)).resolves.toBe(false);
@@ -236,6 +267,49 @@ describe('extension presentation delivery truthfulness (#10400)', () => {
       ).resolves.toBe(false);
     } finally {
       executeCommand.mockRestore();
+    }
+  });
+
+  it('reports progress-view non-delivery when the reveal settles without making the view visible', async () => {
+    // The reveal command resolving is not delivery: nothing was presented if
+    // the view remains hidden after it (#10468).
+    const executeCommand = vi
+      .spyOn(vscode.commands, 'executeCommand')
+      .mockResolvedValue(undefined);
+    try {
+      const host = presentationHost({ isViewVisible: () => false });
+      await expect(host.emit('requestEnsureProgressView', {})).resolves.toBe(
+        false,
+      );
+      expect(executeCommand).toHaveBeenCalledWith('texra.showProgressView');
+    } finally {
+      executeCommand.mockRestore();
+    }
+  });
+
+  it('reports the fallback notification as delivered when the view stays hidden', async () => {
+    const executeCommand = vi
+      .spyOn(vscode.commands, 'executeCommand')
+      .mockResolvedValue(undefined);
+    const showInformationMessage = vi
+      .spyOn(vscode.window, 'showInformationMessage')
+      .mockResolvedValue(undefined);
+    try {
+      const host = presentationHost({ isViewVisible: () => false });
+      await expect(
+        host.emit('requestEnsureProgressView', {
+          fallbackNotification: {
+            agentName: 'writer',
+            modelName: 'test-model',
+            inputName: 'paper.tex',
+            outputInfo: 'to paper.out.tex',
+          },
+        }),
+      ).resolves.toBe(true);
+      expect(showInformationMessage).toHaveBeenCalledOnce();
+    } finally {
+      executeCommand.mockRestore();
+      showInformationMessage.mockRestore();
     }
   });
 

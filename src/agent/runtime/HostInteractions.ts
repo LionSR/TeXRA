@@ -470,7 +470,12 @@ export class SessionHostInteractions implements HostInteractions {
   ): boolean | Promise<boolean> {
     const active = this.activeAttachment;
     if (active) {
-      return active.interactions.emit?.(event, payload) ?? false;
+      try {
+        return active.interactions.emit?.(event, payload) ?? false;
+      } catch (error) {
+        logger.warn('Live presentation emit failed', { data: error });
+        return false;
+      }
     }
     if (options.replayWhenAttached && !this.disposed) {
       // A retained replay is not delivery: nothing has been rendered yet, so

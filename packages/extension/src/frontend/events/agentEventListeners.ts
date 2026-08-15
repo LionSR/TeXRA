@@ -42,16 +42,13 @@ function handleRequestOpenFile(
 ): Promise<boolean> {
   return openBuildDisplayIfTex(payload.location, {
     preserveFocus: payload.preserveFocus,
-  }).then(
-    () => true,
-    (err) => {
-      logger.warn(
-        CHANNEL,
-        `Failed to open file ${payload.location.absolutePath}: ${toErrorMessage(err)}`,
-      );
-      return false;
-    },
-  );
+  }).catch((err) => {
+    logger.warn(
+      CHANNEL,
+      `Failed to open file ${payload.location.absolutePath}: ${toErrorMessage(err)}`,
+    );
+    return false;
+  });
 }
 
 /**
@@ -145,8 +142,16 @@ function handleRequestShowError({ message }: RequestShowErrorPayload): boolean {
   try {
     // Delivery is the toast handoff: `showErrorMessage` resolves only on
     // dismissal, which no caller should wait on, so report once VS Code has
-    // accepted the request.
-    void vscode.window.showErrorMessage(message);
+    // accepted the request. The returned Thenable is still observed so a
+    // post-handoff rejection (e.g. while the extension host is tearing down)
+    // is logged instead of becoming an unhandled rejection.
+    const toast = vscode.window.showErrorMessage(message);
+    void Promise.resolve(toast).catch((err: unknown) => {
+      logger.warn(
+        CHANNEL,
+        `Error toast failed after handoff: ${toErrorMessage(err)}`,
+      );
+    });
     return true;
   } catch (err) {
     logger.warn(
@@ -160,16 +165,23 @@ function handleRequestShowError({ message }: RequestShowErrorPayload): boolean {
 async function handleRequestEnsureProgressView(
   payload: RequestEnsureProgressViewPayload,
   progressViewProvider: ProgressViewProvider,
-): Promise<void> {
-  if (progressViewProvider.isViewVisible()) return;
+): Promise<boolean> {
+  if (progressViewProvider.isViewVisible()) return true;
 
   await vscode.commands.executeCommand('texra.showProgressView');
 
-  // If the view is still not visible after attempting to open it and a
-  // fallback notification was provided, show a toast as a last resort.
-  // This preserves the original two-check semantics that relied on await.
+  // Delivery is the reveal actually becoming visible, not the reveal command
+  // resolving. Re-check after the command before treating the event as
+  // presented.
+  if (progressViewProvider.isViewVisible()) return true;
+
   const fb = payload.fallbackNotification;
-  if (fb && !progressViewProvider.isViewVisible()) {
+  if (fb) {
+    // If the view is still not visible after attempting to open it and a
+    // fallback notification was provided, show a toast as a last resort.
+    // The toast itself is the delivered surface when the view cannot be made
+    // visible: a successful handoff means the event was presented even if
+    // the user dismisses it without retrying the reveal.
     const outputPart = fb.outputInfo ? ` (${fb.outputInfo})` : '';
     const selection = await vscode.window.showInformationMessage(
       `"${fb.agentName}" is processing ${fb.inputName} with ${fb.modelName}${outputPart}.`,
@@ -183,7 +195,10 @@ async function handleRequestEnsureProgressView(
     if (selection) {
       await vscode.commands.executeCommand('texra.showProgressView');
     }
+    return true;
   }
+
+  return false;
 }
 
 /**
@@ -207,8 +222,7 @@ function createPresentationEventHandlers(
     showAgentConfigBanner: handleShowAgentConfigBanner,
     requestShowError: handleRequestShowError,
     requestEnsureProgressView: (payload) =>
-      handleRequestEnsureProgressView(payload, progressViewProvider).then(
-        () => true,
+      handleRequestEnsureProgressView(payload, progressViewProvider).catch(
         (err) => {
           logger.warn(
             CHANNEL,
