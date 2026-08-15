@@ -478,6 +478,74 @@ describe('SessionHandle restart repair', () => {
     expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
   });
 
+  it('skips a later waiting candidate reused while an earlier candidate is repairing', async () => {
+    const firstExecutionId = 'b0a00013' as ExecutionId;
+    const firstStreamId = 'parked#waiting-loop-first' as StreamTabId;
+    const secondExecutionId = 'b0a00014' as ExecutionId;
+    const secondStreamId = 'parked#waiting-loop-second' as StreamTabId;
+
+    const transcripts = await StreamLogStore.open();
+    transcripts.ensureStream(firstStreamId);
+    transcripts.ensureStream(secondStreamId);
+    await transcripts.flush();
+    await seedSidecarFk(firstStreamId, firstExecutionId);
+    await seedSidecarFk(secondStreamId, secondExecutionId);
+    await getExecutionStore(firstExecutionId).writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await getExecutionStore(firstExecutionId).write(
+      flowKey(firstExecutionId),
+      validFlowRecord,
+    );
+    await getExecutionStore(secondExecutionId).writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await getExecutionStore(secondExecutionId).write(
+      flowKey(secondExecutionId),
+      validFlowRecord,
+    );
+    vi.spyOn(waitingDetection, 'detectWaitingStreams').mockResolvedValue(
+      new Set([firstStreamId, secondStreamId]),
+    );
+
+    let releaseFirstClose!: () => void;
+    const firstCloseGate = new Promise<void>((resolve) => {
+      releaseFirstClose = resolve;
+    });
+    const originalEnd =
+      transcripts.endRunningGroupsForStreams.bind(transcripts);
+    vi.spyOn(transcripts, 'endRunningGroupsForStreams').mockImplementation(
+      async (streamIds, now, status) => {
+        if (streamIds.includes(firstStreamId)) {
+          await firstCloseGate;
+        }
+        return originalEnd(streamIds, now, status);
+      },
+    );
+
+    const session = openDeferredSession(transcripts);
+    const readiness = session.waitUntilReady();
+    await vi.waitFor(() => {
+      expect(transcripts.endRunningGroupsForStreams).toHaveBeenCalled();
+    });
+
+    // The first candidate is blocked inside its lease-held repair. Reuse the
+    // second stream now; per-stream revalidation must skip it when the loop
+    // reaches it instead of parking the new run with stale waiting state.
+    session.status.transition(
+      secondStreamId,
+      STREAM_PHASE.RUNNING,
+      'lifecycle',
+    );
+    releaseFirstClose();
+
+    await readiness;
+    expect(session.status.get(firstStreamId)).toBe(STREAM_PHASE.WAITING);
+    expect(session.status.get(secondStreamId)).toBe(STREAM_PHASE.RUNNING);
+  });
+
   it('does not park a waiting stream whose status generation changed during detection', async () => {
     const parkedExecutionId = 'b0a00012' as ExecutionId;
     const parkedStreamId = 'parked#waiting-generation-change' as StreamTabId;

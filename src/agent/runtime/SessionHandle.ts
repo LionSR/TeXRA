@@ -787,18 +787,10 @@ export class SessionHandle {
     }
 
     // The ownership scan, resumability detection, and usage preload are all
-    // async; a follow-up resume or a fresh run can start while they are in
-    // flight. Revalidate each candidate against its status generation at scan
-    // time so a reused stream is never parked with the previous execution id.
+    // async. Refresh resident ownership once here so the map is current, then
+    // let `repairRestartedStreams` revalidate each candidate under its lease
+    // immediately before mutation.
     for (const streamId of new Set([...waitingStreams, ...repairStreams])) {
-      if (
-        this.status.getGeneration(streamId) !==
-        statusGenerationsAtScan.get(streamId)
-      ) {
-        waitingStreams.delete(streamId);
-        repairStreams.delete(streamId);
-        continue;
-      }
       const residentExecutionId = this.snapshots.getRunMetadata(streamId, {
         quiet: true,
       }).executionId;
@@ -812,6 +804,22 @@ export class SessionHandle {
       waitingStreams,
       executionIds,
       repairStreams,
+      expectedStatusGenerations: statusGenerationsAtScan,
+      isRepairCandidateCurrent: (streamId, expectedExecutionId) => {
+        if (
+          this.status.getGeneration(streamId) !==
+          statusGenerationsAtScan.get(streamId)
+        ) {
+          return false;
+        }
+        const residentExecutionId = this.snapshots.getRunMetadata(streamId, {
+          quiet: true,
+        }).executionId;
+        return (
+          residentExecutionId === undefined ||
+          residentExecutionId === expectedExecutionId
+        );
+      },
       closeRunningGroups: async (streamIds, status, now) => {
         // StreamLogStore commits each settlement through its onChange channel;
         // attached progress bridges therefore receive dirty-entry deltas
