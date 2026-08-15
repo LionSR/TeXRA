@@ -11,6 +11,8 @@
  * LSP requests).
  */
 
+import type { ExecutionId } from '@shared/schemas';
+
 import type {
   LeanFileCommand,
   LeanProjectCommand,
@@ -55,6 +57,16 @@ export interface LeanLanguageServices {
     diagnostics: LeanDiagnostic[],
   ): Promise<void>;
   executeProjectCommand(command: LeanProjectCommand): Promise<void>;
+  /**
+   * Stop the per-worktree servers attributed to an agent run that ended.
+   * A host capability like {@link navigateToFirstError}: the direct
+   * CLI/desktop adapter implements it so a finished run does not leave its
+   * worktree's server idling until the idle timeout; the VS Code bridge
+   * omits it because the Lean 4 extension owns that server's lifetime.
+   * Servers still leased by an in-flight request (e.g. a shared worktree's
+   * other run) are left to the idle-timeout backstop.
+   */
+  stopSessionsForRun?(runId: ExecutionId): Promise<void>;
 }
 
 let services: LeanLanguageServices | undefined;
@@ -78,4 +90,16 @@ export function getLeanLanguageServices(): LeanLanguageServices {
     );
   }
   return services;
+}
+
+/**
+ * Run-end hook for the agent run lifecycle: stop the Lean servers the ended
+ * run started. A no-op when no host wired Lean services, or when the wired
+ * host owns server lifetime itself (the VS Code bridge) — only the direct
+ * CLI/desktop adapter implements {@link LeanLanguageServices.stopSessionsForRun}.
+ */
+export async function stopLeanServersForEndedRun(
+  runId: ExecutionId,
+): Promise<void> {
+  await services?.stopSessionsForRun?.(runId);
 }
