@@ -203,10 +203,12 @@ class TuiSessionRenderer implements SessionRendererPort {
     badges: Parameters<SessionRendererPort['onBadgesChanged']>[1],
   ): void {
     if (this.isStaleDispatch(streamId)) return;
-    projectChildRoster(
-      streamId,
-      badges.subagents.filter((child) => child.finishedAt === undefined),
-    );
+    // The shared applier already computed this roster — live rows plus the
+    // finished children it retains for display (phase-merged, 200-capped) —
+    // so project it whole. `finishedAt` presence alone marks a retained row
+    // (schema contract); dropping those rows here was the #9021-class bug
+    // (single-substrate plan, U1).
+    projectChildRoster(streamId, badges.subagents);
   }
 
   onFilesChanged(streamId: StreamTabId): void {
