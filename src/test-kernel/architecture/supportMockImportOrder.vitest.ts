@@ -47,8 +47,22 @@ interface ImportSite {
   isTypeOnly: boolean;
 }
 
-function collectImports(file: string): ImportSite[] {
-  const source = readFileSync(file, 'utf8');
+function declarationIsTypeOnly(
+  importClause: ts.ImportClause | undefined,
+): boolean {
+  if (importClause?.isTypeOnly) return true;
+  if (importClause == null || importClause.name != null) return false;
+
+  const { namedBindings } = importClause;
+  return (
+    namedBindings != null &&
+    ts.isNamedImports(namedBindings) &&
+    namedBindings.elements.length > 0 &&
+    namedBindings.elements.every((element) => element.isTypeOnly)
+  );
+}
+
+function collectImportsFromSource(file: string, source: string): ImportSite[] {
   const sourceFile = ts.createSourceFile(
     file,
     source,
@@ -64,10 +78,14 @@ function collectImports(file: string): ImportSite[] {
     if (specifier == null || !ts.isStringLiteralLike(specifier)) continue;
     imports.push({
       specifier: specifier.text,
-      isTypeOnly: statement.importClause?.isTypeOnly ?? false,
+      isTypeOnly: declarationIsTypeOnly(statement.importClause),
     });
   }
   return imports;
+}
+
+function collectImports(file: string): ImportSite[] {
+  return collectImportsFromSource(file, readFileSync(file, 'utf8'));
 }
 
 function violation(file: string, message: string): string {
@@ -172,5 +190,20 @@ describe('shared test-kernel mock import order', () => {
 
   it('covers the #10361 migrated suites', () => {
     expect(checkedSuites).toEqual(expect.arrayContaining([...MIGRATED_SUITES]));
+  });
+
+  it('detects inline type-only shared mock imports as type-only', () => {
+    const source = `
+      import { type agentCatalogMock } from '@test/support/agentCatalogMock';
+      import { getAgent, type refresh } from '@test/support/agentCatalogMock';
+      import type { cliOutputMock } from '@test/support/cliOutputMock';
+    `;
+    const imports = collectImportsFromSource('inline-type-only.ts', source);
+
+    expect(imports).toEqual([
+      { specifier: '@test/support/agentCatalogMock', isTypeOnly: true },
+      { specifier: '@test/support/agentCatalogMock', isTypeOnly: false },
+      { specifier: '@test/support/cliOutputMock', isTypeOnly: true },
+    ]);
   });
 });

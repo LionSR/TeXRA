@@ -18,7 +18,9 @@ import { durableFinalizationResult } from './agentStorageFixtures';
  * {@link durableFinalizationResult} for the default) and must not import this
  * module: the two registrations would race. Vitest gives each test file a
  * fresh module graph, so the singleton bag is per-suite at runtime; the
- * default implementation survives `vi.clearAllMocks()`.
+ * default implementation survives `vi.clearAllMocks()` but not
+ * `mockReset()`/`vi.resetAllMocks()` — a resetting suite must reinstall
+ * `mockImplementation(async () => durableFinalizationResult())` first.
  *
  * Ordering: the `vi.mock` below registers when this module evaluates, so the
  * import must precede anything that could load `@agent/storage` (see
@@ -31,7 +33,8 @@ const agentStorageFinalizationMock = vi.hoisted(() => ({
 
 // A hoisted factory cannot close over the imported fixture, so the default
 // durable implementation is installed here instead — mockClear (and hence
-// vi.clearAllMocks()) preserves it.
+// vi.clearAllMocks()) preserves it, but mockReset/vi.resetAllMocks() clears
+// it; resetting suites must reinstall the implementation above.
 agentStorageFinalizationMock.finalizeExecution.mockImplementation(async () =>
   durableFinalizationResult(),
 );
