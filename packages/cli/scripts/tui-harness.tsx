@@ -195,6 +195,8 @@ const PLAN_APPROVAL_OBJECTIVE =
   ].join('\n');
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
+const SHOW_TERMINAL_RESUME_REPAINT =
+  process.env.HARNESS_TERMINAL_RESUME_REPAINT === '1';
 const SHOW_ASSISTANT_TOOL_PREAMBLE =
   process.env.HARNESS_ASSISTANT_TOOL_PREAMBLE === '1';
 const SHOW_LIVE_TOOL_ONLY = process.env.HARNESS_LIVE_TOOL_ONLY === '1';
@@ -2465,6 +2467,19 @@ const ink = render(renderHarnessApp(), {
   exitOnCtrlC: false,
 });
 inkRef.current = ink;
+
+if (SHOW_TERMINAL_RESUME_REPAINT) {
+  void (async () => {
+    // Let the first static-transcript commit flush, then exercise the same
+    // SIGCONT repair path the real session-exit controller uses. The epoch
+    // remounts <Static> and repaints with replace semantics.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await ink.waitUntilRenderFlush();
+    viewportController.repaintAfterTerminalResume();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await ink.waitUntilRenderFlush();
+  })();
+}
 
 if (CHILD_EVENT_ORDER || SHOW_WORKFLOW_TIMELINE || SHOW_WORKFLOW_RUNNING) {
   // Mirror real CLI startup: `runChatTui.tsx` installs

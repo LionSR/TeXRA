@@ -35,6 +35,7 @@ import { SubagentList } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import { type ChildListValue } from '../state/childListSelection';
 import { inputBarContentRows } from '../state/cliState';
+import { staticTranscriptRepaintEpoch } from '../state/staticTranscriptRepaint';
 import {
   workflowDashboardPanelItemCount,
   type WorkflowDashboardModel,
@@ -124,7 +125,8 @@ export function ConversationRegion({
     () => JSON.stringify([...snapshot.subagentExecutionLabels]),
     [snapshot.subagentExecutionLabels],
   );
-  const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${executionLabelsKey}`;
+  const staticTranscriptRepaint = useSignal(staticTranscriptRepaintEpoch);
+  const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${executionLabelsKey}:${staticTranscriptRepaint}`;
 
   const activeSlice = snapshot.activeStreamId
     ? snapshot.streams.get(snapshot.activeStreamId)
