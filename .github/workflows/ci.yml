@@ -255,9 +255,10 @@ jobs:
     # Deliberately ungated: this is the one check that must run on BOTH sides
     # of the docs/code split. A guidance-only PR (code=false) skips `checks`,
     # and that is exactly the PR most likely to introduce a stale path; a
-    # code-only PR can break the prose by renaming what it cites. The two
-    # scripts are bare Node, but the browser-safe utils guard now imports the
-    # repo's `typescript` devDependency, so this job installs dependencies.
+    # code-only PR can break the prose by renaming what it cites. Both
+    # scripts run with plain Node (no build step), but the browser-safe utils
+    # guard imports the repo's `typescript` devDependency, so this job
+    # installs dependencies.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

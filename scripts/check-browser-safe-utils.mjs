@@ -95,8 +95,9 @@ function staticSpecifierText(node) {
  * not a dependency edge.
  *
  * Type-only edges are erased by the compiler, so they contribute nothing:
- * `import type ...`, `export type ... from`, a named list whose every binding
- * is `type`-marked (`import { type X }`), and `import type X = require(...)`.
+ * `import type ...`, `export type ... from`, a named list with no default
+ * binding whose every binding is `type`-marked (`import { type X }`), and
+ * `import type X = require(...)`.
  * The parser's `isTypeOnly` flags own the awkward grammar — `{ type as }`
  * imports the name `as` type-only, `{ type as v }` aliases a value named
  * `type`, an escaped `\u0074ype` still parses as the modifier, and Unicode
@@ -116,6 +117,7 @@ function dependencySpecifier(node) {
       if (clause.isTypeOnly) return null;
       const named = clause.namedBindings;
       if (
+        clause.name == null &&
         named != null &&
         ts.isNamedImports(named) &&
         named.elements.length > 0 &&
@@ -214,6 +216,14 @@ function selfTestImportSpecifiers() {
     {
       text: "import { type X } from './typeOnly';\n",
       expected: [],
+    },
+    {
+      text: "import value, { type helper } from './mixed';\n",
+      expected: ['./mixed'],
+    },
+    {
+      text: "import value, { type X, type Y } from './mixed';\n",
+      expected: ['./mixed'],
     },
     {
       text: "import {\n  type X,\n} from './typeOnly';\n",
