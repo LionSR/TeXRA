@@ -197,14 +197,20 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
     ...generateCommandShortcuts(calculusCommandMap),
     // Vector variables: \vec{x} -> \vx
     ...generateDecoratorShortcuts('vec', vectorLetters, 'v'),
-    ...generateCommandShortcuts(GREEK_LETTER_SHORTCUTS),
-    // Bold Greek: \boldsymbol{\alpha} -> \bal
+    // Bold Greek: \boldsymbol{\alpha} -> \bal. Keep this before the bare
+    // Greek shortcuts below: applyReplacements walks the merged pattern object
+    // in insertion order, so the bare-Greek rules would otherwise fire inside
+    // \boldsymbol{...} first and shadow these destinations.
     ...createPatterns(greekBoldLetters, (letter) => [
       [
         `\\boldsymbol{\\${letter}}`,
         `\\b${BOLD_GREEK_SHORTCUTS[letter] ?? letter}`,
       ],
     ]),
+    ...generateCommandShortcuts(GREEK_LETTER_SHORTCUTS),
+    // Combined shortcut: keep this before the \mathcal and effH component rules so
+    // \mathcal{H}^{\text{eff}} reaches \ceffH at runtime.
+    '\\mathcal{H}^{\\text{eff}}': '\\ceffH',
     // Mathcal: \mathcal{X} -> \cX
     ...generateDecoratorShortcuts('mathcal', upperLetters, 'c'),
     // Mathbb: \mathbb{X} -> \eX
@@ -339,7 +345,6 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
 
   // Physics and Statistical Mechanics
   'H^{\\text{eff}}': '\\effH',
-  '\\mathcal{H}^{\\text{eff}}': '\\ceffH',
   'p^{\\text{eq}}': '\\peq',
   'q^{\\text{eq}}': '\\qeq',
   'p^{\\text{st}}': '\\pst',

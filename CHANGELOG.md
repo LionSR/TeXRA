@@ -25,6 +25,10 @@ All notable changes to this project will be documented in this file.
   bold alpha, eta, and sigma now display as the intended symbols instead of
   unknown commands.
 
+- **Every max-style shortcut now resolves in the progress view** — math
+  operators, text labels, mathcal/mathbb letters, and tilde/hat/
+  differential shortcuts render as intended instead of unknown commands.
+
 #### Features
 
 - **The model picker now starts with Sonnet 5 (Thinking)** — Gemini is no
