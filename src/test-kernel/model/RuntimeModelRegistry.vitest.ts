@@ -33,12 +33,13 @@ import { installPlatform } from '@test/support/setupPlatform';
 // The discovered-editor-model fixture must track an llm-zoo base model that
 // is active (neither deprecated nor retired) and Copilot-documented (carries
 // `copilotFullName`): route resolution filters deprecated/retired configs and
-// matches the editor id against the registry's Copilot name. gemini36f
-// satisfies both in llm-zoo 1.25.0 (the previous pin is deprecated there).
-const GEMINI_FLASH: LanguageModelInfo = {
-  id: 'gemini-3.6-flash',
-  name: 'Gemini 3.6 Flash',
-  family: 'gemini-3.6-flash',
+// matches the editor id against the registry's Copilot name. gemini31p
+// satisfies both in llm-zoo 1.28.0; gemini36f, the previous pick, is
+// deprecated there.
+const GEMINI_PRO: LanguageModelInfo = {
+  id: 'gemini-3.1-pro-preview',
+  name: 'Gemini 3.1 Pro',
+  family: 'gemini-3.1-pro-preview',
   vendor: 'copilot',
   version: '2026-07',
   maxInputTokens: 160_000,
@@ -123,18 +124,18 @@ describe('runtime model registry', () => {
   afterEach(resetModelCaches);
 
   it('maps a discovered editor model to a route on its canonical base model', async () => {
-    const port = await installModels(GEMINI_FLASH);
+    const port = await installModels(GEMINI_PRO);
 
     await refreshRuntimeModelRegistry();
 
     expect(port.selectModels).toHaveBeenCalledWith({ vendor: 'copilot' });
-    expect(copilotRouteForModel('gemini36f')).toEqual(
+    expect(copilotRouteForModel('gemini31p')).toEqual(
       expect.objectContaining({
         access: 'allowed',
-        reference: { vendor: 'copilot', id: GEMINI_FLASH.id },
+        reference: { vendor: 'copilot', id: GEMINI_PRO.id },
         effectiveConfig: expect.objectContaining({
-          name: 'gemini36f',
-          contextWindow: GEMINI_FLASH.maxInputTokens,
+          name: 'gemini31p',
+          contextWindow: GEMINI_PRO.maxInputTokens,
           inputPrice: 0,
           outputPrice: 0,
           capabilities: expect.objectContaining({
@@ -143,26 +144,26 @@ describe('runtime model registry', () => {
         }),
       }),
     );
-    expect(getRuntimeModelConfig('gemini36f')?.label).not.toContain('Copilot');
+    expect(getRuntimeModelConfig('gemini31p')?.label).not.toContain('Copilot');
   });
 
   it('resolves duplicate editor versions deterministically to the newest', async () => {
     await installModels(
-      { ...GEMINI_FLASH, id: 'gemini-3.6-flash-old', version: '2026-01' },
-      { ...GEMINI_FLASH, id: 'gemini-3.6-flash', version: '2026-07' },
+      { ...GEMINI_PRO, id: 'gemini-3.1-pro-preview-old', version: '2026-01' },
+      { ...GEMINI_PRO, id: 'gemini-3.1-pro-preview', version: '2026-07' },
     );
 
     await refreshRuntimeModelRegistry();
 
-    expect(copilotRouteForModel('gemini36f')?.reference).toEqual({
+    expect(copilotRouteForModel('gemini31p')?.reference).toEqual({
       vendor: 'copilot',
-      id: 'gemini-3.6-flash',
+      id: 'gemini-3.1-pro-preview',
     });
   });
 
   it('omits editor models whose capabilities TeXRA cannot establish', async () => {
     await installModels({
-      ...GEMINI_FLASH,
+      ...GEMINI_PRO,
       id: 'future-model',
       family: 'future-model',
       name: 'Future model',
@@ -176,15 +177,15 @@ describe('runtime model registry', () => {
 
   it('keeps the exact editor reference for the access-request consent prompt', async () => {
     const port = await installModels({
-      ...GEMINI_FLASH,
+      ...GEMINI_PRO,
       access: 'consent-required',
     });
 
-    await expect(requestRuntimeModelAccess('gemini36f')).resolves.toBe(
+    await expect(requestRuntimeModelAccess('gemini31p')).resolves.toBe(
       'requested',
     );
     expect(port.sendRequest).toHaveBeenCalledWith(
-      { vendor: 'copilot', id: GEMINI_FLASH.id },
+      { vendor: 'copilot', id: GEMINI_PRO.id },
       [
         {
           role: 'user',
@@ -202,10 +203,10 @@ describe('runtime model registry', () => {
 
     invalidateRuntimeModelRegistry();
     const unavailablePort = await installModels({
-      ...GEMINI_FLASH,
+      ...GEMINI_PRO,
       access: 'unavailable',
     });
-    await expect(requestRuntimeModelAccess('gemini36f')).resolves.toBe(
+    await expect(requestRuntimeModelAccess('gemini31p')).resolves.toBe(
       'unavailable',
     );
     expect(unavailablePort.sendRequest).not.toHaveBeenCalled();
@@ -227,18 +228,18 @@ describe('runtime model registry', () => {
   ])(
     're-discovers stale allowed access before $scenario',
     async ({ rediscoveredAccess, outcome, sendsProbe }) => {
-      let models: readonly LanguageModelInfo[] = [GEMINI_FLASH];
+      let models: readonly LanguageModelInfo[] = [GEMINI_PRO];
       const port = {
         ...languageModelPort([]),
         selectModels: vi.fn(async () => models),
       };
       await installPlatform({}, { languageModel: port });
       await refreshRuntimeModelRegistry();
-      expect(copilotRouteForModel('gemini36f')?.access).toBe('allowed');
+      expect(copilotRouteForModel('gemini31p')?.access).toBe('allowed');
 
-      models = [{ ...GEMINI_FLASH, access: rediscoveredAccess }];
+      models = [{ ...GEMINI_PRO, access: rediscoveredAccess }];
 
-      await expect(requestRuntimeModelAccess('gemini36f')).resolves.toBe(
+      await expect(requestRuntimeModelAccess('gemini31p')).resolves.toBe(
         outcome,
       );
       expect(port.selectModels).toHaveBeenCalledTimes(2);
@@ -251,26 +252,26 @@ describe('runtime model registry', () => {
   );
 
   it('retries when access invalidation supersedes a forced allowed probe', async () => {
-    const port = await installModels(GEMINI_FLASH);
+    const port = await installModels(GEMINI_PRO);
     await refreshRuntimeModelRegistry();
 
     const forced = createDeferred<readonly LanguageModelInfo[]>();
     vi.mocked(port.selectModels)
       .mockReturnValueOnce(forced.promise)
-      .mockResolvedValueOnce([{ ...GEMINI_FLASH, access: 'unavailable' }]);
+      .mockResolvedValueOnce([{ ...GEMINI_PRO, access: 'unavailable' }]);
 
-    const request = requestRuntimeModelAccess('gemini36f');
+    const request = requestRuntimeModelAccess('gemini31p');
     invalidateRuntimeModelRegistry();
-    forced.resolve([GEMINI_FLASH]);
+    forced.resolve([GEMINI_PRO]);
 
     await expect(request).resolves.toBe('unavailable');
     expect(port.selectModels).toHaveBeenCalledTimes(3);
     expect(port.sendRequest).not.toHaveBeenCalled();
-    expect(copilotRouteForModel('gemini36f')?.access).toBe('unavailable');
+    expect(copilotRouteForModel('gemini31p')?.access).toBe('unavailable');
   });
 
   it('fails closed when repeated invalidation supersedes the bounded retry', async () => {
-    const port = await installModels(GEMINI_FLASH);
+    const port = await installModels(GEMINI_PRO);
     await refreshRuntimeModelRegistry();
 
     const forced = createDeferred<readonly LanguageModelInfo[]>();
@@ -283,17 +284,17 @@ describe('runtime model registry', () => {
         return retry.promise;
       });
 
-    const request = requestRuntimeModelAccess('gemini36f');
+    const request = requestRuntimeModelAccess('gemini31p');
     invalidateRuntimeModelRegistry();
-    forced.resolve([GEMINI_FLASH]);
+    forced.resolve([GEMINI_PRO]);
     await retryStarted.promise;
     invalidateRuntimeModelRegistry();
-    retry.resolve([GEMINI_FLASH]);
+    retry.resolve([GEMINI_PRO]);
 
     await expect(request).resolves.toBe('unavailable');
     expect(port.selectModels).toHaveBeenCalledTimes(3);
     expect(port.sendRequest).not.toHaveBeenCalled();
-    expect(copilotRouteForModel('gemini36f')?.access).toBe('allowed');
+    expect(copilotRouteForModel('gemini31p')?.access).toBe('allowed');
   });
 
   it('does not let a superseded ordinary discovery overwrite forced access state', async () => {
@@ -309,16 +310,16 @@ describe('runtime model registry', () => {
     await installPlatform({}, { languageModel: port });
 
     const staleOrdinaryRefresh = refreshRuntimeModelRegistry();
-    const forcedRequest = requestRuntimeModelAccess('gemini36f');
-    forced.resolve([{ ...GEMINI_FLASH, access: 'unavailable' }]);
+    const forcedRequest = requestRuntimeModelAccess('gemini31p');
+    forced.resolve([{ ...GEMINI_PRO, access: 'unavailable' }]);
     await expect(forcedRequest).resolves.toBe('unavailable');
 
     // Resolve stale allowed data last: the superseded generation must not
     // overwrite the forced result that authorized the opt-in outcome.
-    ordinary.resolve([GEMINI_FLASH]);
+    ordinary.resolve([GEMINI_PRO]);
     await staleOrdinaryRefresh;
 
-    expect((await discoveredCopilotRoutes()).get('gemini36f')?.access).toBe(
+    expect((await discoveredCopilotRoutes()).get('gemini31p')?.access).toBe(
       'unavailable',
     );
     expect(port.sendRequest).not.toHaveBeenCalled();
@@ -326,15 +327,15 @@ describe('runtime model registry', () => {
   });
 
   it('coalesces overlapping user-initiated fresh discoveries', async () => {
-    const port = await installModels(GEMINI_FLASH);
+    const port = await installModels(GEMINI_PRO);
     await refreshRuntimeModelRegistry();
 
     const discovery = createDeferred<readonly LanguageModelInfo[]>();
     vi.mocked(port.selectModels).mockReturnValueOnce(discovery.promise);
 
-    const first = requestRuntimeModelAccess('gemini36f');
-    const second = requestRuntimeModelAccess('gemini36f');
-    discovery.resolve([{ ...GEMINI_FLASH, access: 'unavailable' }]);
+    const first = requestRuntimeModelAccess('gemini31p');
+    const second = requestRuntimeModelAccess('gemini31p');
+    discovery.resolve([{ ...GEMINI_PRO, access: 'unavailable' }]);
 
     await expect(Promise.all([first, second])).resolves.toEqual([
       'unavailable',
@@ -350,34 +351,34 @@ describe('runtime model registry', () => {
       ...languageModelPort([]),
       selectModels: vi.fn(async () => {
         if (discoveryFails) throw error;
-        return [GEMINI_FLASH];
+        return [GEMINI_PRO];
       }),
     };
     await installPlatform({}, { languageModel: port });
     await refreshRuntimeModelRegistry();
     discoveryFails = true;
 
-    await expect(requestRuntimeModelAccess('gemini36f')).rejects.toBe(error);
+    await expect(requestRuntimeModelAccess('gemini31p')).rejects.toBe(error);
 
     // Settings reads through the public asynchronous boundary. Its retry also
     // fails, but the previously visible route remains available for display.
     const visibleRoutes = await discoveredCopilotRoutes();
-    expect(visibleRoutes.get('gemini36f')?.access).toBe('allowed');
+    expect(visibleRoutes.get('gemini31p')?.access).toBe('allowed');
     expect(preferredCopilotRouteModels()).toEqual([]);
     expect(port.selectModels).toHaveBeenCalledTimes(3);
   });
 
   it('reports the direct fallback for a base model and a legacy copilot id', async () => {
-    await installModels(GEMINI_FLASH, GPT_56);
+    await installModels(GEMINI_PRO, GPT_56);
     await refreshRuntimeModelRegistry();
 
-    expect(getRuntimeModelDirectFallback('gemini36f', false)).toEqual({
-      model: 'gemini36f',
+    expect(getRuntimeModelDirectFallback('gemini31p', false)).toEqual({
+      model: 'gemini31p',
       provider: 'google',
       chatGptSubscriptionEligible: false,
     });
-    expect(getRuntimeModelDirectFallback('gemini36f', true)).toEqual({
-      model: 'gemini36f',
+    expect(getRuntimeModelDirectFallback('gemini31p', true)).toEqual({
+      model: 'gemini31p',
       provider: 'openRouter',
       chatGptSubscriptionEligible: false,
     });
@@ -389,38 +390,38 @@ describe('runtime model registry', () => {
   });
 
   it('reports no route error only when preferred Copilot access is allowed', async () => {
-    const port = languageModelPort([GEMINI_FLASH]);
+    const port = languageModelPort([GEMINI_PRO]);
     await installPlatform(
       {
         globalState: {
-          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini36f', 'gpt56'],
+          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p', 'gpt56'],
         },
       },
       { languageModel: port },
     );
 
     await refreshRuntimeModelRegistry();
-    expect(copilotRouteUnavailableReason('gemini36f')).toBeUndefined();
+    expect(copilotRouteUnavailableReason('gemini31p')).toBeUndefined();
     // A preference for a model the editor does not offer cannot route.
     expect(copilotRouteUnavailableReason('gpt56')).toMatch(
       /does not currently/,
     );
 
-    await setCopilotRoutePreference('gemini36f', false);
-    expect(copilotRouteUnavailableReason('gemini36f')).toBeUndefined();
+    await setCopilotRoutePreference('gemini31p', false);
+    expect(copilotRouteUnavailableReason('gemini31p')).toBeUndefined();
   });
 
   it('replaces route state after invalidation', async () => {
-    await installModels(GEMINI_FLASH);
+    await installModels(GEMINI_PRO);
     await refreshRuntimeModelRegistry();
-    expect(copilotRouteForModel('gemini36f')).toBeDefined();
+    expect(copilotRouteForModel('gemini31p')).toBeDefined();
 
     invalidateRuntimeModelRegistry();
-    expect(copilotRouteForModel('gemini36f')).toBeDefined();
+    expect(copilotRouteForModel('gemini31p')).toBeDefined();
     await installModels();
     await refreshRuntimeModelRegistry();
 
-    expect(copilotRouteForModel('gemini36f')).toBeUndefined();
+    expect(copilotRouteForModel('gemini31p')).toBeUndefined();
   });
 
   it('discards a discovery that an invalidation superseded mid-flight', async () => {
@@ -437,12 +438,12 @@ describe('runtime model registry', () => {
 
     const inFlight = refreshRuntimeModelRegistry();
     invalidateRuntimeModelRegistry();
-    discovery.resolve([GEMINI_FLASH]);
+    discovery.resolve([GEMINI_PRO]);
     await inFlight;
 
     // The superseded result must not land, and the registry must still be
     // stale enough that the next refresh re-probes the (new) port.
-    expect(copilotRouteForModel('gemini36f')).toBeUndefined();
+    expect(copilotRouteForModel('gemini31p')).toBeUndefined();
 
     const port = await installModels(GPT_56);
     await refreshRuntimeModelRegistry();
@@ -458,13 +459,13 @@ describe('runtime model registry', () => {
   });
 
   it('returns the last-known route catalogue when rediscovery fails', async () => {
-    await installModels(GEMINI_FLASH);
+    await installModels(GEMINI_PRO);
     await refreshRuntimeModelRegistry();
 
     invalidateRuntimeModelRegistry();
     await installPlatform({}, { languageModel: failingDiscoveryPort() });
 
-    expect((await discoveredCopilotRoutes()).get('gemini36f')?.access).toBe(
+    expect((await discoveredCopilotRoutes()).get('gemini31p')?.access).toBe(
       'allowed',
     );
   });
@@ -475,25 +476,25 @@ describe('Copilot route in model pickers', () => {
   afterEach(resetModelCaches);
 
   it('shows a base model available both directly and through Copilot exactly once', async () => {
-    const port = languageModelPort([GEMINI_FLASH]);
+    const port = languageModelPort([GEMINI_PRO]);
     await installPlatform(
       {
         globalState: {
-          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini36f'],
+          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
         },
       },
       { languageModel: port },
     );
 
     const options = await computeModelOptionsData(
-      ['gemini36f'],
+      ['gemini31p'],
       modelOptionsAccess({ secrets: googleKeySecrets() }),
     );
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
       expect.objectContaining({
-        value: 'gemini36f',
+        value: 'gemini31p',
         availability: 'copilot-access',
         availabilityLabel: 'Copilot subscription',
         routeLabel: 'Via Copilot',
@@ -506,7 +507,7 @@ describe('Copilot route in model pickers', () => {
   });
 
   it('never appends route rows to the visible model list', async () => {
-    const port = languageModelPort([GEMINI_FLASH, GPT_56]);
+    const port = languageModelPort([GEMINI_PRO, GPT_56]);
     await installPlatform({}, { languageModel: port });
 
     const options = await computeModelOptionsData(
@@ -519,12 +520,12 @@ describe('Copilot route in model pickers', () => {
 
   it('reports consent-required on the base row without adding entries', async () => {
     const port = languageModelPort([
-      { ...GEMINI_FLASH, access: 'consent-required' },
+      { ...GEMINI_PRO, access: 'consent-required' },
     ]);
     await installPlatform(
       {
         globalState: {
-          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini36f'],
+          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
         },
       },
       { languageModel: port },
@@ -532,13 +533,13 @@ describe('Copilot route in model pickers', () => {
 
     const options = await computeModelOptionsData(
       undefined,
-      modelOptionsAccess({ visibleModels: ['gemini36f'] }),
+      modelOptionsAccess({ visibleModels: ['gemini31p'] }),
     );
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
       expect.objectContaining({
-        value: 'gemini36f',
+        value: 'gemini31p',
         availability: 'copilot-consent-required',
         availabilityLabel: 'Copilot approval required',
         disabled: true,
@@ -547,27 +548,25 @@ describe('Copilot route in model pickers', () => {
   });
 
   it('reports an unavailable route instead of falling back to a direct key', async () => {
-    const port = languageModelPort([
-      { ...GEMINI_FLASH, access: 'unavailable' },
-    ]);
+    const port = languageModelPort([{ ...GEMINI_PRO, access: 'unavailable' }]);
     await installPlatform(
       {
         globalState: {
-          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini36f'],
+          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
         },
       },
       { languageModel: port },
     );
 
     const options = await computeModelOptionsData(
-      ['gemini36f'],
+      ['gemini31p'],
       modelOptionsAccess({ secrets: googleKeySecrets() }),
     );
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
       expect.objectContaining({
-        value: 'gemini36f',
+        value: 'gemini31p',
         availability: 'copilot-unavailable',
         availabilityLabel: 'Copilot unavailable',
         disabled: true,
@@ -576,17 +575,17 @@ describe('Copilot route in model pickers', () => {
   });
 
   it('leaves non-preferred models on their ordinary routes', async () => {
-    const port = languageModelPort([GEMINI_FLASH]);
+    const port = languageModelPort([GEMINI_PRO]);
     await installPlatform({}, { languageModel: port });
 
     const options = await computeModelOptionsData(
-      ['gemini36f'],
+      ['gemini31p'],
       modelOptionsAccess({ secrets: googleKeySecrets() }),
     );
 
     expect(options[0]).toEqual(
       expect.objectContaining({
-        value: 'gemini36f',
+        value: 'gemini31p',
         availability: 'provider-key',
       }),
     );
