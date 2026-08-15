@@ -177,11 +177,17 @@ export class ProgressApiKeyRetryController {
         return noRetryResult();
       }
       const routingBefore = this.routingSnapshot();
-      const prepared = await this.applyOwnApiKeyRouting(request);
-      const retried = await this.deps.triggerRetry(
-        request.stream,
-        request.requestId,
-      );
+      const prepared = await this.applyOwnApiKeyRouting(request, routingBefore);
+      let retried = false;
+      try {
+        retried = await this.deps.triggerRetry(
+          request.stream,
+          request.requestId,
+        );
+      } catch (error) {
+        await this.restoreAfterError(routingBefore, prepared);
+        throw error;
+      }
       if (!retried) {
         await this.restoreOwnApiKeyRouting(routingBefore, prepared);
         return noRetryResult();
@@ -255,73 +261,87 @@ export class ProgressApiKeyRetryController {
 
   private async applyOwnApiKeyRouting(
     request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
+    before: ProgressApiRoutingSnapshot,
   ): Promise<ProgressApiKeyPreparationResult> {
-    // Disable relay (included access) so the retry uses the user's own key,
-    // not the relay JWT, whenever the switch promises "your own API key".
-    // Both relay and subscription exhaustion fall through to a direct handler,
-    // which otherwise may still prefer included access over the stored key.
-    // A direct-key failure leaves relay untouched for other providers.
+    // Each switch is recorded right after its setter lands, so a setter that
+    // throws midway rolls back exactly the prefix that succeeded instead of
+    // stranding global toggles the retry will never use.
     let disabledIncludedModelAccess = false;
-    if (this.shouldDisableIncludedModelAccess(request)) {
-      await this.deps.setUseIncludedModelAccess(false);
-      this.deps.invalidateModelOptionsCache();
-      disabledIncludedModelAccess = true;
-    }
-
-    // The subscription quota is exhausted, so turn off the preference and let
-    // Codex-eligible models route through the now-usable OpenAI key on retry.
-    // Remark: prefer-off sticks after the quota resets — users may forget to
-    // re-enable it. A temporary / resume-on-reset override would be kinder.
     let disabledChatGptSubscription = false;
-    if (
-      this.deps.getPreferChatGptSubscription() &&
-      this.isSubscriptionExhausted(request)
-    ) {
-      await this.deps.setPreferChatGptSubscription(false);
-      this.deps.invalidateModelOptionsCache();
-      disabledChatGptSubscription = true;
-    }
-
-    // Any API-key-based coding-plan subscription (GLM Coding Plan, Kimi Code)
-    // whose quota is exhausted: turn off its toggle so requests re-route through
-    // the regular pay-as-you-go endpoint on retry.
     const disabledCodingPlans: ExhaustionReason[] = [];
-    for (const toggle of this.codingPlanToggles) {
-      const planExhaustion =
-        request.exhaustionReason === toggle.exhaustionReason;
-      // An `upstream-credit` failure on a dual-backend Kimi model means the
-      // broken credential is the `kimiCode` key, but the forwarded SDK
-      // provider is `moonshot`. The coding-plan quota reason does not match,
-      // so without this branch the "Prefer Kimi Code" switch would stay on
-      // and the retry rebuild would re-select the exhausted coding endpoint
-      // instead of the newly entered Moonshot key.
-      //
-      // Deliberately conservative: do not consult the live route resolver
-      // here. The failed handler was dispatched under the persisted
-      // `ModelHandlerKimi` compatibility key, and the retry rebuild pins that
-      // same key, so a later OpenRouter preference change cannot make the
-      // rebuild take a non-coding route. The request's
-      // `kimiCodeRoutedOnFailure` flag is captured from that failed handler,
-      // so unrelated `kimi3` failures through OpenRouter, Moonshot, or the
-      // relay leave the preference untouched.
-      const kimiCodeCreditReroute =
-        toggle.exhaustionReason === 'kimi-code-subscription' &&
-        request.exhaustionReason === 'upstream-credit' &&
-        request.kimiCodeRoutedOnFailure === true &&
-        this.isDualBackendKimiCodeModel(request.model);
-      if (toggle.getEnabled() && (planExhaustion || kimiCodeCreditReroute)) {
-        await toggle.setEnabled(false);
+    try {
+      // Disable relay (included access) so the retry uses the user's own key,
+      // not the relay JWT, whenever the switch promises "your own API key".
+      // Both relay and subscription exhaustion fall through to a direct handler,
+      // which otherwise may still prefer included access over the stored key.
+      // A direct-key failure leaves relay untouched for other providers.
+      if (this.shouldDisableIncludedModelAccess(request)) {
+        await this.deps.setUseIncludedModelAccess(false);
+        disabledIncludedModelAccess = true;
         this.deps.invalidateModelOptionsCache();
-        disabledCodingPlans.push(toggle.exhaustionReason);
       }
-    }
 
-    return {
-      proceeded: true,
-      disabledIncludedModelAccess,
-      disabledChatGptSubscription,
-      disabledCodingPlans,
-    };
+      // The subscription quota is exhausted, so turn off the preference and let
+      // Codex-eligible models route through the now-usable OpenAI key on retry.
+      // Remark: prefer-off sticks after the quota resets — users may forget to
+      // re-enable it. A temporary / resume-on-reset override would be kinder.
+      if (
+        this.deps.getPreferChatGptSubscription() &&
+        this.isSubscriptionExhausted(request)
+      ) {
+        await this.deps.setPreferChatGptSubscription(false);
+        disabledChatGptSubscription = true;
+        this.deps.invalidateModelOptionsCache();
+      }
+
+      // Any API-key-based coding-plan subscription (GLM Coding Plan, Kimi Code)
+      // whose quota is exhausted: turn off its toggle so requests re-route through
+      // the regular pay-as-you-go endpoint on retry.
+      for (const toggle of this.codingPlanToggles) {
+        const planExhaustion =
+          request.exhaustionReason === toggle.exhaustionReason;
+        // An `upstream-credit` failure on a dual-backend Kimi model means the
+        // broken credential is the `kimiCode` key, but the forwarded SDK
+        // provider is `moonshot`. The coding-plan quota reason does not match,
+        // so without this branch the "Prefer Kimi Code" switch would stay on
+        // and the retry rebuild would re-select the exhausted coding endpoint
+        // instead of the newly entered Moonshot key.
+        //
+        // Deliberately conservative: do not consult the live route resolver
+        // here. The failed handler was dispatched under the persisted
+        // `ModelHandlerKimi` compatibility key, and the retry rebuild pins that
+        // same key, so a later OpenRouter preference change cannot make the
+        // rebuild take a non-coding route. The request's
+        // `kimiCodeRoutedOnFailure` flag is captured from that failed handler,
+        // so unrelated `kimi3` failures through OpenRouter, Moonshot, or the
+        // relay leave the preference untouched.
+        const kimiCodeCreditReroute =
+          toggle.exhaustionReason === 'kimi-code-subscription' &&
+          request.exhaustionReason === 'upstream-credit' &&
+          request.kimiCodeRoutedOnFailure === true &&
+          this.isDualBackendKimiCodeModel(request.model);
+        if (toggle.getEnabled() && (planExhaustion || kimiCodeCreditReroute)) {
+          await toggle.setEnabled(false);
+          disabledCodingPlans.push(toggle.exhaustionReason);
+          this.deps.invalidateModelOptionsCache();
+        }
+      }
+
+      return {
+        proceeded: true,
+        disabledIncludedModelAccess,
+        disabledChatGptSubscription,
+        disabledCodingPlans,
+      };
+    } catch (error) {
+      await this.restoreAfterError(before, {
+        proceeded: true,
+        disabledIncludedModelAccess,
+        disabledChatGptSubscription,
+        disabledCodingPlans,
+      });
+      throw error;
+    }
   }
 
   /** Apply Copilot fallback routing only for the duration of a launch attempt. */
@@ -338,17 +358,19 @@ export class ProgressApiKeyRetryController {
         return false;
       }
       const before = this.routingSnapshot();
-      const prepared = await this.applyOwnApiKeyRouting(request);
+      const prepared = await this.applyOwnApiKeyRouting(request, before);
       // The user chose "use own API key" for this retry. The direct-route
       // override travels only with the replacement launch; the standing
       // preference remains visible to concurrent and future runs.
       let started = false;
       try {
         started = await start('direct');
-        return started;
-      } finally {
-        if (!started) await this.restoreOwnApiKeyRouting(before, prepared);
+      } catch (error) {
+        await this.restoreAfterError(before, prepared);
+        throw error;
       }
+      if (!started) await this.restoreOwnApiKeyRouting(before, prepared);
+      return started;
     });
   }
 
@@ -369,32 +391,57 @@ export class ProgressApiKeyRetryController {
     before: ProgressApiRoutingSnapshot,
     prepared: ProgressApiKeyPreparationResult,
   ): Promise<void> {
-    const restores: Promise<void>[] = [];
-    if (prepared.disabledIncludedModelAccess) {
-      restores.push(
-        this.deps.setUseIncludedModelAccess(before.useIncludedModelAccess),
-      );
-    }
-    if (prepared.disabledChatGptSubscription) {
-      restores.push(
-        this.deps.setPreferChatGptSubscription(
-          before.preferChatGptSubscription,
-        ),
-      );
-    }
-    for (const reason of prepared.disabledCodingPlans) {
+    // Roll back in reverse application order: the coding-plan toggles
+    // switched last, so they come back first. Every restore is attempted
+    // even when an earlier one fails; the first failure rethrows once the
+    // rest have run (compensation per the error-handling checklist's L2).
+    const restores: Array<() => Promise<void>> = [];
+    for (const reason of [...prepared.disabledCodingPlans].reverse()) {
       const toggle = this.codingPlanToggles.find(
         (candidate) => candidate.exhaustionReason === reason,
       );
       if (toggle)
-        restores.push(
+        restores.push(() =>
           (toggle.restoreEnabled ?? toggle.setEnabled)(
             before.codingPlans.get(reason) ?? false,
           ),
         );
     }
-    await Promise.all(restores);
+    if (prepared.disabledChatGptSubscription) {
+      restores.push(() =>
+        this.deps.setPreferChatGptSubscription(
+          before.preferChatGptSubscription,
+        ),
+      );
+    }
+    if (prepared.disabledIncludedModelAccess) {
+      restores.push(() =>
+        this.deps.setUseIncludedModelAccess(before.useIncludedModelAccess),
+      );
+    }
+    let firstFailure: unknown;
+    for (const restore of restores) {
+      try {
+        await restore();
+      } catch (error) {
+        firstFailure ??= error;
+      }
+    }
+    if (firstFailure !== undefined) throw firstFailure;
     if (restores.length > 0) this.deps.invalidateModelOptionsCache();
+  }
+
+  /**
+   * Roll back a routing switch that an in-flight failure already doomed.
+   * The toggle restore is best-effort here: its failure must not mask the
+   * original error the caller can act on, and the state a failed rollback
+   * leaves is the same stranded one an unguarded throw would have left.
+   */
+  private async restoreAfterError(
+    before: ProgressApiRoutingSnapshot,
+    prepared: ProgressApiKeyPreparationResult,
+  ): Promise<void> {
+    await this.restoreOwnApiKeyRouting(before, prepared).catch(() => {});
   }
 
   private async hasAnyUsableKey(
