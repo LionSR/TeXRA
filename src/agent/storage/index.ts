@@ -34,10 +34,10 @@ export {
 export {
   type AgentExecutionListingEntry,
   type ExecutionListingEntry,
+  createLatexExecutionDiscovery,
   listExecutions,
   deleteExecution,
   deleteAllExecutions,
-  isAgentRunEntry,
   isUserVisibleExecution,
 } from './executionListing';
 export {

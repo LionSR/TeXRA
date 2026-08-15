@@ -21,6 +21,7 @@ import {
   getVisibleAgents,
   loadAgents,
 } from '@agent/index';
+import { agentResponseTextConnector } from '@agent/runtime';
 import type { RetryResult } from '@agent/runtime/HostInteractions';
 import {
   defaultSession,
@@ -29,7 +30,7 @@ import {
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
-import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { platform, tryPlatform } from '@platform/platform';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
@@ -444,7 +445,9 @@ if (HARNESS_MEMORY_FILES.length > 0) {
 }
 const harnessRuntimeSession = initializeDefaultSession({
   transcripts: await StreamLogStore.open(),
-  responseTextProcessing: texraResponseTextProcessing,
+  responseTextProcessing: createTexraResponseTextProcessing(
+    agentResponseTextConnector,
+  ),
 });
 harnessRuntimeSession.setApprovalPolicy(HARNESS_INITIAL_APPROVAL_POLICY);
 const harnessFollowUpLease = defaultSession().followUps.claimLive(

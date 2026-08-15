@@ -5,6 +5,7 @@ import {
 import { classifyAgentError } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
+import type { ResponseTextConnector } from '@latex/texraResponseTextProcessing';
 import * as logger from '@logger/logUtils';
 
 interface ConnectionResult {
@@ -74,3 +75,13 @@ export async function bestConnectionMethod(
     return DEFAULT_RESULT;
   }
 }
+
+/**
+ * Agent-owned connector strategy for the latex response-text policy. Hosts
+ * inject this through the latex-owned factory; it keeps the helper-model call
+ * out of the latex layer.
+ */
+export const agentResponseTextConnector: ResponseTextConnector = async (
+  previous,
+  next,
+) => (await bestConnectionMethod(previous, next)).connector;

@@ -11,6 +11,7 @@ import { loadAgents } from '@agent/index';
 import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import {
+  agentResponseTextConnector,
   defaultSession,
   initializeDefaultSession,
   initializePolishModel,
@@ -64,7 +65,7 @@ import {
 import { migrateLegacyVscodeStorage } from '@frontend/vscode/sharedStorageRoot';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
-import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import * as logger from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
@@ -269,7 +270,9 @@ export async function activate(context: vscode.ExtensionContext) {
   }
   const runtimeSession = initializeDefaultSession({
     transcripts,
-    responseTextProcessing: texraResponseTextProcessing,
+    responseTextProcessing: createTexraResponseTextProcessing(
+      agentResponseTextConnector,
+    ),
   });
   await runtimeSession.waitUntilReady();
   runtimeSession.setApprovalPolicy(

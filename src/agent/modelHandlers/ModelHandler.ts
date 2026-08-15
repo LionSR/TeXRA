@@ -49,10 +49,7 @@ import type {
   TokenCountOptions,
   TokenValidationResult,
 } from '@agent/types/ModelHandlerContracts';
-import {
-  createNeutralResponseTextProcessing,
-  type ResponseTextProcessing,
-} from '@agent/runtime/responseTextProcessing';
+import { createNeutralResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
 import { hasConfigurableReasoningEffort } from '@agent/modelHandlers/support/reasoningEffort';
 import type { ServerToolExtractionResult } from '@agent/types/ServerTools';
 import {
@@ -64,6 +61,7 @@ import {
   isUserAbort,
 } from '@common/errors/sdkError/errorPatterns';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import {
   allowsModelRelay,
   resolveDirectModelApiKeyProvider,

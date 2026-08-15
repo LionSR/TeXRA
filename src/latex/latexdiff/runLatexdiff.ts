@@ -29,6 +29,7 @@ import {
   discoverLatestExecutionOutputs,
   scanRunDirForOutputs,
 } from './outputDiscovery';
+import type { LatexExecutionDiscoveryPort } from './executionDiscovery';
 import type { MathMarkupOption } from './mathMarkup';
 import type {
   DiffProgressReporter,
@@ -61,6 +62,8 @@ export interface RunLatexdiffForExecutionParams {
   readonly agent: string;
   readonly model: string;
   readonly inputFile: string;
+  /** Agent-owned execution listing injected by hosts (metadata auto-discovery). */
+  readonly executionDiscovery: LatexExecutionDiscoveryPort;
   readonly outputFiles?: string[];
   /** Execution to scope output discovery to (progress-toolbar invocations). */
   readonly runId?: string | null;
@@ -90,6 +93,7 @@ export async function runLatexdiffForExecution(
     agent,
     model,
     inputFile,
+    executionDiscovery,
     outputFiles,
     mathMarkup,
     generateBetweenRoundDiffs,
@@ -136,6 +140,7 @@ export async function runLatexdiffForExecution(
   // newer) execution with the same agent/model/input.
   if (!outputsByRound && !runId) {
     const discovered = await discoverLatestExecutionOutputs(
+      executionDiscovery,
       {
         agent,
         model,

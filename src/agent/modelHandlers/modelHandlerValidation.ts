@@ -11,8 +11,8 @@ import type {
   ExtractResponseResult,
   SdkToolCall,
 } from '@agent/types/ModelHandlerContracts';
-import type { ResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
+import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type {
   FileLocation,
   MediaAttachmentKind,

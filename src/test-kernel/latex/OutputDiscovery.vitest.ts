@@ -3,6 +3,10 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type {
+  LatexAgentRunEntry,
+  LatexExecutionDiscoveryPort,
+} from '@latex/latexdiff/executionDiscovery';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { installPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
@@ -10,20 +14,12 @@ import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 // `discoverLatestExecutionOutputs` matches a run by agent/model/input and then
 // reads its per-round outputs. Headless `texra run` executions persist those
 // outputs on disk but never write the progress-view stream-tab snapshot, so the
-// snapshot read comes back empty. These mocks reproduce that case: a matching
+// snapshot read comes back empty. These fakes reproduce that case: a matching
 // execution whose stream-tab snapshot is empty while its run directory holds
 // r0/r1 outputs on disk (the same source the `--run-id` path scans).
 const mocks = vi.hoisted(() => ({
-  listExecutions: vi.fn(),
-  getExecutionStore: vi.fn(),
   findRunDir: vi.fn(),
   readOutputFiles: vi.fn(),
-}));
-
-vi.mock('@agent/storage', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage')>()),
-  listExecutions: mocks.listExecutions,
-  getExecutionStore: mocks.getExecutionStore,
 }));
 
 vi.mock('@utils/files/runStorageFs', async (importActual) => ({
@@ -45,17 +41,27 @@ vi.mock('@transcript', async (importActual) => {
 const { discoverLatestExecutionOutputs } =
   await import('@latex/latexdiff/outputDiscovery');
 
-function matchingExecution(id: string) {
+function matchingExecution(id: string): LatexAgentRunEntry {
   return {
-    kind: 'run',
-    identity: { kind: 'agent', agent: 'polish' },
     id,
     timestamp: '2026-01-01T00:00:00.000Z',
-    record: {
-      agent: 'polish',
-      model: 'deepseek',
-      inputFiles: ['paper.tex'],
+    agent: 'polish',
+    model: 'deepseek',
+    inputFiles: ['paper.tex'],
+  };
+}
+
+function discoveryWith(entries: readonly LatexAgentRunEntry[]): {
+  discovery: LatexExecutionDiscoveryPort;
+  readStreamId: ReturnType<typeof vi.fn>;
+} {
+  const readStreamId = vi.fn(async () => undefined);
+  return {
+    discovery: {
+      listAgentRuns: async () => entries,
+      readStreamId,
     },
+    readStreamId,
   };
 }
 
@@ -71,9 +77,6 @@ describe('discoverLatestExecutionOutputs', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     await installPlatform({}, { fs: nodeFilesystem });
-    mocks.getExecutionStore.mockReturnValue({
-      readMeta: async () => null,
-    } as never);
     mocks.readOutputFiles.mockResolvedValue(undefined);
   });
 
@@ -91,12 +94,14 @@ describe('discoverLatestExecutionOutputs', () => {
       );
     }
 
-    mocks.listExecutions.mockResolvedValue([
-      matchingExecution('exec-headless'),
-    ]);
+    const { discovery } = discoveryWith([matchingExecution('exec-headless')]);
     mocks.findRunDir.mockResolvedValue(runDir);
 
-    const result = await discoverLatestExecutionOutputs(MATCHING_QUERY, 'test');
+    const result = await discoverLatestExecutionOutputs(
+      discovery,
+      MATCHING_QUERY,
+      'test',
+    );
 
     expect(result?.executionId).toBe('exec-headless');
     expect(
@@ -108,21 +113,21 @@ describe('discoverLatestExecutionOutputs', () => {
   });
 
   it('reads outputs under the registered stream identity instead of rebuilding it from configuration (#9590 A1)', async () => {
-    mocks.listExecutions.mockResolvedValue([
+    const { discovery, readStreamId } = discoveryWith([
       matchingExecution('exec-registered'),
     ]);
     // Registered under a stream the agent/model config would NOT derive.
-    mocks.getExecutionStore.mockReturnValue({
-      readMeta: async () => ({
-        timestamp: '2026-01-01T00:00:00.000Z',
-        streamId: 'polish@earlierModel#exec-registered',
-      }),
-    } as never);
+    readStreamId.mockResolvedValue('polish@earlierModel#exec-registered');
     const rounds = { 0: [] };
     mocks.readOutputFiles.mockResolvedValue(rounds);
 
-    const result = await discoverLatestExecutionOutputs(MATCHING_QUERY, 'test');
+    const result = await discoverLatestExecutionOutputs(
+      discovery,
+      MATCHING_QUERY,
+      'test',
+    );
 
+    expect(readStreamId).toHaveBeenCalledWith('exec-registered');
     expect(mocks.readOutputFiles).toHaveBeenCalledWith(
       'polish@earlierModel#exec-registered',
     );
@@ -133,10 +138,14 @@ describe('discoverLatestExecutionOutputs', () => {
   it('returns null when neither the snapshot nor the run directory has outputs', async () => {
     const emptyDir = await makeTempDir('texra-latexdiff-', tempDirs);
 
-    mocks.listExecutions.mockResolvedValue([matchingExecution('exec-empty')]);
+    const { discovery } = discoveryWith([matchingExecution('exec-empty')]);
     mocks.findRunDir.mockResolvedValue(emptyDir);
 
-    const result = await discoverLatestExecutionOutputs(MATCHING_QUERY, 'test');
+    const result = await discoverLatestExecutionOutputs(
+      discovery,
+      MATCHING_QUERY,
+      'test',
+    );
 
     expect(result).toBeNull();
   });
