@@ -28,7 +28,6 @@ export const prSubscriptionRegistry = new StreamSubscriptionRegistry<
   name: 'PRStreamSubscriptionRegistry',
   source: SharedPRPollingSource,
   keyOf: prKeyToString,
-  bindingsChangedEvent: 'prSubscriptionBindingsChanged',
 });
 
 export const repoSubscriptionRegistry = new StreamSubscriptionRegistry<
@@ -38,7 +37,6 @@ export const repoSubscriptionRegistry = new StreamSubscriptionRegistry<
   name: 'RepoStreamSubscriptionRegistry',
   source: SharedRepoPollingSource,
   keyOf: repoKeyToString,
-  bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
 });
 
 export const issueSubscriptionRegistry = new StreamSubscriptionRegistry<
@@ -48,5 +46,4 @@ export const issueSubscriptionRegistry = new StreamSubscriptionRegistry<
   name: 'IssueStreamSubscriptionRegistry',
   source: SharedIssuePollingSource,
   keyOf: issueKeyToString,
-  bindingsChangedEvent: 'issueSubscriptionBindingsChanged',
 });

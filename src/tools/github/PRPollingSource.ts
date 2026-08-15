@@ -11,7 +11,6 @@
  * layer above.
  */
 
-import { appSignals } from '@eventBus/AppSignals';
 import type { Disposable } from '@platform/interfaces';
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -261,10 +260,6 @@ export class PRPollingSource extends PollingSourceBase<
       onEvent,
       minAnnotationLevel,
     );
-  }
-
-  protected emitKeysChangedEvent(keys: readonly string[]): void {
-    appSignals.emit('prSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(

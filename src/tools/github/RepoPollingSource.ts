@@ -36,7 +36,6 @@
 
 import { LRUCache } from 'lru-cache';
 
-import { appSignals } from '@eventBus/AppSignals';
 import type { Disposable } from '@platform/interfaces';
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -173,10 +172,6 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
   ): Disposable {
     const key = repoKeyToString(input);
     return this.register(key, () => createInitialState(input), onEvent);
-  }
-
-  protected emitKeysChangedEvent(keys: readonly RepoKey[]): void {
-    appSignals.emit('repoSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(

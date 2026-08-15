@@ -50,10 +50,6 @@ class TestPollingSource extends PollingSourceBase<
   protected formatErrorEvent(): string {
     return 'subscription error';
   }
-
-  protected emitKeysChangedEvent(): void {
-    // No-op: this test double doesn't need key-change events.
-  }
 }
 
 describe('DedupedResource', () => {
