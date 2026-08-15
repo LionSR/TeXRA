@@ -3,11 +3,7 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 import { resolveModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 
-import {
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
-  kimiCodeWireModelId,
-} from '@model/kimiCodeSubscriptionRouting';
+import { kimiCodeWireModelId } from '@model/kimiCodeSubscriptionRouting';
 import {
   allowsModelRelay,
   resolveModelApiKeyProvider,
@@ -16,6 +12,12 @@ import {
 } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { SETUP_MODEL_BY_PROVIDER } from '@model/setupModelDefaults';
+import {
+  isKimiCodeExclusiveModel,
+  isKimiCodeExclusiveRetryModel,
+  isKimiCodeSubscriptionRetryBlocked,
+  isKimiSubscriptionEligible,
+} from '@shared/model/kimiCodeRetryGate';
 
 describe('Kimi Code model registry', () => {
   it.each([
@@ -51,6 +53,36 @@ describe('Kimi Code model registry', () => {
   it('resolves plan aliases through the runtime registry like any model', () => {
     expect(getRuntimeModelConfig('kimiCoding')).toBe(MODEL_CONFIGS.kimiCoding);
     expect(getRuntimeModelConfig('kimi25T')).toBe(MODEL_CONFIGS.kimi25T);
+  });
+});
+
+describe('Kimi Code exclusivity single-source', () => {
+  it('keeps the retry model-id gate aligned with the shared field predicate', () => {
+    for (const [id, config] of Object.entries(MODEL_CONFIGS)) {
+      expect(isKimiCodeExclusiveRetryModel(id)).toBe(
+        isKimiCodeExclusiveModel(config),
+      );
+    }
+    expect(isKimiCodeExclusiveRetryModel(undefined)).toBe(false);
+    expect(isKimiCodeExclusiveRetryModel('not-a-registered-model')).toBe(false);
+  });
+
+  it('blocks the personal-key switch only for exclusive plan-quota exhaustion', () => {
+    expect(
+      isKimiCodeSubscriptionRetryBlocked(
+        'kimiCoding',
+        'kimi-code-subscription',
+      ),
+    ).toBe(true);
+    expect(
+      isKimiCodeSubscriptionRetryBlocked('kimiCoding', 'upstream-credit'),
+    ).toBe(false);
+    expect(
+      isKimiCodeSubscriptionRetryBlocked('kimi3', 'kimi-code-subscription'),
+    ).toBe(false);
+    expect(
+      isKimiCodeSubscriptionRetryBlocked(undefined, 'kimi-code-subscription'),
+    ).toBe(false);
   });
 });
 

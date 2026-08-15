@@ -1,8 +1,9 @@
-import { isApiProvider, type ApiProvider } from './apiProviders';
 import {
   isKimiCodeExclusiveModel,
   type KimiSubscriptionModelFields,
-} from './kimiCodeSubscriptionRouting';
+} from '@shared/model/kimiCodeRetryGate';
+
+import { isApiProvider, type ApiProvider } from './apiProviders';
 
 import type { ModelConfig } from 'llm-zoo';
 
