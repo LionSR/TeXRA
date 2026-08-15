@@ -403,10 +403,6 @@ function runSupabaseQuery(args, options = {}) {
   return { status: result.status ?? 1, output };
 }
 
-function isMissingStoragePreflightFailure(output) {
-  return output.includes(STORAGE_PREFLIGHT_MISSING_MARKER);
-}
-
 function applyRemoteAgentsSql() {
   const dbUrl = process.env.SUPABASE_DB_URL;
   const projectRef = process.env.SUPABASE_PROJECT_REF;
@@ -422,14 +418,21 @@ function applyRemoteAgentsSql() {
       // supabase/.temp/project-ref unless SUPABASE_PROJECT_ID is set. Pass the
       // requested ref through that env var instead of rewriting the checkout's
       // link file, so there is nothing to restore even if the process is
-      // killed mid-query (#10316, #10329).
-      queryEnv.SUPABASE_PROJECT_ID = projectRef;
+      // killed mid-query (#10316, #10329). The CLI trims the link file but
+      // validates the env var as-is, so normalize padding here (#10408).
+      queryEnv.SUPABASE_PROJECT_ID = projectRef.trim();
     } else if (!existsSync(projectRefFile)) {
       console.error(
         'sync-remote-agents: set SUPABASE_DB_URL or SUPABASE_PROJECT_REF, ' +
           'or run `supabase link` in this checkout.',
       );
       return 1;
+    } else {
+      // Falling back to the checkout's link file: the CLI ranks
+      // SUPABASE_PROJECT_ID above supabase/.temp/project-ref, so scrub any
+      // ambient value from the inherited env to keep the link file
+      // authoritative (#10407). spawnSync drops env keys set to undefined.
+      queryEnv.SUPABASE_PROJECT_ID = undefined;
     }
     args.push('--linked');
   }
@@ -446,7 +449,21 @@ function applyRemoteAgentsSql() {
         env: queryEnv,
       });
       if (preflight.status !== 0) {
-        if (isMissingStoragePreflightFailure(preflight.output)) {
+        // The marker text is embedded verbatim in the generated SQL (it is
+        // the RAISE string literal), so a bare substring match over the
+        // combined output could fire on an echoed query instead of the
+        // raised exception. Only classify when the marker appears on a line
+        // that also carries the Postgres ERROR: severity prefix, which is
+        // how both the pgx path and the Management API report the RAISE
+        // (#10409).
+        const raisedMissingStorage = preflight.output
+          .split('\n')
+          .some(
+            (line) =>
+              line.includes('ERROR:') &&
+              line.includes(STORAGE_PREFLIGHT_MISSING_MARKER),
+          );
+        if (raisedMissingStorage) {
           console.error(
             'sync-remote-agents: Storage preflight failed; catalog metadata was NOT applied. ' +
               'Upload the missing YAML prompt bodies to the agent-configs bucket ' +
