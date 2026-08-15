@@ -1,5 +1,5 @@
 // Node imports
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 // Third-party imports
@@ -12,17 +12,8 @@ import {
   moveEntryIfAbsent,
 } from '@platform/defaults/legacyDataMigration';
 import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
+import { pathExists } from '@test/support/fsTestUtils';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
-    throw error;
-  }
-}
 
 /** Writes `relativePath: contents` files under `root`, creating parents. */
 async function writeEntries(

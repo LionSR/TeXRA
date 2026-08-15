@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, realpath, symlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -10,6 +9,7 @@ import {
   withWorkspacePathArg,
 } from '@desktop/shared/workspacePath';
 import { resolveWorkspacePath } from '@desktop/main/platform/paths';
+import { withTempDir } from '@test/support/tempDirPlatform';
 
 describe('desktop workspace path', () => {
   it('resolves CLI workspace path before stored workspace', () => {
@@ -32,8 +32,7 @@ describe('desktop workspace path', () => {
   });
 
   it('uses the physical path for a symlinked workspace', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'texra-desktop-workspace-'));
-    try {
+    await withTempDir('texra-desktop-workspace-', async (root) => {
       const target = join(root, 'target');
       const link = join(root, 'link');
       await mkdir(target);
@@ -44,9 +43,7 @@ describe('desktop workspace path', () => {
           resolveWorkspacePath({ argv: ['--texra-workspace-path', link] })!,
         ),
       ).toBe(await realpath(target));
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('does not treat empty workspace flags as an opened workspace', () => {

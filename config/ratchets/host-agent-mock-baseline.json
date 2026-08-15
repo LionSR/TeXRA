@@ -2,26 +2,6 @@
   "semantics": "Distinct (file, form, specifier) mock() and doMock() call sites (on vi or on a createModuleMocks() recorder) in host-side (CLI + desktop) test-kernel suites (src/test-kernel/cli/**, src/test-kernel/desktop/**) that mock an internal @agent/* module specifier. Each site pins @agent's current internal module layout from outside src/agent, per issue #7684 QA-2 / #9731. The ratchet fails on any live tuple absent from this baseline (new edge) and on any baseline tuple with no live site (stale headroom); regenerating to remove stale entries is welcome and should shrink this file.",
   "sites": [
     {
-      "file": "src/test-kernel/cli/AgentResolution.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/index"
-    },
-    {
-      "file": "src/test-kernel/cli/AgentsCommand.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/index"
-    },
-    {
-      "file": "src/test-kernel/cli/AgentsRunCommand.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/index"
-    },
-    {
-      "file": "src/test-kernel/cli/AgentsRunCommand.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/storage"
-    },
-    {
       "file": "src/test-kernel/cli/ChatDefaults.vitest.ts",
       "form": "mock",
       "specifier": "@agent/storage"
@@ -87,16 +67,6 @@
       "specifier": "@agent/index"
     },
     {
-      "file": "src/test-kernel/cli/MultiAgentRunCommand.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/index"
-    },
-    {
-      "file": "src/test-kernel/cli/MultiAgentRunCommand.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/storage"
-    },
-    {
       "file": "src/test-kernel/cli/OnboardingGate.vitest.ts",
       "form": "mock",
       "specifier": "@agent/storage"
@@ -140,11 +110,6 @@
       "file": "src/test-kernel/cli/TuiHostInteractionsCancelForStream.vitest.ts",
       "form": "mock",
       "specifier": "@agent/runtime/SessionHandle"
-    },
-    {
-      "file": "src/test-kernel/cli/WorkflowRunCommand.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/index"
     },
     {
       "file": "src/test-kernel/cli/WorkflowRunCommand.vitest.ts",

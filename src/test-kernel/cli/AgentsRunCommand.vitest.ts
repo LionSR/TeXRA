@@ -3,36 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
+import '@test/support/agentCatalogMock';
+import '@test/support/agentStorageFinalizationMock';
+import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
+import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
+import { cliOutputMock } from '@test/support/cliOutputMock';
 
 const mocks = vi.hoisted(() => ({
-  emitCliResult: vi.fn(),
   executeCliToolUseConfig: vi.fn(),
   withExpandedRunInputs: vi.fn(),
-  initLocalCliPlatform: vi.fn(),
   resolveCliLaunchAgent: vi.fn(),
   selectCliRunModel: vi.fn(),
-  writeErrorStderr: vi.fn(),
-  writeTextStderr: vi.fn(),
-}));
-
-vi.mock('@agent/index', () => ({
-  getAgent: vi.fn(),
-  getAgentsByCategory: vi.fn(),
-  getVisibleAgents: vi.fn(),
-  loadAgents: vi.fn(),
-}));
-
-vi.mock('@agent/storage', () => ({
-  finalizeExecution: vi.fn().mockResolvedValue({
-    status: 'durable',
-    terminalStatusPersisted: true,
-    flowRecord: 'deleted',
-  }),
-}));
-
-vi.mock('@cli/runtime/initPlatform', () => ({
-  initLocalCliPlatform: mocks.initLocalCliPlatform,
 }));
 
 vi.mock('@cli/runtime/runModel', () => ({
@@ -42,15 +24,6 @@ vi.mock('@cli/runtime/runModel', () => ({
     renderRunProgress: false,
   })),
   selectCliRunModel: mocks.selectCliRunModel,
-}));
-
-vi.mock('@cli/runtime/logSinks', () => ({
-  writeErrorStderr: mocks.writeErrorStderr,
-  writeTextStderr: mocks.writeTextStderr,
-}));
-
-vi.mock('@cli/commands/_helpers/output', () => ({
-  emitCliResult: mocks.emitCliResult,
 }));
 
 vi.mock('@cli/runtime/agents', async (importOriginal) => ({
@@ -65,13 +38,6 @@ vi.mock('@cli/runtime/runExecution', () => ({
 vi.mock('@cli/runtime/workflowInputs', () => ({
   withExpandedRunInputs: mocks.withExpandedRunInputs,
 }));
-
-function cliContext(overrides: Partial<CliContext> = {}): CliContext {
-  return createTestCliContext({
-    renderRunProgress: true,
-    ...overrides,
-  });
-}
 
 // Hoisted out of each test body — a dynamic import()'s result is cached, so
 // one call here serves every test below.
@@ -118,7 +84,7 @@ describe('CLI agents run command', () => {
   });
 
   it('anchors headless tool-use runs on provided files without polluting display text', async () => {
-    const exitCode = await runToolUseAgent(cliContext(), {
+    const exitCode = await runToolUseAgent(createRunCommandCliContext(), {
       agent: 'chat',
       inputFiles: ['problem.md'],
       contextFiles: ['notes.md'],
@@ -127,12 +93,12 @@ describe('CLI agents run command', () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
+    expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: '/tmp/project' }),
     );
-    expect(mocks.initLocalCliPlatform.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.resolveCliLaunchAgent.mock.invocationCallOrder[0],
-    );
+    expect(
+      cliInitPlatformMock.initLocalCliPlatform.mock.invocationCallOrder[0],
+    ).toBeLessThan(mocks.resolveCliLaunchAgent.mock.invocationCallOrder[0]);
     expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
       'chat',
       'agentsRun',
@@ -161,7 +127,7 @@ describe('CLI agents run command', () => {
     expect(config?.instruction).toContain('- "notes.md"');
     expect(config?.instruction).toContain('Additional user instruction:');
     expect(config?.instruction).toContain('Assess the proof concisely.');
-    const emission = mocks.emitCliResult.mock.calls[0]?.[1];
+    const emission = cliOutputMock.emitCliResult.mock.calls[0]?.[1];
     expect(emission?.json).toEqual({
       category: AgentCategory.ToolUse,
       executionId: 'exec-1',
@@ -205,7 +171,7 @@ describe('CLI agents run command', () => {
           hasMaterializedStdinInput: true,
         }),
     );
-    await runToolUseAgent(cliContext(), {
+    await runToolUseAgent(createRunCommandCliContext(), {
       agent: 'chat',
       inputFiles: ['-'],
       contextFiles: [],
@@ -230,7 +196,7 @@ describe('CLI agents run command', () => {
       },
       exitCode: CliExitCode.Interrupted,
     });
-    const exitCode = await runToolUseAgent(cliContext(), {
+    const exitCode = await runToolUseAgent(createRunCommandCliContext(), {
       agent: 'chat',
       inputFiles: ['problem.md'],
       contextFiles: [],
@@ -238,14 +204,14 @@ describe('CLI agents run command', () => {
     });
 
     expect(exitCode).toBe(CliExitCode.Interrupted);
-    expect(mocks.emitCliResult.mock.calls[0]?.[1].json).toMatchObject({
+    expect(cliOutputMock.emitCliResult.mock.calls[0]?.[1].json).toMatchObject({
       outcome: RUN_OUTCOME.CANCELLED,
     });
   });
 
   it('reports missing instruction before resolving the model', async () => {
     await expect(
-      runToolUseAgent(cliContext(), {
+      runToolUseAgent(createRunCommandCliContext(), {
         agent: 'chat',
         inputFiles: [],
         contextFiles: [],
@@ -254,7 +220,7 @@ describe('CLI agents run command', () => {
       }),
     ).rejects.toThrow('Provide --instruction or --instruction-file.');
 
-    expect(mocks.initLocalCliPlatform).not.toHaveBeenCalled();
+    expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
     expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
     expect(mocks.resolveCliLaunchAgent).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
@@ -278,7 +244,7 @@ describe('CLI agents run command', () => {
     async ({ agent, message }) => {
       mocks.resolveCliLaunchAgent.mockRejectedValueOnce(new Error(message));
       await expect(
-        runToolUseAgent(cliContext(), {
+        runToolUseAgent(createRunCommandCliContext(), {
           agent,
           inputFiles: [],
           contextFiles: [],
@@ -287,7 +253,7 @@ describe('CLI agents run command', () => {
         }),
       ).rejects.toThrow(message);
 
-      expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
+      expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledWith(
         expect.objectContaining({ cwd: '/tmp/project' }),
       );
       expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(

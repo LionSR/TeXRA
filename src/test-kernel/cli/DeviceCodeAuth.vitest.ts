@@ -8,7 +8,8 @@ import {
   requestDeviceAuthorization,
 } from '@cli/runtime/supabaseAuthDeviceCode';
 
-import { jsonResponse } from './fixtures/fetchResponses';
+import { createFakeClock } from '@test/support/asyncTestUtils';
+import { jsonResponse } from '@test/support/fetchTestUtils';
 
 const SESSION_PAYLOAD = {
   access_token: 'access-token',
@@ -47,35 +48,16 @@ function queuedFetch(queue: Array<Response | Error>): {
   return { fetchImpl, calls };
 }
 
-/** Deterministic clock: sleeping advances time, never waits for real timers. */
-function fakeClock(): {
-  now: () => number;
-  sleep: (ms: number) => Promise<void>;
-  sleeps: number[];
-} {
-  let time = 0;
-  const sleeps: number[] = [];
-  return {
-    now: () => time,
-    sleep: (ms: number) => {
-      sleeps.push(ms);
-      time += ms;
-      return Promise.resolve();
-    },
-    sleeps,
-  };
-}
-
 /** Starts a poll over a queued fetch driven by a fresh deterministic clock. */
 function pollWithQueue(
   queue: Array<Response | Error>,
   authorization: Parameters<typeof pollForDeviceSession>[0] = AUTHORIZATION,
 ): {
   completion: ReturnType<typeof pollForDeviceSession>;
-  clock: ReturnType<typeof fakeClock>;
+  clock: ReturnType<typeof createFakeClock>;
   calls: FetchCall[];
 } {
-  const clock = fakeClock();
+  const clock = createFakeClock();
   const { fetchImpl, calls } = queuedFetch(queue);
   return {
     completion: pollForDeviceSession(authorization, {

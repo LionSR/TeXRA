@@ -143,7 +143,7 @@ import {
   type RetryPermission,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { setGoalSessionBashAutoApproval } from '@tools/goal';
 import {
   cleanupAllApprovals,
@@ -151,17 +151,6 @@ import {
   isBashApprovalBypassedForStream,
   proposalApprovals,
 } from '@tools/approval';
-
-function context(overrides: Partial<CliContext> = {}): CliContext {
-  return createTestCliContext({
-    cwd: '/work',
-    mode: 'interactive',
-    approvalPolicy: 'ask',
-    version: 'test',
-    resourcesPath: '/resources',
-    ...overrides,
-  });
-}
 
 function host(): CliRuntimeHost {
   return {
@@ -181,7 +170,7 @@ function tui(
   readonly prepareRetry: ReturnType<typeof vi.fn>;
   readonly dispose: () => void;
 } {
-  const cliContext = context(contextOverrides);
+  const cliContext = createTuiCliContext(contextOverrides);
   defaultSession().setApprovalPolicy(cliContext.approvalPolicy);
   const hostInteractions = createTuiHostInteractions(
     presentationHost,

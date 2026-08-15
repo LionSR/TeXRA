@@ -1,15 +1,14 @@
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile, readdir } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { withTempDir } from '@test/support/tempDirPlatform';
 
 describe('nodeFilesystem.writeFileAtomic', () => {
   it('writes content, overwrites in place, and leaves no temp residue', async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), 'texra-atomic-'));
-    try {
+    await withTempDir('texra-atomic-', async (dir) => {
       const target = path.join(dir, 'flow.json');
 
       await nodeFilesystem.writeFileAtomic(target, Buffer.from('{"step":1}'));
@@ -22,8 +21,6 @@ describe('nodeFilesystem.writeFileAtomic', () => {
       // The temp file must have been renamed away, not abandoned.
       const entries = await readdir(dir);
       expect(entries).toEqual(['flow.json']);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    });
   });
 });

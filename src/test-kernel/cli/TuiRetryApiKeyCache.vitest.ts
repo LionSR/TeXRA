@@ -36,7 +36,7 @@ import {
 } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import type { RetryPermission } from '@shared/schemas';
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { installPlatform } from '@test/support/setupPlatform';
 
 function interactions(): ReturnType<typeof createTuiHostInteractions> {
@@ -45,13 +45,7 @@ function interactions(): ReturnType<typeof createTuiHostInteractions> {
       emit: vi.fn(),
       close: vi.fn(async () => undefined),
     } as unknown as CliRuntimeHost,
-    createTestCliContext({
-      cwd: '/work',
-      mode: 'interactive',
-      approvalPolicy: 'ask',
-      version: 'test',
-      resourcesPath: '/resources',
-    }),
+    createTuiCliContext(),
   );
   onTestFinished(() => tui.dispose?.());
   return tui;

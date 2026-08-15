@@ -14,6 +14,7 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import { jsonResponse } from '@test/support/fetchTestUtils';
 
 const mocks = vi.hoisted(() => ({ readCliAmbientState: vi.fn() }));
 
@@ -153,13 +154,6 @@ describe('buildUpdateCommand / formatUpdateCommand', () => {
 });
 
 describe('fetchLatestCliVersion', () => {
-  function jsonResponse(body: unknown, ok = true): Response {
-    return {
-      ok,
-      json: async () => body,
-    } as unknown as Response;
-  }
-
   it.each([
     {
       name: 'returns the version field from the latest dist-tag',
@@ -168,7 +162,7 @@ describe('fetchLatestCliVersion', () => {
     },
     {
       name: 'returns undefined on non-ok responses',
-      fetchImpl: async () => jsonResponse({ version: '9.9.9' }, false),
+      fetchImpl: async () => jsonResponse({ version: '9.9.9' }, 500),
       expected: undefined,
     },
     {
