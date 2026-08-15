@@ -170,10 +170,10 @@ function settledWorkflowCall(
     case WORKFLOW_CALL_STATUS.CACHED:
       return { ...identity, status: 'cached' };
     case WORKFLOW_CALL_STATUS.SKIPPED:
-      // `finish()` stamps the not-reached note; a user skip carries none.
-      return settled.blockedReason === undefined
-        ? { ...identity, status: 'skipped', reason: 'user', ...spent }
-        : { ...identity, status: 'skipped', reason: 'not-reached' };
+      // The sweep settles not-reached plans; a user skip settles itself.
+      return settled.settledBySweep
+        ? { ...identity, status: 'skipped', reason: 'not-reached' }
+        : { ...identity, status: 'skipped', reason: 'user', ...spent };
     default:
       // Failed, cancelled (the card vocabulary has no cancelled outcome), and
       // the non-terminal states left behind when the snapshot could not be
@@ -374,26 +374,25 @@ export async function runPersistedWorkflowScriptWithProgress(
     };
     switch (status) {
       case 'failed': {
-        // A call `finish()` reclassified (stamped with the unfinished note)
-        // never reached its own settlement: its card carries spend but no
-        // model/duration, the same shape the settle sweep emits.
-        const reclassified = call.error === WORKFLOW_CALL_UNFINISHED_NOTE;
+        // A sweep-settled call never reached its own settlement: its card
+        // carries spend but no model/duration, the same shape the settle
+        // sweep emits.
         const spentOnly =
           call.costUsd !== undefined ? { totalCostUsd: call.costUsd } : {};
         return {
           ...identity,
           status,
           error: call.error ?? WORKFLOW_CALL_UNFINISHED_NOTE,
-          ...(reclassified ? spentOnly : terminalMetadata(call)),
+          ...(call.settledBySweep ? spentOnly : terminalMetadata(call)),
         };
       }
       case 'completed':
         return { ...identity, status, ...terminalMetadata(call) };
       case 'skipped':
-        // finish() stamps the not-reached note; a user skip carries none.
-        return call.blockedReason === undefined
-          ? { ...identity, status, reason: 'user', ...terminalMetadata(call) }
-          : { ...identity, status, reason: 'not-reached' };
+        // The sweep settles not-reached plans; a user skip settles itself.
+        return call.settledBySweep
+          ? { ...identity, status, reason: 'not-reached' }
+          : { ...identity, status, reason: 'user', ...terminalMetadata(call) };
       default:
         return { ...identity, status };
     }

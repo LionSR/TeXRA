@@ -263,6 +263,7 @@ export class WorkflowExecutionState {
       childExecutionId: undefined,
       childStreamId: undefined,
       model: undefined,
+      settledBySweep: undefined,
       blockedReason: undefined,
       error: undefined,
       timestamps: {
@@ -351,6 +352,7 @@ export class WorkflowExecutionState {
         call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED
       ) {
         call.status = WORKFLOW_CALL_STATUS.SKIPPED;
+        call.settledBySweep = true;
         call.blockedReason = WORKFLOW_CALL_NOT_REACHED_NOTE;
         call.timestamps.completedAt = completedAt;
         call.timestamps.updatedAt = completedAt;
@@ -363,6 +365,7 @@ export class WorkflowExecutionState {
           lifecycle === WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED
             ? WORKFLOW_CALL_STATUS.CANCELLED
             : WORKFLOW_CALL_STATUS.FAILED;
+        call.settledBySweep = true;
         call.error ??= WORKFLOW_CALL_UNFINISHED_NOTE;
         call.timestamps.completedAt = completedAt;
         call.timestamps.updatedAt = completedAt;

@@ -260,6 +260,40 @@ return await agent('Inspect src', { id: 'core' })`,
     ]);
   });
 
+  it('stamps sweep-settled outcomes first-class instead of note-sniffing', async () => {
+    // One writer of call outcomes: the terminal sweep marks the calls it
+    // settles (not-reached plans, abandoned live calls) with settledBySweep,
+    // and a call that settled through its own path never carries the flag.
+    const transitions: WorkflowScriptRunResult['snapshot'][] = [];
+    const run = runWorkflowScript({
+      script: `export const meta = {
+  name: 'swept-run',
+  description: 'leaves a declared task unreached',
+  phases: [{ title: 'Audit' }],
+  tasks: [
+    { id: 'first', label: 'First', phase: 'Audit' },
+    { id: 'second', label: 'Second', phase: 'Audit' },
+  ],
+}
+await agent('Inspect src', { id: 'first' })
+throw new Error('script stops before the second task')`,
+      runAgent: echoRunner,
+      onTransition: (snapshot) => transitions.push(structuredClone(snapshot)),
+    });
+
+    await expect(run).rejects.toMatchObject({
+      message: expect.stringContaining('script stops before the second task'),
+    });
+    expect(transitions.at(-1)?.calls).toMatchObject([
+      { id: 'first', status: 'completed' },
+      { id: 'second', status: 'skipped', settledBySweep: true },
+    ]);
+    expect(transitions.at(-1)?.calls[0]).not.toHaveProperty(
+      'settledBySweep',
+      true,
+    );
+  });
+
   it('rejects calls outside a declared plan and conflicting presentation data', async () => {
     const plannedMeta = `export const meta = {
   name: 'strict-plan',
