@@ -12,6 +12,11 @@
 \usepackage{xcolor}
 \geometry{margin=2.5cm}
 
+% TeXRA max-style replacements use \sS for the plain-S subscript/superscript
+% shortcut; define it here so exported LaTeX compiles when max-style output
+% is present.
+\providecommand{\sS}{S}
+
 \lstset{
   basicstyle=\ttfamily\small,
   breaklines=true,
