@@ -241,14 +241,30 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
   );
 }
 
+interface LatexExecutionDiscoveryDependencies {
+  readonly listExecutions: typeof listExecutions;
+  readonly getExecutionStore: typeof getExecutionStore;
+}
+
+const DEFAULT_LATEX_EXECUTION_DISCOVERY_DEPENDENCIES: LatexExecutionDiscoveryDependencies =
+  {
+    listExecutions,
+    getExecutionStore,
+  };
+
 /**
  * Adapter from the agent storage surface to the latex-owned execution
  * discovery port. Hosts inject this into latexdiff orchestration.
+ *
+ * Dependencies are injectable so the projection/filter contract can be unit
+ * tested without scanning real execution storage.
  */
-export function createLatexExecutionDiscovery(): LatexExecutionDiscoveryPort {
+export function createLatexExecutionDiscovery(
+  dependencies: LatexExecutionDiscoveryDependencies = DEFAULT_LATEX_EXECUTION_DISCOVERY_DEPENDENCIES,
+): LatexExecutionDiscoveryPort {
   return {
     async listAgentRuns(): Promise<readonly LatexAgentRunEntry[]> {
-      const executions = await listExecutions();
+      const executions = await dependencies.listExecutions();
       return executions.filter(isAgentRunEntry).map((entry) => ({
         id: entry.id,
         timestamp: entry.timestamp,
@@ -258,7 +274,8 @@ export function createLatexExecutionDiscovery(): LatexExecutionDiscoveryPort {
       }));
     },
     async readStreamId(executionId) {
-      return (await getExecutionStore(executionId).readMeta())?.streamId;
+      return (await dependencies.getExecutionStore(executionId).readMeta())
+        ?.streamId;
     },
   };
 }
