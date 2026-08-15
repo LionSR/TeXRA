@@ -5,13 +5,13 @@ import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
 import { designTokens } from '@shared/styles';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import {
   spendingQuotaRemainingPercent,
   spendingQuotaState,
   type SpendingQuotaState,
   type SpendingStatus,
-} from '@shared/schemas/spendingStatus';
+} from '@shared/schemas';
+import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { clamp } from '@utils/core';
 import { formatPercent } from '@utils/text/stringUtils';
 

@@ -4,9 +4,8 @@ import {
   createWorkspaceAgentRosterController,
   InvalidAgentTeamError,
 } from '@agent/index';
+import { agentKeyOf, CLI_STATE_SETTINGS } from '@shared/schemas';
 import { readSetting } from '@shared/config/settingsAccess';
-import { agentKeyOf } from '@shared/schemas/agent';
-import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
 import { unique } from '@utils/core';
 
 import {

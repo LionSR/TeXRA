@@ -20,10 +20,7 @@ import {
   revealProgressStream,
 } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  SETTINGS_VIEW_CMD,
-  type SettingsMessageFor,
-} from '@shared/schemas/settingsViewMessages';
+import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import {
   withHandlerErrorHandling,

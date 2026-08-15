@@ -23,12 +23,9 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { AGENT_MODE_PRESETS, type AgentModePreset } from '@shared/schemas';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
-import {
-  AGENT_MODE_PRESETS,
-  type AgentModePreset,
-} from '@shared/schemas/agentPresets';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 

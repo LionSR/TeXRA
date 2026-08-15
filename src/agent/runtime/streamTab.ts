@@ -1,5 +1,5 @@
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { getCleanAgentName } from '@shared/schemas/agent';
+import { getCleanAgentName } from '@shared/schemas';
 
 /**
  * Mint the opaque stream tab id for a new run: `${name}#${executionId}`.

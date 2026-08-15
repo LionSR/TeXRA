@@ -10,7 +10,7 @@ import {
   type RunOutcome,
   type StreamPhase,
   type StreamLifecycleStatus,
-} from '@shared/schemas/stream';
+} from '@shared/schemas';
 
 // ============================================================================
 // Run-outcome algebra

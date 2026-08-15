@@ -66,15 +66,17 @@ import {
   codingPlanForApiProvider,
   codingPlanForUsageSetting,
 } from '@shared/codingPlanSubscriptions';
+import type {
+  SettingsMessageFor,
+  SettingsViewInboundHandlerRegistry,
+  SettingsViewSnapshot,
+  SubscriptionUsageProvider,
+} from '@shared/schemas';
 import {
   dispatchSettingsViewInbound,
   SETTINGS_VIEW_CMD,
-  type SubscriptionUsageProvider,
-  type SettingsViewInboundHandlerRegistry,
-  type SettingsMessageFor,
 } from '@shared/schemas';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
 
 import {
   applyStateSettingUpdate,

@@ -14,11 +14,7 @@ import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitio
 import { inlineAgentDefinition } from '@agent/index/inlineAgents';
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
-import {
-  agentKey,
-  AgentCategory,
-  type AgentSource,
-} from '@shared/schemas/agent';
+import { agentKey, AgentCategory, type AgentSource } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 import { resolveAgentSettingTools } from './agentSettingTools';

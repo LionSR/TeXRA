@@ -5,13 +5,13 @@ import {
   type RunModelCandidate,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
-import {
-  isModelOptionAvailable,
-  type ModelAvailabilityKind,
-  type ModelOptionData,
+import type {
+  ApiAccessMode,
+  ModelAvailabilityKind,
+  ModelOptionData,
 } from '@shared/schemas';
+import { isModelOptionAvailable } from '@shared/schemas';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { unique } from '@utils/core';
 import { getGLMCodingPlan } from '@utils/config/providerConfig';
 

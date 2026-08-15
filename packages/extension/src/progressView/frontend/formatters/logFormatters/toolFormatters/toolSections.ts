@@ -28,6 +28,12 @@ import {
   TOOL_CODE_LANGUAGES,
   getLanguageFromPath,
 } from '@progressView/frontend/formatters/constants';
+import type { CodexMcpToolOutput, ProposalFileGroup } from '@shared/schemas';
+import {
+  CodexMcpToolOutputSchema,
+  getProposalFileGroups,
+  WorkflowScriptFilesSchema,
+} from '@shared/schemas';
 import { isEditLikeToolName, toolDisplayKind } from '@shared/tools/toolKind';
 import { isMcpToolName } from '@shared/tools/toolDisplayName';
 import { executionsAction } from '@shared/tools/executionsDisplay';
@@ -36,15 +42,6 @@ import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   DELEGATION_TOOLS,
 } from '@shared/constants/delegationTools';
-import {
-  CodexMcpToolOutputSchema,
-  type CodexMcpToolOutput,
-} from '@shared/schemas/codex';
-import {
-  getProposalFileGroups,
-  type ProposalFileGroup,
-} from '@shared/schemas/proposalFields';
-import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 // Type-only: this is a browser frontend (see eslint `no-restricted-imports`
 // for packages/extension/src/{webview,progressView,settingsView}/frontend),
 // so runtime values (including each tool's Zod input schema) cannot be

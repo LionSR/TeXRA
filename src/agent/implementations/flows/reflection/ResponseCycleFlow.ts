@@ -26,8 +26,11 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import type { ResponseCycleServices } from '@agent/core/flows/CycleServices';
 import type { ToolDefinition } from '@model/ToolDefinition';
-import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
-import { OUTPUT_END_TAG } from '@shared/schemas/output';
+import {
+  AgentFileLocationSchema,
+  MESSAGE_TYPES,
+  OUTPUT_END_TAG,
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { extractScratchpad } from '@utils/text/xmlExtraction';

@@ -10,7 +10,7 @@ import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { hasAnyUsableProviderApiKey } from '@model/setupCredentialAccess';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { platform } from '@platform/platform';
-import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
+import type { ApiAccessMode } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { getCliAuthProfile } from './supabaseAuth';

@@ -13,11 +13,11 @@ import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/Ma
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import type {
   FileOperationMessage,
+  MainViewExecuteMessage,
   MainViewInboundMessage,
-} from '@shared/schemas/mainView/inbound';
+} from '@shared/schemas';
 import { pathToLocation } from '@utils/files/fileLocation';
 
 const CHANNEL = 'ExecutionHandlers';

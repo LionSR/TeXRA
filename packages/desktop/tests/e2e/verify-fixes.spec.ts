@@ -15,7 +15,7 @@ import {
 // settingsPersistence.spec.ts does the same). Source of truth:
 // SETTINGS_VIEW_CMD.SET_TAB in src/shared/ipc.ts; SETTINGS_TAB_INDEX.TOOLS
 // (index of 'TOOLS' in SETTINGS_TAB_ORDER) in
-// src/shared/schemas/settingsView/data.ts.
+// src/shared/schemas/settingsViewMessages.ts.
 const SET_TAB_COMMAND = 'setTab';
 const SETTINGS_TAB_INDEX = {
   TOOLS: 5,

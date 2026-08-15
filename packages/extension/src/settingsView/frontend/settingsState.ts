@@ -25,57 +25,53 @@ import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import {
-  byCategory,
-  DEFAULT_GLOBAL_STREAMING,
-  DEFAULT_QUOTA_AUTO_SWITCHED,
-  SETTINGS_TAB,
-  type AgentCategory,
-  type ByCategory,
-  type HistoryItem,
-  type MemoryViewItem,
-  type ModelSelectionItem,
-  type ProviderKeyStatus,
-  type SpendingStatus,
-  type SpendingStatusError,
-  type SubscriptionUsageSnapshots,
+import type {
+  AgentCategory,
+  AgentModePreset,
+  AgentSelectionItem,
+  ByCategory,
+  ChatGptAuthStatus,
+  ClaudeAgentEffort,
+  ClaudeAgentModel,
+  ClaudeAgentPermissionMode,
+  CodexApprovalPolicy,
+  CodexReasoningEffort,
+  CodexSandboxMode,
+  CopilotRouteInfo,
+  Goal,
+  GrokAuthStatus,
+  HistoryItem,
+  LatexConfigValues,
+  MemoryViewItem,
+  ModelSelectionItem,
+  NumberSetting,
+  ProviderKeyStatus,
+  PRSubscriptionEntry,
+  SpendingStatus,
+  SpendingStatusError,
+  SubscriptionUsageSnapshots,
+  ToolDashboardItem,
 } from '@shared/schemas';
 import {
-  type AgentSelectionItem,
-  type ClaudeAgentEffort,
-  type ClaudeAgentModel,
-  type ClaudeAgentPermissionMode,
-  type CodexApprovalPolicy,
-  type CodexReasoningEffort,
-  type CodexSandboxMode,
-  type LatexConfigValues,
-  type NumberSetting,
-  type Goal,
-  type PRSubscriptionEntry,
-  type ToolDashboardItem,
-  type ChatGptAuthStatus,
-  type GrokAuthStatus,
-  type CopilotRouteInfo,
-  DEFAULT_LATEX_SETTINGS_STATUS,
-} from '@shared/schemas/settingsViewMessages';
-import {
-  DEFAULT_GIT_AUTHOR_NAME,
-  DEFAULT_GIT_AUTHOR_EMAIL,
-  DEFAULT_GIT_MARK_COMMITS,
-  DEFAULT_GIT_WORKTREE_SUPPORT,
-  DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
-} from '@shared/schemas/stateSettings';
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
-import { AGENT_SKILLS_ENABLED_DEFAULT } from '@shared/schemas/agentSkills';
-import type { AgentModePreset } from '@shared/schemas/agentPresets';
-import {
+  AGENT_SKILLS_ENABLED_DEFAULT,
+  byCategory,
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
   CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
-} from '@shared/schemas/agentCliSettings';
+  DEFAULT_GIT_AUTHOR_EMAIL,
+  DEFAULT_GIT_AUTHOR_NAME,
+  DEFAULT_GIT_MARK_COMMITS,
+  DEFAULT_GIT_WORKTREE_SUPPORT,
+  DEFAULT_GLOBAL_STREAMING,
+  DEFAULT_LATEX_SETTINGS_STATUS,
+  DEFAULT_QUOTA_AUTO_SWITCHED,
+  DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
+  SETTINGS_TAB,
+} from '@shared/schemas';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 /** Target for the desktop-host "set provider key" modal. */
 interface ProviderKeyModalTarget {

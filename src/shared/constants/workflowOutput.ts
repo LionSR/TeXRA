@@ -16,7 +16,7 @@
 import escapeRegExp from 'escape-string-regexp';
 
 // Local imports
-import { getCleanAgentName } from '@shared/schemas/agent';
+import { getCleanAgentName } from '@shared/schemas';
 
 /** The fixed basename of every workflow output file (no extension). */
 export const WORKFLOW_OUTPUT_BASENAME = 'output';

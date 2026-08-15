@@ -20,10 +20,10 @@ import {
   setPreferXaiSubscription,
 } from '@model/xai/xaiPreference';
 import { platform } from '@platform/platform';
+import type { ApiAccessMode } from '@shared/schemas';
 import { providerDisplayName } from '@shared/constants/providers';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 
 import { signInCliChatGpt } from './chatgptLogin';
 import { signInCliGrok } from './grokLogin';

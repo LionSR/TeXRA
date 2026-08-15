@@ -9,7 +9,7 @@ import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundHandlerRegistry } from '@shared/schemas';
-import { deriveGoalState } from '@shared/schemas/goal';
+import { deriveGoalState } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 

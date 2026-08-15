@@ -5,13 +5,13 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { platform, tryWorkspaceState } from '@platform/platform';
-import type { ExecutionId, StreamTabId } from '@shared/schemas/identifiers';
-import {
-  GoalSchema,
-  isGoalInFlight,
-  type Goal,
-  type GoalStatus,
-} from '@shared/schemas/goal';
+import type {
+  ExecutionId,
+  Goal,
+  GoalStatus,
+  StreamTabId,
+} from '@shared/schemas';
+import { GoalSchema, isGoalInFlight } from '@shared/schemas';
 import { filterNotNull, unique, hexId12 } from '@utils/core';
 
 const STREAM_KEY_PREFIX = 'goals:byStream:';

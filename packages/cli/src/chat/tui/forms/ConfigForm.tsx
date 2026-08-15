@@ -16,15 +16,15 @@ import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { CROSS, POINTER } from '@cli/tui/ui/glyphs';
-import { stripPrefix } from '@shared/config/configKeys';
-import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
 import {
   settingEnumOptions,
   settingIsBoolean,
   settingIsNumber,
   settingIsString,
   type StateSettingEntry,
-} from '@shared/schemas/stateSettings';
+} from '@shared/schemas';
+import { stripPrefix } from '@shared/config/configKeys';
+import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
 
 import { BaseTextInput } from '../input/BaseTextInput';
 import {

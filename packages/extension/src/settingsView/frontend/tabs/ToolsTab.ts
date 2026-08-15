@@ -14,9 +14,12 @@ import {
   TEXRA_APPROVAL_POLICY_OPTIONS,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
-import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
-import { TOOL_EDIT_APPROVAL_CONFIG_KEY } from '@shared/schemas/coreSettings';
+import type { ToolCategory, ToolDashboardItem } from '@shared/schemas';
+import {
+  AGENT_SKILLS_CONFIG_KEY,
+  BASH_APPROVAL_CONFIG_KEY,
+  TOOL_EDIT_APPROVAL_CONFIG_KEY,
+} from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
@@ -24,10 +27,6 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
-import type {
-  ToolDashboardItem,
-  ToolCategory,
-} from '@shared/schemas/settingsViewMessages';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { groupBy } from '@utils/core';
 

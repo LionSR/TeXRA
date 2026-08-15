@@ -15,10 +15,10 @@ import {
   settingsBannerStyles,
 } from '@shared/styles';
 import type {
+  SessionProblem,
   SpendingStatus,
   SpendingStatusError,
-} from '@shared/schemas/spendingStatus';
-import type { SessionProblem } from '@shared/schemas/settingsViewMessages';
+} from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderBannerFrame } from '@shared/wa/bannerFrame';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';

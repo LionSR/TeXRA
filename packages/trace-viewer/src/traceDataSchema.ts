@@ -10,7 +10,7 @@ import { TraceDocumentSchema } from '@transcript/traceDocumentSchema';
 import {
   STREAM_SNAPSHOT_SCHEMA_VERSION,
   StreamSnapshotSchema,
-} from '@shared/schemas/streamSnapshot';
+} from '@shared/schemas';
 
 const TraceStreamSnapshotSchema = StreamSnapshotSchema.extend({
   schemaVersion: z

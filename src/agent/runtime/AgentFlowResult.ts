@@ -1,20 +1,16 @@
 import { z } from 'zod';
 
 import { AttachedMemoryMissSchema } from '@agent/types/AttachedMemory';
+import type { ExecutionId, RunOutcome, StreamTabId } from '@shared/schemas';
 import {
+  CompileFailureSummarySchema,
   ExecutionIdSchema,
+  OutputFileSummarySchema,
   RetryErrorInfoSchema,
   RunOutcomeSchema,
   STREAM_PHASE,
   StreamTabIdSchema,
-  type ExecutionId,
-  type RunOutcome,
-  type StreamTabId,
 } from '@shared/schemas';
-import {
-  CompileFailureSummarySchema,
-  OutputFileSummarySchema,
-} from '@shared/schemas/output';
 
 const AgentFlowMetaSchema = z.object({
   executionId: ExecutionIdSchema,

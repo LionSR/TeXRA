@@ -4,8 +4,8 @@ import {
   buildVisibleBasicModelOptionsData,
   computeModelOptionsData,
 } from '@model/computeModelOptions';
-import { AgentCategory, type AgentProposalPermission } from '@shared/schemas';
-import { agentName } from '@shared/schemas/agent';
+import type { AgentProposalPermission } from '@shared/schemas';
+import { AgentCategory, agentName } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

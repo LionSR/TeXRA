@@ -27,19 +27,21 @@ import { type ZodError } from 'zod';
 
 // Local imports - shared state and schemas
 import { hostBridge } from '@shared/hostBridge';
-import type { MainViewPersistedState } from '@shared/schemas';
-import { Signal } from '@shared/signals';
+import type {
+  ByCategory,
+  MainViewPersistedState,
+  StateRestoreMessage,
+} from '@shared/schemas';
 import {
   AGENT_CATEGORIES,
   byCategory,
   MainViewPersistedStateSchema,
-  type ByCategory,
 } from '@shared/schemas';
+import { Signal } from '@shared/signals';
 import {
   createWebviewStorage,
   PersistedState,
 } from '@shared/state/PersistedState';
-import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { createFlushableDebounce } from '@utils/core';
 
 // Local imports - main view

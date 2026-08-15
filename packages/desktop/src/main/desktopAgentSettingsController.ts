@@ -22,13 +22,14 @@ import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  agentKey,
-  type SettingsMessageFor,
-  type SettingsViewInboundHandlerRegistry,
-  type SettingsViewInboundMessage,
+import type {
+  AgentCategory,
+  AgentSource,
+  SettingsMessageFor,
+  SettingsViewInboundHandlerRegistry,
+  SettingsViewInboundMessage,
 } from '@shared/schemas';
-import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
+import { agentKey } from '@shared/schemas';
 import {
   buildAgentModePresetsMessage,
   buildAgentSelectionMessage,

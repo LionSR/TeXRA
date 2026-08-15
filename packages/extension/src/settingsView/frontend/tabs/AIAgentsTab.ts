@@ -11,21 +11,15 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { renderEmptyState } from '@shared/wa/emptyState';
-import { renderLoadingState } from '@shared/wa/loadingState';
-
-// Local imports - shared schemas
 import type {
-  ToolDashboardItem,
   ClaudeAgentEffort,
   ClaudeAgentModel,
   ClaudeAgentPermissionMode,
   CodexApprovalPolicy,
   CodexReasoningEffort,
   CodexSandboxMode,
-} from '@shared/schemas/settingsViewMessages';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+  ToolDashboardItem,
+} from '@shared/schemas';
 import {
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
@@ -33,7 +27,13 @@ import {
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
-} from '@shared/schemas/agentCliSettings';
+} from '@shared/schemas';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderEmptyState } from '@shared/wa/emptyState';
+import { renderLoadingState } from '@shared/wa/loadingState';
+
+// Local imports - shared schemas
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSelectValue } from '@shared/utils/selectTemplates';
 
 // Local imports - catalog-driven settings rows

@@ -21,18 +21,20 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
+import type {
+  ToolResult,
+  WorkflowAgentProposal,
+  WorkflowExecutionSnapshot,
+} from '@shared/schemas';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
   JsonValueSchema,
   RUN_OUTCOME,
   ToolError,
-  type ToolResult,
-  type WorkflowAgentProposal,
-  type WorkflowExecutionSnapshot,
   USER_FOLLOW_UP_SUPPORT,
+  WorkflowScriptFilesSchema,
 } from '@shared/schemas';
-import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import {

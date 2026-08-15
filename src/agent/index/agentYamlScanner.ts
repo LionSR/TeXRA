@@ -11,8 +11,8 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { createLog } from '@logger/logUtils';
+import type { AgentSource } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import type { AgentSource } from '@shared/schemas/agent';
 import { filterNotNull, groupBy } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';

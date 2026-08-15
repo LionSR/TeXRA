@@ -3,8 +3,8 @@ import * as path from 'node:path';
 
 // Internal imports
 import * as logger from '@logger/logUtils';
-import { getCleanAgentName } from '@shared/schemas/agent';
-import type { FileOpResult } from '@shared/schemas/opResults';
+import type { FileOpResult } from '@shared/schemas';
+import { getCleanAgentName } from '@shared/schemas';
 import {
   midEraWorkflowOutputStem,
   parseWorkflowOutputRoundDir,

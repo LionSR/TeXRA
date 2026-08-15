@@ -16,14 +16,11 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
-import type {
-  ToolCommandKind,
-  ToolDashboardItem,
-} from '@shared/schemas/settingsViewMessages';
 import { toolStatusLabel } from '@shared/tools/toolStatusLabels';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 

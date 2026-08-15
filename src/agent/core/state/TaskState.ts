@@ -11,7 +11,7 @@ import { z } from 'zod';
 import {
   MULTIPLE_DOCUMENT_FILE_TYPES,
   type MultipleDocumentFileType,
-} from '@shared/schemas/fileTypes';
+} from '@shared/schemas';
 
 import {
   ToolUseAgentConfigSchema,

@@ -14,16 +14,13 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { AGENT_MODE_PRESETS, type AgentModePreset } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
-import {
-  AGENT_MODE_PRESETS,
-  type AgentModePreset,
-} from '@shared/schemas/agentPresets';
 
 // Local imports - catalog-driven settings rows
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';

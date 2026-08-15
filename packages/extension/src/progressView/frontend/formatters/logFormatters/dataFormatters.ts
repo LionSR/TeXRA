@@ -22,15 +22,14 @@ import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - shared schemas and utilities
+import type { ExtendedTokenUsageStats, LogMessageData } from '@shared/schemas';
 import {
   ExtendedTokenUsageStatsSchema,
   FileListEntrySchema,
   MissingOutputsPayloadSchema,
+  OUTPUT_DOCUMENTS_TAG,
   parseDiffResultEntries,
-  type ExtendedTokenUsageStats,
-  type LogMessageData,
 } from '@shared/schemas';
-import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas/output';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { formatCompactTokenCount, getBasename } from '@utils/core';

@@ -3,13 +3,15 @@ import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { AgentCategory } from '@shared/schemas';
-import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
-import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
+import type {
+  AgentDelegationScope,
+  MainViewExecuteMessage,
+} from '@shared/schemas';
 import {
+  AgentCategory,
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
-} from '@shared/schemas/toolConfig';
+} from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
 import { isPastedImage } from '@utils/files/pastedImageName';
 import { getPastedImageFullPath } from '@utils/files/pastedImageUtils';

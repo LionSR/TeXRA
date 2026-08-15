@@ -14,19 +14,21 @@ import {
 import { createLog } from '@logger/logUtils';
 import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import { platform } from '@platform/platform';
-import { AgentCategory } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import type {
+  ClaudeAgentEffort,
+  ClaudeAgentModel,
+  ClaudeAgentPermissionMode,
+} from '@shared/schemas';
 import {
+  AgentCategory,
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
   CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
   parseClaudeAgentEffort,
   parseClaudeAgentModel,
   parseClaudeAgentPermissionMode,
-  type ClaudeAgentEffort,
-  type ClaudeAgentModel,
-  type ClaudeAgentPermissionMode,
-} from '@shared/schemas/agentCliSettings';
+} from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
 

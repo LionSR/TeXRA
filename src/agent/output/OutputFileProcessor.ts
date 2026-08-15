@@ -1,13 +1,13 @@
 import { type AgentTrace } from '@agent/trace';
 import { reportMissingOutputs } from '@agent/runtime/runFactEvents';
 import { replaceInputCommands } from '@agent/output/fileMapping';
-import {
-  type FileLocation,
-  type OutputFileInfo,
-  type OutputXmlSummary,
-  type RoundOutput,
+import type {
+  FileLocation,
+  OutputFileInfo,
+  OutputXmlSummary,
+  RoundOutput,
 } from '@shared/schemas';
-import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas/output';
+import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {

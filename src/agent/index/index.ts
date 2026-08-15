@@ -2,7 +2,7 @@
  * Agent index module - public API for the agent registry.
  */
 
-export type { AgentSource } from '@shared/schemas/agent';
+export type { AgentSource } from '@shared/schemas';
 
 /** All built-in delegating team roots (relay-served + bundled). */
 export { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';

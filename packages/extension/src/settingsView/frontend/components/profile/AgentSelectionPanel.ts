@@ -17,6 +17,15 @@ import { classMap } from 'lit/directives/class-map.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import type {
+  AgentCategory,
+  AgentSelectionItem,
+  AgentSource,
+} from '@shared/schemas';
+import {
+  AGENT_SOURCE,
+  agentKey as agentKeyFromSourceName,
+} from '@shared/schemas';
 import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import {
   renderLabeledActionButton,
@@ -26,13 +35,6 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas and events
-import {
-  AGENT_SOURCE,
-  agentKey as agentKeyFromSourceName,
-  type AgentCategory,
-  type AgentSource,
-} from '@shared/schemas/agent';
-import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { pluralize } from '@utils/text/stringUtils';
 import { agentSelectionPanelStyles } from './AgentSelectionPanel.styles';

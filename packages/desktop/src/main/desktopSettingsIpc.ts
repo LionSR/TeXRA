@@ -12,15 +12,15 @@ import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
+  dispatchSettingsViewInbound,
+  SettingsViewInboundMessageSchema,
+  type SettingsViewInboundHandlerRegistry,
+} from '@shared/schemas';
+import {
   applyStateSettingUpdate,
   postStateSettingSnapshot,
   type SettingsSnapshotPosters,
 } from '@shared/settingsView/handlers/stateSettingWrite';
-import {
-  dispatchSettingsViewInbound,
-  SettingsViewInboundMessageSchema,
-  type SettingsViewInboundHandlerRegistry,
-} from '@shared/schemas/settingsViewMessages';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildApprovalSettingsMessage } from '@shared/settingsView/handlers/approvalHandlers';
 import { buildAgentSkillsSettingsMessage } from '@shared/settingsView/handlers/agentSkillsHandlers';

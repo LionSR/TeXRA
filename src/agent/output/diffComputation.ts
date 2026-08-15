@@ -6,8 +6,7 @@
  */
 
 import { createLog } from '@logger/logUtils';
-import type { OutputFileInfo, FileLocation } from '@shared/schemas';
-import type { DiffStats } from '@shared/schemas/lineChanges';
+import type { DiffStats, FileLocation, OutputFileInfo } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
   createWorkspaceLocation,
