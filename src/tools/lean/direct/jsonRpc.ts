@@ -16,8 +16,10 @@ import {
   type MessageConnection,
 } from 'vscode-jsonrpc/node';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const log = createLog('JsonRpcConnection');
 
 type NotificationHandler = (params: unknown) => void;
 type ServerRequestHandler = (params: unknown) => Promise<unknown>;
@@ -128,7 +130,7 @@ export class JsonRpcConnection {
 
   private logLiveError(context: string, err: unknown): void {
     if (this.disposed || !err) return;
-    logger.debug('JsonRpcConnection', `${context}: ${toErrorMessage(err)}`);
+    log.debug(`${context}: ${toErrorMessage(err)}`);
   }
 }
 

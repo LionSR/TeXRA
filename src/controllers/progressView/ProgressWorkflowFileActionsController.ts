@@ -2,7 +2,7 @@
 import path from 'node:path';
 
 // Local imports
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type {
   AcceptCopyMeta,
   OutputFileInfo,
@@ -12,6 +12,8 @@ import type {
 import { ensureRunDir, findRunDir, getRunDir } from '@utils/files/runStorageFs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { StreamOutputsSource } from './streamOutputs';
+
+const log = createLog('ProgressWorkflowFileActions');
 
 interface ProgressWorkflowFileActionsState extends StreamOutputsSource {
   getActiveStream(): StreamTabId | '';
@@ -122,11 +124,9 @@ export class ProgressWorkflowFileActionsController {
       try {
         currentContent = await this.deps.host.readFile(file);
       } catch (error) {
-        logger.debug(
-          'ProgressWorkflowFileActions',
-          `Could not read current content of ${file} before accept`,
-          { data: error },
-        );
+        log.debug(`Could not read current content of ${file} before accept`, {
+          data: error,
+        });
       }
     }
 

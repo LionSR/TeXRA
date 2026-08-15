@@ -24,7 +24,7 @@ import {
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -60,6 +60,7 @@ import {
 } from './inputFields';
 
 const LOG_CHANNEL = 'delegation';
+const log = createLog(LOG_CHANNEL);
 
 /**
  * Deliver a terminal error to the orchestrator when a resumed subagent's wake
@@ -76,8 +77,7 @@ async function deliverResumeWakeFailure(
   err: unknown,
   expectedGenerationId?: string,
 ): Promise<void> {
-  logger.warn(
-    LOG_CHANNEL,
+  log.warn(
     `Failed to wake resumed subagent '${executionId}': ${toErrorMessage(err)}`,
   );
   const msg = formatSubagentError(executionId, handle.agentName, err);
@@ -88,8 +88,7 @@ async function deliverResumeWakeFailure(
     ...(expectedGenerationId !== undefined ? { expectedGenerationId } : {}),
   });
   if (delivery.kind !== 'delivered') {
-    logger.warn(
-      LOG_CHANNEL,
+    log.warn(
       `Also failed to deliver the wake-failure error for '${executionId}' to the parent (${delivery.kind}).`,
     );
   }
