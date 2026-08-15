@@ -476,37 +476,40 @@ describe('createDesktopDiffHost', () => {
     const consoleSpy = vi
       .spyOn(console, 'warn')
       .mockImplementation(() => undefined);
-    const { host, openPath } = createHost();
-    openPath.mockRejectedValue(new Error('editor unavailable'));
+    try {
+      const { host, openPath } = createHost();
+      openPath.mockRejectedValue(new Error('editor unavailable'));
 
-    let releaseRemoval!: () => void;
-    const removalGate = new Promise<void>((resolve) => {
-      releaseRemoval = resolve;
-    });
-    let removalTarget: string | undefined;
-    vi.mocked(rm).mockImplementationOnce(async (target) => {
-      removalTarget = String(target);
-      await removalGate;
-      throw new Error('simulated removal failure');
-    });
+      let releaseRemoval!: () => void;
+      const removalGate = new Promise<void>((resolve) => {
+        releaseRemoval = resolve;
+      });
+      let removalTarget: string | undefined;
+      vi.mocked(rm).mockImplementationOnce(async (target) => {
+        removalTarget = String(target);
+        await removalGate;
+        throw new Error('simulated removal failure');
+      });
 
-    const openPromise = openDiffPair(host, 'Compare');
-    await vi.waitFor(() => {
-      expect(removalTarget).toBeDefined();
-    });
+      const openPromise = openDiffPair(host, 'Compare');
+      await vi.waitFor(() => {
+        expect(removalTarget).toBeDefined();
+      });
 
-    const disposePromise = host.dispose();
-    releaseRemoval();
+      const disposePromise = host.dispose();
+      releaseRemoval();
 
-    await expect(openPromise).rejects.toThrow('editor unavailable');
-    await disposePromise;
+      await expect(openPromise).rejects.toThrow('editor unavailable');
+      await disposePromise;
 
-    const targetCalls = vi
-      .mocked(rm)
-      .mock.calls.filter(([target]) => String(target) === removalTarget);
-    expect(targetCalls).toHaveLength(2);
-    expect(existsSync(removalTarget!)).toBe(false);
-    consoleSpy.mockRestore();
+      const targetCalls = vi
+        .mocked(rm)
+        .mock.calls.filter(([target]) => String(target) === removalTarget);
+      expect(targetCalls).toHaveLength(2);
+      expect(existsSync(removalTarget!)).toBe(false);
+    } finally {
+      consoleSpy.mockRestore();
+    }
   });
 
   it('bounds the dispose wait for in-flight fallback setup', async () => {
