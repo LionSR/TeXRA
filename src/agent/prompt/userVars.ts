@@ -13,14 +13,13 @@ import type {
   UserVars,
 } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { FileListEntry } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
-import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
+import type { AgentDelegationScope, FileListEntry } from '@shared/schemas';
 import {
   AGENT_SKILLS_CONFIG_KEY,
   AGENT_SKILLS_ENABLED_DEFAULT,
+  AgentCategory,
   AgentSkillsEnabledSchema,
-} from '@shared/schemas/agentSkills';
+} from '@shared/schemas';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import {
   formatAgentList,

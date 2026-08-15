@@ -9,8 +9,7 @@ import type {
   StreamTabId,
   UsageRoute,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
-import { UsageProviderSchema } from '@shared/schemas/usage';
+import { AgentCategory, UsageProviderSchema } from '@shared/schemas';
 import {
   USAGE_LOG_FLUSH_OUTCOME,
   UsageLogService,

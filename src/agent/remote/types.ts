@@ -4,7 +4,7 @@ import {
   type AgentPrompt,
   type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
-import { AgentNameSchema, AgentCategory } from '@shared/schemas/agent';
+import { AgentNameSchema, AgentCategory } from '@shared/schemas';
 
 /**
  * Remote agent list item from DB. Description is cached; YAML is source of truth.

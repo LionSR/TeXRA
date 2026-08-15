@@ -47,12 +47,8 @@ import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { AgentCategory, agentKeyOf, type AgentSource } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
-import {
-  AgentCategory,
-  agentKeyOf,
-  type AgentSource,
-} from '@shared/schemas/agent';
 import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { debounce } from '@utils/core';

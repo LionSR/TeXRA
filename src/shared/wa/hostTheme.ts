@@ -9,7 +9,7 @@
 // `waColorScheme.ts` (the leaf this module already depends on); import them
 // here rather than re-encoding a parallel copy.
 
-import type { Theme } from '@shared/schemas/commonViewMessages';
+import type { Theme } from '@shared/schemas';
 import { setWaColorScheme, THEME_CLASSES, themeIsDark } from './waColorScheme';
 
 /**

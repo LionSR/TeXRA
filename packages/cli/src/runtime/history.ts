@@ -17,16 +17,16 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import {
-  ExecutionIdSchema,
-  RunOutcomeSchema,
-  type ExecutionId,
-  type ExecutionMeta,
+import type {
+  ExecutionId,
+  ExecutionMeta,
+  HistoryRunStatus,
 } from '@shared/schemas';
 import {
+  ExecutionIdSchema,
   resolveHistoryRunStatus,
-  type HistoryRunStatus,
-} from '@shared/schemas/settingsViewMessages';
+  RunOutcomeSchema,
+} from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import {

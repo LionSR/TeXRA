@@ -12,8 +12,7 @@ import {
   runAfterAgentCatalogAuthRefresh,
 } from '@frontend/auth/agentCatalogRefreshScope';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { SettingsTab } from '@shared/schemas/settingsViewMessages';
-import type { AgentCategory } from '@shared/schemas/agent';
+import type { AgentCategory, SettingsTab } from '@shared/schemas';
 
 // Local file imports
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';

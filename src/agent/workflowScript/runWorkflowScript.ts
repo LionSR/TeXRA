@@ -3,16 +3,18 @@ import { basename } from 'node:path';
 import stableStringify from 'fast-json-stable-stringify';
 import PQueue from 'p-queue';
 import pTimeout from 'p-timeout';
+import type {
+  ExecutionId,
+  StreamTabId,
+  WorkflowCallIdentity,
+  WorkflowControlAction,
+  WorkflowExecutionSnapshot,
+} from '@shared/schemas';
 import {
   WORKFLOW_CALL_STATUS,
   WORKFLOW_EXECUTION_LIFECYCLE,
-  type ExecutionId,
-  type StreamTabId,
-  type WorkflowCallIdentity,
-  type WorkflowControlAction,
-  type WorkflowExecutionSnapshot,
+  WorkflowScriptFilesSchema,
 } from '@shared/schemas';
-import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { isNonEmptyString, onAbort } from '@utils/core';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';

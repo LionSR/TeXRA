@@ -1,5 +1,9 @@
 // Local imports - shared constants
 import {
+  DEFAULT_LATEX_SETTINGS_STATUS,
+  type LatexSettingsStatus,
+} from '@shared/schemas';
+import {
   CORE_LATEX_TOOLS,
   DEPENDENCY_INSTALL_COMMANDS,
   HOMEBREW_INSTALL_COMMAND,
@@ -7,10 +11,6 @@ import {
   SCOOP_INSTALL_COMMAND,
   type OSPlatform,
 } from '@shared/constants/latexToolchain';
-import {
-  DEFAULT_LATEX_SETTINGS_STATUS,
-  type LatexSettingsStatus,
-} from '@shared/schemas/settingsViewMessages';
 
 // `CORE_LATEX_TOOLS`/`IMAGE_TOOLS` (`@shared/constants/latex`) are the
 // single source of truth for the LaTeX toolchain probe set, shared with

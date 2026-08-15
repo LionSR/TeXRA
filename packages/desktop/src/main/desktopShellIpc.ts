@@ -1,13 +1,10 @@
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { AgentCategory } from '@shared/schemas/agent';
+import type { MainViewInboundMessage, SettingsTab } from '@shared/schemas';
 import {
+  AgentCategory,
   MainViewInboundMessageSchema,
-  type MainViewInboundMessage,
-} from '@shared/schemas/mainView';
-import {
   SETTINGS_TAB,
-  type SettingsTab,
-} from '@shared/schemas/settingsViewMessages';
+} from '@shared/schemas';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,

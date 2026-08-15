@@ -7,6 +7,13 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import {
+  REASONING_LEVEL_LABELS,
+  REASONING_LEVEL_OPTIONS,
+  type ModelSelectionItem,
+  type ProviderKeyStatus,
+  type ReasoningLevel,
+} from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   renderKeyStatusIcon,
@@ -30,13 +37,6 @@ import {
 } from '@shared/constants/providers';
 
 // Local imports - profile view styles and events
-import {
-  REASONING_LEVEL_LABELS,
-  REASONING_LEVEL_OPTIONS,
-  type ModelSelectionItem,
-  type ProviderKeyStatus,
-  type ReasoningLevel,
-} from '@shared/schemas/settingsViewMessages';
 import { readSelectValue } from '@shared/utils/selectTemplates';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { modelSelectionListStyles } from './ModelSelectionList.styles';

@@ -1,4 +1,4 @@
-import type { ToolStatus } from '@shared/schemas/settingsViewMessages';
+import type { ToolStatus } from '@shared/schemas';
 
 const TOOL_STATUS_FALLBACK_LABELS = {
   available: 'Ready',

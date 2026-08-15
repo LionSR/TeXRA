@@ -5,7 +5,7 @@
 import { LRUCache } from 'lru-cache';
 
 import { createLog } from '@logger/logUtils';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 

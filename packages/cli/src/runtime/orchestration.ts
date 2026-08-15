@@ -3,9 +3,8 @@ import {
   canLaunchTeam,
   teamTexraHostedMissingNames,
 } from '@common/teams/TeamPlan';
-import type { ExecutionId } from '@shared/schemas';
-import { agentKeyOf } from '@shared/schemas/agent';
-import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
+import type { ApiAccessMode, ExecutionId } from '@shared/schemas';
+import { agentKeyOf } from '@shared/schemas';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
 import { formatResultCount } from '@utils/text/stringUtils';
 

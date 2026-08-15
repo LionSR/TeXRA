@@ -81,8 +81,7 @@ import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas';
-import { MESSAGE_TYPES, AgentCategory } from '@shared/schemas';
-import { OUTPUT_END_TAG } from '@shared/schemas/output';
+import { AgentCategory, MESSAGE_TYPES, OUTPUT_END_TAG } from '@shared/schemas';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from '@shared/constants/contextManagement';
 import { AbsoluteFS } from '@utils/files/absoluteFS';

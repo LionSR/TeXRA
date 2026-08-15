@@ -3,16 +3,16 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@shared/schemas';
+import type { CodexReasoningEffort } from '@shared/schemas';
 import {
+  AgentCategory,
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
   parseCodexApprovalPolicy,
   parseCodexReasoningEffort,
   parseCodexSandboxMode,
-  type CodexReasoningEffort,
-} from '@shared/schemas/agentCliSettings';
+} from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createEnumStateGetter } from './support/enumConfig';
 import { CODEX_AGENT_NAME } from './codexShared';

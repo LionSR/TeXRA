@@ -6,6 +6,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import type { ProviderKeyStatus, ProviderSetting } from '@shared/schemas';
 import { DEFAULT_GLOBAL_STREAMING } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
@@ -24,10 +25,6 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Local imports - profile view styles and events
-import type {
-  ProviderKeyStatus,
-  ProviderSetting,
-} from '@shared/schemas/settingsViewMessages';
 import { createEvent } from '@shared/utils/events';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { providerKeyListStyles } from './ProviderKeyList.styles';

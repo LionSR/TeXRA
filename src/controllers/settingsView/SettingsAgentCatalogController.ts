@@ -12,22 +12,22 @@ import {
   type TeamRosterPresetResolution,
   type TeamRosterResolution,
 } from '@common/teams/TeamRoster';
-import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
-import type { AgentModePreset } from '@shared/schemas/agentPresets';
+import type {
+  AgentCategory,
+  AgentModePreset,
+  AgentSelectionItem,
+  AgentSource,
+  ByCategory,
+} from '@shared/schemas';
 import {
+  AGENT_CATEGORIES,
   AGENT_MODE_PRESETS_BY_ID,
-  parseAgentModePresets,
-} from '@shared/schemas/agentPresets';
-import {
   agentKey,
   agentMatchesIdentifier,
   byCategory,
-  AGENT_CATEGORIES,
-  type AgentCategory,
-  type AgentSource,
-  type ByCategory,
-} from '@shared/schemas/agent';
-import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
+  parseAgentModePresets,
+} from '@shared/schemas';
+import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName, isObject } from '@utils/core';
 

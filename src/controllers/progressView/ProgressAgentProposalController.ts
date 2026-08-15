@@ -4,8 +4,11 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { ProposalResult } from '@agent/runtime/HostInteractions';
-import type { AgentProposal, AgentProposalPermission } from '@shared/schemas';
-import type { ProgressAgentProposalActionMessage } from '@shared/schemas/progressView';
+import type {
+  AgentProposal,
+  AgentProposalPermission,
+  ProgressAgentProposalActionMessage,
+} from '@shared/schemas';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

@@ -8,36 +8,36 @@ import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import {
-  AgentCategory,
-  type ActiveSkillSummary,
-  type CompileFailure,
-  type ConversationProgress,
-  type MessageType,
-  type NormalizedToolUse,
-  type OutputFileInfo,
-  type Plan,
-  type RoundIndexed,
-  type RunIdentity,
-  type StreamLogEntry,
-  type StreamPhase,
-  type StreamStage,
-  type StreamSubstate,
-  type StreamTabId,
-  type TaskGroup,
-  type TodoItem,
-  type TokenUsageStats,
-  type UserFollowUpSupport,
-  type WorkflowCallProgress,
+import type {
+  ActiveSkillSummary,
+  AgentDelegationScope,
+  ApiAccessMode,
+  CompileFailure,
+  ConversationProgress,
+  MessageType,
+  NormalizedToolUse,
+  OutputFileInfo,
+  Plan,
+  RoundIndexed,
+  RunIdentity,
+  StreamLogEntry,
+  StreamPhase,
+  StreamStage,
+  StreamSubstate,
+  StreamTabId,
+  TaskGroup,
+  TodoItem,
+  TokenUsageStats,
+  UserFollowUpSupport,
+  WorkflowCallProgress,
 } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { latestWorkflowAttemptId } from '@shared/copy/workflowCall';
-import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import type {
   CompactionActivityBlock,
   CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
 import { isActivePhase } from '@shared/streams/streamStatus';
-import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import {
   applyChildStreamRemoval,
   isChildStreamRemoved,

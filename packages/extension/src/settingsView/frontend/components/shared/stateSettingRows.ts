@@ -12,12 +12,8 @@
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
-import type { StateSettingValue } from '@shared/schemas';
-import {
-  settingEnumChoices,
-  stateSettingByKey,
-  type SettingEnumChoice,
-} from '@shared/schemas/stateSettings';
+import type { SettingEnumChoice, StateSettingValue } from '@shared/schemas';
+import { settingEnumChoices, stateSettingByKey } from '@shared/schemas';
 import { renderSettingsToggleRow } from '@shared/wa/settingsSection';
 
 // Third-party imports

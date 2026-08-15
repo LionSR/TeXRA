@@ -1,26 +1,24 @@
 import type { StateStore } from '@platform/interfaces';
+import type {
+  AgentCategory,
+  AgentModePreset,
+  AgentRosterCategorySelection,
+  AgentRosterSelection,
+  AgentSource,
+  ByCategory,
+} from '@shared/schemas';
 import {
-  agentMatchesIdentifier,
-  agentKeyOf,
-  agentName,
-  byCategory,
   AGENT_CATEGORIES,
-  type AgentCategory,
-  type AgentSource,
-  type ByCategory,
-} from '@shared/schemas/agent';
-import {
-  AgentDelegationScopeLegacySchema,
-  AgentRosterSelectionSchema,
-  INHERITED_AGENT_ROSTER,
-  type AgentRosterCategorySelection,
-  type AgentRosterSelection,
-} from '@shared/schemas/agentRoster';
-import {
   AGENT_MODE_PRESETS,
+  AgentDelegationScopeLegacySchema,
+  agentKeyOf,
+  agentMatchesIdentifier,
+  agentName,
+  AgentRosterSelectionSchema,
+  byCategory,
+  INHERITED_AGENT_ROSTER,
   STARTER_AGENT_MODE_PRESET,
-  type AgentModePreset,
-} from '@shared/schemas/agentPresets';
+} from '@shared/schemas';
 import {
   getDefaultTeamId,
   setDefaultTeamId,

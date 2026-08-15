@@ -7,13 +7,14 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { isApiProvider } from '@model/apiProviders';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentProposal, StreamTabId } from '@shared/schemas';
-import { isPlainAgentIdentity } from '@shared/schemas';
 import type {
+  AgentProposal,
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
   ProgressViewOutboundMessage,
-} from '@shared/schemas/progressView';
+  StreamTabId,
+} from '@shared/schemas';
+import { isPlainAgentIdentity } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   isApprovalBypassedForStream,

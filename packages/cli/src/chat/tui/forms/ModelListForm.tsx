@@ -19,7 +19,7 @@ import {
   isCompactFormRows,
   type SelectWindowSize,
 } from '@cli/tui/selectWindow';
-import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
+import type { ApiAccessMode } from '@shared/schemas';
 import {
   CompactPickerKeyHints,
   FormFrame,

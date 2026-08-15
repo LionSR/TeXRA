@@ -13,24 +13,25 @@ import {
   type PackConfig,
 } from '@commands/housekeeping/fileOpSchemas';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
+import type {
+  AcceptCopyMeta,
+  AgentCategory,
+  FileLocation,
+  SettingsTab,
+} from '@shared/schemas';
+import {
+  AcceptCopyMetaSchema,
+  AgentCategorySchema,
+  FileLocationSchema,
+  SETTINGS_TAB,
+  StreamTabIdSchema,
+} from '@shared/schemas';
 import { commandCatalog } from '@shared/commands/catalog';
 import {
   awaitTrue,
   definedHandler,
   type CommandHandler,
 } from '@shared/commands/registry';
-import { AgentCategorySchema, type AgentCategory } from '@shared/schemas/agent';
-import { StreamTabIdSchema } from '@shared/schemas/identifiers';
-import {
-  AcceptCopyMetaSchema,
-  FileLocationSchema,
-  type AcceptCopyMeta,
-  type FileLocation,
-} from '@shared/schemas/output';
-import {
-  SETTINGS_TAB,
-  type SettingsTab,
-} from '@shared/schemas/settingsViewMessages';
 
 /**
  * This module is deliberately free of `vscode` imports (unlike

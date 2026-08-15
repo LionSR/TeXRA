@@ -7,7 +7,7 @@ import {
   type TeamRosterCatalog,
   type TeamRosterResolution,
 } from '@common/teams/TeamRoster';
-import type { AgentModePreset } from '@shared/schemas/agentPresets';
+import type { AgentModePreset } from '@shared/schemas';
 
 interface ResolvedTeam {
   readonly ok: true;

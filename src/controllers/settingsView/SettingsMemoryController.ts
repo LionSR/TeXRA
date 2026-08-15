@@ -2,10 +2,7 @@
 import type { PromptHost } from '@hosts/uiHosts';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  MemoryPreview,
-  MemoryViewItem,
-} from '@shared/schemas/settingsViewMessages';
+import type { MemoryPreview, MemoryViewItem } from '@shared/schemas';
 import { MAX_PINNED_MEMORIES } from '@tools/memory/constants';
 import {
   loadMemoryItems,

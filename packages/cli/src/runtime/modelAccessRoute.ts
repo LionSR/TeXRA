@@ -1,11 +1,10 @@
-import type { UsageRoute } from '@shared/schemas';
+import type { ApiAccessMode, UsageRoute } from '@shared/schemas';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
   type CodingPlanSubscriptionId,
 } from '@shared/codingPlanSubscriptions';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 
 import { parseCliApiMode } from './apiAccessMode';
 

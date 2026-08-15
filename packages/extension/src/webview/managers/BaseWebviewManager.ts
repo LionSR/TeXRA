@@ -1,10 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-import {
-  MainViewMessageSchema,
-  type MainViewMessage,
-} from '@shared/schemas/mainView';
+import { MainViewMessageSchema, type MainViewMessage } from '@shared/schemas';
 import { assertOutboundMessage } from '@shared/utils/dispatcher';
 
 /**

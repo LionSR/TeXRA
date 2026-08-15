@@ -3,8 +3,7 @@ import type {
   MainViewStartupOptions,
 } from '@controllers/mainView/MainViewStartupController';
 import type { StateStore } from '@platform/interfaces';
-import type { DesktopThemeKind } from '@shared/schemas';
-import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
+import type { DesktopThemeKind, MainViewExecuteMessage } from '@shared/schemas';
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopExecutionIpc } from './desktopExecutionIpc.js';
 import {

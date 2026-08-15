@@ -8,6 +8,11 @@ import { customElement, property } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import type { PRSubscriptionEntry } from '@shared/schemas';
+import {
+  DEFAULT_GIT_AUTHOR_EMAIL,
+  DEFAULT_GIT_AUTHOR_NAME,
+} from '@shared/schemas';
 import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import {
   renderSetStatusIcon,
@@ -22,16 +27,11 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - shared schemas
-import type { PRSubscriptionEntry } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - shared utils
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 
 // Local imports - shared constants
-import {
-  DEFAULT_GIT_AUTHOR_NAME,
-  DEFAULT_GIT_AUTHOR_EMAIL,
-} from '@shared/schemas/stateSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Local imports - catalog-driven settings rows

@@ -1,8 +1,5 @@
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  SettingsMessageFor,
-  SETTINGS_VIEW_CMD,
-} from '@shared/schemas/settingsViewMessages';
+import type { SettingsMessageFor, SETTINGS_VIEW_CMD } from '@shared/schemas';
 import type {
   SettingsRespond,
   SettingsStatePorts,

@@ -1,5 +1,5 @@
 import type { SelectItem } from '@cli/tui/ui/Select';
-import type { StateSettingEntry } from '@shared/schemas/stateSettings';
+import type { StateSettingEntry } from '@shared/schemas';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {

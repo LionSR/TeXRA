@@ -29,16 +29,20 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
-import { MESSAGE_TYPES, ToolError, type ToolResult } from '@shared/schemas';
-import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type {
-  StreamTabId,
   ExecutionId,
+  StreamTabId,
   TodoItem,
+  ToolResult,
   ToolUseLog,
   ToolUseStatus,
 } from '@shared/schemas';
-import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
+import {
+  CodexSandboxModeSchema,
+  MESSAGE_TYPES,
+  ToolError,
+} from '@shared/schemas';
+import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';

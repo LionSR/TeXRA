@@ -14,15 +14,15 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
+  settingsViewSettingByKey,
+  type SettingsViewSnapshot,
+  type SettingsViewStateSettingEntry,
+} from '@shared/schemas';
+import {
   resetSetting,
   writeSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
-import {
-  settingsViewSettingByKey,
-  type SettingsViewSnapshot,
-  type SettingsViewStateSettingEntry,
-} from '@shared/schemas/stateSettings';
 
 /**
  * A validated state-setting write/reset, a rejected catalog value, or `null`

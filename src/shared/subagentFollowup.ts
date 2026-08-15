@@ -18,13 +18,16 @@ import {
   DELIVERY_TAGS,
   type DeliveryTagName,
 } from '@shared/deliveryTags';
-import {
-  type SubagentProgressUpdate,
-  WorkflowScriptDeliverySummarySchema,
-  type WorkflowScriptDeliverySummary,
+import type {
+  SubagentProgressUpdate,
+  WorkflowScriptDeliverySummary,
 } from '@shared/schemas';
-import { countByStatus, STATUS_DISPLAY } from '@shared/schemas/todoDisplay';
-import { planSummaryLine } from '@shared/schemas/workPlan';
+import {
+  countByStatus,
+  planSummaryLine,
+  STATUS_DISPLAY,
+  WorkflowScriptDeliverySummarySchema,
+} from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import {
   formatCompactDuration,

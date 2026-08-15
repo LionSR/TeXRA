@@ -1,6 +1,6 @@
 // Local imports - shared
-import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
-import { agentKeyOf } from '@shared/schemas/agent';
+import type { AgentCategory, AgentSource } from '@shared/schemas';
+import { agentKeyOf } from '@shared/schemas';
 import type { SettingsAgentCatalogState } from './SettingsAgentCatalogController';
 
 export interface SettingsAgentVisibilityEntry {

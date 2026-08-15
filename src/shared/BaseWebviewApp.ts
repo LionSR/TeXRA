@@ -6,13 +6,13 @@ import { state } from 'lit/decorators.js';
 // Local imports - shared handlers
 import { COMMON_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
-
-// Local imports - webview commands
 import {
   CommonViewMessageSchema,
   type StateRestoreMessage,
-} from '@shared/schemas/commonViewMessages';
+} from '@shared/schemas';
+import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
+
+// Local imports - webview commands
 import { setWaColorScheme, themeIsDark } from '@shared/wa/waColorScheme';
 import type { ZodError } from 'zod';
 
