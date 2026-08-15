@@ -3,9 +3,16 @@ repos:
     hooks:
       - id: npm-format
         name: prettier --write staged files
-        # During commits, pre-commit supplies staged paths and temporarily hides
-        # unstaged changes. It detects rewrites, aborts, and lets the contributor
+        # With the local hooks installed (`npm run hooks:install`), a chained
+        # git hook stages Prettier's output before pre-commit runs, so this
+        # hook finds staged content already formatted and passes. Without it,
+        # pre-commit supplies staged paths and temporarily hides unstaged
+        # changes; it detects rewrites, aborts, and lets the contributor
         # review and stage the formatter's output before retrying.
+        #
+        # Never `git add` here: pre-commit stashes unstaged changes around
+        # every hook and rolls back with `git checkout -- .`, which destroys
+        # unstaged hunks once the index has been rewritten (#9953, #9955).
         entry: corepack pnpm exec prettier --write --ignore-unknown --no-error-on-unmatched-pattern
         language: system
       # Forbid a stray internal doc at the docs root from being published to

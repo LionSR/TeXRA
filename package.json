@@ -18,6 +18,7 @@
     "build:initial": "corepack pnpm run desktop:build && corepack pnpm run build:fast && corepack pnpm run check:initial-build-artifacts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "hooks:install": "node scripts/install-local-hooks.mjs",
     "vite:webviews": "corepack pnpm --filter texra vite:webviews",
     "capture:walkthrough-media": "node scripts/capture-walkthrough-media.mjs",
     "smoke:webviews": "corepack pnpm run vite:webviews && corepack pnpm run smoke:webviews:run",
