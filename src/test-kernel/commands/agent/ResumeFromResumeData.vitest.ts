@@ -12,9 +12,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agent/runtime/resolveAndResumeStream', () => ({
   resolveAndResumeStream: mocks.resolveAndResumeStream,
 }));
-vi.mock('@progressView/ProgressViewProvider', () => ({
-  ProgressViewProvider: { getInstance: () => undefined },
-}));
 vi.mock('@commands/agent/executeCommand', () => ({
   runExecuteCommand: vi.fn(),
 }));

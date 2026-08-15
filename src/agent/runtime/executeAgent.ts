@@ -61,7 +61,6 @@ import {
 } from './AgentFlowResult';
 import { generateSessionDescription } from './sessionDescription';
 import { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
-import { ResumeAdmissionCancelledError } from './resumeAdmission';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
@@ -69,6 +68,14 @@ import type { ToolUseResumeData } from './SessionResumeRetrieval';
 
 const CHANNEL = 'executeAgent';
 const logger = createChannelTrace(CHANNEL);
+
+/** A resumed execution lost its canonical admission race with deletion. */
+export class ResumeAdmissionCancelledError extends Error {
+  constructor(readonly executionId: ExecutionId) {
+    super(`Resume cancelled before launch for execution ${executionId}.`);
+    this.name = 'ResumeAdmissionCancelledError';
+  }
+}
 
 /** Create the awaited round-finalized callback used by agent flows. */
 function createUsageRecordingCallback(

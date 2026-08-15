@@ -2,25 +2,19 @@ import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
   resolveAndResumeStream,
+  resolveResumeStateFromSnapshots,
   resumeQueuedToolUseFromResumeData,
   trackTerminalResultPresentation,
   type SessionHandle,
 } from '@agent/runtime';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   DESKTOP_UNAVAILABLE_TOOLS,
   launchDesktopAgent,
 } from './desktopAgentLaunch.js';
 import { toLogData } from './desktopLogUtils.js';
-
-interface DesktopResumeState {
-  readonly runState: AgentConfig;
-  readonly executionId?: ExecutionId;
-  readonly parentStreamId?: StreamTabId;
-}
 
 interface DesktopResumeContext {
   readonly session: SessionHandle;
@@ -65,39 +59,6 @@ export class DesktopProcessResumeOwner {
   }
 }
 
-async function resolveDesktopResumeState(
-  streamId: StreamTabId,
-  context: DesktopResumeContext,
-): Promise<DesktopResumeState | undefined> {
-  const initialMetadata = context.session.snapshots.getRunMetadata(streamId);
-  let runState = initialMetadata.config;
-  let executionId = initialMetadata.executionId;
-  if (!runState || !executionId) {
-    try {
-      await context.session.snapshots.preload([streamId]);
-    } catch (error) {
-      context.logger.warn(
-        `Failed to read persisted resume data for ${streamId}`,
-        { data: toLogData(error) },
-      );
-      return undefined;
-    }
-    const runMetadata = context.session.snapshots.getRunMetadata(streamId);
-    runState = runMetadata.config;
-    executionId ??= runMetadata.executionId;
-    if (!runState || !context.session.transcripts.has(streamId)) {
-      return undefined;
-    }
-  }
-
-  const parentStreamId = context.session.snapshots.getParentStreamId(streamId);
-  return {
-    runState,
-    ...(executionId && { executionId }),
-    ...(parentStreamId !== undefined && { parentStreamId }),
-  };
-}
-
 function resumeDesktopStream(
   streamId: StreamTabId,
   context: DesktopResumeContext,
@@ -135,32 +96,29 @@ function resumeDesktopStream(
   return resolveAndResumeStream(
     streamId,
     {
-      interactions: context.session.interactions,
       streamStatus: context.session.status,
       resolveResumeState: async (id) => {
-        const resumeState = await resolveDesktopResumeState(id, context);
+        const resolution = await resolveResumeStateFromSnapshots(
+          context.session.snapshots,
+          id,
+        );
+        if (resolution.status === 'read-failed') {
+          context.logger.warn(
+            `Failed to read persisted resume data for ${id}`,
+            {
+              data: toLogData(resolution.error),
+            },
+          );
+        }
         if (isResumeInvalidated()) return undefined;
-        if (!resumeState) {
-          await context.session.interactions.showInfoMessage(
-            'No persisted run state was found for this stream. Start a new run instead.',
-            { replayWhenAttached: true },
-          );
-          return undefined;
-        }
-        if (!resumeState.executionId) {
-          await context.session.interactions.showInfoMessage(
-            'This stream has no persisted execution id. Start a new run instead.',
-            { replayWhenAttached: true },
-          );
-          return undefined;
-        }
-        return {
-          runState: resumeState.runState,
-          executionId: resumeState.executionId,
-          ...(resumeState.parentStreamId !== undefined && {
-            parentStreamId: resumeState.parentStreamId,
-          }),
-        };
+        if (resolution.status === 'resolved') return resolution.state;
+        await context.session.interactions.showInfoMessage(
+          resolution.status === 'incomplete' && resolution.runState
+            ? 'This stream has no persisted execution id. Start a new run instead.'
+            : 'No persisted run state was found for this stream. Start a new run instead.',
+          { replayWhenAttached: true },
+        );
+        return undefined;
       },
       resumeToolUse: (snapshot, claimedRecovery) =>
         resumeQueuedToolUseFromResumeData(snapshot.streamId, snapshot, {

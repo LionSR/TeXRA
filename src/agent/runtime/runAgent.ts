@@ -20,11 +20,14 @@ import {
 } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 import { applyHelperModelPreference } from './helperModelPreference';
-import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
+import {
+  executeAgent,
+  ResumeAdmissionCancelledError,
+  type ExecuteAgentOptions,
+} from './executeAgent';
 import { getStreamTabId } from './streamTab';
 import { defaultSession } from './SessionHandle';
 import { flushOwnedExecutionArtifacts } from './executionOwnership';
-import { ResumeAdmissionCancelledError } from './resumeAdmission';
 import type { AgentFlowResult } from './AgentFlowResult';
 
 /**

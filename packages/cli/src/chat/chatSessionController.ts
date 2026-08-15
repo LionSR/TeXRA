@@ -700,7 +700,6 @@ export function createChatSessionController(
           resolveAndResumeStream(
             streamId,
             {
-              interactions: runtimeSession.interactions,
               streamStatus: runtimeSession.status,
               isCancellationRequested,
               resolveResumeState: async () => ({

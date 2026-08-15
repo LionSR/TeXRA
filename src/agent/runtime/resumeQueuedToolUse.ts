@@ -15,9 +15,9 @@ import {
 } from '@shared/schemas';
 import {
   resumeToolUseFromResumeData,
+  ResumeAdmissionCancelledError,
   type SubagentRunOptions,
 } from './executeAgent';
-import { ResumeAdmissionCancelledError } from './resumeAdmission';
 import { defaultSession } from './SessionHandle';
 import type { ToolUseResumeData } from './SessionResumeRetrieval';
 

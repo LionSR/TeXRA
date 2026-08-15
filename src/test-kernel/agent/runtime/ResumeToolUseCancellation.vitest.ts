@@ -70,8 +70,10 @@ vi.mock('@agent/implementations/flows/tooluse/runToolUseFlow', () => ({
 // Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
-import { ResumeAdmissionCancelledError } from '@agent/runtime/resumeAdmission';
+import {
+  resumeToolUseFromResumeData,
+  ResumeAdmissionCancelledError,
+} from '@agent/runtime/executeAgent';
 import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
