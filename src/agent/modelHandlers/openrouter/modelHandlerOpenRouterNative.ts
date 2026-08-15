@@ -60,7 +60,7 @@ import {
   prependTextToChatUserMessage,
 } from '../openai/openAIMessageUtils';
 import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
-import { extractTextFromReasoningDetails } from '../utils/openRouterReasoning';
+import { extractTextFromReasoningDetails } from './openRouterReasoning';
 import {
   OpenRouterStreamAggregator,
   toOpenRouterReasoningEffort,
