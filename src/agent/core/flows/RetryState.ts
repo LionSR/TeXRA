@@ -4,7 +4,9 @@ import { Node } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ModelCell } from '@agent/runtime/ModelCell';
+import { createKimiCodeFallbackHandler } from '@agent/runtime/ModelFactory';
 import type { RunScope } from '@agent/runtime/RunScope';
+import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import {
   hasContextWindowErrorMarker,
   hasMissingApiKeyErrorMarker,
@@ -87,14 +89,19 @@ export type InvocationResult<TSuccess> =
   | { kind: 'skipped' };
 
 interface RetryableNodeServices {
-  config: Pick<AgentConfig, 'model'>;
+  config: Pick<AgentConfig, 'model' | 'agentCategory'>;
   logger: AgentTrace;
   readonly runScope: RunScope;
   /**
    * The run's live client seam. The cell owns the provider client, so a rebind
-   * here is the same rebind every other reader of the run observes.
+   * here is the same rebind every other reader of the run observes; a Kimi
+   * Code fallback swap ({@link prepareRetryForCredentialSelection}) is
+   * likewise visible to every reader.
    */
-  readonly modelCell: Pick<ModelCell, 'getClient' | 'rebind' | 'route'>;
+  readonly modelCell: Pick<
+    ModelCell,
+    'getClient' | 'rebind' | 'route' | 'handler' | 'swap'
+  >;
 }
 
 /** Rebuilds the run's client for the configured credential, logging failure. */
@@ -112,6 +119,48 @@ async function rebindClient(
       data: rebindError,
     });
   }
+}
+
+/**
+ * Prepare the run's client for a credential-selecting retry. Most selections
+ * only need a rebind: the live handler re-resolves credential and endpoint
+ * from the current settings. The exception is a dual-backend Kimi model whose
+ * handler was dispatched onto the Kimi Code coding endpoint — its synthesized
+ * config pins the coding `baseUrl` and wire id, so a rebind would resolve the
+ * same exhausted Kimi Code credential again. For a 'personal' selection the
+ * host has already disabled the plan preference, so rebuild the handler from
+ * the registry config and swap it in (the mid-run replacement the model
+ * switcher also uses); the next attempt then builds its client against the
+ * Moonshot fallback.
+ */
+async function prepareRetryForCredentialSelection(
+  services: RetryableNodeServices,
+  selection: ModelCredentialSelection,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  const { modelCell } = services;
+  if (selection !== 'personal') {
+    await modelCell.rebind(selection, signal);
+    return;
+  }
+  const fallback = await createKimiCodeFallbackHandler(
+    modelCell.handler.config,
+    services.config.model,
+    services.runScope.session.responseTextProcessing,
+  );
+  if (!fallback) {
+    await modelCell.rebind(selection, signal);
+    return;
+  }
+  fallback.setAgentCategory(services.config.agentCategory);
+  fallback.setLogger(services.logger);
+  try {
+    signal?.throwIfAborted();
+  } catch (error) {
+    fallback.dispose();
+    throw error;
+  }
+  modelCell.swap(fallback, services.config.model);
 }
 
 /** Base class for model/tool invocation nodes with retry support. */
@@ -456,7 +505,6 @@ export abstract class RetryableInvocationNode<
     });
     // No timeout: the retry panel waits indefinitely for the user's decision.
     let clientPrepared = false;
-    const { modelCell } = this.services;
     const interaction = session.interactions.requestRetry(
       {
         requestId: `retry-${generateShortId()}`,
@@ -468,7 +516,11 @@ export abstract class RetryableInvocationNode<
       },
       {
         prepareRetry: async (selection, signal) => {
-          await modelCell.rebind(selection, signal);
+          await prepareRetryForCredentialSelection(
+            this.services,
+            selection,
+            signal,
+          );
           clientPrepared = true;
         },
       },

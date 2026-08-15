@@ -15,7 +15,8 @@
 import { writeRawStdout } from '@cli/runtime/logSinks';
 import { terminalCapabilities } from '../state/terminalCapabilities';
 
-type NotificationKind = 'agentFinished' | 'approvalNeeded';
+type NotificationKind =
+  'agentFinished' | 'approvalNeeded' | 'credentialSwitched';
 
 const BEL = '';
 const ESC = '';
@@ -47,5 +48,7 @@ function defaultMessageFor(kind: NotificationKind): string {
       return 'TeXRA agent finished';
     case 'approvalNeeded':
       return 'TeXRA approval needed';
+    case 'credentialSwitched':
+      return 'TeXRA switched to your own API key';
   }
 }

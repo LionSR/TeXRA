@@ -9,6 +9,7 @@ import type {
   ModelCredentialSelection,
   SdkToolCall,
 } from '@agent/types/ModelHandlerContracts';
+import { attachSdkRequestBaseURL } from '@common/errors/sdkError/sdkRequestEndpoint';
 
 // Local file imports
 import { logOpenAICompatibleClientConfig } from './openAIChatHelpers';
@@ -78,5 +79,22 @@ export abstract class OpenAICompatibleModelHandler<
 
   override getRetryEndpoint(client: OpenAI): string {
     return client.baseURL;
+  }
+
+  /**
+   * Record the resolved request endpoint for an OpenAI-SDK error at the
+   * boundary, because the SDK's `APIError` carries status/body/headers but no
+   * request config. Downstream endpoint-scoped detection (Kimi Code
+   * subscription usage limits) reads this record. The side channel never
+   * mutates the thrown error, so stamping stays best-effort even for a frozen
+   * or sealed error and can never replace the original failure.
+   */
+  protected override attachSdkRequestEndpoint(
+    err: unknown,
+    client: OpenAI,
+  ): void {
+    const baseURL = this.getRetryEndpoint(client);
+    if (!baseURL) return;
+    attachSdkRequestBaseURL(err, baseURL);
   }
 }

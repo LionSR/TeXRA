@@ -22,9 +22,11 @@ import {
 } from '@model/copilotRouting';
 import { resolveCodexSubscriptionCapabilities } from '@model/providerCapabilities';
 import {
+  isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
   kimiCodeEffectiveConfig,
   resolveKimiCodeRoutingFacts,
+  type KimiSubscriptionModelFields,
 } from '@model/kimiCodeSubscriptionRouting';
 import { isGpt5ModelName } from '@model/modelNames';
 import {
@@ -32,12 +34,16 @@ import {
   shouldRouteModelThroughOpenRouter,
   type ResolvedModelConfig,
 } from '@model/openRouterRouting';
-import { copilotRouteForModel } from '@model/runtimeModelRegistry';
+import {
+  copilotRouteForModel,
+  resolveRuntimeModelConfig,
+} from '@model/runtimeModelRegistry';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   LanguageModelPortError,
 } from '@platform/languageModel';
 import { platform } from '@platform/platform';
+import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
@@ -427,6 +433,51 @@ export async function createModelHandlerForCompatibilityKey(
       allowCodexSubscriptionOverride:
         compatibilityKey === 'ModelHandlerOpenAIResponse',
     },
+    responseTextProcessing,
+  );
+}
+
+/**
+ * The handler a Kimi Code-routed dual-backend model must be rebuilt onto when
+ * a retry switches to the user's own Moonshot API key. A credential-only
+ * rebind cannot undo the dispatch-time route: the live handler's synthesized
+ * config pins the coding `baseUrl` and wire id, so it would resolve the same
+ * exhausted Kimi Code credential and endpoint again (the pinned config reads
+ * as exclusive to `resolveDirectModelApiKeyProvider`).
+ *
+ * Returns the handler built from the registry config under the same
+ * compatibility key, or undefined when no rebuild applies — the live config
+ * is not on the coding route, the model id is not Kimi-subscription-eligible,
+ * or the model is Kimi Code-EXCLUSIVE (no Moonshot fallback exists; those
+ * retries must not switch at all). The caller must have already disabled the
+ * "Prefer Kimi Code" preference; with it still on, the rebuild would resolve
+ * the coding route again.
+ */
+export async function createKimiCodeFallbackHandler(
+  currentConfig: KimiSubscriptionModelFields,
+  modelId: string,
+  responseTextProcessing?: ResponseTextProcessing,
+): Promise<ModelHandler | undefined> {
+  if (
+    !isKimiSubscriptionEligible(currentConfig) ||
+    currentConfig.baseUrl !== KIMI_CODE_BASE_URL
+  ) {
+    return undefined;
+  }
+  const registryConfig = await resolveRuntimeModelConfig(modelId);
+  if (
+    !registryConfig ||
+    !isKimiSubscriptionEligible(registryConfig) ||
+    isKimiCodeExclusiveModel(registryConfig)
+  ) {
+    return undefined;
+  }
+  // Pin the same compatibility key the coding route dispatched under: the
+  // rebuilt handler keeps the conversation format (and stays off a mid-run
+  // OpenRouter toggle) exactly like a resume-path rebuild.
+  return createModelHandlerForCompatibilityKey(
+    registryConfig,
+    'ModelHandlerKimi',
     responseTextProcessing,
   );
 }
