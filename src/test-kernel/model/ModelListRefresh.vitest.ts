@@ -4,6 +4,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import {
   computeModelListVersion,
+  DEFAULT_MODELS,
   MODEL_LIST_VERSION,
   PREFERRED_DEFAULT_MODELS,
 } from '@model/modelOptionsBasic';
@@ -111,6 +112,24 @@ describe('refreshModelListStateIfNeeded', () => {
     expect(enabledModels(state)).toContain('gemini36f');
   });
 
+  it('clears a retired Copilot route preference', async () => {
+    expect(MODEL_CONFIGS.kimi2?.retired).toBe(true);
+    const state = new FakeStateStore({
+      [GlobalStateKey.MODEL_LIST_VERSION]: MODEL_LIST_VERSION,
+      [GlobalStateKey.ENABLED_MODELS]: ['sonnet5T'],
+      [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['kimi2', 'gemini31p'],
+    });
+
+    const result = await refreshModelListStateIfNeeded(state);
+
+    expect(result.skipped).toBe(false);
+    expect(result.routePreferencesCleared).toEqual(['kimi2']);
+    expect(state.get<string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS)).toEqual([
+      'gemini31p',
+    ]);
+    expect(enabledModels(state)).toEqual(['sonnet5T']);
+  });
+
   it('is idempotent once the stale Copilot route preference is cleared', async () => {
     expect(MODEL_CONFIGS.gemini36f?.deprecated).toBe(true);
     const state = new FakeStateStore({
@@ -130,6 +149,39 @@ describe('refreshModelListStateIfNeeded', () => {
       'gemini31p',
     ]);
     expect(enabledModels(state)).toContain('gemini36f');
+  });
+
+  it('still reconciles enabled models and version when the route write fails', async () => {
+    expect(MODEL_CONFIGS.grok4?.retired).toBe(true);
+    expect(MODEL_CONFIGS.kimi2?.retired).toBe(true);
+    const state = new FakeStateStore({
+      [GlobalStateKey.MODEL_LIST_VERSION]: MODEL_LIST_VERSION - 1,
+      [GlobalStateKey.ENABLED_MODELS]: ['grok4'],
+      [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['kimi2'],
+    });
+    const failingState = {
+      get: <T>(key: string): T | undefined => state.get<T>(key),
+      update: async (key: string, value: unknown): Promise<void> => {
+        if (key === GlobalStateKey.COPILOT_ROUTE_MODELS) {
+          throw new Error('route write failed');
+        }
+        await state.update(key, value);
+      },
+    };
+
+    await expect(refreshModelListStateIfNeeded(failingState)).rejects.toThrow(
+      'route write failed',
+    );
+
+    expect(state.get<string[]>(GlobalStateKey.ENABLED_MODELS)).toEqual([
+      ...DEFAULT_MODELS,
+    ]);
+    expect(state.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
+      MODEL_LIST_VERSION,
+    );
+    expect(state.get<string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS)).toEqual([
+      'kimi2',
+    ]);
   });
 
   it('keeps active Copilot route preferences untouched', async () => {

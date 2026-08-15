@@ -418,7 +418,7 @@ export async function activate(context: vscode.ExtensionContext) {
             if (routePreferencesCleared.length > 0) {
               logger.info(
                 'extension',
-                `Cleared deprecated Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
+                `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
               );
             }
           }

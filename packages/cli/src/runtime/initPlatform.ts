@@ -311,7 +311,7 @@ export async function initCliPlatform(
           logAt(
             'info',
             'cli.models',
-            `Cleared deprecated Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
+            `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
           );
         }
       }
