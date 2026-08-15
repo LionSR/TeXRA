@@ -102,6 +102,15 @@ function renderConversationPaneEntry({
         />
       );
     }
+    if (entry.role === 'phase') {
+      return (
+        <TranscriptEntry
+          colorEnabled={colorEnabled}
+          entry={entry}
+          width={width}
+        />
+      );
+    }
     if (
       entry.role === 'activity' ||
       entry.role === 'error' ||
