@@ -8,7 +8,7 @@
  */
 
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import { calculateTokenPrice } from '@agent/modelHandlers/support/priceUtils';
 
 import { normalizeUsage } from '../support/UsageNormalizer';
 import type { BetaUsage } from '@anthropic-ai/sdk/resources/beta/messages';

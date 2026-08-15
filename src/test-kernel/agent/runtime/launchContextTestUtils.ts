@@ -15,7 +15,7 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { UsageMonitor } from '@agent/utils/UsageMonitor';
+import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import type { ExecutionId, StorageKey, StreamTabId } from '@shared/schemas';
 
 import { AgentCategory } from '@shared/schemas';

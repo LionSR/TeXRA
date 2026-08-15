@@ -15,7 +15,7 @@ import {
   MediaAttachmentProcessor,
   type MediaFileResult,
 } from '@agent/modelHandlers/support/MediaAttachmentProcessor';
-import type { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/types/mediaTypes';
 import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';

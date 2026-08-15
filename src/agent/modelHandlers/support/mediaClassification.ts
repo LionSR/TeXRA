@@ -1,4 +1,4 @@
-import type { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/types/mediaTypes';
 
 /**
  * The fundamental kind of a media entry, derived from its `media_category`

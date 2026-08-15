@@ -11,7 +11,7 @@ import {
   ModelHandlerVscodeLm,
 } from '@agent/modelHandlers/vscodelm/modelHandlerVscodeLm';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
-import type { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/types/mediaTypes';
 import { detectPartialText } from '@common/errors/sdkError/errorMetadata';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';

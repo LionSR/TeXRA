@@ -744,7 +744,7 @@
       "src/latex/LatexMediaManager.ts"
     ],
     "@shared/schemas/usage": [
-      "src/agent/utils/UsageMonitor.ts",
+      "src/agent/runtime/UsageMonitor.ts",
       "src/telemetry/UsageLogTypes.ts"
     ],
     "@shared/schemas/workflowScriptFiles": [

@@ -11,7 +11,7 @@
  * rebate in `computeStandardPrice` follows the tier switch on its own.
  */
 
-import type { LongContextPricingTier } from '@agent/utils/priceUtils';
+import type { LongContextPricingTier } from '@agent/modelHandlers/support/priceUtils';
 
 const XAI_LONG_CONTEXT_TIERS: Readonly<Record<string, LongContextPricingTier>> =
   {

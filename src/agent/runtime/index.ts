@@ -118,3 +118,6 @@ export { initializePolishModel } from './polishModel';
 
 // AgentFlowResult
 export type { WorkflowFlowResult } from './AgentFlowResult';
+
+// core/state projection used by the CLI's frozen progress wire.
+export { agentConfigToTaskState } from '../core/state/agentConfigToTaskState';

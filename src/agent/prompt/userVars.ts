@@ -7,7 +7,8 @@ import {
   AgentPrompt,
 } from '@agent/core/definition/AgentDataclass';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
-import { shouldSaveModelIO } from '@agent/utils/debugMessageSaver';
+import { shouldSaveModelIO } from '@agent/debug/debugMessageSaver';
+import type { UserVars } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { FileListEntry } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -43,11 +44,6 @@ import { StorageFS } from '@utils/files/storageFS';
 
 /** Relative path from an agent directory to the shared LaTeX style rules file. */
 const SHARED_LATEX_RULES_REL = '../shared/latex_style_rules.txt';
-
-/**
- * User variables for prompt rendering
- */
-export type UserVars = Record<string, unknown>;
 
 /**
  * Fixed runtime template variables owned by `buildUserVars`.
@@ -109,7 +105,13 @@ export const USER_VAR_RUNTIME_TOKENS = [
   'ATTACHED_MEMORIES',
   'ATTACHED_MEMORY_MISSES',
   'AVAILABLE_SKILLS',
-] as const;
+] as const satisfies readonly (keyof UserVars)[];
+
+type AssertNever<T extends never> = T;
+/** Reverse guard: every fixed variable must stay passthrough-listed. */
+type _UserVarsStayInRuntimeTokens = AssertNever<
+  Exclude<keyof UserVars, (typeof USER_VAR_RUNTIME_TOKENS)[number]>
+>;
 
 export function buildUserVarPassthrough(): Readonly<Record<string, string>> {
   return Object.freeze(
@@ -145,10 +147,17 @@ export interface BuildUserVarsOptions {
 }
 
 /**
+ * Agent-defined `requiredFilesInternal` variables: each YAML-named variable
+ * `X` contributes a string `X_FILE`/`X_CONTENT` pair. The names are dynamic
+ * by design, so they live outside the fixed {@link UserVars} vocabulary.
+ */
+type RequiredFileVars = Record<string, string>;
+
+/**
  * Result of loading file-based variables
  */
 type FileVarsResult = {
-  vars: UserVars;
+  vars: RequiredFileVars;
   files: LoadedFileEntry[];
 };
 
@@ -228,11 +237,28 @@ export async function buildUserVars(
   return userVars;
 }
 
+type BasicVars = Pick<
+  UserVars,
+  | 'MODEL'
+  | 'INSTRUCTION'
+  | 'IS_OPENAI_MODEL'
+  | 'IS_ANTHROPIC_MODEL'
+  | 'IS_GOOGLE_MODEL'
+  | 'WORKFLOW_AGENTS'
+  | 'TOOL_USE_AGENTS'
+  | 'CWD'
+  | 'DEFAULT_BIB_PATH'
+  | 'BUILTIN_WORKFLOW_DIR'
+  | 'BUILTIN_TOOLUSE_DIR'
+  | 'CUSTOM_AGENTS_DIR'
+  | 'AGENT_DOCS_DIR'
+>;
+
 function getBasicVars(
   agentConfig: AgentConfig,
   providerFlags: ModelProviderFlags,
   options: BuildUserVarsOptions,
-): UserVars {
+): BasicVars {
   // Filter out the current agent so it doesn't see itself as a delegation target
   const selfName = agentConfig.agent;
   const scope = options.delegationAgentScope ?? undefined;
@@ -274,14 +300,22 @@ function getBasicVars(
  * label cannot break prompt rendering. Absent roots render as empty strings
  * (e.g. in tests that don't run activation).
  */
-function getAgentDirectoryVars(): UserVars {
-  const KIND_TO_VAR: Record<ExternalRootKind, string> = {
+type AgentDirectoryVars = Pick<
+  UserVars,
+  | 'BUILTIN_WORKFLOW_DIR'
+  | 'BUILTIN_TOOLUSE_DIR'
+  | 'CUSTOM_AGENTS_DIR'
+  | 'AGENT_DOCS_DIR'
+>;
+
+function getAgentDirectoryVars(): AgentDirectoryVars {
+  const KIND_TO_VAR: Record<ExternalRootKind, keyof AgentDirectoryVars> = {
     builtInWorkflow: 'BUILTIN_WORKFLOW_DIR',
     builtInToolUse: 'BUILTIN_TOOLUSE_DIR',
     custom: 'CUSTOM_AGENTS_DIR',
     agentDocs: 'AGENT_DOCS_DIR',
   };
-  const vars: UserVars = {
+  const vars: AgentDirectoryVars = {
     BUILTIN_WORKFLOW_DIR: '',
     BUILTIN_TOOLUSE_DIR: '',
     CUSTOM_AGENTS_DIR: '',
@@ -316,14 +350,38 @@ function getCategoryFiles(config: AgentConfig, category: string): string[] {
 }
 
 /** Categories used for building file vars (excludes MEDIA which is display-only) */
-const FILE_VAR_CATEGORIES = ['INPUT', 'CONTEXT', 'EDITED'];
+type FileCategoryPrefix = 'INPUT' | 'CONTEXT' | 'EDITED';
+const FILE_VAR_CATEGORIES: readonly FileCategoryPrefix[] = [
+  'INPUT',
+  'CONTEXT',
+  'EDITED',
+];
+
+/** Variables contributed by the readable file categories. */
+type FileCategoryVars = {
+  [P in FileCategoryPrefix as `${P}_FILE`]: string | null;
+} & {
+  [P in FileCategoryPrefix as `${P}_CONTENT`]: string | null;
+} & {
+  [P in FileCategoryPrefix as `${P}_FILES`]: string[];
+} & {
+  [P in FileCategoryPrefix as `ALL_${P}S`]: string | null;
+} & {
+  [P in FileCategoryPrefix as `LIST_OF_ALL_${P}S`]: string;
+};
+
+/** File-based variables: readable categories plus the display-only MEDIA slots. */
+type FileVars = FileCategoryVars &
+  Pick<UserVars, 'MEDIA_FILE' | 'MEDIA_CONTENT'>;
 
 async function getFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   logger: AgentTrace,
-): Promise<UserVars> {
-  const userVars: UserVars = {};
+): Promise<FileVars> {
+  // Filled incrementally in the loop below; every key is assigned on every
+  // path, either by `setVarFromFile` or by an explicit null/empty fallback.
+  const userVars = {} as FileVars;
 
   const contextFiles = getCategoryFiles(agentConfig, 'CONTEXT');
 
@@ -416,7 +474,7 @@ async function getRequiredFileVars(
   agentSetting: AgentSetting,
   agentPath: string,
 ): Promise<FileVarsResult> {
-  const vars: UserVars = {};
+  const vars: RequiredFileVars = {};
   const files: LoadedFileEntry[] = [];
 
   for (const [varName, filePath] of Object.entries(
@@ -485,8 +543,8 @@ async function getAttachedMemories(
 export function resolveOutputFiles(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-): UserVars {
-  const userVars: UserVars = {};
+): Pick<UserVars, 'OUTPUT_FILES'> {
+  const userVars: Pick<UserVars, 'OUTPUT_FILES'> = {};
   const explicitOutputFiles = (agentConfig.outputFiles ?? []).filter(Boolean);
   const defaultOutputFiles = (agentSetting.defaultOutputFiles ?? []).filter(
     Boolean,
@@ -508,12 +566,24 @@ export function resolveOutputFiles(
   return userVars;
 }
 
+type ToolFlagVars = Pick<
+  UserVars,
+  | 'AUTO_EXTRACT_FIGURE'
+  | 'AUTO_EXTRACT_TIKZ_FIGURE'
+  | 'INCLUDE_TEX_COUNT'
+  | 'PRINT_INPUT_PROMPT'
+  | 'AUTO_COMPILE_INPUT_PDF'
+  | 'CODEX_GUIDANCE'
+  | 'CLAUDE_CODE_GUIDANCE'
+  | 'ROUNDS'
+>;
+
 export function getToolFlags(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
-): UserVars {
-  const flags: UserVars = {
+): ToolFlagVars {
+  const flags: ToolFlagVars = {
     AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
     AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
     INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
-import type { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/types/mediaTypes';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Local file imports

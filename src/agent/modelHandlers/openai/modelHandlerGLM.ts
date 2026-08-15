@@ -1,5 +1,5 @@
 // Local imports - agent
-import type { StandardPricingConfig } from '@agent/utils/priceUtils';
+import type { StandardPricingConfig } from '@agent/modelHandlers/support/priceUtils';
 import { clampReasoningEffortToHighOrMax } from '@agent/modelHandlers/support/reasoningEffort';
 
 // Local file imports

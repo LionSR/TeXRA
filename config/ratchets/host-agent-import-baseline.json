@@ -18,8 +18,7 @@
       "@agent/storage",
       "@agent/storage/conversationFormat",
       "@agent/storage/executionLease",
-      "@agent/trace",
-      "@agent/utils/agentConfigToTaskState"
+      "@agent/trace"
     ],
     "desktop": [
       "@agent/core/definition/AgentConfig",
