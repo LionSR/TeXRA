@@ -22,7 +22,7 @@ import {
   type ResultDiffSummary,
 } from '@agent/runtime/AgentFinalResult';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type { OutputFileSummary } from '@shared/schemas/output';
@@ -370,9 +370,11 @@ const LARGE_CHANGE_DIFF_LINES = 80;
 const LARGE_CHANGE_RATIO = 0.4;
 
 const LOG_CHANNEL = 'subagentDiffs';
+const log = createLog(LOG_CHANNEL);
 // The boundary warn in `buildSubagentResult` predates the A4 file merge and
 // stays on its historical channel so log ingestion keyed on it keeps seeing it.
 const DELIVERY_LOG_CHANNEL = 'subagentDelivery';
+const deliveryLog = createLog(DELIVERY_LOG_CHANNEL);
 
 const DIFF_LINE_PREFIX: Readonly<Record<number, string>> = Object.freeze({
   [DIFF_INSERT]: '+',
@@ -483,8 +485,7 @@ export async function computeAndWriteWorkflowDiffs(
         // surface the skip so a missing diff is not indistinguishable from an
         // unchanged file (matching the loud diff-unavailable note the caller
         // boundary logs).
-        logger.warn(
-          LOG_CHANNEL,
+        log.warn(
           `Skipping diff for ${o.absolutePath}: ${toErrorMessage(error)}`,
         );
       }
@@ -546,8 +547,7 @@ export async function buildSubagentResult(
       // Diff computation failure is non-fatal: deliver without diffs, but tell
       // the orchestrator to read the output files directly.
       diffsUnavailable = toErrorMessage(err);
-      logger.warn(
-        DELIVERY_LOG_CHANNEL,
+      deliveryLog.warn(
         `Diff computation failed for ${executionId}: ${diffsUnavailable}`,
       );
     }

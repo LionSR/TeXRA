@@ -28,10 +28,12 @@ import { z } from 'zod';
 
 // Local imports
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { createTexraNunjucksEnvironment } from '@utils/prompt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
+
+const log = createLog('BundledPrompts');
 
 const GoalPromptsSchema = z.object({
   continuation: z.object({ template: z.string().min(1) }),
@@ -155,8 +157,7 @@ async function readBundledPrompt<T>(
     if (row.whenUnavailable.kind === 'required') throw error;
     // Warn so a broken or missing bundled file is detectable rather than
     // silently masked by the inline copy.
-    logger.warn(
-      'BundledPrompts',
+    log.warn(
       `Failed to load bundled ${name} prompts from ${filePath}; using inline templates: ${toErrorMessage(error)}`,
     );
     return row.whenUnavailable.inline;

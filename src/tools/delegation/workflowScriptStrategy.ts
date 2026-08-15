@@ -23,7 +23,7 @@ import type { ExecutionKVStore } from '@agent/storage';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { ExecutionId, WorkflowExecutionSnapshot } from '@shared/schemas';
 import {
   deriveWorkflowCounts,
@@ -50,6 +50,7 @@ import { fingerprintWorkflowAgentDependencies } from './workflowScriptAgentRunne
 const RUN_LOG_MAX_LINES = 80;
 const RUN_LOG_MAX_LINE_LENGTH = 500;
 const SUMMARY_CHANNEL = 'WorkflowDeliverySummary';
+const summaryLog = createLog(SUMMARY_CHANNEL);
 
 /**
  * What the delivery line needs from a settled run: the canonical execution
@@ -192,8 +193,7 @@ export function createWorkflowScriptStrategy(
         // a mis-billed run is a correctness fault, while a delivery line that
         // omits one entry's files is merely incomplete. Loud either way — a
         // silently short file list is how corruption goes unreported.
-        logger.warn(
-          SUMMARY_CHANNEL,
+        summaryLog.warn(
           `Workflow '${params.name}' journal entry ${entry.index} is not an agent final result; its delivered files are omitted from the summary: ${toErrorMessage(parsed.error)}`,
           { data: parsed.error },
         );
