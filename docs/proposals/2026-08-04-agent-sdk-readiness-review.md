@@ -188,6 +188,10 @@ These are small and independent of the strategic Tier-1 program:
    intended path — they are. Module-level barrels are the proving ground;
    promotion through `packages/agent/src/index.ts` is deferred until the
    host-boundary surface has proven stable. One cluster per PR still applies.
+   `@agent/storage` was already a module-level barrel; #10531 folded its
+   remaining host deep-imports (`executionLease` lifecycle and
+   `conversationFormat`) behind it, leaving `followUp` and
+   `core/definition/AgentConfig` as the open clusters under #10024.
 
 2. **Stabilize the withheld interaction contract.** The `HostInteractions`
    docstring (`index.ts:42-47`) and the hard-deny `requestRetry`
@@ -216,4 +220,5 @@ as the baseline to shrink.
 **Reconciliation (2026-08).** #10011 began the §5.1 fold-in at the module-level
 `@agent/runtime` barrel rather than `packages/agent/src/index.ts`, deferring
 package promotion until the module-level barrels have proven the host-boundary
-surface; see §5.1 and review `pullrequestreview-4918028384`.
+surface; see §5.1 and review `pullrequestreview-4918028384`. #10531 continued
+the fold-in behind the pre-existing module-level `@agent/storage` barrel.

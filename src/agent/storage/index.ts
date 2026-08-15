@@ -1,7 +1,15 @@
 /**
- * Execution storage module.
+ * Agent storage — the cross-host public surface of `src/agent/storage`.
  *
- * Provides unified key-value storage for all execution-scoped data.
+ * One curated barrel the hosts (CLI, desktop, extension) import instead of
+ * deep-reaching each storage module by path. Beyond unified key-value storage
+ * for execution-scoped data, this is the curated host boundary for execution
+ * lifecycle and listing, resumability, the `executionLease` lifecycle, and
+ * conversation formatting — decoupling host code from the storage internals'
+ * file layout, per the module-level barrel pattern set by `@agent/runtime`
+ * (#10011). The R-b deep-import width ratchet
+ * (`config/ratchets/host-agent-import-baseline.json`) collapses each host's
+ * many `@agent/storage/*` specifiers to this single door.
  */
 
 export {
