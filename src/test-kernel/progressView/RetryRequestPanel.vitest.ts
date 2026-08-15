@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { RetryRequestPanel } from '@progressView/frontend/components/RetryRequestPanel';
 import type { ProviderErrorPartial } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
 // Local file imports
 import {
@@ -81,6 +82,43 @@ function tailLine(text: string): string {
 }
 
 describe('retry-request-panel', () => {
+  it('does not offer the API-key switch for a Kimi Code-exclusive model', async () => {
+    const element = await mountPanel({
+      model: 'kimiCoding',
+      errorDetails: {
+        exhaustionReason: 'kimi-code-subscription',
+        isRelayError: false,
+        userRetryable: true,
+      },
+    });
+
+    const buttons = [
+      ...(element.shadowRoot?.querySelectorAll(
+        '.retry-request__actions wa-button',
+      ) ?? []),
+    ];
+    expect(buttons.map((button) => button.getAttribute('data-action'))).toEqual(
+      ['retry', 'cancel'],
+    );
+  });
+
+  it('does not map the k shortcut to the API-key switch for exclusive models', async () => {
+    const element = await mountPanel({
+      model: 'kimiCoding',
+      errorDetails: {
+        exhaustionReason: 'kimi-code-subscription',
+        isRelayError: false,
+        userRetryable: true,
+      },
+    });
+    const actions = recordPermissionActions(element);
+
+    expect(element.handleKeyboardShortcut('k')).toBe(false);
+    expect(element.handleKeyboardShortcut('r')).toBe(true);
+
+    expect(actions).toEqual([{ action: 'retry' }]);
+  });
+
   it('marks retry action buttons with action ids for shared sizing styles', async () => {
     const element = await mountPanel();
 
