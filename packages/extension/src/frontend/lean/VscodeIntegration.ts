@@ -417,8 +417,10 @@ async function executeProjectCommand(
  * `extension.ts` via `setLeanLanguageServices`. The single exported surface
  * of this module's language operations: the implementing functions above are
  * module-private so the export list states exactly what the host consumes.
+ * Frozen because the object is a shared module-level singleton handed across
+ * a package boundary — no consumer may reassign a member.
  */
-export const vscodeLeanLanguageServices: LeanLanguageServices = {
+export const vscodeLeanLanguageServices = Object.freeze({
   executeFileCommand,
   getGoalState,
   getTermGoal,
@@ -426,4 +428,4 @@ export const vscodeLeanLanguageServices: LeanLanguageServices = {
   fetchDiagnosticsForFile,
   navigateToFirstError,
   executeProjectCommand,
-};
+} satisfies LeanLanguageServices);
