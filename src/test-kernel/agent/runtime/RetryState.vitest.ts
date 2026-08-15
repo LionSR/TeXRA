@@ -2,6 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { APIError as OpenAIAPIError } from 'openai';
 import {
   afterEach,
@@ -21,6 +22,7 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from '@agent/core/flows/RetryState';
+import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import {
   SessionHostInteractions,
@@ -51,8 +53,10 @@ import {
   attachSdkErrorMetadata,
 } from '@common/errors/sdkError/errorMetadata';
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
+import type { ResolvedModelConfig } from '@model/openRouterRouting';
 import { setIncludedModelAccess } from '@model/includedModelAccess';
 import {
+  AgentCategory,
   MESSAGE_TYPES,
   STREAM_PHASE,
   STREAM_STATUS,
@@ -60,6 +64,7 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
   clearStreamStatusForTest,
@@ -88,12 +93,15 @@ type TestRebind = (
 ) => Promise<void>;
 
 interface TestRetryServices {
-  config: { model: string };
+  config: { model: string; agentCategory: AgentCategory };
   runScope: RunScope;
   streamId: StreamTabId;
   interactions: SessionHostInteractions;
   logger: AgentTrace;
-  modelCell: Pick<ModelCell, 'getClient' | 'rebind' | 'route'>;
+  modelCell: Pick<
+    ModelCell,
+    'getClient' | 'rebind' | 'route' | 'handler' | 'swap'
+  >;
 }
 
 /** The client seam a retry node reads; scenarios stub the parts they drive. */
@@ -101,7 +109,15 @@ function testRetryModelCell(
   rebind: TestRebind = async () => undefined,
   route?: ModelCredentialRoute,
 ): TestRetryServices['modelCell'] {
-  return { getClient: async () => ({}), rebind, route };
+  // The handler stub only feeds the Kimi Code fallback probe, which reads
+  // `config` and finds no Kimi fields on it, so a swap never fires here.
+  return {
+    getClient: async () => ({}),
+    rebind,
+    route,
+    handler: { config: {} } as TestRetryServices['modelCell']['handler'],
+    swap: () => {},
+  };
 }
 
 /** Every retry-node scenario's services; cases override what they drive. */
@@ -117,7 +133,7 @@ function retryServices(
   } = {},
 ): TestRetryServices {
   return {
-    config: { model: 'openai:test' },
+    config: { model: 'openai:test', agentCategory: AgentCategory.Workflow },
     runScope: testRunScope(streamId, { session, signal }),
     streamId,
     interactions: new SessionHostInteractions(),
@@ -183,7 +199,7 @@ function createRetryNode(
   const streamStatus = session.status;
   const node = new ExposedRetryNode().setServices(
     retryServices(streamId, {
-      config: { model: 'sonnet46' },
+      config: { model: 'sonnet46', agentCategory: AgentCategory.ToolUse },
       session,
       modelCell: testRetryModelCell(rebind, route),
     }),
@@ -630,9 +646,8 @@ describe('RetryState', () => {
         session,
         logger,
         modelCell: {
+          ...testRetryModelCell(undefined, 'api-key'),
           getClient,
-          rebind: async () => undefined,
-          route: 'api-key',
         },
       }),
     );
@@ -1636,6 +1651,120 @@ describe('RetryState', () => {
       expect(ensureFreshToken).not.toHaveBeenCalled();
       expect(rebind).not.toHaveBeenCalled();
       expect(operation).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('Kimi Code fallback for personal retries', () => {
+    /** The synthesized config a dual-backend Kimi handler carries once
+     *  dispatch routes it onto the coding endpoint. */
+    function kimiCodeRoutedConfig(): ResolvedModelConfig {
+      return {
+        ...MODEL_CONFIGS.kimi3,
+        fullName: 'k3',
+        shortName: 'k3',
+        baseUrl: KIMI_CODE_BASE_URL,
+      } as ResolvedModelConfig;
+    }
+
+    function kimiFallbackNode(
+      streamId: StreamTabId,
+      model: string,
+      handler: ModelHandlerKimi,
+    ): {
+      node: ExposedRetryNode;
+      modelCell: ModelCell;
+      session: SessionHandle;
+      requestRetry: RetryNodeKit['requestRetry'];
+    } {
+      const modelCell = testModelCell(handler, model);
+      const requestRetry = vi.fn<RetryNodeKit['requestRetry']>();
+      // Loose-typed like the other scenarios: the mock drives the node's own
+      // 'personal' preparation and resolves a plain retry.
+      requestRetry.mockImplementationOnce(async (_request, options) => {
+        await options?.prepareRetry?.('personal');
+        return { action: 'retry' };
+      });
+      const session = sessionWithInteractions(
+        { requestRetry, cancel: () => {} },
+        new StreamStatusMachine(new SessionEventHub()),
+      );
+      const node = new ExposedRetryNode().setServices(
+        retryServices(streamId, {
+          config: { model, agentCategory: AgentCategory.ToolUse },
+          session,
+          modelCell,
+        }),
+      );
+      return { node, modelCell, session, requestRetry };
+    }
+
+    it('swaps a coding-routed dual-backend handler onto its Moonshot config', async () => {
+      await installPlatform();
+      const streamId = 'retry-kimi-fallback' as StreamTabId;
+      const retired = new ModelHandlerKimi(kimiCodeRoutedConfig());
+      const retiredDispose = vi.spyOn(retired, 'dispose');
+      const { node, modelCell, session } = kimiFallbackNode(
+        streamId,
+        'kimi3',
+        retired,
+      );
+
+      try {
+        seedStreamStatusForTest(session.status, streamId, {
+          phase: STREAM_PHASE.RUNNING,
+        });
+
+        await expect(
+          withRetryRunContext(streamId, session, () =>
+            node.retryPrompt(undefined, new Error('kimi code quota')),
+          ),
+        ).resolves.toBe(true);
+
+        // A rebind alone would have rebuilt the client against the pinned
+        // coding endpoint with the same exhausted credential; the swap gives
+        // the retry the registry (Moonshot) config instead.
+        expect(modelCell.handler).not.toBe(retired);
+        expect(modelCell.handler).toBeInstanceOf(ModelHandlerKimi);
+        expect(modelCell.handler.config.fullName).toBe('kimi-k3');
+        expect(modelCell.handler.config.baseUrl).toBeUndefined();
+        expect(modelCell.modelId).toBe('kimi3');
+        expect(retiredDispose).toHaveBeenCalledOnce();
+      } finally {
+        clearStreamStatusForTest(session.status, streamId);
+      }
+    });
+
+    it('rebinds instead of swapping for a Kimi Code-exclusive model', async () => {
+      await installPlatform();
+      const streamId = 'retry-kimi-exclusive' as StreamTabId;
+      const exclusive = new ModelHandlerKimi(
+        MODEL_CONFIGS.kimiCoding as ResolvedModelConfig,
+      );
+      const { node, modelCell, session } = kimiFallbackNode(
+        streamId,
+        'kimiCoding',
+        exclusive,
+      );
+      const rebind = vi.spyOn(modelCell, 'rebind').mockResolvedValue(undefined);
+
+      try {
+        seedStreamStatusForTest(session.status, streamId, {
+          phase: STREAM_PHASE.RUNNING,
+        });
+
+        await expect(
+          withRetryRunContext(streamId, session, () =>
+            node.retryPrompt(undefined, new Error('kimi code quota')),
+          ),
+        ).resolves.toBe(true);
+
+        // kimi-for-coding has no Moonshot fallback to rebuild onto, so the
+        // cell keeps its handler and only refreshes the client.
+        expect(rebind).toHaveBeenCalledWith('personal', undefined);
+        expect(modelCell.handler).toBe(exclusive);
+      } finally {
+        clearStreamStatusForTest(session.status, streamId);
+      }
     });
   });
 });
