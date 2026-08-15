@@ -36,7 +36,6 @@ interface HarnessOptions {
   prompt?(keys: Map<ApiProvider, string | undefined>): void;
   glmCodingPlan?: boolean;
   kimiCode?: boolean;
-  kimiCodeActiveForModel?: (modelId: string) => boolean;
   retryAvailable?: boolean;
   retryPending?: boolean;
   triggerRetry?: ProgressApiKeyRetryControllerDeps['triggerRetry'];
@@ -64,8 +63,6 @@ function createHarness(options: HarnessOptions = {}): {
   const chatGptSubscriptionValues: boolean[] = [];
   const glmCodingPlanValues: boolean[] = [];
   const kimiCodeValues: boolean[] = [];
-  const kimiCodeActiveForModel =
-    options.kimiCodeActiveForModel ?? (() => false);
   let preferChatGptSubscription = true;
   let glmCodingPlan = options.glmCodingPlan ?? true;
   let kimiCode = options.kimiCode ?? true;
@@ -117,7 +114,6 @@ function createHarness(options: HarnessOptions = {}): {
             kimiCode = enabled;
             kimiCodeValues.push(enabled);
           },
-          isActiveForModel: async (modelId) => kimiCodeActiveForModel(modelId),
         },
       ],
       invalidateModelOptionsCache: () => {
@@ -646,7 +642,6 @@ describe('ProgressApiKeyRetryController', () => {
         keys.set('kimiCode', 'new-kimi');
       },
       kimiCode: true,
-      kimiCodeActiveForModel: () => true,
     });
 
     const result = await harness.controller.useOwnApiKey({
@@ -674,14 +669,13 @@ describe('ProgressApiKeyRetryController', () => {
     expect(harness.retries).toStrictEqual(['stream-kimi-credit']);
   });
 
-  it('disables the Kimi Code preference when a dual-backend Kimi model credit-retries from the coding route', async () => {
+  it('disables the Kimi Code preference for a dual-backend Kimi credit retry even when live routing would say not coding', async () => {
     const harness = createHarness({
       keys: { moonshot: 'old-moonshot', kimiCode: 'old-kimi' },
       prompt: (keys) => {
         keys.set('moonshot', 'new-moonshot');
       },
       kimiCode: true,
-      kimiCodeActiveForModel: (modelId) => modelId === 'kimi3',
     });
 
     const result = await harness.controller.useOwnApiKey({
@@ -701,7 +695,11 @@ describe('ProgressApiKeyRetryController', () => {
     });
     // The forwarded SDK provider is `moonshot`, so that is the credential the
     // panel asks to replace; the routing step then turns off "Prefer Kimi
-    // Code" so the rebuilt handler actually uses the new Moonshot key.
+    // Code" so the rebuilt handler actually uses the new Moonshot key. The
+    // controller does not consult the live route resolver here: the failed
+    // handler was dispatched under `ModelHandlerKimi`, and the rebuild pins
+    // that key, so a later OpenRouter preference change must not keep the
+    // exhausted coding route selected.
     expect(harness.prompts).toStrictEqual(['moonshot']);
     expect(harness.keys.get('moonshot')).toBe('new-moonshot');
     expect(harness.keys.get('kimiCode')).toBe('old-kimi');

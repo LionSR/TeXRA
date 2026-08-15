@@ -38,8 +38,6 @@ interface CodingPlanToggle {
   readonly getEnabled: () => boolean;
   readonly setEnabled: (enabled: boolean) => Promise<void>;
   readonly restoreEnabled?: (enabled: boolean) => Promise<void>;
-  /** Resolve whether this plan currently serves `modelId`, when available. */
-  readonly isActiveForModel?: (modelId: string) => Promise<boolean>;
 }
 
 interface ProgressApiKeyPreparationResult {
@@ -140,7 +138,6 @@ export class ProgressApiKeyRetryController {
         getEnabled: runtime.getEnabled,
         setEnabled: runtime.setEnabled,
         restoreEnabled: runtime.restoreEnabled,
-        isActiveForModel: runtime.isActiveForModel,
       }))
     );
   }
@@ -279,19 +276,22 @@ export class ProgressApiKeyRetryController {
     for (const toggle of this.codingPlanToggles) {
       const planExhaustion =
         request.exhaustionReason === toggle.exhaustionReason;
-      // An `upstream-credit` failure on a dual-backend Kimi model currently
-      // routed through the coding endpoint means the broken credential is the
-      // `kimiCode` key, but the forwarded SDK provider is `moonshot`. The
-      // coding-plan quota reason does not match, so without this branch the
-      // "Prefer Kimi Code" switch would stay on and the retry rebuild would
-      // re-select the exhausted coding endpoint instead of the newly entered
-      // Moonshot key.
+      // An `upstream-credit` failure on a dual-backend Kimi model means the
+      // broken credential is the `kimiCode` key, but the forwarded SDK
+      // provider is `moonshot`. The coding-plan quota reason does not match,
+      // so without this branch the "Prefer Kimi Code" switch would stay on
+      // and the retry rebuild would re-select the exhausted coding endpoint
+      // instead of the newly entered Moonshot key.
+      //
+      // Deliberately conservative: do not consult the live route resolver
+      // here. The failed handler was dispatched under the persisted
+      // `ModelHandlerKimi` compatibility key, and the retry rebuild pins that
+      // same key, so a later OpenRouter preference change cannot make the
+      // rebuild take a non-coding route.
       const kimiCodeCreditReroute =
         toggle.exhaustionReason === 'kimi-code-subscription' &&
         request.exhaustionReason === 'upstream-credit' &&
-        this.isDualBackendKimiCodeModel(request.model) &&
-        request.model !== undefined &&
-        ((await toggle.isActiveForModel?.(request.model)) ?? false);
+        this.isDualBackendKimiCodeModel(request.model);
       if (toggle.getEnabled() && (planExhaustion || kimiCodeCreditReroute)) {
         await toggle.setEnabled(false);
         this.deps.invalidateModelOptionsCache();
