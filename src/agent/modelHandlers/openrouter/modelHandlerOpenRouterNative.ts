@@ -102,9 +102,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   ChatResult,
   ChatContentItems
 > {
-  // ── Client-side compaction state ──────────────────────────────────────
-  private lastKnownInputTokens = 0;
-
   /** Client-side compaction is implemented for tool-use sessions regardless of the routed-through provider. */
   override get supportsManualCompaction(): boolean {
     return this.isToolUseMode();
@@ -197,14 +194,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     } = options;
 
     // Phase 0: COMPACT - Apply the shared trigger before building the request.
-    const { compactedMessages, didCompact } =
-      await this.maybeCompactByInputTokens(
-        rawMessages,
-        this.lastKnownInputTokens,
-        () => this.compactConversation(client, rawMessages, signal),
+    const { messagesToUse, updatedMessages } =
+      await this.maybeCompactByLastKnownInputTokens(rawMessages, () =>
+        this.compactConversation(client, rawMessages, signal),
       );
-    const updatedMessages = didCompact ? compactedMessages : undefined;
-    const messagesToUse = updatedMessages ?? rawMessages;
 
     const useStreaming = this.getStreamingConfig();
 
@@ -279,23 +272,20 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         }
 
         const response = aggregator.buildResponse();
-        const finalReasoning = this.processThinkingBlock(response);
-        thinking.finalize(finalReasoning ?? undefined);
         const finalOutput = response.choices?.[0]?.message?.content ?? '';
-        output.finalize(typeof finalOutput === 'string' ? finalOutput : '');
+        this.finalizeProgressStreams(
+          thinking,
+          output,
+          response,
+          typeof finalOutput === 'string' ? finalOutput : '',
+        );
 
         this.trackInputTokens(response.usage, 'streaming response');
         return { response, updatedMessages };
       } catch (err) {
         return handleStreamingFailure(err, {
-          // Ensure progress streams are finalized on error to prevent the
-          // progress view from being stuck in a loading state. No explicit
-          // final text so any chunks already streamed are preserved (passing
-          // `''` would overwrite the visible partial output).
-          finalizeOnError: () => {
-            thinking?.finalize(undefined);
-            output?.finalize();
-          },
+          finalizeOnError: () =>
+            this.finalizeProgressStreamsOnError(thinking, output),
           // Lift the accumulated partial text onto the error so the retry UI
           // can show the tail (parity with the other streaming providers).
           partialTail: () =>
@@ -328,10 +318,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     usage: ChatUsage | undefined,
     responseLabel: string,
   ): void {
-    if (usage?.promptTokens) {
-      this.lastKnownInputTokens = usage.promptTokens;
-      return;
-    }
+    if (this.trackLastKnownInputTokens(usage?.promptTokens)) return;
     this.logger.warn(
       `No usage data in ${responseLabel}: token tracking and compaction may be affected`,
     );
