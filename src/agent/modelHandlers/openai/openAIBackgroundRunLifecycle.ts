@@ -8,7 +8,7 @@ import type { AgentTrace } from '@agent/trace';
 import { detectStatusCode } from '@common/errors/sdkError/errorInspection';
 
 import { BackgroundRunLifecycle } from '../support/BackgroundRunLifecycle';
-import { tagOpenAISdkError } from '../support/sdkErrorMetadata';
+import { tagOpenAISdkError } from './openAISdkError';
 import {
   classifyOpenAIBackgroundResumeError,
   createOpenAIBackgroundPollingError,

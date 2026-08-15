@@ -164,6 +164,10 @@ function readPersistedWorkPlan(raw: unknown): WorkPlanSnapshot {
     for (const field of Object.keys(WorkPlanSnapshotShape) as Array<
       keyof typeof WorkPlanSnapshotShape
     >) {
+      // A field that was never written (older file, or the key is simply
+      // absent) is not corruption — only warn when a present value fails to
+      // validate against its raw (non-`.catch`) shape.
+      if (raw[field] === undefined) continue;
       const fieldResult = WorkPlanSnapshotShape[field].safeParse(raw[field]);
       if (!fieldResult.success) {
         log.warn(

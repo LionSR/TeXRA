@@ -21,7 +21,7 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from '@agent/core/flows/RetryState';
-import { tagOpenAISdkError } from '@agent/modelHandlers/support/sdkErrorMetadata';
+import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import {
   SessionHostInteractions,
   type HostRetryInteractionOptions,

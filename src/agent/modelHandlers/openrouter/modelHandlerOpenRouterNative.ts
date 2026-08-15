@@ -48,7 +48,7 @@ import {
   computeOpenRouterPrice,
   normalizeOpenRouterUsage,
 } from './openRouterUsage';
-import { tagOpenRouterSdkError } from '../support/sdkErrorMetadata';
+import { tagOpenRouterSdkError } from './openRouterSdkError';
 import { toOpenAITools } from '../toolConversion';
 import {
   appendUserTextToChatMessages,

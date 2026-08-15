@@ -20,7 +20,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentSettingSchema } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
-import { tagOpenAISdkError } from '@agent/modelHandlers/support/sdkErrorMetadata';
+import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import type {
   ModelCredentialRoute,
   OpenAIResponseToolCall,

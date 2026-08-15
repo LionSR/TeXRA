@@ -2631,6 +2631,13 @@ describe('StreamSnapshotStore', () => {
       expect.stringContaining('"plan"'),
       expect.anything(),
     );
+    // planSummary was never written (not present, not malformed) — must not
+    // be misreported as corrupted.
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('"planSummary"'),
+      expect.anything(),
+    );
   });
 
   it('ignores a workPlan.json stamped with a newer schemaVersion (forward-compat gate)', async () => {

@@ -5,7 +5,7 @@ import { isRetryableStatusCode } from '@common/errors/sdkError/sdkErrorKinds';
 import type { ProviderError } from '@shared/schemas';
 
 // Local file imports
-import { tagOpenAISdkError } from '../support/sdkErrorMetadata';
+import { tagOpenAISdkError } from './openAISdkError';
 
 // Third-party imports
 import type { Response } from 'openai/resources/responses/responses';

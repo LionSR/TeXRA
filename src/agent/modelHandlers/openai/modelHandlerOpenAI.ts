@@ -54,7 +54,7 @@ import {
   getDeclaredMaxReasoningEffort,
   toOpenAIReasoningEffort,
 } from '../support/reasoningEffort';
-import { tagOpenAISdkError } from '../support/sdkErrorMetadata';
+import { tagOpenAISdkError } from './openAISdkError';
 import { computeOpenAIPrice, normalizeOpenAIUsage } from './openAIUsage';
 import {
   appendUserTextToChatMessages,
