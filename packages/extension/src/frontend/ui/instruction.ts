@@ -59,12 +59,7 @@ export async function showInstructionWithSuppress(
     return;
   }
 
-  await handleInstructionChoice(
-    stateKey,
-    showSuppress,
-    actions,
-    await prompt,
-  );
+  await handleInstructionChoice(stateKey, showSuppress, actions, await prompt);
 }
 
 /**

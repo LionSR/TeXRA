@@ -134,8 +134,7 @@ const errorPresentationPendingMarker = createErrorMarker(
  *  not queue a second surface before that replay settles. */
 export const attachErrorPresentationPending =
   errorPresentationPendingMarker.attach;
-export const hasErrorPresentationPending =
-  errorPresentationPendingMarker.has;
+export const hasErrorPresentationPending = errorPresentationPendingMarker.has;
 
 export const providerErrorMetadata =
   createErrorMetadata<ProviderError>('providerError');
