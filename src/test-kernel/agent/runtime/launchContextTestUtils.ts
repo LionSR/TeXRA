@@ -91,6 +91,7 @@ export function createTestLaunchContext({
     parentStage: logger.openStage(`Run: ${config.agent}`),
     storageKey,
     userVarChannels: { input: Object.freeze({}), transient: {} },
+    toolPolicy: {},
     attachedMemoryMisses: [],
     usageMonitor: new UsageMonitor(
       modelCell,

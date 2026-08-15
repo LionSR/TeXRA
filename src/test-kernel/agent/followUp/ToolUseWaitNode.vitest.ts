@@ -62,6 +62,8 @@ type WaitNodeServiceOverrides = Partial<
   /** Session owning this run's status machine and approvals. */
   ownerSession?: SessionHandle;
   signal?: AbortSignal;
+  /** Injected tool policy the wait node reads instead of the ambient RunContext. */
+  stopAfterCycle?: boolean;
 };
 
 function createWaitNodeServices(
@@ -73,12 +75,14 @@ function createWaitNodeServices(
     ownerSession,
     session,
     signal,
+    stopAfterCycle,
     streamId = 'test-stream',
     ...topLevel
   } = overrides;
   const { capabilities, ...modelHandlerOverrides } = modelHandler ?? {};
   return {
     runScope: testRunScope(streamId, { session: ownerSession, signal }),
+    toolPolicy: { stopAfterCycle },
     fileService: {
       createLocation: (filePath: string) => ({ absolutePath: filePath }),
       ...fileService,
@@ -252,21 +256,18 @@ describe('ToolUseWaitNode', () => {
   it('stops instead of suspending when stopAfterCycle is set (headless in-band subagent)', async () => {
     const shared = toolUseRunShared();
 
+    // `stopAfterCycle` is injected through `services.toolPolicy`; no
+    // AsyncLocalStorage frame is installed for this cycle.
     const services = createWaitNodeServices({
       isSubagent: true,
+      stopAfterCycle: true,
     });
 
     const node = new ToolUseWaitNode().setServices(services);
     const prep = await node.prep(shared);
-    const transition = await withTestRunContext(
-      services.runScope,
-      async () => {
-        const exec = await node.exec(prep);
-        expect(exec.kind).toBe('stop');
-        return node.post(shared, prep, exec);
-      },
-      { stopAfterCycle: true },
-    );
+    const exec = await node.exec(prep);
+    expect(exec.kind).toBe('stop');
+    const transition = await node.post(shared, prep, exec);
 
     expect(transition).toBe(FlowTransition.COMPLETE);
   });
@@ -416,6 +417,7 @@ describe('ToolUseWaitNode', () => {
       logger,
       ownerSession,
       streamId,
+      stopAfterCycle: true,
       session: {
         waitForFollowUp,
       },
@@ -423,10 +425,11 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      const exec = await withTestRunContext(
-        services.runScope,
-        () => node.exec(waitPrep(true)),
-        { stopAfterCycle: true },
+      // `pauseActiveGoal` resolves `currentSession()` through the active run
+      // context, so the ALS frame stays (stopAfterCycle is still read from
+      // `services.toolPolicy`, not from the ambient context).
+      const exec = await withTestRunContext(services.runScope, () =>
+        node.exec(waitPrep(true)),
       );
 
       const goal = GoalStore.getForStream(streamId);

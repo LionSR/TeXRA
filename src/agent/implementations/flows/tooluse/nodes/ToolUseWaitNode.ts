@@ -1,7 +1,6 @@
 import { Node } from '@agent/node';
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import {
   applyFollowUpBatch,
@@ -54,9 +53,9 @@ export class ToolUseWaitNode<C> extends Node<
   }
 
   async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
-    const { session, isSubagent, runScope } = this.services;
+    const { session, isSubagent, runScope, toolPolicy } = this.services;
     const { streamId, session: ownerSession, signal } = runScope;
-    const { stopAfterCycle } = useLaunchRunContext();
+    const { stopAfterCycle } = toolPolicy;
     const hasDrainedFollowUps = Boolean(this.drainedFollowUps?.length);
 
     if (signal.aborted) {

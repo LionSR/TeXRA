@@ -16,7 +16,11 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
-import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
+import {
+  createToolPolicy,
+  type AgentCore,
+  type ToolPolicy,
+} from '@agent/core/flows/BaseFlowServices';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import {
@@ -114,6 +118,8 @@ export interface AgentLaunchInput {
   copilotRouteOverride?: CopilotRouteOverride;
   /** Cancel launch preparation and the resulting live run. */
   signal?: AbortSignal;
+  /** Immutable per-run tool policy carried on the launch context for cycle flows. */
+  toolPolicy?: ToolPolicy;
 }
 
 const STATUS_MESSAGES: Record<string, string> = {
@@ -504,6 +510,7 @@ async function assembleAgentLaunchContext(
     setting,
     prompt,
     modelCell,
+    toolPolicy: createToolPolicy(input.toolPolicy),
     logger: agentLogger,
     parentStage,
     storageKey,

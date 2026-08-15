@@ -88,6 +88,7 @@ async function runPersistedReflectionFlow(
           transient: {},
         },
         modelCell,
+        toolPolicy: {},
         onRoundFinalized: () => {},
       }),
     );

@@ -178,6 +178,7 @@ function roundServices(opts: {
       userRequest: '',
     } satisfies AgentPrompt,
     userVarChannels: { input: {}, transient: {} },
+    toolPolicy: {},
     logger: opts.logger,
     fileService: new TaskRunFileService('deadbeef'),
     toolRegistry: opts.toolRegistry,

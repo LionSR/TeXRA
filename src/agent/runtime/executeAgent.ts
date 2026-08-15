@@ -6,7 +6,10 @@ import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseF
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { RoundFinalizedCallback } from '@agent/core/flows/BaseFlowServices';
+import {
+  createToolPolicy,
+  type RoundFinalizedCallback,
+} from '@agent/core/flows/BaseFlowServices';
 import {
   type AgentToolUseSetting,
   type AgentWorkflowSetting,
@@ -401,6 +404,11 @@ export async function executeAgent(
 ): Promise<AgentRuntimeFlowResult> {
   const runWithOwnership = captureOwnedExecutionLease(executionId);
   return await runWithOwnership(async () => {
+    const toolPolicy = createToolPolicy({
+      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+      runtimeUnavailableTools: options.runtimeUnavailableTools,
+      stopAfterCycle: options.stopAfterCycle,
+    });
     const ctx = await buildAgentLaunchContext({
       config,
       executionId,
@@ -414,12 +422,11 @@ export async function executeAgent(
       modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
       copilotRouteOverride: options.copilotRouteOverride,
       signal: options.launchSignal,
+      toolPolicy,
     });
     const runContextOptions = {
-      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+      ...toolPolicy,
       onApprovalPolicyDenial: options.onApprovalPolicyDenial,
-      runtimeUnavailableTools: options.runtimeUnavailableTools,
-      stopAfterCycle: options.stopAfterCycle,
     };
     return withExecutionRunContext(ctx, runContextOptions, async () => {
       const { setting, config } = ctx;
@@ -547,6 +554,10 @@ export async function resumeToolUseFromResumeData(
     let isSubagent: boolean;
     let userFollowUpSupport: UserFollowUpSupport;
     let ctx: AgentLaunchContext;
+    const toolPolicy = createToolPolicy({
+      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+      runtimeUnavailableTools: options.runtimeUnavailableTools,
+    });
     try {
       // This execution is running again, so the terminal facts its previous
       // run left behind stop describing it here, before any turn of the
@@ -569,6 +580,7 @@ export async function resumeToolUseFromResumeData(
         // skip the bus-level error to avoid double-notifying.
         suppressErrorNotification: true,
         session: options.session,
+        toolPolicy,
       });
     } catch (error) {
       throw await releaseOwnedExecutionLeaseAfterFailure(
@@ -577,9 +589,8 @@ export async function resumeToolUseFromResumeData(
       );
     }
     const runContextOptions = {
-      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+      ...toolPolicy,
       onApprovalPolicyDenial: options.onApprovalPolicyDenial,
-      runtimeUnavailableTools: options.runtimeUnavailableTools,
     };
     const { setting } = ctx;
     const { streamId: runStreamId, session: runSession } = ctx.runScope;

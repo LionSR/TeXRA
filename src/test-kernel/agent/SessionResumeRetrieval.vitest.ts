@@ -362,6 +362,7 @@ async function runPersistedFlow(
           logger: noopTrace,
           userVarChannels,
           modelCell,
+          toolPolicy: { stopAfterCycle: options.stopAfterCycle },
           onModelChanged: () => {},
           interrupt: () => abortController.abort(),
           onRoundFinalized: () => {},
