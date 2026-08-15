@@ -87,9 +87,44 @@ require); host card vocabularies (`WorkflowCallProgress` is a wire schema);
 whether `counts.skipped` semantics change for not-reached calls (today they
 count as skipped — keep the projection stable by mapping, not by renaming).
 
+## Check verdicts (2026-08-15, read-only pass against head)
+
+The maintainer ruled "consolidate"; the five checks ran and the fold is
+**feasible**. What the checks found:
+
+1. **Error taxonomy — passes.** The taxonomy's only consumer is
+   `workflowScriptAgentRunner:~397`, which converts any
+   `SubagentDurabilityError` (reconciliation included) into a
+   `WorkflowRunAbortError`. Its entire consumed meaning is one bit:
+   infrastructure fault → abort the run, vs ordinary child failure → the
+   call resolves null. Under one driver that bit maps cleanly onto "loop
+   completion rejected" vs "completion resolved, persisted outcome failed".
+   The ledger's reservation/inspection/recovery throws stay synchronous and
+   ledger-side, untouched.
+2. **Lease scope — passes.** Both paths already converge on
+   `runFlowWithLifecycle` for per-turn handle finalization; the loop's
+   dangling-handle sweep covers the inter-turn gaps. The in-band explicit
+   `releaseExecutionLeaseAfterArtifacts` collapses into the loop's existing
+   release, with the failure-does-not-mask-run-error wrinkle expressed once.
+3. **Queue semantics — passes.** The workflow-script terminal-only strategy
+   is the precedent: the loop's queue lease is harmless for a child that
+   never consumes follow-ups.
+4. **Budget — trivial.** The awaiting-caller form omits `budgeted`.
+5. **Cancellation — passes.** The same strategy's `params.signal` binding
+   covers the run; the awaiting caller aborts via the registered handle.
+
+**The one genuine contract underneath** (the honest core of the 2026-08-03
+ruling): the ledger requires the child's typed result _durably persisted_
+before the logical call completes — recovery inspects `resultMeta`. That is
+a _persistence-mode option on the one driver_ ("required" vs the detached
+path's best-effort), not a second driver. The fold therefore proceeds as:
+ledger wrapper → loop-driven run (persistOnly delivery, required result) →
+await completion → read `resultMeta`; `executeInBand`'s parallel
+register/guard/launch/release choreography deletes.
+
 ## Sequencing
 
-After PR #10475 merges. Each smell is its own PR; smell 2 is independent of
-smell 1 and smaller. Both are measured against the net-gain bar — if the
-fold nets positive LoC or forces a wider option surface, the honest outcome
-is the named-contract record, per the item-8 precedent.
+Smell 1 implements next on this branch (checks passed above); smell 2 is
+independent and smaller. Both are measured against the net-gain bar — if
+the fold nets positive LoC or forces a wider option surface, the honest
+outcome is the named-contract record, per the item-8 precedent.
