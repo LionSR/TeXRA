@@ -372,8 +372,8 @@ describe('runResumeExecution', () => {
   });
 
   it('identifies lease inspection failures separately from session loading', async () => {
-    const executionLease = await import('@agent/storage/executionLease');
-    vi.spyOn(executionLease, 'inspectExecutionLease').mockRejectedValueOnce(
+    const storage = await import('@agent/storage');
+    vi.spyOn(storage, 'inspectExecutionLease').mockRejectedValueOnce(
       new Error('lease disk offline'),
     );
 

@@ -2,8 +2,11 @@ import {
   releaseExecutionLeaseAfterArtifacts,
   type SessionHandle,
 } from '@agent/runtime';
-import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
-import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
+import {
+  finalizeExecution,
+  markOwnedExecutionLeaseUndurable,
+  type FinalizeExecutionInput,
+} from '@agent/storage';
 import type { RunOutcome } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
