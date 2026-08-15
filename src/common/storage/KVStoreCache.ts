@@ -22,13 +22,14 @@ import { KVStore } from '@common/storage/KVStore';
 
 /**
  * Largest `max` the cache accepts. lru-cache preallocates its key/val lists
- * with `Array.from({ length: max })`, which throws `RangeError: Invalid array
- * length` once `max` reaches 2**32 and still attempts a ~4.3B-element
- * allocation at 2**32 - 1 (the largest valid array length). Cap one below
- * that so an unsizable `max` fails early with the KVStoreCache-scoped
- * RangeError instead of inside lru-cache.
+ * with `Array.from({ length: max })`, so a max anywhere near the array-length
+ * limit (2**32 - 1) attempts a ~4.3B-element dense allocation and can exhaust
+ * the process heap before the cache is ever usable. Cap far below that at an
+ * application-level ceiling: no KVStoreCache owner keeps anywhere near 100k
+ * live handles (the only bounded owner uses 50), and the bound keeps the
+ * preallocation to ~1.6 MB so the boundary stays testable.
  */
-const MAX_BOUNDED_HANDLES = 2 ** 32 - 2;
+const MAX_BOUNDED_HANDLES = 100_000;
 
 export class KVStoreCache<
   TId extends NonNullable<unknown>,
@@ -55,10 +56,9 @@ export class KVStoreCache<
       // there is no silent no-cache mode to prevent — but with its own
       // TypeError (0, -1, 1.5, NaN, Infinity), a generic Error (integers
       // beyond the safe range, whose per-cap index array it cannot size),
-      // or an array-length RangeError (safe integers larger than
-      // MAX_BOUNDED_HANDLES, whose key/val lists it cannot preallocate).
-      // Guard here so every invalid max fails early with one
-      // KVStoreCache-scoped RangeError.
+      // or an array-length RangeError (max >= 2**32, which the ceiling
+      // here already rejects before lru-cache sees it). Guard so every
+      // invalid max fails early with one KVStoreCache-scoped RangeError.
       throw new RangeError(
         `KVStoreCache max must be a positive safe integer no larger than ${MAX_BOUNDED_HANDLES} (got ${max}); omit it for an unbounded cache`,
       );
