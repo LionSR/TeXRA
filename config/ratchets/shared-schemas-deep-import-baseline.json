@@ -522,7 +522,6 @@
       "packages/cli/src/schemas/knownKeys.ts",
       "packages/extension/src/settingsView/frontend/tabs/LaTeXTab.ts",
       "packages/extension/src/settingsView/frontend/tabs/ToolsTab.ts",
-      "src/agent/core/flows/RetryState.ts",
       "src/agent/modelHandlers/openai/modelHandlerOpenAI.ts",
       "src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts",
       "src/agent/runtime/ModelFactory.ts",

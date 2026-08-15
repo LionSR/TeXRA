@@ -16,11 +16,12 @@ import {
 // Local imports
 import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
 import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
-import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import {
-  RetryableInvocationNode,
+  ModelInvocationNode,
   handleInvocationResult,
-} from '@agent/core/flows/RetryState';
+  type InvocationResult,
+  type InvocationSuccess,
+} from '@agent/core/flows/ModelInvocationNode';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import {
   SessionHostInteractions,
@@ -78,8 +79,17 @@ import {
 } from '../progressTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
 
-/** Mirrors the RETRY_BACKOFF_MS implementation constant in RetryState.ts. */
+/** Mirrors the RETRY_BACKOFF_MS constant in ModelInvocationNode.ts. */
 const RETRY_BACKOFF_SECONDS = 1;
+
+/** The resolved provider attempt scenarios hand back from a stubbed call. */
+const ATTEMPT_SUCCESS: InvocationSuccess = {
+  kind: 'success',
+  response: 'recovered',
+};
+
+/** A resolved attempt the invocation boundary rejects as empty. */
+const EMPTY_ATTEMPT: InvocationSuccess = { kind: 'success', response: '' };
 
 /** The rebind seam the retry node drives, stubbed per scenario. */
 type TestRebind = (
@@ -127,23 +137,30 @@ function retryServices(
   };
 }
 
-class ExposedRetryNode extends RetryableInvocationNode<
-  unknown,
-  TestRetryServices
-> {
-  protected getOperationName(): string {
-    return 'Model request';
+/**
+ * The retry lifecycle under test never reaches a model handler, so the node's
+ * config only supplies the operation name its prompts and diagnostics report.
+ */
+class ExposedRetryNode extends ModelInvocationNode<BaseCycleFields> {
+  constructor() {
+    super({
+      operationName: 'Model request',
+      streaming: false,
+      storeResponse: () => {},
+    });
   }
 
   promptFor(error: Error): Promise<unknown> {
     return this.handleManualRetryPrompt(error);
   }
 
-  runWithRelayRecovery<T>(op: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  runWithRelayRecovery(
+    op: (signal: AbortSignal) => Promise<InvocationSuccess>,
+  ): Promise<InvocationSuccess> {
     return this.invokeWithRelayRecovery(op);
   }
 
-  fallbackFor(error: Error): unknown {
+  fallbackFor(error: Error): InvocationResult {
     return this.getFallbackResult(error);
   }
 
@@ -186,7 +203,7 @@ function createRetryNode(
       config: { model: 'sonnet46' },
       session,
       modelCell: testRetryModelCell(rebind, route),
-    }),
+    }) as never,
   );
   return { node, session, streamStatus, requestRetry };
 }
@@ -363,7 +380,7 @@ function collectRetryLifecycleEvents(
   return events;
 }
 
-describe('RetryState', () => {
+describe('ModelInvocationNode retry', () => {
   beforeEach(() => {
     vi.stubEnv(RELAY_TOKEN_ENV_VAR, '');
     installTexraModelAccess();
@@ -484,13 +501,13 @@ describe('RetryState', () => {
     class DiagnosticRetryNode extends ExposedRetryNode {
       attempts = 0;
 
-      override async exec(): Promise<string> {
+      override async exec(): Promise<InvocationSuccess> {
         return this.runWithRelayRecovery(async () => {
           this.attempts += 1;
           if (this.attempts === 1) {
             throw new Error('temporary provider failure');
           }
-          return 'recovered';
+          return ATTEMPT_SUCCESS;
         });
       }
     }
@@ -500,7 +517,7 @@ describe('RetryState', () => {
         session,
         logger,
         modelCell: testRetryModelCell(undefined, 'api-key'),
-      }),
+      }) as never,
     );
 
     try {
@@ -508,7 +525,7 @@ describe('RetryState', () => {
         phase: STREAM_PHASE.RUNNING,
       });
 
-      await expect(node._exec(undefined)).resolves.toBe('recovered');
+      await expect(node._exec(undefined)).resolves.toBe(ATTEMPT_SUCCESS);
 
       const rows = transcript.get(streamId)?.getRange(0) ?? [];
       const diagnostics = rows
@@ -620,8 +637,8 @@ describe('RetryState', () => {
     );
 
     class ClientPreparationRetryNode extends ExposedRetryNode {
-      override async exec(): Promise<string> {
-        return this.runWithRelayRecovery(async () => 'recovered');
+      override async exec(): Promise<InvocationSuccess> {
+        return this.runWithRelayRecovery(async () => ATTEMPT_SUCCESS);
       }
     }
 
@@ -634,7 +651,7 @@ describe('RetryState', () => {
           rebind: async () => undefined,
           route: 'api-key',
         },
-      }),
+      }) as never,
     );
 
     try {
@@ -642,7 +659,7 @@ describe('RetryState', () => {
         phase: STREAM_PHASE.RUNNING,
       });
 
-      await expect(node._exec(undefined)).resolves.toBe('recovered');
+      await expect(node._exec(undefined)).resolves.toBe(ATTEMPT_SUCCESS);
 
       expect(
         events.map((event) => [event.event, event.attemptOrdinal]),
@@ -669,21 +686,15 @@ describe('RetryState', () => {
     }
   });
 
-  it('records a resolved result rejected by the concrete boundary as failed', async () => {
+  it('records a resolved result rejected by the invocation boundary as failed', async () => {
     const streamId = 'retry-invalid-result' as StreamTabId;
     const logger = new TraceEmitter();
     const events = collectRetryLifecycleEvents(logger);
     const session = createTestSession();
 
     class InvalidResultNode extends ExposedRetryNode {
-      protected override isSuccessfulInvocationResult(
-        result: unknown,
-      ): boolean {
-        return Boolean(result);
-      }
-
-      override async exec(): Promise<string> {
-        return this.runWithRelayRecovery(async () => '');
+      override async exec(): Promise<InvocationSuccess> {
+        return this.runWithRelayRecovery(async () => EMPTY_ATTEMPT);
       }
     }
 
@@ -692,11 +703,11 @@ describe('RetryState', () => {
         session,
         logger,
         modelCell: testRetryModelCell(undefined, 'api-key'),
-      }),
+      }) as never,
     );
 
     try {
-      await expect(node._exec(undefined)).resolves.toBe('');
+      await expect(node._exec(undefined)).resolves.toBe(EMPTY_ATTEMPT);
       expect(events.map((event) => event.event)).toEqual([
         'attempt_started',
         'attempt_failed',
@@ -758,9 +769,9 @@ describe('RetryState', () => {
     class StatuslessServerErrorNode extends ExposedRetryNode {
       attempts = 0;
 
-      override async exec(): Promise<string> {
+      override async exec(): Promise<InvocationSuccess> {
         this.attempts += 1;
-        if (this.attempts > 1) return 'recovered';
+        if (this.attempts > 1) return ATTEMPT_SUCCESS;
 
         throw statuslessServerError('temporary provider failure');
       }
@@ -769,7 +780,7 @@ describe('RetryState', () => {
     vi.useFakeTimers();
     try {
       const node = new StatuslessServerErrorNode().setServices(
-        retryServices('retry-delay' as StreamTabId),
+        retryServices('retry-delay' as StreamTabId) as never,
       );
       const retry = node._exec(undefined);
       const delayMs = RETRY_BACKOFF_SECONDS * 1000;
@@ -778,7 +789,7 @@ describe('RetryState', () => {
       expect(node.attempts).toBe(1);
 
       await vi.advanceTimersByTimeAsync(1);
-      await expect(retry).resolves.toBe('recovered');
+      await expect(retry).resolves.toBe(ATTEMPT_SUCCESS);
       expect(node.attempts).toBe(2);
     } finally {
       vi.useRealTimers();
@@ -797,7 +808,7 @@ describe('RetryState', () => {
       override async execFallback(
         _prepRes: unknown,
         error: Error,
-      ): Promise<unknown> {
+      ): Promise<InvocationResult> {
         return this.fallbackFor(error);
       }
     }
@@ -811,7 +822,7 @@ describe('RetryState', () => {
       const node = new InterruptibleBackoffNode().setServices(
         retryServices('retry-interrupt' as StreamTabId, {
           signal: runController.signal,
-        }),
+        }) as never,
       );
       const retry = node._exec(undefined);
       await vi.advanceTimersByTimeAsync(0);
@@ -855,12 +866,12 @@ describe('RetryState', () => {
     SupabaseClient.setAuthProvider(createAuthTokenProvider());
     const unauthorized = httpError('relay token expired', 401);
     const operation = vi
-      .fn<(signal: AbortSignal) => Promise<string>>()
+      .fn<(signal: AbortSignal) => Promise<InvocationSuccess>>()
       .mockRejectedValueOnce(unauthorized)
-      .mockResolvedValueOnce('recovered');
+      .mockResolvedValueOnce(ATTEMPT_SUCCESS);
 
     await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-      'recovered',
+      ATTEMPT_SUCCESS,
     );
 
     const refreshSignal = rebind.mock.calls[0]?.[1];
@@ -877,12 +888,12 @@ describe('RetryState', () => {
     SupabaseClient.setAuthProvider(createAuthTokenProvider());
     const unauthorized = httpError('relay token expired', 401);
     const operation = vi
-      .fn<() => Promise<string>>()
+      .fn<() => Promise<InvocationSuccess>>()
       .mockRejectedValueOnce(unauthorized)
-      .mockResolvedValueOnce('recovered');
+      .mockResolvedValueOnce(ATTEMPT_SUCCESS);
 
     class ReactiveRecoveryNode extends ExposedRetryNode {
-      override async exec(): Promise<string> {
+      override async exec(): Promise<InvocationSuccess> {
         return this.runWithRelayRecovery(operation);
       }
     }
@@ -892,11 +903,11 @@ describe('RetryState', () => {
         session,
         logger,
         modelCell: testRetryModelCell(rebind, 'relay'),
-      }),
+      }) as never,
     );
 
     try {
-      await expect(node._exec(undefined)).resolves.toBe('recovered');
+      await expect(node._exec(undefined)).resolves.toBe(ATTEMPT_SUCCESS);
       expect(
         events.map((event) => ({
           event: event.event,
@@ -1403,12 +1414,12 @@ describe('RetryState', () => {
 
       const unauthorized = httpError('new relay 401', 401);
       const operation = vi
-        .fn<(signal: AbortSignal) => Promise<string>>()
+        .fn<(signal: AbortSignal) => Promise<InvocationSuccess>>()
         .mockRejectedValueOnce(unauthorized)
-        .mockResolvedValueOnce('recovered');
+        .mockResolvedValueOnce(ATTEMPT_SUCCESS);
 
       await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-        'recovered',
+        ATTEMPT_SUCCESS,
       );
       expect(operation).toHaveBeenCalledTimes(2);
       expect(ensureFreshToken).toHaveBeenCalledOnce();
@@ -1526,9 +1537,9 @@ describe('RetryState', () => {
         createAuthTokenProvider({ isTokenExpiringSoon: () => true }),
       );
 
-      const operation = vi.fn(async () => 'response');
+      const operation = vi.fn(async () => ATTEMPT_SUCCESS);
       await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-        'response',
+        ATTEMPT_SUCCESS,
       );
 
       expect(operation).toHaveBeenCalledOnce();
@@ -1552,9 +1563,9 @@ describe('RetryState', () => {
         }),
       );
 
-      const operation = vi.fn(async () => 'response');
+      const operation = vi.fn(async () => ATTEMPT_SUCCESS);
       await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-        'response',
+        ATTEMPT_SUCCESS,
       );
 
       expect(ensureFreshToken).toHaveBeenCalledOnce();
@@ -1583,9 +1594,9 @@ describe('RetryState', () => {
         }),
       );
 
-      const operation = vi.fn(async () => 'response');
+      const operation = vi.fn(async () => ATTEMPT_SUCCESS);
       await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-        'response',
+        ATTEMPT_SUCCESS,
       );
 
       expect(ensureFreshToken).toHaveBeenCalledOnce();
@@ -1602,9 +1613,9 @@ describe('RetryState', () => {
         createAuthTokenProvider({ ensureFreshToken }),
       );
 
-      const operation = vi.fn(async () => 'response');
+      const operation = vi.fn(async () => ATTEMPT_SUCCESS);
       await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-        'response',
+        ATTEMPT_SUCCESS,
       );
 
       expect(ensureFreshToken).not.toHaveBeenCalled();
@@ -1625,9 +1636,9 @@ describe('RetryState', () => {
         }),
       );
 
-      const operation = vi.fn(async () => 'response');
+      const operation = vi.fn(async () => ATTEMPT_SUCCESS);
       await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-        'response',
+        ATTEMPT_SUCCESS,
       );
 
       // The configured CI token satisfies the non-forced read cache-only: the
