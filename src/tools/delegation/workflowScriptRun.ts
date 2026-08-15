@@ -220,6 +220,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     {
       status: WorkflowCallProgress['status'];
       childStreamId: WorkflowCallProgress['childStreamId'];
+      updatedAt: string;
     }
   >();
   let constructionEmissionSeen = false;
@@ -445,33 +446,38 @@ export async function runPersistedWorkflowScriptWithProgress(
         if (status === 'planned' && projected?.status === 'running') {
           status = 'running';
         }
-        // A call already terminal in the construction emission is hydrated
-        // history, not this attempt's activity: record it silently and
-        // project it only once the run changes it (a cache reclassification
-        // or a fresh child stream). Emitting it here would freeze its card
-        // identity from the historical snapshot — hydration strips the phase
-        // from dynamic calls, so the card would stay grouped under the parent
-        // after `issueCall` restores the phase — and would double-report the
-        // old result in the run log (completed now, cached on reissue).
-        if (
-          !constructionEmissionSeen &&
-          !projected &&
-          (status === 'completed' ||
-            status === 'failed' ||
-            status === 'skipped' ||
-            status === 'cached')
-        ) {
+        // A call carried into the construction emission is hydrated history,
+        // not this attempt's activity. Reusable calls are terminal here;
+        // failed/cancelled calls were reset to planned, but retain an earlier
+        // creation timestamp or attempt record. Record either shape silently.
+        // Emitting a hydrated dynamic call would freeze the identity before
+        // `issueCall` restores its phase, and a call absent from this script
+        // would appear as current-attempt not-reached work.
+        const hydratedHistory =
+          status === 'completed' ||
+          status === 'failed' ||
+          status === 'skipped' ||
+          status === 'cached' ||
+          call.attempts.length > 0 ||
+          call.timestamps.createdAt !== call.timestamps.updatedAt;
+        if (!constructionEmissionSeen && !projected && hydratedHistory) {
           hydratedBaseline.set(call.id, {
             status,
             childStreamId: call.childStreamId,
+            updatedAt: call.timestamps.updatedAt,
           });
           continue;
         }
         const baseline = projected ? undefined : hydratedBaseline.get(call.id);
         if (baseline !== undefined) {
+          // A non-reusable historical call must first be reissued as planned.
+          // Sweep-only terminalization of a call absent from the new script is
+          // still history and must not manufacture a card for this attempt.
+          if (baseline.status === 'planned' && status !== 'planned') continue;
           if (
             baseline.status === status &&
-            baseline.childStreamId === call.childStreamId
+            baseline.childStreamId === call.childStreamId &&
+            baseline.updatedAt === call.timestamps.updatedAt
           ) {
             continue;
           }

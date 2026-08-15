@@ -417,6 +417,59 @@ return await agent('Read', { phase: 'Review' })`;
     expect(workflowCallEvent(events, 'Read', 'running')).toBeUndefined();
   });
 
+  it('defers failed hydrated dynamic calls until the retry reissues them', async () => {
+    const script = `${meta}
+phase('Review')
+return await agent('Retry review', { id: 'retry-review' })`;
+    const failed = await runScript(
+      recordingTrace().trace,
+      'failed-hydrated-call',
+      script,
+      {
+        runAgent: vi.fn(() =>
+          Promise.reject(new Error('first attempt failed')),
+        ),
+      },
+    );
+    expect(failed.snapshot.calls[0]?.status).toBe('failed');
+
+    clearStoreCache();
+    const retry = recordingTrace();
+    await runScript(retry.trace, 'failed-hydrated-call', script);
+
+    const reviewId = stageId(retry.events, 'Review');
+    expect(
+      workflowCallEvent(retry.events, 'Retry review', 'planned'),
+    ).toMatchObject({ stageId: reviewId, call: { phase: 'Review' } });
+    expect(
+      workflowCallEvent(retry.events, 'Retry review', 'completed'),
+    ).toMatchObject({ stageId: reviewId, call: { phase: 'Review' } });
+  });
+
+  it('does not project a failed hydrated call omitted by the retry', async () => {
+    const failed = await runScript(
+      recordingTrace().trace,
+      'omitted-hydrated-call',
+      `${meta}
+return await agent('Historical call', { id: 'historical' })`,
+      { runAgent: vi.fn(() => Promise.reject(new Error('failed'))) },
+    );
+    expect(failed.snapshot.calls[0]?.status).toBe('failed');
+
+    clearStoreCache();
+    const retry = recordingTrace();
+    await runScript(
+      retry.trace,
+      'omitted-hydrated-call',
+      `${meta}
+return 'done'`,
+    );
+
+    expect(retry.events.some((event) => event.type === 'workflow.call')).toBe(
+      false,
+    );
+  });
+
   it('keeps phase counts when an agent opens the stage before phase()', async () => {
     const { trace, events } = recordingTrace();
     const script = `export const meta = {
