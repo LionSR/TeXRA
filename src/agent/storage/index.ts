@@ -8,8 +8,9 @@
  * conversation formatting — decoupling host code from the storage internals'
  * file layout, per the module-level barrel pattern set by `@agent/runtime`
  * (#10011). The R-b deep-import width ratchet
- * (`config/ratchets/host-agent-import-baseline.json`) collapses each host's
- * many `@agent/storage/*` specifiers to this single door.
+ * (`config/ratchets/host-agent-import-baseline.json`) records the remaining
+ * host `@agent/storage/*` specifiers — CLI's `conversationFormat` and
+ * `executionLease` — collapsed to this single door.
  */
 
 export {
