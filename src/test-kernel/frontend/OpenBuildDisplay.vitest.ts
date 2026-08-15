@@ -13,7 +13,12 @@ import {
 const mocks = vi.hoisted(() => ({
   exists: vi.fn(async (_path: string) => true),
   isLatexFile: vi.fn((_path: string) => true),
-  compileLatex2Pdf: vi.fn(async () => ({ ok: true as const, logTail: '' })),
+  compileLatex2Pdf: vi.fn(
+    async (): Promise<{ ok: boolean; logTail: string }> => ({
+      ok: true,
+      logTail: '',
+    }),
+  ),
   pathToLocation: vi.fn((absolutePath: string) => ({
     kind: 'workspace' as const,
     absolutePath,
@@ -91,6 +96,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
     vi.clearAllMocks();
     mocks.exists.mockResolvedValue(true);
     mocks.isLatexFile.mockReturnValue(true);
+    mocks.compileLatex2Pdf.mockResolvedValue({ ok: true, logTail: '' });
     mocks.executeCommand.mockImplementation(async () => undefined);
   });
 
@@ -213,6 +219,63 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
     expect(mocks.executeCommand).not.toHaveBeenCalledWith(
       'latex-workshop.view',
     );
+  });
+
+  it('reports external compile failure as not viewer-ready', async () => {
+    mocks.compileLatex2Pdf.mockResolvedValue({
+      ok: false,
+      logTail: 'compilation failed',
+    });
+    const externalTex = {
+      kind: 'external' as const,
+      absolutePath: '/tmp/paper.tex',
+    };
+
+    const ready = await prepareBuildDisplay(externalTex, {
+      scheduleViewer: false,
+    });
+    expect(ready).toBe(false);
+    await vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS);
+    expect(mocks.executeCommand).not.toHaveBeenCalledWith(
+      'latex-workshop.view',
+    );
+  });
+
+  it('keeps the final viewer schedulable when a later prepare rejects', async () => {
+    const order: string[] = [];
+    mocks.openTextDocument.mockImplementation(async (uri: unknown) => {
+      const fsPath = (uri as { fsPath: string }).fsPath;
+      order.push(`open:${fsPath}`);
+      if (fsPath === '/workspace/diff-2.tex') {
+        throw new Error('second setup failed');
+      }
+      return { uri };
+    });
+    mocks.showTextDocument.mockImplementation(async () => {
+      order.push('show');
+    });
+    mocks.executeCommand.mockImplementation(async (command: string) => {
+      order.push(command);
+      return undefined;
+    });
+
+    const first = { ...workspaceTex, absolutePath: '/workspace/diff-1.tex' };
+    const second = { ...workspaceTex, absolutePath: '/workspace/diff-2.tex' };
+
+    await prepareBuildDisplay(first, { scheduleViewer: false });
+    await expect(
+      prepareBuildDisplay(second, { scheduleViewer: false }),
+    ).rejects.toThrow('second setup failed');
+
+    // The command's try/finally schedules the final viewer for the last
+    // prepared diff after the setup rejection propagates.
+    void scheduleViewerDisplay();
+    await vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS);
+
+    const viewerIndexes = order
+      .map((entry, index) => (entry === 'latex-workshop.view' ? index : -1))
+      .filter((index) => index >= 0);
+    expect(viewerIndexes).toHaveLength(1);
   });
 
   it('keeps final-result viewer delivery deterministic across sequential latexdiff results', async () => {
