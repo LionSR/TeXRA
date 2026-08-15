@@ -285,12 +285,13 @@ export abstract class ModelHandler<
     this.continueLimit = DEFAULT_CONTINUE_LIMIT;
     this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
     this.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR;
-    // Initialize with default channel, will be overwritten by agent. Unlike
-    // the other ~25 log-only `createChannelTrace` singletons, this default
-    // is exercised through `createThinkingStream`/`createOutputStream`
-    // (`this.logger.openStream(...)`) before `setLogger` swaps in the real
-    // per-run trace in some paths, so it needs the full `TraceEmitter`, not
-    // the log-only closure `createChannelTrace` now returns.
+    // Initialize with default channel, will be overwritten by agent. Log-only
+    // module singletons now use `createLog`; remaining `createChannelTrace`
+    // sites are `AgentTrace`-typed fallbacks or singletons still being
+    // narrowed under #10595. Unlike those, this default is exercised through
+    // `createThinkingStream`/`createOutputStream` (`this.logger.openStream(...)`)
+    // before `setLogger` swaps in the real per-run trace in some paths, so it
+    // needs the full `TraceEmitter`, not a log-only closure.
     this.logger = new TraceEmitter();
     attachChannelSubscriber(this.logger, { channel: 'Agent', isAgent: false });
     this.mediaProcessor = new MediaAttachmentProcessor(this.logger, {
