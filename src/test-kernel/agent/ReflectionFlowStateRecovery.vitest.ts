@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import { getExecutionStore } from '@agent/storage';
 import { noopTrace } from '@agent/trace';
+import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import {
   AgentPromptSchema,
   AgentWorkflowSettingSchema,
@@ -88,6 +89,7 @@ async function runPersistedReflectionFlow(
           transient: {},
         },
         modelCell,
+        toolPolicy: createToolPolicy(),
         onRoundFinalized: () => {},
       }),
     );
