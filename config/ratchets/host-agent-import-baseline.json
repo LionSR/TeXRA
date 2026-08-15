@@ -16,8 +16,6 @@
       "@agent/modelHandlers/support/contextUtilization",
       "@agent/runtime",
       "@agent/storage",
-      "@agent/storage/conversationFormat",
-      "@agent/storage/executionLease",
       "@agent/trace"
     ],
     "desktop": [
