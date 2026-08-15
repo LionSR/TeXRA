@@ -9,6 +9,16 @@
 > (main moved during the sweep and eight PRs from the delegation campaign are
 > in flight): re-open every cited site before acting.
 
+> **Follow-up:** the maintainer subsequently ruled for maximal consolidation
+> ("same data structure, UI rendered differently, collapse
+> projectors/adapters/bridges, single source of truth"). The target
+> architecture and staged plan for that directive live in the companion doc
+> `2026-08-15-single-substrate-hosts-as-renderers.md`, which deepens §2's
+> C1/C13/C16/C20/C22 and the §4 register into a layer census, a transcript
+> row-model study, a session-state field study, and a prior-rulings
+> compliance map. Where the two docs disagree on an estimate, the companion
+> doc's per-field accounting supersedes this doc's sweep-level estimate.
+
 The question this audit answers, as the maintainer posed it: after the
 substrate campaign, **is there tech debt that can actually be consolidated
 between desktop/CLI/extension — rather than doing different layering or
