@@ -4,6 +4,7 @@ import { z } from 'zod';
 // Local imports - tools
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
+import { restoreLatexSectionSign } from '@replacement/maxRules';
 import type { ToolResult } from '@shared/schemas';
 import {
   applyApprovedFileEdit,
@@ -39,7 +40,7 @@ export class WriteFileTool extends defineTool({
     }
     const { path, displayPath, exists, originalContent } = prepared.target;
     const proposedContent = isTexFile(path)
-      ? replacementEngine.applyAll(input.content)
+      ? restoreLatexSectionSign(replacementEngine.applyAll(input.content))
       : input.content;
 
     return applyApprovedFileEdit({
