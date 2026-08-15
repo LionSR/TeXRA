@@ -28,30 +28,32 @@ const mocks = vi.hoisted(() => ({
   resumeToolUseFromResumeData: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   throwDeliveryFormatting: false,
+  throwErrorFormatting: false,
 }));
 
-vi.mock('@tools/delegation/subagentDeliveryFormat', async (importOriginal) => {
+vi.mock('@tools/delegation/subagentResults', async (importOriginal) => {
   const original =
-    await importOriginal<
-      typeof import('@tools/delegation/subagentDeliveryFormat')
-    >();
+    await importOriginal<typeof import('@tools/delegation/subagentResults')>();
   return {
     ...original,
-    formatBuiltSubagentDelivery: (
-      ...args: Parameters<typeof original.formatBuiltSubagentDelivery>
+    formatSubagentDelivery: (
+      ...args: Parameters<typeof original.formatSubagentDelivery>
     ) => {
       if (mocks.throwDeliveryFormatting) {
         throw new Error('delivery formatting failed');
       }
-      return original.formatBuiltSubagentDelivery(...args);
+      return original.formatSubagentDelivery(...args);
+    },
+    formatSubagentError: (
+      ...args: Parameters<typeof original.formatSubagentError>
+    ) => {
+      if (mocks.throwErrorFormatting) {
+        throw new Error('error formatting failed');
+      }
+      return original.formatSubagentError(...args);
     },
   };
 });
-
-vi.mock('@agent/runtime/executeAgent', () => ({
-  executeAgent: mocks.executeAgent,
-  resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
-}));
 
 vi.mock('@agent/storage', () => ({
   finalizeExecution: mocks.finalizeExecution,
@@ -63,14 +65,12 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  runWithOwnedExecutionLease: (
-    _executionId: ExecutionId,
-    operation: () => unknown,
-  ) => operation(),
-}));
-
-vi.mock('@agent/runtime/executionOwnership', () => ({
-  releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
+  captureOwnedExecutionLease:
+    (_executionId: ExecutionId) => (operation: () => unknown) =>
+      operation(),
+  renewOwnedExecutionLease: vi.fn(async () => {}),
+  abandonOwnedExecutionLease: vi.fn(),
+  completeOwnedExecutionLease: vi.fn(async () => {}),
 }));
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
@@ -88,7 +88,11 @@ vi.mock('@agent/storage/childRunPersistence', () => ({
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { createNativeSubagentStrategy } from '@tools/delegation/nativeSubagentStrategy';
+import {
+  createNativeSubagentStrategy,
+  provideAgentEngine,
+  type AgentEngine,
+} from '@tools/delegation/nativeSubagentStrategy';
 
 const ownedSessions = new Set<SessionHandle>();
 
@@ -174,9 +178,16 @@ async function launchWaitingTurn(
 }
 
 describe('NativeSubagentStrategy', () => {
+  let restoreAgentEngine = (): void => {};
+
   beforeEach(() => {
     vi.resetAllMocks();
+    restoreAgentEngine = provideAgentEngine({
+      executeAgent: mocks.executeAgent,
+      resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
+    } as unknown as AgentEngine);
     mocks.throwDeliveryFormatting = false;
+    mocks.throwErrorFormatting = false;
     mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
     mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
     mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
@@ -189,6 +200,7 @@ describe('NativeSubagentStrategy', () => {
   });
 
   afterEach(() => {
+    restoreAgentEngine();
     for (const session of ownedSessions) session.dispose();
     ownedSessions.clear();
   });
@@ -295,6 +307,38 @@ describe('NativeSubagentStrategy', () => {
       params.executionId,
       expect.objectContaining({
         result: expect.objectContaining({ cost: 0.29, outcome: 'failed' }),
+      }),
+    );
+  });
+
+  it('persists a typed result-only failure without formatting error prose', async () => {
+    const params = { ...baseParams(), resultOnly: true };
+    const failure = new Error('provider failed');
+    mocks.throwErrorFormatting = true;
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      options.onRunError?.(failure);
+      return toolUseTurnResult('failed', params.executionId, {
+        error: { message: failure.message, userRetryable: false },
+      });
+    });
+
+    const { completion } = startChildRunLoop({
+      childStreamId: CHILD_STREAM_ID,
+      parentStreamId: params.parentStreamId,
+      executionId: params.executionId,
+      agentName: params.agentName,
+      strategy: createNativeSubagentStrategy(params),
+    });
+    await completion;
+
+    expect(mocks.persistChildRunResultMeta).toHaveBeenCalledWith(
+      params.executionId,
+      expect.objectContaining({
+        producer: 'subagent',
+        result: expect.objectContaining({
+          outcome: 'failed',
+          error: expect.objectContaining({ message: 'provider failed' }),
+        }),
       }),
     );
   });
@@ -434,6 +478,16 @@ describe('NativeSubagentStrategy', () => {
       'delivery formatting failed',
     );
     await expect(strategy.buildResult(turn)).resolves.toBe(built);
+  });
+
+  it('does not format prose for a typed-result-only child', async () => {
+    const params = { ...baseParams(), resultOnly: true };
+    const strategy = createNativeSubagentStrategy(params);
+    const turn = toolUseTurnResult('completed', params.executionId) as never;
+    mocks.throwDeliveryFormatting = true;
+
+    await expect(strategy.formatDelivery(turn, 1000)).resolves.toBe('');
+    await expect(strategy.buildResult(turn)).resolves.toBeDefined();
   });
 
   it('reports a non-throwing subagent failure via isTurnError, captured from onRunError', async () => {

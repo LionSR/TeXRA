@@ -13,6 +13,7 @@ export type {
   WorkflowAgentCallOptions,
   WorkflowAgentInvocation,
   WorkflowAgentRunner,
+  WorkflowExecutionTransition,
   WorkflowJournalEntry,
   WorkflowScriptControl,
   WorkflowScriptEvent,

@@ -22,7 +22,6 @@ import {
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
   proposalApprovals,
-  setDelegatedWorkApprovalBypasses,
 } from '@tools/approval';
 import { PlanTool } from '@tools/plan/PlanTool';
 
@@ -128,7 +127,7 @@ describe('PlanTool — update (plan approval)', () => {
     const workPlanState = new WorkPlanState();
 
     try {
-      setDelegatedWorkApprovalBypasses(streamId, true, session);
+      session.approvals.setDelegatedWorkBypasses(streamId, true);
       expect(proposalApprovals(session).isBypassed(streamId)).toBe(true);
 
       const resultPromise = withToolEnvironment(

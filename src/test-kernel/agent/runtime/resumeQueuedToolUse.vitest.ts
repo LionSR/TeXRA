@@ -12,6 +12,10 @@ import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 const resumeToolUseFromResumeDataMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/runtime/executeAgent', () => ({
   resumeToolUseFromResumeData: resumeToolUseFromResumeDataMock,
+  // The module under test narrows admission cancellation by `instanceof`; the
+  // mocked launcher never throws one, so a stand-in class keeps that branch
+  // false without pulling the real engine module into this test.
+  ResumeAdmissionCancelledError: class extends Error {},
 }));
 
 const STREAM = 'stream:resume-ownership' as StreamTabId;

@@ -2,10 +2,6 @@ import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { recordRound } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import {
-  createResponseCycleFlow,
-  type ResponseCycleShared,
-} from '@agent/core/flows/ResponseCycleFlow';
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
@@ -15,6 +11,10 @@ import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { ensureError } from '@utils/errors/errorMessage';
 
+import {
+  createResponseCycleFlow,
+  type ResponseCycleShared,
+} from '../ResponseCycleFlow';
 import { workspaceFromSnapshot } from '../helpers';
 import type {
   ReflectionFlowShared,

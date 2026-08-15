@@ -7,7 +7,6 @@
 
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
 import {
-  completeOwnedExecutionLease,
   ExecutionLeaseLostError,
   markOwnedExecutionLeaseUndurable,
 } from '@agent/storage/executionLease';
@@ -55,6 +54,9 @@ export interface ChildExecutionActivation {
   readonly executionId: ExecutionId;
   readonly parentStreamId: StreamTabId;
   readonly childStreamId: StreamTabId;
+  readonly interrupt: () => void;
+  readonly detach: () => void;
+  readonly isDetached: () => boolean;
 }
 
 interface TerminateOptions {
@@ -103,7 +105,12 @@ interface ExecutionRegistryInit {
   readonly events: SessionEventHub;
   readonly approvals?: SessionApprovals;
   readonly publishResult?: (event: ResultEvent, streamId: StreamTabId) => void;
-  readonly releaseRootExecutionLease?: (
+  /**
+   * The session's one exit choreography (`SessionHandle.releaseExecutionLease`)
+   * — required so no construction path can silently release a lease without
+   * draining the session's durable writers first.
+   */
+  readonly releaseRootExecutionLease: (
     executionId: ExecutionId,
   ) => Promise<void>;
 }
@@ -159,8 +166,7 @@ export class ExecutionRegistry {
     this.streamStatus = options.streamStatus;
     this.approvals = options.approvals;
     this.publishResult = options.publishResult;
-    this.releaseRootExecutionLease =
-      options.releaseRootExecutionLease ?? completeOwnedExecutionLease;
+    this.releaseRootExecutionLease = options.releaseRootExecutionLease;
     // Notify waiters and refresh UI badges when stream status changes
     // (e.g. RUNNING → WAITING). SessionEventHub dispatch is synchronous, so
     // bookkeeping retains the status machine subscription's original ordering.
@@ -202,6 +208,8 @@ export class ExecutionRegistry {
   track(handle: AgentExecutionHandle): void {
     this.assertActive();
     const previous = this.handles.get(handle.executionId);
+    const activation = this.childActivations.get(handle.executionId);
+    if (activation?.isDetached()) handle.detach();
     if (previous && previous.suspendedTerminationStarted) {
       // A resumed lifecycle can replace its suspended predecessor while the
       // predecessor's asynchronous teardown is still in progress. The
@@ -502,6 +510,17 @@ export class ExecutionRegistry {
     visited: Set<string>,
     options: TerminateOptions,
   ): void {
+    for (const activation of this.childActivations.values()) {
+      if (
+        activation.parentStreamId !== parentStreamId ||
+        activation.isDetached() ||
+        visited.has(activation.executionId)
+      ) {
+        continue;
+      }
+      visited.add(activation.executionId);
+      activation.interrupt();
+    }
     for (const handle of this.handles.values()) {
       if (isChildExecution(handle, parentStreamId)) {
         this.terminate(handle, visited, options);
@@ -516,6 +535,20 @@ export class ExecutionRegistry {
    * children.
    */
   detachActiveChildren(parentStreamId: StreamTabId): void {
+    for (const activation of this.childActivations.values()) {
+      if (
+        activation.parentStreamId !== parentStreamId ||
+        activation.isDetached()
+      ) {
+        continue;
+      }
+      activation.detach();
+      this.approvals?.detachStreamFromParent(activation.childStreamId);
+      this.emitParentStreamUpdate({
+        childStreamId: activation.childStreamId,
+        parentStreamId: null,
+      });
+    }
     for (const handle of this.handles.values()) {
       if (!isChildExecution(handle, parentStreamId)) continue;
       this.approvals?.detachStreamFromParent(handle.childStreamId);
@@ -673,6 +706,14 @@ export class ExecutionRegistry {
   }
 
   hasActiveChildren(parentStreamId: StreamTabId): boolean {
+    for (const activation of this.childActivations.values()) {
+      if (
+        activation.parentStreamId === parentStreamId &&
+        !activation.isDetached()
+      ) {
+        return true;
+      }
+    }
     for (const handle of this.handles.values()) {
       if (isChildExecution(handle, parentStreamId)) return true;
     }
@@ -853,7 +894,6 @@ export class ExecutionRegistry {
           flowRecord: 'delete',
           logger,
           failedMessage: 'Failed to finalize stopped waiting execution',
-          rejectedMessage: 'Waiting-execution finalizer rejected unexpectedly',
         });
       } finally {
         if (!handle.isChildExecution) {

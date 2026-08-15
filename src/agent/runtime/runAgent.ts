@@ -1,10 +1,9 @@
 import { registerExecution } from '@agent/storage';
 import { clearTerminalExecutionState } from '@agent/storage/executionLifecycle';
 import {
-  abandonOwnedExecutionLease,
   acquireResumedExecutionLease,
   captureOwnedExecutionLease,
-  completeOwnedExecutionLease,
+  markOwnedExecutionLeaseUndurable,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
 import { finalizeExecutionWithLease } from '@agent/storage/terminalPersistence';
@@ -20,11 +19,13 @@ import {
 } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 import { applyHelperModelPreference } from './helperModelPreference';
-import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
+import {
+  executeAgent,
+  ResumeAdmissionCancelledError,
+  type ExecuteAgentOptions,
+} from './executeAgent';
 import { getStreamTabId } from './streamTab';
 import { defaultSession } from './SessionHandle';
-import { flushOwnedExecutionArtifacts } from './executionOwnership';
-import { ResumeAdmissionCancelledError } from './resumeAdmission';
 import type { AgentFlowResult } from './AgentFlowResult';
 
 /**
@@ -139,109 +140,97 @@ export async function runAgent(
     let lifecycleStarted = false;
     let runResult: AgentFlowResult | undefined;
     let runFailure: { error: unknown } | undefined;
-    let artifactsDurable = false;
     let finalArtifactsHandled = false;
     let previousTerminalOutcome: RunOutcome | undefined;
     let resumedStreamId: StreamTabId | undefined;
     const callerOnRun = executeAgentOptions.onRun;
     try {
-      try {
-        // A resumed execution is no longer described by the terminal facts its
-        // previous run persisted; drop them before this run writes anything a
-        // reader would project them onto.
-        if (!shouldRegister) {
-          const cleared = await clearTerminalExecutionState(executionId);
-          resumedStreamId = cleared.streamId;
-          previousTerminalOutcome = cleared.previousOutcome;
-        }
-        const result = await executeAgent(config, executionId, {
-          ...executeAgentOptions,
-          streamTabIdOverride: resumedStreamId,
-          userFollowUpSupport,
-          onRun: async (handle) => {
-            lifecycleStarted = true;
-            await callerOnRun?.(handle);
-          },
+      // A resumed execution is no longer described by the terminal facts its
+      // previous run persisted; drop them before this run writes anything a
+      // reader would project them onto.
+      if (!shouldRegister) {
+        const cleared = await clearTerminalExecutionState(executionId);
+        resumedStreamId = cleared.streamId;
+        previousTerminalOutcome = cleared.previousOutcome;
+      }
+      const result = await executeAgent(config, executionId, {
+        ...executeAgentOptions,
+        streamTabIdOverride: resumedStreamId,
+        userFollowUpSupport,
+        onRun: async (handle) => {
+          lifecycleStarted = true;
+          await callerOnRun?.(handle);
+        },
+      });
+      runResult = result;
+    } catch (error) {
+      runFailure = { error };
+      const restoredOutcome = shouldRegister
+        ? RUN_OUTCOME.FAILED
+        : previousTerminalOutcome;
+      if (!lifecycleStarted && restoredOutcome !== undefined) {
+        // finalizeExecutionWithLease already marks the owned lease undurable
+        // when the terminal status did not reach disk; this site only needs
+        // to fold the persistence error into the run failure.
+        const finalization = await finalizeExecutionWithLease({
+          executionId,
+          outcome: restoredOutcome,
+          flowRecord: shouldRegister ? 'delete' : 'preserve',
         });
-        runResult = result;
-      } catch (error) {
-        runFailure = { error };
-        const restoredOutcome = shouldRegister
-          ? RUN_OUTCOME.FAILED
-          : previousTerminalOutcome;
-        if (!lifecycleStarted && restoredOutcome !== undefined) {
-          // finalizeExecutionWithLease already marks the owned lease undurable
-          // when the terminal status did not reach disk; this site only needs
-          // to fold the persistence error into the run failure.
-          const finalization = await finalizeExecutionWithLease({
-            executionId,
-            outcome: restoredOutcome,
-            flowRecord: shouldRegister ? 'delete' : 'preserve',
-          });
-          let finalizationError: unknown;
-          if ('thrownError' in finalization) {
-            finalizationError = finalization.thrownError;
-          } else if (finalization.finalization.status === 'failed') {
-            finalizationError = finalization.finalization.error;
-          }
-          if (finalizationError !== undefined) {
-            runFailure = {
-              error: new AggregateError(
-                [error, finalizationError],
-                `Execution ${executionId} failed before lifecycle startup and its terminal status could not be persisted`,
-              ),
-            };
-          }
+        if (finalization.status === 'failed') {
+          runFailure = {
+            error: new AggregateError(
+              [error, finalization.error],
+              `Execution ${executionId} failed before lifecycle startup and its terminal status could not be persisted`,
+            ),
+          };
         }
       }
+    }
 
-      const artifactFailures: unknown[] = [];
+    const artifactFailures: unknown[] = [];
+    try {
+      finalArtifactsHandled = (await beforeLeaseRelease?.()) === true;
+    } catch (error) {
+      artifactFailures.push(error);
+      // Host-owned final state failed to persist: poison the lease so the
+      // drain below completes as abandon rather than releasing a record
+      // whose host-side artifacts are not durable.
+      markOwnedExecutionLeaseUndurable(executionId);
+    }
+    if (!finalArtifactsHandled) {
+      // A failed host hook may already have abandoned ownership. Still try
+      // the ordinary drain: callbacks can also fail before touching session
+      // artifacts, and preserving those artifacts is worth the attempt. If
+      // ownership is gone, the resulting lease-lost error remains secondary
+      // to the host hook's original failure in the aggregate below.
       try {
-        finalArtifactsHandled = (await beforeLeaseRelease?.()) === true;
+        await runSession.releaseExecutionLease(executionId);
       } catch (error) {
         artifactFailures.push(error);
       }
-      if (!finalArtifactsHandled) {
-        // A failed host hook may already have abandoned ownership. Still try
-        // the ordinary drain: callbacks can also fail before touching session
-        // artifacts, and preserving those artifacts is worth the attempt. If
-        // ownership is gone, the resulting lease-lost error remains secondary
-        // to the host hook's original failure in the aggregate below.
-        try {
-          await flushOwnedExecutionArtifacts(runSession, executionId);
-        } catch (error) {
-          artifactFailures.push(error);
-        }
-      }
-      artifactsDurable = artifactFailures.length === 0;
-
-      if (artifactFailures.length > 0) {
-        const artifactFailure =
-          artifactFailures.length === 1
-            ? artifactFailures[0]
-            : new AggregateError(
-                artifactFailures,
-                `Execution ${executionId} has multiple final artifact failures`,
-              );
-        if (runFailure) {
-          throw new AggregateError(
-            [runFailure.error, artifactFailure],
-            `Execution ${executionId} failed and its final artifacts could not be persisted`,
-          );
-        }
-        throw artifactFailure;
-      }
-      if (runFailure) throw runFailure.error;
-      if (!runResult) {
-        throw new Error(`Execution ${executionId} finished without a result.`);
-      }
-      return runResult;
-    } finally {
-      if (artifactsDurable && !finalArtifactsHandled) {
-        await completeOwnedExecutionLease(executionId);
-      } else if (!artifactsDurable) {
-        abandonOwnedExecutionLease(executionId);
-      }
     }
+
+    if (artifactFailures.length > 0) {
+      const artifactFailure =
+        artifactFailures.length === 1
+          ? artifactFailures[0]
+          : new AggregateError(
+              artifactFailures,
+              `Execution ${executionId} has multiple final artifact failures`,
+            );
+      if (runFailure) {
+        throw new AggregateError(
+          [runFailure.error, artifactFailure],
+          `Execution ${executionId} failed and its final artifacts could not be persisted`,
+        );
+      }
+      throw artifactFailure;
+    }
+    if (runFailure) throw runFailure.error;
+    if (!runResult) {
+      throw new Error(`Execution ${executionId} finished without a result.`);
+    }
+    return runResult;
   });
 }

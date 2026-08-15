@@ -43,5 +43,6 @@ export function testExecutionRegistry(): ExecutionRegistry {
   return new ExecutionRegistry({
     events,
     streamStatus: new StreamStatusMachine(events),
+    releaseRootExecutionLease: async () => {},
   });
 }

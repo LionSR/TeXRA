@@ -46,6 +46,18 @@ vi.mock('@agent/storage', async (importOriginal) => {
     ),
     deriveResumability: mocks.deriveResumability,
     finalizeExecution: mocks.finalizeExecution,
+    // Mirrors the real result-object conversion over the same writeResultMeta
+    // fake, so failure injection keeps flowing through mocks.writeResultMeta.
+    persistChildRunResultMeta: vi.fn(
+      async (_executionId: ExecutionId, meta: unknown) => {
+        try {
+          await mocks.writeResultMeta(meta);
+          return { kind: 'persisted' as const };
+        } catch (err) {
+          return { kind: 'failed' as const, err };
+        }
+      },
+    ),
   };
 });
 

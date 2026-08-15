@@ -17,9 +17,11 @@ const mocks = vi.hoisted(() => ({
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
   deliverChildRunFollowUp: vi.fn(),
-  releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
-  runWithOwnedExecutionLease: vi.fn(
-    (_executionId: ExecutionId, operation: () => unknown) => operation(),
+  releaseExecutionLeaseAfterArtifacts: vi.fn(
+    async (_session: unknown, _executionId: ExecutionId) => {},
+  ),
+  captureOwnedExecutionLease: vi.fn(
+    (_executionId: ExecutionId) => (operation: () => unknown) => operation(),
   ),
   leaseLossListener: undefined as (() => void) | undefined,
 }));
@@ -41,7 +43,7 @@ vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
   markOwnedExecutionLeaseUndurable: vi.fn(),
-  runWithOwnedExecutionLease: mocks.runWithOwnedExecutionLease,
+  captureOwnedExecutionLease: mocks.captureOwnedExecutionLease,
   onOwnedExecutionLeaseLost: vi.fn(
     (_executionId: ExecutionId, listener: () => void) => {
       mocks.leaseLossListener = listener;
@@ -52,11 +54,6 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
       };
     },
   ),
-}));
-
-vi.mock('@agent/runtime/executionOwnership', () => ({
-  releaseExecutionLeaseAfterArtifacts:
-    mocks.releaseExecutionLeaseAfterArtifacts,
 }));
 
 vi.mock('@agent/storage/childRunPersistence', () => ({
@@ -70,6 +67,10 @@ vi.mock('@agent/followUp/childRunDelivery', () => ({
 
 import type { WorkflowJournalEntry } from '@agent/workflowScript';
 import { getExecutionStore } from '@agent/storage';
+import {
+  childRunBudgetFor,
+  DEFAULT_CHILD_RUN_BUDGET,
+} from '@agent/runtime/childRunBudget';
 import {
   startChildRunLoop,
   type ChildRunLoopHandle,
@@ -270,6 +271,11 @@ async function waitForLoopEnd(childStreamId: StreamTabId): Promise<void> {
 beforeEach(() => {
   session = defaultSession();
   vi.clearAllMocks();
+  // The loop's terminal drain is the session's one exit choreography; the
+  // suite observes it through the same (session, executionId) spy as before.
+  vi.spyOn(session, 'releaseExecutionLease').mockImplementation((executionId) =>
+    mocks.releaseExecutionLeaseAfterArtifacts(session, executionId),
+  );
   mocks.leaseLossListener = undefined;
   mocks.finalizeExecution.mockResolvedValue({
     status: 'durable',
@@ -294,7 +300,7 @@ describe('childRunLoop E2E fixtures', () => {
   it('validates the captured lease before registering loop resources', () => {
     const { childStreamId, executionId } = loopIds('lost-before-setup');
     const { strategy, callCount } = createFakeStrategy();
-    mocks.runWithOwnedExecutionLease.mockImplementationOnce(() => {
+    mocks.captureOwnedExecutionLease.mockImplementationOnce(() => {
       throw new Error('lease generation lost');
     });
 
@@ -311,8 +317,10 @@ describe('childRunLoop E2E fixtures', () => {
     const { childStreamId, executionId } = loopIds('lost-during-setup');
     const { strategy, callCount } = createFakeStrategy();
     const claimChildRun = vi.spyOn(session.followUps, 'claimChildRun');
-    mocks.runWithOwnedExecutionLease
-      .mockImplementationOnce((_id, operation) => operation())
+    mocks.captureOwnedExecutionLease
+      .mockImplementationOnce(
+        (_id) => (operation: () => unknown) => operation(),
+      )
       .mockImplementationOnce(() => {
         throw new Error('lease generation lost during setup');
       });
@@ -475,7 +483,7 @@ describe('childRunLoop E2E fixtures', () => {
     const { strategy, rejectTurn } = createFakeStrategy();
 
     startLoop({ childStreamId, executionId }, strategy);
-    expect(mocks.runWithOwnedExecutionLease).toHaveBeenCalledTimes(3);
+    expect(mocks.captureOwnedExecutionLease).toHaveBeenCalledTimes(3);
     await vi.waitFor(() => expect(mocks.leaseLossListener).toBeDefined());
 
     mocks.leaseLossListener?.();
@@ -566,7 +574,7 @@ describe('childRunLoop E2E fixtures', () => {
         startLoop(ids, createTerminalStrategy('Retry attempt')).completion,
       ).resolves.toBeUndefined();
       expect(admissions).toEqual(['live_flow', 'live_flow']);
-      const delivered = session.followUps.drainItems(parentLease);
+      const delivered = session.followUps.queue(parentLease).drainItems();
       expect(delivered.map((item) => item.text)).toEqual([
         'delivered:done',
         'delivered:done',
@@ -1023,6 +1031,47 @@ describe('childRunLoop E2E fixtures', () => {
     expect(mocks.finalizeExecution).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: RUN_OUTCOME.FAILED }),
     );
+  });
+
+  it('gates budgeted child turns through the session child-run budget', async () => {
+    childRunBudgetFor(session, 1);
+    try {
+      const first = loopIds('budget-first');
+      const second = loopIds('budget-second');
+      const started: string[] = [];
+      let releaseFirst: ((turn: FakeTurn) => void) | undefined;
+
+      const firstStrategy = createTerminalStrategy(
+        'Budgeted first child',
+        () =>
+          new Promise<FakeTurn>((resolve) => {
+            started.push('first');
+            releaseFirst = resolve;
+          }),
+      );
+      const secondStrategy = createTerminalStrategy(
+        'Budgeted second child',
+        async () => {
+          started.push('second');
+          return { kind: 'terminal', value: 'done' };
+        },
+      );
+
+      startLoop(first, firstStrategy, { budgeted: true });
+      startLoop(second, secondStrategy, { budgeted: true });
+
+      await vi.waitFor(() => expect(started).toEqual(['first']));
+      // One slot: the second child's turn must not start while the first
+      // holds it — even after its loop has acquired its queue lease.
+      await waitForLiveOwner(second.childStreamId);
+      expect(started).toEqual(['first']);
+
+      releaseFirst?.({ kind: 'terminal', value: 'done' });
+      await waitForLoopEnd(second.childStreamId);
+      expect(started).toEqual(['first', 'second']);
+    } finally {
+      childRunBudgetFor(session, DEFAULT_CHILD_RUN_BUDGET);
+    }
   });
 
   it('recordCost commits exactly once with the greatest observed value', async () => {

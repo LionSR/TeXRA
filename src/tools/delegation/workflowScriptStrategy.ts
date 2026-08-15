@@ -251,8 +251,9 @@ export function createWorkflowScriptStrategy(
 
       let unregisterControls: (() => void) | undefined;
       // The engine flushes its terminal snapshot before it rethrows, so the
-      // last one published is the run's own final account of what ran — the
-      // only source the failure path has for phase and task tallies.
+      // last one *persisted* is the run's own final account of what ran — the
+      // only source the failure path has for phase and task tallies, and by
+      // construction never newer than the durable execution record.
       let lastSnapshot: WorkflowExecutionSnapshot | undefined;
       let run: WorkflowScriptRunResult;
       try {
@@ -273,8 +274,11 @@ export function createWorkflowScriptStrategy(
             fingerprintWorkflowAgentDependencies(params.executionId, options),
           onActivity: runLog.add,
           onSnapshot: async (snapshot) => {
-            lastSnapshot = snapshot;
+            // Persist first: only a durably written snapshot may feed the
+            // delivery summary, otherwise a failed write leaves the summary
+            // reporting a newer state than /executions/{id} keeps.
             await params.onSnapshot?.(snapshot);
+            lastSnapshot = snapshot;
           },
           // The engine's control is already keyed by the grandchild execution
           // id a host targets, so the run registers it as-is.

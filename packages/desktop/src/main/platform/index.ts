@@ -1,7 +1,7 @@
 import { access, constants } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { app } from 'electron';
-import { initializePolishModel } from '@agent/runtime';
+import { initializeBundledPrompts } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { isFileNotFoundError } from '@common/errors';
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
@@ -14,7 +14,6 @@ import {
   bootstrapNodeAgentDirectories,
   createNodePlatform,
   initNodeAgentRuntime,
-  initializeNodeGoalPrompts,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
@@ -163,12 +162,10 @@ export async function initializeElectronPlatform(
   // Register the shared Node-host agent runtime: memory + goal tool injections
   // and the direct Lean language services (lake env lean --server).
   initNodeAgentRuntime(lifecycle);
-  initializeNodeGoalPrompts(resourcesPath);
-  // Follow-up polish uses the same bundled template as the extension; desktop
-  // previously wired `polishTextWithAI` without setting this path.
-  initializePolishModel(
-    join(resourcesPath, 'templates', 'instructionPolish.yaml'),
-  );
+  // Goal continuation and follow-up polish read the same bundled templates as
+  // the extension; one call registers every row of the prompt table, so
+  // desktop cannot wire one prompt and forget another the way it once did.
+  initializeBundledPrompts(resourcesPath);
   initializeNodeRuntimeSkills({
     cwd: workspacePath ?? app.getPath('home'),
     resourcesPath,

@@ -417,6 +417,67 @@ return await agent('Read', { phase: 'Review' })`;
     expect(workflowCallEvent(events, 'Read', 'running')).toBeUndefined();
   });
 
+  it('reissues hydrated calls when hydration and issue share a timestamp', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-15T20:00:00.000Z'));
+    try {
+      const script = `${meta}
+phase('Review')
+return await agent('Retry review', { id: 'retry-review' })`;
+      const failed = await runScript(
+        recordingTrace().trace,
+        'failed-hydrated-call',
+        script,
+        {
+          runAgent: vi.fn(() =>
+            Promise.reject(new Error('first attempt failed')),
+          ),
+        },
+      );
+      expect(failed.snapshot.calls[0]?.status).toBe('failed');
+
+      clearStoreCache();
+      const retry = recordingTrace();
+      // Keep the exact same millisecond for constructor hydration and
+      // issueCall: projection admission must use the explicit issue fact.
+      await runScript(retry.trace, 'failed-hydrated-call', script);
+
+      const reviewId = stageId(retry.events, 'Review');
+      expect(
+        workflowCallEvent(retry.events, 'Retry review', 'planned'),
+      ).toMatchObject({ stageId: reviewId, call: { phase: 'Review' } });
+      expect(
+        workflowCallEvent(retry.events, 'Retry review', 'completed'),
+      ).toMatchObject({ stageId: reviewId, call: { phase: 'Review' } });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not project a failed hydrated call omitted by the retry', async () => {
+    const failed = await runScript(
+      recordingTrace().trace,
+      'omitted-hydrated-call',
+      `${meta}
+return await agent('Historical call', { id: 'historical' })`,
+      { runAgent: vi.fn(() => Promise.reject(new Error('failed'))) },
+    );
+    expect(failed.snapshot.calls[0]?.status).toBe('failed');
+
+    clearStoreCache();
+    const retry = recordingTrace();
+    await runScript(
+      retry.trace,
+      'omitted-hydrated-call',
+      `${meta}
+return 'done'`,
+    );
+
+    expect(retry.events.some((event) => event.type === 'workflow.call')).toBe(
+      false,
+    );
+  });
+
   it('keeps phase counts when an agent opens the stage before phase()', async () => {
     const { trace, events } = recordingTrace();
     const script = `export const meta = {

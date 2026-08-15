@@ -2,8 +2,6 @@ import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { createToolUseRoundFlow } from '@agent/core/flows/ToolUseRoundFlow';
-import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundShared';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { USER_VAR_INSTRUCTION } from '@agent/prompt/userVars';
 import { buildFailedRetryInfo } from '@common/errors/sdkError/providerErrorFormat';
@@ -15,6 +13,8 @@ import {
 } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 
+import { createToolUseRoundFlow } from '../ToolUseRoundFlow';
+import type { ToolUseRoundShared } from '../toolUseRound/roundShared';
 import type { ToolUseRunShared, CyclePrepResult } from './types';
 import type { ToolUseServices } from '../ToolUseServices';
 

@@ -15,9 +15,9 @@ import {
 } from '@shared/schemas';
 import {
   resumeToolUseFromResumeData,
+  ResumeAdmissionCancelledError,
   type SubagentRunOptions,
 } from './executeAgent';
-import { ResumeAdmissionCancelledError } from './resumeAdmission';
 import { defaultSession } from './SessionHandle';
 import type { ToolUseResumeData } from './SessionResumeRetrieval';
 
@@ -103,7 +103,7 @@ export async function resumeQueuedToolUseFromResumeData(
   const restoreFollowUps = (): void => {
     if (followUpsRestored) return;
     followUpsRestored = true;
-    followUpsQueue.restore(queueLease, followUps);
+    followUpsQueue.queue(queueLease).restore(followUps);
     if (followUps.length > 0) {
       session.events.emit({
         scope: 'session',
@@ -116,7 +116,7 @@ export async function resumeQueuedToolUseFromResumeData(
   };
   try {
     options.onFollowUpQueueReady?.(queueLease);
-    followUps = [...seed, ...followUpsQueue.drainItems(queueLease)];
+    followUps = [...seed, ...followUpsQueue.queue(queueLease).drainItems()];
     session.events.emit({
       scope: 'session',
       event: {
@@ -160,7 +160,7 @@ export async function resumeQueuedToolUseFromResumeData(
       // this host resume must claim the late batch so input accepted by the
       // live context cannot remain dormant.
       takePendingFollowUps: () => {
-        const raced = followUpsQueue.drainItems(queueLease);
+        const raced = followUpsQueue.queue(queueLease).drainItems();
         followUps = [...followUps, ...raced];
         return raced.map(toFollowUpBatchItem);
       },
