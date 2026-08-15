@@ -382,6 +382,7 @@ export class SessionStores {
       failed.add(stream);
     };
     for (const stream of snapshotStreams) {
+      if (executionIdsByStream.has(stream)) continue;
       try {
         const executionId =
           await this.snapshots.readPersistedExecutionId(stream);

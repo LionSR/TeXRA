@@ -84,23 +84,29 @@ async function restorePersistedGeneration(
   streamId: StreamTabId,
   session: SessionHandle,
 ): Promise<boolean> {
-  let executionId: string | undefined;
-  try {
-    executionId =
-      (await session.snapshots.readPersistedExecutionId(streamId)) ??
-      session.transcripts.getSummaryMeta(streamId)?.executionId;
-  } catch (error) {
-    logger.warn(
-      `Cannot restore continuation generation for ${streamId}: persisted execution identity is unreadable.`,
-      {
-        data: {
-          streamId,
-          cause: 'execution_id_read_failed',
-          error,
+  // Prefer the resident snapshot record for a live session: `run.start`
+  // updates it synchronously while the sidecar FK write is still queued.
+  let executionId = session.snapshots.getRunMetadata(streamId, {
+    quiet: true,
+  }).executionId;
+  if (!executionId) {
+    try {
+      executionId =
+        (await session.snapshots.readPersistedExecutionId(streamId)) ??
+        session.transcripts.getSummaryMeta(streamId)?.executionId;
+    } catch (error) {
+      logger.warn(
+        `Cannot restore continuation generation for ${streamId}: persisted execution identity is unreadable.`,
+        {
+          data: {
+            streamId,
+            cause: 'execution_id_read_failed',
+            error,
+          },
         },
-      },
-    );
-    return false;
+      );
+      return false;
+    }
   }
   if (!executionId) {
     logger.warn(

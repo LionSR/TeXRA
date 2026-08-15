@@ -428,6 +428,36 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
     });
   });
 
+  it('bulk deletion preserves resident ownership and skips its sidecar read', async () => {
+    await withSession(async (session) => {
+      const executionId = 'abc444' as ExecutionId;
+      const stream = `resident@model#${executionId}` as StreamTabId;
+      session.transcripts.ensureStream(stream);
+      const snapshots = new StreamSnapshotStore();
+      ownExecution(snapshots, stream, executionId);
+      vi.spyOn(snapshots, 'listPersistedStreams').mockResolvedValue([stream]);
+      vi.spyOn(snapshots, 'listStagedDeletions').mockResolvedValue([]);
+      vi.spyOn(snapshots, 'readPersistedExecutionId').mockRejectedValue(
+        new Error('sidecar should not be read for a resident stream'),
+      );
+      const deleteExecution = deletionSpy();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        deleteExecution,
+      });
+
+      const result = await stores.deleteAll();
+
+      expect(result.failed).toEqual(new Set());
+      expect(deleteExecution).toHaveBeenCalledWith(
+        executionId,
+        expect.anything(),
+      );
+      expect(session.transcripts.has(stream)).toBe(false);
+    });
+  });
+
   it('never derives ownership from a name suffix, even for legacy records without a sidecar FK', async () => {
     await withSession(async (session) => {
       const executionId = 'abc888' as ExecutionId;

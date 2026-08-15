@@ -478,6 +478,50 @@ describe('SessionHandle restart repair', () => {
     expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
   });
 
+  it('does not park a waiting stream whose status generation changed during detection', async () => {
+    const parkedExecutionId = 'b0a00012' as ExecutionId;
+    const parkedStreamId = 'parked#waiting-generation-change' as StreamTabId;
+
+    const transcripts = await StreamLogStore.open();
+    transcripts.ensureStream(parkedStreamId);
+    await transcripts.flush();
+    await seedSidecarFk(parkedStreamId, parkedExecutionId);
+
+    const executionStore = getExecutionStore(parkedExecutionId);
+    await executionStore.writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await executionStore.write(flowKey(parkedExecutionId), validFlowRecord);
+
+    let finishDetection: ((streams: Set<StreamTabId>) => void) | undefined;
+    const detectionBlocked = new Promise<Set<StreamTabId>>((resolve) => {
+      finishDetection = resolve;
+    });
+    vi.spyOn(waitingDetection, 'detectWaitingStreams').mockReturnValue(
+      detectionBlocked,
+    );
+
+    const session = openDeferredSession(transcripts);
+    const readiness = session.waitUntilReady();
+    await vi.waitFor(() => {
+      expect(waitingDetection.detectWaitingStreams).toHaveBeenCalledOnce();
+    });
+
+    // A live run reuses the stream while detection is blocked. The generation
+    // recheck before repair must drop the stale WAITING candidate instead of
+    // parking this now-running stream.
+    session.status.transition(
+      parkedStreamId,
+      STREAM_PHASE.RUNNING,
+      'lifecycle',
+    );
+    finishDetection?.(new Set([parkedStreamId]));
+
+    await readiness;
+    expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.RUNNING);
+  });
+
   it('isolates one unreadable parked WAITING preload so session startup still publishes WAITING', async () => {
     const parkedExecutionId = 'b0a00010' as ExecutionId;
     const parkedStreamId = 'parked#waiting-preload-failure' as StreamTabId;

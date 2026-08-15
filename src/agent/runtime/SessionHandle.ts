@@ -675,6 +675,13 @@ export class SessionHandle {
     // bounded-startup invariant keeps settled history lazy (#9947). Only
     // non-resident streams (parked WAITING and settled history outside the
     // seed) need the one-file sidecar read below.
+    const statusGenerationsAtScan = new Map<StreamTabId, object | undefined>();
+    for (const streamId of this.transcripts.keys()) {
+      statusGenerationsAtScan.set(
+        streamId,
+        this.status.getGeneration(streamId),
+      );
+    }
     const executionIds = new Map(this.snapshots.getExecutionIdMap());
     const unresolvedStreams = new Set<StreamTabId>();
     // Bound the one-file ownership scan so startup latency does not scale
@@ -777,6 +784,27 @@ export class SessionHandle {
       this.restartRepairAbort.signal.aborted
     ) {
       return;
+    }
+
+    // The ownership scan, resumability detection, and usage preload are all
+    // async; a follow-up resume or a fresh run can start while they are in
+    // flight. Revalidate each candidate against its status generation at scan
+    // time so a reused stream is never parked with the previous execution id.
+    for (const streamId of new Set([...waitingStreams, ...repairStreams])) {
+      if (
+        this.status.getGeneration(streamId) !==
+        statusGenerationsAtScan.get(streamId)
+      ) {
+        waitingStreams.delete(streamId);
+        repairStreams.delete(streamId);
+        continue;
+      }
+      const residentExecutionId = this.snapshots.getRunMetadata(streamId, {
+        quiet: true,
+      }).executionId;
+      if (residentExecutionId) {
+        executionIds.set(streamId, residentExecutionId);
+      }
     }
 
     const result = await repairRestartedStreams({

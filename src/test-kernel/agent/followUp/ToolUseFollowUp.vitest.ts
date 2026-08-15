@@ -431,6 +431,37 @@ describe('submitFollowUp', () => {
     expect(session.followUps.currentGenerationId(streamId)).toBe(generationId);
   });
 
+  it('prefers quiet resident ownership before the persisted sidecar FK', async () => {
+    const streamId = id('stream:resident-generation');
+    const residentExecutionId = 'resident-execution' as ExecutionId;
+    const session = fakeSession({ kind: 'queue', reason: 'waiting' });
+    session.snapshots.getRunMetadata = vi.fn(() => ({
+      executionId: residentExecutionId,
+    }));
+    vi.spyOn(session.snapshots, 'readPersistedExecutionId').mockResolvedValue(
+      'persisted-execution' as ExecutionId,
+    );
+    const generationId = '04d3201e-5df0-45a8-9f8b-76b2097ce574';
+    const deriveResumability = vi
+      .spyOn(resumability, 'deriveResumability')
+      .mockResolvedValue(durableResumabilityDecision(generationId));
+    const tryResumeStream = mockTryResume();
+
+    await expect(
+      submitFollowUp(streamId, 'resident generation answer', {
+        session,
+        resumePort: { tryResumeStream },
+        expectedGenerationId: generationId,
+      }),
+    ).resolves.toMatchObject({
+      status: 'queued',
+      continuation: 'resumed',
+    });
+
+    expect(deriveResumability).toHaveBeenCalledWith(residentExecutionId);
+    expect(session.snapshots.readPersistedExecutionId).not.toHaveBeenCalled();
+  });
+
   it('serializes durable generation lookup before later ordinary admission', async () => {
     const streamId = id('stream:serialized-generation-lookup');
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });
