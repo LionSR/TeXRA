@@ -5,8 +5,8 @@ import {
   getHistorySearchTokens,
   historySearchTextMatches,
 } from '@settingsView/frontend/components/history/historySearch';
+import { HISTORY_RUN_STATUS } from '@shared/schemas';
 import type { HistoryItem } from '@shared/schemas';
-import { HISTORY_RUN_STATUS } from '@shared/schemas/historyViewMessages';
 
 const workflowHistoryItem: HistoryItem = {
   id: 'execution-1',

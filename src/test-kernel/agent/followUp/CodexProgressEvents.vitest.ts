@@ -4,14 +4,17 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { type AgentTrace, TraceEmitter } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import {
+  MESSAGE_TYPES,
+  CODEX_THREAD_TOOL,
+  CODEX_TURN_TOOL,
+} from '@shared/schemas';
 import type {
   ExecutionId,
   StreamTabId,
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import { MESSAGE_TYPES } from '@shared/schemas';
-import { CODEX_THREAD_TOOL, CODEX_TURN_TOOL } from '@shared/schemas/codex';
 import { publishAgentCliStreamUsage } from '@tools/agentCliShared';
 import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
 import { createRunTrace, StreamLogStore } from '@transcript';

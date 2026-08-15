@@ -4,11 +4,11 @@ import { z } from 'zod';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { TeamOptionDataSchema } from '@shared/schemas/mainView/state';
+import { TeamOptionDataSchema } from '@shared/schemas';
+import type { AgentCategory, AgentSource } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
 
-import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
 import { commandOf } from './desktopSettingsTestSupport';

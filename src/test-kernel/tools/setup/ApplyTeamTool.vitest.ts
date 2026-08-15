@@ -17,7 +17,7 @@ import { refresh } from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import type { AgentRosterSelection } from '@shared/schemas/agentRoster';
+import type { AgentRosterSelection } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
 import { createFakePlatform } from '@test/support/FakePlatform';

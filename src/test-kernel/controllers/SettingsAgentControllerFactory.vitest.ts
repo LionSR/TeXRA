@@ -6,7 +6,7 @@ import {
   type SettingsAgentControllers,
 } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import type { StateStore } from '@platform/interfaces';
-import type { AgentCategory } from '@shared/schemas/agent';
+import type { AgentCategory } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 

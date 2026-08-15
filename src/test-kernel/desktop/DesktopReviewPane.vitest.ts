@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { DESKTOP_THEME_KIND } from '@shared/schemas/commonViewMessages';
+import { DESKTOP_THEME_KIND } from '@shared/schemas';
 
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 

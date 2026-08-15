@@ -14,9 +14,8 @@ import {
   PROGRESS_VIEW_COMMANDS,
   SETTINGS_VIEW_COMMANDS,
 } from '@shared/ipc';
-import { AgentCategory } from '@shared/schemas/agent';
+import { AgentCategory, SETTINGS_TAB } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 

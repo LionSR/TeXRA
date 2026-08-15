@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RESUMABILITY_CAUSE } from '@agent/storage';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
-import { AgentCategory } from '@shared/schemas/agent';
-import { HISTORY_RUN_STATUS } from '@shared/schemas/historyViewMessages';
-import { RUN_OUTCOME } from '@shared/schemas/stream';
+import {
+  AgentCategory,
+  HISTORY_RUN_STATUS,
+  RUN_OUTCOME,
+} from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   listExecutions: vi.fn(),

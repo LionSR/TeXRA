@@ -16,11 +16,10 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  type ExecutionId,
-  type StreamTabId,
   AgentCategory,
+  DEFAULT_TOOL_CONFIG,
 } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import {
   appendTranscriptEntry,
