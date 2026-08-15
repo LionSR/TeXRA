@@ -4,6 +4,7 @@
 
 // Local imports - log
 import { createLog } from '@logger/logUtils';
+import { findBraceBalancedMacroCalls } from '@utils/text/braceBalancedMacro';
 
 const log = createLog('ReplacementEngine');
 
@@ -369,36 +370,49 @@ export function fixLatexQuoteIssues(text: string): string {
   return text;
 }
 
-const CRITICIZE_ARG = String.raw`(?:[^{}]|\{[^{}]*\})*`;
-const CRITICIZE_INLINE_RE = new RegExp(
-  String.raw`\\criticize\{${CRITICIZE_ARG}\}\{${CRITICIZE_ARG}\}\{${CRITICIZE_ARG}\}`,
-  'g',
-);
-// Whole-line form runs first so a macro occupying its own line is removed
-// without leaving a trailing blank line.
-const CRITICIZE_WHOLE_LINE_RE = new RegExp(
-  String.raw`^[ \t]*\\criticize\{${CRITICIZE_ARG}\}\{${CRITICIZE_ARG}\}\{${CRITICIZE_ARG}\}[ \t]*$\r?\n?`,
-  'gm',
-);
+const CRITICIZE_MACRO = '\\criticize';
 
 /**
  * Strip all `\criticize{comment}{severity}{confidence}` LaTeX annotations
- * (inserted by critique-style agents) from LaTeX content.
+ * (inserted by critique-style agents) from LaTeX content. Uses the same
+ * brace-balanced macro scanner as `parseCriticismAnnotations`
+ * (`@latex/criticismParser`) so a message containing nested macros (e.g.
+ * `\cref{...}`, `\frac{a}{b}`) is stripped correctly rather than left
+ * behind. Unlike `parseCriticismAnnotations`, this applies no
+ * severity/confidence validation — malformed annotations still need to be
+ * removed from output.
  */
 export function stripCriticizeAnnotations(content: string): {
   content: string;
   count: number;
 } {
-  if (!content.includes('\\criticize')) return { content, count: 0 };
-  let count = 0;
-  const tally = () => {
-    count++;
-    return '';
-  };
-  const out = content
-    .replaceAll(CRITICIZE_WHOLE_LINE_RE, tally)
-    .replaceAll(CRITICIZE_INLINE_RE, tally);
-  return { content: out, count };
+  if (!content.includes(CRITICIZE_MACRO)) return { content, count: 0 };
+  const calls = findBraceBalancedMacroCalls(content, CRITICIZE_MACRO, 3);
+  if (calls.length === 0) return { content, count: 0 };
+
+  let out = '';
+  let cursor = 0;
+  for (const call of calls) {
+    const lineStart = content.lastIndexOf('\n', call.start - 1) + 1;
+    const nlIndex = content.indexOf('\n', call.end);
+    const lineEnd = nlIndex === -1 ? content.length : nlIndex;
+    const beforeOnLine = content.slice(lineStart, call.start);
+    const afterOnLine = content.slice(call.end, lineEnd);
+    // Whole-line form is removed along with its trailing newline so a macro
+    // occupying its own line doesn't leave a blank line behind.
+    const isWholeLine =
+      /^[ \t]*$/.test(beforeOnLine) && /^[ \t]*\r?$/.test(afterOnLine);
+
+    if (isWholeLine) {
+      out += content.slice(cursor, lineStart);
+      cursor = nlIndex === -1 ? content.length : nlIndex + 1;
+    } else {
+      out += content.slice(cursor, call.start);
+      cursor = call.end;
+    }
+  }
+  out += content.slice(cursor);
+  return { content: out, count: calls.length };
 }
 
 /**

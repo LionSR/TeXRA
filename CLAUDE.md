@@ -53,7 +53,7 @@ Things the tree won't tell you:
   modules are browser-reachable today: `@utils/core`,
   `@utils/core/boundedIdSet`, `@utils/core/keyedMutex`,
   `@utils/errors/errorMessage`, `@utils/files/pastedImageName`,
-  `@utils/text/diff`, and `@utils/text/stringUtils`. The other 54
+  `@utils/text/diff`, and `@utils/text/stringUtils`. The other 55
   TypeScript modules are not browser-reachable and must not be assumed
   browser-safe. Side-specific helpers still belong in `frontend/` or `common/`.
   (`scripts/check-browser-safe-utils.mjs` enforces the count and reachable set.)
