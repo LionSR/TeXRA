@@ -105,7 +105,13 @@ const RUNTIME_PRESENTATION_NDJSON_CASES = {
   },
   showAgentConfigBanner: {
     payload: { agentName: 'polish' },
-    policy: { kind: 'suppressed' },
+    policy: {
+      kind: 'log',
+      level: 'error',
+      message:
+        'Agent not found: polish. Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.',
+      fields: {},
+    },
   },
   requestEnsureProgressView: {
     payload: {},
@@ -1160,6 +1166,21 @@ describe('CLI run progress renderer', () => {
     });
 
     expect(output).toContain('Something needs attention. (some-future-action)');
+  });
+
+  it('prints a visible agent-not-found error for showAgentConfigBanner in text mode', async () => {
+    const output = await captureStreamWrites(process.stderr, async () => {
+      const host = createCliRuntimeHost(context({ outputFormat: 'text' }));
+
+      expect(host.emit('showAgentConfigBanner', { agentName: 'ghost' })).toBe(
+        true,
+      );
+
+      await host.close();
+    });
+
+    expect(output).toContain('Agent not found: ghost');
+    expect(output).toContain('texra agents list');
   });
 
   it('does not gate requestShowInstruction behind quietLogs in text mode', async () => {

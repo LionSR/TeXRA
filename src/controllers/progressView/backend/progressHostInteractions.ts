@@ -126,8 +126,8 @@ export function createProgressHostInteractions(
     emit<K extends RuntimePresentationEvent>(
       event: K,
       payload: RuntimePresentationEventPayloads[K],
-    ): void {
-      options.interactions.emit(event, payload);
+    ): boolean | Promise<boolean> {
+      return options.interactions.emit(event, payload);
     },
 
     setApprovalBypassState: options.setApprovalBypassState,

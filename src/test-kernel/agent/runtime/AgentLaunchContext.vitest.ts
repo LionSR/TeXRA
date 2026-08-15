@@ -80,13 +80,10 @@ describe('AgentLaunchContext', () => {
     ]);
   });
 
-  it('still falls back to the generic error toast for a missing-agent failure', async () => {
-    // Deliberately NOT deduplicated (unlike model-not-recognized below):
-    // `showAgentConfigBanner` is a documented no-op on both CLI presentation
-    // hosts, so marking this failure as "presented" would leave CLI users
-    // with no visible error at all. See the comment at `getAgentPath`'s
-    // throw site.
-    const recording = createRecordingHost();
+  it('keeps the generic error toast when the missing-agent banner is not delivered', async () => {
+    // A host that reports no delivery (for example an older/no-op adapter)
+    // must still surface the launch failure once through the generic toast.
+    const recording = createRecordingHost({ emitDelivery: false });
     const session = createTestSession({ interactions: recording.host });
 
     try {
@@ -110,8 +107,35 @@ describe('AgentLaunchContext', () => {
     ).toHaveLength(1);
   });
 
+  it('does not double-surface a delivered missing-agent banner via the generic toast', async () => {
+    // The delivery-confirmed path for webview-style hosts: the banner was
+    // rendered, so the launch catch must not emit a second generic error.
+    const recording = createRecordingHost({ emitDelivery: true });
+    const session = createTestSession({ interactions: recording.host });
+
+    try {
+      await expect(
+        buildAgentLaunchContext({
+          config: AgentConfigSchema.parse({ agent: '', model: '' }),
+          session,
+        }),
+      ).rejects.toThrow('Could not find agent');
+    } finally {
+      session.dispose();
+    }
+
+    expect(
+      recording.events.filter((event) => event.event === 'requestShowError'),
+    ).toEqual([]);
+    expect(
+      recording.events.filter(
+        (event) => event.event === 'showAgentConfigBanner',
+      ),
+    ).toHaveLength(1);
+  });
+
   it('does not double-surface a model-not-recognized failure via the generic error toast', async () => {
-    const recording = createRecordingHost();
+    const recording = createRecordingHost({ emitDelivery: true });
     const session = createTestSession({ interactions: recording.host });
 
     mocks.resolve.mockReturnValueOnce({

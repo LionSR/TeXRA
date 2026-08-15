@@ -166,19 +166,18 @@ export async function getAgentPath(
   const result = resolveAgentForLaunch(category, agentIdentifier, source);
   if (result) return result;
 
-  interactions.emit(
+  const delivered = await interactions.emit(
     'showAgentConfigBanner',
     { agentName: agentIdentifier },
     { replayWhenAttached: true },
   );
-  // Deliberately NOT marked via `attachErrorPresented`: `showAgentConfigBanner`
-  // is a documented no-op on both CLI presentation hosts (no persistent
-  // sidebar to render it in), so treating this as "presented" would leave CLI
-  // users with no visible failure at all once the generic `requestShowError`
-  // fallback is gated on the marker. The double-surface on hosts that DO
-  // render the banner (extension, desktop) stays open pending a banner
-  // presentation that reports whether it actually reached the user.
-  throw new AgentError(`Could not find agent: ${agentIdentifier}`);
+  // Only mark the thrown error as presented when the host confirmed it
+  // rendered the targeted banner. A host that reports `false` (or a no-op
+  // handler) keeps the generic `requestShowError` fallback as the visible
+  // failure, so no host goes silent and no host sees two surfaces.
+  const err = new AgentError(`Could not find agent: ${agentIdentifier}`);
+  if (delivered) attachErrorPresented(err);
+  throw err;
 }
 
 async function validateModelExists(
@@ -188,7 +187,7 @@ async function validateModelExists(
   const modelConfig = await resolveRuntimeModelConfig(modelName);
   if (modelConfig) return modelConfig;
 
-  interactions.emit(
+  const delivered = await interactions.emit(
     'requestShowInstruction',
     {
       key: 'modelNotRecognized',
@@ -198,8 +197,12 @@ async function validateModelExists(
     },
     { replayWhenAttached: true },
   );
+  // As with `getAgentPath`: mark only after a host confirms the instruction
+  // was rendered. The extension returns `false` when `showInstructionWithSuppress`
+  // rejects, so a failed targeted presentation still falls back to the
+  // generic launch toast instead of being swallowed.
   const err = new AgentError(`Model ${modelName} is not registered`);
-  attachErrorPresented(err);
+  if (delivered) attachErrorPresented(err);
   throw err;
 }
 

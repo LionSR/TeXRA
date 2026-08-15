@@ -115,7 +115,10 @@ function createPortSession(): {
   const uiEvents: UiEvent[] = [];
   const emitted: string[] = [];
   const presentationSink: Required<Pick<HostInteractions, 'emit'>> = {
-    emit: (event) => emitted.push(event),
+    emit: (event) => {
+      emitted.push(event);
+      return true;
+    },
   };
   const handlers = createHandlerSet(uiEvents);
   const session = createTestSession();

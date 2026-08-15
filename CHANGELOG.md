@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file.
 - **A missing helper model falls back to DeepSeek V4 Flash** — disabling or
   removing the helper no longer silently switches auxiliary tasks to the
   first picker model.
+- **An unknown agent name is reported once, with next-step guidance** — the
+  error no longer appears twice, and command-line users now get the same
+  "agent not found" hint as the other surfaces.
 
 ### Extension (VS Code) and Desktop
 

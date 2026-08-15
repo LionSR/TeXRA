@@ -274,7 +274,7 @@ export async function executeCliRequest(
       beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
       emit: (event, payload) => {
         if (event === 'requestShowError') failurePresented = true;
-        presentationHost.emit(event, payload);
+        return presentationHost.emit(event, payload);
       },
       setApprovalBypassState: (update) =>
         presentationHost.emitApprovalBypassState(update),
