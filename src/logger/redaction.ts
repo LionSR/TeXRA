@@ -78,19 +78,7 @@ const PROVIDER_KEY_PATTERNS = [
   ),
 ];
 
-export interface LogRedactionOptions {
-  readonly homeDir?: string | undefined;
-  readonly workspacePath?: string | undefined;
-}
-
-export function redactSecrets(
-  text: string,
-  options: LogRedactionOptions = {},
-): string {
-  const prefixes = [options.workspacePath, options.homeDir]
-    .filter((prefix): prefix is string => Boolean(prefix))
-    .sort((a, b) => b.length - a.length);
-
+export function redactSecrets(text: string): string {
   let redacted = text
     .replaceAll(
       JSON_STRING_PROPERTY_PATTERN,
@@ -107,10 +95,6 @@ export function redactSecrets(
 
   for (const pattern of PROVIDER_KEY_PATTERNS) {
     redacted = redacted.replaceAll(pattern, REDACTED);
-  }
-
-  for (const prefix of prefixes) {
-    redacted = redacted.replaceAll(prefix, '[path]');
   }
 
   return redacted;
