@@ -21,6 +21,10 @@ export interface ProgressApiKeyRetryRequest {
   /** Canonical base model the fallback run will launch with, when known. */
   model?: string;
   exhaustionReason?: ExhaustionReason;
+  /** True when the failed handler's effective config was pinned to the Kimi
+   * Code coding endpoint, captured from the persisted handler before the
+   * retry panel opened. */
+  kimiCodeRoutedOnFailure?: boolean;
   chatGptSubscriptionEligible?: boolean;
   viaRelay?: boolean;
 }
@@ -287,10 +291,14 @@ export class ProgressApiKeyRetryController {
       // here. The failed handler was dispatched under the persisted
       // `ModelHandlerKimi` compatibility key, and the retry rebuild pins that
       // same key, so a later OpenRouter preference change cannot make the
-      // rebuild take a non-coding route.
+      // rebuild take a non-coding route. The request's
+      // `kimiCodeRoutedOnFailure` flag is captured from that failed handler,
+      // so unrelated `kimi3` failures through OpenRouter, Moonshot, or the
+      // relay leave the preference untouched.
       const kimiCodeCreditReroute =
         toggle.exhaustionReason === 'kimi-code-subscription' &&
         request.exhaustionReason === 'upstream-credit' &&
+        request.kimiCodeRoutedOnFailure === true &&
         this.isDualBackendKimiCodeModel(request.model);
       if (toggle.getEnabled() && (planExhaustion || kimiCodeCreditReroute)) {
         await toggle.setEnabled(false);

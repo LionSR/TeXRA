@@ -313,6 +313,7 @@ export function handlePermissionAction(
               ? 'openai'
               : data.errorDetails?.provider,
           viaRelay: data.errorDetails?.isRelayError === true || undefined,
+          kimiCodeRoutedOnFailure: data.kimiCodeRoutedOnFailure,
         });
         break;
       }

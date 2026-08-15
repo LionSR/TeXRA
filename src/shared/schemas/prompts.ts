@@ -50,6 +50,9 @@ export const RetryPermissionSchema = z.strictObject({
   model: z.string().optional(),
   errorMessage: z.string().optional(),
   errorDetails: ProviderErrorPartialSchema.optional(),
+  /** True when the failed handler was dispatched onto the Kimi Code coding
+   * endpoint, captured before the retry panel opened. */
+  kimiCodeRoutedOnFailure: z.boolean().optional(),
 });
 export type RetryPermission = z.infer<typeof RetryPermissionSchema>;
 

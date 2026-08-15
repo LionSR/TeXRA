@@ -650,6 +650,7 @@ describe('ProgressApiKeyRetryController', () => {
       model: 'kimiCoding',
       provider: 'moonshot',
       exhaustionReason: 'upstream-credit',
+      kimiCodeRoutedOnFailure: true,
     });
 
     expect(result).toStrictEqual({
@@ -684,6 +685,7 @@ describe('ProgressApiKeyRetryController', () => {
       model: 'kimi3',
       provider: 'moonshot',
       exhaustionReason: 'upstream-credit',
+      kimiCodeRoutedOnFailure: true,
     });
 
     expect(result).toStrictEqual({
@@ -706,6 +708,42 @@ describe('ProgressApiKeyRetryController', () => {
     expect(harness.kimiCodeValues).toStrictEqual([false]);
     expect(harness.invalidations).toBe(1);
     expect(harness.retries).toStrictEqual(['stream-kimi-dual']);
+  });
+
+  it('leaves the Kimi Code preference untouched for a non-Kimi-Code kimi3 credit retry', async () => {
+    const harness = createHarness({
+      keys: { moonshot: 'old-moonshot', kimiCode: 'old-kimi' },
+      prompt: (keys) => {
+        keys.set('moonshot', 'new-moonshot');
+      },
+      kimiCode: true,
+    });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-kimi-moonshot',
+      requestId: 'retry-kimi-moonshot',
+      model: 'kimi3',
+      provider: 'moonshot',
+      exhaustionReason: 'upstream-credit',
+      kimiCodeRoutedOnFailure: false,
+    });
+
+    expect(result).toStrictEqual({
+      proceeded: true,
+      retried: true,
+      disabledIncludedModelAccess: false,
+      disabledChatGptSubscription: false,
+      disabledCodingPlans: [],
+    });
+    // A canonical `kimi3` can also fail through OpenRouter, Moonshot, or the
+    // relay. Those failed handlers were not dispatched onto the Kimi Code
+    // endpoint, so the retry must not turn off the user's coding preference.
+    expect(harness.prompts).toStrictEqual(['moonshot']);
+    expect(harness.keys.get('moonshot')).toBe('new-moonshot');
+    expect(harness.keys.get('kimiCode')).toBe('old-kimi');
+    expect(harness.kimiCodeValues).toStrictEqual([]);
+    expect(harness.invalidations).toBe(0);
+    expect(harness.retries).toStrictEqual(['stream-kimi-moonshot']);
   });
 
   it('rechecks Copilot fallback retry identity after the routing queue admits it', async () => {

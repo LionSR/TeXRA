@@ -194,6 +194,9 @@ export interface HostRetryRequest {
   readonly model?: string;
   readonly errorMessage?: string;
   readonly errorDetails?: ProviderErrorPartial;
+  /** True when the failed handler was dispatched onto the Kimi Code coding
+   * endpoint, captured before the retry panel opened. */
+  readonly kimiCodeRoutedOnFailure?: boolean;
 }
 
 export type HostUserQuestionRequest = UserQuestionPermission;

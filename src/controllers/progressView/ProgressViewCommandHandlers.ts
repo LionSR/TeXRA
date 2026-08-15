@@ -459,6 +459,7 @@ export function createProgressViewSecondTierHandlers(
         provider: providerArg,
         exhaustionReason: data.exhaustionReason,
         viaRelay: data.viaRelay,
+        kimiCodeRoutedOnFailure: data.kimiCodeRoutedOnFailure,
       });
       if (result.proceeded && !result.retried) {
         await deps.host.showInfo(
