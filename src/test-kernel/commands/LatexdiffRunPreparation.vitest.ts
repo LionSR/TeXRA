@@ -217,6 +217,21 @@ describe('texra.runLatexdiff result preparation and final viewer delivery', () =
     expect(mocks.showTextDocument).toHaveBeenCalledTimes(1);
   });
 
+  it('skips the final viewer when restoring the last viewer-ready diff fails', async () => {
+    mocks.prepareBuildDisplay.mockImplementation(
+      async (location: { kind: string }) => location.kind === 'workspace',
+    );
+    mocks.openTextDocument.mockRejectedValueOnce(new Error('restore failed'));
+
+    await mocks.runLatexdiffHandler?.(runConfig);
+
+    expect(mocks.scheduleViewerDisplay).not.toHaveBeenCalled();
+    expect(mocks.warn).toHaveBeenCalledWith(
+      'LaTeXCommands',
+      expect.stringContaining('Failed to restore the last prepared diff'),
+    );
+  });
+
   it('schedules the final viewer for the last prepared diff when a later setup rejects', async () => {
     mocks.prepareBuildDisplay.mockImplementation(
       async (location: { absolutePath: string }) => {

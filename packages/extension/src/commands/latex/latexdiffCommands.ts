@@ -164,7 +164,7 @@ async function openLatexdiffResult(
  */
 async function restorePreparedViewerTarget(
   diffLocation: FileLocation,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const doc = await vscode.workspace.openTextDocument(
       vscode.Uri.file(diffLocation.absolutePath),
@@ -173,13 +173,15 @@ async function restorePreparedViewerTarget(
       preview: true,
       preserveFocus: true,
     });
+    return true;
   } catch (err) {
-    // The original setup error still propagates; this is a best-effort viewer
-    // target restore, not a second error path.
+    // The original setup error still propagates; a failed restore is a reason
+    // to skip the argument-free viewer rather than open a stale/unrelated PDF.
     logger.warn(
       CHANNEL,
       `Failed to restore the last prepared diff before viewer handoff: ${toErrorMessage(err)}`,
     );
+    return false;
   }
 }
 
@@ -231,14 +233,18 @@ async function prepareLatexdiffResultsAndScheduleViewer(
     completedSetup = true;
   } finally {
     if (viewerPrepared && lastViewerLocation) {
+      let viewerTargetReady = true;
       if (
         !completedSetup ||
         !lastProcessedLocation ||
         lastProcessedLocation.absolutePath !== lastViewerLocation.absolutePath
       ) {
-        await restorePreparedViewerTarget(lastViewerLocation);
+        viewerTargetReady =
+          await restorePreparedViewerTarget(lastViewerLocation);
       }
-      void scheduleViewerDisplay();
+      if (viewerTargetReady) {
+        void scheduleViewerDisplay();
+      }
     }
   }
 }
