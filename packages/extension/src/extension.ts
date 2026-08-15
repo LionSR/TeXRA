@@ -391,6 +391,7 @@ export async function activate(context: vscode.ExtensionContext) {
           previousVersion,
           removed,
           reordered,
+          routePreferencesCleared,
           skipped,
         } = await refreshModelListStateIfNeeded(globalSM);
         if (!skipped) {
@@ -401,12 +402,25 @@ export async function activate(context: vscode.ExtensionContext) {
             );
           }
           logger.info('extension', 'Model list refresh completed successfully');
-          if (added.length > 0 || removed.length > 0 || reordered) {
+          if (
+            added.length > 0 ||
+            removed.length > 0 ||
+            reordered ||
+            routePreferencesCleared.length > 0
+          ) {
             invalidateModelOptionsCache();
-            logger.info(
-              'extension',
-              `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
-            );
+            if (added.length > 0 || removed.length > 0 || reordered) {
+              logger.info(
+                'extension',
+                `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
+              );
+            }
+            if (routePreferencesCleared.length > 0) {
+              logger.info(
+                'extension',
+                `Cleared deprecated Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
+              );
+            }
           }
         }
       } catch (err) {

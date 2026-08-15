@@ -18,6 +18,11 @@ interface EnabledModelReconciliation {
   removed: string[];
 }
 
+interface CopilotRouteReconciliation {
+  models: string[];
+  cleared: string[];
+}
+
 export interface ModelListRefreshResult {
   skipped: boolean;
   previousVersion: number | undefined;
@@ -26,6 +31,8 @@ export interface ModelListRefreshResult {
   removed: string[];
   /** True when the persisted enabled list was rewritten only to change order. */
   reordered: boolean;
+  /** Copilot route preferences cleared because their base model is deprecated. */
+  routePreferencesCleared: string[];
 }
 
 /**
@@ -99,6 +106,27 @@ function reconcileEnabledModels(
   };
 }
 
+/**
+ * Clear persisted Copilot route preferences whose base model is deprecated.
+ * Copilot discovery deliberately excludes deprecated configs
+ * (`matchingBaseModel` in runtimeModelRegistry.ts), so a route preference for
+ * one can never resolve to a route. Leaving it persisted would strand the
+ * model behind the hard no-fallthrough error (#9635) on every launch. Unlike
+ * the enabled-list deprecated sweep above, this runs unconditionally:
+ * affected users may already have persisted the current MODEL_LIST_VERSION
+ * before this migration shipped.
+ */
+function reconcileCopilotRoutePreferences(
+  currentModels: readonly string[],
+): CopilotRouteReconciliation {
+  const cleared = currentModels.filter((model) => isDeprecatedModel(model));
+  const clearedSet = new Set(cleared);
+  return {
+    models: currentModels.filter((model) => !clearedSet.has(model)),
+    cleared,
+  };
+}
+
 function sameModelList(
   left: readonly string[],
   right: readonly string[],
@@ -115,9 +143,25 @@ export async function refreshModelListStateIfNeeded(
   const previousVersion = state.get<number>(GlobalStateKey.MODEL_LIST_VERSION);
   const versionChanged = previousVersion !== MODEL_LIST_VERSION;
   const currentModels = state.get<string[]>(GlobalStateKey.ENABLED_MODELS);
+  const currentRoutePreferences = state.get<string[]>(
+    GlobalStateKey.COPILOT_ROUTE_MODELS,
+  );
   let added: string[] = [];
   let removed: string[] = [];
   let reordered = false;
+  let routePreferencesCleared: string[] = [];
+  if (currentRoutePreferences) {
+    const reconciliation = reconcileCopilotRoutePreferences(
+      currentRoutePreferences,
+    );
+    routePreferencesCleared = reconciliation.cleared;
+    if (routePreferencesCleared.length > 0) {
+      await state.update(
+        GlobalStateKey.COPILOT_ROUTE_MODELS,
+        reconciliation.models,
+      );
+    }
+  }
   if (currentModels) {
     const reconciliation = reconcileEnabledModels(
       currentModels,
@@ -143,11 +187,13 @@ export async function refreshModelListStateIfNeeded(
       !versionChanged &&
       added.length === 0 &&
       removed.length === 0 &&
-      !reordered,
+      !reordered &&
+      routePreferencesCleared.length === 0,
     previousVersion,
     currentVersion: MODEL_LIST_VERSION,
     added,
     removed,
     reordered,
+    routePreferencesCleared,
   };
 }

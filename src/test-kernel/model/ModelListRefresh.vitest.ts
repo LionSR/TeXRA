@@ -93,6 +93,61 @@ describe('refreshModelListStateIfNeeded', () => {
     );
   });
 
+  it('clears a deprecated Copilot route preference while preserving the enabled model', async () => {
+    expect(MODEL_CONFIGS.gemini36f?.deprecated).toBe(true);
+    const state = new FakeStateStore({
+      [GlobalStateKey.MODEL_LIST_VERSION]: MODEL_LIST_VERSION,
+      [GlobalStateKey.ENABLED_MODELS]: ['gemini36f'],
+      [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini36f', 'gemini31p'],
+    });
+
+    const result = await refreshModelListStateIfNeeded(state);
+
+    expect(result.skipped).toBe(false);
+    expect(result.routePreferencesCleared).toEqual(['gemini36f']);
+    expect(state.get<string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS)).toEqual([
+      'gemini31p',
+    ]);
+    expect(enabledModels(state)).toContain('gemini36f');
+  });
+
+  it('is idempotent once the stale Copilot route preference is cleared', async () => {
+    expect(MODEL_CONFIGS.gemini36f?.deprecated).toBe(true);
+    const state = new FakeStateStore({
+      [GlobalStateKey.MODEL_LIST_VERSION]: MODEL_LIST_VERSION,
+      [GlobalStateKey.ENABLED_MODELS]: ['gemini36f'],
+      [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini36f', 'gemini31p'],
+    });
+
+    const first = await refreshModelListStateIfNeeded(state);
+    const second = await refreshModelListStateIfNeeded(state);
+
+    expect(first.skipped).toBe(false);
+    expect(first.routePreferencesCleared).toEqual(['gemini36f']);
+    expect(second.skipped).toBe(true);
+    expect(second.routePreferencesCleared).toEqual([]);
+    expect(state.get<string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS)).toEqual([
+      'gemini31p',
+    ]);
+    expect(enabledModels(state)).toContain('gemini36f');
+  });
+
+  it('keeps active Copilot route preferences untouched', async () => {
+    const state = new FakeStateStore({
+      [GlobalStateKey.MODEL_LIST_VERSION]: MODEL_LIST_VERSION,
+      [GlobalStateKey.ENABLED_MODELS]: ['sonnet5T'],
+      [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
+    });
+
+    const result = await refreshModelListStateIfNeeded(state);
+
+    expect(result.skipped).toBe(true);
+    expect(result.routePreferencesCleared).toEqual([]);
+    expect(state.get<string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS)).toEqual([
+      'gemini31p',
+    ]);
+  });
+
   it('restabilizes a Gemini-first list so the curated default leads', async () => {
     const state = new FakeStateStore({
       [GlobalStateKey.MODEL_LIST_VERSION]: MODEL_LIST_VERSION,
