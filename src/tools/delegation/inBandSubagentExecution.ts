@@ -17,6 +17,7 @@ import { getExecutionStore, type ResultMeta } from '@agent/storage';
 import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
 import {
   ExecutionLeaseLostError,
+  inspectExecutionLease,
   runWithInactiveExecutionLease,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
@@ -253,7 +254,46 @@ async function inspectStableAttempt(
       `Persisted subagent ${executionId} has different parent lineage; refusing to reuse or repeat it.`,
     );
   }
+  if (attempt.phase === 'retryable') return { kind: 'advance' };
   if (resultMeta.result.outcome !== 'completed') return { kind: 'advance' };
+  if (attempt.phase === 'launched') {
+    // A clean terminal release deletes the lease before recovery. A final
+    // artifact-drain failure instead abandons its persisted lease, so a fresh
+    // record means the parent's retryable-marker write was deferred. Never
+    // accept that manifest as durable success: wait while the lease is fresh,
+    // then repair the attempt once the abandoned record becomes stale.
+    let lease: Awaited<ReturnType<typeof inspectExecutionLease>>;
+    try {
+      lease = await inspectExecutionLease(executionId);
+    } catch (error) {
+      throw new SubagentReconciliationError(
+        `Failed to inspect the lease for persisted subagent ${executionId}.`,
+        { cause: error },
+      );
+    }
+    if (lease.status === 'owned' || lease.status === 'foreign') {
+      throw new SubagentReconciliationError(
+        `Subagent ${executionId} still has a live lease; refusing to recover its result.`,
+      );
+    }
+    if (lease.status === 'stale') {
+      const repair = await runWithInactiveExecutionLease(executionId, () =>
+        writeStableSubagentAttempt(store, {
+          ...attempt,
+          phase: 'retryable',
+        }),
+      ).catch((error: unknown) => {
+        throw new SubagentReconciliationError(
+          `Failed to repair the abandoned subagent ${executionId}.`,
+          { cause: error },
+        );
+      });
+      if (repair.status === 'performed') return { kind: 'advance' };
+      throw new SubagentReconciliationError(
+        `Subagent ${executionId} regained a live lease; refusing to recover its result.`,
+      );
+    }
+  }
   options.signal?.throwIfAborted();
   return {
     kind: 'recovered',

@@ -745,6 +745,7 @@ export function startChildRunLoop<TTurn>(
   const parentDeliveryGenerationId =
     runSession.followUps.currentGenerationId(parentStreamId);
   const loop = new ChildRunInterruptible(runSession, childStreamId);
+  let activationDetached = false;
   const releaseChildActivation = childStream
     ? () => undefined
     : runSession.executions.reserveChildActivation({
@@ -752,6 +753,10 @@ export function startChildRunLoop<TTurn>(
         parentStreamId,
         childStreamId,
         interrupt: () => loop.interrupt(),
+        detach: () => {
+          activationDetached = true;
+        },
+        isDetached: () => activationDetached,
       });
   let sessionOwnershipReleased = false;
   const releaseSessionOwnershipOnce = (): void => {
@@ -833,7 +838,7 @@ export function startChildRunLoop<TTurn>(
         params.notify(update);
         return;
       }
-      if (strategy.deliveryMode === 'persistOnly') return;
+      if (strategy.deliveryMode === 'persistOnly' || activationDetached) return;
       const targetStreamId = resolveDeliveryTarget(strategy, parentStreamId);
       if (!targetStreamId) return;
       const msg = formatSubagentProgress(executionId, agentName, update);
@@ -973,6 +978,7 @@ export function startChildRunLoop<TTurn>(
           turnStateWrites,
           onTurnSettled: params.onTurnSettled,
           prepareParentDelivery: () => {
+            if (activationDetached) return false;
             if (loop.isInterrupted()) {
               releaseSessionOwnershipOnce();
               return false;

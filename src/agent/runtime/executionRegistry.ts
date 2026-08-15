@@ -55,6 +55,8 @@ export interface ChildExecutionActivation {
   readonly parentStreamId: StreamTabId;
   readonly childStreamId: StreamTabId;
   readonly interrupt: () => void;
+  readonly detach: () => void;
+  readonly isDetached: () => boolean;
 }
 
 interface TerminateOptions {
@@ -206,6 +208,8 @@ export class ExecutionRegistry {
   track(handle: AgentExecutionHandle): void {
     this.assertActive();
     const previous = this.handles.get(handle.executionId);
+    const activation = this.childActivations.get(handle.executionId);
+    if (activation?.isDetached()) handle.detach();
     if (previous && previous.suspendedTerminationStarted) {
       // A resumed lifecycle can replace its suspended predecessor while the
       // predecessor's asynchronous teardown is still in progress. The
@@ -509,6 +513,7 @@ export class ExecutionRegistry {
     for (const activation of this.childActivations.values()) {
       if (
         activation.parentStreamId !== parentStreamId ||
+        activation.isDetached() ||
         visited.has(activation.executionId)
       ) {
         continue;
@@ -530,6 +535,20 @@ export class ExecutionRegistry {
    * children.
    */
   detachActiveChildren(parentStreamId: StreamTabId): void {
+    for (const activation of this.childActivations.values()) {
+      if (
+        activation.parentStreamId !== parentStreamId ||
+        activation.isDetached()
+      ) {
+        continue;
+      }
+      activation.detach();
+      this.approvals?.detachStreamFromParent(activation.childStreamId);
+      this.emitParentStreamUpdate({
+        childStreamId: activation.childStreamId,
+        parentStreamId: null,
+      });
+    }
     for (const handle of this.handles.values()) {
       if (!isChildExecution(handle, parentStreamId)) continue;
       this.approvals?.detachStreamFromParent(handle.childStreamId);
@@ -687,6 +706,14 @@ export class ExecutionRegistry {
   }
 
   hasActiveChildren(parentStreamId: StreamTabId): boolean {
+    for (const activation of this.childActivations.values()) {
+      if (
+        activation.parentStreamId === parentStreamId &&
+        !activation.isDetached()
+      ) {
+        return true;
+      }
+    }
     for (const handle of this.handles.values()) {
       if (isChildExecution(handle, parentStreamId)) return true;
     }

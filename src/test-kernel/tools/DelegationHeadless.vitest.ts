@@ -16,7 +16,10 @@ import type {
   ProposalResult,
 } from '@agent/runtime/HostInteractions';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
-import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
+import {
+  ExecutionLeaseLostError,
+  markOwnedExecutionLeaseUndurable,
+} from '@agent/storage/executionLease';
 import {
   STREAM_PHASE,
   AgentCategory,
@@ -43,6 +46,7 @@ const mocks = vi.hoisted(() => ({
   resumeToolUseFromResumeData: vi.fn(),
   getExecutionStore: vi.fn(),
   getVisibleAgents: vi.fn(),
+  inspectExecutionLease: vi.fn(),
   isApprovalBypassedForStream: vi.fn(),
   isProposalBypassed: vi.fn(),
   registerExecution: vi.fn(),
@@ -89,6 +93,7 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   captureOwnedExecutionLease:
     (_executionId: ExecutionId) => (operation: () => unknown) =>
       operation(),
+  inspectExecutionLease: mocks.inspectExecutionLease,
   markOwnedExecutionLeaseUndurable: vi.fn(),
   ownsExecutionLease: vi.fn(() => true),
   // The session's one exit choreography runs for real over these inert lease
@@ -408,6 +413,7 @@ describe('headless delegation', () => {
     ]);
     mocks.isProposalBypassed.mockReturnValue(true);
     mocks.isApprovalBypassedForStream.mockReturnValue(false);
+    mocks.inspectExecutionLease.mockResolvedValue({ status: 'missing' });
     const memoryStores = new Map<
       ExecutionId,
       ReturnType<typeof memoryExecutionStore>
@@ -870,15 +876,39 @@ describe('headless delegation', () => {
     await expect(runInBand(delegationOptions())).rejects.toBe(childFailure);
   });
 
-  it('does not return a typed result when final artifact cleanup fails', async () => {
+  it('does not recover a typed result while failed artifact cleanup retains its lease', async () => {
     const cleanupFailure = new Error('artifact flush failed');
+    const logicalExecutionId = 'dddddd777777' as ExecutionId;
+    const childStore = memoryExecutionStore();
+    const write = childStore.write.getMockImplementation();
+    childStore.write.mockImplementation(async (key, value) => {
+      if (
+        key === 'stable-subagent-attempt' &&
+        (value as { phase?: string }).phase === 'retryable'
+      ) {
+        throw new ExecutionLeaseLostError(logicalExecutionId);
+      }
+      return await write?.(key, value);
+    });
+    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
     mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(cleanupFailure);
 
-    await expect(runInBand(delegationOptions())).rejects.toMatchObject({
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toMatchObject({
       name: 'SubagentDurabilityError',
       cause: cleanupFailure,
     });
-    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalled();
+    mocks.inspectExecutionLease.mockResolvedValueOnce({
+      status: 'foreign',
+      heartbeatAt: Date.now(),
+    });
+
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+    expect(mocks.executeAgent).toHaveBeenCalledOnce();
+    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledOnce();
   });
 
   it('preserves the child failure when its failure manifest cannot be written', async () => {
