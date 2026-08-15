@@ -20,6 +20,7 @@ import {
   STREAM_SNAPSHOT_SCHEMA_VERSION,
   StreamSnapshotSchema,
   StreamTabMetaSchema,
+  WorkPlanSnapshotShape,
   type CompileFailure,
   type OutputFileInfo,
   type RoundIndexed,
@@ -132,7 +133,14 @@ export async function readMeta(
  * (returns empty) rather than coerced, so we never consume a future shape's
  * fields as v1 — this is the single forward-compat gate. Within a known
  * version, `PersistedWorkPlanSchema`'s per-field `.catch` keeps one corrupt
- * value from nuking the rest. A structurally unreadable file (a non-object
+ * value from nuking the rest, but `.catch` itself is silent — so each field is
+ * re-checked here against its raw (non-`.catch`) shape to log which one, if
+ * any, actually got defaulted. Without this, a corrupted field is silently
+ * dropped on this read and then permanently baked over the real on-disk value
+ * by the next unrelated write (`writeWorkPlan` rewrites all three fields
+ * together), with no diagnostic ever produced — the same silent-data-loss
+ * trap `parseUsageData` (`@shared/schemas/streamData`, #7464) was built to
+ * avoid for `usageStats.json`. A structurally unreadable file (a non-object
  * shape that survives the `!raw` guard) degrades to an empty plan LOUDLY —
  * warned and diagnosable — rather than via a silent whole-object `.catch`
  * default, matching the read-side degradation handling in
@@ -151,6 +159,19 @@ function readPersistedWorkPlan(raw: unknown): WorkPlanSnapshot {
       data: result.error,
     });
     return EMPTY_WORK_PLAN;
+  }
+  if (isObject(raw)) {
+    for (const field of Object.keys(WorkPlanSnapshotShape) as Array<
+      keyof typeof WorkPlanSnapshotShape
+    >) {
+      const fieldResult = WorkPlanSnapshotShape[field].safeParse(raw[field]);
+      if (!fieldResult.success) {
+        log.warn(
+          `Discarding corrupted "${field}" in persisted work plan; using default.`,
+          { data: fieldResult.error },
+        );
+      }
+    }
   }
   return result.data;
 }

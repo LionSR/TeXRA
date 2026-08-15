@@ -19,9 +19,11 @@ import {
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { tagAnthropicSdkError } from '@agent/modelHandlers/anthropic/anthropicSdkError';
-import { tagGoogleSdkError } from '@agent/modelHandlers/google/googleSdkError';
-import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
+import {
+  tagAnthropicSdkError,
+  tagGoogleSdkError,
+  tagOpenAISdkError,
+} from '@agent/modelHandlers/support/sdkErrorMetadata';
 import {
   attachContextWindowError,
   attachProviderError,

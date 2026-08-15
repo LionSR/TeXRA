@@ -60,7 +60,7 @@ import {
   type GoogleClientCache,
   type GoogleMediaSource,
 } from './googleHandlerShared';
-import { tagGoogleSdkError } from './googleSdkError';
+import { tagGoogleSdkError } from '../support/sdkErrorMetadata';
 import {
   computeGoogleInteractionsPrice,
   normalizeGoogleInteractionsUsage,

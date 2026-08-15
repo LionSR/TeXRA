@@ -75,7 +75,7 @@ import {
   computeOpenAIResponsePrice,
   normalizeOpenAIResponseUsage,
 } from './openAIUsage';
-import { tagOpenAISdkError } from './openAISdkError';
+import { tagOpenAISdkError } from '../support/sdkErrorMetadata';
 import { normalizeOpenAIResponseError } from './openAIResponseErrors';
 import {
   formatAttachmentSummary,

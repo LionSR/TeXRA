@@ -2611,6 +2611,7 @@ describe('StreamSnapshotStore', () => {
 
   it('degrades gracefully when workPlan.json is valid JSON but the wrong shape', async () => {
     // Corrupt-but-parseable payload must NOT throw and abort read()/resume.
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     await writeStreamFile(STREAM, 'workPlan.json', {
       todos: 'not-an-array',
       plan: 42,
@@ -2618,6 +2619,18 @@ describe('StreamSnapshotStore', () => {
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.todos).toEqual([]);
     expect(snap.plan).toBeNull();
+    // Each defaulted field must be logged loudly, not silently absorbed by
+    // PersistedWorkPlanSchema's per-field `.catch` (see #7464-style trap).
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('"todos"'),
+      expect.anything(),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('"plan"'),
+      expect.anything(),
+    );
   });
 
   it('ignores a workPlan.json stamped with a newer schemaVersion (forward-compat gate)', async () => {
