@@ -230,6 +230,7 @@ export function createLogsPane(
       ${renderEmptyState({
         icon: 'file-lines',
         title: 'No desktop log entries yet.',
+        headingTag: 'h3',
         className: 'desktop-log-viewer-empty',
       })}
     </div>`;

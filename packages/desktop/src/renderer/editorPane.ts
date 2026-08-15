@@ -142,7 +142,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         icon: 'folder-open',
         title: 'No files found in this workspace.',
         headingTag: 'h3',
-        className: 'desktop-editor-tree-empty',
+        className: 'desktop-editor-tree-empty desktop-editor-tree-empty-state',
       });
     }
     return html`
