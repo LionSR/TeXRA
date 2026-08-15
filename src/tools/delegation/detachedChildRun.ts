@@ -57,6 +57,8 @@ export interface DetachedChildRunInput<TTurn> {
   readonly notify?: ChildRunLoopParams<never>['notify'];
   /** In-memory settled-turn facts for awaiting persist-only callers. */
   readonly onTurnSettled?: ChildRunLoopParams<never>['onTurnSettled'];
+  /** Publish caller-owned state after final artifacts drain, before lease release. */
+  readonly afterArtifactsDrained?: ChildRunLoopParams<never>['afterArtifactsDrained'];
   /**
    * Build the strategy (and any attempt-scoped setup) INSIDE the lease launch
    * guard: a throw here must release the owned-execution lease. A function
@@ -87,6 +89,9 @@ export async function startDetachedChildRunLoop<TTurn>(
       ...(input.notify !== undefined && { notify: input.notify }),
       ...(input.onTurnSettled !== undefined && {
         onTurnSettled: input.onTurnSettled,
+      }),
+      ...(input.afterArtifactsDrained !== undefined && {
+        afterArtifactsDrained: input.afterArtifactsDrained,
       }),
       // Every detached native/workflow child takes one shared-budget slot per
       // turn; an awaited in-band child rides its idle parent's slot instead.

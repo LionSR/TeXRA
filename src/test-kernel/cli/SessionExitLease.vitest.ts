@@ -49,7 +49,7 @@ describe('CLI session exit lease ownership', () => {
     mocks.runCliPlatformShutdownSequence.mockResolvedValue(undefined);
     completeLeaseSpy = vi
       .spyOn(executionLease, 'completeOwnedExecutionLease')
-      .mockResolvedValue(undefined);
+      .mockResolvedValue({ status: 'released' });
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
       throw new Error('process.exit');
     }) as typeof process.exit);
@@ -104,7 +104,10 @@ describe('CLI session exit lease ownership', () => {
       resumableIdle: true,
       flushArtifacts: pushes(order, 'flush'),
     });
-    completeLeaseSpy.mockImplementation(pushes(order, 'release'));
+    completeLeaseSpy.mockImplementation(async () => {
+      order.push('release');
+      return { status: 'released' };
+    });
 
     await expect(exitController.gracefulTeardown()).rejects.toThrow(
       'process.exit',
@@ -127,7 +130,10 @@ describe('CLI session exit lease ownership', () => {
       resumableIdle: true,
       flushArtifacts: pushes(order, 'flush'),
     });
-    completeLeaseSpy.mockImplementation(pushes(order, 'release'));
+    completeLeaseSpy.mockImplementation(async () => {
+      order.push('release');
+      return { status: 'released' };
+    });
     mocks.runCliPlatformShutdownSequence.mockImplementation(
       pushes(order, 'shutdown'),
     );
