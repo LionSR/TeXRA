@@ -288,6 +288,20 @@ describe('format-staged', () => {
     expect(stagedBlob('a.ts')).toBe("const x = 'a';\n");
   });
 
+  it('snapshots a diverged extensionless YAML .prettierrc (#10500)', () => {
+    writeFileSync(join(dir, '.prettierrc'), 'singleQuote: true\n');
+    git(['add', '.prettierrc']);
+    writeFileSync(join(dir, '.prettierrc'), 'singleQuote: false\n');
+    writeFileSync(join(dir, 'a.ts'), 'const x = "a";\n');
+    git(['add', 'a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('staged Prettier output for a.ts');
+    expect(stagedBlob('a.ts')).toBe("const x = 'a';\n");
+  });
+
   it('uses the staged .prettierignore when the worktree copy has unstaged edits', () => {
     writeFileSync(join(dir, '.prettierignore'), 'ignored.ts\n');
     git(['add', '.prettierignore']);
@@ -532,6 +546,28 @@ describe('format-staged', () => {
     expect(stagedBlob('a.ts')).toBe('const x = "a";\n');
   });
 
+  it('skips a clean package.yaml whose relative plugin has unstaged edits (#10501)', () => {
+    writeFileSync(join(dir, 'fake-plugin.mjs'), 'export default {};\n');
+    writeFileSync(
+      join(dir, 'package.yaml'),
+      'prettier:\n  plugins:\n    - "./fake-plugin.mjs"\n',
+    );
+    git(['add', 'fake-plugin.mjs', 'package.yaml']);
+    git(['commit', '-qm', 'config base']);
+    writeFileSync(
+      join(dir, 'fake-plugin.mjs'),
+      'export default {};\n// edit\n',
+    );
+    writeFileSync(join(dir, 'a.ts'), STAGED);
+    git(['add', 'a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('fake-plugin.mjs has unstaged edits');
+    expect(stagedBlob('a.ts')).toBe(STAGED);
+  });
+
   it('updates a fully staged mixed-EOL file in the working tree (#10432)', () => {
     const mixed = MULTI_STAGED.replace(
       'const a={x:1,y:2};\n',
@@ -546,6 +582,28 @@ describe('format-staged', () => {
     expect(result.stdout).toContain('staged Prettier output for a.ts');
     expect(stagedBlob('a.ts')).toBe(MULTI_FORMATTED);
     expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(MULTI_FORMATTED);
+    expect(git(['diff', '--name-only', '--', 'a.ts'])).toBe('');
+  });
+
+  it('writes formatted output verbatim for a fully staged mixed-EOL CRLF file (#10505)', () => {
+    writeFileSync(join(dir, '.prettierrc'), '{"endOfLine":"crlf"}\n');
+    git(['add', '.prettierrc']);
+    git(['commit', '-qm', 'crlf config']);
+    const mixed = MULTI_STAGED.replace(
+      'const a={x:1,y:2};\n',
+      'const a={x:1,y:2};\r\n',
+    );
+    writeFileSync(join(dir, 'a.ts'), mixed);
+    git(['add', 'a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('staged Prettier output for a.ts');
+    expect(stagedBlob('a.ts')).toBe(toCrlf(MULTI_FORMATTED));
+    expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(
+      toCrlf(MULTI_FORMATTED),
+    );
     expect(git(['diff', '--name-only', '--', 'a.ts'])).toBe('');
   });
 
@@ -623,6 +681,35 @@ describe('format-staged', () => {
     expect(stagedBlob('src/a.ts')).toBe('export const x = 1;\n');
   });
 
+  it('leaves a clean JavaScript config with an unstaged dependency to Prettier (#10504)', () => {
+    mkdirSync(join(dir, 'src'));
+    writeFileSync(
+      join(dir, 'src/.prettierrc.mjs'),
+      'import opts from "./opts.mjs";\nexport default opts;\n',
+    );
+    writeFileSync(
+      join(dir, 'src/opts.mjs'),
+      'export default { semi: false };\n',
+    );
+    git(['add', 'src/.prettierrc.mjs', 'src/opts.mjs']);
+    git(['commit', '-qm', 'config base']);
+    writeFileSync(
+      join(dir, 'src/opts.mjs'),
+      'export default { semi: true };\n',
+    );
+    writeFileSync(join(dir, 'src/a.ts'), STAGED);
+    git(['add', 'src/a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('staged Prettier output for src/a.ts');
+    expect(result.stdout).not.toContain('src/opts.mjs has unstaged edits');
+    // Prettier resolves the clean config from the working tree, so the
+    // unstaged semi:true dependency wins; the hook must not skip the commit.
+    expect(stagedBlob('src/a.ts')).toBe(FORMATTED);
+  });
+
   it('sources a string-pointer prettier config from the index (#10435)', () => {
     mkdirSync(join(dir, 'config'));
     writeFileSync(
@@ -645,6 +732,64 @@ describe('format-staged', () => {
       join(dir, 'config/prettier.cjs'),
       'module.exports = { semi: true };\n',
     );
+    writeFileSync(join(dir, 'a.ts'), 'export const x = 1;\n');
+    git(['add', 'a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('staged Prettier output for a.ts');
+    expect(stagedBlob('a.ts')).toBe('export const x = 1\n');
+  });
+
+  it('skips a clean JS pointer target whose relative dependency is unstaged (#10502)', () => {
+    mkdirSync(join(dir, 'config'));
+    writeFileSync(
+      join(dir, 'config/prettier.cjs'),
+      'const opts = require("./opts.cjs");\nmodule.exports = opts;\n',
+    );
+    writeFileSync(
+      join(dir, 'config/opts.cjs'),
+      'module.exports = { semi: false };\n',
+    );
+    writeFileSync(
+      join(dir, 'package.json'),
+      '{"prettier":"./config/prettier.cjs"}\n',
+    );
+    git(['add', 'config/prettier.cjs', 'config/opts.cjs', 'package.json']);
+    git(['commit', '-qm', 'config base']);
+    writeFileSync(
+      join(dir, 'config/opts.cjs'),
+      'module.exports = { semi: true };\n',
+    );
+    writeFileSync(join(dir, 'a.ts'), 'export const x = 1;\n');
+    git(['add', 'a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('config/opts.cjs has unstaged edits');
+    expect(stagedBlob('a.ts')).toBe('export const x = 1;\n');
+  });
+
+  it('resolves a package-name shareable config from node_modules (#10503)', () => {
+    mkdirSync(join(dir, 'node_modules/@company/prettier-config'), {
+      recursive: true,
+    });
+    writeFileSync(
+      join(dir, 'node_modules/@company/prettier-config/package.json'),
+      '{"name":"@company/prettier-config","main":"index.cjs"}\n',
+    );
+    writeFileSync(
+      join(dir, 'node_modules/@company/prettier-config/index.cjs'),
+      'module.exports = { semi: false };\n',
+    );
+    writeFileSync(
+      join(dir, 'package.json'),
+      '{"prettier":"@company/prettier-config"}\n',
+    );
+    git(['add', 'package.json']);
+    git(['commit', '-qm', 'config base']);
     writeFileSync(join(dir, 'a.ts'), 'export const x = 1;\n');
     git(['add', 'a.ts']);
 
