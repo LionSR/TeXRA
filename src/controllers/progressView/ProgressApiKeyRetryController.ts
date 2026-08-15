@@ -196,9 +196,8 @@ export class ProgressApiKeyRetryController {
   async ensureOwnApiKey(
     request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
   ): Promise<boolean> {
-    const providersToCheck = request.provider
-      ? [request.provider]
-      : this.deps.providers;
+    const provider = this.resolveProvider(request);
+    const providersToCheck = provider ? [provider] : this.deps.providers;
     const requireChange = request.exhaustionReason === 'upstream-credit';
 
     // The gate depends on which credential failed:
@@ -210,7 +209,7 @@ export class ProgressApiKeyRetryController {
     // credential, which would allow retrying without a usable direct key.
     if (requireChange) {
       const before = await this.readKeys(providersToCheck);
-      await this.deps.promptForApiKey(request.provider);
+      await this.deps.promptForApiKey(provider);
       return this.hasChangedUsableKey(providersToCheck, before);
     }
 
@@ -220,8 +219,18 @@ export class ProgressApiKeyRetryController {
     // none exists yet, and only re-check the keys after that prompt (so the
     // common already-set path reads the secret store once, not twice).
     if (await this.hasAnyUsableKey(providersToCheck)) return true;
-    await this.deps.promptForApiKey(request.provider);
+    await this.deps.promptForApiKey(provider);
     return this.hasAnyUsableKey(providersToCheck);
+  }
+
+  // chatgpt-subscription auth is OpenAI-only (providerCapabilities.ts), so
+  // that exhaustion reason always means the OpenAI key, regardless of provider.
+  private resolveProvider(
+    request: Pick<ProgressApiKeyRetryRequest, 'provider' | 'exhaustionReason'>,
+  ): ApiProvider | undefined {
+    return request.exhaustionReason === 'chatgpt-subscription'
+      ? 'openai'
+      : request.provider;
   }
 
   private shouldDisableIncludedModelAccess(

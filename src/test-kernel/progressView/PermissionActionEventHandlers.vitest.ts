@@ -246,6 +246,34 @@ const actionCases: PermissionCase[] = [
     remains: true,
   },
   {
+    name: 'retry API-key selection forwards the raw tagged provider unchanged',
+    detail: {
+      kind: PERMISSION_KIND.RETRY,
+      data: {
+        ...retryData,
+        errorDetails: {
+          provider: 'anthropic',
+          exhaustionReason: 'chatgpt-subscription',
+        },
+      },
+      decision: { action: 'useOwnApiKey' },
+    } as const,
+    calls: [
+      call(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY, {
+        stream: 'stream-1',
+        requestId: 'retry-1',
+        model: 'claude-sonnet',
+        exhaustionReason: 'chatgpt-subscription',
+        // The chatgpt-subscription -> openai fallback mapping is the
+        // controller's policy now (ProgressApiKeyRetryController), not the
+        // webview's — this must pass the tagged provider through untouched.
+        provider: 'anthropic',
+        viaRelay: undefined,
+      }),
+    ],
+    remains: true,
+  },
+  {
     name: 'proposal approve',
     detail: detail.proposal({
       action: 'approve',
