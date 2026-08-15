@@ -18,7 +18,7 @@
  * tier switch on its own.
  *
  * The model set is cross-checked against the llm-zoo catalog: a live xAI
- * model whose context window clears the lowest documented threshold but which
+ * model whose context window reaches the lowest documented threshold but which
  * has no row here trips {@link xaiLongContextTierGap} so it surfaces loudly
  * instead of silently billing flat.
  */
@@ -83,7 +83,7 @@ export function xaiCacheDiscountFactor(fullName: string): number | undefined {
 /**
  * True when a catalog entry looks like it should have a documented tier but
  * has none: a live xAI model (not deprecated or retired) whose context window
- * exceeds the lowest documented threshold, with no row above. This is the
+ * reaches the lowest documented threshold, with no row above. This is the
  * drift tripwire for the hand-maintained table — a new tiered xAI model
  * warns through the handler instead of silently billing flat rates.
  */
@@ -97,7 +97,7 @@ export function xaiLongContextTierGap(
     model.provider === ModelProvider.XAI &&
     model.deprecated !== true &&
     model.retired !== true &&
-    model.contextWindow > LOWEST_DOCUMENTED_THRESHOLD_TOKENS &&
+    model.contextWindow >= LOWEST_DOCUMENTED_THRESHOLD_TOKENS &&
     XAI_DOCUMENTED_PRICING[model.fullName] === undefined
   );
 }
