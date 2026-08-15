@@ -755,6 +755,35 @@ single-caller premise failed (the inquiry formatter and the goal directory
 have multiple real consumers; `executionKvFiles.ts` is a genuine
 cross-package SSOT — keep).
 
+**Landed 2026-08-15 (PR #10608) at −91 LoC, ~27 elements.** The shortfall
+against the −190 estimate is honest: inlining a helper moves its body
+rather than deleting it, so the recovered lines are module headers,
+imports, exports, and re-export rows; the element count still lands above
+the estimate because the write-only-field item deletes more type-level
+constructs than the estimate credited. Three of the nine surfaces failed
+re-verification at PR time and were cut; each is recorded here with the
+premise that failed, as a standing negative result — do not re-propose:
+
+- `detectWaitingStreams` — the one-production-consumer premise held, but
+  the module path itself is a live mock seam: `vi.doMock` in
+  `DesktopAgentExecution.vitest.ts` and
+  `DesktopAgentExecutionFactory.vitest.ts`, `vi.spyOn` in
+  `SessionRestartRepair.vitest.ts`, a direct functional test in
+  `Resumability.vitest.ts`, and two rows in
+  `config/ratchets/host-agent-mock-baseline.json`. Inlining it into
+  `SessionHandle` would force those desktop restart-timing tests onto a
+  different gate — a mock-path hazard not worth 29 LoC.
+- `src/shared/streams/streamMetadata.ts` — `buildStreamMetadata` is a Zod
+  parse boundary owning the `UPDATE_STREAMS` wire shape
+  (`StreamMetadataSchema.parse`, prefault semantics documented in-file),
+  and `src/shared/` is the documented home for wire contracts. Moving it
+  into `controllers/progressView/backend/` would relocate a wire-shape
+  owner out of its layer and strand its 67-line unit test.
+- `src/shared/streams/childActivityReducer.ts` — a pure tested algorithm
+  with its own 53-line `describe` block; inlining trades a tested pure
+  function for an untested inline block — element count drops by 2,
+  coverage drops with it.
+
 ### B3. Make the host-agent baseline tell the truth (−25 LoC net, −18 elements)
 
 `host-agent-import-baseline.json` carries **5 stale rows** (specifiers with
