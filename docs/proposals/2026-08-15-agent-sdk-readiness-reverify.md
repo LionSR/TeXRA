@@ -1,7 +1,9 @@
 # Agent-SDK readiness — re-verification pass, four-area deep audit, one landed increment (2026-08-15)
 
-> **Status:** Verification + one landed increment, written 2026-08-15 at HEAD
-> `ee56ceb`. A scheduled audit routine re-ran the standing question — "review the
+> **Status:** Verification + one landed increment, written 2026-08-15. The area
+> metrics and abstraction audit below were measured at parent HEAD `ee56ceb`;
+> §3's relocation increment lands on top of it (in this PR's head commit). A
+> scheduled audit routine re-ran the standing question — "review the
 > agent core, model handler, logger, and surface for unnecessary abstraction and
 > unready surface; design subagent boundaries" — against the plan of record
 > ([`2026-07-09-agent-sdk-north-star.md`](./2026-07-09-agent-sdk-north-star.md))
@@ -11,7 +13,7 @@
 > fresh four-area deep audit (one focused reader per area) rather than only
 > re-measuring, landed one small invariant-aligned cleanup, and catalogued the
 > deep audit's new observations as tracked opportunities. Every claim carries a
-> `file:line`, config path, or commit, checked at this HEAD.
+> `file:line`, config path, or commit, checked at `ee56ceb` unless noted.
 
 ## 0. Verdict
 
@@ -55,7 +57,7 @@ What is new in this pass:
 | ----------------------------------------------------------- | -------------- | --------------------------------------------------------- |
 | SDK package `@agent/*` deep-import specifiers               | 7              | **7** (`config/ratchets/host-agent-import-baseline.json`) |
 | Host specifier width (cli / desktop / extension)            | 18 / 13 / 17   | **18 / 13 / 17** — frozen, not slipping                   |
-| `RuntimePresentationEventPayloads` arms (0 phantom)         | 5              | **5** (`runtimePresentationEvents.ts:16-22`)              |
+| `RuntimePresentationEventPayloads` arms (0 phantom)         | 5              | **5** (`runtimePresentationEvents.ts:17-21`)              |
 | `platform().log` call sites under `src/agent`               | 0              | **0** (no host log port exists; see §4 L-2)               |
 | Version (governs `runFact.` retirement, due v0.41)          | 0.40.3         | **0.40.3** — retirement not yet due                       |
 | Logger core LoC (`logUtils` / `redaction` / `channelTrace`) | 250 / 117 / 82 | **250 / 117 / 82**                                        |
