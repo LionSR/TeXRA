@@ -13,10 +13,7 @@ import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus
 import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
-import {
-  SettingsProfileController,
-  getSharedProviderProfileDefaults,
-} from '@controllers/settingsView/SettingsProfileController';
+import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import {
   buildModelSelectionMessage,
   createModelSelectionController,
@@ -164,7 +161,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       options.modelSelectionExtras,
     );
     this.profileController = new SettingsProfileController({
-      ...getSharedProviderProfileDefaults(),
       globalState: options.globalState,
       loadProviderKeyStatuses: () =>
         loadApiKeyStatusMap(options.secrets, API_PROVIDERS),

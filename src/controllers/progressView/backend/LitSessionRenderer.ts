@@ -1,18 +1,26 @@
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import type { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
-import { ProgressStreamProjectionBuilder } from '@controllers/progressView/backend/ProgressStreamProjectionBuilder';
-import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
+import {
+  ProgressStreamProjectionBuilder,
+  type ProjectedStreamRoster,
+} from '@controllers/progressView/backend/ProgressStreamProjectionBuilder';
 import type {
   PresentedStreamId,
   SessionRendererPort,
 } from '@controllers/session/SessionRendererPort';
 import type { StreamBadgeSnapshot } from '@controllers/session/SessionState';
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   ConversationProgress,
   GoalStatus,
   InquiryThreadUpdatedEvent,
+  PermissionPayload,
   Plan,
+  ProgressPermissionKind,
+  ProgressViewOutboundMessage,
+  ProgressViewPlacement,
   StreamPhase,
   StreamStage,
   StreamSubstate,
@@ -27,9 +35,10 @@ import { createFlushableDebounce, type FlushableDebounce } from '@utils/core';
 const PROGRESS_THROTTLE_MS = 500;
 
 /**
- * Lit/progress-view delivery policy over immutable stream projections.
- * Owns active-only delivery, conversation-progress debounce, phase-vs-round
- * stage delivery, and bridge cursor synchronization.
+ * The single owner of Lit/progress-view delivery: it both decides *what* the
+ * webview is told (active-only delivery, conversation-progress debounce,
+ * phase-vs-round stage delivery, bridge cursor synchronization) and builds the
+ * typed outbound messages that carry it.
  */
 export class LitSessionRenderer implements SessionRendererPort {
   private readonly progressDebounce: FlushableDebounce =
@@ -46,13 +55,31 @@ export class LitSessionRenderer implements SessionRendererPort {
     private readonly projections: ProgressStreamProjectionBuilder,
     private readonly snapshots: StreamSnapshotStore,
     private readonly followUps: ToolUseFollowUpQueue,
-    private readonly webviewUpdater: WebviewUpdater,
     private readonly webviewBridge: WebviewBridge,
+    private readonly send: (message: ProgressViewOutboundMessage) => void,
+    private readonly hasTarget: () => boolean,
     private readonly getActiveStream: () => PresentedStreamId = () => '',
+    /**
+     * Commands this host's inbound registry declares `unsupported(...)`
+     * (see `unsupportedCommands` in `@shared/utils/dispatcher`). Included
+     * with every stream-tabs update so the frontend's capability gating
+     * (e.g. StreamHeader) stays derived from the registry, never a
+     * host-check ternary.
+     */
+    private readonly getUnsupportedCommands?: () => readonly string[],
   ) {}
 
+  /**
+   * Deliver one typed message to the current active webview target. Uses the
+   * `ProgressViewOutboundMessage` union for compile-time safety.
+   */
+  private sendMessage(message: ProgressViewOutboundMessage): void {
+    if (!this.hasTarget()) return;
+    this.send(message);
+  }
+
   isAvailable(): boolean {
-    return this.webviewUpdater.isAvailable();
+    return this.hasTarget();
   }
 
   dispose(): void {
@@ -72,15 +99,10 @@ export class LitSessionRenderer implements SessionRendererPort {
       activeStream?: PresentedStreamId;
     },
   ): void {
-    if (!this.webviewUpdater.isAvailable()) return;
-    this.webviewUpdater.updateStreamMetadata(
-      this.projections.streamMetadata(
-        streamId,
-        options?.streamStates,
-        options?.activeStream ?? this.getActiveStream(),
-      ),
-      { activeStream: options?.activeStream },
-    );
+    if (!this.isAvailable()) return;
+    this.updateStreamMetadata(streamId, options?.streamStates, {
+      activeStream: options?.activeStream,
+    });
   }
 
   onStreamStatusChanged(
@@ -90,21 +112,29 @@ export class LitSessionRenderer implements SessionRendererPort {
     lastTimestamp?: number,
     substate?: StreamSubstate,
   ): void {
-    this.webviewUpdater.updateStreamStatus(
-      streamId,
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+      stream: streamId,
       status,
       logHead,
       lastTimestamp,
-      substate,
-    );
+      ...(substate ? { substate } : {}),
+    });
   }
 
   onActiveStreamChanged(streamId: PresentedStreamId): void {
-    this.webviewUpdater.setActiveStream(streamId);
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: streamId,
+    });
   }
 
   onStreamDescriptionChanged(streamId: StreamTabId, description: string): void {
-    this.webviewUpdater.updateStreamDescription(streamId, description);
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION,
+      stream: streamId,
+      description,
+    });
   }
 
   onParentStreamChanged(
@@ -112,14 +142,8 @@ export class LitSessionRenderer implements SessionRendererPort {
     _parentStreamId: StreamTabId | null,
   ): void {
     // Parent edge rides `StreamTabInfo.parentStreamId` on the metadata wire.
-    if (!this.webviewUpdater.isAvailable()) return;
-    this.webviewUpdater.updateStreamMetadata(
-      this.projections.streamMetadata(
-        childStreamId,
-        undefined,
-        this.getActiveStream(),
-      ),
-    );
+    if (!this.isAvailable()) return;
+    this.updateStreamMetadata(childStreamId);
   }
 
   onConversationProgressChanged(
@@ -140,18 +164,16 @@ export class LitSessionRenderer implements SessionRendererPort {
       // per-stream metadata patch instead of the targeted message: phases
       // advance a handful of times per run, so the extra fields on the wire
       // cost nothing.
-      if (!this.webviewUpdater.isAvailable()) return;
-      this.webviewUpdater.updateStreamMetadata(
-        this.projections.streamMetadata(
-          streamId,
-          undefined,
-          this.getActiveStream(),
-        ),
-      );
+      if (!this.isAvailable()) return;
+      this.updateStreamMetadata(streamId);
       return;
     }
     this.sendIfActive(streamId, () =>
-      this.webviewUpdater.updateStage(streamId, stage),
+      this.sendMessage({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STAGE,
+        stream: streamId,
+        stage,
+      }),
     );
   }
 
@@ -163,14 +185,20 @@ export class LitSessionRenderer implements SessionRendererPort {
     // child, leaving its row live ("Running") until the parent happened to be
     // reactivated. The message is stream-addressed and stored per stream, and
     // a child's lifecycle emits a handful of them, so sending always is cheap.
-    if (!this.webviewUpdater.isAvailable()) return;
-    this.webviewUpdater.updateStreamBadges(streamId, badges);
+    if (!this.isAvailable()) return;
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+      stream: streamId,
+      ...badges,
+    });
   }
 
   onFilesChanged(streamId: StreamTabId): void {
     this.sendIfActive(streamId, () => {
       const rounds = this.snapshots.getOutputFiles(streamId);
-      this.webviewUpdater.updateFiles(streamId, {
+      this.sendMessage({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
+        stream: streamId,
         rounds: Object.keys(rounds).length ? rounds : undefined,
       });
     });
@@ -182,11 +210,17 @@ export class LitSessionRenderer implements SessionRendererPort {
   ): void {
     this.sendIfActive(streamId, () => {
       if (options?.reset) {
-        this.webviewUpdater.updateMissingOutputs(streamId, { reset: true });
+        this.sendMessage({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
+          stream: streamId,
+          reset: true,
+        });
         return;
       }
       const rounds = this.snapshots.getMissingOutputs(streamId);
-      this.webviewUpdater.updateMissingOutputs(streamId, {
+      this.sendMessage({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
+        stream: streamId,
         rounds: Object.keys(rounds).length ? rounds : undefined,
       });
     });
@@ -195,7 +229,9 @@ export class LitSessionRenderer implements SessionRendererPort {
   onCompileFailuresChanged(streamId: StreamTabId): void {
     this.sendIfActive(streamId, () => {
       const rounds = this.snapshots.getCompileFailures(streamId);
-      this.webviewUpdater.updateCompileFailures(streamId, {
+      this.sendMessage({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
+        stream: streamId,
         rounds: Object.keys(rounds).length ? rounds : undefined,
         reset: true,
       });
@@ -212,30 +248,49 @@ export class LitSessionRenderer implements SessionRendererPort {
     const nextUsage =
       this.snapshots.getRunUsage(streamId).get(storageKey) ?? usage;
     this.sendIfActive(streamId, () =>
-      this.webviewUpdater.updateRunUsage(streamId, storageKey, nextUsage),
+      this.sendMessage({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
+        stream: streamId,
+        runId: storageKey,
+        usage: nextUsage,
+      }),
     );
   }
 
   onTodosChanged(streamId: StreamTabId, todos: TodoItem[]): void {
     this.sendIfActive(streamId, () =>
-      this.webviewUpdater.updateTodos(streamId, todos),
+      this.sendMessage({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
+        stream: streamId,
+        todos,
+      }),
     );
   }
 
   onPlanChanged(streamId: StreamTabId, plan: Plan | null): void {
     // Plan is not active-gated (historical Lit delivery quirk).
-    this.webviewUpdater.updatePlan(streamId, plan);
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PLAN,
+      stream: streamId,
+      plan,
+    });
   }
 
   onQueuedFollowUpsChanged(streamId: StreamTabId): void {
     this.sendIfActive(streamId, () => {
-      const messages = this.followUps.getAll(streamId);
-      this.webviewUpdater.updateQueuedFollowUps(streamId, messages);
+      this.sendMessage({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
+        stream: streamId,
+        messages: this.followUps.getAll(streamId),
+      });
     });
   }
 
   onInquiryThreadUpdated(thread: InquiryThreadUpdatedEvent): void {
-    this.webviewUpdater.updateInquiryThread(thread);
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_INQUIRY_THREAD,
+      thread,
+    });
   }
 
   onGoalActiveChanged(
@@ -243,7 +298,13 @@ export class LitSessionRenderer implements SessionRendererPort {
     active: boolean,
     details?: { status?: GoalStatus; objective?: string },
   ): void {
-    this.webviewUpdater.updateGoalActive(streamId, active, details);
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.GOAL_ACTIVE_UPDATED,
+      stream: streamId,
+      active,
+      ...(details?.status ? { status: details.status } : {}),
+      ...(details?.objective ? { objective: details.objective } : {}),
+    });
   }
 
   onGoalPaused(_streamId: StreamTabId): void {
@@ -256,12 +317,15 @@ export class LitSessionRenderer implements SessionRendererPort {
       includeActiveState?: boolean;
     } = {},
   ): void {
-    if (!this.webviewUpdater.isAvailable()) return;
+    if (!this.isAvailable()) return;
 
     const { includeActiveState = false } = options;
 
     if (!stream) {
-      this.webviewUpdater.sendSyncStreamContent({ action: 'clear' });
+      this.sendMessage({
+        command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+        action: 'clear',
+      });
       return;
     }
 
@@ -271,15 +335,133 @@ export class LitSessionRenderer implements SessionRendererPort {
       stream,
       includeActiveState,
     );
-    if (projection) this.webviewUpdater.sendSyncStreamContent(projection);
+    if (projection) {
+      this.sendMessage({
+        command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+        ...projection,
+      });
+    }
+  }
+
+  /** Push one stream's metadata patch, optionally re-asserting the selection. */
+  updateStreamMetadata(
+    streamId: StreamTabId,
+    streamStates?: Map<StreamTabId, StreamPhaseState>,
+    options?: { activeStream?: PresentedStreamId },
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+      ...this.projections.streamMetadata(
+        streamId,
+        streamStates,
+        options?.activeStream ?? this.getActiveStream(),
+      ),
+      activeStream: options?.activeStream,
+    });
+  }
+
+  /**
+   * Update stream metadata and theme for the webview.
+   * Use this for structural updates (initial sync, stream add/remove).
+   * For incremental updates, prefer the targeted notifications above.
+   */
+  sendStreamMetadata(
+    projection: ProjectedStreamRoster,
+    activeStream: PresentedStreamId,
+    theme?: 'dark' | 'light',
+  ): void {
+    if (!this.isAvailable()) return;
+
+    if (theme) this.setTheme(theme);
+
+    // Full stream-tabs refresh, carrying the per-stream metadata patch.
+    const unsupportedCommands = this.getUnsupportedCommands?.();
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+      streams: projection.streams,
+      activeStream,
+      unsupportedCommands: unsupportedCommands
+        ? [...unsupportedCommands]
+        : undefined,
+      streamStates: projection.streamStates,
+    });
+  }
+
+  settleStreamSelection(
+    requestId: string,
+    status: 'accepted' | 'rejected' | 'superseded',
+    activeStream: PresentedStreamId,
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.SETTLE_STREAM_SELECTION,
+      requestId,
+      status,
+      activeStream,
+    });
+  }
+
+  releaseStreamContent(stream: StreamTabId): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.RELEASE_STREAM_CONTENT,
+      stream,
+    });
+  }
+
+  showPermission(permission: PermissionPayload): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+      action: 'show',
+      permission,
+    });
+  }
+
+  resolvePermission(kind: ProgressPermissionKind, id: string): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+      action: 'resolve',
+      kind,
+      id,
+    });
+  }
+
+  syncInquiryThreads(threads: InquiryThreadUpdatedEvent[]): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.SYNC_INQUIRY_THREADS,
+      threads,
+    });
+  }
+
+  updateBypassState(
+    stream: StreamTabId,
+    type: ApprovalBypassKind,
+    bypassActive: boolean,
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
+      stream,
+      type,
+      bypassActive,
+    });
+  }
+
+  setPlacement(placement: ProgressViewPlacement): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.SET_PLACEMENT,
+      placement,
+    });
+  }
+
+  /** Push the host theme alone — theme flips need no metadata rebuild. */
+  setTheme(theme: 'dark' | 'light'): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.THEME_SET,
+      theme,
+    });
   }
 
   /** Send to webview only if streamId is the active stream. */
   private sendIfActive(streamId: string, send: () => void): void {
-    if (
-      streamId === this.getActiveStream() &&
-      this.webviewUpdater.isAvailable()
-    ) {
+    if (streamId === this.getActiveStream() && this.isAvailable()) {
       send();
     }
   }
@@ -289,8 +471,12 @@ export class LitSessionRenderer implements SessionRendererPort {
     const progress = activeStream
       ? this.pendingProgressUpdates.get(activeStream)
       : undefined;
-    if (progress && this.webviewUpdater.isAvailable()) {
-      this.webviewUpdater.updateConversationProgress(activeStream, progress);
+    if (progress && this.isAvailable()) {
+      this.sendMessage({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS,
+        stream: activeStream,
+        progress,
+      });
     }
     this.pendingProgressUpdates.clear();
   }

@@ -123,7 +123,7 @@ function createProvider() {
   injected.backend = backend;
   const logger = { error: vi.fn() };
   injected.logger = logger;
-  injected.webviewUpdater = {
+  injected.renderer = {
     isAvailable: () => true,
     setPlacement: vi.fn(),
     sendStreamMetadata: vi.fn(() => undefined),

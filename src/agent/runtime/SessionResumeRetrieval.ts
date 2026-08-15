@@ -16,7 +16,6 @@ import {
   RESUMABILITY_CAUSE,
   type ResumabilityDecision,
 } from '@agent/storage';
-import { createChannelTrace } from '@agent/trace';
 import type { FlowRecord } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { ProviderMessageArraySchema } from '@agent/types/ProviderMessage';
@@ -24,6 +23,7 @@ import {
   migrateSharedState,
   type PreparedShared,
 } from '@agent/implementations/flows/tooluse/nodes/types';
+import { createLog } from '@logger/logUtils';
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import {
@@ -35,7 +35,7 @@ import {
   type ModelHandlerCompatibilityKey,
 } from './modelHandlerCompatibilityKey';
 
-const logger = createChannelTrace('SessionResumeRetrieval');
+const logger = createLog('SessionResumeRetrieval');
 
 /** Canonical tool-use shared state plus the identity needed to resume it. */
 export interface ToolUseResumeData {

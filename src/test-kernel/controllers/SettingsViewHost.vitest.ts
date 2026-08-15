@@ -9,13 +9,7 @@ import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
-function createModelSelectionController() {
-  const state = {
-    enabledModels: ['gpt55', 'sonnet46T'] as readonly string[],
-    helperModel: 'gpt55',
-    reasoningLevelOverrides: {},
-    preferShortModelNames: false,
-  };
+function createModelSelectionController(globalState: FakeStateStore) {
   const resolveModelOptions = async (
     models: readonly string[],
   ): Promise<ModelOptionData[]> =>
@@ -27,36 +21,19 @@ function createModelSelectionController() {
       disabled: false,
     }));
 
-  return {
-    controller: new SettingsModelSelectionController({
-      state: {
-        getEnabledModels: () => state.enabledModels,
-        setEnabledModels: async (models) => {
-          state.enabledModels = models;
-        },
-        getHelperModel: () => state.helperModel,
-        setHelperModel: async (model) => {
-          state.helperModel = model;
-        },
-        getReasoningLevelOverrides: () => state.reasoningLevelOverrides,
-        setReasoningLevelOverrides: async (overrides) => {
-          state.reasoningLevelOverrides = overrides;
-        },
-        getPreferShortModelNames: () => state.preferShortModelNames,
-        setPreferShortModelNames: async (enabled) => {
-          state.preferShortModelNames = enabled;
-        },
-      },
-      resolveModelOptions,
-    }),
-    state,
-  };
+  return new SettingsModelSelectionController({
+    globalState,
+    resolveModelOptions,
+  });
 }
 
 describe('SettingsViewHost', () => {
   it('posts memory and model-selection messages through shared host wiring', async () => {
-    const modelSelection = createModelSelectionController();
-    const globalState = new FakeStateStore();
+    const globalState = new FakeStateStore({
+      [GlobalStateKey.ENABLED_MODELS]: ['gpt55', 'sonnet46T'],
+      [GlobalStateKey.HELPER_MODEL]: 'gpt55',
+    });
+    const modelSelection = createModelSelectionController(globalState);
     const messages: unknown[] = [];
     const beforeModelSelectionMessage = vi.fn();
     const host = new SettingsViewHost({
@@ -73,7 +50,7 @@ describe('SettingsViewHost', () => {
       },
       beforeModelSelectionMessage,
       controllers: {
-        modelSelection: modelSelection.controller,
+        modelSelection,
       },
     });
 
@@ -102,7 +79,9 @@ describe('SettingsViewHost', () => {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       helperModel: DEFAULT_HELPER_MODEL,
     });
-    expect(modelSelection.state.enabledModels).toEqual(['sonnet46T']);
+    expect(globalState.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
+      'sonnet46T',
+    ]);
     expect(beforeModelSelectionMessage).toHaveBeenCalledTimes(2);
   });
 });

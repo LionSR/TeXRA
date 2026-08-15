@@ -1,9 +1,9 @@
 import { getExecutionStore } from '@agent/storage';
-import { createChannelTrace } from '@agent/trace';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
+import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
-const logger = createChannelTrace('AgentCliSessionRegistry');
+const logger = createLog('AgentCliSessionRegistry');
 
 interface AgentCliSessionRegistryDependencies {
   persistSessionId(

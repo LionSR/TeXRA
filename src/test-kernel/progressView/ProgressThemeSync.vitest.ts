@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
     state: {
       streamStatus: { getAllStreamStates: vi.fn(() => new Map()) },
     },
-    webviewUpdater: {
+    renderer: {
       isAvailable: vi.fn(() => true),
       setTheme: vi.fn(),
       setPlacement: vi.fn(),
@@ -130,8 +130,8 @@ function fireThemeChange(kind: number): void {
 describe('progress view theme sync', () => {
   beforeEach(() => {
     mocks.themeListeners.length = 0;
-    mocks.backend.webviewUpdater.setTheme.mockClear();
-    mocks.backend.webviewUpdater.sendStreamMetadata.mockClear();
+    mocks.backend.renderer.setTheme.mockClear();
+    mocks.backend.renderer.sendStreamMetadata.mockClear();
   });
 
   it('sends only the theme message on theme change, mapped by kind', () => {
@@ -148,12 +148,10 @@ describe('progress view theme sync', () => {
     fireThemeChange(1);
 
     expect(
-      mocks.backend.webviewUpdater.setTheme.mock.calls.map(([theme]) => theme),
+      mocks.backend.renderer.setTheme.mock.calls.map(([theme]) => theme),
     ).toEqual(['dark', 'light']);
     // The regression this pins down: no full stream-metadata rebuild.
-    expect(
-      mocks.backend.webviewUpdater.sendStreamMetadata,
-    ).not.toHaveBeenCalled();
+    expect(mocks.backend.renderer.sendStreamMetadata).not.toHaveBeenCalled();
   });
 
   it('drops theme changes while no progress surface is visible', () => {
@@ -167,6 +165,6 @@ describe('progress view theme sync', () => {
 
     fireThemeChange(2);
 
-    expect(mocks.backend.webviewUpdater.setTheme).not.toHaveBeenCalled();
+    expect(mocks.backend.renderer.setTheme).not.toHaveBeenCalled();
   });
 });

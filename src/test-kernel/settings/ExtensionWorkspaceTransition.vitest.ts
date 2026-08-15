@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
       streamStatus: { getAllStreamStates: vi.fn(() => new Map()) },
     },
     webviewBridge: {},
-    webviewUpdater: {},
+    renderer: {},
     setApprovalBypassState: vi.fn(),
   },
   showErrorMessage: vi.fn(),

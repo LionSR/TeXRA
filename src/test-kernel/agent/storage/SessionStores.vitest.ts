@@ -94,6 +94,77 @@ describe('SessionStores deletion coordination', () => {
     });
   });
 
+  it('deletes the sidecar-named execution when the summary mirror diverges', async () => {
+    await withSession(async (session) => {
+      const stream = 'divergent@test#bbb00002' as StreamTabId;
+      const summaryExecutionId = 'aaa00001' as ExecutionId;
+      const sidecarExecutionId = 'bbb00002' as ExecutionId;
+      session.transcripts.ensureStream(stream);
+      session.transcripts.recordSummaryMeta(stream, {
+        executionId: summaryExecutionId,
+      });
+      const snapshots = new StreamSnapshotStore();
+      ownExecution(snapshots, stream, sidecarExecutionId);
+      await snapshots.flush();
+      snapshots.evictAll();
+      const deleteExecution = deletionSpy();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        deleteExecution,
+      });
+
+      await expect(stores.deleteStream(stream)).resolves.toBe('deleted');
+
+      expect(deleteExecution).toHaveBeenCalledWith(
+        sidecarExecutionId,
+        expect.anything(),
+      );
+      expect(deleteExecution).not.toHaveBeenCalledWith(
+        summaryExecutionId,
+        expect.anything(),
+      );
+    });
+  });
+
+  it('waits on the resident execution during an unflushed run.start, not the stale sidecar FK', async () => {
+    await withSession(async (session) => {
+      const stream = 'unflushed@test#cur00001' as StreamTabId;
+      const previousExecutionId = 'old00001' as ExecutionId;
+      const currentExecutionId = 'new00001' as ExecutionId;
+      session.transcripts.ensureStream(stream);
+      const snapshots = new StreamSnapshotStore();
+      // Persist the previous run's sidecar FK first.
+      ownExecution(snapshots, stream, previousExecutionId);
+      await snapshots.flush();
+      // `run.start` updates the resident record synchronously; the sidecar FK
+      // write is queued and still names the previous execution until run-end
+      // flush. Single-stream deletion must wait on the current execution.
+      snapshotFacts(snapshots).setRunStart({
+        streamId: stream,
+        executionId: currentExecutionId,
+        identity: { kind: 'agent', agent: 'assistant' },
+      });
+      const deleteExecution = deletionSpy();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        deleteExecution,
+      });
+
+      await expect(stores.deleteStream(stream)).resolves.toBe('deleted');
+
+      expect(deleteExecution).toHaveBeenCalledWith(
+        currentExecutionId,
+        expect.anything(),
+      );
+      expect(deleteExecution).not.toHaveBeenCalledWith(
+        previousExecutionId,
+        expect.anything(),
+      );
+    });
+  });
+
   it('projects child detachment when durable discovery fails', async () => {
     await withSession(async (session) => {
       const parent = 'discovery-failure-parent' as StreamTabId;
@@ -293,7 +364,7 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
     });
   });
 
-  it('propagates sidecar FK storage failures instead of deciding ownership', async () => {
+  it('returns failed rather than rejecting when ownership storage is unreadable', async () => {
     await withSession(async (session) => {
       const executionId = 'abc111' as ExecutionId;
       const stream = `flaky@model#${executionId}` as StreamTabId;
@@ -309,9 +380,7 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
         deleteExecution,
       });
 
-      await expect(stores.deleteStream(stream)).rejects.toThrow(
-        'storage read failed',
-      );
+      await expect(stores.deleteStream(stream)).resolves.toBe('failed');
       expect(deleteExecution).not.toHaveBeenCalled();
       expect(session.transcripts.has(stream)).toBe(true);
     });
@@ -356,6 +425,36 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
       );
       expect(session.transcripts.has(flakyStream)).toBe(true);
       expect(session.transcripts.has(goodStream)).toBe(false);
+    });
+  });
+
+  it('bulk deletion preserves resident ownership and skips its sidecar read', async () => {
+    await withSession(async (session) => {
+      const executionId = 'abc444' as ExecutionId;
+      const stream = `resident@model#${executionId}` as StreamTabId;
+      session.transcripts.ensureStream(stream);
+      const snapshots = new StreamSnapshotStore();
+      ownExecution(snapshots, stream, executionId);
+      vi.spyOn(snapshots, 'listPersistedStreams').mockResolvedValue([stream]);
+      vi.spyOn(snapshots, 'listStagedDeletions').mockResolvedValue([]);
+      vi.spyOn(snapshots, 'readPersistedExecutionId').mockRejectedValue(
+        new Error('sidecar should not be read for a resident stream'),
+      );
+      const deleteExecution = deletionSpy();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        deleteExecution,
+      });
+
+      const result = await stores.deleteAll();
+
+      expect(result.failed).toEqual(new Set());
+      expect(deleteExecution).toHaveBeenCalledWith(
+        executionId,
+        expect.anything(),
+      );
+      expect(session.transcripts.has(stream)).toBe(false);
     });
   });
 

@@ -9,7 +9,7 @@ import { AgentCategory, agentName } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type { WebviewUpdater } from './WebviewUpdater';
+import type { LitSessionRenderer } from './LitSessionRenderer';
 
 const log = createLog('agentProposalTransport');
 
@@ -25,13 +25,13 @@ const log = createLog('agentProposalTransport');
  */
 export function createAgentProposalTransport(options: {
   /** Read lazily: hosts wire this before their backend field is assigned. */
-  getWebviewUpdater(): WebviewUpdater;
+  getRenderer(): LitSessionRenderer;
   isPending(proposalId: string): boolean;
 }): {
   show(proposal: AgentProposalPermission): void;
   dismiss(proposalId: string): void;
 } {
-  const { getWebviewUpdater, isPending } = options;
+  const { getRenderer, isPending } = options;
 
   // Model options have a visible-model fallback that does not require
   // ServerSideKeyService, so the dropdown still appears if availability
@@ -65,7 +65,7 @@ export function createAgentProposalTransport(options: {
       }),
     ]);
     if (!isPending(proposal.proposalId)) return;
-    getWebviewUpdater().showPermission({
+    getRenderer().showPermission({
       kind: PERMISSION_KIND.PROPOSAL,
       data: proposal,
       modelOptionsData,
@@ -75,7 +75,7 @@ export function createAgentProposalTransport(options: {
 
   return {
     show(proposal) {
-      getWebviewUpdater().showPermission({
+      getRenderer().showPermission({
         kind: PERMISSION_KIND.PROPOSAL,
         data: proposal,
         modelOptionsData: buildVisibleBasicModelOptionsData(),
@@ -83,10 +83,7 @@ export function createAgentProposalTransport(options: {
       void sendResolvedOptions(proposal);
     },
     dismiss(proposalId) {
-      getWebviewUpdater().resolvePermission(
-        PERMISSION_KIND.PROPOSAL,
-        proposalId,
-      );
+      getRenderer().resolvePermission(PERMISSION_KIND.PROPOSAL, proposalId);
     },
   };
 }

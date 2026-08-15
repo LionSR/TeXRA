@@ -16,6 +16,7 @@ import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { isGpt5ModelName } from '@model/modelNames';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import type { StateStore } from '@platform/interfaces';
 import type {
   CopilotRouteInfo,
   ModelOptionData,
@@ -23,6 +24,7 @@ import type {
   ReasoningLevel,
 } from '@shared/schemas';
 import { ReasoningLevelSchema } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   DEFAULT_HELPER_MODEL,
   MODEL_SOURCE_ORDER,
@@ -30,19 +32,9 @@ import {
 } from '@shared/constants/providers';
 import { byName } from '@utils/core';
 
-export interface SettingsModelSelectionState {
-  getEnabledModels(): readonly string[] | undefined;
-  setEnabledModels(models: readonly string[]): Promise<void>;
-  getHelperModel(): string | undefined;
-  setHelperModel(model: string): Promise<void>;
-  getReasoningLevelOverrides(): Record<string, string> | undefined;
-  setReasoningLevelOverrides(overrides: Record<string, string>): Promise<void>;
-  getPreferShortModelNames(): boolean | undefined;
-  setPreferShortModelNames(enabled: boolean): Promise<void>;
-}
-
 export interface SettingsModelSelectionControllerDeps {
-  state: SettingsModelSelectionState;
+  /** Persisted picker state: enabled models, helper model, reasoning levels. */
+  globalState: StateStore;
   modelSources?: readonly string[];
   useIncludedAccess?: () => boolean;
   getUserTier?: () => string | undefined;
@@ -82,7 +74,10 @@ export class SettingsModelSelectionController {
     // Normalize at the single read boundary: an empty persisted list (e.g. the
     // user disabled every model) falls back to defaults so downstream consumers
     // — including the helper-model dropdown — never see an empty model set.
-    const enabled = this.deps.state.getEnabledModels();
+    const enabled = this.deps.globalState.get<readonly string[]>(
+      GlobalStateKey.ENABLED_MODELS,
+      DEFAULT_MODELS,
+    );
     return enabled && enabled.length > 0 ? enabled : DEFAULT_MODELS;
   }
 
@@ -99,8 +94,10 @@ export class SettingsModelSelectionController {
     return {
       models: await this.buildSelectionItems(routes, preferredModels),
       helperModel: this.getEffectiveHelperModel(visibleModels),
-      preferShortModelNames:
-        this.deps.state.getPreferShortModelNames() ?? false,
+      preferShortModelNames: this.deps.globalState.get<boolean>(
+        GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+        false,
+      ),
       copilotModels: this.buildCopilotRouteInfos(routes, preferredModels),
     };
   }
@@ -144,33 +141,44 @@ export class SettingsModelSelectionController {
       !input.enabled &&
       this.getEffectiveHelperModel(current) === input.modelName;
 
-    await this.deps.state.setEnabledModels(updated);
+    await this.deps.globalState.update(GlobalStateKey.ENABLED_MODELS, updated);
     if (wasHelper) {
-      await this.deps.state.setHelperModel(DEFAULT_HELPER_MODEL);
+      await this.setHelperModel(DEFAULT_HELPER_MODEL);
     }
   }
 
   async setHelperModel(modelName: string): Promise<void> {
-    await this.deps.state.setHelperModel(modelName);
+    await this.deps.globalState.update(GlobalStateKey.HELPER_MODEL, modelName);
   }
 
   async setReasoningLevel(input: {
     modelName: string;
     level: ReasoningLevel | null;
   }): Promise<void> {
-    const overrides = {
-      ...(this.deps.state.getReasoningLevelOverrides() ?? {}),
-    };
+    const overrides = { ...this.getReasoningLevelOverrides() };
     if (input.level == null) {
       delete overrides[input.modelName];
     } else {
       overrides[input.modelName] = input.level;
     }
-    await this.deps.state.setReasoningLevelOverrides(overrides);
+    await this.deps.globalState.update(
+      GlobalStateKey.REASONING_LEVELS,
+      overrides,
+    );
   }
 
   async setPreferShortModelNames(enabled: boolean): Promise<void> {
-    await this.deps.state.setPreferShortModelNames(enabled);
+    await this.deps.globalState.update(
+      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+      enabled,
+    );
+  }
+
+  private getReasoningLevelOverrides(): Record<string, string> {
+    return this.deps.globalState.get<Record<string, string>>(
+      GlobalStateKey.REASONING_LEVELS,
+      {},
+    );
   }
 
   private async buildSelectionItems(
@@ -178,8 +186,7 @@ export class SettingsModelSelectionController {
     preferredCopilotModels: ReadonlySet<string>,
   ): Promise<ModelSelectionItem[]> {
     const enabledSet = new Set(this.getVisibleModels());
-    const reasoningOverrides =
-      this.deps.state.getReasoningLevelOverrides() ?? {};
+    const reasoningOverrides = this.getReasoningLevelOverrides();
 
     // Resolve availability (relay/included, personal-key, quota) once for the
     // models this host shows, via the same shared computation the CLI picker
@@ -241,7 +248,9 @@ export class SettingsModelSelectionController {
 
   private getEffectiveHelperModel(visibleModels: readonly string[]): string {
     return resolveEffectiveHelperModel(
-      this.deps.state.getHelperModel(),
+      this.deps.globalState.get<string | undefined>(
+        GlobalStateKey.HELPER_MODEL,
+      ),
       visibleModels,
     );
   }

@@ -314,18 +314,18 @@ export class DesktopProgressBridge {
           // assigned by the time either runs.
           retry: {
             show: (permission) =>
-              this.backend.webviewUpdater.showPermission({
+              this.backend.renderer.showPermission({
                 kind: PERMISSION_KIND.RETRY,
                 data: permission,
               }),
             dismiss: (id) =>
-              this.backend.webviewUpdater.resolvePermission(
+              this.backend.renderer.resolvePermission(
                 PERMISSION_KIND.RETRY,
                 id,
               ),
           },
           proposal: createAgentProposalTransport({
-            getWebviewUpdater: () => this.backend.webviewUpdater,
+            getRenderer: () => this.backend.renderer,
             isPending: (proposalId) =>
               this.backend.approvalHandlers.proposal.get(proposalId) !==
               undefined,
@@ -1025,13 +1025,14 @@ export class DesktopProgressBridge {
   }
 
   private getRunMetadata(streamId: StreamTabId): RunMetadata {
-    // Summary first for the execution edge (#9947), sidecar-backed record for
-    // the full config/identity fields the summary intentionally does not carry.
-    const summary = this.state.getStreamMetadata(streamId);
+    // The sidecar-backed record is the execution authority; fall back to the
+    // summary mirror only when the sidecar has no FK. The summary
+    // intentionally does not carry the full config/identity fields.
     const metadata = this.state.snapshots.getRunMetadata(streamId);
+    const summary = this.state.getStreamMetadata(streamId);
     return {
       ...metadata,
-      executionId: summary.executionId ?? metadata.executionId,
+      executionId: metadata.executionId ?? summary.executionId,
     };
   }
 

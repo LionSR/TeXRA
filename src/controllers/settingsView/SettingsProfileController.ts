@@ -1,4 +1,4 @@
-import { createChannelTrace } from '@agent/trace';
+import { createLog } from '@logger/logUtils';
 import { API_PROVIDERS } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
@@ -32,7 +32,7 @@ import {
 } from '@utils/config/providerConfig';
 import { buildProfileMessage } from './ProfileMessageBuilder';
 
-const logger = createChannelTrace('SettingsProfileController');
+const logger = createLog('SettingsProfileController');
 
 type SettingsReliabilitySetting = Omit<NumberSetting, 'value'> & {
   defaultValue: number;
@@ -79,34 +79,14 @@ type ApiAccessModeUpdate =
   | { readonly kind: 'rejected'; readonly reason: 'quota_exhausted' };
 
 /**
- * Provider wiring that is identical on every host: the provider catalog
- * itself and the region-aware lookups built on it. Supplied whole by
- * {@link getSharedProviderProfileDefaults} rather than a `Partial` of the full
- * deps, so the shared fragment is a complete, self-typed object.
- */
-interface SettingsProfileProviderDeps {
-  readonly providerIds: readonly string[];
-  readonly providerSettings: Record<string, readonly ProviderSettingDef[]>;
-  readonly providerDisplayNames: Record<string, string>;
-  readonly providerKeyUrls: Record<string, string>;
-  getProviderDisplayName(provider: string, defaultName: string): string;
-  getProviderKeyUrl(provider: string, defaultUrl: string): string;
-  getProviderStreaming(provider: string): boolean;
-  getProviderEndpoint(provider: string): string;
-  supportsCustomEndpoint(provider: string): boolean;
-  invalidateModelOptionsCache(): void;
-}
-
-/**
  * Host-supplied storage/secrets wiring: `globalState`,
  * `loadProviderKeyStatuses`, `getConfig`/`updateConfig`,
  * `setUseIncludedModelAccess`, and `refreshSpendingStatus` all depend on
- * host-specific storage and secrets, so each host must supply them. Keeping
- * them a separate, required half of {@link SettingsProfileControllerDeps}
- * means a host that forgets one fails at compile time instead of spreading a
- * `Partial` silently.
+ * host-specific storage and secrets, so each host must supply them. Everything
+ * else the controller needs — the provider catalog and the region-aware
+ * lookups built on it — is host-agnostic and read straight from its modules.
  */
-interface SettingsProfileHostDeps {
+interface SettingsProfileControllerDeps {
   readonly globalState: StateStore;
   loadProviderKeyStatuses(): Promise<
     Record<string, ProviderKeyStatus['status']>
@@ -115,29 +95,6 @@ interface SettingsProfileHostDeps {
   updateConfig(key: string, value: SettingsProfileConfigValue): Promise<void>;
   setUseIncludedModelAccess(enabled: boolean): Promise<void>;
   refreshSpendingStatus(): Promise<SpendingStatus | null>;
-}
-
-interface SettingsProfileControllerDeps
-  extends SettingsProfileProviderDeps, SettingsProfileHostDeps {}
-
-/**
- * Returns a fresh object per call rather than a shared exported literal, so
- * one host mutating its spread copy (`{ ...getSharedProviderProfileDefaults(), ... }`)
- * can never alias into the other host's controller.
- */
-export function getSharedProviderProfileDefaults(): SettingsProfileProviderDeps {
-  return {
-    providerIds: API_PROVIDERS,
-    providerSettings: PROVIDER_SETTINGS,
-    providerDisplayNames: PROVIDER_DISPLAY_NAMES,
-    providerKeyUrls: PROVIDER_URLS,
-    getProviderDisplayName,
-    getProviderKeyUrl,
-    getProviderStreaming,
-    getProviderEndpoint,
-    supportsCustomEndpoint,
-    invalidateModelOptionsCache,
-  };
 }
 
 export class SettingsProfileController {
@@ -151,7 +108,7 @@ export class SettingsProfileController {
     // appear under multiple providers, and the original lookup resolved to
     // the first match.
     this.providerSettingsByKey = new Map();
-    for (const setting of Object.values(deps.providerSettings).flat()) {
+    for (const setting of Object.values(PROVIDER_SETTINGS).flat()) {
       if (!this.providerSettingsByKey.has(setting.key)) {
         this.providerSettingsByKey.set(setting.key, setting);
       }
@@ -182,16 +139,16 @@ export class SettingsProfileController {
   }
 
   getProviderDisplayName(provider: string): string {
-    return this.deps.getProviderDisplayName(
+    return getProviderDisplayName(
       provider,
-      this.deps.providerDisplayNames[provider] ?? provider,
+      PROVIDER_DISPLAY_NAMES[provider] ?? provider,
     );
   }
 
   getProviderKeyUrl(provider: string): string | undefined {
-    const defaultUrl = this.deps.providerKeyUrls[provider];
+    const defaultUrl = PROVIDER_URLS[provider];
     if (!defaultUrl) return undefined;
-    return this.deps.getProviderKeyUrl(provider, defaultUrl);
+    return getProviderKeyUrl(provider, defaultUrl);
   }
 
   async setApiAccessMode(mode: ApiAccessMode): Promise<ApiAccessModeUpdate> {
@@ -223,7 +180,7 @@ export class SettingsProfileController {
       openRouterDisabled = true;
     }
 
-    this.deps.invalidateModelOptionsCache();
+    invalidateModelOptionsCache();
     return { kind: 'updated', mode, openRouterDisabled };
   }
 
@@ -257,7 +214,7 @@ export class SettingsProfileController {
       providerSetting?.globalStateKey === GlobalStateKey.USE_OPENROUTER ||
       providerSetting?.globalStateKey === GlobalStateKey.KIMI_CODE_PREFER;
     if (affectsModelAvailability) {
-      this.deps.invalidateModelOptionsCache();
+      invalidateModelOptionsCache();
     }
     return { kind: 'updated', affectsModelAvailability };
   }
@@ -267,20 +224,20 @@ export class SettingsProfileController {
    */
   private async getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
     const secretStatuses = await this.deps.loadProviderKeyStatuses();
-    return this.deps.providerIds.map((provider) => ({
+    return API_PROVIDERS.map((provider) => ({
       provider,
       displayName: this.getProviderDisplayName(provider),
       status: secretStatuses[provider] ?? 'not-set',
       keyUrl: this.getProviderKeyUrl(provider) ?? '',
-      streaming: this.deps.getProviderStreaming(provider),
-      customEndpoint: this.deps.getProviderEndpoint(provider),
-      supportsCustomEndpoint: this.deps.supportsCustomEndpoint(provider),
+      streaming: getProviderStreaming(provider),
+      customEndpoint: getProviderEndpoint(provider),
+      supportsCustomEndpoint: supportsCustomEndpoint(provider),
       providerSettings: this.getProviderSettings(provider),
     }));
   }
 
   private getProviderSettings(provider: string): ProviderSetting[] {
-    const defs = this.deps.providerSettings[provider];
+    const defs = PROVIDER_SETTINGS[provider];
     if (!defs) return [];
     return defs.map((def) => ({
       ...def,

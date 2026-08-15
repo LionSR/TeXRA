@@ -25,10 +25,7 @@ import {
   planToolTerminalAction,
 } from '@controllers/settingsView/ToolDashboardData';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
-import {
-  SettingsProfileController,
-  getSharedProviderProfileDefaults,
-} from '@controllers/settingsView/SettingsProfileController';
+import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import {
@@ -180,7 +177,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       },
     });
     this.profileController = new SettingsProfileController({
-      ...getSharedProviderProfileDefaults(),
       globalState: globalSM,
       loadProviderKeyStatuses: () =>
         loadApiKeyStatusMap(platform().secrets, SecretManager.API_PROVIDERS),

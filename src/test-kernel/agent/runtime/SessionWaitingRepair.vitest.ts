@@ -124,6 +124,42 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
   });
 
+  it('prefers the persisted sidecar FK over a divergent summary mirror', async () => {
+    seedCancelled();
+    // Flush the run.start fact so the sidecar carries the authoritative FK,
+    // then evict the resident record so the probe is forced to read the cold
+    // sidecar instead of answering from the always-resident snapshot.
+    await session.snapshots.flush();
+    session.snapshots.evictAll();
+    const divergentExecutionId = `c${executionId.slice(1)}` as ExecutionId;
+    session.transcripts.recordSummaryMeta(streamId, {
+      executionId: divergentExecutionId,
+    });
+    mockResumable();
+
+    await expect(repair()).resolves.toBe(true);
+
+    expect(deriveResumability).toHaveBeenCalledWith(executionId);
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+  });
+
+  it('does not reject follow-ups when the ownership recheck becomes unreadable', async () => {
+    seedCancelled();
+    // Start from a cold sidecar so the probe's initial ownership read and its
+    // recheck both go through `readPersistedExecutionId`.
+    await session.snapshots.flush();
+    session.snapshots.evictAll();
+    mockResumable();
+    vi.spyOn(session.snapshots, 'readPersistedExecutionId')
+      .mockResolvedValueOnce(executionId)
+      .mockRejectedValueOnce(new Error('ownership recheck failed'));
+
+    await expect(repair()).resolves.toBe(false);
+
+    expect(deriveResumability).toHaveBeenCalledWith(executionId);
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+  });
+
   it('leaves the terminal phase alone when the execution is not resumable', async () => {
     seedCancelled();
     deriveResumability.mockResolvedValue({
@@ -162,6 +198,18 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     expect(deriveResumability).not.toHaveBeenCalled();
   });
 
+  it('does not reject follow-ups when the persisted ownership read fails for an unseeded stream', async () => {
+    const unseededStream = `${streamId}:unseeded` as StreamTabId;
+    vi.spyOn(
+      session.snapshots,
+      'readPersistedExecutionId',
+    ).mockRejectedValueOnce(new Error('storage read failed'));
+
+    await expect(repair(unseededStream)).resolves.toBe(false);
+
+    expect(deriveResumability).not.toHaveBeenCalled();
+  });
+
   it('collapses concurrent probes for one stream onto the first', async () => {
     seedCancelled();
     const deferred = createDeferredResumability();
@@ -170,7 +218,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     const first = repair();
     const second = repair();
 
-    expect(deriveResumability).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
 
     deferred.resolve();
     await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
@@ -185,6 +233,32 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     });
     await expect(repair()).resolves.toBe(false);
     expect(deriveResumability).toHaveBeenCalledTimes(2);
+  });
+
+  it('starts a distinct probe when resident and cold authorities would revalidate differently', async () => {
+    seedCancelled();
+    const residentDeferred = createDeferredResumability();
+    const coldDeferred = createDeferredResumability();
+    deriveResumability
+      .mockImplementationOnce(() => residentDeferred.promise)
+      .mockImplementationOnce(() => coldDeferred.promise);
+
+    const resident = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
+
+    // Move the same stream to a cold sidecar while the resident probe is still
+    // in flight. The in-flight slot must not be reused: a cold probe revalidates
+    // against the sidecar, not the resident snapshot record.
+    await session.snapshots.flush();
+    session.snapshots.evictAll();
+    const cold = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(2));
+
+    coldDeferred.resolve();
+    await expect(cold).resolves.toBe(true);
+    residentDeferred.resolve();
+    await expect(resident).resolves.toBe(false);
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
   });
 
   it('shares rejection and releases the probe slot for retry', async () => {
@@ -210,6 +284,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     mockDeferredProbe(deferred);
 
     const first = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
     const second = repair();
 
@@ -227,6 +302,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     mockDeferredProbe(deferred);
 
     const pending = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
     session.status.clearStream(streamId);
     // Public residency reset - the per-stream evict is store-internal.
     session.snapshots.evictAll();
@@ -242,8 +318,10 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     mockDeferredProbe(deferred);
 
     const pending = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
     const replacementExecutionId = `c${executionId.slice(1)}` as ExecutionId;
     ownStream(replacementExecutionId);
+    await session.snapshots.flush();
     deferred.resolve();
 
     await expect(pending).resolves.toBe(false);
@@ -262,9 +340,12 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     );
 
     const original = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
     const replacementExecutionId = `d${executionId.slice(1)}` as ExecutionId;
     ownStream(replacementExecutionId);
+    await session.snapshots.flush();
     const replacement = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(2));
 
     expect(deriveResumability).toHaveBeenNthCalledWith(1, executionId);
     expect(deriveResumability).toHaveBeenNthCalledWith(
@@ -285,6 +366,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     mockDeferredProbe(deferred);
 
     const pending = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
     session.status.clearStream(streamId);
     seedCancelled();
     deferred.resolve();
@@ -300,6 +382,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     mockDeferredProbe(deferred);
 
     const first = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
     const firstRejection = expect(first).rejects.toBe(failure);
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
     session.status.transition(streamId, STREAM_PHASE.WAITING, 'wait');
@@ -321,19 +404,20 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
       .mockImplementationOnce(() => secondDeferred.promise);
 
     const first = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
     session.status.clearStream(streamId);
     seedCancelled();
     const second = repair();
-    expect(deriveResumability).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(2));
 
     firstDeferred.resolve();
     await expect(first).resolves.toBe(false);
 
     const third = repair();
-    expect(deriveResumability).toHaveBeenCalledTimes(2);
     secondDeferred.resolve();
 
     await expect(Promise.all([second, third])).resolves.toEqual([true, true]);
+    expect(deriveResumability).toHaveBeenCalledTimes(2);
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
   });
 });

@@ -11,6 +11,7 @@ import {
 import * as waitingDetection from '@agent/storage/detectWaitingStreams';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
+import * as restartRepair from '@agent/runtime/restartRepair';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { platform } from '@platform/platform';
 import {
@@ -411,6 +412,250 @@ describe('SessionHandle restart repair', () => {
       session.repairWaitingIfResumable(parkedStreamId),
     ).resolves.toBe(true);
     expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
+  });
+
+  it('resolves waiting-stream ownership from the sidecar FK when the summary mirror diverges', async () => {
+    const sidecarExecutionId = 'b0a00007' as ExecutionId;
+    const summaryExecutionId = 'b0a00008' as ExecutionId;
+    const settledStream = 'settled#divergent-mirror' as StreamTabId;
+
+    const transcripts = await StreamLogStore.open();
+    appendRunningGroup(transcripts, settledStream, 'settled-divergent-group');
+    await transcripts.endRunningGroupsForStreams(
+      [settledStream],
+      2_000,
+      RUN_OUTCOME.COMPLETED,
+    );
+    await transcripts.flush();
+    transcripts.recordSummaryMeta(settledStream, {
+      executionId: summaryExecutionId,
+    });
+    await seedSidecarFk(settledStream, sidecarExecutionId);
+
+    const executionStore = getExecutionStore(sidecarExecutionId);
+    await executionStore.writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await executionStore.write(flowKey(sidecarExecutionId), validFlowRecord);
+
+    const session = openDeferredSession(transcripts);
+    await session.waitUntilReady();
+
+    // The summary mirror names a different (non-resumable) execution; repair
+    // must follow the persisted sidecar FK and park the stream as WAITING.
+    expect(session.status.get(settledStream)).toBe(STREAM_PHASE.WAITING);
+  });
+
+  it('preloads parked WAITING streams before publishing restart status', async () => {
+    const parkedExecutionId = 'b0a00009' as ExecutionId;
+    const parkedStreamId = 'parked#waiting-preload' as StreamTabId;
+
+    const transcripts = await StreamLogStore.open();
+    transcripts.ensureStream(parkedStreamId);
+    await transcripts.flush();
+    await seedSidecarFk(parkedStreamId, parkedExecutionId);
+
+    const executionStore = getExecutionStore(parkedExecutionId);
+    await executionStore.writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await executionStore.write(flowKey(parkedExecutionId), validFlowRecord);
+
+    const session = openDeferredSession(transcripts);
+    const preload = vi.spyOn(session.snapshots, 'preload');
+    const repair = vi.spyOn(restartRepair, 'repairRestartedStreams');
+
+    await session.waitUntilReady();
+
+    expect(preload).toHaveBeenCalledTimes(2);
+    expect([...preload.mock.calls[1][0]]).toEqual([parkedStreamId]);
+    expect(preload.mock.calls[1][1]).toEqual({ usageOnly: true });
+    expect(preload.mock.invocationCallOrder[1]).toBeLessThan(
+      repair.mock.invocationCallOrder[0],
+    );
+    expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
+  });
+
+  it('skips a later waiting candidate reused while an earlier candidate is repairing', async () => {
+    const firstExecutionId = 'b0a00013' as ExecutionId;
+    const firstStreamId = 'parked#waiting-loop-first' as StreamTabId;
+    const secondExecutionId = 'b0a00014' as ExecutionId;
+    const secondStreamId = 'parked#waiting-loop-second' as StreamTabId;
+
+    const transcripts = await StreamLogStore.open();
+    transcripts.ensureStream(firstStreamId);
+    transcripts.ensureStream(secondStreamId);
+    await transcripts.flush();
+    await seedSidecarFk(firstStreamId, firstExecutionId);
+    await seedSidecarFk(secondStreamId, secondExecutionId);
+    await getExecutionStore(firstExecutionId).writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await getExecutionStore(firstExecutionId).write(
+      flowKey(firstExecutionId),
+      validFlowRecord,
+    );
+    await getExecutionStore(secondExecutionId).writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await getExecutionStore(secondExecutionId).write(
+      flowKey(secondExecutionId),
+      validFlowRecord,
+    );
+    vi.spyOn(waitingDetection, 'detectWaitingStreams').mockResolvedValue(
+      new Set([firstStreamId, secondStreamId]),
+    );
+
+    let releaseFirstClose!: () => void;
+    const firstCloseGate = new Promise<void>((resolve) => {
+      releaseFirstClose = resolve;
+    });
+    const originalEnd =
+      transcripts.endRunningGroupsForStreams.bind(transcripts);
+    vi.spyOn(transcripts, 'endRunningGroupsForStreams').mockImplementation(
+      async (streamIds, now, status) => {
+        if (streamIds.includes(firstStreamId)) {
+          await firstCloseGate;
+        }
+        return originalEnd(streamIds, now, status);
+      },
+    );
+
+    const session = openDeferredSession(transcripts);
+    const readiness = session.waitUntilReady();
+    await vi.waitFor(() => {
+      expect(transcripts.endRunningGroupsForStreams).toHaveBeenCalled();
+    });
+
+    // The first candidate is blocked inside its lease-held repair. Reuse the
+    // second stream now; per-stream revalidation must skip it when the loop
+    // reaches it instead of parking the new run with stale waiting state.
+    session.status.transition(
+      secondStreamId,
+      STREAM_PHASE.RUNNING,
+      'lifecycle',
+    );
+    releaseFirstClose();
+
+    await readiness;
+    expect(session.status.get(firstStreamId)).toBe(STREAM_PHASE.WAITING);
+    expect(session.status.get(secondStreamId)).toBe(STREAM_PHASE.RUNNING);
+  });
+
+  it('does not park a waiting stream whose status generation changed during detection', async () => {
+    const parkedExecutionId = 'b0a00012' as ExecutionId;
+    const parkedStreamId = 'parked#waiting-generation-change' as StreamTabId;
+
+    const transcripts = await StreamLogStore.open();
+    transcripts.ensureStream(parkedStreamId);
+    await transcripts.flush();
+    await seedSidecarFk(parkedStreamId, parkedExecutionId);
+
+    const executionStore = getExecutionStore(parkedExecutionId);
+    await executionStore.writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await executionStore.write(flowKey(parkedExecutionId), validFlowRecord);
+
+    let finishDetection: ((streams: Set<StreamTabId>) => void) | undefined;
+    const detectionBlocked = new Promise<Set<StreamTabId>>((resolve) => {
+      finishDetection = resolve;
+    });
+    vi.spyOn(waitingDetection, 'detectWaitingStreams').mockReturnValue(
+      detectionBlocked,
+    );
+
+    const session = openDeferredSession(transcripts);
+    const readiness = session.waitUntilReady();
+    await vi.waitFor(() => {
+      expect(waitingDetection.detectWaitingStreams).toHaveBeenCalledOnce();
+    });
+
+    // A live run reuses the stream while detection is blocked. The generation
+    // recheck before repair must drop the stale WAITING candidate instead of
+    // parking this now-running stream.
+    session.status.transition(
+      parkedStreamId,
+      STREAM_PHASE.RUNNING,
+      'lifecycle',
+    );
+    finishDetection?.(new Set([parkedStreamId]));
+
+    await readiness;
+    expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.RUNNING);
+  });
+
+  it('isolates one unreadable parked WAITING preload so session startup still publishes WAITING', async () => {
+    const parkedExecutionId = 'b0a00010' as ExecutionId;
+    const parkedStreamId = 'parked#waiting-preload-failure' as StreamTabId;
+
+    const transcripts = await StreamLogStore.open();
+    transcripts.ensureStream(parkedStreamId);
+    await transcripts.flush();
+    await seedSidecarFk(parkedStreamId, parkedExecutionId);
+
+    const executionStore = getExecutionStore(parkedExecutionId);
+    await executionStore.writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await executionStore.write(flowKey(parkedExecutionId), validFlowRecord);
+
+    const session = openDeferredSession(transcripts);
+    const originalPreload = session.snapshots.preload.bind(session.snapshots);
+    const preload = vi
+      .spyOn(session.snapshots, 'preload')
+      .mockImplementation(async (streamIds) => {
+        if (streamIds.includes(parkedStreamId)) {
+          throw new Error('parked sidecar unreadable');
+        }
+        await originalPreload(streamIds);
+      });
+
+    await expect(session.waitUntilReady()).resolves.toBeUndefined();
+
+    expect(preload).toHaveBeenCalledTimes(2);
+    // The stream is still marked WAITING; only its usage hydration was skipped.
+    expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
+  });
+
+  it('preserves summary-only WAITING ownership without rewriting the sidecar', async () => {
+    const parkedExecutionId = 'b0a00011' as ExecutionId;
+    const parkedStreamId = 'parked#waiting-summary-only' as StreamTabId;
+
+    const transcripts = await StreamLogStore.open();
+    transcripts.ensureStream(parkedStreamId);
+    transcripts.recordSummaryMeta(parkedStreamId, {
+      executionId: parkedExecutionId,
+    });
+    await transcripts.flush();
+
+    const executionStore = getExecutionStore(parkedExecutionId);
+    await executionStore.writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await executionStore.write(flowKey(parkedExecutionId), validFlowRecord);
+
+    const session = openDeferredSession(transcripts);
+    await session.waitUntilReady();
+
+    // The legacy stream has no sidecar FK, only a summary mirror entry. Its
+    // usage-only preload must not republish the summary from an empty/corrupt
+    // sidecar meta, so the summary ownership and the absent sidecar FK both
+    // stay exactly as they were.
+    expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
+    expect(
+      session.transcripts.getSummaryMeta(parkedStreamId)?.executionId,
+    ).toBe(parkedExecutionId);
+    await expect(
+      session.snapshots.readPersistedExecutionId(parkedStreamId),
+    ).resolves.toBeUndefined();
   });
 
   it('preserves mapped runs and fails only unmapped streams when resumability detection fails', async () => {

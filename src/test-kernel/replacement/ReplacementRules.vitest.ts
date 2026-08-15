@@ -552,6 +552,24 @@ describe('stripCriticizeAnnotations', () => {
       count: 1,
     },
     {
+      name: 'handles doubly-nested braces inside \\criticize arguments',
+      input: `before\n\\criticize{see \\sqrt{\\frac{a}{b}}}{2}{3}\nafter`,
+      content: `before\nafter`,
+      count: 1,
+    },
+    {
+      name: 'strips a \\criticize call with whitespace before its arguments',
+      input: `before\n\\criticize {x} {1} {2}\nafter`,
+      content: `before\nafter`,
+      count: 1,
+    },
+    {
+      name: 'strips a \\criticize call with an escaped brace in the message',
+      input: `before\n\\criticize{a\\}b}{2}{3}\nafter`,
+      content: `before\nafter`,
+      count: 1,
+    },
+    {
       name: 'is a no-op when content has no \\criticize',
       input: `no annotations here`,
       content: `no annotations here`,

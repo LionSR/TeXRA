@@ -12,7 +12,6 @@ import {
   WebviewBridge,
   type ProgressViewMessageSender,
 } from '@controllers/progressView/backend/WebviewBridge';
-import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import { LitSessionRenderer } from '@controllers/progressView/backend/LitSessionRenderer';
 import { ProgressPresentationState } from '@controllers/progressView/backend/ProgressPresentationState';
 import { ProgressStreamProjectionBuilder } from '@controllers/progressView/backend/ProgressStreamProjectionBuilder';
@@ -46,7 +45,7 @@ const log = createLog('ProgressBackend');
 
 type ProgressBackendApprovalOptions = Omit<
   BuildApprovalRequestHandlerSetParams,
-  'webviewUpdater'
+  'renderer'
 >;
 
 interface ProgressBackendLifecycleOptions {
@@ -83,7 +82,7 @@ export interface ProgressBackendOptions {
   /**
    * Commands this host's progressView inbound registry declares
    * `unsupported(...)` — pass `() => unsupportedCommands(registry)`. Threaded
-   * to {@link WebviewUpdater} so the frontend's capability gating stays a
+   * to {@link LitSessionRenderer} so the frontend's capability gating stays a
    * projection of the registry.
    */
   getUnsupportedCommands?: () => readonly string[];
@@ -99,7 +98,8 @@ export interface ProgressBackendOptions {
 export class ProgressBackend {
   readonly state: SessionState;
   readonly presentation: ProgressPresentationState;
-  readonly webviewUpdater: WebviewUpdater;
+  /** The single owner of Lit/progress-view delivery for this backend. */
+  readonly renderer: LitSessionRenderer;
   readonly webviewBridge: WebviewBridge;
   readonly projections: ProgressStreamProjectionBuilder;
   readonly approvalHandlers: ApprovalRequestHandlerSet;
@@ -107,7 +107,6 @@ export class ProgressBackend {
     update: HostApprovalBypassStateUpdate,
   ) => void;
   private readonly factApplier: SessionFactApplier;
-  private readonly litRenderer: LitSessionRenderer;
   private readonly session: SessionHandle;
   private readonly lifecycle: ProgressBackendLifecycleOptions;
   private readonly reportTranscriptLoadError: ProgressBackendOptions['reportTranscriptLoadError'];
@@ -145,11 +144,6 @@ export class ProgressBackend {
     };
     this.state = new SessionState(this.session, options.stores);
     this.presentation = new ProgressPresentationState(options.storage);
-    this.webviewUpdater = new WebviewUpdater(
-      this.postMessage,
-      options.hasTarget,
-      options.getUnsupportedCommands,
-    );
     this.projections = new ProgressStreamProjectionBuilder(
       this.state,
       options.getStreamControls,
@@ -159,37 +153,31 @@ export class ProgressBackend {
       options.sendMessage,
       () => this.presentation.activeStream || null,
     );
-
-    this.approvalHandlers = buildApprovalRequestHandlerSet({
-      ...options.approvals,
-      webviewUpdater: this.webviewUpdater,
-    });
-    const ui = createProgressBackendUiConfig({
-      handlers: this.approvalHandlers,
-      webviewUpdater: this.webviewUpdater,
-      canSend: options.approvals.canSend,
-    });
-    this.hasPendingPermissions = ui.hasPendingPermissions;
-    this.litRenderer = new LitSessionRenderer(
+    this.renderer = new LitSessionRenderer(
       this.projections,
       this.state.snapshots,
       this.state.followUps,
-      this.webviewUpdater,
       this.webviewBridge,
+      this.postMessage,
+      options.hasTarget,
       () => this.presentation.activeStream,
+      options.getUnsupportedCommands,
     );
-    this.factApplier = new SessionFactApplier(this.state, this.litRenderer, {
+
+    this.approvalHandlers = buildApprovalRequestHandlerSet({
+      ...options.approvals,
+      renderer: this.renderer,
+    });
+    const ui = createProgressBackendUiConfig({
+      handlers: this.approvalHandlers,
+      renderer: this.renderer,
+      canSend: options.approvals.canSend,
+    });
+    this.hasPendingPermissions = ui.hasPendingPermissions;
+    this.factApplier = new SessionFactApplier(this.state, this.renderer, {
       deleteStream: (stream) => this.deleteStream(stream),
     });
     this.setApprovalBypassState = ui.setApprovalBypassState;
-  }
-
-  /** Full active-viewport rebuild for the Lit progress surface. */
-  syncStreamContent(
-    stream: Parameters<LitSessionRenderer['syncStreamContent']>[0],
-    options?: Parameters<LitSessionRenderer['syncStreamContent']>[1],
-  ): void {
-    this.litRenderer.syncStreamContent(stream, options);
   }
 
   /** Rebuild stream tabs and, when requested, rehydrate the active viewport. */
@@ -213,7 +201,7 @@ export class ProgressBackend {
     if (options.syncActiveStream && pendingSelectableActivation) {
       projectedStream = this.latestActivationTarget;
     }
-    this.webviewUpdater.sendStreamMetadata(
+    this.renderer.sendStreamMetadata(
       this.projections.streamRoster(
         projectedStream,
         this.state.streamStatus.getAllStreamStates(),
@@ -248,7 +236,7 @@ export class ProgressBackend {
       this.activationGeneration += 1;
       this.latestActivationTarget = stream;
       if (requestId) {
-        this.webviewUpdater.settleStreamSelection(
+        this.renderer.settleStreamSelection(
           requestId,
           'rejected',
           this.presentation.activeStream,
@@ -262,7 +250,7 @@ export class ProgressBackend {
       });
       if (!committed) await this.recoverFromFailedActivation(stream);
       if (requestId) {
-        this.webviewUpdater.settleStreamSelection(
+        this.renderer.settleStreamSelection(
           requestId,
           committed ? 'accepted' : 'superseded',
           this.presentation.activeStream,
@@ -272,7 +260,7 @@ export class ProgressBackend {
       this.reportTranscriptLoadError(error, stream);
       await this.recoverFromFailedActivation(stream);
       if (requestId) {
-        this.webviewUpdater.settleStreamSelection(
+        this.renderer.settleStreamSelection(
           requestId,
           'rejected',
           this.presentation.activeStream,
@@ -326,16 +314,16 @@ export class ProgressBackend {
       const previousStream = this.presentation.activeStream;
       this.presentation.select('');
       this.releasePresentationLeases();
-      if (this.litRenderer.isAvailable()) {
-        this.litRenderer.onActiveStreamChanged('');
-        this.litRenderer.syncStreamContent('', { includeActiveState: true });
+      if (this.renderer.isAvailable()) {
+        this.renderer.onActiveStreamChanged('');
+        this.renderer.syncStreamContent('', { includeActiveState: true });
         if (previousStream) {
-          this.webviewUpdater.releaseStreamContent(previousStream);
+          this.renderer.releaseStreamContent(previousStream);
         }
       }
       return true;
     }
-    if (!this.litRenderer.isAvailable()) {
+    if (!this.renderer.isAvailable()) {
       this.presentation.select(stream);
       this.releasePresentationLeases();
       return true;
@@ -383,11 +371,10 @@ export class ProgressBackend {
     const previousTranscriptLease = this.transcriptPresentationLease;
     this.transcriptPresentationLease = transcriptLeaseResult.value;
     this.presentation.select(stream);
-    if (options.notifyActivation)
-      this.litRenderer.onActiveStreamChanged(stream);
-    this.litRenderer.syncStreamContent(stream, { includeActiveState: true });
+    if (options.notifyActivation) this.renderer.onActiveStreamChanged(stream);
+    this.renderer.syncStreamContent(stream, { includeActiveState: true });
     if (previousStream && previousStream !== stream) {
-      this.webviewUpdater.releaseStreamContent(previousStream);
+      this.renderer.releaseStreamContent(previousStream);
     }
     if (previousTranscriptLease !== transcriptLeaseResult.value)
       previousTranscriptLease?.close();
@@ -466,10 +453,15 @@ export class ProgressBackend {
     const storageGeneration = this.storageGeneration;
     const retained = await this.enqueuePreparedStorageOperation(
       () => this.prepareStreamDeletion(stream),
-      () =>
-        storageGeneration === this.storageGeneration
-          ? this.deleteStreamNow(stream, wasActive, activationGeneration)
-          : Promise.resolve(undefined),
+      (ownershipReadFailed) => {
+        if (storageGeneration !== this.storageGeneration) {
+          return Promise.resolve(undefined);
+        }
+        if (ownershipReadFailed) {
+          return Promise.resolve('failed' as const);
+        }
+        return this.deleteStreamNow(stream, wasActive, activationGeneration);
+      },
     );
     if (retained) {
       await this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
@@ -497,7 +489,9 @@ export class ProgressBackend {
    * so the all-delete path can run it over every stream without changing
    * behavior.
    */
-  private async prepareStreamDeletionCore(stream: StreamTabId): Promise<void> {
+  private async prepareStreamDeletionCore(
+    stream: StreamTabId,
+  ): Promise<boolean> {
     const ownedLocally =
       this.session.executions.getAgentHandleByStream(stream) !== undefined;
     if (ownedLocally && isInFlightPhase(this.session.status.get(stream))) {
@@ -507,13 +501,22 @@ export class ProgressBackend {
     // A terminal child is untracked before its artifact flush releases the
     // execution lease. Auto-close can land in that interval, so the handle is
     // not a reliable indication that local durable writes have finished.
-    await this.state.stores.waitForOwnedExecutionRelease(stream);
+    try {
+      await this.state.stores.waitForOwnedExecutionRelease(stream);
+      return false;
+    } catch (error) {
+      log.warn(
+        `Stream ${stream} was retained because its execution ownership could not be read`,
+        { data: error },
+      );
+      return true;
+    }
   }
 
-  private async prepareStreamDeletion(stream: StreamTabId): Promise<void> {
-    if (!canUseStreamDataDir(stream)) return;
-    if (!this.hasDeletableStreamData(stream)) return;
-    await this.prepareStreamDeletionCore(stream);
+  private async prepareStreamDeletion(stream: StreamTabId): Promise<boolean> {
+    if (!canUseStreamDataDir(stream)) return false;
+    if (!this.hasDeletableStreamData(stream)) return false;
+    return this.prepareStreamDeletionCore(stream);
   }
 
   private async deleteStreamNow(
@@ -582,7 +585,7 @@ export class ProgressBackend {
     const storageGeneration = this.storageGeneration;
     const outcome = await this.enqueuePreparedStorageOperation(
       () => this.prepareAllStreamDeletions(),
-      () =>
+      (_prepared) =>
         storageGeneration === this.storageGeneration
           ? this.deleteAllStreamsNow()
           : Promise.resolve(undefined),
@@ -607,6 +610,9 @@ export class ProgressBackend {
     // Runs the per-stream prepare over every known stream — deliberately
     // without the single-delete guards, so in-flight reserved-segment streams
     // are still stopped before clearAll() exactly as before the shared core.
+    // Ownership-read failures are already converted to a per-stream result by
+    // `prepareStreamDeletionCore`; `clearAll` reports those streams through
+    // its own failed set.
     await Promise.all(
       this.state.streamLogs
         .keys()
@@ -721,19 +727,22 @@ export class ProgressBackend {
    * preparation outside the queue. An earlier root replacement may be waiting
    * for the same execution leases and must be able to observe their release.
    */
-  private enqueuePreparedStorageOperation<T>(
-    prepare: () => Promise<void>,
-    work: () => Promise<T>,
+  private enqueuePreparedStorageOperation<T, P>(
+    prepare: () => Promise<P>,
+    work: (prepared: P) => Promise<T>,
   ): Promise<T> {
+    let prepared!: P;
     let publishPreparation!: (value: PromiseLike<void>) => void;
     const preparation = new Promise<void>((resolve) => {
       publishPreparation = resolve;
     });
     const operation = this.enqueueStorageOperation(async () => {
       await preparation;
-      return work();
+      return work(prepared);
     });
-    const pendingPreparation = Promise.resolve().then(prepare);
+    const pendingPreparation = Promise.resolve().then(async () => {
+      prepared = await prepare();
+    });
     // If an earlier queue entry is still running, attach a rejection handler
     // until this operation reaches the same promise.
     void preparation.catch(() => undefined);

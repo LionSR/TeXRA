@@ -8,7 +8,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { LitSessionRenderer } from '@controllers/progressView/backend/LitSessionRenderer';
 import { ProgressStreamProjectionBuilder } from '@controllers/progressView/backend/ProgressStreamProjectionBuilder';
 import type { GetProgressStreamControls } from '@controllers/progressView/progressStreamControls';
-import type { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import type { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import { SessionState } from '@controllers/session/SessionState';
 import type {
@@ -24,6 +23,7 @@ import type {
   TokenUsageStats,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
 
@@ -94,12 +94,6 @@ async function createSyncHarness(
   const state = new SessionState();
   await state.snapshots.load([]);
   const messages: SyncStreamContentPayload[] = [];
-  const updater = {
-    isAvailable: () => true,
-    sendSyncStreamContent: (payload: SyncStreamContentPayload) => {
-      messages.push(payload);
-    },
-  } as unknown as WebviewUpdater;
   const bridge = {
     syncStream: vi.fn(),
     clearAll: vi.fn(),
@@ -109,8 +103,15 @@ async function createSyncHarness(
     projections,
     state.snapshots,
     state.followUps,
-    updater,
     bridge,
+    (message) => {
+      if (message.command !== PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT) {
+        return;
+      }
+      const { command: _command, ...payload } = message;
+      messages.push(payload);
+    },
+    () => true,
   );
   return { state, messages, bridge, renderer };
 }

@@ -1,55 +1,31 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   SettingsProfileController,
   type SettingsProfileConfigValue,
 } from '@controllers/settingsView/SettingsProfileController';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas';
 import type { SpendingStatus } from '@shared/schemas';
-import type { ProviderSettingDef } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
+
+// The controller reads the shipped provider catalog directly, so the picker
+// invalidation it triggers is the real module function; count it here.
+vi.mock('@model/computeModelOptions', () => ({
+  invalidateModelOptionsCache: vi.fn(),
+}));
 
 const MAX_ATTEMPTS_KEY = 'texra.model.retry.maxAttempts';
 const INVALID_MAX_ATTEMPTS = [2.5, 6];
 const COMPACTION_KEY = 'texra.model.compactionThresholdPercent';
 
-const providerSettings = {
-  openai: [
-    {
-      key: 'texra.model.useOpenAIResponsesAPI',
-      label: 'Responses API',
-      description: 'Use Responses API',
-      defaultValue: true,
-    },
-  ],
-  google: [
-    {
-      key: 'texra.model.useGoogleInteractionsServerState',
-      label: 'Server state',
-      description: 'Use Google server-side conversation state',
-      defaultValue: true,
-    },
-  ],
-  openRouter: [
-    {
-      key: GlobalStateKey.USE_OPENROUTER,
-      label: 'Use OpenRouter',
-      description: 'Route through OpenRouter',
-      globalStateKey: GlobalStateKey.USE_OPENROUTER,
-    },
-  ],
-  kimiCode: [
-    {
-      key: GlobalStateKey.KIMI_CODE_PREFER,
-      label: 'Prefer Kimi Code',
-      description: 'Route dual-backend Kimi models through Kimi Code',
-      defaultValue: false,
-      globalStateKey: GlobalStateKey.KIMI_CODE_PREFER,
-    },
-  ],
-} satisfies Record<string, readonly ProviderSettingDef[]>;
+const invalidations = vi.mocked(invalidateModelOptionsCache);
+
+beforeEach(() => {
+  invalidations.mockClear();
+});
 
 function createController(
   options: {
@@ -60,39 +36,20 @@ function createController(
 ): {
   controller: SettingsProfileController;
   includedAccessUpdates: boolean[];
-  invalidations: { count: number };
   config: Record<string, SettingsProfileConfigValue>;
 } {
   const includedAccessUpdates: boolean[] = [];
-  const invalidations = { count: 0 };
   const config = options.config ?? {};
   const state = options.state ?? new FakeStateStore();
 
   return {
     controller: new SettingsProfileController({
       globalState: state,
-      providerIds: ['openai', 'google', 'openRouter'],
-      providerSettings,
-      providerDisplayNames: {
-        openai: 'OpenAI',
-        google: 'Google',
-        openRouter: 'OpenRouter',
-      },
-      providerKeyUrls: {
-        openai: 'https://platform.openai.com/api-keys',
-        google: 'https://aistudio.google.com/app/apikey',
-        openRouter: 'https://openrouter.ai/keys',
-      },
       loadProviderKeyStatuses: async () => ({
         openai: 'set',
         google: 'not-set',
         openRouter: 'not-set',
       }),
-      getProviderDisplayName: (_provider, defaultName) => defaultName,
-      getProviderKeyUrl: (_provider, defaultUrl) => defaultUrl,
-      getProviderStreaming: () => true,
-      getProviderEndpoint: () => '',
-      supportsCustomEndpoint: () => false,
       getConfig: <T>(key: string, defaultValue: T): T =>
         (Object.hasOwn(config, key) ? config[key] : defaultValue) as T,
       updateConfig: async (key, value) => {
@@ -103,12 +60,8 @@ function createController(
       },
       refreshSpendingStatus:
         options.refreshSpendingStatus ?? (async () => null),
-      invalidateModelOptionsCache: () => {
-        invalidations.count += 1;
-      },
     }),
     includedAccessUpdates,
-    invalidations,
     config,
   };
 }
@@ -127,15 +80,17 @@ describe('SettingsProfileController', () => {
         [GlobalStateKey.USE_OPENROUTER]: true,
       });
       const refresh = vi.fn(refreshSpendingStatus);
-      const { controller, includedAccessUpdates, invalidations } =
-        createController({ state, refreshSpendingStatus: refresh });
+      const { controller, includedAccessUpdates } = createController({
+        state,
+        refreshSpendingStatus: refresh,
+      });
 
       const update = await controller.setApiAccessMode('included');
 
       expect(refresh).toHaveBeenCalledOnce();
       expect(includedAccessUpdates).toEqual([true]);
       expect(state.get(GlobalStateKey.USE_OPENROUTER, true)).toBe(false);
-      expect(invalidations.count).toBe(1);
+      expect(invalidations).toHaveBeenCalledTimes(1);
       expect(update).toEqual({
         kind: 'updated',
         mode: 'included',
@@ -146,14 +101,13 @@ describe('SettingsProfileController', () => {
 
   it('keeps OpenRouter unchanged when switching to personal keys', async () => {
     const state = new FakeStateStore({ [GlobalStateKey.USE_OPENROUTER]: true });
-    const { controller, includedAccessUpdates, invalidations } =
-      createController({ state });
+    const { controller, includedAccessUpdates } = createController({ state });
 
     const update = await controller.setApiAccessMode('personal');
 
     expect(includedAccessUpdates).toEqual([false]);
     expect(state.get(GlobalStateKey.USE_OPENROUTER, false)).toBe(true);
-    expect(invalidations.count).toBe(1);
+    expect(invalidations).toHaveBeenCalledTimes(1);
     expect(update).toEqual({
       kind: 'updated',
       mode: 'personal',
@@ -169,8 +123,10 @@ describe('SettingsProfileController', () => {
       remaining: 0,
       percentUsed: 100,
     }));
-    const { controller, includedAccessUpdates, invalidations } =
-      createController({ state, refreshSpendingStatus });
+    const { controller, includedAccessUpdates } = createController({
+      state,
+      refreshSpendingStatus,
+    });
 
     await expect(controller.setApiAccessMode('included')).resolves.toEqual({
       kind: 'rejected',
@@ -179,7 +135,7 @@ describe('SettingsProfileController', () => {
     expect(refreshSpendingStatus).toHaveBeenCalledOnce();
     expect(includedAccessUpdates).toEqual([]);
     expect(state.get(GlobalStateKey.USE_OPENROUTER, false)).toBe(true);
-    expect(invalidations.count).toBe(0);
+    expect(invalidations).toHaveBeenCalledTimes(0);
   });
 
   it('accepts included access when a fresh quota check has headroom', async () => {
@@ -205,7 +161,7 @@ describe('SettingsProfileController', () => {
 
   it('updates only whitelisted provider settings', async () => {
     const state = new FakeStateStore();
-    const { controller, invalidations } = createController({ state });
+    const { controller } = createController({ state });
 
     const rejected = await controller.setProviderSetting({
       key: 'texra.unknownSetting',
@@ -225,12 +181,12 @@ describe('SettingsProfileController', () => {
       affectsModelAvailability: true,
     });
     expect(state.get(GlobalStateKey.USE_OPENROUTER, false)).toBe(true);
-    expect(invalidations.count).toBe(1);
+    expect(invalidations).toHaveBeenCalledTimes(1);
   });
 
   it('recomputes model options when Prefer Kimi Code is toggled', async () => {
     const state = new FakeStateStore();
-    const { controller, invalidations } = createController({ state });
+    const { controller } = createController({ state });
 
     const updated = await controller.setProviderSetting({
       key: GlobalStateKey.KIMI_CODE_PREFER,
@@ -243,7 +199,7 @@ describe('SettingsProfileController', () => {
       affectsModelAvailability: true,
     });
     expect(state.get(GlobalStateKey.KIMI_CODE_PREFER, false)).toBe(true);
-    expect(invalidations.count).toBe(1);
+    expect(invalidations).toHaveBeenCalledTimes(1);
   });
 
   it('renders declared provider setting defaults when config is unset', async () => {
@@ -263,7 +219,7 @@ describe('SettingsProfileController', () => {
   });
 
   it('keeps reliability settings in config-backed model policy', async () => {
-    const { controller, config, invalidations } = createController();
+    const { controller, config } = createController();
 
     const result = await controller.setProviderSetting({
       key: MAX_ATTEMPTS_KEY,
@@ -275,7 +231,7 @@ describe('SettingsProfileController', () => {
       affectsModelAvailability: false,
     });
     expect(config[MAX_ATTEMPTS_KEY]).toBe(3);
-    expect(invalidations.count).toBe(0);
+    expect(invalidations).toHaveBeenCalledTimes(0);
     expect(controller.getReliabilitySettings()).toContainEqual(
       expect.objectContaining({
         key: MAX_ATTEMPTS_KEY,
