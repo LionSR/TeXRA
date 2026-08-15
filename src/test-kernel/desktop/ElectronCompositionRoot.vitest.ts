@@ -104,6 +104,19 @@ describe('desktop composition root and launch environment', () => {
     ]);
   });
 
+  it('starts each window diff-host disposal before queueing its completion', async () => {
+    const source = await readDesktopMainIndex();
+
+    expect(source).toContain(
+      'const diffHostDisposeQueue = new PQueue({ concurrency: 1 });',
+    );
+    expect(source).not.toContain('createDesktopDiffHostDisposeQueue');
+    expectOrderedAfter(source, "window.once('closed'", [
+      'desktopDiffHost.dispose().catch(reportAsyncError)',
+      'diffHostDisposeQueue.add(() => current)',
+    ]);
+  });
+
   it('imports process-store initialization directly from its owner', async () => {
     const source = await readDesktopMainIndex();
     expect(
