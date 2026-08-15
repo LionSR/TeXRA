@@ -244,6 +244,12 @@ describe('ModelHandlerGoogleInteractions streaming', () => {
       (r) => r.type === MESSAGE_TYPES.THINKING,
     );
     expect(thinkingRecord?.finalized).toBe('PROCESSED_REASONING');
+    // The other half of the ordering fix: with the extractor throwing, only
+    // the output stream falls back to the raw streamed chunks via the error
+    // path (#10414).
+    expect(
+      records.find((r) => r.type === MESSAGE_TYPES.MODEL_RESPONSE)?.finalized,
+    ).toBe('partial output');
   });
 
   it('reports incomplete when the stream ends without an interaction.completed event', async () => {

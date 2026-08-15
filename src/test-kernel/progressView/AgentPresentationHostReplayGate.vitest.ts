@@ -9,6 +9,7 @@ import { createAgentPresentationHost } from '@frontend/events/agentEventListener
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { ToolEditPermission } from '@shared/schemas';
+import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Local file imports
@@ -31,6 +32,8 @@ import { createRecordingApprovalHandlers } from './approvalHandlerSetHarness';
 const mocks = vi.hoisted(() => ({
   getLinterMessages: vi.fn(async () => []),
   pushManualCriticism: vi.fn(() => true),
+  openBuildDisplayIfTex: vi.fn(async () => undefined),
+  instructionMemento: new Map<string, unknown>(),
 }));
 
 vi.mock('@frontend/latex/linter', () => ({
@@ -39,6 +42,22 @@ vi.mock('@frontend/latex/linter', () => ({
 
 vi.mock('@frontend/latex/inlineCriticism', () => ({
   pushManualCriticism: mocks.pushManualCriticism,
+}));
+
+vi.mock('@frontend/latex/openBuild', () => ({
+  openBuildDisplayIfTex: mocks.openBuildDisplayIfTex,
+}));
+
+// An in-memory global state memento, so the "never remind again" suppression
+// path can be driven without a VS Code extension context.
+vi.mock('@common/state', async (importActual) => ({
+  ...(await importActual<typeof import('@common/state')>()),
+  globalSM: {
+    get: (key: string) => mocks.instructionMemento.get(key),
+    update: async (key: string, value: unknown) => {
+      mocks.instructionMemento.set(key, value);
+    },
+  },
 }));
 
 function toolEditPermission(requestId: string): ToolEditPermission {
@@ -140,6 +159,128 @@ describe('extension presentation-event emit port (#9251 replay gate)', () => {
       }
     } finally {
       showErrorMessage.mockRestore();
+    }
+  });
+});
+describe('extension presentation delivery truthfulness (#10400)', () => {
+  function presentationHost(
+    provider?: Partial<ProgressViewProvider>,
+  ): ReturnType<typeof createAgentPresentationHost> {
+    return createAgentPresentationHost(
+      (provider ?? {}) as unknown as ProgressViewProvider,
+    );
+  }
+
+  it('reports the error toast as delivered once VS Code accepts the handoff', async () => {
+    const showErrorMessage = vi
+      .spyOn(vscode.window, 'showErrorMessage')
+      .mockResolvedValue(undefined);
+    try {
+      const host = presentationHost();
+      expect(await host.emit('requestShowError', { message: 'Boom' })).toBe(
+        true,
+      );
+      expect(showErrorMessage).toHaveBeenCalledWith('Boom');
+    } finally {
+      showErrorMessage.mockRestore();
+    }
+  });
+
+  it('reports the error toast as not delivered when the handoff throws', async () => {
+    const showErrorMessage = vi
+      .spyOn(vscode.window, 'showErrorMessage')
+      .mockImplementation(() => {
+        throw new Error('host gone');
+      });
+    try {
+      const host = presentationHost();
+      expect(await host.emit('requestShowError', { message: 'Boom' })).toBe(
+        false,
+      );
+    } finally {
+      showErrorMessage.mockRestore();
+    }
+  });
+
+  it('reports file-open delivery from the open promise', async () => {
+    const host = presentationHost();
+    const payload = {
+      location: {
+        kind: 'workspace' as const,
+        absolutePath: '/workspace/paper.pdf',
+        relativePath: 'paper.pdf',
+      },
+      preserveFocus: true,
+    };
+
+    mocks.openBuildDisplayIfTex.mockResolvedValueOnce(undefined);
+    await expect(host.emit('requestOpenFile', payload)).resolves.toBe(true);
+
+    mocks.openBuildDisplayIfTex.mockRejectedValueOnce(new Error('no viewer'));
+    await expect(host.emit('requestOpenFile', payload)).resolves.toBe(false);
+  });
+
+  it('reports progress-view reveal delivery from the reveal outcome', async () => {
+    const visibleHost = presentationHost({ isViewVisible: () => true });
+    await expect(
+      visibleHost.emit('requestEnsureProgressView', {}),
+    ).resolves.toBe(true);
+
+    const executeCommand = vi
+      .spyOn(vscode.commands, 'executeCommand')
+      .mockRejectedValue(new Error('no view container'));
+    try {
+      const hiddenHost = presentationHost({ isViewVisible: () => false });
+      await expect(
+        hiddenHost.emit('requestEnsureProgressView', {}),
+      ).resolves.toBe(false);
+    } finally {
+      executeCommand.mockRestore();
+    }
+  });
+
+  it('reports a rendered instruction as delivered once VS Code accepts it', async () => {
+    const showInformationMessage = vi
+      .spyOn(vscode.window, 'showInformationMessage')
+      .mockResolvedValue(undefined);
+    try {
+      const host = presentationHost();
+      await expect(
+        host.emit('requestShowInstruction', {
+          key: 'deliveryShownInstruction',
+          message: 'Set your API key.',
+          showSuppress: false,
+        }),
+      ).resolves.toBe(true);
+      expect(showInformationMessage).toHaveBeenCalledOnce();
+    } finally {
+      showInformationMessage.mockRestore();
+    }
+  });
+
+  it('treats a "never remind" suppressed instruction as delivered without rendering', async () => {
+    // Suppression is a deliberate user opt-out, so it reports delivered: the
+    // caller's generic fallback must not resurface the same notice through a
+    // toast the user cannot suppress.
+    const stateKey = `${INSTRUCTION_PREFIX}deliverySuppressedInstruction`;
+    mocks.instructionMemento.set(stateKey, true);
+    const showInformationMessage = vi.spyOn(
+      vscode.window,
+      'showInformationMessage',
+    );
+    try {
+      const host = presentationHost();
+      await expect(
+        host.emit('requestShowInstruction', {
+          key: 'deliverySuppressedInstruction',
+          message: 'You should not see this.',
+          showSuppress: true,
+        }),
+      ).resolves.toBe(true);
+      expect(showInformationMessage).not.toHaveBeenCalled();
+    } finally {
+      mocks.instructionMemento.delete(stateKey);
+      showInformationMessage.mockRestore();
     }
   });
 });

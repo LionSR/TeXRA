@@ -96,6 +96,16 @@ export function dispatchPresentationEvent<Payloads, K extends keyof Payloads>(
  * renders asynchronously (e.g. awaiting a webview post) returns
  * `Promise<boolean>`. Any other result means "not delivered", so callers can
  * keep a fallback surface instead of assuming best-effort delivery.
+ *
+ * Every handler implements this contract, not only the events a caller
+ * currently marks on (`showAgentConfigBanner`, `requestShowInstruction`): a
+ * handler that presented its event must say so, because the next caller to
+ * mark on the result will trust it. A deliberate no-op (the CLI's
+ * `requestOpenFile`, the desktop progress-view reveal) truthfully reports
+ * "not delivered". Deliberate suppression by user choice — the extension's
+ * "never remind again" instruction state — counts as delivered: the user
+ * opted out of that surface, and the generic fallback would resurface the
+ * notice through a channel they cannot suppress.
  */
 export type PresentationDelivery = boolean | Promise<boolean>;
 

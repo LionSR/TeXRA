@@ -478,9 +478,24 @@ export class SessionHostInteractions implements HostInteractions {
       // closure reports the eventual delivery result back through the
       // option callbacks once a live host actually renders (or declines) it.
       this.queuePresentationReplay((interactions) => {
-        const delivered = interactions.emit?.(event, payload);
         if (!options.onReplayDelivered && !options.onReplayNotDelivered) {
-          return delivered;
+          return interactions.emit?.(event, payload);
+        }
+        // A synchronous throw from the host's emit (a desktop renderer post
+        // during teardown, a development assertion) escapes the promise
+        // chain below and would otherwise be caught only by the replay
+        // loop's warn-log, leaving the caller's presentation-pending marker
+        // stuck and the failure surfaced zero times. Route it through the
+        // same not-delivered fallback as a returned `false` or a rejection.
+        let delivered: boolean | Promise<boolean> | undefined;
+        try {
+          delivered = interactions.emit?.(event, payload);
+        } catch (error) {
+          logger.warn('Replayed presentation notice failed', {
+            data: error,
+          });
+          options.onReplayNotDelivered?.(interactions);
+          return undefined;
         }
         return Promise.resolve(delivered).then(
           (value) => {
