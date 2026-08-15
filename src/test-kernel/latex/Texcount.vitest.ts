@@ -122,4 +122,40 @@ describe('texcount logger seam', () => {
       expect.stringContaining('Stderr: texcount exploded'),
     );
   });
+
+  // #10649: getSummedCount also resolves its logger per call from the
+  // threaded channel. Its one emission of its own is the Chinese-package
+  // debug line, so a Chinese-package file in sum mode must reach the spied
+  // namespace on both the threaded and the default channel.
+  it('emits the sum-mode Chinese-package debug line on the resolved channel', async () => {
+    await installPlatform({
+      workspacePath: '/workspace',
+      files: { '/workspace/main.tex': '\\documentclass{ctexart}\n' },
+    });
+    mocks.runToolWithCheck.mockResolvedValue({
+      success: true,
+      stdout: 'Words in text: 5',
+      stderr: '',
+      exitCode: 0,
+    });
+    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+
+    const pinned = await getTeXCount('main.tex', {
+      mode: 'sum',
+      channel: 'pinnedTexcount',
+    });
+    const defaulted = await getTeXCount('main.tex', { mode: 'sum' });
+
+    // The (sum) prefix proves the summed path, not the per-file path, ran.
+    expect(pinned.output).toContain('Combined TeX Count Results (sum):');
+    expect(defaulted).toEqual(pinned);
+    expect(debug).toHaveBeenCalledWith(
+      'pinnedTexcount',
+      'Chinese packages detected in main.tex, enabling Chinese character counting',
+    );
+    expect(debug).toHaveBeenCalledWith(
+      LATEX_COMMANDS_CHANNEL,
+      'Chinese packages detected in main.tex, enabling Chinese character counting',
+    );
+  });
 });
