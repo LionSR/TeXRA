@@ -1,5 +1,6 @@
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 import { nanoid } from 'nanoid';
 
@@ -33,6 +34,13 @@ export interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
    */
   openPath(filePath: string): Promise<void>;
 }
+
+/**
+ * Upper bound on how long `dispose()` waits for in-flight fallback setup
+ * before proceeding to remove already-recorded temp directories. A hung
+ * read of an arbitrary path must not block app quit indefinitely.
+ */
+export const DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS = 5_000;
 
 export function createDesktopDiffHost(
   options: DesktopDiffHostOptions,
@@ -81,6 +89,27 @@ export function createDesktopDiffHost(
     inFlightFallbacks.add(setup);
     void setup.finally(() => inFlightFallbacks.delete(setup));
     return settle;
+  }
+
+  // Waits for fallback setup that was already in flight when `dispose()`
+  // started, up to a fixed bound. The loop re-snapshots the set because an
+  // `openDiff` can register after the first snapshot; those late calls still
+  // self-clean through the `disposed` branch once their setup finishes.
+  async function drainFallbackSetups(): Promise<void> {
+    const deadline = Date.now() + DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS;
+    while (inFlightFallbacks.size > 0) {
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) return;
+      const abort = new AbortController();
+      try {
+        await Promise.race([
+          Promise.allSettled([...inFlightFallbacks]),
+          sleep(remainingMs, undefined, { signal: abort.signal }),
+        ]);
+      } finally {
+        abort.abort();
+      }
+    }
   }
 
   async function openDiff(
@@ -170,24 +199,49 @@ export function createDesktopDiffHost(
 
   async function dispose(): Promise<void> {
     disposed = true;
-    // Wait for every fallback that was still setting up when the window
-    // closed. A setup that had not yet created its temp directory now sees
-    // `disposed` and removes it itself; awaiting the setup here keeps the quit
-    // lifecycle from resolving before that post-disposal removal finishes.
-    await Promise.allSettled([...inFlightFallbacks]);
+    // Wait for fallbacks that were setting up when the window closed, bounded
+    // so a hung read cannot block quit forever. A setup that had not yet
+    // created its temp directory now sees `disposed` and removes it itself;
+    // awaiting that cleanup here (up to the bound) keeps the quit lifecycle
+    // from resolving before the post-disposal removal finishes.
+    await drainFallbackSetups();
+
     const tempDirs = [...externalPatchDirs];
     externalPatchDirs.clear();
-    const results = await Promise.allSettled(
+    const firstResults = await Promise.allSettled(
       tempDirs.map((tempDir) => removeTempDir(tempDir)),
     );
-    const failures = results.filter(
-      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    const firstFailures = tempDirs.filter(
+      (_, index) => firstResults[index].status === 'rejected',
     );
-    if (failures.length > 0) {
+    if (firstFailures.length === 0) return;
+
+    // A transient `EBUSY`/`EPERM` on the shared error-path removal would
+    // otherwise leave the directory untracked, because `dispose()` cleared
+    // `externalPatchDirs` before the shared attempt settled. Retry each
+    // failure once; the per-path memo was cleared when the first attempt
+    // settled, so the retry issues a fresh `rm`.
+    const retryResults = await Promise.allSettled(
+      firstFailures.map((tempDir) => removeTempDir(tempDir)),
+    );
+    const stillFailed = firstFailures.filter(
+      (_, index) => retryResults[index].status === 'rejected',
+    );
+    // Keep directories whose retry also failed recorded so another dispose can
+    // try again instead of leaking them permanently.
+    for (const tempDir of stillFailed) {
+      externalPatchDirs.add(tempDir);
+    }
+    if (stillFailed.length > 0) {
       throw new AggregateError(
-        failures.map((failure) => failure.reason),
-        `Failed to remove ${failures.length} diff temp ${
-          failures.length === 1 ? 'directory' : 'directories'
+        retryResults
+          .filter(
+            (result): result is PromiseRejectedResult =>
+              result.status === 'rejected',
+          )
+          .map((failure) => failure.reason),
+        `Failed to remove ${stillFailed.length} diff temp ${
+          stillFailed.length === 1 ? 'directory' : 'directories'
         }.`,
       );
     }

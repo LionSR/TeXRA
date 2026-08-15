@@ -2,6 +2,11 @@
   "semantics": "Per-symbol baseline of knip dead-code findings (files/exports/types/duplicate-export groups), each identified by (file, category, name) -- never by line number, so unrelated edits that shift lines never spuriously mark a baseline entry as fixed. The ratchet (scripts/check-dead-code-ratchet.mjs) fails only when the current knip run contains a finding not in this list. Removing entries here is always welcome (it means the dead code was cleaned up); a genuinely new unused file/export/type must either be deleted or, if intentionally kept, added here in the same PR. Regenerate by piping `knip --reporter json` through extractFindings() and sorting with compareFindings(); do not hand-edit into disorder.",
   "findings": [
     {
+      "file": "packages/desktop/src/main/desktopDiffHost.ts",
+      "category": "exports",
+      "name": "DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS"
+    },
+    {
       "file": "packages/desktop/src/main/desktopNavigationPolicy.ts",
       "category": "exports",
       "name": "isAllowedExternalUrl"
