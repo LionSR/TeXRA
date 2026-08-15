@@ -32,7 +32,6 @@
       "@agent/remote/remoteAgentConfigClient",
       "@agent/runtime",
       "@agent/storage",
-      "@agent/storage/detectWaitingStreams",
       "@agent/templates/agentTemplateRenderer",
       "@agent/trace"
     ],
