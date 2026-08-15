@@ -707,7 +707,7 @@ function ensureStaticSessionHeader({
   };
 }
 
-interface AppendStaticTranscriptItemsOptions {
+interface BuildStaticTranscriptItemsOptions {
   readonly currentItems: readonly StaticTranscriptItem[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly childStreamEntries?: ChildStreamEntries;
@@ -731,7 +731,7 @@ interface StaticTranscriptBuildResult {
  *  hard reset, and fold rebuild; ordinary ticks use the incremental scan in
  *  {@link incrementalStaticTranscriptEntries}. */
 export function buildStaticTranscriptItems(
-  options: AppendStaticTranscriptItemsOptions,
+  options: BuildStaticTranscriptItemsOptions,
 ): StaticTranscriptBuildResult {
   const {
     currentItems,
