@@ -23,7 +23,7 @@ import {
   type ProviderErrorPartial,
 } from '@shared/schemas';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
-import { isKimiCodeExclusiveRetryModel } from '@shared/model/kimiCodeRetryGate';
+import { isKimiCodeSubscriptionRetryBlocked } from '@shared/model/kimiCodeRetryGate';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
 import { tailWithEllipsis, toGraphemes } from '@utils/text/stringUtils';
@@ -156,15 +156,11 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
 
   private canUseOwnApiKey(): boolean {
     const data = this.permission.data;
-    // Exclusivity blocks only the coding-plan quota case: a Kimi Code-exclusive
-    // model has no open-platform fallback when its membership quota is spent.
-    // Other exhaustion reasons (notably upstream credit depletion) still allow
-    // rebinding the same model to a fresh credential.
     return (
       isCredentialExhausted(data.errorDetails) &&
-      !(
-        data.errorDetails?.exhaustionReason === 'kimi-code-subscription' &&
-        isKimiCodeExclusiveRetryModel(data.model)
+      !isKimiCodeSubscriptionRetryBlocked(
+        data.model,
+        data.errorDetails?.exhaustionReason,
       )
     );
   }

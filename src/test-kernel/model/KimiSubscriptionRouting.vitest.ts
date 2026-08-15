@@ -2,13 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
 import {
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
   kimiCodeRuntimeConfig,
   kimiCodeWireModelId,
   resolveKimiCodeRoute,
 } from '@model/kimiCodeSubscriptionRouting';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
+import {
+  isKimiCodeExclusiveModel,
+  isKimiSubscriptionEligible,
+} from '@shared/model/kimiCodeRetryGate';
 import type { ModelConfig } from 'llm-zoo';
 
 const dual = {

@@ -600,11 +600,11 @@ describe('ProgressApiKeyRetryController', () => {
     expect(pendingChecks).toBe(2);
   });
 
-  it('allows a Kimi Code-exclusive model to enter a fresh key on credit depletion', async () => {
+  it('prompts for the kimiCode credential when an exclusive model rebinds on credit depletion', async () => {
     const harness = createHarness({
-      keys: { anthropic: 'old-key' },
+      keys: { kimiCode: 'old-kimi', moonshot: 'old-moonshot' },
       prompt: (keys) => {
-        keys.set('anthropic', 'new-key');
+        keys.set('kimiCode', 'new-kimi');
       },
     });
 
@@ -612,6 +612,7 @@ describe('ProgressApiKeyRetryController', () => {
       stream: 'stream-kimi-credit',
       requestId: 'retry-kimi-credit',
       model: 'kimiCoding',
+      provider: 'moonshot',
       exhaustionReason: 'upstream-credit',
     });
 
@@ -622,7 +623,12 @@ describe('ProgressApiKeyRetryController', () => {
       disabledChatGptSubscription: false,
       disabledCodingPlans: [],
     });
-    expect(harness.prompts).toStrictEqual([undefined]);
+    // The SDK error identifies the open-platform Moonshot provider, but the
+    // exclusive handler rebinds with `kimiCode`; the prompt and key check must
+    // target the same credential or the retry repeats the same failure.
+    expect(harness.prompts).toStrictEqual(['kimiCode']);
+    expect(harness.keys.get('kimiCode')).toBe('new-kimi');
+    expect(harness.keys.get('moonshot')).toBe('old-moonshot');
     expect(harness.retries).toStrictEqual(['stream-kimi-credit']);
   });
 });

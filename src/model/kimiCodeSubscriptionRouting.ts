@@ -29,12 +29,6 @@ import {
 } from '@shared/model/kimiCodeRetryGate';
 import { getPreferKimiCode } from '@utils/config/providerConfig';
 
-export {
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
-  type KimiSubscriptionModelFields,
-};
-
 import { hasUsableApiKey } from './apiProviders';
 import { includedModelAccess } from './includedModelAccess';
 import { zeroCostAccessOverrides } from './subscriptionAccessOverrides';

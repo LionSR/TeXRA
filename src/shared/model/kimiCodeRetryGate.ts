@@ -63,3 +63,20 @@ export function isKimiCodeExclusiveRetryModel(
   const config = MODEL_CONFIGS[model];
   return config !== undefined && isKimiCodeExclusiveModel(config);
 }
+
+/**
+ * Whether the progress-view retry must not offer the personal API-key switch.
+ * Exclusive Kimi Code models have no open-platform fallback when their
+ * coding-plan quota is exhausted, so switching to a personal credential cannot
+ * reroute them. Both the webview offer gate and the host enforcement gate
+ * consume this composed predicate so they cannot desync.
+ */
+export function isKimiCodeSubscriptionRetryBlocked(
+  model: string | undefined,
+  exhaustionReason: string | undefined,
+): boolean {
+  return (
+    exhaustionReason === 'kimi-code-subscription' &&
+    isKimiCodeExclusiveRetryModel(model)
+  );
+}

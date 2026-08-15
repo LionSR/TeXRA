@@ -5,7 +5,7 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { TokenCountOptions } from '@agent/types/ModelHandlerContracts';
 import type { ToolDefinition } from '@model/ToolDefinition';
-import { isKimiCodeExclusiveModel } from '@model/kimiCodeSubscriptionRouting';
+import { isKimiCodeExclusiveModel } from '@shared/model/kimiCodeRetryGate';
 import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import { resolveMoonshotRequestParameters } from '../support/moonshotRequestParameters';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
