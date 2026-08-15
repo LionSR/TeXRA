@@ -12,7 +12,7 @@ import { Box, Static, Text } from 'ink';
 import { shortCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
-import type { StreamTabId } from '@shared/schemas';
+import type { StreamPhase, StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { safeHomedir } from '@utils/system/platformPaths';
 
@@ -31,7 +31,12 @@ import {
 import { streamViewForId } from '../state/streamViews';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
-import { orderedStaticTranscriptEntries } from './transcriptEntries';
+import {
+  EMPTY_TRANSCRIPT_ENTRIES,
+  incrementalStaticTranscriptEntries,
+  orderedStaticTranscriptEntries,
+  type StaticTranscriptScanCursor,
+} from './transcriptEntries';
 import { TranscriptEntry } from './TranscriptEntry';
 import {
   transcriptColumns,
@@ -56,6 +61,37 @@ export type StaticTranscriptItem =
 interface StaticTranscriptState {
   readonly ownerKey: string;
   readonly items: readonly StaticTranscriptItem[];
+  /** Cumulative row/byte estimates for `items`, maintained incrementally. */
+  readonly rowCount: number;
+  readonly byteCount: number;
+  readonly scan: StaticTranscriptScanCursor;
+  /** Incremented whenever items change non-append-only (trim, header insert,
+   *  hard reset, fold rebuild) so the `<Static>` identity remounts and
+   *  `onRenderKeyChange` repaints the bounded tail with replace semantics. */
+  readonly repaintEpoch: number;
+}
+
+export interface StaticTranscriptRingBudgets {
+  readonly rowHighWater: number;
+  readonly rowLowWater: number;
+  readonly byteHighWater: number;
+  readonly byteLowWater: number;
+}
+
+/** Bounded tail at native-terminal-scrollback scale. The high/low split is
+ *  hysteresis: a burst can overflow the high-water mark, then trim once down
+ *  to the low-water mark instead of trimming on every subsequent append. */
+export const DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS: StaticTranscriptRingBudgets =
+  Object.freeze({
+    rowHighWater: 2_000,
+    rowLowWater: 1_500,
+    byteHighWater: 1024 * 1024,
+    byteLowWater: 768 * 1024,
+  });
+
+interface StaticTranscriptTotals {
+  readonly rows: number;
+  readonly bytes: number;
 }
 
 function shortenCwd(cwd: string): string {
@@ -173,27 +209,6 @@ const SESSION_HEADER_ID = 'session-header';
 const FULL_SESSION_HEADER_ROWS = 4;
 const COMPACT_SESSION_HEADER_ROWS = 1;
 
-function staticTranscriptItemRowCount(
-  item: StaticTranscriptItem,
-  width?: number,
-  executionLabels?: ExecutionLabels,
-  previousItem?: StaticTranscriptItem,
-): number {
-  if (item.kind === 'header') {
-    return item.compact
-      ? COMPACT_SESSION_HEADER_ROWS
-      : FULL_SESSION_HEADER_ROWS;
-  }
-  return transcriptEntryLayoutRows(
-    transcriptEntryLayout(item.entry, {
-      executionLabels,
-      mode: 'scrollback-budget',
-      previousEntry: entryAbove(previousItem),
-      width,
-    }),
-  );
-}
-
 /** The transcript entry an item sits directly below, when that neighbor is
  *  itself an entry. A header above carries no margin for the next entry to
  *  collapse against. */
@@ -203,57 +218,282 @@ function entryAbove(
   return item?.kind === 'entry' ? item.entry : undefined;
 }
 
-function StaticTranscriptItemContent({
-  colorEnabled,
-  executionLabels,
-  item,
-  previousItem,
-  width,
-}: {
-  readonly colorEnabled?: boolean;
-  readonly executionLabels?: ExecutionLabels;
-  readonly item: StaticTranscriptItem;
-  readonly previousItem?: StaticTranscriptItem;
-  readonly width: number;
-}): React.JSX.Element {
-  switch (item.kind) {
-    case 'header':
-      return (
-        <EntryErrorBoundary label="session header">
-          <SessionHeaderBlock
-            compact={item.compact}
-            identityLine={item.identityLine}
-            meta={item.meta}
-            width={width}
-          />
-        </EntryErrorBoundary>
-      );
-    case 'entry':
-      return (
-        <EntryErrorBoundary label={item.entry.role}>
-          <TranscriptEntry
-            entry={item.entry}
-            previousEntry={entryAbove(previousItem)}
-            subagentExecutionLabels={executionLabels}
-            width={width}
-            colorEnabled={colorEnabled}
-          />
-        </EntryErrorBoundary>
-      );
-  }
+interface StaticTranscriptItemMetrics {
+  readonly rows: number;
+  readonly bytes: number;
 }
 
-export function appendStaticTranscriptItems({
+/** Row count plus a conservative UTF-8 byte estimate for one static item.
+ *  Entry metrics come from the same `scrollback-budget` layout the row budget
+ *  uses, so the ring never pays for a second full layout pass. */
+function staticTranscriptItemMetrics(
+  item: StaticTranscriptItem,
+  width?: number,
+  executionLabels?: ExecutionLabels,
+  previousItem?: StaticTranscriptItem,
+): StaticTranscriptItemMetrics {
+  if (item.kind === 'header') {
+    return {
+      rows: item.compact
+        ? COMPACT_SESSION_HEADER_ROWS
+        : FULL_SESSION_HEADER_ROWS,
+      bytes:
+        Buffer.byteLength(item.identityLine, 'utf8') +
+        Buffer.byteLength(item.meta.version, 'utf8') +
+        Buffer.byteLength(item.meta.apiMode, 'utf8') +
+        Buffer.byteLength(item.meta.agent, 'utf8') +
+        Buffer.byteLength(item.meta.cwd, 'utf8') +
+        64,
+    };
+  }
+  const layout = transcriptEntryLayout(item.entry, {
+    executionLabels,
+    mode: 'scrollback-budget',
+    previousEntry: entryAbove(previousItem),
+    width,
+  });
+  let bytes = 0;
+  for (const line of layout.lines) bytes += Buffer.byteLength(line, 'utf8');
+  return { rows: transcriptEntryLayoutRows(layout), bytes };
+}
+
+function staticTranscriptItemRowCount(
+  item: StaticTranscriptItem,
+  width?: number,
+  executionLabels?: ExecutionLabels,
+  previousItem?: StaticTranscriptItem,
+): number {
+  return staticTranscriptItemMetrics(item, width, executionLabels, previousItem)
+    .rows;
+}
+
+function staticTranscriptItemsTotals(
+  items: readonly StaticTranscriptItem[],
+  width?: number,
+  executionLabels?: ExecutionLabels,
+): StaticTranscriptTotals {
+  let rows = 0;
+  let bytes = 0;
+  let previousItem: StaticTranscriptItem | undefined;
+  for (const item of items) {
+    const metrics = staticTranscriptItemMetrics(
+      item,
+      width,
+      executionLabels,
+      previousItem,
+    );
+    rows += metrics.rows;
+    bytes += metrics.bytes;
+    previousItem = item;
+  }
+  return { rows, bytes };
+}
+
+/**
+ * Trim the oldest non-header items until the retained tail is at or below
+ * both low-water marks. A single oversized newest entry is kept even when it
+ * still exceeds a low-water mark; the header is never trimmed.
+ */
+export function trimStaticTranscriptItems(
+  items: readonly StaticTranscriptItem[],
+  options: {
+    readonly budgets?: StaticTranscriptRingBudgets;
+    readonly executionLabels?: ExecutionLabels;
+    readonly totals: StaticTranscriptTotals;
+    readonly width?: number;
+  },
+): {
+  readonly items: readonly StaticTranscriptItem[];
+  readonly totals: StaticTranscriptTotals;
+  readonly trimmed: boolean;
+} {
+  const budgets = options.budgets ?? DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS;
+  if (
+    options.totals.rows <= budgets.rowHighWater &&
+    options.totals.bytes <= budgets.byteHighWater
+  ) {
+    return { items, totals: options.totals, trimmed: false };
+  }
+
+  const nextItems = [...items];
+  const totals = { ...options.totals };
+  const headerCount = nextItems[0]?.kind === 'header' ? 1 : 0;
+  while (
+    nextItems.length > headerCount + 1 &&
+    (totals.rows > budgets.rowLowWater || totals.bytes > budgets.byteLowWater)
+  ) {
+    const removedIndex = headerCount;
+    const removed = nextItems[removedIndex];
+    if (removed === undefined) break;
+    const previousItem =
+      removedIndex > 0 ? nextItems[removedIndex - 1] : undefined;
+    const removedMetrics = staticTranscriptItemMetrics(
+      removed,
+      options.width,
+      options.executionLabels,
+      previousItem,
+    );
+    totals.rows -= removedMetrics.rows;
+    totals.bytes -= removedMetrics.bytes;
+
+    const nextRetained = nextItems[removedIndex + 1];
+    if (nextRetained !== undefined) {
+      const oldNextMetrics = staticTranscriptItemMetrics(
+        nextRetained,
+        options.width,
+        options.executionLabels,
+        removed,
+      );
+      nextItems.splice(removedIndex, 1);
+      const newPrevious =
+        removedIndex > 0 ? nextItems[removedIndex - 1] : undefined;
+      const newNextMetrics = staticTranscriptItemMetrics(
+        nextRetained,
+        options.width,
+        options.executionLabels,
+        newPrevious,
+      );
+      totals.rows += newNextMetrics.rows - oldNextMetrics.rows;
+      totals.bytes += newNextMetrics.bytes - oldNextMetrics.bytes;
+    } else {
+      nextItems.splice(removedIndex, 1);
+    }
+  }
+
+  return { items: nextItems, totals, trimmed: true };
+}
+
+function shouldWaitForChildIdentity({
   currentItems,
-  streams,
-  childStreamEntries = new Map(),
-  executionLabels,
-  meta,
-  maxRows,
-  parentStream = new Map(),
+  parentStream,
   scrollbackStreamId,
+  streams,
+}: {
+  readonly currentItems: readonly StaticTranscriptItem[];
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly scrollbackStreamId: StreamTabId | undefined;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+}): boolean {
+  return (
+    !currentItems.some((item) => item.id === SESSION_HEADER_ID) &&
+    scrollbackStreamId !== undefined &&
+    parentStream.has(scrollbackStreamId) &&
+    !streams.get(scrollbackStreamId)?.model
+  );
+}
+
+function ensureStaticSessionHeader({
+  byteCount,
+  childStreamEntries,
+  executionLabels,
+  items,
+  maxRows,
+  meta,
+  parentStream,
+  rowCount,
+  scrollbackStreamId,
+  streams,
   width,
 }: {
+  readonly byteCount: number;
+  readonly childStreamEntries: ChildStreamEntries;
+  readonly executionLabels?: ExecutionLabels;
+  readonly items: readonly StaticTranscriptItem[];
+  readonly maxRows?: number;
+  readonly meta: SessionMeta;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly rowCount: number;
+  readonly scrollbackStreamId: StreamTabId | undefined;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+  readonly width?: number;
+}): {
+  readonly items: readonly StaticTranscriptItem[];
+  readonly rowCount: number;
+  readonly byteCount: number;
+  readonly inserted: boolean;
+} {
+  if (items.some((item) => item.id === SESSION_HEADER_ID)) {
+    return { items, rowCount, byteCount, inserted: false };
+  }
+  if (
+    shouldWaitForChildIdentity({
+      currentItems: items,
+      parentStream,
+      scrollbackStreamId,
+      streams,
+    })
+  ) {
+    return { items, rowCount, byteCount, inserted: false };
+  }
+
+  const compact = maxRows !== undefined && maxRows < FULL_SESSION_HEADER_ROWS;
+  const header: StaticTranscriptItem = {
+    id: SESSION_HEADER_ID,
+    kind: 'header',
+    compact,
+    identityLine: sessionHeaderIdentityLine(meta, {
+      childStreamEntries,
+      parentStream,
+      streamId: scrollbackStreamId,
+      streams,
+    }),
+    meta,
+  };
+  const headerMetrics = staticTranscriptItemMetrics(
+    header,
+    width,
+    executionLabels,
+  );
+  const firstItem = items.find((item) => item.kind !== 'header');
+  let nextRowCount: number;
+  let nextByteCount: number;
+  if (firstItem === undefined) {
+    nextRowCount = rowCount + headerMetrics.rows;
+    nextByteCount = byteCount + headerMetrics.bytes;
+  } else {
+    const oldFirstMetrics = staticTranscriptItemMetrics(
+      firstItem,
+      width,
+      executionLabels,
+    );
+    const newFirstMetrics = staticTranscriptItemMetrics(
+      firstItem,
+      width,
+      executionLabels,
+      header,
+    );
+    nextRowCount =
+      rowCount -
+      oldFirstMetrics.rows +
+      newFirstMetrics.rows +
+      headerMetrics.rows;
+    nextByteCount =
+      byteCount -
+      oldFirstMetrics.bytes +
+      newFirstMetrics.bytes +
+      headerMetrics.bytes;
+  }
+  const fitsBudget = maxRows === undefined || nextRowCount <= maxRows;
+  if (!fitsBudget) {
+    return { items, rowCount, byteCount, inserted: false };
+  }
+
+  const firstEntryIndex = items.findIndex((item) => item.kind !== 'header');
+  const nextItems = [...items];
+  nextItems.splice(
+    firstEntryIndex < 0 ? nextItems.length : firstEntryIndex,
+    0,
+    header,
+  );
+  return {
+    items: nextItems,
+    rowCount: nextRowCount,
+    byteCount: nextByteCount,
+    inserted: true,
+  };
+}
+
+interface AppendStaticTranscriptItemsOptions {
   readonly currentItems: readonly StaticTranscriptItem[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly childStreamEntries?: ChildStreamEntries;
@@ -263,17 +503,64 @@ export function appendStaticTranscriptItems({
   readonly parentStream?: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly scrollbackStreamId: StreamTabId | undefined;
   readonly width?: number;
-}): readonly StaticTranscriptItem[] {
+  readonly ringBudgets?: StaticTranscriptRingBudgets;
+}
+
+interface StaticTranscriptBuildResult {
+  readonly items: readonly StaticTranscriptItem[];
+  readonly rowCount: number;
+  readonly byteCount: number;
+  readonly trimmed: boolean;
+}
+
+/** Full rebuild path. This is the from-scratch oracle used on owner switch,
+ *  hard reset, and fold rebuild; ordinary ticks use the incremental scan in
+ *  {@link incrementalStaticTranscriptEntries}. */
+export function buildStaticTranscriptItems(
+  options: AppendStaticTranscriptItemsOptions,
+): StaticTranscriptBuildResult {
+  const {
+    currentItems,
+    streams,
+    childStreamEntries = new Map(),
+    executionLabels,
+    meta,
+    maxRows,
+    parentStream = new Map(),
+    scrollbackStreamId,
+    width,
+    ringBudgets = DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
+  } = options;
   const seen = new Set(currentItems.map((item) => item.id));
   // Copied lazily: this runs on every stream-sync tick and most ticks append
   // nothing.
   let nextItems: StaticTranscriptItem[] | undefined;
-  const shouldWaitForChildIdentity =
-    !seen.has(SESSION_HEADER_ID) &&
-    scrollbackStreamId !== undefined &&
-    parentStream.has(scrollbackStreamId) &&
-    !streams.get(scrollbackStreamId)?.model;
-  if (shouldWaitForChildIdentity) return currentItems;
+  if (
+    shouldWaitForChildIdentity({
+      currentItems,
+      parentStream,
+      scrollbackStreamId,
+      streams,
+    })
+  ) {
+    const totals = staticTranscriptItemsTotals(
+      currentItems,
+      width,
+      executionLabels,
+    );
+    const trimmed = trimStaticTranscriptItems(currentItems, {
+      budgets: ringBudgets,
+      executionLabels,
+      totals,
+      width,
+    });
+    return {
+      items: trimmed.items,
+      rowCount: trimmed.totals.rows,
+      byteCount: trimmed.totals.bytes,
+      trimmed: trimmed.trimmed,
+    };
+  }
 
   if (!seen.has(SESSION_HEADER_ID)) {
     const header: StaticTranscriptItem = {
@@ -340,9 +627,143 @@ export function appendStaticTranscriptItems({
       appendItem({ id: entry.id, kind: 'entry', entry });
     }
   }
-  // Same reference when nothing was appended so the `setItems` functional
-  // update doesn't schedule a re-render on every stream-sync tick.
-  return nextItems ?? currentItems;
+
+  const items = nextItems ?? currentItems;
+  const totals = staticTranscriptItemsTotals(items, width, executionLabels);
+  const trimmed = trimStaticTranscriptItems(items, {
+    budgets: ringBudgets,
+    executionLabels,
+    totals,
+    width,
+  });
+  return {
+    items: trimmed.items,
+    rowCount: trimmed.totals.rows,
+    byteCount: trimmed.totals.bytes,
+    trimmed: trimmed.trimmed,
+  };
+}
+
+export function appendStaticTranscriptItems(
+  options: AppendStaticTranscriptItemsOptions,
+): readonly StaticTranscriptItem[] {
+  return buildStaticTranscriptItems(options).items;
+}
+
+function StaticTranscriptItemContent({
+  colorEnabled,
+  executionLabels,
+  item,
+  previousItem,
+  width,
+}: {
+  readonly colorEnabled?: boolean;
+  readonly executionLabels?: ExecutionLabels;
+  readonly item: StaticTranscriptItem;
+  readonly previousItem?: StaticTranscriptItem;
+  readonly width: number;
+}): React.JSX.Element {
+  switch (item.kind) {
+    case 'header':
+      return (
+        <EntryErrorBoundary label="session header">
+          <SessionHeaderBlock
+            compact={item.compact}
+            identityLine={item.identityLine}
+            meta={item.meta}
+            width={width}
+          />
+        </EntryErrorBoundary>
+      );
+    case 'entry':
+      return (
+        <EntryErrorBoundary label={item.entry.role}>
+          <TranscriptEntry
+            entry={item.entry}
+            previousEntry={entryAbove(previousItem)}
+            subagentExecutionLabels={executionLabels}
+            width={width}
+            colorEnabled={colorEnabled}
+          />
+        </EntryErrorBoundary>
+      );
+  }
+}
+
+function scanStaticTranscriptFromStart(
+  entries: readonly ConversationEntry[] | undefined,
+  status: StreamPhase | undefined,
+): StaticTranscriptScanCursor {
+  return incrementalStaticTranscriptEntries(entries, status, {
+    entriesRef: undefined,
+    scannedIndex: 0,
+    lastScannedEntry: undefined,
+    status: undefined,
+  }).cursor;
+}
+
+function buildStaticTranscriptState({
+  childStreamEntries,
+  executionLabels,
+  maxRows,
+  meta,
+  ownerKey,
+  parentStream,
+  repaintEpoch,
+  scrollbackStreamId,
+  streams,
+  width,
+}: {
+  readonly childStreamEntries: ChildStreamEntries;
+  readonly executionLabels?: ExecutionLabels;
+  readonly maxRows?: number;
+  readonly meta: SessionMeta;
+  readonly ownerKey: string;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly repaintEpoch: number;
+  readonly scrollbackStreamId: StreamTabId | undefined;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+  readonly width?: number;
+}): StaticTranscriptState {
+  const built = buildStaticTranscriptItems({
+    currentItems: [],
+    streams,
+    childStreamEntries,
+    executionLabels,
+    meta,
+    maxRows,
+    parentStream,
+    scrollbackStreamId,
+    width,
+  });
+  const slice = scrollbackStreamId
+    ? streams.get(scrollbackStreamId)
+    : undefined;
+  // While a focused child has no model yet, appendStaticTranscriptItems
+  // intentionally holds both the header and entries. Keep the scan cursor at
+  // zero in that state so the entries are still pending when the model
+  // arrives; scanning them now would mark them consumed and drop them later.
+  const waitingForChildIdentity = shouldWaitForChildIdentity({
+    currentItems: [],
+    parentStream,
+    scrollbackStreamId,
+    streams,
+  });
+  const scan = waitingForChildIdentity
+    ? incrementalStaticTranscriptEntries(
+        slice?.entries,
+        slice?.status,
+        undefined,
+      ).cursor
+    : scanStaticTranscriptFromStart(slice?.entries, slice?.status);
+  return {
+    ownerKey,
+    items: built.items,
+    rowCount: built.rowCount,
+    byteCount: built.byteCount,
+    scan,
+    repaintEpoch,
+  };
 }
 
 export function StaticConversationTranscript({
@@ -365,20 +786,13 @@ export function StaticConversationTranscript({
   readonly width?: number;
 }): React.JSX.Element {
   const normalizedWidth = transcriptColumns(width);
-  const previousRenderKey = useRef<string | undefined>(undefined);
-  useLayoutEffect(() => {
-    const previous = previousRenderKey.current;
-    previousRenderKey.current = renderKey;
-    if (previous !== undefined && previous !== renderKey) {
-      onRenderKeyChange?.();
-    }
-  }, [onRenderKeyChange, renderKey]);
   const streams = useSignal(streamsSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const parentStream = useSignal(parentStreamSignal);
   const childStreamEntries = useSignal(childStreamEntriesSignal);
+
   const buildFreshItems = (): readonly StaticTranscriptItem[] =>
-    appendStaticTranscriptItems({
+    buildStaticTranscriptItems({
       currentItems: [],
       streams,
       childStreamEntries,
@@ -388,11 +802,22 @@ export function StaticConversationTranscript({
       parentStream,
       scrollbackStreamId,
       width: normalizedWidth,
-    });
-  const [state, setState] = useState<StaticTranscriptState>(() => ({
-    ownerKey,
-    items: buildFreshItems(),
-  }));
+    }).items;
+
+  const [state, setState] = useState<StaticTranscriptState>(() =>
+    buildStaticTranscriptState({
+      childStreamEntries,
+      executionLabels: subagentExecutionLabels,
+      maxRows,
+      meta: sessionMeta,
+      ownerKey,
+      parentStream,
+      repaintEpoch: 0,
+      scrollbackStreamId,
+      streams,
+      width: normalizedWidth,
+    }),
+  );
 
   const items = state.ownerKey === ownerKey ? state.items : buildFreshItems();
 
@@ -403,23 +828,137 @@ export function StaticConversationTranscript({
     // starts from scratch because root and child histories must not share
     // append-only Static state.
     const isHardReset = streams.size === 0 && scrollbackStreamId === undefined;
+    const slice = scrollbackStreamId
+      ? streams.get(scrollbackStreamId)
+      : undefined;
+    const entries = slice?.entries ?? EMPTY_TRANSCRIPT_ENTRIES;
+    const status = slice?.status;
+
     setState((current) => {
       const ownerChanged = current.ownerKey !== ownerKey;
-      const nextItems = appendStaticTranscriptItems({
-        currentItems: isHardReset || ownerChanged ? [] : current.items,
-        streams,
-        childStreamEntries,
-        executionLabels: subagentExecutionLabels,
-        meta: sessionMeta,
-        maxRows,
-        parentStream,
-        scrollbackStreamId,
-        width: normalizedWidth,
-      });
-      if (current.ownerKey === ownerKey && current.items === nextItems) {
+      if (isHardReset || ownerChanged) {
+        return buildStaticTranscriptState({
+          childStreamEntries,
+          executionLabels: subagentExecutionLabels,
+          maxRows,
+          meta: sessionMeta,
+          ownerKey,
+          parentStream,
+          repaintEpoch: current.repaintEpoch + 1,
+          scrollbackStreamId,
+          streams,
+          width: normalizedWidth,
+        });
+      }
+
+      if (
+        shouldWaitForChildIdentity({
+          currentItems: current.items,
+          parentStream,
+          scrollbackStreamId,
+          streams,
+        })
+      ) {
         return current;
       }
-      return { ownerKey, items: nextItems };
+
+      const plan = incrementalStaticTranscriptEntries(
+        entries,
+        status,
+        current.scan,
+      );
+      if (plan.rebuild) {
+        return buildStaticTranscriptState({
+          childStreamEntries,
+          executionLabels: subagentExecutionLabels,
+          maxRows,
+          meta: sessionMeta,
+          ownerKey,
+          parentStream,
+          repaintEpoch: current.repaintEpoch + 1,
+          scrollbackStreamId,
+          streams,
+          width: normalizedWidth,
+        });
+      }
+
+      let nextItems = current.items;
+      let nextRowCount = current.rowCount;
+      let nextByteCount = current.byteCount;
+      let nextRepaintEpoch = current.repaintEpoch;
+      let changed = false;
+
+      const header = ensureStaticSessionHeader({
+        byteCount: nextByteCount,
+        childStreamEntries,
+        executionLabels: subagentExecutionLabels,
+        items: nextItems,
+        maxRows,
+        meta: sessionMeta,
+        parentStream,
+        rowCount: nextRowCount,
+        scrollbackStreamId,
+        streams,
+        width: normalizedWidth,
+      });
+      if (header.inserted) {
+        nextItems = header.items;
+        nextRowCount = header.rowCount;
+        nextByteCount = header.byteCount;
+        nextRepaintEpoch += 1;
+        changed = true;
+      }
+
+      let previousItem = nextItems.at(-1);
+      for (const entry of plan.appended) {
+        const item: StaticTranscriptItem = {
+          id: entry.id,
+          kind: 'entry',
+          entry,
+        };
+        const metrics = staticTranscriptItemMetrics(
+          item,
+          normalizedWidth,
+          subagentExecutionLabels,
+          previousItem,
+        );
+        nextRowCount += metrics.rows;
+        nextByteCount += metrics.bytes;
+        nextItems = [...nextItems, item];
+        previousItem = item;
+        changed = true;
+      }
+
+      const trimmed = trimStaticTranscriptItems(nextItems, {
+        budgets: DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
+        executionLabels: subagentExecutionLabels,
+        totals: { rows: nextRowCount, bytes: nextByteCount },
+        width: normalizedWidth,
+      });
+      if (trimmed.trimmed) {
+        nextItems = trimmed.items;
+        nextRowCount = trimmed.totals.rows;
+        nextByteCount = trimmed.totals.bytes;
+        nextRepaintEpoch += 1;
+        changed = true;
+      }
+
+      const cursor = plan.cursor;
+      const cursorChanged =
+        cursor.entriesRef !== current.scan.entriesRef ||
+        cursor.scannedIndex !== current.scan.scannedIndex ||
+        cursor.lastScannedEntry !== current.scan.lastScannedEntry ||
+        cursor.status !== current.scan.status;
+      if (!changed && !cursorChanged) return current;
+
+      return {
+        ownerKey,
+        items: nextItems,
+        rowCount: nextRowCount,
+        byteCount: nextByteCount,
+        scan: cursor,
+        repaintEpoch: nextRepaintEpoch,
+      };
     });
   }, [
     childStreamEntries,
@@ -433,6 +972,16 @@ export function StaticConversationTranscript({
     normalizedWidth,
   ]);
 
+  const repaintKey = `${renderKey}:${state.repaintEpoch}`;
+  const previousRenderKey = useRef<string | undefined>(undefined);
+  useLayoutEffect(() => {
+    const previous = previousRenderKey.current;
+    previousRenderKey.current = repaintKey;
+    if (previous !== undefined && previous !== repaintKey) {
+      onRenderKeyChange?.();
+    }
+  }, [onRenderKeyChange, repaintKey]);
+
   // Keep our scrollback state readonly and adapt once at the Ink boundary.
   // `<Static>` declares `items: T[]`; memoizing the defensive copy avoids the
   // old O(history) spread on unrelated renders without exposing state to a
@@ -441,7 +990,7 @@ export function StaticConversationTranscript({
 
   return (
     <Static
-      key={`transcript:${renderKey}:${normalizedWidth}`}
+      key={`transcript:${renderKey}:${normalizedWidth}:${state.repaintEpoch}`}
       items={staticItems}
     >
       {(item: StaticTranscriptItem, index: number) => (

@@ -127,6 +127,15 @@ const CHILD_EVENT_ORDER_CWD = mkdtempSync(
 process.on('exit', () => {
   rmSync(CHILD_EVENT_ORDER_CWD, { recursive: true, force: true });
 });
+// The static-transcript repaint scenarios compare a resize/resume repaint
+// against a from-scratch render of the same retained tail, so they too need a
+// byte-stable cwd across the canonical/reflow pair.
+const STATIC_TRANSCRIPT_CWD = mkdtempSync(
+  path.join(tmpdir(), 'texra-tui-static-transcript-'),
+);
+process.on('exit', () => {
+  rmSync(STATIC_TRANSCRIPT_CWD, { recursive: true, force: true });
+});
 const CHILD_EVENT_ORDER_MARKER_OSC = 777;
 const CHILD_EVENT_ORDER_MARKER_PREFIX = 'texra-harness-child-event-order:';
 
@@ -143,6 +152,44 @@ const SCENARIOS = [
       '◆',
       'Ctrl-C exit',
     ],
+  },
+
+  {
+    name: 'static-transcript-repaint-canonical',
+    frame: 'scrollback',
+    rows: 24,
+    cols: 80,
+    env: {
+      HARNESS_ENTRIES: '12',
+      HARNESS_CWD: STATIC_TRANSCRIPT_CWD,
+    },
+    expect: ['TeXRA', 'chat history line to grow the transcript pane'],
+  },
+  {
+    name: 'static-transcript-repaint-reflow',
+    equivalentFrameTo: 'static-transcript-repaint-canonical',
+    frame: 'scrollback',
+    rows: 24,
+    cols: 40,
+    env: {
+      HARNESS_ENTRIES: '12',
+      HARNESS_CWD: STATIC_TRANSCRIPT_CWD,
+    },
+    resizes: [{ cols: 80, rows: 24 }],
+    expect: ['TeXRA', 'chat history line to grow the transcript pane'],
+  },
+  {
+    name: 'static-transcript-terminal-resume',
+    equivalentFrameTo: 'static-transcript-repaint-canonical',
+    frame: 'scrollback',
+    rows: 24,
+    cols: 80,
+    env: {
+      HARNESS_ENTRIES: '12',
+      HARNESS_CWD: STATIC_TRANSCRIPT_CWD,
+      HARNESS_TERMINAL_RESUME_REPAINT: '1',
+    },
+    expect: ['TeXRA', 'chat history line to grow the transcript pane'],
   },
   {
     name: 'workflow-timeline',
