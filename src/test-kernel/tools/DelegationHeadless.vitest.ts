@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => ({
   getExecutionStore: vi.fn(),
   getVisibleAgents: vi.fn(),
   inspectExecutionLease: vi.fn(),
+  abandonOwnedExecutionLease: vi.fn(),
   isApprovalBypassedForStream: vi.fn(),
   isProposalBypassed: vi.fn(),
   registerExecution: vi.fn(),
@@ -99,7 +100,7 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   // The session's one exit choreography runs for real over these inert lease
   // verbs; the release spy observes its terminal step.
   renewOwnedExecutionLease: vi.fn(async () => {}),
-  abandonOwnedExecutionLease: vi.fn(),
+  abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
   completeOwnedExecutionLease: vi.fn(async (executionId: ExecutionId) =>
     mocks.releaseOwnedExecutionLease(executionId),
   ),
@@ -578,30 +579,97 @@ describe('headless delegation', () => {
     );
   });
 
-  it('commits stable success only after final artifact release', async () => {
+  it('commits stable success after artifact drain but before lease release', async () => {
     const logicalExecutionId = 'cccccc666666' as ExecutionId;
     const childStore = memoryExecutionStore();
+    const order: string[] = [];
+    const originalWrite = childStore.write.getMockImplementation();
+    childStore.write.mockImplementation(async (key, value) => {
+      await originalWrite?.(key, value);
+      const phase = (value as { phase?: string }).phase;
+      if (phase) order.push(phase);
+    });
+    const detachFlusher = defaultSession().useArtifactFlusher(async () => {
+      order.push('drain');
+    });
+    mocks.releaseOwnedExecutionLease.mockImplementationOnce(async () => {
+      order.push('release');
+    });
     useStableStores(stableSequenceStore(logicalExecutionId), childStore);
 
-    await runInBand(delegationOptions(), logicalExecutionId);
+    try {
+      await runInBand(delegationOptions(), logicalExecutionId);
+    } finally {
+      detachFlusher();
+    }
 
-    const launchedWrite = childStore.write.mock.calls.findIndex(
-      ([key, value]) =>
-        key === 'stable-subagent-attempt' &&
-        (value as { phase?: string }).phase === 'launched',
-    );
-    const committedWrite = childStore.write.mock.calls.findIndex(
-      ([key, value]) =>
-        key === 'stable-subagent-attempt' &&
-        (value as { phase?: string }).phase === 'committed',
-    );
-    expect(launchedWrite).toBeGreaterThanOrEqual(0);
-    expect(committedWrite).toBeGreaterThan(launchedWrite);
+    expect(order).toContain('launched');
+    expect(order.lastIndexOf('drain')).toBeLessThan(order.indexOf('committed'));
+    expect(order.indexOf('committed')).toBeLessThan(order.indexOf('release'));
     expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledOnce();
-    expect(
-      childStore.write.mock.invocationCallOrder[committedWrite],
-    ).toBeGreaterThan(
-      mocks.releaseOwnedExecutionLease.mock.invocationCallOrder[0] ?? 0,
+  });
+
+  it('abandons the lease when the post-drain stable commit fails', async () => {
+    const logicalExecutionId = 'cccccc777777' as ExecutionId;
+    const childStore = memoryExecutionStore();
+    const commitError = new Error('commit write failed');
+    const originalWrite = childStore.write.getMockImplementation();
+    childStore.write.mockImplementation(async (key, value) => {
+      if ((value as { phase?: string }).phase === 'committed') {
+        throw commitError;
+      }
+      await originalWrite?.(key, value);
+    });
+    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toMatchObject({
+      name: 'SubagentCommitError',
+      message: expect.stringContaining('Failed to commit durable completion'),
+      cause: commitError,
+    });
+
+    expect(mocks.abandonOwnedExecutionLease).toHaveBeenCalledWith(
+      logicalExecutionId,
+    );
+    expect(mocks.releaseOwnedExecutionLease).not.toHaveBeenCalled();
+    expect(childStore.write).toHaveBeenCalledWith(
+      'stable-subagent-attempt',
+      expect.objectContaining({ phase: 'launched' }),
+    );
+    expect(childStore.write).not.toHaveBeenCalledWith(
+      'stable-subagent-attempt',
+      expect.objectContaining({ phase: 'retryable' }),
+    );
+  });
+
+  it('recovers committed success when lease deletion fails', async () => {
+    const logicalExecutionId = 'cccccc888888' as ExecutionId;
+    const childStore = memoryExecutionStore();
+    const releaseError = new Error('lease deletion failed');
+    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+    mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(releaseError);
+
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toMatchObject({
+      name: 'SubagentDurabilityError',
+      message: expect.stringContaining('committed durable completion'),
+      cause: releaseError,
+    });
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).resolves.toMatchObject({ executionId: logicalExecutionId });
+
+    expect(mocks.executeAgent).toHaveBeenCalledOnce();
+    expect(childStore.write).toHaveBeenCalledWith(
+      'stable-subagent-attempt',
+      expect.objectContaining({ phase: 'committed' }),
+    );
+    expect(childStore.write).not.toHaveBeenCalledWith(
+      'stable-subagent-attempt',
+      expect.objectContaining({ phase: 'retryable' }),
     );
   });
 
@@ -962,14 +1030,20 @@ describe('headless delegation', () => {
       return await write?.(key, value);
     });
     useStableStores(stableSequenceStore(logicalExecutionId), childStore);
-    mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(cleanupFailure);
-
-    await expect(
-      runInBand(delegationOptions(), logicalExecutionId),
-    ).rejects.toMatchObject({
-      name: 'SubagentDurabilityError',
-      cause: cleanupFailure,
+    const detachFlusher = defaultSession().useArtifactFlusher(async () => {
+      throw cleanupFailure;
     });
+
+    try {
+      await expect(
+        runInBand(delegationOptions(), logicalExecutionId),
+      ).rejects.toMatchObject({
+        name: 'SubagentDurabilityError',
+        cause: cleanupFailure,
+      });
+    } finally {
+      detachFlusher();
+    }
     mocks.inspectExecutionLease.mockResolvedValueOnce({
       status: 'foreign',
       heartbeatAt: Date.now(),
@@ -979,7 +1053,7 @@ describe('headless delegation', () => {
       runInBand(delegationOptions(), logicalExecutionId),
     ).rejects.toBeInstanceOf(SubagentReconciliationError);
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
-    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledOnce();
+    expect(mocks.releaseOwnedExecutionLease).not.toHaveBeenCalled();
   });
 
   it('does not recover a completed manifest after restart repair removes an abandoned lease', async () => {
@@ -999,19 +1073,25 @@ describe('headless delegation', () => {
       return await write?.(key, value);
     });
     useStableStores(stableSequenceStore(logicalExecutionId), childStore);
-    mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(cleanupFailure);
-
-    await expect(
-      runInBand(delegationOptions(), logicalExecutionId),
-    ).rejects.toMatchObject({
-      name: 'SubagentDurabilityError',
-      cause: cleanupFailure,
+    const detachFlusher = defaultSession().useArtifactFlusher(async () => {
+      throw cleanupFailure;
     });
+
+    try {
+      await expect(
+        runInBand(delegationOptions(), logicalExecutionId),
+      ).rejects.toMatchObject({
+        name: 'SubagentDurabilityError',
+        cause: cleanupFailure,
+      });
+    } finally {
+      detachFlusher();
+    }
 
     // Perform the restart repair's observable lease transition before the
     // stable call resumes: the abandoned lease no longer fences store writes.
     // That absence must not attest artifact-release success; only the explicit
-    // post-release commit marker can do that.
+    // post-drain commit marker can do that.
     abandonedLeasePresent = false;
     await expect(
       runInBand(delegationOptions(), logicalExecutionId),

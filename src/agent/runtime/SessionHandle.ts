@@ -883,15 +883,22 @@ export class SessionHandle {
    * writer has drained. Session artifacts persist between two short
    * owner-token validations — the durable lease remains fresh while the
    * session drains, so no file lock needs to cover unrelated transcript and
-   * snapshot I/O. A drain failure abandons the lease (record retained,
-   * renewal stopped) and rethrows; a poisoned lease completes as abandon.
-   * This is the one exit choreography every run driver calls.
+   * snapshot I/O. An optional post-drain operation may publish lifecycle state
+   * that is valid only once those artifacts are durable; it still runs before
+   * the lease record is deleted. A drain or post-drain failure abandons the
+   * lease (record retained, renewal stopped) and rethrows; a poisoned lease
+   * completes as abandon. This is the one exit choreography every run driver
+   * calls.
    */
-  async releaseExecutionLease(executionId: ExecutionId): Promise<void> {
+  async releaseExecutionLease(
+    executionId: ExecutionId,
+    afterArtifactsDrained?: () => void | Promise<void>,
+  ): Promise<void> {
     try {
       await renewOwnedExecutionLease(executionId);
       await this.flushArtifacts(executionId);
       await renewOwnedExecutionLease(executionId);
+      await afterArtifactsDrained?.();
     } catch (error) {
       abandonOwnedExecutionLease(executionId);
       throw error;
