@@ -11,13 +11,13 @@
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 
 import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
 import type { StreamStatusMachine } from './StreamStatusService';
-import type { SessionHostInteractions } from './HostInteractions';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 interface ResolvedResumeState {
@@ -26,9 +26,64 @@ interface ResolvedResumeState {
   readonly parentStreamId?: StreamTabId;
 }
 
+/**
+ * Outcome of {@link resolveResumeStateFromSnapshots}. `incomplete` carries the
+ * two fields it did read so each host keeps its own "which half is missing"
+ * surface (a log line in the extension, an info message on desktop).
+ */
+export type ResumeStateResolution =
+  | { readonly status: 'resolved'; readonly state: ResolvedResumeState }
+  | { readonly status: 'read-failed'; readonly error: unknown }
+  | {
+      readonly status: 'incomplete';
+      readonly runState: AgentConfig | undefined;
+      readonly executionId: ExecutionId | undefined;
+    };
+
+/**
+ * The one `resolveResumeState` for hosts whose persisted run metadata lives in
+ * a session's {@link StreamSnapshotStore} (extension and desktop; the CLI
+ * already holds the config it is resuming). Returns the outcome and never
+ * logs — the reporting surface stays host-owned.
+ *
+ * Preload-then-read (#9947): a stream whose sidecar record is not resident yet
+ * must be seeded from disk before the synchronous reads can be trusted. Both
+ * fields are re-read after the seed rather than filled in individually —
+ * seeding deliberately drops a resident config/execution pair whose sidecar
+ * names a different execution, and half of that invalidated pair must not
+ * survive into the resume.
+ */
+export async function resolveResumeStateFromSnapshots(
+  snapshots: Pick<
+    StreamSnapshotStore,
+    'getRunMetadata' | 'getParentStreamId' | 'preload'
+  >,
+  streamId: StreamTabId,
+): Promise<ResumeStateResolution> {
+  let { config: runState, executionId } = snapshots.getRunMetadata(streamId);
+  if (!runState || !executionId) {
+    try {
+      await snapshots.preload([streamId]);
+    } catch (error) {
+      return { status: 'read-failed', error };
+    }
+    ({ config: runState, executionId } = snapshots.getRunMetadata(streamId));
+  }
+  if (!runState || !executionId) {
+    return { status: 'incomplete', runState, executionId };
+  }
+  const parentStreamId = snapshots.getParentStreamId(streamId);
+  return {
+    status: 'resolved',
+    state: {
+      runState,
+      executionId,
+      ...(parentStreamId !== undefined && { parentStreamId }),
+    },
+  };
+}
+
 export interface ResumeStreamPorts {
-  /** Session host interactions receiving the RESUMING/WAITING status updates. */
-  readonly interactions: SessionHostInteractions;
   /**
    * The status machine of the session that owns this stream — process-owned on
    * desktop, and the default session's machine in the extension/CLI. The

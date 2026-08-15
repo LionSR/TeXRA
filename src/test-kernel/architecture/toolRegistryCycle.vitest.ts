@@ -31,17 +31,13 @@ import { REPO_ROOT, sourceFilesUnder, toRepoPath } from '../support/repoScan';
 const TOOL_REGISTRY = 'src/tools/registry.ts';
 
 /**
- * Tools whose closure may still contain the registry: both launch a subagent
- * in-band, and resolving that subagent's YAML tool list genuinely needs the
- * whole tool table (`inBandSubagentExecution -> executeAgent -> agentLoad ->
- * @tools/registry`). That is a real dependency, not a cycle artifact — but it
- * is also the only reason these two still ship the domain tools, so shrink this
- * list rather than growing it.
+ * Tools whose closure may still contain the registry. Empty since the
+ * delegation tools stopped reaching `executeAgent` statically: the engine now
+ * provides its entry points to `nativeSubagentStrategy` at its own module
+ * load, so even the agent-launching tools resolve the tool table through the
+ * live engine rather than through their import closure. Keep it empty.
  */
-const AGENT_LAUNCHING_TOOLS: readonly string[] = [
-  'src/tools/delegation/DelegationTools.ts',
-  'src/tools/delegation/WorkflowScriptTool.ts',
-];
+const AGENT_LAUNCHING_TOOLS: readonly string[] = [];
 
 /** Domain subsystems no generic tool should have to install. */
 const DOMAIN_PREFIXES = [

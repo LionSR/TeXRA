@@ -16,7 +16,10 @@ import type {
   ProposalResult,
 } from '@agent/runtime/HostInteractions';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
-import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
+import {
+  ExecutionLeaseLostError,
+  markOwnedExecutionLeaseUndurable,
+} from '@agent/storage/executionLease';
 import {
   STREAM_PHASE,
   AgentCategory,
@@ -32,12 +35,18 @@ import {
   SubagentReconciliationError,
   type InBandSubagentExecutionOptions,
 } from '@tools/delegation/inBandSubagentExecution';
+import {
+  provideAgentEngine,
+  type AgentEngine,
+} from '@tools/delegation/nativeSubagentStrategy';
 
 const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
   executeAgent: vi.fn(),
+  resumeToolUseFromResumeData: vi.fn(),
   getExecutionStore: vi.fn(),
   getVisibleAgents: vi.fn(),
+  inspectExecutionLease: vi.fn(),
   isApprovalBypassedForStream: vi.fn(),
   isProposalBypassed: vi.fn(),
   registerExecution: vi.fn(),
@@ -58,10 +67,6 @@ vi.mock('@agent/index/agentRegistry', () => ({
     entries: readonly { source: string; name: string }[],
     identifier: string,
   ) => entries.find((entry) => agentMatchesIdentifier(entry, identifier)),
-}));
-
-vi.mock('@agent/runtime/executeAgent', () => ({
-  executeAgent: mocks.executeAgent,
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -88,17 +93,15 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   captureOwnedExecutionLease:
     (_executionId: ExecutionId) => (operation: () => unknown) =>
       operation(),
+  inspectExecutionLease: mocks.inspectExecutionLease,
   markOwnedExecutionLeaseUndurable: vi.fn(),
   ownsExecutionLease: vi.fn(() => true),
-  runWithOwnedExecutionLease: vi.fn(
-    (_executionId: ExecutionId, operation: () => unknown) => operation(),
-  ),
-}));
-
-vi.mock('@agent/runtime/executionOwnership', () => ({
-  releaseExecutionLeaseAfterArtifacts: vi.fn(
-    async (_session: unknown, executionId: ExecutionId) =>
-      mocks.releaseOwnedExecutionLease(executionId),
+  // The session's one exit choreography runs for real over these inert lease
+  // verbs; the release spy observes its terminal step.
+  renewOwnedExecutionLease: vi.fn(async () => {}),
+  abandonOwnedExecutionLease: vi.fn(),
+  completeOwnedExecutionLease: vi.fn(async (executionId: ExecutionId) =>
+    mocks.releaseOwnedExecutionLease(executionId),
   ),
 }));
 
@@ -311,25 +314,30 @@ function stableAttempt(
 /** In-memory execution KV store: enough surface for the stable attempt path. */
 function memoryExecutionStore() {
   const kv = new Map<string, unknown>();
+  // The loop persists the manifest and the awaiting caller verifies it by
+  // read-back, so the fixture must retain writes like the real store does.
+  let resultMeta: unknown = null;
   return {
     listKeys: vi.fn(async () => [...kv.keys()]),
     read: vi.fn(async (key: string) => kv.get(key)),
     write: vi.fn(async (key: string, value: unknown) => {
       kv.set(key, value);
     }),
-    readResultMeta: vi.fn(async () => null),
+    readResultMeta: vi.fn(async () => resultMeta),
     writeReport: mocks.writeReport,
-    writeResultMeta: mocks.writeResultMeta,
+    writeResultMeta: vi.fn(async (value: unknown) => {
+      // Retain only writes that succeed, like the real store: a rejected
+      // write must stay invisible to the caller's durability read-back.
+      const written = await mocks.writeResultMeta(value);
+      resultMeta = value;
+      return written;
+    }),
   };
 }
 
 /** Child store with nothing persisted: what a fresh attempt starts from. */
 function emptyChildStore() {
-  return {
-    listKeys: vi.fn().mockResolvedValue([]),
-    read: vi.fn().mockResolvedValue(undefined),
-    readResultMeta: vi.fn().mockResolvedValue(null),
-  };
+  return memoryExecutionStore();
 }
 
 /** Child store holding a launched attempt marker and its result manifest. */
@@ -379,8 +387,14 @@ function stableSequenceStore(logicalExecutionId: ExecutionId, nextAttempt = 0) {
 }
 
 describe('headless delegation', () => {
+  let restoreAgentEngine = (): void => {};
+
   beforeEach(() => {
     vi.clearAllMocks();
+    restoreAgentEngine = provideAgentEngine({
+      executeAgent: mocks.executeAgent,
+      resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
+    } as unknown as AgentEngine);
     mocks.getVisibleAgents.mockReturnValue([
       {
         name: 'review',
@@ -399,6 +413,7 @@ describe('headless delegation', () => {
     ]);
     mocks.isProposalBypassed.mockReturnValue(true);
     mocks.isApprovalBypassedForStream.mockReturnValue(false);
+    mocks.inspectExecutionLease.mockResolvedValue({ status: 'missing' });
     const memoryStores = new Map<
       ExecutionId,
       ReturnType<typeof memoryExecutionStore>
@@ -422,6 +437,7 @@ describe('headless delegation', () => {
   });
 
   afterEach(() => {
+    restoreAgentEngine();
     for (const executionId of defaultSession().executions.getActiveIds()) {
       defaultSession().executions.untrack(executionId);
     }
@@ -455,6 +471,39 @@ describe('headless delegation', () => {
     expect(result.output).toContain('<response>');
     expect(result.output).toContain('The proof is correct.');
     expect(mocks.writeReport).toHaveBeenCalledWith(result.output);
+  });
+
+  it('projects in-band child progress onto the parent trace', async () => {
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      options.onProgress?.({ kind: 'started' });
+      options.onProgress?.({
+        kind: 'overview',
+        toolCallCount: 3,
+        filesChanged: ['a.tex'],
+      });
+      return {
+        category: 'toolUse',
+        outcome: 'completed',
+        executionId: 'child-exec',
+        streamId: 'child-stream',
+        response: 'done',
+        files: [],
+      };
+    });
+    const info = vi.fn();
+
+    await withToolFileInteractionContext(
+      { tracker: {} as never, trace: { info } as never },
+      () =>
+        withRunContext(parentRunContext({ stopAfterCycle: true }), () =>
+          callDelegateReview(),
+        ),
+    );
+
+    expect(info).toHaveBeenCalledWith("Subagent 'review' started");
+    expect(info).toHaveBeenCalledWith(
+      "Subagent 'review': 3 tool calls, 1 files changed",
+    );
   });
 
   it('marks the execution lease undurable when the in-band delivery report write fails', async () => {
@@ -497,7 +546,10 @@ describe('headless delegation', () => {
       files: [],
       cost: 0,
     });
-    expect(mocks.writeReport).not.toHaveBeenCalled();
+    // The single driver persists the report alongside the manifest for every
+    // child — a scripted grandchild is debuggable through the same artifacts
+    // as any detached child (this closed item 10's report gap).
+    expect(mocks.writeReport).toHaveBeenCalled();
     expect(mocks.registerExecution).toHaveBeenCalledWith(
       result.executionId,
       expect.objectContaining({ agent: 'review' }),
@@ -507,13 +559,18 @@ describe('headless delegation', () => {
         streamId: expect.stringContaining(`#${result.executionId}`),
       }),
     );
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith({
-      producer: 'subagent',
-      agentName: 'review',
-      parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-      wallTimeMs: expect.any(Number),
-      result: result.result,
-    });
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        producer: 'subagent',
+        agentName: 'review',
+        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        wallTimeMs: expect.any(Number),
+        // The loop stamps turn attribution on every manifest it persists —
+        // scripted children included (this closed item 10's turnToken gap).
+        turnToken: expect.any(String),
+        result: result.result,
+      }),
+    );
     expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.releaseOwnedExecutionLease.mock.invocationCallOrder[0],
     );
@@ -713,11 +770,7 @@ describe('headless delegation', () => {
                   .fn()
                   .mockResolvedValue(stableAttempt(logicalExecutionId, phase)),
               }
-            : {
-                ...emptyChildStore(),
-                write: vi.fn().mockResolvedValue(undefined),
-                writeResultMeta: mocks.writeResultMeta,
-              };
+            : emptyChildStore();
         stores.set(id, store);
         return store;
       });
@@ -781,11 +834,7 @@ describe('headless delegation', () => {
             files: [],
             cost: 0,
           })
-        : {
-            ...emptyChildStore(),
-            write: vi.fn().mockResolvedValue(undefined),
-            writeResultMeta: mocks.writeResultMeta,
-          };
+        : emptyChildStore();
       stores.set(id, store);
       return store;
     });
@@ -812,7 +861,9 @@ describe('headless delegation', () => {
     await expect(runInBand(delegationOptions())).rejects.toBeInstanceOf(
       SubagentDurabilityError,
     );
-    expect(mocks.writeReport).not.toHaveBeenCalled();
+    // The single driver persists the report independently of the manifest;
+    // the manifest read-back is what gates the typed return.
+    expect(mocks.writeReport).toHaveBeenCalled();
   });
 
   it('preserves the child failure when final lease cleanup also fails', async () => {
@@ -825,14 +876,39 @@ describe('headless delegation', () => {
     await expect(runInBand(delegationOptions())).rejects.toBe(childFailure);
   });
 
-  it('surfaces final lease cleanup failure after a successful child', async () => {
-    mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(
-      new Error('artifact flush failed'),
-    );
+  it('does not recover a typed result while failed artifact cleanup retains its lease', async () => {
+    const cleanupFailure = new Error('artifact flush failed');
+    const logicalExecutionId = 'dddddd777777' as ExecutionId;
+    const childStore = memoryExecutionStore();
+    const write = childStore.write.getMockImplementation();
+    childStore.write.mockImplementation(async (key, value) => {
+      if (
+        key === 'stable-subagent-attempt' &&
+        (value as { phase?: string }).phase === 'retryable'
+      ) {
+        throw new ExecutionLeaseLostError(logicalExecutionId);
+      }
+      return await write?.(key, value);
+    });
+    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+    mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(cleanupFailure);
 
-    await expect(runInBand(delegationOptions())).rejects.toThrow(
-      'artifact flush failed',
-    );
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toMatchObject({
+      name: 'SubagentDurabilityError',
+      cause: cleanupFailure,
+    });
+    mocks.inspectExecutionLease.mockResolvedValueOnce({
+      status: 'foreign',
+      heartbeatAt: Date.now(),
+    });
+
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+    expect(mocks.executeAgent).toHaveBeenCalledOnce();
+    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledOnce();
   });
 
   it('preserves the child failure when its failure manifest cannot be written', async () => {
@@ -859,8 +935,18 @@ describe('headless delegation', () => {
 
     const run = runInBand(delegationOptions());
 
-    await expectDurabilityErrorPreservingChildFailure(run);
-    expect(mocks.writeResultMeta).not.toHaveBeenCalled();
+    // An unconstructable failure result degrades to the category-only
+    // manifest carrying the child's real error, so durability holds and the
+    // caller sees the child failure itself.
+    await expect(run).rejects.toThrow('review model failed');
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          outcome: 'failed',
+          error: expect.objectContaining({ message: 'review model failed' }),
+        }),
+      }),
+    );
   });
 
   it('does not rewrite a completed child when typed result construction fails', async () => {

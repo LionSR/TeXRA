@@ -109,7 +109,6 @@ export const TOOL_ICON_MAP: Record<string, TeXRAIconName> = {
   read_file: 'file',
   write_file: 'file-circle-plus',
   edit_file: 'pencil',
-  str_replace_editor: 'pencil',
 
   // Search/find
   glob: 'magnifying-glass',
@@ -117,6 +116,9 @@ export const TOOL_ICON_MAP: Record<string, TeXRAIconName> = {
   // These tools are no longer registered, but persisted progress entries from
   // past runs still reference them — keep their icons so historical runs
   // render with the right glyphs instead of the generic fallback.
+  // `str_replace_editor` is also Anthropic's native text-editor tool name, so
+  // a delegated sub-agent can still report it live.
+  str_replace_editor: 'pencil',
   apply_path: 'code-compare',
   crossref_doi: 'link',
   ls: 'folder-open',

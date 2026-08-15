@@ -4,16 +4,16 @@
  * the polling source, key derivation, and external event names differ.
  *
  * Each (streamId, key) pair holds one disposable from the polling source.
- * Event callbacks route through `sendFollowUp` so events land in the same
- * follow-up queue user-typed messages use; the agent consumes them via
- * the normal `waitForFollowUp` mechanism. When a stream's queue is released
+ * Event callbacks route through `deliverLiveNotification` so events land in
+ * the same follow-up queue user-typed messages use; the agent consumes them
+ * via the normal `waitForFollowUp` mechanism. When a stream's queue is released
  * (orchestrator disposed, user deleted the stream) every subscription
  * bound to that stream is auto-disposed.
  */
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { deliverLiveNotification } from '@agent/followUp/liveNotification';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   currentSession,
@@ -59,10 +59,9 @@ interface BoundSubscription {
   /**
    * Session captured at bind() time (inside the run's AsyncLocalStorage).
    * onEvent fires later from a detached polling timer where the ALS is empty, so
-   * it must pass this session to submitFollowUp explicitly — otherwise submitFollowUp
-   * falls back to defaultSession() and the follow-up is misrouted/dropped on a
-   * non-default session (for example, the desktop process session). Mirrors
-   * ExecutionSubscriptionBinder.
+   * it must travel with the notification — otherwise submitFollowUp falls back
+   * to defaultSession() and the follow-up is misrouted/dropped on a non-default
+   * session (for example, the desktop process session).
    */
   session: SessionHandle;
   /** Continuation generation in which this detached producer was bound. */
@@ -115,29 +114,17 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       expectedGenerationId: session.followUps.currentGenerationId(streamId),
     };
     subscription.onEvent = (text: string) => {
-      void submitFollowUp(streamId, text, {
+      deliverLiveNotification({
+        streamId,
+        followUp: text,
         session: subscription.session,
-        mode: 'live_notification',
-        ...(subscription.expectedGenerationId !== undefined
-          ? { expectedGenerationId: subscription.expectedGenerationId }
-          : {}),
-      })
-        .then((result) => {
-          if (result.status === 'sent' || result.status === 'queued') {
-            subscription.session.events.emit({
-              scope: 'session',
-              event: {
-                type: 'updateQueuedFollowUps',
-                payload: { streamId },
-              },
-            });
-          }
-        })
-        .catch((err: unknown) => {
-          this.logger.warn('Failed to deliver subscription follow-up', {
-            data: { key, streamId, err },
-          });
-        });
+        expectedGenerationId: subscription.expectedGenerationId,
+        logger: this.logger,
+        failure: {
+          message: 'Failed to deliver subscription follow-up',
+          data: { key, streamId },
+        },
+      });
     };
     bound.set(key, subscription);
     // The source's keys-changed event fires synchronously during subscribe()

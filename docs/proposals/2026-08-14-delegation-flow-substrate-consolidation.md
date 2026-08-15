@@ -1,7 +1,79 @@
 # Delegation and flow substrate consolidation: the remaining ten debts
 
-Status: proposal (plan of record for execution ordering)
-Date: 2026-08-14
+Status: Waves 1-4 implemented 2026-08-15 (PR #10475), with two amendments
+below. Wave 1 (items 1, 6, 9) + A4: the cycle break landed via an
+engine-provided `AgentEngine` slot in `nativeSubagentStrategy.ts` (both lazy
+imports retired; the `toolRegistryCycle` closure guard's agent-launching
+allowlist is now pinned empty); item 9's relocations follow the
+single-consumer test (`CycleServices` and `IToolUseSession` stayed;
+`toolCallParsing` moved up to `core/flows/`). Wave 2: item 2's cost
+contract written at `ChildRunPorts` (no site violated it; agent-CLI
+children's absent observer recorded as deliberate — open question 1
+answered); item 3's notify sink threads to the parent trace (workflow-YAML
+`tools:` warn folded in); item 10 decided result-only as contract (open
+question 3 audited: only the `report` action's copy assumed otherwise).
+Wave 3: item 5/A7 executed — one label derivation, delivery summary reads
+only persisted snapshots, `WorkflowScriptEvent` narrowed to `log` with the
+projection folding per-transition snapshots (`onTransition`). Wave 4:
+item 4 landed per `2026-08-15-child-run-concurrency-budget.md` (open
+question 2 answered there: per-session count budget, loop-owned single
+acquisition, in-band inherits, default 16; setting + per-provider-key
+recorded follow-ups).
+
+**Amendment (item 8, 2026-08-15): the hydration premise is stale.** The
+read + stamp spine was already consolidated in `@agent/node/persistedFlow`
+(#10286/#9990/#9966); the sole remaining duplication is a 5-line throw-idiom, and a
+measured extraction honoring the caller-owned-write constraint nets
+**+35 production LoC** for +2 exports. Item 8's hydration sub-item is
+closed as fails-net-gain; do not re-attempt. The real residual divergence
+is the honorable-mention schema-strictness asymmetry
+(`ToolUseRunSharedSchema` loose vs reflection strict), a behavior question.
+
+**Consolidation round (2026-08-15, maintainer directive "I cannot stand
+dual systems"), all on PR #10475:**
+
+- **A1 landed** (−70 LoC): `RetryState.ts` merged into `ModelInvocationNode`
+  as one deep module; the seven single-consumer classifiers collapsed into
+  one memoized `classifyModelRouteFailure` verdict honoring all three
+  verifier corrections.
+- **A2 landed** (−52 LoC) as _two_ trims: `proposalApproval.ts` dissolved
+  into `SessionApprovals`; the rejection-provenance union declared once and
+  derived five times. Trim 1 (the approval barrel) was already re-ruled a
+  documented public surface by review #10339 — not a banned barrel; skipped.
+- **A5/B9 landed**: the desktop polish defect was already fixed upstream
+  (#10365, with a regression test); the by-construction consolidation
+  shipped — one table-driven `initializeBundledPrompts(resourcesPath)` per
+  host replaces `polishModel.ts` + `goal/promptLoader.ts` (−2 modules, −3
+  initializers; failure semantics are per-row data). The `copy-resources`
+  claim in A5 was also stale.
+- **A6 landed, both tiers**: dead `ResumeStreamPorts.interactions` + its
+  suppliers deleted; `resumeAdmission.ts` dissolved into `executeAgent.ts`;
+  one `resolveResumeStateFromSnapshots` replaces the extension/desktop
+  mirror resolvers and the `ProgressViewProvider` singleton hop. The −45
+  estimate was not reachable honestly (net ≈ flat LoC, −5 elements).
+- **A8 stage 1 landed** (one `deliverLiveNotification` owner for the
+  copy-pasted post-notification sequence). **Stage 2 measured OUT with
+  probe evidence**: session-inclusive keying regresses shipped GitHub
+  behavior (single re-pointed binding → duplicate event delivery), and the
+  honest unified registry is interface-bigger-than-the-thing (~−65 LoC for
+  a multi-mode class). Standing negative result; do not re-propose without
+  first fixing the registry's own latent cross-session defect (release
+  hook wipes a whole stream bucket regardless of owning session — filing
+  candidate).
+- **B6 was already banked** in #10286 (TextEditorTool deleted wholesale
+  before the audit snapshot); the −870 is that PR's, not re-claimable. The
+  warn-and-degrade path for custom YAMLs is the generic unresolved-name
+  path, loud at three layers; one stale icon-table grouping fixed.
+- **Smells 1-2 of `2026-08-15-single-driver-child-runs.md` landed**:
+  `executeInBand` is no longer a second driver (in-band = await the one
+  loop + consume the settled turn's in-memory facts; the ledger keeps its
+  recovery contract via durability read-back), and sweep-settled call
+  outcomes are first-class (`settledBySweep`) instead of note-string
+  sniffing. Riding wins: `AgentFinalResult` carries a failed run's
+  structured error, and scripted grandchildren gained reports + turnToken
+  stamping — closing both item-10 gaps. Next in that note's queue: the
+  execution-lease scope unification (maintainer-flagged).
+  Date: 2026-08-14
 
 ## Framing
 

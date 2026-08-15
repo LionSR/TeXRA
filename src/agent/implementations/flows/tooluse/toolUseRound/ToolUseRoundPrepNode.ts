@@ -9,10 +9,10 @@ import {
   userFollowUpInstruction,
 } from '@agent/followUp/followUpMessages';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 
 // Local file imports
-import { FlowTransition } from '../FlowTransitions';
-import type { ToolUseRoundServices } from '../CycleServices';
 import type { ToolUseRoundShared } from './roundShared';
 
 /** Prep result for ToolUseRoundPrepNode - drained queued follow-up plus interrupt flag. */

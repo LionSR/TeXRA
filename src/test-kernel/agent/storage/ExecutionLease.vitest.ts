@@ -27,7 +27,6 @@ import {
   resetExecutionLeaseCoordinationForTests,
   renewOwnedExecutionLease,
   runWithInactiveExecutionLease,
-  runWithOwnedExecutionLease,
   captureOwnedExecutionLeaseIfPresent,
   waitForOwnedExecutionLeaseRelease,
 } from '@agent/storage/executionLease';
@@ -319,7 +318,7 @@ describe('cross-process execution leases', () => {
     await acquire(executionId);
     const onLeaseLost = vi.fn();
     onOwnedExecutionLeaseLost(executionId, onLeaseLost);
-    await runWithOwnedExecutionLease(executionId, async () => {
+    await captureOwnedExecutionLease(executionId)(async () => {
       await writeForeignLease(
         executionId,
         Date.now(),
@@ -346,14 +345,14 @@ describe('cross-process execution leases', () => {
     await acquire(executionId);
     const lateWriteGate = createDeferred();
     const lateWrite = Promise.resolve(
-      runWithOwnedExecutionLease(executionId, async () => {
+      captureOwnedExecutionLease(executionId)(async () => {
         await lateWriteGate.promise;
         expect(ownsExecutionLease(executionId)).toBe(false);
         markOwnedExecutionLeaseUndurable(executionId);
         abandonOwnedExecutionLease(executionId);
         await completeOwnedExecutionLease(executionId);
         expect(() =>
-          runWithOwnedExecutionLease(executionId, () => undefined),
+          captureOwnedExecutionLease(executionId)(() => undefined),
         ).toThrow(ExecutionLeaseLostError);
         await writeExecution(executionId);
       }),
@@ -367,7 +366,7 @@ describe('cross-process execution leases', () => {
     lateWriteGate.resolve();
     await expect(lateWrite).rejects.toBeInstanceOf(ExecutionLeaseLostError);
 
-    await runWithOwnedExecutionLease(executionId, () =>
+    await captureOwnedExecutionLease(executionId)(() =>
       getExecutionStore(executionId).writeMeta({
         timestamp: '2026-07-16T12:01:00.000Z',
       }),

@@ -7,7 +7,7 @@ import { addOutputText } from 'openai/lib/ResponsesParser';
 
 // Local imports
 import { logProgressStatus, startCompactionActivity } from '@agent/trace';
-import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
+import { parseToolInput } from '@agent/core/flows/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/types/mediaTypes';

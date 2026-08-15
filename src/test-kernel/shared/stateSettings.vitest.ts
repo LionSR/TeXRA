@@ -471,7 +471,7 @@ const CLI_CORE_SETTING_READER_FILES = {
   'src/agent/modelHandlers/ModelHandler.ts': [
     'model.compactionThresholdPercent',
   ],
-  'src/agent/core/flows/RetryState.ts': ['model.retry.maxAttempts'],
+  'src/agent/core/flows/ModelInvocationNode.ts': ['model.retry.maxAttempts'],
   // Thin provider modules own the public prefer-switch surface; the shared
   // factory in subscriptionPreference.ts is not a separate consumer key.
   'src/model/codex/codexPreference.ts': ['chatgptCodex.preferSubscription'],

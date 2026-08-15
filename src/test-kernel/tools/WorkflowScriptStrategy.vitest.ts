@@ -306,6 +306,32 @@ throw new Error('script failed after replay')`;
     expect(errText).toContain('"taskTotal":1');
   });
 
+  it('keeps the delivery summary at the last persisted snapshot when snapshot writes fail', async () => {
+    const ports = fakePorts();
+    const strategy = createWorkflowScriptStrategy(
+      strategyParams({
+        name: 'snapshot-write-failure',
+        script,
+        createRunAgent: billingRunAgent,
+        onSnapshot: async () => {
+          throw new Error('snapshot disk full');
+        },
+      }),
+    );
+
+    await expect(strategy.launch(ports, new AbortController())).rejects.toThrow(
+      'Failed to persist workflow execution snapshot',
+    );
+
+    // No snapshot was ever durably written, so the failure summary must
+    // report the durable view (nothing ran) rather than the newer in-memory
+    // snapshot the rejected write carried.
+    const errText = await strategy.formatError(null, new Error('boom'));
+    expect(errText).toContain('"outcome":"failed"');
+    expect(errText).toContain('"taskDone":0');
+    expect(errText).toContain('"taskTotal":0');
+  });
+
   it('retains live spend when the completed journal result is malformed', async () => {
     const malformedScript = `export const meta = {
   name: 'malformed-cost',

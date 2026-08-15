@@ -14,7 +14,7 @@ vi.mock('@agent/runtime/helperModel', () => ({
   runHelperModelCompletion: mocks.runHelperModelCompletion,
 }));
 
-vi.mock('@agent/runtime/polishModel', () => ({
+vi.mock('@agent/runtime/bundledPrompts', () => ({
   renderPolishPrompt: mocks.renderPolishPrompt,
 }));
 

@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import {
   buildCliWorkflowResultMeta,
   deriveResumability,
-  getExecutionStore,
+  persistChildRunResultMeta,
   type ResumabilityDecision,
 } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
@@ -308,11 +308,10 @@ async function persistWorkflowResultMeta(
   executionId: string,
   resultMeta: ReturnType<typeof buildCliWorkflowResultMeta>,
 ): Promise<void> {
-  try {
-    await getExecutionStore(executionId).writeResultMeta(resultMeta);
-  } catch (error) {
+  const result = await persistChildRunResultMeta(executionId, resultMeta);
+  if (result.kind === 'failed') {
     writeTextStderr(
-      `Warning: could not persist workflow result metadata: ${toErrorMessage(error)}`,
+      `Warning: could not persist workflow result metadata: ${toErrorMessage(result.err)}`,
     );
   }
 }
