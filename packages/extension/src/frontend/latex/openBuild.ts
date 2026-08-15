@@ -91,9 +91,16 @@ export async function invokeLatexWorkshopBuild(
  * Open a file, compile if it is TeX, and display the resulting PDF.
  * The PDF viewer is refreshed if already loaded.
  *
- * Resolves `true` when a surface was actually opened, and `false` when the
- * path is missing or the internal LaTeX compilation failed, so presentation
- * callers can report non-delivery truthfully.
+ * Resolves `true` when a surface was actually presented, and `false` when
+ * the path is missing, the internal LaTeX compilation failed, or the PDF
+ * viewer command rejected, so presentation callers can report non-delivery
+ * truthfully.
+ *
+ * Workspace TeX files are built through LaTeX Workshop rather than the
+ * internal compiler. A `latex-workshop.build` failure is warn-logged but does
+ * not by itself make this resolve `false`: LaTeX Workshop surfaces its own
+ * build-failure UI in the editor, so the returned boolean reports the
+ * viewer-open outcome that follows the build attempt.
  */
 export async function openBuildDisplayIfTex(
   fileLocation: FileLocation,
@@ -128,6 +135,8 @@ export async function openBuildDisplayIfTex(
  * Files outside the workspace (e.g. in run-storage) are compiled with the
  * internal `compileLatex2Pdf` helper which sets TEXINPUTS to include the
  * workspace root, ensuring project-local .sty / .cls / .bib files are found.
+ *
+ * Returns the viewer-open outcome after the build path completes.
  */
 async function openAndBuildLatex(
   uri: vscode.Uri,
@@ -161,24 +170,37 @@ async function openAndBuildLatex(
     }
   }
 
-  scheduleViewerDisplay();
-  return true;
+  return scheduleViewerDisplay();
 }
 
 /**
- * Schedule PDF viewer display and refresh after build.
+ * Open the PDF viewer after the build, then refresh it once it is visible.
+ *
+ * Resolves `true` when `latex-workshop.view` accepts the open request, and
+ * `false` when it rejects, so the caller can report viewer non-delivery.
  */
-function scheduleViewerDisplay(): void {
-  setTimeout(() => {
-    vscode.commands.executeCommand('latex-workshop.view').then(
-      () => {
-        setTimeout(() => {
-          vscode.commands.executeCommand('latex-workshop.refresh-viewer');
-        }, LATEX_VIEWER_REFRESH_DELAY_MS);
-      },
-      (err) => {
-        logger.warn(CHANNEL, `Viewer display failed: ${toErrorMessage(err)}`);
-      },
-    );
-  }, LATEX_VIEWER_OPEN_DELAY_MS);
+function scheduleViewerDisplay(): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    setTimeout(() => {
+      void vscode.commands.executeCommand('latex-workshop.view').then(
+        () => {
+          setTimeout(() => {
+            void vscode.commands
+              .executeCommand('latex-workshop.refresh-viewer')
+              .then(undefined, (err: unknown) => {
+                logger.warn(
+                  CHANNEL,
+                  `Viewer refresh failed: ${toErrorMessage(err)}`,
+                );
+              });
+          }, LATEX_VIEWER_REFRESH_DELAY_MS);
+          resolve(true);
+        },
+        (err: unknown) => {
+          logger.warn(CHANNEL, `Viewer display failed: ${toErrorMessage(err)}`);
+          resolve(false);
+        },
+      );
+    }, LATEX_VIEWER_OPEN_DELAY_MS);
+  });
 }
