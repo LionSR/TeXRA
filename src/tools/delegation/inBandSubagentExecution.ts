@@ -27,7 +27,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
@@ -58,6 +58,7 @@ import {
 } from './nativeSubagentStrategy';
 
 const LOG_CHANNEL = 'inBandSubagentExecution';
+const log = createLog(LOG_CHANNEL);
 
 interface InBandSubagentExecutionBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
@@ -320,14 +321,13 @@ async function throwRetryableDurabilityError(
       const repair = await runWithInactiveExecutionLease(executionId, () =>
         writeStableSubagentAttempt(getExecutionStore(executionId), marker),
       ).catch((repairError: unknown) => {
-        logger.warn(LOG_CHANNEL, 'Retryable-marker repair write failed', {
+        log.warn('Retryable-marker repair write failed', {
           data: { executionId, error: repairError },
         });
         return undefined;
       });
       if (repair?.status !== 'performed') {
-        logger.warn(
-          LOG_CHANNEL,
+        log.warn(
           'Deferred retryable marker to resume-time reconciliation: the child lease is still held',
           { data: { executionId } },
         );
@@ -354,12 +354,12 @@ function recordCost(
   try {
     const observed = onCost?.(totalCostUsd);
     void Promise.resolve(observed).catch((error: unknown) => {
-      logger.warn(LOG_CHANNEL, 'Subagent cost observer rejected', {
+      log.warn('Subagent cost observer rejected', {
         data: error,
       });
     });
   } catch (error) {
-    logger.warn(LOG_CHANNEL, 'Subagent cost observer failed', {
+    log.warn('Subagent cost observer failed', {
       data: error,
     });
   }
