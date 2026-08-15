@@ -342,11 +342,16 @@ export function matchesCancelSelector(
  * adapters own presentation, request-id resolution, and local disposal.
  */
 export interface HostInteractions {
-  /** Present an ignorable runtime event through the active host attachment. */
+  /**
+   * Present a runtime event through the active host attachment. A host that
+   * renders the event returns `true` (or a `Promise<true>` once rendered);
+   * a host that ignores it or cannot deliver it returns `false`, so callers
+   * can keep a fallback surface instead of assuming fire-and-forget delivery.
+   */
   emit?<K extends RuntimePresentationEvent>(
     event: K,
     payload: RuntimePresentationEventPayloads[K],
-  ): void;
+  ): boolean | Promise<boolean>;
   /** Read diagnostics from the active host integration. */
   readonly readDiagnostics?: DiagnosticsReader;
   /** Add one manual criticism to the active host diagnostics surface. */
@@ -418,7 +423,7 @@ export class SessionHostInteractions implements HostInteractions {
   private readonly pendingCountListeners: ListenerSet<(count: number) => void> =
     createListenerSet();
   private readonly pendingPresentationReplays: Array<
-    (interactions: HostInteractions) => Promise<void> | void
+    (interactions: HostInteractions) => unknown
   > = [];
   private attachmentVersion = 0;
   private disposed = false;
@@ -462,15 +467,41 @@ export class SessionHostInteractions implements HostInteractions {
     event: K,
     payload: RuntimePresentationEventPayloads[K],
     options: AgentRuntimeEmitOptions = {},
-  ): void {
+  ): boolean | Promise<boolean> {
     const active = this.activeAttachment;
     if (active) {
-      active.interactions.emit?.(event, payload);
-    } else if (options.replayWhenAttached && !this.disposed) {
-      this.queuePresentationReplay((interactions) =>
-        interactions.emit?.(event, payload),
-      );
+      return active.interactions.emit?.(event, payload) ?? false;
     }
+    if (options.replayWhenAttached && !this.disposed) {
+      // A retained replay is not delivery: nothing has been rendered yet, so
+      // the caller must not treat this as confirmed presentation. The replay
+      // closure reports the eventual delivery result back through the
+      // option callbacks once a live host actually renders (or declines) it.
+      this.queuePresentationReplay((interactions) => {
+        const delivered = interactions.emit?.(event, payload);
+        if (!options.onReplayDelivered && !options.onReplayNotDelivered) {
+          return delivered;
+        }
+        return Promise.resolve(delivered).then(
+          (value) => {
+            if (value === true) {
+              options.onReplayDelivered?.();
+            } else {
+              options.onReplayNotDelivered?.(interactions);
+            }
+          },
+          (error: unknown) => {
+            logger.warn('Replayed presentation notice failed', {
+              data: error,
+            });
+            options.onReplayNotDelivered?.(interactions);
+          },
+        );
+      });
+      options.onReplayScheduled?.();
+      return false;
+    }
+    return false;
   }
 
   get readDiagnostics(): DiagnosticsReader | undefined {
@@ -699,7 +730,7 @@ export class SessionHostInteractions implements HostInteractions {
   }
 
   private queuePresentationReplay(
-    replay: (interactions: HostInteractions) => Promise<void> | void,
+    replay: (interactions: HostInteractions) => unknown,
   ): void {
     if (
       this.pendingPresentationReplays.length >= MAX_PENDING_PRESENTATION_REPLAYS
