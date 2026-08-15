@@ -300,11 +300,18 @@ function resolveConfigDepPath(configDir, spec, kind) {
   push(base);
   for (const ext of CJS_FILE_EXTENSIONS) push(`${base}${ext}`);
 
-  // stat, not lstat: Node's LOAD_AS_DIRECTORY follows a symlinked
-  // dependency directory too. Candidates reached through the link traverse
-  // a worktree symlink, which verifyConfigDep rejects loudly, so following
-  // the link here can never verify the wrong file.
-  if (statSync(base, { throwIfNoEntry: false })?.isDirectory()) {
+  // Node applies LOAD_AS_DIRECTORY only when LOAD_AS_FILE found no file:
+  // an admitted file candidate wins outright and the directory's package
+  // main/index.* are never inspected, so an irrelevant directory beside the
+  // winner (for example an untracked symlinked package) must not force a
+  // skip either. stat, not lstat: Node's LOAD_AS_DIRECTORY follows a
+  // symlinked dependency directory too. Candidates reached through the link
+  // traverse a worktree symlink, which verifyConfigDep rejects loudly, so
+  // following the link here can never verify the wrong file.
+  if (
+    candidates.length === 0 &&
+    statSync(base, { throwIfNoEntry: false })?.isDirectory()
+  ) {
     const main = readPackageMain(base);
     if (main) {
       const mainTarget = resolve(base, normalizeSpecifier(main));
