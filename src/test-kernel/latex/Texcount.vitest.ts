@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LATEX_COMMANDS_CHANNEL } from '@latex/latexLogging';
 import { getTeXCount } from '@latex/texcount';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import { installPlatform } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
@@ -61,6 +62,37 @@ describe('texcount logger seam', () => {
     expect(warn).toHaveBeenCalledWith(
       'pinnedTexcount',
       expect.stringContaining('does not exist'),
+    );
+  });
+
+  // The module-level `const log = createLog(CHANNEL)` in texcount.ts is bound
+  // at import time, before this suite's spy exists — exactly the case
+  // createLog's per-call loggerSelf lookup exists for. A read failure inside
+  // hasChinesePackages must still reach the spied namespace.
+  it('emits through the import-time module binding when the Chinese-package check fails', async () => {
+    await installPlatform({
+      workspacePath: '/workspace',
+      files: { '/workspace/main.tex': '\\documentclass{article}\n' },
+    });
+    // The first (and only) AbsoluteFS.read in this flow is hasChinesePackages'.
+    vi.spyOn(platform().fs, 'readFile').mockRejectedValueOnce(
+      new Error('disk flutter'),
+    );
+    mocks.runToolWithCheck.mockResolvedValue({
+      success: true,
+      stdout: 'Words in text: 5',
+      stderr: '',
+      exitCode: 0,
+    });
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+
+    const result = await getTeXCount('main.tex');
+
+    // The failed Chinese-package probe is best-effort: the count still runs.
+    expect(result.output).toContain('Words in text: 5');
+    expect(error).toHaveBeenCalledWith(
+      LATEX_COMMANDS_CHANNEL,
+      expect.stringContaining('Error checking Chinese packages: disk flutter'),
     );
   });
 

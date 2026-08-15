@@ -158,6 +158,9 @@ describe('outputDiscovery logger seam', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    // clearAllMocks keeps mockRejectedValue implementations — reset so a
+    // rejection pinned by one test cannot leak into the next.
+    mocks.findRunDir.mockReset();
     await installPlatform({}, { fs: nodeFilesystem });
   });
 
@@ -227,6 +230,8 @@ describe('outputDiscovery logger seam', () => {
       '\\documentclass{article}\\begin{document}x\\end{document}',
     );
     const unreadable = path.join(runDir, 'r0');
+    // Hand-rolled because FakeFileSystemProvider cannot inject a per-path
+    // readDirectory failure — it seeds files, not fault rules.
     await installPlatform(
       {},
       {
