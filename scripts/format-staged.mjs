@@ -40,6 +40,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -203,9 +204,13 @@ function isConfigPointerPath(spec) {
   return isRelativeSpecifier(spec) || isAbsolute(spec);
 }
 
-/** True when `path` is a regular file in the working tree. */
+/** True when `path` is a regular file in the working tree. Node's
+ * LOAD_AS_FILE/tryExtensions classify with stat, so a symlink to a file
+ * counts: admitting the link as a candidate makes an untracked one a loud
+ * "not staged" skip instead of a silent fall-through to a fallback Node
+ * would never load. */
 function isWorktreeFile(path) {
-  return lstatSync(path, { throwIfNoEntry: false })?.isFile() === true;
+  return statSync(path, { throwIfNoEntry: false })?.isFile() === true;
 }
 
 /** Return the `main` entry of a dependency directory's package.json. The
@@ -289,7 +294,11 @@ function resolveConfigDepPath(configDir, spec, kind) {
       // an unstaged edit to the real main drive Prettier.
       push(mainTarget);
       for (const ext of CJS_FILE_EXTENSIONS) push(`${mainTarget}${ext}`);
-      if (lstatSync(mainTarget, { throwIfNoEntry: false })?.isDirectory()) {
+      // stat, not lstat: Node's LOAD_AS_DIRECTORY follows symlinks, so a
+      // main target that links to a directory resolves to its index.*.
+      // Classifying the link itself would skip those candidates and verify
+      // the package-level index.* fallback Node never loads (#10602).
+      if (statSync(mainTarget, { throwIfNoEntry: false })?.isDirectory()) {
         for (const indexName of CJS_INDEX_EXTENSIONS) {
           push(join(mainTarget, indexName));
         }

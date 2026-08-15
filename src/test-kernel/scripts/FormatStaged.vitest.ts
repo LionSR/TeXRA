@@ -1353,6 +1353,203 @@ describe('format-staged', () => {
     expect(stagedBlob('a.ts')).toBe('export const x = 1;\n');
   });
 
+  it.skipIf(process.platform === 'win32')(
+    'skips when a directory package main is an untracked symlink to a directory (#10602)',
+    () => {
+      mkdirSync(join(dir, 'config/opts/dist-target'), { recursive: true });
+      writeFileSync(join(dir, 'config/opts/package.json'), '{"main":"dist"}\n');
+      writeFileSync(
+        join(dir, 'config/opts/dist-target/index.js'),
+        'module.exports = { semi: true };\n',
+      );
+      writeFileSync(
+        join(dir, 'config/opts/index.js'),
+        'module.exports = { semi: true };\n',
+      );
+      writeFileSync(
+        join(dir, 'config/prettier.cjs'),
+        'const opts = require("./opts");\nmodule.exports = opts;\n',
+      );
+      writeFileSync(
+        join(dir, 'package.json'),
+        '{"prettier":"./config/prettier.cjs"}\n',
+      );
+      git([
+        'add',
+        'config/prettier.cjs',
+        'config/opts/package.json',
+        'config/opts/dist-target/index.js',
+        'config/opts/index.js',
+        'package.json',
+      ]);
+      git(['commit', '-qm', 'config base']);
+      // `dist` is an untracked symlink to a directory whose index.js has
+      // uncommitted edits. Node's LOAD_AS_DIRECTORY follows the link (stat)
+      // and loads `dist/index.js`; classifying the link itself (lstat) falls
+      // through to the clean package-level index.js fallback and lets the
+      // uncommitted rules drive Prettier.
+      writeFileSync(
+        join(dir, 'config/opts/dist-target/index.js'),
+        'module.exports = { semi: false };\n',
+      );
+      symlinkSync('dist-target', join(dir, 'config/opts/dist'), 'dir');
+      writeFileSync(join(dir, 'a.ts'), 'export const x = 1;\n');
+      git(['add', 'a.ts']);
+
+      const result = runFormat();
+
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toContain(
+        'config/opts/dist/index.js is not staged',
+      );
+      expect(result.stdout).not.toContain('staged Prettier output for a.ts');
+      expect(stagedBlob('a.ts')).toBe('export const x = 1;\n');
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'skips when a package main target is an untracked symlink to a file (#10602)',
+    () => {
+      mkdirSync(join(dir, 'config/opts'), { recursive: true });
+      writeFileSync(join(dir, 'config/opts/package.json'), '{"main":"main"}\n');
+      writeFileSync(
+        join(dir, 'config/opts/index.js'),
+        'module.exports = { semi: true };\n',
+      );
+      writeFileSync(
+        join(dir, 'config/prettier.cjs'),
+        'const opts = require("./opts");\nmodule.exports = opts;\n',
+      );
+      writeFileSync(
+        join(dir, 'package.json'),
+        '{"prettier":"./config/prettier.cjs"}\n',
+      );
+      git([
+        'add',
+        'config/prettier.cjs',
+        'config/opts/package.json',
+        'config/opts/index.js',
+        'package.json',
+      ]);
+      git(['commit', '-qm', 'config base']);
+      // `main` is an untracked symlink to a file holding uncommitted rules.
+      // Node's tryFile follows the link (stat) and loads it, so the hook must
+      // admit the link itself as a candidate and skip loudly rather than
+      // verify the clean package-level index.js fallback.
+      writeFileSync(
+        join(dir, 'config/opts/main-real.js'),
+        'module.exports = { semi: false };\n',
+      );
+      symlinkSync('main-real.js', join(dir, 'config/opts/main'), 'file');
+      writeFileSync(join(dir, 'a.ts'), 'export const x = 1;\n');
+      git(['add', 'a.ts']);
+
+      const result = runFormat();
+
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toContain('config/opts/main is not staged');
+      expect(result.stdout).not.toContain('staged Prettier output for a.ts');
+      expect(stagedBlob('a.ts')).toBe('export const x = 1;\n');
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'falls back to the package index when a package main symlink is broken (#10602)',
+    () => {
+      mkdirSync(join(dir, 'config/opts'), { recursive: true });
+      writeFileSync(join(dir, 'config/opts/package.json'), '{"main":"dist"}\n');
+      writeFileSync(
+        join(dir, 'config/opts/index.js'),
+        'module.exports = { semi: true };\n',
+      );
+      writeFileSync(
+        join(dir, 'config/prettier.cjs'),
+        'const opts = require("./opts");\nmodule.exports = opts;\n',
+      );
+      writeFileSync(
+        join(dir, 'package.json'),
+        '{"prettier":"./config/prettier.cjs"}\n',
+      );
+      git([
+        'add',
+        'config/prettier.cjs',
+        'config/opts/package.json',
+        'config/opts/index.js',
+        'package.json',
+      ]);
+      git(['commit', '-qm', 'config base']);
+      // A broken main symlink resolves nowhere: Node's stat-based
+      // LOAD_AS_FILE/LOAD_AS_DIRECTORY both fail, so resolution falls through
+      // to the package-level index.js — which is tracked and clean here, so
+      // the hook verifies that same file and formats.
+      symlinkSync('no-such-target', join(dir, 'config/opts/dist'), 'dir');
+      writeFileSync(join(dir, 'a.ts'), STAGED);
+      git(['add', 'a.ts']);
+
+      const result = runFormat();
+
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toContain('staged Prettier output for a.ts');
+      expect(stagedBlob('a.ts')).toBe(FORMATTED);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'skips when a directory package main symlink escapes the repository (#10602)',
+    () => {
+      const outside = mkdtempSync(join(tmpdir(), 'format-staged-outside-'));
+      try {
+        mkdirSync(join(dir, 'config/opts'), { recursive: true });
+        writeFileSync(
+          join(dir, 'config/opts/package.json'),
+          '{"main":"dist"}\n',
+        );
+        writeFileSync(
+          join(dir, 'config/opts/index.js'),
+          'module.exports = { semi: true };\n',
+        );
+        writeFileSync(
+          join(dir, 'config/prettier.cjs'),
+          'const opts = require("./opts");\nmodule.exports = opts;\n',
+        );
+        writeFileSync(
+          join(dir, 'package.json'),
+          '{"prettier":"./config/prettier.cjs"}\n',
+        );
+        git([
+          'add',
+          'config/prettier.cjs',
+          'config/opts/package.json',
+          'config/opts/index.js',
+          'package.json',
+        ]);
+        git(['commit', '-qm', 'config base']);
+        // `dist` links to a directory outside the repository. Node loads
+        // `dist/index.js` through the link; the hook must classify the link
+        // target as a directory and skip loudly on the unstaged candidate
+        // instead of verifying the clean package-level index.js fallback.
+        writeFileSync(
+          join(outside, 'index.js'),
+          'module.exports = { semi: false };\n',
+        );
+        symlinkSync(outside, join(dir, 'config/opts/dist'), 'dir');
+        writeFileSync(join(dir, 'a.ts'), 'export const x = 1;\n');
+        git(['add', 'a.ts']);
+
+        const result = runFormat();
+
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.stdout).toContain(
+          'config/opts/dist/index.js is not staged',
+        );
+        expect(result.stdout).not.toContain('staged Prettier output for a.ts');
+        expect(stagedBlob('a.ts')).toBe('export const x = 1;\n');
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
+    },
+  );
+
   it('does not append extensions for an extensionless ESM import (#10502)', () => {
     mkdirSync(join(dir, 'config'));
     writeFileSync(
