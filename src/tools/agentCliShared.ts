@@ -446,7 +446,7 @@ export interface AgentCliLoopParams<TTurn> {
  * `ChildRunStrategy` fields (`isTerminal`, `getUsage`, `onLoopStart`,
  * `onTurnSuccess`, `publishUsage`, `releaseSessionOwnership`). Callers supply
  * only their provider-specific turn execution, usage/delivery formatting, and
- * registry entry shape.
+ * registry entry construction.
  */
 export function startAgentCliLoop<TTurn>(
   params: AgentCliLoopParams<TTurn>,

@@ -2,8 +2,8 @@
  * TeXRA sugar over {@link AgentTrace}, as plain functions.
  *
  * Every helper takes the trace as its first argument and reduces to a
- * single primitive call (`info` / `warn` / `error` / `domain` / `emit` /
- * `contextState`). Agent code uses these instead of the bigger
+ * single primitive call (`info` / `warn` / `error` / `domain` / `emit`).
+ * Agent code uses these instead of the bigger
  * `error(msg, { data: buildErrorLogData(...), messageType })` blocks so
  * call sites stay 1 line.
  *
