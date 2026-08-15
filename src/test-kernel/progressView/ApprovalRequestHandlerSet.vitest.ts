@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
+import { LitSessionRenderer } from '@controllers/progressView/backend/LitSessionRenderer';
 import {
   buildApprovalRequestHandlerSet,
   cancelApprovalRequestHandlers,
@@ -30,8 +30,15 @@ function recordingHandlers(
   messages: ProgressViewOutboundMessage[],
   overrides: Parameters<typeof buildApprovalRequestHandlerSet>[0]['overrides'],
 ): ApprovalRequestHandlerSet {
+  // Permission delivery is the only half of the renderer these handlers use;
+  // its projection/snapshot/bridge collaborators are never reached.
+  const unused = undefined as unknown as never;
   return buildApprovalRequestHandlerSet({
-    webviewUpdater: new WebviewUpdater(
+    renderer: new LitSessionRenderer(
+      unused,
+      unused,
+      unused,
+      unused,
       (message) => messages.push(message),
       () => true,
     ),
@@ -176,7 +183,7 @@ describe('ApprovalRequestHandlerSet helpers', () => {
 
     const { hasPendingPermissions } = createProgressBackendUiConfig({
       handlers,
-      webviewUpdater: {} as WebviewUpdater,
+      renderer: {} as LitSessionRenderer,
       canSend: () => true,
     });
 

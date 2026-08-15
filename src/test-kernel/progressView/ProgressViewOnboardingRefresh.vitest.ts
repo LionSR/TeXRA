@@ -99,8 +99,8 @@ function createProgressViewProvider(): ProgressViewProviderFake {
       deleteAllStreams: vi.fn(),
       stopStream: vi.fn(),
     },
-    webviewUpdater: {
-      updateGoalActive: vi.fn(),
+    renderer: {
+      onGoalActiveChanged: vi.fn(),
     },
     webviewBridge: {
       clearStream: vi.fn(),

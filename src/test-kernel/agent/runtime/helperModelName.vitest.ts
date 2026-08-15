@@ -6,6 +6,7 @@ import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 
 describe('resolveEffectiveHelperModel', () => {
@@ -93,16 +94,9 @@ describe('#7582 runtime vs Settings UI helper-model divergence', () => {
     // against candidates, else fall back" logic, but each owns its own
     // candidate list and empty-list handling.
     const controller = new SettingsModelSelectionController({
-      state: {
-        getEnabledModels: () => undefined,
-        setEnabledModels: async () => {},
-        getHelperModel: () => configuredModel,
-        setHelperModel: async () => {},
-        getReasoningLevelOverrides: () => undefined,
-        setReasoningLevelOverrides: async () => {},
-        getPreferShortModelNames: () => undefined,
-        setPreferShortModelNames: async () => {},
-      },
+      globalState: new FakeStateStore({
+        [GlobalStateKey.HELPER_MODEL]: configuredModel,
+      }),
       resolveModelOptions: async () => [],
     });
 
