@@ -1,5 +1,5 @@
 {
-  "semantics": "Distinct (file, form, specifier) mock() and doMock() call sites (on vi or on a createModuleMocks() recorder) in host-side (CLI + desktop) test-kernel suites (src/test-kernel/cli/**, src/test-kernel/desktop/**) that mock an internal @agent/* module specifier. Each site pins @agent's current internal module layout from outside src/agent, per issue #7684 QA-2 / #9731. The ratchet fails on any live tuple absent from this baseline (new edge) and on any baseline tuple with no live site (stale headroom); regenerating to remove stale entries is welcome and should shrink this file.",
+  "semantics": "Distinct (file, form, specifier) mock() and doMock() call sites (on vi or on a createModuleMocks() recorder) in host-side (CLI + desktop) test-kernel suites and the shared support modules they import (src/test-kernel/cli/**, src/test-kernel/desktop/**, src/test-kernel/support/**) that mock an internal @agent/* module specifier. Each site pins @agent's current internal module layout from outside src/agent, per issue #7684 QA-2 / #9731. The ratchet fails on any live tuple absent from this baseline (new edge) and on any baseline tuple with no live site (stale headroom); regenerating to remove stale entries is welcome and should shrink this file.",
   "sites": [
     {
       "file": "src/test-kernel/cli/ChatDefaults.vitest.ts",
@@ -160,6 +160,16 @@
       "file": "src/test-kernel/desktop/DesktopToolEditApproval.vitest.ts",
       "form": "doMock",
       "specifier": "@agent/runtime/RunContext"
+    },
+    {
+      "file": "src/test-kernel/support/agentCatalogMock.ts",
+      "form": "mock",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/support/agentStorageFinalizationMock.ts",
+      "form": "mock",
+      "specifier": "@agent/storage"
     }
   ]
 }
