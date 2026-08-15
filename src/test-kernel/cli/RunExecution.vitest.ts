@@ -816,6 +816,8 @@ describe('executeCliRequest', () => {
 
         load = vi.fn(async () => undefined);
 
+        preload = vi.fn(async () => undefined);
+
         getExecutionIdMap = vi.fn(() => new Map());
 
         flush = vi.fn(async () => {

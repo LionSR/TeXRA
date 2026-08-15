@@ -2229,12 +2229,12 @@ describe('DesktopProgressBridge', () => {
     emitRunEvent(bridge, 'stream-new' as StreamTabId, {
       type: 'run.start',
       streamId: 'stream-new' as StreamTabId,
-      executionId: 'exec-new' as ExecutionId,
+      executionId: 'e7ec0001' as ExecutionId,
       identity: { kind: 'agent', agent: runConfig.agent },
     });
     emitRunConfigFact(bridge, {
       streamId: 'stream-new',
-      executionId: 'exec-new',
+      executionId: 'e7ec0001',
       config: runConfig,
     });
 

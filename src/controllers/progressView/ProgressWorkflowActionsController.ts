@@ -97,6 +97,7 @@ export class ProgressWorkflowActionsController {
     stream: StreamTabId,
     action: (config: AgentConfig, executionId?: string) => Promise<void>,
   ): Promise<void> {
+    await this.deps.state.preload?.(stream);
     const { config, executionId } = this.deps.state.getRunMetadata(stream);
     if (!config || config.agentCategory !== AgentCategory.Workflow) return;
 

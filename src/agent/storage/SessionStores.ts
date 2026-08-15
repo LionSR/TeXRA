@@ -292,15 +292,16 @@ export class SessionStores {
   }
 
   /**
-   * The stream→execution reverse edge: in-memory first, then the persisted
-   * sidecar FK. A stream without either has no owned execution — name
-   * resemblance is never ownership, so no suffix derivation exists.
+   * The stream→execution reverse edge: the always-resident summary mirror
+   * first, then the persisted sidecar FK. A stream without either has no
+   * owned execution — name resemblance is never ownership, so no suffix
+   * derivation exists.
    */
   private async executionIdForStream(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
     return (
-      this.snapshots.getRunMetadata(stream).executionId ??
+      this.streamLogs.getSummaryMeta(stream)?.executionId ??
       (await this.snapshots.readPersistedExecutionId(stream))
     );
   }

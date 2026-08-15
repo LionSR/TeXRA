@@ -46,6 +46,8 @@ interface ProgressViewHostCommandOptions {
 
 interface ProgressViewRunState {
   getRunMetadata(stream: StreamTabId): RunMetadata;
+  /** Warm a webview-selected stream before its run metadata is read. */
+  preload?(stream: StreamTabId): Promise<void>;
 }
 
 interface ProgressViewRunDependencies {
@@ -75,6 +77,7 @@ async function resumeStream(
     stream,
     showInfo,
     'resumed',
+    dependencies.state.preload,
   );
   if (!metadata) return;
   const { config, executionId } = metadata;
@@ -100,6 +103,7 @@ async function runNewStream(
     stream,
     showInfo,
     're-run',
+    dependencies.state.preload,
   );
   if (!metadata) return;
 

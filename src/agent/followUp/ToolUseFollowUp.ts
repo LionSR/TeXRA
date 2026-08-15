@@ -87,7 +87,7 @@ async function restorePersistedGeneration(
   let executionId: string | undefined;
   try {
     executionId =
-      session.snapshots.getRunMetadata(streamId).executionId ??
+      session.transcripts.getSummaryMeta(streamId)?.executionId ??
       (await session.snapshots.readPersistedExecutionId(streamId));
   } catch (error) {
     logger.warn(

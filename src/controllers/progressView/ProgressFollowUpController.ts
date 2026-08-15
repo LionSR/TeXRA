@@ -39,6 +39,8 @@ export interface ProgressFollowUpState {
   getRunMetadata(stream: StreamTabId): RunMetadata;
   getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo>;
   getCompileFailures(stream: StreamTabId): RoundIndexed<CompileFailure>;
+  /** Warm this stream's sidecars before the plan's synchronous readers run. */
+  preload?(stream: StreamTabId): Promise<void>;
 }
 
 interface CompileFixerTarget {
@@ -80,6 +82,7 @@ export class ProgressFollowUpController {
   async planCompileFixerForStream(
     streamId: StreamTabId,
   ): Promise<ProgressFollowUpPlan> {
+    await this.deps.state.preload?.(streamId);
     const modelOptions = await this.deps.loadModelOptions();
     const compileFailures = Object.values(
       this.deps.state.getCompileFailures(streamId),
