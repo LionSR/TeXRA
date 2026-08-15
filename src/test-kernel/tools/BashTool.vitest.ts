@@ -15,6 +15,7 @@ import {
 // Local imports
 import type { AgentEvent } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
+import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import type {
   AgentPrompt,
   AgentSetting,
@@ -24,9 +25,9 @@ import {
   AgentWorkspaceState,
   FileInteractionState,
 } from '@agent/core/state/AgentWorkspaceState';
-import { ToolUseDispatchNode } from '@agent/core/flows/toolUseRound/ToolUseDispatchNode';
-import { createToolUseRoundFlow } from '@agent/core/flows/ToolUseRoundFlow';
-import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundShared';
+import { ToolUseDispatchNode } from '@agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode';
+import { createToolUseRoundFlow } from '@agent/implementations/flows/tooluse/ToolUseRoundFlow';
+import type { ToolUseRoundShared } from '@agent/implementations/flows/tooluse/toolUseRound/roundShared';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
@@ -178,6 +179,7 @@ function roundServices(opts: {
       userRequest: '',
     } satisfies AgentPrompt,
     userVarChannels: { input: {}, transient: {} },
+    toolPolicy: createToolPolicy(),
     logger: opts.logger,
     fileService: new TaskRunFileService('deadbeef'),
     toolRegistry: opts.toolRegistry,

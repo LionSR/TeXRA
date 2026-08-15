@@ -7,7 +7,7 @@
  * This is the inner primitive invoked by ToolUseCycleNode (the outer session step).
  * The distinction:
  *   - ToolUseRoundFlow  (this file) = one LLM invocation + tool dispatch loop
- *   - ToolUseCycleNode  (implementations/flows/tooluse) = one session turn,
+ *   - ToolUseCycleNode  (./nodes/ToolUseCycleNode.ts) = one session turn,
  *     which may invoke many rounds via createToolUseRoundFlow()
  *
  * This file owns the flow factory only. The node implementations and the
@@ -18,14 +18,14 @@
 // Local imports - core flow primitives
 import { Flow } from '@agent/node';
 import { defaultPostCompactionContext } from '@agent/core/flows/CommonCycleTypes';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
+import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 
 // Local file imports
-import { FlowTransition } from './FlowTransitions';
-import { ModelInvocationNode } from './ModelInvocationNode';
 import { ToolUseRoundPrepNode } from './toolUseRound/ToolUseRoundPrepNode';
 import { ToolUseProcessNode } from './toolUseRound/ToolUseProcessNode';
 import { ToolUseDispatchNode } from './toolUseRound/ToolUseDispatchNode';
-import type { ToolUseRoundServices } from './CycleServices';
 import type { ToolUseRoundShared } from './toolUseRound/roundShared';
 
 /**

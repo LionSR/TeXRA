@@ -23,7 +23,7 @@ import type { ExecutionKVStore } from '@agent/storage';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { ExecutionId, WorkflowExecutionSnapshot } from '@shared/schemas';
 import {
   deriveWorkflowCounts,
@@ -50,6 +50,7 @@ import { fingerprintWorkflowAgentDependencies } from './workflowScriptAgentRunne
 const RUN_LOG_MAX_LINES = 80;
 const RUN_LOG_MAX_LINE_LENGTH = 500;
 const SUMMARY_CHANNEL = 'WorkflowDeliverySummary';
+const summaryLog = createLog(SUMMARY_CHANNEL);
 
 /**
  * What the delivery line needs from a settled run: the canonical execution
@@ -192,8 +193,7 @@ export function createWorkflowScriptStrategy(
         // a mis-billed run is a correctness fault, while a delivery line that
         // omits one entry's files is merely incomplete. Loud either way — a
         // silently short file list is how corruption goes unreported.
-        logger.warn(
-          SUMMARY_CHANNEL,
+        summaryLog.warn(
           `Workflow '${params.name}' journal entry ${entry.index} is not an agent final result; its delivered files are omitted from the summary: ${toErrorMessage(parsed.error)}`,
           { data: parsed.error },
         );
@@ -251,8 +251,9 @@ export function createWorkflowScriptStrategy(
 
       let unregisterControls: (() => void) | undefined;
       // The engine flushes its terminal snapshot before it rethrows, so the
-      // last one published is the run's own final account of what ran — the
-      // only source the failure path has for phase and task tallies.
+      // last one *persisted* is the run's own final account of what ran — the
+      // only source the failure path has for phase and task tallies, and by
+      // construction never newer than the durable execution record.
       let lastSnapshot: WorkflowExecutionSnapshot | undefined;
       let run: WorkflowScriptRunResult;
       try {
@@ -273,8 +274,11 @@ export function createWorkflowScriptStrategy(
             fingerprintWorkflowAgentDependencies(params.executionId, options),
           onActivity: runLog.add,
           onSnapshot: async (snapshot) => {
-            lastSnapshot = snapshot;
+            // Persist first: only a durably written snapshot may feed the
+            // delivery summary, otherwise a failed write leaves the summary
+            // reporting a newer state than /executions/{id} keeps.
             await params.onSnapshot?.(snapshot);
+            lastSnapshot = snapshot;
           },
           // The engine's control is already keyed by the grandchild execution
           // id a host targets, so the run registers it as-is.

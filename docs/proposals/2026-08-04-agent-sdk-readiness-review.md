@@ -190,9 +190,13 @@ These are small and independent of the strategic Tier-1 program:
    host-boundary surface has proven stable. One cluster per PR still applies.
    `@agent/storage` was already a module-level barrel that exposed execution
    lifecycle/listing and resumability; #10531 folded the remaining host
-   deep-imports (CLI's `executionLease` and `conversationFormat`) behind it,
-   leaving `followUp` and `core/definition/AgentConfig` as the open clusters
-   under #10024.
+   deep-imports (CLI's `executionLease` and `conversationFormat`) behind it.
+   The `followUp` cluster then folded behind a new curated
+   `src/agent/followUp/index.ts` barrel (`submitFollowUp`,
+   `presentFollowUpResult`, `notifyFollowUpSent`, and the
+   `SubmitFollowUpResult`/`FollowUpQueueInput`/`FollowUpRecoveryLease` types),
+   leaving `core/definition/AgentConfig` as the only open cluster under
+   #10024.
 
 2. **Stabilize the withheld interaction contract.** The `HostInteractions`
    docstring (`index.ts:42-47`) and the hard-deny `requestRetry`
@@ -222,4 +226,7 @@ as the baseline to shrink.
 `@agent/runtime` barrel rather than `packages/agent/src/index.ts`, deferring
 package promotion until the module-level barrels have proven the host-boundary
 surface; see §5.1 and review `pullrequestreview-4918028384`. #10531 continued
-the fold-in behind the pre-existing module-level `@agent/storage` barrel.
+the fold-in behind the pre-existing module-level `@agent/storage` barrel, and
+#10650 folded the `followUp` cluster behind a new curated
+`src/agent/followUp/index.ts` barrel; `core/definition/AgentConfig` is the
+only remaining open cluster under #10024.

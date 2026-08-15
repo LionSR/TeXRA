@@ -7,7 +7,12 @@ import {
   type AgentFlowResult,
   type WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
-import { JsonValueSchema, type RunOutcome } from '@shared/schemas';
+import {
+  JsonValueSchema,
+  RetryErrorInfoSchema,
+  RUN_OUTCOME,
+  type RunOutcome,
+} from '@shared/schemas';
 
 /** Reference to one persisted workflow diff. */
 const ResultDiffSummarySchema = z.strictObject({
@@ -38,6 +43,13 @@ export const WorkflowAgentFinalResultSchema = WorkflowFlowResultSchema.pick({
     cost: CostSchema,
     diffsUnavailable: z.string().optional(),
     structured: JsonValueSchema.optional(),
+    /**
+     * The structured error of a run that ended FAILED, carried on the typed
+     * result so chaining consumers read the failure from the artifact itself
+     * (the result-only observability contract). Absent on non-failed
+     * outcomes; journal entries only ever hold completed results.
+     */
+    error: RetryErrorInfoSchema.optional(),
   })
   .strict();
 
@@ -52,6 +64,8 @@ const ToolUseAgentFinalResultSchema = ToolUseFlowResultSchema.pick({
     files: ToolUseFlowResultSchema.shape.files.unwrap().prefault(() => []),
     cost: CostSchema,
     structured: JsonValueSchema.optional(),
+    /** See the workflow member: failed runs carry their structured error. */
+    error: RetryErrorInfoSchema.optional(),
   })
   .strict();
 
@@ -104,6 +118,13 @@ export function buildAgentFinalResult(
     const structured =
       source.structured ??
       (result.category === 'toolUse' ? result.structured : undefined);
+    // Error facts travel only with the outcome they describe: a caller that
+    // re-stamps a nominally completed flow as failed keeps the flow's error
+    // (when it recorded one); any non-failed outcome drops it.
+    const error =
+      outcome === RUN_OUTCOME.FAILED && result.error !== undefined
+        ? { error: result.error }
+        : {};
     if (result.category === 'workflow') {
       return AgentFinalResultSchema.parse({
         category: result.category,
@@ -114,6 +135,7 @@ export function buildAgentFinalResult(
         cost: result.totalCostUsd,
         diffsUnavailable: source.diffsUnavailable,
         structured,
+        ...error,
       });
     }
     return AgentFinalResultSchema.parse({
@@ -123,6 +145,7 @@ export function buildAgentFinalResult(
       files: result.files,
       cost: result.totalCostUsd,
       structured,
+      ...error,
     });
   }
 

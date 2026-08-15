@@ -35,7 +35,6 @@ function basePorts(
   overrides: Partial<ResumeStreamPorts> = {},
 ): ResumeStreamPorts {
   return {
-    interactions: defaultSession().interactions,
     streamStatus: defaultSession().status,
     resolveResumeState: vi.fn(async () => RESOLVED_STATE),
     resumeToolUse: vi.fn(async () => true),

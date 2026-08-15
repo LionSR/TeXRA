@@ -84,6 +84,14 @@ const WorkflowExecutionCallSchema = z.strictObject({
   childStreamId: StreamTabIdSchema.optional(),
   attempts: z.array(WorkflowExecutionAttemptSchema),
   status: WorkflowExecutionCallStatusSchema,
+  /**
+   * The terminal sweep (`finish()`) assigned this call's outcome because the
+   * run ended while the call had not settled itself — not-reached plans and
+   * abandoned live calls. First-class so consumers never infer "swept" from
+   * the human-facing note strings. Absent means the call settled through its
+   * own path.
+   */
+  settledBySweep: z.literal(true).optional(),
   blockedReason: z.string().optional(),
   error: z.string().optional(),
   costUsd: z.number().nonnegative().optional(),

@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 
 import { describe, it, beforeAll } from 'vitest';
 
-import { ToolUseDispatchNode } from '@agent/core/flows/toolUseRound/ToolUseDispatchNode';
+import { ToolUseDispatchNode } from '@agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';

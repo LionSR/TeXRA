@@ -37,6 +37,7 @@ import {
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
 } from '@shared/schemas/output';
+import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
 import { ensureRunDir } from '@utils/files/runStorageFs';
 
@@ -59,8 +60,6 @@ import {
   type WorkflowFlowResult,
 } from './AgentFlowResult';
 import { generateSessionDescription } from './sessionDescription';
-import { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
-import { ResumeAdmissionCancelledError } from './resumeAdmission';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
@@ -68,6 +67,14 @@ import type { ToolUseResumeData } from './SessionResumeRetrieval';
 
 const CHANNEL = 'executeAgent';
 const logger = createChannelTrace(CHANNEL);
+
+/** A resumed execution lost its canonical admission race with deletion. */
+export class ResumeAdmissionCancelledError extends Error {
+  constructor(readonly executionId: ExecutionId) {
+    super(`Resume cancelled before launch for execution ${executionId}.`);
+    this.name = 'ResumeAdmissionCancelledError';
+  }
+}
 
 /** Create the awaited round-finalized callback used by agent flows. */
 function createUsageRecordingCallback(
@@ -407,92 +414,95 @@ export async function executeAgent(
       modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
       copilotRouteOverride: options.copilotRouteOverride,
       signal: options.launchSignal,
+      toolPolicy: {
+        approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+        runtimeUnavailableTools: options.runtimeUnavailableTools,
+        stopAfterCycle: options.stopAfterCycle,
+      },
     });
-    const runContextOptions = {
-      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-      onApprovalPolicyDenial: options.onApprovalPolicyDenial,
-      runtimeUnavailableTools: options.runtimeUnavailableTools,
-      stopAfterCycle: options.stopAfterCycle,
-    };
-    return withExecutionRunContext(ctx, runContextOptions, async () => {
-      const { setting, config } = ctx;
-      const {
-        streamId: runStreamId,
-        executionId: runExecutionId,
-        session: runSession,
-      } = ctx.runScope;
-      const { isSubagent } = options;
+    return withExecutionRunContext(
+      ctx,
+      { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
+      async () => {
+        const { setting, config } = ctx;
+        const {
+          streamId: runStreamId,
+          executionId: runExecutionId,
+          session: runSession,
+        } = ctx.runScope;
+        const { isSubagent } = options;
 
-      // Start description generation concurrently with the run, but join it
-      // before the owner can release its execution lease. This prevents the
-      // metadata write from recreating an execution deleted by another host.
-      const sessionDescription = generateSessionDescription(
-        runExecutionId,
-        runStreamId,
-        config,
-        runSession,
-        ctx.runScope.signal,
-      );
-      try {
-        const result = await runFlowWithLifecycle(
-          ctx,
-          async (handle, lifecycle) => {
-            // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
-            await ensureRunDir(executionId);
-            logger.info(`Starting task execution (streamId: ${runStreamId})`);
-            logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
-            logger.debug('Task execution details', {
-              data: {
-                streamId: runStreamId,
-                agent: config.agent,
-                model: config.model,
-              },
-            });
-            logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
-            // Subagents don't need to force-open the progress board or show notifications —
-            // the orchestrator's stream is already visible.
-            if (!isSubagent) {
-              runSession.interactions.emit(
-                'requestEnsureProgressView',
-                { fallbackNotification: buildFallbackNotification(config) },
-                { replayWhenAttached: true },
-              );
-            }
-            logger.info('Executing agent', {
-              data: { agent: config.agent, model: config.model },
-            });
-
-            if (setting.agentCategory === AgentCategory.ToolUse) {
-              return launchToolUseRun(
-                ctx,
-                handle,
-                lifecycle,
-                { ...options, setting, isSubagent },
-                { kind: 'fresh', onIdle: options.onIdle },
-              );
-            }
-            const result = await runReflectionAgent(ctx, setting);
-            if (result.error) return result;
-            const outputOutcome = await options.openWorkflowOutput?.(result);
-            return outputOutcome === undefined
-              ? result
-              : { ...result, outcome: outputOutcome };
-          },
-          buildLifecycleOptions(options, isSubagent),
+        // Start description generation concurrently with the run, but join it
+        // before the owner can release its execution lease. This prevents the
+        // metadata write from recreating an execution deleted by another host.
+        const sessionDescription = generateSessionDescription(
+          runExecutionId,
+          runStreamId,
+          config,
+          runSession,
+          ctx.runScope.signal,
         );
-        if (
-          isWaitingFlowResult(result) &&
-          options.allowWaitingResult !== true
-        ) {
-          throw new Error(
-            'executeAgent received a non-terminal WAITING result without allowWaitingResult.',
+        try {
+          const result = await runFlowWithLifecycle(
+            ctx,
+            async (handle, lifecycle) => {
+              // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
+              await ensureRunDir(executionId);
+              logger.info(`Starting task execution (streamId: ${runStreamId})`);
+              logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
+              logger.debug('Task execution details', {
+                data: {
+                  streamId: runStreamId,
+                  agent: config.agent,
+                  model: config.model,
+                },
+              });
+              logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
+              // Subagents don't need to force-open the progress board or show notifications —
+              // the orchestrator's stream is already visible.
+              if (!isSubagent) {
+                runSession.interactions.emit(
+                  'requestEnsureProgressView',
+                  { fallbackNotification: buildFallbackNotification(config) },
+                  { replayWhenAttached: true },
+                );
+              }
+              logger.info('Executing agent', {
+                data: { agent: config.agent, model: config.model },
+              });
+
+              if (setting.agentCategory === AgentCategory.ToolUse) {
+                return launchToolUseRun(
+                  ctx,
+                  handle,
+                  lifecycle,
+                  { ...options, setting, isSubagent },
+                  { kind: 'fresh', onIdle: options.onIdle },
+                );
+              }
+              const result = await runReflectionAgent(ctx, setting);
+              if (result.error) return result;
+              const outputOutcome = await options.openWorkflowOutput?.(result);
+              return outputOutcome === undefined
+                ? result
+                : { ...result, outcome: outputOutcome };
+            },
+            buildLifecycleOptions(options, isSubagent),
           );
+          if (
+            isWaitingFlowResult(result) &&
+            options.allowWaitingResult !== true
+          ) {
+            throw new Error(
+              'executeAgent received a non-terminal WAITING result without allowWaitingResult.',
+            );
+          }
+          return result;
+        } finally {
+          await sessionDescription;
         }
-        return result;
-      } finally {
-        await sessionDescription;
-      }
-    });
+      },
+    );
   });
 }
 
@@ -562,6 +572,10 @@ export async function resumeToolUseFromResumeData(
         // skip the bus-level error to avoid double-notifying.
         suppressErrorNotification: true,
         session: options.session,
+        toolPolicy: {
+          approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+          runtimeUnavailableTools: options.runtimeUnavailableTools,
+        },
       });
     } catch (error) {
       throw await releaseOwnedExecutionLeaseAfterFailure(
@@ -569,11 +583,6 @@ export async function resumeToolUseFromResumeData(
         error,
       );
     }
-    const runContextOptions = {
-      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-      onApprovalPolicyDenial: options.onApprovalPolicyDenial,
-      runtimeUnavailableTools: options.runtimeUnavailableTools,
-    };
     const { setting } = ctx;
     const { streamId: runStreamId, session: runSession } = ctx.runScope;
 
@@ -583,7 +592,7 @@ export async function resumeToolUseFromResumeData(
     try {
       result = await withExecutionRunContext(
         ctx,
-        runContextOptions,
+        { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
         async () => {
           if (setting.agentCategory !== AgentCategory.ToolUse) {
             // Keep this historical diagnostic byte-for-byte for external monitors.
@@ -623,10 +632,7 @@ export async function resumeToolUseFromResumeData(
       // The run's own failure is the one the caller must see; a release failure
       // on top of it is additional information, not a replacement.
       try {
-        await releaseExecutionLeaseAfterArtifacts(
-          runSession,
-          resume.executionId,
-        );
+        await runSession.releaseExecutionLease(resume.executionId);
       } catch (releaseError) {
         throw new AggregateError(
           [error, releaseError],
@@ -637,8 +643,14 @@ export async function resumeToolUseFromResumeData(
     }
     // A WAITING result keeps the lease: the next resume owns this execution.
     if (!isWaitingFlowResult(result)) {
-      await releaseExecutionLeaseAfterArtifacts(runSession, resume.executionId);
+      await runSession.releaseExecutionLease(resume.executionId);
     }
     return result;
   });
 }
+
+// Close the delegation recursion: the delegation tools drive child runs
+// through `nativeSubagentStrategy`, whose engine calls are provided here —
+// the one direction that cannot be a static import, because this module's
+// flow drivers statically import the tool registry that includes those tools.
+provideAgentEngine({ executeAgent, resumeToolUseFromResumeData });

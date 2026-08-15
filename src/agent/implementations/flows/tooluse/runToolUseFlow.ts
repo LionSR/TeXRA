@@ -14,7 +14,6 @@ import {
 } from '@agent/runtime/ModelFactory';
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   PersistedFlow,
@@ -177,9 +176,7 @@ export async function runToolUseFlow<C = unknown>(
   toolRegistry?: IToolRegistry,
   attachment?: ToolUseFlowAttachment,
 ): Promise<RunToolUseFlowResult> {
-  const { logger, setting } = input;
-  const runContext = useLaunchRunContext();
-  const { runScope } = runContext;
+  const { logger, setting, runScope, toolPolicy } = input;
   const { streamId, executionId, session: runSession, signal } = runScope;
   const continuationGenerationId =
     runSession.followUps.currentChildGenerationId(streamId) ??
@@ -198,8 +195,8 @@ export async function runToolUseFlow<C = unknown>(
     tools: setting.tools,
     registry: baseRegistry,
     logger,
-    approvalPromptsUnavailable: runContext.approvalPromptsUnavailable,
-    runtimeUnavailableTools: runContext.runtimeUnavailableTools,
+    approvalPromptsUnavailable: toolPolicy.approvalPromptsUnavailable,
+    runtimeUnavailableTools: toolPolicy.runtimeUnavailableTools,
     toolInjections: input.toolInjections,
   });
   const overlayTools: ITool[] = [];

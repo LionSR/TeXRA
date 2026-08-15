@@ -23,9 +23,11 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   AgentCategory,
+  TODO_STATUS,
   USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type StreamTabId,
+  type SubagentProgressUpdate,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
@@ -36,17 +38,38 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
 import { executeSubagentForDeliveryInBand } from './inBandSubagentExecution';
-
-// `createNativeSubagentStrategy` is lazy-imported below. The strategy module
-// imports `@agent/runtime/executeAgent` (directly, or transitively via
-// `resumeQueuedToolUseFromResumeData`), which pulls in `runToolUseFlow.ts` ->
-// `@tools/registry`. An eager import here would close the same
-// registry -> DelegationTools -> proposalFlow -> subagentExecution cycle
-// the existing `executeAgent` lazy import already avoids.
+import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 
 // ============================================================================
 // Shared utilities
 // ============================================================================
+
+/**
+ * One compact trace line per child progress update, for the in-band arm where
+ * progress degrades to the parent run's trace instead of follow-up delivery.
+ * Returns undefined for updates with nothing worth a line.
+ */
+function describeSubagentProgress(
+  agentName: string,
+  update: SubagentProgressUpdate,
+): string | undefined {
+  switch (update.kind) {
+    case 'started':
+      return `Subagent '${agentName}' started`;
+    case 'todos': {
+      const done = update.todos.filter(
+        (todo) => todo.status === TODO_STATUS.COMPLETED,
+      ).length;
+      return `Subagent '${agentName}' todos: ${done}/${update.todos.length} complete`;
+    }
+    case 'plan':
+      return update.plan
+        ? `Subagent '${agentName}' plan: ${update.plan.objective}`
+        : undefined;
+    case 'overview':
+      return `Subagent '${agentName}': ${update.toolCallCount} tool calls, ${update.filesChanged.length} files changed`;
+  }
+}
 
 /** Metadata about how the delegation was approved, included in the tool result. */
 interface ApprovalMeta {
@@ -68,7 +91,7 @@ interface ApprovalMeta {
 export async function executeSubagent(
   configPayload: AgentConfigPayload,
   agentName: string,
-  orchestratorStreamId: StreamTabId,
+  parentStreamId: StreamTabId,
   options?: { approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
   const parentContext = tryUseRunContext();
@@ -112,7 +135,7 @@ export async function executeSubagent(
     // delegated-task approval also reaches nested orchestrators.
     configureDelegatedChildApprovals(
       resolvedStreamId,
-      orchestratorStreamId,
+      parentStreamId,
       options?.approvalMeta?.autoApproved === true
         ? 'auto-approved'
         : 'inherit',
@@ -120,18 +143,28 @@ export async function executeSubagent(
   };
 
   if (parentContext.stopAfterCycle) {
+    // The parent is mid-cycle, so child progress cannot be delivered as a
+    // follow-up the way the detached loop does it. Degrade deliberately to the
+    // parent run's trace (the same trace nested tool activity projects onto):
+    // the orchestrator's transcript still records what its child is doing.
+    const parentTrace = getCurrentToolCallContext()?.trace;
+    const notifyParentTrace = (update: SubagentProgressUpdate): void => {
+      const line = describeSubagentProgress(agentName, update);
+      if (line) parentTrace?.info(line);
+    };
     try {
       const { result, delivery } = await executeSubagentForDeliveryInBand({
         configPayload: childConfigPayload,
         agentName,
         parentExecutionId,
-        parentStreamId: orchestratorStreamId,
+        parentStreamId,
         session: parentSession,
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
         onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
         runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
         onStreamResolved: inheritChildStreamApprovals,
         onCost: recordCost,
+        notify: notifyParentTrace,
       });
       return executed(
         delivery,
@@ -182,7 +215,7 @@ export async function executeSubagent(
       executionId,
       parentExecutionId,
       agentName,
-      parentStreamId: orchestratorStreamId,
+      parentStreamId,
       session: parentSession,
       startedAt,
       workingDirectory,
@@ -194,23 +227,19 @@ export async function executeSubagent(
 
     await startDetachedChildRunLoop({
       executionId,
-      parentStreamId: orchestratorStreamId,
+      parentStreamId,
       childStreamId,
       agentName,
       recordCost,
-      buildLaunch: async () => {
-        const { createNativeSubagentStrategy } =
-          await import('./nativeSubagentStrategy.js');
-        return {
-          strategy: createNativeSubagentStrategy(strategyParams),
-          onLoopFailed: (error: unknown): void => {
-            createChannelTrace('childRunLoop').error(
-              `Subagent '${agentName}' run loop failed after launch`,
-              { data: error },
-            );
-          },
-        };
-      },
+      buildLaunch: async () => ({
+        strategy: createNativeSubagentStrategy(strategyParams),
+        onLoopFailed: (error: unknown): void => {
+          createChannelTrace('childRunLoop').error(
+            `Subagent '${agentName}' run loop failed after launch`,
+            { data: error },
+          );
+        },
+      }),
     });
 
     const meta = options?.approvalMeta;

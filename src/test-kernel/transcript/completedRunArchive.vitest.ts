@@ -453,7 +453,6 @@ describe('completedRunArchive facade', () => {
     try {
       await expect(
         resolveAndResumeStream(streamId, {
-          interactions: session.interactions,
           streamStatus: session.status,
           resolveResumeState,
           resumeToolUse: async (resume) => {

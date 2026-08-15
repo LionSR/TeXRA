@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
-import { createToolUseRoundFlow } from '@agent/core/flows/ToolUseRoundFlow';
-import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundShared';
+import { createToolUseRoundFlow } from '@agent/implementations/flows/tooluse/ToolUseRoundFlow';
+import type { ToolUseRoundShared } from '@agent/implementations/flows/tooluse/toolUseRound/roundShared';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 

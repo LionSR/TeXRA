@@ -185,3 +185,17 @@ files when the artifact itself must be edited or passed to another workflow
 agent. Cost settlement covers completed logical calls retained in the journal;
 failed or cancelled attempts can consume additional quota before they become
 durable.
+
+## Grandchild observability contract
+
+A scripted `agent()` grandchild and a `delegate_agent` child are debugged
+through different artifacts. Each asymmetry below is a decided contract or a
+recorded gap — not an accident:
+
+| Artifact / behavior                                                                                     | Scripted grandchild (`agent()`)                                                                                  | Detached child (`delegate_agent`) | Verdict                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `/executions/{id}/result` (typed)                                                                       | persisted and verified by read-back (required; failure results carry their structured `error`)                   | persisted                         | **Contract.** The typed result is the engine's consumed value and the authoritative terminal artifact for scripted children.    |
+| `/executions/{id}/report` (prose)                                                                       | persisted (since the single-driver fold: one loop persists both artifacts for every child; older runs have none) | persisted at delivery             | **Closed.** The `executions` tool's `report` action still redirects to `/result` for pre-fold executions without one.           |
+| Parent-facing delivery shape                                                                            | `<workflow-summary>` JSON line on the workflow run                                                               | `<subagent-result>` XML follow-up | **Contract.** One feeds a deterministic script's caller, one feeds a model conversation (see the standing two-surfaces ruling). |
+| Runner post-conditions (`outcome !== 'completed'` → throw; workflow category with zero outputs → throw) | enforced                                                                                                         | absent                            | **Contract.** `agent()` must return a usable value or fail the stage; a conversational parent judges its child's output itself. |
+| `turnToken` turn attribution                                                                            | stamped by the loop (since the single-driver fold)                                                               | stamped by the loop               | **Closed.** One driver stamps every manifest.                                                                                   |

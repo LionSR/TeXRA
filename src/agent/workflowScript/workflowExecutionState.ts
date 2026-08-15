@@ -11,7 +11,10 @@ import {
   WORKFLOW_CALL_UNFINISHED_NOTE,
 } from '@shared/copy/workflowCall';
 
-import type { WorkflowAttemptFacts } from './types';
+import type {
+  WorkflowAttemptFacts,
+  WorkflowExecutionTransition,
+} from './types';
 
 interface WorkflowCallDefinition {
   readonly id: string;
@@ -24,7 +27,10 @@ interface WorkflowCallDefinition {
 /** Owns canonical workflow stage/call transitions and interrupted-run hydration. */
 export class WorkflowExecutionState {
   readonly #snapshot: WorkflowExecutionSnapshot;
-  readonly #publish: (snapshot: WorkflowExecutionSnapshot) => void;
+  readonly #publish: (
+    snapshot: WorkflowExecutionSnapshot,
+    transition?: WorkflowExecutionTransition,
+  ) => void;
   readonly #hasDeclaredStages: boolean;
   readonly #issuedCallIds = new Set<string>();
   #sealed = false;
@@ -38,7 +44,10 @@ export class WorkflowExecutionState {
      * that retain it or persist asynchronously must clone it first (the
      * runner's snapshot writer clones at drain time).
      */
-    readonly publish: (snapshot: WorkflowExecutionSnapshot) => void;
+    readonly publish: (
+      snapshot: WorkflowExecutionSnapshot,
+      transition?: WorkflowExecutionTransition,
+    ) => void;
   }) {
     this.#publish = options.publish;
     this.#hasDeclaredStages = options.phases.length > 0;
@@ -93,16 +102,6 @@ export class WorkflowExecutionState {
 
   snapshot(): WorkflowExecutionSnapshot {
     return structuredClone(this.#snapshot);
-  }
-
-  /**
-   * Spend recorded for one call across every physical attempt it made. This
-   * class already owns per-call cost (see {@link reportAttempt}); progress
-   * events read it here rather than accumulating a second total from the same
-   * runner callbacks.
-   */
-  callCostUsd(id: string): number | undefined {
-    return this.#call(id).costUsd;
   }
 
   enterStage(title: string): void {
@@ -217,7 +216,7 @@ export class WorkflowExecutionState {
       Object.assign(call, canonical);
       call.timestamps.updatedAt = timestamp;
     }
-    this.#emit();
+    this.#emit({ type: 'call-issued', callId: definition.id });
   }
 
   #call(id: string): WorkflowExecutionCall {
@@ -273,6 +272,7 @@ export class WorkflowExecutionState {
       childExecutionId: undefined,
       childStreamId: undefined,
       model: undefined,
+      settledBySweep: undefined,
       blockedReason: undefined,
       error: undefined,
       timestamps: {
@@ -361,6 +361,7 @@ export class WorkflowExecutionState {
         call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED
       ) {
         call.status = WORKFLOW_CALL_STATUS.SKIPPED;
+        call.settledBySweep = true;
         call.blockedReason = WORKFLOW_CALL_NOT_REACHED_NOTE;
         call.timestamps.completedAt = completedAt;
         call.timestamps.updatedAt = completedAt;
@@ -373,6 +374,7 @@ export class WorkflowExecutionState {
           lifecycle === WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED
             ? WORKFLOW_CALL_STATUS.CANCELLED
             : WORKFLOW_CALL_STATUS.FAILED;
+        call.settledBySweep = true;
         call.error ??= WORKFLOW_CALL_UNFINISHED_NOTE;
         call.timestamps.completedAt = completedAt;
         call.timestamps.updatedAt = completedAt;
@@ -449,11 +451,11 @@ export class WorkflowExecutionState {
     stage.completedAt = completedAt;
   }
 
-  #emit(): void {
+  #emit(transition?: WorkflowExecutionTransition): void {
     this.#snapshot.timestamps.updatedAt = now();
     // Live reference by contract (see the publish option): coalesced-away
     // publications then never pay a full structuredClone of the snapshot.
-    this.#publish(this.#snapshot);
+    this.#publish(this.#snapshot, transition);
   }
 }
 

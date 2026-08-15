@@ -211,6 +211,15 @@ export interface SessionApprovals {
    */
   readonly proposal: StreamApprovalBypass;
   /**
+   * Set the complete delegated-task approval mode for one stream: later
+   * delegation proposals, file edits, and commands are all approved for it.
+   *
+   * This is the shared meaning of the extension's legacy "Super Yolo"
+   * control. Approval state is session-owned, so the grant cannot leak to
+   * another CLI, extension, or desktop session.
+   */
+  setDelegatedWorkBypasses(streamId: StreamTabId, enabled: boolean): void;
+  /**
    * Record that `childStreamId` descends from `parentStreamId` for bypass
    * resolution purposes: each bypass kind named in `kinds` will defer to the
    * parent's bypass state whenever the child has no explicit value of its
@@ -332,6 +341,15 @@ export function createSessionApprovals(
     toolEdit,
     bash,
     proposal,
+    setDelegatedWorkBypasses(streamId, enabled) {
+      proposal.setBypass(streamId, enabled);
+      // Unconditional: write the stream's own explicit tool-edit entry even
+      // when `isBypassed` already reports true, because that can be an
+      // ancestry-resolved inheritance from the parent — super-YOLO granted
+      // here must survive the parent later re-gating its own edits.
+      toolEdit.bypass.setBypass(streamId, enabled);
+      bash.bypass.setBypass(streamId, enabled);
+    },
     registerStreamParent(
       childStreamId,
       parentStreamId,

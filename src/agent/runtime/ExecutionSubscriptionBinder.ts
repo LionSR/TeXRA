@@ -17,7 +17,7 @@ import type {
   ExecutionStatusInfo,
 } from '@agent/runtime/ExecutionHandle';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { deliverLiveNotification } from '@agent/followUp/liveNotification';
 import type { StreamTabId } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
@@ -155,28 +155,17 @@ class ExecutionSubscription {
   }
 
   private send(text: string): void {
-    void submitFollowUp(this.streamId, wrapAndSanitizeTag(TAG, text), {
+    deliverLiveNotification({
+      streamId: this.streamId,
+      followUp: wrapAndSanitizeTag(TAG, text),
       session: this.session,
-      mode: 'live_notification',
-      ...(this.expectedGenerationId !== undefined
-        ? { expectedGenerationId: this.expectedGenerationId }
-        : {}),
-    })
-      .then((result) => {
-        if (result.status !== 'sent' && result.status !== 'queued') return;
-        (this.session ?? currentSession()).events.emit({
-          scope: 'session',
-          event: {
-            type: 'updateQueuedFollowUps',
-            payload: { streamId: this.streamId },
-          },
-        });
-      })
-      .catch((err: unknown) => {
-        this.logger.warn('Failed to deliver execution subscription follow-up', {
-          data: { executionId: this.executionId, streamId: this.streamId, err },
-        });
-      });
+      expectedGenerationId: this.expectedGenerationId,
+      logger: this.logger,
+      failure: {
+        message: 'Failed to deliver execution subscription follow-up',
+        data: { executionId: this.executionId, streamId: this.streamId },
+      },
+    });
   }
 }
 

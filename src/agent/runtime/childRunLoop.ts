@@ -21,7 +21,7 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
   onOwnedExecutionLeaseLost,
-  runWithOwnedExecutionLease,
+  captureOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import {
   currentSession,
@@ -31,7 +31,7 @@ import {
   finalizeRunTerminal,
   type RunTerminalPersistence,
 } from '@agent/runtime/AgentRunLifecycle';
-import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
+import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
 import type {
   AgentExecutionHandle,
   ExecutionInterruptHandler,
@@ -65,10 +65,39 @@ type TurnUsage = { input_tokens?: number; output_tokens?: number };
  * run. `notify` is best-effort live progress (no report/manifest persist, no
  * gating — duplicate delivery is impossible by construction since there is
  * one delivery site per turn, so there is nothing left to dedupe against).
- * `recordCost` may be called freely, as often as the strategy likes, with a
- * cumulative cost estimate. The loop retains the greatest defined value and
- * commits it exactly once when the child's run ends, so a later partial source
- * cannot replace the best available total.
+ *
+ * ## Cost accounting contract (the one discipline every child-run type keeps)
+ *
+ * One fact — "this child's total spend" — flows through three fixed roles:
+ *
+ * - **Observe.** A strategy reports spend only through `recordCost`, and only
+ *   as a *cumulative total for the physical run so far*, never a delta. Native
+ *   subagents pass each turn's run-cumulative `totalCostUsd`
+ *   (`nativeSubagentStrategy.runNative`). The workflow-script strategy's
+ *   attempt model is per-grandchild deltas, so it converts them into an
+ *   invocation-cumulative total first (`createWorkflowAttemptCostTracker`) —
+ *   the retention rule below is only correct over cumulative observations.
+ *   Replayed/recovered journal work observes zero (it was billed by the run
+ *   that produced it), and `invocation.report({ costUsd })` is snapshot
+ *   display, never accounting.
+ * - **Retain.** The loop retains `max(best defined observation)`. Max over
+ *   cumulative totals is order-insensitive and monotone, so a later partial
+ *   source cannot replace the best available total; max over deltas would
+ *   under-bill, which is why observation is cumulative by contract.
+ * - **Commit.** Exactly one commit per physical child run, at run end, into
+ *   `params.recordCost` — the parent-side callback *adds* into the parent's
+ *   usage totals, so a second commit is double-billing and a missed one is
+ *   under-billing. The in-band single-cycle path has exactly one observation
+ *   per physical attempt and forwards it to its caller's `onCost` once; there
+ *   is no multi-observation in-band path, hence no retention layer there.
+ * - **Failure path (workflow).** A failed run settles from the checkpoint
+ *   journal; if settlement itself fails, that spend stays unbilled and must be
+ *   warned about loudly — never silently, and never masking the run error.
+ *   Live observations already retained remain committed.
+ * - **Agent-CLI children** wire no cost observer by design: their spend is
+ *   external (the user's own claude/codex subscription), not TeXRA-billed
+ *   USD. A future cost-reporting CLI must observe through this same
+ *   cumulative discipline rather than adding a parallel channel.
  */
 export interface ChildRunPorts {
   notify(update: SubagentProgressUpdate): void;
@@ -213,6 +242,12 @@ export interface ChildRunStrategy<TTurn> {
     turn: TTurn | null,
     isError: boolean,
     wallTimeMs: number,
+    /**
+     * The thrown error of a failed turn, when the failure was a throw rather
+     * than a returned failed result — so the manifest can carry the failure
+     * message even when no flow result exists to carry it.
+     */
+    error?: unknown,
   ): ResultMeta | undefined | Promise<ResultMeta | undefined>;
 
   /**
@@ -261,6 +296,37 @@ export interface ChildRunLoopParams<TTurn> {
   readonly recordCost?: (
     totalCostUsd: number | undefined,
   ) => void | Promise<void>;
+  /**
+   * Gate every turn through the session's shared child-run budget
+   * (`childRunBudgetFor`). Set by the detached native/workflow launch path;
+   * agent-CLI callers omit it — their children are external processes on the
+   * user's own subscription, outside both the cost contract and the budget
+   * (see `docs/proposals/2026-08-15-child-run-concurrency-budget.md`).
+   */
+  readonly budgeted?: boolean;
+  /**
+   * Progress sink override for awaiting callers of a persist-only child: the
+   * parent is blocked inside a tool call, so follow-up delivery cannot reach
+   * it and the caller degrades deliberately (e.g. to the parent run's trace).
+   * When present it replaces follow-up delivery for every progress update.
+   */
+  readonly notify?: (update: SubagentProgressUpdate) => void;
+  /**
+   * Hands an awaiting caller each settled turn's facts in memory — the
+   * formatted message, the (turn-stamped) result manifest, and the raw error
+   * of a failed turn. Persistence stays best-effort in the loop; a caller
+   * with a required-durability contract verifies the store afterwards rather
+   * than changing what the loop persists. Fires after persistence, once per
+   * settled turn.
+   */
+  readonly onTurnSettled?: (settled: {
+    readonly message: string;
+    readonly resultMeta?: ResultMeta;
+    readonly isError: boolean;
+    readonly error?: unknown;
+  }) => void;
+  /** Publish caller-owned state after final artifacts drain, before lease release. */
+  readonly afterArtifactsDrained?: () => void | Promise<void>;
 }
 
 export interface ChildRunLoopHandle {
@@ -525,6 +591,7 @@ async function deliverTurn<TTurn>(params: {
   parentDeliveryGenerationId?: string;
   /** Serializes turn-state writes against the acceptance write (#9531). */
   turnStateWrites: PQueue;
+  onTurnSettled?: ChildRunLoopParams<TTurn>['onTurnSettled'];
 }): Promise<PendingChildDelivery | undefined> {
   const {
     strategy,
@@ -549,6 +616,7 @@ async function deliverTurn<TTurn>(params: {
     turn,
     isError,
     wallTimeMs,
+    err ?? undefined,
   );
   // Attribute the envelope to this turn so /result can tell which turn the
   // latest-value slot reflects (#9531).
@@ -579,6 +647,13 @@ async function deliverTurn<TTurn>(params: {
       logger,
     ),
   );
+
+  params.onTurnSettled?.({
+    message: msg,
+    ...(stampedMeta !== undefined && { resultMeta: stampedMeta }),
+    isError,
+    ...(err != null && { error: err }),
+  });
 
   if (strategy.deliveryMode === 'persistOnly') return undefined;
 
@@ -664,19 +739,26 @@ export function startChildRunLoop<TTurn>(
   const logger = childStream?.logger ?? createChannelTrace('childRunLoop');
   // The code below is synchronous until the scoped loop task is spawned, so a
   // lost generation fails before any queue, listener, stage, or loop exists.
-  runWithOwnedExecutionLease(executionId, () => undefined);
+  captureOwnedExecutionLease(executionId);
   const runSession = currentSession();
   // Parent delivery belongs to the continuation generation under which this
   // producer started. A terminal retry may reuse the same stream ID, but late
   // progress or results from this child must not enter the replacement queue.
   const parentDeliveryGenerationId =
     runSession.followUps.currentGenerationId(parentStreamId);
+  const loop = new ChildRunInterruptible(runSession, childStreamId);
+  let activationDetached = false;
   const releaseChildActivation = childStream
     ? () => undefined
     : runSession.executions.reserveChildActivation({
         executionId,
         parentStreamId,
         childStreamId,
+        interrupt: () => loop.interrupt(),
+        detach: () => {
+          activationDetached = true;
+        },
+        isDetached: () => activationDetached,
       });
   let sessionOwnershipReleased = false;
   const releaseSessionOwnershipOnce = (): void => {
@@ -685,7 +767,6 @@ export function startChildRunLoop<TTurn>(
     strategy.releaseSessionOwnership?.();
   };
 
-  const loop = new ChildRunInterruptible(runSession, childStreamId);
   let stopWatchingLease: (() => void) | undefined;
   let queue!: FollowUpQueue;
   let queueLease: FollowUpConsumerLease | undefined;
@@ -710,7 +791,7 @@ export function startChildRunLoop<TTurn>(
     });
     // Revalidate at the state transition itself: setup hooks above may run
     // arbitrary synchronous code after the early fail-fast lease check.
-    runWithOwnedExecutionLease(executionId, () => undefined);
+    captureOwnedExecutionLease(executionId);
     queueLease = runSession.followUps.claimChildRun(childStreamId, executionId);
     if (!queueLease) {
       throw new Error(
@@ -755,7 +836,11 @@ export function startChildRunLoop<TTurn>(
   let bestCostUsd: number | undefined;
   const ports: ChildRunPorts = {
     notify: (update) => {
-      if (strategy.deliveryMode === 'persistOnly') return;
+      if (params.notify) {
+        params.notify(update);
+        return;
+      }
+      if (strategy.deliveryMode === 'persistOnly' || activationDetached) return;
       const targetStreamId = resolveDeliveryTarget(strategy, parentStreamId);
       if (!targetStreamId) return;
       const msg = formatSubagentProgress(executionId, agentName, update);
@@ -785,7 +870,41 @@ export function startChildRunLoop<TTurn>(
   // (#8093). Interim (non-terminal) turns wake inline, immediately, since no
   // finalize is pending for them.
   let pendingDelivery: PendingChildDelivery | undefined;
+  // One slot per live turn: acquired here — the single boundary that drives
+  // every detached native child turn — and nowhere above or below (design:
+  // docs/proposals/2026-08-15-child-run-concurrency-budget.md).
+  const budget = params.budgeted ? childRunBudgetFor(runSession) : undefined;
+  const gateTurn = (
+    base: (ac: AbortController) => Promise<TTurn>,
+  ): ((ac: AbortController) => Promise<TTurn>) =>
+    budget === undefined
+      ? base
+      : (ac) =>
+          budget.add(
+            () => {
+              // A turn cancelled while awaiting a slot must not start fresh
+              // model work; the loop classifies this throw as interrupted.
+              if (loop.isInterrupted() || ac.signal.aborted) {
+                throw new Error(
+                  'Child run turn cancelled while awaiting a concurrency slot.',
+                );
+              }
+              return base(ac);
+            },
+            // Settle a queued turn the moment it is cancelled: without the
+            // signal, an aborted task blocks here until a budget slot frees
+            // and only then observes the abort above.
+            { signal: ac.signal },
+          ) as Promise<TTurn>;
+
   const run = async (): Promise<void> => {
+    // A release failure after a clean run must reach awaited callers: the
+    // child's artifacts did not drain and its lease was abandoned, so a
+    // required-result parent must not journal the turn as durably settled.
+    // Recorded here and thrown after the terminal choreography so it never
+    // masks a primary body or finalize failure (which stays the thrown
+    // error, with the release failure logged as secondary).
+    let releaseFailure: unknown;
     let runner: (ac: AbortController) => Promise<TTurn> = (ac) =>
       strategy.launch(ports, ac);
     // Turn identity (#9531): each accepted turn mints a stable token/delivery
@@ -827,7 +946,7 @@ export function startChildRunLoop<TTurn>(
         const abortController = loop.startTurn();
         const attempt = await attemptTurn(
           strategy,
-          runner,
+          gateTurn(runner),
           loop,
           logger,
           abortController,
@@ -859,7 +978,9 @@ export function startChildRunLoop<TTurn>(
           wallTimeMs,
           isError: turnFailed,
           turnStateWrites,
+          onTurnSettled: params.onTurnSettled,
           prepareParentDelivery: () => {
+            if (activationDetached) return false;
             if (loop.isInterrupted()) {
               releaseSessionOwnershipOnce();
               return false;
@@ -1028,21 +1149,28 @@ export function startChildRunLoop<TTurn>(
         );
       } finally {
         try {
-          await releaseExecutionLeaseAfterArtifacts(runSession, executionId);
+          await runSession.releaseExecutionLease(
+            executionId,
+            params.afterArtifactsDrained,
+          );
         } catch (error) {
           logger.warn('Failed to persist final child-run artifacts', {
             data: { executionId, error },
           });
+          releaseFailure = error;
         } finally {
           stopWatchingLease?.();
           releaseChildActivation();
         }
       }
     }
+    // Reached only when neither the loop body nor the terminal choreography
+    // threw: the lease drain failure is then the run's failure.
+    if (releaseFailure !== undefined) throw releaseFailure;
   };
   try {
     const completion = Promise.resolve(
-      runWithOwnedExecutionLease(executionId, run),
+      captureOwnedExecutionLease(executionId)(run),
     );
     return { completion };
   } catch (error) {

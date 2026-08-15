@@ -9,13 +9,13 @@ import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { ServerToolContentBlock } from '@agent/types/ServerTools';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { isNonEmptyString, isObject } from '@utils/core';
 import { formatContent } from '@utils/text/xmlConversion';
 
 // Local file imports
-import { FlowTransition } from '../FlowTransitions';
-import type { ToolUseRoundServices } from '../CycleServices';
 import type { ToolUseRoundShared } from './roundShared';
 
 const BLANK_TOOL_RESULT_CONTINUATION =

@@ -17,11 +17,11 @@ import { createChannelTrace } from '@agent/trace';
 import {
   defaultSession,
   resolveAndResumeStream,
+  resolveResumeStateFromSnapshots,
   resumeQueuedToolUseFromResumeData,
 } from '@agent/runtime';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { StreamTabId } from '@shared/schemas';
 
 import { runExecuteCommand } from './executeCommand';
@@ -51,7 +51,6 @@ export function tryResumeFromResumeData(
   return resolveAndResumeStream(
     streamId,
     {
-      interactions: session.interactions,
       // The extension runs on the default session for this host-path caller
       // (outside any run ALS), so its status plane is the same one every other
       // unmigrated default-session caller reads through `defaultSession()`.
@@ -60,42 +59,23 @@ export function tryResumeFromResumeData(
       // resurrected by the resume that was already in flight.
       isCancellationRequested: () => !session.transcripts.has(streamId),
       resolveResumeState: async (id) => {
-        const progressState = ProgressViewProvider.getInstance()?.state;
-        if (!progressState) {
-          logger.warn(`No ProgressViewProvider found for stream: ${id}`);
+        const resolution = await resolveResumeStateFromSnapshots(
+          session.snapshots,
+          id,
+        );
+        if (resolution.status === 'resolved') return resolution.state;
+        if (resolution.status === 'read-failed') {
+          logger.warn(`Failed to read persisted resume data for ${id}`, {
+            data: resolution.error,
+          });
           return undefined;
         }
-        let { config: runConfig, executionId } =
-          progressState.snapshots.getRunMetadata(id);
-        if (!runConfig || !executionId) {
-          // Preload-then-read (#9947), mirroring the desktop resume path: a
-          // stream whose sidecar record is not resident yet must be seeded
-          // from disk before the synchronous reads can be trusted.
-          try {
-            await progressState.snapshots.preload([id]);
-          } catch (error) {
-            logger.warn(`Failed to read persisted resume data for ${id}`, {
-              data: error,
-            });
-            return undefined;
-          }
-          ({ config: runConfig, executionId } =
-            progressState.snapshots.getRunMetadata(id));
-        }
-        if (!executionId) {
-          logger.warn(`No execution ID found for stream: ${id}`);
-          return undefined;
-        }
-        if (!runConfig) {
-          logger.warn(`No run config found for stream: ${id}`);
-          return undefined;
-        }
-        const parentStreamId = progressState.snapshots.getParentStreamId(id);
-        return {
-          runState: runConfig,
-          executionId,
-          ...(parentStreamId !== undefined && { parentStreamId }),
-        };
+        logger.warn(
+          resolution.executionId === undefined
+            ? `No execution ID found for stream: ${id}`
+            : `No run config found for stream: ${id}`,
+        );
+        return undefined;
       },
       // Extension wrapper around the host-neutral tool-use resume: it
       // supplies the extension runtime host and surfaces failures as a

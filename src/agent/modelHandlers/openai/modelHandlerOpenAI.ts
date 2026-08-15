@@ -8,7 +8,7 @@ import {
 } from 'openai/lib/ChatCompletionStream';
 
 // Local imports
-import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
+import { parseToolInput } from '@agent/core/flows/toolCallParsing';
 import type { ExtendedCompletionUsage } from '@agent/core/usage/ResponseUsage';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
