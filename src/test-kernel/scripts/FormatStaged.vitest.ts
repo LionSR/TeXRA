@@ -729,6 +729,24 @@ describe('format-staged', () => {
     expect(git(['diff', '--name-only', '--', 'a.ts'])).toBe('');
   });
 
+  it('keeps an unstaged CRLF conversion when the index blob is LF (#10505)', () => {
+    writeFileSync(join(dir, 'a.ts'), BASE);
+    git(['add', 'a.ts']);
+    git(['commit', '-qm', 'base']);
+    writeFileSync(join(dir, 'a.ts'), STAGED);
+    git(['add', 'a.ts']);
+    // Byte-different but normalized-equal worktree: this is an unstaged
+    // line-ending conversion, not a fully staged file, and must survive.
+    writeFileSync(join(dir, 'a.ts'), toCrlf(STAGED));
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('staged Prettier output for a.ts');
+    expect(stagedBlob('a.ts')).toBe(FORMATTED);
+    expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(toCrlf(FORMATTED));
+  });
+
   it('does not treat an autocrlf package.yaml checkout as divergent (#10433)', () => {
     git(['config', 'core.autocrlf', 'true']);
     writeFileSync(
@@ -1154,9 +1172,92 @@ describe('format-staged', () => {
     const result = runFormat();
 
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('config/opts is not staged');
+    expect(result.stdout).toContain('config/opts/package.json is not staged');
     expect(result.stdout).not.toContain('config/evil.cjs');
     expect(stagedBlob('a.ts')).toBe('export const x = 1;\n');
+  });
+
+  it('skips when a directory package main manifest has unstaged edits (#10502)', () => {
+    mkdirSync(join(dir, 'config/opts'), { recursive: true });
+    writeFileSync(
+      join(dir, 'config/opts/package.json'),
+      '{"main":"./good.cjs"}\n',
+    );
+    writeFileSync(
+      join(dir, 'config/opts/good.cjs'),
+      'module.exports = { semi: false };\n',
+    );
+    writeFileSync(
+      join(dir, 'config/prettier.cjs'),
+      'const opts = require("./opts");\nmodule.exports = opts;\n',
+    );
+    writeFileSync(
+      join(dir, 'package.json'),
+      '{"prettier":"./config/prettier.cjs"}\n',
+    );
+    git([
+      'add',
+      'config/prettier.cjs',
+      'config/opts/package.json',
+      'config/opts/good.cjs',
+      'package.json',
+    ]);
+    git(['commit', '-qm', 'config base']);
+    writeFileSync(
+      join(dir, 'config/opts/package.json'),
+      '{"main":"./good.cjs","x":1}\n',
+    );
+    writeFileSync(join(dir, 'a.ts'), 'export const x = 1;\n');
+    git(['add', 'a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain(
+      'config/opts/package.json has unstaged edits',
+    );
+    expect(stagedBlob('a.ts')).toBe('export const x = 1;\n');
+  });
+
+  it('honors package main over index fallback for extensionless require (#10502)', () => {
+    mkdirSync(join(dir, 'config/opts'), { recursive: true });
+    writeFileSync(
+      join(dir, 'config/opts/package.json'),
+      '{"main":"main.cjs"}\n',
+    );
+    writeFileSync(
+      join(dir, 'config/opts/main.cjs'),
+      'module.exports = { semi: false };\n',
+    );
+    writeFileSync(
+      join(dir, 'config/opts/index.js'),
+      'module.exports = { semi: true };\n',
+    );
+    writeFileSync(
+      join(dir, 'config/prettier.cjs'),
+      'const opts = require("./opts");\nmodule.exports = opts;\n',
+    );
+    writeFileSync(
+      join(dir, 'package.json'),
+      '{"prettier":"./config/prettier.cjs"}\n',
+    );
+    git([
+      'add',
+      'config/prettier.cjs',
+      'config/opts/package.json',
+      'config/opts/main.cjs',
+      'config/opts/index.js',
+      'package.json',
+    ]);
+    git(['commit', '-qm', 'config base']);
+    writeFileSync(join(dir, 'a.ts'), 'export const x = 1;\n');
+    git(['add', 'a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('staged Prettier output for a.ts');
+    expect(stagedBlob('a.ts')).toBe('export const x = 1\n');
   });
 
   it('does not append extensions for an extensionless ESM import (#10502)', () => {

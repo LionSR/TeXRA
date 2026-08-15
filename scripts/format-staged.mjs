@@ -208,17 +208,38 @@ function isWorktreeFile(path) {
   return lstatSync(path, { throwIfNoEntry: false })?.isFile() === true;
 }
 
-/** Return the `main` entry of a dependency directory's package.json from
- * the index only. An untracked worktree manifest is never consulted: index
- * resolution must reflect the committed state, not an uncommitted redirect. */
+/** Return the `main` entry of a dependency directory's package.json. The
+ * manifest itself must be tracked and equal to its index blob before its
+ * redirect is trusted; otherwise an untracked or unstaged `main` edit could
+ * route Prettier to uncommitted rules. Throws when the manifest is present in
+ * only one of the index/worktree or differs between them. */
 function readPackageMain(dir) {
   const pkgPath = join(dir, 'package.json');
   const pkgRel = relToCwd(pkgPath);
   if (!pkgRel) return null;
-  const blob = readIndexFile(pkgRel);
-  if (!blob) return null;
+  const stagedPkg = readIndexFile(pkgRel);
+  if (!stagedPkg) {
+    if (existsSync(pkgPath)) {
+      throw new SkipError(
+        `${pkgRel} is not staged but the config depends on it; skipped ` +
+          'auto-staging so its uncommitted manifest stays out of the commit.',
+      );
+    }
+    return null;
+  }
+  if (!existsSync(pkgPath)) {
+    throw new SkipError(
+      `${pkgRel} vanished from the working tree; skipped auto-staging.`,
+    );
+  }
+  if (!normalizedEquals(readFileSync(pkgPath), stagedPkg)) {
+    throw new SkipError(
+      `${pkgRel} has unstaged edits while the config depends on it; ` +
+        'skipped auto-staging so the uncommitted manifest stays out of the commit.',
+    );
+  }
   try {
-    const main = JSON.parse(stripBom(blob.toString('utf8'))).main;
+    const main = JSON.parse(stripBom(stagedPkg.toString('utf8'))).main;
     return typeof main === 'string' ? main : null;
   } catch {
     return null;
@@ -429,8 +450,13 @@ function mergeWorktree(path, stagedBlob, formatted) {
   // verbatim, so write those exact bytes back — even when Prettier chose a
   // different EOL than the worktree's uniform convention. The one exception
   // is an autocrlf=true checkout, where Git checks the index's LF blob out as
-  // CRLF; preserve the tree's CRLF convention there.
-  if (worktreeLf.equals(stagedLf)) {
+  // CRLF; preserve the tree's CRLF convention there. A normalized-equal but
+  // byte-different worktree without that checkout conversion is an unstaged
+  // EOL edit, so it falls through to the merge path below.
+  const fullyStaged =
+    worktree.equals(stagedBlob) ||
+    (isAutocrlfCheckout() && worktreeLf.equals(stagedLf));
+  if (fullyStaged) {
     const content =
       isAutocrlfCheckout() && worktree.includes(CRLF)
         ? withWorktreeEol(formatted, worktree)
