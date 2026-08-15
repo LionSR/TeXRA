@@ -169,6 +169,32 @@ export async function runReflectionFlow<C = unknown>(
       return canonical;
     });
 
+  const workflowOutputPolicy: WorkflowOutputPolicy =
+    input.workflowOutputPolicy ?? {
+      shouldAutoOpenPdfOrLog: () =>
+        readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF),
+      shouldRejectOnCompileFailure: () =>
+        readPlatformSetting<boolean>(
+          WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+        ),
+    };
+
+  const services: ReflectionServices<C> = {
+    ...input,
+    outputState,
+    xmlManager,
+    diffManager,
+    latexMediaManager,
+    promptBuilder,
+    fileService,
+    getOutputFileLocation,
+    workflowOutputPolicy,
+    baseFiles,
+  };
+
+  // Kick off run-workspace preparation (awaited lazily by extractFilesFromXml).
+  setActiveRun(outputState, services, storageKey);
+
   const kv = getExecutionStore(executionId);
 
   const flowRecord = await readPersistedFlowRecord(kv, executionId);
@@ -236,16 +262,6 @@ export async function runReflectionFlow<C = unknown>(
   mediaNode.next(responseCycleNode);
   responseCycleNode.next(outputNode);
 
-  const workflowOutputPolicy: WorkflowOutputPolicy =
-    input.workflowOutputPolicy ?? {
-      shouldAutoOpenPdfOrLog: () =>
-        readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF),
-      shouldRejectOnCompileFailure: () =>
-        readPlatformSetting<boolean>(
-          WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-        ),
-    };
-
   const pf = new RoundPersistedFlow<
     ReflectionFlowShared,
     ReflectionServices<C>
@@ -286,22 +302,7 @@ export async function runReflectionFlow<C = unknown>(
     },
   });
 
-  const services: ReflectionServices<C> = {
-    ...input,
-    outputState,
-    xmlManager,
-    diffManager,
-    latexMediaManager,
-    promptBuilder,
-    fileService,
-    getOutputFileLocation,
-    workflowOutputPolicy,
-    baseFiles,
-  };
   pf.setServices(services);
-
-  // Kick off run-workspace preparation (awaited lazily by extractFilesFromXml).
-  setActiveRun(outputState, services, storageKey);
 
   if (flowRecord) {
     logger.debug('Resuming reflection flow from persistence');
