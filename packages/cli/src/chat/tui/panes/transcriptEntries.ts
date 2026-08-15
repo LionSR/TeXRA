@@ -198,7 +198,10 @@ export function splitTranscriptEntries(
   const pending: ConversationEntry[] = [];
   let canPromoteToStatic = true;
   for (const [index, entry] of entries.entries()) {
-    if (entry.role === 'activity' && !entry.finalized) {
+    // Mirror the static-ring settled-prefix barrier: any unfinished entry
+    // blocks later finalized rows from static promotion, so they stay visible
+    // in the live pending pane instead of disappearing between the two panes.
+    if (!entry.finalized) {
       canPromoteToStatic = false;
     }
     if (!isRenderableTranscriptEntry(entry)) continue;

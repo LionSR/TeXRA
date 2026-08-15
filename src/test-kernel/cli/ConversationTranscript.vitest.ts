@@ -182,6 +182,61 @@ describe('CLI conversation transcript', () => {
     expect(waitingBeforeFinalize.pending).toEqual([]);
   });
 
+  it('keeps finalized rows behind an unfinished assistant live in the pending pane', () => {
+    const user = entry('u1', 'user', 'go', true);
+    const assistant = entry('a1', 'assistant', 'working', false);
+    const tool = {
+      ...toolEntry('t1', TOOL_USE_STATUS.COMPLETED),
+      finalized: true,
+    };
+
+    const split = splitTranscriptEntries(
+      [user, assistant, tool],
+      STREAM_PHASE.RUNNING,
+    );
+    expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
+    expect(split.pending.map((item) => item.id)).toEqual(['a1', 't1']);
+  });
+
+  it('keeps finalized rows behind unfinished tool and workflow rows live', () => {
+    const tool = toolEntry('t1', 'in_progress');
+    const toolPhase: ConversationEntry = {
+      id: 'p1',
+      role: 'phase',
+      text: 'After tool',
+      finalized: true,
+      phaseLabel: 'After tool',
+    };
+    const workflowTask: ConversationEntry = {
+      id: 'w1',
+      role: 'workflowTask',
+      text: 'Planned: Task',
+      finalized: false,
+      task: { id: 'w1', label: 'Task', status: 'planned' },
+    };
+    const workflowPhase: ConversationEntry = {
+      id: 'p2',
+      role: 'phase',
+      text: 'After workflow task',
+      finalized: true,
+      phaseLabel: 'After workflow task',
+    };
+
+    const toolSplit = splitTranscriptEntries(
+      [tool, toolPhase],
+      STREAM_PHASE.RUNNING,
+    );
+    expect(toolSplit.finalized).toEqual([]);
+    expect(toolSplit.pending.map((item) => item.id)).toEqual(['t1', 'p1']);
+
+    const workflowSplit = splitTranscriptEntries(
+      [workflowTask, workflowPhase],
+      STREAM_PHASE.RUNNING,
+    );
+    expect(workflowSplit.finalized).toEqual([]);
+    expect(workflowSplit.pending.map((item) => item.id)).toEqual(['w1', 'p2']);
+  });
+
   it('keeps running compaction live and promotes its terminal update once', () => {
     const running = compactionEntry('running');
     expect(
@@ -1105,9 +1160,13 @@ describe('CLI conversation transcript', () => {
       [CHILD, ROOT_STREAM],
     ]);
     const childEntry = entry('a1', 'assistant', 'checking', true);
+    // Keep one shared entries array so the model patch reuses the same
+    // `entriesRef` and exercises the `sameEntries && scannedIndex < length`
+    // rescan guard rather than falling through to the new-array path.
+    const childEntries = [childEntry];
     const streamsWithoutChildModel = new Map<StreamTabId, StreamSlice>([
       [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [])],
-      [CHILD, sliceWithEntries(CHILD, [childEntry])],
+      [CHILD, sliceWithEntries(CHILD, childEntries)],
     ]);
     const initial = buildStaticTranscriptState({
       childStreamEntries: new Map(),
@@ -1122,14 +1181,12 @@ describe('CLI conversation transcript', () => {
     });
 
     expect(initial.items).toEqual([]);
-    expect(initial.scan.entriesRef).toBe(
-      streamsWithoutChildModel.get(CHILD)?.entries,
-    );
+    expect(initial.scan.entriesRef).toBe(childEntries);
     expect(initial.scan.scannedIndex).toBe(0);
 
     const streamsWithChildModel = new Map<StreamTabId, StreamSlice>([
       [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [])],
-      [CHILD, sliceWithEntries(CHILD, [childEntry], { model: 'kimi26T' })],
+      [CHILD, sliceWithEntries(CHILD, childEntries, { model: 'kimi26T' })],
     ]);
     const advanced = advanceStaticTranscriptState(initial, {
       childStreamEntries: new Map(),
@@ -1264,6 +1321,44 @@ describe('CLI conversation transcript', () => {
     expect(advanced.byteCount).toBeGreaterThan(initial.byteCount);
     expect(advanced.repaintEpoch).toBe(1);
     expect(advanced.executionLabels).toBe(longLabels);
+  });
+
+  it('does not relayout or repaint for semantically equal fresh execution labels', () => {
+    const labels = new Map<string, string>([['sub', 'A']]);
+    const entries = [compactExecutionsEntry('t1', '/executions/sub/report')];
+    const streamMap = new Map<StreamTabId, StreamSlice>([
+      [STREAM_ID, sliceWithEntries(STREAM_ID, entries)],
+    ]);
+    const initial = buildStaticTranscriptState({
+      childStreamEntries: new Map(),
+      executionLabels: labels,
+      maxRows: 1,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      repaintEpoch: 0,
+      ringBudgets: DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
+      scrollbackStreamId: STREAM_ID,
+      streams: streamMap,
+      width: 80,
+    });
+    // Same projection contents in a fresh Map — the signal allocates these on
+    // unrelated child-roster churn, so they must not read as a layout change.
+    const sameLabelsFreshMap = new Map<string, string>([['sub', 'A']]);
+    const unchanged = advanceStaticTranscriptState(initial, {
+      childStreamEntries: new Map(),
+      executionLabels: sameLabelsFreshMap,
+      maxRows: 1,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      ringBudgets: DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
+      scrollbackStreamId: STREAM_ID,
+      streams: streamMap,
+      width: 80,
+    });
+    expect(unchanged).toBe(initial);
+    expect(unchanged.repaintEpoch).toBe(initial.repaintEpoch);
   });
 
   it('trims and bumps the repaint epoch when incremental appends exceed a small budget', () => {

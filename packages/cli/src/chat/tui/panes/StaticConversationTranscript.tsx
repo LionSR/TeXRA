@@ -485,6 +485,23 @@ function retainedStaticTranscriptTail(
   });
 }
 
+/** The execution-label map is a `computed()` signal that can return a fresh
+ *  `Map` for unrelated child-roster churn (elapsed timers, active/inactive
+ *  flips). Only a content change affects transcript layout, so compare the
+ *  label projection semantically instead of by reference. */
+function executionLabelsEqual(
+  left: ExecutionLabels | undefined,
+  right: ExecutionLabels | undefined,
+): boolean {
+  if (left === right) return true;
+  if (left === undefined || right === undefined) return false;
+  if (left.size !== right.size) return false;
+  for (const [key, value] of left) {
+    if (right.get(key) !== value) return false;
+  }
+  return true;
+}
+
 function shouldWaitForChildIdentity({
   currentItems,
   parentStream,
@@ -964,7 +981,7 @@ export function advanceStaticTranscriptState(
 
   const layoutChanged =
     width !== current.layoutWidth ||
-    executionLabels !== current.executionLabels;
+    !executionLabelsEqual(executionLabels, current.executionLabels);
   let nextItems = current.items;
   let nextRowCount = current.rowCount;
   let nextByteCount = current.byteCount;
