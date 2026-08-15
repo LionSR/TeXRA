@@ -315,18 +315,18 @@ export class DesktopProgressBridge {
           // assigned by the time either runs.
           retry: {
             show: (permission) =>
-              this.backend.webviewUpdater.showPermission({
+              this.backend.renderer.showPermission({
                 kind: PERMISSION_KIND.RETRY,
                 data: permission,
               }),
             dismiss: (id) =>
-              this.backend.webviewUpdater.resolvePermission(
+              this.backend.renderer.resolvePermission(
                 PERMISSION_KIND.RETRY,
                 id,
               ),
           },
           proposal: createAgentProposalTransport({
-            getWebviewUpdater: () => this.backend.webviewUpdater,
+            getRenderer: () => this.backend.renderer,
             isPending: (proposalId) =>
               this.backend.approvalHandlers.proposal.get(proposalId) !==
               undefined,
