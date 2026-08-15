@@ -32,6 +32,10 @@ import {
   SubagentReconciliationError,
   type InBandSubagentExecutionOptions,
 } from '@tools/delegation/inBandSubagentExecution';
+import {
+  provideAgentEngine,
+  type AgentEngine,
+} from '@tools/delegation/nativeSubagentStrategy';
 
 const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
@@ -58,10 +62,6 @@ vi.mock('@agent/index/agentRegistry', () => ({
     entries: readonly { source: string; name: string }[],
     identifier: string,
   ) => entries.find((entry) => agentMatchesIdentifier(entry, identifier)),
-}));
-
-vi.mock('@agent/runtime/executeAgent', () => ({
-  executeAgent: mocks.executeAgent,
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -381,6 +381,9 @@ function stableSequenceStore(logicalExecutionId: ExecutionId, nextAttempt = 0) {
 describe('headless delegation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    provideAgentEngine({
+      executeAgent: mocks.executeAgent,
+    } as unknown as AgentEngine);
     mocks.getVisibleAgents.mockReturnValue([
       {
         name: 'review',

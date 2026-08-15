@@ -46,8 +46,6 @@ import {
 } from './subagentResults';
 
 // Local file imports
-// Type-only: the strategy module pulls in `@agent/runtime/executeAgent` at
-// runtime (see the lazy import below), but a type import is erased at build.
 import { type BuiltSubagentResult } from './subagentDeliveryFormat';
 import {
   readStableSubagentAttempt,
@@ -58,7 +56,10 @@ import {
   type StableSubagentAttempt,
   type StableSubagentSequence,
 } from './stableSubagentAttempt';
-import type { ChildRunLaunchOptions } from './nativeSubagentStrategy';
+import {
+  createNativeSubagentStrategy,
+  type ChildRunLaunchOptions,
+} from './nativeSubagentStrategy';
 
 const LOG_CHANNEL = 'inBandSubagentExecution';
 
@@ -394,10 +395,6 @@ async function executeInBand(
 ): Promise<CompletedInBandSubagent> {
   options.signal?.throwIfAborted();
 
-  // Lazy import: the strategy imports executeAgent, whose runtime registry
-  // loads delegation tools. Keeping this edge lazy avoids closing that cycle.
-  const { createNativeSubagentStrategy } =
-    await import('./nativeSubagentStrategy.js');
   const config = AgentConfigSchema.parse(options.configPayload);
   const startedAt = Date.now();
   const workingDirectory = config.workingDirectory ?? undefined;

@@ -36,13 +36,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
 import { executeSubagentForDeliveryInBand } from './inBandSubagentExecution';
-
-// `createNativeSubagentStrategy` is lazy-imported below. The strategy module
-// imports `@agent/runtime/executeAgent` (directly, or transitively via
-// `resumeQueuedToolUseFromResumeData`), which pulls in `runToolUseFlow.ts` ->
-// `@tools/registry`. An eager import here would close the same
-// registry -> DelegationTools -> proposalFlow -> subagentExecution cycle
-// the existing `executeAgent` lazy import already avoids.
+import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 
 // ============================================================================
 // Shared utilities
@@ -198,19 +192,15 @@ export async function executeSubagent(
       childStreamId,
       agentName,
       recordCost,
-      buildLaunch: async () => {
-        const { createNativeSubagentStrategy } =
-          await import('./nativeSubagentStrategy.js');
-        return {
-          strategy: createNativeSubagentStrategy(strategyParams),
-          onLoopFailed: (error: unknown): void => {
-            createChannelTrace('childRunLoop').error(
-              `Subagent '${agentName}' run loop failed after launch`,
-              { data: error },
-            );
-          },
-        };
-      },
+      buildLaunch: async () => ({
+        strategy: createNativeSubagentStrategy(strategyParams),
+        onLoopFailed: (error: unknown): void => {
+          createChannelTrace('childRunLoop').error(
+            `Subagent '${agentName}' run loop failed after launch`,
+            { data: error },
+          );
+        },
+      }),
     });
 
     const meta = options?.approvalMeta;

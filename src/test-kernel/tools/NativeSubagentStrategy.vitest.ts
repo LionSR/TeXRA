@@ -48,11 +48,6 @@ vi.mock('@tools/delegation/subagentDeliveryFormat', async (importOriginal) => {
   };
 });
 
-vi.mock('@agent/runtime/executeAgent', () => ({
-  executeAgent: mocks.executeAgent,
-  resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
-}));
-
 vi.mock('@agent/storage', () => ({
   finalizeExecution: mocks.finalizeExecution,
   getExecutionStore: vi.fn(() => ({
@@ -88,7 +83,11 @@ vi.mock('@agent/storage/childRunPersistence', () => ({
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { createNativeSubagentStrategy } from '@tools/delegation/nativeSubagentStrategy';
+import {
+  createNativeSubagentStrategy,
+  provideAgentEngine,
+  type AgentEngine,
+} from '@tools/delegation/nativeSubagentStrategy';
 
 const ownedSessions = new Set<SessionHandle>();
 
@@ -176,6 +175,10 @@ async function launchWaitingTurn(
 describe('NativeSubagentStrategy', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    provideAgentEngine({
+      executeAgent: mocks.executeAgent,
+      resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
+    } as unknown as AgentEngine);
     mocks.throwDeliveryFormatting = false;
     mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
     mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });

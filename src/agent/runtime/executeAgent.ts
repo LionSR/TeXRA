@@ -37,6 +37,7 @@ import {
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
 } from '@shared/schemas/output';
+import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
 import { ensureRunDir } from '@utils/files/runStorageFs';
 
@@ -642,3 +643,9 @@ export async function resumeToolUseFromResumeData(
     return result;
   });
 }
+
+// Close the delegation recursion: the delegation tools drive child runs
+// through `nativeSubagentStrategy`, whose engine calls are provided here —
+// the one direction that cannot be a static import, because this module's
+// flow drivers statically import the tool registry that includes those tools.
+provideAgentEngine({ executeAgent, resumeToolUseFromResumeData });

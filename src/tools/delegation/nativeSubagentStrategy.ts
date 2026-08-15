@@ -32,10 +32,6 @@ import {
   type AgentFlowResult,
   type AgentRuntimeFlowResult,
 } from '@agent/runtime/AgentFlowResult';
-import {
-  executeAgent,
-  resumeToolUseFromResumeData,
-} from '@agent/runtime/executeAgent';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
@@ -65,6 +61,37 @@ import {
   formatBuiltSubagentDelivery,
   type BuiltSubagentResult,
 } from './subagentDeliveryFormat';
+
+/**
+ * The two engine entry points a native child run needs. Provided by
+ * `@agent/runtime/executeAgent` at its module load rather than imported: a
+ * static import here would close the
+ * registry -> DelegationTools -> proposalFlow -> subagentExecution ->
+ * nativeSubagentStrategy -> executeAgent -> runToolUseFlow -> registry cycle,
+ * because the engine's flow driver statically imports the tool registry (a
+ * kept edge). Agents launching agents is inherently recursive; this slot is
+ * the single, typed point where that recursion closes at runtime.
+ */
+export interface AgentEngine {
+  readonly executeAgent: typeof import('@agent/runtime/executeAgent').executeAgent;
+  readonly resumeToolUseFromResumeData: typeof import('@agent/runtime/executeAgent').resumeToolUseFromResumeData;
+}
+
+let agentEngine: AgentEngine | undefined;
+
+/** Called once at `@agent/runtime/executeAgent` module load (tests substitute fakes). */
+export function provideAgentEngine(engine: AgentEngine): void {
+  agentEngine = engine;
+}
+
+function engine(): AgentEngine {
+  if (!agentEngine) {
+    throw new Error(
+      'Native subagent launch requires the agent engine, but @agent/runtime/executeAgent has not been loaded.',
+    );
+  }
+  return agentEngine;
+}
 
 /**
  * The launch fields every native child run needs, shared between the two
@@ -251,7 +278,7 @@ export function createNativeSubagentStrategy(
           },
           onRun,
         };
-        return executeAgent(params.config, params.executionId, {
+        return engine().executeAgent(params.config, params.executionId, {
           ...executeOptions,
           allowWaitingResult: true,
           userFollowUpSupport:
@@ -303,7 +330,7 @@ export function createNativeSubagentStrategy(
           STREAM_TRANSITION_CAUSE.RESUME,
           { substate: STREAM_SUBSTATE.RESUMING },
         );
-        return await resumeToolUseFromResumeData(resume, {
+        return await engine().resumeToolUseFromResumeData(resume, {
           session: params.session,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
           onApprovalPolicyDenial: params.onApprovalPolicyDenial,
