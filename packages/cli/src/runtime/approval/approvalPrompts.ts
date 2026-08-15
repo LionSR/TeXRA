@@ -33,14 +33,22 @@ import { safeTerminalText } from '../terminalText';
  * the runtime host. They are the discriminator for the CLI's own approval
  * prompts, and the payloads are the plain `@shared/schemas` permission shapes
  * the live `HostInteractions` requests already carry.
+ *
+ * Carrying `type` and `payload` in one discriminated union (rather than two
+ * separate `(event, payload)` parameters keyed off a generic) lets a
+ * `switch (request.type)` narrow `request.payload` for free — no `as`
+ * casts needed at the read sites.
  */
-export interface CliDecisionApprovalPayloads {
-  showPlanApproval: PlanApprovalPermission;
-  showAgentProposal: AgentProposalPermission;
-  showRetryRequest: RetryPermission;
-}
-
-export type CliDecisionApprovalEvent = keyof CliDecisionApprovalPayloads;
+export type CliDecisionApprovalRequest =
+  | {
+      readonly type: 'showPlanApproval';
+      readonly payload: PlanApprovalPermission;
+    }
+  | {
+      readonly type: 'showAgentProposal';
+      readonly payload: AgentProposalPermission;
+    }
+  | { readonly type: 'showRetryRequest'; readonly payload: RetryPermission };
 
 const CLI_PERSONAL_API_RETRY_HINT =
   'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to your own API keys.';

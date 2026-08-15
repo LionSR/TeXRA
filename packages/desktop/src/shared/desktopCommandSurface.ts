@@ -170,7 +170,6 @@ export interface DesktopSettingsTabMessage {
 
 export interface DesktopMainViewResetMessage {
   command: typeof MAIN_VIEW_COMMANDS.STATE_RESTORE;
-  state: Record<string, never>;
   isResetOperation: true;
 }
 
@@ -397,7 +396,6 @@ export function postDesktopSettingsView(
 export function buildDesktopMainViewResetMessage(): DesktopMainViewResetMessage {
   return {
     command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-    state: {},
     isResetOperation: true,
   };
 }

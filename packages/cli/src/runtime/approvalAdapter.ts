@@ -11,9 +11,7 @@ import {
 } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
 import {
-  type AgentProposalPermission,
   type ApprovalDecision,
-  type PlanApprovalPermission,
   type RetryPermission,
   type UserQuestionAnswers,
 } from '@shared/schemas';
@@ -22,6 +20,7 @@ import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   settleExecutable,
@@ -32,8 +31,7 @@ import {
   type CliApprovalContent,
   type CliApprovalDecision,
   type CliApprovalPromptHooks,
-  type CliDecisionApprovalEvent,
-  type CliDecisionApprovalPayloads,
+  type CliDecisionApprovalRequest,
   askApproval,
   queueCliApprovalQuestion,
 } from './approval/approvalPrompts';
@@ -87,56 +85,46 @@ async function decideToolEdit(
   return toToolEditResult(decision, request.proposedContent);
 }
 
-function summarizeApprovalEvent<K extends CliDecisionApprovalEvent>(
-  event: K,
-  payload: CliDecisionApprovalPayloads[K],
+function summarizeApprovalEvent(
+  request: CliDecisionApprovalRequest,
 ): CliApprovalContent {
-  switch (event) {
-    case 'showPlanApproval': {
-      const data = payload as PlanApprovalPermission;
+  switch (request.type) {
+    case 'showPlanApproval':
       return {
-        summary: `Plan approval requested:\n${JSON.stringify(data.plan, null, 2)}`,
+        summary: `Plan approval requested:\n${JSON.stringify(request.payload.plan, null, 2)}`,
       };
-    }
-    case 'showAgentProposal': {
-      const data = payload as AgentProposalPermission;
-      return buildAgentProposalApprovalContent(data);
-    }
-    case 'showRetryRequest': {
+    case 'showAgentProposal':
+      return buildAgentProposalApprovalContent(request.payload);
+    case 'showRetryRequest':
       // The prompt surface owns the retry hint: the operator must see the
       // `/api personal` / coding-plan switch guidance in the prompt they
       // actually answer, not only in the pre-prompt stderr line.
       // `formatRetryRequestMessage` is the single retry formatter.
-      return { summary: formatRetryRequestMessage(payload as RetryPermission) };
-    }
-    default: {
-      const never: never = event;
-      return { summary: String(never) };
-    }
+      return { summary: formatRetryRequestMessage(request.payload) };
+    default:
+      return assertNever(request, 'Unhandled CLI approval request kind');
   }
 }
 
-async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
-  event: K,
-  payload: CliDecisionApprovalPayloads[K],
+async function decideApprovalEvent(
+  request: CliDecisionApprovalRequest,
   context: CliContext,
   hooks: CliApprovalPromptHooks,
   options: { writeRejectionToStderr?: boolean } = {},
 ): Promise<{ decision: ApprovalDecision; prompted: boolean }> {
   const immediate =
-    event === 'showRetryRequest'
-      ? settleRetry(payload as RetryPermission, context)
+    request.type === 'showRetryRequest'
+      ? settleRetry(request.payload, context)
       : settleExecutable(context);
 
-  if (event === 'showRetryRequest') {
-    const data = payload as RetryPermission;
+  if (request.type === 'showRetryRequest') {
     if (!immediate) hooks.beforePrompt?.();
-    writeTextStderr(formatRetryRequestMessage(data));
+    writeTextStderr(formatRetryRequestMessage(request.payload));
   }
 
   if (immediate) return { decision: immediate, prompted: false };
 
-  const content = summarizeApprovalEvent(event, payload);
+  const content = summarizeApprovalEvent(request);
   const decision = await askApproval(context, content, hooks);
   if (!decision.accepted && options.writeRejectionToStderr) {
     writeTextStderr(
@@ -274,8 +262,7 @@ export function createHeadlessCliHostInteractions(
     },
     async requestPlanApproval(request) {
       const { decision, prompted } = await decideApprovalEvent(
-        'showPlanApproval',
-        request,
+        { type: 'showPlanApproval', payload: request },
         context,
         hooks,
       );
@@ -291,8 +278,7 @@ export function createHeadlessCliHostInteractions(
     },
     async requestAgentProposal(request: HostAgentProposalRequest) {
       const { decision, prompted } = await decideApprovalEvent(
-        'showAgentProposal',
-        request,
+        { type: 'showAgentProposal', payload: request },
         context,
         hooks,
       );
@@ -316,8 +302,7 @@ export function createHeadlessCliHostInteractions(
         ...(request.errorDetails ? { errorDetails: request.errorDetails } : {}),
       };
       const { decision, prompted } = await decideApprovalEvent(
-        'showRetryRequest',
-        payload,
+        { type: 'showRetryRequest', payload },
         context,
         hooks,
         { writeRejectionToStderr: true },
