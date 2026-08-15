@@ -14,19 +14,19 @@ import {
   type ExtractedToolAttachments,
 } from '@agent/core/tools/toolAttachmentExtraction';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import {
+  normalizeToolCallError,
+  parseToolInput,
+  partitionDuplicateCalls,
+} from '@agent/core/flows/toolCallParsing';
+import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import type { FileLocation, ToolResult } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 
 // Local file imports
-import { FlowTransition } from '../FlowTransitions';
-import {
-  normalizeToolCallError,
-  parseToolInput,
-  partitionDuplicateCalls,
-} from './toolCallParsing';
-import type { ToolUseRoundServices } from '../CycleServices';
 import type { ToolUseRoundShared } from './roundShared';
 
 /** Max concurrently executing tool calls within one dispatch batch. */

@@ -8,6 +8,8 @@
  * (just before injection into model context via FollowUpQueue).
  */
 
+import path from 'node:path';
+
 import type { ResultMeta } from '@agent/storage';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import type {
@@ -20,11 +22,23 @@ import {
   type ResultDiffSummary,
 } from '@agent/runtime/AgentFinalResult';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
+import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type { OutputFileSummary } from '@shared/schemas/output';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration, unique } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { getRunDir, ensureRunDir } from '@utils/files/runStorageFs';
+import {
+  diffTextByLine,
+  DIFF_DELETE,
+  DIFF_EQUAL,
+  DIFF_INSERT,
+} from '@utils/text/diff';
+import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
+import { countLines } from '@utils/text/stringUtils';
 import {
   formatChildRunDelivery,
   formatChildRunError,
@@ -299,9 +313,17 @@ export function buildSubagentFailureResultMeta(
   fallbackCategory: AgentFlowCategory,
   result: AgentFlowResult | undefined,
   wallTimeMs: number,
-  options: { readonly parentExecutionId?: ExecutionId } = {},
+  options: {
+    readonly parentExecutionId?: ExecutionId;
+    /**
+     * The thrown error behind this failure, used when the flow result itself
+     * recorded no structured error — so the typed manifest always carries a
+     * failure message for its awaiting consumer.
+     */
+    readonly cause?: unknown;
+  } = {},
 ): SubagentResultMeta {
-  const finalResult = result
+  const built = result
     ? buildAgentFinalResult({
         flowResult: result,
         // A nominally completed flow that reached the error path is a failure;
@@ -312,5 +334,244 @@ export function buildSubagentFailureResultMeta(
         category: fallbackCategory,
         outcome: 'failed',
       });
-  return buildSubagentResultMeta(agentName, finalResult, wallTimeMs, options);
+  const finalResult =
+    built.outcome === 'failed' &&
+    built.error === undefined &&
+    options.cause !== undefined
+      ? {
+          ...built,
+          // A thrown child failure is not a user-retry offer.
+          error: {
+            message: toErrorMessage(options.cause),
+            userRetryable: false,
+          },
+        }
+      : built;
+  return buildSubagentResultMeta(agentName, finalResult, wallTimeMs, {
+    parentExecutionId: options.parentExecutionId,
+  });
+}
+
+// ============================================================================
+// Workflow output diffs
+// ============================================================================
+
+/** Maximum lines of diff to include per file in deliveries. */
+const MAX_DIFF_LINES = 200;
+
+/** Shorter truncation limit for large changes (>40% of file modified). */
+const LARGE_CHANGE_DIFF_LINES = 80;
+
+/**
+ * When the changed lines (added + removed) exceed this fraction of the
+ * original file's line count, the diff is flagged as a large change.
+ * The orchestrator still gets a diff file but truncated shorter.
+ */
+const LARGE_CHANGE_RATIO = 0.4;
+
+const LOG_CHANNEL = 'subagentDiffs';
+// The boundary warn in `buildSubagentResult` predates the A4 file merge and
+// stays on its historical channel so log ingestion keyed on it keeps seeing it.
+const DELIVERY_LOG_CHANNEL = 'subagentDelivery';
+
+const DIFF_LINE_PREFIX: Readonly<Record<number, string>> = Object.freeze({
+  [DIFF_INSERT]: '+',
+  [DIFF_DELETE]: '-',
+  [DIFF_EQUAL]: ' ',
+});
+
+/**
+ * Compute a human-readable line-level diff between two strings.
+ * Uses diff-match-patch's line-mode diffing (diff_linesToChars_ /
+ * diff_charsToLines_) to produce clean whole-line diffs with +/- prefixes.
+ * Returns null if the strings are identical.
+ */
+function computeReadableDiff(
+  original: string,
+  modified: string,
+): string | null {
+  const diffs = diffTextByLine(original, modified, {
+    cleanupSemantic: false,
+  });
+
+  // Check if there are any actual changes.
+  if (diffs.every(([op]) => op === DIFF_EQUAL)) return null;
+
+  const lines: string[] = [];
+  for (const [op, text] of diffs) {
+    const prefix = DIFF_LINE_PREFIX[op] ?? ' ';
+    // Each chunk is one or more complete lines (with trailing \n).
+    // Split and prefix each line, dropping the trailing empty entry from split.
+    const chunkLines = text.split('\n');
+    if (chunkLines.at(-1) === '') chunkLines.pop();
+    for (const line of chunkLines) lines.push(`${prefix}${line}`);
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Truncate diff text to a maximum number of lines.
+ * Appends a truncation notice if the diff exceeds the limit.
+ */
+function truncateDiff(diff: string, maxLines: number): string {
+  const lines = diff.split('\n');
+  if (lines.length <= maxLines) return diff;
+  return lines.slice(0, maxLines).join('\n') + '\n[... diff truncated]';
+}
+
+/** Info about a diff file written to the execution's run directory. */
+export interface DiffFileInfo {
+  /** The relative path within the run directory (e.g. "diffs/chapter1.tex.diff"). */
+  diffRelPath: string;
+  /** True when the change ratio exceeded the large-change threshold. */
+  largeChange: boolean;
+}
+
+/**
+ * Compute diffs for workflow output files and write them to the execution's
+ * run directory as `.diff` files. Returns a map from output absolutePath to
+ * diff file info, so the delivery formatter can reference them by path.
+ *
+ * All diffs are written regardless of change size. Large changes (ratio above
+ * {@link LARGE_CHANGE_RATIO}) are flagged so the orchestrator knows the diff
+ * may be truncated and can read the full output file for context.
+ *
+ * Files without an original (new files) or where reading fails are omitted.
+ */
+export async function computeAndWriteWorkflowDiffs(
+  executionId: ExecutionId,
+  outputs: OutputFileSummary[],
+): Promise<Map<string, DiffFileInfo>> {
+  const results = new Map<string, DiffFileInfo>();
+  const diffsToWrite: { diffRelPath: string; content: string }[] = [];
+
+  // First pass: compute diffs and decide which to write.
+  await Promise.all(
+    outputs.map(async (o) => {
+      if (!o.originalPath) return;
+      try {
+        const [original, modified] = await Promise.all([
+          AbsoluteFS.read(o.originalPath),
+          AbsoluteFS.read(o.absolutePath),
+        ]);
+
+        // Flag large changes so the orchestrator knows to also read the
+        // full output file — the diff alone may not capture everything.
+        let largeChange = false;
+        const originalLines = countLines(original);
+        if (originalLines > 0 && o.added !== null && o.removed !== null) {
+          const changedLines = o.added + o.removed;
+          largeChange = changedLines / originalLines > LARGE_CHANGE_RATIO;
+        }
+
+        const diff = computeReadableDiff(original, modified);
+        if (diff) {
+          const limit = largeChange ? LARGE_CHANGE_DIFF_LINES : MAX_DIFF_LINES;
+          const truncated = truncateDiff(diff, limit);
+          // Use full relativePath (with separators replaced) to avoid collisions
+          // when multiple files share the same basename in different directories.
+          const safeName = sanitizePathSegment(o.relativePath, {
+            invalidCharPattern: /[\\/]/g,
+            replacement: '_',
+          });
+          const diffRelPath = `diffs/${safeName}.diff`;
+          results.set(o.absolutePath, { diffRelPath, largeChange });
+          diffsToWrite.push({ diffRelPath, content: truncated });
+        }
+      } catch (error) {
+        // File read failure is non-fatal — skip diff for this file — but
+        // surface the skip so a missing diff is not indistinguishable from an
+        // unchanged file (matching the loud diff-unavailable note the caller
+        // boundary logs).
+        logger.warn(
+          LOG_CHANNEL,
+          `Skipping diff for ${o.absolutePath}: ${toErrorMessage(error)}`,
+        );
+      }
+    }),
+  );
+
+  // Second pass: write diff files to disk.
+  if (diffsToWrite.length > 0) {
+    const runDir = getRunDir(executionId);
+    await ensureRunDir(executionId);
+    const diffsDir = path.join(runDir, 'diffs');
+    await AbsoluteFS.ensureDir(diffsDir);
+
+    await Promise.all(
+      diffsToWrite.map(async ({ diffRelPath, content }) => {
+        const fullPath = path.join(runDir, diffRelPath);
+        await AbsoluteFS.write(fullPath, content);
+      }),
+    );
+  }
+
+  return results;
+}
+
+// ============================================================================
+// Built terminal results
+// ============================================================================
+
+export interface BuiltSubagentResult {
+  readonly result: AgentFinalResult;
+  readonly resultMeta: SubagentResultMeta;
+  readonly wallTimeMs: number;
+}
+
+/**
+ * Build a subagent's typed terminal result and persistence record.
+ * For workflow results, computes latexdiffs and writes them as files to the
+ * execution's run directory first — the delivery references diff file paths
+ * so the orchestrator can read them on demand via /executions/{id}/files/.
+ */
+export async function buildSubagentResult(
+  executionId: ExecutionId,
+  agentName: string,
+  result: AgentFlowResult,
+  options: {
+    readonly startedAt: number;
+    readonly parentExecutionId?: ExecutionId;
+  },
+): Promise<BuiltSubagentResult> {
+  let diffInfos: Map<string, DiffFileInfo> | undefined;
+  let diffsUnavailable: string | undefined;
+  if (result.category === 'workflow' && result.outputs.length > 0) {
+    try {
+      diffInfos = await computeAndWriteWorkflowDiffs(
+        executionId,
+        result.outputs,
+      );
+    } catch (err) {
+      // Diff computation failure is non-fatal: deliver without diffs, but tell
+      // the orchestrator to read the output files directly.
+      diffsUnavailable = toErrorMessage(err);
+      logger.warn(
+        DELIVERY_LOG_CHANNEL,
+        `Diff computation failed for ${executionId}: ${diffsUnavailable}`,
+      );
+    }
+  }
+
+  const wallTimeMs = Date.now() - options.startedAt;
+  const diffs =
+    result.category === 'workflow' && diffInfos
+      ? result.outputs.flatMap((output) => {
+          const diff = diffInfos.get(output.absolutePath);
+          return diff ? [{ path: output.absolutePath, ...diff }] : [];
+        })
+      : undefined;
+  const finalResult = buildAgentFinalResult({
+    flowResult: result,
+    diffs,
+    diffsUnavailable,
+    structured: result.category === 'toolUse' ? result.structured : undefined,
+  });
+  return {
+    result: finalResult,
+    resultMeta: buildSubagentResultMeta(agentName, finalResult, wallTimeMs, {
+      parentExecutionId: options.parentExecutionId,
+    }),
+    wallTimeMs,
+  };
 }

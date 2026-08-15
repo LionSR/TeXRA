@@ -211,7 +211,6 @@ export async function finalizeRunTerminal(
         typeof flowRecord === 'function' ? flowRecord(outcome) : flowRecord,
       logger,
       failedMessage: 'Failed to finalize durable execution state',
-      rejectedMessage: 'Execution finalizer rejected unexpectedly',
     });
     outcomePersisted = persisted.outcomePersisted;
   }

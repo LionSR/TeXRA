@@ -12,7 +12,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import * as SessionResumeRetrieval from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import * as AgentRunner from '@agent/runtime/runAgent';
-import { ResumeAdmissionCancelledError } from '@agent/runtime/resumeAdmission';
+import { ResumeAdmissionCancelledError } from '@agent/runtime/executeAgent';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { DesktopProcessResumeOwner } from '@desktop/main/desktopAgentResume';
 import {

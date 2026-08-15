@@ -6,9 +6,9 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { ToolUseProcessNode } from '@agent/core/flows/toolUseRound/ToolUseProcessNode';
+import { ToolUseProcessNode } from '@agent/implementations/flows/tooluse/toolUseRound/ToolUseProcessNode';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
-import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundShared';
+import type { ToolUseRoundShared } from '@agent/implementations/flows/tooluse/toolUseRound/roundShared';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { testModelCell } from '../modelCellTestUtils';
 

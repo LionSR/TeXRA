@@ -324,7 +324,7 @@ describe('built-in authored prompt inventory', () => {
     }
     expect(TYPESCRIPT_MODEL_COPY_INVENTORY).toEqual(
       expect.arrayContaining([
-        'src/agent/core/flows/toolUseRound/ToolUseProcessNode.ts',
+        'src/agent/implementations/flows/tooluse/toolUseRound/ToolUseProcessNode.ts',
         'src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts',
         'src/agent/prompt/PromptBuilder.ts',
         'src/tools/ExecutionsTool.ts',

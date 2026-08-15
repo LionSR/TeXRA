@@ -9,11 +9,7 @@ import {
   createBoundedIdSet,
   type BoundedIdSet,
 } from '@utils/core/boundedIdSet';
-import {
-  FollowUpQueue,
-  type DrainedFollowUpItem,
-  type FollowUpQueueInput,
-} from './FollowUpQueue';
+import { FollowUpQueue, type FollowUpQueueInput } from './FollowUpQueue';
 
 // Hosts reach the queue input shape through this module (ratchet-baselined
 // import specifier); FollowUpQueue.ts stays agent-internal.
@@ -258,14 +254,6 @@ export class ToolUseFollowUpQueue {
     return { kind: 'recovery', lease: lease as FollowUpRecoveryLease };
   }
 
-  /** Restore a failed recovery batch ahead of submissions that raced it. */
-  restore(
-    lease: FollowUpRecoveryLease,
-    followUps: readonly FollowUpQueueInput[],
-  ): void {
-    this.requireOwner(lease).queue.restore(followUps);
-  }
-
   /** Read-only lifecycle probe used by diagnostics and teardown assertions. */
   hasLiveOwner(streamId: StreamTabId): boolean {
     const owner = this.entries.get(streamId)?.owner;
@@ -299,10 +287,6 @@ export class ToolUseFollowUpQueue {
 
   queue(lease: FollowUpConsumerLease): FollowUpQueue {
     return this.requireOwner(lease).queue;
-  }
-
-  drainItems(lease: FollowUpConsumerLease): DrainedFollowUpItem[] {
-    return this.requireOwner(lease).queue.drainItems();
   }
 
   /**

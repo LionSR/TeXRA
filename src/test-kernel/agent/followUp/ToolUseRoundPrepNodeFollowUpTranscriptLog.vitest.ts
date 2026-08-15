@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { ToolUseRoundPrepNode } from '@agent/core/flows/toolUseRound/ToolUseRoundPrepNode';
+import { ToolUseRoundPrepNode } from '@agent/implementations/flows/tooluse/toolUseRound/ToolUseRoundPrepNode';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
-import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundShared';
+import type { ToolUseRoundShared } from '@agent/implementations/flows/tooluse/toolUseRound/roundShared';
 import { testRunScope, withTestRunContext } from '../progressTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
 

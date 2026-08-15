@@ -17,7 +17,7 @@ import { logProgressStatus } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
-import { parseToolInputAsObject } from '@agent/core/flows/toolUseRound/toolCallParsing';
+import { parseToolInputAsObject } from '@agent/core/flows/toolCallParsing';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@agent/core/constants';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';

@@ -101,7 +101,10 @@ describe('submitFollowUp', () => {
 
     expect(tryResumeStream).not.toHaveBeenCalled();
     expect(
-      session.followUps.drainItems(child).map((item) => item.text),
+      session.followUps
+        .queue(child)
+        .drainItems()
+        .map((item) => item.text),
     ).toEqual(['while waiting', 'between turns', 'during turn']);
   });
 
@@ -121,7 +124,7 @@ describe('submitFollowUp', () => {
 
     expect(tryResumeStream).not.toHaveBeenCalled();
     expect(appendFollowUp).not.toHaveBeenCalled();
-    expect(session.followUps.drainItems(flow)).toMatchObject([
+    expect(session.followUps.queue(flow).drainItems()).toMatchObject([
       { text: 'during active turn' },
     ]);
     expect(session.events.emit).toHaveBeenCalledWith({
@@ -149,7 +152,7 @@ describe('submitFollowUp', () => {
       continuation: 'live',
     });
 
-    expect(session.followUps.drainItems(flow)).toMatchObject([
+    expect(session.followUps.queue(flow).drainItems()).toMatchObject([
       { text: 'child progress' },
     ]);
     expect(session.events.emit).not.toHaveBeenCalled();

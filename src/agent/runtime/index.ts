@@ -57,7 +57,6 @@ export type {
 // runAgent
 export { runAgent } from './runAgent';
 export type { RunAgentOptions } from './runAgent';
-export { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
 
 // SessionResumeRetrieval
 export { retrieveSessionResumeData } from './SessionResumeRetrieval';
@@ -70,7 +69,10 @@ export {
 } from './terminalResultToast';
 
 // resolveAndResumeStream
-export { resolveAndResumeStream } from './resolveAndResumeStream';
+export {
+  resolveAndResumeStream,
+  resolveResumeStateFromSnapshots,
+} from './resolveAndResumeStream';
 
 // detachSubagentsOnStop
 export { detachSubagentsOnStop } from './detachSubagentsOnStop';
@@ -116,8 +118,8 @@ export { agentResponseTextConnector } from './textConnection';
 // ExecutionHandle
 export type { AgentRunHandle } from './ExecutionHandle';
 
-// polishModel
-export { initializePolishModel } from './polishModel';
+// bundledPrompts
+export { initializeBundledPrompts } from './bundledPrompts';
 
 // AgentFlowResult
 export type { WorkflowFlowResult } from './AgentFlowResult';

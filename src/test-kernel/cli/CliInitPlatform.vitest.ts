@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
+import * as agentRuntime from '@agent/runtime';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
-import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
@@ -68,7 +68,6 @@ const mocks = vi.hoisted(() => ({
   })),
   createNodePlatform: vi.fn(() => ({})),
   initializeCliSupabaseAuth: vi.fn(),
-  initializeNodeGoalPrompts: vi.fn(),
   initializeNodeRuntimeSkills: vi.fn(),
   initNodeAgentRuntime: vi.fn(),
   serverSideKeyService: {
@@ -130,7 +129,6 @@ vi.mock('@platform/defaults/nodeHost', () => ({
   bootstrapNodeAgentDirectories: mocks.bootstrapNodeAgentDirectories,
   createNodePlatform: mocks.createNodePlatform,
   initNodeAgentRuntime: mocks.initNodeAgentRuntime,
-  initializeNodeGoalPrompts: mocks.initializeNodeGoalPrompts,
   initializeNodeRuntimeSkills: mocks.initializeNodeRuntimeSkills,
 }));
 
@@ -402,7 +400,6 @@ describe('CLI platform init', () => {
       releaseResumeState = () => resolve(undefined);
     });
     const pendingResume = resolveAndResumeStream(streamId, {
-      interactions: new SessionHostInteractions(),
       streamStatus: { isActiveOrResuming: () => false },
       resolveResumeState: () => pendingResumeState,
       resumeToolUse: vi.fn(async () => false),
@@ -426,6 +423,23 @@ describe('CLI platform init', () => {
     }
   });
 
+  it('registers bundled prompts from the CLI resource bundle', async () => {
+    const initializeBundledPrompts = vi
+      .spyOn(agentRuntime, 'initializeBundledPrompts')
+      .mockImplementation(() => {});
+    try {
+      await initCliPlatform(
+        cliContext({ resourcesPath: '/tmp/cli-prompt-resources' }),
+      );
+
+      expect(initializeBundledPrompts).toHaveBeenCalledWith(
+        '/tmp/cli-prompt-resources',
+      );
+    } finally {
+      initializeBundledPrompts.mockRestore();
+    }
+  });
+
   it('bootstraps bundled agents with the CLI version store', async () => {
     mocks.tryPlatform.mockReturnValue({
       globalState: stubGlobalState((key, defaultValue) =>
@@ -442,9 +456,6 @@ describe('CLI platform init', () => {
       }),
     );
 
-    expect(mocks.initializeNodeGoalPrompts).toHaveBeenCalledWith(
-      '/tmp/resources-versioned',
-    );
     expect(mocks.bootstrapNodeAgentDirectories).toHaveBeenCalledWith({
       channel: 'cli',
       resourcesPath: '/tmp/resources-versioned',
