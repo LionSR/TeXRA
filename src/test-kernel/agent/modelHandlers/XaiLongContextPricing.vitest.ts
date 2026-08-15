@@ -161,23 +161,23 @@ describe('xaiLongContextTierGap', () => {
 });
 
 describe('ModelHandlerXAI long-context pricing', () => {
-  it('bills flat rates at the threshold and tier rates past it', () => {
+  it('bills flat rates below the threshold and tier rates once reached', () => {
     const handler = new ModelHandlerXAI(catalogXaiConfig('grok-4.6'));
 
+    expect(
+      handler.computePrice({
+        prompt_tokens: 199_999,
+        completion_tokens: 1_000,
+        total_tokens: 200_999,
+      }),
+    ).toBeCloseTo((199_999 * 2 + 1_000 * 6) / 1e6, 12);
     expect(
       handler.computePrice({
         prompt_tokens: 200_000,
         completion_tokens: 1_000,
         total_tokens: 201_000,
       }),
-    ).toBeCloseTo((200_000 * 2 + 1_000 * 6) / 1e6, 12);
-    expect(
-      handler.computePrice({
-        prompt_tokens: 200_001,
-        completion_tokens: 1_000,
-        total_tokens: 201_001,
-      }),
-    ).toBeCloseTo((200_001 * 4 + 1_000 * 12) / 1e6, 12);
+    ).toBeCloseTo((200_000 * 4 + 1_000 * 12) / 1e6, 12);
   });
 
   it('keeps flat rates for xAI models without a documented tier', () => {
