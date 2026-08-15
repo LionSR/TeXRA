@@ -126,6 +126,44 @@ describe('SessionStores deletion coordination', () => {
     });
   });
 
+  it('waits on the resident execution during an unflushed run.start, not the stale sidecar FK', async () => {
+    await withSession(async (session) => {
+      const stream = 'unflushed@test#cur00001' as StreamTabId;
+      const previousExecutionId = 'old00001' as ExecutionId;
+      const currentExecutionId = 'new00001' as ExecutionId;
+      session.transcripts.ensureStream(stream);
+      const snapshots = new StreamSnapshotStore();
+      // Persist the previous run's sidecar FK first.
+      ownExecution(snapshots, stream, previousExecutionId);
+      await snapshots.flush();
+      // `run.start` updates the resident record synchronously; the sidecar FK
+      // write is queued and still names the previous execution until run-end
+      // flush. Single-stream deletion must wait on the current execution.
+      snapshotFacts(snapshots).setRunStart({
+        streamId: stream,
+        executionId: currentExecutionId,
+        identity: { kind: 'agent', agent: 'assistant' },
+      });
+      const deleteExecution = deletionSpy();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        deleteExecution,
+      });
+
+      await expect(stores.deleteStream(stream)).resolves.toBe('deleted');
+
+      expect(deleteExecution).toHaveBeenCalledWith(
+        currentExecutionId,
+        expect.anything(),
+      );
+      expect(deleteExecution).not.toHaveBeenCalledWith(
+        previousExecutionId,
+        expect.anything(),
+      );
+    });
+  });
+
   it('projects child detachment when durable discovery fails', async () => {
     await withSession(async (session) => {
       const parent = 'discovery-failure-parent' as StreamTabId;

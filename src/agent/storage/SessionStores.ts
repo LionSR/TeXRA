@@ -292,15 +292,21 @@ export class SessionStores {
   }
 
   /**
-   * The stream→execution reverse edge: the persisted sidecar FK first, then
-   * the always-resident summary mirror for legacy streams without a persisted
-   * FK. A stream with neither has no owned execution — name resemblance is
-   * never ownership, so no suffix derivation exists.
+   * The stream→execution reverse edge. Live deletion paths resolve the current
+   * execution from the resident snapshot record first: `run.start` updates the
+   * in-memory record and the summary mirror synchronously, while the persisted
+   * sidecar FK is written asynchronously and may still name the previous
+   * execution until the run-end flush. For streams with no resident record the
+   * persisted sidecar FK is authoritative (settled streams, #10518), then the
+   * always-resident summary mirror for legacy streams without a persisted FK.
+   * A stream with neither has no owned execution — name resemblance is never
+   * ownership, so no suffix derivation exists.
    */
   private async executionIdForStream(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
     return (
+      this.snapshots.getResidentExecutionId(stream) ??
       (await this.snapshots.readPersistedExecutionId(stream)) ??
       this.streamLogs.getSummaryMeta(stream)?.executionId
     );

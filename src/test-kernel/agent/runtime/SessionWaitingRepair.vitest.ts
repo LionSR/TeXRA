@@ -178,6 +178,18 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     expect(deriveResumability).not.toHaveBeenCalled();
   });
 
+  it('does not reject follow-ups when the persisted ownership read fails for an unseeded stream', async () => {
+    const unseededStream = `${streamId}:unseeded` as StreamTabId;
+    vi.spyOn(
+      session.snapshots,
+      'readPersistedExecutionId',
+    ).mockRejectedValueOnce(new Error('storage read failed'));
+
+    await expect(repair(unseededStream)).resolves.toBe(false);
+
+    expect(deriveResumability).not.toHaveBeenCalled();
+  });
+
   it('collapses concurrent probes for one stream onto the first', async () => {
     seedCancelled();
     const deferred = createDeferredResumability();

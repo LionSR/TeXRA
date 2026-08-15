@@ -477,6 +477,40 @@ describe('SessionHandle restart repair', () => {
     expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
   });
 
+  it('isolates one unreadable parked WAITING preload so session startup still publishes WAITING', async () => {
+    const parkedExecutionId = 'b0a00010' as ExecutionId;
+    const parkedStreamId = 'parked#waiting-preload-failure' as StreamTabId;
+
+    const transcripts = await StreamLogStore.open();
+    transcripts.ensureStream(parkedStreamId);
+    await transcripts.flush();
+    await seedSidecarFk(parkedStreamId, parkedExecutionId);
+
+    const executionStore = getExecutionStore(parkedExecutionId);
+    await executionStore.writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await executionStore.write(flowKey(parkedExecutionId), validFlowRecord);
+
+    const session = openDeferredSession(transcripts);
+    const originalPreload = session.snapshots.preload.bind(session.snapshots);
+    const preload = vi
+      .spyOn(session.snapshots, 'preload')
+      .mockImplementation(async (streamIds) => {
+        if (streamIds.includes(parkedStreamId)) {
+          throw new Error('parked sidecar unreadable');
+        }
+        await originalPreload(streamIds);
+      });
+
+    await expect(session.waitUntilReady()).resolves.toBeUndefined();
+
+    expect(preload).toHaveBeenCalledTimes(2);
+    // The stream is still marked WAITING; only its usage hydration was skipped.
+    expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
+  });
+
   it('preserves mapped runs and fails only unmapped streams when resumability detection fails', async () => {
     const degradedExecutionId = 'decade123' as ExecutionId;
     const degradedStreamId = `degraded#${degradedExecutionId}` as StreamTabId;

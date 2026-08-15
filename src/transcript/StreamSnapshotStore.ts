@@ -1391,6 +1391,16 @@ export class StreamSnapshotStore {
   }
 
   /**
+   * Execution id from the resident snapshot record only, without the
+   * unseeded-access warning. Live-session ownership decisions need the current
+   * in-memory value even before disk provenance is established; cold streams
+   * have no resident record and simply return `undefined`.
+   */
+  getResidentExecutionId(stream: StreamTabId): ExecutionId | undefined {
+    return this.records.get(stream)?.runExecutionId;
+  }
+
+  /**
    * Canonical immutable run record projected from live facts or hydrated from
    * the execution record named by the stream sidecar. All five fields share
    * that execution owner and replacement lifecycle.
@@ -1432,6 +1442,26 @@ export class StreamSnapshotStore {
     // field from. The bounded-startup invariant (#9947) keeps cold historical
     // streams record-free until a caller actually seeds or mutates them.
     return (await readMeta(this.kvHandles.get(stream)))?.executionId;
+  }
+
+  /**
+   * Persist the stream→execution FK into the sidecar meta, seeding the stream
+   * with the FK already staged so hydration cannot republish an executionless
+   * summary. Restart repair uses this to normalize legacy streams whose only
+   * ownership mapping lives in the summary mirror before their parked WAITING
+   * preload.
+   */
+  async persistExecutionId(
+    stream: StreamTabId,
+    executionId: ExecutionId,
+  ): Promise<void> {
+    // Stage the FK before the seed so `applyStreamData` merges it into the
+    // freshly-read meta and publishes the ownership instead of erasing it.
+    this.patchMetaMemory(stream, { executionId });
+    this.getOrCreateRecord(stream).metaOverlay = true;
+    await this.seedStreams([stream]);
+    this.writeMeta(stream, this.patchMetaMemory(stream, { executionId }));
+    await this.waitForWrites(stream);
   }
 
   /**
