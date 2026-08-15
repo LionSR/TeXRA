@@ -32,6 +32,7 @@ import {
   type ModelRouteVerdict,
 } from '@common/errors/sdkError/providerErrorFormat';
 import { includedModelAccess } from '@model/includedModelAccess';
+import type { ResolvedModelConfig } from '@model/openRouterRouting';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import {
   DEFAULT_CORE_SETTINGS,
@@ -78,6 +79,13 @@ interface ManualRetryPromptResult {
   userCancelled: boolean;
   clientPrepared?: boolean;
   retrySource?: RetryAttemptSource;
+}
+
+/** The failed handler's effective config and model id, captured from the
+ *  live cell as one pair when the retry panel opens. */
+interface FailedModelIdentity {
+  readonly config: ResolvedModelConfig;
+  readonly modelId: string;
 }
 
 type RetryAttemptSource = 'automatic' | 'human';
@@ -198,13 +206,17 @@ export class ModelInvocationNode<
    * config pins the coding `baseUrl` and wire id, so a rebind would resolve the
    * same exhausted Kimi Code credential again. For a 'personal' selection the
    * host has already disabled the plan preference, so rebuild the handler from
-   * the registry config and swap it in (the mid-run replacement the model
-   * switcher also uses); the next attempt then builds its client against the
-   * Moonshot fallback.
+   * the failed model's registry config and swap it in (the mid-run replacement
+   * the model switcher also uses); the next attempt then builds its client
+   * against the Moonshot fallback. Both the rebuild probe and the swap id come
+   * from the `failedModel` pair captured when the panel opened, so the
+   * replacement still describes the handler that failed even if the panel
+   * outlived a mid-run `switchModel`.
    */
   private async prepareRetryForCredentialSelection(
     selection: ModelCredentialSelection,
     signal: AbortSignal | undefined,
+    failedModel: FailedModelIdentity,
   ): Promise<void> {
     const { modelCell } = this.services;
     if (selection !== 'personal') {
@@ -212,8 +224,8 @@ export class ModelInvocationNode<
       return;
     }
     const fallback = await createKimiCodeFallbackHandler(
-      modelCell.handler.config,
-      this.services.config.model,
+      failedModel.config,
+      failedModel.modelId,
       this.services.runScope.session.responseTextProcessing,
     );
     if (!fallback) {
@@ -228,7 +240,7 @@ export class ModelInvocationNode<
       fallback.dispose();
       throw error;
     }
-    modelCell.swap(fallback, this.services.config.model);
+    modelCell.swap(fallback, failedModel.modelId);
   }
 
   /** Emit compact diagnostic data for durable, non-presentational recording. */
@@ -528,27 +540,41 @@ export class ModelInvocationNode<
     });
     // No timeout: the retry panel waits indefinitely for the user's decision.
     let clientPrepared = false;
+    // The failed handler's config and model id, captured as one pair from
+    // the live cell: the cell keeps handler and id coherent, while
+    // `services.config.model` is the immutable launch config a mid-run
+    // `switchModel` leaves stale. The request below — and a fallback rebuild
+    // if the user accepts with personal credentials — must describe the
+    // handler that actually failed, so all of them read this pair.
+    const failedModel: FailedModelIdentity = {
+      config: this.services.modelCell.handler.config,
+      modelId: this.services.modelCell.modelId,
+    };
     // Capture the failed handler's effective route before the retry panel can
     // be outlived by routing-preference changes. A dual-backend Kimi handler
     // dispatched onto the coding endpoint carries the pinned Kimi Code
     // `baseUrl`, so the shared field predicate is true for that runtime config
     // even though the registry entry itself is not coding-exclusive.
     const kimiCodeRoutedOnFailure = isKimiCodeExclusiveModel(
-      this.services.modelCell.handler.config,
+      failedModel.config,
     );
     const interaction = session.interactions.requestRetry(
       {
         requestId: `retry-${generateShortId()}`,
         streamId,
         operation: operationName,
-        model: this.services.config.model,
+        model: failedModel.modelId,
         errorMessage: formatted.message,
         errorDetails: formatted,
         kimiCodeRoutedOnFailure,
       },
       {
         prepareRetry: async (selection, signal) => {
-          await this.prepareRetryForCredentialSelection(selection, signal);
+          await this.prepareRetryForCredentialSelection(
+            selection,
+            signal,
+            failedModel,
+          );
           clientPrepared = true;
         },
       },
