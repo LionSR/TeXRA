@@ -29,7 +29,8 @@ search, and mouse-scroll for finalized history, so don't reinvent them.
   mouse-scroll keep working. Never render a finalized root turn in the root live
   region, and never reprint root `<Static>` items unless the repaint starts from
   a known origin — dedupe by the entry's own stable id, not a stream-scoped key
-  (see `appendStaticTranscriptItems`). Focused child streams are separate
+  (see `buildStaticTranscriptItems` for the rebuild oracle and
+  `advanceStaticTranscriptState` for the incremental path). Focused child streams are separate
   viewports that temporarily select the child as the `<Static>` scrollback
   owner; root and child histories must not share append-only Static state.
 

@@ -157,7 +157,7 @@ export function orderedStaticTranscriptEntries(
     key: readonly [number, number];
   }> = [];
   for (const [index, entry] of entries.entries()) {
-    if (entry.role === 'activity' && !entry.finalized) break;
+    if (!entry.finalized) break;
     if (!isStaticTranscriptEntryAt(entries, index, status)) continue;
     candidates.push({ entry, index, key: transcriptOrderKey(entry, index) });
   }
@@ -198,7 +198,10 @@ export function splitTranscriptEntries(
   const pending: ConversationEntry[] = [];
   let canPromoteToStatic = true;
   for (const [index, entry] of entries.entries()) {
-    if (entry.role === 'activity' && !entry.finalized) {
+    // Mirror the static-ring settled-prefix barrier: any unfinished entry
+    // blocks later finalized rows from static promotion, so they stay visible
+    // in the live pending pane instead of disappearing between the two panes.
+    if (!entry.finalized) {
       canPromoteToStatic = false;
     }
     if (!isRenderableTranscriptEntry(entry)) continue;
@@ -225,7 +228,9 @@ export function splitTranscriptEntries(
   return { finalized, pending };
 }
 
-export const EMPTY_TRANSCRIPT_ENTRIES: readonly ConversationEntry[] = [];
+const EMPTY_TRANSCRIPT_ENTRIES: readonly ConversationEntry[] = Object.freeze(
+  [],
+);
 
 /** Cursor over the settled prefix of a stream's projected entries. The static
  *  transcript appends only entries after this cursor on ordinary syncs; a
@@ -292,7 +297,11 @@ export function incrementalStaticTranscriptEntries(
   }
 
   const sameEntries = previous.entriesRef === source;
-  if (sameEntries && previous.status === status) {
+  if (
+    sameEntries &&
+    previous.status === status &&
+    previous.scannedIndex >= source.length
+  ) {
     return { appended: [], cursor: previous, rebuild: false };
   }
 
@@ -327,7 +336,6 @@ export function incrementalStaticTranscriptEntries(
   for (let index = 0; index < suffix.length; index += 1) {
     const entry = suffix[index];
     if (entry === undefined) break;
-    if (entry.role === 'activity' && !entry.finalized) break;
     if (!entry.finalized) break;
     if (!isRenderableTranscriptEntry(entry)) {
       scannedIndex = start + index + 1;

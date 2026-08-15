@@ -16,13 +16,15 @@ import { formatRenderError } from '@cli/chat/tui/panes/EntryErrorBoundary';
 import {
   incrementalStaticTranscriptEntries,
   isInquiryContinuationText,
+  orderedStaticTranscriptEntries,
   splitTranscriptEntries,
   terminalVisibleTranscriptText,
   trimAssistantTranscriptLead,
 } from '@cli/chat/tui/panes/transcriptEntries';
 import {
-  appendStaticTranscriptItems,
+  advanceStaticTranscriptState,
   buildStaticTranscriptItems,
+  buildStaticTranscriptState,
   DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
   sessionHeaderIdentityLine,
   trimStaticTranscriptItems,
@@ -178,6 +180,61 @@ describe('CLI conversation transcript', () => {
     );
     expect(waitingBeforeFinalize.finalized).toEqual([user]);
     expect(waitingBeforeFinalize.pending).toEqual([]);
+  });
+
+  it('keeps finalized rows behind an unfinished assistant live in the pending pane', () => {
+    const user = entry('u1', 'user', 'go', true);
+    const assistant = entry('a1', 'assistant', 'working', false);
+    const tool = {
+      ...toolEntry('t1', TOOL_USE_STATUS.COMPLETED),
+      finalized: true,
+    };
+
+    const split = splitTranscriptEntries(
+      [user, assistant, tool],
+      STREAM_PHASE.RUNNING,
+    );
+    expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
+    expect(split.pending.map((item) => item.id)).toEqual(['a1', 't1']);
+  });
+
+  it('keeps finalized rows behind unfinished tool and workflow rows live', () => {
+    const tool = toolEntry('t1', 'in_progress');
+    const toolPhase: ConversationEntry = {
+      id: 'p1',
+      role: 'phase',
+      text: 'After tool',
+      finalized: true,
+      phaseLabel: 'After tool',
+    };
+    const workflowTask: ConversationEntry = {
+      id: 'w1',
+      role: 'workflowTask',
+      text: 'Planned: Task',
+      finalized: false,
+      task: { id: 'w1', label: 'Task', status: 'planned' },
+    };
+    const workflowPhase: ConversationEntry = {
+      id: 'p2',
+      role: 'phase',
+      text: 'After workflow task',
+      finalized: true,
+      phaseLabel: 'After workflow task',
+    };
+
+    const toolSplit = splitTranscriptEntries(
+      [tool, toolPhase],
+      STREAM_PHASE.RUNNING,
+    );
+    expect(toolSplit.finalized).toEqual([]);
+    expect(toolSplit.pending.map((item) => item.id)).toEqual(['t1', 'p1']);
+
+    const workflowSplit = splitTranscriptEntries(
+      [workflowTask, workflowPhase],
+      STREAM_PHASE.RUNNING,
+    );
+    expect(workflowSplit.finalized).toEqual([]);
+    expect(workflowSplit.pending.map((item) => item.id)).toEqual(['w1', 'p2']);
   });
 
   it('keeps running compaction live and promotes its terminal update once', () => {
@@ -682,12 +739,12 @@ describe('CLI conversation transcript', () => {
     expect(split.finalized).toEqual([]);
     expect(split.pending.map((item) => item.id)).toEqual(['u1']);
 
-    const items = appendStaticTranscriptItems({
+    const items = buildStaticTranscriptItems({
       scrollbackStreamId: STREAM_ID,
       currentItems: [],
       streams,
       meta: SESSION_META,
-    });
+    }).items;
     expect(items.map((item) => item.id)).toEqual(['session-header']);
   });
 
@@ -707,12 +764,12 @@ describe('CLI conversation transcript', () => {
     expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
     expect(split.pending.map((item) => item.id)).toEqual(['t1']);
 
-    const items = appendStaticTranscriptItems({
+    const items = buildStaticTranscriptItems({
       scrollbackStreamId: STREAM_ID,
       currentItems: [],
       streams,
       meta: SESSION_META,
-    });
+    }).items;
     expect(items.map((item) => item.id)).toEqual(['session-header', 'u1']);
     expect(items[1]).toMatchObject({ kind: 'entry' });
   });
@@ -799,20 +856,20 @@ describe('CLI conversation transcript', () => {
   });
 
   it('shows the session header exactly once', () => {
-    const first = appendStaticTranscriptItems({
+    const first = buildStaticTranscriptItems({
       scrollbackStreamId: undefined,
       currentItems: [],
       streams: new Map(),
       meta: SESSION_META,
-    });
+    }).items;
     expect(first).toHaveLength(1);
 
-    const again = appendStaticTranscriptItems({
+    const again = buildStaticTranscriptItems({
       scrollbackStreamId: undefined,
       currentItems: first,
       streams: new Map(),
       meta: { ...SESSION_META, model: 'sonnet' },
-    });
+    }).items;
     expect(again).toHaveLength(1);
   });
 
@@ -1008,6 +1065,40 @@ describe('CLI conversation transcript', () => {
       'session-header',
       'e0',
     ]);
+    expect(built.trimmed).toBe(false);
+  });
+
+  it('reports a trim when the newest oversized entry forces a prefix drop', () => {
+    const budgets: StaticTranscriptRingBudgets = {
+      rowHighWater: 1,
+      rowLowWater: 1,
+      byteHighWater: 1024 * 1024,
+      byteLowWater: 1024 * 1024,
+    };
+    const built = buildStaticTranscriptItems({
+      currentItems: [],
+      streams: new Map([
+        [
+          STREAM_ID,
+          sliceWithEntries(STREAM_ID, [
+            entry('e0', 'assistant', 'first', true),
+            entry('e1', 'assistant', 'second', true),
+            entry('e2', 'assistant', 'x'.repeat(80), true),
+          ]),
+        ],
+      ]),
+      maxRows: 1,
+      meta: SESSION_META,
+      scrollbackStreamId: STREAM_ID,
+      width: 80,
+      ringBudgets: budgets,
+    });
+
+    expect(built.items.map((item) => item.id)).toEqual([
+      'session-header',
+      'e2',
+    ]);
+    expect(built.trimmed).toBe(true);
   });
 
   it('trims a static tail with margin-collapse-aware row accounting', () => {
@@ -1055,6 +1146,371 @@ describe('CLI conversation transcript', () => {
       'u2',
     ]);
     expect(trimmed.totals.rows).toBeLessThanOrEqual(beforeRows);
+  });
+
+  it('keeps a finalized tool behind an unfinalized assistant out of the settled prefix', () => {
+    const user = entry('u1', 'user', 'go', true);
+    const assistant = entry('a1', 'assistant', 'working', false);
+    const tool = {
+      ...toolEntry('t1', TOOL_USE_STATUS.COMPLETED),
+      finalized: true,
+    };
+    const settledAssistant = { ...assistant, finalized: true };
+    const emptyCursor = {
+      entriesRef: undefined,
+      scannedIndex: 0,
+      lastScannedEntry: undefined,
+      status: undefined,
+    } as const;
+
+    expect(
+      orderedStaticTranscriptEntries(
+        [user, assistant, tool],
+        STREAM_PHASE.RUNNING,
+      ).map((item) => item.id),
+    ).toEqual(['u1']);
+
+    const first = incrementalStaticTranscriptEntries(
+      [user, assistant, tool],
+      STREAM_PHASE.RUNNING,
+      emptyCursor,
+    );
+    expect(first.appended.map((item) => item.id)).toEqual(['u1']);
+    expect(first.cursor.scannedIndex).toBe(1);
+
+    const second = incrementalStaticTranscriptEntries(
+      [user, settledAssistant, tool],
+      STREAM_PHASE.RUNNING,
+      first.cursor,
+    );
+    expect(second.appended.map((item) => item.id)).toEqual(['a1', 't1']);
+    expect(second.cursor.scannedIndex).toBe(3);
+  });
+
+  it('rescans pending child entries when the child model identity arrives', () => {
+    const CHILD = 'search-stream' as StreamTabId;
+    const parentStream = new Map<StreamTabId, StreamTabId>([
+      [CHILD, ROOT_STREAM],
+    ]);
+    const childEntry = entry('a1', 'assistant', 'checking', true);
+    // Keep one shared entries array so the model patch reuses the same
+    // `entriesRef` and exercises the `sameEntries && scannedIndex < length`
+    // rescan guard rather than falling through to the new-array path.
+    const childEntries = [childEntry];
+    const streamsWithoutChildModel = new Map<StreamTabId, StreamSlice>([
+      [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [])],
+      [CHILD, sliceWithEntries(CHILD, childEntries)],
+    ]);
+    const initial = buildStaticTranscriptState({
+      childStreamEntries: new Map(),
+      maxRows: undefined,
+      meta: SESSION_META,
+      ownerKey: `stream:${CHILD}`,
+      parentStream,
+      repaintEpoch: 0,
+      scrollbackStreamId: CHILD,
+      streams: streamsWithoutChildModel,
+      width: 80,
+    });
+
+    expect(initial.items).toEqual([]);
+    expect(initial.scan.entriesRef).toBe(childEntries);
+    expect(initial.scan.scannedIndex).toBe(0);
+
+    const streamsWithChildModel = new Map<StreamTabId, StreamSlice>([
+      [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [])],
+      [CHILD, sliceWithEntries(CHILD, childEntries, { model: 'kimi26T' })],
+    ]);
+    const advanced = advanceStaticTranscriptState(initial, {
+      childStreamEntries: new Map(),
+      maxRows: undefined,
+      meta: SESSION_META,
+      ownerKey: `stream:${CHILD}`,
+      parentStream,
+      scrollbackStreamId: CHILD,
+      streams: streamsWithChildModel,
+      width: 80,
+    });
+
+    expect(advanced.items.map((item) => item.id)).toEqual([
+      'session-header',
+      'a1',
+    ]);
+    expect(advanced.scan.scannedIndex).toBe(1);
+  });
+
+  it('recomputes ring totals and trims when the layout width shrinks', () => {
+    const budgets: StaticTranscriptRingBudgets = {
+      rowHighWater: 6,
+      rowLowWater: 4,
+      byteHighWater: 1024 * 1024,
+      byteLowWater: 1024 * 1024,
+    };
+    const entries = Array.from({ length: 4 }, (_, index) =>
+      entry(`e${index}`, 'assistant', 'x'.repeat(10), true),
+    );
+    const wideStreams = new Map<StreamTabId, StreamSlice>([
+      [STREAM_ID, sliceWithEntries(STREAM_ID, entries)],
+    ]);
+    const wide = buildStaticTranscriptState({
+      childStreamEntries: new Map(),
+      maxRows: 1,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      repaintEpoch: 0,
+      ringBudgets: budgets,
+      scrollbackStreamId: STREAM_ID,
+      streams: wideStreams,
+      width: 40,
+    });
+
+    expect(wide.items.map((item) => item.id)).toEqual([
+      'session-header',
+      'e0',
+      'e1',
+      'e2',
+      'e3',
+    ]);
+    expect(wide.rowCount).toBeLessThanOrEqual(budgets.rowHighWater);
+    expect(wide.repaintEpoch).toBe(0);
+
+    const narrow = advanceStaticTranscriptState(wide, {
+      childStreamEntries: new Map(),
+      maxRows: 1,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      ringBudgets: budgets,
+      scrollbackStreamId: STREAM_ID,
+      streams: wideStreams,
+      width: 8,
+    });
+
+    expect(narrow.items.map((item) => item.id)).toEqual([
+      'session-header',
+      'e3',
+    ]);
+    expect(narrow.rowCount).toBeLessThanOrEqual(budgets.rowLowWater);
+    expect(narrow.repaintEpoch).toBe(1);
+    expect(narrow.layoutWidth).toBe(8);
+  });
+
+  it('recomputes ring byte totals and trims when execution labels change', () => {
+    const budgets: StaticTranscriptRingBudgets = {
+      rowHighWater: 10,
+      rowLowWater: 1,
+      byteHighWater: 250,
+      byteLowWater: 1,
+    };
+    const shortLabels = new Map<string, string>([['sub', 'A']]);
+    const longLabels = new Map<string, string>([['sub', 'A'.repeat(60)]]);
+    const entries = [
+      compactExecutionsEntry('t1', '/executions/sub/report'),
+      compactExecutionsEntry('t2', '/executions/sub/report'),
+    ];
+    const streamMap = new Map<StreamTabId, StreamSlice>([
+      [STREAM_ID, sliceWithEntries(STREAM_ID, entries)],
+    ]);
+    const initial = buildStaticTranscriptState({
+      childStreamEntries: new Map(),
+      executionLabels: shortLabels,
+      maxRows: 1,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      repaintEpoch: 0,
+      ringBudgets: budgets,
+      scrollbackStreamId: STREAM_ID,
+      streams: streamMap,
+      width: 80,
+    });
+
+    expect(initial.items.map((item) => item.id)).toEqual([
+      'session-header',
+      't1',
+      't2',
+    ]);
+    expect(initial.byteCount).toBeLessThanOrEqual(budgets.byteHighWater);
+    expect(initial.repaintEpoch).toBe(0);
+
+    const advanced = advanceStaticTranscriptState(initial, {
+      childStreamEntries: new Map(),
+      executionLabels: longLabels,
+      maxRows: 1,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      ringBudgets: budgets,
+      scrollbackStreamId: STREAM_ID,
+      streams: streamMap,
+      width: 80,
+    });
+
+    expect(advanced.items.map((item) => item.id)).toEqual([
+      'session-header',
+      't2',
+    ]);
+    expect(advanced.byteCount).toBeGreaterThan(initial.byteCount);
+    expect(advanced.repaintEpoch).toBe(1);
+    expect(advanced.executionLabels).toBe(longLabels);
+  });
+
+  it('does not relayout or repaint for semantically equal fresh execution labels', () => {
+    const labels = new Map<string, string>([['sub', 'A']]);
+    const entries = [compactExecutionsEntry('t1', '/executions/sub/report')];
+    const streamMap = new Map<StreamTabId, StreamSlice>([
+      [STREAM_ID, sliceWithEntries(STREAM_ID, entries)],
+    ]);
+    const initial = buildStaticTranscriptState({
+      childStreamEntries: new Map(),
+      executionLabels: labels,
+      maxRows: 1,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      repaintEpoch: 0,
+      ringBudgets: DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
+      scrollbackStreamId: STREAM_ID,
+      streams: streamMap,
+      width: 80,
+    });
+    // Same projection contents in a fresh Map — the signal allocates these on
+    // unrelated child-roster churn, so they must not read as a layout change.
+    const sameLabelsFreshMap = new Map<string, string>([['sub', 'A']]);
+    const unchanged = advanceStaticTranscriptState(initial, {
+      childStreamEntries: new Map(),
+      executionLabels: sameLabelsFreshMap,
+      maxRows: 1,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      ringBudgets: DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
+      scrollbackStreamId: STREAM_ID,
+      streams: streamMap,
+      width: 80,
+    });
+    expect(unchanged).toBe(initial);
+    expect(unchanged.repaintEpoch).toBe(initial.repaintEpoch);
+  });
+
+  it('trims and bumps the repaint epoch when incremental appends exceed a small budget', () => {
+    const budgets: StaticTranscriptRingBudgets = {
+      rowHighWater: 2,
+      rowLowWater: 1,
+      byteHighWater: 1024 * 1024,
+      byteLowWater: 1024 * 1024,
+    };
+    const firstEntry = entry('e0', 'assistant', 'x', true);
+    const firstStreams = new Map<StreamTabId, StreamSlice>([
+      [STREAM_ID, sliceWithEntries(STREAM_ID, [firstEntry])],
+    ]);
+    const initial = buildStaticTranscriptState({
+      childStreamEntries: new Map(),
+      maxRows: 1,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      repaintEpoch: 0,
+      ringBudgets: budgets,
+      scrollbackStreamId: STREAM_ID,
+      streams: firstStreams,
+      width: 80,
+    });
+
+    expect(initial.items.map((item) => item.id)).toEqual([
+      'session-header',
+      'e0',
+    ]);
+    expect(initial.repaintEpoch).toBe(0);
+
+    const secondEntry = entry('e1', 'assistant', 'y', true);
+    const appendedStreams = new Map<StreamTabId, StreamSlice>([
+      [STREAM_ID, sliceWithEntries(STREAM_ID, [firstEntry, secondEntry])],
+    ]);
+    const advanced = advanceStaticTranscriptState(initial, {
+      childStreamEntries: new Map(),
+      maxRows: 1,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      ringBudgets: budgets,
+      scrollbackStreamId: STREAM_ID,
+      streams: appendedStreams,
+      width: 80,
+    });
+
+    expect(advanced.items.map((item) => item.id)).toEqual([
+      'session-header',
+      'e1',
+    ]);
+    expect(advanced.repaintEpoch).toBe(1);
+  });
+
+  it('does not report a trim when only the header and one oversized entry remain', () => {
+    const header: StaticTranscriptItem = {
+      id: 'session-header',
+      kind: 'header',
+      compact: true,
+      identityLine: 'agent: research · model: test',
+      meta: SESSION_META,
+    };
+    const oversized: StaticTranscriptItem = {
+      id: 'e0',
+      kind: 'entry',
+      entry: entry('e0', 'assistant', 'x'.repeat(80), true),
+    };
+    const trimmed = trimStaticTranscriptItems([header, oversized], {
+      budgets: {
+        rowHighWater: 1,
+        rowLowWater: 1,
+        byteHighWater: 1,
+        byteLowWater: 1,
+      },
+      totals: { rows: 20, bytes: 500 },
+      width: 80,
+    });
+
+    expect(trimmed.items.map((item) => item.id)).toEqual([
+      'session-header',
+      'e0',
+    ]);
+    expect(trimmed.trimmed).toBe(false);
+  });
+
+  it('does not bump the repaint epoch on a scrollback owner switch', () => {
+    const rootStreams = new Map<StreamTabId, StreamSlice>([
+      [
+        STREAM_ID,
+        sliceWithEntries(STREAM_ID, [entry('e0', 'assistant', 'root', true)]),
+      ],
+    ]);
+    const initial = buildStaticTranscriptState({
+      childStreamEntries: new Map(),
+      maxRows: 1,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      repaintEpoch: 5,
+      scrollbackStreamId: STREAM_ID,
+      streams: rootStreams,
+      width: 80,
+    });
+    expect(initial.repaintEpoch).toBe(5);
+
+    const switched = advanceStaticTranscriptState(initial, {
+      childStreamEntries: new Map(),
+      maxRows: 1,
+      meta: SESSION_META,
+      ownerKey: 'stream:other',
+      parentStream: new Map(),
+      scrollbackStreamId: STREAM_ID,
+      streams: rootStreams,
+      width: 80,
+    });
+
+    expect(switched.ownerKey).toBe('stream:other');
+    expect(switched.repaintEpoch).toBe(5);
   });
 
   it('appends settled entries incrementally and resumes a deferred live prompt', () => {
@@ -1175,14 +1631,14 @@ describe('CLI conversation transcript', () => {
     ).toBe('subagent: search · parent: main · model: Kimi K2.6 (Thinking)');
 
     expect(
-      appendStaticTranscriptItems({
+      buildStaticTranscriptItems({
         scrollbackStreamId: CHILD,
         currentItems: [],
         streams,
         childStreamEntries,
         meta: SESSION_META,
         parentStream: new Map([[CHILD, ROOT_STREAM]]),
-      })[0],
+      }).items[0],
     ).toMatchObject({
       kind: 'header',
       identityLine:
@@ -1202,13 +1658,13 @@ describe('CLI conversation transcript', () => {
     ]);
 
     expect(
-      appendStaticTranscriptItems({
+      buildStaticTranscriptItems({
         scrollbackStreamId: CHILD,
         currentItems: [],
         streams: streamsWithoutChildModel,
         meta: SESSION_META,
         parentStream,
-      }),
+      }).items,
     ).toEqual([]);
 
     const streamsWithChildModel = new Map<StreamTabId, StreamSlice>([
@@ -1222,23 +1678,23 @@ describe('CLI conversation transcript', () => {
     ]);
 
     expect(
-      appendStaticTranscriptItems({
+      buildStaticTranscriptItems({
         scrollbackStreamId: CHILD,
         currentItems: [],
         streams: streamsWithChildModel,
         meta: SESSION_META,
         parentStream,
-      }).map((item) => item.id),
+      }).items.map((item) => item.id),
     ).toEqual(['session-header', 'a1']);
   });
 
   it('only feeds the root scrollback stream, not background subagents', () => {
-    const items = appendStaticTranscriptItems({
+    const items = buildStaticTranscriptItems({
       scrollbackStreamId: ROOT_STREAM,
       currentItems: [],
       streams: rootChildStreams('do x', 'done'),
       meta: SESSION_META,
-    });
+    }).items;
 
     expect(items.slice(1).map((item) => item.id)).toEqual(['u1']);
   });
@@ -1249,12 +1705,12 @@ describe('CLI conversation transcript', () => {
       rootStreamId: ROOT_STREAM,
       scopedTranscript: false,
     });
-    const items = appendStaticTranscriptItems({
+    const items = buildStaticTranscriptItems({
       scrollbackStreamId: scrollbackTarget.streamId,
       currentItems: [],
       streams: rootChildStreams('root prompt', 'child detail'),
       meta: SESSION_META,
-    });
+    }).items;
 
     expect(scrollbackTarget).toEqual({
       ownerKey: 'root',
@@ -1269,12 +1725,12 @@ describe('CLI conversation transcript', () => {
       rootStreamId: ROOT_STREAM,
       scopedTranscript: true,
     });
-    const items = appendStaticTranscriptItems({
+    const items = buildStaticTranscriptItems({
       scrollbackStreamId: scrollbackTarget.streamId,
       currentItems: [],
       streams: rootChildStreams('root prompt', 'child detail'),
       meta: SESSION_META,
-    });
+    }).items;
 
     expect(scrollbackTarget).toEqual({
       ownerKey: `stream:${CHILD_STREAM}`,
@@ -1464,14 +1920,14 @@ function staticItems(
     readonly width?: number;
   } = {},
 ): readonly StaticTranscriptItem[] {
-  return appendStaticTranscriptItems({
+  return buildStaticTranscriptItems({
     currentItems: options.currentItems ?? [],
     maxRows: options.maxRows,
     meta: SESSION_META,
     scrollbackStreamId: STREAM_ID,
     streams: new Map([[STREAM_ID, sliceWithEntries(STREAM_ID, entries)]]),
     width: options.width,
-  });
+  }).items;
 }
 
 function staticItemIds(

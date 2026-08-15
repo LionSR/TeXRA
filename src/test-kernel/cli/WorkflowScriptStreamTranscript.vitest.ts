@@ -15,8 +15,10 @@ import '@test/support/defaultSessionTestSetup';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 
 import {
+  advanceStaticTranscriptState,
+  buildStaticTranscriptItems,
+  buildStaticTranscriptState,
   StaticConversationTranscript,
-  appendStaticTranscriptItems,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
 import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
 import {
@@ -85,19 +87,19 @@ async function renderStaticTranscript(): Promise<string> {
   );
 }
 
-type StaticItems = ReturnType<typeof appendStaticTranscriptItems>;
+type StaticItems = ReturnType<typeof buildStaticTranscriptItems>['items'];
 
 function appendItems(
   currentItems: StaticItems = [],
-  overrides: Partial<Parameters<typeof appendStaticTranscriptItems>[0]> = {},
+  overrides: Partial<Parameters<typeof buildStaticTranscriptItems>[0]> = {},
 ): StaticItems {
-  return appendStaticTranscriptItems({
+  return buildStaticTranscriptItems({
     currentItems,
     meta: SESSION_META,
     scrollbackStreamId: STREAM_ID,
     streams: streams.get(),
     ...overrides,
-  });
+  }).items;
 }
 
 function staticEntries(items: StaticItems): readonly ConversationEntry[] {
@@ -526,7 +528,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     ]);
   });
 
-  it('keeps declared-plan phase-task ordering identical live and cold', async () => {
+  it('holds later settled rows behind pending declared-plan tasks', async () => {
     const runTrace = openRunTrace(STREAM_ID);
     for (const [id, label] of [
       ['core', 'Audit core'],
@@ -558,18 +560,38 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
     syncStreamLog(STREAM_ID);
 
-    let incrementalItems = appendItems();
-    expect(entryIds(incrementalItems)).toEqual([
-      expect.stringMatching(/.+/),
-      expect.stringMatching(/^local:/),
-      'audit-phase',
-    ]);
+    const buildState = (repaintEpoch = 0) =>
+      buildStaticTranscriptState({
+        childStreamEntries: new Map(),
+        maxRows: undefined,
+        meta: SESSION_META,
+        ownerKey: 'root',
+        parentStream: new Map(),
+        repaintEpoch,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+        width: 80,
+      });
+    const advance = (
+      current: ReturnType<typeof buildStaticTranscriptState>,
+    ): ReturnType<typeof buildStaticTranscriptState> =>
+      advanceStaticTranscriptState(current, {
+        childStreamEntries: new Map(),
+        maxRows: undefined,
+        meta: SESSION_META,
+        ownerKey: 'root',
+        parentStream: new Map(),
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+        width: 80,
+      });
+
+    let state = buildState();
+    expect(entryIds(state.items)).toEqual([]);
     const initialOutput = await renderStaticTranscript();
-    expectOutputOrder(initialOutput, [
-      'Preparing repository audit',
-      'Local audit checkpoint',
-      '◆ Repository audit',
-    ]);
+    expect(initialOutput).not.toContain('Preparing repository audit');
+    expect(initialOutput).not.toContain('Local audit checkpoint');
+    expect(initialOutput).not.toContain('Repository audit');
 
     runTrace.trace.emit({
       type: 'workflow.call',
@@ -583,33 +605,51 @@ describe('CLI workflow-script child-stream transcript', () => {
       },
     });
     syncStreamLog(STREAM_ID);
-    incrementalItems = appendItems(incrementalItems);
-    expect(entryIds(incrementalItems)).toEqual([
-      expect.stringMatching(/.+/),
-      expect.stringMatching(/^local:/),
-      'audit-phase',
-      'core-task',
-    ]);
+    state = advance(state);
+    expect(entryIds(state.items)).toEqual(['core-task']);
     const liveOutput = await renderStaticTranscript();
-    expectOutputOrder(liveOutput, [
-      'Preparing repository audit',
-      'Local audit checkpoint',
-      '◆ Repository audit',
-      'Finished: Audit core',
-    ]);
+    expect(liveOutput).toContain('Finished: Audit core');
+    expect(liveOutput).not.toContain('Preparing repository audit');
+    expect(liveOutput).not.toContain('Local audit checkpoint');
+    expect(liveOutput).not.toContain('Repository audit');
 
     phase.end('completed');
     syncStreamLog(STREAM_ID);
-    incrementalItems = appendItems(incrementalItems);
+    state = advance(state);
+    expect(entryIds(state.items)).toEqual(['core-task']);
+
+    for (const id of ['extension', 'cli', 'desktop', 'scripts'] as const) {
+      runTrace.trace.emit({
+        type: 'workflow.call',
+        logId: `${id}-task`,
+        call: {
+          id,
+          label: `Audit ${id}`,
+          phase: 'Repository audit',
+          status: 'completed',
+          model: 'deepseekT',
+        },
+      });
+    }
+    syncStreamLog(STREAM_ID);
+    state = advance(state);
 
     const settledSlice = streamSlice();
     expect(settledSlice?.entries.findLast((entry) => entry.finalized)?.id).toBe(
       'audit-phase',
     );
 
-    const incrementalEntryIds = entryIds(incrementalItems);
-    expect(incrementalEntryIds.at(-2)).toBe('audit-phase');
-    expect(incrementalEntryIds.at(-1)).toBe('core-task');
+    const incrementalEntryIds = entryIds(state.items);
+    expect(incrementalEntryIds).toEqual([
+      expect.stringMatching(/.+/),
+      expect.stringMatching(/^local:/),
+      'audit-phase',
+      'core-task',
+      'extension-task',
+      'cli-task',
+      'desktop-task',
+      'scripts-task',
+    ]);
     expect(entryIds(appendItems([]))).toEqual(incrementalEntryIds);
     const coldOutput = await renderStaticTranscript();
     expectOutputOrder(coldOutput, [
@@ -617,6 +657,10 @@ describe('CLI workflow-script child-stream transcript', () => {
       'Local audit checkpoint',
       '◆ Repository audit',
       'Finished: Audit core',
+      'Finished: Audit extension',
+      'Finished: Audit cli',
+      'Finished: Audit desktop',
+      'Finished: Audit scripts',
     ]);
   });
 
@@ -804,10 +848,20 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
     syncStreamLog(STREAM_ID);
 
-    let incrementalItems = appendItems();
-    expect(staticEntries(incrementalItems).map((entry) => entry.role)).toEqual([
+    const heldSplit = splitTranscriptEntries(
+      streamEntries(),
+      STREAM_PHASE.RUNNING,
+    );
+    expect(heldSplit.finalized).toEqual([]);
+    expect(heldSplit.pending.map((entry) => entry.role)).toEqual([
+      'tool',
       'media',
     ]);
+
+    let incrementalItems = appendItems();
+    expect(staticEntries(incrementalItems).map((entry) => entry.role)).toEqual(
+      [],
+    );
 
     runTrace.trace.toolEnd({
       logId: 'audit-tool',
