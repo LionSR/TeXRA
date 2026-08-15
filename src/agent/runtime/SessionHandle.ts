@@ -36,14 +36,23 @@ import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
-import { runWithOwnedExecutionLeaseQuiescence } from '@agent/storage/executionLease';
+import {
+  abandonOwnedExecutionLease,
+  completeOwnedExecutionLease,
+  renewOwnedExecutionLease,
+  runWithOwnedExecutionLeaseQuiescence,
+} from '@agent/storage/executionLease';
 import { deriveResumability } from '@agent/storage/resumability';
 import { platform } from '@platform/platform';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import {
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
@@ -67,7 +76,6 @@ import {
   type SessionApprovals,
 } from './streamApprovalQueue';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
-import { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
 import {
   repairRestartedStreams,
   RestartRepairRetryScheduler,
@@ -194,7 +202,7 @@ export class SessionHandle {
       approvals,
       publishResult: (event, streamId) => this.publishRunEvent(streamId, event),
       releaseRootExecutionLease: (executionId) =>
-        releaseExecutionLeaseAfterArtifacts(this, executionId),
+        this.releaseExecutionLease(executionId),
     });
 
     this.executions = executions;
@@ -668,6 +676,27 @@ export class SessionHandle {
   useArtifactFlusher(flush: () => Promise<void>): () => void {
     this.artifactFlushers.add(flush);
     return () => this.artifactFlushers.delete(flush);
+  }
+
+  /**
+   * End ownership of one execution only after every session-owned durable
+   * writer has drained. Session artifacts persist between two short
+   * owner-token validations — the durable lease remains fresh while the
+   * session drains, so no file lock needs to cover unrelated transcript and
+   * snapshot I/O. A drain failure abandons the lease (record retained,
+   * renewal stopped) and rethrows; a poisoned lease completes as abandon.
+   * This is the one exit choreography every run driver calls.
+   */
+  async releaseExecutionLease(executionId: ExecutionId): Promise<void> {
+    try {
+      await renewOwnedExecutionLease(executionId);
+      await this.flushArtifacts(executionId);
+      await renewOwnedExecutionLease(executionId);
+    } catch (error) {
+      abandonOwnedExecutionLease(executionId);
+      throw error;
+    }
+    await completeOwnedExecutionLease(executionId);
   }
 
   /** Persist one execution's trace plus the session's shared artifact stores. */

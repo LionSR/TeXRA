@@ -124,6 +124,20 @@ register/guard/launch/release choreography deletes.
 
 ## Follow-up: one execution-lease scope (maintainer-flagged, 2026-08-15)
 
+> **Landed** (2026-08-15, this branch). The synthesis kept the acquire arms
+> as they were (their semantics are real and distinct) and consolidated the
+> _exit_: `SessionHandle.releaseExecutionLease` is now the one exit
+> choreography (renew → drain → renew → complete; abandon on drain failure;
+> a poisoned lease completes as abandon), `executionOwnership.ts` and its
+> barrel export are deleted along with the CLI's host-local shim, the
+> registry's `releaseRootExecutionLease` is required so no construction path
+> can silently release without draining, `runWithOwnedExecutionLease` folded
+> into direct `captureOwnedExecutionLease` calls, and `bash.ts`'s hand-rolled
+> release-on-launch-failure now uses `runWithOwnedExecutionLeaseLaunchGuard`.
+> `runWithOwnedExecutionLease` and the `executionOwnership` pair are gone;
+> the remaining free functions are acquire arms plus the two failure exits
+> the guard composes — no caller hand-writes exit choreography anymore.
+
 The lease protocol — one owner per execution; flush final artifacts before
 release so a concurrent host cannot resurrect a half-written record — is one
 lifecycle spread over three modules and ~seven verbs

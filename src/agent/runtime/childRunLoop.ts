@@ -21,7 +21,7 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
   onOwnedExecutionLeaseLost,
-  runWithOwnedExecutionLease,
+  captureOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import {
   currentSession,
@@ -32,7 +32,6 @@ import {
   type RunTerminalPersistence,
 } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
-import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import type {
   AgentExecutionHandle,
   ExecutionInterruptHandler,
@@ -738,7 +737,7 @@ export function startChildRunLoop<TTurn>(
   const logger = childStream?.logger ?? createChannelTrace('childRunLoop');
   // The code below is synchronous until the scoped loop task is spawned, so a
   // lost generation fails before any queue, listener, stage, or loop exists.
-  runWithOwnedExecutionLease(executionId, () => undefined);
+  captureOwnedExecutionLease(executionId);
   const runSession = currentSession();
   // Parent delivery belongs to the continuation generation under which this
   // producer started. A terminal retry may reuse the same stream ID, but late
@@ -784,7 +783,7 @@ export function startChildRunLoop<TTurn>(
     });
     // Revalidate at the state transition itself: setup hooks above may run
     // arbitrary synchronous code after the early fail-fast lease check.
-    runWithOwnedExecutionLease(executionId, () => undefined);
+    captureOwnedExecutionLease(executionId);
     queueLease = runSession.followUps.claimChildRun(childStreamId, executionId);
     if (!queueLease) {
       throw new Error(
@@ -1128,7 +1127,7 @@ export function startChildRunLoop<TTurn>(
         );
       } finally {
         try {
-          await releaseExecutionLeaseAfterArtifacts(runSession, executionId);
+          await runSession.releaseExecutionLease(executionId);
         } catch (error) {
           logger.warn('Failed to persist final child-run artifacts', {
             data: { executionId, error },
@@ -1142,7 +1141,7 @@ export function startChildRunLoop<TTurn>(
   };
   try {
     const completion = Promise.resolve(
-      runWithOwnedExecutionLease(executionId, run),
+      captureOwnedExecutionLease(executionId)(run),
     );
     return { completion };
   } catch (error) {

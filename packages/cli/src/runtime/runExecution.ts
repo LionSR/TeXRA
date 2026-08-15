@@ -35,10 +35,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { warnApprovalDenied } from './approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
-import {
-  finalizeCliExecution,
-  releaseCliExecutionLeaseAfterArtifacts,
-} from './executionFinalization';
+import { finalizeCliExecution } from './executionFinalization';
 import {
   formatInterruptedResumeHint,
   tryReadCliCwd,
@@ -361,7 +358,7 @@ export async function executeCliRequest(
             'preserve',
             reportShutdownFinalizationFailure,
           );
-          await releaseCliExecutionLeaseAfterArtifacts(session, executionId);
+          await session.releaseExecutionLease(executionId);
         });
         const resumability = terminalStatusPersisted
           ? await deriveResumability(executionId)

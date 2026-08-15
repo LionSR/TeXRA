@@ -91,15 +91,12 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
       operation(),
   markOwnedExecutionLeaseUndurable: vi.fn(),
   ownsExecutionLease: vi.fn(() => true),
-  runWithOwnedExecutionLease: vi.fn(
-    (_executionId: ExecutionId, operation: () => unknown) => operation(),
-  ),
-}));
-
-vi.mock('@agent/runtime/executionOwnership', () => ({
-  releaseExecutionLeaseAfterArtifacts: vi.fn(
-    async (_session: unknown, executionId: ExecutionId) =>
-      mocks.releaseOwnedExecutionLease(executionId),
+  // The session's one exit choreography runs for real over these inert lease
+  // verbs; the release spy observes its terminal step.
+  renewOwnedExecutionLease: vi.fn(async () => {}),
+  abandonOwnedExecutionLease: vi.fn(),
+  completeOwnedExecutionLease: vi.fn(async (executionId: ExecutionId) =>
+    mocks.releaseOwnedExecutionLease(executionId),
   ),
 }));
 

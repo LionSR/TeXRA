@@ -60,7 +60,6 @@ import {
   type WorkflowFlowResult,
 } from './AgentFlowResult';
 import { generateSessionDescription } from './sessionDescription';
-import { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
@@ -631,10 +630,7 @@ export async function resumeToolUseFromResumeData(
       // The run's own failure is the one the caller must see; a release failure
       // on top of it is additional information, not a replacement.
       try {
-        await releaseExecutionLeaseAfterArtifacts(
-          runSession,
-          resume.executionId,
-        );
+        await runSession.releaseExecutionLease(resume.executionId);
       } catch (releaseError) {
         throw new AggregateError(
           [error, releaseError],
@@ -645,7 +641,7 @@ export async function resumeToolUseFromResumeData(
     }
     // A WAITING result keeps the lease: the next resume owns this execution.
     if (!isWaitingFlowResult(result)) {
-      await releaseExecutionLeaseAfterArtifacts(runSession, resume.executionId);
+      await runSession.releaseExecutionLease(resume.executionId);
     }
     return result;
   });

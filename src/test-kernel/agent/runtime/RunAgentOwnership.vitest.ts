@@ -27,10 +27,6 @@ vi.mock('@agent/storage/executionLease', () => ({
       operation(),
   markOwnedExecutionLeaseUndurable: mocks.markOwnedExecutionLeaseUndurable,
   renewOwnedExecutionLease: mocks.renewOwnedExecutionLease,
-  runWithOwnedExecutionLease: (
-    _executionId: ExecutionId,
-    operation: () => unknown,
-  ) => operation(),
 }));
 
 vi.mock('@agent/storage/executionLifecycle', () => ({
@@ -43,6 +39,7 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 }));
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent } from '@agent/runtime/runAgent';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
@@ -54,7 +51,13 @@ const CONFIG = AgentConfigSchema.parse({
   model: 'test-model',
 });
 const flushArtifacts = vi.fn();
-const SESSION = { flushArtifacts } as never;
+// The real exit choreography over the fake's flushArtifacts and the mocked
+// lease verbs, so the existing renew/flush/complete/abandon assertions keep
+// observing the same tree through its one owner.
+const SESSION = {
+  flushArtifacts,
+  releaseExecutionLease: SessionHandle.prototype.releaseExecutionLease,
+} as never;
 
 const EXECUTE_RESULT = {
   category: 'toolUse',
@@ -347,8 +350,15 @@ describe('runAgent execution ownership', () => {
       runError,
       artifactError,
     ]);
-    expect(mocks.completeOwnedExecutionLease).not.toHaveBeenCalled();
-    expect(mocks.abandonOwnedExecutionLease).toHaveBeenCalledWith(EXECUTION_ID);
+    // A failed host hook poisons the lease; the one drain still runs, and the
+    // poisoned lease completes-as-abandon inside completeOwnedExecutionLease
+    // (that short-circuit is ExecutionLease.vitest's own contract).
+    expect(mocks.markOwnedExecutionLeaseUndurable).toHaveBeenCalledWith(
+      EXECUTION_ID,
+    );
+    expect(mocks.completeOwnedExecutionLease).toHaveBeenCalledWith(
+      EXECUTION_ID,
+    );
     expect(flushArtifacts).toHaveBeenCalledOnce();
   });
 });

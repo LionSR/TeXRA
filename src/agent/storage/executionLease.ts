@@ -474,13 +474,6 @@ async function runWithValidatedOwnership<T>(
  * A continuation from a displaced owner keeps its original token and cannot
  * borrow a later local owner's lease for the same execution id.
  */
-export function runWithOwnedExecutionLease<T>(
-  executionId: ExecutionId,
-  operation: () => T | Promise<T>,
-): T | Promise<T> {
-  return captureOwnedExecutionLease(executionId)(operation);
-}
-
 /** Capture the current generation so a delayed lifecycle root cannot borrow its successor. */
 export function captureOwnedExecutionLease(
   executionId: ExecutionId,

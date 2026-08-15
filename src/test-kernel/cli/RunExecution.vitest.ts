@@ -87,14 +87,6 @@ vi.mock('@agent/runtime/runAgent', () => ({
   runAgent: mocks.runAgent,
 }));
 
-vi.mock('@cli/runtime/executionFinalization', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@cli/runtime/executionFinalization')
-  >()),
-  releaseCliExecutionLeaseAfterArtifacts:
-    mocks.releaseExecutionLeaseAfterArtifacts,
-}));
-
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
   deriveResumability: mocks.deriveResumability,
@@ -219,7 +211,7 @@ async function spyOnTranscriptFlush() {
   return { store, flushSpy };
 }
 
-function stubRunExecutionDeps(): void {
+async function stubRunExecutionDeps(): Promise<void> {
   vi.clearAllMocks();
   mocks.close.mockResolvedValue(undefined);
   mocks.detachRunProgressRenderer.mockReturnValue(undefined);
@@ -253,6 +245,14 @@ function stubRunExecutionDeps(): void {
   });
   mocks.inspectExecutionLease.mockResolvedValue({ status: 'missing' });
   mocks.releaseExecutionLeaseAfterArtifacts.mockResolvedValue(undefined);
+  // The CLI shutdown drain is the session's one exit choreography; the suite
+  // observes it through the same spy the deleted host-local shim fed.
+  const { SessionHandle } = await import('@agent/runtime/SessionHandle');
+  vi.spyOn(SessionHandle.prototype, 'releaseExecutionLease').mockImplementation(
+    function (this: unknown, executionId) {
+      return mocks.releaseExecutionLeaseAfterArtifacts(this, executionId);
+    },
+  );
   mocks.finalizeExecution.mockResolvedValue({
     status: 'durable',
     outcomePersisted: true,
@@ -278,7 +278,7 @@ async function installFakePlatform() {
 
 describe('executeCliRequest', () => {
   beforeEach(async () => {
-    stubRunExecutionDeps();
+    await stubRunExecutionDeps();
     await installFreshDefaultSession();
   });
 
@@ -1383,7 +1383,7 @@ describe('executeCliRequest', () => {
 
 describe('executeCliConfig', () => {
   beforeEach(async () => {
-    stubRunExecutionDeps();
+    await stubRunExecutionDeps();
     await installFreshDefaultSession();
   });
 

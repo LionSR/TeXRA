@@ -7,7 +7,7 @@ import {
   captureOwnedExecutionLease,
   markOwnedExecutionLeaseUndurable,
   onOwnedExecutionLeaseLost,
-  releaseOwnedExecutionLeaseAfterFailure,
+  runWithOwnedExecutionLeaseLaunchGuard,
 } from '@agent/storage/executionLease';
 import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
@@ -26,7 +26,6 @@ import {
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { BASH_CHILD_STREAM_PREFIX } from '@agent/runtime/streamTab';
-import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { tryPlatform } from '@platform/platform';
 import {
@@ -433,7 +432,7 @@ export class BashTool extends defineTool({
     const runWithOwnership = captureOwnedExecutionLease(executionId);
 
     let childStream!: ChildStream;
-    try {
+    await runWithOwnedExecutionLeaseLaunchGuard(executionId, () => {
       runWithOwnership(() => {
         childStream = createChildStream(executionId, parentStreamId, {
           streamPrefix: BASH_CHILD_STREAM_PREFIX,
@@ -443,9 +442,7 @@ export class BashTool extends defineTool({
           config: syntheticConfig,
         });
       });
-    } catch (error) {
-      throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
-    }
+    });
     const { childStreamId, logger } = childStream;
     // Whitespace normalization is off here: a background log is delivered
     // verbatim, and its head/tail budgets are its own (see the constants
@@ -648,7 +645,7 @@ export class BashTool extends defineTool({
         }
       } finally {
         try {
-          await releaseExecutionLeaseAfterArtifacts(runSession, executionId);
+          await runSession.releaseExecutionLease(executionId);
         } catch (err: unknown) {
           logBackgroundFailure('persist final artifacts', err);
         } finally {

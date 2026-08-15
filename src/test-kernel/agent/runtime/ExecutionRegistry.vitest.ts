@@ -132,6 +132,7 @@ function createRegistry(
   const registry = new ExecutionRegistry({
     streamStatus,
     events,
+    releaseRootExecutionLease: async () => {},
     ...options,
   });
   return { events, streamStatus, registry };

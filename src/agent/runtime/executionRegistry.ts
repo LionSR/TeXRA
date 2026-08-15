@@ -7,7 +7,6 @@
 
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
 import {
-  completeOwnedExecutionLease,
   ExecutionLeaseLostError,
   markOwnedExecutionLeaseUndurable,
 } from '@agent/storage/executionLease';
@@ -103,7 +102,12 @@ interface ExecutionRegistryInit {
   readonly events: SessionEventHub;
   readonly approvals?: SessionApprovals;
   readonly publishResult?: (event: ResultEvent, streamId: StreamTabId) => void;
-  readonly releaseRootExecutionLease?: (
+  /**
+   * The session's one exit choreography (`SessionHandle.releaseExecutionLease`)
+   * — required so no construction path can silently release a lease without
+   * draining the session's durable writers first.
+   */
+  readonly releaseRootExecutionLease: (
     executionId: ExecutionId,
   ) => Promise<void>;
 }
@@ -159,8 +163,7 @@ export class ExecutionRegistry {
     this.streamStatus = options.streamStatus;
     this.approvals = options.approvals;
     this.publishResult = options.publishResult;
-    this.releaseRootExecutionLease =
-      options.releaseRootExecutionLease ?? completeOwnedExecutionLease;
+    this.releaseRootExecutionLease = options.releaseRootExecutionLease;
     // Notify waiters and refresh UI badges when stream status changes
     // (e.g. RUNNING → WAITING). SessionEventHub dispatch is synchronous, so
     // bookkeeping retains the status machine subscription's original ordering.

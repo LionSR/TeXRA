@@ -362,7 +362,11 @@ function installOwnerSession(): {
 } {
   const events = new SessionEventHub();
   const status = new StreamStatusMachine(events);
-  const executions = new ExecutionRegistry({ events, streamStatus: status });
+  const executions = new ExecutionRegistry({
+    events,
+    streamStatus: status,
+    releaseRootExecutionLease: async () => {},
+  });
   const interactions = new SessionHostInteractions();
   installSession({
     useHostInteractions: (adapter: Parameters<typeof interactions.use>[0]) =>

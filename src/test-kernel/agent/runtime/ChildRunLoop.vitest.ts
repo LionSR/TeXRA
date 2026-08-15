@@ -17,9 +17,11 @@ const mocks = vi.hoisted(() => ({
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
   deliverChildRunFollowUp: vi.fn(),
-  releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
-  runWithOwnedExecutionLease: vi.fn(
-    (_executionId: ExecutionId, operation: () => unknown) => operation(),
+  releaseExecutionLeaseAfterArtifacts: vi.fn(
+    async (_session: unknown, _executionId: ExecutionId) => {},
+  ),
+  captureOwnedExecutionLease: vi.fn(
+    (_executionId: ExecutionId) => (operation: () => unknown) => operation(),
   ),
   leaseLossListener: undefined as (() => void) | undefined,
 }));
@@ -41,7 +43,7 @@ vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
   markOwnedExecutionLeaseUndurable: vi.fn(),
-  runWithOwnedExecutionLease: mocks.runWithOwnedExecutionLease,
+  captureOwnedExecutionLease: mocks.captureOwnedExecutionLease,
   onOwnedExecutionLeaseLost: vi.fn(
     (_executionId: ExecutionId, listener: () => void) => {
       mocks.leaseLossListener = listener;
@@ -52,11 +54,6 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
       };
     },
   ),
-}));
-
-vi.mock('@agent/runtime/executionOwnership', () => ({
-  releaseExecutionLeaseAfterArtifacts:
-    mocks.releaseExecutionLeaseAfterArtifacts,
 }));
 
 vi.mock('@agent/storage/childRunPersistence', () => ({
@@ -274,6 +271,11 @@ async function waitForLoopEnd(childStreamId: StreamTabId): Promise<void> {
 beforeEach(() => {
   session = defaultSession();
   vi.clearAllMocks();
+  // The loop's terminal drain is the session's one exit choreography; the
+  // suite observes it through the same (session, executionId) spy as before.
+  vi.spyOn(session, 'releaseExecutionLease').mockImplementation((executionId) =>
+    mocks.releaseExecutionLeaseAfterArtifacts(session, executionId),
+  );
   mocks.leaseLossListener = undefined;
   mocks.finalizeExecution.mockResolvedValue({
     status: 'durable',
@@ -298,7 +300,7 @@ describe('childRunLoop E2E fixtures', () => {
   it('validates the captured lease before registering loop resources', () => {
     const { childStreamId, executionId } = loopIds('lost-before-setup');
     const { strategy, callCount } = createFakeStrategy();
-    mocks.runWithOwnedExecutionLease.mockImplementationOnce(() => {
+    mocks.captureOwnedExecutionLease.mockImplementationOnce(() => {
       throw new Error('lease generation lost');
     });
 
@@ -315,8 +317,10 @@ describe('childRunLoop E2E fixtures', () => {
     const { childStreamId, executionId } = loopIds('lost-during-setup');
     const { strategy, callCount } = createFakeStrategy();
     const claimChildRun = vi.spyOn(session.followUps, 'claimChildRun');
-    mocks.runWithOwnedExecutionLease
-      .mockImplementationOnce((_id, operation) => operation())
+    mocks.captureOwnedExecutionLease
+      .mockImplementationOnce(
+        (_id) => (operation: () => unknown) => operation(),
+      )
       .mockImplementationOnce(() => {
         throw new Error('lease generation lost during setup');
       });
@@ -483,7 +487,7 @@ describe('childRunLoop E2E fixtures', () => {
     const { strategy, rejectTurn } = createFakeStrategy();
 
     startLoop({ childStreamId, executionId }, strategy);
-    expect(mocks.runWithOwnedExecutionLease).toHaveBeenCalledTimes(3);
+    expect(mocks.captureOwnedExecutionLease).toHaveBeenCalledTimes(3);
     await vi.waitFor(() => expect(mocks.leaseLossListener).toBeDefined());
 
     mocks.leaseLossListener?.();

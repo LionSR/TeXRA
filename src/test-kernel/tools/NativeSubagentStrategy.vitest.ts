@@ -56,14 +56,12 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  runWithOwnedExecutionLease: (
-    _executionId: ExecutionId,
-    operation: () => unknown,
-  ) => operation(),
-}));
-
-vi.mock('@agent/runtime/executionOwnership', () => ({
-  releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
+  captureOwnedExecutionLease:
+    (_executionId: ExecutionId) => (operation: () => unknown) =>
+      operation(),
+  renewOwnedExecutionLease: vi.fn(async () => {}),
+  abandonOwnedExecutionLease: vi.fn(),
+  completeOwnedExecutionLease: vi.fn(async () => {}),
 }));
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
