@@ -7,6 +7,7 @@ import {
   ArxivProcessor,
   resolveArxivPaperDirectoryRelative,
 } from '@latex/arxivProcessor';
+import * as logger from '@logger/logUtils';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 const tempDirs: string[] = [];
@@ -14,6 +15,7 @@ const SOURCE_URL = 'https://arxiv.org/src/2404.12175';
 
 afterEach(async () => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   await cleanupTempDirs(tempDirs);
 });
 
@@ -58,6 +60,57 @@ describe('arXiv processor logger channel', () => {
     // must stay lowercase so log filters keep matching `[arxivProcessor]`.
     const channel = (ArxivProcessor as unknown as { channel: string }).channel;
     expect(channel).toBe('arxivProcessor');
+  });
+
+  // Spy seam (#10635): the owner getter binds `this.channel` through createLog
+  // per call, so a logger-namespace spy must observe the owner channel.
+  it('emits download retry logs through the logger namespace on the owner channel', async () => {
+    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+    const destBasePath = await tempSourceBase();
+    let attempt = 0;
+    const fetchMock = vi.fn(async () => {
+      attempt += 1;
+      return attempt === 1
+        ? new Response(null, { status: 429 })
+        : sourceResponse();
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const downloadedPath = await ArxivProcessor.downloadFile(
+      SOURCE_URL,
+      destBasePath,
+      5000,
+    );
+
+    expect(downloadedPath).toBe(destBasePath);
+    expect(debug).toHaveBeenCalledWith(
+      'arxivProcessor',
+      expect.stringContaining('Download attempt failed'),
+    );
+  });
+
+  it('logs extraction failures on the owner channel and honors a channel override', async () => {
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    const dir = await makeTempDir('texra-arxiv-', tempDirs);
+    const missingTar = path.join(dir, 'missing.tar');
+
+    const fallback = await ArxivProcessor.extractTarFile(missingTar, dir);
+
+    expect(fallback.success).toBe(false);
+    expect(error).toHaveBeenCalledWith(
+      'arxivProcessor',
+      expect.stringContaining('Failed to extract tar file'),
+    );
+
+    const overridden = await ArxivProcessor.extractTarFile(missingTar, dir, {
+      channel: 'arxivExtractOverride',
+    });
+
+    expect(overridden.success).toBe(false);
+    expect(error).toHaveBeenCalledWith(
+      'arxivExtractOverride',
+      expect.stringContaining('Failed to extract tar file'),
+    );
   });
 });
 

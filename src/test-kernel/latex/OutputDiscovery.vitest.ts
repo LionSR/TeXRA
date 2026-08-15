@@ -7,6 +7,7 @@ import type {
   LatexAgentRunEntry,
   LatexExecutionDiscoveryPort,
 } from '@latex/latexdiff/executionDiscovery';
+import * as logger from '@logger/logUtils';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { installPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
@@ -38,7 +39,7 @@ vi.mock('@transcript', async (importActual) => {
   };
 });
 
-const { discoverLatestExecutionOutputs } =
+const { discoverLatestExecutionOutputs, scanRunDirForOutputs } =
   await import('@latex/latexdiff/outputDiscovery');
 
 function matchingExecution(id: string): LatexAgentRunEntry {
@@ -81,6 +82,7 @@ describe('discoverLatestExecutionOutputs', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await cleanupTempDirs(tempDirs);
   });
 
@@ -148,5 +150,111 @@ describe('discoverLatestExecutionOutputs', () => {
     );
 
     expect(result).toBeNull();
+  });
+});
+
+describe('outputDiscovery logger seam', () => {
+  const tempDirs: string[] = [];
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    await installPlatform({}, { fs: nodeFilesystem });
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await cleanupTempDirs(tempDirs);
+  });
+
+  // #10634: a failed persisted-state read degrades the invocation to the
+  // workspace scan — fallback discipline requires warn, not debug.
+  it('warns on the pinned channel when the run-dir scan cannot read run storage', async () => {
+    mocks.findRunDir.mockRejectedValue(new Error('storage index corrupt'));
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+
+    const result = await scanRunDirForOutputs(
+      'abc123',
+      'paper.tex',
+      undefined,
+      'test',
+    );
+
+    expect(result).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      'test',
+      expect.stringContaining(
+        'RunDir scan for abc123 failed: storage index corrupt',
+      ),
+    );
+    expect(debug).not.toHaveBeenCalled();
+  });
+
+  it('warns on the pinned channel when persisted execution metadata cannot be read', async () => {
+    const discovery: LatexExecutionDiscoveryPort = {
+      listAgentRuns: async () => {
+        throw new Error('execution index unreadable');
+      },
+      readStreamId: async () => undefined,
+    };
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+
+    const result = await discoverLatestExecutionOutputs(
+      discovery,
+      MATCHING_QUERY,
+      'test',
+    );
+
+    expect(result).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      'test',
+      expect.stringContaining(
+        'Metadata-driven latexdiff discovery failed: execution index unreadable',
+      ),
+    );
+    expect(debug).not.toHaveBeenCalled();
+  });
+
+  // #10635: collectTexFiles keeps its own per-function createLog(channel) —
+  // an unreadable round subtree warns while the remaining rounds still scan.
+  it('warns on the pinned channel for an unreadable round dir and keeps the readable rounds', async () => {
+    const runDir = await makeTempDir('texra-latexdiff-', tempDirs);
+    await mkdir(path.join(runDir, 'r0'), { recursive: true });
+    await mkdir(path.join(runDir, 'r1'), { recursive: true });
+    await writeFile(
+      path.join(runDir, 'r1', 'paper.tex'),
+      '\\documentclass{article}\\begin{document}x\\end{document}',
+    );
+    const unreadable = path.join(runDir, 'r0');
+    await installPlatform(
+      {},
+      {
+        fs: {
+          ...nodeFilesystem,
+          readDirectory: async (target: string) => {
+            if (target === unreadable) {
+              throw new Error('EACCES: permission denied');
+            }
+            return nodeFilesystem.readDirectory(target);
+          },
+        },
+      },
+    );
+    mocks.findRunDir.mockResolvedValue(runDir);
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    const result = await scanRunDirForOutputs(
+      'abc123',
+      'paper.tex',
+      undefined,
+      'test',
+    );
+
+    expect(Object.keys(result ?? {}).map(Number)).toEqual([1]);
+    expect(warn).toHaveBeenCalledWith(
+      'test',
+      expect.stringContaining(`Skipping unreadable directory '${unreadable}'`),
+    );
   });
 });
