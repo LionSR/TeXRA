@@ -11,6 +11,19 @@
 > prior-rulings register). Every number below is verified-at-citation;
 > re-open sites before acting — eight campaign PRs are landing around these
 > files.
+>
+> **Re-verified against origin/main `3122ace2bc` (2026-08-15, post-campaign
+> merges):** no structural claim died; corrections are folded in below and
+> the full stale-claims register lives in
+> `2026-08-15-shared-contracts-and-retirement.md` §5. The load-bearing
+> changes: B4 (#10611) already banked −163 of Wave C by deleting
+> `WebviewUpdater` into `LitSessionRenderer`; B2/#10541 banked the dead
+> `StreamSlice.files` field; Wave C is revised to the ruling-clean
+> derivation form (§6, per the contracts doc §2.3) so the §0.1-item-6
+> supersession is **withdrawn**; and B3's set-based ratchet adds a new
+> obligation — every PR deleting a host's last `@agent/*` deep import must
+> prune `config/ratchets/host-agent-import-baseline.json` in the same
+> commit, or CI fails on stale headroom.
 
 ## 0. The directive as a ruling, and what it does to prior rulings
 
@@ -30,9 +43,13 @@ three facts:
    `2026-08-03-ssot-consolidation-plan.md` §0.1 item 8, the clause *"the CLI
    `StreamSlice` vs extension slice fragmentation stays (no shared reducer,
    no merged host implementations)"*. The maintainer's 2026-08-15 directive
-   overrides that clause. Items 1, 2, 4, 6*, 7, 11 of the same list stay
-   binding (*item 6's progress-view-IPC freeze is partially superseded — see
-   §6, the one other supersession this plan requests).
+   overrides that clause. Items 1, 2, 4, 6, 7, 11 of the same list stay
+   binding — including item 6's progress-view-IPC freeze: the originally
+   drafted Wave C would have needed to supersede it, but the revised Wave C
+   (§6, per the contracts doc §2.3) derives the targeted messages from one
+   canonical projection shape while keeping every literal, so **no
+   supersession of item 6 is requested**. Item 8 is the program's only
+   supersession.
 3. **Everything else is compliant, not superseded.** No new bus, hub, plane,
    or vocabulary anywhere in this plan (R4's mechanism ban stands). The
    sanctioned channel is the existing one: `SessionEventHub`
@@ -69,7 +86,7 @@ One state plane, already built, promoted to *the only* state plane:
      ┌──────────────┬───────┴──────┬────────────────┤
   Lit renderer   TUI renderer   headless text     NDJSON (frozen wire,
   (ext+desktop,  (Ink paint     renderer          untouched)
-   via 3-message  over shared    (paint over
+   via derived    over shared    (paint over
    wire, §6)      state)         shared state)
 ```
 
@@ -85,9 +102,10 @@ test exactly as-is.
 
 Three real process boundaries survive, each with a named minimal contract:
 
-- **B1 webview/IPC** (ext postMessage, desktop Electron IPC): 3 outbound
-  payloads + 1 inbound registry (§6). `WebviewBridge`'s resync handshake is
-  load-bearing and keeps.
+- **B1 webview/IPC** (ext postMessage, desktop Electron IPC): the existing
+  literals, with every targeted arm derived from one canonical projection
+  shape (§6 revised). `WebviewBridge`'s resync handshake is load-bearing
+  and keeps.
 - **B2 NDJSON stdout**: frozen public vocabulary; `sessionProgressSubscription`
   + `cliPresentationHost` keep as-is, protected by the import fence
   (parity-audit fence row 32).
@@ -119,11 +137,13 @@ added in `src/controllers/session` and `src/shared/schemas` for promotions.
 The gap between ceiling and realistic is itemized honestly in §8 (things that
 looked collapsible and are not).
 
-Named pass-through band (each item cites the census):
-`ProgressStreamProjectionBuilder` (158, stateless 1:1 repack of
-`SessionState` + snapshot getters), ~230 LoC of `LitSessionRenderer`
-3-line forwarders, ~229 LoC of `WebviewUpdater` beyond a table-driven
-sender, frontend slices `runTrackingSlice`/`syncSlice`/`streamStateMerge`/
+Named pass-through band (each item cites the census; **corrected for B4**,
+which deleted `WebviewUpdater.ts` into `LitSessionRenderer` — now one
+483-LoC file with ≈ −290 remaining headroom on the renderer band, −163
+already banked): `ProgressStreamProjectionBuilder` (158, stateless 1:1
+repack of `SessionState` + snapshot getters, 3 refs), the
+`LitSessionRenderer` renderer band (~290 collapsible under §6's revised
+form), frontend slices `runTrackingSlice`/`syncSlice`/`streamStateMerge`/
 `taskSlice`/`inquirySlice` (263 combined — each unpacks exactly what the
 backend packed), `subscribeStreamArtifacts` (135), `streamViews` label
 re-derivation (~120), `approvalAdapter` result-shape renames (~150, gated —
@@ -134,8 +154,13 @@ single-field patches.
 
 ## 3. Wave A — the CLI collapse (largest, no boundary defending it)
 
-Per the session-state field study; **≈ 995–1,070 LoC deleted in
-`packages/cli` against ~100 added in `src/`**. Two structural unlocks carry
+Per the session-state field study; **≈ 983–1,058 LoC deleted in
+`packages/cli` against ~100 added in `src/`** (corrected for the two items
+main already banked). Ratchet rider for every PR in this wave: the CLI's
+`host-agent-import-baseline` list pins 14 specifiers (followUp, TaskState,
+contextUtilization among them) — deleting a specifier's last import
+without pruning the baseline in the same commit **fails** the set-based
+ratchet. Two structural unlocks carry
 ~70% of it:
 
 - **U1 — stop dropping retained children.** One line:
@@ -157,7 +182,7 @@ Then, container by container:
 | container | today | survives | net | notes |
 |---|---|---|---|---|
 | `childExecutions.ts` | 585 | ~110 (~35 with tombstone promoted) | **−475..−550** | roster/parent/tombstone all re-derive `StreamExecutionState.subagents` + `metadata.parentStreamId`; the cap constant is a self-admitted copy of `RETAINED_FINISHED_CHILDREN_CAP` ("as a value, not an import", `:71-76`). Two real riders: (1) `resetPerRunChildState` (`SessionState.ts:310-332`) drops retained children on a new RUNNING while the CLI's exit hint needs them — retention scope becomes a declared per-host policy on the shared structure, not a second container; (2) the removal tombstone is promoted (§4), because `SessionFactApplier.ts:353` re-mints state for deleted streams in ext+desktop too — the CLI's "extra" code was masking a shared bug. |
-| `cliState.ts` `StreamSlice` | 941 | ~490 | **−450** | 26 of 30 fields are field-for-field re-derivations of the shared `StreamState` schema + `StreamTabInfo` (table in the study). The slice becomes `StreamState & CliOnlyFields` where `CliOnlyFields` = `runStartedAt`, `latestLine`, `thinkingActive`, `compactingActive` + fold working state (until §4 promotes the first four). `files` field has no writer and no reader — −13 free. **This is the §0.1-item-8 supersession, executed.** |
+| `cliState.ts` `StreamSlice` | 929 | ~490 | **−438** | 26 of 30 fields are field-for-field re-derivations of the shared `StreamState` schema + `StreamTabInfo` (table in the study). The slice becomes `StreamState & CliOnlyFields` where `CliOnlyFields` = `runStartedAt`, `latestLine`, `thinkingActive`, `compactingActive` + fold working state (until §4 promotes the first four). The dead `files` field is **already removed on main** (B2/#10541, −12 banked). **This is the §0.1-item-8 supersession, executed.** |
 | `sessionSignalsAdapter.ts` | 372 | ~90 | **−280** | ~200 LoC of single-field patch forwarders delete under U2; ~80 LoC of metadata/usage re-derivation deletes when the slice holds shared records verbatim; keeps: dispatch-generation staleness guard (genuine TUI-reset modality), the slice-minting gate, `onGoalPaused` local row. Also deletes the **dual status path**: `:337` drops the status fact so `subscribeStreamStatus.ts` (57) can re-subscribe separately, bypassing the applier's ordering guarantees — two subscribers to one fact, merged back into the port. |
 | `runProgressRenderer.ts` (headless) | 573 | ~395 | **−175** | `RenderState`'s six fields and the child bookkeeping are all owned by `StreamExecutionState`/metadata; attach a ~40-LoC headless `SessionRendererPort` and delete the hand-rolled `handleSessionFact`/`apply*` machinery. Bonus: the "clear child descriptions before roster repaint reuses a stale label" bug-guard becomes unnecessary — the roster row carries the description. ANSI repaint/throttle/heartbeat keep (modality). |
 | `subscribeStreamArtifacts.ts` | 135 | 0 | **−135** | copies `StreamSnapshotStore` getters into the slice; CLI reads the store directly (it already holds the session). |
@@ -244,40 +269,43 @@ tool-output suppression rule (two unrelated rulesets today), redaction
 (fact or paint — if fact, the webview is under-redacted *today*), phase as
 row vs group.
 
-## 6. Wave C — the webview wire, narrowed to three messages
+## 6. Wave C — the webview wire, derived instead of restated (REVISED)
 
-The census's sharpest webview finding: of the `PROGRESS_VIEW_COMMANDS`
-vocabulary, ten `UPDATE_*` message types (todos, plan, files,
-missingOutputs, compileFailures, runUsage, conversationProgress, badges,
-description, status) are **narrower slices of three payloads that already
-exist** — a bandwidth optimization masquerading as 8 handler slices, ~230
-LoC of `LitSessionRenderer` forwarders, and 349 LoC of `WebviewUpdater`
-method bodies. The minimal wire is:
+*Revised 2026-08-15 after the contract census and rulings re-check: the
+originally drafted form retired ten `UPDATE_*` literals, which required
+superseding §0.1 item 6 — and item 8 explicitly blesses the
+snapshot+targeted dual path as the intended end state. The census found a
+strictly better, ruling-clean path; the supersession request is withdrawn.
+Full detail: `2026-08-15-shared-contracts-and-retirement.md` §2.3.*
 
-1. `LOG_DELTA` (+ resync handshake) — untouched;
-2. `UPDATE_STREAM_METADATA` — `StreamTabInfo[]` + `StreamMetadata` record
-   (both already shared Zod schemas);
-3. `SYNC_STREAM_CONTENT` — the existing discriminated union, extended to be
-   the delta carrier for the ten retired messages (send the changed member,
-   not the whole payload — the bandwidth property is kept, the vocabulary
-   is not).
+The verified fact stands, sharper than before: **12 of the 30 outbound
+arms are single-field projections of the `SYNC_STREAM_CONTENT` render
+payload, declared twice and independently** — a field added to the
+snapshot silently misses the targeted path and vice versa. The fix that
+respects both rulings:
 
-Downstream deletions this unlocks: the five pass-through slices (263),
-`ProgressStreamProjectionBuilder` (158 — `WebviewUpdater` reads
-`SessionState` directly), the forwarder band of `LitSessionRenderer`
-(~230), `WebviewUpdater` shrunk to a ~120-LoC table-driven sender
-(−229), `contentStore` (127 — state keyed by log id duplicating
-`data` already on the row), `streamMetaSlice`'s ordering re-derivation and
-`pendingDescriptions` race plumbing (~90). **≈ −1,050 LoC on this wave**,
-all inside the ext+desktop pair, no behavior change, ProgressBridge suite
-as the parity harness.
+1. Declare the canonical projection shape **once** and derive every
+   targeted arm from it via `pickProjection(...)` (the
+   `RoundUpdateMessageSchema` factory already proves the idiom). Every
+   literal keeps; both delivery paths keep; the two paths gain the
+   compile-time link they currently lack.
+2. `SessionRendererPort` gains `invalidate(streamId, slice)`; the four
+   payload-free notification methods and `onParentStreamChanged`'s dead
+   second argument collapse into it (5 methods × 2 implementations).
+3. The ~8 `progressEvents.ts` payload interfaces duplicating outbound
+   schemas become `z.infer` of them.
+4. The still-open renderer-band items proceed unchanged:
+   `ProgressStreamProjectionBuilder` folds away (158, the renderer reads
+   `SessionState` directly), the remaining renderer band tightens
+   (≈ −290 headroom after B4's banked −163), `contentStore` (127) and
+   `streamMetaSlice`'s re-derivations (~90) delete, and the pass-through
+   slices shrink to their wire-mandated minimum.
 
-- **Supersession required:** `2026-08-03-ssot-consolidation-plan.md` §0.1
-  item 6 freezes "progress-view IPC literals". Unlike the NDJSON rail this
-  wire is **internal** — both ends ship in the same bundle, no external
-  consumer exists, and the trace-viewer (the third consumer) goes through
-  the same `dispatchMessage`. This plan requests that narrow supersession;
-  the NDJSON and persisted-outcome freezes in the same item stay.
+**≈ −450..−550 LoC on this wave** (down from the originally claimed
+≈ −1,050: B4 banked −163, and keeping the literals keeps their thin
+handler arms), all inside the ext+desktop pair, no behavior change,
+ProgressBridge suite as the parity harness.
+
 - **6d. Replay joins the same path:** a `TraceDocument → SessionState`
   hydrator lets `replayTrace()` call the same projections as live
   (~−100 LoC); the three archived-format compat readers keep (~90, fenced).
@@ -335,11 +363,11 @@ re-flagging them:
 | `sessionPresentationBoundary.vitest.ts` | selection/focus/presentation stay host-side; test untouched |
 | `storePublicSurfaceRatchet` | promotions land in `SessionState`, not the ratcheted stores; the one candidate exception (usage sum) declares its +1 unit or stays out |
 | `transcriptResidencyLeaseSites` | allowlist rows move one-for-one with relocated owners; no widening |
-| `hostAgentDeepImportRatchet` / `subsystemEdgeRatchet` | relocations target `src/controllers/session` via existing aliases; any new src-edge is declared in the PR; goal is baseline shrink, never growth |
+| `hostAgentDeepImportRatchet` / `subsystemEdgeRatchet` | relocations target `src/controllers/session` via existing aliases; any new src-edge is declared in the PR. **Post-B3 the host-agent ratchet is set-based and fails in both directions** — every deletion PR that removes a package's last import of a listed specifier prunes the baseline in the same commit |
 | host-parity fence rows 7/29/30/32 | per-host status-label projectors, per-host display budgets, TUI output-file-fact drop, NDJSON import fence — all untouched |
 | D1/T9, D7/T14, ModelCell scope | persisted `result.outcome` untouched; no keyed one-instance registry anywhere; no `HostUiBus` |
 | build-implies-delete, R6/R8 | every wave's PRs pair the shared landing with the host deletion; R6 element deltas and R8 subscriber greps in each body |
-| supersessions requested (by name, the only two) | SSOT §0.1 item 8 "CLI `StreamSlice` fragmentation stays"; §0.1 item 6 *progress-view IPC literals only* |
+| supersession requested (by name, the only one) | SSOT §0.1 item 8 "CLI `StreamSlice` fragmentation stays" — item 6 is no longer touched (§6 revised) |
 
 ## 10. Staged execution
 
@@ -356,15 +384,16 @@ Order chosen so each wave is independently shippable and the risky ruling
 3. **B-1:** ordering slice (−49, fixes the webview ordering bug). **B-2**
    waits for the six policy rulings; lands as 2–3 PRs (row model + webview
    adoption + CLI adoption), declared +60.
-4. **C:** wire narrowing behind the §0.1-item-6 supersession; then the slice/
-   forwarder/builder deletions. ≈ −1,050. ProgressBridge suite is the gate.
+4. **C (revised):** the derivation contract + renderer-band deletions, no
+   supersession needed. ≈ −450..−550. ProgressBridge suite is the gate.
 5. **D:** `StreamLogFeed`. ≈ −180.
 6. **Promotions (§4)** ride whichever wave first needs them; each fixes a
    named cross-host gap and cites it.
 
-Rough program total: **≈ −2,300..−2,700 LoC net**, four per-stream state
-containers reduced to one, ten wire messages reduced to three, and every
-remaining host-side structure justifiable by the three-part rule in §1 —
-which is the deliverable the directive actually names: not fewer lines, but
-one source of truth with renderers that cannot drift because they have
-nothing left to re-derive.
+Rough program total (post-verification, and adding the contracts +
+retirement doc's own waves): **≈ −2,100..−2,500 LoC net**, four per-stream
+state containers reduced to one, the snapshot and targeted wire paths
+compile-linked, and every remaining host-side structure justifiable by the
+three-part rule in §1 — which is the deliverable the directive actually
+names: not fewer lines, but one source of truth with renderers that cannot
+drift because they have nothing left to re-derive.
