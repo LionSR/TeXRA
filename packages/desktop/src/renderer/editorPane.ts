@@ -19,6 +19,8 @@ import { html, nothing, render, type TemplateResult } from 'lit';
 
 import type { DesktopThemeKind } from '@shared/schemas';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { renderEmptyState } from '@shared/wa/emptyState';
+import { renderLoadingState } from '@shared/wa/loadingState';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import {
@@ -133,18 +135,15 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       `;
     }
     if (treeLoading) {
-      return html`
-        <div class="desktop-editor-tree-empty" role="status">
-          <p>Loading project files…</p>
-        </div>
-      `;
+      return renderLoadingState('Loading project files…');
     }
     if (treeNodes.length === 0) {
-      return html`
-        <div class="desktop-editor-tree-empty">
-          <p>No files found in this workspace.</p>
-        </div>
-      `;
+      return renderEmptyState({
+        icon: 'folder-open',
+        title: 'No files found in this workspace.',
+        headingTag: 'h3',
+        className: 'desktop-editor-tree-empty',
+      });
     }
     return html`
       <div class="desktop-editor-tree-header">

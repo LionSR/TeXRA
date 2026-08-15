@@ -1198,6 +1198,16 @@ wa-input.desktop-command-palette-input::part(input) {
   text-align: center;
 }
 
+.desktop-log-viewer-empty .empty-state-icon {
+  font-size: var(--font-size-h1);
+}
+
+.desktop-log-viewer-empty .empty-state-title {
+  margin: 0;
+  font-size: inherit;
+  font-weight: var(--wa-font-weight-regular, normal);
+}
+
 @container (max-width: 720px) {
   .desktop-log-viewer-header {
     grid-template-columns: minmax(0, 1fr);
@@ -1613,10 +1623,37 @@ wa-card.desktop-onboarding::part(footer) {
   background: var(--wa-color-brand-fill-loud, currentColor);
 }
 
+/* Structure owned by the shared renderLoadingState helper (@shared/wa) — light-DOM
+   mirror of the `.loading-state` rule in src/shared/styles/commonViewStyles.ts,
+   since this tree can't adopt that shadow-DOM stylesheet. Shared by the editor
+   tree panel and the desktop log viewer. */
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--wa-space-xs);
+  padding: var(--wa-space-m);
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+}
+
+.desktop-log-viewer-list .loading-state {
+  min-height: 8rem;
+}
+
 .desktop-editor-tree-empty {
   padding: var(--wa-space-m);
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
+}
+
+/* Class hook consumed by the shared renderEmptyState() helper (@shared/wa/emptyState).
+   Neutralizes the UA heading chrome so it reads like the plain text this panel used
+   before adopting the helper. */
+.desktop-editor-tree-empty .empty-state-title {
+  margin: 0;
+  font-size: inherit;
+  font-weight: var(--wa-font-weight-regular, normal);
 }
 
 .desktop-editor-surface {

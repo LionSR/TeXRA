@@ -3,7 +3,9 @@ import { html, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { postMessage } from '@shared/hostBridge';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderEmptyState } from '@shared/wa/emptyState';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { renderLoadingState } from '@shared/wa/loadingState';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { formatTimestamp, truncateSummary } from '@utils/text/stringUtils';
 import { DESKTOP_LOCAL_COMMANDS } from '../shared/desktopCommandSurface';
@@ -27,7 +29,7 @@ export interface DesktopLogEntry {
 
 interface LogViewerState {
   entries: readonly DesktopLogEntry[];
-  emptyMessage: string;
+  status: 'loading' | 'ready';
   meta: string;
 }
 
@@ -174,7 +176,7 @@ export function createLogsPane(
 
   let state: LogViewerState = {
     entries: [],
-    emptyMessage: 'Loading recent entries…',
+    status: 'loading',
     meta: 'Recent redacted log entries appear here.',
   };
   let active = false;
@@ -208,6 +210,24 @@ export function createLogsPane(
         <pre class="desktop-log-entry-content">${entry.raw}</pre>
       </wa-details>
     `;
+  }
+
+  function logListContent(): TemplateResult {
+    if (state.entries.length > 0) {
+      return html`${repeat(
+        state.entries.toReversed(),
+        (entry) => entry.id,
+        entryTemplate,
+      )}`;
+    }
+    if (state.status === 'loading') {
+      return renderLoadingState('Loading recent entries…');
+    }
+    return renderEmptyState({
+      icon: 'file-lines',
+      title: 'No desktop log entries yet.',
+      className: 'desktop-log-viewer-empty',
+    });
   }
 
   function viewerTemplate(): TemplateResult {
@@ -248,17 +268,7 @@ export function createLogsPane(
           role="list"
           aria-label="Recent desktop log entries"
         >
-          ${
-            state.entries.length === 0
-              ? html`<div class="desktop-log-viewer-empty" role="status">
-                  ${state.emptyMessage}
-                </div>`
-              : repeat(
-                  state.entries.toReversed(),
-                  (entry) => entry.id,
-                  entryTemplate,
-                )
-          }
+          ${logListContent()}
         </div>
       </section>
     `;
@@ -293,7 +303,7 @@ export function createLogsPane(
     const entries = parseDesktopLogEntries(message.log.text);
     state = {
       entries,
-      emptyMessage: 'No desktop log entries yet.',
+      status: 'ready',
       meta: message.log.truncated
         ? `Showing the most recent redacted entries from ${path}.`
         : `Showing redacted entries from ${path}.`,
