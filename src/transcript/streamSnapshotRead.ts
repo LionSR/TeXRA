@@ -161,6 +161,19 @@ function readPersistedWorkPlan(raw: unknown): WorkPlanSnapshot {
     return EMPTY_WORK_PLAN;
   }
   if (isObject(raw)) {
+    // schemaVersion carries the same silent `.catch` as the three fields
+    // below; the forward-compat gate above only handles a NEWER version, so
+    // any other present-but-wrong value (e.g. a string) still gets defaulted
+    // here and deserves the same loud treatment.
+    if (
+      raw.schemaVersion !== undefined &&
+      raw.schemaVersion !== STREAM_SNAPSHOT_SCHEMA_VERSION
+    ) {
+      log.warn(
+        'Discarding corrupted "schemaVersion" in persisted work plan; using current.',
+        { data: raw.schemaVersion },
+      );
+    }
     for (const field of Object.keys(WorkPlanSnapshotShape) as Array<
       keyof typeof WorkPlanSnapshotShape
     >) {

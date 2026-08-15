@@ -2640,6 +2640,24 @@ describe('StreamSnapshotStore', () => {
     );
   });
 
+  it('logs loudly when workPlan.json has a malformed schemaVersion', async () => {
+    // A non-numeric schemaVersion also falls through PersistedWorkPlanSchema's
+    // per-field `.catch`, silently defaulting to the current version — must
+    // be logged like the other three fields, not swallowed.
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    await writeStreamFile(STREAM, 'workPlan.json', {
+      schemaVersion: 'not-a-number',
+      todos: [TODO],
+    });
+    const snap = await new StreamSnapshotStore().read(STREAM);
+    expect(snap.todos).toEqual([TODO]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('"schemaVersion"'),
+      expect.anything(),
+    );
+  });
+
   it('ignores a workPlan.json stamped with a newer schemaVersion (forward-compat gate)', async () => {
     // A file from a FUTURE schema must be read as empty, not have its unknown
     // shape consumed as v1 (the single forward-compat gate).
