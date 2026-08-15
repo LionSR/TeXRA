@@ -23,9 +23,11 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   AgentCategory,
+  TODO_STATUS,
   USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type StreamTabId,
+  type SubagentProgressUpdate,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
@@ -41,6 +43,33 @@ import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 // ============================================================================
 // Shared utilities
 // ============================================================================
+
+/**
+ * One compact trace line per child progress update, for the in-band arm where
+ * progress degrades to the parent run's trace instead of follow-up delivery.
+ * Returns undefined for updates with nothing worth a line.
+ */
+function describeSubagentProgress(
+  agentName: string,
+  update: SubagentProgressUpdate,
+): string | undefined {
+  switch (update.kind) {
+    case 'started':
+      return `Subagent '${agentName}' started`;
+    case 'todos': {
+      const done = update.todos.filter(
+        (todo) => todo.status === TODO_STATUS.COMPLETED,
+      ).length;
+      return `Subagent '${agentName}' todos: ${done}/${update.todos.length} complete`;
+    }
+    case 'plan':
+      return update.plan
+        ? `Subagent '${agentName}' plan: ${update.plan.objective}`
+        : undefined;
+    case 'overview':
+      return `Subagent '${agentName}': ${update.toolCallCount} tool calls, ${update.filesChanged.length} files changed`;
+  }
+}
 
 /** Metadata about how the delegation was approved, included in the tool result. */
 interface ApprovalMeta {
@@ -114,6 +143,15 @@ export async function executeSubagent(
   };
 
   if (parentContext.stopAfterCycle) {
+    // The parent is mid-cycle, so child progress cannot be delivered as a
+    // follow-up the way the detached loop does it. Degrade deliberately to the
+    // parent run's trace (the same trace nested tool activity projects onto):
+    // the orchestrator's transcript still records what its child is doing.
+    const parentTrace = getCurrentToolCallContext()?.trace;
+    const notifyParentTrace = (update: SubagentProgressUpdate): void => {
+      const line = describeSubagentProgress(agentName, update);
+      if (line) parentTrace?.info(line);
+    };
     try {
       const { result, delivery } = await executeSubagentForDeliveryInBand({
         configPayload: childConfigPayload,
@@ -126,6 +164,7 @@ export async function executeSubagent(
         runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
         onStreamResolved: inheritChildStreamApprovals,
         onCost: recordCost,
+        notify: notifyParentTrace,
       });
       return executed(
         delivery,

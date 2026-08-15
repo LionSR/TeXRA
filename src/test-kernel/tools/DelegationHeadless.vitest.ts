@@ -460,6 +460,39 @@ describe('headless delegation', () => {
     expect(mocks.writeReport).toHaveBeenCalledWith(result.output);
   });
 
+  it('projects in-band child progress onto the parent trace', async () => {
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      options.onProgress?.({ kind: 'started' });
+      options.onProgress?.({
+        kind: 'overview',
+        toolCallCount: 3,
+        filesChanged: ['a.tex'],
+      });
+      return {
+        category: 'toolUse',
+        outcome: 'completed',
+        executionId: 'child-exec',
+        streamId: 'child-stream',
+        response: 'done',
+        files: [],
+      };
+    });
+    const info = vi.fn();
+
+    await withToolFileInteractionContext(
+      { tracker: {} as never, trace: { info } as never },
+      () =>
+        withRunContext(parentRunContext({ stopAfterCycle: true }), () =>
+          callDelegateReview(),
+        ),
+    );
+
+    expect(info).toHaveBeenCalledWith("Subagent 'review' started");
+    expect(info).toHaveBeenCalledWith(
+      "Subagent 'review': 3 tool calls, 1 files changed",
+    );
+  });
+
   it('marks the execution lease undurable when the in-band delivery report write fails', async () => {
     mocks.writeReport.mockRejectedValueOnce(new Error('disk full'));
 

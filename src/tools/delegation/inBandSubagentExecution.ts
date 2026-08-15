@@ -36,7 +36,11 @@ import { getStreamTabId } from '@agent/runtime/streamTab';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import * as logger from '@logger/logUtils';
-import { USER_FOLLOW_UP_SUPPORT, type ExecutionId } from '@shared/schemas';
+import {
+  USER_FOLLOW_UP_SUPPORT,
+  type ExecutionId,
+  type SubagentProgressUpdate,
+} from '@shared/schemas';
 import { generateExecutionId, KeyedMutex } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveExecutionId } from '@utils/core/idHash';
@@ -66,6 +70,15 @@ const LOG_CHANNEL = 'inBandSubagentExecution';
 interface InBandSubagentExecutionBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
   readonly onCost?: (totalCostUsd: number | undefined) => void | Promise<void>;
+  /**
+   * Live progress sink for the in-band child. An in-band parent is mid-cycle,
+   * so follow-up delivery cannot reach it — each caller degrades deliberately:
+   * the headless delegation arm projects progress onto the parent run's trace,
+   * and the workflow-script arm omits this because the engine already carries
+   * grandchild progress on its own channel (`WorkflowScriptEvent`). Absent
+   * therefore means deliberately silent, not accidentally dropped.
+   */
+  readonly notify?: (update: SubagentProgressUpdate) => void;
 }
 
 /** Options for the typed child API. Direct persisted parentage is required. */
@@ -457,7 +470,7 @@ async function executeInBand(
       try {
         const turn = await strategy.launch(
           {
-            notify: () => {},
+            notify: options.notify ?? (() => {}),
             recordCost: (totalCostUsd) =>
               recordCost(options.onCost, totalCostUsd),
           },
