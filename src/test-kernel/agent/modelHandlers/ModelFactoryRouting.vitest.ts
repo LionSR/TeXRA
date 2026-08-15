@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MODEL_CONFIGS,
   ModelProvider,
@@ -19,6 +19,7 @@ import { ModelHandlerMiniMax } from '@agent/modelHandlers/openai/modelHandlerMin
 import { ModelHandlerGLM } from '@agent/modelHandlers/openai/modelHandlerGLM';
 import {
   activeModelHandlerCompatibilityKey,
+  createKimiCodeFallbackHandler,
   createModelHandler,
   createModelHandlerForCompatibilityKey,
   resolveModelHandlerCompatibilityKey,
@@ -1096,5 +1097,62 @@ describe('Kimi Code reroute under included access', () => {
   it('reroutes to the coding endpoint when the relay cannot serve', async () => {
     const config = await createKimiHandler({ includedAccess: false });
     expect(config.baseUrl).toBe('https://api.kimi.com/coding/v1');
+  });
+});
+
+describe('createKimiCodeFallbackHandler', () => {
+  /** The synthesized config a dual-backend handler carries on the coding route. */
+  const codingRoutedKimi3 = {
+    ...MODEL_CONFIGS.kimi3,
+    fullName: 'k3',
+    shortName: 'k3',
+    baseUrl: 'https://api.kimi.com/coding/v1',
+  } as ModelConfig;
+
+  beforeEach(async () => {
+    // The "Prefer Kimi Code" switch is off here, matching the retry switch's
+    // pre-commit: the rebuild must resolve the Moonshot fallback, not the
+    // coding route again.
+    await installPlatform();
+  });
+
+  it('rebuilds a coding-routed dual-backend model from the registry config', async () => {
+    const handler = await createKimiCodeFallbackHandler(
+      codingRoutedKimi3,
+      'kimi3',
+    );
+
+    // The compat-key tag (not instanceof) survives this file's
+    // vi.resetModules() re-imports, and pins the conversation format.
+    expect(handler && activeModelHandlerCompatibilityKey(handler)).toBe(
+      'ModelHandlerKimi',
+    );
+    expect(handler?.config.fullName).toBe('kimi-k3');
+    expect(handler?.config.baseUrl).toBeUndefined();
+    handler?.dispose();
+  });
+
+  it('rebuilds nothing for a Kimi Code-exclusive model', async () => {
+    // kimi-for-coding pins the coding baseUrl in the registry: no Moonshot
+    // fallback exists to rebuild onto.
+    await expect(
+      createKimiCodeFallbackHandler(MODEL_CONFIGS.kimiCoding, 'kimiCoding'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('rebuilds nothing when the live config is not on the coding route', async () => {
+    // A plain direct/relay kimi3 handler re-resolves fine with a rebind.
+    await expect(
+      createKimiCodeFallbackHandler(MODEL_CONFIGS.kimi3, 'kimi3'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('rebuilds nothing for a non-Kimi model', async () => {
+    await expect(
+      createKimiCodeFallbackHandler(
+        modelConfig(ModelProvider.OPENAI),
+        'test-openai',
+      ),
+    ).resolves.toBeUndefined();
   });
 });

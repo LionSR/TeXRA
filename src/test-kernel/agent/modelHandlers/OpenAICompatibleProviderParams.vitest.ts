@@ -250,7 +250,7 @@ describe('OpenAI-compatible provider request params', () => {
     );
   });
 
-  it('stamps the coding endpoint onto thrown OpenAI SDK errors so Kimi Code usage limits classify', async () => {
+  it('records the coding endpoint for thrown OpenAI SDK errors so Kimi Code usage limits classify', async () => {
     const handler = createKimiHandler({
       name: 'kimi3',
       fullName: 'kimi-k3',
@@ -287,7 +287,55 @@ describe('OpenAI-compatible provider request params', () => {
         temperature: 0,
       }),
     ).rejects.toBe(thrown);
-    expect(thrown).toMatchObject({ request: { baseURL: KIMI_CODE_BASE_URL } });
+    // The endpoint record is a side channel, not a property stamp: the thrown
+    // error itself is never mutated.
+    expect('request' in thrown).toBe(false);
+
+    const formatted = formatProviderHttpError(thrown);
+    expect(formatted.exhaustionReason).toBe('kimi-code-subscription');
+    expect(formatted.userRetryable).toBe(true);
+  });
+
+  it('classifies a frozen SDK error without masking it', async () => {
+    const handler = createKimiHandler({
+      name: 'kimi3',
+      fullName: 'kimi-k3',
+      kimiSubscription: true,
+      baseUrl: KIMI_CODE_BASE_URL,
+    });
+    const usageLimitMessage =
+      "You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle.";
+    const thrown = new Error(usageLimitMessage) as Error & {
+      status: number;
+      error: unknown;
+    };
+    thrown.status = 403;
+    thrown.error = {
+      message: usageLimitMessage,
+      type: 'invalid_request_error',
+      code: 'usage_limit_reached',
+    };
+    Object.freeze(thrown);
+    const client = {
+      baseURL: KIMI_CODE_BASE_URL,
+      chat: {
+        completions: {
+          create: async () => {
+            throw thrown;
+          },
+        },
+      },
+    };
+
+    // Recording must be best-effort: the original 403 propagates unchanged
+    // instead of being replaced by a stamping TypeError.
+    await expect(
+      handler.createResponse({
+        client: client as never,
+        messages: SINGLE_TURN,
+        temperature: 0,
+      }),
+    ).rejects.toBe(thrown);
 
     const formatted = formatProviderHttpError(thrown);
     expect(formatted.exhaustionReason).toBe('kimi-code-subscription');
