@@ -1,7 +1,7 @@
 /**
  * Registry that ties polling-source subscriptions to agent stream lifecycles.
  * Used identically for per-PR, per-repo, and per-issue subscriptions; only
- * the polling source, key derivation, and external event names differ.
+ * the polling source and key derivation differ.
  *
  * Each (streamId, key) pair holds one disposable from the polling source.
  * Event callbacks route through `sendFollowUp` so events land in the same
@@ -46,11 +46,6 @@ export interface StreamSubscriptionRegistryOptions<K extends string, Input> {
   source: PollingSourceLike<K, Input>;
   /** Convert a subscribe-input value to the canonical string key. */
   keyOf: (input: Input) => K;
-  /** External event listeners use to refresh ownership display. */
-  bindingsChangedEvent:
-    | 'prSubscriptionBindingsChanged'
-    | 'repoSubscriptionBindingsChanged'
-    | 'issueSubscriptionBindingsChanged';
 }
 
 interface BoundSubscription {
@@ -140,9 +135,9 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
         });
     };
     bound.set(key, subscription);
-    // The source's keys-changed event fires synchronously during subscribe()
-    // for new keys (covering the UI refresh); only emit our registry event
-    // for existing keys where that source event won't fire.
+    // The source emits githubSubscriptionsChanged synchronously during
+    // subscribe() for new keys (covering the UI refresh); emit here only for
+    // existing keys, where that source emission won't fire.
     const keyIsNew = !this.opts.source.has(key);
     let disposable: Disposable;
     try {
@@ -270,6 +265,6 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   }
 
   private emitBindingsChanged(): void {
-    appSignals.emit(this.opts.bindingsChangedEvent, undefined);
+    appSignals.emit('githubSubscriptionsChanged', undefined);
   }
 }

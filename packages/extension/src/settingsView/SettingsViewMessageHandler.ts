@@ -234,23 +234,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     );
     this.handlerRegistry = this.createHandlerRegistry();
 
-    const refreshSubscriptions = () =>
-      void this.withActiveWebview((w) =>
-        this.githubHandlers.sendPRSubscriptions(w),
-      );
-    for (const signal of [
-      'prSubscriptionsChanged',
-      'prSubscriptionBindingsChanged',
-      'repoSubscriptionsChanged',
-      'repoSubscriptionBindingsChanged',
-      'issueSubscriptionsChanged',
-      'issueSubscriptionBindingsChanged',
-    ] as const) {
-      context.subscriptions.push({
-        dispose: appSignals.on(signal, refreshSubscriptions),
-      });
-    }
     context.subscriptions.push(
+      {
+        dispose: appSignals.on('githubSubscriptionsChanged', () => {
+          void this.withActiveWebview((w) =>
+            this.githubHandlers.sendPRSubscriptions(w),
+          );
+        }),
+      },
       {
         dispose: appSignals.on('toolAvailabilityChanged', () => {
           void this.withActiveWebview((w) =>
