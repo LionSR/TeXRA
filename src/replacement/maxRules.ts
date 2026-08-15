@@ -176,9 +176,7 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
     'p^{\\text{st}}': '\\pst',
     'q^{\\text{st}}': '\\qst',
     '\\rho^{\\text{eq}}': '\\rhoeq',
-    '\\rho_{\\text{eq}}': '\\rhoeq',
     '\\rho^{\\text{st}}': '\\rhost',
-    '\\rho_{\\text{st}}': '\\rhost',
     // Text Commands: \text{cmd} -> \cmd
     ...createPatterns(textCommands, (cmd) => [
       [`\\text{${cmd}}`, `\\${cmd}`],
@@ -235,6 +233,10 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
     '\\cH^{\\text{eff}}': '\\ceffH',
     '\\hat{H}^{\\text{eff}}': '\\hat{\\effH}',
     '\\hH^{\\text{eff}}': '\\hat{\\effH}',
+    '\\tilde{\\mathcal{H}}^{\\text{eff}}': '\\tilde{\\ceffH}',
+    '\\tcH^{\\text{eff}}': '\\tilde{\\ceffH}',
+    '\\bar{H}^{\\text{eff}}': '\\bar{\\effH}',
+    '\\barH^{\\text{eff}}': '\\bar{\\effH}',
     // Mathcal: \mathcal{X} -> \cX
     ...generateDecoratorShortcuts('mathcal', upperLetters, 'c'),
     // Mathbb: \mathbb{X} -> \eX
@@ -396,6 +398,12 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
   '\\tau_f': '\\tauf',
 
   // Equilibrium and steady state notation
+  // Subscript rho eq/st stay manual: the AUTO \text{eq}/\text{st} rules
+  // consume the fragment first (preserving \rho_\eq / \rho_\st), so
+  // these entries are inert for bare sources but document the intended
+  // compaction destinations.
+  '\\rho_{\\text{eq}}': '\\rhoeq',
+  '\\rho_{\\text{st}}': '\\rhost',
   '\\rho^{\\text{ss}}': '\\rhost',
   '\\rho^{\\text{sst}}': '\\rhost',
   '\\rho_{\\text{ss}}': '\\rhost',
@@ -571,6 +579,12 @@ export const MAX_REGEX_REPLACEMENTS: RegexReplacementCategory = {
     // '([+\\-*\\/])\\s*\\.\\.\\.\\s*([+\\-*\\/])': '$1\\cdots$2',
     // '([,;])\\s*\\.\\.\\.\\s*([,;])': '$1\\ldots$2',
     // Max like ,..,
+
+    // Legacy unbraced '\S' plain-S shortcut migration. The non-regex
+    // table handles the braced source forms; these boundary-aware rules
+    // catch the pre-rename persisted unbraced output without turning
+    // '\Strat'/'\Sig' into '\sStrat'/'\sSig'.
+    '([_^])\\\\S(?![A-Za-z])': '$1\\sS',
 
     // PUNCTUATION AND SPACING
 

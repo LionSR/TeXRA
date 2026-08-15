@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { applyReplacements } from '@replacement/engine';
-import { MAX_STYLE_REPLACEMENTS } from '@replacement/maxRules';
+import {
+  MAX_REGEX_REPLACEMENTS,
+  MAX_STYLE_REPLACEMENTS,
+} from '@replacement/maxRules';
 import { katexMacros } from '@shared/markdown/katexMacros';
 
 const MAX_COMMAND = /\\[A-Za-z][A-Za-z0-9]*/g;
@@ -54,6 +57,7 @@ const KATEX_ONLY_SHORTCUTS = [
  * unnoticed.
  */
 const MAX_ONLY_SHORTCUTS = [
+  '\\bar',
   '\\beta',
   '\\cref',
   '\\frac',
@@ -68,6 +72,7 @@ const MAX_ONLY_SHORTCUTS = [
   '\\ref',
   '\\tau',
   '\\text',
+  '\\tilde',
   '\\top',
 ] as const;
 
@@ -179,6 +184,22 @@ describe('katexMacros vs maxRules shortcuts', () => {
   it('maps built-in-colliding sources to safe destinations at runtime', () => {
     expect(applyReplacements('_{\\S}', MAX_STYLE_REPLACEMENTS)).toBe('_\\sS');
     expect(applyReplacements('^{\\S}', MAX_STYLE_REPLACEMENTS)).toBe('^\\sS');
+    expect(applyReplacements('_\\S', MAX_REGEX_REPLACEMENTS)).toBe('_\\sS');
+    expect(applyReplacements('^\\S', MAX_REGEX_REPLACEMENTS)).toBe('^\\sS');
+    // The boundary-aware migration must not turn S-prefixed shortcuts such
+    // as '\Strat'/'\\Sig' into '\sStrat'/'\\sSig'.
+    expect(
+      applyReplacements('_\\Strat', [
+        MAX_STYLE_REPLACEMENTS,
+        MAX_REGEX_REPLACEMENTS,
+      ]),
+    ).toBe('_\\Strat');
+    expect(
+      applyReplacements('^\\Sig', [
+        MAX_STYLE_REPLACEMENTS,
+        MAX_REGEX_REPLACEMENTS,
+      ]),
+    ).toBe('^\\Sig');
     expect(applyReplacements('\\mathbf{f}', MAX_STYLE_REPLACEMENTS)).toBe(
       '\\bbf',
     );
@@ -198,6 +219,21 @@ describe('katexMacros vs maxRules shortcuts', () => {
     expect(
       applyReplacements('\\hH^{\\text{eff}}', MAX_STYLE_REPLACEMENTS),
     ).toBe('\\hat{\\effH}');
+    expect(
+      applyReplacements(
+        '\\tilde{\\mathcal{H}}^{\\text{eff}}',
+        MAX_STYLE_REPLACEMENTS,
+      ),
+    ).toBe('\\tilde{\\ceffH}');
+    expect(
+      applyReplacements('\\tcH^{\\text{eff}}', MAX_STYLE_REPLACEMENTS),
+    ).toBe('\\tilde{\\ceffH}');
+    expect(
+      applyReplacements('\\bar{H}^{\\text{eff}}', MAX_STYLE_REPLACEMENTS),
+    ).toBe('\\bar{\\effH}');
+    expect(
+      applyReplacements('\\barH^{\\text{eff}}', MAX_STYLE_REPLACEMENTS),
+    ).toBe('\\bar{\\effH}');
   });
 
   it('fires the eq/st compaction family at runtime', () => {
@@ -218,13 +254,13 @@ describe('katexMacros vs maxRules shortcuts', () => {
     ).toBe('\\rhoeq');
     expect(
       applyReplacements('\\rho_{\\text{eq}}', MAX_STYLE_REPLACEMENTS),
-    ).toBe('\\rhoeq');
+    ).toBe('\\rho_\\eq');
     expect(
       applyReplacements('\\rho^{\\text{st}}', MAX_STYLE_REPLACEMENTS),
     ).toBe('\\rhost');
     expect(
       applyReplacements('\\rho_{\\text{st}}', MAX_STYLE_REPLACEMENTS),
-    ).toBe('\\rhost');
+    ).toBe('\\rho_\\st');
   });
 
   it('keeps runtime max-style output resolvable by the renderer macros', () => {
