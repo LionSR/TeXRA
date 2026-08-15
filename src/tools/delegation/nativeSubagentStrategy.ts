@@ -263,6 +263,9 @@ export function createNativeSubagentStrategy(
       runNative(ports, abortController, async (onRun) => {
         const executeOptions = {
           session: params.session,
+          // True by construction: this strategy only ever launches child runs
+          // (`parentStreamId` is required), matching `handle.isChildExecution`
+          // once the run handle exists.
           isSubagent: true,
           enforceCategory: params.agentCategoryExplicit,
           parentStreamId: params.parentStreamId,

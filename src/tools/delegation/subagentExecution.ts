@@ -62,7 +62,7 @@ interface ApprovalMeta {
 export async function executeSubagent(
   configPayload: AgentConfigPayload,
   agentName: string,
-  orchestratorStreamId: StreamTabId,
+  parentStreamId: StreamTabId,
   options?: { approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
   const parentContext = tryUseRunContext();
@@ -106,7 +106,7 @@ export async function executeSubagent(
     // delegated-task approval also reaches nested orchestrators.
     configureDelegatedChildApprovals(
       resolvedStreamId,
-      orchestratorStreamId,
+      parentStreamId,
       options?.approvalMeta?.autoApproved === true
         ? 'auto-approved'
         : 'inherit',
@@ -119,7 +119,7 @@ export async function executeSubagent(
         configPayload: childConfigPayload,
         agentName,
         parentExecutionId,
-        parentStreamId: orchestratorStreamId,
+        parentStreamId,
         session: parentSession,
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
         onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
@@ -176,7 +176,7 @@ export async function executeSubagent(
       executionId,
       parentExecutionId,
       agentName,
-      parentStreamId: orchestratorStreamId,
+      parentStreamId,
       session: parentSession,
       startedAt,
       workingDirectory,
@@ -188,7 +188,7 @@ export async function executeSubagent(
 
     await startDetachedChildRunLoop({
       executionId,
-      parentStreamId: orchestratorStreamId,
+      parentStreamId,
       childStreamId,
       agentName,
       recordCost,
