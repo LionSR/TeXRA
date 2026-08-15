@@ -4,7 +4,6 @@
     "cli": [
       "@agent/core/definition/AgentConfig",
       "@agent/core/definition/AgentDataclass",
-      "@agent/core/state/agentConfigToTaskState",
       "@agent/core/state/executionRequests",
       "@agent/core/state/TaskState",
       "@agent/export/chatExportFormatter",

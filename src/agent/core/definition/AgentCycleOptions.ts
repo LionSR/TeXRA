@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
+import {
+  AttachedMemoryMissSchema,
+  type AttachedMemoryMiss,
+} from '@agent/types/AttachedMemory';
 
 /**
  * The fixed template-variable vocabulary `buildUserVars`
@@ -93,26 +96,89 @@ export type UserVars = {
 export type TemplateVars = Partial<UserVars> & Record<string, unknown>;
 
 /**
+ * Runtime validators for the fixed {@link UserVars} keys. Known keys are
+ * optional here because persisted checkpoints may have dropped variables; the
+ * `satisfies` clause keeps this map in lockstep with the vocabulary. Custom
+ * `requiredFilesInternal` keys are not in this map and pass through as
+ * unknown values via the loose record below.
+ */
+const UserVariableValueSchemas = {
+  MODEL: z.string(),
+  INSTRUCTION: z.string(),
+  IS_OPENAI_MODEL: z.boolean(),
+  IS_ANTHROPIC_MODEL: z.boolean(),
+  IS_GOOGLE_MODEL: z.boolean(),
+  WORKFLOW_AGENTS: z.string(),
+  TOOL_USE_AGENTS: z.string(),
+  CWD: z.string(),
+  DEFAULT_BIB_PATH: z.string(),
+  BUILTIN_WORKFLOW_DIR: z.string(),
+  BUILTIN_TOOLUSE_DIR: z.string(),
+  CUSTOM_AGENTS_DIR: z.string(),
+  AGENT_DOCS_DIR: z.string(),
+  INPUT_FILE: z.string().nullable(),
+  INPUT_CONTENT: z.string().nullable(),
+  CONTEXT_FILE: z.string().nullable(),
+  CONTEXT_CONTENT: z.string().nullable(),
+  EDITED_FILE: z.string().nullable(),
+  EDITED_CONTENT: z.string().nullable(),
+  INPUT_FILES: z.array(z.string()),
+  CONTEXT_FILES: z.array(z.string()),
+  EDITED_FILES: z.array(z.string()),
+  ALL_INPUTS: z.string().nullable(),
+  ALL_CONTEXTS: z.string().nullable(),
+  ALL_EDITEDS: z.string().nullable(),
+  LIST_OF_ALL_INPUTS: z.string(),
+  LIST_OF_ALL_CONTEXTS: z.string(),
+  LIST_OF_ALL_EDITEDS: z.string(),
+  MEDIA_FILE: z.string().nullable(),
+  MEDIA_CONTENT: z.null(),
+  OUTPUT_FILES: z.array(z.string()),
+  AUTO_EXTRACT_FIGURE: z.boolean(),
+  AUTO_EXTRACT_TIKZ_FIGURE: z.boolean(),
+  INCLUDE_TEX_COUNT: z.boolean(),
+  PRINT_INPUT_PROMPT: z.boolean(),
+  AUTO_COMPILE_INPUT_PDF: z.boolean(),
+  CODEX_GUIDANCE: z.string(),
+  CLAUDE_CODE_GUIDANCE: z.string(),
+  ROUNDS: z.number(),
+  LATEX_STYLE_RULES: z.string(),
+  ATTACHED_MEMORIES: z.string().nullable(),
+  ATTACHED_MEMORY_MISSES: z.array(AttachedMemoryMissSchema),
+  AVAILABLE_SKILLS: z.string(),
+} satisfies {
+  [K in keyof Required<UserVars>]-?: z.ZodType<Required<UserVars>[K]>;
+};
+
+function optionalizeUserVariableSchemas<T extends Record<string, z.ZodTypeAny>>(
+  schemas: T,
+): { [K in keyof T]: z.ZodOptional<T[K]> } {
+  return Object.fromEntries(
+    Object.entries(schemas).map(([key, schema]) => [key, schema.optional()]),
+  ) as { [K in keyof T]: z.ZodOptional<T[K]> };
+}
+
+/**
+ * The persisted channel shape stays a loose record — checkpoints written by
+ * older versions may carry renamed or dropped variables and must still parse
+ * — but each known fixed key is validated with its per-key type when present.
+ * Custom `requiredFilesInternal` keys pass through untouched.
+ */
+const UserVariableChannelRecordSchema = z.looseObject(
+  optionalizeUserVariableSchemas(UserVariableValueSchemas),
+);
+
+/**
  * User variable channels for template rendering.
  *
  * Two-channel design:
  * - input: Frozen base variables (readonly, set at initialization)
  * - transient: Runtime modifications (mutable copy of base)
  */
-export interface UserVariableChannels {
-  input: Readonly<TemplateVars>;
-  transient: TemplateVars;
-}
+export const UserVariableChannelsSchema = z.object({
+  input: UserVariableChannelRecordSchema.readonly(),
+  transient: UserVariableChannelRecordSchema,
+});
 
-/**
- * The persisted channel shape stays an open record — checkpoints written by
- * older versions may carry renamed or dropped variables and must still parse.
- * In memory the channels always hold the `buildUserVars` product, so the
- * transform asserts the typed view once here rather than at every reader.
- */
-export const UserVariableChannelsSchema = z
-  .object({
-    input: z.record(z.string(), z.unknown()).readonly(),
-    transient: z.record(z.string(), z.unknown()),
-  })
-  .transform((channels) => channels as UserVariableChannels);
+/** Derived from UserVariableChannelsSchema - single source of truth. */
+export type UserVariableChannels = z.output<typeof UserVariableChannelsSchema>;
