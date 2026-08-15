@@ -257,6 +257,24 @@ function isIndexTracked(path) {
   return rel !== null && readIndexFile(rel) !== null;
 }
 
+/** True when any component of `path`, from the repository root down to the
+ * path itself, is a worktree symlink. Node loads a module by realpath and
+ * resolves its own relative dependencies from the real directory, so an
+ * index blob at the lexical path proves nothing about the dependency context
+ * Node actually sees; such a path must fail loudly rather than verify. */
+function pathTraversesSymlink(path) {
+  const rel = relToCwd(path);
+  if (rel === null) return false;
+  let current = process.cwd();
+  for (const segment of rel.split('/')) {
+    current = join(current, segment);
+    if (lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Resolve a relative config dependency specifier to the tracked file
  * Node/Prettier would load, without executing any config. `kind` is `cjs`
  * for `require()`/CommonJS resolution; every other kind (ESM `import`,
@@ -282,7 +300,11 @@ function resolveConfigDepPath(configDir, spec, kind) {
   push(base);
   for (const ext of CJS_FILE_EXTENSIONS) push(`${base}${ext}`);
 
-  if (lstatSync(base, { throwIfNoEntry: false })?.isDirectory()) {
+  // stat, not lstat: Node's LOAD_AS_DIRECTORY follows a symlinked
+  // dependency directory too. Candidates reached through the link traverse
+  // a worktree symlink, which verifyConfigDep rejects loudly, so following
+  // the link here can never verify the wrong file.
+  if (statSync(base, { throwIfNoEntry: false })?.isDirectory()) {
     const main = readPackageMain(base);
     if (main) {
       const mainTarget = resolve(base, normalizeSpecifier(main));
@@ -320,6 +342,13 @@ function verifyConfigDep(configDir, spec, kind = 'exact') {
     throw new SkipError(
       `config dependency ${spec} resolves outside the repository; skipped ` +
         'auto-staging.',
+    );
+  }
+  if (pathTraversesSymlink(depPath)) {
+    throw new SkipError(
+      `${depRel} resolves through a worktree symlink while the staged config ` +
+        'depends on it; skipped auto-staging so the realpath target and its ' +
+        'uncommitted dependencies stay out of the commit.',
     );
   }
   const stagedDep = readIndexFile(depRel);
