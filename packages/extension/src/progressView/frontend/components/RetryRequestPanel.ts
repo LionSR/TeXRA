@@ -23,7 +23,7 @@ import {
   type ProviderErrorPartial,
 } from '@shared/schemas';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
-import { isKimiCodeExclusiveRetryModel } from '@shared/model/kimiCodeRetryGate';
+import { isKimiCodeSubscriptionRetryBlocked } from '@shared/model/kimiCodeRetryGate';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
 import { tailWithEllipsis, toGraphemes } from '@utils/text/stringUtils';
@@ -158,7 +158,10 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     const data = this.permission.data;
     return (
       isCredentialExhausted(data.errorDetails) &&
-      !isKimiCodeExclusiveRetryModel(data.model)
+      !isKimiCodeSubscriptionRetryBlocked(
+        data.model,
+        data.errorDetails?.exhaustionReason,
+      )
     );
   }
 

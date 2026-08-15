@@ -6,11 +6,11 @@ import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import type { UsageRoute } from '@shared/schemas';
+import { isKimiSubscriptionEligible } from '@shared/model/kimiCodeRetryGate';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import {
   isKimiCodeRoute,
-  isKimiSubscriptionEligible,
   resolveKimiCodeRoutingFacts,
 } from './kimiCodeSubscriptionRouting';
 import { resolveRuntimeModelConfig } from './runtimeModelRegistry';

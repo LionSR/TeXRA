@@ -1,11 +1,16 @@
 import PQueue from 'p-queue';
+import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
 import type { ApiProvider } from '@model/apiProviders';
 import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
+import { resolveDirectModelApiKeyProvider } from '@model/openRouterRouting';
 import type { ExhaustionReason, StreamTabId } from '@shared/schemas';
-import { isKimiCodeExclusiveRetryModel } from '@shared/model/kimiCodeRetryGate';
+import {
+  isKimiCodeExclusiveModel,
+  isKimiCodeSubscriptionRetryBlocked,
+} from '@shared/model/kimiCodeRetryGate';
 import { isNonEmptyString } from '@utils/core';
 
 export interface ProgressApiKeyRetryRequest {
@@ -92,6 +97,22 @@ export class ProgressApiKeyRetryController {
 
   constructor(private readonly deps: ProgressApiKeyRetryControllerDeps) {}
 
+  private credentialProviderFor(
+    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
+  ): ApiProvider | undefined {
+    if (request.model === undefined) return request.provider;
+    const config = MODEL_CONFIGS[request.model];
+    if (config === undefined) return request.provider;
+    // The live handler rebinds through the direct-route resolver. Exclusive
+    // models bind to the `kimiCode` credential even when the SDK error labels
+    // the open-platform Moonshot provider, so prompt for and verify the key
+    // the retry will actually use; every other model keeps the forwarded
+    // provider (or the default provider sweep) unchanged.
+    return isKimiCodeExclusiveModel(config)
+      ? resolveDirectModelApiKeyProvider(config)
+      : request.provider;
+  }
+
   private get codingPlanToggles(): readonly CodingPlanToggle[] {
     return (
       this.deps.codingPlanToggles ??
@@ -107,12 +128,19 @@ export class ProgressApiKeyRetryController {
   async useOwnApiKey(
     request: ProgressApiKeyRetryRequest,
   ): Promise<ProgressApiKeyRetryResult> {
-    // Kimi Code-exclusive models are served only by the coding endpoint, so a
-    // personal-key switch cannot reroute them; keep the request untouched
-    // rather than disabling routing around an already-swapped client.
-    if (isKimiCodeExclusiveRetryModel(request.model)) return noRetryResult();
+    if (
+      isKimiCodeSubscriptionRetryBlocked(
+        request.model,
+        request.exhaustionReason,
+      )
+    ) {
+      return noRetryResult();
+    }
 
-    const proceeded = await this.ensureOwnApiKey(request);
+    const proceeded = await this.ensureOwnApiKey({
+      ...request,
+      provider: this.credentialProviderFor(request),
+    });
     if (
       !proceeded ||
       !this.deps.isRetryPending(request.stream, request.requestId)
@@ -121,6 +149,12 @@ export class ProgressApiKeyRetryController {
     }
 
     return this.routingCommitQueue.add(async () => {
+      // The request may have been dismissed or replaced while this callback
+      // waited behind another stream's routing commit. Re-check before touching
+      // global routing so a stale switch cannot briefly rebind credentials.
+      if (!this.deps.isRetryPending(request.stream, request.requestId)) {
+        return noRetryResult();
+      }
       const routingBefore = this.routingSnapshot();
       const prepared = await this.applyOwnApiKeyRouting(request);
       const retried = await this.deps.triggerRetry(
