@@ -16,7 +16,11 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { logOpenAICompatibleClientConfig } from './openAIChatHelpers';
-import { xaiLongContextTier } from './xaiLongContextPricing';
+import {
+  xaiCacheDiscountFactor,
+  xaiLongContextTier,
+  xaiLongContextTierGap,
+} from './xaiLongContextPricing';
 import type { ChatCompletion } from 'openai/resources/chat/completions';
 
 /**
@@ -45,6 +49,9 @@ const XAI_SUBSCRIPTION_BASE_URL = 'https://api.x.ai/v1';
  * usageProvider and toolCallProvider inherit from base class via config.provider.
  */
 export class ModelHandlerXAI extends ModelHandlerOpenAI {
+  /** Set once a missing-tier warning has been logged for this model. */
+  private tierGapWarned = false;
+
   protected override validateReasoningEffort(effort: string): string {
     // xhigh only exists on the multi-agent variant, where it means agent count.
     if (effort === 'low' || effort === 'medium' || effort === 'high') {
@@ -92,9 +99,25 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
       };
     }
     // API-key usage bills per token, with xAI's long-context tier past the
-    // model's documented prompt-token threshold.
+    // model's documented prompt-token threshold. llm-zoo's xAI entries carry
+    // the default cacheDiscountFactor of 1, which would zero the cached-token
+    // rebate, so the documented per-model factor wins when known.
+    if (!this.tierGapWarned && xaiLongContextTierGap(this.config)) {
+      this.tierGapWarned = true;
+      this.logger.warn(
+        `xAI model ${this.config.fullName} has a ` +
+          `${this.config.contextWindow}-token context window but no documented ` +
+          'long-context pricing tier; billing flat catalog rates. If xAI ' +
+          'publishes a tier for it, add it to XAI_DOCUMENTED_PRICING in ' +
+          'xaiLongContextPricing.ts.',
+      );
+    }
+    const base = super.standardPricingConfig();
     return {
-      ...super.standardPricingConfig(),
+      ...base,
+      cacheDiscountFactor:
+        xaiCacheDiscountFactor(this.config.fullName) ??
+        base.cacheDiscountFactor,
       longContextTier: xaiLongContextTier(this.config.fullName),
     };
   }
