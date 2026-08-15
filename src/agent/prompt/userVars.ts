@@ -8,7 +8,10 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import { shouldSaveModelIO } from '@agent/debug/debugMessageSaver';
-import type { UserVars } from '@agent/core/definition/AgentCycleOptions';
+import type {
+  BuiltUserVars,
+  UserVars,
+} from '@agent/core/definition/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { FileListEntry } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -113,6 +116,11 @@ type _UserVarsStayInRuntimeTokens = AssertNever<
   Exclude<keyof UserVars, (typeof USER_VAR_RUNTIME_TOKENS)[number]>
 >;
 
+/** Runtime view of the fixed vocabulary for the required-file collision guard. */
+const FIXED_USER_VAR_KEYS: ReadonlySet<string> = new Set(
+  USER_VAR_RUNTIME_TOKENS,
+);
+
 export function buildUserVarPassthrough(): Readonly<Record<string, string>> {
   return Object.freeze(
     Object.fromEntries(
@@ -180,7 +188,7 @@ export async function buildUserVars(
   providerFlags: ModelProviderFlags,
   logger: AgentTrace,
   options: BuildUserVarsOptions = {},
-): Promise<UserVars> {
+): Promise<BuiltUserVars> {
   // Parallelize independent I/O: required files, rules, and memories
   const [
     { vars: requiredVars, files: requiredFiles },
@@ -217,7 +225,9 @@ export async function buildUserVars(
 
   // Merge all variable sources using spread operator.
   // LATEX_STYLE_RULES is placed last to prevent silent overrides from spreads.
-  const userVars: UserVars = {
+  // The custom `requiredFilesInternal` keys ride beside the fixed vocabulary
+  // (BuiltUserVars) and reach templates through the channel boundary.
+  const userVars: BuiltUserVars = {
     ...getBasicVars(agentConfig, providerFlags, options),
     ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
@@ -379,9 +389,29 @@ async function getFileVars(
   agentSetting: AgentSetting,
   logger: AgentTrace,
 ): Promise<FileVars> {
-  // Filled incrementally in the loop below; every key is assigned on every
-  // path, either by `setVarFromFile` or by an explicit null/empty fallback.
-  const userVars = {} as FileVars;
+  // Compiler-checked completeness: every FileVars key starts at its
+  // empty-file default here, so a future FileVars key without a matching
+  // default is a type error at this literal. The loop below only overwrites
+  // the defaults, and a failed `setVarFromFile` leaves the null pair standing.
+  const userVars: FileVars = {
+    INPUT_FILE: null,
+    INPUT_CONTENT: null,
+    CONTEXT_FILE: null,
+    CONTEXT_CONTENT: null,
+    EDITED_FILE: null,
+    EDITED_CONTENT: null,
+    INPUT_FILES: [],
+    CONTEXT_FILES: [],
+    EDITED_FILES: [],
+    ALL_INPUTS: null,
+    ALL_CONTEXTS: null,
+    ALL_EDITEDS: null,
+    LIST_OF_ALL_INPUTS: '',
+    LIST_OF_ALL_CONTEXTS: '',
+    LIST_OF_ALL_EDITEDS: '',
+    MEDIA_FILE: null,
+    MEDIA_CONTENT: null,
+  };
 
   const contextFiles = getCategoryFiles(agentConfig, 'CONTEXT');
 
@@ -402,13 +432,8 @@ async function getFileVars(
         ? await getXmlFormatFromReadableFiles(allFiles)
         : { xml: null, readableFiles: [] };
     const primaryFile = readableFiles[0];
-
-    const loaded =
-      primaryFile != null &&
-      (await setVarFromFile(primaryFile, prefix, userVars));
-    if (!loaded) {
-      userVars[`${prefix}_FILE`] = null;
-      userVars[`${prefix}_CONTENT`] = null;
+    if (primaryFile != null) {
+      await setVarFromFile(primaryFile, prefix, userVars);
     }
 
     userVars[`ALL_${prefix}S`] = xml;
@@ -420,7 +445,6 @@ async function getFileVars(
 
   const mediaFiles = getCategoryFiles(agentConfig, 'MEDIA');
   userVars.MEDIA_FILE = mediaFiles[0] ?? null;
-  userVars.MEDIA_CONTENT = null;
 
   return userVars;
 }
@@ -467,6 +491,24 @@ async function logFileCategoriesWithExistence(
 }
 
 /**
+ * A required-file variable `X` generates the `X_FILE`/`X_CONTENT` pair, which
+ * `buildUserVars` spreads after the fixed variables — so a name like `MEDIA`
+ * would silently override the fixed `MEDIA_CONTENT: null`, and the persisted
+ * channel schema's `z.null()` validator would then reject checkpoints the
+ * application itself produced, making the session impossible to resume. Fail
+ * loudly when the variables are built instead.
+ */
+function assertNoFixedVarCollision(varName: string): void {
+  for (const generatedKey of [`${varName}_FILE`, `${varName}_CONTENT`]) {
+    if (FIXED_USER_VAR_KEYS.has(generatedKey)) {
+      throw new Error(
+        `requiredFilesInternal name "${varName}" generates "${generatedKey}", which collides with a fixed template variable. Rename the required-file variable.`,
+      );
+    }
+  }
+}
+
+/**
  * Load the files an agent bundles next to its YAML. Paths are resolved against
  * the agent's directory; an absolute path is used as written.
  */
@@ -482,6 +524,7 @@ async function getRequiredFileVars(
   )) {
     if (!filePath) continue;
 
+    assertNoFixedVarCollision(varName);
     const fullPath = path.resolve(agentPath, filePath);
     const ok = await setVarFromFile(fullPath, varName, vars, true);
     files.push({

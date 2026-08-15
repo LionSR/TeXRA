@@ -1,10 +1,22 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  expectTypeOf,
+  it,
+  vi,
+} from 'vitest';
 
 import { noopTrace } from '@agent/trace';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import type {
+  BuiltUserVars,
+  TemplateVars,
+} from '@agent/core/definition/AgentCycleOptions';
 import {
   AgentPromptSchema,
   AgentWorkflowSettingSchema,
@@ -235,13 +247,34 @@ describe('output file prompt variables', () => {
   });
 });
 
-// Replaces the whole global platform in its own beforeEach and never restores
-// it — MUST stay the last describe in this file.
+// Compile-time pins for the buildUserVars contract: no runtime I/O, so this
+// describe does not touch the platform.
+describe('buildUserVars declared type', () => {
+  it('admits custom required-file keys beside the precisely typed fixed vocabulary', () => {
+    type BuiltResult = Awaited<ReturnType<typeof buildUserVars>>;
+
+    expectTypeOf<BuiltResult>().toEqualTypeOf<BuiltUserVars>();
+    // Fixed keys keep their precise types.
+    expectTypeOf<BuiltUserVars['MEDIA_CONTENT']>().toEqualTypeOf<null>();
+    expectTypeOf<BuiltUserVars['IS_OPENAI_MODEL']>().toEqualTypeOf<boolean>();
+    expectTypeOf<BuiltUserVars['INPUT_FILES']>().toEqualTypeOf<string[]>();
+    // Custom required-file keys are admitted beside the fixed vocabulary.
+    expectTypeOf<BuiltUserVars['CUSTOM_CONTENT']>().toEqualTypeOf<unknown>();
+    // The render/channel boundary accepts the builder's product as-is.
+    expectTypeOf<BuiltUserVars>().toMatchTypeOf<TemplateVars>();
+  });
+});
+
+// The describes below replace the whole global platform in their own
+// beforeEach and never restore it — they MUST stay the last describes in
+// this file.
 function buildVars(
   agentConfig: ReturnType<typeof AgentConfigSchema.parse>,
+  requiredFilesInternal: Record<string, string> = {},
 ): ReturnType<typeof buildUserVars> {
   const agentSetting = AgentWorkflowSettingSchema.parse({
     agentCategory: AgentCategory.Workflow,
+    requiredFilesInternal,
   });
   const agentPrompt = AgentPromptSchema.parse({});
   return buildUserVars(
@@ -299,6 +332,32 @@ describe('buildUserVars with missing configured files', () => {
     expect(vars.CONTEXT_CONTENT).toBe('present context');
   });
 
+  it('returns every file variable at its empty default when no files are configured', async () => {
+    const vars = await buildVars(
+      AgentConfigSchema.parse({ agent: 'generic', model: 'test-model' }),
+    );
+
+    expect(vars).toMatchObject({
+      INPUT_FILE: null,
+      INPUT_CONTENT: null,
+      CONTEXT_FILE: null,
+      CONTEXT_CONTENT: null,
+      EDITED_FILE: null,
+      EDITED_CONTENT: null,
+      INPUT_FILES: [],
+      CONTEXT_FILES: [],
+      EDITED_FILES: [],
+      ALL_INPUTS: null,
+      ALL_CONTEXTS: null,
+      ALL_EDITEDS: null,
+      LIST_OF_ALL_INPUTS: '',
+      LIST_OF_ALL_CONTEXTS: '',
+      LIST_OF_ALL_EDITEDS: '',
+      MEDIA_FILE: null,
+      MEDIA_CONTENT: null,
+    });
+  });
+
   it('records attached memory read misses from the prompt-load pass', async () => {
     const vars = await buildVars(
       AgentConfigSchema.parse({
@@ -314,5 +373,59 @@ describe('buildUserVars with missing configured files', () => {
     expect(vars.ATTACHED_MEMORY_MISSES).toEqual([
       expect.objectContaining({ path: '/memories/missing.md' }),
     ]);
+  });
+});
+
+describe('requiredFilesInternal custom variables', () => {
+  beforeEach(async () => {
+    const { initPlatform } = await import('@platform/platform');
+
+    initPlatform(
+      createFakePlatform({
+        workspacePath: '/workspace',
+        files: { '/agents/generic/brief.txt': 'briefing notes' },
+      }),
+    );
+  });
+
+  // A required file named after a file category generates the fixed X_FILE /
+  // X_CONTENT variables and would silently override them — and, for
+  // validators like MEDIA_CONTENT's z.null(), produce checkpoints the
+  // persisted channel schema rejects, making the session impossible to
+  // resume. The guard fails loudly at variable-build time instead.
+  it.each(['INPUT', 'CONTEXT', 'EDITED', 'MEDIA'])(
+    'rejects a required file named %s whose generated variables collide with the fixed vocabulary',
+    async (varName) => {
+      await expect(
+        buildVars(
+          AgentConfigSchema.parse({ agent: 'generic', model: 'test-model' }),
+          { [varName]: 'brief.txt' },
+        ),
+      ).rejects.toThrow('collides with a fixed template variable');
+    },
+  );
+
+  it('names the offending generated key in the collision error', async () => {
+    await expect(
+      buildVars(
+        AgentConfigSchema.parse({ agent: 'generic', model: 'test-model' }),
+        { MEDIA: 'brief.txt' },
+      ),
+    ).rejects.toThrow(
+      'requiredFilesInternal name "MEDIA" generates "MEDIA_FILE", which collides with a fixed template variable. Rename the required-file variable.',
+    );
+  });
+
+  it('passes custom required-file variables through beside the fixed vocabulary', async () => {
+    const vars = await buildVars(
+      AgentConfigSchema.parse({ agent: 'generic', model: 'test-model' }),
+      { BRIEF: 'brief.txt' },
+    );
+
+    expect(vars['BRIEF_FILE']).toBe('/agents/generic/brief.txt');
+    expect(vars['BRIEF_CONTENT']).toBe('briefing notes');
+    // The fixed slots the collision guard protects keep their built values.
+    expect(vars.MEDIA_CONTENT).toBeNull();
+    expect(vars.MODEL).toBe('test-model');
   });
 });
