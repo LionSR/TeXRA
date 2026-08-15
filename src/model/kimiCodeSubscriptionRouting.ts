@@ -18,11 +18,22 @@
  *    differs (`kimi-k3` → `k3`, see {@link kimiCodeWireModelId}).
  */
 
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
+import { type ModelConfig } from 'llm-zoo';
 
 import { platform } from '@platform/platform';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
+import {
+  isKimiCodeExclusiveModel,
+  isKimiSubscriptionEligible,
+  type KimiSubscriptionModelFields,
+} from '@shared/model/kimiCodeRetryGate';
 import { getPreferKimiCode } from '@utils/config/providerConfig';
+
+export {
+  isKimiCodeExclusiveModel,
+  isKimiSubscriptionEligible,
+  type KimiSubscriptionModelFields,
+};
 
 import { hasUsableApiKey } from './apiProviders';
 import { includedModelAccess } from './includedModelAccess';
@@ -41,45 +52,6 @@ export function kimiCodeWireModelId(config: {
   readonly fullName: string;
 }): string {
   return KIMI_CODE_WIRE_MODEL_IDS[config.fullName] ?? config.fullName;
-}
-
-/**
- * The registry facts the eligibility predicates read. Structural (not the full
- * `ModelConfig`) so routing call sites and test fixtures can pass partial
- * configs.
- */
-export interface KimiSubscriptionModelFields {
-  readonly provider?: string;
-  readonly kimiSubscription?: boolean;
-  readonly baseUrl?: string;
-}
-
-/**
- * Whether `model` is eligible to route through the Kimi Code coding endpoint.
- * Read directly from the llm-zoo `kimiSubscription` registry flag (added in
- * llm-zoo 1.19.x) — serving status is a fact about the Kimi Code backend, not
- * derivable from other model fields. Requires
- * `provider === ModelProvider.MOONSHOT`, asserted here since this function is
- * exported and a non-Moonshot config must never resolve eligible.
- */
-export function isKimiSubscriptionEligible(
-  model: KimiSubscriptionModelFields,
-): boolean {
-  if (model.provider !== ModelProvider.MOONSHOT) return false;
-  return model.kimiSubscription === true;
-}
-
-/**
- * Whether `model` is served ONLY by the coding endpoint (no open-platform or
- * OpenRouter route exists). Derived from the registry's pinned `baseUrl` — the
- * pin is what makes the model unreachable anywhere else.
- */
-export function isKimiCodeExclusiveModel(
-  model: KimiSubscriptionModelFields,
-): boolean {
-  return (
-    isKimiSubscriptionEligible(model) && model.baseUrl === KIMI_CODE_BASE_URL
-  );
 }
 
 /**

@@ -147,6 +147,12 @@ export function createProgressHostInteractions(
     retryPreparations.get(streamId) === preparation &&
     isRetryPending(streamId, requestId);
 
+  /** Whether this exact preparation is still the one stored for the stream. */
+  const isStoredRetryPreparation = (
+    streamId: StreamTabId,
+    preparation: PendingRetryPreparation,
+  ): boolean => retryPreparations.get(streamId) === preparation;
+
   /**
    * Complete one retry settlement without letting a dismiss-delivery failure
    * become an unhandled rejection. `complete` settles the request before it
@@ -208,6 +214,13 @@ export function createProgressHostInteractions(
         );
       } catch (error) {
         if (!isCurrentRetryPreparation(streamId, requestId, preparation)) {
+          // Cancellation may already have removed the pending handler before
+          // this abort rejection ran. If the map still stores this exact
+          // preparation, remove it so a cancelled stream does not retain the
+          // preparation callback and its captured state.
+          if (isStoredRetryPreparation(streamId, preparation)) {
+            retryPreparations.delete(streamId);
+          }
           return false;
         }
         retryPreparations.delete(streamId);
@@ -222,6 +235,9 @@ export function createProgressHostInteractions(
         return denialResult;
       }
       if (!isCurrentRetryPreparation(streamId, requestId, preparation)) {
+        if (isStoredRetryPreparation(streamId, preparation)) {
+          retryPreparations.delete(streamId);
+        }
         return false;
       }
       retryPreparations.delete(streamId);
@@ -310,7 +326,7 @@ export function createProgressHostInteractions(
       if (decision.action === 'cancel') {
         retryPreparations.get(streamId)?.controller.abort();
         retryPreparations.delete(streamId);
-        return handlers().retry.complete(streamId, decision);
+        return completeRetrySettlement(streamId, decision, true);
       }
       void settlePreparedRetry(
         streamId,

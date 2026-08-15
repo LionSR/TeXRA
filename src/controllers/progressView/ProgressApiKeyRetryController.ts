@@ -107,10 +107,16 @@ export class ProgressApiKeyRetryController {
   async useOwnApiKey(
     request: ProgressApiKeyRetryRequest,
   ): Promise<ProgressApiKeyRetryResult> {
-    // Kimi Code-exclusive models are served only by the coding endpoint, so a
-    // personal-key switch cannot reroute them; keep the request untouched
-    // rather than disabling routing around an already-swapped client.
-    if (isKimiCodeExclusiveRetryModel(request.model)) return noRetryResult();
+    // Kimi Code-exclusive models have no open-platform fallback when the
+    // coding-plan quota is exhausted, so a personal-key switch cannot reroute
+    // them. Other exhaustion reasons (e.g. upstream credit depletion) still
+    // support rebinding an exclusive model to a replaced credential.
+    if (
+      request.exhaustionReason === 'kimi-code-subscription' &&
+      isKimiCodeExclusiveRetryModel(request.model)
+    ) {
+      return noRetryResult();
+    }
 
     const proceeded = await this.ensureOwnApiKey(request);
     if (
@@ -121,6 +127,12 @@ export class ProgressApiKeyRetryController {
     }
 
     return this.routingCommitQueue.add(async () => {
+      // The request may have been dismissed or replaced while this callback
+      // waited behind another stream's routing commit. Re-check before touching
+      // global routing so a stale switch cannot briefly rebind credentials.
+      if (!this.deps.isRetryPending(request.stream, request.requestId)) {
+        return noRetryResult();
+      }
       const routingBefore = this.routingSnapshot();
       const prepared = await this.applyOwnApiKeyRouting(request);
       const retried = await this.deps.triggerRetry(

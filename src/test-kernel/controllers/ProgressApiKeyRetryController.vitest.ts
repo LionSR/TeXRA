@@ -573,4 +573,56 @@ describe('ProgressApiKeyRetryController', () => {
     expect(harness.includedAccessValues).toStrictEqual([]);
     expect(harness.retries).toStrictEqual([]);
   });
+
+  it('rechecks retry identity after the routing queue admits the request', async () => {
+    let pendingChecks = 0;
+    const harness = createHarness({
+      keys: { openai: 'stored-openai' },
+      isRetryPending: () => {
+        pendingChecks += 1;
+        // The pre-queue check passes; the request is dismissed before the
+        // serialized callback starts, so the in-queue recheck must fail.
+        return pendingChecks === 1;
+      },
+    });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-stale-queue',
+      requestId: 'retry-stale-queue',
+      provider: 'openai',
+      exhaustionReason: 'chatgpt-subscription',
+    });
+
+    expect(result).toStrictEqual(IDLE_RESULT);
+    expect(harness.includedAccessValues).toStrictEqual([]);
+    expect(harness.chatGptSubscriptionValues).toStrictEqual([]);
+    expect(harness.retries).toStrictEqual([]);
+    expect(pendingChecks).toBe(2);
+  });
+
+  it('allows a Kimi Code-exclusive model to enter a fresh key on credit depletion', async () => {
+    const harness = createHarness({
+      keys: { anthropic: 'old-key' },
+      prompt: (keys) => {
+        keys.set('anthropic', 'new-key');
+      },
+    });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-kimi-credit',
+      requestId: 'retry-kimi-credit',
+      model: 'kimiCoding',
+      exhaustionReason: 'upstream-credit',
+    });
+
+    expect(result).toStrictEqual({
+      proceeded: true,
+      retried: true,
+      disabledIncludedModelAccess: false,
+      disabledChatGptSubscription: false,
+      disabledCodingPlans: [],
+    });
+    expect(harness.prompts).toStrictEqual([undefined]);
+    expect(harness.retries).toStrictEqual(['stream-kimi-credit']);
+  });
 });

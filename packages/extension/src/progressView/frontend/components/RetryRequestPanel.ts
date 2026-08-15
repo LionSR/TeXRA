@@ -156,9 +156,16 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
 
   private canUseOwnApiKey(): boolean {
     const data = this.permission.data;
+    // Exclusivity blocks only the coding-plan quota case: a Kimi Code-exclusive
+    // model has no open-platform fallback when its membership quota is spent.
+    // Other exhaustion reasons (notably upstream credit depletion) still allow
+    // rebinding the same model to a fresh credential.
     return (
       isCredentialExhausted(data.errorDetails) &&
-      !isKimiCodeExclusiveRetryModel(data.model)
+      !(
+        data.errorDetails?.exhaustionReason === 'kimi-code-subscription' &&
+        isKimiCodeExclusiveRetryModel(data.model)
+      )
     );
   }
 

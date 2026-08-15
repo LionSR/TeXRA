@@ -16,6 +16,11 @@ import {
 } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { SETUP_MODEL_BY_PROVIDER } from '@model/setupModelDefaults';
+import {
+  isKimiCodeExclusiveModel as sharedIsKimiCodeExclusiveModel,
+  isKimiCodeExclusiveRetryModel,
+  isKimiSubscriptionEligible as sharedIsKimiSubscriptionEligible,
+} from '@shared/model/kimiCodeRetryGate';
 
 describe('Kimi Code model registry', () => {
   it.each([
@@ -51,6 +56,23 @@ describe('Kimi Code model registry', () => {
   it('resolves plan aliases through the runtime registry like any model', () => {
     expect(getRuntimeModelConfig('kimiCoding')).toBe(MODEL_CONFIGS.kimiCoding);
     expect(getRuntimeModelConfig('kimi25T')).toBe(MODEL_CONFIGS.kimi25T);
+  });
+});
+
+describe('Kimi Code exclusivity single-source', () => {
+  it('re-exports the shared field predicates from the route resolver', () => {
+    expect(isKimiCodeExclusiveModel).toBe(sharedIsKimiCodeExclusiveModel);
+    expect(isKimiSubscriptionEligible).toBe(sharedIsKimiSubscriptionEligible);
+  });
+
+  it('keeps the retry model-id gate aligned with the shared field predicate', () => {
+    for (const [id, config] of Object.entries(MODEL_CONFIGS)) {
+      expect(isKimiCodeExclusiveRetryModel(id)).toBe(
+        isKimiCodeExclusiveModel(config),
+      );
+    }
+    expect(isKimiCodeExclusiveRetryModel(undefined)).toBe(false);
+    expect(isKimiCodeExclusiveRetryModel('not-a-registered-model')).toBe(false);
   });
 });
 
