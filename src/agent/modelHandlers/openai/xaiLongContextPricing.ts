@@ -23,8 +23,10 @@
  * instead of silently billing flat.
  */
 
+// Third-party imports
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
+// Local imports
 import type { LongContextPricingTier } from '@agent/modelHandlers/support/priceUtils';
 
 /** Documented rates llm-zoo lacks for one xAI model. */
@@ -37,7 +39,7 @@ interface XaiDocumentedPricing {
 const XAI_DOCUMENTED_PRICING: Readonly<Record<string, XaiDocumentedPricing>> = {
   'grok-4.3': {
     tier: { thresholdTokens: 200_000, inputPrice: 2.5, outputPrice: 5 },
-    cacheDiscountFactor: 0.25,
+    cacheDiscountFactor: 0.16,
   },
   'grok-4.5': {
     tier: { thresholdTokens: 200_000, inputPrice: 4, outputPrice: 12 },
@@ -45,7 +47,7 @@ const XAI_DOCUMENTED_PRICING: Readonly<Record<string, XaiDocumentedPricing>> = {
   },
   'grok-4.6': {
     tier: { thresholdTokens: 200_000, inputPrice: 4, outputPrice: 12 },
-    cacheDiscountFactor: 0.16,
+    cacheDiscountFactor: 0.25,
   },
 };
 
