@@ -90,17 +90,21 @@ export async function invokeLatexWorkshopBuild(
 /**
  * Open a file, compile if it is TeX, and display the resulting PDF.
  * The PDF viewer is refreshed if already loaded.
+ *
+ * Resolves `true` when a surface was actually opened, and `false` when the
+ * path is missing or the internal LaTeX compilation failed, so presentation
+ * callers can report non-delivery truthfully.
  */
 export async function openBuildDisplayIfTex(
   fileLocation: FileLocation,
   options: { preserveFocus?: boolean } = {},
-): Promise<void> {
+): Promise<boolean> {
   const absolutePath = fileLocation.absolutePath;
 
   const exists = await AbsoluteFS.exists(absolutePath);
   if (!exists) {
     void showLoggedMessage(CHANNEL, `File not found: ${absolutePath}`);
-    return;
+    return false;
   }
 
   const uri = vscode.Uri.file(absolutePath);
@@ -109,10 +113,10 @@ export async function openBuildDisplayIfTex(
     await vscode.commands.executeCommand('vscode.open', uri, {
       preserveFocus: options.preserveFocus ?? false,
     } satisfies vscode.TextDocumentShowOptions);
-    return;
+    return true;
   }
 
-  await openAndBuildLatex(uri, fileLocation, options.preserveFocus ?? false);
+  return openAndBuildLatex(uri, fileLocation, options.preserveFocus ?? false);
 }
 
 /**
@@ -129,7 +133,7 @@ async function openAndBuildLatex(
   uri: vscode.Uri,
   fileLocation: FileLocation,
   preserveFocus: boolean,
-): Promise<void> {
+): Promise<boolean> {
   const doc = await vscode.workspace.openTextDocument(uri);
   await vscode.window.showTextDocument(doc, { preview: true, preserveFocus });
 
@@ -153,10 +157,12 @@ async function openAndBuildLatex(
         `Internal LaTeX compilation failed for ${uri.fsPath}:\n${compiled.logTail}`,
         { data: { sourceFile: uri.fsPath, logTail: compiled.logTail } },
       );
+      return false;
     }
   }
 
   scheduleViewerDisplay();
+  return true;
 }
 
 /**

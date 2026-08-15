@@ -439,6 +439,25 @@ describe('session.interactions immediate capabilities', () => {
     session.dispose();
   });
 
+  it('reports a synchronously throwing live-host emit as not delivered', () => {
+    // The live-host immediate-attachment branch must apply the same guard as
+    // the queued replay path: a host adapter whose emit throws synchronously
+    // (a desktop renderer post during teardown) must read as not delivered,
+    // not escape as an arbitrary host exception (#10466).
+    const session = createTestSession();
+    session.useHostInteractions({
+      emit: () => {
+        throw new Error('renderer torn down mid-post');
+      },
+      cancel: vi.fn(),
+    });
+
+    expect(
+      session.interactions.emit('requestShowError', { message: 'boom' }),
+    ).toBe(false);
+    session.dispose();
+  });
+
   it('reports a synchronously throwing replayed emit through onReplayNotDelivered', async () => {
     // A host adapter whose emit throws synchronously (a desktop renderer
     // post during teardown) escapes the replay closure's promise chain; the
