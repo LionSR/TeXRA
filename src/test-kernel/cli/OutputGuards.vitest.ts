@@ -10,6 +10,7 @@ import {
   assertOutputFileAvailable,
   probeOutputPathForTests,
 } from '@cli/runtime/workflowOutput';
+import { errnoError } from '@test/support/fsTestUtils';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 const tempDirs: string[] = [];
@@ -18,10 +19,6 @@ afterEach(async () => {
   await cleanupTempDirs(tempDirs);
 });
 
-function errno(code: string, message = code): NodeJS.ErrnoException {
-  return Object.assign(new Error(message), { code });
-}
-
 // Every probe case below starts from a stat that reports the target missing.
 function probeDeps(
   mkdir: (candidate: string) => Promise<string | undefined>,
@@ -29,7 +26,7 @@ function probeDeps(
   return {
     dirname: win32.dirname,
     stat: async () => {
-      throw errno('ENOENT');
+      throw errnoError('ENOENT');
     },
     mkdir,
   };
@@ -63,7 +60,7 @@ describe('probeOutputPath', () => {
           '--output',
           probeDeps(async (candidate) => {
             mkdirVisited.push(candidate);
-            throw errno(mkdirCode);
+            throw errnoError(mkdirCode);
           }),
         ),
       ).rejects.toThrow(
@@ -111,7 +108,7 @@ describe('probeOutputPath', () => {
           flagLabel,
           probeDeps(async (candidate) => {
             mkdirVisited.push(candidate);
-            throw errno('ENOENT');
+            throw errnoError('ENOENT');
           }),
         ),
       ).rejects.toThrow(expectedMessage);
@@ -120,7 +117,7 @@ describe('probeOutputPath', () => {
   );
 
   it('preserves unexpected mkdir failures', async () => {
-    const denied = errno('EACCES', 'denied');
+    const denied = errnoError('EACCES', 'denied');
     await expect(
       probeOutputPathForTests(
         '/missing/output.tex',

@@ -2,36 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CliContext } from '@cli/runtime/cliContext';
 import { AgentCategory } from '@shared/schemas';
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
+import { agentCatalogMock } from '@test/support/agentCatalogMock';
+import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
+import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
+import { cliOutputMock } from '@test/support/cliOutputMock';
 
 const mocks = vi.hoisted(() => ({
-  emitCliResult: vi.fn(),
-  getAgent: vi.fn(),
-  getAgentsByCategory: vi.fn(),
-  getVisibleAgents: vi.fn(),
-  initLocalCliPlatform: vi.fn(),
-  loadAgents: vi.fn(),
   resolveCliAgent: vi.fn(),
-  writeTextStderr: vi.fn(),
-}));
-
-vi.mock('@agent/index', () => ({
-  getAgent: mocks.getAgent,
-  getAgentsByCategory: mocks.getAgentsByCategory,
-  getVisibleAgents: mocks.getVisibleAgents,
-  loadAgents: mocks.loadAgents,
-}));
-
-vi.mock('@cli/runtime/initPlatform', () => ({
-  initLocalCliPlatform: mocks.initLocalCliPlatform,
-}));
-
-vi.mock('@cli/runtime/logSinks', () => ({
-  writeTextStderr: mocks.writeTextStderr,
-}));
-
-vi.mock('@cli/commands/_helpers/output', () => ({
-  emitCliResult: mocks.emitCliResult,
 }));
 
 vi.mock('@cli/runtime/agents', async (importOriginal) => ({
@@ -44,13 +22,6 @@ vi.mock('@cli/runtime/agents', async (importOriginal) => ({
 // the import cost lands in file load, not the first test's timeout budget.
 const { listAgents, showAgent } = await import('@cli/commands/agents');
 const { parseCliAgentCategoryFilter } = await import('@cli/runtime/agents');
-
-function cliContext(overrides: Partial<CliContext> = {}): CliContext {
-  return createTestCliContext({
-    renderRunProgress: true,
-    ...overrides,
-  });
-}
 
 const LEAN_AGENT = {
   name: 'lean',
@@ -92,10 +63,10 @@ type CategoryCatalog = Partial<
 >;
 
 function stubCatalog(catalog: CategoryCatalog): void {
-  mocks.getVisibleAgents.mockImplementation(
+  agentCatalogMock.getVisibleAgents.mockImplementation(
     (category: AgentCategory) => catalog[category]?.visible ?? [],
   );
-  mocks.getAgentsByCategory.mockImplementation(
+  agentCatalogMock.getAgentsByCategory.mockImplementation(
     (category: AgentCategory) => catalog[category]?.all ?? [],
   );
 }
@@ -107,16 +78,20 @@ interface EmittedAgentsPayload {
 }
 
 function expectEmittedAgents(payload: EmittedAgentsPayload): void {
-  expect(mocks.emitCliResult).toHaveBeenCalledWith(expect.anything(), payload, {
-    paged: true,
-  });
+  expect(cliOutputMock.emitCliResult).toHaveBeenCalledWith(
+    expect.anything(),
+    payload,
+    {
+      paged: true,
+    },
+  );
 }
 
 describe('CLI agents command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getAgentsByCategory.mockReturnValue([]);
-    mocks.getVisibleAgents.mockReturnValue([]);
+    agentCatalogMock.getAgentsByCategory.mockReturnValue([]);
+    agentCatalogMock.getVisibleAgents.mockReturnValue([]);
   });
 
   it('parses agent category filter spellings', () => {
@@ -138,16 +113,18 @@ describe('CLI agents command', () => {
       },
     });
 
-    const exitCode = await listAgents(cliContext());
+    const exitCode = await listAgents(createRunCommandCliContext());
 
     expect(exitCode).toBe(0);
-    expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
+    expect(agentCatalogMock.loadAgents).toHaveBeenCalledWith({
+      includeRemote: false,
+    });
     expectEmittedAgents({
       json: [LEAN_AGENT],
       ndjson: [{ kind: 'agent', agent: LEAN_AGENT }],
       text: 'toolUse\tlean\tLean 4 proof assistant.',
     });
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
       'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --all` to show all agents.',
     );
   });
@@ -155,9 +132,12 @@ describe('CLI agents command', () => {
   it('reports hidden agents in json mode without changing stdout payload', async () => {
     stubCatalog({ [AgentCategory.Workflow]: { all: [CORRECT_AGENT] } });
 
-    const exitCode = await listAgents(cliContext({ outputFormat: 'json' }), {
-      category: AgentCategory.Workflow,
-    });
+    const exitCode = await listAgents(
+      createRunCommandCliContext({ outputFormat: 'json' }),
+      {
+        category: AgentCategory.Workflow,
+      },
+    );
 
     expect(exitCode).toBe(0);
     expectEmittedAgents({
@@ -165,7 +145,7 @@ describe('CLI agents command', () => {
       ndjson: [],
       text: '',
     });
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
       'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category workflow --all` to show all workflow agents.',
     );
   });
@@ -173,7 +153,7 @@ describe('CLI agents command', () => {
   it('shows a text empty state when no workflow agents are visible', async () => {
     stubCatalog({ [AgentCategory.Workflow]: { all: [CORRECT_AGENT] } });
 
-    const exitCode = await listAgents(cliContext(), {
+    const exitCode = await listAgents(createRunCommandCliContext(), {
       category: AgentCategory.Workflow,
     });
 
@@ -183,7 +163,7 @@ describe('CLI agents command', () => {
       ndjson: [],
       text: 'No visible workflow agents are enabled for this workspace. Use `texra agents list --category workflow --all` to show all workflow agents.',
     });
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
       'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category workflow --all` to show all workflow agents.',
     );
   });
@@ -191,9 +171,12 @@ describe('CLI agents command', () => {
   it('keeps quiet empty agent lists byte-empty for shell completion', async () => {
     stubCatalog({ [AgentCategory.Workflow]: { all: [CORRECT_AGENT] } });
 
-    const exitCode = await listAgents(cliContext({ quietLogs: true }), {
-      category: AgentCategory.Workflow,
-    });
+    const exitCode = await listAgents(
+      createRunCommandCliContext({ quietLogs: true }),
+      {
+        category: AgentCategory.Workflow,
+      },
+    );
 
     expect(exitCode).toBe(0);
     expectEmittedAgents({
@@ -201,7 +184,7 @@ describe('CLI agents command', () => {
       ndjson: [],
       text: '',
     });
-    expect(mocks.writeTextStderr).not.toHaveBeenCalled();
+    expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
   });
 
   it('suppresses hidden-agent notices in quiet text mode', async () => {
@@ -212,9 +195,12 @@ describe('CLI agents command', () => {
       },
     });
 
-    const exitCode = await listAgents(cliContext({ quietLogs: true }), {
-      category: AgentCategory.Workflow,
-    });
+    const exitCode = await listAgents(
+      createRunCommandCliContext({ quietLogs: true }),
+      {
+        category: AgentCategory.Workflow,
+      },
+    );
 
     expect(exitCode).toBe(0);
     expectEmittedAgents({
@@ -222,28 +208,32 @@ describe('CLI agents command', () => {
       ndjson: [{ kind: 'agent', agent: POLISH_AGENT }],
       text: 'workflow\tpolish\tPolishes prose.',
     });
-    expect(mocks.writeTextStderr).not.toHaveBeenCalled();
+    expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
   });
 
   it('filters agents by category and reports hidden agents in that category', async () => {
-    mocks.getVisibleAgents.mockImplementation((category: AgentCategory) => {
-      if (category !== AgentCategory.ToolUse) {
-        throw new Error('workflow agents should not be loaded');
-      }
-      return [LEAN_AGENT];
-    });
-    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) => {
-      if (category !== AgentCategory.ToolUse) {
-        throw new Error('workflow agents should not be loaded');
-      }
-      return [LEAN_AGENT, CHAT_AGENT];
-    });
-    const exitCode = await listAgents(cliContext(), {
+    agentCatalogMock.getVisibleAgents.mockImplementation(
+      (category: AgentCategory) => {
+        if (category !== AgentCategory.ToolUse) {
+          throw new Error('workflow agents should not be loaded');
+        }
+        return [LEAN_AGENT];
+      },
+    );
+    agentCatalogMock.getAgentsByCategory.mockImplementation(
+      (category: AgentCategory) => {
+        if (category !== AgentCategory.ToolUse) {
+          throw new Error('workflow agents should not be loaded');
+        }
+        return [LEAN_AGENT, CHAT_AGENT];
+      },
+    );
+    const exitCode = await listAgents(createRunCommandCliContext(), {
       category: AgentCategory.ToolUse,
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.getAgentsByCategory).not.toHaveBeenCalledWith(
+    expect(agentCatalogMock.getAgentsByCategory).not.toHaveBeenCalledWith(
       AgentCategory.Workflow,
     );
     expectEmittedAgents({
@@ -251,7 +241,7 @@ describe('CLI agents command', () => {
       ndjson: [{ kind: 'agent', agent: LEAN_AGENT }],
       text: 'toolUse\tlean\tLean 4 proof assistant.',
     });
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
       'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category toolUse --all` to show all tool-use agents.',
     );
   });
@@ -264,7 +254,7 @@ describe('CLI agents command', () => {
       },
     });
 
-    const exitCode = await listAgents(cliContext(), {
+    const exitCode = await listAgents(createRunCommandCliContext(), {
       category: AgentCategory.Workflow,
     });
 
@@ -274,7 +264,7 @@ describe('CLI agents command', () => {
       ndjson: [{ kind: 'agent', agent: POLISH_AGENT }],
       text: 'workflow\tpolish\tPolishes prose.',
     });
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
       'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category workflow --all` to show all workflow agents.',
     );
   });
@@ -290,12 +280,14 @@ describe('CLI agents command', () => {
       [AgentCategory.ToolUse]: { all: [CHAT_AGENT] },
     });
 
-    const exitCode = await listAgents(cliContext(), { includeHidden: true });
+    const exitCode = await listAgents(createRunCommandCliContext(), {
+      includeHidden: true,
+    });
 
     expect(exitCode).toBe(0);
-    expect(mocks.loadAgents).toHaveBeenCalledWith(undefined);
-    expect(mocks.getVisibleAgents).not.toHaveBeenCalled();
-    expect(mocks.writeTextStderr).not.toHaveBeenCalled();
+    expect(agentCatalogMock.loadAgents).toHaveBeenCalledWith(undefined);
+    expect(agentCatalogMock.getVisibleAgents).not.toHaveBeenCalled();
+    expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
     expectEmittedAgents({
       json: [workflowAgent, CHAT_AGENT],
       ndjson: [
@@ -338,28 +330,34 @@ describe('CLI agents command', () => {
   ])('$name', async ({ agent, args, textContain }) => {
     mocks.resolveCliAgent.mockResolvedValue(agent);
 
-    const exitCode = await showAgent(cliContext(), args);
+    const exitCode = await showAgent(createRunCommandCliContext(), args);
 
     expect(exitCode).toBe(0);
-    expect(mocks.initLocalCliPlatform).toHaveBeenCalledTimes(1);
-    expect(mocks.getAgent).not.toHaveBeenCalled();
+    expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledTimes(1);
+    expect(agentCatalogMock.getAgent).not.toHaveBeenCalled();
     expect(mocks.resolveCliAgent).toHaveBeenCalledWith(args);
-    expect(mocks.emitCliResult).toHaveBeenCalledWith(expect.anything(), {
-      json: agent,
-      ndjson: { kind: 'agent', agent },
-      text: expect.stringContaining(textContain),
-    });
+    expect(cliOutputMock.emitCliResult).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        json: agent,
+        ndjson: { kind: 'agent', agent },
+        text: expect.stringContaining(textContain),
+      },
+    );
   });
 
   it('reports missing agents after CLI agent resolution misses', async () => {
     mocks.resolveCliAgent.mockResolvedValue(undefined);
 
-    const exitCode = await showAgent(cliContext(), 'missing-agent');
+    const exitCode = await showAgent(
+      createRunCommandCliContext(),
+      'missing-agent',
+    );
 
     expect(exitCode).toBe(2);
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
       'Agent not found: missing-agent. Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.',
     );
-    expect(mocks.emitCliResult).not.toHaveBeenCalled();
+    expect(cliOutputMock.emitCliResult).not.toHaveBeenCalled();
   });
 });

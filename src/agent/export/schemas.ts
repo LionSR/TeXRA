@@ -8,10 +8,14 @@
  * `@google/genai`.
  *
  * Zod schemas are the single source of truth; types are derived with `z.infer`.
+ * The one cross-module dependency is the canonical web-search entry schema
+ * from `@agent/types/ServerTools`, whose provider SDK imports are type-only,
+ * so the neutrality note above still holds.
  */
 
 import { z } from 'zod';
 
+import { WebSearchResultEntrySchema } from '@agent/types/ServerTools';
 import type { MediaAttachmentKind } from '@shared/schemas';
 
 // ============================================================
@@ -41,9 +45,15 @@ export type ChatExportInput = z.infer<typeof ChatExportInputSchema>;
 // Intermediate representation — format-agnostic
 // ============================================================
 
-const WebSearchResultSchema = z.object({
-  title: z.string(),
-  url: z.string(),
+/**
+ * One rendered search hit in the exported document: the title/url projection
+ * of the canonical provider result entry ({@link WebSearchResultEntrySchema}
+ * in `@agent/types/ServerTools`). Snippet, domain, and page age never reach
+ * the export IR.
+ */
+const ExportWebSearchResultSchema = WebSearchResultEntrySchema.pick({
+  title: true,
+  url: true,
 });
 
 /**
@@ -80,7 +90,7 @@ const ExportNodeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('web-search'), query: z.string() }),
   z.object({
     kind: z.literal('web-search-results'),
-    results: z.array(WebSearchResultSchema),
+    results: z.array(ExportWebSearchResultSchema),
   }),
   z.object({
     kind: z.literal('web-fetch'),

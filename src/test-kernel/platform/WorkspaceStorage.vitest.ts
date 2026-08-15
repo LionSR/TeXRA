@@ -1,5 +1,5 @@
 // Node imports
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
@@ -19,17 +19,8 @@ import {
   RUNS_STORAGE_DIR,
   workspaceStorageId,
 } from '@platform/defaults/workspaceStorage';
+import { pathExists } from '@test/support/fsTestUtils';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
-    throw error;
-  }
-}
 
 async function readWorkspaceMarker(
   storagePath: string,
