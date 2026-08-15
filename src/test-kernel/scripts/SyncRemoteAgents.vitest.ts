@@ -216,6 +216,9 @@ describe.skipIf(process.platform === 'win32')(
         expect(result.stderr).toContain(
           'SUPABASE_PROJECT_REF is set but empty after trimming',
         );
+        expect(result.stderr).toContain(
+          "or unset SUPABASE_PROJECT_REF to use this checkout's linked project",
+        );
         expect(existsSync(join(root, 'stub.log'))).toBe(false);
         expect(readFileSync(projectRefPath(root), 'utf8')).toBe('proj-a\n');
       } finally {
