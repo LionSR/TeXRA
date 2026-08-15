@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
+import * as agentRuntime from '@agent/runtime';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
@@ -75,16 +76,10 @@ const mocks = vi.hoisted(() => ({
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
   invalidateModelOptionsCache: vi.fn(),
-  initializeBundledPrompts: vi.fn(),
   tryPlatform: vi.fn(),
   // Collects callbacks registered via the (mocked) lifecycle host's onShutdown
   // so a test can run them and assert the usage-log dispose was wired.
   shutdownHandlers: [] as Array<() => unknown>,
-}));
-
-vi.mock('@agent/runtime', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/runtime')>()),
-  initializeBundledPrompts: mocks.initializeBundledPrompts,
 }));
 
 vi.mock('@agent/index/platformAgentDirectories', () => ({
@@ -429,13 +424,20 @@ describe('CLI platform init', () => {
   });
 
   it('registers bundled prompts from the CLI resource bundle', async () => {
-    await initCliPlatform(
-      cliContext({ resourcesPath: '/tmp/cli-prompt-resources' }),
-    );
+    const initializeBundledPrompts = vi
+      .spyOn(agentRuntime, 'initializeBundledPrompts')
+      .mockImplementation(() => {});
+    try {
+      await initCliPlatform(
+        cliContext({ resourcesPath: '/tmp/cli-prompt-resources' }),
+      );
 
-    expect(mocks.initializeBundledPrompts).toHaveBeenCalledWith(
-      '/tmp/cli-prompt-resources',
-    );
+      expect(initializeBundledPrompts).toHaveBeenCalledWith(
+        '/tmp/cli-prompt-resources',
+      );
+    } finally {
+      initializeBundledPrompts.mockRestore();
+    }
   });
 
   it('bootstraps bundled agents with the CLI version store', async () => {
