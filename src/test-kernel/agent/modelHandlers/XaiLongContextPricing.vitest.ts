@@ -56,9 +56,9 @@ describe('xaiLongContextTier', () => {
 
 describe('xaiCacheDiscountFactor', () => {
   it('carries the documented per-model cache factor', () => {
-    expect(xaiCacheDiscountFactor('grok-4.3')).toBe(0.25);
+    expect(xaiCacheDiscountFactor('grok-4.3')).toBe(0.16);
     expect(xaiCacheDiscountFactor('grok-4.5')).toBe(0.15);
-    expect(xaiCacheDiscountFactor('grok-4.6')).toBe(0.16);
+    expect(xaiCacheDiscountFactor('grok-4.6')).toBe(0.25);
   });
 
   it('has no factor for undocumented or OpenRouter-qualified ids', () => {
@@ -89,7 +89,7 @@ describe('llm-zoo catalog cross-check', () => {
         model.provider === ModelProvider.XAI &&
         xaiLongContextTier(model.fullName) !== undefined,
     );
-    expect(tiered.map((model) => model.fullName).sort()).toEqual([
+    expect(tiered.map((model) => model.fullName).toSorted()).toEqual([
       'grok-4.3',
       'grok-4.5',
       'grok-4.6',
@@ -98,6 +98,22 @@ describe('llm-zoo catalog cross-check', () => {
       const tier = xaiLongContextTier(model.fullName);
       expect(tier?.inputPrice).toBe(2 * model.inputPrice);
       expect(tier?.outputPrice).toBe(2 * model.outputPrice);
+    }
+  });
+});
+
+describe('catalog cache-factor pin', () => {
+  it('reports the no-discount default for every served xAI model', () => {
+    // llm-zoo's xAI entries inherit the default factor of 1 — the reason the
+    // handler override exists. If upstream ever ships real factors (a short
+    // window would not trip the tier sweep above), prefer the catalog and
+    // drop the override table and this pin.
+    const served = Object.values(MODEL_CONFIGS).filter(
+      (model) => model.provider === ModelProvider.XAI && !model.retired,
+    );
+    expect(served.length).toBeGreaterThan(0);
+    for (const model of served) {
+      expect(model.capabilities.cacheDiscountFactor).toBe(1);
     }
   });
 });
@@ -179,9 +195,9 @@ describe('ModelHandlerXAI long-context pricing', () => {
 
 describe('ModelHandlerXAI cache rebate wiring', () => {
   it.each([
-    ['grok-4.3', 1.25, 2.5, 0.25],
+    ['grok-4.3', 1.25, 2.5, 0.16],
     ['grok-4.5', 2, 6, 0.15],
-    ['grok-4.6', 2, 6, 0.16],
+    ['grok-4.6', 2, 6, 0.25],
   ] as const)(
     'rebates %s cached tokens at its documented factor on the real catalog config',
     (fullName, inputPrice, outputPrice, factor) => {
@@ -205,12 +221,6 @@ describe('ModelHandlerXAI cache rebate wiring', () => {
   );
 
   it('follows the tier input rate for the rebate past the threshold', () => {
-    // llm-zoo's xAI entries inherit the default factor of 1 — the reason the
-    // handler override exists. If upstream ever ships the real factor, drop
-    // the override table and this pin with it.
-    expect(catalogXaiConfig('grok-4.6').capabilities.cacheDiscountFactor).toBe(
-      1,
-    );
     const handler = new ModelHandlerXAI(catalogXaiConfig('grok-4.6'));
 
     expect(
@@ -220,7 +230,7 @@ describe('ModelHandlerXAI cache rebate wiring', () => {
         total_tokens: 251_000,
         prompt_tokens_details: { cached_tokens: 40_000 },
       }),
-    ).toBeCloseTo((250_000 * 4 + 1_000 * 12 - 40_000 * 4 * 0.84) / 1e6, 12);
+    ).toBeCloseTo((250_000 * 4 + 1_000 * 12 - 40_000 * 4 * 0.75) / 1e6, 12);
   });
 });
 
@@ -245,7 +255,9 @@ describe('ModelHandlerXAI tier-gap warning', () => {
     handler.computePrice(usage);
 
     expect(warn).toHaveBeenCalledOnce();
-    expect(warn.mock.calls[0]?.[0]).toContain('grok-9');
+    expect(warn.mock.calls[0]?.[1]).toMatchObject({
+      data: { fullName: 'grok-9', contextWindow: 1_000_000 },
+    });
   });
 
   it('stays quiet for models the table covers', () => {
