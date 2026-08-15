@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { nanoid } from 'nanoid';
@@ -35,7 +35,13 @@ export interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
 
 export function createDesktopDiffHost(
   options: DesktopDiffHostOptions,
-): Pick<DiffViewHost, 'openDiff'> {
+): Pick<DiffViewHost, 'openDiff'> & { dispose(): Promise<void> } {
+  // External-editor patch files live under a fresh temp directory per diff.
+  // That directory cannot be removed as soon as `openPath` settles because the
+  // OS editor may still be reading it, so each fallback run records its
+  // directory here and `dispose()` removes them when the window closes.
+  const externalPatchDirs = new Set<string>();
+
   async function openDiff(
     original: DiffSource,
     proposed: DiffSource,
@@ -73,13 +79,32 @@ export function createDesktopDiffHost(
       computeUserPatch(originalContent, proposedContent) ??
       `No textual changes for ${path.basename(proposed.filePath)}.\n`;
     const tempDir = await createTexraTempDir('texra-desktop-diff-');
+    externalPatchDirs.add(tempDir);
     const diffPath = path.join(tempDir, `${nanoid()}.diff`);
 
-    await writeFile(diffPath, patch, 'utf8');
-    await options.openPath(diffPath);
+    try {
+      await writeFile(diffPath, patch, 'utf8');
+      await options.openPath(diffPath);
+    } catch (error) {
+      // The patch never reached an editor: clean it up now instead of waiting
+      // for window close, and preserve the original failure for the caller.
+      externalPatchDirs.delete(tempDir);
+      await rm(tempDir, { recursive: true, force: true }).catch(
+        () => undefined,
+      );
+      throw error;
+    }
 
     return { original, proposed, title };
   }
 
-  return { openDiff };
+  async function dispose(): Promise<void> {
+    const tempDirs = [...externalPatchDirs];
+    externalPatchDirs.clear();
+    await Promise.all(
+      tempDirs.map((tempDir) => rm(tempDir, { recursive: true, force: true })),
+    );
+  }
+
+  return { openDiff, dispose };
 }
