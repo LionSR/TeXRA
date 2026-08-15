@@ -1,13 +1,23 @@
 # Cross-host consolidation: extension / desktop / CLI shared-substrate audit (2026-08-15)
 
-> **Status:** Adjudicated audit (2026-08-15), pinned to worktree HEAD
-> `bc64b7cab4` on `refactor/delegation-substrate-wave1` (includes PR #10475;
-> origin/main at `658923a9ba`). Produced by four scoped sweeps — execution
+> **Status:** Adjudicated audit (2026-08-15). Originally pinned to the wave1
+> branch head `bc64b7cab4` (a branch commit not reachable from main — use
+> **`3122ace2bc`**, post-campaign origin/main, as the reproduction pin; the
+> stale-claims register in the contracts doc §5 re-verified every
+> load-bearing claim there). Produced by four scoped sweeps — execution
 > lifecycle, session/event projection, settings/auth/platform ports, and
-> rendering/output — each instructed to separate *host-agnostic logic written
-> twice* from *legitimate host projection*. The re-verify-at-HEAD trap is live
-> (main moved during the sweep and eight PRs from the delegation campaign are
-> in flight): re-open every cited site before acting.
+> rendering/output — each instructed to separate _host-agnostic logic written
+> twice_ from _legitimate host projection_. The re-verify-at-HEAD trap is
+> live: re-open every cited site before acting.
+>
+> **Review round applied (2026-08-16):** corrections from the PR #10636
+> reviews are folded in inline, marked _(Corrected/Narrowed after review)_ —
+> notably V1a (not a missing host argument), V2 (partially initialized, not
+> dead), V8 (shutdown sites are deliberate cascade), C2 (CLI has the bail),
+> C3 (re-cited; needs a discriminated resolution first), C4 (read-vs-write
+> failure split), C6 (no Electron race), C17 (transport, not ignored data),
+> C19 (relocation withdrawn), §4i (webview fallback narrower than claimed),
+> §4k (example replaced with the narrower true claim).
 
 > **Follow-up:** the maintainer subsequently ruled for maximal consolidation
 > ("same data structure, UI rendered differently, collapse
@@ -94,6 +104,15 @@ duplications (the single-caller-extraction ban is respected); none adds a
 layer — each replaces N copies with the strongest existing copy relocated to
 core.
 
+**Maintainer ruling (2026-08-16): recomputation and re-derivation are the
+named defect class.** A fact computed by its owner and then re-derived
+downstream (C17's second diff algorithm, C22's re-derived elapsed time, the
+CLI's re-derived context window, every `resolve*`/`derive*` helper that
+recomputes an upstream fact) is a defect regardless of whether the copies
+currently agree — compute once at the owner, carry as data, render at the
+edge. This is checklist §15's decide-once-carry-as-data rule promoted to a
+standing review criterion for the whole program.
+
 ### 2a. Projection plane
 
 - **C1. The delta-feed driver is written twice.** Ext/desktop
@@ -115,44 +134,50 @@ core.
   re-derives identity/agent/model by hand
   (`sessionSignalsAdapter.ts:135-155`) — no `getCleanAgentName`, no
   `modelLabel`, no `worktree`, no registry-derived `isRemote` — and re-runs
-  `getRuntimeModelLabel` ad hoc at 4 more sites
+  `getRuntimeModelLabel` ad hoc across the TUI
   (`StaticConversationTranscript.tsx:126,140`, `SubagentList.tsx:148,255`,
-  `sessionStatus.ts:93`, `statusBarDisplay.ts`). → Route the CLI through the
+  `sessionStatus.ts:93`, `statusBarDisplay.ts`,
+  `runtime/workflowCallText.ts:9`). → Route the CLI through the
   shared builder. **Net:** ~−40 L; CLI gains worktree/isRemote/label parity
   for free.
 - **C13. Small drifted predicates, one owner each.**
-  - *Usage-worth-showing*: canonical `isEmptyUsage`
+  - _Usage-worth-showing_: canonical `isEmptyUsage`
     (`src/shared/schemas/usage.ts:111`, checks 7 fields incl. cost/cacheMiss/
     reasoning) vs CLI `usageHasTokens` (`resumeHint.ts:86`, no cost) vs
     webview `hasUsage` (`UsagePanel.ts:184-194`, no cacheMiss/reasoning).
     Observable drift: a reasoning-only run shows in the CLI hint and hides in
     the webview; cost-only is the inverse. Both host copies are pure
     duplication of an already-exported symbol. **Net:** ~−20 L. (Adjacent to
-    DR8, which covers the *totals* fold; this row is only the predicate.)
-  - *ACTIVE_SKILLS last-entry-wins*: three sites, two hosts
+    DR8, which covers the _totals_ fold; this row is only the predicate.)
+  - _ACTIVE_SKILLS last-entry-wins_: three sites, two hosts
     (`logSlice.ts:100-112`, `subscribeStreamLog.ts:388-393`,
     `transcriptFold.ts:1057-1066`). → shared `latestActiveSkills(entries)`.
     **Net:** ~−25 L.
-  - *Transcript-row membership*: the extension's drop rule
+  - _Transcript-row membership_: the extension's drop rule
     (`logSlice.ts:149` + suppression list) and the CLI's
     `TRANSCRIPT_MESSAGE_TYPES` sets (`transcriptFold.ts:96-134,846-877`)
     encode one editorial decision in two vocabularies and have already
-    drifted. Consolidating the *vocabulary* (one exported set with
-    per-host subsets) is mechanical; the *membership deltas* are §4. Companion
+    drifted. Consolidating the _vocabulary_ (one exported set with
+    per-host subsets) is mechanical; the _membership deltas_ are §4. Companion
     to CP5 (run-fact filter arrays), which remains open.
 - **C17. Diff line-count stats, two algorithms for one edit.** Core computes
   `addedLines/removedLines` via diff-match-patch and puts them on the wire
   (`src/tools/approval/toolEditApproval.ts:159-188`,
   `src/shared/schemas/prompts.ts:34-35`; consumed by
-  `ToolEditRequestPanel.ts:124-125`). The CLI ignores the wire fields
-  (`grep addedLines packages/cli/src` → 0) and recomputes from
-  `structuredPatch` hunks (`DiffView.tsx:52-63`). Two numbers for the same
-  edit. → CLI renders the stamped values; keep `buildHunks` only for the
-  visual diff. Same disease as C22.
+  `ToolEditRequestPanel.ts:124-125`). The CLI recomputes from
+  `structuredPatch` hunks (`DiffView.tsx:52-63`). _(Transport corrected
+  after review: the CLI's zero-hit grep reflects a different transport, not
+  ignored data — its approval path receives `ToolEditApprovalRequest` via
+  `SessionHandle.interactions`, which does not carry
+  `addedLines`/`removedLines`; those live only on the webview
+  `ToolEditPermission` payload.)_ → Either add the counts to the
+  host-interaction contract (pairs with the contracts doc §2.2 aliasing) or
+  have the CLI call the canonical counting helper; keep `buildHunks` only
+  for the visual diff. Same disease as C22.
 - **C22. `elapsed`: wire-stamped vs locally recomputed.**
   `executionRegistry.ts:323` stamps `formatDuration(...)`; the webview renders
   it verbatim (`BackgroundTasksPanel.ts:478-480`); the CLI recomputes with a
-  *different* formatter and live ticking (`childControls.ts:24-34`). → One
+  _different_ formatter and live ticking (`childControls.ts:24-34`). → One
   derivation + one formatter; if live ticking is wanted, ship `startedAt` on
   the wire and derive in one shared helper. **Net:** ~−15 L.
 - **C18. `replayTrace` bootstrap re-implements two live builders.**
@@ -168,20 +193,20 @@ core.
 
 ### 2b. Lifecycle plane
 
-- **C2. Resume recovery claim/release triad — byte-identical, 2 hosts, 3rd
-  missing the guard.**
+- **C2. Resume recovery claim/release triad — byte-identical, 2 hosts.**
   `packages/extension/src/commands/agent/resumeFromResumeData.ts:46-50,106-108`
   and `packages/desktop/src/main/desktopAgentResume.ts:50-58` are the same
   three statements (`useRecovery`/`claimRecovery` → bail on failure →
   `.finally(release('recoverable'))`) — pure `SessionHandle.followUps`
-  choreography, nothing host-specific. The CLI
-  (`chatSessionController.ts:700-747`) never claims at the port boundary and
-  relies on `resumeQueuedToolUseFromResumeData`'s internal claim
-  (`resumeQueuedToolUse.ts:88-91`), so the "queue already owned or terminal →
-  bail early" guard never fires there. → Core
+  choreography, nothing host-specific. _(Corrected after review: the CLI is
+  NOT missing the guard — when no preclaimed recovery is supplied,
+  `resumeQueuedToolUseFromResumeData` performs the same
+  `claimRecovery(streamId, true)` internally and returns `false` if the
+  queue is already owned or terminal (`resumeQueuedToolUse.ts:88-91`). The
+  bail happens later in the call, not never.)_ → Core
   `resumeStreamWithRecovery(streamId, ports, recovery)` beside
-  `resolveAndResumeStream`; both GUI hosts collapse to a ports object, CLI
-  gains the early bail. **Net:** −2 copies + 1 missing guard.
+  `resolveAndResumeStream` as a **dedup of the two GUI wrappers only**; the
+  CLI keeps its in-function claim. **Net:** −2 copies.
 - **C10. `validateExecutionRequest` → report → bail: 6 sites, 3 sinks, one
   silent.** CLI (`runExecution.ts:146-150`, stderr + exit code), desktop
   (`desktopAgentExecution.ts:1282-1289` + `desktopProgressFileActions.ts:82`,
@@ -203,29 +228,34 @@ core.
   unconditional `onError: showResumeError`
   (`resumeFromResumeData.ts:33-40,83-87`) even though
   `resumeToolUseFromResumeData` sets `suppressErrorNotification: true`
-  *because* "host resume callers surface their own warning toast"
+  _because_ "host resume callers surface their own warning toast"
   (`executeAgent.ts:570`) — so a failure that already produced a
   terminal-result toast toasts twice. → Core
   `withUnhandledFailureReporting(session, filter, run, report)`; 3 existing
   sites become callers, the extension becomes the 4th and loses the double
   toast. **Net:** −3 copies + 1 bug.
-- **C3. Resume-state resolution reporting: same 4-branch tree, drifted
-  bodies.** Core deliberately returns a silent 3-state resolution
-  (`resolveAndResumeStream.ts:34-41,56-84`); desktop
-  (`desktopAgentResume.ts:100-132`) and extension
-  (`resumeFromResumeData.ts:61-79`) then re-implement the same decision tree
-  with different surfaces — and the extension's `read-failed` arm is
-  log-only, producing exactly the false "no state exists" diagnosis the
-  desktop comment (`desktopAgentResume.ts:112-114`) says must not happen. The
-  message-selection half is host-agnostic. → Core
-  `describeResumeStateResolution(resolution): {severity, message}`; hosts keep
-  only the render verb. Fixes §3 V4(a) as a side effect.
+- **C3. Resume-state resolution reporting: both GUI hosts mishandle
+  `read-failed`, differently.** _(Re-cited after review — the original
+  citations were wrong: the data|null|throw contract lives in
+  `retrieveSessionResumeData` (`SessionResumeRetrieval.ts`), the cited
+  desktop comment does not exist, and the port today resolves to
+  `ResolvedResumeState | undefined` — the extension collapses a preload
+  **failure** into the same `undefined` as missing state.)_ Corrected
+  finding: on read failure the extension is log-only/silent
+  (`resumeFromResumeData.ts:63-80`) and desktop shows the generic "No
+  persisted run state was found" message (`desktopAgentResume.ts:141-149`)
+  — **neither** host distinguishes "storage failed" from "nothing to
+  resume", the false-diagnosis defect. The fix is therefore a small
+  **contract change first**: propagate a discriminated resolution
+  (`read-failed | incomplete | resolved`) through the port and its callers,
+  then one shared `describeResumeStateResolution(resolution)` supplies the
+  message; hosts keep only the render verb. Fixes §3 V4(a).
 - **C21. `ExecutionLeaseActiveError` classification: 3 hosts, 3 phrasings,
   zero shared code.** CLI pre-checks via `inspectExecutionLease`
   (`resumeExecution.ts:96-105`, "Execution X is active in TeXRA."); desktop
   and extension hit the error deep inside `resumeToolUseFromResumeData` and
   render "Resume failed: …" / "Failed to resume tool-use session: …". The
-  *pre-check* is CLI-only (1 host — leave it); the **error classification and
+  _pre-check_ is CLI-only (1 host — leave it); the **error classification and
   message** are shared by all three and exist nowhere. → One
   `describeResumeFailure(error)` in core distinguishing lease-active from
   generic failure; three call sites.
@@ -238,8 +268,8 @@ core.
   affordance — which desktop **discards** (`:1307-1310`), giving desktop
   users a dead-end error where extension users get "Open file management
   guide" (gap, fix with the extraction). → `runMainViewLaunch(message,
-  hostPorts)` on the existing `MainViewExecutionController`. **Net:** −1 copy
-  + 1 restored affordance.
+hostPorts)` on the existing `MainViewExecutionController`. **Net:** −1 copy
+  - 1 restored affordance.
 
 ### 2c. Composition-root / platform plane
 
@@ -252,9 +282,13 @@ core.
   `hasProjectConfig || canCreateOrWrite(path)` rule, same internal-store
   fallback, near-identical warning text; only the log sink differs. The CLI
   has **neither** — `initPlatform.ts:237-239` opens
-  `workspaceTexraConfigPath(cwd)` unguarded, so a corrupt or unwritable
-  `.texra/config.json` throws for every `texra` command instead of degrading
-  loudly to the internal store (§3 V10). Adjacent: the global-store open is
+  `workspaceTexraConfigPath(cwd)` unguarded. _(Narrowed after review:
+  `JsonStore.open()` only reads — `ENOENT` is an empty store and no write
+  happens until `set()`/`flush()` — so the failure cases split: a
+  **malformed or unreadable** config file fails CLI initialization, while
+  an **unwritable** one fails only when a command persists configuration.
+  The GUI hosts degrade both cases to the internal store; the CLI degrades
+  neither.)_ (§3 V10.) Adjacent: the global-store open is
   3-host with one drifted constant (desktop hard-codes `'config.json'`,
   `platform/index.ts:99-101`, instead of `TEXRA_CONFIG_FILE_NAME`). →
   `openTexraConfigStores(storage, workspaceRoot, warn) → {workspace, global}`
@@ -271,14 +305,18 @@ core.
   `cliSecrets.ts:34-78` and `electronSecrets.ts:59-168` share the whole
   `JsonStore`-backed shape (env-first get, `set/delete` = `store.set`,
   `listStoredKeys` = snapshot keys); real deltas are the value codec
-  (identity vs `safeStorage` envelope) and the CLI's `PQueue` serialization —
-  which Electron *lacks*, leaving concurrent `set()` racing on `JsonStore`'s
-  internal queue alone. The env-first `get()` appears in all four impls
-  (`vscodeSecrets.ts:19-23`, `electronSecrets.ts:69-74`,
-  `cliSecrets.ts:39-41`, `packages/agent/src/node.ts:29-30`). →
-  `JsonStoreSecrets` base with injected codec (2 implementers, both gaining
-  the queue) + `withEnvOverride(store)` (4 callers). `VscodeSecrets` and the
-  Electron `safeStorage` mode machine stay host-specific (deserved).
+  (identity vs `safeStorage` envelope) and the CLI's outer `PQueue`.
+  _(Corrected after review: Electron's missing queue is NOT a race —
+  `JsonStore.set()` synchronously enqueues flushes into a module-wide
+  per-path `PQueue` and the flush takes a cross-process file lock; the CLI
+  needs its outer queue only because it asynchronously re-opens a fresh
+  store per mutation. Do not add a redundant queue to Electron.)_ The
+  env-first `get()` appears in all four impls (`vscodeSecrets.ts:19-23`,
+  `electronSecrets.ts:69-74`, `cliSecrets.ts:39-41`,
+  `packages/agent/src/node.ts:29-30`). → `JsonStoreSecrets` base with
+  injected codec (2 implementers) + `withEnvOverride(store)` (4 callers) —
+  a FLAGGED-class extraction that lands only if net-≤0. `VscodeSecrets` and
+  the Electron `safeStorage` mode machine stay host-specific (deserved).
 - **C7. The extension re-implements two shared bootstrap helpers — by
   admission.** (a) `copyDefaultAgents`
   (`packages/extension/src/frontend/setup.ts:26-55`) duplicates
@@ -289,25 +327,38 @@ core.
   that module's Lean direct-adapter import." The blocker is a module-boundary
   artifact: `nodeHost.ts:25` imports the Lean LSP adapter. → Split the skill
   helper out of `nodeHost.ts`; the extension imports both helpers; delete
-  both inline copies. **Net:** −2 admitted duplicates; real 3-host
-  consolidation unlocked by a file split, not a new layer.
+  both inline copies. **Rider (review-caught):** `copyDefaultAgents` catches
+  reconciliation errors so VS Code activation survives an unreadable agent
+  directory, while `bootstrapNodeAgentDirectories` propagates — the shared
+  helper must gain a catch-and-warn (or injected reporter) before the
+  extension copy deletes, or a broken agent dir starts rejecting activation.
+  **Net:** −2 admitted duplicates; real 3-host consolidation unlocked by a
+  file split, not a new layer.
 - **C8. Three near-identical `Platform` literals.** `createNodePlatform`
   (`nodeHost.ts:93-114`), `nodePlatform` (`packages/agent/src/node.ts:58-78`
-  — reimplements rather than calls it, blocked only by
-  `NodePlatformServices.configStores` being typed `JsonStore` instead of
-  `ConfigProvider`), and the extension's hand-assembled literal
-  (`extension.ts:209-235`). → Widen the field type; agent package becomes a
-  3rd caller; extension passes overrides (`globalState`, `workspaceState`,
-  `secrets`, `languageModel`, `toolMissingHandler`). **Net:** −2 restatements.
+  — reimplements rather than calls it), and the extension's hand-assembled
+  literal (`extension.ts:209-235`). _(Mechanism corrected after review:
+  widening `configStores`' declared type is NOT sufficient —
+  `createNodePlatform` unconditionally constructs `new JsonConfigProvider`
+  from the stores, while the SDK deliberately supplies a
+  `MemoryConfigProvider`. The consolidation needs the factory to accept an
+  already-constructed `ConfigProvider` (stores-or-provider input), so the
+  SDK's semantics survive; and the SDK surface is frozen, so its exported
+  signature must not change.)_ Extension passes overrides (`globalState`,
+  `workspaceState`, `secrets`, `languageModel`, `toolMissingHandler`).
+  **Net:** −2 restatements.
 - **C15. Workspace-state path derived twice, same physical file.** Desktop
   (`platform/index.ts:84-98`) re-derives
   `join(storage.getStoragePath(), 'state.json')` that
   `createCliStateStores` (`cliStateStores.ts:22-46`) already owns — and in
   production both hosts write the **same**
   `~/.texra/workspace-storage/<id>/state.json`. Fold into one helper; the
-  *global*-state path divergence is §3 V1 (a ruling, not a refactor).
+  _global_-state path divergence is §3 V1 (a ruling, not a refactor).
 - **C14. `registerCoreShutdownHandlers` — desktop and CLI leak at exit.**
-  Only the extension disposes the shared polling sources
+  _(Scope note from review: the recorder backstop belongs only to
+  recording-capable hosts — the CLI has no audio path, so its wiring would
+  be dead; the lifecycle doc's self-registration form scopes this
+  naturally.)_ Only the extension disposes the shared polling sources
   (`SharedPR/Repo/IssuePollingSource.disposeAll`), `killActiveRecording`, and
   `clearStoreCache` at shutdown (`extension.ts:289-308`); desktop
   (`index.ts:1231-1252`) and CLI (`initPlatform.ts:353-377`) dispose none of
@@ -325,17 +376,17 @@ core.
   `grokLogin.ts:18-57`), desktop inline
   (`desktopCredentialSettingsController.ts:312-338`) each restate
   `{coordinator, loginWithDeviceCode, loginWithLoopback, accountLabel,
-  setPreferSubscription, displayName}` per provider, and the three generic
+setPreferSubscription, displayName}` per provider, and the three generic
   runners share one device-code-vs-loopback shape with only presentation
   differing. → One `SUBSCRIPTION_PROVIDERS` registry in `src/auth/` + a
   host-supplied `{presentDeviceCode, presentSignInUrl}` port; 6 descriptor
   sites → 2. Rider: desktop currently imports **only** `loginWithLoopback`
   (§3 V11a) — the registry gives it the device-code fallback for free.
 - **C-minor (auth).** `getServerSideKeyService().clearAllCaches({
-  resetQuotaFlip: true })` is repeated unconditionally at 6 sites across the
+resetQuotaFlip: true })` is repeated unconditionally at 6 sites across the
   three hosts (`SupabaseAuthProvider.ts:83,388`,
   `desktopSupabaseAuth.ts:414`, `cli/supabaseAuth.ts:158,209,221`).
-  `authFlowEffects.ts:1-21` argues the *surrounding* refresh sequence is a
+  `authFlowEffects.ts:1-21` argues the _surrounding_ refresh sequence is a
   permanent host boundary — this single call is not part of that argument and
   belongs inside the shared coordinator. Also: `getCliSecrets` memoizes on
   first `storageRoot` and ignores later arguments (`cliSecrets.ts:86-91`)
@@ -350,24 +401,26 @@ core.
   normalizer is shared (`src/shared/toolUse.ts:81`, 2 callers); every display
   decision on top is forked with divergent policy — header-preview source,
   truncation (width-budgeted vs fixed 60/120), which tools show output (CLI:
-  bash+MCP only, `toolRenderers.tsx:318-329`; webview: everything *except*
+  bash+MCP only, `toolRenderers.tsx:318-329`; webview: everything _except_
   MCP/read/delegate/…, `toolFormatters.ts:155-162` — a direct inversion on
   MCP), output truncation (CLI head-6/tail-3/2000-chars vs webview none),
   error text (240-char collapse vs full `<pre>`). → The workflowCall.ts shape
   (§1): a core `toolRowModel(normalized, {widthBudget}) → {headerLabel,
-  headerPreview, sections[], errorPreview, elision}`; CLI paints spans,
+headerPreview, sections[], errorPreview, elision}`; CLI paints spans,
   webview paints Lit. **Blocked on an editorial ruling** — which policy wins
-  per axis — so this is Band 1 mechanics *after* a Band 2 decision (§4).
+  per axis — so this is Band 1 mechanics _after_ a Band 2 decision (§4).
   Related: `buildDelegationSections` / `buildWorkflowScriptSections` etc.
   (`toolSections.ts:408,455`) have no CLI counterpart at all (§4d).
-- **C19. Host-neutral text analysis stranded in `packages/cli`.**
-  `htmlMarkdownNormalize.ts` (346 L: HTML→markdown conversion,
-  currency/shell `$` disambiguation) is pure text analysis importing the
-  shared `protectLatexMathSpans`; and `summarizeEmbeddedSubagentFollowups`
+- **C19. (Withdrawn half + surviving half.)** _(Review-adjudicated:)_ the
+  `htmlMarkdownNormalize.ts` relocation is **withdrawn** — the Lit webview
+  renders HTML directly and no second consumer for the terminal conversion
+  exists, so moving it to shared code would mint a single-caller shared API
+  (the banned species). It stays in the CLI until a second host needs it.
+  The surviving half: `summarizeEmbeddedSubagentFollowups`
   (`src/shared/subagentFollowup.ts:391`) sits in shared code with a header
   claiming "Both hosts render them" while having exactly one CLI caller —
   the header is wrong or the webview is missing the feature (§4f decides
-  which). Relocation/rehoming, no behavior change.
+  which).
 
 ---
 
@@ -378,13 +431,18 @@ Format: mechanism → consequence → convergence/ruling needed.
 - **V1. Same setting key, three physical stores.**
   - Git-author keys (`texra.git.*`, catalog says
     `hosts: ['vscode','cli','desktop']`, `stateSettings.ts:351-407`): ext →
-    `WorktreeMemento`; desktop → workspace `state.json` under the **wrong
-    slot** — `applyStateSettingUpdate` is called without a host argument
-    (`desktopSettingsIpc.ts:258`), so `settingsAccess.ts:41-46` defaults to
-    `'extension'` and the row's `cliStore: 'config'` override never applies;
-    CLI → `.texra/config.json`. Desktop and CLI share the same physical
-    `state.json` yet cannot see each other's value. The missing host argument
-    is a **plain bug**; where the value *should* live is a ruling.
+    `WorktreeMemento`; desktop → workspace `state.json`; CLI →
+    `.texra/config.json`. _(Corrected after review: this is NOT a missing
+    host argument — `applyStateSettingUpdate` has no host parameter by
+    design, `SettingsHostKind` is deliberately `'extension' | 'cli'`, and
+    `settingsAccess.ts:23-25` documents that desktop shares `entry.store`
+    with the extension while `cliStore` is CLI-only. Desktop writing these
+    keys to workspace `state.json` follows the catalog contract.)_ The
+    defect is the **three-store divergence itself**: the same catalog row
+    resolves to three different physical stores, so a value set in one host
+    is invisible in the others. Where the value _should_ live is the
+    ruling — and the 2026-08-15 policy-toggle precedent (extension moves to
+    the shared store) is the recorded direction.
   - Global state is not shared at all — desktop
     `<userData>/state/global.json` (`platform/index.ts:84-86`) vs CLI
     `~/.texra/global-storage/state.json` (`cliStateStores.ts:22-28`) vs VS
@@ -398,18 +456,22 @@ Format: mechanism → consequence → convergence/ruling needed.
   - Secrets are not shared and differ in confidentiality tier:
     `~/.texra/secrets.json` plaintext 0o600 (CLI) vs `safeStorage`-encrypted
     `<userData>/secrets.json` (desktop) vs VS Code SecretStorage. `texra
-    login` does not sign in the GUI hosts and vice-versa. Ruling: is
+login` does not sign in the GUI hosts and vice-versa. Ruling: is
     cross-host single sign-on a goal? If yes, this is a keychain-backed
     shared-store design note; if no, fence it and say so in `texra login`
     help.
-- **V2. Desktop telemetry is dead while the toggle is live.** The catalog row
-  declares `hosts: ['vscode','desktop']` (`stateSettings.ts:881-890`) and the
-  desktop renders + persists the toggle (`desktopSettingsIpc.ts:248`), but no
-  code in `packages/desktop` calls `UsageLogService.initialize` — the flush
-  timer never starts (`UsageLogService.ts:171-190`) and
-  `editorType`/`extensionVersion` stay undefined on queued entries, including
-  the plan-accounting rounds that bypass the telemetry setting (`:194`).
-  Desktop relay usage is effectively unreported/untagged. Same class:
+- **V2. Desktop telemetry is partially initialized.** _(Narrowed twice on
+  review/verification — "dead" overstated it.)_ The catalog row declares
+  `hosts: ['vscode','desktop']` (`stateSettings.ts:881-890`), the desktop
+  renders + persists the toggle (`desktopSettingsIpc.ts:248`), and the
+  toggle DOES gate collection (`log()` checks the setting per entry).
+  What the missing `UsageLogService.initialize` costs: no 30 s flush
+  cadence ever starts (batch-of-10 and immediate relay-round flushes still
+  fire), `editorType`/`extensionVersion` stay undefined on every desktop
+  entry, and low-volume **non-relay** entries (BYOK telemetry,
+  subscription-route plan accounting) queue until exit and are lost —
+  relay spend-cap accounting is safe (flushed per round by
+  `UsageMonitor`). Same class:
   desktop never calls `refreshModelListStateIfNeeded` at startup (ext
   `extension.ts:385`, CLI `initPlatform.ts:298`), so retired-model sweeps and
   stale Copilot-route clears never run there. Both are FS-class
@@ -424,7 +486,7 @@ Format: mechanism → consequence → convergence/ruling needed.
   in only one host's UI over a key core reads everywhere
   (`WEBSOCKET_OPENAI`, `USE_OPENROUTER`, `KIMI_CODE_PREFER`, provider
   endpoints — `hosts: ['cli']` with the Models tab as a parallel UI), and
-  ext/desktop-only rows the CLI reports as *unknown keys* when they appear in
+  ext/desktop-only rows the CLI reports as _unknown keys_ when they appear in
   `.texra/config.json` (`ALLOW_ORCHESTRATOR_KILL`,
   `DETACH_SUBAGENTS_ON_STOP` — which is also the CP2 gap,
   `WORKFLOW_AUTO_OPEN_PDF`, `LATEXDIFF_*`, `LATEX_FORMATTER`,
@@ -438,7 +500,7 @@ Format: mechanism → consequence → convergence/ruling needed.
   window can still have its lease acquired; desktop and CLI both pass the
   guard; (c) its cancellation is non-monotone — recomputed live from
   `!session.transcripts.has(streamId)` (`:60`), so a stream re-created under
-  the same id *un-cancels* a resume, where desktop latches
+  the same id _un-cancels_ a resume, where desktop latches
   (`isResumeInvalidated`, `desktopAgentResume.ts:72-84`) and the CLI latches
   with an explicit monotonicity comment
   (`chatSessionController.ts:295-299,668-672`); (d) double-toast (fixed by
@@ -456,10 +518,14 @@ Format: mechanism → consequence → convergence/ruling needed.
   release — relying entirely on next-launch `repairRestartedStreams` and the
   120 s stale horizon (`executionLease.ts:19`). Consequence: quitting the
   desktop/VS Code mid-run leaves a live lease blocking `texra resume` of that
-  execution for up to 2 minutes, and nothing documents it. Ruling: either
-  port a minimal settle-at-quit (persist CANCELLED + release) to the
-  long-lived hosts, or fence the asymmetry with the stale-horizon rationale
-  written down where the lease constant lives.
+  execution for up to 2 minutes, and nothing documents it. _(Widened after
+  review + lifecycle verification: the CLI is not fully settled either —
+  the TUI completes leases only when `isResumableIdle()`, and headless
+  settlement can lose its bounded grace race — so this is a **four-host gap
+  of varying width**.)_ Resolution: lease settlement becomes a
+  session-level obligation for all hosts (an awaited session-owned shutdown
+  drain, since lease completion is async under file locking — the lifecycle
+  doc §3 fix 2 owns the design).
 - **V6. `enforceCategory` + mismatch finalization are CLI-only.** Core
   supports it (`runAgent.ts:39`, `executeAgent.ts:354`, enforced at
   `AgentLaunchContext.ts:321`); passed by 4 CLI sites + core's
@@ -484,13 +550,19 @@ Format: mechanism → consequence → convergence/ruling needed.
   tool-availability/token/model-access half is **new**. → Wire desktop (and
   where sensible CLI TUI) subscriptions; where a host deliberately won't
   react, fence it at the signal declaration.
-- **V8. `detachActiveChildren` bypasses its own SSOT — plain bug, 2 CLI
-  sites.** `detachSubagentsOnStop.ts:17` documents itself as "shared by every
-  host" and is honored at 4 sites; `chatSessionController.ts:856-858`
-  (`stopStream`) hardcodes `true`, and `runExecution.ts:409,505` call
-  `session.executions.kill(id)` with no options, silently taking the default
-  over the user's toggle. Fix the two sites; no ruling needed. (CP2's
-  "CLI has no setter" half remains a separate decision.)
+- **V8. `detachActiveChildren` bypasses its own SSOT — 1 bug + 2 sites to
+  document.** `detachSubagentsOnStop.ts:17` documents itself as "shared by
+  every host" and is honored at 4 sites; `chatSessionController.ts:856-858`
+  (`stopStream`) hardcodes `true` — that is the plain bug (the same TUI
+  applies two policies depending on which surface the user stops from).
+  _(Narrowed after review:)_ the `runExecution.ts:409,505` optionless
+  `kill(id)` sites are on the **process-shutdown path**, where cascade-kill
+  is correct — a detached child cannot outlive the exiting CLI process, and
+  applying the toggle there would strand children without finalization. Fix:
+  `stopStream` consults the SSOT; the shutdown sites pass an explicit
+  `{detachActiveChildren: false}` with a comment declaring the deliberate
+  cascade (per the lifecycle doc §4). (CP2's "CLI has no setter" half
+  remains a separate decision.)
 - **V9. "Resumable" has two truth sources.** GUI hosts:
   `deriveResumability(id)` with typed causes
   (`HistoryMessageBuilder.ts:36-42`, `resumability.ts:82`). CLI:
@@ -517,8 +589,11 @@ Format: mechanism → consequence → convergence/ruling needed.
   silently. Ruling: minimum bar for callback binding, then converge.
 - **V12. Approval-policy default differs by entry path, undocumented.** CLI
   under `--no-input` defaults to `'never'`
-  (`cliContext.ts:411-413`), ext and desktop to `'ask'`
-  (`extension.ts:266-270`, `desktop/main/index.ts:1263-1267`). Plausibly
+  (`cliContext.ts:411-413`), ext and desktop to `'ask'` via the shared
+  `TEXRA_APPROVAL_POLICY_DEFAULT` constant (`src/shared/approvalPolicy.ts:9`;
+  ext through `settingsState.ts:199`, desktop through
+  `readPersistedTexraApprovalPolicy` imported at
+  `desktop/main/index.ts:48` — anchors refreshed on review). Plausibly
   deserved (headless discipline) — but the catalog doesn't record it; fence
   or unify.
 
@@ -527,8 +602,8 @@ Format: mechanism → consequence → convergence/ruling needed.
 ## 4. The #9021 register: data on the wire, dropped by the CLI
 
 The live instances of the class issue #9021 named (subagent file data on the
-wire, discarded by the CLI adapter). Each is *data already computed by shared
-code*; the CLI either filters it out or re-derives a weaker version. These
+wire, discarded by the CLI adapter). Each is _data already computed by shared
+code_; the CLI either filters it out or re-derives a weaker version. These
 need one editorial ruling — "does the CLI transcript aim for webview parity
 or a deliberately terser editorial line?" — after which each row is
 mechanical. Today the answer is undeclared, which is how the drift
@@ -583,28 +658,39 @@ accumulated.
   `contextManagement`, `scratchpad`; `thinking` is live-activity-only.
   Some rows are surely deserved (terminal economy) — the point is to rule
   per-type and fence, not leave it to accretion.
-- **(i) Render failures are silent in the CLI.** The webview wraps every
-  formatter and renders a visible "Failed to render X" row
-  (`formatters/index.ts:56-79`); the CLI returns `null` on malformed rows
-  (`transcriptFold.ts:299-302`) behind a comment claiming parity with the
-  progress view — which is factually wrong. Silent-degradation defect;
-  fix regardless of the parity ruling.
+- **(i) Malformed rows are silently dropped — on both hosts, differently.**
+  _(Corrected after review:)_ the webview's visible "Failed to render X"
+  fallback (`formatters/index.ts:56-79`) covers only **thrown** formatter
+  errors; for malformed tool payloads `normalizeToolUseData` `safeParse`s to
+  `null` and the entry falls through to the default formatter — so the CLI
+  comment claiming parity (`transcriptFold.ts:299-302`) is closer to true
+  than first audited. The real defect is that neither host has a declared
+  malformed-payload policy: choose one (visible failure row or structured
+  normalization error) and apply it to both, rather than prescribing "CLI
+  adopts webview behavior" that doesn't exist.
 - **(j) MCP tool output inversion.** Shown in CLI
   (`toolRenderers.tsx:327-328`), suppressed in webview
   (`toolFormatters.ts:159`). Someone decided each side once; nobody decided
   both.
-- **(k) LaTeX math environment corruption — CLI-only, real corruption.**
+- **(k) LaTeX math environment coverage gap — CLI-only exposure.**
   The shared `MATH_SPAN_PATTERNS` (`createMarkdownProcessor.ts:123-128`)
   protect `$…$`/`$$…$$`/`\(...\)`/`\[...\]` but **not**
   `\begin{env}…\end{env}`; the webview's texmath enables `beg_end`
-  (`texmathPlugin.ts:54`). `\begin{align} a_{i} b_{j} \end{align}` renders in
-  the webview and gets eaten by markdown-it emphasis in the CLI. Zero test
-  coverage. Inverse false-positive also live: the CLI's inline `$…$` pattern
-  lacks texmath's adjacency rule, so `Cost $5 then *ten* $10` suppresses
-  emphasis in the CLI only, and the currency masking that would compensate
-  runs only when an HTML tag is present
-  (`htmlMarkdownNormalize.ts:247-318`). Both are pattern fixes in the shared
-  processor + tests, no ruling needed.
+  (`texmathPlugin.ts:54`). _(Corrected after review — the original
+  `a_{i} b_{j}` example does not reproduce: those `_` runs are not
+  left-flanking under CommonMark rules, so they survive verbatim.)_ The
+  narrower true claim: environment bodies pass through markdown-it
+  **unprotected** in the CLI, so any genuinely markdown-sensitive content
+  inside them corrupts — `\\` row breaks are eaten as escapes, `*…*`
+  spans become emphasis, `` ` `` opens code — where the webview's `beg_end`
+  consumes the whole environment first. Test coverage exists for the four
+  protected delimiters (`AnsiMarkdown.vitest.ts:985-1002`); a
+  `\begin…\end`-specific test is the missing piece. Inverse false-positive
+  verified as stated: the CLI's inline `$…$` pattern lacks texmath's
+  adjacency rule, so `Cost $5 then *ten* $10` suppresses emphasis in the
+  CLI only, and the currency masking that would compensate runs only when
+  an HTML tag is present (`htmlMarkdownNormalize.ts:247-318`). Both are
+  pattern fixes in the shared processor + tests, no ruling needed.
 
 Headless CLI is deliberately **out** of this register: the NDJSON rail is a
 frozen wire (fenced), and the status-line renderer's hand-rolled folds are
@@ -647,7 +733,7 @@ New rows for the fence register (different on purpose; stop re-flagging):
 - **Math protection mechanisms differ correctly**: webview texmath consumes
   math before inline rules run (hazard structurally absent); CLI opts into
   `protectLatexMath` (`ansiMarkdown.ts:503-514`) because terminal markdown-it
-  has no texmath. One *coverage* gap is real (§4k); the mechanism split is
+  has no texmath. One _coverage_ gap is real (§4k); the mechanism split is
   deserved.
 - **Ink `<Static>` settlement-ordering model**
   (`transcriptEntries.ts:117-179`, `finalizedFrontier`) vs the webview's
@@ -665,7 +751,7 @@ New rows for the fence register (different on purpose; stop re-flagging):
   GUIs) in `texra relay-tokens` help rather than porting.
 - **Electron `safeStorage` mode machine + Linux `basic_text` refusal;
   VS Code SecretStorage `keys()` unsupported-host error** — deserved
-  host-specific secret backends (the *skeleton* consolidates, C6).
+  host-specific secret backends (the _skeleton_ consolidates, C6).
 - **`childExecutions.ts` tombstones ≠ retained finished rows** — the copied
   cap constant is defensible, but convert the "as a value, not an import"
   comment into an import once §4a lands.
@@ -700,6 +786,6 @@ needing none). Suggested order:
    (V11b), approval-policy default fence (V12).
 
 Everything here was found by scoped sweeps, not adjudicated line-by-line the
-way the 2026-07-09 audit was; treat each row as *verified-at-citation* but
+way the 2026-07-09 audit was; treat each row as _verified-at-citation_ but
 re-open sites before acting — the verifier-wrong-on-specifics rate in past
 campaigns was nonzero, and eight campaign PRs are landing around these files.

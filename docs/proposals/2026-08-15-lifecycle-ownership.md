@@ -11,6 +11,12 @@
 > sweep, a background-task/OS-process sweep — every load-bearing claim
 > adversarially re-verified, with three finder claims refuted or narrowed
 > and carried here in corrected form.
+>
+> **Review round applied (2026-08-16):** recording re-rooted to
+> view/window scope, lease settlement moved to an awaited shutdown drain,
+> the shutdown deadline extended to an abort-then-advance contract, the
+> SDK's deliberate run-scoped cleanup recorded as a process-root
+> exception, and the §6 step-9 wording aligned with §4's no-table rework.
 
 ## 0. The verdict, at two altitudes
 
@@ -36,13 +42,13 @@ Every owned resource registers with **exactly one** root's store at
 creation; ownership moves only by explicit transfer (`move()`), never
 aliasing. The roots are anchors that already exist (R4: nothing new):
 
-| Root | Anchor (exists today) | Closes via |
-|---|---|---|
-| Process/platform | `LifecycleHost` + one process store | `runShutdown()` (idempotent, phased) |
-| Session | `SessionHandle` | `dispose()` → store dispose (LIFO) |
-| Execution/run | `AgentExecutionHandle` + lease scope | `finalizeRunTerminal` (claim-gated) |
-| Stream | `StreamLogStore` residency record | residency-lease release |
-| View | webview/window/TUI-generation context | unmount / context death / generation bump |
+| Root             | Anchor (exists today)                 | Closes via                                |
+| ---------------- | ------------------------------------- | ----------------------------------------- |
+| Process/platform | `LifecycleHost` + one process store   | `runShutdown()` (idempotent, phased)      |
+| Session          | `SessionHandle`                       | `dispose()` → store dispose (LIFO)        |
+| Execution/run    | `AgentExecutionHandle` + lease scope  | `finalizeRunTerminal` (claim-gated)       |
+| Stream           | `StreamLogStore` residency record     | residency-lease release                   |
+| View             | webview/window/TUI-generation context | unmount / context death / generation bump |
 
 The full resource→root assignment table (every audited resource, exactly
 one root, with today-vs-change per row) is in the workflow synthesis; the
@@ -61,10 +67,13 @@ rows that change:
   widest-impact fix); the `CodexThreads`/`ClaudeAgentSessions` module
   registries move to session keying (the `childRunBudget` WeakMap model —
   the last instances of the #7694-banned pattern).
-- **Execution root:** the recording subprocess (today a module `let` with
-  an extension-only kill hook) becomes run-scoped with a self-registered
-  process backstop; the childRunLoop's ordered `finally` ladder becomes a
-  run-scoped stack so ordering is structural.
+- **Execution root:** the childRunLoop's ordered `finally` ladder becomes a
+  run-scoped stack so ordering is structural. _(Recording re-rooted on
+  review: recordings start from the main/progress view with NO agent
+  execution in existence, so run-scoping would tie them to an unrelated
+  run or nothing — the recorder is a **view/window-root** resource with a
+  self-registered process-shutdown backstop, scoped to the two
+  recording-capable hosts.)_
 - **View root:** presentation leases get a store backstop (7 hand-released
   sites today); the CLI's `disposers` arrays and the TUI's
   `RESET_HOOKS`/generation machinery are recognized as a view-root store
@@ -104,6 +113,12 @@ Grounds (evidence over fashion):
   per-phase bound with laggard logging — verified: **zero unconditional
   drain timeouts exist today** on any host (desktop `before-quit` awaits
   unboundedly; the CLI's grace race is bypassed on its recovery branch).
+  _(Contract rider from review: a `Promise.race` bound alone does not stop
+  the laggard — it keeps running while `runShutdown` advances, and a late
+  BEFORE handler can then race the ON phase's disposals. The deadline
+  therefore extends the drain contract: handlers receive an abort signal
+  fired at the deadline, and a phase does not advance past an un-settled
+  laggard without first aborting it.)_
 
 Migration is ranked by collision severity (sync/async seam and its
 `void`-casts first; the CLI's triple exit system second; lease-as-fourth-
@@ -119,13 +134,19 @@ closure sites — stores in new and touched code only.
    residual windows only (the run-end subscription reaper handles normal
    completions; the "unconditional hang" claim was downgraded on verify);
    desktop polls GitHub until process death.
-2. **Quit-time lease settlement at the session root** — `SessionHandle.dispose`
-   completes/abandons owned leases. Verified as a **four-host gap of
-   varying width**, not "CLI is fine": extension/desktop never settle
-   (blocks resume up to the 120s horizon); CLI TUI settles only when
-   `isResumableIdle()`; headless can lose its grace race. Deletes the
-   CLI-UI-layer settlement as the sole implementation.
-3. **Desktop recording kill** — run-scope the recorder; interim, register
+2. **Quit-time lease settlement at the session root** — as an **awaited
+   session-owned shutdown drain, not `dispose()`** _(mechanism corrected on
+   review: `completeOwnedExecutionLease` is async under cross-process file
+   locking, and the sync `abandonOwnedExecutionLease` deliberately leaves
+   the persisted lease until the stale horizon — so settlement inside a
+   sync `dispose()` cannot fix the resume-block window; it runs as a drain
+   the shutdown registry awaits, before synchronous disposal)_. Verified as
+   a **four-host gap of varying width**, not "CLI is fine":
+   extension/desktop never settle (blocks resume up to the 120s horizon);
+   CLI TUI settles only when `isResumableIdle()`; headless can lose its
+   grace race. Deletes the CLI-UI-layer settlement as the sole
+   implementation.
+3. **Desktop recording kill** — view/window-scope the recorder (per the §1 correction); interim, register
    the kill in desktop shutdown. (Corrected on verify: sox does not orphan
    on graceful desktop quit — execa's cleanup default covers it; the
    exposure is abrupt kill, same as the extension's. The CLI claim was
@@ -154,21 +175,25 @@ construction**: one driver (`childRunLoop`) for all four child types
 lease protocol with three-layer double-ownership defense and working
 cross-host orphan adoption, host-invariant terminal persistence and
 parent-wake-after-finalize ordering, `registerAgentShutdownHandlers` wired
-identically in all three hosts (+ the SDK host), bash fore/background and
+identically in all three hosts (+ the SDK host — with the review-recorded
+exception that SDK embedders never run host shutdown handlers, so
+`packages/agent` deliberately performs that cleanup **per run** in its
+`runAgent` `finally`; the migration must keep that run-scoped path, not
+re-root it at a process lifecycle no embedder calls), bash fore/background and
 codex/claude process kill paths uniform, crash-swept process rows uniform.
 
-**The ad-hoc layer is stop/quit *policy*** — which events consult the
+**The ad-hoc layer is stop/quit _policy_** — which events consult the
 detach SSOT and what quitting means for children:
 
-| Event | extension | desktop | CLI |
-|---|---|---|---|
-| user stop (active) | detach toggle | detach toggle | detach toggle |
-| stop specific stream | toggle | toggle | **hardcoded detach** (`stopStream`) — same TUI, two policies by surface |
-| headless shutdown | — | — | **hardcoded cascade-kill** (optionless `kill`) |
-| host quit, native children | abandon → repair | abandon → repair | headless: kill+await; TUI: interrupt on ^C, abandon on ^C^C |
-| host quit, foreground bash | orphans (deliberate resume-first) | orphans | **killed** on normal quit gestures (verifier-caught asymmetry) |
-| toggle backing store | Memento (worktree-shared) | shared `state.json` | same `state.json`; **no CLI surface to set either toggle** |
-| detached-child approvals | always-attached UI | always-attached UI | explicit `interactionOwnership` (sole writer) |
+| Event                      | extension                         | desktop             | CLI                                                                     |
+| -------------------------- | --------------------------------- | ------------------- | ----------------------------------------------------------------------- |
+| user stop (active)         | detach toggle                     | detach toggle       | detach toggle                                                           |
+| stop specific stream       | toggle                            | toggle              | **hardcoded detach** (`stopStream`) — same TUI, two policies by surface |
+| headless shutdown          | —                                 | —                   | **hardcoded cascade-kill** (optionless `kill`)                          |
+| host quit, native children | abandon → repair                  | abandon → repair    | headless: kill+await; TUI: interrupt on ^C, abandon on ^C^C             |
+| host quit, foreground bash | orphans (deliberate resume-first) | orphans             | **killed** on normal quit gestures (verifier-caught asymmetry)          |
+| toggle backing store       | Memento (worktree-shared)         | shared `state.json` | same `state.json`; **no CLI surface to set either toggle**              |
+| detached-child approvals   | always-attached UI                | always-attached UI  | explicit `interactionOwnership` (sole writer)                           |
 
 **The fix — no new concept.** The SSOT already exists
 (`detachSubagentsOnStop()`); a policy-event table beside it would be an
@@ -180,7 +205,7 @@ three call-site repairs and one sentence of documentation:
 2. The two optionless headless `kill` sites pass an explicit
    `{detachActiveChildren: false}` with a comment stating headless
    shutdown deliberately cascades — the behavior is probably correct;
-   what's wrong is that it's an *accident of a default* instead of a
+   what's wrong is that it's an _accident of a default_ instead of a
    written decision.
 3. The quit asymmetry (GUI abandon-to-repair vs CLI kill) gets one
    paragraph at `detachSubagentsOnStop`'s declaration — the existing
@@ -208,7 +233,7 @@ shape + store + leak-assert), TC39 explicit resource management (`using`,
 `Symbol.dispose`; native `DisposableStack` deferred to a Node 24 floor —
 house store until then), AbortSignal structured cancellation
 (`any`/`timeout`/`throwIfAborted`), the sync-dispose/async-drain split,
-structured concurrency as a *rule* (scope owns children; `SessionHandle`
+structured concurrency as a _rule_ (scope owns children; `SessionHandle`
 and `childRunLoop` already are this), `p-queue`'s
 `abort → clear() → race(onIdle, timeout)` as the drain primitive, `execa`
 signal threading (bash already does it).
@@ -237,10 +262,13 @@ split avoids), `signal-exit` (Ink already embeds it; keep one exit matrix).
 7. **Desktop window root.** Deletes the 8-step manual ledger and the
    `pendingDesktopDiffHostDispose` module hand-off.
 8. **Tool-layer singletons → true scope** (agent-CLI registries session-
-   keyed; recording run-scoped; delete-or-wire `clearInlineAgents`;
+   keyed; recording view/window-scoped; delete-or-wire `clearInlineAgents`;
    collapse the duplicated stream→execution resolver).
-9. **`ChildStopPolicy` table + LaTeX signal threading + `using` adoption in
-   tests/new scopes + Lean single-owner registration.**
+9. **The §4 stop/quit call-site repairs (no table — §4's rework is the
+   spec: `stopStream` → SSOT, explicit documented options at the two
+   shutdown sites, one doc paragraph at the SSOT declaration) + LaTeX
+   signal threading + `using` adoption in tests/new scopes + Lean
+   single-owner registration.**
 
 PRs 1–5 independent except 4-after-3; 6–9 ride on 2. Every step leaves the
 tree with strictly fewer teardown mechanisms than it found.

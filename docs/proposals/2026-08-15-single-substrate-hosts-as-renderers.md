@@ -3,10 +3,10 @@
 > **Status:** Adjudicated design, 2026-08-15. Companion to
 > `2026-08-15-cross-host-consolidation.md` (the audit register); this doc is
 > the target architecture and staged plan for the maintainer's directive:
-> *"consolidate as much as possible; use the same data structure; just the UI
+> _"consolidate as much as possible; use the same data structure; just the UI
 > is rendered differently; collapse projectors, adaptors, bridges, and all
 > other forms that cheated with cleaner designs; get a single source of
-> truth."* Produced by four deep sweeps at worktree HEAD `bc64b7cab4`
+> truth."_ Produced by four deep sweeps at worktree HEAD `bc64b7cab4`
 > (layer census, transcript row-model study, session-state field study,
 > prior-rulings register). Every number below is verified-at-citation;
 > re-open sites before acting — eight campaign PRs are landing around these
@@ -24,6 +24,13 @@
 > obligation — every PR deleting a host's last `@agent/*` deep import must
 > prune `config/ratchets/host-agent-import-baseline.json` in the same
 > commit, or CI fails on stale headroom.
+>
+> **Review round applied (2026-08-16):** corrections folded in inline —
+> B-1 revised to the `sourceSeqNo` form (settlement ordering stays CLI
+> modality), the redaction ruling withdrawn (record-time redaction is
+> canonical), the 6d hydrator re-targeted to a browser-safe DTO, and three
+> §4 promotion rows corrected (`compactingActive` withdrawn, `resumable` →
+> `resumeEligible`, root-run identity → execution-keyed query).
 
 ## 0. The directive as a ruling, and what it does to prior rulings
 
@@ -36,13 +43,13 @@ three facts:
    `SessionRendererPort` landed and **is** the shared reducer for all three
    hosts (`ProgressBackend.ts:181` for ext+desktop,
    `sessionSignalsAdapter.ts:325` for CLI). The ruling's goal was reached by
-   a different mechanism; its live residue is only: *hosts keep persistence,
-   async race handling, and genuinely-local UI state*. This plan finishes the
+   a different mechanism; its live residue is only: _hosts keep persistence,
+   async race handling, and genuinely-local UI state_. This plan finishes the
    collapse onto that structure — it does not build a new one.
 2. **One prior ruling is squarely superseded, by name:**
-   `2026-08-03-ssot-consolidation-plan.md` §0.1 item 8, the clause *"the CLI
+   `2026-08-03-ssot-consolidation-plan.md` §0.1 item 8, the clause _"the CLI
    `StreamSlice` vs extension slice fragmentation stays (no shared reducer,
-   no merged host implementations)"*. The maintainer's 2026-08-15 directive
+   no merged host implementations)"_. The maintainer's 2026-08-15 directive
    overrides that clause. Items 1, 2, 4, 6, 7, 11 of the same list stay
    binding — including item 6's progress-view-IPC freeze: the originally
    drafted Wave C would have needed to supersede it, but the revised Wave C
@@ -67,7 +74,7 @@ the same PR, R6 net-element accounting and R8 consumer-grep in every PR body.
 
 ## 1. Target architecture
 
-One state plane, already built, promoted to *the only* state plane:
+One state plane, already built, promoted to _the only_ state plane:
 
 ```
                      SessionEventHub  (session.events: AgentEvent | SessionFact)
@@ -107,8 +114,8 @@ Three real process boundaries survive, each with a named minimal contract:
   shape (§6 revised). `WebviewBridge`'s resync handshake is load-bearing
   and keeps.
 - **B2 NDJSON stdout**: frozen public vocabulary; `sessionProgressSubscription`
-  + `cliPresentationHost` keep as-is, protected by the import fence
-  (parity-audit fence row 32).
+  - `cliPresentationHost` keep as-is, protected by the import fence
+    (parity-audit fence row 32).
 - **B3 archived trace.json**: the three compat readers in `replayTrace.ts`
   (~90 LoC) keep; the other ~100 LoC of hand-built payloads collapse via a
   `TraceDocument → SessionState` hydrator (§6d).
@@ -122,12 +129,12 @@ convention, and where the collapse is cheapest and largest (§3).
 Full table in the census sweep; the totals, against ~19,900 LoC currently in
 the state→pixels band (excluding leaf Ink/Lit components):
 
-| bucket | LoC | meaning |
-|---|---|---|
-| pass-through | **1,733** | reshapes/renames with zero policy — pure deletions |
+| bucket              | LoC       | meaning                                                        |
+| ------------------- | --------- | -------------------------------------------------------------- |
+| pass-through        | **1,733** | reshapes/renames with zero policy — pure deletions             |
 | parallel-derivation | **2,624** | recomputes what a shared structure owns — converge by deletion |
-| wire-translation | ~1,200 | real boundaries; keep minimal (some shrink under §6) |
-| modality | rest | keep |
+| wire-translation    | ~1,200    | real boundaries; keep minimal (some shrink under §6)           |
+| modality            | rest      | keep                                                           |
 
 **Theoretical ceiling ≈ 4,357 LoC (~22% of the band), and four independent
 per-stream state containers collapse to one.** The realistic first-tranche
@@ -179,16 +186,16 @@ ratchet. Two structural unlocks carry
 
 Then, container by container:
 
-| container | today | survives | net | notes |
-|---|---|---|---|---|
-| `childExecutions.ts` | 585 | ~110 (~35 with tombstone promoted) | **−475..−550** | roster/parent/tombstone all re-derive `StreamExecutionState.subagents` + `metadata.parentStreamId`; the cap constant is a self-admitted copy of `RETAINED_FINISHED_CHILDREN_CAP` ("as a value, not an import", `:71-76`). Two real riders: (1) `resetPerRunChildState` (`SessionState.ts:310-332`) drops retained children on a new RUNNING while the CLI's exit hint needs them — retention scope becomes a declared per-host policy on the shared structure, not a second container; (2) the removal tombstone is promoted (§4), because `SessionFactApplier.ts:353` re-mints state for deleted streams in ext+desktop too — the CLI's "extra" code was masking a shared bug. |
-| `cliState.ts` `StreamSlice` | 929 | ~490 | **−438** | 26 of 30 fields are field-for-field re-derivations of the shared `StreamState` schema + `StreamTabInfo` (table in the study). The slice becomes `StreamState & CliOnlyFields` where `CliOnlyFields` = `runStartedAt`, `latestLine`, `thinkingActive`, `compactingActive` + fold working state (until §4 promotes the first four). The dead `files` field is **already removed on main** (B2/#10541, −12 banked). **This is the §0.1-item-8 supersession, executed.** |
-| `sessionSignalsAdapter.ts` | 372 | ~90 | **−280** | ~200 LoC of single-field patch forwarders delete under U2; ~80 LoC of metadata/usage re-derivation deletes when the slice holds shared records verbatim; keeps: dispatch-generation staleness guard (genuine TUI-reset modality), the slice-minting gate, `onGoalPaused` local row. Also deletes the **dual status path**: `:337` drops the status fact so `subscribeStreamStatus.ts` (57) can re-subscribe separately, bypassing the applier's ordering guarantees — two subscribers to one fact, merged back into the port. |
-| `runProgressRenderer.ts` (headless) | 573 | ~395 | **−175** | `RenderState`'s six fields and the child bookkeeping are all owned by `StreamExecutionState`/metadata; attach a ~40-LoC headless `SessionRendererPort` and delete the hand-rolled `handleSessionFact`/`apply*` machinery. Bonus: the "clear child descriptions before roster repaint reuses a stale label" bug-guard becomes unnecessary — the roster row carries the description. ANSI repaint/throttle/heartbeat keep (modality). |
-| `subscribeStreamArtifacts.ts` | 135 | 0 | **−135** | copies `StreamSnapshotStore` getters into the slice; CLI reads the store directly (it already holds the session). |
-| `streamViews.ts` | 262 | ~140 | **−120** | label/parentLabel re-derivation replaced by `buildStreamTabInfo` output (this also fixes the drift where ext and CLI print different names for the same run — `getCleanAgentName(runIdentityName(…))` vs `runIdentityDisplayName`). |
-| `statusBarDisplay.ts` context gauge | ~35 | ~8 | **−27** | needs the `contextState` promotion (§4); until then the CLI's context window is *wrong* on subscription/compaction routes — this is a correctness fix wearing a refactor. |
-| `resumeHint.ts` targets | ~42 | ~27 | **−15** | needs the `resumable` promotion (§4). |
+| container                           | today | survives                           | net            | notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------- | ----- | ---------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `childExecutions.ts`                | 585   | ~110 (~35 with tombstone promoted) | **−475..−550** | roster/parent/tombstone all re-derive `StreamExecutionState.subagents` + `metadata.parentStreamId`; the cap constant is a self-admitted copy of `RETAINED_FINISHED_CHILDREN_CAP` ("as a value, not an import", `:71-76`). Two real riders: (1) `resetPerRunChildState` (`SessionState.ts:310-332`) drops retained children on a new RUNNING while the CLI's exit hint needs them — retention scope becomes a declared per-host policy on the shared structure, not a second container; (2) the removal tombstone is promoted (§4), because `SessionFactApplier.ts:353` re-mints state for deleted streams in ext+desktop too — the CLI's "extra" code was masking a shared bug. |
+| `cliState.ts` `StreamSlice`         | 929   | ~490                               | **−438**       | 26 of 30 fields are field-for-field re-derivations of the shared `StreamState` schema + `StreamTabInfo` (table in the study). The slice becomes `StreamState & CliOnlyFields` where `CliOnlyFields` = `runStartedAt`, `latestLine`, `thinkingActive`, `compactingActive` + fold working state (until §4 promotes the first four). The dead `files` field is **already removed on main** (B2/#10541, −12 banked). **This is the §0.1-item-8 supersession, executed.**                                                                                                                                                                                                            |
+| `sessionSignalsAdapter.ts`          | 372   | ~90                                | **−280**       | ~200 LoC of single-field patch forwarders delete under U2; ~80 LoC of metadata/usage re-derivation deletes when the slice holds shared records verbatim; keeps: dispatch-generation staleness guard (genuine TUI-reset modality), the slice-minting gate, `onGoalPaused` local row. Also deletes the **dual status path**: `:337` drops the status fact so `subscribeStreamStatus.ts` (57) can re-subscribe separately, bypassing the applier's ordering guarantees — two subscribers to one fact, merged back into the port.                                                                                                                                                   |
+| `runProgressRenderer.ts` (headless) | 573   | ~395                               | **−175**       | `RenderState`'s six fields and the child bookkeeping are all owned by `StreamExecutionState`/metadata; attach a ~40-LoC headless `SessionRendererPort` and delete the hand-rolled `handleSessionFact`/`apply*` machinery. Bonus: the "clear child descriptions before roster repaint reuses a stale label" bug-guard becomes unnecessary — the roster row carries the description. ANSI repaint/throttle/heartbeat keep (modality).                                                                                                                                                                                                                                             |
+| `subscribeStreamArtifacts.ts`       | 135   | 0                                  | **−135**       | copies `StreamSnapshotStore` getters into the slice; CLI reads the store directly (it already holds the session).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `streamViews.ts`                    | 262   | ~140                               | **−120**       | label/parentLabel re-derivation replaced by `buildStreamTabInfo` output (this also fixes the drift where ext and CLI print different names for the same run — `getCleanAgentName(runIdentityName(…))` vs `runIdentityDisplayName`).                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `statusBarDisplay.ts` context gauge | ~35   | ~8                                 | **−27**        | needs the `contextState` promotion (§4); until then the CLI's context window is _wrong_ on subscription/compaction routes — this is a correctness fix wearing a refactor.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `resumeHint.ts` targets             | ~42   | ~27                                | **−15**        | needs the `resumable` promotion (§4).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 Ratchet note for the whole wave: anything relocated lands in
 `src/controllers/session/` (the CLAUDE.md-sanctioned home for host-neutral
@@ -199,23 +206,23 @@ ratchet-cheapest direction. No new `@agent/*` deep-import specifiers, so
 ## 4. The promotion list — facts one host computes that belong in the substrate
 
 Each of these is a fact currently computed host-side; promoting it deletes
-the host copy *and* fixes a feature gap in the other hosts. Promotions land
+the host copy _and_ fixes a feature gap in the other hosts. Promotions land
 in `SessionState`/`StreamExecutionState` (not `StreamSnapshotStore`, whose
 public surface is ratcheted caller-honest — growth there fails
 `storePublicSurfaceRatchet` and needs explicit accounting; the one exception
 is noted).
 
-| fact | today | promote to | fixes |
-|---|---|---|---|
-| `contextState` (window/tokens/utilization) | webview extracts from its log fold (`logSlice.ts:134`); CLI re-derives from `MODEL_CONFIGS` | `StreamExecutionState` (already in the wire schema, `streamState.ts:159`) | CLI gauge wrong on subscription/compaction routes; single authoritative source |
-| removal tombstone / resurrection guard | CLI only (`childExecutions.ts:353-434`) | `SessionState` beside `clearStream` | shared bug: applier re-mints state for deleted streams in ext+desktop |
-| `runStartedAt` | CLI only (`cliState.ts:482`) | `StreamExecutionState` | webview gains a live elapsed-time source; also kills the `elapsed` dual-derivation (audit C22) |
-| `thinkingActive`/`compactingActive` | CLI only (`subscribeStreamLog.ts:376-380`) | `StreamExecutionState` | webview has no liveness indicator for token-less turns |
-| `resumable` (per-subagent) | CLI only (`resumeHint.ts:171-180`) | roster row | webview cannot offer per-subagent resume today |
-| root-run stream identity | three CLI copies (`runProgressRenderer.ts:398`, `cliState.ts:606,617`) | `SessionState` | headless and TUI can disagree which stream is "the run" |
-| run input files + `plannedRounds` | headless renderer only (`:298-300,518`) | `SessionStreamConfigDetails` | GUI hosts cannot show input subject or planned rounds |
-| `cumulativeUsage` sum rule | CLI eager-sums, webview lazy-sums | one owner; if it must be the snapshot store, the +1 surface unit is declared in the PR | two summing sites, one rule |
-| display-label rule | `buildStreamTabInfo` vs `runIdentityDisplayName` | one of them (ruling) | same run, two names |
+| fact                                       | today                                                                                       | promote to                                                                                                                                                      | fixes                                                                                                                                                                                                                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contextState` (window/tokens/utilization) | webview extracts from its log fold (`logSlice.ts:134`); CLI re-derives from `MODEL_CONFIGS` | `StreamExecutionState` (already in the wire schema, `streamState.ts:159`)                                                                                       | CLI gauge wrong on subscription/compaction routes; single authoritative source                                                                                                                                                                                                      |
+| removal tombstone / resurrection guard     | CLI only (`childExecutions.ts:353-434`)                                                     | `SessionState` beside `clearStream`                                                                                                                             | shared bug: applier re-mints state for deleted streams in ext+desktop                                                                                                                                                                                                               |
+| `runStartedAt`                             | CLI only (`cliState.ts:482`)                                                                | `StreamExecutionState`                                                                                                                                          | webview gains a live elapsed-time source; also kills the `elapsed` dual-derivation (audit C22)                                                                                                                                                                                      |
+| `thinkingActive` only                      | CLI only (`subscribeStreamLog.ts:376-380`)                                                  | `StreamExecutionState`                                                                                                                                          | _(Narrowed on review: `compactingActive` is WITHDRAWN — the webview already has compaction liveness via the shared `CompactionActivityBlock` `running` state; promoting it would mint a second owner beside the transcript-owned lifecycle. `thinkingActive` assessed separately.)_ |
+| `resumeEligible` (per-subagent)            | CLI only (`resumeHint.ts:171-180`)                                                          | roster row                                                                                                                                                      | _(Renamed on review: the CLI predicate is admission **eligibility** (native agent ∧ tool-use), not durable resumability — it checks no persisted checkpoint/lease. Ship it as `resumeEligible`, with actual resumability derived at the durable-state boundary on demand.)_         |
+| root-run stream identity                   | three CLI copies (`runProgressRenderer.ts:398`, `cliState.ts:606,617`)                      | a query keyed by execution id (NOT a session field — review-caught: GUI sessions hold multiple concurrent roots, so a single session-wide value is ill-defined) | headless and TUI can disagree which stream is "the run"                                                                                                                                                                                                                             |
+| run input files + `plannedRounds`          | headless renderer only (`:298-300,518`)                                                     | `SessionStreamConfigDetails`                                                                                                                                    | GUI hosts cannot show input subject or planned rounds                                                                                                                                                                                                                               |
+| `cumulativeUsage` sum rule                 | CLI eager-sums, webview lazy-sums                                                           | one owner; if it must be the snapshot store, the +1 surface unit is declared in the PR                                                                          | two summing sites, one rule                                                                                                                                                                                                                                                         |
+| display-label rule                         | `buildStreamTabInfo` vs `runIdentityDisplayName`                                            | one of them (ruling)                                                                                                                                            | same run, two names                                                                                                                                                                                                                                                                 |
 
 ## 5. Wave B — transcript: collapse the rules, keep the containers
 
@@ -228,18 +235,25 @@ ambition: ~700 LoC of `transcriptFold` is Ink-specific incremental
 machinery with no webview consumer, and moving it to `src/shared/` for one
 caller is the banned extraction. What is shared is the **policy**:
 
-- **B-1 (do first, pays in LoC and fixes the bug): the ordering slice.**
-  One shared `TranscriptOrderKey` (`settlementSeqNo ?? sourceSeqNo`, tier,
-  tieBreak) + comparator in `src/shared/`; the webview deletes its three
-  timestamp comparators (~60–90 LoC), the CLI's key moves. **Net ≈ −49 and
-  the webview gets stable, settlement-correct ordering for free.** The walk
-  (Ink `<Static>` settlement scan) stays CLI-side — the key is shared, the
-  walk is modality.
+- **B-1 (do first, pays in LoC): the ordering slice — REVISED on review.**
+  _(The original form shared the settlement key with the webview; review
+  correctly objected that a mutable in-place-updating timeline ordered by
+  `settlementSeqNo` would visibly reorder rows that settle late — e.g. a
+  planned call settled as skipped jumps to the end. Settlement order is
+  Ink-`<Static>`-scrollback semantics; the webview's chronological
+  in-place model is deserved.)_ Revised form: the webview replaces its
+  three `timestamp` comparators with **`sourceSeqNo`** — the same
+  chronology it approximates today, minus the tie/clock-skew fragility
+  (the field is already on the wire and currently discarded at
+  `toLogMessage`); the CLI keeps its settlement key. One shared
+  `compareBySourceSeq` helper, two consumers. Net still ≈ −40..−49; the
+  "webview ordering bug" claim narrows to ties/skew rather than
+  settlement-vs-start.
 - **B-2: one row model, projected per entry.** A pure
   `projectTranscriptRow(entry, ctx): TranscriptRow | undefined` in
   `src/shared/transcript/` (~350–420 LoC, the `workflowCall.ts` register:
   one membership rule, one settlement predicate, one error/detail shape
-  carrying **untruncated** text plus elision *metadata* — hosts apply width
+  carrying **untruncated** text plus elision _metadata_ — hosts apply width
   at paint, which dissolves the truncation drift by construction). The
   webview's formatters take `TranscriptRow`; `toLogMessage` +
   `LogMessageDataSchema` delete; the CLI's `renderLogEntryFresh` moves. The
@@ -251,11 +265,15 @@ caller is the banned extraction. What is shared is the **policy**:
   **Honest accounting: ≈ +60 LoC net.** This is a drift-elimination
   purchase, not a deletion: it retires five silently-divergent policies
   (membership, error fields, tool output suppression, header assembly,
-  settlement predicate) between two shipped surfaces, plus the redaction
-  asymmetry (CLI redacts assistant/error text, webview doesn't — a security
-  edge that must be ruled, not inherited). Under build-implies-delete it
-  qualifies because both host copies delete in the same PRs; under the
-  net-positive rule the PR body states this paragraph as the reason.
+  settlement predicate) between two shipped surfaces. _(Redaction claim
+  WITHDRAWN on review: there is no renderer security gap for
+  assistant/error text — `TexraTranscriptRecorder` redacts at record time
+  for all hosts, and the CLI's render-time calls are documented legacy
+  defense over already-redacted data. The shared row consumes the canonical
+  redacted content; tool inputs/results remain the separately-documented
+  exception.)_ Under build-implies-delete it qualifies because both host
+  copies delete in the same PRs; under the net-positive rule the PR body
+  states this paragraph as the reason.
 - **Containers keep:** `transcriptFold`'s incremental machinery (~620),
   `transcriptEntries`' settlement scan (~210), all HTML section markup
   (~1,400), all width/ANSI code. The transcript rail stays separate from the
@@ -265,18 +283,18 @@ Policy rulings needed before B-2 (each one sentence from the maintainer):
 membership set (CLI's 5-type allowlist vs webview's 15 formatters, or one
 allowlist + per-host mode), error-detail shape (1 capped field vs 11
 uncapped), quota-hint canon (CLI API-switch hint vs webview relay label),
-tool-output suppression rule (two unrelated rulesets today), redaction
-(fact or paint — if fact, the webview is under-redacted *today*), phase as
-row vs group.
+tool-output suppression rule (two unrelated rulesets today), phase as
+row vs group. _(The former fifth ruling — redaction — is withdrawn; see the
+correction above: record-time redaction is already canonical.)_
 
 ## 6. Wave C — the webview wire, derived instead of restated (REVISED)
 
-*Revised 2026-08-15 after the contract census and rulings re-check: the
+_Revised 2026-08-15 after the contract census and rulings re-check: the
 originally drafted form retired ten `UPDATE_*` literals, which required
 superseding §0.1 item 6 — and item 8 explicitly blesses the
 snapshot+targeted dual path as the intended end state. The census found a
 strictly better, ruling-clean path; the supersession request is withdrawn.
-Full detail: `2026-08-15-shared-contracts-and-retirement.md` §2.3.*
+Full detail: `2026-08-15-shared-contracts-and-retirement.md` §2.3._
 
 The verified fact stands, sharper than before: **12 of the 30 outbound
 arms are single-field projections of the `SYNC_STREAM_CONTENT` render
@@ -306,9 +324,14 @@ respects both rulings:
 handler arms), all inside the ext+desktop pair, no behavior change,
 ProgressBridge suite as the parity harness.
 
-- **6d. Replay joins the same path:** a `TraceDocument → SessionState`
-  hydrator lets `replayTrace()` call the same projections as live
-  (~−100 LoC); the three archived-format compat readers keep (~90, fenced).
+- **6d. Replay joins the same path — browser-safety rider (review-caught):**
+  the hydrator must NOT target the concrete `SessionState` class — its
+  import graph reaches Node built-ins (`node:async_hooks`, `node:crypto`)
+  and the trace-viewer is a browser-only bundle that must run under
+  `file://`. Hydrate the browser-safe projection **input shape** (the same
+  DTO the projections read) instead, so `replayTrace()` calls the same
+  builders as live (~−100 LoC); the three archived-format compat readers
+  keep (~90, fenced).
 
 ## 7. Wave D — one delta pump
 
@@ -320,7 +343,7 @@ invalidation, generation guards). Extract one `StreamLogFeed` in
 resync handshake; `subscribeStreamLog` = feed + fold. **≈ −180 LoC** and one
 class of resync bug. Compliance note: `transcriptResidencyLeaseSites`
 allowlists `.ensureLoaded(` at exactly 7 sites including
-`subscribeStreamLog.ts` — the extraction *moves* an allowlist row to the new
+`subscribeStreamLog.ts` — the extraction _moves_ an allowlist row to the new
 owner (visible, reviewable, one-for-one), it does not widen the list.
 
 ## 8. Honest non-collapses (new fence rows)
@@ -334,7 +357,7 @@ re-flagging them:
   `stage.start`. Folding it over `TaskGroup[]` snapshots requires
   snapshot→line diffing — strictly more code. Nets positive; leave it.
 - **The log-fold container split** (`transcriptFold` machinery vs Lit
-  re-render). Correctly split; only the *rules* converge (§5).
+  re-render). Correctly split; only the _rules_ converge (§5).
 - **NDJSON projection** (`sessionProgressSubscription`, 216) — frozen wire,
   deliberate de-normalization, import-fenced. Keep byte-for-byte.
 - **Trace-viewer compat readers** (~90) — immutable archived formats,
@@ -355,19 +378,19 @@ re-flagging them:
 
 ## 9. Compliance map (rulings × this plan)
 
-| binding constraint | how this plan passes |
-|---|---|
-| R4: no new plane/bus/vocabulary/coordinator | zero new emitters or vocabularies; every PR deletes the layer it replaces; the only new module names are `StreamLogFeed`, `projectTranscriptRow`, and a headless renderer port — each with ≥2 consumers at birth |
-| "no new subscribe surface"; sanctioned channel | hosts stay on `SessionEventHub` via `SessionRendererPort`; U2 *narrows* the port |
-| plane rule 1 (facts flow one way) | shared structures are read-only downstream of the applier; host writes go through existing plane-2/3 APIs |
-| `sessionPresentationBoundary.vitest.ts` | selection/focus/presentation stay host-side; test untouched |
-| `storePublicSurfaceRatchet` | promotions land in `SessionState`, not the ratcheted stores; the one candidate exception (usage sum) declares its +1 unit or stays out |
-| `transcriptResidencyLeaseSites` | allowlist rows move one-for-one with relocated owners; no widening |
+| binding constraint                                    | how this plan passes                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R4: no new plane/bus/vocabulary/coordinator           | zero new emitters or vocabularies; every PR deletes the layer it replaces; the only new module names are `StreamLogFeed`, `projectTranscriptRow`, and a headless renderer port — each with ≥2 consumers at birth                                                                                              |
+| "no new subscribe surface"; sanctioned channel        | hosts stay on `SessionEventHub` via `SessionRendererPort`; U2 _narrows_ the port                                                                                                                                                                                                                              |
+| plane rule 1 (facts flow one way)                     | shared structures are read-only downstream of the applier; host writes go through existing plane-2/3 APIs                                                                                                                                                                                                     |
+| `sessionPresentationBoundary.vitest.ts`               | selection/focus/presentation stay host-side; test untouched                                                                                                                                                                                                                                                   |
+| `storePublicSurfaceRatchet`                           | promotions land in `SessionState`, not the ratcheted stores; the one candidate exception (usage sum) declares its +1 unit or stays out                                                                                                                                                                        |
+| `transcriptResidencyLeaseSites`                       | allowlist rows move one-for-one with relocated owners; no widening                                                                                                                                                                                                                                            |
 | `hostAgentDeepImportRatchet` / `subsystemEdgeRatchet` | relocations target `src/controllers/session` via existing aliases; any new src-edge is declared in the PR. **Post-B3 the host-agent ratchet is set-based and fails in both directions** — every deletion PR that removes a package's last import of a listed specifier prunes the baseline in the same commit |
-| host-parity fence rows 7/29/30/32 | per-host status-label projectors, per-host display budgets, TUI output-file-fact drop, NDJSON import fence — all untouched |
-| D1/T9, D7/T14, ModelCell scope | persisted `result.outcome` untouched; no keyed one-instance registry anywhere; no `HostUiBus` |
-| build-implies-delete, R6/R8 | every wave's PRs pair the shared landing with the host deletion; R6 element deltas and R8 subscriber greps in each body |
-| supersession requested (by name, the only one) | SSOT §0.1 item 8 "CLI `StreamSlice` fragmentation stays" — item 6 is no longer touched (§6 revised) |
+| host-parity fence rows 7/29/30/32                     | per-host status-label projectors, per-host display budgets, TUI output-file-fact drop, NDJSON import fence — all untouched                                                                                                                                                                                    |
+| D1/T9, D7/T14, ModelCell scope                        | persisted `result.outcome` untouched; no keyed one-instance registry anywhere; no `HostUiBus`                                                                                                                                                                                                                 |
+| build-implies-delete, R6/R8                           | every wave's PRs pair the shared landing with the host deletion; R6 element deltas and R8 subscriber greps in each body                                                                                                                                                                                       |
+| supersession requested (by name, the only one)        | SSOT §0.1 item 8 "CLI `StreamSlice` fragmentation stays" — item 6 is no longer touched (§6 revised)                                                                                                                                                                                                           |
 
 ## 10. Staged execution
 
@@ -381,7 +404,8 @@ Order chosen so each wave is independently shippable and the risky ruling
    stream resurrection).
 2. **A1–A6:** the CLI containers, one PR each, in the table order of §3.
    ≈ −1,000.
-3. **B-1:** ordering slice (−49, fixes the webview ordering bug). **B-2**
+3. **B-1:** ordering slice in its revised `sourceSeqNo` form (−40..−49,
+   fixes tie/clock-skew ordering fragility). **B-2**
    waits for the six policy rulings; lands as 2–3 PRs (row model + webview
    adoption + CLI adoption), declared +60.
 4. **C (revised):** the derivation contract + renderer-band deletions, no
