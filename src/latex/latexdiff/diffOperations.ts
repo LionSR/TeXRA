@@ -8,7 +8,7 @@ import * as path from 'node:path';
 
 // Local imports
 import type { MathMarkupOption } from '@latex/latexdiff/mathMarkup';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import {
   getEffectiveDiffBase,
@@ -50,6 +50,7 @@ async function executeDiffOperations(
 ): Promise<DiffRunOutcome> {
   const results: DiffRunResult[] = [...immediateResults];
   const incrementPct = operations.length > 0 ? 100 / operations.length : 0;
+  const log = createLog(latexdiff.channel);
 
   for (const operation of operations) {
     progress.report({
@@ -71,10 +72,7 @@ async function executeDiffOperations(
       continue;
     }
 
-    logger.debug(
-      latexdiff.channel,
-      `Running ${operation.type} diff: ${operation.description}`,
-    );
+    log.debug(`Running ${operation.type} diff: ${operation.description}`);
 
     const diffResult =
       operation.type === 'round'
@@ -205,6 +203,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     latexdiff,
     progress,
   } = params;
+  const log = createLog(latexdiff.channel);
 
   const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
@@ -218,10 +217,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
   const configuredInputFiles =
     outputFiles && outputFiles.length > 0 ? outputFiles : [inputFile];
 
-  logger.debug(
-    latexdiff.channel,
-    `Input files: ${configuredInputFiles.join(', ')}`,
-  );
+  log.debug(`Input files: ${configuredInputFiles.join(', ')}`);
 
   // Per input file: round number → workspace-relative output path. A round
   // matched more than once (e.g. two legacy files matching the same round
@@ -287,10 +283,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
       } catch (error) {
         // Skip unreadable round dirs but record which one so a missing
         // round output isn't silently invisible during diagnosis.
-        logger.debug(
-          latexdiff.channel,
-          `Skipping round dir '${roundAbsoluteDir}': ${error}`,
-        );
+        log.debug(`Skipping round dir '${roundAbsoluteDir}': ${error}`);
         continue;
       }
       const match = roundEntries.find(
@@ -314,15 +307,11 @@ export async function runLatexdiffViaWorkspaceScan(params: {
 
     if (roundOutputs.size > 0) {
       inputToOutputsMap.set(candidateInput, roundOutputs);
-      logger.debug(
-        latexdiff.channel,
+      log.debug(
         `Found ${roundOutputs.size} matching outputs for ${candidateInput}`,
       );
     } else {
-      logger.debug(
-        latexdiff.channel,
-        `No matching outputs found for ${candidateInput}`,
-      );
+      log.debug(`No matching outputs found for ${candidateInput}`);
     }
   }
 
