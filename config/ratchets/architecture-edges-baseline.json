@@ -39,7 +39,6 @@
     { "from": "housekeeping", "to": "platform", "kind": "value" },
     { "from": "housekeeping", "to": "shared", "kind": "value" },
     { "from": "housekeeping", "to": "utils", "kind": "value" },
-    { "from": "latex", "to": "agent", "kind": "value" },
     { "from": "latex", "to": "common", "kind": "value" },
     { "from": "latex", "to": "logger", "kind": "value" },
     { "from": "latex", "to": "platform", "kind": "value" },

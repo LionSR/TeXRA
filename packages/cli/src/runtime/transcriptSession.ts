@@ -1,10 +1,11 @@
 import {
+  agentResponseTextConnector,
   initializeDefaultSession,
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime';
 import { createSessionStores } from '@controllers/session/sessionStores';
-import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 
 export type InteractiveTranscriptPolicy =
@@ -44,7 +45,9 @@ async function initializePersistentSession(
   const result = await persistentSession(
     initializeDefaultSession({
       transcripts,
-      responseTextProcessing: texraResponseTextProcessing,
+      responseTextProcessing: createTexraResponseTextProcessing(
+        agentResponseTextConnector,
+      ),
     }),
   );
   await createSessionStores(result.session).sweepLeftoverStreams();
@@ -107,7 +110,9 @@ export async function initializeInteractiveTranscriptSession(
 
   const session = initializeDefaultSession({
     transcripts,
-    responseTextProcessing: texraResponseTextProcessing,
+    responseTextProcessing: createTexraResponseTextProcessing(
+      agentResponseTextConnector,
+    ),
   });
   await session.waitUntilReady();
   return ephemeralSession(

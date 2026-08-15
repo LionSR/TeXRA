@@ -110,6 +110,9 @@ export type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKe
 // helperModelName
 export { getHelperModelName } from './helperModelName';
 
+// textConnection
+export { agentResponseTextConnector } from './textConnection';
+
 // ExecutionHandle
 export type { AgentRunHandle } from './ExecutionHandle';
 

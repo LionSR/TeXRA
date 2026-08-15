@@ -13,6 +13,10 @@ import {
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
 import { isFileNotFoundError } from '@common/errors';
+import type {
+  LatexAgentRunEntry,
+  LatexExecutionDiscoveryPort,
+} from '@latex/latexdiff/executionDiscovery';
 import { createLog } from '@logger/logUtils';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type {
@@ -74,7 +78,7 @@ export type ExecutionListingEntry =
 
 /** Narrow to the agent arm; nested `identity.kind` cannot discriminate the
  *  entry union for TypeScript, so this is the one spelled-out guard. */
-export function isAgentRunEntry(
+function isAgentRunEntry(
   entry: ExecutionListingEntry,
 ): entry is AgentExecutionListingEntry {
   return entry.kind === 'run' && entry.identity.kind === 'agent';
@@ -235,6 +239,28 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     results.filter(filterNotNull),
     (item) => item.timestamp,
   );
+}
+
+/**
+ * Adapter from the agent storage surface to the latex-owned execution
+ * discovery port. Hosts inject this into latexdiff orchestration.
+ */
+export function createLatexExecutionDiscovery(): LatexExecutionDiscoveryPort {
+  return {
+    async listAgentRuns(): Promise<readonly LatexAgentRunEntry[]> {
+      const executions = await listExecutions();
+      return executions.filter(isAgentRunEntry).map((entry) => ({
+        id: entry.id,
+        timestamp: entry.timestamp,
+        agent: entry.record.agent,
+        model: entry.record.model,
+        inputFiles: entry.record.inputFiles,
+      }));
+    },
+    async readStreamId(executionId) {
+      return (await getExecutionStore(executionId).readMeta())?.streamId;
+    },
+  };
 }
 
 /**

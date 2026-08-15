@@ -7,13 +7,13 @@ import {
   internalValidationModelHandlerEnvName,
   shouldUseInternalValidationModelHandler,
 } from '@agent/runtime/internalValidationOverride';
-import type { ResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
 import {
   CodexAuthError,
   formatCodexAuthUnavailableMessage,
   isCodexSessionRoutable,
 } from '@auth/codex';
 import { AgentError } from '@common/errors';
+import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import {
   copilotRouteUnavailableReason,

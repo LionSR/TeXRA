@@ -1,22 +1,13 @@
-/** Optional host policy for text returned by a provider. */
-type ResponseTextPostProcessor = (text: string) => string;
+import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 
 /**
- * Host policy for provider-output cleanup and joining continued responses.
+ * Optional host policy for text returned by a provider.
  *
  * The package defaults are deliberately neutral and deterministic: provider
  * text is returned unchanged, and adjacent non-whitespace text is separated
- * by one space. TeXRA hosts may inject their LaTeX-specific behavior.
+ * by one space. TeXRA hosts may inject their LaTeX-specific behavior via
+ * the latex-owned factory.
  */
-export interface ResponseTextProcessing {
-  /** Normalize provider text only when the host explicitly requests it. */
-  readonly normalizeResponseText: ResponseTextPostProcessor;
-  readonly postProcessResponse: ResponseTextPostProcessor;
-  readonly connectResponseText: (
-    previous: string,
-    next: string,
-  ) => Promise<string>;
-}
 
 /** Preserve provider text when no host-specific post-processor is supplied. */
 function preserveResponseText(text: string): string {

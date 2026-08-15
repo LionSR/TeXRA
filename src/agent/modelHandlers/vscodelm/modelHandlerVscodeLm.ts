@@ -11,7 +11,6 @@ import type {
   TokenCountOptions,
   VscodeLmToolCall,
 } from '@agent/types/ModelHandlerContracts';
-import type { ResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import { AgentError } from '@common/errors';
@@ -22,6 +21,7 @@ import {
   takeTail,
 } from '@common/errors/sdkError/errorPatterns';
 import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
+import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { copilotRouteForModel } from '@model/runtimeModelRegistry';
 import { platform } from '@platform/platform';

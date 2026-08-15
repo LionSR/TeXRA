@@ -193,7 +193,16 @@ async function handleRequestEnsureProgressView(
       'Show Progress View',
     );
     if (selection) {
-      await vscode.commands.executeCommand('texra.showProgressView');
+      try {
+        await vscode.commands.executeCommand('texra.showProgressView');
+      } catch (err) {
+        // The toast handoff already established delivery; a failed retry is
+        // a diagnostic, not non-delivery, so it must not downgrade the event.
+        logger.warn(
+          CHANNEL,
+          `Failed to retry the progress-view reveal: ${toErrorMessage(err)}`,
+        );
+      }
     }
     return true;
   }
