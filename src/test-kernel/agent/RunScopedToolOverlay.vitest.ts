@@ -9,8 +9,15 @@ import {
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import {
+  createRunContext,
+  tryUseRunContext,
+  useRunContext,
+  withRunContext,
+} from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
+import { tryDefaultSession } from '@agent/runtime/SessionHandle';
+import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import {
   AgentCategory,
   type ExecutionId,
@@ -18,7 +25,9 @@ import {
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { TodoWriteTool } from '@tools/todo/TodoTool';
 import { testModelCell } from './modelCellTestUtils';
+import { roundModelHandler } from './toolUseRoundTestUtils';
 
 const CONFIG = AgentConfigSchema.parse({
   agent: 'chat',
@@ -132,6 +141,168 @@ describe('run-scoped tool overlay', () => {
       expect(warn).toHaveBeenCalledWith(
         'Run-scoped tool "first" shadows an existing tool.',
       );
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('dispatches and completes a real tool without an ambient run context', async () => {
+    const executionId = '9329abcf' as ExecutionId;
+    const streamId = `chat#${executionId}` as StreamTabId;
+    const session = createTestSession();
+    const runScope = createRunScope({
+      executionId,
+      streamId,
+      agentName: 'chat',
+      session,
+      signal: new AbortController().signal,
+    });
+    const toolCall: SdkToolCall = {
+      provider: 'deepseek',
+      callId: 'call-todo-write',
+      name: 'todo_write',
+      input: {
+        todos: [
+          {
+            content: 'Exercise dispatch',
+            activeForm: 'Exercising dispatch',
+            status: 'completed',
+          },
+        ],
+      },
+      raw: {} as never,
+    };
+    const responses = [
+      { text: '', toolCalls: [toolCall] },
+      { text: 'Tool dispatch completed.', toolCalls: [] },
+    ];
+    const observedToolLists: string[][] = [];
+    const observedToolResults: unknown[] = [];
+    const progressUpdates: unknown[] = [];
+    const dispatchRunContexts: unknown[] = [];
+    const modelHandler = roundModelHandler({
+      capabilities: { supportsFunctionCalling: true, supportsVision: false },
+      requiresPerCallSystemPrompt: false,
+      supportsForcedToolChoice: false,
+      initializeMessages: async () => [
+        { role: 'user', content: 'Update the todo list.' },
+      ],
+      consumeInsertedAttachmentKinds: () => [],
+      createResponse: vi.fn(async (options: { tools?: { name: string }[] }) => {
+        observedToolLists.push((options.tools ?? []).map(({ name }) => name));
+        const response = responses.shift();
+        if (!response) throw new Error('Unexpected model invocation');
+        return { response };
+      }),
+      extractResponse: (response: unknown) => {
+        const turn = response as { text: string; toolCalls: SdkToolCall[] };
+        return {
+          text: turn.text,
+          usage: null,
+          stopReason: turn.toolCalls.length ? 'tool_use' : 'stop',
+        };
+      },
+      extractToolUse: (response: unknown) =>
+        (response as { toolCalls: SdkToolCall[] }).toolCalls,
+      createToolUseFollowUpMessages: async (
+        _client: unknown,
+        call: SdkToolCall,
+        result: unknown,
+      ) => {
+        observedToolResults.push(result);
+        return [
+          {
+            role: 'tool',
+            tool_call_id: call.callId,
+            content: JSON.stringify(result),
+          },
+        ];
+      },
+    });
+    const modelCell = testModelCell(modelHandler, 'test-model');
+    const config = AgentConfigSchema.parse({
+      agent: 'chat',
+      model: 'test-model',
+      agentCategory: AgentCategory.ToolUse,
+      workingDirectory: process.cwd(),
+    });
+    let attachedOwner: unknown;
+
+    try {
+      // The test process has no default session, so any currentSession()
+      // fallback during dispatch fails instead of silently using another owner.
+      expect(tryDefaultSession()).toBeUndefined();
+      expect(tryUseRunContext()).toBeUndefined();
+      expect(() => useRunContext()).toThrow(/outside withRunContext/);
+
+      const result = await runToolUseFlow(
+        {
+          config,
+          runScope,
+          setting: AgentToolUseSettingSchema.parse({
+            tools: [{ name: 'bash' }, { name: 'todo_write' }],
+          }),
+          prompt: AgentPromptSchema.parse({}),
+          logger: noopTrace,
+          userVarChannels: {
+            input: Object.freeze({ MODEL: config.model }),
+            transient: {},
+          },
+          modelCell,
+          toolPolicy: createToolPolicy({
+            approvalPromptsUnavailable: true,
+            stopAfterCycle: true,
+          }),
+          onModelChanged: () => {},
+          interrupt: () => {},
+          onRoundFinalized: () => {},
+          onProgress: (update) => {
+            progressUpdates.push(update);
+            if (update.kind === 'todos') {
+              // TodoWriteTool emits this synchronously from inside call(), so
+              // this observation is made in the real dispatch window.
+              dispatchRunContexts.push(tryUseRunContext());
+            }
+          },
+        },
+        new MapToolRegistry({
+          bash: approvalGatedTool('bash'),
+          todo_write: new TodoWriteTool(),
+        }),
+        {
+          attach: ({ ownerSession }) => {
+            attachedOwner = ownerSession;
+          },
+          detach: () => {},
+        },
+      );
+
+      expect(result).toMatchObject({
+        outcome: 'completed',
+        response: 'Tool dispatch completed.',
+      });
+      expect(attachedOwner).toBe(session);
+      expect(observedToolLists).toEqual([['todo_write'], ['todo_write']]);
+      expect(observedToolResults).toEqual([
+        expect.objectContaining({
+          status: 'executed',
+          output: 'OK',
+        }),
+      ]);
+      expect(dispatchRunContexts).toEqual([undefined]);
+      expect(progressUpdates).toContainEqual({
+        kind: 'todos',
+        todos: [
+          {
+            content: 'Exercise dispatch',
+            activeForm: 'Exercising dispatch',
+            status: 'completed',
+          },
+        ],
+      });
+      expect(responses).toHaveLength(0);
+      expect(tryUseRunContext()).toBeUndefined();
+      expect(tryDefaultSession()).toBeUndefined();
     } finally {
       session.dispose();
     }
