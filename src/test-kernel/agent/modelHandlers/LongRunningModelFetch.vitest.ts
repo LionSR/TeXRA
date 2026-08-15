@@ -300,4 +300,101 @@ describe('long-running model transport', () => {
     });
     expect(request.arrayBuffer).not.toHaveBeenCalled();
   });
+
+  it('forwards the duplex hint when an init stream body overrides a Request', async () => {
+    stubComposedDispatcher();
+    transportMocks.undiciFetch.mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.close();
+      },
+    });
+
+    await longRunningModelFetch(foreignRequest({ method: 'GET' }), {
+      method: 'POST',
+      body,
+    });
+
+    const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
+    expect(init?.body).toBe(body);
+    expect(init?.duplex).toBe('half');
+  });
+
+  it('passes array-form init headers through untransformed', async () => {
+    stubComposedDispatcher();
+    transportMocks.undiciFetch.mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+    const headers: [string, string][] = [
+      ['content-type', 'application/json'],
+      ['x-tuple', 'yes'],
+    ];
+
+    await longRunningModelFetch(foreignRequest({}), { headers });
+
+    const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
+    // The tuple form is legal HeadersInit; flattening must not mistake the
+    // array's own index/value entries() for a Headers iterator.
+    expect(init?.headers).toBe(headers);
+  });
+
+  it('keeps the input body when the init body is null', async () => {
+    stubComposedDispatcher();
+    transportMocks.undiciFetch.mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+    const bytes = new TextEncoder().encode('{"prompt":"kept"}').buffer;
+    const request = foreignRequest({
+      body: { pipeTo: async () => undefined },
+      arrayBuffer: vi.fn().mockResolvedValue(bytes),
+    });
+
+    // Fetch retains the input Request's body for a null init body; only a
+    // non-null body overrides.
+    await longRunningModelFetch(request, { body: null });
+
+    const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
+    expect(request.arrayBuffer).toHaveBeenCalledOnce();
+    expect(init?.body).toBe(bytes);
+  });
+
+  it('detaches on a null signal but inherits an omitted one', async () => {
+    stubComposedDispatcher();
+    transportMocks.undiciFetch.mockResolvedValue(
+      new Response(null, {
+        status: 204,
+      }),
+    );
+    const controller = new AbortController();
+    controller.abort();
+    const request = foreignRequest({ signal: controller.signal });
+
+    await longRunningModelFetch(request, { signal: null });
+    await longRunningModelFetch(request);
+
+    const [, detachedInit] = transportMocks.undiciFetch.mock.calls[0] ?? [];
+    const [, inheritedInit] = transportMocks.undiciFetch.mock.calls[1] ?? [];
+    expect(detachedInit?.signal).toBeNull();
+    expect(inheritedInit?.signal).toBe(request.signal);
+  });
+
+  it('replaces the input headers wholesale when init supplies headers', async () => {
+    stubComposedDispatcher();
+    transportMocks.undiciFetch.mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+    const request = foreignRequest({
+      headers: new Headers({ 'x-input': 'dropped', 'x-also-input': 'gone' }),
+    });
+
+    // `new Request(input, init)` empties the copied header list before filling
+    // it from init.headers — the rebuild keeps that parity rather than
+    // merging per key.
+    await longRunningModelFetch(request, { headers: { 'x-init': 'only' } });
+
+    const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
+    expect(init?.headers).toStrictEqual({ 'x-init': 'only' });
+  });
 });
