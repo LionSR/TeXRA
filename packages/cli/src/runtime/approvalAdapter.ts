@@ -20,6 +20,7 @@ import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   settleExecutable,
@@ -100,6 +101,8 @@ function summarizeApprovalEvent(
       // actually answer, not only in the pre-prompt stderr line.
       // `formatRetryRequestMessage` is the single retry formatter.
       return { summary: formatRetryRequestMessage(request.payload) };
+    default:
+      return assertNever(request, 'Unhandled CLI approval request kind');
   }
 }
 

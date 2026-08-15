@@ -24,7 +24,7 @@ import type { ToolResult } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { proposalApprovals } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
-import { generateShortId } from '@utils/core';
+import { assertNever, generateShortId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -114,11 +114,22 @@ function summarizeProposal(
   return parts.join(', ');
 }
 
-function proposalRejectionResult(
-  result: Extract<ProposalResult, { action: 'reject' }>,
+/** Convert proposal result to ToolResult. Returns null if approved. */
+export function proposalResultToToolResult(
+  result: ProposalResult,
   agentName: string,
-  echo: string,
-): ToolResult {
+  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
+): ToolResult | null {
+  const echo = summarizeProposal(proposal);
+
+  if (result.action === 'approve') return null;
+  if (result.action === 'setup') {
+    return executed(
+      `Delegation opened for editing. The user will run it manually when ready.\nYour delegation was: ${echo}`,
+      `User opened '${agentName}' for editing`,
+    );
+  }
+
   const classification = classifyRejection(result);
   switch (classification.kind) {
     case 'cancelled': {
@@ -148,27 +159,8 @@ function proposalRejectionResult(
         { summary: `User rejected delegation to '${agentName}'` },
       );
     }
-  }
-}
-
-/** Convert proposal result to ToolResult. Returns null if approved. */
-export function proposalResultToToolResult(
-  result: ProposalResult,
-  agentName: string,
-  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
-): ToolResult | null {
-  const echo = summarizeProposal(proposal);
-
-  switch (result.action) {
-    case 'reject':
-      return proposalRejectionResult(result, agentName, echo);
-    case 'setup':
-      return executed(
-        `Delegation opened for editing. The user will run it manually when ready.\nYour delegation was: ${echo}`,
-        `User opened '${agentName}' for editing`,
-      );
-    case 'approve':
-      return null;
+    default:
+      return assertNever(classification, 'Unhandled rejection classification');
   }
 }
 

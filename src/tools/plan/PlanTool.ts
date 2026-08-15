@@ -48,7 +48,7 @@ import {
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
-import { generateShortId } from '@utils/core';
+import { assertNever, generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const logger = createChannelTrace('PlanTool');
@@ -313,6 +313,11 @@ pause/complete only affect autonomous goals; with no goal running they return gu
           },
         );
       }
+      default:
+        return assertNever(
+          classification,
+          'Unhandled rejection classification',
+        );
     }
   }
 

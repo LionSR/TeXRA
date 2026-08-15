@@ -16,7 +16,7 @@ import type { ToolResult } from '@shared/schemas';
 import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
-import { generateShortId } from '@utils/core';
+import { assertNever, generateShortId } from '@utils/core';
 
 const logger = createChannelTrace('UserQuestionTool');
 
@@ -86,6 +86,11 @@ The tool returns a JSON object whose keys are the original question texts and wh
             classification.feedback
               ? `The user declined to answer: ${classification.feedback}`
               : 'The user declined to answer.',
+          );
+        default:
+          return assertNever(
+            classification,
+            'Unhandled rejection classification',
           );
       }
     }

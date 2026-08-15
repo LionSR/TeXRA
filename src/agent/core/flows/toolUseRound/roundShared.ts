@@ -70,7 +70,7 @@ type ToolUseRoundFields = z.infer<typeof ToolUseRoundFieldsSchema>;
  * Shared state for tool-use round flows.
  *
  * Uses flat structure (like ResponseCycleFlow) for consistency.
- * All fields from ToolUseRoundFieldsSchema plus runtime-only toolCalls typing.
+ * All fields come from ToolUseRoundFieldsSchema.
  *
  * ## Architecture
  * - Mutable state: `shared` (this interface) - flat, no nested wrappers

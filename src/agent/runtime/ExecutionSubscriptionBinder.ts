@@ -29,20 +29,25 @@ const TAG = DELIVERY_TAG.executionActivity;
 
 /**
  * Composite key so one flat map replaces the (streamId -> executionId ->
- * subscription) nesting. The delimiter is a literal backslash-zero escape
- * sequence (NOT a raw NUL byte) so it cannot appear in either id.
+ * subscription) nesting. Built from `JSON.stringify(streamId)` rather than
+ * plain concatenation: `StreamTabIdSchema` (`z.string().min(1)`) does not
+ * forbid any particular character, so a delimiter-based key could alias two
+ * distinct (streamId, executionId) pairs if an id ever contained it.
+ * `JSON.stringify` is self-delimiting (its closing quote cannot be faked by
+ * a longer or differently-escaped string), so `streamKeyPrefix`'s
+ * `startsWith` check cannot collide across streams regardless of id content.
  */
 type SubscriptionKey = string;
+
+function streamKeyPrefix(streamId: StreamTabId): string {
+  return `${JSON.stringify(streamId)}:`;
+}
 
 function subscriptionKey(
   streamId: StreamTabId,
   executionId: string,
 ): SubscriptionKey {
-  return `${streamId}\0${executionId}`;
-}
-
-function streamKeyPrefix(streamId: StreamTabId): string {
-  return `${streamId}\0`;
+  return `${streamKeyPrefix(streamId)}${JSON.stringify(executionId)}`;
 }
 
 interface ReleaseSource {
@@ -110,8 +115,15 @@ class ExecutionSubscription {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.removeListener?.();
-    this.onDisposed();
+    // onDisposed() must run even if removeListener throws — it is the only
+    // path that removes this subscription's entry from the binder's map, and
+    // a leaked map entry blocks a future bind() for the same (streamId,
+    // executionId) pair from ever succeeding.
+    try {
+      this.removeListener?.();
+    } finally {
+      this.onDisposed();
+    }
   }
 
   private handleChange(handle: AgentExecutionHandle | undefined): void {

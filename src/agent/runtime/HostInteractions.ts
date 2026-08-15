@@ -271,7 +271,7 @@ export type UserQuestionSettlement =
  * reads the field presence, so consumers switch on `kind` instead of each
  * re-deriving the `'cause' in result` / `'reason' in result` cascade.
  */
-export type RejectionClassification =
+type RejectionClassification =
   | { readonly kind: 'cancelled'; readonly cause: string | undefined }
   | { readonly kind: 'policy'; readonly reason: string }
   | { readonly kind: 'feedback'; readonly feedback?: string };
@@ -282,9 +282,15 @@ export function classifyRejection(result: {
   readonly cause?: string;
 }): RejectionClassification {
   if ('cause' in result) return { kind: 'cancelled', cause: result.cause };
-  if ('reason' in result) {
-    return { kind: 'policy', reason: result.reason as string };
-  }
+  // Nullish, not presence: the four concrete result unions above type
+  // `reason` as a required, non-optional `string` on the policy variant,
+  // but this function's parameter type is intentionally looser (shared
+  // across all four) and `HostInteractions` is an extension boundary —
+  // JS/headless embedders can hand back `{ reason: undefined }`. Treating
+  // that as "policy" would need a fake value (every consumer calls
+  // `.trim()` on `reason` unconditionally); falling through to `feedback`
+  // instead matches what the pre-refactor sites did with this shape.
+  if (result.reason != null) return { kind: 'policy', reason: result.reason };
   return { kind: 'feedback', feedback: result.feedback };
 }
 
