@@ -1,5 +1,3 @@
-import type { AgentTrace } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import {
   SessionStores,
   type DeleteAllStreamsResult,
@@ -12,6 +10,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { createSessionStores } from '@controllers/session/sessionStores';
+import { createLog } from '@logger/logUtils';
 import {
   type ActiveChildInfo,
   type ConversationProgress,
@@ -117,14 +116,14 @@ export class SessionState {
   readonly streamStatus: StreamStatusMachine;
   readonly followUps: ToolUseFollowUpQueue;
 
-  private readonly logger: AgentTrace;
+  private readonly logger: ReturnType<typeof createLog>;
   private readonly session: SessionHandle;
 
   constructor(
     session: SessionHandle = defaultSession(),
     stores?: SessionStores,
   ) {
-    this.logger = createChannelTrace('SessionState');
+    this.logger = createLog('SessionState');
     this.session = session;
     this.streamStatus = session.status;
     this.streamLogs = session.transcripts;

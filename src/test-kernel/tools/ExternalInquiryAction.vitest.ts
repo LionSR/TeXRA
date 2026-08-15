@@ -29,14 +29,15 @@ const traceMocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
-vi.mock('@agent/trace', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agent/trace')>();
+vi.mock('@logger/logUtils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@logger/logUtils')>();
   return {
     ...actual,
-    createChannelTrace: () => ({
-      ...actual.noopTrace,
+    createLog: () => ({
+      debug: vi.fn(),
       info: traceMocks.info,
       warn: traceMocks.warn,
+      error: vi.fn(),
     }),
   };
 });

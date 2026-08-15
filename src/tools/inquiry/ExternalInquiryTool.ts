@@ -17,7 +17,6 @@
 
 import { z } from 'zod';
 
-import { createChannelTrace } from '@agent/trace';
 import {
   getRunContextExecutionId,
   getRunContextSession,
@@ -28,6 +27,7 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { createLog } from '@logger/logUtils';
 import {
   InquiryThreadIdSchema,
   ToolError,
@@ -53,7 +53,7 @@ import {
   type ExternalInquiryThreadManifest,
 } from './externalInquiryStorage';
 
-const logger = createChannelTrace('InquiryTool');
+const logger = createLog('InquiryTool');
 
 // ============================================================================
 // Schemas

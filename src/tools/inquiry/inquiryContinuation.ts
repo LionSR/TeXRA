@@ -12,7 +12,6 @@
  * forward it to the UI via the `inquiryThreadUpdated` event.
  */
 
-import { createChannelTrace } from '@agent/trace';
 import {
   submitFollowUp,
   type SubmitFollowUpResult,
@@ -22,6 +21,7 @@ import {
   resolveEmitSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { createLog } from '@logger/logUtils';
 import type {
   InquiryThreadId,
   InquiryThreadSummary,
@@ -42,7 +42,7 @@ import {
   type ExternalInquiryThreadManifest,
 } from './externalInquiryStorage';
 
-const logger = createChannelTrace('inquiryContinuation');
+const logger = createLog('inquiryContinuation');
 
 export type InjectionOutcome = 'sent' | 'queued' | 'resumed' | 'archived';
 
