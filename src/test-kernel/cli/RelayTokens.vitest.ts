@@ -24,7 +24,7 @@ import {
 } from '@cli/runtime/relayTokensClient';
 import { relayTokenStillActiveNotice } from '@cli/runtime/supabaseAuth';
 
-import { jsonResponse } from './fixtures/fetchResponses';
+import { jsonResponse } from '@test/support/fetchTestUtils';
 
 const TOKEN = `${RELAY_CI_TOKEN_PREFIX}abcdefghijklmnopqrstuvwxyz0123456789abcdEFG`;
 

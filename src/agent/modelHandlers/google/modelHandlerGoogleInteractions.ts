@@ -2151,23 +2151,21 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
             : (completedInteraction?.steps ?? []),
       };
 
-      const finalReasoning = this.processThinkingBlock(response);
-      thinking.finalize(finalReasoning ?? undefined);
-
-      const finalText = this.extractResponse(response, endTag ?? '').text;
-      output.finalize(finalText);
+      this.finalizeProgressStreams(
+        thinking,
+        output,
+        response,
+        this.extractResponse(response, endTag ?? '').text,
+      );
       streamsFinalized = true;
 
       return { response };
     } finally {
       // Finalize the progress streams on a mid-stream failure so the progress
       // view does not hang in a loading state. Guarded so the success-path
-      // finalize above (with the real content) is not overwritten. No explicit
-      // final text so any chunks already streamed are preserved (passing `''`
-      // would overwrite the visible partial output).
+      // finalize above (with the real content) is not overwritten.
       if (!streamsFinalized) {
-        thinking.finalize(undefined);
-        output.finalize();
+        this.finalizeProgressStreamsOnError(thinking, output);
       }
     }
   }

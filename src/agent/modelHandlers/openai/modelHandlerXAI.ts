@@ -16,6 +16,7 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { logOpenAICompatibleClientConfig } from './openAIChatHelpers';
+import { xaiLongContextTier } from './xaiLongContextPricing';
 import type { ChatCompletion } from 'openai/resources/chat/completions';
 
 /**
@@ -90,7 +91,12 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
         outputPrice: 0,
       };
     }
-    return super.standardPricingConfig();
+    // API-key usage bills per token, with xAI's long-context tier past the
+    // model's documented prompt-token threshold.
+    return {
+      ...super.standardPricingConfig(),
+      longContextTier: xaiLongContextTier(this.config.fullName),
+    };
   }
 
   /**

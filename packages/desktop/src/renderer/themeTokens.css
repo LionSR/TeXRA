@@ -508,11 +508,15 @@
   --wa-color-testing-passed: var(--desktop-color-success);
   --wa-color-testing-failed: var(--desktop-color-error);
 
-  /* Terminal — full palette, no WA equivalent. */
+  /* Terminal — full palette, no WA equivalent. Foreground and cursor read
+     the canvas pair rather than the Field/FieldText input pair: high-contrast
+     themes map the two pairs to independently configurable system colors, so
+     an input-sourced foreground can be unreadable on the canvas background.
+     Light and dark resolve both pairs to the same values. */
   --wa-color-terminal-background: var(--desktop-color-background);
-  --wa-color-terminal-foreground: var(--desktop-color-input-foreground);
+  --wa-color-terminal-foreground: var(--desktop-color-foreground);
   --wa-color-terminal-selection-bg: var(--desktop-color-terminal-selection);
-  --wa-color-terminal-cursor: var(--desktop-color-input-foreground);
+  --wa-color-terminal-cursor: var(--desktop-color-foreground);
   --wa-color-terminal-ansi-black: light-dark(#24292f, #6e7681);
   --wa-color-terminal-ansi-blue: var(--desktop-color-accent);
   --wa-color-terminal-ansi-cyan: light-dark(#1b7c83, #4ec9b0);

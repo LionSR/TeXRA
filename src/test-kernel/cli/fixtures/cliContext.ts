@@ -26,3 +26,30 @@ export function createTestCliContext(
 ): CliContext {
   return { ...BASE_CLI_CONTEXT, ...overrides };
 }
+
+/**
+ * The run-command suites' shared default: progress rendering on, everything
+ * else at the base defaults.
+ */
+export function createRunCommandCliContext(
+  overrides: Partial<CliContext> = {},
+): CliContext {
+  return createTestCliContext({ renderRunProgress: true, ...overrides });
+}
+
+/**
+ * The TUI host-interaction suites' shared interactive context: an interactive
+ * `ask`-policy session against the conventional `/work` + `/resources` paths.
+ */
+export function createTuiCliContext(
+  overrides: Partial<CliContext> = {},
+): CliContext {
+  return createTestCliContext({
+    cwd: '/work',
+    mode: 'interactive',
+    approvalPolicy: 'ask',
+    version: 'test',
+    resourcesPath: '/resources',
+    ...overrides,
+  });
+}
