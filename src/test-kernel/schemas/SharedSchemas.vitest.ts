@@ -64,7 +64,7 @@ describe('MainView housekeeping messages', () => {
  * Regression coverage for issue #7230: `web_search`/`web_fetch` `url` fields
  * are LLM/tool-controlled and must never carry a dangerous scheme through to
  * a rendered `<a href>` in the live webview or the exported HTML. Sanitization
- * lives in the shared schemas (`WebSearchResultItemSchema` /
+ * lives in the shared schemas (`WebSearchPayloadItemSchema` /
  * `WebFetchPayloadSchema`) so both render paths are protected by one fix.
  * Only `http:`/`https:`/`mailto:` and anchor-only (`#foo`) URLs survive;
  * empty, protocol-relative, root-relative, and dangerous schemes collapse to

@@ -24,6 +24,7 @@ import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionConte
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
+  JsonValueSchema,
   RUN_OUTCOME,
   ToolError,
   type ToolResult,
@@ -96,7 +97,7 @@ const WorkflowScriptToolInputSchema = z
       ),
   })
   .superRefine((input, ctx) => {
-    if (input.args != null && !z.json().safeParse(input.args).success) {
+    if (input.args != null && !JsonValueSchema.safeParse(input.args).success) {
       ctx.addIssue({
         code: 'custom',
         message: 'Workflow arguments must contain valid JSON values.',
