@@ -324,6 +324,95 @@ describe('SessionHandle restart repair', () => {
     expectClosedWith(transcripts, resumableStreamId, RUN_OUTCOME.CANCELLED);
   });
 
+  it('seeds only unfinished streams and their transitive parent chain at startup', async () => {
+    const child = 'bounded#child' as StreamTabId;
+    const parent = 'bounded#parent' as StreamTabId;
+    const grandparent = 'bounded#grandparent' as StreamTabId;
+    const settled = 'bounded#settled' as StreamTabId;
+    const childExecutionId = 'b0a00001' as ExecutionId;
+    const parentExecutionId = 'b0a00002' as ExecutionId;
+    const grandparentExecutionId = 'b0a00003' as ExecutionId;
+    const settledExecutionId = 'b0a00004' as ExecutionId;
+
+    const transcripts = await StreamLogStore.open();
+    appendRunningGroup(transcripts, child, 'child-running-group');
+    appendRunningGroup(transcripts, settled, 'settled-running-group');
+    await transcripts.endRunningGroupsForStreams(
+      [settled],
+      2_000,
+      RUN_OUTCOME.COMPLETED,
+    );
+    await transcripts.flush();
+    transcripts.recordSummaryMeta(child, { parentStreamId: parent });
+    transcripts.recordSummaryMeta(parent, { parentStreamId: grandparent });
+
+    await seedSidecarFk(child, childExecutionId);
+    await seedSidecarFk(parent, parentExecutionId);
+    await seedSidecarFk(grandparent, grandparentExecutionId);
+    await seedSidecarFk(settled, settledExecutionId);
+
+    const session = openDeferredSession(transcripts);
+    const preload = vi.spyOn(session.snapshots, 'preload');
+    vi.spyOn(
+      session as unknown as { runRestartRepair(): Promise<void> },
+      'runRestartRepair',
+    ).mockResolvedValue(undefined);
+
+    await session.waitUntilReady();
+
+    const expected = [child, parent, grandparent].sort();
+    expect(preload).toHaveBeenCalledTimes(1);
+    expect([...preload.mock.calls[0][0]].sort()).toEqual(expected);
+    expect([...session.snapshots.getExecutionIdMap().keys()].sort()).toEqual(
+      expected,
+    );
+  });
+
+  it('resumes a parked WAITING stream with no resident snapshot record after restart', async () => {
+    const parkedExecutionId = 'b0a00005' as ExecutionId;
+    const parkedStreamId = 'parked#waiting' as StreamTabId;
+
+    const transcripts = await StreamLogStore.open();
+    transcripts.ensureStream(parkedStreamId);
+    transcripts.recordSummaryMeta(parkedStreamId, {
+      executionId: parkedExecutionId,
+    });
+    await transcripts.flush();
+    await seedSidecarFk(parkedStreamId, parkedExecutionId);
+
+    const executionStore = getExecutionStore(parkedExecutionId);
+    await executionStore.writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await executionStore.write(flowKey(parkedExecutionId), validFlowRecord);
+
+    const session = openDeferredSession(transcripts);
+    vi.spyOn(
+      session as unknown as { runRestartRepair(): Promise<void> },
+      'runRestartRepair',
+    ).mockResolvedValue(undefined);
+
+    await session.waitUntilReady();
+
+    // The parked stream is settled history, so the bounded startup seed leaves
+    // its snapshot record absent; the follow-up repair must still resolve the
+    // execution through the summary mirror and route it back to WAITING.
+    expect([...session.snapshots.getExecutionIdMap().keys()]).not.toContain(
+      parkedStreamId,
+    );
+    session.status.transition(
+      parkedStreamId,
+      STREAM_PHASE.CANCELLED,
+      'user-stop',
+    );
+
+    await expect(
+      session.repairWaitingIfResumable(parkedStreamId),
+    ).resolves.toBe(true);
+    expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
+  });
+
   it('preserves mapped runs and fails only unmapped streams when resumability detection fails', async () => {
     const degradedExecutionId = 'decade123' as ExecutionId;
     const degradedStreamId = `degraded#${degradedExecutionId}` as StreamTabId;
@@ -360,10 +449,12 @@ describe('SessionHandle restart repair', () => {
     expectClosedWith(transcripts, unmappedStreamId, RUN_OUTCOME.FAILED);
   });
 
-  it('replaces stores and status only at the workspace-root boundary', async () => {
+  it('replaces stores with evictAll + bounded preload at the workspace-root boundary', async () => {
     const transcripts = await StreamLogStore.open();
     const session = openDeferredSession(transcripts);
     const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
+    const preloadSnapshots = vi.spyOn(session.snapshots, 'preload');
+    const evictSnapshots = vi.spyOn(session.snapshots, 'evictAll');
     const loadSnapshots = vi.spyOn(session.snapshots, 'load');
     session.status.transition(
       'previous-workspace' as StreamTabId,
@@ -374,7 +465,9 @@ describe('SessionHandle restart repair', () => {
     await session.reloadAfterStorageRootChange();
 
     expect(reload).toHaveBeenCalledOnce();
-    expect(loadSnapshots).toHaveBeenCalledWith(transcripts.keys());
+    expect(evictSnapshots).toHaveBeenCalledOnce();
+    expect(preloadSnapshots).toHaveBeenCalledWith([]);
+    expect(loadSnapshots).not.toHaveBeenCalled();
     expect(
       session.status.get('previous-workspace' as StreamTabId),
     ).toBeUndefined();
@@ -531,7 +624,7 @@ describe('SessionHandle restart repair', () => {
     });
     const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
     const reloadError = new Error('new snapshot root is unreadable');
-    vi.spyOn(session.snapshots, 'load')
+    vi.spyOn(session.snapshots, 'preload')
       .mockRejectedValueOnce(reloadError)
       .mockResolvedValue();
     const evictSnapshots = vi.spyOn(session.snapshots, 'evictAll');
@@ -557,7 +650,7 @@ describe('SessionHandle restart repair', () => {
     expect(transitionHooks.afterStorageRollback).toHaveBeenCalledOnce();
     expect(transitionHooks.afterStorageFinalize).not.toHaveBeenCalled();
     expect(reload).toHaveBeenCalledTimes(2);
-    expect(evictSnapshots).toHaveBeenCalledOnce();
+    expect(evictSnapshots).toHaveBeenCalledTimes(2);
     expect(reload).toHaveBeenNthCalledWith(2, {
       discardPendingWrites: true,
     });
@@ -620,7 +713,7 @@ describe('SessionHandle restart repair', () => {
 
       const replacementError = new Error('new snapshot root is unreadable');
       vi.spyOn(transcripts, 'reload').mockResolvedValue();
-      vi.spyOn(session.snapshots, 'load')
+      vi.spyOn(session.snapshots, 'preload')
         .mockRejectedValueOnce(replacementError)
         .mockResolvedValue();
 

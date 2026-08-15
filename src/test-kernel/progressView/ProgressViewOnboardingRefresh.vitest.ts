@@ -82,6 +82,7 @@ function createProgressViewProvider(): ProgressViewProviderFake {
     getOutputFiles: vi.fn(() => new Map()),
     getKnownFilePaths: vi.fn(() => new Set()),
     getCompileFailures: vi.fn(() => new Map()),
+    preload: vi.fn(async () => undefined),
   };
   const state = {
     activeStream: '',
