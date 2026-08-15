@@ -432,7 +432,7 @@ export class ModelHandlerOpenAI<
         thinking,
         output,
         finalResponse,
-        finalResponse.choices?.[0]?.message?.content ?? '',
+        () => finalResponse.choices?.[0]?.message?.content ?? '',
       );
       return finalResponse;
     } catch (streamError) {
