@@ -13,7 +13,6 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import {
   startChildRunLoop,
   type ChildRunPorts,
@@ -78,19 +77,6 @@ export function publishAgentCliStreamUsage(
   );
 }
 
-interface ResumableAgentCliSession {
-  childStreamId: StreamTabId;
-  executionId: ExecutionId;
-  /** Registry holding the live handle — lineage is read there, never copied. */
-  executions: ExecutionRegistry;
-}
-
-interface ClaimableAgentCliStore {
-  claim(id: string): (() => void) | undefined;
-  lookup(id: string): ResumableAgentCliSession | undefined;
-  waitForActive(id: string): Promise<ResumableAgentCliSession | undefined>;
-}
-
 export interface AgentCliResumeLabels {
   notActiveLabel: string;
   idParamName: string;
@@ -111,7 +97,7 @@ function requireCallerOwnership(
 }
 
 async function queueAgentCliFollowUp(
-  stored: ResumableAgentCliSession,
+  stored: AgentCliSessionEntry,
   params: {
     id: string;
     prompt: string;
@@ -155,7 +141,7 @@ async function queueAgentCliFollowUp(
  * initial turn.
  */
 async function resumeOrLaunchAgentCliSession(
-  store: ClaimableAgentCliStore,
+  store: AgentCliSessionRegistry,
   params: {
     id: string | undefined;
     prompt: string;
@@ -335,7 +321,7 @@ export interface AgentCliLaunchContext {
 export function dispatchAgentCliTool(params: {
   agentName: string;
   approvalLabel: string;
-  store: ClaimableAgentCliStore;
+  store: AgentCliSessionRegistry;
   resumeId: string | undefined;
   /** Existing live session read by a fresh launch, such as a fork source. */
   sourceId?: string;
