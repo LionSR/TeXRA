@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Local imports
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { ExecutionId } from '@shared/schemas';
 import type { FileOpResult } from '@shared/schemas/opResults';
@@ -15,6 +15,8 @@ import { findRunDir } from '@utils/files/runStorageFs';
 import { CHANNEL, HISTORY_DIR } from './constants';
 import { generateTimestamp } from './utils';
 
+const log = createLog(CHANNEL);
+
 /**
  * Snapshot a completed run's runDir into `workspace/History/`. Symlinks
  * are dereferenced so the snapshot is a self-contained copy.
@@ -25,17 +27,13 @@ export async function runPackRunDir(
   model: string,
   inputFile: string,
 ): Promise<FileOpResult> {
-  logger.info(
-    CHANNEL,
+  log.info(
     `Packing runDir for execution ${executionId} (agent=${agent}, model=${model}, inputFile=${inputFile})`,
   );
 
   const runDirAbsolute = await findRunDir(executionId);
   if (!runDirAbsolute) {
-    logger.warn(
-      CHANNEL,
-      `Run directory not found for execution ${executionId}`,
-    );
+    log.warn(`Run directory not found for execution ${executionId}`);
     return { status: 'noFiles' };
   }
 
@@ -57,14 +55,11 @@ export async function runPackRunDir(
       overwrite: true,
       dereference: true,
     });
-    logger.info(
-      CHANNEL,
-      `Packed runDir ${runDirAbsolute} -> ${destinationAbsolute}`,
-    );
+    log.info(`Packed runDir ${runDirAbsolute} -> ${destinationAbsolute}`);
     return { status: 'success', outputFolder: destinationRelative };
   } catch (error) {
     const message = toErrorMessage(error);
-    logger.error(CHANNEL, `Pack runDir failed: ${message}`, { data: error });
+    log.error(`Pack runDir failed: ${message}`, { data: error });
     return { status: 'error', error: message };
   }
 }
@@ -78,24 +73,18 @@ export async function runCleanRunDir(
 ): Promise<FileOpResult> {
   const runDirAbsolute = await findRunDir(executionId);
   if (!runDirAbsolute) {
-    logger.warn(
-      CHANNEL,
-      `Run directory not found for execution ${executionId}`,
-    );
+    log.warn(`Run directory not found for execution ${executionId}`);
     return { status: 'noFiles' };
   }
 
-  logger.info(
-    CHANNEL,
-    `Removing runDir for execution ${executionId}: ${runDirAbsolute}`,
-  );
+  log.info(`Removing runDir for execution ${executionId}: ${runDirAbsolute}`);
 
   try {
     await platform().fs.delete(runDirAbsolute, { recursive: true });
     return { status: 'success' };
   } catch (error) {
     const message = toErrorMessage(error);
-    logger.error(CHANNEL, `Clean runDir failed: ${message}`, { data: error });
+    log.error(`Clean runDir failed: ${message}`, { data: error });
     return { status: 'error', error: message };
   }
 }
