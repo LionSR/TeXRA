@@ -35,6 +35,8 @@ interface HarnessOptions {
   keys?: Partial<Record<ApiProvider, string | undefined>>;
   prompt?(keys: Map<ApiProvider, string | undefined>): void;
   glmCodingPlan?: boolean;
+  kimiCode?: boolean;
+  kimiCodeActiveForModel?: (modelId: string) => boolean;
   retryAvailable?: boolean;
   retryPending?: boolean;
   triggerRetry?: ProgressApiKeyRetryControllerDeps['triggerRetry'];
@@ -48,6 +50,7 @@ function createHarness(options: HarnessOptions = {}): {
   includedAccessValues: boolean[];
   chatGptSubscriptionValues: boolean[];
   glmCodingPlanValues: boolean[];
+  kimiCodeValues: boolean[];
   invalidations: number;
   retries: string[];
 } {
@@ -60,8 +63,12 @@ function createHarness(options: HarnessOptions = {}): {
   const includedAccessValues: boolean[] = [];
   const chatGptSubscriptionValues: boolean[] = [];
   const glmCodingPlanValues: boolean[] = [];
+  const kimiCodeValues: boolean[] = [];
+  const kimiCodeActiveForModel =
+    options.kimiCodeActiveForModel ?? (() => false);
   let preferChatGptSubscription = true;
   let glmCodingPlan = options.glmCodingPlan ?? true;
+  let kimiCode = options.kimiCode ?? true;
   let invalidations = 0;
   const retries: string[] = [];
 
@@ -71,6 +78,7 @@ function createHarness(options: HarnessOptions = {}): {
     includedAccessValues,
     chatGptSubscriptionValues,
     glmCodingPlanValues,
+    kimiCodeValues,
     get invalidations() {
       return invalidations;
     },
@@ -101,6 +109,15 @@ function createHarness(options: HarnessOptions = {}): {
             glmCodingPlan = enabled;
             glmCodingPlanValues.push(enabled);
           },
+        },
+        {
+          exhaustionReason: 'kimi-code-subscription',
+          getEnabled: () => kimiCode,
+          setEnabled: async (enabled) => {
+            kimiCode = enabled;
+            kimiCodeValues.push(enabled);
+          },
+          isActiveForModel: async (modelId) => kimiCodeActiveForModel(modelId),
         },
       ],
       invalidateModelOptionsCache: () => {
@@ -396,7 +413,12 @@ describe('ProgressApiKeyRetryController', () => {
     expect(harness.includedAccessValues).toStrictEqual([]);
 
     const started = await harness.controller.runCopilotFallbackWithRouting(
-      { provider: 'anthropic', exhaustionReason: 'copilot-subscription' },
+      {
+        stream: 'stream-a',
+        requestId: 'retry-a',
+        provider: 'anthropic',
+        exhaustionReason: 'copilot-subscription',
+      },
       async () => true,
     );
 
@@ -413,7 +435,11 @@ describe('ProgressApiKeyRetryController', () => {
     const harness = createHarness();
 
     const started = await harness.controller.runCopilotFallbackWithRouting(
-      { exhaustionReason: 'copilot-subscription' },
+      {
+        stream: 'stream-a',
+        requestId: 'retry-a',
+        exhaustionReason: 'copilot-subscription',
+      },
       async () => false,
     );
 
@@ -427,6 +453,8 @@ describe('ProgressApiKeyRetryController', () => {
 
     const started = await harness.controller.runCopilotFallbackWithRouting(
       {
+        stream: 'stream-a',
+        requestId: 'retry-a',
         exhaustionReason: 'copilot-subscription',
         chatGptSubscriptionEligible: true,
       },
@@ -444,6 +472,8 @@ describe('ProgressApiKeyRetryController', () => {
 
     const started = await harness.controller.runCopilotFallbackWithRouting(
       {
+        stream: 'stream-a',
+        requestId: 'retry-a',
         exhaustionReason: 'copilot-subscription',
         chatGptSubscriptionEligible: true,
       },
@@ -460,7 +490,11 @@ describe('ProgressApiKeyRetryController', () => {
     const harness = createHarness();
 
     const started = await harness.controller.runCopilotFallbackWithRouting(
-      { exhaustionReason: 'copilot-subscription' },
+      {
+        stream: 'stream-a',
+        requestId: 'retry-a',
+        exhaustionReason: 'copilot-subscription',
+      },
       async () => true,
     );
 
@@ -485,7 +519,12 @@ describe('ProgressApiKeyRetryController', () => {
 
     expect(prefersCopilotRoute('sonnet46')).toBe(true);
     const started = await harness.controller.runCopilotFallbackWithRouting(
-      { model: 'sonnet46', exhaustionReason: 'copilot-subscription' },
+      {
+        stream: 'stream-a',
+        requestId: 'retry-a',
+        model: 'sonnet46',
+        exhaustionReason: 'copilot-subscription',
+      },
       async (copilotRouteOverride) => {
         expect(copilotRouteOverride).toBe('direct');
         // A concurrent launch still sees the user's standing preference; only
@@ -606,6 +645,8 @@ describe('ProgressApiKeyRetryController', () => {
       prompt: (keys) => {
         keys.set('kimiCode', 'new-kimi');
       },
+      kimiCode: true,
+      kimiCodeActiveForModel: () => true,
     });
 
     const result = await harness.controller.useOwnApiKey({
@@ -629,6 +670,93 @@ describe('ProgressApiKeyRetryController', () => {
     expect(harness.prompts).toStrictEqual(['kimiCode']);
     expect(harness.keys.get('kimiCode')).toBe('new-kimi');
     expect(harness.keys.get('moonshot')).toBe('old-moonshot');
+    expect(harness.kimiCodeValues).toStrictEqual([]);
     expect(harness.retries).toStrictEqual(['stream-kimi-credit']);
+  });
+
+  it('disables the Kimi Code preference when a dual-backend Kimi model credit-retries from the coding route', async () => {
+    const harness = createHarness({
+      keys: { moonshot: 'old-moonshot', kimiCode: 'old-kimi' },
+      prompt: (keys) => {
+        keys.set('moonshot', 'new-moonshot');
+      },
+      kimiCode: true,
+      kimiCodeActiveForModel: (modelId) => modelId === 'kimi3',
+    });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-kimi-dual',
+      requestId: 'retry-kimi-dual',
+      model: 'kimi3',
+      provider: 'moonshot',
+      exhaustionReason: 'upstream-credit',
+    });
+
+    expect(result).toStrictEqual({
+      proceeded: true,
+      retried: true,
+      disabledIncludedModelAccess: false,
+      disabledChatGptSubscription: false,
+      disabledCodingPlans: ['kimi-code-subscription'],
+    });
+    // The forwarded SDK provider is `moonshot`, so that is the credential the
+    // panel asks to replace; the routing step then turns off "Prefer Kimi
+    // Code" so the rebuilt handler actually uses the new Moonshot key.
+    expect(harness.prompts).toStrictEqual(['moonshot']);
+    expect(harness.keys.get('moonshot')).toBe('new-moonshot');
+    expect(harness.keys.get('kimiCode')).toBe('old-kimi');
+    expect(harness.kimiCodeValues).toStrictEqual([false]);
+    expect(harness.invalidations).toBe(1);
+    expect(harness.retries).toStrictEqual(['stream-kimi-dual']);
+  });
+
+  it('rechecks Copilot fallback retry identity after the routing queue admits it', async () => {
+    const firstStart = pDefer<boolean>();
+    let stalePending = true;
+    const startCalls: string[] = [];
+    const harness = createHarness({
+      isRetryPending: (_stream, requestId) =>
+        requestId === 'retry-stale' ? stalePending : true,
+    });
+
+    const holder = harness.controller.runCopilotFallbackWithRouting(
+      {
+        stream: 'stream-holder',
+        requestId: 'retry-holder',
+        exhaustionReason: 'copilot-subscription',
+      },
+      async () => {
+        startCalls.push('holder');
+        return firstStart.promise;
+      },
+    );
+    await vi.waitFor(() =>
+      expect(harness.includedAccessValues).toStrictEqual([false]),
+    );
+    await vi.waitFor(() => expect(startCalls).toStrictEqual(['holder']));
+
+    const stale = harness.controller.runCopilotFallbackWithRouting(
+      {
+        stream: 'stream-stale',
+        requestId: 'retry-stale',
+        exhaustionReason: 'copilot-subscription',
+      },
+      async () => {
+        startCalls.push('stale');
+        return true;
+      },
+    );
+
+    // The stale request is queued behind the holder; dismissing it before the
+    // queue admits it must make the in-queue recheck fail and prevent any
+    // routing write or launch from the stale request.
+    stalePending = false;
+    firstStart.resolve(true);
+
+    await expect(holder).resolves.toBe(true);
+    await expect(stale).resolves.toBe(false);
+    expect(startCalls).toStrictEqual(['holder']);
+    expect(harness.includedAccessValues).toStrictEqual([false]);
+    expect(harness.invalidations).toBe(1);
   });
 });
