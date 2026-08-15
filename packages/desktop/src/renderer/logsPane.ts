@@ -1,5 +1,5 @@
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import { html, render, type TemplateResult } from 'lit';
+import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { postMessage } from '@shared/hostBridge';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
@@ -212,28 +212,21 @@ export function createLogsPane(
     `;
   }
 
-  function logListContent(): TemplateResult {
-    if (state.entries.length > 0) {
-      return html`${repeat(
-        state.entries.toReversed(),
-        (entry) => entry.id,
-        entryTemplate,
-      )}`;
-    }
+  // role="status" lives on this permanently mounted wrapper — not on a node
+  // that's created fresh per state — because assistive tech only reliably
+  // announces content changing inside an already-present live region, not a
+  // brand-new node that arrives with its content already populated.
+  function logStatusContent(): TemplateResult | typeof nothing {
+    if (state.entries.length > 0) return nothing;
     if (state.status === 'loading') {
       return renderLoadingState('Loading recent entries…');
     }
-    // role="status" keeps the previous div's behavior: announce to screen
-    // readers that the requested snapshot finished loading with no entries,
-    // not just that it's still loading.
-    return html`<div role="status">
-      ${renderEmptyState({
-        icon: 'file-lines',
-        title: 'No desktop log entries yet.',
-        headingTag: 'h3',
-        className: 'desktop-log-viewer-empty',
-      })}
-    </div>`;
+    return renderEmptyState({
+      icon: 'file-lines',
+      title: 'No desktop log entries yet.',
+      headingTag: 'h3',
+      className: 'desktop-log-viewer-empty',
+    });
   }
 
   function viewerTemplate(): TemplateResult {
@@ -274,7 +267,16 @@ export function createLogsPane(
           role="list"
           aria-label="Recent desktop log entries"
         >
-          ${logListContent()}
+          <div role="status">${logStatusContent()}</div>
+          ${
+            state.entries.length > 0
+              ? repeat(
+                  state.entries.toReversed(),
+                  (entry) => entry.id,
+                  entryTemplate,
+                )
+              : nothing
+          }
         </div>
       </section>
     `;
