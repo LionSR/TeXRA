@@ -1,4 +1,4 @@
-import { formatConversationMessage } from '@agent/storage/conversationFormat';
+import { formatConversationMessage } from '@agent/storage';
 
 import type {
   CliHistoryConversationPreview,

@@ -178,6 +178,17 @@ These are small and independent of the strategic Tier-1 program:
    migrate each host off the deep import and **shrink**
    `host-agent-import-baseline.json` accordingly. One cluster per PR keeps each
    change reviewable and each ratchet decrease verifiable.
+
+   **Reconciliation (2026-08).** The first §3 increment (#10011) took an
+   intermediate step instead of the `packages/agent/src/index.ts` promotion named
+   above: it added a curated module-level barrel, `src/agent/runtime/index.ts`
+   (imported as `@agent/runtime`), as the host boundary and left the package
+   barrel untouched. Review comment `pullrequestreview-4918028384` flagged that
+   scope change and asked for §5.1/§6 to record it if module-level barrels are the
+   intended path — they are. Module-level barrels are the proving ground;
+   promotion through `packages/agent/src/index.ts` is deferred until the
+   host-boundary surface has proven stable. One cluster per PR still applies.
+
 2. **Stabilize the withheld interaction contract.** The `HostInteractions`
    docstring (`index.ts:42-47`) and the hard-deny `requestRetry`
    (`index.ts:234-240`) are the concrete "not-yet-stable" markers. Deciding the
@@ -201,3 +212,8 @@ and the gap is packaging + bootstrap, not internal complexity. Readers acting on
 this should work from the north-star plan of record; this document only refreshes
 the evidence at HEAD `5fc8cae` and pins the current deep-import counts (39/32/25)
 as the baseline to shrink.
+
+**Reconciliation (2026-08).** #10011 began the §5.1 fold-in at the module-level
+`@agent/runtime` barrel rather than `packages/agent/src/index.ts`, deferring
+package promotion until the module-level barrels have proven the host-boundary
+surface; see §5.1 and review `pullrequestreview-4918028384`.

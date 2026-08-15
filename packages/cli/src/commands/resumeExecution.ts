@@ -2,8 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { resolveAndResumeStream } from '@agent/runtime';
-import { getExecutionStore } from '@agent/storage';
-import { inspectExecutionLease } from '@agent/storage/executionLease';
+import { getExecutionStore, inspectExecutionLease } from '@agent/storage';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
