@@ -123,10 +123,13 @@ describe('texcount logger seam', () => {
     );
   });
 
-  // #10649: getSummedCount also resolves its logger per call from the
-  // threaded channel. Its one emission of its own is the Chinese-package
-  // debug line, so a Chinese-package file in sum mode must reach the spied
-  // namespace on both the threaded and the default channel.
+  // #10649: pins the sum-mode path's own log emission: getSummedCount's
+  // Chinese-package debug line reaches the spied namespace at debug level
+  // with its exact message, on both the threaded channel and the default
+  // LATEX_COMMANDS_CHANNEL. The spy is installed before the per-call
+  // createLog runs, so this test does not prove call-time loggerSelf
+  // delegation; that bind-time-vs-call-time seam is guarded by the
+  // import-time hasChinesePackages test above.
   it('emits the sum-mode Chinese-package debug line on the resolved channel', async () => {
     await installPlatform({
       workspacePath: '/workspace',
