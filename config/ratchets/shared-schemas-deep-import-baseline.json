@@ -686,7 +686,6 @@
       "src/controllers/settingsView/SettingsAgentCatalogController.ts (type-only)",
       "src/controllers/settingsView/SettingsMemoryController.ts (type-only)",
       "src/controllers/settingsView/SettingsModelSelectionController.ts",
-      "src/controllers/settingsView/SettingsModelSelectionControllerFactory.ts (type-only)",
       "src/controllers/settingsView/SettingsProfileController.ts (type-only)",
       "src/controllers/settingsView/SettingsViewHost.ts (type-only)",
       "src/controllers/settingsView/ToolDashboardData.ts (type-only)",
