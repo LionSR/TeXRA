@@ -264,6 +264,12 @@ export function createNativeSubagentStrategy(
         ? 'Native tool-use subagent'
         : 'Native workflow subagent',
 
+    // A single-cycle child has no later turn to consume a follow-up delivery;
+    // its awaiting caller reads the persisted report/result instead.
+    ...(params.executionMode === 'single-cycle' && {
+      deliveryMode: 'persistOnly' as const,
+    }),
+
     launch: (ports, abortController) =>
       runNative(ports, abortController, async (onRun) => {
         const executeOptions = {
@@ -286,18 +292,38 @@ export function createNativeSubagentStrategy(
           },
           onRun,
         };
-        return engine().executeAgent(params.config, params.executionId, {
-          ...executeOptions,
-          allowWaitingResult: true,
-          userFollowUpSupport:
-            params.executionMode !== 'single-cycle' &&
-            params.config.agentCategory === AgentCategory.ToolUse
-              ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
-              : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-          ...(params.executionMode === 'single-cycle'
-            ? { stopAfterCycle: true }
-            : {}),
-        });
+        const turn = await engine().executeAgent(
+          params.config,
+          params.executionId,
+          {
+            ...executeOptions,
+            allowWaitingResult: true,
+            userFollowUpSupport:
+              params.executionMode !== 'single-cycle' &&
+              params.config.agentCategory === AgentCategory.ToolUse
+                ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
+                : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+            ...(params.executionMode === 'single-cycle'
+              ? { stopAfterCycle: true }
+              : {}),
+          },
+        );
+        // A single-cycle run must end its cycle: a WAITING turn here is an
+        // invariant violation, surfaced loudly as this turn's failure rather
+        // than parked on a queue no follow-up will ever reach. Record the
+        // turn's facts first so the failure meta and the parent's cost
+        // accounting keep what the run actually spent.
+        if (
+          params.executionMode === 'single-cycle' &&
+          isWaitingFlowResult(turn)
+        ) {
+          lastResult = toDeliveryResult(turn, params.executionId);
+          ports.recordCost(turn.totalCostUsd);
+          throw new Error(
+            `Single-cycle subagent ${params.executionId} unexpectedly suspended.`,
+          );
+        }
+        return turn;
       }),
 
     runTurn: (followUps, ports, abortController) =>
@@ -406,20 +432,37 @@ export function createNativeSubagentStrategy(
       );
     },
 
-    buildResultMeta: async (turn, isError) => {
+    buildResultMeta: async (turn, isError, _wallTimeMs, error) => {
       if (isError || turn === null) {
         // Overwrite any interim success manifest from an earlier turn so
         // /executions/{id}/result never claims success for a failed run.
         const result = turn
           ? toDeliveryResult(turn, params.executionId)
           : lastResult;
-        return buildSubagentFailureResultMeta(
-          params.agentName,
-          params.config.agentCategory,
-          result,
-          Date.now() - params.startedAt,
-          { parentExecutionId: params.parentExecutionId },
-        );
+        const failureOptions = {
+          parentExecutionId: params.parentExecutionId,
+          cause: lastErr ?? error,
+        };
+        try {
+          return buildSubagentFailureResultMeta(
+            params.agentName,
+            params.config.agentCategory,
+            result,
+            Date.now() - params.startedAt,
+            failureOptions,
+          );
+        } catch {
+          // Even an unconstructable failure result must leave a durable
+          // failure manifest (with the child's real error), never a stale
+          // interim record. The category-only form cannot throw.
+          return buildSubagentFailureResultMeta(
+            params.agentName,
+            params.config.agentCategory,
+            undefined,
+            Date.now() - params.startedAt,
+            failureOptions,
+          );
+        }
       }
       return (await buildResult(turn)).resultMeta;
     },

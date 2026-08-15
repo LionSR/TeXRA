@@ -313,9 +313,17 @@ export function buildSubagentFailureResultMeta(
   fallbackCategory: AgentFlowCategory,
   result: AgentFlowResult | undefined,
   wallTimeMs: number,
-  options: { readonly parentExecutionId?: ExecutionId } = {},
+  options: {
+    readonly parentExecutionId?: ExecutionId;
+    /**
+     * The thrown error behind this failure, used when the flow result itself
+     * recorded no structured error — so the typed manifest always carries a
+     * failure message for its awaiting consumer.
+     */
+    readonly cause?: unknown;
+  } = {},
 ): SubagentResultMeta {
-  const finalResult = result
+  const built = result
     ? buildAgentFinalResult({
         flowResult: result,
         // A nominally completed flow that reached the error path is a failure;
@@ -326,7 +334,22 @@ export function buildSubagentFailureResultMeta(
         category: fallbackCategory,
         outcome: 'failed',
       });
-  return buildSubagentResultMeta(agentName, finalResult, wallTimeMs, options);
+  const finalResult =
+    built.outcome === 'failed' &&
+    built.error === undefined &&
+    options.cause !== undefined
+      ? {
+          ...built,
+          // A thrown child failure is not a user-retry offer.
+          error: {
+            message: toErrorMessage(options.cause),
+            userRetryable: false,
+          },
+        }
+      : built;
+  return buildSubagentResultMeta(agentName, finalResult, wallTimeMs, {
+    parentExecutionId: options.parentExecutionId,
+  });
 }
 
 // ============================================================================

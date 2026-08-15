@@ -1094,14 +1094,14 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       turnAttributionNote(store),
     ]);
     if (!report) {
-      // Workflow-scripted children are result-only by contract: their typed
-      // result is the terminal artifact, and no prose report is ever written
-      // (see src/agent/workflowScript/README.md). Point the reader at the
-      // artifact that does exist instead of implying the run never finished.
+      // Pre-single-driver workflow-scripted children persisted only their
+      // typed result (see src/agent/workflowScript/README.md). Point the
+      // reader at the artifact that does exist instead of implying the run
+      // never finished.
       const resultMeta = await store.readResultMeta();
       if (resultMeta) {
         return executed(
-          `Execution ${executionId} persists a typed result instead of a prose report (workflow-scripted and in-band children are result-only). Read /executions/${executionId}/result.`,
+          `Execution ${executionId} persists a typed result and no prose report. Read /executions/${executionId}/result.`,
         );
       }
       return executed(

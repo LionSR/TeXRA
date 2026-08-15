@@ -312,25 +312,30 @@ function stableAttempt(
 /** In-memory execution KV store: enough surface for the stable attempt path. */
 function memoryExecutionStore() {
   const kv = new Map<string, unknown>();
+  // The loop persists the manifest and the awaiting caller verifies it by
+  // read-back, so the fixture must retain writes like the real store does.
+  let resultMeta: unknown = null;
   return {
     listKeys: vi.fn(async () => [...kv.keys()]),
     read: vi.fn(async (key: string) => kv.get(key)),
     write: vi.fn(async (key: string, value: unknown) => {
       kv.set(key, value);
     }),
-    readResultMeta: vi.fn(async () => null),
+    readResultMeta: vi.fn(async () => resultMeta),
     writeReport: mocks.writeReport,
-    writeResultMeta: mocks.writeResultMeta,
+    writeResultMeta: vi.fn(async (value: unknown) => {
+      // Retain only writes that succeed, like the real store: a rejected
+      // write must stay invisible to the caller's durability read-back.
+      const written = await mocks.writeResultMeta(value);
+      resultMeta = value;
+      return written;
+    }),
   };
 }
 
 /** Child store with nothing persisted: what a fresh attempt starts from. */
 function emptyChildStore() {
-  return {
-    listKeys: vi.fn().mockResolvedValue([]),
-    read: vi.fn().mockResolvedValue(undefined),
-    readResultMeta: vi.fn().mockResolvedValue(null),
-  };
+  return memoryExecutionStore();
 }
 
 /** Child store holding a launched attempt marker and its result manifest. */
@@ -535,7 +540,10 @@ describe('headless delegation', () => {
       files: [],
       cost: 0,
     });
-    expect(mocks.writeReport).not.toHaveBeenCalled();
+    // The single driver persists the report alongside the manifest for every
+    // child — a scripted grandchild is debuggable through the same artifacts
+    // as any detached child (this closed item 10's report gap).
+    expect(mocks.writeReport).toHaveBeenCalled();
     expect(mocks.registerExecution).toHaveBeenCalledWith(
       result.executionId,
       expect.objectContaining({ agent: 'review' }),
@@ -545,13 +553,18 @@ describe('headless delegation', () => {
         streamId: expect.stringContaining(`#${result.executionId}`),
       }),
     );
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith({
-      producer: 'subagent',
-      agentName: 'review',
-      parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-      wallTimeMs: expect.any(Number),
-      result: result.result,
-    });
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        producer: 'subagent',
+        agentName: 'review',
+        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        wallTimeMs: expect.any(Number),
+        // The loop stamps turn attribution on every manifest it persists —
+        // scripted children included (this closed item 10's turnToken gap).
+        turnToken: expect.any(String),
+        result: result.result,
+      }),
+    );
     expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.releaseOwnedExecutionLease.mock.invocationCallOrder[0],
     );
@@ -751,11 +764,7 @@ describe('headless delegation', () => {
                   .fn()
                   .mockResolvedValue(stableAttempt(logicalExecutionId, phase)),
               }
-            : {
-                ...emptyChildStore(),
-                write: vi.fn().mockResolvedValue(undefined),
-                writeResultMeta: mocks.writeResultMeta,
-              };
+            : emptyChildStore();
         stores.set(id, store);
         return store;
       });
@@ -819,11 +828,7 @@ describe('headless delegation', () => {
             files: [],
             cost: 0,
           })
-        : {
-            ...emptyChildStore(),
-            write: vi.fn().mockResolvedValue(undefined),
-            writeResultMeta: mocks.writeResultMeta,
-          };
+        : emptyChildStore();
       stores.set(id, store);
       return store;
     });
@@ -850,7 +855,9 @@ describe('headless delegation', () => {
     await expect(runInBand(delegationOptions())).rejects.toBeInstanceOf(
       SubagentDurabilityError,
     );
-    expect(mocks.writeReport).not.toHaveBeenCalled();
+    // The single driver persists the report independently of the manifest;
+    // the manifest read-back is what gates the typed return.
+    expect(mocks.writeReport).toHaveBeenCalled();
   });
 
   it('preserves the child failure when final lease cleanup also fails', async () => {
@@ -863,14 +870,18 @@ describe('headless delegation', () => {
     await expect(runInBand(delegationOptions())).rejects.toBe(childFailure);
   });
 
-  it('surfaces final lease cleanup failure after a successful child', async () => {
+  it('returns the verified typed result despite a lease cleanup failure', async () => {
+    // Release-after-artifacts is best-effort in the one driver (warned
+    // loudly loop-side); the typed return is gated by the manifest read-back
+    // instead, so a flush failure no longer masks a durably completed child.
     mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(
       new Error('artifact flush failed'),
     );
 
-    await expect(runInBand(delegationOptions())).rejects.toThrow(
-      'artifact flush failed',
-    );
+    const completed = await runInBand(delegationOptions());
+
+    expect(completed.result.outcome).toBe('completed');
+    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalled();
   });
 
   it('preserves the child failure when its failure manifest cannot be written', async () => {
@@ -897,8 +908,18 @@ describe('headless delegation', () => {
 
     const run = runInBand(delegationOptions());
 
-    await expectDurabilityErrorPreservingChildFailure(run);
-    expect(mocks.writeResultMeta).not.toHaveBeenCalled();
+    // An unconstructable failure result degrades to the category-only
+    // manifest carrying the child's real error, so durability holds and the
+    // caller sees the child failure itself.
+    await expect(run).rejects.toThrow('review model failed');
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          outcome: 'failed',
+          error: expect.objectContaining({ message: 'review model failed' }),
+        }),
+      }),
+    );
   });
 
   it('does not rewrite a completed child when typed result construction fails', async () => {

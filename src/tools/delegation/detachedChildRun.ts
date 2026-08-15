@@ -15,6 +15,7 @@
 import { runWithOwnedExecutionLeaseLaunchGuard } from '@agent/storage/executionLease';
 import {
   startChildRunLoop,
+  type ChildRunLoopParams,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -47,6 +48,16 @@ export interface DetachedChildRunInput<TTurn> {
   /** Roll the child's final cost into the parent's usage totals. */
   readonly recordCost?: (totalCostUsd: number | undefined) => void;
   /**
+   * False for an awaited in-band child, which runs while its parent is
+   * blocked awaiting it and therefore rides the parent's budget slot (see
+   * the child-run budget design note). Detached children default to true.
+   */
+  readonly budgeted?: boolean;
+  /** Progress sink override for awaiting persist-only callers. */
+  readonly notify?: ChildRunLoopParams<never>['notify'];
+  /** In-memory settled-turn facts for awaiting persist-only callers. */
+  readonly onTurnSettled?: ChildRunLoopParams<never>['onTurnSettled'];
+  /**
    * Build the strategy (and any attempt-scoped setup) INSIDE the lease launch
    * guard: a throw here must release the owned-execution lease. A function
    * (rather than a pre-built value) so the build runs lazily inside the guard.
@@ -73,9 +84,13 @@ export async function startDetachedChildRunLoop<TTurn>(
       agentName: input.agentName,
       strategy,
       ...(input.recordCost !== undefined && { recordCost: input.recordCost }),
+      ...(input.notify !== undefined && { notify: input.notify }),
+      ...(input.onTurnSettled !== undefined && {
+        onTurnSettled: input.onTurnSettled,
+      }),
       // Every detached native/workflow child takes one shared-budget slot per
-      // turn; in-band children ride their idle parent's slot instead.
-      budgeted: true,
+      // turn; an awaited in-band child rides its idle parent's slot instead.
+      budgeted: input.budgeted ?? true,
     });
     if (onLoopFailed) void completion.catch(onLoopFailed);
     return {

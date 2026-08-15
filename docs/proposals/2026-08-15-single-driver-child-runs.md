@@ -122,6 +122,23 @@ ledger wrapper → loop-driven run (persistOnly delivery, required result) →
 await completion → read `resultMeta`; `executeInBand`'s parallel
 register/guard/launch/release choreography deletes.
 
+## Follow-up: one execution-lease scope (maintainer-flagged, 2026-08-15)
+
+The lease protocol — one owner per execution; flush final artifacts before
+release so a concurrent host cannot resurrect a half-written record — is one
+lifecycle spread over three modules and ~seven verbs
+(`registerOwnedExecution`, `captureOwnedExecutionLease`,
+`acquireResumedExecutionLease`, `runWithOwnedExecutionLeaseLaunchGuard`,
+`releaseOwnedExecutionLeaseAfterFailure`, `markOwnedExecutionLeaseUndurable`,
+`releaseExecutionLeaseAfterArtifacts`), with every call site hand-composing
+its own exit choreography — which is exactly how `executeInBand` grew the
+private release policy the smell-1 fold deleted. The clean shape: one lease
+_scope_ owning acquire → run → release, artifact-flush inside the single
+release path, launch-guard and release-after-failure as that scope's exit
+arms rather than separately-remembered free functions. Needs its own
+adversarial pass (the resume-acquire and undurable-mark arms have real
+semantics); candidate next after both smells land.
+
 ## Sequencing
 
 Smell 1 implements next on this branch (checks passed above); smell 2 is

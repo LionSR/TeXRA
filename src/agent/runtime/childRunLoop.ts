@@ -243,6 +243,12 @@ export interface ChildRunStrategy<TTurn> {
     turn: TTurn | null,
     isError: boolean,
     wallTimeMs: number,
+    /**
+     * The thrown error of a failed turn, when the failure was a throw rather
+     * than a returned failed result — so the manifest can carry the failure
+     * message even when no flow result exists to carry it.
+     */
+    error?: unknown,
   ): ResultMeta | undefined | Promise<ResultMeta | undefined>;
 
   /**
@@ -299,6 +305,27 @@ export interface ChildRunLoopParams<TTurn> {
    * (see `docs/proposals/2026-08-15-child-run-concurrency-budget.md`).
    */
   readonly budgeted?: boolean;
+  /**
+   * Progress sink override for awaiting callers of a persist-only child: the
+   * parent is blocked inside a tool call, so follow-up delivery cannot reach
+   * it and the caller degrades deliberately (e.g. to the parent run's trace).
+   * When present it replaces follow-up delivery for every progress update.
+   */
+  readonly notify?: (update: SubagentProgressUpdate) => void;
+  /**
+   * Hands an awaiting caller each settled turn's facts in memory — the
+   * formatted message, the (turn-stamped) result manifest, and the raw error
+   * of a failed turn. Persistence stays best-effort in the loop; a caller
+   * with a required-durability contract verifies the store afterwards rather
+   * than changing what the loop persists. Fires after persistence, once per
+   * settled turn.
+   */
+  readonly onTurnSettled?: (settled: {
+    readonly message: string;
+    readonly resultMeta?: ResultMeta;
+    readonly isError: boolean;
+    readonly error?: unknown;
+  }) => void;
 }
 
 export interface ChildRunLoopHandle {
@@ -563,6 +590,7 @@ async function deliverTurn<TTurn>(params: {
   parentDeliveryGenerationId?: string;
   /** Serializes turn-state writes against the acceptance write (#9531). */
   turnStateWrites: PQueue;
+  onTurnSettled?: ChildRunLoopParams<TTurn>['onTurnSettled'];
 }): Promise<PendingChildDelivery | undefined> {
   const {
     strategy,
@@ -587,6 +615,7 @@ async function deliverTurn<TTurn>(params: {
     turn,
     isError,
     wallTimeMs,
+    err ?? undefined,
   );
   // Attribute the envelope to this turn so /result can tell which turn the
   // latest-value slot reflects (#9531).
@@ -617,6 +646,13 @@ async function deliverTurn<TTurn>(params: {
       logger,
     ),
   );
+
+  params.onTurnSettled?.({
+    message: msg,
+    ...(stampedMeta !== undefined && { resultMeta: stampedMeta }),
+    isError,
+    ...(err != null && { error: err }),
+  });
 
   if (strategy.deliveryMode === 'persistOnly') return undefined;
 
@@ -793,6 +829,10 @@ export function startChildRunLoop<TTurn>(
   let bestCostUsd: number | undefined;
   const ports: ChildRunPorts = {
     notify: (update) => {
+      if (params.notify) {
+        params.notify(update);
+        return;
+      }
       if (strategy.deliveryMode === 'persistOnly') return;
       const targetStreamId = resolveDeliveryTarget(strategy, parentStreamId);
       if (!targetStreamId) return;
@@ -918,6 +958,7 @@ export function startChildRunLoop<TTurn>(
           wallTimeMs,
           isError: turnFailed,
           turnStateWrites,
+          onTurnSettled: params.onTurnSettled,
           prepareParentDelivery: () => {
             if (loop.isInterrupted()) {
               releaseSessionOwnershipOnce();
