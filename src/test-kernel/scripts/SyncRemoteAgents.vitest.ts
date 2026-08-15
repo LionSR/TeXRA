@@ -121,8 +121,12 @@ function readStubSql(root: string, filename: string) {
     throw new Error(`Stub log does not contain sql-file: ${filename}`);
   }
   const contentStart = start + marker.length;
-  const nextMarker = log.indexOf('\nsql-file: ', contentStart);
-  const end = nextMarker === -1 ? log.length : nextMarker + 1;
+  // Each stub invocation logs its args:/observed-* lines before the sql-file
+  // body, so the next '\nargs: ' marks the end of this file's SQL. Slicing
+  // there keeps the following invocation's log lines out of the result
+  // (#10411).
+  const nextInvocation = log.indexOf('\nargs: ', contentStart);
+  const end = nextInvocation === -1 ? log.length : nextInvocation;
   return log.slice(contentStart, end);
 }
 
@@ -159,11 +163,39 @@ describe.skipIf(process.platform === 'win32')(
         });
 
         expect(result.status, result.stderr).toBe(0);
+        const log = readStubLog(root);
         // The CLI was pointed at proj-b without rewriting the checkout file.
-        expect(readStubLog(root)).toContain('observed-project-id: proj-b');
-        expect(readStubLog(root)).toContain('observed-ref: proj-a');
+        expect(log).toContain('observed-project-id: proj-b');
+        expect(log).toContain('observed-ref: proj-a');
+        // SUPABASE_PROJECT_ID only steers the CLI in combination with
+        // --linked; without the flag the CLI would silently fall back to
+        // --local (#10412).
+        const invocations = log
+          .split('\n')
+          .filter((line) => line.startsWith('args:'));
+        expect(invocations).toHaveLength(2);
+        for (const invocation of invocations) {
+          expect(invocation).toContain('--linked');
+        }
         expect(readFileSync(projectRefPath(root), 'utf8')).toBe('proj-a\n');
         expect(result.stderr).not.toContain('substituting');
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    it('trims SUPABASE_PROJECT_REF before passing it through as SUPABASE_PROJECT_ID', () => {
+      const root = createFixtureCheckout('proj-a');
+      try {
+        const result = runSync(root, ['--apply'], {
+          SUPABASE_PROJECT_REF: '  proj-b  ',
+        });
+
+        expect(result.status, result.stderr).toBe(0);
+        // The CLI validates the env var without trimming, so the script must
+        // hand it the unpadded ref (#10408).
+        expect(readStubLog(root)).toContain('observed-project-id: proj-b\n');
+        expect(readFileSync(projectRefPath(root), 'utf8')).toBe('proj-a\n');
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
@@ -177,9 +209,39 @@ describe.skipIf(process.platform === 'win32')(
         });
 
         expect(result.status, result.stderr).toBe(0);
-        expect(readStubLog(root)).toContain('observed-project-id: proj-b');
+        const log = readStubLog(root);
+        expect(log).toContain('observed-project-id: proj-b');
+        // The ref file was absent *while the CLI ran*, not just afterwards:
+        // the post-run existsSync checks alone would also pass if the file
+        // were created and then cleaned up mid-run (#10412).
+        expect(log).toContain('observed-ref: <absent>');
+        const invocations = log
+          .split('\n')
+          .filter((line) => line.startsWith('args:'));
+        expect(invocations).toHaveLength(2);
+        for (const invocation of invocations) {
+          expect(invocation).toContain('--linked');
+        }
         expect(existsSync(projectRefPath(root))).toBe(false);
         expect(existsSync(join(root, 'supabase/.temp'))).toBe(false);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    it('scrubs an ambient SUPABASE_PROJECT_ID when falling back to the linked checkout', () => {
+      const root = createFixtureCheckout('proj-a');
+      try {
+        const result = runSync(root, ['--apply'], {
+          SUPABASE_PROJECT_ID: 'proj-ambient',
+        });
+
+        expect(result.status, result.stderr).toBe(0);
+        // The CLI ranks SUPABASE_PROJECT_ID above the link file, so the
+        // script must hide the ambient value from the spawned CLI to keep
+        // the checkout's linked project authoritative (#10407).
+        expect(readStubLog(root)).toContain('observed-project-id: <absent>');
+        expect(readStubLog(root)).toContain('observed-ref: proj-a');
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
@@ -233,6 +295,10 @@ describe.skipIf(process.platform === 'win32')(
         expect(preflightSql).toContain('storage.objects');
         expect(preflightSql).toContain("bucket_id = 'agent-configs'");
         expect(preflightSql).toContain('researcher/apply.yaml');
+        // The slice stops at the apply invocation: only the SQL body, ending
+        // with the preflight's final line, no trailing stub-log lines.
+        expect(preflightSql).not.toContain('observed-');
+        expect(preflightSql.endsWith('$$;\n')).toBe(true);
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
@@ -245,9 +311,9 @@ describe.skipIf(process.platform === 'win32')(
           SUPABASE_PROJECT_REF: 'proj-b',
           TEXRA_STUB_FAIL: 'preflight',
           TEXRA_STUB_FAIL_OUTPUT:
-            'sync-remote-agents: 1 catalog storage path(s) missing from the agent-configs bucket: ' +
+            'ERROR: sync-remote-agents: 1 catalog storage path(s) missing from the agent-configs bucket: ' +
             'researcher/apply.yaml. Upload the YAML prompt bodies first ' +
-            '(docs/supabase/SUPABASE_SETUP.md, Part 7).',
+            '(docs/supabase/SUPABASE_SETUP.md, Part 7). (SQLSTATE P0001)',
         });
 
         expect(result.status).toBe(1);
@@ -263,6 +329,38 @@ describe.skipIf(process.platform === 'win32')(
         expect(invocations[0]).toContain('remote-agents-preflight.sql');
         // The failed run still left the checkout's link state untouched.
         expect(readFileSync(projectRefPath(root), 'utf8')).toBe('proj-a\n');
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    it('ignores the marker text when no ERROR: line carries it', () => {
+      const root = createFixtureCheckout('proj-a');
+      try {
+        const result = runSync(root, ['--apply'], {
+          SUPABASE_PROJECT_REF: 'proj-b',
+          TEXRA_STUB_FAIL: 'preflight',
+          // A non-RAISE failure whose output echoes the submitted SQL: the
+          // marker appears verbatim in the RAISE source line but no
+          // ERROR:-prefixed line carries it, so this is not the
+          // missing-storage case and must not print upload guidance
+          // (#10409).
+          TEXRA_STUB_FAIL_OUTPUT:
+            'ERROR: connection to server at "db.proj-b.supabase.co" failed: Connection refused\n' +
+            "query context:     RAISE EXCEPTION 'sync-remote-agents: % catalog storage path(s) missing from the agent-configs bucket: %. " +
+            "Upload the YAML prompt bodies first (docs/supabase/SUPABASE_SETUP.md, Part 7).',",
+        });
+
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain('Storage preflight failed');
+        expect(result.stderr).not.toContain(
+          'Upload the missing YAML prompt bodies to the agent-configs bucket',
+        );
+        const invocations = readStubLog(root)
+          .split('\n')
+          .filter((line) => line.startsWith('args:'));
+        expect(invocations).toHaveLength(1);
+        expect(invocations[0]).toContain('remote-agents-preflight.sql');
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
