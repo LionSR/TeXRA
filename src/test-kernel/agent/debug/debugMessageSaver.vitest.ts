@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentTrace } from '@agent/trace';
-import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
+import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
 import {
   resolveRunStoragePath,
   RUNS_STORAGE_DIR,

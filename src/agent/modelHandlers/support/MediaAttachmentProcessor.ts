@@ -6,7 +6,7 @@ import pMap from 'p-map';
 
 // Local imports - agent utils
 import { logFilesLoaded, type AgentTrace } from '@agent/trace';
-import type { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/types/mediaTypes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import type { FileLocation, LoadedMediaMetadata } from '@shared/schemas';
 

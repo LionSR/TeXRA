@@ -13,7 +13,7 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import type { ResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
-import type { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/types/mediaTypes';
 import { AgentError } from '@common/errors';
 import type { SdkErrorKind } from '@common/errors/sdkError/sdkErrorKinds';
 import { attachSdkErrorMetadata } from '@common/errors/sdkError/errorMetadata';

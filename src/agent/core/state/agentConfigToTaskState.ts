@@ -1,6 +1,7 @@
-import { type AgentConfig } from '@agent/core/definition/AgentConfig';
-import { type TaskState } from '@agent/core/state/TaskState';
 import { AgentCategory } from '@shared/schemas';
+
+import { type AgentConfig } from '../definition/AgentConfig';
+import { type TaskState } from './TaskState';
 
 /**
  * Project a run config into the frozen CLI NDJSON `setTaskState` payload. This

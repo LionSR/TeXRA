@@ -501,7 +501,7 @@ const CLI_CORE_SETTING_READER_FILES = {
   'src/tools/media/audio.ts': ['audio.soxPath'],
   'src/logger/logUtils.ts': ['logger.debugMode'],
   'src/telemetry/UsageLogService.ts': ['telemetry.enabled'],
-  'src/agent/utils/debugMessageSaver.ts': ['debug.saveModelIO'],
+  'src/agent/debug/debugMessageSaver.ts': ['debug.saveModelIO'],
   'src/agent/prompt/userVars.ts': ['skills.enabled'],
   'src/tools/approval/toolEditApproval.ts': ['toolUse.requireEditApproval'],
   'src/tools/approval/bashApproval.ts': ['toolUse.requireBashApproval'],

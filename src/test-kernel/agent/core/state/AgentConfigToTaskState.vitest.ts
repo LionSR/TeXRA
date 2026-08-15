@@ -7,7 +7,7 @@ import { describe, it } from 'vitest';
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { TaskStateSchema } from '@agent/core/state/TaskState';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+import { agentConfigToTaskState } from '@agent/core/state/agentConfigToTaskState';
 import { AgentCategory } from '@shared/schemas';
 
 describe('agentConfigToTaskState', () => {
