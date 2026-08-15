@@ -42,6 +42,10 @@ All notable changes to this project will be documented in this file.
 - **Every max-style shortcut now resolves in the progress view** — math
   operators, text labels, mathcal/mathbb letters, and tilde/hat/
   differential shortcuts render as intended instead of unknown commands.
+- **Max-style shortcuts no longer shadow KaTeX built-ins** — the section
+  sign and the legacy bold switch render as intended, `\label` no longer
+  errors in rendered math, and decorated-H effective-Hamiltonian plus
+  equilibrium/steady-state forms compact to their intended shortcuts.
 
 #### Features
 

@@ -83,7 +83,7 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
   // prettier-ignore
   const symbolOperators = [
       'infty', 'top',
-      'N', 'M', 'S',
+      'N', 'M',
       '0','1','2',
       'tit', 'wtit', 'tif', 'ttf', 'ttauf', 'tze', 'tzero', 'tone', 'tauf', 'tf', 'ttau', 'tau',
       'bu', 'ta'
@@ -130,7 +130,10 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
   // Math font letter sets
   const upperLetters = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
   const mathbbLetters = [...'CEINPQRTV'];
-  const lowerLetters = [...'abcdefghjnpqrsuvwxyz'];
+  // 'f' stays out of lowerLetters: the MANUAL '\mathbf{f}' -> '\bbf'
+  // special case keeps '\bf' (KaTeX's legacy bold switch) out of max-style
+  // output.
+  const lowerLetters = [...'abcdeghjnpqrsuvwxyz'];
   const mathbfUpperLetters = [...'ABCDEFGIJKMQRUVWXYZ'];
   const alphabetLetters = [
     ...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
@@ -165,6 +168,17 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
       [`_\\op`, `_{\\${op}}`],
       [`^\\op`, `^{\\${op}}`],
     ]),
+    // Combined eq/st shortcuts: keep these before the textCommands block so
+    // the AUTO \text{eq} -> \eq / \text{st} -> \st rules cannot consume
+    // the fragment first (same shadowing class as \mathcal{H}^{\text{eff}}).
+    'p^{\\text{eq}}': '\\peq',
+    'q^{\\text{eq}}': '\\qeq',
+    'p^{\\text{st}}': '\\pst',
+    'q^{\\text{st}}': '\\qst',
+    '\\rho^{\\text{eq}}': '\\rhoeq',
+    '\\rho_{\\text{eq}}': '\\rhoeq',
+    '\\rho^{\\text{st}}': '\\rhost',
+    '\\rho_{\\text{st}}': '\\rhost',
     // Text Commands: \text{cmd} -> \cmd
     ...createPatterns(textCommands, (cmd) => [
       [`\\text{${cmd}}`, `\\${cmd}`],
@@ -182,6 +196,10 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
       [`_{\\${op}}`, `_\\${op}`],
       [`^{\\${op}}`, `^\\${op}`],
     ]),
+    // '\S' is KaTeX's built-in section sign, so the plain-S shortcut lands
+    // on the non-conflicting '\sS' destination instead of '_\S'/'^\S'.
+    '_{\\S}': '_\\sS',
+    '^{\\S}': '^\\sS',
     ...generateDifferentialSpacing(differentialVariables, '~'),
     ...createPatterns(fractionDiffVariables, (variable) => [
       // Handle cases like {dx} -> {\\dd x}
@@ -208,9 +226,15 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
       ],
     ]),
     ...generateCommandShortcuts(GREEK_LETTER_SHORTCUTS),
-    // Combined shortcut: keep this before the \mathcal and effH component rules so
-    // \mathcal{H}^{\text{eff}} reaches \ceffH at runtime.
+    // Combined shortcuts: keep these before the \mathcal, \hat, and effH
+    // component rules so the decorated-H combinations are not consumed
+    // piecemeal first (AUTO \hat{H} -> \hH would otherwise turn
+    // \hat{H}^{\text{eff}} into \hH^{\text{eff}} and the effH rule would
+    // then fire inside it, corrupting to \h\effH).
     '\\mathcal{H}^{\\text{eff}}': '\\ceffH',
+    '\\cH^{\\text{eff}}': '\\ceffH',
+    '\\hat{H}^{\\text{eff}}': '\\hat{\\effH}',
+    '\\hH^{\\text{eff}}': '\\hat{\\effH}',
     // Mathcal: \mathcal{X} -> \cX
     ...generateDecoratorShortcuts('mathcal', upperLetters, 'c'),
     // Mathbb: \mathbb{X} -> \eX
@@ -345,10 +369,6 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
 
   // Physics and Statistical Mechanics
   'H^{\\text{eff}}': '\\effH',
-  'p^{\\text{eq}}': '\\peq',
-  'q^{\\text{eq}}': '\\qeq',
-  'p^{\\text{st}}': '\\pst',
-  'q^{\\text{st}}': '\\qst',
   'p^{\\text{ss}}': '\\pst',
   'q^{\\text{ss}}': '\\qst',
 
@@ -376,13 +396,9 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
   '\\tau_f': '\\tauf',
 
   // Equilibrium and steady state notation
-  '\\rho^{\\text{eq}}': '\\rhoeq',
-  '\\rho^{\\text{st}}': '\\rhost',
   '\\rho^{\\text{ss}}': '\\rhost',
   '\\rho^{\\text{sst}}': '\\rhost',
-  '\\rho_{\\text{eq}}': '\\rhoeq',
   '\\rho_{\\text{ss}}': '\\rhost',
-  '\\rho_{\\text{st}}': '\\rhost',
   '\\rho_{\\text{sst}}': '\\rhost',
   '{\\text{ss}}': '{\\text{st}}',
   '{\\text{sst}}': '{\\text{st}}',
