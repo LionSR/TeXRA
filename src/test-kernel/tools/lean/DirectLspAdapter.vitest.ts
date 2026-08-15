@@ -32,6 +32,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 });
 
 // Local imports
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { fileUriToPath, LeanSession } from '@tools/lean/direct/leanSession';
 import {
@@ -649,7 +650,146 @@ describe('createDirectLspLeanAdapter', () => {
       await adapter.dispose();
     }
   });
+
+  // Idle eviction is disabled in the run-end tests below (idleTimeoutMs: 0),
+  // so the run-end stop is the only mechanism that can remove a server.
+  fakeLakeIt('stops the server when the run that started it ends', async () => {
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 0,
+    });
+    try {
+      await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
+      expect(activeServerRoots()).toEqual([projectRoot]);
+
+      await adapter.stopSessionsForRun?.('e00001');
+
+      expect(activeServerRoots()).toEqual([]);
+      expect(await countStarts()).toBe(1);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
+  fakeLakeIt(
+    'keeps servers started by other runs or outside a run when a run ends',
+    async () => {
+      const second = makeLakeProject(tempRoot, 'project-b');
+      const third = makeLakeProject(tempRoot, 'project-c');
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        idleTimeoutMs: 0,
+      });
+      try {
+        await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
+        await asRun('e00002', () =>
+          adapter.fetchDiagnosticsForFile(second.filePath),
+        );
+        await adapter.fetchDiagnosticsForFile(third.filePath);
+        expect(activeServerRoots()).toEqual([
+          projectRoot,
+          second.projectRoot,
+          third.projectRoot,
+        ]);
+
+        await adapter.stopSessionsForRun?.('e00001');
+
+        expect(activeServerRoots()).toEqual([
+          second.projectRoot,
+          third.projectRoot,
+        ]);
+      } finally {
+        await adapter.dispose();
+      }
+    },
+  );
+
+  fakeLakeIt(
+    'keeps a server whose request is still in flight when its run ends',
+    async () => {
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        idleTimeoutMs: 0,
+      });
+      // Attribute the session to run e00001, then hold it leased with a build
+      // whose lake process is gated on an env delay — the shared-worktree case
+      // where another run is mid-request when this run ends. A project command
+      // acquires its lease synchronously with the call, so no settling delay
+      // is needed before the stop.
+      await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
+      expect(activeServerRoots()).toEqual([projectRoot]);
+      vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '1500');
+      const build = adapter.executeProjectCommand('build');
+      try {
+        await adapter.stopSessionsForRun?.('e00001');
+        expect(activeServerRoots()).toEqual([projectRoot]);
+      } finally {
+        await adapter.dispose();
+        await Promise.allSettled([build]);
+      }
+    },
+  );
+
+  fakeLakeIt(
+    'reattributes a reused server to the run that leases it',
+    async () => {
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        idleTimeoutMs: 0,
+      });
+      try {
+        await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
+        await asRun('e00002', () => adapter.fetchDiagnosticsForFile(filePath));
+        expect(await countStarts()).toBe(1);
+
+        // The server now belongs to the run that last used it, so the
+        // original run's end leaves it running.
+        await adapter.stopSessionsForRun?.('e00001');
+        expect(activeServerRoots()).toEqual([projectRoot]);
+
+        await adapter.stopSessionsForRun?.('e00002');
+        expect(activeServerRoots()).toEqual([]);
+      } finally {
+        await adapter.dispose();
+      }
+    },
+  );
+
+  fakeLakeIt(
+    'reattributes a restarted server to the restarting run',
+    async () => {
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        idleTimeoutMs: 0,
+      });
+      try {
+        await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
+        await asRun('e00002', () =>
+          adapter.executeProjectCommand('restart_server'),
+        );
+        expect(await countStarts()).toBe(2);
+
+        // The replacement process was started by e00002, so e00001's end must
+        // leave it alone and e00002's end must dispose it.
+        await adapter.stopSessionsForRun?.('e00001');
+        expect(activeServerRoots()).toEqual([projectRoot]);
+
+        await adapter.stopSessionsForRun?.('e00002');
+        expect(activeServerRoots()).toEqual([]);
+      } finally {
+        await adapter.dispose();
+      }
+    },
+  );
 });
+
+/** Run `fn` with the ambient run context of the given agent run. */
+function asRun<T>(
+  executionId: string,
+  fn: () => T | Promise<T>,
+): T | Promise<T> {
+  return withRunContext(createRunContext({ executionId }), fn);
+}
 
 function makeLakeProject(
   root: string,
