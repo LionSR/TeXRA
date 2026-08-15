@@ -14,6 +14,7 @@
 import PQueue from 'p-queue';
 
 import {
+  currentSession,
   defaultSession,
   matchesCancelSelector,
   type BashSettlement,
@@ -66,10 +67,7 @@ import {
   type PlanApprovalPermission,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import {
-  setDelegatedWorkApprovalBypasses,
-  setToolEditApprovalSessionBypass,
-} from '@tools/approval';
+import { setToolEditApprovalSessionBypass } from '@tools/approval';
 import {
   prepareBashApprovalPrompt,
   setBashApprovalSessionBypass,
@@ -320,7 +318,7 @@ async function requestProposalInteraction(
     decision.bypass === 'superYolo' &&
     request.streamId
   ) {
-    setDelegatedWorkApprovalBypasses(request.streamId, true);
+    currentSession().approvals.setDelegatedWorkBypasses(request.streamId, true);
     approveQueuedDelegatedWorkForStream(request.streamId);
   }
   return toApprovalSettlement(decision);

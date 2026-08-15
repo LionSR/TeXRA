@@ -8,7 +8,10 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
+import type {
+  RejectionProvenance,
+  SessionHostInteractions,
+} from '@agent/runtime/HostInteractions';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import {
   decideTexraApproval,
@@ -67,24 +70,7 @@ export type ToolEditApprovalResult =
       };
       readonly startLine?: number;
     }
-  | {
-      readonly accepted: false;
-      readonly feedback?: string;
-      readonly reason?: never;
-      readonly cause?: never;
-    }
-  | {
-      readonly accepted: false;
-      readonly reason: string;
-      readonly feedback?: never;
-      readonly cause?: never;
-    }
-  | {
-      readonly accepted: false;
-      readonly cause: string | undefined;
-      readonly feedback?: never;
-      readonly reason?: never;
-    };
+  | ({ readonly accepted: false } & RejectionProvenance);
 
 const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
 
@@ -399,6 +385,13 @@ export function appendApprovalDiffNote(
     : baseOutput;
 }
 
+/**
+ * Reader-side provenance: deliberately NOT `RejectionProvenance`. A caller
+ * summarizing several rejected edits at once (`accept_run_files`) can hold a
+ * user rejection, a policy denial, and a cancellation simultaneously, so this
+ * shape is the loose aggregate the message builder reads, not the exclusive
+ * union a single settlement produces.
+ */
 interface ToolEditRejectionProvenance {
   readonly feedback?: string;
   readonly reason?: string;
