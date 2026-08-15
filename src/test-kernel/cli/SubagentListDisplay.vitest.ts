@@ -75,14 +75,6 @@ function workflowAgentSlice(
   };
 }
 
-function files(
-  input: string[],
-  context: string[] = [],
-  output: string[] = [],
-): NonNullable<StreamSlice['files']> {
-  return { input, context, media: [], output };
-}
-
 function phaseEntry(
   id: string,
   label: string,
@@ -195,20 +187,11 @@ describe('CLI child list display model', () => {
   });
 
   it('omits static input and context counts from the live workflow band', () => {
-    const workflow = workflowAgentSlice('devise', {
-      files: files(
-        ['src/Main.lean', 'src/Lemma.lean'],
-        ['notes/proof.md'],
-        ['out/Main.lean'],
-      ),
-    });
+    const workflow = workflowAgentSlice('devise', {});
     const toolUse = workflowAgentSlice('review', {
       category: AgentCategory.ToolUse,
-      files: files(['paper.tex'], ['notes.md'], ['review.md']),
     });
-    const workflowWithoutInputs = workflowAgentSlice('empty', {
-      files: files([]),
-    });
+    const workflowWithoutInputs = workflowAgentSlice('empty', {});
 
     expect(workflowRunStatusSummary(workflow)).toBeUndefined();
     expect(workflowRunStatusSummary(toolUse)).toBeUndefined();
@@ -218,7 +201,6 @@ describe('CLI child list display model', () => {
 
   it('leads the workflow status band with the current phase and its task fold', () => {
     const slice = workflowAgentSlice('itemized', {
-      files: files(['paper.tex']),
       entries: [
         phaseEntry('phase-map', 'Map', { phaseIndex: 0, phaseTotal: 3 }),
         workflowTaskEntry(
@@ -260,7 +242,6 @@ describe('CLI child list display model', () => {
 
   it('appends a warning failure tally when any call has failed', () => {
     const slice = workflowAgentSlice('partial-failure', {
-      files: files(['paper.tex']),
       entries: [
         phaseEntry('phase-map', 'Map', { phaseIndex: 0, phaseTotal: 1 }),
         workflowTaskEntry(
@@ -402,7 +383,6 @@ describe('CLI child list display model', () => {
     // advances, unlike the current-phase done/total. The whole-run tally keeps
     // it visible.
     const slice = workflowAgentSlice('cross-phase-failure', {
-      files: files(['paper.tex']),
       entries: [
         phaseEntry('phase-write', 'Write', { phaseIndex: 1, phaseTotal: 2 }),
         workflowTaskEntry('task-old-bad', 'Failed: Map the seams', {
@@ -459,7 +439,6 @@ describe('CLI child list display model', () => {
     // and stamps both, so the count here can never name a phase the card is
     // not in.
     const slice = workflowAgentSlice('loose', {
-      files: files(['paper.tex']),
       entries: [
         phaseEntry('phase-map', 'Map', { phaseIndex: 0, phaseTotal: 2 }),
         workflowTaskEntry('task-in-phase', 'Running: Map the seams', {
@@ -492,7 +471,6 @@ describe('CLI child list display model', () => {
     const streamId = 'devise' as StreamTabId;
     const slice = workflowAgentSlice(streamId, {
       status: STREAM_PHASE.RUNNING,
-      files: files(['paper.tex'], ['notes.md']),
       entries: [
         {
           id: 'live-tool',
@@ -579,13 +557,6 @@ describe('CLI child list display model', () => {
       const streamId = 'devise' as StreamTabId;
       const slice = workflowAgentSlice(streamId, {
         status: STREAM_PHASE.RUNNING,
-        files: files(
-          ['inputs/a-very-long-workflow-input-filename.tex'],
-          Array.from(
-            { length: 12 },
-            (_, index) => `context/a-very-long-context-filename-${index}.md`,
-          ),
-        ),
         entries: [activity],
       });
       activeStreamId.set(streamId);
@@ -952,9 +923,7 @@ describe('CLI child list display model', () => {
             id: run,
             label: 'devise',
             active: true,
-            slice: workflowAgentSlice('run', {
-              files: files(['Main.lean', 'Lemma.lean'], ['notes.md']),
-            }),
+            slice: workflowAgentSlice('run', {}),
           },
         ],
       },

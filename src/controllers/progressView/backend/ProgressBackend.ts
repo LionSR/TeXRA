@@ -466,10 +466,15 @@ export class ProgressBackend {
     const storageGeneration = this.storageGeneration;
     const retained = await this.enqueuePreparedStorageOperation(
       () => this.prepareStreamDeletion(stream),
-      () =>
-        storageGeneration === this.storageGeneration
-          ? this.deleteStreamNow(stream, wasActive, activationGeneration)
-          : Promise.resolve(undefined),
+      (ownershipReadFailed) => {
+        if (storageGeneration !== this.storageGeneration) {
+          return Promise.resolve(undefined);
+        }
+        if (ownershipReadFailed) {
+          return Promise.resolve('failed' as const);
+        }
+        return this.deleteStreamNow(stream, wasActive, activationGeneration);
+      },
     );
     if (retained) {
       await this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
@@ -497,7 +502,9 @@ export class ProgressBackend {
    * so the all-delete path can run it over every stream without changing
    * behavior.
    */
-  private async prepareStreamDeletionCore(stream: StreamTabId): Promise<void> {
+  private async prepareStreamDeletionCore(
+    stream: StreamTabId,
+  ): Promise<boolean> {
     const ownedLocally =
       this.session.executions.getAgentHandleByStream(stream) !== undefined;
     if (ownedLocally && isInFlightPhase(this.session.status.get(stream))) {
@@ -507,13 +514,22 @@ export class ProgressBackend {
     // A terminal child is untracked before its artifact flush releases the
     // execution lease. Auto-close can land in that interval, so the handle is
     // not a reliable indication that local durable writes have finished.
-    await this.state.stores.waitForOwnedExecutionRelease(stream);
+    try {
+      await this.state.stores.waitForOwnedExecutionRelease(stream);
+      return false;
+    } catch (error) {
+      log.warn(
+        `Stream ${stream} was retained because its execution ownership could not be read`,
+        { data: error },
+      );
+      return true;
+    }
   }
 
-  private async prepareStreamDeletion(stream: StreamTabId): Promise<void> {
-    if (!canUseStreamDataDir(stream)) return;
-    if (!this.hasDeletableStreamData(stream)) return;
-    await this.prepareStreamDeletionCore(stream);
+  private async prepareStreamDeletion(stream: StreamTabId): Promise<boolean> {
+    if (!canUseStreamDataDir(stream)) return false;
+    if (!this.hasDeletableStreamData(stream)) return false;
+    return this.prepareStreamDeletionCore(stream);
   }
 
   private async deleteStreamNow(
@@ -582,7 +598,7 @@ export class ProgressBackend {
     const storageGeneration = this.storageGeneration;
     const outcome = await this.enqueuePreparedStorageOperation(
       () => this.prepareAllStreamDeletions(),
-      () =>
+      (_prepared) =>
         storageGeneration === this.storageGeneration
           ? this.deleteAllStreamsNow()
           : Promise.resolve(undefined),
@@ -607,6 +623,9 @@ export class ProgressBackend {
     // Runs the per-stream prepare over every known stream — deliberately
     // without the single-delete guards, so in-flight reserved-segment streams
     // are still stopped before clearAll() exactly as before the shared core.
+    // Ownership-read failures are already converted to a per-stream result by
+    // `prepareStreamDeletionCore`; `clearAll` reports those streams through
+    // its own failed set.
     await Promise.all(
       this.state.streamLogs
         .keys()
@@ -721,19 +740,22 @@ export class ProgressBackend {
    * preparation outside the queue. An earlier root replacement may be waiting
    * for the same execution leases and must be able to observe their release.
    */
-  private enqueuePreparedStorageOperation<T>(
-    prepare: () => Promise<void>,
-    work: () => Promise<T>,
+  private enqueuePreparedStorageOperation<T, P>(
+    prepare: () => Promise<P>,
+    work: (prepared: P) => Promise<T>,
   ): Promise<T> {
+    let prepared!: P;
     let publishPreparation!: (value: PromiseLike<void>) => void;
     const preparation = new Promise<void>((resolve) => {
       publishPreparation = resolve;
     });
     const operation = this.enqueueStorageOperation(async () => {
       await preparation;
-      return work();
+      return work(prepared);
     });
-    const pendingPreparation = Promise.resolve().then(prepare);
+    const pendingPreparation = Promise.resolve().then(async () => {
+      prepared = await prepare();
+    });
     // If an earlier queue entry is still running, attach a rejection handler
     // until this operation reaches the same promise.
     void preparation.catch(() => undefined);
