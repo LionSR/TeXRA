@@ -9,7 +9,6 @@ import {
   type ResolvedAgent,
 } from '@agent/index';
 import {
-  createChannelTrace,
   logSdkError,
   logUserMessage,
   type AgentTrace,
@@ -47,6 +46,7 @@ import {
   hasErrorPresentedMarker,
 } from '@common/errors/sdkError/errorMetadata';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type {
@@ -79,7 +79,7 @@ import { AgentLaunchResources } from './AgentLaunchResources';
 import type { StreamStatusMachine } from './StreamStatusService';
 import type { SessionHostInteractions } from './HostInteractions';
 
-const logger = createChannelTrace('AgentLaunchContext');
+const logger = createLog('AgentLaunchContext');
 
 export interface AgentLaunchContext extends AgentCore {
   usageMonitor: UsageMonitor;
