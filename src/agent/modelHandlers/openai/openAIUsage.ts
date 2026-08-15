@@ -12,7 +12,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   computeStandardPrice,
   type StandardPricingConfig,
-} from '@agent/utils/priceUtils';
+} from '@agent/modelHandlers/support/priceUtils';
 
 import { normalizeUsage } from '../support/UsageNormalizer';
 import type { ResponseUsage } from 'openai/resources/responses/responses';

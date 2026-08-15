@@ -6,7 +6,7 @@ import {
   recordCycleMetrics,
 } from '@agent/core/state/AgentState';
 import { recordNormalizedUsage } from '@agent/core/usage/RunUsageAccumulator';
-import { UsageMonitor } from '@agent/utils/UsageMonitor';
+import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {

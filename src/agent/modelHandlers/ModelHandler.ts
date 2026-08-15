@@ -25,8 +25,8 @@ import type {
   AgentRunStateSnapshot,
 } from '@agent/core/state/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type { MediaEntry } from '@agent/utils/mediaTypes';
-import type { StandardPricingConfig } from '@agent/utils/priceUtils';
+import type { MediaEntry } from '@agent/types/mediaTypes';
+import type { StandardPricingConfig } from '@agent/modelHandlers/support/priceUtils';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@agent/core/constants';
 import {

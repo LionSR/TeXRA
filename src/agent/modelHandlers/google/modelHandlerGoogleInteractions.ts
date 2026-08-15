@@ -30,7 +30,7 @@ import type {
   ModelCredentialSelection,
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
-import type { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/types/mediaTypes';
 import { detectStatusCode } from '@common/errors/sdkError/errorInspection';
 import {
   attachManualRetryOnlyError,

@@ -34,7 +34,7 @@ import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCo
 import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { buildUserVars } from '@agent/prompt/userVars';
-import { UsageMonitor } from '@agent/utils/UsageMonitor';
+import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { AgentError } from '@common/errors';
 import {
   attachErrorPresented,

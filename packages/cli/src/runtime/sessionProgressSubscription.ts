@@ -1,6 +1,6 @@
 import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
 import type { SessionEventHub, SessionFact } from '@agent/runtime';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+import { agentConfigToTaskState } from '@agent/core/state/agentConfigToTaskState';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 import { roundStageFromStageStart } from '@shared/streams/stage';

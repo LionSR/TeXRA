@@ -10,7 +10,7 @@
  * list price" for every client version, old or new.
  *
  * Formula parity: mirrors the client's `computeStandardPrice`
- * (`src/agent/utils/priceUtils.ts`) on the wire fields. The client reports
+ * (`src/agent/modelHandlers/support/priceUtils.ts`) on the wire fields. The client reports
  * `inputTokens` as cache-MISS tokens (`UsageMonitor.logToBackend` sends
  * `usage.cacheMissInputTokens`) with cached tokens separate, so
  *   miss·in + cached·in·discount + (output + reasoning)·out

@@ -4,6 +4,7 @@
     "cli": [
       "@agent/core/definition/AgentConfig",
       "@agent/core/definition/AgentDataclass",
+      "@agent/core/state/agentConfigToTaskState",
       "@agent/core/state/executionRequests",
       "@agent/core/state/TaskState",
       "@agent/export/chatExportFormatter",
@@ -18,8 +19,7 @@
       "@agent/storage",
       "@agent/storage/conversationFormat",
       "@agent/storage/executionLease",
-      "@agent/trace",
-      "@agent/utils/agentConfigToTaskState"
+      "@agent/trace"
     ],
     "desktop": [
       "@agent/core/definition/AgentConfig",
