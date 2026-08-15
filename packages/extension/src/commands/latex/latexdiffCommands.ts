@@ -8,7 +8,10 @@ import * as vscode from 'vscode';
 import { createLatexExecutionDiscovery } from '@agent/storage';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { workspaceSM } from '@common/state';
-import { prepareBuildDisplayAndScheduleViewer } from '@frontend/latex/openBuild';
+import {
+  prepareBuildDisplay,
+  scheduleViewerDisplay,
+} from '@frontend/latex/openBuild';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
@@ -107,6 +110,7 @@ async function promptForLatexdiffMathMarkup(): Promise<
 async function openLatexdiffResult(
   base: FileLocation,
   diffFileName: string,
+  options: { scheduleViewer?: boolean } = {},
 ): Promise<string | undefined> {
   const baseDirectory = path.extname(base.absolutePath)
     ? path.dirname(base.absolutePath)
@@ -125,10 +129,12 @@ async function openLatexdiffResult(
 
   // Await the file-open/build phase so multi-round latexdiff runs keep their
   // sequential build/show ordering and failures still propagate to
-  // `withLatexdiffTool`, but detach only the 5s viewer-open confirmation so
-  // the loop no longer serializes on viewer delivery (#10553).
-  await prepareBuildDisplayAndScheduleViewer(diffLocation, {
+  // `withLatexdiffTool`. Callers that prepare several diffs pass
+  // `scheduleViewer: false` here and schedule one final viewer handoff after
+  // the loop, so earlier detached handoffs cannot fire (#10553).
+  await prepareBuildDisplay(diffLocation, {
     preserveFocus: true,
+    scheduleViewer: options.scheduleViewer,
   });
   return diffFilePath;
 }
@@ -361,6 +367,7 @@ async function handleRunLatexdiff(
         );
       }
 
+      let preparedDiff = false;
       for (const result of results) {
         const suffix = result.description ? ` (${result.description})` : '';
 
@@ -368,8 +375,10 @@ async function handleRunLatexdiff(
           const diffFilePath = await openLatexdiffResult(
             pathToLocation(result.basePath),
             result.diffFileName,
+            { scheduleViewer: false },
           );
           if (diffFilePath) {
+            preparedDiff = true;
             logger.debug(
               CHANNEL,
               `Successfully generated diff: ${diffFilePath}${suffix}`,
@@ -381,6 +390,14 @@ async function handleRunLatexdiff(
             `Failed to generate diff${suffix}: ${result.message ?? 'Unknown error'}`,
           );
         }
+      }
+
+      // All successful diffs are now shown and built in order, with the final
+      // diff left as LaTeX Workshop's current document. Schedule one detached
+      // viewer handoff for that final context instead of one per result, so
+      // stale argument-free `latex-workshop.view` timers cannot fire (#10553).
+      if (preparedDiff) {
+        void scheduleViewerDisplay();
       }
     },
   );

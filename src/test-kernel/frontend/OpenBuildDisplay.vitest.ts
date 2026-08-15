@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   openBuildDisplayIfTex,
-  prepareBuildDisplayAndScheduleViewer,
+  prepareBuildDisplay,
+  scheduleViewerDisplay,
 } from '@frontend/latex/openBuild';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,
@@ -206,15 +207,15 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
     // so the latexdiff command's existing error handler stays authoritative.
     mocks.openTextDocument.mockRejectedValueOnce(new Error('open failed'));
 
-    await expect(
-      prepareBuildDisplayAndScheduleViewer(workspaceTex),
-    ).rejects.toThrow('open failed');
+    await expect(prepareBuildDisplay(workspaceTex)).rejects.toThrow(
+      'open failed',
+    );
     expect(mocks.executeCommand).not.toHaveBeenCalledWith(
       'latex-workshop.view',
     );
   });
 
-  it('keeps detached viewer delivery ordered across sequential latexdiff results', async () => {
+  it('keeps final-result viewer delivery deterministic across sequential latexdiff results', async () => {
     const order: string[] = [];
     mocks.openTextDocument.mockImplementation(async (uri: unknown) => {
       const fsPath = (uri as { fsPath: string }).fsPath;
@@ -234,14 +235,17 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       { ...workspaceTex, absolutePath: '/workspace/diff-2.tex' },
     ];
 
+    // Prepare every diff without scheduling a viewer handoff, as the
+    // multi-result latexdiff loop does (#10553).
     for (const diff of diffs) {
-      await prepareBuildDisplayAndScheduleViewer(diff, {
+      await prepareBuildDisplay(diff, {
         preserveFocus: true,
+        scheduleViewer: false,
       });
     }
 
-    // Detaching only the viewer wait keeps the file-open/show/build phase
-    // serialized in result order (#10553).
+    // The file-open/show/build phase is serialized in result order and no
+    // stale intermediate viewer timer has been scheduled.
     expect(order).toEqual([
       'open:/workspace/diff-1.tex',
       'show',
@@ -250,13 +254,18 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       'show',
       'latex-workshop.build',
     ]);
+    expect(order).not.toContain('latex-workshop.view');
 
+    // Schedule exactly one viewer for the final diff context and let it fire.
+    void scheduleViewerDisplay();
     await vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS);
 
     const viewerIndexes = order
       .map((entry, index) => (entry === 'latex-workshop.view' ? index : -1))
       .filter((index) => index >= 0);
-    expect(viewerIndexes).toHaveLength(2);
-    expect(viewerIndexes[0]).toBeLessThan(viewerIndexes[1]);
+    expect(viewerIndexes).toHaveLength(1);
+    expect(viewerIndexes[0]).toBeGreaterThan(
+      order.lastIndexOf('latex-workshop.build'),
+    );
   });
 });

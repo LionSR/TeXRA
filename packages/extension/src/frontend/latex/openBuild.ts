@@ -106,7 +106,7 @@ export async function openBuildDisplayIfTex(
   fileLocation: FileLocation,
   options: { preserveFocus?: boolean } = {},
 ): Promise<boolean> {
-  const prepared = await prepareBuildDisplay(
+  const prepared = await prepareFileForDisplay(
     fileLocation,
     options.preserveFocus ?? false,
   );
@@ -115,37 +115,41 @@ export async function openBuildDisplayIfTex(
 }
 
 /**
- * Prepare a file for display (open, show, and build when TeX), then schedule
- * the PDF viewer without awaiting the delayed viewer-delivery confirmation.
+ * Prepare a file for display (open, show, and build when TeX), optionally
+ * scheduling the delayed PDF viewer.
  *
- * Unlike `openBuildDisplayIfTex`, this resolves once the file-open/build phase
- * completes, so sequential callers keep their build/show ordering and any
- * pre-view failure still propagates to the caller's error path. Only the
- * `LATEX_VIEWER_OPEN_DELAY_MS` viewer-open wait is detached (#10553).
+ * With `scheduleViewer` left `true` (the default) this resolves after the
+ * file-open/build phase completes and schedules the viewer without awaiting
+ * its 5s confirmation. Set `scheduleViewer: false` to prepare several files
+ * sequentially without scheduling viewer handoffs, then call
+ * `scheduleViewerDisplay` once after the final file so LaTeX Workshop's
+ * current document/root is the intended viewer target (#10553).
  */
-export async function prepareBuildDisplayAndScheduleViewer(
+export async function prepareBuildDisplay(
   fileLocation: FileLocation,
-  options: { preserveFocus?: boolean } = {},
+  options: { preserveFocus?: boolean; scheduleViewer?: boolean } = {},
 ): Promise<boolean> {
-  const prepared = await prepareBuildDisplay(
+  const prepared = await prepareFileForDisplay(
     fileLocation,
     options.preserveFocus ?? false,
   );
   if (prepared.kind !== 'latex-ready') return prepared.delivered;
 
-  // `scheduleViewerDisplay` always settles to a boolean, so this is a
-  // deliberate detached side effect rather than an unhandled promise.
-  void scheduleViewerDisplay();
+  if (options.scheduleViewer !== false) {
+    // `scheduleViewerDisplay` always settles to a boolean, so this is a
+    // deliberate detached side effect rather than an unhandled promise.
+    void scheduleViewerDisplay();
+  }
   return true;
 }
 
-type PrepareBuildDisplayResult =
+type PrepareFileForDisplayResult =
   { kind: 'done'; delivered: boolean } | { kind: 'latex-ready' };
 
-async function prepareBuildDisplay(
+async function prepareFileForDisplay(
   fileLocation: FileLocation,
   preserveFocus: boolean,
-): Promise<PrepareBuildDisplayResult> {
+): Promise<PrepareFileForDisplayResult> {
   const absolutePath = fileLocation.absolutePath;
 
   const exists = await AbsoluteFS.exists(absolutePath);
@@ -217,12 +221,16 @@ async function prepareLatexBuild(
 }
 
 /**
- * Open the PDF viewer after the build, then refresh it once it is visible.
+ * Schedule the PDF viewer open for the current LaTeX Workshop document/root.
+ *
+ * `latex-workshop.view` is argument-free and acts on LaTeX Workshop's current
+ * context, so callers that prepare a batch of files should schedule this only
+ * once, after the intended final file has been shown and built.
  *
  * Resolves `true` when `latex-workshop.view` accepts the open request, and
  * `false` when it rejects, so the caller can report viewer non-delivery.
  */
-function scheduleViewerDisplay(): Promise<boolean> {
+export function scheduleViewerDisplay(): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     setTimeout(() => {
       // Route the viewer-open command through a promise chain so a synchronous
