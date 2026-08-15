@@ -182,25 +182,33 @@ async function openAndBuildLatex(
 function scheduleViewerDisplay(): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     setTimeout(() => {
-      void vscode.commands.executeCommand('latex-workshop.view').then(
-        () => {
-          setTimeout(() => {
-            void vscode.commands
-              .executeCommand('latex-workshop.refresh-viewer')
-              .then(undefined, (err: unknown) => {
-                logger.warn(
-                  CHANNEL,
-                  `Viewer refresh failed: ${toErrorMessage(err)}`,
-                );
-              });
-          }, LATEX_VIEWER_REFRESH_DELAY_MS);
-          resolve(true);
-        },
-        (err: unknown) => {
-          logger.warn(CHANNEL, `Viewer display failed: ${toErrorMessage(err)}`);
-          resolve(false);
-        },
-      );
+      // Route the viewer-open command through a promise chain so a synchronous
+      // throw from `executeCommand` becomes a rejection instead of escaping the
+      // timer callback and leaving the delivery promise pending forever (#10556).
+      void Promise.resolve()
+        .then(() => vscode.commands.executeCommand('latex-workshop.view'))
+        .then(
+          () => {
+            setTimeout(() => {
+              void vscode.commands
+                .executeCommand('latex-workshop.refresh-viewer')
+                .then(undefined, (err: unknown) => {
+                  logger.warn(
+                    CHANNEL,
+                    `Viewer refresh failed: ${toErrorMessage(err)}`,
+                  );
+                });
+            }, LATEX_VIEWER_REFRESH_DELAY_MS);
+            resolve(true);
+          },
+          (err: unknown) => {
+            logger.warn(
+              CHANNEL,
+              `Viewer display failed: ${toErrorMessage(err)}`,
+            );
+            resolve(false);
+          },
+        );
     }, LATEX_VIEWER_OPEN_DELAY_MS);
   });
 }

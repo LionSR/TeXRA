@@ -37,6 +37,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
 // Local file imports
@@ -123,7 +124,18 @@ async function openLatexdiffResult(
     return undefined;
   }
 
-  await openBuildDisplayIfTex(diffLocation, { preserveFocus: true });
+  // This caller only needs the diff path, not the viewer-open outcome:
+  // fire-and-forget the display so multi-round latexdiff runs do not serialize
+  // on the viewer-open delivery delay (#10553). The promise is still observed
+  // so a rejection is logged instead of surfacing as an unhandled rejection.
+  void openBuildDisplayIfTex(diffLocation, { preserveFocus: true }).catch(
+    (err: unknown) => {
+      logger.warn(
+        CHANNEL,
+        `Failed to open generated diff ${diffFilePath}: ${toErrorMessage(err)}`,
+      );
+    },
+  );
   return diffFilePath;
 }
 

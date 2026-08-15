@@ -100,6 +100,10 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
     });
 
     const delivery = openBuildDisplayIfTex(workspaceTex);
+    // Flush the setup chain (exists -> openTextDocument -> showTextDocument ->
+    // latex-workshop.build) before advancing the clock so the viewer-open timer
+    // is actually registered when the 5s advance runs (#10555).
+    await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS);
 
     await expect(delivery).resolves.toBe(false);
@@ -116,6 +120,9 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       return delivered;
     });
 
+    // Flush the setup chain first so the `settled` boundary is measured against
+    // the viewer-open timer rather than against the pending setup microtasks.
+    await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS - 1);
     expect(settled).toBe(false);
 
@@ -133,12 +140,35 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
     });
 
     const delivery = openBuildDisplayIfTex(workspaceTex);
+    await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS);
 
     await expect(delivery).resolves.toBe(true);
     expect(mocks.warn).toHaveBeenCalledWith(
       'OpenBuildUtils',
       expect.stringContaining('LaTeX Workshop build failed'),
+    );
+  });
+
+  it('settles the delivery promise when the viewer-open command throws synchronously', async () => {
+    // A synchronous throw from `executeCommand('latex-workshop.view')` must
+    // become a rejection that resolves `false`, not leave the promise pending
+    // forever (#10556).
+    mocks.executeCommand.mockImplementation((command: string) => {
+      if (command === 'latex-workshop.view') {
+        throw new Error('viewer unavailable');
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const delivery = openBuildDisplayIfTex(workspaceTex);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS);
+
+    await expect(delivery).resolves.toBe(false);
+    expect(mocks.warn).toHaveBeenCalledWith(
+      'OpenBuildUtils',
+      expect.stringContaining('Viewer display failed'),
     );
   });
 });
