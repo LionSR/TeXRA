@@ -42,10 +42,17 @@ import {
   hasErrorPresentationPending,
   hasErrorPresentedMarker,
 } from '@common/errors/sdkError/errorMetadata';
-import { RUN_OUTCOME, STREAM_PHASE, AgentCategory } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  STREAM_PHASE,
+  AgentCategory,
+  type ExecutionId,
+} from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
 import { createRecordingHost } from '../progressTestUtils';
+
+const EXECUTION_ID = 'launch-context-test' as ExecutionId;
 
 describe('AgentLaunchContext', () => {
   it('still rejects empty canonical values, now at agent resolution', async () => {
@@ -57,6 +64,7 @@ describe('AgentLaunchContext', () => {
       await expect(
         buildAgentLaunchContext({
           config: AgentConfigSchema.parse({ agent: '', model: '' }),
+          executionId: EXECUTION_ID,
           session,
         }),
       ).rejects.toThrow('Could not find agent');
@@ -96,6 +104,7 @@ describe('AgentLaunchContext', () => {
       await expect(
         buildAgentLaunchContext({
           config: AgentConfigSchema.parse({ agent: '', model: '' }),
+          executionId: EXECUTION_ID,
           session,
         }),
       ).rejects.toThrow('Could not find agent');
@@ -123,6 +132,7 @@ describe('AgentLaunchContext', () => {
       await expect(
         buildAgentLaunchContext({
           config: AgentConfigSchema.parse({ agent: '', model: '' }),
+          executionId: EXECUTION_ID,
           session,
         }),
       ).rejects.toThrow('Could not find agent');
@@ -270,6 +280,7 @@ describe('AgentLaunchContext', () => {
     try {
       await buildAgentLaunchContext({
         config: AgentConfigSchema.parse({ agent: '', model: '' }),
+        executionId: EXECUTION_ID,
         session,
       }).catch((error: unknown) => {
         thrown = error;
@@ -296,6 +307,7 @@ describe('AgentLaunchContext', () => {
       await expect(
         buildAgentLaunchContext({
           config: AgentConfigSchema.parse({ agent: '', model: '' }),
+          executionId: EXECUTION_ID,
           session,
         }),
       ).rejects.toThrow('Could not find agent');
@@ -340,6 +352,7 @@ describe('AgentLaunchContext', () => {
             agent: 'chat',
             model: '__unregistered_model_for_launch_context_test__',
           }),
+          executionId: EXECUTION_ID,
           session,
         }),
       ).rejects.toThrow('is not registered');
@@ -495,6 +508,7 @@ describe('AgentLaunchContext', () => {
             agentCategory: AgentCategory.ToolUse,
             delegationAgentScope,
           }),
+          executionId: EXECUTION_ID,
           session,
           streamTabIdOverride: 'late-assembly-stream',
           suppressErrorNotification: true,

@@ -21,7 +21,14 @@ import {
 import { defaultSession } from './SessionHandle';
 import type { ToolUseResumeData } from './SessionResumeRetrieval';
 
-export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
+export interface ResumeQueuedToolUseOptions extends Pick<
+  SubagentRunOptions,
+  | 'session'
+  | 'tools'
+  | 'approvalPromptsUnavailable'
+  | 'onApprovalPolicyDenial'
+  | 'runtimeUnavailableTools'
+> {
   /** Recovery ownership synchronously claimed by the submission boundary. */
   readonly recovery?: RecoveryContinuation;
   /** Recheck canonical admission atomically while acquiring the resumed lease. */
@@ -137,15 +144,10 @@ export async function resumeQueuedToolUseFromResumeData(
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
       onApprovalPolicyDenial: options.onApprovalPolicyDenial,
       runtimeUnavailableTools: options.runtimeUnavailableTools,
-      parentStreamId: options.parentStreamId ?? resume.parentStreamId,
-      workflowPhase: options.workflowPhase,
+      parentStreamId: resume.parentStreamId,
       onFollowUpConsumed: () => {
         followUps = [];
-        options.onFollowUpConsumed?.();
       },
-      onProgress: options.onProgress,
-      onRunError: options.onRunError,
-      onRun: options.onRun,
       ...(options.canAcquireResumeLease && {
         canAcquireResumeLease: options.canAcquireResumeLease,
       }),
