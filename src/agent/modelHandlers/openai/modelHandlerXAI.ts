@@ -105,11 +105,15 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
     if (!this.tierGapWarned && xaiLongContextTierGap(this.config)) {
       this.tierGapWarned = true;
       this.logger.warn(
-        `xAI model ${this.config.fullName} has a ` +
-          `${this.config.contextWindow}-token context window but no documented ` +
-          'long-context pricing tier; billing flat catalog rates. If xAI ' +
-          'publishes a tier for it, add it to XAI_DOCUMENTED_PRICING in ' +
-          'xaiLongContextPricing.ts.',
+        'xAI model has no documented long-context pricing tier; billing ' +
+          'flat catalog rates. If xAI publishes a tier for it, add it to ' +
+          'XAI_DOCUMENTED_PRICING in xaiLongContextPricing.ts.',
+        {
+          data: {
+            fullName: this.config.fullName,
+            contextWindow: this.config.contextWindow,
+          },
+        },
       );
     }
     const base = super.standardPricingConfig();

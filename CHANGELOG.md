@@ -22,11 +22,10 @@ All notable changes to this project will be documented in this file.
 - **Long Grok prompts report their true cost** — xAI raises per-token rates
   once a prompt crosses the model's long-context threshold; usage costs for
   those requests no longer underreport.
-- **Cached Grok tokens bill at xAI's real discount** — the cache rebate was
-  wired to a no-discount factor and never applied; xAI models without
-  documented long-context rates now warn instead of silently billing flat,
-  and the model request transport handles more Fetch edge cases (null body or
-  signal overrides, tuple-form headers, streamed bodies on Request inputs).
+- **Cached Grok tokens bill at xAI's real discount** — the cache rebate
+  previously never applied, and xAI models without documented long-context
+  rates now warn instead of silently billing flat. Rare request edge cases
+  also no longer drop a request's body, headers, or cancellation.
 
 ### Extension (VS Code) and Desktop
 
