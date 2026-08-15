@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
+import { createLatexExecutionDiscovery } from '@agent/storage';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { workspaceSM } from '@common/state';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -321,6 +322,7 @@ async function handleRunLatexdiff(
             outputsByRound,
             mathMarkup,
             generateBetweenRoundDiffs,
+            executionDiscovery: createLatexExecutionDiscovery(),
             latexdiff: { channel: CHANNEL, service: latexdiffService },
             progress,
           });

@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { createLatexExecutionDiscovery } from '@agent/storage';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
@@ -219,6 +220,7 @@ export class DesktopProgressFileActions {
         outputsByRound: hasOutputs ? runContext.outputsByRound : null,
         mathMarkup: DEFAULT_MATH_MARKUP,
         generateBetweenRoundDiffs: true,
+        executionDiscovery: createLatexExecutionDiscovery(),
         latexdiff: {
           channel: DESKTOP_LATEXDIFF_CHANNEL,
           service: new LaTeXdiffService(DESKTOP_LATEXDIFF_CHANNEL),

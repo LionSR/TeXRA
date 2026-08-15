@@ -14,7 +14,11 @@ import {
 } from 'electron';
 
 import type { SessionStores } from '@agent/storage';
-import { attachTerminalResultToast, SessionHandle } from '@agent/runtime';
+import {
+  agentResponseTextConnector,
+  attachTerminalResultToast,
+  SessionHandle,
+} from '@agent/runtime';
 import {
   computeAgentOptionsData,
   getAgent,
@@ -35,7 +39,7 @@ import { LatexConfigPersistenceController } from '@controllers/settingsView/Late
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
@@ -1207,7 +1211,9 @@ if (protocolLifecycle.shouldContinue) {
       const processSession = new SessionHandle({
         transcripts,
         restartRepair: 'deferred',
-        responseTextProcessing: texraResponseTextProcessing,
+        responseTextProcessing: createTexraResponseTextProcessing(
+          agentResponseTextConnector,
+        ),
       });
       const detachTerminalResultToast = attachTerminalResultToast(
         processSession,

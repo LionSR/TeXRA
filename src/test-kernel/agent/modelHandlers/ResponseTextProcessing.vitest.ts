@@ -7,7 +7,7 @@ import { noopTrace } from '@agent/trace';
 import { ModelHandlerValidation } from '@agent/modelHandlers/modelHandlerValidation';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { createNeutralResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
-import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 const RAW_PROVIDER_TEXT = '$\\mathrm{Tr}$ remains provider text.';
@@ -84,12 +84,14 @@ describe('response text processing', () => {
   );
 
   it('keeps TeXRA replacement behavior in the application adapter', () => {
-    expect(Object.isFrozen(texraResponseTextProcessing)).toBe(true);
+    const processing = createTexraResponseTextProcessing(async () => ' ');
 
-    const normalized = texraResponseTextProcessing.normalizeResponseText(
+    expect(Object.isFrozen(processing)).toBe(true);
+
+    const normalized = processing.normalizeResponseText(
       ` ${RAW_PROVIDER_TEXT}\n`,
     );
-    expect(texraResponseTextProcessing.postProcessResponse(normalized)).toBe(
+    expect(processing.postProcessResponse(normalized)).toBe(
       '$\\Tr$ remains provider text.',
     );
   });

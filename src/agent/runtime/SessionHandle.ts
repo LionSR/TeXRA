@@ -38,6 +38,7 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import { runWithOwnedExecutionLeaseQuiescence } from '@agent/storage/executionLease';
 import { deriveResumability } from '@agent/storage/resumability';
+import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { platform } from '@platform/platform';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -72,10 +73,7 @@ import {
   repairRestartedStreams,
   RestartRepairRetryScheduler,
 } from './restartRepair';
-import {
-  createNeutralResponseTextProcessing,
-  type ResponseTextProcessing,
-} from './responseTextProcessing';
+import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 
 const logger = createChannelTrace('sessionHandle');
 
