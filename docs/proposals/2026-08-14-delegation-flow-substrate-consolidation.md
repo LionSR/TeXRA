@@ -28,7 +28,52 @@ measured extraction honoring the caller-owned-write constraint nets
 closed as fails-net-gain; do not re-attempt. The real residual divergence
 is the honorable-mention schema-strictness asymmetry
 (`ToolUseRunSharedSchema` loose vs reflection strict), a behavior question.
-Date: 2026-08-14
+
+**Consolidation round (2026-08-15, maintainer directive "I cannot stand
+dual systems"), all on PR #10475:**
+
+- **A1 landed** (−70 LoC): `RetryState.ts` merged into `ModelInvocationNode`
+  as one deep module; the seven single-consumer classifiers collapsed into
+  one memoized `classifyModelRouteFailure` verdict honoring all three
+  verifier corrections.
+- **A2 landed** (−52 LoC) as _two_ trims: `proposalApproval.ts` dissolved
+  into `SessionApprovals`; the rejection-provenance union declared once and
+  derived five times. Trim 1 (the approval barrel) was already re-ruled a
+  documented public surface by review #10339 — not a banned barrel; skipped.
+- **A5/B9 landed**: the desktop polish defect was already fixed upstream
+  (#10365, with a regression test); the by-construction consolidation
+  shipped — one table-driven `initializeBundledPrompts(resourcesPath)` per
+  host replaces `polishModel.ts` + `goal/promptLoader.ts` (−2 modules, −3
+  initializers; failure semantics are per-row data). The `copy-resources`
+  claim in A5 was also stale.
+- **A6 landed, both tiers**: dead `ResumeStreamPorts.interactions` + its
+  suppliers deleted; `resumeAdmission.ts` dissolved into `executeAgent.ts`;
+  one `resolveResumeStateFromSnapshots` replaces the extension/desktop
+  mirror resolvers and the `ProgressViewProvider` singleton hop. The −45
+  estimate was not reachable honestly (net ≈ flat LoC, −5 elements).
+- **A8 stage 1 landed** (one `deliverLiveNotification` owner for the
+  copy-pasted post-notification sequence). **Stage 2 measured OUT with
+  probe evidence**: session-inclusive keying regresses shipped GitHub
+  behavior (single re-pointed binding → duplicate event delivery), and the
+  honest unified registry is interface-bigger-than-the-thing (~−65 LoC for
+  a multi-mode class). Standing negative result; do not re-propose without
+  first fixing the registry's own latent cross-session defect (release
+  hook wipes a whole stream bucket regardless of owning session — filing
+  candidate).
+- **B6 was already banked** in #10286 (TextEditorTool deleted wholesale
+  before the audit snapshot); the −870 is that PR's, not re-claimable. The
+  warn-and-degrade path for custom YAMLs is the generic unresolved-name
+  path, loud at three layers; one stale icon-table grouping fixed.
+- **Smells 1-2 of `2026-08-15-single-driver-child-runs.md` landed**:
+  `executeInBand` is no longer a second driver (in-band = await the one
+  loop + consume the settled turn's in-memory facts; the ledger keeps its
+  recovery contract via durability read-back), and sweep-settled call
+  outcomes are first-class (`settledBySweep`) instead of note-string
+  sniffing. Riding wins: `AgentFinalResult` carries a failed run's
+  structured error, and scripted grandchildren gained reports + turnToken
+  stamping — closing both item-10 gaps. Next in that note's queue: the
+  execution-lease scope unification (maintainer-flagged).
+  Date: 2026-08-14
 
 ## Framing
 
