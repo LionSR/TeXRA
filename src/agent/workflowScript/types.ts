@@ -332,6 +332,12 @@ type WorkflowScriptProgressId = WorkflowCallIdentity['id'];
  */
 export type WorkflowScriptEvent = { type: 'log'; message: string };
 
+/** Synchronous transition metadata that is intentionally not persisted. */
+export type WorkflowExecutionTransition = {
+  readonly type: 'call-issued';
+  readonly callId: string;
+};
+
 /**
  * Guest-visible result of a call cancelled via `control(childExecutionId,
  * 'skip')`: a first-class sentinel distinct from a failed call's `null`, so a
@@ -397,7 +403,10 @@ export interface WorkflowScriptRunOptions {
    * propagates into the engine and aborts the run, so consumers guard their
    * own folds.
    */
-  onTransition?: (snapshot: WorkflowExecutionSnapshot) => void;
+  onTransition?: (
+    snapshot: WorkflowExecutionSnapshot,
+    transition?: WorkflowExecutionTransition,
+  ) => void;
   onEvent?: (event: WorkflowScriptEvent) => void;
   /**
    * Handed the per-call control handle once, synchronously, before the script

@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   resumeToolUseFromResumeData: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   throwDeliveryFormatting: false,
+  throwErrorFormatting: false,
 }));
 
 vi.mock('@tools/delegation/subagentResults', async (importOriginal) => {
@@ -42,6 +43,14 @@ vi.mock('@tools/delegation/subagentResults', async (importOriginal) => {
         throw new Error('delivery formatting failed');
       }
       return original.formatSubagentDelivery(...args);
+    },
+    formatSubagentError: (
+      ...args: Parameters<typeof original.formatSubagentError>
+    ) => {
+      if (mocks.throwErrorFormatting) {
+        throw new Error('error formatting failed');
+      }
+      return original.formatSubagentError(...args);
     },
   };
 });
@@ -178,6 +187,7 @@ describe('NativeSubagentStrategy', () => {
       resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
     } as unknown as AgentEngine);
     mocks.throwDeliveryFormatting = false;
+    mocks.throwErrorFormatting = false;
     mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
     mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
     mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
@@ -297,6 +307,38 @@ describe('NativeSubagentStrategy', () => {
       params.executionId,
       expect.objectContaining({
         result: expect.objectContaining({ cost: 0.29, outcome: 'failed' }),
+      }),
+    );
+  });
+
+  it('persists a typed result-only failure without formatting error prose', async () => {
+    const params = { ...baseParams(), resultOnly: true };
+    const failure = new Error('provider failed');
+    mocks.throwErrorFormatting = true;
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      options.onRunError?.(failure);
+      return toolUseTurnResult('failed', params.executionId, {
+        error: { message: failure.message, userRetryable: false },
+      });
+    });
+
+    const { completion } = startChildRunLoop({
+      childStreamId: CHILD_STREAM_ID,
+      parentStreamId: params.parentStreamId,
+      executionId: params.executionId,
+      agentName: params.agentName,
+      strategy: createNativeSubagentStrategy(params),
+    });
+    await completion;
+
+    expect(mocks.persistChildRunResultMeta).toHaveBeenCalledWith(
+      params.executionId,
+      expect.objectContaining({
+        producer: 'subagent',
+        result: expect.objectContaining({
+          outcome: 'failed',
+          error: expect.objectContaining({ message: 'provider failed' }),
+        }),
       }),
     );
   });

@@ -5,6 +5,7 @@ import {
   type PersistedWorkflowScriptRunOptions,
   type WorkflowAgentInvocation,
   type WorkflowJournalEntry,
+  type WorkflowExecutionTransition,
   type WorkflowScriptEvent,
   type WorkflowScriptRunResult,
 } from '@agent/workflowScript';
@@ -220,7 +221,6 @@ export async function runPersistedWorkflowScriptWithProgress(
     {
       status: WorkflowCallProgress['status'];
       childStreamId: WorkflowCallProgress['childStreamId'];
-      updatedAt: string;
     }
   >();
   let constructionEmissionSeen = false;
@@ -422,7 +422,10 @@ export async function runPersistedWorkflowScriptWithProgress(
    * everything is read here, nothing retained. A projection fault must never
    * abort the run, so the fold guards itself and reports on the run trace.
    */
-  const fold = (snapshot: WorkflowExecutionSnapshot): void => {
+  const fold = (
+    snapshot: WorkflowExecutionSnapshot,
+    transition?: WorkflowExecutionTransition,
+  ): void => {
     if (closed) return;
     try {
       declaredStageTotal ??= snapshot.stages.length;
@@ -464,20 +467,23 @@ export async function runPersistedWorkflowScriptWithProgress(
           hydratedBaseline.set(call.id, {
             status,
             childStreamId: call.childStreamId,
-            updatedAt: call.timestamps.updatedAt,
           });
           continue;
         }
         const baseline = projected ? undefined : hydratedBaseline.get(call.id);
         if (baseline !== undefined) {
-          // A non-reusable historical call must first be reissued as planned.
-          // Sweep-only terminalization of a call absent from the new script is
-          // still history and must not manufacture a card for this attempt.
-          if (baseline.status === 'planned' && status !== 'planned') continue;
-          if (
+          // A reset historical call is current only after issueCall explicitly
+          // identifies it as issued by this attempt. This cannot collapse when
+          // hydration and reissue occur within the same clock tick. Sweep-only
+          // terminalization of an omitted call therefore stays silent.
+          if (baseline.status === 'planned') {
+            const reissued =
+              transition?.type === 'call-issued' &&
+              transition.callId === call.id;
+            if (!reissued) continue;
+          } else if (
             baseline.status === status &&
-            baseline.childStreamId === call.childStreamId &&
-            baseline.updatedAt === call.timestamps.updatedAt
+            baseline.childStreamId === call.childStreamId
           ) {
             continue;
           }

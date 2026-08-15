@@ -424,6 +424,7 @@ export function createNativeSubagentStrategy(
     },
 
     formatError: (turn, err) => {
+      if (params.resultOnly) return '';
       const wallTimeMs = Date.now() - params.startedAt;
       const result = turn
         ? toDeliveryResult(turn, params.executionId)

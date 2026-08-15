@@ -361,8 +361,8 @@ export async function runWorkflowScript(
     // Live projections observe every transition synchronously; the durable
     // writer behind onSnapshot coalesces under backpressure. Same source,
     // two delivery guarantees.
-    publish: (snapshot) => {
-      options.onTransition?.(snapshot);
+    publish: (snapshot, transition) => {
+      options.onTransition?.(snapshot, transition);
       snapshotWriter.publish(snapshot);
     },
   });

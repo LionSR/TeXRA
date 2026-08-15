@@ -11,7 +11,10 @@ import {
   WORKFLOW_CALL_UNFINISHED_NOTE,
 } from '@shared/copy/workflowCall';
 
-import type { WorkflowAttemptFacts } from './types';
+import type {
+  WorkflowAttemptFacts,
+  WorkflowExecutionTransition,
+} from './types';
 
 interface WorkflowCallDefinition {
   readonly id: string;
@@ -24,7 +27,10 @@ interface WorkflowCallDefinition {
 /** Owns canonical workflow stage/call transitions and interrupted-run hydration. */
 export class WorkflowExecutionState {
   readonly #snapshot: WorkflowExecutionSnapshot;
-  readonly #publish: (snapshot: WorkflowExecutionSnapshot) => void;
+  readonly #publish: (
+    snapshot: WorkflowExecutionSnapshot,
+    transition?: WorkflowExecutionTransition,
+  ) => void;
   readonly #hasDeclaredStages: boolean;
   readonly #issuedCallIds = new Set<string>();
   #sealed = false;
@@ -38,7 +44,10 @@ export class WorkflowExecutionState {
      * that retain it or persist asynchronously must clone it first (the
      * runner's snapshot writer clones at drain time).
      */
-    readonly publish: (snapshot: WorkflowExecutionSnapshot) => void;
+    readonly publish: (
+      snapshot: WorkflowExecutionSnapshot,
+      transition?: WorkflowExecutionTransition,
+    ) => void;
   }) {
     this.#publish = options.publish;
     this.#hasDeclaredStages = options.phases.length > 0;
@@ -207,7 +216,7 @@ export class WorkflowExecutionState {
       Object.assign(call, canonical);
       call.timestamps.updatedAt = timestamp;
     }
-    this.#emit();
+    this.#emit({ type: 'call-issued', callId: definition.id });
   }
 
   #call(id: string): WorkflowExecutionCall {
@@ -442,11 +451,11 @@ export class WorkflowExecutionState {
     stage.completedAt = completedAt;
   }
 
-  #emit(): void {
+  #emit(transition?: WorkflowExecutionTransition): void {
     this.#snapshot.timestamps.updatedAt = now();
     // Live reference by contract (see the publish option): coalesced-away
     // publications then never pay a full structuredClone of the snapshot.
-    this.#publish(this.#snapshot);
+    this.#publish(this.#snapshot, transition);
   }
 }
 
