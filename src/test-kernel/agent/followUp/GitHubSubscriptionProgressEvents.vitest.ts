@@ -67,10 +67,6 @@ class TestPollingSource extends PollingSourceBase<
     return 'subscription error';
   }
 
-  protected emitKeysChangedEvent(): void {
-    // No-op: this test double doesn't need to observe key-change events.
-  }
-
   failWithAuthError(state: BasePollSubscriptionState): void {
     this.handleFailure('owner/repo', state, new GitHubAuthError('bad token'));
   }
@@ -132,17 +128,13 @@ describe('GitHub subscription app signals and follow-ups', () => {
     submitFollowUpMock.mockResolvedValue({ status: 'sent' as const });
   });
 
-  it.each([
-    'repoSubscriptionBindingsChanged',
-    'issueSubscriptionBindingsChanged',
-  ] as const)('publishes %s through app signals', (event) => {
-    const signal = recordAppSignal(event);
+  it('publishes githubSubscriptionsChanged through app signals', () => {
+    const signal = recordAppSignal('githubSubscriptionsChanged');
     const source = new RegistryTestSource();
     const registry = new StreamSubscriptionRegistry<string, string>({
       name: 'test subscriptions',
       source,
       keyOf: (input) => input,
-      bindingsChangedEvent: event,
     });
 
     try {
@@ -151,7 +143,9 @@ describe('GitHub subscription app signals and follow-ups', () => {
       registry.bind('stream-a' as StreamTabId, 'owner/repo');
       registry.unbind('stream-a' as StreamTabId, 'owner/repo');
 
-      expect(signal.events).toEqual([{ event, payload: undefined }]);
+      expect(signal.events).toEqual([
+        { event: 'githubSubscriptionsChanged', payload: undefined },
+      ]);
     } finally {
       signal.dispose();
     }
@@ -210,13 +204,12 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
   it('emits one binding change when unsubscribe disposes synchronously', () => {
     const host = createRecordingHost();
-    const signal = recordAppSignal('repoSubscriptionBindingsChanged');
+    const signal = recordAppSignal('githubSubscriptionsChanged');
     const source = new RegistryTestSource();
     const registry = new StreamSubscriptionRegistry<string, string>({
       name: 'test subscriptions',
       source,
       keyOf: (input) => input,
-      bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
     });
 
     try {
@@ -228,7 +221,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
       );
 
       expect(signal.events).toEqual([
-        { event: 'repoSubscriptionBindingsChanged', payload: undefined },
+        { event: 'githubSubscriptionsChanged', payload: undefined },
       ]);
       expect(host.events).toEqual([]);
     } finally {
@@ -245,7 +238,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
       name: 'test subscriptions',
       source,
       keyOf: (input) => input,
-      bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
     });
 
     try {
@@ -284,7 +276,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
       name: 'test subscriptions',
       source,
       keyOf: (input) => input,
-      bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
     });
 
     try {
@@ -326,7 +317,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
       logger,
       source,
       keyOf: (input) => input,
-      bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
     });
     const unhandledRejection = vi.fn();
     submitFollowUpMock.mockRejectedValueOnce(new Error('delivery failed'));

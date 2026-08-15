@@ -14,7 +14,6 @@
  * file only owns the per-issue endpoint set and the dedup state.
  */
 
-import { appSignals } from '@eventBus/AppSignals';
 import type { Disposable } from '@platform/interfaces';
 import {
   formatIssueClosed,
@@ -88,10 +87,6 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
   subscribe(issue: IssueKey, onEvent: (text: string) => void): Disposable {
     const key = issueKeyToString(issue);
     return this.register(key, () => createInitialState(issue), onEvent);
-  }
-
-  protected emitKeysChangedEvent(keys: readonly string[]): void {
-    appSignals.emit('issueSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(
