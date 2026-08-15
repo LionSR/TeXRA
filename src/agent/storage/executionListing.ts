@@ -21,6 +21,7 @@ import { createLog } from '@logger/logUtils';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type {
   ExecutionId,
+  ExecutionMeta,
   RunIdentity,
   RunOutcome,
   StreamTabId,
@@ -243,14 +244,16 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
 
 interface LatexExecutionDiscoveryDependencies {
   readonly listExecutions: typeof listExecutions;
-  readonly getExecutionStore: typeof getExecutionStore;
+  readonly readStreamMeta: (
+    executionId: ExecutionId,
+  ) => Promise<ExecutionMeta | null>;
 }
 
-const DEFAULT_LATEX_EXECUTION_DISCOVERY_DEPENDENCIES: LatexExecutionDiscoveryDependencies =
-  {
-    listExecutions,
-    getExecutionStore,
-  };
+const DEFAULT_LATEX_EXECUTION_DISCOVERY_DEPENDENCIES = Object.freeze({
+  listExecutions,
+  readStreamMeta: (executionId: ExecutionId) =>
+    getExecutionStore(executionId).readMeta(),
+} as const satisfies LatexExecutionDiscoveryDependencies);
 
 /**
  * Adapter from the agent storage surface to the latex-owned execution
@@ -274,8 +277,7 @@ export function createLatexExecutionDiscovery(
       }));
     },
     async readStreamId(executionId) {
-      return (await dependencies.getExecutionStore(executionId).readMeta())
-        ?.streamId;
+      return (await dependencies.readStreamMeta(executionId))?.streamId;
     },
   };
 }
