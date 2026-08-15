@@ -6,7 +6,7 @@ import type {
   FileLocation,
   Plan,
   ProgressPermissionKind as PendingInteractionKind,
-  ProviderErrorPartial,
+  RetryPermission,
   StreamTabId,
   UserQuestionAnswers,
   ExternalInquiryPermission,
@@ -187,14 +187,13 @@ export type HostAgentProposalRequest = AgentProposal & {
   readonly streamId: StreamTabId;
 };
 
-export interface HostRetryRequest {
-  readonly requestId: string;
-  readonly streamId: StreamTabId;
-  readonly operation: string;
-  readonly model?: string;
-  readonly errorMessage?: string;
-  readonly errorDetails?: ProviderErrorPartial;
-}
+/**
+ * The retry payload the runtime hands to hosts. This is deliberately an alias
+ * of the shared {@link RetryPermission} schema so the runtime and every host
+ * render the same contract; a field added to the permission payload is
+ * available here without a hand-maintained mirror.
+ */
+export type HostRetryRequest = RetryPermission;
 
 export type HostUserQuestionRequest = UserQuestionPermission;
 
