@@ -51,14 +51,8 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-
-function cliContext(overrides: Partial<CliContext> = {}): CliContext {
-  return createTestCliContext({
-    renderRunProgress: true,
-    ...overrides,
-  });
-}
+import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
+import { withTempDir } from '@test/support/tempDirPlatform';
 
 type StoredResumeConfig = Parameters<typeof resumeWorkflowOutputFile>[0];
 
@@ -107,18 +101,6 @@ async function initDefaultFakePlatform(): Promise<void> {
     import('@test/support/FakePlatform'),
   ]);
   initPlatform(createFakePlatform());
-}
-
-async function withTempDir<T>(
-  prefix: string,
-  run: (root: string) => Promise<T>,
-): Promise<T> {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
-  try {
-    return await run(root);
-  } finally {
-    await fs.rm(root, { recursive: true, force: true });
-  }
 }
 
 async function withExternalDirs(
@@ -870,7 +852,7 @@ describe('CLI root argument routing', () => {
           outputs: [],
           compileFailures: [],
         },
-        cliContext(),
+        createRunCommandCliContext(),
         {},
       ),
     ).rejects.toThrow(
@@ -974,7 +956,7 @@ describe('CLI root argument routing', () => {
           outputs: [],
           compileFailures: [],
         },
-        cliContext(),
+        createRunCommandCliContext(),
         {},
       ),
     ).rejects.toThrow(
@@ -994,7 +976,7 @@ describe('CLI root argument routing', () => {
         outputs: [],
         compileFailures: [],
       },
-      cliContext(),
+      createRunCommandCliContext(),
       {},
     );
 
@@ -1026,7 +1008,7 @@ describe('CLI root argument routing', () => {
 
   it('does not force doctor into personal-key model availability', () => {
     const init = doctorPlatformInitContext(
-      cliContext({ apiMode: 'included' }),
+      createRunCommandCliContext({ apiMode: 'included' }),
     ) as { skipIncludedModelAccess?: boolean; quietLogs?: boolean };
 
     expect(init.quietLogs).toBe(true);

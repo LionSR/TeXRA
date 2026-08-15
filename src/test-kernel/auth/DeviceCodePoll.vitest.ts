@@ -5,29 +5,11 @@ import {
   deviceCodePending,
   pollUntilDeviceAuthorized,
 } from '@auth/oauth/deviceCodePoll';
-
-/** Deterministic clock: sleeping advances time, never waits for real timers. */
-function fakeClock(): {
-  now: () => number;
-  sleep: (ms: number) => Promise<void>;
-  sleeps: number[];
-} {
-  let time = 0;
-  const sleeps: number[] = [];
-  return {
-    now: () => time,
-    sleep: (ms: number) => {
-      sleeps.push(ms);
-      time += ms;
-      return Promise.resolve();
-    },
-    sleeps,
-  };
-}
+import { createFakeClock } from '@test/support/asyncTestUtils';
 
 describe('pollUntilDeviceAuthorized', () => {
   it('returns the authorized value after soft continues', async () => {
-    const clock = fakeClock();
+    const clock = createFakeClock();
     let attempts = 0;
 
     const value = await pollUntilDeviceAuthorized({
@@ -49,7 +31,7 @@ describe('pollUntilDeviceAuthorized', () => {
   });
 
   it('grows the interval on slow_down deltas', async () => {
-    const clock = fakeClock();
+    const clock = createFakeClock();
     let attempts = 0;
 
     await pollUntilDeviceAuthorized({
@@ -71,7 +53,7 @@ describe('pollUntilDeviceAuthorized', () => {
   });
 
   it('throws the timeout error when the deadline elapses (check before sleep)', async () => {
-    const clock = fakeClock();
+    const clock = createFakeClock();
     let attempts = 0;
 
     await expect(
@@ -94,7 +76,7 @@ describe('pollUntilDeviceAuthorized', () => {
   });
 
   it('checks the deadline after sleep when checkDeadlineBeforeSleep is false', async () => {
-    const clock = fakeClock();
+    const clock = createFakeClock();
     let attempts = 0;
 
     await expect(
@@ -118,7 +100,7 @@ describe('pollUntilDeviceAuthorized', () => {
   });
 
   it('rethrows hard errors from attempt', async () => {
-    const clock = fakeClock();
+    const clock = createFakeClock();
 
     await expect(
       pollUntilDeviceAuthorized({

@@ -52,6 +52,28 @@ export async function waitForRecordedEvent<TEvent extends string>(
   throw new Error(`Timed out waiting for ${eventName}`);
 }
 
+/**
+ * A deterministic clock: sleeping advances time, never waits for real timers.
+ * `sleeps` records every requested delay in order.
+ */
+export function createFakeClock(): {
+  now: () => number;
+  sleep: (ms: number) => Promise<void>;
+  sleeps: number[];
+} {
+  let time = 0;
+  const sleeps: number[] = [];
+  return {
+    now: () => time,
+    sleep: (ms: number) => {
+      sleeps.push(ms);
+      time += ms;
+      return Promise.resolve();
+    },
+    sleeps,
+  };
+}
+
 /** Create a promise together with the resolvers that settle it, for tests that need to control timing externally. */
 export function createDeferred<T = void>(): {
   promise: Promise<T>;

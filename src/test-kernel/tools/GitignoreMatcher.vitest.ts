@@ -2,6 +2,8 @@ import * as path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { errnoError } from '@test/support/fsTestUtils';
+
 const fsState = vi.hoisted(() => ({
   workspacePath: '/workspace' as string | undefined,
   homeDirectory: undefined as string | undefined,
@@ -102,10 +104,6 @@ function expectEmptyMatcher(matcher: Matcher): void {
   expect(matcher.ignores('paper.tex')).toBe(false);
 }
 
-function eaccesError(message: string): Error {
-  return Object.assign(new Error(message), { code: 'EACCES' });
-}
-
 describe('getGitignoreMatcher', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -126,14 +124,14 @@ describe('getGitignoreMatcher', () => {
   });
 
   it('rejects when a workspace ignore policy cannot be read', async () => {
-    const error = eaccesError('Permission denied');
+    const error = errnoError('EACCES', 'Permission denied');
     fsState.workspaceReadErrors.set('.gitignore', error);
 
     await expect(loadMatcher()).rejects.toBe(error);
   });
 
   it('rejects when a global ignore policy cannot be read', async () => {
-    const error = eaccesError('Permission denied');
+    const error = errnoError('EACCES', 'Permission denied');
     fsState.homeDirectory = path.join(path.sep, 'home', 'user');
     fsState.absoluteReadErrors.set(
       path.join(path.sep, 'home', 'user', '.gitignore_global'),
@@ -158,7 +156,7 @@ describe('getGitignoreMatcher', () => {
   });
 
   it('retries after a failed shared load attempt', async () => {
-    const error = eaccesError('Temporarily unavailable');
+    const error = errnoError('EACCES', 'Temporarily unavailable');
     fsState.workspaceFiles.set('.gitignore', 'dist/\n');
     fsState.workspaceReadErrors.set('.gitignore', error);
     vi.resetModules();
