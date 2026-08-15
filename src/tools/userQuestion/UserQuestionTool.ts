@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { createChannelTrace } from '@agent/trace';
 import { classifyRejection } from '@agent/runtime/HostInteractions';
 import {
   getRunContextSession,
@@ -8,6 +7,7 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import { createLog } from '@logger/logUtils';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
@@ -18,7 +18,7 @@ import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { assertNever, generateShortId } from '@utils/core';
 
-const logger = createChannelTrace('UserQuestionTool');
+const logger = createLog('UserQuestionTool');
 
 const AskUserQuestionInputSchema = z.strictObject({
   questions: z

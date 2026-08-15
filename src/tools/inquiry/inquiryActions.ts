@@ -9,8 +9,8 @@
  */
 
 // Local imports - agent
-import { createChannelTrace } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { createLog } from '@logger/logUtils';
 
 // Local imports - shared
 import type { InquiryActionMessage } from '@shared/schemas';
@@ -26,7 +26,7 @@ import {
   injectContinuationForDroppedThread,
 } from './inquiryContinuation';
 
-const logger = createChannelTrace('InquiryTool');
+const logger = createLog('InquiryTool');
 
 type InquirySubmitAction = Extract<
   InquiryActionMessage,

@@ -17,7 +17,6 @@
 import { z } from 'zod';
 
 // Local imports
-import { createChannelTrace } from '@agent/trace';
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import {
   classifyRejection,
@@ -32,6 +31,7 @@ import {
   getCurrentToolContexts,
   type CurrentToolContexts,
 } from '@agent/followUp/ToolFileInteractionContext';
+import { createLog } from '@logger/logUtils';
 import type { Plan, ToolResult } from '@shared/schemas';
 import {
   formatGoalTime,
@@ -51,7 +51,7 @@ import { errorResult, executed } from '@tools/core/result';
 import { assertNever, generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const logger = createChannelTrace('PlanTool');
+const logger = createLog('PlanTool');
 
 function formatGoalView(goal: Goal): string {
   return [

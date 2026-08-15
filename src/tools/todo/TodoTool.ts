@@ -10,8 +10,8 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { createChannelTrace } from '@agent/trace';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { createLog } from '@logger/logUtils';
 import {
   TODO_STATUS,
   STATUS_DISPLAY,
@@ -23,7 +23,7 @@ import { type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 
-const logger = createChannelTrace('TodoWriteTool');
+const logger = createLog('TodoWriteTool');
 
 /**
  * Schema for the todo_write tool input.

@@ -27,10 +27,10 @@ const STREAM_B = 'stream:b' as StreamTabId;
 const GENERATION_A = 'f9de9269-9198-4103-a248-6a3bd78bd4eb';
 
 /**
- * Capture per-channel log lines. The storage module logs through a channel
- * trace that binds `logUtils.warn` at module init, so a `vi.spyOn` installed
- * inside a test can't intercept it — observe the output sink instead (same
- * pattern as ChannelTrace.vitest.ts).
+ * Capture per-channel log lines. The storage module logs through `createLog`,
+ * which routes through the module namespace and lands in the output sink;
+ * observe the sink so these assertions pin the sink path without coupling to
+ * the namespace seam (same capture pattern as ChannelTrace.vitest.ts).
  */
 function captureLogLines(): string[] {
   const lines: string[] = [];

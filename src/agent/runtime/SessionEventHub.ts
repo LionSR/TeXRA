@@ -1,7 +1,7 @@
 import process from 'node:process';
 
 import type { AgentEvent, StatusEvent } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
+import { createLog } from '@logger/logUtils';
 import type {
   ClearMissingOutputsPayload,
   FollowUpSentPayload,
@@ -15,7 +15,7 @@ import type {
   UpdateStreamDescriptionPayload,
 } from '@shared/schemas';
 
-const logger = createChannelTrace('SessionEventHub');
+const logger = createLog('SessionEventHub');
 
 /**
  * Session-scoped fact vocabulary. Payload-bearing arms use fact-native named
