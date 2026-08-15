@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { KVStore } from '@common/storage/KVStore';
+import { KVStoreCache } from '@common/storage/KVStoreCache';
 import * as log from '@logger/logUtils';
 import {
   AgentCategorySchema,
@@ -43,14 +44,6 @@ export const STREAM_LOG_SUMMARIES_DIR =
   WORKSPACE_STORAGE_LAYOUT.streamLogSummaries;
 const STREAM_LOG_LOAD_CONCURRENCY = 8;
 const LOG_TAG = 'StreamLogStore';
-
-function createLogKv(): KVStore {
-  return new KVStore(STREAM_LOGS_DIR, { compactJson: true });
-}
-
-function createSummaryKv(): KVStore {
-  return new KVStore(STREAM_LOG_SUMMARIES_DIR, { compactJson: true });
-}
 
 type StreamLogListener = (streamId: StreamTabId, delta: StreamLogDelta) => void;
 
@@ -297,8 +290,14 @@ export class StreamLogStore {
    */
   private readonly releaseRequests = new Set<StreamTabId>();
   private readonly listeners = createListenerSet<StreamLogListener>();
-  private kv = createLogKv();
-  private summaryKv = createSummaryKv();
+  /**
+   * Lazily-created handles over the two fixed transcript directories, keyed
+   * by directory. Dropped wholesale on storage-root reload so the next
+   * access re-resolves against the new root.
+   */
+  private readonly kvHandles = new KVStoreCache<string>(
+    (dir) => new KVStore(dir, { compactJson: true }),
+  );
 
   /**
    * Lightweight summary per stream (first/last timestamp). Populated at open
@@ -344,6 +343,16 @@ export class StreamLogStore {
 
   private constructor(mode: StreamLogStoreMode) {
     this.mode = Object.freeze(mode);
+  }
+
+  /** Handle over `STREAM_LOGS_DIR`; re-resolved after a storage-root reload. */
+  private kv(): KVStore {
+    return this.kvHandles.get(STREAM_LOGS_DIR);
+  }
+
+  /** Handle over `STREAM_LOG_SUMMARIES_DIR`; same lifecycle as `kv()`. */
+  private summaryKv(): KVStore {
+    return this.kvHandles.get(STREAM_LOG_SUMMARIES_DIR);
   }
 
   // -- StreamState record access -------------------------------------------
@@ -479,7 +488,7 @@ export class StreamLogStore {
     if (this.mode.kind === 'ephemeral' || !this.summaries.has(streamId)) {
       return [];
     }
-    const raw = await this.kv.read<unknown[]>(streamId);
+    const raw = await this.kv().read<unknown[]>(streamId);
     const parsed = this.parsePersistedEntries(streamId, raw);
     return new StreamLog(parsed.entries, parsed.preservedRawEntries).toJSON();
   }
@@ -500,7 +509,7 @@ export class StreamLogStore {
    */
   async hasAuthoritativeStream(streamId: StreamTabId): Promise<boolean> {
     if (this.mode.kind === 'ephemeral') return this.has(streamId);
-    return this.kv.exists(streamId);
+    return this.kv().exists(streamId);
   }
 
   keys(): StreamTabId[] {
@@ -801,7 +810,7 @@ export class StreamLogStore {
     if (state?.pendingLoad) return state.pendingLoad;
     const work = (async () => {
       try {
-        const raw = await this.kv.read<unknown[]>(streamId);
+        const raw = await this.kv().read<unknown[]>(streamId);
         // If `delete` or `clear` ran during the read, don't resurrect it.
         if (
           this.clearing ||
@@ -957,7 +966,7 @@ export class StreamLogStore {
       await this.executeWrite();
       if (this.mode.kind !== 'ephemeral') {
         log.info(LOG_TAG, `Deleting stream: ${streamId}`);
-        await this.kv.delete(streamId);
+        await this.kv().delete(streamId);
         await this.deleteSummaryCache(streamId);
       }
       // The summaries map is the progress tab registry. Commit its removal
@@ -991,7 +1000,7 @@ export class StreamLogStore {
       if (this.mode.kind === 'ephemeral') return;
 
       log.info(LOG_TAG, `Clearing all ${count} streams`);
-      await this.kv.deleteDir();
+      await this.kv().deleteDir();
       await this.clearSummaryCache();
     } finally {
       this.writeTombstones.clear();
@@ -1251,11 +1260,10 @@ export class StreamLogStore {
       );
     }
 
-    // KV adapters cache successful directory creation. A workspace-root
-    // replacement changes what these relative directories resolve to, so new
-    // adapters must own the new root before its first write.
-    this.kv = createLogKv();
-    this.summaryKv = createSummaryKv();
+    // A workspace-root replacement changes what these relative directories
+    // resolve to, so the cached KV handles are dropped and re-resolve
+    // against the new root on next access, before its first write.
+    this.kvHandles.invalidateAll();
     this.summaryCacheMaintenanceEnabled = true;
     if (this.mode.kind === 'persistent') await this.prepareSummaryCache();
 
@@ -1271,7 +1279,7 @@ export class StreamLogStore {
   private async readPersistentSummaries(): Promise<
     Map<StreamTabId, StreamLogSummary>
   > {
-    const streamIds = await this.kv.listKeys();
+    const streamIds = await this.kv().listKeys();
     const results = await pMap(
       streamIds,
       (streamId) => this.loadStreamSummary(streamId as StreamTabId),
@@ -1335,7 +1343,7 @@ export class StreamLogStore {
       return { streamId, summary: persistedSummary };
     }
 
-    const raw = await this.kv.read<unknown[]>(streamId);
+    const raw = await this.kv().read<unknown[]>(streamId);
     // `listKeys()` found the stream, but it may have been deleted before the
     // read completed. Only an existing authoritative `[]` is registration
     // evidence; KVStore's missing-file `undefined` is not.
@@ -1354,13 +1362,13 @@ export class StreamLogStore {
     streamId: StreamTabId,
   ): Promise<StreamLogSummary | undefined> {
     try {
-      const persisted = await this.summaryKv.read<unknown>(streamId);
+      const persisted = await this.summaryKv().read<unknown>(streamId);
       const summary = this.parsePersistedSummary(persisted);
       if (!summary) return undefined;
 
       const [summaryMtime, logMtime] = await Promise.all([
-        this.summaryKv.modifiedAt(streamId),
-        this.kv.modifiedAt(streamId),
+        this.summaryKv().modifiedAt(streamId),
+        this.kv().modifiedAt(streamId),
       ]);
       // A missing log mtime means the authoritative log is gone (deleted, or
       // never written) — orphaned summary, not merely stale. Trusting it here
@@ -1432,9 +1440,9 @@ export class StreamLogStore {
     expectedGeneration: number = this.writeGeneration,
   ): Promise<void> {
     if (this.shouldSkipWrite(streamId, expectedGeneration)) return;
-    await this.kv.write(streamId, logInstance.toPersistedEntries());
+    await this.kv().write(streamId, logInstance.toPersistedEntries());
     if (this.shouldSkipWrite(streamId, expectedGeneration)) {
-      await this.kv.delete(streamId);
+      await this.kv().delete(streamId);
       await this.deleteSummaryCache(streamId);
       return;
     }
@@ -1448,7 +1456,7 @@ export class StreamLogStore {
       ...(meta !== undefined && { meta }),
     });
     if (this.shouldSkipWrite(streamId, expectedGeneration)) {
-      await this.kv.delete(streamId);
+      await this.kv().delete(streamId);
       await this.deleteSummaryCache(streamId);
     }
   }
@@ -1515,7 +1523,7 @@ export class StreamLogStore {
       return;
     }
     try {
-      await this.summaryKv.write(streamId, summary);
+      await this.summaryKv().write(streamId, summary);
     } catch (error) {
       this.disableSummaryCacheMaintenance(
         `Failed to write transcript summary cache for ${streamId}: ${toErrorMessage(error)}`,
@@ -1526,7 +1534,7 @@ export class StreamLogStore {
   private async deleteSummaryCache(streamId: StreamTabId): Promise<void> {
     if (!this.summaryCacheMaintenanceEnabled) return;
     try {
-      await this.summaryKv.delete(streamId);
+      await this.summaryKv().delete(streamId);
     } catch (error) {
       this.disableSummaryCacheMaintenance(
         `Failed to delete transcript summary cache for ${streamId}: ${toErrorMessage(error)}`,
@@ -1537,7 +1545,7 @@ export class StreamLogStore {
   private async clearSummaryCache(): Promise<void> {
     if (!this.summaryCacheMaintenanceEnabled) return;
     try {
-      await this.summaryKv.deleteDir();
+      await this.summaryKv().deleteDir();
     } catch (error) {
       this.disableSummaryCacheMaintenance(
         `Failed to clear transcript summary cache: ${toErrorMessage(error)}`,
