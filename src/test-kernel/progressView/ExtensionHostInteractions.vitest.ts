@@ -392,6 +392,85 @@ describe('createExtensionHostInteractions', () => {
     await expect(replacement).resolves.toEqual({ action: 'retry' });
   });
 
+  it('prepares a progress-view retry before settling it', async () => {
+    const { interactions } = createInteractions({
+      session: createTestSession(),
+    });
+    const prepareRetry = vi.fn(async () => undefined);
+    const result = interactions.requestRetry?.(
+      {
+        requestId: 'retry:prepared',
+        streamId: STREAM_A,
+        operation: 'Model invocation',
+      },
+      { prepareRetry },
+    );
+
+    expect(
+      interactions.submitRetryDecision(STREAM_A, 'retry:prepared', {
+        action: 'retry',
+      }),
+    ).toBe(true);
+    await expect(result).resolves.toEqual({ action: 'retry' });
+    expect(prepareRetry).toHaveBeenCalledWith('configured', expect.anything());
+  });
+
+  it('prepares the personal route for the API-key retry switch', async () => {
+    const { interactions } = createInteractions({
+      session: createTestSession(),
+    });
+    const prepareRetry = vi.fn(async () => undefined);
+    const result = interactions.requestRetry?.(
+      {
+        requestId: 'retry:personal',
+        streamId: STREAM_A,
+        operation: 'Model invocation',
+      },
+      { prepareRetry },
+    );
+
+    await expect(
+      interactions.submitRetryWithPersonalCredentials(
+        STREAM_A,
+        'retry:personal',
+        'switched to the stored key',
+      ),
+    ).resolves.toBe(true);
+    await expect(result).resolves.toEqual({
+      action: 'retry',
+      feedback: 'switched to the stored key',
+    });
+    expect(prepareRetry).toHaveBeenCalledWith('personal', expect.anything());
+  });
+
+  it('denies a personal-credential retry when client preparation fails', async () => {
+    const { interactions } = createInteractions({
+      session: createTestSession(),
+    });
+    const prepareRetry = vi.fn(async () => {
+      throw new Error('replacement client failed');
+    });
+    const result = interactions.requestRetry?.(
+      {
+        requestId: 'retry:prepare-failure',
+        streamId: STREAM_A,
+        operation: 'Model invocation',
+      },
+      { prepareRetry },
+    );
+
+    await expect(
+      interactions.submitRetryWithPersonalCredentials(
+        STREAM_A,
+        'retry:prepare-failure',
+      ),
+    ).resolves.toBe(false);
+    await expect(result).resolves.toEqual({
+      action: 'deny',
+      reason: 'replacement client failed',
+    });
+  });
+
   it('cancels pending retry requests for a removed stream', async () => {
     const presentationSink = createPresentationSink();
     const { handlers, interactions } = createInteractions({

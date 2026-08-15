@@ -13,6 +13,7 @@ import {
   type HostInteractionOptions,
   type HostInteractions,
   type HostPlanApprovalRequest,
+  type HostRetryInteractionOptions,
   type HostRetryRequest,
   type PlanApprovalResult,
   type ProposalResult,
@@ -30,6 +31,7 @@ import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   cancelApprovalRequestHandlers,
@@ -63,6 +65,12 @@ export interface ProgressHostInteractions extends HostInteractions {
     requestId: string,
     decision: RetrySettlement,
   ): boolean;
+  /** Settle a retry after switching routing onto the user's own API key. */
+  submitRetryWithPersonalCredentials(
+    streamId: StreamTabId,
+    requestId: string,
+    feedback?: string,
+  ): Promise<boolean>;
   submitUserQuestionDecision(
     requestId: string,
     decision: UserQuestionSettlement,
@@ -104,9 +112,72 @@ export function createProgressHostInteractions(
     }
   };
 
+  /**
+   * The client-preparation callback carried by one pending retry request.
+   * Keyed by stream because the shared retry handler only keeps one pending
+   * request per stream; the request id guards against a stale settlement.
+   */
+  interface PendingRetryPreparation {
+    readonly requestId: string;
+    readonly prepareRetry: NonNullable<
+      HostRetryInteractionOptions['prepareRetry']
+    >;
+    readonly controller: AbortController;
+    settling: boolean;
+  }
+  const retryPreparations = new Map<StreamTabId, PendingRetryPreparation>();
+
+  const settlePreparedRetry = async (
+    streamId: StreamTabId,
+    requestId: string,
+    selection: 'configured' | 'personal',
+    feedback?: string,
+    denialResult = true,
+  ): Promise<boolean> => {
+    const preparation = retryPreparations.get(streamId);
+    if (!preparation || preparation.requestId !== requestId) {
+      // No host-side preparation callback is attached, so the caller's normal
+      // retry path (rebind) stays responsible for refreshing the client.
+      retryPreparations.delete(streamId);
+      return handlers().retry.complete(streamId, {
+        action: 'retry',
+        ...(feedback !== undefined ? { feedback } : {}),
+      });
+    }
+    if (preparation.settling) return true;
+    preparation.settling = true;
+    try {
+      await preparation.prepareRetry(selection, preparation.controller.signal);
+    } catch (error) {
+      retryPreparations.delete(streamId);
+      handlers().retry.complete(streamId, {
+        action: 'deny',
+        reason: toErrorMessage(error),
+      });
+      // The API-key switch path reports a denied preparation as false so its
+      // controller can roll the routing changes back; a plain retry has no
+      // routing changes to undo, so it still reports that the request settled.
+      return denialResult;
+    }
+    retryPreparations.delete(streamId);
+    return handlers().retry.complete(streamId, {
+      action: 'retry',
+      ...(feedback !== undefined ? { feedback } : {}),
+    });
+  };
+
   const cancel = (selector: HostInteractionCancelSelector = {}): void => {
     if (selector.kind == null || selector.kind === 'toolEdit') {
       options.getToolEditApprovals().cancel(selector);
+    }
+    if (selector.kind == null || selector.kind === 'retry') {
+      if (selector.streamId === undefined) {
+        for (const preparation of retryPreparations.values()) {
+          preparation.controller.abort();
+        }
+      } else if (selector.streamId !== null) {
+        retryPreparations.get(selector.streamId)?.controller.abort();
+      }
     }
     cancelApprovalRequestHandlers(
       handlers(),
@@ -154,7 +225,9 @@ export function createProgressHostInteractions(
     /**
      * Settle a pending retry request. Returns false when the request is no
      * longer the pending one for that stream, so a stale renderer click cannot
-     * resolve a newer request.
+     * resolve a newer request. A retry action runs any forwarded client
+     * preparation before the request actually settles; a preparation failure
+     * settles the request as a denial instead of retrying with a stale client.
      */
     submitRetryDecision(
       streamId: StreamTabId,
@@ -162,7 +235,38 @@ export function createProgressHostInteractions(
       decision: RetrySettlement,
     ): boolean {
       if (!isRetryPending(streamId, requestId)) return false;
-      return handlers().retry.complete(streamId, decision);
+      if (decision.action === 'cancel') {
+        retryPreparations.delete(streamId);
+        return handlers().retry.complete(streamId, decision);
+      }
+      void settlePreparedRetry(
+        streamId,
+        requestId,
+        'configured',
+        decision.feedback,
+      );
+      return true;
+    },
+
+    /**
+     * Settle a retry after the host has switched routing onto the user's own
+     * API key. The personal-credential preparation must run before the retry
+     * settles; a failure returns false so the API-key controller can roll its
+     * routing changes back.
+     */
+    async submitRetryWithPersonalCredentials(
+      streamId: StreamTabId,
+      requestId: string,
+      feedback?: string,
+    ): Promise<boolean> {
+      if (!isRetryPending(streamId, requestId)) return false;
+      return settlePreparedRetry(
+        streamId,
+        requestId,
+        'personal',
+        feedback,
+        false,
+      );
     },
 
     submitBashDecision: (requestId, decision) =>
@@ -234,9 +338,23 @@ export function createProgressHostInteractions(
      */
     requestRetry(
       request: HostRetryRequest,
-      interactionOptions?: HostInteractionOptions,
+      interactionOptions?: HostRetryInteractionOptions,
     ): Promise<RetryResult> {
       revealStream(request.streamId);
+      // A replacement retry on the same stream cancels any preparation still
+      // in flight for the request it replaces; the shared handler does the same
+      // for its pending entry below.
+      retryPreparations.get(request.streamId)?.controller.abort();
+      if (interactionOptions?.prepareRetry) {
+        retryPreparations.set(request.streamId, {
+          requestId: request.requestId,
+          prepareRetry: interactionOptions.prepareRetry,
+          controller: new AbortController(),
+          settling: false,
+        });
+      } else {
+        retryPreparations.delete(request.streamId);
+      }
       return handlers().retry.request(request, {
         cancellationScope: interactionOptions?.cancellationScope,
         cancellationResult: (cause) => cancellationResultFor('retry', cause),
@@ -265,6 +383,7 @@ export function createProgressHostInteractions(
 
     dispose(): void {
       cancel({ cause: SESSION_DISPOSED_CAUSE });
+      retryPreparations.clear();
     },
   };
 }

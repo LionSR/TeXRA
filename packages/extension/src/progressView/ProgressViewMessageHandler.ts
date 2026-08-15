@@ -213,10 +213,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             action: 'retry',
             feedback,
           }),
-        cancel: (stream, requestId) =>
+        cancel: (stream, requestId) => {
           this.interactions.submitRetryDecision(stream, requestId, {
             action: 'cancel',
-          }),
+          });
+        },
       },
     };
 
@@ -567,9 +568,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       isRetryPending: (stream, requestId) =>
         this.interactions.isRetryPending(stream, requestId),
       triggerRetry: (stream, requestId) =>
-        this.interactions.submitRetryDecision(stream, requestId, {
-          action: 'retry',
-        }),
+        this.interactions.submitRetryWithPersonalCredentials(stream, requestId),
     });
   }
 

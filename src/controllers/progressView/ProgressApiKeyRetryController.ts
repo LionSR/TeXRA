@@ -72,7 +72,10 @@ export interface ProgressApiKeyRetryControllerDeps {
   codingPlanToggles?: readonly CodingPlanToggle[];
   invalidateModelOptionsCache(): void;
   isRetryPending(stream: StreamTabId, requestId: string): boolean;
-  triggerRetry(stream: StreamTabId, requestId: string): boolean;
+  triggerRetry(
+    stream: StreamTabId,
+    requestId: string,
+  ): boolean | Promise<boolean>;
 }
 
 /**
@@ -109,7 +112,10 @@ export class ProgressApiKeyRetryController {
 
     const routingBefore = this.routingSnapshot();
     const prepared = await this.applyOwnApiKeyRouting(request);
-    const retried = this.deps.triggerRetry(request.stream, request.requestId);
+    const retried = await this.deps.triggerRetry(
+      request.stream,
+      request.requestId,
+    );
     if (!retried) {
       await this.restoreOwnApiKeyRouting(routingBefore, prepared);
       return noRetryResult();

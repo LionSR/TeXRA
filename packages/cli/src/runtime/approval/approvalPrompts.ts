@@ -3,6 +3,8 @@ import PQueue from 'p-queue';
 import { defaultSession } from '@agent/runtime';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkError/relayDetection';
 import { warn as logWarning } from '@logger/logUtils';
+import { isKimiCodeExclusiveModel } from '@model/kimiCodeSubscriptionRouting';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
@@ -108,6 +110,20 @@ export type CliRetryAction =
   | 'switch-to-personal'
   | 'none';
 
+/**
+ * Whether the retrying model is served ONLY by the Kimi Code coding endpoint
+ * (`kimi-for-coding` aliases pin its `baseUrl` in the registry). Unknown or
+ * non-Kimi models are not exclusive, so a missing `model` never blocks the
+ * GLM/Kimi dual-backend switch.
+ */
+export function isKimiCodeExclusiveRetryModel(
+  model: string | undefined,
+): boolean {
+  if (model === undefined) return false;
+  const config = getRuntimeModelConfig(model);
+  return config !== undefined && isKimiCodeExclusiveModel(config);
+}
+
 export function classifyCliRetryAction(
   payload: RetryPermission,
 ): CliRetryAction {
@@ -116,7 +132,19 @@ export function classifyCliRetryAction(
   const codingPlan = CODING_PLAN_SUBSCRIPTIONS.find(
     (plan) => plan.exhaustionReason === details?.exhaustionReason,
   );
-  if (codingPlan) return `disable-coding-plan:${codingPlan.id}`;
+  if (codingPlan) {
+    // Kimi Code-exclusive models are served only by the coding endpoint, so
+    // turning the plan off cannot reroute them to a Moonshot fallback. They
+    // keep the retry modal without an API-key switch, exactly like the
+    // auto-switch gate in the TUI.
+    if (
+      codingPlan.id === 'kimiCode' &&
+      isKimiCodeExclusiveRetryModel(payload.model)
+    ) {
+      return 'none';
+    }
+    return `disable-coding-plan:${codingPlan.id}`;
+  }
   if (
     details != null &&
     isCredentialExhausted(details) &&
