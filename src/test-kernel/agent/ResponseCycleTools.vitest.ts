@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { noopTrace } from '@agent/trace';
-import type { AgentCore, ToolPolicy } from '@agent/core/flows/BaseFlowServices';
+import {
+  createToolPolicy,
+  type AgentCore,
+  type ToolPolicy,
+} from '@agent/core/flows/BaseFlowServices';
 import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
 import type { ResponseCycleServices } from '@agent/core/flows/CycleServices';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
@@ -16,7 +20,7 @@ function toolNames(tools: readonly { name: string }[] | undefined): string[] {
 
 function responseServices({
   supportsFunctionCalling = true,
-  toolPolicy = {},
+  toolPolicy = createToolPolicy(),
 }: {
   supportsFunctionCalling?: boolean;
   toolPolicy?: ToolPolicy;
@@ -48,20 +52,20 @@ describe('response cycle tool visibility', () => {
   it.each([
     {
       name: 'filters approval-gated workflow tools when prompts are unavailable',
-      toolPolicy: { approvalPromptsUnavailable: true },
+      toolPolicy: createToolPolicy({ approvalPromptsUnavailable: true }),
       expected: ['grep'],
     },
     {
       name: 'keeps workflow tools when approval prompts are available',
-      toolPolicy: { approvalPromptsUnavailable: false },
+      toolPolicy: createToolPolicy({ approvalPromptsUnavailable: false }),
       expected: ['bash', 'grep', 'inquiry', 'write_file', 'wolfram'],
     },
     {
       name: 'filters runtime-unavailable workflow tools without hiding approvals',
-      toolPolicy: {
+      toolPolicy: createToolPolicy({
         approvalPromptsUnavailable: false,
         runtimeUnavailableTools: ['inquiry'],
-      },
+      }),
       expected: ['bash', 'grep', 'write_file', 'wolfram'],
     },
   ])('$name', ({ toolPolicy, expected }) => {

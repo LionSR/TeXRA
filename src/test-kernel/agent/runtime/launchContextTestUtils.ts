@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
+import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   AgentPromptSchema,
@@ -91,7 +92,7 @@ export function createTestLaunchContext({
     parentStage: logger.openStage(`Run: ${config.agent}`),
     storageKey,
     userVarChannels: { input: Object.freeze({}), transient: {} },
-    toolPolicy: {},
+    toolPolicy: createToolPolicy(),
     attachedMemoryMisses: [],
     usageMonitor: new UsageMonitor(
       modelCell,

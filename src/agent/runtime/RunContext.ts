@@ -68,7 +68,7 @@ interface CreateBareRunContextOptions
   runScope?: undefined;
 }
 
-export interface CreateLaunchRunContextOptions extends CreateRunContextCommon {
+interface CreateLaunchRunContextOptions extends CreateRunContextCommon {
   runScope: RunScope;
 }
 

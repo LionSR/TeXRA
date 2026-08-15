@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { noopTrace } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
+import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import {
   AgentPromptSchema,
@@ -362,7 +363,9 @@ async function runPersistedFlow(
           logger: noopTrace,
           userVarChannels,
           modelCell,
-          toolPolicy: { stopAfterCycle: options.stopAfterCycle },
+          toolPolicy: createToolPolicy({
+            stopAfterCycle: options.stopAfterCycle,
+          }),
           onModelChanged: () => {},
           interrupt: () => abortController.abort(),
           onRoundFinalized: () => {},

@@ -34,7 +34,15 @@ export interface ToolPolicy {
 
 /** Freeze a tool policy so flows cannot mutate it mid-run. */
 export function createToolPolicy(policy: ToolPolicy = {}): ToolPolicy {
-  return Object.freeze({ ...policy });
+  // `Object.freeze` is shallow, so the nested tool-name array gets its own
+  // frozen copy rather than aliasing the caller's (still mutable) array.
+  return Object.freeze({
+    approvalPromptsUnavailable: policy.approvalPromptsUnavailable,
+    runtimeUnavailableTools: policy.runtimeUnavailableTools
+      ? Object.freeze([...policy.runtimeUnavailableTools])
+      : undefined,
+    stopAfterCycle: policy.stopAfterCycle,
+  });
 }
 
 export interface AgentCore<C = unknown> {

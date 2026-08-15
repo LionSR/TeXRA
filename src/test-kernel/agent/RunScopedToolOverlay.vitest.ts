@@ -202,10 +202,10 @@ describe('run-scoped tool overlay', () => {
             transient: {},
           },
           modelCell,
-          toolPolicy: {
+          toolPolicy: createToolPolicy({
             approvalPromptsUnavailable: true,
             runtimeUnavailableTools: ['inquiry'],
-          },
+          }),
           onModelChanged: () => {},
           interrupt: () => {},
           onRoundFinalized: () => {},

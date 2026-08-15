@@ -15,6 +15,7 @@ import {
 // Local imports
 import type { AgentEvent } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
+import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import type {
   AgentPrompt,
   AgentSetting,
@@ -178,7 +179,7 @@ function roundServices(opts: {
       userRequest: '',
     } satisfies AgentPrompt,
     userVarChannels: { input: {}, transient: {} },
-    toolPolicy: {},
+    toolPolicy: createToolPolicy(),
     logger: opts.logger,
     fileService: new TaskRunFileService('deadbeef'),
     toolRegistry: opts.toolRegistry,

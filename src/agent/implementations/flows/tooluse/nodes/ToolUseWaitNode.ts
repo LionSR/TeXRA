@@ -222,7 +222,12 @@ export class ToolUseWaitNode<C> extends Node<
     }
 
     await GoalStore.setStatus(streamId, 'paused');
-    await setGoalSessionBashAutoApproval(streamId, false);
+    // Route the bypass mutation through the session this flow already owns
+    // (`runScope.session`) rather than `currentSession()`, so the goal-pause
+    // path stays drivable without an ambient RunContext/ALS frame.
+    await setGoalSessionBashAutoApproval(streamId, false, {
+      session: this.services.runScope.session,
+    });
     emitRunFact(this.services.logger, 'goalPaused', { streamId });
   }
 }

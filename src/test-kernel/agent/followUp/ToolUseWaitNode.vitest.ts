@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseWaitNode';
@@ -82,7 +83,7 @@ function createWaitNodeServices(
   const { capabilities, ...modelHandlerOverrides } = modelHandler ?? {};
   return {
     runScope: testRunScope(streamId, { session: ownerSession, signal }),
-    toolPolicy: { stopAfterCycle },
+    toolPolicy: createToolPolicy({ stopAfterCycle }),
     fileService: {
       createLocation: (filePath: string) => ({ absolutePath: filePath }),
       ...fileService,
@@ -425,12 +426,10 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      // `pauseActiveGoal` resolves `currentSession()` through the active run
-      // context, so the ALS frame stays (stopAfterCycle is still read from
-      // `services.toolPolicy`, not from the ambient context).
-      const exec = await withTestRunContext(services.runScope, () =>
-        node.exec(waitPrep(true)),
-      );
+      // No AsyncLocalStorage frame: `pauseActiveGoal` routes the bash bypass
+      // mutation through `services.runScope.session` (the owner session), never
+      // through `currentSession()`/`defaultSession()`.
+      const exec = await node.exec(waitPrep(true));
 
       const goal = GoalStore.getForStream(streamId);
       expect(exec.kind).toBe('stop');
