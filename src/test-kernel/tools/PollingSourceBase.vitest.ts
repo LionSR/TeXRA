@@ -2,9 +2,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z, type ZodType } from 'zod';
 
+// Local imports - event bus
+import { appSignals } from '@eventBus/AppSignals';
+
+// Local imports - platform
+import type { Disposable } from '@platform/interfaces';
+
 // Local imports - tools
 import { getNewestTimestamp } from '@tools/github/githubPaths';
 import {
+  createBasePollState,
   DedupedResource,
   PollingSourceBase,
   type BasePollSubscriptionState,
@@ -43,16 +50,16 @@ class TestPollingSource extends PollingSourceBase<
     this.logger.warn = warn;
   }
 
+  subscribe(key: string): Disposable {
+    return this.register(key, createBasePollState, () => {});
+  }
+
   protected pollOne(): Promise<void> {
     return Promise.resolve();
   }
 
   protected formatErrorEvent(): string {
     return 'subscription error';
-  }
-
-  protected emitKeysChangedEvent(): void {
-    // No-op: this test double doesn't need key-change events.
   }
 }
 
@@ -131,6 +138,27 @@ describe('DedupedResource', () => {
     resource.seed([]);
 
     expect(resource.sinceCursor).toBe('2026-07-04T00:00:00Z');
+  });
+});
+
+describe('PollingSourceBase key changes', () => {
+  it('emits subscription changes when the first listener is added and the last is removed', () => {
+    const source = new TestPollingSource();
+    const changed = vi.fn();
+    const signal = appSignals.on('githubSubscriptionsChanged', changed);
+
+    try {
+      const subscription = source.subscribe('owner/repo');
+      expect(changed).toHaveBeenCalledTimes(1);
+      expect(changed).toHaveBeenLastCalledWith(undefined);
+
+      subscription.dispose();
+      expect(changed).toHaveBeenCalledTimes(2);
+      expect(changed).toHaveBeenLastCalledWith(undefined);
+    } finally {
+      signal();
+      source.disposeAll();
+    }
   });
 });
 
