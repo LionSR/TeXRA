@@ -524,21 +524,6 @@ async function executeInBand(
       );
     }
 
-    if (
-      mode === 'required-result' &&
-      loopFailure !== undefined &&
-      !childFailed
-    ) {
-      await throwRetryableDurabilityError(
-        executionId,
-        stableAttempt,
-        new SubagentDurabilityError(
-          `Subagent ${executionId} failed to persist its final artifacts.`,
-          { cause: loopFailure },
-        ),
-      );
-    }
-
     if (mode === 'required-result') {
       // The ledger recovers restarts by inspecting the persisted manifest, so
       // the in-memory copy is not enough here: verify the write landed. A
@@ -579,6 +564,21 @@ async function executeInBand(
           `Failed to persist result for subagent ${executionId}.`,
         );
       }
+    }
+
+    if (
+      mode === 'required-result' &&
+      loopFailure !== undefined &&
+      !childFailed
+    ) {
+      await throwRetryableDurabilityError(
+        executionId,
+        stableAttempt,
+        new SubagentDurabilityError(
+          `Subagent ${executionId} failed to persist its final artifacts.`,
+          { cause: loopFailure },
+        ),
+      );
     }
 
     if (childFailed) {

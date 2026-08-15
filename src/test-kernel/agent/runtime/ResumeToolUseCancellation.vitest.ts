@@ -152,7 +152,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
       async (_executionId: ExecutionId, error: unknown) => error,
     );
-    mocks.completeOwnedExecutionLease.mockResolvedValue(undefined);
+    mocks.completeOwnedExecutionLease.mockResolvedValue({ status: 'released' });
     // Default: the lifecycle wrapper just runs the flow against a no-op
     // handle. Tests that need a real handle override with
     // mockImplementationOnce, which takes precedence for their single call.

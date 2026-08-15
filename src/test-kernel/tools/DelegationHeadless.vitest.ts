@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => ({
   getVisibleAgents: vi.fn(),
   inspectExecutionLease: vi.fn(),
   abandonOwnedExecutionLease: vi.fn(),
+  undurableExecutionIds: new Set<ExecutionId>(),
   isApprovalBypassedForStream: vi.fn(),
   isProposalBypassed: vi.fn(),
   registerExecution: vi.fn(),
@@ -95,15 +96,29 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
     (_executionId: ExecutionId) => (operation: () => unknown) =>
       operation(),
   inspectExecutionLease: mocks.inspectExecutionLease,
-  markOwnedExecutionLeaseUndurable: vi.fn(),
+  markOwnedExecutionLeaseUndurable: vi.fn((executionId: ExecutionId) => {
+    mocks.undurableExecutionIds.add(executionId);
+  }),
+  isOwnedExecutionLeaseDurable: vi.fn(
+    (executionId: ExecutionId) => !mocks.undurableExecutionIds.has(executionId),
+  ),
   ownsExecutionLease: vi.fn(() => true),
   // The session's one exit choreography runs for real over these inert lease
-  // verbs; the release spy observes its terminal step.
+  // verbs; completion mirrors production's explicit released/retained outcome.
   renewOwnedExecutionLease: vi.fn(async () => {}),
   abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
-  completeOwnedExecutionLease: vi.fn(async (executionId: ExecutionId) =>
-    mocks.releaseOwnedExecutionLease(executionId),
-  ),
+  completeOwnedExecutionLease: vi.fn(async (executionId: ExecutionId) => {
+    if (mocks.undurableExecutionIds.has(executionId)) {
+      mocks.abandonOwnedExecutionLease(executionId);
+      return { status: 'retained', reason: 'undurable' } as const;
+    }
+    try {
+      await mocks.releaseOwnedExecutionLease(executionId);
+      return { status: 'released' } as const;
+    } catch (error) {
+      return { status: 'retained', reason: 'release-failed', error } as const;
+    }
+  }),
 }));
 
 // `persistChildRun*` moved to `@agent/storage/childRunPersistence`, which
@@ -394,6 +409,7 @@ describe('headless delegation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.undurableExecutionIds.clear();
     restoreAgentEngine = provideAgentEngine({
       executeAgent: mocks.executeAgent,
       resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
@@ -644,8 +660,28 @@ describe('headless delegation', () => {
     );
   });
 
-  it('recovers committed success when lease deletion fails', async () => {
+  it('does not commit or recover when required report persistence poisons the lease', async () => {
     const logicalExecutionId = 'cccccc888888' as ExecutionId;
+    const childStore = memoryExecutionStore();
+    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+    mocks.writeReport.mockRejectedValueOnce(new Error('report write failed'));
+
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toBeInstanceOf(SubagentDurabilityError);
+    await expect(
+      runInBand(delegationOptions(), logicalExecutionId),
+    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+
+    expect(mocks.executeAgent).toHaveBeenCalledOnce();
+    expect(childStore.write).not.toHaveBeenCalledWith(
+      'stable-subagent-attempt',
+      expect.objectContaining({ phase: 'committed' }),
+    );
+  });
+
+  it('recovers committed success when lease deletion fails', async () => {
+    const logicalExecutionId = 'cccccc999999' as ExecutionId;
     const childStore = memoryExecutionStore();
     const releaseError = new Error('lease deletion failed');
     useStableStores(stableSequenceStore(logicalExecutionId), childStore);
