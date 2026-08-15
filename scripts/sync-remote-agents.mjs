@@ -405,7 +405,9 @@ function runSupabaseQuery(args, options = {}) {
 
 function applyRemoteAgentsSql() {
   const dbUrl = process.env.SUPABASE_DB_URL;
-  const projectRef = process.env.SUPABASE_PROJECT_REF;
+  // Normalize once here and reject a set-but-blank ref before it can reach the
+  // CLI as an empty SUPABASE_PROJECT_ID (#10452).
+  const projectRef = process.env.SUPABASE_PROJECT_REF?.trim();
   const projectRefFile = resolve(rootDir, 'supabase/.temp/project-ref');
   const args = ['--yes', 'db', 'query', '-o', 'table'];
   const queryEnv = {};
@@ -413,14 +415,22 @@ function applyRemoteAgentsSql() {
   if (dbUrl) {
     args.push('--db-url', dbUrl);
   } else {
+    if (process.env.SUPABASE_PROJECT_REF !== undefined && !projectRef) {
+      console.error(
+        'sync-remote-agents: SUPABASE_PROJECT_REF is set but empty after trimming. ' +
+          'Set a non-empty SUPABASE_PROJECT_REF, set SUPABASE_DB_URL, or run ' +
+          '`supabase link` in this checkout.',
+      );
+      return 1;
+    }
     if (projectRef) {
       // `supabase db query --linked` reads its target from
       // supabase/.temp/project-ref unless SUPABASE_PROJECT_ID is set. Pass the
       // requested ref through that env var instead of rewriting the checkout's
       // link file, so there is nothing to restore even if the process is
       // killed mid-query (#10316, #10329). The CLI trims the link file but
-      // validates the env var as-is, so normalize padding here (#10408).
-      queryEnv.SUPABASE_PROJECT_ID = projectRef.trim();
+      // validates the env var as-is, so padding was normalized above (#10408).
+      queryEnv.SUPABASE_PROJECT_ID = projectRef;
     } else if (!existsSync(projectRefFile)) {
       console.error(
         'sync-remote-agents: set SUPABASE_DB_URL or SUPABASE_PROJECT_REF, ' +
