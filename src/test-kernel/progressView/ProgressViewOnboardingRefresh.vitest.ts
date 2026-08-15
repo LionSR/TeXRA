@@ -48,6 +48,7 @@ function createHostInteractions(
     submitPlanDecision: vi.fn(() => false),
     submitProposalDecision: vi.fn(() => false),
     submitRetryDecision: vi.fn(() => false),
+    submitRetryWithPersonalCredentials: vi.fn(async () => false),
     submitUserQuestionDecision: vi.fn(() => false),
     dismissExternalInquiry: vi.fn(),
     cancel: vi.fn(),

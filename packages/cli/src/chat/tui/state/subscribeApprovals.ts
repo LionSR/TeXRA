@@ -39,6 +39,7 @@ import {
   classifyCliRetryAction,
   cliRetryApiSwitchDecision,
   isCliApiSwitchableRetry,
+  isKimiCodeExclusiveRetryModel,
 } from '@cli/runtime/approval/approvalPrompts';
 import {
   denyExternalInquiryIfNoHumanInput,
@@ -61,8 +62,6 @@ import {
   codingPlanSubscriptionRuntimes,
   type CodingPlanSubscriptionRuntime,
 } from '@model/codingPlanSubscriptions';
-import { isKimiCodeExclusiveModel } from '@model/kimiCodeSubscriptionRouting';
-import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import {
@@ -140,31 +139,16 @@ function maybeAutoSwitchRetry(
 
   // Coding-plan quotas (Kimi Code, GLM Coding Plan) have a fallback route that
   // re-uses an already-stored key, so auto-switch when that key exists.
+  // Kimi Code-exclusive models never reach this branch: the classifier above
+  // gates them to 'none', keeping the modal without an API-key switch.
   if (action.startsWith('disable-coding-plan:')) {
     if (payload.personalApiKeyAvailable !== true) return undefined;
-    // Kimi Code-EXCLUSIVE models are served only by the coding endpoint:
-    // disabling the plan cannot reroute them, so an automatic switch would
-    // just retry the same exhausted credential without a human decision.
-    // They keep the modal (wait for the reset, or cancel).
-    if (isKimiCodeExclusiveRetryModel(payload.model)) return undefined;
     // The switch decision's single owner is the classifier's sibling, so the
     // auto-switch cannot drift from the modal.
     return cliRetryApiSwitchDecision(payload);
   }
 
   return undefined;
-}
-
-/**
- * Whether the retrying model is served ONLY by the Kimi Code coding endpoint
- * (`kimi-for-coding` aliases pin its `baseUrl` in the registry). Unknown or
- * non-Kimi models are not exclusive, so a missing `model` never blocks the
- * GLM/Kimi dual-backend auto-switch.
- */
-function isKimiCodeExclusiveRetryModel(model: string | undefined): boolean {
-  if (model === undefined) return false;
-  const config = getRuntimeModelConfig(model);
-  return config !== undefined && isKimiCodeExclusiveModel(config);
 }
 
 /**
@@ -435,12 +419,6 @@ async function requestRetryInteraction(
       }
       if (autoSwitch) {
         retryDecision.source = 'automatic';
-        // Skipping the modal also skips its quota warning, and the switch
-        // persists the plan preference as disabled — an interactive user
-        // must still get a visible signal that it happened.
-        if (autoSwitch.disableCodingPlan !== undefined) {
-          notify('credentialSwitched');
-        }
         reservation.settle(autoSwitch);
         return;
       }
@@ -477,6 +455,16 @@ async function requestRetryInteraction(
         preparationSignal: reservation.signal,
         commitQueue: attachment.commitQueue,
       });
+      // Skipping the modal also skips its quota warning, and the switch
+      // persists the plan preference as disabled. Announce it only after the
+      // switch commits: a preparation failure rolls the preference back, and
+      // the user must not be told a switch happened that did not.
+      if (
+        retryDecision.source === 'automatic' &&
+        decision.disableCodingPlan !== undefined
+      ) {
+        notify('credentialSwitched');
+      }
     } else if (options?.prepareRetry) {
       await prepareRetryClient(
         options.prepareRetry,
@@ -682,6 +670,117 @@ function throwWithRollbackFailures(
   throw error;
 }
 
+/** Commit the access-mode and subscription writes for a retry switch.
+ *
+ *  Runs while the commit queue already holds its slot. On failure it rolls
+ *  back everything it wrote (plus the already-disabled coding plan, when one
+ *  is supplied) and rethrows; callers then surface the aggregate error.
+ */
+async function applyRetryCredentialCommit(
+  decision: ApprovalDecision,
+  signal: AbortSignal,
+  codingPlanRollback?: RetrySettingRollbackConfig,
+): Promise<void> {
+  signal.throwIfAborted();
+  const previousApiMode = getCliApiMode();
+  const previousOpenRouter = cliOpenRouterEnabled();
+  const previousSubscriptionPreference = isPreferCodexSubscription();
+  let apiModeWriteStarted = false;
+  let subscriptionWriteStarted = false;
+  try {
+    if (decision.apiMode) {
+      const apiMode = decision.apiMode;
+      apiModeWriteStarted = true;
+      await runRetryTask(() => setCliApiMode(apiMode), signal);
+      signal.throwIfAborted();
+    }
+    if (decision.disableChatGptSubscription) {
+      subscriptionWriteStarted = true;
+      const update = await runRetryTask(
+        () => setCliCodexSubscription(false),
+        signal,
+      );
+      if (update.effective) {
+        throw new Error(
+          'ChatGPT subscription remains enabled by a more specific setting.',
+        );
+      }
+      signal.throwIfAborted();
+    }
+    if (decision.apiMode) patchSessionMeta({ apiMode: decision.apiMode });
+    return;
+  } catch (error) {
+    // Each config is evaluated after the previous restore resolved, so a
+    // rollback sees the state its predecessor left behind. Skipped attempts
+    // must not await: this runs while the commit queue still holds its slot,
+    // and the extra turns let a newer queued switch commit ahead of the
+    // restores below. OpenRouter is restored after the mode, because
+    // restoring included access clears the OpenRouter toggle: a switch the
+    // user never got would otherwise leave their routing preference silently
+    // off.
+    let openRouterToPreserve = previousOpenRouter;
+    const rollbackFailures = await rollbackChangedSettings([
+      {
+        writeStarted: subscriptionWriteStarted,
+        needsRollback: () => !isPreferCodexSubscription(),
+        restore: async () => {
+          const update = await setCliCodexSubscription(
+            previousSubscriptionPreference,
+          );
+          if (update.effective !== previousSubscriptionPreference) {
+            throw new Error(
+              `ChatGPT subscription preference remained ${String(update.effective)}.`,
+            );
+          }
+        },
+        restoredInMemory: () =>
+          isPreferCodexSubscription() === previousSubscriptionPreference,
+        memoryRestoredContext:
+          'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed',
+        restoreFailedContext:
+          'Could not restore the ChatGPT subscription preference',
+      },
+      ...(codingPlanRollback ? [codingPlanRollback] : []),
+      {
+        writeStarted: apiModeWriteStarted,
+        needsRollback: () => getCliApiMode() === decision.apiMode,
+        restore: async () => {
+          // A newer OpenRouter choice may have landed after this retry
+          // changed modes. Restoring included mode clears that choice, so
+          // carry its current value into the final route restore.
+          openRouterToPreserve = cliOpenRouterEnabled();
+          await setCliApiMode(previousApiMode);
+          if (getCliApiMode() !== previousApiMode) {
+            throw new Error(`API mode remained ${getCliApiMode()}.`);
+          }
+        },
+        restoredInMemory: () => getCliApiMode() === previousApiMode,
+        memoryRestoredContext:
+          'The previous API mode appears restored in memory, but persistence could not be confirmed',
+        restoreFailedContext: 'Could not restore API mode',
+      },
+      {
+        writeStarted: apiModeWriteStarted,
+        needsRollback: () => openRouterToPreserve && !cliOpenRouterEnabled(),
+        restore: async () => {
+          await platform().globalState.update(
+            GlobalStateKey.USE_OPENROUTER,
+            true,
+          );
+          if (!cliOpenRouterEnabled()) {
+            throw new Error('OpenRouter routing remained disabled.');
+          }
+        },
+        restoredInMemory: () => cliOpenRouterEnabled(),
+        memoryRestoredContext:
+          'The previous OpenRouter routing preference appears restored in memory, but persistence could not be confirmed',
+        restoreFailedContext: 'Could not restore OpenRouter routing',
+      },
+    ]);
+    throwWithRollbackFailures(error, rollbackFailures);
+  }
+}
+
 async function switchRetryToPersonalCredentials(
   decision: ApprovalDecision,
   request: TuiRetryRequest,
@@ -716,193 +815,93 @@ async function switchRetryToPersonalCredentials(
   if (!options.prepareRetry) {
     throw new Error('The model client cannot be refreshed for this retry.');
   }
+  const prepareRetry = options.prepareRetry;
 
   // A coding-plan switch must take effect BEFORE the client is rebuilt:
   // credential and endpoint resolution read the live plan preference (the GLM
   // coding endpoint is selected from it, and dual-backend Kimi models are
   // rerouted onto the coding endpoint only while it is on), so rebuilding
   // first would prepare the retry against the exhausted coding route. The
-  // disable commits ahead of the preparation; if the preparation then fails,
-  // the preference goes back, so a retry that never ran leaves no settings
-  // behind.
+  // disable, preparation, and rollback all stay inside one commit-queue slot
+  // so a second coding-plan retry cannot interleave: its disable must wait
+  // until this retry's rollback (if any) has finished.
   const codingPlanId = decision.disableCodingPlan;
   const codingPlanRuntime = codingPlanId
     ? codingPlanSubscriptionRuntimes.find(
         (runtime) => runtime.descriptor.id === codingPlanId,
       )
     : undefined;
-  let codingPlanWriteStarted = false;
-  let previousCodingPlanEnabled = false;
   if (codingPlanId && codingPlanRuntime) {
     const runtime = codingPlanRuntime;
     // Wrapped so a cancel settles this retry immediately instead of waiting
     // for an unrelated stream's commit or rollback to drain first. The task
-    // still runs, and stops at the check below.
-    try {
-      await runRetryTask(
-        () =>
-          options.commitQueue.add(async () => {
-            signal.throwIfAborted();
-            previousCodingPlanEnabled = runtime.getEnabled();
+    // still runs, and stops at the checks below.
+    await runRetryTask(
+      () =>
+        options.commitQueue.add(async () => {
+          signal.throwIfAborted();
+          const previousCodingPlanEnabled = runtime.getEnabled();
+          let codingPlanWriteStarted = false;
+          try {
             codingPlanWriteStarted = true;
             await runRetryTask(
               () => setCliCodingPlanSubscription(codingPlanId, false),
               signal,
             );
             signal.throwIfAborted();
-          }),
-        signal,
-      );
-    } catch (error) {
-      throwWithRollbackFailures(
-        error,
-        await rollbackChangedSettings([
-          codingPlanRollbackConfig(
-            runtime,
-            previousCodingPlanEnabled,
-            codingPlanWriteStarted,
-          ),
-        ]),
-      );
-    }
-    try {
-      await prepareRetryClient(options.prepareRetry, 'personal', signal);
-    } catch (error) {
-      throwWithRollbackFailures(
-        error,
-        await rollbackChangedSettings([
-          codingPlanRollbackConfig(
-            runtime,
-            previousCodingPlanEnabled,
-            codingPlanWriteStarted,
-          ),
-        ]),
-      );
-    }
-  } else {
-    await prepareRetryClient(options.prepareRetry, 'personal', signal);
-  }
-
-  // Wrapped so a cancel settles this retry immediately instead of waiting for
-  // an unrelated stream's commit or rollback to drain first. The task still
-  // runs, and stops at the check below.
-  await runRetryTask(
-    () =>
-      options.commitQueue.add(async () => {
-        // The task can wait behind another stream's rollback, so the queue may
-        // have cancelled this retry since it was scheduled.
-        signal.throwIfAborted();
-        const previousApiMode = getCliApiMode();
-        const previousOpenRouter = cliOpenRouterEnabled();
-        const previousSubscriptionPreference = isPreferCodexSubscription();
-        let apiModeWriteStarted = false;
-        let subscriptionWriteStarted = false;
-        try {
-          if (decision.apiMode) {
-            const apiMode = decision.apiMode;
-            apiModeWriteStarted = true;
-            await runRetryTask(() => setCliApiMode(apiMode), signal);
-            signal.throwIfAborted();
-          }
-          if (decision.disableChatGptSubscription) {
-            subscriptionWriteStarted = true;
-            const update = await runRetryTask(
-              () => setCliCodexSubscription(false),
-              signal,
+          } catch (error) {
+            throwWithRollbackFailures(
+              error,
+              await rollbackChangedSettings([
+                codingPlanRollbackConfig(
+                  runtime,
+                  previousCodingPlanEnabled,
+                  codingPlanWriteStarted,
+                ),
+              ]),
             );
-            if (update.effective) {
-              throw new Error(
-                'ChatGPT subscription remains enabled by a more specific setting.',
-              );
-            }
-            signal.throwIfAborted();
           }
-          if (decision.apiMode) patchSessionMeta({ apiMode: decision.apiMode });
-          return;
-        } catch (error) {
-          // Each config is evaluated after the previous restore resolved, so a
-          // rollback sees the state its predecessor left behind. Skipped
-          // attempts must not await: this runs while the commit queue still
-          // holds its slot, and the extra turns let a newer queued switch
-          // commit ahead of the restores below. OpenRouter is restored after
-          // the mode, because restoring included access clears the OpenRouter
-          // toggle: a switch the user never got would otherwise leave their
-          // routing preference silently off.
-          let openRouterToPreserve = previousOpenRouter;
-          const rollbackFailures = await rollbackChangedSettings([
-            {
-              writeStarted: subscriptionWriteStarted,
-              needsRollback: () => !isPreferCodexSubscription(),
-              restore: async () => {
-                const update = await setCliCodexSubscription(
-                  previousSubscriptionPreference,
-                );
-                if (update.effective !== previousSubscriptionPreference) {
-                  throw new Error(
-                    `ChatGPT subscription preference remained ${String(update.effective)}.`,
-                  );
-                }
-              },
-              restoredInMemory: () =>
-                isPreferCodexSubscription() === previousSubscriptionPreference,
-              memoryRestoredContext:
-                'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed',
-              restoreFailedContext:
-                'Could not restore the ChatGPT subscription preference',
-            },
-            // The coding-plan preference was already disabled before the
-            // client preparation; a failure here restores it too.
-            ...(codingPlanRuntime
-              ? [
-                  codingPlanRollbackConfig(
-                    codingPlanRuntime,
-                    previousCodingPlanEnabled,
-                    codingPlanWriteStarted,
-                  ),
-                ]
-              : []),
-            {
-              writeStarted: apiModeWriteStarted,
-              needsRollback: () => getCliApiMode() === decision.apiMode,
-              restore: async () => {
-                // A newer OpenRouter choice may have landed after this retry
-                // changed modes. Restoring included mode clears that choice,
-                // so carry its current value into the final route restore.
-                openRouterToPreserve = cliOpenRouterEnabled();
-                await setCliApiMode(previousApiMode);
-                if (getCliApiMode() !== previousApiMode) {
-                  throw new Error(`API mode remained ${getCliApiMode()}.`);
-                }
-              },
-              restoredInMemory: () => getCliApiMode() === previousApiMode,
-              memoryRestoredContext:
-                'The previous API mode appears restored in memory, but persistence could not be confirmed',
-              restoreFailedContext: 'Could not restore API mode',
-            },
-            {
-              writeStarted: apiModeWriteStarted,
-              needsRollback: () =>
-                openRouterToPreserve && !cliOpenRouterEnabled(),
-              restore: async () => {
-                await platform().globalState.update(
-                  GlobalStateKey.USE_OPENROUTER,
-                  true,
-                );
-                if (!cliOpenRouterEnabled()) {
-                  throw new Error('OpenRouter routing remained disabled.');
-                }
-              },
-              restoredInMemory: () => cliOpenRouterEnabled(),
-              memoryRestoredContext:
-                'The previous OpenRouter routing preference appears restored in memory, but persistence could not be confirmed',
-              restoreFailedContext: 'Could not restore OpenRouter routing',
-            },
-          ]);
-          throwWithRollbackFailures(error, rollbackFailures);
-        }
-      }),
-    signal,
-  );
+          try {
+            await prepareRetryClient(prepareRetry, 'personal', signal);
+          } catch (error) {
+            throwWithRollbackFailures(
+              error,
+              await rollbackChangedSettings([
+                codingPlanRollbackConfig(
+                  runtime,
+                  previousCodingPlanEnabled,
+                  codingPlanWriteStarted,
+                ),
+              ]),
+            );
+          }
+          await applyRetryCredentialCommit(
+            decision,
+            signal,
+            codingPlanRollbackConfig(
+              runtime,
+              previousCodingPlanEnabled,
+              codingPlanWriteStarted,
+            ),
+          );
+        }),
+      signal,
+    );
+  } else {
+    await prepareRetryClient(prepareRetry, 'personal', signal);
+    // Wrapped so a cancel settles this retry immediately instead of waiting
+    // for an unrelated stream's commit or rollback to drain first. The task
+    // still runs, and stops at the check below.
+    await runRetryTask(
+      () =>
+        options.commitQueue.add(async () => {
+          // The task can wait behind another stream's rollback, so the queue
+          // may have cancelled this retry since it was scheduled.
+          await applyRetryCredentialCommit(decision, signal);
+        }),
+      signal,
+    );
+  }
 }
 
 function handleExternalInquiry(
