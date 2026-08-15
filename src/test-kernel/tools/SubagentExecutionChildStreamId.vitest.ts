@@ -24,9 +24,22 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
 }));
 
-vi.mock('@agent/trace', () => ({
-  createChannelTrace: () => ({ error: mocks.childLoopError }),
-}));
+// `executeSubagent` reports a late detached-loop failure through an inline
+// `createLog('childRunLoop')` call; spread the real module so the graph's
+// other `createLog` consumers (e.g. `executionLifecycle`,
+// `inBandSubagentExecution`) keep working loggers.
+vi.mock('@logger/logUtils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@logger/logUtils')>();
+  return {
+    ...actual,
+    createLog: () => ({
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: mocks.childLoopError,
+    }),
+  };
+});
 
 vi.mock('@agent/storage', () => ({
   registerExecution: mocks.registerExecution,
@@ -176,7 +189,7 @@ describe('executeSubagent childStreamId derivation', () => {
     );
   });
 
-  it('logs a detached run-loop rejection through the runtime trace', async () => {
+  it('logs a detached run-loop rejection through the childRunLoop channel log', async () => {
     const lateFailure = new Error('late subagent finalization failed');
     mocks.startChildRunLoop.mockReturnValue({
       completion: Promise.reject(lateFailure),

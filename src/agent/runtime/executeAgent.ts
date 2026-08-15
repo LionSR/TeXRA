@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 
 import { logConversationProgress } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
@@ -23,6 +22,7 @@ import {
   releaseOwnedExecutionLeaseAfterFailure,
 } from '@agent/storage/executionLease';
 import { AgentError } from '@common/errors';
+import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import {
   type RequestEnsureProgressViewPayload,
@@ -66,7 +66,7 @@ import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKe
 import type { ToolUseResumeData } from './SessionResumeRetrieval';
 
 const CHANNEL = 'executeAgent';
-const logger = createChannelTrace(CHANNEL);
+const logger = createLog(CHANNEL);
 
 /** A resumed execution lost its canonical admission race with deletion. */
 export class ResumeAdmissionCancelledError extends Error {
