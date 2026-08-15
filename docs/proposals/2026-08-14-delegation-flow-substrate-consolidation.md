@@ -610,7 +610,7 @@ and only ship the emit fold.
 
 ## Addendum B: the surrounding substrate (second debt-audit run, 2026-08-14)
 
-A second audit run swept the substrate *around* the already-audited core —
+A second audit run swept the substrate _around_ the already-audited core —
 `src/tools/` (minus delegation), storage/trace/output/prompt/goal/roster/
 index/modelHandlers, controllers, eventBus, shared, platform, and the three
 hosts' import edges — under five lenses (pass-throughs, dual systems, dead
@@ -714,7 +714,7 @@ call is a no-op at its single call site (result discarded; outputs already
 assigned), `ProcessingContext`'s members are one-line forwards. Then
 relocate the directory under `implementations/flows/reflection/` (the same
 move as item 9's `ResponseCycleFlow`). Verifier correction: the relocation
-*does* touch the shared-schemas ratchet (three files are listed in the
+_does_ touch the shared-schemas ratchet (three files are listed in the
 baseline) — regenerate in the same PR, or land after B1 empties it.
 
 ### B8. BLOCKED — do not delete the "orphaned" inline-agent machinery or the legacy-storage migrations
@@ -725,7 +725,7 @@ the explicitly ruled SDK Tier-1 mechanism ("definitions-as-values: add an
 'inline' AgentSource; do not build an options API" —
 `2026-07-27-agent-npm-package-step3.md`), and the legacy migrations carry
 their own retention decisions. Deleting either contradicts the plan of
-record; the correct follow-up is a *date* on the migrations' retirement,
+record; the correct follow-up is a _date_ on the migrations' retirement,
 not a deletion PR.
 
 ### B9. Converge the composition roots (−60 LoC, −9 elements; extends A5)
