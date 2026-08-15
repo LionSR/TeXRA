@@ -130,12 +130,17 @@ function insideRanges(index, ranges) {
  * Mixed `{ type X, y }` stays reachable because `y` is a value import.
  * A binding named `type` (`import { type }` / `import { type as value }`) is
  * a value import — TypeScript treats `type` followed by `as` as the name.
+ * `type as as Alias` is type-only: `type` is the modifier and `as` is the name.
+ * `binding` is escape-decoded, so an identifier may start with any Unicode
+ * ID_Start code point (`É`, `\u00c9` decoded, ...), not only ASCII.
  */
 function isTypeOnlyBinding(binding) {
+  // `type as as Alias` is a type-only import of the name `as`.
+  if (/^type\s+as\s+as\s+[\p{ID_Start}$_]/u.test(binding)) return true;
   // `type as value` imports a runtime binding named `type`.
   // `type as` / `type as,` is a type-only import of the name `as`.
-  if (/^type\s+as\s+[A-Za-z_$]/.test(binding)) return false;
-  return /^type\s+[A-Za-z_$]/.test(binding);
+  if (/^type\s+as\s+[\p{ID_Start}$_]/u.test(binding)) return false;
+  return /^type\s+[\p{ID_Start}$_]/u.test(binding);
 }
 
 /** Blank comment ranges so they cannot change binding classification. */
@@ -153,6 +158,23 @@ function withoutComments(text) {
   return result + text.slice(cursor);
 }
 
+/**
+ * Decode `\uXXXX` / `\u{...}` identifier escapes. TypeScript decodes these
+ * before parsing, so `\u00c9` and `É` are the same identifier and an escaped
+ * `\u0074ype` / `\u0061s` still acts as the `type` / `as` keyword. Out-of-
+ * range escapes are kept verbatim; that code does not compile anyway.
+ */
+function decodeIdentifierEscapes(text) {
+  return text
+    .replace(/\\u\{([0-9A-Fa-f]+)\}/g, (sequence, hex) => {
+      const codePoint = Number.parseInt(hex, 16);
+      return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : sequence;
+    })
+    .replace(/\\u([0-9A-Fa-f]{4})/g, (_sequence, hex) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    );
+}
+
 function precedingUnmaskedClause(text, matchIndex, ranges) {
   const before = text.slice(0, matchIndex);
   let keywordIndex = -1;
@@ -168,10 +190,12 @@ function isTypeOnlySpecifier(text, match, ranges) {
   const matched = match[0];
   // `import type X = require('...')` is erased. A bare require() is not.
   if (/^require/.test(matched)) {
-    const clause = withoutComments(
-      precedingUnmaskedClause(text, match.index, ranges),
+    const clause = decodeIdentifierEscapes(
+      withoutComments(precedingUnmaskedClause(text, match.index, ranges)),
     );
-    return /^(?:import|export)\s+type\s+[A-Za-z_$][\w$]*\s*=\s*$/.test(clause);
+    return /^(?:import|export)\s+type\s+[\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*\s*=\s*$/u.test(
+      clause,
+    );
   }
   if (/^(?:import\s*\(|import\.meta\.resolve)/.test(matched)) {
     return false;
@@ -185,11 +209,19 @@ function isTypeOnlySpecifier(text, match, ranges) {
     return false;
   }
 
-  const clause = withoutComments(
-    precedingUnmaskedClause(text, match.index, ranges),
+  const clause = decodeIdentifierEscapes(
+    withoutComments(precedingUnmaskedClause(text, match.index, ranges)),
   );
   if (clause.length === 0) return false;
-  if (/^(?:import|export)\s+type\b/.test(clause)) return true;
+  // `import type from` is a default binding named `type`. Type-only needs a
+  // specifier after `type` (`{`, `*`, or a name). Blanked comments are spaces,
+  // so `import /* c */ type from` stays a value import. The name check uses
+  // ID_Start on escape-decoded text, so `import type É from` stays type-only.
+  if (
+    /^(?:import|export)\s+type(?:\s+[\p{ID_Start}$_]|\s*[{*])/u.test(clause)
+  ) {
+    return true;
+  }
   const named = clause.match(/^(?:import|export)\s*\{([^}]*)\}\s*$/);
   if (named == null) return false;
   const bindings = named[1]
@@ -218,6 +250,18 @@ function selfTestImportSpecifiers() {
   const cases = [
     {
       text: "import type { X } from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "import type X from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "import type * as ns from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "export type * from './typeOnly';\n",
       expected: [],
     },
     {
@@ -263,6 +307,46 @@ function selfTestImportSpecifiers() {
     {
       text: "import { type as } from './typeOnly';\n",
       expected: [],
+    },
+    {
+      text: "import { type as as Value } from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "import type É from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "import type \\u00C9 from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "import { type É } from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "import { \\u0074ype X } from './typeOnly';\n",
+      expected: [],
+    },
+    {
+      text: "import type É = require('./typeOnly');\n",
+      expected: [],
+    },
+    {
+      text: "import { type as É } from './value';\n",
+      expected: ['./value'],
+    },
+    {
+      text: "import { type \\u0061s value } from './value';\n",
+      expected: ['./value'],
+    },
+    {
+      text: "import type from './value';\n",
+      expected: ['./value'],
+    },
+    {
+      text: "import /* note */ type from './value';\n",
+      expected: ['./value'],
     },
     {
       text: "import /* note */ type { X } from './typeOnly';\n",
