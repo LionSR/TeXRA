@@ -28,7 +28,9 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   buildClaudeAgentEnv: vi.fn(),
   findClaudeBinaryPath: vi.fn(),
-  submitFollowUp: vi.fn(async () => ({ status: 'sent' as const })),
+  submitFollowUp: vi.fn<() => Promise<unknown>>(async () => ({
+    status: 'sent' as const,
+  })),
 }));
 
 vi.mock('@tools/approval/bashApproval', () => ({
@@ -464,6 +466,58 @@ describe('claude_agent tool launch and resume fallback', () => {
     expect(result.status).toBe('executed');
     expect(result.summary).toMatch(/Follow-up queued/);
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+  });
+
+  it('rejects a resume onto a live session owned by another stream', async () => {
+    const foreignExecutionId = 'foreign-execution' as ExecutionId;
+    const handle = testExecutionHandle({
+      executionId: foreignExecutionId,
+      parentStreamId: 'stream:other-owner' as StreamTabId,
+      childStreamId,
+      agent: 'claude_code',
+    });
+    ClaudeAgentSessions.register('foreign-live-session', {
+      childStreamId,
+      executionId: foreignExecutionId,
+      executions: { getHandle: () => handle } as any,
+    });
+
+    const result = await new ClaudeAgentTool().call({
+      prompt: "continue someone else's session",
+      session_id: 'foreign-live-session',
+    });
+
+    expect(result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining('owned by a different session'),
+    });
+    expect(mocks.submitFollowUp).not.toHaveBeenCalled();
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+    ClaudeAgentSessions.release('foreign-live-session');
+  });
+
+  it('fails a resume whose live session no longer accepts follow-ups', async () => {
+    ClaudeAgentSessions.register('sess-unresponsive', {
+      childStreamId,
+      executionId,
+      executions: stubExecutions(),
+    });
+    mocks.submitFollowUp.mockResolvedValueOnce({
+      status: 'no_session',
+      streamStatus: undefined,
+    });
+
+    const result = await new ClaudeAgentTool().call({
+      prompt: 'one more follow-up',
+      session_id: 'sess-unresponsive',
+    });
+
+    expect(result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining('no longer has a resumable continuation'),
+    });
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+    ClaudeAgentSessions.release('sess-unresponsive');
   });
 
   it('forks an active session into a distinct child and only forks its first turn', async () => {

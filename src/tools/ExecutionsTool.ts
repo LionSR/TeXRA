@@ -35,6 +35,7 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
+import { isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { FileStat } from '@platform/interfaces';
 import { platform } from '@platform/platform';
@@ -247,8 +248,15 @@ async function walkRunDirectory(
   let entries: [string, number][];
   try {
     entries = await StorageFS.readDir(fullPath);
-  } catch {
-    // Directory doesn't exist or can't be read
+  } catch (error) {
+    // A missing directory is the expected "nothing persisted for this run"
+    // case. Any other read failure (permissions, corrupt storage) must not
+    // silently render as an empty listing — degrade loudly instead.
+    if (!isFileNotFoundError(error)) {
+      log.warn(`Unreadable run directory '${fullPath}'; listing it as empty`, {
+        data: error,
+      });
+    }
     return results;
   }
 
