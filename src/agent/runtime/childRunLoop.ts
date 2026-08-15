@@ -65,10 +65,39 @@ type TurnUsage = { input_tokens?: number; output_tokens?: number };
  * run. `notify` is best-effort live progress (no report/manifest persist, no
  * gating — duplicate delivery is impossible by construction since there is
  * one delivery site per turn, so there is nothing left to dedupe against).
- * `recordCost` may be called freely, as often as the strategy likes, with a
- * cumulative cost estimate. The loop retains the greatest defined value and
- * commits it exactly once when the child's run ends, so a later partial source
- * cannot replace the best available total.
+ *
+ * ## Cost accounting contract (the one discipline every child-run type keeps)
+ *
+ * One fact — "this child's total spend" — flows through three fixed roles:
+ *
+ * - **Observe.** A strategy reports spend only through `recordCost`, and only
+ *   as a *cumulative total for the physical run so far*, never a delta. Native
+ *   subagents pass each turn's run-cumulative `totalCostUsd`
+ *   (`nativeSubagentStrategy.runNative`). The workflow-script strategy's
+ *   attempt model is per-grandchild deltas, so it converts them into an
+ *   invocation-cumulative total first (`createWorkflowAttemptCostTracker`) —
+ *   the retention rule below is only correct over cumulative observations.
+ *   Replayed/recovered journal work observes zero (it was billed by the run
+ *   that produced it), and `invocation.report({ costUsd })` is snapshot
+ *   display, never accounting.
+ * - **Retain.** The loop retains `max(best defined observation)`. Max over
+ *   cumulative totals is order-insensitive and monotone, so a later partial
+ *   source cannot replace the best available total; max over deltas would
+ *   under-bill, which is why observation is cumulative by contract.
+ * - **Commit.** Exactly one commit per physical child run, at run end, into
+ *   `params.recordCost` — the parent-side callback *adds* into the parent's
+ *   usage totals, so a second commit is double-billing and a missed one is
+ *   under-billing. The in-band single-cycle path has exactly one observation
+ *   per physical attempt and forwards it to its caller's `onCost` once; there
+ *   is no multi-observation in-band path, hence no retention layer there.
+ * - **Failure path (workflow).** A failed run settles from the checkpoint
+ *   journal; if settlement itself fails, that spend stays unbilled and must be
+ *   warned about loudly — never silently, and never masking the run error.
+ *   Live observations already retained remain committed.
+ * - **Agent-CLI children** wire no cost observer by design: their spend is
+ *   external (the user's own claude/codex subscription), not TeXRA-billed
+ *   USD. A future cost-reporting CLI must observe through this same
+ *   cumulative discipline rather than adding a parallel channel.
  */
 export interface ChildRunPorts {
   notify(update: SubagentProgressUpdate): void;

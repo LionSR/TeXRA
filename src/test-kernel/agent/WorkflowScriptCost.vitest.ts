@@ -132,6 +132,38 @@ return await agent('retry cost')`,
     expect(tracker.total([completed])).toBeCloseTo(0.6);
   });
 
+  it('reports invocation-cumulative totals compatible with the loop max-latch', () => {
+    // ChildRunPorts contract: the loop retains max(best observation), which is
+    // only correct over cumulative observations — record() must return a
+    // running invocation total that never decreases, whatever the attempt
+    // interleaving.
+    const tracker = createWorkflowAttemptCostTracker();
+    const observations = [
+      tracker.record({ index: 0, key: 'a' }, 0.2),
+      tracker.record({ index: 1, key: 'b' }, 0.1),
+      tracker.record({ index: 0, key: 'a' }, 0),
+      tracker.record({ index: 2, key: 'c' }, 0.3),
+    ];
+    for (let i = 1; i < observations.length; i += 1) {
+      expect(observations[i]).toBeGreaterThanOrEqual(observations[i - 1] ?? 0);
+    }
+    expect(observations.at(-1)).toBeCloseTo(0.6);
+  });
+
+  it('terminal settlement never undercuts the live-observed total', () => {
+    // The journal fallback only raises a completed key's final attempt, so
+    // total() >= the last live record(); under the loop's max-latch the
+    // committed value is therefore the terminal total, and a cheap journal
+    // can never shrink already-observed spend.
+    const cheapJournal = entry(0, workflowResult(0.05), 'live');
+    const tracker = createWorkflowAttemptCostTracker();
+
+    tracker.record(cheapJournal, 0.1);
+    const live = tracker.record(cheapJournal, 0.4);
+    expect(tracker.total([cheapJournal])).toBeGreaterThanOrEqual(live);
+    expect(tracker.total([cheapJournal])).toBeCloseTo(0.5);
+  });
+
   it('separates sequential duplicate keys when only the first call is live', () => {
     const live = entry(0, workflowResult(0.4), 'duplicate');
     const recovered = entry(1, workflowResult(0.7), 'duplicate');

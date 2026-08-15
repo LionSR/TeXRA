@@ -99,6 +99,13 @@ interface WorkflowAttemptCostTracker {
  * result, so its charge is `max(observer, journal)` rather than another sum.
  * `record` and `total` therefore return comparable attempt-scoped USD totals
  * for the loop-owned best-value latch without charging historical entries.
+ *
+ * This is the workflow path's conversion step in the shared cost contract
+ * (`ChildRunPorts` in `@agent/runtime/childRunLoop`): the loop retains
+ * max(best) over *cumulative* observations, so this tracker turns the
+ * engine's per-attempt deltas into invocation-cumulative totals before they
+ * reach `recordCost`. `total()` never undercuts the live-observed sum — the
+ * journal fallback only raises a completed key's last attempt.
  */
 export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
   const attemptsByIdentity = new Map<string, number[]>();
