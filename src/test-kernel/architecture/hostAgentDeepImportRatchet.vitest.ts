@@ -149,7 +149,7 @@ describe('R-b host deep-import ratchet', () => {
         added,
         `New ${host} @agent/* deep-import specifier(s) not in ${BASELINE_FILE}:\n` +
           added.map((specifier) => `  + ${specifier}`).join('\n') +
-          `\n\nIf this growth is intentional, update ${BASELINE_FILE} in this PR.`,
+          `\n\nRemove the import or route it through an approved public surface; do not widen ${BASELINE_FILE}.`,
       ).toEqual([]);
     },
   );
