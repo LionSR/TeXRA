@@ -65,6 +65,11 @@ export function createDesktopDiffHost(
   // recording its temp directory: the set has already been snapshotted and
   // cleared, so recording would leak the directory.
   let disposed = false;
+  // Set once drainFallbackSetups() has taken the final `externalPatchDirs`
+  // snapshot. A fallback that reaches the `disposed` branch before this flag
+  // is still owned by the disposal removal phase; after it, cleanup is
+  // best-effort because the snapshot and owner are gone.
+  let drainComplete = false;
 
   function removeTempDir(tempDir: string): Promise<void> {
     const pending = pendingRemovals.get(tempDir);
@@ -91,15 +96,35 @@ export function createDesktopDiffHost(
     return settle;
   }
 
-  // Waits for fallback setup that was already in flight when `dispose()`
-  // started, up to a fixed bound. The loop re-snapshots the set because an
-  // `openDiff` can register after the first snapshot; those late calls still
-  // self-clean through the `disposed` branch once their setup finishes.
-  async function drainFallbackSetups(): Promise<void> {
-    const deadline = Date.now() + DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS;
-    while (inFlightFallbacks.size > 0) {
-      const remainingMs = deadline - Date.now();
-      if (remainingMs <= 0) return;
+  // Waits for fallback setup to reach a stable empty state, up to a fixed
+  // bound, and then takes the final `externalPatchDirs` snapshot in the same
+  // synchronous step. The double-empty recheck closes the race where an
+  // `openDiff` registers between an initial empty observation and the
+  // snapshot; a registration after the snapshot is already past the drain and
+  // self-cleans through the `disposed` branch on its own.
+  async function drainFallbackSetups(): Promise<string[]> {
+    const deadline = performance.now() + DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS;
+    let observedEmpty = false;
+    while (true) {
+      if (inFlightFallbacks.size === 0) {
+        if (observedEmpty) {
+          drainComplete = true;
+          const tempDirs = [...externalPatchDirs];
+          externalPatchDirs.clear();
+          return tempDirs;
+        }
+        observedEmpty = true;
+        await Promise.resolve();
+        continue;
+      }
+      observedEmpty = false;
+      const remainingMs = deadline - performance.now();
+      if (remainingMs <= 0) {
+        drainComplete = true;
+        const tempDirs = [...externalPatchDirs];
+        externalPatchDirs.clear();
+        return tempDirs;
+      }
       const abort = new AbortController();
       try {
         await Promise.race([
@@ -152,15 +177,27 @@ export function createDesktopDiffHost(
         `No textual changes for ${path.basename(proposed.filePath)}.\n`;
       const tempDir = await createTexraTempDir('texra-desktop-diff-');
       if (disposed) {
-        // The window closed while this fallback was in flight and dispose()
-        // has already drained the record set, so recording the directory now
-        // would leak it. Remove it immediately and stop instead.
+        // The window closed while this fallback was in flight. If the drain
+        // has not yet taken its final record-set snapshot, keep the directory
+        // tracked so the removal phase retries a failed cleanup; once the
+        // snapshot is gone this call is already late and cleanup is
+        // best-effort.
+        if (!drainComplete) {
+          externalPatchDirs.add(tempDir);
+        }
         try {
           await removeTempDir(tempDir);
+          externalPatchDirs.delete(tempDir);
         } catch (cleanupError) {
-          console.warn(
-            `[desktop] Failed to remove the temporary diff directory after the window closed: ${toErrorMessage(cleanupError)}`,
-          );
+          if (drainComplete) {
+            console.warn(
+              `[desktop] Failed to remove the temporary diff directory after the window closed; leaving it for OS temp cleanup: ${toErrorMessage(cleanupError)}`,
+            );
+          } else {
+            console.warn(
+              `[desktop] Failed to remove the temporary diff directory after the window closed; will retry during disposal: ${toErrorMessage(cleanupError)}`,
+            );
+          }
         }
         throw new Error(
           'Desktop window closed before the diff could be opened.',
@@ -203,11 +240,10 @@ export function createDesktopDiffHost(
     // so a hung read cannot block quit forever. A setup that had not yet
     // created its temp directory now sees `disposed` and removes it itself;
     // awaiting that cleanup here (up to the bound) keeps the quit lifecycle
-    // from resolving before the post-disposal removal finishes.
-    await drainFallbackSetups();
-
-    const tempDirs = [...externalPatchDirs];
-    externalPatchDirs.clear();
+    // from resolving before the post-disposal removal finishes. The returned
+    // snapshot is taken in the same step as the final stable-empty check, so a
+    // late registration cannot slip between them.
+    const tempDirs = await drainFallbackSetups();
     const firstResults = await Promise.allSettled(
       tempDirs.map((tempDir) => removeTempDir(tempDir)),
     );

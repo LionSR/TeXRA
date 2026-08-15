@@ -303,6 +303,105 @@ describe('createDesktopDiffHost', () => {
     expect(listDiffTempDirs()).toEqual(diffDirsBefore);
   });
 
+  it('rechecks the drain before snapshotting a late fallback registration', async () => {
+    // A fallback registered after `dispose()` starts but before the record
+    // snapshot must still be awaited: the drain rechecks after yielding, so the
+    // quit lifecycle cannot resolve before the `disposed` branch cleans up.
+    const { host, openPath } = createHost();
+    const [original, proposed] = await prepareDiffPair();
+    const diffDirsBefore = listDiffTempDirs();
+
+    let markReadStarted!: () => void;
+    const readStarted = new Promise<void>((resolve) => {
+      markReadStarted = resolve;
+    });
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    vi.mocked(readFile).mockImplementationOnce(async () => {
+      markReadStarted();
+      await readGate;
+      return 'a\n';
+    });
+
+    const disposePromise = host.dispose();
+    const openPromise = host.openDiff(original, proposed, 'Compare');
+
+    await readStarted;
+    let disposeSettled = false;
+    void disposePromise.then(() => {
+      disposeSettled = true;
+    });
+    await Promise.resolve();
+    expect(disposeSettled).toBe(false);
+
+    releaseRead();
+    await expect(openPromise).rejects.toThrow(
+      'Desktop window closed before the diff could be opened.',
+    );
+    await disposePromise;
+    expect(disposeSettled).toBe(true);
+    expect(openPath).not.toHaveBeenCalled();
+    expect(listDiffTempDirs()).toEqual(diffDirsBefore);
+  });
+
+  it('keeps a disposed-branch removal failure tracked for the removal phase', async () => {
+    // When the fallback still belongs to the disposal drain, a transient
+    // EBUSY/EPERM on its self-cleanup must leave the directory tracked so the
+    // removal phase retries it instead of dropping it after one warning.
+    const consoleSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    try {
+      const { host, openPath } = createHost();
+      const [original, proposed] = await prepareDiffPair();
+      const diffDirsBefore = listDiffTempDirs();
+
+      let markReadStarted!: () => void;
+      const readStarted = new Promise<void>((resolve) => {
+        markReadStarted = resolve;
+      });
+      let releaseRead!: () => void;
+      const readGate = new Promise<void>((resolve) => {
+        releaseRead = resolve;
+      });
+      vi.mocked(readFile).mockImplementationOnce(async () => {
+        markReadStarted();
+        await readGate;
+        return 'a\n';
+      });
+
+      const openPromise = host.openDiff(original, proposed, 'Compare');
+      await readStarted;
+
+      const disposePromise = host.dispose();
+      let removalTarget: string | undefined;
+      vi.mocked(rm).mockImplementationOnce(async (target) => {
+        removalTarget = String(target);
+        throw new Error('simulated EBUSY removal failure');
+      });
+
+      releaseRead();
+
+      await expect(openPromise).rejects.toThrow(
+        'Desktop window closed before the diff could be opened.',
+      );
+      await disposePromise;
+
+      const targetCalls = vi
+        .mocked(rm)
+        .mock.calls.filter(([target]) => String(target) === removalTarget);
+      expect(targetCalls).toHaveLength(2);
+      expect(existsSync(removalTarget!)).toBe(false);
+      expect(openPath).not.toHaveBeenCalled();
+      expect(listDiffTempDirs()).toEqual(diffDirsBefore);
+      expect(consoleSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      consoleSpy.mockRestore();
+    }
+  });
+
   it('retries a failed removal once during dispose', async () => {
     // A transient OS-level failure during dispose() must be retried, not just
     // logged: the record set has already been cleared, so a single failed
