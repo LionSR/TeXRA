@@ -24,19 +24,19 @@ import {
 } from '@agent/storage/executionLease';
 import { AgentError } from '@common/errors';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
-import {
-  type RequestEnsureProgressViewPayload,
-  type StreamTabId,
-  type ExecutionId,
-  type SubagentProgressUpdate,
-  type UserFollowUpSupport,
-  type RunOutcome,
-  AgentCategory,
+import type {
+  ExecutionId,
+  RequestEnsureProgressViewPayload,
+  RunOutcome,
+  StreamTabId,
+  SubagentProgressUpdate,
+  UserFollowUpSupport,
 } from '@shared/schemas';
 import {
+  AgentCategory,
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
-} from '@shared/schemas/output';
+} from '@shared/schemas';
 import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
 import { ensureRunDir } from '@utils/files/runStorageFs';
 

@@ -1,10 +1,11 @@
-import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
+import type {
+  AgentCategory,
+  GettingStartedAction,
+  SettingsTab,
+  StreamTabId,
+} from '@shared/schemas';
+import { SETTINGS_TAB } from '@shared/schemas';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { type AgentCategory } from '@shared/schemas/agent';
-import {
-  SETTINGS_TAB,
-  type SettingsTab,
-} from '@shared/schemas/settingsViewMessages';
 import {
   toElectronAccelerator,
   toPlatformAccelerator,

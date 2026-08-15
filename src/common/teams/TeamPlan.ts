@@ -1,25 +1,25 @@
+import type {
+  AgentDelegationScope,
+  AgentModePreset,
+  AgentSource,
+  ByCategory,
+  TeamOptionData,
+} from '@shared/schemas';
+import {
+  AGENT_CATEGORIES,
+  AGENT_MODE_PRESETS,
+  AgentCategory,
+  agentKeyOf,
+  agentMatchesIdentifier,
+  byCategory,
+  parseAgentModePresets,
+  STARTER_AGENT_MODE_PRESET,
+} from '@shared/schemas';
 import {
   BUILTIN_TEAM_ROOT_AGENT_NAMES,
   implicitDefaultToolUseAgents,
 } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
-import {
-  AGENT_CATEGORIES,
-  AgentCategory,
-  agentKeyOf,
-  agentMatchesIdentifier,
-  byCategory,
-  type AgentSource,
-  type ByCategory,
-} from '@shared/schemas/agent';
-import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
-import {
-  AGENT_MODE_PRESETS,
-  STARTER_AGENT_MODE_PRESET,
-  parseAgentModePresets,
-  type AgentModePreset,
-} from '@shared/schemas/agentPresets';
-import type { TeamOptionData } from '@shared/schemas/mainView/state';
 import { capitalize } from '@utils/text/stringUtils';
 
 import {

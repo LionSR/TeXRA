@@ -10,8 +10,8 @@ import {
 } from '@controllers/settingsView/SettingsModelSelectionController';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type { UpdateModelSelectionMessage } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { UpdateModelSelectionMessage } from '@shared/schemas/settingsViewMessages';
 
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 

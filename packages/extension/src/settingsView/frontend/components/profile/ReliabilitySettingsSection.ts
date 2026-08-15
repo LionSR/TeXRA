@@ -10,7 +10,7 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type { NumberSetting } from '@shared/schemas/settingsViewMessages';
+import type { NumberSetting } from '@shared/schemas';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { clampOptional } from '@utils/core';
 

@@ -23,17 +23,20 @@ import {
 } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { platform } from '@platform/platform';
+import type {
+  ExecutionId,
+  RetryErrorInfo,
+  RunOutcome,
+  StreamTabId,
+  UserFollowUpSupport,
+} from '@shared/schemas';
 import {
+  agentName as baseAgentName,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
-  USER_FOLLOW_UP_SUPPORT,
   toRetryErrorInfo,
-  type ExecutionId,
-  type RetryErrorInfo,
-  type RunOutcome,
-  type StreamTabId,
-  type UserFollowUpSupport,
+  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import {
   isTerminalOutcomePhase,
@@ -43,7 +46,6 @@ import {
   getFirstRunDone,
   setFirstRunDone,
 } from '@shared/state/onboardingState';
-import { agentName as baseAgentName } from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
 import {

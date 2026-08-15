@@ -1,5 +1,10 @@
 // Local imports - state keys
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  LatexConfigValuesSchema,
+  type LatexConfigValues,
+  type UpdateLatexConfigValuesMessage,
+} from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Local imports - shared constants
@@ -10,11 +15,6 @@ import {
 } from '@shared/constants/latexConfig';
 
 // Local imports - shared schemas
-import {
-  LatexConfigValuesSchema,
-  type LatexConfigValues,
-  type UpdateLatexConfigValuesMessage,
-} from '@shared/schemas/settingsViewMessages';
 
 interface CoreConfigReader {
   get(key: string): unknown;

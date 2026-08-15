@@ -25,13 +25,9 @@ import {
 } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
+import type { AgentCategory, AgentSource } from '@shared/schemas';
+import { agentKey, parseAgentModePresets } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  agentKey,
-  type AgentCategory,
-  type AgentSource,
-} from '@shared/schemas/agent';
-import { parseAgentModePresets } from '@shared/schemas/agentPresets';
 
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 

@@ -9,23 +9,23 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   CompileFailure,
   ConversationProgress,
+  GoalStatus,
   InquiryThreadUpdatedEvent,
   OutputFileInfo,
   PermissionPayload,
+  Plan,
   ProgressPermissionKind,
-  ProgressViewPlacement,
   ProgressViewOutboundMessage,
+  ProgressViewPlacement,
   RoundIndexed,
   StreamPhase,
   StreamStage,
   StreamSubstate,
   StreamTabId,
-  Plan,
-  TodoItem,
   SyncStreamContentPayload,
+  TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import type { GoalStatus } from '@shared/schemas/goal';
 /**
  * Manages webview updates for the progress view.
  * Provides a clean interface for updating different parts of the webview

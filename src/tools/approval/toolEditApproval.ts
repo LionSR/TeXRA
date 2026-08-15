@@ -16,11 +16,11 @@ import {
   texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
 import type {
+  LineChanges,
   StreamTabId,
   ToolEditPermission,
   ToolResult,
 } from '@shared/schemas';
-import type { LineChanges } from '@shared/schemas/lineChanges';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files/workspaceFS';

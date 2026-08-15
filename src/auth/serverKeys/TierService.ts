@@ -22,7 +22,7 @@ import {
   SpendingStatusSchema,
   type SpendingStatus,
   type SpendingStatusError,
-} from '@shared/schemas/spendingStatus';
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   relayTierConfigUrl,

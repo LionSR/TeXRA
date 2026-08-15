@@ -3,14 +3,12 @@ import { z } from 'zod';
 import { RunRecordSchema } from '@agent/core/definition/RunRecord';
 import {
   ExecutionIdSchema,
-  StreamTabIdSchema,
-} from '@shared/schemas/identifiers';
-import { StreamLogEntrySchema } from '@shared/schemas/log';
-import {
   ExecutionMetaSchema,
   ExecutionStatusSchema,
-} from '@shared/schemas/stream';
-import { StreamSnapshotSchema } from '@shared/schemas/streamSnapshot';
+  StreamLogEntrySchema,
+  StreamSnapshotSchema,
+  StreamTabIdSchema,
+} from '@shared/schemas';
 
 /** Everything a static trace viewer needs to replay one finished execution. */
 export const TraceDocumentSchema = z.object({

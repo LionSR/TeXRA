@@ -1,4 +1,4 @@
-import type { StreamTabId } from '@shared/schemas/identifiers';
+import type { StreamTabId } from '@shared/schemas';
 
 /**
  * Engage or clear the per-stream bash approval bypass for an autonomous goal.

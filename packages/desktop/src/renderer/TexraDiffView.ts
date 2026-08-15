@@ -6,10 +6,7 @@ import { consume } from '@lit/context';
 // Local imports - shared modules
 import { themeContext } from '@shared/BaseWebviewApp';
 import { commonViewStyles, designTokens } from '@shared/styles';
-import {
-  DESKTOP_THEME_KIND,
-  type Theme,
-} from '@shared/schemas/commonViewMessages';
+import { DESKTOP_THEME_KIND, type Theme } from '@shared/schemas';
 import {
   loadMonaco,
   monacoThemeForHostTheme,

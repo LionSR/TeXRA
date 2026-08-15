@@ -25,11 +25,11 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared utils
-import {
-  AgentCategory,
-  type AgentProposalPermission,
-  type WorkflowAgentProposalPermission,
+import type {
+  AgentProposalPermission,
+  WorkflowAgentProposalPermission,
 } from '@shared/schemas';
+import { AgentCategory, getProposalFileGroups } from '@shared/schemas';
 import { postMessage } from '@shared/hostBridge';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import {
@@ -39,7 +39,6 @@ import {
 } from '@shared/utils/selectTemplates';
 
 // Local imports - shared schemas
-import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 
 // Local imports - shared utilities
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';

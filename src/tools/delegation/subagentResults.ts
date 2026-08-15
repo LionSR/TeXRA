@@ -20,9 +20,8 @@ import {
   type ResultDiffSummary,
 } from '@agent/runtime/AgentFinalResult';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
-import type { ExecutionId } from '@shared/schemas';
+import type { ExecutionId, OutputFileSummary } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
-import type { OutputFileSummary } from '@shared/schemas/output';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration, unique } from '@utils/core';
 import {

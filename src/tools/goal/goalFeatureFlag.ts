@@ -1,5 +1,5 @@
 import { platform } from '@platform/platform';
-import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas/goal';
+import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
 
 /**
  * Whether Goal (autonomous-continuation mode) is enabled.

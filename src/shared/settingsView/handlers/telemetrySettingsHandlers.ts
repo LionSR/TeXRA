@@ -1,7 +1,7 @@
 import type { ConfigProvider } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { UpdateTelemetrySettingsMessage } from '@shared/schemas';
-import { CoreSettingsShape } from '@shared/schemas/coreSettings';
+import { CoreSettingsShape } from '@shared/schemas';
 
 export function buildTelemetrySettingsMessage(
   config: ConfigProvider,

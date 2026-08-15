@@ -1,9 +1,5 @@
-import type { HistoryItem } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas/agent';
-import {
-  HISTORY_RUN_STATUS,
-  type HistoryRunStatus,
-} from '@shared/schemas/settingsViewMessages';
+import type { HistoryItem, HistoryRunStatus } from '@shared/schemas';
+import { AgentCategory, HISTORY_RUN_STATUS } from '@shared/schemas';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
 import { formatShortDateTime } from '@utils/text/stringUtils';
 

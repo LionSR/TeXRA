@@ -32,6 +32,7 @@ import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { setPreferCodexSubscription } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
+import type { ApiAccessMode } from '@shared/schemas';
 import {
   backfillFirstRunDone,
   readOnboardingFlags,
@@ -48,7 +49,6 @@ import {
   ONBOARDING_CHOICE_SKIP_LABEL,
 } from '@shared/copy/onboarding';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';

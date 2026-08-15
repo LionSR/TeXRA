@@ -23,12 +23,12 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type { MainViewInboundMessage } from '@shared/schemas';
-import {
-  isMultipleDocumentFileType,
-  type CurrentFileType,
-  type DocumentFileType,
-} from '@shared/schemas/fileTypes';
+import type {
+  CurrentFileType,
+  DocumentFileType,
+  MainViewInboundMessage,
+} from '@shared/schemas';
+import { isMultipleDocumentFileType } from '@shared/schemas';
 import { getFileStem } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';

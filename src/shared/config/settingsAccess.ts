@@ -5,10 +5,7 @@ import type {
   ConfigTarget,
   StateStore,
 } from '@platform/interfaces';
-import type {
-  SettingStore,
-  StateSettingEntry,
-} from '@shared/schemas/stateSettings';
+import type { SettingStore, StateSettingEntry } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('settingsAccess');

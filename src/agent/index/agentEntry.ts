@@ -1,7 +1,7 @@
 /** Agent registry value objects (canonical AgentSource: @shared/schemas/agent). */
 
 import type { AgentDefinition } from '@agent/core/definition/AgentDataclass';
-import type { AgentSource, AgentCategory } from '@shared/schemas/agent';
+import type { AgentSource, AgentCategory } from '@shared/schemas';
 
 /**
  * Minimal agent metadata for dropdown display and path resolution.

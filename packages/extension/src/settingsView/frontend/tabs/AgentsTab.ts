@@ -17,16 +17,14 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 // Local imports - shared schemas
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import {
-  byCategory,
-  type AgentCategory,
-  type ByCategory,
-} from '@shared/schemas';
-import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import type {
+  AgentCategory,
   AgentSelectionItem,
+  ByCategory,
   NumberSetting,
-} from '@shared/schemas/settingsViewMessages';
+} from '@shared/schemas';
+import { byCategory } from '@shared/schemas';
+import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
   renderIconActionButton,

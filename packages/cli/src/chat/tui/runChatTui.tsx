@@ -48,13 +48,12 @@ import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import {
-  STREAM_PHASE,
-  type ExecutionId,
-  type StreamPhase,
-  AgentCategory,
+import type {
+  AgentDelegationScope,
+  ExecutionId,
+  StreamPhase,
 } from '@shared/schemas';
-import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
+import { AgentCategory, STREAM_PHASE } from '@shared/schemas';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';

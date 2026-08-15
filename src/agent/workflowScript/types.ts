@@ -1,14 +1,14 @@
 import { z } from 'zod';
 
-import {
-  WorkflowCallIdentitySchema,
-  type ExecutionId,
-  type WorkflowCallIdentity,
-  type WorkflowControlAction,
-  type WorkflowExecutionSnapshot,
-  type StreamTabId,
+import type {
+  ExecutionId,
+  StreamTabId,
+  WorkflowCallIdentity,
+  WorkflowControlAction,
+  WorkflowExecutionSnapshot,
+  WorkflowScriptFiles,
 } from '@shared/schemas';
-import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
+import { WorkflowCallIdentitySchema } from '@shared/schemas';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

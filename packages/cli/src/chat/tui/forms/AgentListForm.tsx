@@ -10,7 +10,7 @@ import {
   isCompactFormRows,
 } from '@cli/tui/selectWindow';
 import type { AgentOptionData } from '@shared/schemas';
-import { agentName } from '@shared/schemas/agent';
+import { agentName } from '@shared/schemas';
 
 import {
   CompactPickerKeyHints,

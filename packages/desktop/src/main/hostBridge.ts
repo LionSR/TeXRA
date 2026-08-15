@@ -1,8 +1,10 @@
 import { ipcMain, type BrowserWindow, type IpcMainEvent } from 'electron';
 
-import { CommonViewMessageSchema } from '@shared/schemas';
-import { MainViewMessageSchema } from '@shared/schemas/mainView';
-import { ProgressViewOutboundMessageSchema } from '@shared/schemas/progressView';
+import {
+  CommonViewMessageSchema,
+  MainViewMessageSchema,
+  ProgressViewOutboundMessageSchema,
+} from '@shared/schemas';
 import { assertKnownOutboundMessage } from '@shared/utils/dispatcher';
 
 import { DesktopOutboundMessageSchema } from '../shared/desktopOutboundMessages.js';

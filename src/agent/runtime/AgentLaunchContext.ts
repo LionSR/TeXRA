@@ -45,15 +45,18 @@ import {
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import type {
+  AgentSource,
+  ExecutionId,
+  StorageKey,
+  StreamTabId,
+} from '@shared/schemas';
 import {
+  AgentCategory,
+  INSTRUCTION_ACTION,
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  type ExecutionId,
-  type StorageKey,
-  type StreamTabId,
 } from '@shared/schemas';
-import { AgentCategory, INSTRUCTION_ACTION } from '@shared/schemas';
-import type { AgentSource } from '@shared/schemas/agent';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
 import { generateExecutionId } from '@utils/core';

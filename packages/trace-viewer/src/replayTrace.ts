@@ -1,18 +1,20 @@
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
+import type {
+  ProgressViewOutboundMessage,
+  RunIdentity,
+  StreamLifecycleStatus,
+  StreamTabInfo,
+  SyncStreamContentPayload,
+} from '@shared/schemas';
 import {
   AgentCategory,
   executionStatusToRunOutcome,
-  STREAM_STATUS,
   STREAM_LOG_ENTRY_TYPES,
+  STREAM_STATUS,
   StreamLifecycleStatusSchema,
   streamStatusToLifecycleStatus,
-  type RunIdentity,
-  type StreamLifecycleStatus,
-  type SyncStreamContentPayload,
-  type StreamTabInfo,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type { ProgressViewOutboundMessage } from '@shared/schemas/progressView';
 import type { TraceDocument } from '@transcript';
 import { isObject } from '@utils/core';
 

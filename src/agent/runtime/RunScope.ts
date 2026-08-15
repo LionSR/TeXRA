@@ -1,5 +1,8 @@
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
+import type {
+  AgentDelegationScope,
+  ExecutionId,
+  StreamTabId,
+} from '@shared/schemas';
 
 import type { SessionHandle } from './SessionHandle';
 

@@ -15,11 +15,8 @@
  */
 
 import type { StateStore } from '@platform/interfaces';
+import type { SpendingStatus, SpendingStatusError } from '@shared/schemas';
 import type { ServerSideProvider } from '@shared/constants/providers';
-import type {
-  SpendingStatus,
-  SpendingStatusError,
-} from '@shared/schemas/spendingStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { SupabaseClient } from '../SupabaseClient';
 import {

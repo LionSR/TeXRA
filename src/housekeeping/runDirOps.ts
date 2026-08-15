@@ -4,9 +4,8 @@ import * as path from 'node:path';
 // Local imports
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import type { ExecutionId } from '@shared/schemas';
-import type { FileOpResult } from '@shared/schemas/opResults';
-import { getCleanAgentName } from '@shared/schemas/agent';
+import type { ExecutionId, FileOpResult } from '@shared/schemas';
+import { getCleanAgentName } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { findRunDir } from '@utils/files/runStorageFs';

@@ -17,9 +17,9 @@ import { computed, signal, type Signal } from '@lit-labs/signals';
 
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { CodingPlanSubscriptionId } from '@shared/codingPlanSubscriptions';
-import type { StreamTabId } from '@shared/schemas';
 import type {
   AgentProposalPermission,
+  ApiAccessMode,
   ApprovalDecision as SharedApprovalDecision,
   BashPermission,
   ExternalInquiryPermission,
@@ -27,9 +27,9 @@ import type {
   PlanApprovalPermission,
   ProgressPermissionKind,
   RetryPermission,
+  StreamTabId,
   UserQuestionPermission,
 } from '@shared/schemas';
-import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { assertNever } from '@utils/core';
 

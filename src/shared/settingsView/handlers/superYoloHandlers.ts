@@ -9,9 +9,11 @@
  * extension; absent in the desktop build), so callers supply them.
  */
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type {
+  NumberSetting,
+  UpdateReliabilityAndOrchestrationMessage,
+} from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { NumberSetting } from '@shared/schemas/settingsViewMessages';
-import type { UpdateReliabilityAndOrchestrationMessage } from '@shared/schemas/settingsViewMessages';
 
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 

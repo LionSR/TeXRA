@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 // Local imports
 import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
-import type { AgentSource } from '@shared/schemas/agent';
+import type { AgentSource } from '@shared/schemas';
 
 import {
   BUILTIN_WORKFLOW_AGENTS_DIR,

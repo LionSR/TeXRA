@@ -1,5 +1,11 @@
 // Local imports - shared schemas
 import type {
+  CodexFileChangeToolInput,
+  CodexMcpToolOutput,
+  CodexThreadToolInput,
+  CodexTodoToolInput,
+  CodexTurnState,
+  CodexTurnToolInput,
   TokenUsageStats,
   ToolUseLog,
   ToolUseStatus,
@@ -9,15 +15,7 @@ import {
   CODEX_THREAD_TOOL,
   CODEX_TODO_TOOL,
   CODEX_TURN_TOOL,
-} from '@shared/schemas/codex';
-import type {
-  CodexFileChangeToolInput,
-  CodexMcpToolOutput,
-  CodexThreadToolInput,
-  CodexTodoToolInput,
-  CodexTurnState,
-  CodexTurnToolInput,
-} from '@shared/schemas/codex';
+} from '@shared/schemas';
 import { buildMcpToolName } from '@shared/tools/toolDisplayName';
 import { getBasename } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';

@@ -1,6 +1,6 @@
 import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { OutputFileSummary } from '@shared/schemas';
 import { finalWorkflowOutput, RUN_OUTCOME } from '@shared/schemas';
-import type { OutputFileSummary } from '@shared/schemas/output';
 import { getConfig } from '@utils/config/configUtils';
 
 /**

@@ -17,8 +17,8 @@ import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionS
 import * as logger from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
+import { agentName } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { agentName } from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import {
   ONBOARDING_CHOICE_API_KEY,

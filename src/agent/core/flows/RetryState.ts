@@ -18,15 +18,13 @@ import {
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
 import { includedModelAccess } from '@model/includedModelAccess';
-import {
-  STREAM_PHASE,
-  toRetryErrorInfo,
-  type RetryErrorInfo,
-} from '@shared/schemas';
+import type { RetryErrorInfo } from '@shared/schemas';
 import {
   DEFAULT_CORE_SETTINGS,
   ModelRetryMaxAttemptsSchema,
-} from '@shared/schemas/coreSettings';
+  STREAM_PHASE,
+  toRetryErrorInfo,
+} from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 import { getValidatedConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';

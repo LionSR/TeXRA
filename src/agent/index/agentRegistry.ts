@@ -4,22 +4,22 @@ import { DEFAULT_WORKFLOW_AGENT } from '@agent/core/definition/AgentConfig';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import type { AgentOptionData } from '@shared/schemas';
-import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { parseAgentModePresets } from '@shared/schemas/agentPresets';
 import type {
   AgentCategory as AgentCategoryType,
+  AgentDelegationScope,
+  AgentOptionData,
   AgentSource,
-} from '@shared/schemas/agent';
-import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
+} from '@shared/schemas';
 import {
-  agentMatchesIdentifier,
+  AgentCategory,
   agentKey,
   agentKeyOf,
+  agentMatchesIdentifier,
   agentName,
-  AgentCategory,
-} from '@shared/schemas/agent';
+  parseAgentModePresets,
+} from '@shared/schemas';
+import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName } from '@utils/core';
 import { scanDirectory } from './agentYamlScanner';

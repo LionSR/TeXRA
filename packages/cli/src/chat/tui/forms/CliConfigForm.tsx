@@ -7,13 +7,13 @@ import {
   saveProviderApiKey,
 } from '@cli/runtime/providerApiKey';
 import type { ApiProvider } from '@model/apiProviders';
+import { CLI_STATE_SETTINGS } from '@shared/schemas';
 import {
   readSetting,
   resetSetting,
   writeSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
-import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setPreferKimiCode } from '@utils/config/providerConfig';
 

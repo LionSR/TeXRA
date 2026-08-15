@@ -8,23 +8,26 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
+import type {
+  ConversationProgress,
+  GoalStatus,
+  StreamStage,
+  StreamState,
+  StreamSubstate,
+  StreamTabInfo,
+} from '@shared/schemas';
 import {
   DEFAULT_STREAM_METADATA_STATUS,
-  STREAM_PHASE,
-  STREAM_SUBSTATE,
+  deriveGoalState,
   isPlainAgentIdentity,
   isToolUseState,
   isWorkflowState,
-  type ConversationProgress,
-  type StreamStage,
-  type StreamState,
-  type StreamSubstate,
-  type StreamTabInfo,
+  STREAM_PHASE,
+  STREAM_SUBSTATE,
 } from '@shared/schemas';
 import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { formatWorkflowRunContext } from '@shared/copy/workflowRunContext';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
-import { deriveGoalState, type GoalStatus } from '@shared/schemas/goal';
 import {
   progressHeaderStatus,
   streamStatusIndicatorClass,

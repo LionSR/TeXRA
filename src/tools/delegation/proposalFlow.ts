@@ -14,14 +14,14 @@ import {
   type ProposalResult,
 } from '@agent/runtime/HostInteractions';
 import { computeModelOptionsData } from '@model/computeModelOptions';
-import {
-  AgentCategory,
-  type WorkflowAgentProposal,
-  type ToolUseAgentProposal,
-  type StreamTabId,
+import type {
+  AgentDelegationScope,
+  StreamTabId,
+  ToolResult,
+  ToolUseAgentProposal,
+  WorkflowAgentProposal,
 } from '@shared/schemas';
-import type { ToolResult } from '@shared/schemas';
-import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
+import { AgentCategory } from '@shared/schemas';
 import { proposalApprovals } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import { assertNever, generateShortId } from '@utils/core';

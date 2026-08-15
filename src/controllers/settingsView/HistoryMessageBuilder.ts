@@ -17,7 +17,7 @@ import {
   resolveHistoryRunStatus,
   type HistoryItem,
   type UpdateHistoryMessage,
-} from '@shared/schemas/settingsViewMessages';
+} from '@shared/schemas';
 
 export async function buildHistoryMessage(): Promise<UpdateHistoryMessage> {
   const entries = await listExecutions();

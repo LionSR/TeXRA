@@ -1,8 +1,8 @@
+import { getCoreSettingDefault } from '@shared/schemas';
 import {
   canonicalConfigKey,
   createWatcherRegistry,
 } from '@shared/config/configKeys';
-import { getCoreSettingDefault } from '@shared/schemas/coreSettings';
 
 import type { JsonStore } from './jsonStore';
 import type {

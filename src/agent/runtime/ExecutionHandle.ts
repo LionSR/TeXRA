@@ -12,14 +12,14 @@ import type { AgentTrace, ResultEvent } from '@agent/trace';
 import type { OwnedExecutionLeaseScope } from '@agent/storage/executionLease';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse/runToolUseFlow';
-import {
-  runIdentityName,
-  type ExecutionId,
-  type RunIdentity,
-  type StreamPhase,
-  type StreamTabId,
+import type {
+  AgentCategory,
+  ExecutionId,
+  RunIdentity,
+  StreamPhase,
+  StreamTabId,
 } from '@shared/schemas';
-import type { AgentCategory } from '@shared/schemas/agent';
+import { runIdentityName } from '@shared/schemas';
 import { onAbort } from '@utils/core';
 
 export interface ExecutionStatusInfo {

@@ -45,12 +45,12 @@ import {
   codingPlanForUsageSetting,
 } from '@shared/codingPlanSubscriptions';
 import type {
+  ApiAccessMode,
   SettingsViewInboundHandlerRegistry,
   SpendingStatus,
   SubscriptionUsageSnapshots,
 } from '@shared/schemas';
 import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
-import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import {

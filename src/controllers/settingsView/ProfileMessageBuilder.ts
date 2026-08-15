@@ -27,7 +27,7 @@ import type {
   ProviderKeyStatus,
   RemoteAgent,
   UpdateProfileMessage,
-} from '@shared/schemas/settingsViewMessages';
+} from '@shared/schemas';
 import { getGlobalStreaming } from '@utils/config/providerConfig';
 
 interface BuildProfileMessageDeps {

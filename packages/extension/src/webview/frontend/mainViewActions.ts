@@ -13,17 +13,17 @@ import { postMessage } from '@shared/hostBridge';
 import type {
   ActionDetail,
   CompareMessage,
-  LatexDiffsActionDetail,
   LatexdiffMessage,
+  LatexDiffsActionDetail,
   LatexdiffvcMessage,
   LaunchTarget,
+  MainViewExecuteMessage,
   MergeMessage,
   MultiFiles,
   PackLatexdiffvcMessage,
   PackMultipleMessage,
 } from '@shared/schemas';
 import { buildMainViewExecuteMessage } from '@shared/mainView/executionFormState';
-import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 
 // Local imports - main view
 import {

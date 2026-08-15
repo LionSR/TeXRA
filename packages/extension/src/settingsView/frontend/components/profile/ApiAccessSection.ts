@@ -7,6 +7,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { API_ACCESS_MODE_OPTIONS } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 
@@ -18,7 +19,6 @@ import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 // Local imports - shared copy
 import { PROMO_NOTICE_LONG } from '@shared/copy/promoNotice';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import { API_ACCESS_MODE_OPTIONS } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - profile view styles
 import { apiAccessSectionStyles } from './ApiAccessSection.styles';

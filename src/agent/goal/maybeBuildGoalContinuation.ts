@@ -1,5 +1,5 @@
-import type { StreamTabId } from '@shared/schemas/identifiers';
-import { formatGoalTime, goalElapsedMs } from '@shared/schemas/goal';
+import type { StreamTabId } from '@shared/schemas';
+import { formatGoalTime, goalElapsedMs } from '@shared/schemas';
 import { GoalStore, isGoalEnabled } from '@tools/goal';
 import { renderPrompt } from '@utils/prompt';
 

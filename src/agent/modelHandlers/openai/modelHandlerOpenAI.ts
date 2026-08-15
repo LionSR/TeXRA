@@ -37,7 +37,7 @@ import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';

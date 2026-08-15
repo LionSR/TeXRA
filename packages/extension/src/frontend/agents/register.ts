@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { createWorkspaceAgentRosterController } from '@agent/index';
 import { createLog } from '@logger/logUtils';
-import type { AgentSource } from '@shared/schemas/agent';
+import type { AgentSource } from '@shared/schemas';
 
 const log = createLog('AgentRegister');
 

@@ -37,15 +37,18 @@ import {
   setPreferCodexSubscription,
 } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
-import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
-import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { unsupportedCommands } from '@shared/utils/dispatcher';
+import type {
+  GettingStartedAction,
+  ProgressViewInboundHandlerRegistry,
+  ProgressViewInboundMessage,
+  StreamTabId,
+} from '@shared/schemas';
 import {
   dispatchProgressViewInbound,
-  type ProgressViewInboundHandlerRegistry,
-  type ProgressViewInboundMessage,
-} from '@shared/schemas/progressView';
-import { GETTING_STARTED_COMMANDS } from '@shared/schemas/mainView';
+  GETTING_STARTED_COMMANDS,
+} from '@shared/schemas';
+import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   cleanupUnscopedApprovals,
   releaseStreamResources,

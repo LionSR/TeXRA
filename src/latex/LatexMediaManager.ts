@@ -7,7 +7,7 @@ import pMap from 'p-map';
 // Local imports
 import { platform } from '@platform/platform';
 import type { FileLocation } from '@shared/schemas';
-import { ToolConfig } from '@shared/schemas/toolConfig';
+import { ToolConfig } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';

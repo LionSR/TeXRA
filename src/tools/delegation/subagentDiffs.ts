@@ -1,8 +1,7 @@
 import path from 'node:path';
 
 import * as logger from '@logger/logUtils';
-import type { ExecutionId } from '@shared/schemas';
-import type { OutputFileSummary } from '@shared/schemas/output';
+import type { ExecutionId, OutputFileSummary } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { getRunDir, ensureRunDir } from '@utils/files/runStorageFs';
 import { toErrorMessage } from '@utils/errors/errorMessage';

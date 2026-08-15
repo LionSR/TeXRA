@@ -16,18 +16,18 @@ import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { isGpt5ModelName } from '@model/modelNames';
 import { computeModelOptionsData } from '@model/computeModelOptions';
-import type { ModelOptionData } from '@shared/schemas';
+import type {
+  CopilotRouteInfo,
+  ModelOptionData,
+  ModelSelectionItem,
+  ReasoningLevel,
+} from '@shared/schemas';
+import { ReasoningLevelSchema } from '@shared/schemas';
 import {
   DEFAULT_HELPER_MODEL,
   MODEL_SOURCE_ORDER,
   isFastFirstResponseModel,
 } from '@shared/constants/providers';
-import {
-  ReasoningLevelSchema,
-  type CopilotRouteInfo,
-  type ModelSelectionItem,
-  type ReasoningLevel,
-} from '@shared/schemas/settingsViewMessages';
 import { byName } from '@utils/core';
 
 export interface SettingsModelSelectionState {
