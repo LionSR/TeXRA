@@ -30,20 +30,18 @@ const mocks = vi.hoisted(() => ({
   throwDeliveryFormatting: false,
 }));
 
-vi.mock('@tools/delegation/subagentDeliveryFormat', async (importOriginal) => {
+vi.mock('@tools/delegation/subagentResults', async (importOriginal) => {
   const original =
-    await importOriginal<
-      typeof import('@tools/delegation/subagentDeliveryFormat')
-    >();
+    await importOriginal<typeof import('@tools/delegation/subagentResults')>();
   return {
     ...original,
-    formatBuiltSubagentDelivery: (
-      ...args: Parameters<typeof original.formatBuiltSubagentDelivery>
+    formatSubagentDelivery: (
+      ...args: Parameters<typeof original.formatSubagentDelivery>
     ) => {
       if (mocks.throwDeliveryFormatting) {
         throw new Error('delivery formatting failed');
       }
-      return original.formatBuiltSubagentDelivery(...args);
+      return original.formatSubagentDelivery(...args);
     },
   };
 });

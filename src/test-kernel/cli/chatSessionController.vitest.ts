@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => ({
   moveLocalTranscriptToStream: vi.fn(),
   readCliToolUseResumeData: vi.fn(),
   followUpEnqueue: vi.fn(),
+  followUpQueueForLease: vi.fn(),
   sessionEventEmit: vi.fn(),
 }));
 
@@ -329,7 +330,11 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     useHostInteractions: vi.fn(() => mocks.detachHostInteractions),
     interactions: { cancel: mocks.cancelInteractions },
     events: { emit: mocks.sessionEventEmit },
-    followUps: { restore: mocks.followUpEnqueue },
+    followUps: {
+      queue: mocks.followUpQueueForLease.mockReturnValue({
+        restore: mocks.followUpEnqueue,
+      }),
+    },
     approvals: { registerStreamParent: vi.fn() },
     status: { isActiveOrResuming: mocks.streamIsActiveOrResuming },
     executions: {
@@ -1694,10 +1699,12 @@ describe('createChatSessionController', () => {
 
     await expect(launcherResume).resolves.toBe(true);
     await expect(admission.completion).resolves.toBe(true);
-    expect(mocks.followUpEnqueue).toHaveBeenCalledWith(
+    expect(mocks.followUpQueueForLease).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'recovery' }),
-      [{ text: 'Transfer this accepted message.' }],
     );
+    expect(mocks.followUpEnqueue).toHaveBeenCalledWith([
+      { text: 'Transfer this accepted message.' },
+    ]);
   });
 
   it('holds a message submitted while interruption teardown finishes', async () => {

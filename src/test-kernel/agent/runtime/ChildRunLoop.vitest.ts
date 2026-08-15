@@ -570,7 +570,7 @@ describe('childRunLoop E2E fixtures', () => {
         startLoop(ids, createTerminalStrategy('Retry attempt')).completion,
       ).resolves.toBeUndefined();
       expect(admissions).toEqual(['live_flow', 'live_flow']);
-      const delivered = session.followUps.drainItems(parentLease);
+      const delivered = session.followUps.queue(parentLease).drainItems();
       expect(delivered.map((item) => item.text)).toEqual([
         'delivered:done',
         'delivered:done',

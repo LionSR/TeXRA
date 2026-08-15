@@ -43,10 +43,10 @@ import { deriveExecutionId } from '@utils/core/idHash';
 import {
   buildSubagentFailureResultMeta,
   formatSubagentError,
+  type BuiltSubagentResult,
 } from './subagentResults';
 
 // Local file imports
-import { type BuiltSubagentResult } from './subagentDeliveryFormat';
 import {
   readStableSubagentAttempt,
   readStableSubagentSequence,

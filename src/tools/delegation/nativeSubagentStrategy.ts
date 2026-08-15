@@ -53,14 +53,11 @@ import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { onAbort, unique } from '@utils/core';
 import {
   buildSubagentFailureResultMeta,
-  formatSubagentError,
-} from './subagentResults';
-
-import {
   buildSubagentResult,
-  formatBuiltSubagentDelivery,
+  formatSubagentDelivery,
+  formatSubagentError,
   type BuiltSubagentResult,
-} from './subagentDeliveryFormat';
+} from './subagentResults';
 
 /**
  * The two engine entry points a native child run needs. Provided by
@@ -367,13 +364,15 @@ export function createNativeSubagentStrategy(
     buildResult,
 
     formatDelivery: async (turn) => {
-      cachedDelivery ??= formatBuiltSubagentDelivery(
-        params.executionId,
-        params.agentName,
-        toDeliveryResult(turn, params.executionId),
-        await buildResult(turn),
-        params.workingDirectory,
-      );
+      if (cachedDelivery === undefined) {
+        const built = await buildResult(turn);
+        cachedDelivery = formatSubagentDelivery(params.agentName, built.result, {
+          executionId: params.executionId,
+          memoryMisses: toDeliveryResult(turn, params.executionId).memoryMisses,
+          wallTimeMs: built.wallTimeMs,
+          workingDirectory: params.workingDirectory,
+        });
+      }
       return cachedDelivery;
     },
 
