@@ -348,6 +348,41 @@ describe('extension presentation delivery truthfulness (#10400)', () => {
     }
   });
 
+  it('keeps the fallback notification reachable when the initial reveal throws', async () => {
+    // A rejected reveal command must not escape to the wrapper: the toast is
+    // the delivery channel when the view stays hidden, so the fallback still
+    // has to run after the failed reveal (#10554).
+    const executeCommand = vi
+      .spyOn(vscode.commands, 'executeCommand')
+      .mockRejectedValue(new Error('no view container'));
+    const showInformationMessage = vi
+      .spyOn(vscode.window, 'showInformationMessage')
+      .mockResolvedValue(undefined);
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    try {
+      const host = presentationHost({ isViewVisible: () => false });
+      await expect(
+        host.emit('requestEnsureProgressView', {
+          fallbackNotification: {
+            agentName: 'writer',
+            modelName: 'test-model',
+            inputName: 'paper.tex',
+            outputInfo: 'to paper.out.tex',
+          },
+        }),
+      ).resolves.toBe(true);
+      expect(showInformationMessage).toHaveBeenCalledOnce();
+      expect(warn).toHaveBeenCalledWith(
+        'agentEventListeners',
+        expect.stringContaining('Failed to reveal the progress view'),
+      );
+    } finally {
+      executeCommand.mockRestore();
+      showInformationMessage.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
   it('reports a rendered instruction as delivered once VS Code accepts it', async () => {
     const showInformationMessage = vi
       .spyOn(vscode.window, 'showInformationMessage')
