@@ -5,7 +5,7 @@ import { promises as fs } from 'node:fs';
 // Local imports
 import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import {
   resolveRunOriginalSnapshotPath,
   resolveRunStoragePath,
@@ -26,6 +26,7 @@ import { isDirectory, isFile, isSymlink } from './fsEntryType';
 import { StorageFS } from './storageFS';
 
 export const CHANNEL = 'taskRunStorage';
+const log = createLog(CHANNEL);
 
 export function getRunDir(id: ExecutionId): string {
   return StorageFS.fullPath(resolveRunStoragePath(id));
@@ -239,8 +240,7 @@ export async function createSymlink(
       return;
     }
     if (err.code && SYMLINK_UNSUPPORTED_CODES.has(err.code)) {
-      logger.warn(
-        CHANNEL,
+      log.warn(
         `Falling back to copy ${sourceAbsolute} -> ${destination} due to ${err.code}`,
       );
       const stats = await fs.lstat(sourceAbsolute);

@@ -9,7 +9,7 @@ import { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { ToolResult } from '@shared/schemas';
 import {
   isTimeoutError,
@@ -28,6 +28,7 @@ import {
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 const LOOGLE_CHANNEL = 'lean_loogle';
+const log = createLog(LOOGLE_CHANNEL);
 /** Retry transient Loogle failures (timeouts, 5xx, dropped connections). */
 const LOOGLE_RETRIES = 2;
 
@@ -174,8 +175,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
         minTimeout: 1000,
         cancelSignal,
         onFailedAttempt: ({ error, retriesLeft }) => {
-          logger.debug(
-            LOOGLE_CHANNEL,
+          log.debug(
             `Loogle query "${query}" failed (${retriesLeft} retries left): ${toErrorMessage(error)}`,
           );
         },

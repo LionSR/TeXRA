@@ -11,7 +11,7 @@ import PQueue from 'p-queue';
 
 // Local imports
 import { safeParseJson } from '@common/parsing/safeParseJson';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { generateOAuthState, generatePkcePair } from './pkce';
@@ -21,6 +21,8 @@ import {
 } from './providerAuthBridge';
 import { SubscriptionOAuthError } from './subscriptionOAuthError';
 import type { z } from 'zod';
+
+const log = createLog('SubscriptionOAuth');
 
 /** Secret-backed persistence for one session bundle. */
 export interface SubscriptionSessionStorage {
@@ -145,16 +147,14 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     const parsedJson = safeParseJson(raw);
     if (parsedJson.isErr()) {
       // Present-but-corrupt is not the same as never signed in.
-      logger.warn(
-        'SubscriptionOAuth',
+      log.warn(
         `Stored subscription session is not valid JSON; treating as signed out: ${toErrorMessage(parsedJson.error)}`,
       );
       return null;
     }
     const parsed = this.policy.sessionSchema.safeParse(parsedJson.value);
     if (!parsed.success) {
-      logger.warn(
-        'SubscriptionOAuth',
+      log.warn(
         `Stored subscription session failed schema validation; treating as signed out: ${toErrorMessage(parsed.error)}`,
       );
       return null;

@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { renderPrompt } from '@utils/prompt';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -12,6 +12,8 @@ import { getConfig } from '@utils/config/configUtils';
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
+
+const log = createLog(CHANNEL);
 
 /**
  * Get the TikZ template from configuration or use default
@@ -58,10 +60,7 @@ async function createStandalone(
   const texLocation = pathToLocation(path.join(buildDir, filename));
 
   await AbsoluteFS.write(texLocation.absolutePath, standaloneContent);
-  logger.debug(
-    CHANNEL,
-    `Created standalone LaTeX file: ${texLocation.absolutePath}`,
-  );
+  log.debug(`Created standalone LaTeX file: ${texLocation.absolutePath}`);
 
   return texLocation;
 }
@@ -104,7 +103,7 @@ export const TikzPictureManager = {
 
       if (tikzMatches.length > 0) {
         labeledTikzPictures.push([label, tikzMatches]);
-        logger.debug(CHANNEL, `Found TikZ picture with label: ${label}`);
+        log.debug(`Found TikZ picture with label: ${label}`);
       }
     }
 
@@ -126,15 +125,9 @@ export const TikzPictureManager = {
 
     await AbsoluteFS.ensureDir(buildDir);
 
-    logger.debug(
-      CHANNEL,
-      `Extracting TikZ pictures from ${latexFile.absolutePath}`,
-    );
+    log.debug(`Extracting TikZ pictures from ${latexFile.absolutePath}`);
     const labeledTikzPictures = await this.extract(latexFile);
-    logger.debug(
-      CHANNEL,
-      `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
-    );
+    log.debug(`Found ${labeledTikzPictures.length} labeled TikZ pictures`);
 
     const compiledFiles: FileLocation[] = [];
 
@@ -156,8 +149,7 @@ export const TikzPictureManager = {
           compiler: 'pdflatex',
         });
         if (!compiled.ok) {
-          logger.warn(
-            CHANNEL,
+          log.warn(
             `Failed to compile TikZ picture ${texLocation.absolutePath}:\n${compiled.logTail}`,
             {
               data: {
@@ -175,10 +167,7 @@ export const TikzPictureManager = {
 
         if (await AbsoluteFS.exists(pdfLocation.absolutePath)) {
           compiledFiles.push(pdfLocation);
-          logger.debug(
-            CHANNEL,
-            `Successfully compiled: ${pdfLocation.absolutePath}`,
-          );
+          log.debug(`Successfully compiled: ${pdfLocation.absolutePath}`);
         }
       }
     }

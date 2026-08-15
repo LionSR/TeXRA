@@ -12,7 +12,7 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import {
   RUN_OUTCOME,
   type RunOutcome,
@@ -40,6 +40,8 @@ import type {
   StreamOptions,
   UsageEmitOptions,
 } from './AgentTrace';
+
+const log = createLog('TraceEmitter');
 
 export class TraceEmitter implements AgentTrace {
   private readonly subscribers = createListenerSet<AgentTraceSubscriber>();
@@ -87,8 +89,7 @@ export class TraceEmitter implements AgentTrace {
         // the quiet-degradation shape the guardrail forbids, and it matches the
         // sibling fan-out bus (`SessionEventHub.emit`). `AppSignals.emit`
         // deliberately re-throws instead — a different, documented contract.
-        logger.warn(
-          'TraceEmitter',
+        log.warn(
           `Trace subscriber threw while handling event: ${toErrorMessage(err)}`,
         );
       }
