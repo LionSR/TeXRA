@@ -287,7 +287,8 @@ export abstract class ModelHandler<
     this.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR;
     // Initialize with default channel, will be overwritten by agent. Log-only
     // module singletons now use `createLog`; remaining `createChannelTrace`
-    // sites are `AgentTrace`-typed fallbacks or singletons still being
+    // sites are genuine `AgentTrace`-typed fallbacks plus log-only callers
+    // (singletons, per-instance defaults, inline one-offs) still being
     // narrowed under #10595. Unlike those, this default is exercised through
     // `createThinkingStream`/`createOutputStream` (`this.logger.openStream(...)`)
     // before `setLogger` swaps in the real per-run trace in some paths, so it
