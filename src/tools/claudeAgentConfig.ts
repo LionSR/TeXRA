@@ -11,7 +11,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { AgentCategory } from '@shared/schemas';
@@ -35,6 +35,7 @@ import { createEnumStateGetter } from './support/enumConfig';
 import { CLAUDE_AGENT_NAME } from './claudeAgentShared';
 
 const LOG_CHANNEL = 'claudeAgent';
+const log = createLog(LOG_CHANNEL);
 
 // ============================================================================
 // Model — defaults to Sonnet 5; users can override per-call or via workspace state
@@ -224,8 +225,7 @@ export async function buildClaudeAgentEnv(
   //    letting it surface as an opaque "Invalid API key" from Claude Code.
   const managed = await lookupApiKey(platform().secrets, 'anthropic').catch(
     (error: unknown) => {
-      logger.warn(
-        LOG_CHANNEL,
+      log.warn(
         `Failed to read the managed Anthropic API key: ${toErrorMessage(error)}`,
       );
       return undefined;
