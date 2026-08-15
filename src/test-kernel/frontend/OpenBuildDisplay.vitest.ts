@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { LATEX_VIEWER_OPEN_DELAY_MS } from '@shared/constants/latexTiming';
+import {
+  openBuildDisplayIfTex,
+  prepareBuildDisplayAndScheduleViewer,
+} from '@frontend/latex/openBuild';
+import {
+  LATEX_VIEWER_OPEN_DELAY_MS,
+  LATEX_VIEWER_REFRESH_DELAY_MS,
+} from '@shared/constants/latexTiming';
 
 const mocks = vi.hoisted(() => ({
   exists: vi.fn(async (_path: string) => true),
@@ -170,5 +176,87 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       'OpenBuildUtils',
       expect.stringContaining('Viewer display failed'),
     );
+  });
+
+  it('keeps viewer delivery true when the refresh command throws synchronously', async () => {
+    // The refresh command is scheduled only after `latex-workshop.view` has
+    // settled, so its synchronous throw must be warn-logged without downgrading
+    // the already-established viewer delivery (#10556).
+    mocks.executeCommand.mockImplementation((command: string) => {
+      if (command === 'latex-workshop.refresh-viewer') {
+        throw new Error('refresh unavailable');
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const delivery = openBuildDisplayIfTex(workspaceTex);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS);
+    await vi.advanceTimersByTimeAsync(LATEX_VIEWER_REFRESH_DELAY_MS);
+
+    await expect(delivery).resolves.toBe(true);
+    expect(mocks.warn).toHaveBeenCalledWith(
+      'OpenBuildUtils',
+      expect.stringContaining('Viewer refresh failed'),
+    );
+  });
+
+  it('propagates pre-view failures before the detached viewer wait', async () => {
+    // The detached path must still await and propagate file-open/build errors
+    // so the latexdiff command's existing error handler stays authoritative.
+    mocks.openTextDocument.mockRejectedValueOnce(new Error('open failed'));
+
+    await expect(
+      prepareBuildDisplayAndScheduleViewer(workspaceTex),
+    ).rejects.toThrow('open failed');
+    expect(mocks.executeCommand).not.toHaveBeenCalledWith(
+      'latex-workshop.view',
+    );
+  });
+
+  it('keeps detached viewer delivery ordered across sequential latexdiff results', async () => {
+    const order: string[] = [];
+    mocks.openTextDocument.mockImplementation(async (uri: unknown) => {
+      const fsPath = (uri as { fsPath: string }).fsPath;
+      order.push(`open:${fsPath}`);
+      return { uri };
+    });
+    mocks.showTextDocument.mockImplementation(async () => {
+      order.push('show');
+    });
+    mocks.executeCommand.mockImplementation(async (command: string) => {
+      order.push(command);
+      return undefined;
+    });
+
+    const diffs = [
+      { ...workspaceTex, absolutePath: '/workspace/diff-1.tex' },
+      { ...workspaceTex, absolutePath: '/workspace/diff-2.tex' },
+    ];
+
+    for (const diff of diffs) {
+      await prepareBuildDisplayAndScheduleViewer(diff, {
+        preserveFocus: true,
+      });
+    }
+
+    // Detaching only the viewer wait keeps the file-open/show/build phase
+    // serialized in result order (#10553).
+    expect(order).toEqual([
+      'open:/workspace/diff-1.tex',
+      'show',
+      'latex-workshop.build',
+      'open:/workspace/diff-2.tex',
+      'show',
+      'latex-workshop.build',
+    ]);
+
+    await vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS);
+
+    const viewerIndexes = order
+      .map((entry, index) => (entry === 'latex-workshop.view' ? index : -1))
+      .filter((index) => index >= 0);
+    expect(viewerIndexes).toHaveLength(2);
+    expect(viewerIndexes[0]).toBeLessThan(viewerIndexes[1]);
   });
 });

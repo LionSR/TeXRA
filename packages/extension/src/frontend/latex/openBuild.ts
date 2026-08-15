@@ -106,28 +106,72 @@ export async function openBuildDisplayIfTex(
   fileLocation: FileLocation,
   options: { preserveFocus?: boolean } = {},
 ): Promise<boolean> {
+  const prepared = await prepareBuildDisplay(
+    fileLocation,
+    options.preserveFocus ?? false,
+  );
+  if (prepared.kind !== 'latex-ready') return prepared.delivered;
+  return scheduleViewerDisplay();
+}
+
+/**
+ * Prepare a file for display (open, show, and build when TeX), then schedule
+ * the PDF viewer without awaiting the delayed viewer-delivery confirmation.
+ *
+ * Unlike `openBuildDisplayIfTex`, this resolves once the file-open/build phase
+ * completes, so sequential callers keep their build/show ordering and any
+ * pre-view failure still propagates to the caller's error path. Only the
+ * `LATEX_VIEWER_OPEN_DELAY_MS` viewer-open wait is detached (#10553).
+ */
+export async function prepareBuildDisplayAndScheduleViewer(
+  fileLocation: FileLocation,
+  options: { preserveFocus?: boolean } = {},
+): Promise<boolean> {
+  const prepared = await prepareBuildDisplay(
+    fileLocation,
+    options.preserveFocus ?? false,
+  );
+  if (prepared.kind !== 'latex-ready') return prepared.delivered;
+
+  // `scheduleViewerDisplay` always settles to a boolean, so this is a
+  // deliberate detached side effect rather than an unhandled promise.
+  void scheduleViewerDisplay();
+  return true;
+}
+
+type PrepareBuildDisplayResult =
+  { kind: 'done'; delivered: boolean } | { kind: 'latex-ready' };
+
+async function prepareBuildDisplay(
+  fileLocation: FileLocation,
+  preserveFocus: boolean,
+): Promise<PrepareBuildDisplayResult> {
   const absolutePath = fileLocation.absolutePath;
 
   const exists = await AbsoluteFS.exists(absolutePath);
   if (!exists) {
     void showLoggedMessage(CHANNEL, `File not found: ${absolutePath}`);
-    return false;
+    return { kind: 'done', delivered: false };
   }
 
   const uri = vscode.Uri.file(absolutePath);
 
   if (!isLatexFile(absolutePath)) {
     await vscode.commands.executeCommand('vscode.open', uri, {
-      preserveFocus: options.preserveFocus ?? false,
+      preserveFocus,
     } satisfies vscode.TextDocumentShowOptions);
-    return true;
+    return { kind: 'done', delivered: true };
   }
 
-  return openAndBuildLatex(uri, fileLocation, options.preserveFocus ?? false);
+  const prepared = await prepareLatexBuild(uri, fileLocation, preserveFocus);
+  return prepared
+    ? { kind: 'latex-ready' }
+    : { kind: 'done', delivered: false };
 }
 
 /**
- * Open LaTeX file, build it, and display PDF viewer.
+ * Open a LaTeX file and run its build path, returning whether the PDF viewer
+ * should still be opened (`false` only when internal compilation failed).
  *
  * Files inside the workspace are compiled via LaTeX Workshop so the user
  * gets the full editor integration (synctex, diagnostics, etc.).
@@ -135,10 +179,8 @@ export async function openBuildDisplayIfTex(
  * Files outside the workspace (e.g. in run-storage) are compiled with the
  * internal `compileLatex2Pdf` helper which sets TEXINPUTS to include the
  * workspace root, ensuring project-local .sty / .cls / .bib files are found.
- *
- * Returns the viewer-open outcome after the build path completes.
  */
-async function openAndBuildLatex(
+async function prepareLatexBuild(
   uri: vscode.Uri,
   fileLocation: FileLocation,
   preserveFocus: boolean,
@@ -148,29 +190,30 @@ async function openAndBuildLatex(
 
   if (fileLocation.kind === 'workspace') {
     await invokeLatexWorkshopBuild(uri, CHANNEL, 'LaTeX Workshop build failed');
-  } else {
-    // Outside workspace — LaTeX Workshop cannot resolve project-local
-    // packages, so compile internally with TEXINPUTS set.
-    // Resolve the same outDir that LaTeX Workshop uses so the viewer finds the PDF.
-    const outDir = resolveLatexWorkshopOutDir(uri.fsPath);
-    const compiled = await compileLatex2Pdf(pathToLocation(uri.fsPath), {
-      outputDirectory: outDir,
-    });
-    if (!compiled.ok) {
-      // Include the tail in the visible message itself, not just `data` —
-      // writeLine only shows `data` when texra.logger.debugMode is on
-      // (default off), and this failure's whole point is to be visible
-      // without needing to enable debug logging.
-      logger.warn(
-        CHANNEL,
-        `Internal LaTeX compilation failed for ${uri.fsPath}:\n${compiled.logTail}`,
-        { data: { sourceFile: uri.fsPath, logTail: compiled.logTail } },
-      );
-      return false;
-    }
+    return true;
   }
 
-  return scheduleViewerDisplay();
+  // Outside workspace — LaTeX Workshop cannot resolve project-local
+  // packages, so compile internally with TEXINPUTS set.
+  // Resolve the same outDir that LaTeX Workshop uses so the viewer finds the PDF.
+  const outDir = resolveLatexWorkshopOutDir(uri.fsPath);
+  const compiled = await compileLatex2Pdf(pathToLocation(uri.fsPath), {
+    outputDirectory: outDir,
+  });
+  if (!compiled.ok) {
+    // Include the tail in the visible message itself, not just `data` —
+    // writeLine only shows `data` when texra.logger.debugMode is on
+    // (default off), and this failure's whole point is to be visible
+    // without needing to enable debug logging.
+    logger.warn(
+      CHANNEL,
+      `Internal LaTeX compilation failed for ${uri.fsPath}:\n${compiled.logTail}`,
+      { data: { sourceFile: uri.fsPath, logTail: compiled.logTail } },
+    );
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -190,8 +233,15 @@ function scheduleViewerDisplay(): Promise<boolean> {
         .then(
           () => {
             setTimeout(() => {
-              void vscode.commands
-                .executeCommand('latex-workshop.refresh-viewer')
+              // Apply the same sync-throw normalization to the refresh command:
+              // a synchronous throw is warn-logged instead of escaping this
+              // nested timer callback as an uncaught exception (#10556).
+              void Promise.resolve()
+                .then(() =>
+                  vscode.commands.executeCommand(
+                    'latex-workshop.refresh-viewer',
+                  ),
+                )
                 .then(undefined, (err: unknown) => {
                   logger.warn(
                     CHANNEL,
