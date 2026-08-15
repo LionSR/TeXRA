@@ -17,7 +17,7 @@ import { z } from 'zod';
 import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { filterNotNull } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -25,6 +25,7 @@ import { errorDataToString, FETCH_TIMEOUT_MS } from './errorData';
 import { RemoteAgentListItemSchema, type RemoteAgentListItem } from './types';
 
 export const CHANNEL = 'RemoteAgentLoader';
+const log = createLog(CHANNEL);
 
 const REMOTE_AGENT_LIST_COLUMNS =
   'id, name, description, tools, agent_category';
@@ -63,8 +64,7 @@ function parseListItemRow(row: RemoteAgentListRow): RemoteAgentListItem | null {
   });
 
   if (!result.success) {
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Invalid metadata for agent "${row.name}": ${z.prettifyError(result.error)}`,
     );
     return null;
@@ -82,16 +82,13 @@ export async function listRemoteAgents(): Promise<RemoteAgentListItem[]> {
     const { data, error } = await fetchRemoteAgentListRows(token);
 
     if (error) {
-      logger.debug(CHANNEL, `Failed to list remote agents: ${error.message}`);
+      log.debug(`Failed to list remote agents: ${error.message}`);
       return [];
     }
 
     return (data ?? []).map(parseListItemRow).filter(filterNotNull);
   } catch (error) {
-    logger.debug(
-      CHANNEL,
-      `Error listing remote agents: ${toErrorMessage(error)}`,
-    );
+    log.debug(`Error listing remote agents: ${toErrorMessage(error)}`);
     return [];
   }
 }

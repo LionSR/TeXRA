@@ -15,12 +15,14 @@
 
 // Local imports
 import { appSignals } from '@eventBus/AppSignals';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { tryGlobalState } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { getDisabledToolIds } from '@utils/config/constants';
+
+const log = createLog('toolAvailability');
 
 // ============================================================
 // Result type
@@ -86,8 +88,7 @@ export async function seedDisabledToolDefaults(
     (def) => def.id,
   );
   await state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
-  logger.info(
-    'toolAvailability',
+  log.info(
     `First install: default-disabled toggleable tools: ${defaults.join(', ')}`,
   );
 }

@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { promises as fs } from 'node:fs';
 
 import { isFileNotFoundError } from '@common/errors';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { type ExecutionId, type FileLocation } from '@shared/schemas';
 import {
   WORKFLOW_OUTPUT_BASENAME,
@@ -28,6 +28,8 @@ import {
   snapshotExists,
 } from './runStorageFs';
 import { WorkspaceFS } from './workspaceFS';
+
+const log = createLog(CHANNEL);
 
 export class TaskRunFileService {
   public readonly runDirectory: string;
@@ -78,8 +80,7 @@ export class TaskRunFileService {
         try {
           await this.mirrorWorkspaceFile(candidate);
         } catch (error) {
-          logger.warn(
-            CHANNEL,
+          log.warn(
             `Failed to mirror workspace dependency ${candidate.absolutePath}: ${toErrorMessage(error)}`,
           );
         }
@@ -246,8 +247,7 @@ export class TaskRunFileService {
           depDir === '' &&
           depName === WORKFLOW_OUTPUT_BASENAME
         ) {
-          logger.debug(
-            CHANNEL,
+          log.debug(
             `Skipping run-dir mirror of ${relativePath}: would clobber primary output in ${relativeDirectory}`,
           );
           return;
@@ -273,8 +273,7 @@ export class TaskRunFileService {
           sourceAbsolute = snapshotAbsolute;
         } catch (error) {
           if (!isFileNotFoundError(error)) {
-            logger.debug(
-              CHANNEL,
+            log.debug(
               `Unable to stat snapshot ${snapshotAbsolute}: ${toErrorMessage(error)}`,
             );
           }
@@ -292,16 +291,14 @@ export class TaskRunFileService {
         try {
           const stat = await fs.lstat(destinationAbsolute);
           if (!stat.isSymbolicLink()) {
-            logger.debug(
-              CHANNEL,
+            log.debug(
               `Skipping run-dir mirror of ${relativePath}: destination in ${relativeDirectory} is an existing real file`,
             );
             return;
           }
         } catch (error) {
           if (!isFileNotFoundError(error)) {
-            logger.debug(
-              CHANNEL,
+            log.debug(
               `Unable to stat ${destinationAbsolute}: ${toErrorMessage(error)}`,
             );
           }
@@ -311,8 +308,7 @@ export class TaskRunFileService {
         try {
           await createSymlink(sourceAbsolute, destinationAbsolute);
         } catch (error) {
-          logger.debug(
-            CHANNEL,
+          log.debug(
             `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
           );
         }
