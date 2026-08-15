@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // Local imports
 import { FileType, type FileStat } from '@platform/interfaces';
 import type { ExecutionId } from '@shared/schemas';
+import { errnoError } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files/storageFS';
 import {
@@ -36,7 +37,7 @@ function fileStat(type: number): FileStat {
 }
 
 function missing(target: string): Error {
-  return Object.assign(new Error(`Missing: ${target}`), { code: 'ENOENT' });
+  return errnoError('ENOENT', `Missing: ${target}`);
 }
 
 describe('inspectRunStorageEntry', () => {
