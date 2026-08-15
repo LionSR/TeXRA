@@ -169,9 +169,11 @@ async function launchWaitingTurn(
 }
 
 describe('NativeSubagentStrategy', () => {
+  let restoreAgentEngine = (): void => {};
+
   beforeEach(() => {
     vi.resetAllMocks();
-    provideAgentEngine({
+    restoreAgentEngine = provideAgentEngine({
       executeAgent: mocks.executeAgent,
       resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
     } as unknown as AgentEngine);
@@ -188,6 +190,7 @@ describe('NativeSubagentStrategy', () => {
   });
 
   afterEach(() => {
+    restoreAgentEngine();
     for (const session of ownedSessions) session.dispose();
     ownedSessions.clear();
   });
@@ -433,6 +436,16 @@ describe('NativeSubagentStrategy', () => {
       'delivery formatting failed',
     );
     await expect(strategy.buildResult(turn)).resolves.toBe(built);
+  });
+
+  it('does not format prose for a typed-result-only child', async () => {
+    const params = { ...baseParams(), resultOnly: true };
+    const strategy = createNativeSubagentStrategy(params);
+    const turn = toolUseTurnResult('completed', params.executionId) as never;
+    mocks.throwDeliveryFormatting = true;
+
+    await expect(strategy.formatDelivery(turn, 1000)).resolves.toBe('');
+    await expect(strategy.buildResult(turn)).resolves.toBeDefined();
   });
 
   it('reports a non-throwing subagent failure via isTurnError, captured from onRunError', async () => {

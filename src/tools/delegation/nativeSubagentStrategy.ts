@@ -77,16 +77,21 @@ export interface AgentEngine {
 let agentEngine: AgentEngine | undefined;
 
 /**
- * Last-wins provider for the engine slot. Production has exactly one caller —
+ * Scoped provider for the engine slot. Production has exactly one caller —
  * `@agent/runtime/executeAgent` at its own module load, guaranteed before any
  * strategy call because a subagent only launches from inside an engine-driven
- * run — and tests re-provide fakes per case, which is also how they isolate
- * this state. Passing the engine as an explicit parameter instead is not
- * available: the strategy's callers are the delegation tools, whose static
- * import of the engine is the exact cycle this slot exists to sever.
+ * run. Tests dispose their override after each case so a fake cannot leak into
+ * another consumer of this module graph. Passing the engine as an explicit
+ * parameter instead is not available: the strategy's callers are the
+ * delegation tools, whose static import of the engine is the exact cycle this
+ * slot exists to sever.
  */
-export function provideAgentEngine(engine: AgentEngine): void {
+export function provideAgentEngine(engine: AgentEngine): () => void {
+  const previous = agentEngine;
   agentEngine = engine;
+  return () => {
+    if (agentEngine === engine) agentEngine = previous;
+  };
 }
 
 function engine(): AgentEngine {
@@ -133,6 +138,8 @@ export interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
   readonly workingDirectory?: string;
   /** Omit for ordinary interactive delegation; durable calls end after one cycle. */
   readonly executionMode?: 'single-cycle';
+  /** Persist the typed result without constructing fallible prose delivery. */
+  readonly resultOnly?: boolean;
   /** Fires with the resolved child stream id — the caller inherits approvals onto it. */
   readonly onStreamResolved: (streamId: StreamTabId) => void;
 }
@@ -400,6 +407,7 @@ export function createNativeSubagentStrategy(
     formatDelivery: async (turn) => {
       if (cachedDelivery === undefined) {
         const built = await buildResult(turn);
+        if (params.resultOnly) return '';
         cachedDelivery = formatSubagentDelivery(
           params.agentName,
           built.result,

@@ -54,6 +54,7 @@ export interface ChildExecutionActivation {
   readonly executionId: ExecutionId;
   readonly parentStreamId: StreamTabId;
   readonly childStreamId: StreamTabId;
+  readonly interrupt: () => void;
 }
 
 interface TerminateOptions {
@@ -505,6 +506,16 @@ export class ExecutionRegistry {
     visited: Set<string>,
     options: TerminateOptions,
   ): void {
+    for (const activation of this.childActivations.values()) {
+      if (
+        activation.parentStreamId !== parentStreamId ||
+        visited.has(activation.executionId)
+      ) {
+        continue;
+      }
+      visited.add(activation.executionId);
+      activation.interrupt();
+    }
     for (const handle of this.handles.values()) {
       if (isChildExecution(handle, parentStreamId)) {
         this.terminate(handle, visited, options);

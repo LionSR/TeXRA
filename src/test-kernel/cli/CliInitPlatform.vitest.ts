@@ -1,7 +1,3 @@
-// Node imports
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
@@ -16,7 +12,6 @@ import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import type { StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
-import { REPO_ROOT } from '@test/support/repoScan';
 import {
   ClaudeAgentSessions,
   CodexThreads,
@@ -80,10 +75,16 @@ const mocks = vi.hoisted(() => ({
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
   invalidateModelOptionsCache: vi.fn(),
+  initializeBundledPrompts: vi.fn(),
   tryPlatform: vi.fn(),
   // Collects callbacks registered via the (mocked) lifecycle host's onShutdown
   // so a test can run them and assert the usage-log dispose was wired.
   shutdownHandlers: [] as Array<() => unknown>,
+}));
+
+vi.mock('@agent/runtime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/runtime')>()),
+  initializeBundledPrompts: mocks.initializeBundledPrompts,
 }));
 
 vi.mock('@agent/index/platformAgentDirectories', () => ({
@@ -427,19 +428,14 @@ describe('CLI platform init', () => {
     }
   });
 
-  // Every host registers the bundled prompt table itself. Desktop once wired a
-  // prompt consumer while forgetting one of the two per-prompt initializers
-  // (#10365); one initializer per host is what makes that unrepeatable, so
-  // each composition root is pinned to calling it. Asserted on the source
-  // because `@platform/platform` is mocked here without an `fs` port, so a
-  // real load would fall back and pass either way.
   it('registers bundled prompts from the CLI resource bundle', async () => {
-    const source = await readFile(
-      resolve(REPO_ROOT, 'packages/cli/src/runtime/initPlatform.ts'),
-      'utf8',
+    await initCliPlatform(
+      cliContext({ resourcesPath: '/tmp/cli-prompt-resources' }),
     );
 
-    expect(source).toContain('initializeBundledPrompts(context.resourcesPath)');
+    expect(mocks.initializeBundledPrompts).toHaveBeenCalledWith(
+      '/tmp/cli-prompt-resources',
+    );
   });
 
   it('bootstraps bundled agents with the CLI version store', async () => {

@@ -382,9 +382,11 @@ function stableSequenceStore(logicalExecutionId: ExecutionId, nextAttempt = 0) {
 }
 
 describe('headless delegation', () => {
+  let restoreAgentEngine = (): void => {};
+
   beforeEach(() => {
     vi.clearAllMocks();
-    provideAgentEngine({
+    restoreAgentEngine = provideAgentEngine({
       executeAgent: mocks.executeAgent,
       resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
     } as unknown as AgentEngine);
@@ -429,6 +431,7 @@ describe('headless delegation', () => {
   });
 
   afterEach(() => {
+    restoreAgentEngine();
     for (const executionId of defaultSession().executions.getActiveIds()) {
       defaultSession().executions.untrack(executionId);
     }
@@ -867,17 +870,14 @@ describe('headless delegation', () => {
     await expect(runInBand(delegationOptions())).rejects.toBe(childFailure);
   });
 
-  it('returns the verified typed result despite a lease cleanup failure', async () => {
-    // Release-after-artifacts is best-effort in the one driver (warned
-    // loudly loop-side); the typed return is gated by the manifest read-back
-    // instead, so a flush failure no longer masks a durably completed child.
-    mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(
-      new Error('artifact flush failed'),
-    );
+  it('does not return a typed result when final artifact cleanup fails', async () => {
+    const cleanupFailure = new Error('artifact flush failed');
+    mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(cleanupFailure);
 
-    const completed = await runInBand(delegationOptions());
-
-    expect(completed.result.outcome).toBe('completed');
+    await expect(runInBand(delegationOptions())).rejects.toMatchObject({
+      name: 'SubagentDurabilityError',
+      cause: cleanupFailure,
+    });
     expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalled();
   });
 

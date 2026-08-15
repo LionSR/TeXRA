@@ -744,12 +744,14 @@ export function startChildRunLoop<TTurn>(
   // progress or results from this child must not enter the replacement queue.
   const parentDeliveryGenerationId =
     runSession.followUps.currentGenerationId(parentStreamId);
+  const loop = new ChildRunInterruptible(runSession, childStreamId);
   const releaseChildActivation = childStream
     ? () => undefined
     : runSession.executions.reserveChildActivation({
         executionId,
         parentStreamId,
         childStreamId,
+        interrupt: () => loop.interrupt(),
       });
   let sessionOwnershipReleased = false;
   const releaseSessionOwnershipOnce = (): void => {
@@ -758,7 +760,6 @@ export function startChildRunLoop<TTurn>(
     strategy.releaseSessionOwnership?.();
   };
 
-  const loop = new ChildRunInterruptible(runSession, childStreamId);
   let stopWatchingLease: (() => void) | undefined;
   let queue!: FollowUpQueue;
   let queueLease: FollowUpConsumerLease | undefined;

@@ -995,6 +995,7 @@ describe('createChatSessionController', () => {
           executionId: childExecutionId,
           parentStreamId: rootStream,
           childStreamId: childStream,
+          interrupt: vi.fn(),
         });
         executions.untrack(executionId);
         return {

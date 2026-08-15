@@ -202,6 +202,7 @@ describe('executionRegistry', () => {
         executionId,
         parentStreamId,
         childStreamId,
+        interrupt: vi.fn(),
       });
       expect(activationEvents).toEqual([true]);
 
@@ -954,8 +955,15 @@ describe('executionRegistry', () => {
     const childStreamId = 'child-stop-policy-test' as StreamTabId;
     const rootInterrupt = vi.fn();
     const childInterrupt = vi.fn();
+    const queuedChildInterrupt = vi.fn();
 
     try {
+      registry.reserveChildActivation({
+        executionId: 'exec-queued-child-stop-policy-test' as ExecutionId,
+        parentStreamId: rootStreamId,
+        childStreamId: 'queued-child-stop-policy-test' as StreamTabId,
+        interrupt: queuedChildInterrupt,
+      });
       trackInterruptibleHandle(
         registry,
         {
@@ -980,6 +988,7 @@ describe('executionRegistry', () => {
 
       expect(rootInterrupt).toHaveBeenCalledOnce();
       expect(childInterrupt).toHaveBeenCalledOnce();
+      expect(queuedChildInterrupt).toHaveBeenCalledOnce();
       expect(streamStatus.get(rootStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(sessionFactsOfType(recorded.events, 'status')).toEqual(

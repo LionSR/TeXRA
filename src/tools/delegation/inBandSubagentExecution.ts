@@ -416,6 +416,7 @@ async function executeInBand(
             startedAt,
             workingDirectory,
             executionMode: 'single-cycle',
+            resultOnly: mode === 'required-result',
             onStreamResolved: options.onStreamResolved ?? (() => {}),
           }),
         };
@@ -452,6 +453,21 @@ async function executeInBand(
     const result = resultMeta.result;
     const childFailed =
       settledTurn.isError || result.outcome === RUN_OUTCOME.FAILED;
+
+    if (
+      mode === 'required-result' &&
+      loopFailure !== undefined &&
+      !childFailed
+    ) {
+      await throwRetryableDurabilityError(
+        executionId,
+        stableAttempt,
+        new SubagentDurabilityError(
+          `Subagent ${executionId} failed to persist its final artifacts.`,
+          { cause: loopFailure },
+        ),
+      );
+    }
 
     if (mode === 'required-result') {
       // The ledger recovers restarts by inspecting the persisted manifest, so

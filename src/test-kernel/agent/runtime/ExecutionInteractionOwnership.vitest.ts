@@ -129,6 +129,7 @@ describe('execution interaction ownership', () => {
       executionId: 'child',
       parentStreamId: rootStream,
       childStreamId: childStream,
+      interrupt: vi.fn(),
     });
     registry.untrack('root');
     scope.finish();
@@ -156,6 +157,7 @@ describe('execution interaction ownership', () => {
       executionId: 'child',
       parentStreamId: rootStream,
       childStreamId: childStream,
+      interrupt: vi.fn(),
     });
     registry.untrack('root');
     scope.finish();

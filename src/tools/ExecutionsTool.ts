@@ -1094,10 +1094,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       turnAttributionNote(store),
     ]);
     if (!report) {
-      // Pre-single-driver workflow-scripted children persisted only their
-      // typed result (see src/agent/workflowScript/README.md). Point the
-      // reader at the artifact that does exist instead of implying the run
-      // never finished.
+      // Compatibility reader introduced 2026-08-15 for workflow-scripted
+      // children created before the single driver. Remove after 2026-11-15,
+      // once the three-month internal-format window has elapsed.
+      // Those children persisted only their typed result (see
+      // src/agent/workflowScript/README.md), so point at that artifact instead
+      // of implying the run never finished.
       const resultMeta = await store.readResultMeta();
       if (resultMeta) {
         return executed(
