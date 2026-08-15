@@ -7,7 +7,7 @@ import {
   presentFollowUpResult,
   submitFollowUp,
   type SubmitFollowUpResult,
-} from '@agent/followUp/ToolUseFollowUp';
+} from '@agent/followUp';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import type { StreamTabId } from '@shared/schemas';
 
