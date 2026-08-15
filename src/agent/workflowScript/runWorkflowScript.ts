@@ -494,14 +494,19 @@ export async function runWorkflowScript(
     const primaryFile =
       callOptions.inputFiles?.[0] ?? callOptions.contextFiles?.[0];
     const role = callOptions.agentName ?? 'Agent';
+    // One derivation for every surface (progress events and the execution
+    // snapshot), so the label a host shows live is the label the durable
+    // record keeps: declared > explicit > file-derived > prompt excerpt >
+    // role + position.
+    const promptExcerpt = prompt
+      .slice(0, LABEL_EXCERPT_LENGTH)
+      .replaceAll(/\s+/g, ' ')
+      .trim();
     const label =
       plannedTask?.label ??
       callOptions.label ??
-      prompt.slice(0, LABEL_EXCERPT_LENGTH).replaceAll(/\s+/g, ' ').trim();
-    const snapshotLabel =
-      plannedTask?.label ??
-      callOptions.label ??
       (primaryFile ? `${basename(primaryFile)}: ${role}` : undefined) ??
+      (promptExcerpt === '' ? undefined : promptExcerpt) ??
       `${role} ${index + 1}`;
     const hasFileDependencies =
       (callOptions.inputFiles?.length ?? 0) > 0 ||
@@ -560,7 +565,7 @@ export async function runWorkflowScript(
     try {
       executionState.issueCall({
         id: progressId,
-        label: snapshotLabel,
+        label,
         phase: callOptions.phase,
         agent: callOptions.agentName,
         files: {
