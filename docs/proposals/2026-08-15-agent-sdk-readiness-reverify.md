@@ -41,8 +41,8 @@ What is new in this pass:
 
 ## 1. Scope re-audited
 
-| Area          | Entry points inspected                                                                                                        |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Area          | Entry points inspected                                                                                                       |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Agent core    | `src/agent/core/{definition,state,usage,tools,flows}/`, `src/agent/node/index.ts`, `src/agent/implementations/flows/`        |
 | Model handler | `src/agent/modelHandlers/**`, `src/agent/types/IModelHandler.ts`, `ModelHandler.ts`, `src/agent/runtime/ModelFactory.ts`     |
 | Logger        | `src/logger/{logUtils,redaction}.ts`, `src/agent/trace/channelTrace.ts` + `AgentTrace`, `src/transcript/StreamLog*.ts`       |
@@ -51,14 +51,14 @@ What is new in this pass:
 
 ## 2. Re-verification — every `-08-14` metric still true at HEAD `ee56ceb`
 
-| Metric                                             | `-08-14`      | HEAD `ee56ceb`                                                         |
-| -------------------------------------------------- | ------------- | --------------------------------------------------------------------- |
-| SDK package `@agent/*` deep-import specifiers       | 7             | **7** (`config/ratchets/host-agent-import-baseline.json`)             |
-| Host specifier width (cli / desktop / extension)   | 18 / 13 / 17  | **18 / 13 / 17** — frozen, not slipping                              |
-| `RuntimePresentationEventPayloads` arms (0 phantom) | 5             | **5** (`runtimePresentationEvents.ts:16-22`)                         |
-| `platform().log` call sites under `src/agent`       | 0             | **0** (no host log port exists; see §4 L-2)                           |
-| Version (governs `runFact.` retirement, due v0.41)  | 0.40.3        | **0.40.3** — retirement not yet due                                  |
-| Logger core LoC (`logUtils` / `redaction` / `channelTrace`) | 250 / 117 / 82 | **250 / 117 / 82**                                          |
+| Metric                                                      | `-08-14`       | HEAD `ee56ceb`                                            |
+| ----------------------------------------------------------- | -------------- | --------------------------------------------------------- |
+| SDK package `@agent/*` deep-import specifiers               | 7              | **7** (`config/ratchets/host-agent-import-baseline.json`) |
+| Host specifier width (cli / desktop / extension)            | 18 / 13 / 17   | **18 / 13 / 17** — frozen, not slipping                   |
+| `RuntimePresentationEventPayloads` arms (0 phantom)         | 5              | **5** (`runtimePresentationEvents.ts:16-22`)              |
+| `platform().log` call sites under `src/agent`               | 0              | **0** (no host log port exists; see §4 L-2)               |
+| Version (governs `runFact.` retirement, due v0.41)          | 0.40.3         | **0.40.3** — retirement not yet due                       |
+| Logger core LoC (`logUtils` / `redaction` / `channelTrace`) | 250 / 117 / 82 | **250 / 117 / 82**                                        |
 
 Recent commits to the audited areas are all converging cleanup — retire
 resume-blob compat arms (#10286), consolidate prompt-rendering ownership
@@ -151,7 +151,7 @@ a change this pass makes.
   instance and clean — is the structural blocker to a fully embeddable
   multi-instance SDK. It also confirms the standing note that **there is no
   `platform().log` port** (`platform.ts:31-34` documents channel logging as
-  *not* a platform member; hosts wire it via `logUtils.setOutputChannelFactory`).
+  _not_ a platform member; hosts wire it via `logUtils.setOutputChannelFactory`).
   **Disposition:** a maintainer design decision (per-instance sink registry),
   not a churn PR — aligns with `-08-14 §9.2`; do not plan against `platform().log`.
 - **L-3 (small defect worth a note): redaction options dropped at the log sink.**
@@ -209,7 +209,7 @@ a change this pass makes.
   class as a whole owns real run semantics and stays.
 - **T-1: `AgentFinalResult` re-declares a union parallel to `AgentFlowResult`.**
   They are two lifecycle stages, not duplicates — `AgentFinalResult`
-  (`AgentFinalResult.ts:64`, 3 prod build sites) is the post-flow *delivery*
+  (`AgentFinalResult.ts:64`, 3 prod build sites) is the post-flow _delivery_
   envelope, `.pick()`ed from the flow result and adding post-artifact fields
   (`diffs`, `cost`, `structured`). The one consolidation is to model it as
   `AgentFlowResult ⊕ post-artifact extension` rather than a re-declared union.
@@ -256,7 +256,7 @@ object, so promotion is relocation, not redesign:
 - **No `runSession()` facade / SDK wrapper layer.** The `-08-12` "higher-level
   public-typed entry" proposal conflicts with north-star §5 and was corrected in
   `-08-14 §6`. The sanctioned mechanism is the barrel fold plus moving
-  bookkeeping *into* `SessionHandle`. Do not resurrect the wrapper.
+  bookkeeping _into_ `SessionHandle`. Do not resurrect the wrapper.
 - **TD-2(a) (`HostInteractions` request methods optional) is retired, not open.**
   The optional-with-graceful-decline shape is the tested minimal-host contract
   the npm package depends on (`-08-03 §7`, `-08-14 §9.1`). Do not re-propose
@@ -274,7 +274,7 @@ object, so promotion is relocation, not redesign:
    evidence (§6); genuine maintainer decision if ever revisited, not a mechanical
    edit.
 2. **Logger → event stream** — surfacing the package's bootstrap/model-routing
-   logs to an embedder's `AgentRun` means *extending `AgentEvent`* (routed through
+   logs to an embedder's `AgentRun` means _extending `AgentEvent`_ (routed through
    the event-channel ruling), a proposal not a churn PR. L-2 above is the same
    theme from the sink side.
 3. **Further specifier reduction** is bounded by the provider-type-leak constraint
