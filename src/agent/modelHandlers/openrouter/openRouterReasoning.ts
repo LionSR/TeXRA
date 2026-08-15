@@ -1,5 +1,5 @@
 // Local imports
-import { joinReasoningItemsText } from './reasoningDetailsText';
+import { joinReasoningItemsText } from '../utils/reasoningDetailsText';
 
 // Third-party imports
 import type { ReasoningDetailUnion } from '@openrouter/sdk/models';
