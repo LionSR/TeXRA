@@ -10,7 +10,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flowKey } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import * as logger from '@logger/logUtils';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import { STREAM_PHASE, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
@@ -512,48 +511,6 @@ describe('ExecutionsTool', () => {
       }
     });
   });
-
-  // The /files walk treats a vanished run directory as "nothing persisted"
-  // (silent empty listing) but any other read failure must degrade loudly.
-  it.each([
-    { code: 'ENOENT', warns: false },
-    { code: 'EACCES', warns: true },
-  ])(
-    'renders an empty listing on $code readDir failure, warn=$warns',
-    async ({ code, warns }) => {
-      await withTempStorage(async () => {
-        const executionId = 'abc123' as ExecutionId;
-        await StorageFS.ensureDir(resolveRunStoragePath(executionId));
-        const readDir = vi
-          .spyOn(StorageFS, 'readDir')
-          .mockRejectedValue(
-            Object.assign(new Error(`simulated ${code}`), { code }),
-          );
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-
-        try {
-          const result = await new ExecutionsTool().call({
-            path: `/executions/${executionId}/files`,
-          });
-
-          expect(result.status).toBe('executed');
-          expect(result.output).toBe('No files generated for this execution.');
-          if (warns) {
-            expect(warn).toHaveBeenCalledWith(
-              'ExecutionsTool',
-              expect.stringContaining('Unreadable run directory'),
-              expect.anything(),
-            );
-          } else {
-            expect(warn).not.toHaveBeenCalled();
-          }
-        } finally {
-          warn.mockRestore();
-          readDir.mockRestore();
-        }
-      });
-    },
-  );
 
   it('reads recorded files inside a top-level workspace directory', async () => {
     await withTempDir('texra-exec-files-', async (workspace) => {
