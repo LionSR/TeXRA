@@ -404,9 +404,14 @@ export async function executeCliRequest(
       launchAbortController.abort();
       // Paired with tryCommitWorkflowOutputPublication: keep this flag read
       // and the shutdownInterrupted assignment below in one synchronous turn.
+      // Headless shutdown deliberately cascades into active children: a
+      // detached child cannot outlive the exiting CLI process, so the
+      // detach-on-stop toggle is not consulted on this path.
       const interruptionAccepted =
         !workflowOutputPublicationCommitted && ownedExecutionId
-          ? session.executions.kill(ownedExecutionId)
+          ? session.executions.kill(ownedExecutionId, {
+              detachActiveChildren: false,
+            })
           : false;
       // Before lifecycle registration, the launch signal is the cancellation
       // authority. Afterwards, only an accepted registry stop may replace the
@@ -501,8 +506,11 @@ export async function executeCliRequest(
           // Acquisition precedes registry tracking. If shutdown landed in
           // between, interrupt as soon as the canonical handle becomes live.
           if (shutdownRequested && ownedExecutionId) {
+            // Same deliberate cascade as the shutdown-phase kill above.
             shutdownInterrupted =
-              session.executions.kill(ownedExecutionId) || shutdownInterrupted;
+              session.executions.kill(ownedExecutionId, {
+                detachActiveChildren: false,
+              }) || shutdownInterrupted;
           }
         },
         stopAfterCycle: options.stopAfterCycle,
