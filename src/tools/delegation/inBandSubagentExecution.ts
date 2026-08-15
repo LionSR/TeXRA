@@ -260,7 +260,8 @@ async function inspectStableAttempt(
     // additionally requires the post-release marker written after the child
     // loop and its artifact drain both returned successfully. Lease absence
     // is not an attestation: restart repair may already have removed an
-    // abandoned lease from a failed drain.
+    // abandoned lease from a failed drain. This ambiguity deliberately stays
+    // irreconcilable rather than risking repeated side-effectful work.
     throw new SubagentReconciliationError(
       `Cannot attest durable completion for persisted subagent ${executionId}; refusing to recover its result.`,
     );

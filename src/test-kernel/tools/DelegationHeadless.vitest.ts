@@ -944,8 +944,10 @@ describe('headless delegation', () => {
     const logicalExecutionId = 'dddddd888888' as ExecutionId;
     const childStore = memoryExecutionStore();
     const write = childStore.write.getMockImplementation();
+    let abandonedLeasePresent = true;
     childStore.write.mockImplementation(async (key, value) => {
       if (
+        abandonedLeasePresent &&
         key === 'stable-subagent-attempt' &&
         (value as { phase?: string }).phase === 'retryable'
       ) {
@@ -963,10 +965,11 @@ describe('headless delegation', () => {
       cause: cleanupFailure,
     });
 
-    // Restart repair has removed the stale abandoned lease before the stable
-    // call resumes. Missing lease state must not attest that artifact release
-    // succeeded; only the explicit post-release commit marker can do that.
-    mocks.inspectExecutionLease.mockResolvedValue({ status: 'missing' });
+    // Perform the restart repair's observable lease transition before the
+    // stable call resumes: the abandoned lease no longer fences store writes.
+    // That absence must not attest artifact-release success; only the explicit
+    // post-release commit marker can do that.
+    abandonedLeasePresent = false;
     await expect(
       runInBand(delegationOptions(), logicalExecutionId),
     ).rejects.toBeInstanceOf(SubagentReconciliationError);
