@@ -1239,6 +1239,93 @@ describe('CLI conversation transcript', () => {
     expect(advanced.scan.scannedIndex).toBe(1);
   });
 
+  it('keeps the scan cursor and state identical while the scrollback slice is missing', () => {
+    const initial = buildStaticTranscriptState({
+      childStreamEntries: new Map(),
+      maxRows: undefined,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      repaintEpoch: 0,
+      scrollbackStreamId: STREAM_ID,
+      streams: new Map(),
+      width: 80,
+    });
+
+    const advanced = advanceStaticTranscriptState(initial, {
+      childStreamEntries: new Map(),
+      maxRows: undefined,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      scrollbackStreamId: STREAM_ID,
+      streams: new Map(),
+      width: 80,
+    });
+
+    expect(advanced).toBe(initial);
+    expect(advanced.scan).toBe(initial.scan);
+    expect(advanced.repaintEpoch).toBe(initial.repaintEpoch);
+  });
+
+  it('rebuilds once, then stays stable, when the scrollback slice disappears', () => {
+    const settled = entry('a1', 'assistant', 'ok', true);
+    const present = new Map<StreamTabId, StreamSlice>([
+      [STREAM_ID, sliceWithEntries(STREAM_ID, [settled])],
+    ]);
+    const initial = buildStaticTranscriptState({
+      childStreamEntries: new Map(),
+      maxRows: undefined,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      repaintEpoch: 0,
+      scrollbackStreamId: STREAM_ID,
+      streams: present,
+      width: 80,
+    });
+    const advancedOnce = advanceStaticTranscriptState(initial, {
+      childStreamEntries: new Map(),
+      maxRows: undefined,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      scrollbackStreamId: STREAM_ID,
+      streams: present,
+      width: 80,
+    });
+
+    expect(advancedOnce.scan.scannedIndex).toBe(1);
+
+    const missing = advanceStaticTranscriptState(advancedOnce, {
+      childStreamEntries: new Map(),
+      maxRows: undefined,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      scrollbackStreamId: STREAM_ID,
+      streams: new Map(),
+      width: 80,
+    });
+
+    expect(missing.repaintEpoch).toBe(advancedOnce.repaintEpoch + 1);
+
+    const missingAgain = advanceStaticTranscriptState(missing, {
+      childStreamEntries: new Map(),
+      maxRows: undefined,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      scrollbackStreamId: STREAM_ID,
+      streams: new Map(),
+      width: 80,
+    });
+
+    expect(missingAgain).toBe(missing);
+    expect(missingAgain.scan).toBe(missing.scan);
+    expect(missingAgain.repaintEpoch).toBe(missing.repaintEpoch);
+  });
+
   it('recomputes ring totals and trims when the layout width shrinks', () => {
     const budgets: StaticTranscriptRingBudgets = {
       rowHighWater: 6,

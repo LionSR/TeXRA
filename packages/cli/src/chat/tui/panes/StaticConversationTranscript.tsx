@@ -1008,7 +1008,11 @@ export function advanceStaticTranscriptState(
   const slice = scrollbackStreamId
     ? streams.get(scrollbackStreamId)
     : undefined;
-  const entries: readonly ConversationEntry[] = slice?.entries ?? [];
+  // Pass `slice?.entries` through unchanged. `incrementalStaticTranscriptEntries`
+  // normalizes a missing slice to its frozen empty entries array; a fresh `[]`
+  // here would break cursor identity on every dependency tick while the
+  // scrollback slice is absent.
+  const entries = slice?.entries;
   const status = slice?.status;
 
   if (isHardReset) {

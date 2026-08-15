@@ -105,6 +105,7 @@ function renderConversationPaneEntry({
     if (
       entry.role === 'activity' ||
       entry.role === 'error' ||
+      entry.role === 'media' ||
       entry.role === 'workflowTask'
     ) {
       return (
