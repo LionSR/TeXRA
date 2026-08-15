@@ -1198,6 +1198,16 @@ wa-input.desktop-command-palette-input::part(input) {
   text-align: center;
 }
 
+.desktop-log-viewer-empty .empty-state-icon {
+  font-size: var(--font-size-h1);
+}
+
+.desktop-log-viewer-empty .empty-state-title {
+  margin: 0;
+  font-size: inherit;
+  font-weight: var(--wa-font-weight-regular, normal);
+}
+
 @container (max-width: 720px) {
   .desktop-log-viewer-header {
     grid-template-columns: minmax(0, 1fr);
@@ -1613,10 +1623,56 @@ wa-card.desktop-onboarding::part(footer) {
   background: var(--wa-color-brand-fill-loud, currentColor);
 }
 
+/* Structure owned by the shared renderLoadingState helper (@shared/wa) — light-DOM
+   mirror of the `.loading-state` rule in src/shared/styles/commonViewStyles.ts,
+   since this tree can't adopt that shadow-DOM stylesheet. Same tokens as the
+   canonical rule (padding: --wa-space-l, no font-size override) so it doesn't
+   reintroduce the per-consumer mismatch this file's header warns against.
+   Shared by the editor tree panel and the desktop log viewer. */
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--wa-space-xs);
+  padding: var(--wa-space-l);
+  color: var(--wa-color-text-quiet);
+}
+
+.desktop-log-viewer-list .loading-state {
+  min-height: 8rem;
+}
+
+/* The editor tree is a narrow sidebar, not the roomier canonical panel — keep
+   its loading state's footprint matching its own .desktop-editor-tree-empty
+   rather than the larger canonical padding/font-size. */
+.desktop-editor-tree .loading-state {
+  padding: var(--wa-space-m);
+  font-size: var(--font-size-sm);
+}
+
 .desktop-editor-tree-empty {
   padding: var(--wa-space-m);
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
+}
+
+/* Class hook consumed by the shared renderEmptyState() helper (@shared/wa/emptyState).
+   Neutralizes the UA heading chrome so it reads like the plain text this panel used
+   before adopting the helper. */
+.desktop-editor-tree-empty .empty-state-title {
+  margin: 0;
+  font-size: inherit;
+  font-weight: var(--wa-font-weight-regular, normal);
+}
+
+/* Second class carried only by the empty-state render (not the wa-callout error
+   state, which shares .desktop-editor-tree-empty alone) — lays out the helper's
+   icon and title without restyling the callout. */
+.desktop-editor-tree-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: var(--wa-space-2xs);
+  text-align: center;
 }
 
 .desktop-editor-surface {

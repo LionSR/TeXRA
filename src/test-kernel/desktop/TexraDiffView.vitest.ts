@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { TexraDiffView } from '@desktop/renderer/TexraDiffView';
-import { DESKTOP_THEME_KIND } from '@shared/schemas/commonViewMessages';
+import { DESKTOP_THEME_KIND } from '@shared/schemas';
 
 const workerModuleIds = [
   'monaco-editor/editor/editor.worker?worker',

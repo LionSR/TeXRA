@@ -60,14 +60,11 @@ import {
   MESSAGE_TYPES,
   STREAM_PHASE,
   STREAM_STATUS,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
-import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
-import {
   DEFAULT_CORE_SETTINGS,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-} from '@shared/schemas/coreSettings';
+} from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
   clearStreamStatusForTest,

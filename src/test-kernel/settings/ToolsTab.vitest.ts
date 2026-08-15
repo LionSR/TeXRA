@@ -10,8 +10,8 @@ vi.mock('@shared/hostBridge', () => ({
 
 import type { ToolsTab } from '@settingsView/frontend/tabs/ToolsTab';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
-import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
+import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
+import type { ToolDashboardItem } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 import {

@@ -12,10 +12,8 @@ vi.mock('@shared/hostBridge', () => ({
 // Local imports
 import type { MultiAgentTab } from '@settingsView/frontend/tabs/MultiAgentTab';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  AGENT_MODE_PRESETS,
-  type AgentModePreset,
-} from '@shared/schemas/agentPresets';
+import { AGENT_MODE_PRESETS } from '@shared/schemas';
+import type { AgentModePreset } from '@shared/schemas';
 
 // Local file imports
 import {

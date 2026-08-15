@@ -7,7 +7,7 @@ import type { StreamHandle } from '@agent/trace';
 import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import type { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/types/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
 import type {
@@ -272,13 +272,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         }
 
         const response = aggregator.buildResponse();
-        const finalOutput = response.choices?.[0]?.message?.content ?? '';
-        this.finalizeProgressStreams(
-          thinking,
-          output,
-          response,
-          typeof finalOutput === 'string' ? finalOutput : '',
-        );
+        this.finalizeProgressStreams(thinking, output, response, () => {
+          const finalOutput = response.choices?.[0]?.message?.content ?? '';
+          return typeof finalOutput === 'string' ? finalOutput : '';
+        });
 
         this.trackInputTokens(response.usage, 'streaming response');
         return { response, updatedMessages };

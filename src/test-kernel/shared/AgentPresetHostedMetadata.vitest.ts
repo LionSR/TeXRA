@@ -4,7 +4,7 @@ import {
   AGENT_MODE_PRESETS,
   parseAgentModePresets,
   STARTER_AGENT_MODE_PRESET,
-} from '@shared/schemas/agentPresets';
+} from '@shared/schemas';
 
 describe('agent preset hosted-definition metadata', () => {
   it('keeps every hosted name inside its owning preset roster', () => {

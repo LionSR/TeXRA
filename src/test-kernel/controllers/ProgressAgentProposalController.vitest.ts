@@ -4,12 +4,11 @@ import {
   ProgressAgentProposalController,
   type ProgressAgentProposalControllerDeps,
 } from '@controllers/progressView/ProgressAgentProposalController';
-import {
-  AgentCategory,
-  type AgentProposalPermission,
-  type WorkflowAgentProposalPermission,
+import { AgentCategory, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
+import type {
+  AgentProposalPermission,
+  WorkflowAgentProposalPermission,
 } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 
 function createWorkflowProposal(): AgentProposalPermission {

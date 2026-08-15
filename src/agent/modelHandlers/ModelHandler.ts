@@ -25,8 +25,8 @@ import type {
   AgentRunStateSnapshot,
 } from '@agent/core/state/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type { MediaEntry } from '@agent/utils/mediaTypes';
-import type { StandardPricingConfig } from '@agent/utils/priceUtils';
+import type { MediaEntry } from '@agent/types/mediaTypes';
+import type { StandardPricingConfig } from '@agent/modelHandlers/support/priceUtils';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@agent/core/constants';
 import {
@@ -439,16 +439,22 @@ export abstract class ModelHandler<
    * closes with the provider-extracted final text. Each provider keeps
    * extracting that text itself (every response shape reads differently);
    * what shares is the finalize ordering.
+   *
+   * `extractFinalText` is a callback (not a precomputed string) so extraction
+   * runs AFTER `processThinkingBlock` has committed the processed reasoning:
+   * if extraction throws, the thinking stream keeps the processed reasoning
+   * (`finalize` is idempotent) instead of falling back to the raw streamed
+   * chunks via the error path (#10372).
    */
   protected finalizeProgressStreams(
     thinking: StreamHandle,
     output: StreamHandle,
     response: Resp,
-    finalText: string,
+    extractFinalText: () => string,
   ): void {
     const finalReasoning = this.processThinkingBlock(response);
     thinking.finalize(finalReasoning ?? undefined);
-    output.finalize(finalText);
+    output.finalize(extractFinalText());
   }
 
   /**

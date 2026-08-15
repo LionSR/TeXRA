@@ -18,8 +18,7 @@
       "@agent/storage",
       "@agent/storage/conversationFormat",
       "@agent/storage/executionLease",
-      "@agent/trace",
-      "@agent/utils/agentConfigToTaskState"
+      "@agent/trace"
     ],
     "desktop": [
       "@agent/core/definition/AgentConfig",
@@ -29,7 +28,6 @@
       "@agent/index/agentRegistry",
       "@agent/index/BundledAgentDirectories",
       "@agent/index/platformAgentDirectories",
-      "@agent/remote/remoteAgentConfigClient",
       "@agent/runtime",
       "@agent/storage",
       "@agent/templates/agentTemplateRenderer",
@@ -46,7 +44,6 @@
       "@agent/index",
       "@agent/index/AgentDirectorySync",
       "@agent/index/platformAgentDirectories",
-      "@agent/remote/remoteAgentConfigClient",
       "@agent/review/reviewDiff",
       "@agent/review/reviewIssues",
       "@agent/runtime",

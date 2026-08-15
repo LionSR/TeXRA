@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
@@ -33,9 +33,11 @@ function createStreamRecorder(records: StreamRecord[]): AgentTrace {
       return {
         id: `stream-${counter}`,
         append: (text: string) => record.appends.push(text),
+        // First finalize wins, mirroring StreamHandle's idempotent finalize.
         finalize: (text?: string) => {
-          record.finalized = text;
-          return text ?? record.appends.join('');
+          record.finalized ??=
+            typeof text === 'string' ? text : record.appends.join('');
+          return record.finalized;
         },
       };
     },
@@ -174,6 +176,74 @@ describe('ModelHandlerGoogleInteractions streaming', () => {
     expect(result.response.usage?.total_input_tokens).toBe(10);
     expect(result.response.usage?.total_output_tokens).toBe(3);
     expect(result.response.status).toBe('completed');
+  });
+
+  // Regression for #10372: finalizeProgressStreams must run
+  // processThinkingBlock (committing the processed reasoning to the thinking
+  // stream) BEFORE the extract step. If extraction throws, the thinking
+  // stream must already hold the processed reasoning — not fall through to
+  // the error-path finalize with only the raw streamed chunks.
+  it('commits processed reasoning before extractResponse runs on the streaming finalize', async () => {
+    const records: StreamRecord[] = [];
+    const handler = createHandler(records);
+
+    const callOrder: string[] = [];
+    const originalProcess = handler.processThinkingBlock.bind(handler);
+    vi.spyOn(handler, 'processThinkingBlock').mockImplementation(
+      (response, workspaceState) => {
+        callOrder.push('processThinkingBlock');
+        originalProcess(response, workspaceState);
+        // Distinct from the raw streamed chunk ('plan') so the finalize
+        // assertion below can tell processed reasoning apart from it.
+        return 'PROCESSED_REASONING';
+      },
+    );
+    vi.spyOn(handler, 'extractResponse').mockImplementation(() => {
+      callOrder.push('extractResponse');
+      throw new Error('extractResponse failed');
+    });
+
+    const events: Interactions.InteractionSSEEvent[] = [
+      {
+        event_type: 'interaction.created',
+        interaction: { id: 'int_err', status: 'in_progress' },
+      },
+      { event_type: 'step.start', index: 0, step: { type: 'thought' } },
+      {
+        event_type: 'step.delta',
+        index: 0,
+        delta: {
+          type: 'thought_summary',
+          content: { type: 'text', text: 'plan' },
+        },
+      },
+      { event_type: 'step.stop', index: 0 },
+      {
+        event_type: 'step.start',
+        index: 1,
+        step: { type: 'model_output' },
+      },
+      {
+        event_type: 'step.delta',
+        index: 1,
+        delta: { type: 'text', text: 'partial output' },
+      },
+      { event_type: 'step.stop', index: 1 },
+      {
+        event_type: 'interaction.completed',
+        interaction: { id: 'int_err', status: 'completed' },
+      },
+    ];
+
+    await expect(runPrompt(handler, events, 'Hi')).rejects.toThrow(
+      'extractResponse failed',
+    );
+
+    expect(callOrder).toEqual(['processThinkingBlock', 'extractResponse']);
+    const thinkingRecord = records.find(
+      (r) => r.type === MESSAGE_TYPES.THINKING,
+    );
+    expect(thinkingRecord?.finalized).toBe('PROCESSED_REASONING');
   });
 
   it('reports incomplete when the stream ends without an interaction.completed event', async () => {

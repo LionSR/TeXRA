@@ -5,11 +5,11 @@ import {
   type LatexPathTool,
   type LatexToolingControllerDeps,
 } from '@controllers/settingsView/LatexToolingController';
+import { DEFAULT_LATEX_SETTINGS_STATUS } from '@shared/schemas';
 import {
   HOMEBREW_INSTALL_COMMAND,
   type OSPlatform,
 } from '@shared/constants/latexToolchain';
-import { DEFAULT_LATEX_SETTINGS_STATUS } from '@shared/schemas/settingsViewMessages';
 
 const INSTALLED_TOOLS = {
   pdflatex: false,

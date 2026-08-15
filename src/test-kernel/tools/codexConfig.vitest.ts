@@ -5,13 +5,13 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports
-import { AgentCategory } from '@shared/schemas';
 import {
+  AgentCategory,
   CODEX_FILE_CHANGE_TOOL,
   CODEX_THREAD_TOOL,
   CODEX_TODO_TOOL,
   CODEX_TURN_TOOL,
-} from '@shared/schemas/codex';
+} from '@shared/schemas';
 import {
   buildCodexConfig,
   toCodexCliReasoningEffort,

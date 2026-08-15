@@ -12,7 +12,7 @@ import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/mo
 import type { ResolvedClientCredential } from '@agent/types/ModelHandlerContracts';
 import * as serverKeysModule from '@auth/serverKeys';
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
-import { AgentCategory } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
 

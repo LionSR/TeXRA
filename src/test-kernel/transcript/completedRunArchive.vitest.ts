@@ -70,11 +70,9 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  type ExecutionId,
-  type StreamTabId,
-  type TodoItem,
+  AgentCategory,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas/agent';
+import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
 import {
   cleanupTempDirs,
   createTempDirPlatform,

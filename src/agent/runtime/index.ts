@@ -76,8 +76,12 @@ export { resolveAndResumeStream } from './resolveAndResumeStream';
 export { detachSubagentsOnStop } from './detachSubagentsOnStop';
 
 // runtimePresentationEvents
-export { dispatchPresentationEvent } from './runtimePresentationEvents';
+export {
+  dispatchPresentationEvent,
+  toPresentationDelivery,
+} from './runtimePresentationEvents';
 export type {
+  PresentationDelivery,
   PresentationEventHandlers,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -114,3 +118,6 @@ export { initializePolishModel } from './polishModel';
 
 // AgentFlowResult
 export type { WorkflowFlowResult } from './AgentFlowResult';
+
+// core/state projection used by the CLI's frozen progress wire.
+export { agentConfigToTaskState } from '../core/state/agentConfigToTaskState';

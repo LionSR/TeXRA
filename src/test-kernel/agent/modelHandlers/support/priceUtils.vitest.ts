@@ -1,11 +1,11 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - agent utils
+// Local imports - agent model handlers
 import {
   computeStandardPrice,
   type StandardPricingConfig,
-} from '@agent/utils/priceUtils';
+} from '@agent/modelHandlers/support/priceUtils';
 
 // grok-4.6's documented rates: $2/$6 flat, doubling to $4/$12 past 200k
 // prompt tokens, with cached tokens at 25% of the input rate in both tiers.

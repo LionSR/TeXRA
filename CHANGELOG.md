@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file.
 - **A missing helper model falls back to DeepSeek V4 Flash** — disabling or
   removing the helper no longer silently switches auxiliary tasks to the
   first picker model.
+- **An unknown agent name is reported once, with next-step guidance** — the
+  error no longer appears twice, and command-line users now get the same
+  "agent not found" hint as the other surfaces.
 - **Long Grok prompts report their true cost** — xAI raises per-token rates
   once a prompt crosses the model's long-context threshold; usage costs for
   those requests no longer underreport.
@@ -30,6 +33,10 @@ All notable changes to this project will be documented in this file.
 - **The Progress terminal uses the host integrated terminal colors** —
   background and text follow the dedicated terminal tokens instead of the
   generic surface palette.
+
+- **Every max-style shortcut now resolves in the progress view** — math
+  operators, text labels, mathcal/mathbb letters, and tilde/hat/
+  differential shortcuts render as intended instead of unknown commands.
 
 #### Features
 
@@ -61,16 +68,16 @@ All notable changes to this project will be documented in this file.
   silently returns the original draft; it now applies the same bundled prompt
   template the extension uses.
 - **Temporary diff files are cleaned up** — viewing a diff in an external
-  editor no longer leaves `texra-desktop-diff` folders behind after the window
-  closes.
+  editor no longer leaves temporary files behind after the window closes.
 
 ### CLI and Desktop
 
 #### Bug Fixes
 
-- **Unused Lean language servers no longer accumulate** — leftover CLI and
-  desktop Lean sessions stop after they sit unused, so later Lean work is not
-  disrupted by leftover servers from earlier worktrees.
+- **Unused Lean language servers no longer accumulate** — a CLI or desktop
+  Lean session stops when the agent run that was using it ends, and at the
+  latest after it sits unused, so later Lean work is not disrupted by
+  leftover servers from earlier worktrees.
 
 ### CLI
 

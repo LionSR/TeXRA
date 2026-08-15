@@ -7,7 +7,7 @@ import type {
   ModelCredentialRoute,
   ResolvedClientCredential,
 } from '@agent/types/ModelHandlerContracts';
-import type { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/types/mediaTypes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { isNonEmptyString } from '@utils/core';
 

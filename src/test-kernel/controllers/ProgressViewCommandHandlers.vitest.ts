@@ -12,9 +12,11 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   ProgressViewInboundMessageSchema,
   dispatchProgressViewInbound,
-  type ProgressViewInboundHandlerRegistry,
-  type ProgressViewInboundMessage,
-} from '@shared/schemas/progressView';
+} from '@shared/schemas';
+import type {
+  ProgressViewInboundHandlerRegistry,
+  ProgressViewInboundMessage,
+} from '@shared/schemas';
 import { assertSupported, unsupported } from '@shared/utils/dispatcher';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {

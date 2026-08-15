@@ -4,7 +4,7 @@ import type {
   ExtractResponseResult,
   ModelCredentialSelection,
 } from '@agent/types/ModelHandlerContracts';
-import type { StandardPricingConfig } from '@agent/utils/priceUtils';
+import type { StandardPricingConfig } from '@agent/modelHandlers/support/priceUtils';
 import {
   formatXaiAuthUnavailableMessage,
   XaiAuthError,

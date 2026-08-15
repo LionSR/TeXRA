@@ -13,6 +13,7 @@ import {
   computeLineChangeSummary,
   computeUserPatch,
 } from '@tools/approval/toolEditApproval';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createTexraTempDir } from '@utils/files/tempDir';
 
 import {
@@ -41,6 +42,10 @@ export function createDesktopDiffHost(
   // OS editor may still be reading it, so each fallback run records its
   // directory here and `dispose()` removes them when the window closes.
   const externalPatchDirs = new Set<string>();
+  // Set when dispose() starts. A fallback still in flight checks this before
+  // recording its temp directory: the set has already been snapshotted and
+  // cleared, so recording would leak the directory.
+  let disposed = false;
 
   async function openDiff(
     original: DiffSource,
@@ -79,6 +84,19 @@ export function createDesktopDiffHost(
       computeUserPatch(originalContent, proposedContent) ??
       `No textual changes for ${path.basename(proposed.filePath)}.\n`;
     const tempDir = await createTexraTempDir('texra-desktop-diff-');
+    if (disposed) {
+      // The window closed while this fallback was in flight and dispose() has
+      // already drained the record set, so recording the directory now would
+      // leak it. Remove it immediately and stop instead.
+      try {
+        await rm(tempDir, { recursive: true, force: true });
+      } catch (cleanupError) {
+        console.warn(
+          `[desktop] Failed to remove the temporary diff directory after the window closed: ${toErrorMessage(cleanupError)}`,
+        );
+      }
+      throw new Error('Desktop window closed before the diff could be opened.');
+    }
     externalPatchDirs.add(tempDir);
     const diffPath = path.join(tempDir, `${nanoid()}.diff`);
 
@@ -88,10 +106,16 @@ export function createDesktopDiffHost(
     } catch (error) {
       // The patch never reached an editor: clean it up now instead of waiting
       // for window close, and preserve the original failure for the caller.
-      externalPatchDirs.delete(tempDir);
-      await rm(tempDir, { recursive: true, force: true }).catch(
-        () => undefined,
-      );
+      // Keep the directory recorded when the removal fails so dispose() can
+      // retry it, and log instead of swallowing the failure.
+      try {
+        await rm(tempDir, { recursive: true, force: true });
+        externalPatchDirs.delete(tempDir);
+      } catch (cleanupError) {
+        console.warn(
+          `[desktop] Failed to remove the temporary diff directory; will retry when the window closes: ${toErrorMessage(cleanupError)}`,
+        );
+      }
       throw error;
     }
 
@@ -99,6 +123,7 @@ export function createDesktopDiffHost(
   }
 
   async function dispose(): Promise<void> {
+    disposed = true;
     const tempDirs = [...externalPatchDirs];
     externalPatchDirs.clear();
     await Promise.all(

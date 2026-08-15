@@ -29,6 +29,7 @@ import {
   STREAM_PHASE,
   USER_FOLLOW_UP_SUPPORT,
   toRetryErrorInfo,
+  type ExecutionId,
   type RetryErrorInfo,
   type RunOutcome,
   type StreamTabId,
@@ -44,7 +45,6 @@ import {
 } from '@shared/state/onboardingState';
 import { agentName as baseAgentName } from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-
 import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
 import {
   buildTerminalFlowResult,
@@ -78,6 +78,15 @@ export interface RunFlowLifecycleOptions {
    * via `executions`). Throwing here must not abort the run, so it is guarded.
    */
   onRun?: (handle: AgentRunHandle) => void | Promise<void>;
+  /**
+   * Run-end side effect supplied by the composition layer. The lifecycle owns
+   * *when* it fires (terminal completion/failure, and the parked-handle
+   * teardown for a later kill) and the guard rails (skipped for subagents and
+   * WAITING suspensions, logged rather than rethrown), but not *what* it does.
+   * Kept injected so this module does not statically reach tool-domain
+   * services such as the Lean language adapter.
+   */
+  onRunEnd?: (executionId: ExecutionId) => void | Promise<void>;
 }
 
 type FlowRecordDisposition = FinalizeExecutionInput['flowRecord'];
@@ -656,6 +665,23 @@ export async function runFlowWithLifecycle(
     finalizedRunFailures.add(finalizedFailure);
     throw finalizedFailure;
   };
+  /**
+   * Invoke the composition-supplied run-end hook when the run genuinely ends.
+   * The lifecycle owns the guard rails: subagent runs do not invoke it (the
+   * parent owns the worktree), and the WAITING branch invokes it only from the
+   * parked-handle teardown if a later kill actually ends the run.
+   */
+  const runOnRunEnd = async (): Promise<void> => {
+    if (options?.isSubagent) return;
+    if (!options?.onRunEnd) return;
+    try {
+      await options.onRunEnd(executionId);
+    } catch (runEndError) {
+      logger.warn('Failed to run the run-end hook', {
+        data: { agentIdentifier, streamId, error: runEndError },
+      });
+    }
+  };
   try {
     // Publish run identity/config before the RUNNING transition so progress
     // backends can create the initial StreamExecutionState with the real
@@ -712,6 +738,11 @@ export async function runFlowWithLifecycle(
           handle,
           ctx.parentStage.id,
         );
+        // A parked run that a later stop/kill tears down has ended here,
+        // through the suspended-handle path instead of the success/error arms.
+        // Stop its Lean servers on that path too; the WAITING return above
+        // deliberately did not.
+        await runOnRunEnd();
       });
       return result;
     }
@@ -772,6 +803,17 @@ export async function runFlowWithLifecycle(
       logger.warn('Failed to cancel host interactions after the run ended', {
         data: { agentIdentifier, streamId, error: cancelError },
       });
+    }
+    // Stop the Lean servers attributed to this run in its worktree(s) so they
+    // do not idle until the timeout after the run is gone (CLI/desktop; a host
+    // whose Lean integration owns server lifetime no-ops here). Servers still
+    // leased by another run's in-flight request survive on the idle-timeout
+    // backstop. Guarded like the cancel above: a failing stop must not
+    // replace the result this run already published. A WAITING suspension is
+    // not a run end, so its return skips this and leaves the stop to the
+    // suspended-handle teardown if a later kill actually ends the run.
+    if (!keepLeaseWatcher) {
+      await runOnRunEnd();
     }
     // Release long-lived resources (e.g., WebSocket connections, keepalive
     // intervals) to prevent leaks when handler instances are discarded after

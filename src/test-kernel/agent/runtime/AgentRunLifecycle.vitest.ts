@@ -34,12 +34,11 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  type ExecutionId,
-  type RunOutcome,
-  type StreamTabId,
+  agentKey,
+  AgentCategory,
 } from '@shared/schemas';
+import type { ExecutionId, RunOutcome, StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { agentKey, AgentCategory } from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import {
   executionLeasePath,
@@ -295,6 +294,96 @@ describe('runFlowWithLifecycle', () => {
         category: 'workflow',
         agentName: 'polish',
       });
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('stops the Lean servers attributed to a run when the run ends', async () => {
+    await initLifecycleTestPlatform(true);
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-lean-server-stop',
+    );
+    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
+
+    try {
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+        { onRunEnd: stopSessionsForRun },
+      );
+
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      expect(stopSessionsForRun).toHaveBeenCalledWith(executionId);
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('still stops the Lean servers when the run fails', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-lean-server-stop-failed',
+    );
+    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
+
+    try {
+      await expect(
+        runFlowWithLifecycle(
+          ctx,
+          async () => {
+            throw new Error('flow exploded');
+          },
+          { onRunEnd: stopSessionsForRun },
+        ),
+      ).rejects.toThrow('flow exploded');
+
+      expect(stopSessionsForRun).toHaveBeenCalledWith(executionId);
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('does not stop the Lean servers when a tool-use run parks at WAITING', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-lean-server-stop-waiting',
+    );
+    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
+
+    try {
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => waitingResult(executionId, streamId),
+        { onRunEnd: stopSessionsForRun },
+      );
+
+      // WAITING is a suspension, not a terminal run end: the server must
+      // survive the parked run so a resume reuses it instead of paying a cold
+      // spawn.
+      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+      expect(stopSessionsForRun).not.toHaveBeenCalled();
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('does not stop the Lean servers when a subagent run ends', async () => {
+    await initLifecycleTestPlatform(true);
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-lean-server-stop-subagent',
+    );
+    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
+
+    try {
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+        { isSubagent: true, onRunEnd: stopSessionsForRun },
+      );
+
+      // The parent run owns the worktree, so a subagent's own terminal
+      // boundary must not stop a server the parent may still reuse.
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      expect(stopSessionsForRun).not.toHaveBeenCalled();
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
     }

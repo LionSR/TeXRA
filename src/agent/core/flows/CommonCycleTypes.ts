@@ -14,7 +14,7 @@ import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import type { FinalTool } from '@agent/types/ModelHandlerContracts';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
+import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
 import { formatPostCompactionContext } from '@agent/core/flows/postCompactionContext';
 import { RetryErrorInfoSchema } from '@shared/schemas';
 

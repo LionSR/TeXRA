@@ -15,7 +15,7 @@ import {
   setPreferCodexSubscription,
   isPreferCodexSubscription,
 } from '@model/codex/codexPreference';
-import { AgentCategory } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 

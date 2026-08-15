@@ -4,16 +4,16 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { writeSetting } from '@shared/config/settingsAccess';
 import {
   AGENT_SKILLS_CONFIG_KEY,
   AGENT_SKILLS_ENABLED_DEFAULT,
-} from '@shared/schemas/agentSkills';
+  settingsViewSettingByKey,
+} from '@shared/schemas';
+import { writeSetting } from '@shared/config/settingsAccess';
 import {
   buildAgentSkillsSettingsMessage,
   readAgentSkillsEnabled,
 } from '@shared/settingsView/handlers/agentSkillsHandlers';
-import { settingsViewSettingByKey } from '@shared/schemas/stateSettings';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 
 describe('agent skills settings', () => {

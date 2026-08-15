@@ -8,12 +8,12 @@ import type {
 } from '@desktop/shared/desktopCommandSurface';
 
 // Local imports - command catalog and shared schemas
+import { SETTINGS_TAB } from '@shared/schemas';
 import {
   formatDesktopAccelerator,
   toElectronAccelerator,
 } from '@shared/commands/accelerators';
 import { commandCatalogById, type CommandId } from '@shared/commands/catalog';
-import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - test support
 import { loadSourceModule } from './loadSourceModule.ts';

@@ -235,11 +235,17 @@ What remains:
 
 - the `orchestratorStreamId`/`parentStreamId` naming split
   (`subagentExecution.ts:71`)
-- two `isSubagent` spellings (`handle.isChildExecution` vs hardcoded `true`
-  at `nativeSubagentStrategy.ts:239`) across three finalize sites
 
-**Fix.** Rename the parameter and replace the hardcoded `true`. Cheap
-honesty, not a Wave-1 unlock.
+**Fix.** Rename the parameter. Cheap honesty, not a Wave-1 unlock. The
+second leftover originally listed here — the hardcoded `isSubagent: true`
+at `nativeSubagentStrategy.ts:239` — is **not** a finalize-site lineage
+spelling (#10343): it is an `executeAgent` launch option set inside
+`runNative`'s callback, before `onRun` supplies any handle to derive
+lineage from, and it drives runtime behavior (view/error suppression and
+`ToolUseWaitNode`'s child-specific waiting path). Replacing it as a naming
+cleanup can make a real delegated child execute with top-level semantics;
+it stays unless a distinct launch-time source of truth for the flag is
+designed.
 
 ### 7. Detached-launch lease choreography
 
@@ -347,9 +353,16 @@ action to say so instead of returning nothing.
 - Workflow agents _can_ declare `tools:` in YAML (shared
   `AgentSettingBaseSchema.tools`); definitions would be sent to the provider
   but a returned call is never dispatched — a latent silent-failure trap,
-  currently moot because no shipped workflow YAML declares tools. A load-time
-  warn (or schema-level rejection) on `tools:` in a workflow-category YAML
-  would close it cheaply; fold into whichever of items 3/9 lands first.
+  currently moot because no shipped workflow YAML declares tools. Ship the
+  non-breaking load-time warn on `tools:` in a workflow-category YAML first,
+  folded into whichever of items 3/9 lands first. Schema-level rejection is
+  a behavior change, not churn (#10341): `AgentSettingBaseSchema` accepts
+  `tools` for workflow-category agents today (`AgentDataclass.ts:28`,
+  `z.array(ToolDefinitionSchema).prefault([])`), so user-authored workflow
+  YAMLs in custom agent directories can declare `tools:` and currently load
+  fine. Rejection, if ever, is an explicit behavior-changing decision with
+  its own validation and release treatment — not a rider on item 9's
+  mechanical relocation.
 - `ToolUseRunSharedSchema` is a `z.looseObject` while reflection's shared
   schema is strict.
 - The `max(configuredRounds, userRequestTemplateCount)` rule duplicated
@@ -372,8 +385,9 @@ the named sites against head.
    `architecture-edges` ratchet stays unchanged.
 2. Item 9's relocations (mechanical; churn-only; best landed early before
    other waves touch the same files).
-3. Item 6's leftover naming (parameter rename + hardcoded `true`); not a
-   blocker.
+3. Item 6's leftover naming (the `orchestratorStreamId`/`parentStreamId`
+   parameter rename only — the hardcoded `isSubagent: true` is a launch
+   option, not residue; see item 6). Not a blocker.
 
 **Wave 2 — contracts (design-first, small diffs):**
 
@@ -462,18 +476,25 @@ and relay's max(header, body) retryAfter with rate-vs-concurrency reason;
 the existing `RetryState.vitest.ts` predicate condition tables survive
 unchanged; the test harness needs a dummy config, which is churn, not risk.
 
-### A2. Approval surface trim (−100 LoC, −13 elements)
+### A2. Approval surface trim (−80 LoC, −10 elements)
 
-Three shippable trims, none touching the healthy core: delete the
-"re-export commonly used functions" convenience barrel block in
-`tools/approval/index.ts` (a banned barrel with a live dual import path);
-dissolve `proposalApproval.ts` (46 LoC of `SessionApprovals` behavior
-stranded two directories from its owner — becomes a method on the class
-already owning the bypass objects); single-source the
-`{feedback}|{reason}|{cause}` rejection-provenance union hand-written five
-times across `HostInteractions.ts`/`toolEditApproval.ts`. Verifier cut:
-keep `cleanupAllApprovals` (test teardown consumer set makes deletion a
-wash).
+Two shippable trims, none touching the healthy core: dissolve
+`proposalApproval.ts` (46 LoC of `SessionApprovals` behavior stranded two
+directories from its owner — becomes a method on the class already owning
+the bypass objects); single-source the `{feedback}|{reason}|{cause}`
+rejection-provenance union hand-written five times across
+`HostInteractions.ts`/`toolEditApproval.ts`. Verifier cut: keep
+`cleanupAllApprovals` (test teardown consumer set makes deletion a wash).
+Review cut (#10339): the "re-export commonly used functions" block in
+`tools/approval/index.ts` is **not** a banned barrel — the module's
+docstring declares it the unified approval-system surface, which is exactly
+the documented-public-surface carve-out in AGENTS.md's "No convenience
+barrels" rule, and `2026-08-01-directory-organization.md` already evaluated
+and retained this exact barrel on that ground; several production consumers
+intentionally import `@tools/approval`. Deleting the block would churn
+imports without removing the index module or simplifying the structure. It
+stays unless the 2026-08-01 surface ruling is revisited with the reasoning
+recorded here first.
 
 ### A3. One error channel for child-run/terminal persistence (−90 LoC, −9)
 
@@ -562,10 +583,17 @@ Tier 2: extension and desktop each maintain a near-identical
 preload-then-read resume-state resolver over the same `StreamSnapshotStore`
 (the extension comment admits the mirroring), and the extension's
 `ProgressViewProvider` singleton hop is provably identical to
-`defaultSession().snapshots` while adding a spurious "progress view never
-opened" failure mode — one runtime default resolver deletes both host
-copies. The riskier CLI two-rehydration-path merge is droppable without
-losing the tiers above.
+`defaultSession().snapshots` — one runtime default resolver deletes both
+host copies. Review correction (#10340): the "progress view never opened"
+failure mode originally cited against the singleton hop cannot occur on the
+extension path — `extension.ts:509-514` constructs `ProgressViewProvider`
+and awaits `initialize()` during activation, before command registration at
+`:523`, and activations without exactly one workspace folder return early
+at `:149-166` without registering the follow-up command at all. The hop is
+still worth deleting as pure indirection, but no failure-mode elimination
+is a verified benefit; re-verify the extension resume-state resolver claims
+against head before executing. The riskier CLI two-rehydration-path merge
+is droppable without losing the tiers above.
 
 ### A7. `WorkflowExecutionSnapshot` as the one fold owner (−70 LoC, −6)
 
@@ -662,8 +690,15 @@ zero hits in any host package) while desktop live-imports
 `@agent/index/agentEntry` unrecorded — drift the count-only gate
 structurally cannot catch, since any specifier can swap for any other under
 the same count. The sibling `hostAgentMockRatchet` already runs the
-set-based two-check form green in the same directory. Fix: purge stale
-rows, record the drift, convert the gate to set-based; reshape the lean
+set-based two-check form green in the same directory. Fix: first delete the
+avoidable edge — desktop's `type AgentEntry` import in
+`desktopAgentSettingsController.ts` re-routes through the existing
+`@agent/index` surface, which already exports it (#10342) — then purge the
+stale rows and convert the gate to set-based. Do **not** "record the drift"
+by adding `@agent/index/agentEntry` to the baseline: that would legitimize
+exactly the class of new distinct `@agent/*` deep-import specifier the
+ratchet exists to reject (AGENTS.md: a host may not add a NEW distinct
+`@agent/*` deep-import specifier, type-only included). Reshape the lean
 exports out of knip (7 of 15 knip-baseline rows exist only for it).
 Verifier correction: TS-side cost is ~+15 LoC (the set-based checks are
 longer than the count assert) — accepted because the gate then states

@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { platform } from '@platform/platform';
+import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
-import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas/goal';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { GoalStore, isGoalEnabled } from '@tools/goal';

@@ -9,7 +9,7 @@ import { describe, it, beforeAll } from 'vitest';
 
 // Local imports
 import type { ConfigProvider } from '@platform/interfaces';
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
+import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
 import {

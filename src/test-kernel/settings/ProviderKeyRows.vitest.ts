@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { resolveProviderKeyRows } from '@settingsView/frontend/components/profile/providerKeyRows';
+import type { ProviderKeyStatus } from '@shared/schemas';
 import {
   API_KEY_PROVIDER_IDS,
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
   SERVER_SIDE_PROVIDER_IDS,
 } from '@shared/constants/providers';
-import type { ProviderKeyStatus } from '@shared/schemas/settingsViewMessages';
 
 describe('settings provider key rows', () => {
   it('keeps every API-key provider covered by display labels and key URLs', () => {

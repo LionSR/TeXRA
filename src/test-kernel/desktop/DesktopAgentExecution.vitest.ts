@@ -29,11 +29,15 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   STREAM_STATUS,
-  type ExecutionId,
-  type OutputFileInfo,
-  type StorageKey,
-  type StreamPhase,
-  type StreamTabId,
+  DEFAULT_TOOL_CONFIG,
+} from '@shared/schemas';
+import type {
+  ExecutionId,
+  OutputFileInfo,
+  StorageKey,
+  StreamPhase,
+  StreamTabId,
+  ProgressViewInboundHandlerRegistry,
 } from '@shared/schemas';
 import {
   COMMON_COMMANDS,
@@ -41,8 +45,6 @@ import {
   PROGRESS_VIEW_COMMANDS,
 } from '@shared/ipc';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
-import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createDeferred } from '@test/support/asyncTestUtils';
