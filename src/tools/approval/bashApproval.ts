@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
-import type {
-  BashSettlement,
-  HostBashApprovalRequest,
+import {
+  classifyRejection,
+  type BashSettlement,
+  type HostBashApprovalRequest,
 } from '@agent/runtime/HostInteractions';
 import {
   currentSession,
@@ -135,20 +136,20 @@ export function buildBashApprovalRejectedResult(
   rejection: Extract<BashSettlement, { action: 'reject' }>,
 ): ToolResult {
   const preview = truncateWithEllipsis(command, 60);
-  const feedback = rejection.feedback?.trim();
-  const isPolicyDenial = rejection.reason != null;
-  const isAutomaticCancellation = 'cause' in rejection;
-  const reason = rejection.reason?.trim();
-  const cause = rejection.cause?.trim();
+  const classification = classifyRejection(rejection);
+  const feedback =
+    classification.kind === 'feedback'
+      ? classification.feedback?.trim()
+      : undefined;
   let message = `User rejected command: ${preview}`;
   let guidance: string | undefined = DEFAULT_BASH_REJECTION_GUIDANCE;
-  if (isPolicyDenial) {
+  if (classification.kind === 'policy') {
     message = `Command denied: ${preview}`;
-    guidance = reason;
+    guidance = classification.reason.trim();
   }
-  if (isAutomaticCancellation) {
+  if (classification.kind === 'cancelled') {
     message = `Command approval cancelled: ${preview}`;
-    guidance = cause;
+    guidance = classification.cause?.trim();
   }
   const error = feedback || !guidance ? message : `${message}\n\n${guidance}`;
   return errorResult(error, {

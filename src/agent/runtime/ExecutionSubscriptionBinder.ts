@@ -27,7 +27,28 @@ const logger = createChannelTrace('ExecutionSubscriptionBinder');
 
 const TAG = DELIVERY_TAG.executionActivity;
 
-type PerStream = Map<string, ExecutionSubscription>;
+/**
+ * Composite key so one flat map replaces the (streamId -> executionId ->
+ * subscription) nesting. Built from `JSON.stringify(streamId)` rather than
+ * plain concatenation: `StreamTabIdSchema` (`z.string().min(1)`) does not
+ * forbid any particular character, so a delimiter-based key could alias two
+ * distinct (streamId, executionId) pairs if an id ever contained it.
+ * `JSON.stringify` is self-delimiting (its closing quote cannot be faked by
+ * a longer or differently-escaped string), so `streamKeyPrefix`'s
+ * `startsWith` check cannot collide across streams regardless of id content.
+ */
+type SubscriptionKey = string;
+
+function streamKeyPrefix(streamId: StreamTabId): string {
+  return `${JSON.stringify(streamId)}:`;
+}
+
+function subscriptionKey(
+  streamId: StreamTabId,
+  executionId: string,
+): SubscriptionKey {
+  return `${streamKeyPrefix(streamId)}${JSON.stringify(executionId)}`;
+}
 
 interface ReleaseSource {
   onRelease(observer: (streamId: StreamTabId) => void): () => void;
@@ -94,8 +115,15 @@ class ExecutionSubscription {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.removeListener?.();
-    this.onDisposed();
+    // onDisposed() must run even if removeListener throws — it is the only
+    // path that removes this subscription's entry from the binder's map, and
+    // a leaked map entry blocks a future bind() for the same (streamId,
+    // executionId) pair from ever succeeding.
+    try {
+      this.removeListener?.();
+    } finally {
+      this.onDisposed();
+    }
   }
 
   private handleChange(handle: AgentExecutionHandle | undefined): void {
@@ -160,7 +188,10 @@ export class ExecutionSubscriptionBinder {
   private readonly releaseSource: ReleaseSource;
   private readonly logger: BinderLogger;
   private readonly session?: SessionHandle;
-  private readonly perStream = new Map<StreamTabId, PerStream>();
+  private readonly subscriptions = new Map<
+    SubscriptionKey,
+    ExecutionSubscription
+  >();
   private releaseHook: (() => void) | undefined;
 
   constructor(options: ExecutionSubscriptionBinderOptions = {}) {
@@ -191,23 +222,19 @@ export class ExecutionSubscriptionBinder {
       );
     }
 
-    let bound = this.perStream.get(streamId);
-    if (!bound) {
-      bound = new Map();
-      this.perStream.set(streamId, bound);
-    }
-    if (bound.has(executionId)) return;
+    const key = subscriptionKey(streamId, executionId);
+    if (this.subscriptions.has(key)) return;
 
     const subscription = new ExecutionSubscription(
       streamId,
       handle,
       this.registry,
       this.logger,
-      () => this.removeBoundKey(streamId, executionId),
+      () => this.subscriptions.delete(key),
       this.releaseSource.currentGenerationId?.(streamId),
       this.session,
     );
-    bound.set(executionId, subscription);
+    this.subscriptions.set(key, subscription);
     if (subscription.bind()) {
       this.logger.info('Bound execution subscription to stream', {
         data: { executionId, streamId },
@@ -220,7 +247,9 @@ export class ExecutionSubscriptionBinder {
    * (stream, execution) pair.
    */
   unbind(streamId: StreamTabId, executionId: string): boolean {
-    const subscription = this.perStream.get(streamId)?.get(executionId);
+    const subscription = this.subscriptions.get(
+      subscriptionKey(streamId, executionId),
+    );
     if (!subscription) return false;
     try {
       subscription.dispose();
@@ -235,36 +264,29 @@ export class ExecutionSubscriptionBinder {
   dispose(): void {
     this.releaseHook?.();
     this.releaseHook = undefined;
-    for (const bound of [...this.perStream.values()]) {
-      this.disposeBoundSubscriptions(bound, 'binder disposal');
-    }
-    this.perStream.clear();
+    this.disposeMatching(() => true, 'binder disposal');
+    this.subscriptions.clear();
   }
 
   private ensureReleaseHook(): void {
     if (this.releaseHook) return;
     this.releaseHook = this.releaseSource.onRelease((streamId) => {
-      const bound = this.perStream.get(streamId);
-      if (!bound) return;
-      this.disposeBoundSubscriptions(bound, 'release');
-      this.perStream.delete(streamId);
+      const prefix = streamKeyPrefix(streamId);
+      this.disposeMatching((key) => key.startsWith(prefix), 'release');
     });
   }
 
-  private disposeBoundSubscriptions(bound: PerStream, reason: string): void {
-    for (const subscription of [...bound.values()]) {
+  private disposeMatching(
+    matches: (key: SubscriptionKey) => boolean,
+    reason: string,
+  ): void {
+    for (const [key, subscription] of [...this.subscriptions]) {
+      if (!matches(key)) continue;
       try {
         subscription.dispose();
       } catch (err) {
         this.logger.warn(`Disposer threw during ${reason}`, { data: err });
       }
     }
-  }
-
-  private removeBoundKey(streamId: StreamTabId, executionId: string): void {
-    const bound = this.perStream.get(streamId);
-    if (!bound) return;
-    bound.delete(executionId);
-    if (bound.size === 0) this.perStream.delete(streamId);
   }
 }
