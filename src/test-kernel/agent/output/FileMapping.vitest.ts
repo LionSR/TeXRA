@@ -6,7 +6,7 @@ import type { AgentTrace } from '@agent/trace';
 import {
   createFileMapping,
   replaceInputCommands,
-} from '@agent/output/fileMapping';
+} from '@agent/implementations/flows/reflection/output/fileMapping';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { createExternalLocation as externalLocation } from '@utils/files/fileLocation';
 import { AbsoluteFS } from '@utils/files/absoluteFS';

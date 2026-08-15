@@ -1,14 +1,6 @@
 import { getExecutionStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
 import { PromptBuilder } from '@agent/prompt/PromptBuilder';
-import {
-  createOutputState,
-  setActiveRun,
-  getOutputFilesByRound,
-  roundsFromPersisted,
-} from '@agent/output/outputState';
-import { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
@@ -38,6 +30,14 @@ import {
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { readPlatformSetting } from '@utils/config/platformSettings';
+import { LatexDiffManager } from './output/LatexDiffManager';
+import { XmlOutputManager } from './output/XmlOutputManager';
+import {
+  createOutputState,
+  setActiveRun,
+  getOutputFilesByRound,
+  roundsFromPersisted,
+} from './output/outputState';
 
 import { TeXCountNode } from './nodes/TeXCountNode';
 import { MediaExtractionNode } from './nodes/MediaExtractionNode';
@@ -106,8 +106,7 @@ export async function runReflectionFlow<C = unknown>(
     userVarChannels,
     runScope,
   } = input;
-  const { streamId, executionId, session: runSession } = runScope;
-  const interactions = runSession.interactions;
+  const { streamId, executionId } = runScope;
 
   let shared: ReflectionFlowShared | undefined;
 
@@ -169,20 +168,6 @@ export async function runReflectionFlow<C = unknown>(
       }
       return canonical;
     });
-
-  setActiveRun(
-    outputState,
-    {
-      setting,
-      config,
-      baseFiles,
-      logger,
-      fileService,
-      streamId,
-      interactions,
-    },
-    storageKey,
-  );
 
   const kv = getExecutionStore(executionId);
 
@@ -314,6 +299,9 @@ export async function runReflectionFlow<C = unknown>(
     baseFiles,
   };
   pf.setServices(services);
+
+  // Kick off run-workspace preparation (awaited lazily by extractFilesFromXml).
+  setActiveRun(outputState, services, storageKey);
 
   if (flowRecord) {
     logger.debug('Resuming reflection flow from persistence');

@@ -5,10 +5,13 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { computeOutputDiffStats } from '@agent/output/diffComputation';
-import { assignByContentSimilarity } from '@agent/output/extraction/contentSimilarity';
-import { createOutputState, ensureRoundData } from '@agent/output/outputState';
-import type { RoundFileMapping } from '@agent/output/types';
+import { computeOutputDiffStats } from '@agent/implementations/flows/reflection/output/diffComputation';
+import { assignByContentSimilarity } from '@agent/implementations/flows/reflection/output/extraction/contentSimilarity';
+import {
+  createOutputState,
+  ensureRoundData,
+} from '@agent/implementations/flows/reflection/output/outputState';
+import type { RoundFileMapping } from '@agent/implementations/flows/reflection/output/types';
 import type { ExecutionId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { computeAndWriteWorkflowDiffs } from '@tools/delegation/subagentResults';

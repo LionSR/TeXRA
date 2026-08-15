@@ -1,11 +1,8 @@
-import { type AgentTrace } from '@agent/trace';
 import { reportMissingOutputs } from '@agent/runtime/runFactEvents';
-import { replaceInputCommands } from '@agent/output/fileMapping';
 import type {
   FileLocation,
   OutputFileInfo,
   OutputXmlSummary,
-  RoundOutput,
 } from '@shared/schemas';
 import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
@@ -14,29 +11,30 @@ import {
   extractMultipleTextFromTag,
   extractTextFromTag,
 } from '@utils/text/xmlExtraction';
+import { replaceInputCommands } from './fileMapping';
 
 import { tryOperation } from './outputOperations';
+import {
+  ensureRoundData,
+  type OutputDependencies,
+  type OutputState,
+} from './outputState';
 import type { XmlOutputManager } from './XmlOutputManager';
-
-export interface ProcessingContext {
-  baseFiles: FileLocation[];
-  streamId: string;
-  logger: AgentTrace;
-  xmlManager: XmlOutputManager;
-  setRoundOutputs: (round: number, outputs: OutputFileInfo[]) => void;
-  ensureRoundData: (round: number) => RoundOutput;
-}
 
 /** Handles processing of single and multiple output files. */
 export class OutputFileProcessor {
-  constructor(private readonly ctx: ProcessingContext) {}
+  constructor(
+    private readonly state: OutputState,
+    private readonly deps: OutputDependencies,
+    private readonly xmlManager: XmlOutputManager,
+  ) {}
 
   async processMultipleOutputs(
     outputLocation: FileLocation,
     currRound: number,
     rawLocation: FileLocation,
   ): Promise<void> {
-    const { logger } = this.ctx;
+    const { logger } = this.deps;
 
     logger.debug(
       `Processing multiple outputs for ${outputLocation.absolutePath}`,
@@ -45,7 +43,7 @@ export class OutputFileProcessor {
     await tryOperation(
       async () => {
         const processedPairs =
-          await this.ctx.xmlManager.splitScratchpadMultipleOutputXml(
+          await this.xmlManager.splitScratchpadMultipleOutputXml(
             outputLocation,
             currRound,
             'scratchpad',
@@ -61,10 +59,10 @@ export class OutputFileProcessor {
         }
 
         const locations = processedPairs.map((p) => p.location);
-        if (this.ctx.baseFiles.length > 0) {
-          await replaceInputCommands(this.ctx.baseFiles, locations, logger);
+        if (this.deps.baseFiles.length > 0) {
+          await replaceInputCommands(this.deps.baseFiles, locations, logger);
         }
-        this.ctx.setRoundOutputs(currRound, processedPairs);
+        ensureRoundData(this.state, currRound).outputs = processedPairs;
         await this.captureXmlSummary(currRound, rawLocation, processedPairs);
       },
       {
@@ -86,9 +84,9 @@ export class OutputFileProcessor {
    * location.
    */
   private similarityBaseFiles(currRound: number): FileLocation[] {
-    const { baseFiles } = this.ctx;
+    const { baseFiles } = this.deps;
     if (currRound === 0) return baseFiles;
-    const previousOutputs = this.ctx.ensureRoundData(currRound - 1).outputs;
+    const previousOutputs = ensureRoundData(this.state, currRound - 1).outputs;
     if (previousOutputs.length === 0) return baseFiles;
 
     // An output's source is the workspace-relative document name; a base
@@ -127,7 +125,7 @@ export class OutputFileProcessor {
     rawLocation: FileLocation,
   ): Promise<void> {
     await this.emitMissingOutputs(currRound, outputLocation);
-    this.ctx.setRoundOutputs(currRound, []);
+    ensureRoundData(this.state, currRound).outputs = [];
     await this.captureXmlSummary(currRound, rawLocation, []);
   }
 
@@ -145,7 +143,7 @@ export class OutputFileProcessor {
       () => '',
     );
     if (rawText.trim().length > 0) {
-      this.ctx.logger.warn(
+      this.deps.logger.warn(
         `The model returned output but no files could be extracted from it: it likely did not wrap each document in <${OUTPUT_DOCUMENTS_TAG}>. The raw response was kept at ${outputLocation.absolutePath} for recovery.`,
         {
           data: {
@@ -155,8 +153,8 @@ export class OutputFileProcessor {
         },
       );
     }
-    reportMissingOutputs(this.ctx.logger, {
-      streamId: this.ctx.streamId,
+    reportMissingOutputs(this.deps.logger, {
+      streamId: this.deps.runScope.streamId,
       round: currRound,
       missing: [],
       xmlFile: outputLocation.absolutePath,
@@ -168,7 +166,7 @@ export class OutputFileProcessor {
     rawOutput: FileLocation | null,
     processed: OutputFileInfo[],
   ): Promise<void> {
-    const data = this.ctx.ensureRoundData(round);
+    const data = ensureRoundData(this.state, round);
     const singleFile =
       processed.length === 1 ? processed[0].location.absolutePath : null;
 
@@ -219,7 +217,7 @@ export class OutputFileProcessor {
         data.xmlSummary = buildSummary(tagContents);
       },
       {
-        logger: this.ctx.logger,
+        logger: this.deps.logger,
         level: 'debug',
         label: `Failed to collect XML summary for round ${round}`,
         recover: () => {

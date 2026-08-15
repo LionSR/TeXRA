@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractFilenameHeaderDocuments } from '@agent/output/extraction/filenameHeaders';
+import { extractFilenameHeaderDocuments } from '@agent/implementations/flows/reflection/output/extraction/filenameHeaders';
 
 /**
  * Regression coverage for issue #6937: `sawSoleOutputChunkLabel` must be
@@ -12,7 +12,7 @@ import { extractFilenameHeaderDocuments } from '@agent/output/extraction/filenam
  * All scenarios below use the single-output-file wiring
  * (`synthesisName === coalesceRepeatedName`) that `XmlOutputManager` uses for
  * agents like ocr / paper2slide that declare exactly one output file — see
- * `src/agent/output/XmlOutputManager.ts` around the `soleExpectedFile` wiring.
+ * `src/agent/implementations/flows/reflection/output/XmlOutputManager.ts` around the `soleExpectedFile` wiring.
  */
 function extract(content: string) {
   return extractFilenameHeaderDocuments(content, {

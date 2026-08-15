@@ -1,12 +1,12 @@
 import type { PromptBuilder } from '@agent/prompt/PromptBuilder';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
-import type { OutputState } from '@agent/output/outputState';
-import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
-import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import type { LatexMediaManager } from '@latex/LatexMediaManager';
 import type { AgentFileLocation, FileLocation } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files/taskRunStorage';
+import type { OutputState } from './output/outputState';
+import type { LatexDiffManager } from './output/LatexDiffManager';
+import type { XmlOutputManager } from './output/XmlOutputManager';
 
 export interface WorkflowOutputPolicy {
   readonly shouldAutoOpenPdfOrLog: () => boolean;

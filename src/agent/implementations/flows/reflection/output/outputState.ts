@@ -14,7 +14,7 @@
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
+import type { RunScope } from '@agent/runtime/RunScope';
 import {
   OutputXmlSummarySchema,
   type CompileFailure,
@@ -34,14 +34,18 @@ export interface OutputState {
   runPreparation: Promise<void> | null;
 }
 
+/**
+ * The structural subset of `ReflectionServices` the output pipeline reads.
+ * `OutputNode` and `runReflectionFlow` pass their services object directly —
+ * never build a separate literal of this shape.
+ */
 export interface OutputDependencies {
-  setting: AgentWorkflowSetting;
-  config: AgentConfig;
-  baseFiles: FileLocation[];
-  logger: AgentTrace;
-  fileService: TaskRunFileService;
-  streamId: string;
-  interactions: SessionHostInteractions;
+  readonly setting: AgentWorkflowSetting;
+  readonly config: AgentConfig;
+  readonly baseFiles: FileLocation[];
+  readonly logger: AgentTrace;
+  readonly fileService: TaskRunFileService;
+  readonly runScope: RunScope;
 }
 
 export function createOutputState(
