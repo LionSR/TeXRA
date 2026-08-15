@@ -1,30 +1,6 @@
 import { Node } from '@agent/node';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
-import type { RoundFileMapping } from '@agent/output/types';
-import type { CompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
-import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
-import {
-  hasCompileFailures,
-  hasRoundOutputs,
-  getStorageKey,
-  roundsToPersisted,
-  setCompileFailures,
-  type OutputDependencies,
-} from '@agent/output/outputState';
-import { runCompileCheck } from '@agent/output/compileCheck';
-import { extractFilesFromXml } from '@agent/output/outputFileExtraction';
-import { traceFileLineage } from '@agent/output/lineageMapping';
-import { resolveBaseFilesForDiff } from '@agent/output/snapshotResolution';
-import { checkExpectedOutputs } from '@agent/output/outputValidation';
-import {
-  blankRoundSummary,
-  summarizeRound,
-  getRoundOutput,
-  type RoundSummary,
-} from '@agent/output/roundSummary';
-import { formatCompileFailureRoundContext } from '@agent/output/compileFailureRoundContext';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { tryOperation } from '@agent/output/outputOperations';
 import {
   MESSAGE_TYPES,
   type AgentFileLocation,
@@ -34,6 +10,28 @@ import {
 } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  hasCompileFailures,
+  hasRoundOutputs,
+  getStorageKey,
+  roundsToPersisted,
+  setCompileFailures,
+} from '../output/outputState';
+import { runCompileCheck } from '../output/compileCheck';
+import { extractFilesFromXml } from '../output/outputFileExtraction';
+import { traceFileLineage } from '../output/lineageMapping';
+import { resolveBaseFilesForDiff } from '../output/snapshotResolution';
+import { checkExpectedOutputs } from '../output/outputValidation';
+import {
+  blankRoundSummary,
+  summarizeRound,
+  type RoundSummary,
+} from '../output/roundSummary';
+import { formatCompileFailureRoundContext } from '../output/compileFailureRoundContext';
+import { tryOperation } from '../output/outputOperations';
+import type { LatexDiffManager } from '../output/LatexDiffManager';
+import type { CompiledPdfArtifact } from '../output/compiledPdfArtifacts';
+import type { RoundFileMapping } from '../output/types';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionServices } from '../ReflectionServices';
@@ -56,22 +54,6 @@ export class OutputNode<C = unknown> extends Node<
   ReflectionFlowShared,
   ReflectionServices<C>
 > {
-  private outputDependencies(): OutputDependencies {
-    const { baseFiles, config, fileService, logger, setting, runScope } =
-      this.services;
-    const { streamId } = runScope;
-
-    return {
-      baseFiles,
-      config,
-      fileService,
-      logger,
-      interactions: runScope.session.interactions,
-      setting,
-      streamId,
-    };
-  }
-
   async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
     if (!shared.outputLocation) {
       throw new Error(
@@ -89,14 +71,13 @@ export class OutputNode<C = unknown> extends Node<
   async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
     const { outputState, xmlManager, diffManager, setting, logger, baseFiles } =
       this.services;
-    const outputDependencies = this.outputDependencies();
     const { outputLocation, currentRound, endTurn } = prepRes;
 
     // Resolve to pre-run snapshots once so mapping, latexdiff, and diff
     // stats all see the same base locations (see snapshotResolution).
     const diffBaseFiles = await resolveBaseFilesForDiff(
       baseFiles,
-      outputDependencies.fileService.executionId,
+      this.services.fileService.executionId,
     );
 
     let mapping: RoundFileMapping | undefined;
@@ -118,7 +99,7 @@ export class OutputNode<C = unknown> extends Node<
         () =>
           extractFilesFromXml(
             outputState,
-            outputDependencies,
+            this.services,
             xmlManager,
             outputLocation,
             currentRound,
@@ -150,7 +131,12 @@ export class OutputNode<C = unknown> extends Node<
             currentRound,
           );
           const compileResult = await runCompileCheck(
-            { ...outputDependencies, outputState },
+            {
+              fileService: this.services.fileService,
+              outputState,
+              logger,
+              streamId: this.services.runScope.streamId,
+            },
             currentRound,
           );
           compileFailures = compileResult.failures;
@@ -166,7 +152,7 @@ export class OutputNode<C = unknown> extends Node<
     // Summarize round (pure data — no events)
     const summary = await summarizeRound(
       outputState,
-      outputDependencies,
+      this.services,
       outputLocation,
       currentRound,
       {
@@ -176,11 +162,6 @@ export class OutputNode<C = unknown> extends Node<
         baseFiles: diffBaseFiles,
       },
     );
-
-    // Get round output — critical, throw if it fails
-    await getRoundOutput(outputState, diffBaseFiles, currentRound, {
-      isRewrite: setting.isRewrite,
-    });
 
     return {
       summary,
@@ -196,7 +177,6 @@ export class OutputNode<C = unknown> extends Node<
     error: Error,
   ): Promise<OutputExecResult> {
     const { logger, outputState, setting } = this.services;
-    const outputDependencies = this.outputDependencies();
     const { outputLocation, currentRound, endTurn } = prepRes;
     logger.warn(`Output processing failed: ${error.message}`, { data: error });
 
@@ -205,7 +185,7 @@ export class OutputNode<C = unknown> extends Node<
     try {
       summary = await summarizeRound(
         outputState,
-        outputDependencies,
+        this.services,
         outputLocation,
         currentRound,
         { endTurn, isRewrite: setting.isRewrite },
@@ -251,9 +231,10 @@ export class OutputNode<C = unknown> extends Node<
     prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
-    const { logger, outputState, workflowOutputPolicy } = this.services;
-    const outputDependencies = this.outputDependencies();
-    const { interactions, streamId } = outputDependencies;
+    const { logger, outputState, workflowOutputPolicy, runScope } =
+      this.services;
+    const { streamId } = runScope;
+    const interactions = runScope.session.interactions;
     const { outputLocation, currentRound, endTurn } = prepRes;
     const { summary } = execRes;
 
@@ -299,7 +280,7 @@ export class OutputNode<C = unknown> extends Node<
       await tryOperation(async () => {
         const validationResult = await checkExpectedOutputs(
           outputState,
-          outputDependencies,
+          this.services,
           outputLocation,
           currentRound,
           summary.stage,

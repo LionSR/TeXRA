@@ -2,8 +2,8 @@
 import * as path from 'node:path';
 
 // Local imports
-import type { CompileCheckContext } from '@agent/output/compileCheck';
-import type { OutputState } from '@agent/output/outputState';
+import type { CompileCheckContext } from '@agent/implementations/flows/reflection/output/compileCheck';
+import type { OutputState } from '@agent/implementations/flows/reflection/output/outputState';
 import type {
   ExecutionId,
   FileLocation,

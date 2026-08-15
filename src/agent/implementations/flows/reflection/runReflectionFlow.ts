@@ -1,14 +1,6 @@
 import { getExecutionStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
 import { PromptBuilder } from '@agent/prompt/PromptBuilder';
-import {
-  createOutputState,
-  setActiveRun,
-  getOutputFilesByRound,
-  roundsFromPersisted,
-} from '@agent/output/outputState';
-import { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
@@ -38,6 +30,14 @@ import {
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { readPlatformSetting } from '@utils/config/platformSettings';
+import { LatexDiffManager } from './output/LatexDiffManager';
+import { XmlOutputManager } from './output/XmlOutputManager';
+import {
+  createOutputState,
+  setActiveRun,
+  getOutputFilesByRound,
+  roundsFromPersisted,
+} from './output/outputState';
 
 import { TeXCountNode } from './nodes/TeXCountNode';
 import { MediaExtractionNode } from './nodes/MediaExtractionNode';
@@ -106,8 +106,7 @@ export async function runReflectionFlow<C = unknown>(
     userVarChannels,
     runScope,
   } = input;
-  const { streamId, executionId, session: runSession } = runScope;
-  const interactions = runSession.interactions;
+  const { streamId, executionId } = runScope;
 
   let shared: ReflectionFlowShared | undefined;
 
@@ -170,19 +169,31 @@ export async function runReflectionFlow<C = unknown>(
       return canonical;
     });
 
-  setActiveRun(
+  const workflowOutputPolicy: WorkflowOutputPolicy =
+    input.workflowOutputPolicy ?? {
+      shouldAutoOpenPdfOrLog: () =>
+        readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF),
+      shouldRejectOnCompileFailure: () =>
+        readPlatformSetting<boolean>(
+          WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+        ),
+    };
+
+  const services: ReflectionServices<C> = {
+    ...input,
     outputState,
-    {
-      setting,
-      config,
-      baseFiles,
-      logger,
-      fileService,
-      streamId,
-      interactions,
-    },
-    storageKey,
-  );
+    xmlManager,
+    diffManager,
+    latexMediaManager,
+    promptBuilder,
+    fileService,
+    getOutputFileLocation,
+    workflowOutputPolicy,
+    baseFiles,
+  };
+
+  // Kick off run-workspace preparation (awaited lazily by extractFilesFromXml).
+  setActiveRun(outputState, services, storageKey);
 
   const kv = getExecutionStore(executionId);
 
@@ -251,16 +262,6 @@ export async function runReflectionFlow<C = unknown>(
   mediaNode.next(responseCycleNode);
   responseCycleNode.next(outputNode);
 
-  const workflowOutputPolicy: WorkflowOutputPolicy =
-    input.workflowOutputPolicy ?? {
-      shouldAutoOpenPdfOrLog: () =>
-        readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF),
-      shouldRejectOnCompileFailure: () =>
-        readPlatformSetting<boolean>(
-          WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-        ),
-    };
-
   const pf = new RoundPersistedFlow<
     ReflectionFlowShared,
     ReflectionServices<C>
@@ -301,18 +302,6 @@ export async function runReflectionFlow<C = unknown>(
     },
   });
 
-  const services: ReflectionServices<C> = {
-    ...input,
-    outputState,
-    xmlManager,
-    diffManager,
-    latexMediaManager,
-    promptBuilder,
-    fileService,
-    getOutputFileLocation,
-    workflowOutputPolicy,
-    baseFiles,
-  };
   pf.setServices(services);
 
   if (flowRecord) {
