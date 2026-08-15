@@ -44,6 +44,7 @@ import {
   emitActiveStream,
   emitRunConfig,
   emitRunEvent,
+  emitSessionFact,
   emitStreamDescription,
   toolUseConfig,
 } from './progressBackendHarness';
@@ -1027,8 +1028,8 @@ describe('ProgressBackend', () => {
 
   it('drops buffered conversation progress when an existing stream re-enters running', async () => {
     vi.useFakeTimers();
-    const { backend, messages } = createRecordingBackend();
-    backend.setupEventListeners();
+    const target = createListeningBackend();
+    const { backend, messages } = target;
     const stream = 'tool-stream' as StreamTabId;
 
     try {
@@ -1045,7 +1046,7 @@ describe('ProgressBackend', () => {
       });
       backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
 
-      backend.applyRunFact(stream, {
+      emitRunEvent(target, stream, {
         type: 'conversation.progress',
         progress: { toolCallCount: 7 },
       });
@@ -1096,7 +1097,7 @@ describe('ProgressBackend', () => {
       },
     }));
     try {
-      const { backend } = createRecordingBackend();
+      const target = createListeningBackend();
       const stream = 'tool-stream' as StreamTabId;
       const failure = new Error('status application exploded');
       vi.spyOn(
@@ -1104,7 +1105,7 @@ describe('ProgressBackend', () => {
         'setStreamStatus',
       ).mockRejectedValue(failure);
 
-      backend.applySessionFact({
+      emitSessionFact(target, {
         type: 'status',
         streamId: stream,
         phase: STREAM_PHASE.RUNNING,

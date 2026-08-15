@@ -14,6 +14,7 @@ import type {
   DeleteExecutionResult,
 } from '@agent/storage/executionListing';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   ProgressBackend,
@@ -167,6 +168,13 @@ export function emitRunEvent(
   event: AgentEvent,
 ): void {
   target.session.events.emit({ scope: 'run', streamId, event });
+}
+
+export function emitSessionFact(
+  target: { session: SessionHandle },
+  event: SessionFact,
+): void {
+  target.session.events.emit({ scope: 'session', event });
 }
 
 export function emitActiveStream(

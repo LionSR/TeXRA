@@ -418,27 +418,16 @@ export class ProgressBackend {
     }
   }
 
-  /** Awaitable status application for tests and hosts that cannot fire-and-forget. */
+  /**
+   * Awaitable status application for tests and hosts that cannot
+   * fire-and-forget. The only fact-seed surface left on the backend: every
+   * other fact arrives through the session-event hub, whose synchronous emit
+   * cannot hand back the handler promise `setStreamStatus` callers need.
+   */
   applyStreamStatus(
     ...args: Parameters<SessionFactApplier['setStreamStatus']>
   ): ReturnType<SessionFactApplier['setStreamStatus']> {
     return this.factApplier.setStreamStatus(...args);
-  }
-
-  /** Inject a session fact (tests / rare host seeds). Prefer the hub in production. */
-  applySessionFact(
-    ...args: Parameters<SessionFactApplier['handleSessionFact']>
-  ): void {
-    this.factApplier.handleSessionFact(...args);
-    const [fact] = args;
-    if (fact.type === 'setActiveStream') {
-      this.handleStreamPresentationRequest(fact.payload);
-    }
-  }
-
-  /** Inject a run fact (tests / rare host seeds). Prefer the hub in production. */
-  applyRunFact(...args: Parameters<SessionFactApplier['handleRunFact']>): void {
-    this.factApplier.handleRunFact(...args);
   }
 
   async stopStream(stream: StreamTabId): Promise<void> {
