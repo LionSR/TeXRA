@@ -47,8 +47,8 @@ All notable changes to this project will be documented in this file.
 - **Max-style shortcuts no longer shadow KaTeX built-ins** — the section
   sign and the legacy bold switch render as intended, `\label` no longer
   errors in rendered math, decorated-H effective-Hamiltonian forms keep
-  their accents, equilibrium/steady-state subscripts no longer turn into
-  superscripts, and written documents with the plain-S shortcut compile.
+  their accents, and equilibrium/steady-state eq/st subscripts no longer turn
+  into superscripts.
 
 #### Features
 

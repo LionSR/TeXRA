@@ -200,6 +200,29 @@ describe('katexMacros vs maxRules shortcuts', () => {
         MAX_REGEX_REPLACEMENTS,
       ]),
     ).toBe('^\\Sig');
+    // Escaped script markers (`\_\S`, `\^\S`) are not legacy unbraced
+    // output; the migration's negative lookbehind must leave them intact.
+    expect(
+      applyReplacements('\\_\\S', [
+        MAX_STYLE_REPLACEMENTS,
+        MAX_REGEX_REPLACEMENTS,
+      ]),
+    ).toBe('\\_\\S');
+    expect(
+      applyReplacements('\\^\\S', [
+        MAX_STYLE_REPLACEMENTS,
+        MAX_REGEX_REPLACEMENTS,
+      ]),
+    ).toBe('\\^\\S');
+    // `\S` followed by a digit is the documented remaining ambiguity: the
+    // migration still rewrites it because legacy `\S0` output is
+    // indistinguishable from a genuine section sign in `x^\S2`.
+    expect(
+      applyReplacements('x^\\S2', [
+        MAX_STYLE_REPLACEMENTS,
+        MAX_REGEX_REPLACEMENTS,
+      ]),
+    ).toBe('x^\\sS2');
     expect(applyReplacements('\\mathbf{f}', MAX_STYLE_REPLACEMENTS)).toBe(
       '\\bbf',
     );
