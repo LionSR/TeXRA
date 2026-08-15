@@ -8,7 +8,7 @@ import {
   ReasoningEffort,
 } from 'llm-zoo';
 // Local imports
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace, StreamHandle } from '@agent/trace';
 import {
   attachChannelSubscriber,
   logContextManagementEvent,
@@ -430,6 +430,40 @@ export abstract class ModelHandler<
       deferStart: !options?.atPhaseSignal,
       phaseOnly: !this.outputStreaming,
     });
+  }
+
+  /**
+   * Success-path close of the thinking/output stream pair opened via
+   * {@link createThinkingStream}/{@link createOutputStream}: the thinking
+   * stream closes with the processed thinking block, then the output stream
+   * closes with the provider-extracted final text. Each provider keeps
+   * extracting that text itself (every response shape reads differently);
+   * what shares is the finalize ordering.
+   */
+  protected finalizeProgressStreams(
+    thinking: StreamHandle,
+    output: StreamHandle,
+    response: Resp,
+    finalText: string,
+  ): void {
+    const finalReasoning = this.processThinkingBlock(response);
+    thinking.finalize(finalReasoning ?? undefined);
+    output.finalize(finalText);
+  }
+
+  /**
+   * Error-path close of the thinking/output stream pair so the progress view
+   * does not hang in a loading state. No explicit final text, so chunks
+   * already streamed are preserved (passing `''` would overwrite the visible
+   * partial output). `finalize` is idempotent, so this is safe even after a
+   * partial finalize already ran.
+   */
+  protected finalizeProgressStreamsOnError(
+    thinking: StreamHandle | undefined,
+    output: StreamHandle | undefined,
+  ): void {
+    thinking?.finalize(undefined);
+    output?.finalize();
   }
 
   /**
@@ -871,6 +905,16 @@ export abstract class ModelHandler<
     sourceFingerprint: string;
     result: ClientCompactionResult<M>;
   };
+
+  /**
+   * Prompt-token total from the most recent API response, for handlers whose
+   * client-side compaction trigger keys off API-reported usage. Fed by
+   * {@link trackLastKnownInputTokens}; read by
+   * {@link maybeCompactByLastKnownInputTokens} and by the handlers'
+   * `compactConversation` as the `tokensBefore` figure. Handlers with
+   * server-side chain state key off the chain's cumulative count instead.
+   */
+  protected lastKnownInputTokens = 0;
 
   /** Cheap mutation detector for a messages array reused across attempts:
    *  follow-ups either push (length changes) or merge into the last message
@@ -1426,6 +1470,42 @@ export abstract class ModelHandler<
       };
     }
     return result;
+  }
+
+  /**
+   * COMPACT-phase prologue for handlers that compact client-side off the last
+   * API-reported prompt-token count: run the shared threshold trigger
+   * ({@link maybeCompactByInputTokens}) against {@link lastKnownInputTokens}
+   * and reshape the result into the {@link CreateResponseResult.updatedMessages}
+   * contract — `undefined` unless this call actually compacted. The provider
+   * supplies only its SDK-specific summarization call via {@link compact}.
+   */
+  protected async maybeCompactByLastKnownInputTokens(
+    messages: M[],
+    compact: () => Promise<ClientCompactionResult<M>>,
+  ): Promise<{ messagesToUse: M[]; updatedMessages: M[] | undefined }> {
+    const { compactedMessages, didCompact } =
+      await this.maybeCompactByInputTokens(
+        messages,
+        this.lastKnownInputTokens,
+        compact,
+      );
+    const updatedMessages = didCompact ? compactedMessages : undefined;
+    return { messagesToUse: updatedMessages ?? messages, updatedMessages };
+  }
+
+  /**
+   * TRACK-phase companion to {@link maybeCompactByLastKnownInputTokens}:
+   * record the prompt-token total from a completed response. Reports whether
+   * a total was present so the handler keeps its own missing-usage
+   * diagnostics.
+   */
+  protected trackLastKnownInputTokens(
+    promptTokens: number | null | undefined,
+  ): boolean {
+    if (!promptTokens) return false;
+    this.lastKnownInputTokens = promptTokens;
+    return true;
   }
 
   /**

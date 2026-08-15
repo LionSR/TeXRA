@@ -72,7 +72,6 @@ import {
 } from './openAIChatHelpers';
 import { toOpenAITools } from '../toolConversion';
 import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
-import { ModelHandler } from '../ModelHandler';
 import { OpenAICompatibleModelHandler } from './OpenAICompatibleModelHandler';
 import { ReasoningStreamAggregator } from './ReasoningStreamAggregator';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
@@ -173,10 +172,6 @@ export class ModelHandlerOpenAI<
   ChatCompletion,
   ChatCompletionContentPart
 > {
-  // ── Client-side compaction state ──────────────────────────────────────
-  /** Tracks prompt_tokens from the last API response for compaction threshold checks. */
-  private lastKnownInputTokens = 0;
-
   protected useReasoningStreamAggregator: boolean = false;
 
   // ── Compaction interface overrides ────────────────────────────────────
@@ -364,18 +359,6 @@ export class ModelHandlerOpenAI<
     return baseParams;
   }
 
-  protected finalizeStreams(
-    thinking: ReturnType<ModelHandler['createThinkingStream']>,
-    output: ReturnType<ModelHandler['createOutputStream']>,
-    finalResponse: ChatCompletion,
-  ): void {
-    const finalReasoning = this.processThinkingBlock(finalResponse);
-    thinking.finalize(finalReasoning ?? undefined);
-
-    const finalOutput = finalResponse.choices?.[0]?.message?.content ?? '';
-    output.finalize(finalOutput);
-  }
-
   protected async executeStreamingChat(
     client: OpenAI,
     baseParams: ChatCompletionRequestBase,
@@ -445,20 +428,17 @@ export class ModelHandlerOpenAI<
         }
       }
 
-      this.finalizeStreams(thinking, output, finalResponse);
+      this.finalizeProgressStreams(
+        thinking,
+        output,
+        finalResponse,
+        finalResponse.choices?.[0]?.message?.content ?? '',
+      );
       return finalResponse;
     } catch (streamError) {
       return handleStreamingFailure(streamError, {
-        // Finalize the progress streams on error so the progress view does
-        // not hang in a loading state (parity with the OpenRouter streaming
-        // path). No explicit final text so any chunks already streamed are
-        // preserved (passing `''` would overwrite the visible partial
-        // output). `finalize` is idempotent, so this is safe even if a
-        // partial finalize already ran.
-        finalizeOnError: () => {
-          thinking.finalize(undefined);
-          output.finalize();
-        },
+        finalizeOnError: () =>
+          this.finalizeProgressStreamsOnError(thinking, output),
         // On mid-stream failure, lift the partial content the SDK already
         // accumulated (currentChatCompletionSnapshot) onto the error so the
         // retry UI can show it and future continuation logic can reference
@@ -605,14 +585,10 @@ export class ModelHandlerOpenAI<
     } = options;
 
     // Phase 0: COMPACT - Apply the shared trigger before building the request.
-    const { compactedMessages, didCompact } =
-      await this.maybeCompactByInputTokens(
-        rawMessages,
-        this.lastKnownInputTokens,
-        () => this.compactConversation(client, rawMessages, signal),
+    const { messagesToUse, updatedMessages } =
+      await this.maybeCompactByLastKnownInputTokens(rawMessages, () =>
+        this.compactConversation(client, rawMessages, signal),
       );
-    const updatedMessages = didCompact ? compactedMessages : undefined;
-    const messagesToUse = updatedMessages ?? rawMessages;
 
     // Apply message normalization if subclass specifies options
     const messages = this.prepareNormalizedMessages(messagesToUse);
@@ -656,9 +632,7 @@ export class ModelHandlerOpenAI<
       : await this.executeNonStreamingChat(client, baseParams, signal);
 
     // Phase 5: TRACK - Record prompt_tokens for compaction threshold checks
-    if (response.usage?.prompt_tokens) {
-      this.lastKnownInputTokens = response.usage.prompt_tokens;
-    }
+    this.trackLastKnownInputTokens(response.usage?.prompt_tokens);
 
     return { response, updatedMessages };
   }
