@@ -34,7 +34,6 @@ type _EffortLevelsAligned = _AssertExact<
 >;
 
 export const CLAUDE_AGENT_NAME = 'claude_code';
-export const CLAUDE_AGENT_DISPLAY_MODEL = 'claude';
 
 /**
  * Adaptive thinking is only supported on Fable 5, Opus 4.6+, and Sonnet 4.6+

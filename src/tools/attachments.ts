@@ -1,6 +1,8 @@
+// Third-party imports
+import { imageSize } from 'image-size';
+
 // Local imports
 import { ToolError, type ToolFileAttachment } from '@shared/schemas';
-import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
 import {
   resolveAndFormat,
   type WorkspacePathResolution,
@@ -27,6 +29,26 @@ export interface BuildFileAttachmentOptions {
 }
 
 const ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024; // 15 MiB
+
+/**
+ * Max image dimension (px) for many-image API requests.
+ * Anthropic returns a non-retryable 400 when any image exceeds this in a
+ * multi-image request.
+ */
+const MANY_IMAGE_MAX_DIMENSION = 2000;
+
+/** Returns true if buffer is an image exceeding the many-image dimension limit. */
+function isOversizedImage(buffer: Buffer | Uint8Array): boolean {
+  try {
+    const { width, height } = imageSize(buffer);
+    return (
+      width > MANY_IMAGE_MAX_DIMENSION || height > MANY_IMAGE_MAX_DIMENSION
+    );
+  } catch {
+    // Unrecognized or truncated image data — nothing to measure.
+    return false;
+  }
+}
 
 export interface BuildBytesAttachmentOptions {
   /** Display path surfaced to the model. */
