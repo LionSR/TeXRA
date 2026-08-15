@@ -32,41 +32,6 @@
       "name": "DESKTOP_COMMAND_IDS"
     },
     {
-      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
-      "category": "exports",
-      "name": "executeFileCommand"
-    },
-    {
-      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
-      "category": "exports",
-      "name": "executeProjectCommand"
-    },
-    {
-      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
-      "category": "exports",
-      "name": "fetchDiagnosticsForFile"
-    },
-    {
-      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
-      "category": "exports",
-      "name": "getGoalState"
-    },
-    {
-      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
-      "category": "exports",
-      "name": "getHoverInfo"
-    },
-    {
-      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
-      "category": "exports",
-      "name": "getTermGoal"
-    },
-    {
-      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
-      "category": "exports",
-      "name": "navigateToFirstError"
-    },
-    {
       "file": "packages/trace-viewer/vite.standalone.config.ts",
       "category": "files",
       "name": "packages/trace-viewer/vite.standalone.config.ts"

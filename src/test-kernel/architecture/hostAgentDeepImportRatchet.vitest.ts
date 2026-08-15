@@ -1,19 +1,20 @@
-// R-b host deep-import WIDTH ratchet (issue #7684). Each host package (CLI,
+// R-b host deep-import ratchet (issue #7684). Each host package (CLI,
 // desktop, extension) reaches past the `@agent` barrel into `@agent/*`
 // internals, pinning agent's current internal module layout from outside
 // src/agent. `agent` here is the `@texra-ai/agent` SDK package itself
 // (packages/agent/src): it assembles the public run surface from `@agent/*`
-// internals, so its own distinct-specifier width is exactly the surface a
-// Tier-1 barrel would have to re-export or seal, and freezing it here keeps
-// that count from silently widening. Clones the checked-in-baseline +
-// AST-scanning vitest pattern from LAY-1 (subsystemEdgeRatchet.vitest.ts, PR
-// #7774) and QA-2 (hostAgentMockRatchet.vitest.ts, PR #7817): baseline the
-// current set of DISTINCT `@agent/*` deep-import specifiers per package and
-// fail only when a package's specifier count increases; a decrease (or an
-// @agent restructor that removes the need for a deep import) is always welcome
-// and should shrink config/ratchets/host-agent-import-baseline.json. Armed per
-// the issue text pending Stage-5 exit (#6968, closed); this is the deferred
-// execution.
+// internals, so its own distinct-specifier set is exactly the surface a
+// Tier-1 barrel would have to re-export or seal. Clones the
+// checked-in-baseline + AST-scanning vitest pattern from LAY-1
+// (subsystemEdgeRatchet.vitest.ts, PR #7774) and the set-based two-check
+// form from QA-2 (hostAgentMockRatchet.vitest.ts, PR #7817): the baseline
+// is the exact set of DISTINCT `@agent/*` deep-import specifiers per
+// package. A live specifier absent from the baseline is a new edge; a
+// baseline specifier with no live import is stale headroom that could
+// silently absorb a future new edge (under the old count-only form, any
+// specifier could swap for any other). Removing a deep import (or an
+// @agent restructor that removes the need for one) is always welcome and
+// should shrink config/ratchets/host-agent-import-baseline.json.
 
 // Node imports
 import { readFileSync } from 'node:fs';
@@ -130,21 +131,7 @@ function readBaseline(): HostBaseline {
   return JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as HostBaseline;
 }
 
-function reportGrowth(
-  host: Host,
-  baseline: string[],
-  current: string[],
-): string {
-  const baselineSet = new Set(baseline);
-  const added = current.filter((specifier) => !baselineSet.has(specifier));
-  return (
-    `${host} @agent/* deep-import specifiers grew from ${baseline.length} to ${current.length}:\n` +
-    added.map((specifier) => `  + ${specifier}`).join('\n') +
-    `\n\nIf this growth is intentional, update ${BASELINE_FILE} in this PR.`
-  );
-}
-
-describe('R-b host deep-import width ratchet', () => {
+describe('R-b host deep-import ratchet', () => {
   // Scanned once for the whole suite — the per-host cases and the baseline
   // invariants read the same snapshot instead of rescanning three trees per
   // it.each case.
@@ -152,12 +139,34 @@ describe('R-b host deep-import width ratchet', () => {
   const current = collectCurrentHosts();
 
   it.each(HOSTS)(
-    'does not increase the count of distinct @agent/* deep-import specifiers in %s',
+    'rejects any @agent/* deep-import specifier in %s that is not in the baseline',
     (host) => {
+      const baselineSet = new Set(baseline.hosts[host]);
+      const added = current[host].filter(
+        (specifier) => !baselineSet.has(specifier),
+      );
       expect(
-        current[host].length,
-        reportGrowth(host, baseline.hosts[host], current[host]),
-      ).toBeLessThanOrEqual(baseline.hosts[host].length);
+        added,
+        `New ${host} @agent/* deep-import specifier(s) not in ${BASELINE_FILE}:\n` +
+          added.map((specifier) => `  + ${specifier}`).join('\n') +
+          `\n\nRemove the import or route it through an approved public surface; do not widen ${BASELINE_FILE}.`,
+      ).toEqual([]);
+    },
+  );
+
+  it.each(HOSTS)(
+    'rejects baseline specifiers with no live %s import (stale headroom)',
+    (host) => {
+      const currentSet = new Set(current[host]);
+      const stale = baseline.hosts[host].filter(
+        (specifier) => !currentSet.has(specifier),
+      );
+      expect(
+        stale,
+        `Stale ${host} specifier(s) in ${BASELINE_FILE}:\n` +
+          stale.map((specifier) => `  - ${specifier}`).join('\n') +
+          `\n\nRemove them from ${BASELINE_FILE} so they cannot absorb a future new edge.`,
+      ).toEqual([]);
     },
   );
 
