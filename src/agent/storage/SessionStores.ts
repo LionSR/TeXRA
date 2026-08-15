@@ -106,17 +106,8 @@ export class SessionStores {
   }
 
   async waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void> {
-    try {
-      const executionId = await this.executionIdForStream(stream);
-      if (executionId) await waitForOwnedExecutionLeaseRelease(executionId);
-    } catch (error) {
-      // The deletion path below reports the unreadable ownership as `failed`;
-      // this wait must not escape the deletion result contract as a rejection.
-      log.warn(
-        `Stream ${stream} skipped its owned-execution lease wait because ownership could not be read: ${toErrorMessage(error)}`,
-        { data: error },
-      );
-    }
+    const executionId = await this.executionIdForStream(stream);
+    if (executionId) await waitForOwnedExecutionLeaseRelease(executionId);
   }
 
   deleteStream(stream: StreamTabId): Promise<DeleteStreamResult> {
@@ -131,7 +122,18 @@ export class SessionStores {
     return this.trackStreamDeletion(stream, async () => {
       // Track the whole wait so a presentation attaching during terminal
       // artifact persistence cannot replay a stream already marked removed.
-      await this.waitForOwnedExecutionRelease(stream);
+      // If the ownership read fails here, report `failed` immediately rather
+      // than enqueueing a second read that could decide the stream has no
+      // execution and delete it.
+      try {
+        await this.waitForOwnedExecutionRelease(stream);
+      } catch (error) {
+        log.warn(
+          `Stream ${stream} was retained because its execution ownership could not be read: ${toErrorMessage(error)}`,
+          { data: error },
+        );
+        return 'failed';
+      }
       return this.enqueueDeletion(() => this.deleteStreamAndNotify(stream));
     });
   }
