@@ -191,9 +191,10 @@ export async function scanRunDirForOutputs(
 
     return Object.keys(rounds).length > 0 ? rounds : null;
   } catch (error) {
-    log.debug(
-      `RunDir scan for ${executionId} failed: ${toErrorMessage(error)}`,
-    );
+    // A failed run-storage read degrades a pinned-runId invocation to the
+    // plain workspace scan — a behavior-changing fallback, so fallback
+    // discipline (review checklist §15) forbids logging it below warn.
+    log.warn(`RunDir scan for ${executionId} failed: ${toErrorMessage(error)}`);
     return null;
   }
 }
@@ -271,7 +272,9 @@ export async function discoverLatestExecutionOutputs(
       }
     }
   } catch (error) {
-    log.debug(
+    // Same discipline as scanRunDirForOutputs above: a failed persisted
+    // metadata read drops the invocation to the workspace scan, so warn.
+    log.warn(
       `Metadata-driven latexdiff discovery failed: ${toErrorMessage(error)}`,
     );
   }
