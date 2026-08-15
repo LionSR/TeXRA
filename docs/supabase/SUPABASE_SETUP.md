@@ -587,13 +587,15 @@ Apply it with:
 npm run sync:remote-agents -- --apply
 ```
 
-Needs a `supabase link`ed checkout, or `SUPABASE_DB_URL`, or `SUPABASE_ACCESS_TOKEN` plus `SUPABASE_PROJECT_REF`. With `SUPABASE_PROJECT_REF` the script substitutes that ref for the checkout's linked project only while it runs and restores the previous link state afterwards.
+Needs a `supabase link`ed checkout, or `SUPABASE_DB_URL`, or `SUPABASE_ACCESS_TOKEN` plus `SUPABASE_PROJECT_REF`. With `SUPABASE_PROJECT_REF` the script passes that ref to the CLI through `SUPABASE_PROJECT_ID`, leaving the checkout's linked project untouched.
 
-Before writing any metadata, `--apply` verifies that every catalog `storage_path` already exists as an object in the `agent-configs` bucket; if any are missing it aborts and lists them, and no metadata is published. YAML bodies are still uploaded separately from metadata, so upload new or moved agents **before** applying (or before merging to `main`):
+Before writing any metadata, `--apply` verifies that every catalog `storage_path` already exists as an object in the `agent-configs` bucket; if any are missing it aborts and lists them, and no metadata is published. The preflight checks object existence, not freshness, so a green preflight does not prove the uploaded bodies are current. YAML bodies are still uploaded separately from metadata, so upload new, moved, or changed agents **before** applying (or before merging to `main`):
 
 ```bash
-# <folder> must match the agent's "folder" in docs/supabase/remote-agents.config.json
-supabase storage cp "prompts/agents/remote/<agent>.yaml" "ss:///agent-configs/<folder>/<agent>.yaml" --project-ref <PROJECT-REF>
+# <source> is the YAML path under prompts/agents/remote/, including any
+# subdirectory (for example "apply.yaml" or "Lean4/lean.yaml").
+# <folder> must match the agent's "folder" in docs/supabase/remote-agents.config.json.
+supabase storage cp "prompts/agents/remote/<source>" "ss:///agent-configs/<folder>/<agent>.yaml" --project-ref <PROJECT-REF>
 ```
 
 The same apply command (including the storage check) runs on merge to `main` when those files change (`.github/workflows/remote-agents-sync.yml`). PRs run `npm run sync:remote-agents` (generate only) and do not write production.
