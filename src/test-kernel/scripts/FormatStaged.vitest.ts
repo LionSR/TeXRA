@@ -175,6 +175,21 @@ describe('format-staged', () => {
     expect(git(['diff', '--name-only', '--', 'a.ts'])).toBe('');
   });
 
+  it('treats core.autocrlf=1 as a CRLF checkout (#10505)', () => {
+    git(['config', 'core.autocrlf', '1']);
+    writeFileSync(join(dir, 'a.ts'), toCrlf(STAGED));
+    git(['add', 'a.ts']);
+    expect(stagedBlob('a.ts')).toBe(STAGED);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('staged Prettier output for a.ts');
+    expect(stagedBlob('a.ts')).toBe(FORMATTED);
+    expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(toCrlf(FORMATTED));
+    expect(git(['diff', '--name-only', '--', 'a.ts'])).toBe('');
+  });
+
   it('folds non-overlapping CRLF edits without a spurious merge conflict', () => {
     git(['config', 'core.autocrlf', 'true']);
     writeFileSync(
@@ -591,7 +606,7 @@ describe('format-staged', () => {
     expect(stagedBlob('a.ts')).toBe(STAGED);
   });
 
-  it('does not false-skip an extensionless package.yaml plugin backed by .mjs (#10501)', () => {
+  it('does not append extensions for an extensionless package.yaml plugin (#10501)', () => {
     writeFileSync(join(dir, 'fake-plugin.mjs'), 'export default {};\n');
     writeFileSync(
       join(dir, 'package.yaml'),
@@ -605,12 +620,9 @@ describe('format-staged', () => {
     const result = runFormat();
 
     expect(result.status, result.stderr).toBe(0);
-    // The hook must resolve the staged dependency to fake-plugin.mjs for its
-    // index comparison; Prettier itself cannot load an extensionless plugin
-    // path, so the remaining skip is a real loader error, not the false
-    // "not staged" provenance skip.
-    expect(result.stdout).not.toContain('fake-plugin is not staged');
-    expect(result.stderr).toContain('Cannot find module');
+    // Prettier's plugin loader does not append extensions, so the hook must
+    // verify the literal specifier rather than invent a .mjs fallback.
+    expect(result.stdout).toContain('fake-plugin is not staged');
     expect(stagedBlob('a.ts')).toBe(STAGED);
   });
 
@@ -618,7 +630,7 @@ describe('format-staged', () => {
     mkdirSync(join(dir, 'config'));
     writeFileSync(
       join(dir, 'config/prettier.cjs'),
-      'const opts = require("./opts");\nmodule.exports = opts;\n',
+      'const opts = require("./opts.cjs");\nmodule.exports = opts;\n',
     );
     writeFileSync(
       join(dir, 'config/opts.cjs'),
@@ -973,7 +985,7 @@ describe('format-staged', () => {
     expect(stagedBlob('a.ts')).toBe('export const x = 1\n');
   });
 
-  it('does not false-skip an extensionless CommonJS dependency backed by .cjs (#10502)', () => {
+  it('does not append .cjs for an extensionless CommonJS require (#10502)', () => {
     mkdirSync(join(dir, 'config'));
     writeFileSync(
       join(dir, 'config/prettier.cjs'),
@@ -995,11 +1007,9 @@ describe('format-staged', () => {
     const result = runFormat();
 
     expect(result.status, result.stderr).toBe(0);
-    // Node's CommonJS loader does not add a .cjs extension for require(),
-    // so Prettier still reports a real loader error. The hook's resolution
-    // must remove the false "not staged" provenance skip for that path.
-    expect(result.stdout).not.toContain('config/opts is not staged');
-    expect(result.stderr).toContain("Cannot find module './opts'");
+    // Node's CJS LOAD_AS_FILE does not try .cjs for require('./opts'), so the
+    // literal dependency path is not staged and the hook skips accordingly.
+    expect(result.stdout).toContain('config/opts is not staged');
     expect(stagedBlob('a.ts')).toBe('export const x = 1;\n');
   });
 
@@ -1018,6 +1028,30 @@ describe('format-staged', () => {
       '{"prettier":"./config/prettier.cjs"}\n',
     );
     git(['add', 'config/prettier.cjs', 'config/opts.js', 'package.json']);
+    git(['commit', '-qm', 'config base']);
+    writeFileSync(join(dir, 'a.ts'), 'export const x = 1;\n');
+    git(['add', 'a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('staged Prettier output for a.ts');
+    expect(result.stdout).not.toContain('config/opts is not staged');
+    expect(stagedBlob('a.ts')).toBe('export const x = 1\n');
+  });
+
+  it('resolves an extensionless CommonJS require to its .json file (#10502)', () => {
+    mkdirSync(join(dir, 'config'));
+    writeFileSync(
+      join(dir, 'config/prettier.cjs'),
+      'const opts = require("./opts");\nmodule.exports = opts;\n',
+    );
+    writeFileSync(join(dir, 'config/opts.json'), '{ "semi": false }\n');
+    writeFileSync(
+      join(dir, 'package.json'),
+      '{"prettier":"./config/prettier.cjs"}\n',
+    );
+    git(['add', 'config/prettier.cjs', 'config/opts.json', 'package.json']);
     git(['commit', '-qm', 'config base']);
     writeFileSync(join(dir, 'a.ts'), 'export const x = 1;\n');
     git(['add', 'a.ts']);
@@ -1092,6 +1126,67 @@ describe('format-staged', () => {
     expect(stagedBlob('a.ts')).toBe('export const x = 1\n');
   });
 
+  it('does not follow an untracked directory package.json redirect (#10502)', () => {
+    mkdirSync(join(dir, 'config/opts'), { recursive: true });
+    writeFileSync(
+      join(dir, 'config/prettier.cjs'),
+      'const opts = require("./opts");\nmodule.exports = opts;\n',
+    );
+    writeFileSync(
+      join(dir, 'config/evil.cjs'),
+      'module.exports = { semi: true };\n',
+    );
+    writeFileSync(
+      join(dir, 'package.json'),
+      '{"prettier":"./config/prettier.cjs"}\n',
+    );
+    git(['add', 'config/prettier.cjs', 'config/evil.cjs', 'package.json']);
+    git(['commit', '-qm', 'config base']);
+    // The redirect manifest exists only in the worktree, so index resolution
+    // must ignore it instead of resolving ./opts to the tracked evil.cjs.
+    writeFileSync(
+      join(dir, 'config/opts/package.json'),
+      '{"main":"./evil.cjs"}\n',
+    );
+    writeFileSync(join(dir, 'a.ts'), 'export const x = 1;\n');
+    git(['add', 'a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('config/opts is not staged');
+    expect(result.stdout).not.toContain('config/evil.cjs');
+    expect(stagedBlob('a.ts')).toBe('export const x = 1;\n');
+  });
+
+  it('does not append extensions for an extensionless ESM import (#10502)', () => {
+    mkdirSync(join(dir, 'config'));
+    writeFileSync(
+      join(dir, 'config/prettier.mjs'),
+      'import opts from "./opts";\nexport default opts;\n',
+    );
+    writeFileSync(
+      join(dir, 'config/opts.js'),
+      'export default { semi: false };\n',
+    );
+    writeFileSync(
+      join(dir, 'package.json'),
+      '{"prettier":"./config/prettier.mjs"}\n',
+    );
+    git(['add', 'config/prettier.mjs', 'config/opts.js', 'package.json']);
+    git(['commit', '-qm', 'config base']);
+    writeFileSync(join(dir, 'a.ts'), 'export const x = 1;\n');
+    git(['add', 'a.ts']);
+
+    const result = runFormat();
+
+    expect(result.status, result.stderr).toBe(0);
+    // Node ESM does not append .js to a relative import, so the literal
+    // dependency path is not staged and the hook skips.
+    expect(result.stdout).toContain('config/opts is not staged');
+    expect(stagedBlob('a.ts')).toBe('export const x = 1;\n');
+  });
+
   it('reports the literal path when an extensionless dependency has no candidate (#10502)', () => {
     mkdirSync(join(dir, 'config'));
     writeFileSync(
@@ -1114,7 +1209,7 @@ describe('format-staged', () => {
     expect(stagedBlob('a.ts')).toBe('export const x = 1;\n');
   });
 
-  it('skips an ambiguous extensionless dependency instead of guessing (#10502)', () => {
+  it('uses deterministic CJS first-match when .js and .cjs both exist (#10502)', () => {
     mkdirSync(join(dir, 'config'));
     writeFileSync(
       join(dir, 'config/prettier.cjs'),
@@ -1126,7 +1221,7 @@ describe('format-staged', () => {
     );
     writeFileSync(
       join(dir, 'config/opts.cjs'),
-      'module.exports = { semi: false };\n',
+      'module.exports = { semi: true };\n',
     );
     writeFileSync(
       join(dir, 'package.json'),
@@ -1146,8 +1241,9 @@ describe('format-staged', () => {
     const result = runFormat();
 
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('config dependency ./opts is ambiguous');
-    expect(stagedBlob('a.ts')).toBe('export const x = 1;\n');
+    // Node's CJS LOAD_AS_FILE order picks opts.js before any other candidate.
+    expect(result.stdout).toContain('staged Prettier output for a.ts');
+    expect(stagedBlob('a.ts')).toBe('export const x = 1\n');
   });
 
   it('resolves a package-name shareable config from node_modules (#10503)', () => {

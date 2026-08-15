@@ -61,7 +61,8 @@ const NOTICE = '[format-staged]';
 
 const CRLF = Buffer.from('\r\n');
 
-const JS_CONFIG_EXTENSIONS = ['.js', '.cjs', '.mjs'];
+const CJS_FILE_EXTENSIONS = ['.js', '.json', '.node'];
+const CJS_INDEX_EXTENSIONS = ['index.js', 'index.json', 'index.node'];
 
 /** Intentional skip: logged loudly as a notice and never treated as a crash. */
 class SkipError extends Error {}
@@ -82,9 +83,11 @@ function git(args, { input } = {}) {
 /** True when `core.autocrlf=true`, so Git checks out the index's LF blobs
  * as CRLF and a CRLF worktree convention must be preserved. */
 function isAutocrlfCheckout() {
-  const result = spawnSync('git', ['config', '--get', 'core.autocrlf'], {
-    encoding: 'utf8',
-  });
+  const result = spawnSync(
+    'git',
+    ['config', '--bool', '--get', 'core.autocrlf'],
+    { encoding: 'utf8' },
+  );
   return result.status === 0 && result.stdout.trim() === 'true';
 }
 
@@ -205,15 +208,14 @@ function isWorktreeFile(path) {
   return lstatSync(path, { throwIfNoEntry: false })?.isFile() === true;
 }
 
-/** Return the `main` entry of a dependency directory's package.json,
- * preferring the staged index blob so an unstaged manifest cannot redirect
- * extensionless resolution. Returns null when there is no usable manifest. */
+/** Return the `main` entry of a dependency directory's package.json from
+ * the index only. An untracked worktree manifest is never consulted: index
+ * resolution must reflect the committed state, not an uncommitted redirect. */
 function readPackageMain(dir) {
   const pkgPath = join(dir, 'package.json');
   const pkgRel = relToCwd(pkgPath);
   if (!pkgRel) return null;
-  let blob = readIndexFile(pkgRel);
-  if (!blob && existsSync(pkgPath)) blob = readFileSync(pkgPath);
+  const blob = readIndexFile(pkgRel);
   if (!blob) return null;
   try {
     const main = JSON.parse(stripBom(blob.toString('utf8'))).main;
@@ -223,55 +225,51 @@ function readPackageMain(dir) {
   }
 }
 
+/** True when `path` is tracked in the index. */
+function isIndexTracked(path) {
+  const rel = relToCwd(path);
+  return rel !== null && readIndexFile(rel) !== null;
+}
+
 /** Resolve a relative config dependency specifier to the tracked file
- * Node/Prettier would load, without executing any config. Exact specifiers
- * (anything with an extension) are kept verbatim. Extensionless specifiers
- * follow Node-style precedence: the literal path, then the supported config
- * extensions (`.js`/`.cjs`/`.mjs`), then a directory's package.json `main`,
- * then `index.js`/`index.cjs`/`index.mjs`. Multiple existing candidates are
- * treated as ambiguous and skipped rather than guessing which module system
- * Prettier will use. */
-function resolveConfigDepPath(configDir, spec) {
+ * Node/Prettier would load, without executing any config. `kind` is `cjs`
+ * for `require()`/CommonJS resolution; every other kind (ESM `import`,
+ * `export ... from`, dynamic `import()`, and Prettier plugin paths) is exact
+ * and gets no extension or directory-index fallback, matching the loaders. */
+function resolveConfigDepPath(configDir, spec, kind) {
   const normalized = normalizeSpecifier(spec);
   const base = resolve(configDir, normalized);
-  if (parse(normalized).ext !== '') return base;
+  if (kind !== 'cjs' || parse(normalized).ext !== '') return base;
 
+  // Node's CommonJS LOAD_AS_FILE order: exact path, then .js, .json, .node.
+  // LOAD_AS_DIRECTORY follows with package.json `main` (index-sourced only),
+  // then index.js/index.json/index.node. First present candidate wins; the
+  // subsequent verifyConfigDep check reports it as untracked/diverged if the
+  // winning candidate is not the committed dependency.
   const candidates = [];
   const push = (candidate) => {
-    const candidateRel = relToCwd(candidate);
-    const present =
-      isWorktreeFile(candidate) ||
-      (candidateRel !== null && readIndexFile(candidateRel) !== null);
-    if (present && !candidates.includes(candidate)) candidates.push(candidate);
+    if (isWorktreeFile(candidate) || isIndexTracked(candidate)) {
+      candidates.push(candidate);
+    }
   };
 
   push(base);
-  for (const ext of JS_CONFIG_EXTENSIONS) push(`${base}${ext}`);
+  for (const ext of CJS_FILE_EXTENSIONS) push(`${base}${ext}`);
 
   if (lstatSync(base, { throwIfNoEntry: false })?.isDirectory()) {
     const main = readPackageMain(base);
     if (main) push(resolve(base, normalizeSpecifier(main)));
-    for (const ext of JS_CONFIG_EXTENSIONS) {
-      push(join(base, `index${ext}`));
+    for (const indexName of CJS_INDEX_EXTENSIONS) {
+      push(join(base, indexName));
     }
   }
 
-  if (candidates.length === 1) return candidates[0];
-  if (candidates.length > 1) {
-    const listed = candidates
-      .map((candidate) => relToCwd(candidate) ?? candidate)
-      .join(', ');
-    throw new SkipError(
-      `config dependency ${normalized} is ambiguous (${listed}); skipped ` +
-        'auto-staging.',
-    );
-  }
-  return base;
+  return candidates[0] ?? base;
 }
 
 /** Verify one relative config dependency against its index blob. */
-function verifyConfigDep(configDir, spec) {
-  const depPath = resolveConfigDepPath(configDir, spec);
+function verifyConfigDep(configDir, spec, kind = 'exact') {
+  const depPath = resolveConfigDepPath(configDir, spec, kind);
   const depRel = relToCwd(depPath);
   if (!depRel) {
     throw new SkipError(
@@ -320,31 +318,40 @@ function verifyDepSpecs(config, configDir) {
   for (const dep of deps) verifyConfigDep(configDir, dep);
 }
 
-/** Collect relative import/require/plugin specifiers from a JavaScript config.
- * This is intentionally conservative: it verifies statically-written relative
- * module specifiers, which is the surface a prettier config normally uses. */
+/** Collect relative JS config specifiers with the loader that consumes them.
+ * `cjs` means Node's CommonJS `require()` resolution; `esm` and `plugin` are
+ * exact path loads (Prettier plugins and Node ESM do not append extensions). */
 function collectJsRelativeDeps(source) {
-  const deps = new Set();
-  const addSpec = (spec) => {
-    if (isRelativeSpecifier(spec)) deps.add(spec);
+  const deps = new Map();
+  const addSpec = (spec, kind) => {
+    if (!isRelativeSpecifier(spec)) return;
+    if (!deps.has(spec)) deps.set(spec, new Set());
+    deps.get(spec).add(kind);
   };
-  const patterns = [
+
+  const esmPatterns = [
     /\bimport\s+[\s\S]*?\s+from\s*['"]([^'"]+)['"]/g,
     /\bimport\s+['"]([^'"]+)['"]/g,
     /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
     /\bexport\s+[\s\S]*?\s+from\s*['"]([^'"]+)['"]/g,
-    /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
   ];
-  for (const pattern of patterns) {
+  for (const pattern of esmPatterns) {
     let match;
-    while ((match = pattern.exec(source))) addSpec(match[1]);
+    while ((match = pattern.exec(source))) addSpec(match[1], 'esm');
   }
+
+  const requirePattern = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  let requireMatch;
+  while ((requireMatch = requirePattern.exec(source))) {
+    addSpec(requireMatch[1], 'cjs');
+  }
+
   const pluginsPattern = /\bplugins\s*:\s*\[([^\]]*)\]/g;
   let block;
   while ((block = pluginsPattern.exec(source))) {
     const stringPattern = /['"]([^'"]+)['"]/g;
     let match;
-    while ((match = stringPattern.exec(block[1]))) addSpec(match[1]);
+    while ((match = stringPattern.exec(block[1]))) addSpec(match[1], 'plugin');
   }
   return deps;
 }
@@ -352,8 +359,9 @@ function collectJsRelativeDeps(source) {
 /** Verify a JavaScript config's statically-visible relative dependencies. */
 function verifyJsConfigDeps(configPath, configBlob) {
   const source = stripBom(configBlob.toString('utf8'));
-  for (const dep of collectJsRelativeDeps(source)) {
-    verifyConfigDep(dirname(configPath), dep);
+  const configDir = dirname(configPath);
+  for (const [dep, kinds] of collectJsRelativeDeps(source)) {
+    verifyConfigDep(configDir, dep, kinds.has('cjs') ? 'cjs' : 'exact');
   }
 }
 
