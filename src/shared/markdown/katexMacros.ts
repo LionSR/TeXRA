@@ -42,7 +42,8 @@ export const katexMacros = {
   // Single-letter shortcut variables
   '\\M': 'M',
   '\\N': 'N',
-  '\\S': 'S',
+  // '\S' would override KaTeX's built-in section sign, so S uses '\sS'.
+  '\\sS': 'S',
   '\\t': 't',
   '\\x': 'x',
   // Common math operators
@@ -138,7 +139,10 @@ export const katexMacros = {
   '\\bc': '\\mathbf{c}',
   '\\bd': '\\mathbf{d}',
   '\\be': '\\mathbf{e}',
-  '\\bf': '\\mathbf{f}',
+  // Keep '\bf' off: as a settings macro it overrides KaTeX's legacy bold
+  // switch globally (`{\bf x}` would expand to `\mathbf{f}x`). Max-style
+  // never emits '\bf'; bold f goes through '\bbf' below.
+  // '\\bf': '\\mathbf{f}',
   '\\bg': '\\mathbf{g}',
   '\\bh': '\\mathbf{h}',
   '\\bj': '\\mathbf{j}',
@@ -345,4 +349,13 @@ export const katexMacros = {
   '\\argmin': '\\operatorname{argmin}',
   '\\argsort': '\\operatorname{argsort}',
   '\\sort': '\\operatorname{sort}',
+
+  // Manuscript structure
+  // KaTeX has no '\label' function; consume the argument and emit nothing
+  // so the max-style '\label{eqn:}' destination renders like LaTeX (labels
+  // produce no visible output) instead of erroring as an unknown command.
+  '\\label': (context: { consumeArg: () => unknown }) => {
+    context.consumeArg();
+    return '';
+  },
 };
