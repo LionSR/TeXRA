@@ -523,3 +523,181 @@ deletions, is the flagged failure mode — reject in review.
 4. **Test-only seam ruling** (§3 Tier 3), then its mechanical PR.
 5. Wave A of the substrate plan proceeds unchanged (with the N1 baseline
    pruning added to every PR); Wave C proceeds in its §4 revised form.
+
+## 7. Second-order removal map (2026-08-16 cascade round)
+
+> Produced by a 12-agent workflow on origin/main `3122ace2bc`: five what-if
+> cascade sweeps (Wave A, projection-zero, contracts, lifecycle, whole-module
+> obviation) + a deep-module (Ousterhout) seam analysis, every risky
+> last-consumer claim adversarially re-checked before inclusion.
+
+
+Scope: what the five verified cascade sweeps (Wave A, projection-zero, contracts, lifecycle, whole-module obviation) prove is removable **beyond the first-order rows already tabled in this doc**, with adversarial verdicts applied — corrections folded in, refuted claims dropped, checked-negatives kept as an explicit register. All citations are at origin/main `3122ace2bc` unless noted. House rules apply to every PR in this map: **no new concept without a paired deletion in the same PR (§5b ledger)**; **R6 (consumer evidence, file:line) and R8 (looks-orphaned-but-isn't guard) sections in every PR body**; **set-based ratchet baselines pruned in the same commit as the last-import deletion** — never as a follow-up.
+
+### 7.1 The deep-module frame
+
+One thesis governs the map: the storage/protocol floor is already deep (lease, stores, handle); the debt is a shallow projection band between one substrate and N renderers. Every wave is one of two Ousterhout repairs — *narrow* an interface that enumerates its implementation, or *pull downward* complexity consumers re-implement.
+
+| Seam | Width today | Verdict | Industry pattern it maps to | Executing wave |
+|---|---|---|---|---|
+| `SessionRendererPort` (`src/controllers/session/SessionRendererPort.ts`, 113 L) | 22 methods × 2 impls; 18 are `on<Field>Changed` | **NARROW** → `invalidate(streamId, slice)` | Dirty-region / damage model (invalidate-then-paint) | contracts §2.3, then §4b |
+| `HostInteractions` shapes (`src/agent/runtime/HostInteractions.ts`) | 7 kinds, 4 hand mirrors, 2 result idioms, 3 id spellings | **KEEP surface / DEEPEN shapes** (alias to `prompts.ts`, unify `{action}`) | Parnas information hiding — one canonical shape, aliases at the seam; hexagonal port with default no-op adapter | contracts §2.2 |
+| Platform ports (`src/platform/platform.ts:36-57`) | 14 ports / ~49 methods | **KEEP — fence row** | Few-fat-ports hexagonal (depth = hidden decisions, not method count; `fileLocks.runExclusive`, `agentResume.tryResumeStream` are 1-method deep ports) | none |
+| `SessionState` reads (`SessionState.ts`, 450 L) | 16 methods + 5 sub-stores; fresh-object reads (`:239`) push change detection into every consumer | **DEEPEN** — U2 stable-identity reads + §4 promotions | Pull complexity downward; single egress waist | substrate A0 / Wave A |
+| `StreamSnapshotStore` (2,164 L) | 24 methods + 5 units, ratcheted | **KEEP — cite as house model** | Interface-width budget in CI (Ousterhout depth metric; `getRunMetadata`=5-units rule blocks the aggregate-getter cheat) | none |
+| `StreamLogStore` (1,745 L) | 24 methods; twin delta pumps above it (`WebviewBridge` 189 L + `subscribeStreamLog` 500 L) | **KEEP store; BUILD `StreamLogFeed`** (~120 L) | Missing deep module — pull resync/coalesce/gap-detect down once | substrate D |
+| `executionLease` (863 L / 18 verbs) | wide-ish, every verb one protocol obligation | **KEEP untouched; fix callers** | Define errors out of existence (`completeOwnedExecutionLease:706-722` completes-as-abandon); structured-concurrency scoped combinators | lifecycle §3-2 / PR 4 |
+| Settings access | ≥9 entry points, 3 altitudes, 6 catalogs | **DEEPEN** — one `SettingEntry{slots, honoredBy, surfaces, onWrite}` row; catalogs become filters | Somewhat-general-purpose interface; single source of truth with derived views | contracts §2.1 |
+| PROGRESS_VIEW outbound (29 commands / 34 schemas) | 12 arms are single-field slices declared twice | **NARROW** — derive, then waist | Narrow waist / hourglass (in-tree exemplar: frozen NDJSON rail with `CliNdjsonActiveChildRow` boundary re-projection) | contracts §2.3 → §4b |
+| `SessionHandle` (1,215 L) | 13 methods + 16 subsystem fields; hand-rolled dispose at `:1073-1107` | **KEEP shape; DEEPEN dispose** via `DisposableStore` | DDD aggregate root (Demeter-purism correctly discounted); LIFO disposable store | lifecycle PR 3 |
+
+The change-one-place test before/after: adding a stream-state field today touches ~7 sites (applier arm, port method, 2 impls, snapshot payload, targeted arm, frontend slice); post-program ≈ 2 (schema field + projection shape).
+
+### 7.2 Removal map by unlocking wave
+
+Consumer-evidence status legend: **V** = verified exhaustive by cascade sweep and confirmed by adversarial pass; **V-adj** = verified after adversarial correction (corrected consumer set is the binding one); **gated** = removal correct but blocked on a named ruling/supersession.
+
+#### Wave A (unlocked by the A0 substrate PR: roster/tombstone/`parentStreamId`/`runStartedAt`/`contextState` promotions into `SessionState`)
+
+| Item | LOC | Evidence | Unlocking PR |
+|---|---|---|---|
+| `packages/cli/src/chat/tui/state/childExecutions.ts` 585 → ~35 remnant | −550 | **V-adj** — original per-export list REFUTED as incomplete; binding consumer set adds 4 files: `packages/cli/scripts/tui-harness.tsx:110-115` (imports 6 of the dying exports; uses at `:1364,:2042,:2092,:2161,:2209,:2214,:2259` — type-checked via workspace tsconfig though outside the ratchet's `packages/cli/src` scope), `StaticConversationTranscript.tsx:27-30` (reads `:1213-1214`), `StatusBar.tsx:38-39` (reads `:73-74,:257,:304`), `sessionCommands.ts:12-13` (reads `:103,:109,:117`). Every missed read is of roster/parent-map data the wave promotes; migration surface is 4 files larger than the cascade report claims. | Wave A main PR |
+| `subscribeStreamStatus.ts` | −57 | **V-adj** — 3 consumers beyond `runChatTui.tsx:97,403`: `tui-harness.tsx:130,:2505` (plus ordering-contract comments `:287,:1281,:1506,:2495` pinning the attach-before-subscribe sequence the wave dissolves), `TuiStateAndFocus.vitest.ts:57,:381` (shared dispose — touches far more of that file than the two scoped blocks), `ConversationTranscript.vitest.ts:59,:326,:364`. Still deletable; all consumers inside the rewrite surface. | Wave A main PR |
+| `subscribeStreamArtifacts.ts` | −135 | **V** — exhaustive grep confirmed: production consumers `runChatTui.tsx:95,345`, `sessionCommands.ts:29-30,64,74`, `sessionSignalsAdapter.ts:45,77,314`, `registerBuiltins.tsx:82,279`; tests `SubscribeStreamArtifacts.vitest.ts` (dies), `SlashCommandDispatch.vitest.ts:43,180-181` (rewrites). | Wave A main PR |
+| `cliState.ts` 929 → ~490 | −438 | **V** — 26/30 `StreamSlice` fields → `StreamState & CliOnlyFields`; tombstone guards `:505,:588,:869` → `SessionState` reads | Wave A main PR |
+| `sessionSignalsAdapter.ts` 372 → ~90 | −280 | **V** — patch forwarders `:103-290`, roster filter `:208` (U1), status bypass `:340` | Wave A main PR |
+| `streamViews.ts` 262 → ~140 | −120 | **V** — label half dies; scope/ancestor helpers keep (`StreamViews.vitest.ts` 77 L survives whole) | Wave A main PR |
+| `runProgressRenderer.ts` 573 → ~395 | −175 | **V** — `handleSessionFact`/`handleRunFact`/roster bookkeeping `:209-405`; ANSI/throttle/heartbeat keep | Wave A main PR |
+| `statusBarDisplay.ts` context gauge `:207-226,:320` | −27 | **V** — reads promoted `contextState`; shared model symbols keep (6 other CLI consumers) | Wave A main PR |
+| `resumeHint.ts` `collectResumeTargets:150-191` | −15 | **V** — `formatResumeCommand` & friends keep (3 external consumers) | Wave A main PR |
+| Tests: `SubscribeStreamArtifacts.vitest.ts` (350, whole), `support/childStreamEntries.ts` (136, whole — **V**, exactly 4 consumers), `TuiStateAndFocus` blocks `:3938-4261` (324) + `:3192-3905` (~713 majority) + child-edge tests `:398-648` (~150-200), `RunProgressRenderer.vitest.ts:643-1003` (~360) | ≈ −1,900 | **V** / **V-adj** (`ConversationTranscript.vitest.ts` rewrite is larger than "roster fixture swap" — it also consumes `subscribeStreamStatus`) | Wave A main PR |
+
+#### Compliant wire (unlocked by contracts §2.3 `pickProjection` PR; survives into projection-zero as a strict subset)
+
+| Item | LOC | Evidence | Unlocking PR |
+|---|---|---|---|
+| `pickProjection` derivation replaces hand-written field declarations in `outbound.ts` | −90 | **V** (superseded by §4b A1 if projection-zero lands) | §2.3 PR |
+| Port 22→17: 4 payload-free methods + `onParentStreamChanged` dead param, ×2 impls | −60 | **V** | §2.3 PR |
+| `progressEvents.ts` ~8 interfaces → `z.infer` | −40 | **V** — file does NOT delete (SessionFact vocabulary, upstream of wire) | §2.3 PR |
+| `ProgressStreamProjectionBuilder.ts` (158 L → 0; net −80 after `streamContent():77-135` relocates as the SYNC snapshot) | −80 net | **V** — consumers `LitSessionRenderer.ts:5-7,55`, `ProgressBackend.ts:17,104,147`, `StreamContentSync.vitest.ts:9,101` (rewrites). **Rider:** replayTrace 6d hydrator must land same wave (`replayTrace.ts:228` hand-builds the same payload). | Wave C |
+| `replayTrace.ts:166-260` hand-built payloads → 6d hydrator | −100 | **V** — compat readers `:105-163` fenced permanent | Wave C / 6d PR |
+| `messageIndex.ts` timestamp machinery (`insertByTime:27-44`, `messageTime:46-48`, `toSorted:218-222`) | ~−50 | **V**, **B-1-dependent** — not projection-zero | B-1 PR |
+
+#### Projection-zero-only (gated: §4b's two named supersessions + bandwidth measurement before deletion — runUsage maps are the flagged chunky member)
+
+| Item | LOC | Evidence | Unlocking PR |
+|---|---|---|---|
+| `outbound.ts` 12 schemas + union rows (`:97-110,:134-182,:236-245,:365-370,:382-411`) | −95 | **V** — sole producer `LitSessionRenderer.ts`, sole consumer surface the five frontend slices; trace-viewer emits only the 3 kept messages; desktop has no independent producer. **V-adj:** `scripts/capture-walkthrough-media.mjs:427,:438` injects `updateFiles`/`updateRunUsage` into the frontend dispatcher — must update in the same change. | §4b supersession PR |
+| `src/shared/ipc.ts` 12 literal keys (`:131-152,:182`) | −12 | **gated** — frozen by §0.1 item 6; requires the §4b item-1 supersession (with item 8's dual-path clause) named in the PR | §4b supersession PR |
+| `runTrackingSlice.ts` whole file (76) + `stateUtils.updateRounds:24-34` (last consumer dies) | −87 | **V** — sole importer `messageDispatcher.ts:22`; `updateWorkflowState`/`setStreamStateForId` survive elsewhere | §4b PR |
+| `taskSlice.ts` whole file | −30 | **V** — sole importer `messageDispatcher.ts:21`; `updateToolUseState` survives ×6 sites | §4b PR |
+| `streamMetaSlice.ts:165-187` + `permissionSlice.ts:88-118` + `followUpSlice.ts:60-67` | −62 | **V** — `deriveGoalState` survives (`StreamHeader.ts`) | §4b PR |
+| `LitSessionRenderer.ts` targeted-send band + debounce apparatus (`:162-306,:434-480,:35,:44-52,:94-96`) | −170 net | **V** — `updateBypassState`'s one caller `progressBackendUiConfig.ts:277` confirmed; `followUps` ctor dep referenced only at `:284` (dying) → `@agent/followUp` type import drops | §4b PR |
+| `SessionRendererPort.ts` 113 → ~35 | −78 | **V** — open point: `onStreamDescriptionChanged`/`onInquiryThreadUpdated` (kept wire) unruled | §4b PR |
+| `sessionSignalsAdapter.ts` per-field patches `:185-307` | (−125) | **V — do not double-count:** these lines are inside Wave A's −438/−280; count once | — |
+| `SessionFactApplier.ts` notify half `:82-110,:277-315` | −40 | **V** — file survives (owns fact→state) | §4b PR |
+| Tests: `ProgressBackendFactProjection.vitest.ts` targeted-delivery/debounce suites (`:622-732,:1076`) | −250..−350 | **V** — false positives excluded: `CodexProgressEvents`/`ToolUseProgressEvents`/`OutputProgressEvents`/`CliSessionProgressSubscription`/`SessionEventHub`/`StreamSnapshotStore`/`RunExecution` vitest files match only run-fact **types** (`sessionProgressSubscription.ts:100-160` projects onto the frozen NDJSON wire, which keeps) — NOT casualties | §4b PR |
+
+#### Contracts (unlocked by the §2.x family PRs)
+
+| Item | LOC | Evidence | Unlocking PR |
+|---|---|---|---|
+| `CLI_CORE_SETTING_PATHS` + `EXTENSION_ONLY_CORE_SETTING_PATHS` + `_AssertEveryCorePathClassified` (`coreSettings.ts:507-565`) | −85 | **V-adj** — code consumers complete (`knownKeys.ts:2,25` rewrites; `stateSettings.vitest.ts:14,16,536-560` dies), **but** both names sit in `shared-schemas-deep-import-baseline.json:120,124` and the `does not shrink the leaf-aware published surface` gate fails on export disappearance regardless of importers → baseline regen (`TEXRA_UPDATE_SHARED_SCHEMAS_BASELINE=1`) in the same PR | §2.1 PR |
+| Test reader registry `stateSettings.vitest.ts:455-514,:535-588` | −90..−100 test | **V** — third catalog copy absorbed by `honoredBy` | §2.1 PR |
+| `cliStore` field + `settingSlot` branch (`stateSettings.ts:156,:349-400`; `settingsAccess.ts:45`) | ~−8 + rewrites | **V** | §2.1 PR |
+| `PROVIDER_SETTINGS` record (`providers.ts:389-454`) + 7 `*_PROVIDER_SETTING` exports (`:314-387`, sole importer `stateSettings.ts`) + `ProviderSettingDef.defaultValue` + controller thinning (`SettingsProfileController.ts:100-115,:200-217,:241-251`) | −140 + −45 | **V** — the raw `globalState.update` bypass at `:200-204` routes via `applyStateSettingUpdate` | §2.1 PR |
+| ~14 scalar-write literals → `UPDATE_STATE_SETTING` (`settingsView/inbound.ts` arms + ipc rows + ext handler `:447-483,:530-566,:1011-…` + desktop `:197-227,:377-407,:504-…`) | ≈ −180 across 4 layers | **V** — orphan alert: `enabledFlag` (`inbound.ts:47-49`) has exactly 5 callers, all migrating → must delete same PR (knip) | §2.5 PR |
+| `SettingsCredentialActions` extraction: ext `:434-446,:852-…` (~−140), desktop `:344-375` (~−180), CLI `providerApiKey.ts` (47) | flagged net-≤0 | **V** — FLAGGED-class: must land net-≤0 with the sk-placeholder gap closed on all hosts; V3 rider `desktopSettingsIpc.ts:258` gains the missing `host` arg | §2.5 PR |
+| `packages/cli/src/runtime/unavailableTools.ts` whole file | −35 | **V-adj** — import list complete (`chatSessionController.ts:44,428,584,717`; `runExecution.ts:52,516`), but "zero test importers" is literal-only: `RunExecution.vitest.ts:25-26,164-169,:419,:429-437` and `DesktopAgentExecutionFactory.vitest.ts:14-15,:325-328` **reconstruct and pin the roster contents** without importing it — both suites rewrite against the `hosts` projection in the same PR | §2.4 PR |
+| `DESKTOP_UNAVAILABLE_TOOLS` (`desktopAgentLaunch.ts:18-22,:53`; `desktopAgentResume.ts:14,137`) + `hideFromCli` (`externalToolDefs.ts:109,:525-526,:549`; `cli/runtime/tools.ts:33`) | −10 + filter | **V** — test pin `externalToolDefs.vitest.ts:56` rewrites | §2.4 PR |
+| Approval aliasing: 4 mirrors → `prompts.ts` aliases (`HostInteractions.ts:175-191`; `toolEditApproval.ts:49-55` incl. the `:564` cast), `{accepted}`→`{action}` (`:62-73`, cancellation literal `:567` dies for `cancellationResultFor`), zombie `ApprovalDecisionSchema` (`prompts.ts:188-198`) | ≈ −35 decl + 7 test-file rewrites | **V** — extension's `ApprovalDecision` in `progressView/frontend/events.ts:140` is a different type, untouched | §2.2 PR |
+| `SET_BANNER`: 12+3 ipc rows (`ipc.ts:49-68`), schema arms (`mainView/outbound.ts:109-124,:160-171`), 2 bannerSlices collapse | −100..−120 | **V** — main-view literals not item-6 frozen; 4 test suites pin literals | §2.8 PR |
+| Stream-schema §2.6: `streamSnapshot.ts:115` status fix (legacy-inbound union required — persisted data), `StreamIdentityFieldsSchema` declare-once (builders collapse) | ~−40 | **V** — `STREAM_STATUS` enum does NOT delete (trace-viewer `replayTrace.ts:131-132` keeps it; fence only) | §2.6 PR |
+| `cardStatusFor` switch (`workflowScriptRun.ts:334-357`) → projection table; `cancelled` joins the union (ripple: 7 exhaustive consumers gain an arm; `waiting` key deletes) | −24 + ripple | **V** | §2.7 PR |
+| Usage naming (`NormalizedUsage.ts:37,41`; `RunUsageAccumulator.ts:44,46`; `UsageMonitor.ts:144-145,:213,:269-291`) | −10 + 3 mapping rows | **V** — hard gate: `UsageLogTypes` external-consumer check first | §2.9 PR |
+
+#### Lifecycle (unlocked by lifecycle PRs 2–8: `DisposableStore`, session-root lease settlement, join-with-deadline shutdown, run-scoped resources)
+
+| Item | LOC | Evidence | Unlocking PR |
+|---|---|---|---|
+| `CLI_RUN_SHUTDOWN_GRACE_MS` race (`runExecution.ts:56,:446-467` + obsolete comments `:411-414,:429-437`) | −24 (+ test `:976-1001` moves to `LifecycleHost.vitest.ts`) | **V** | PR 5 |
+| CLI lease settlement (`sessionExitController.ts:18,:166-177`) → `SessionHandle.dispose` | −12 | **V** — `SessionExitLease.vitest.ts` (166 L) retires whole; behavior re-pins at session root | PR 4 |
+| CLI `disposers` arrays ×3 sites (`runChatTui.tsx:334+7 pushes`; `chatSessionController.ts:179,:195,:207-213,:383`; `sessionExitController.ts:79,:331`) | −20 | **V** | PR 2 |
+| `RESET_HOOKS`/generation machinery (`cliState.ts:879-889,:928`) | −15 | **V** | PR 2 |
+| `SessionHandle` teardown: `teardownOwners:1093-1107` → `store.dispose()`, hand-rolled aggregation `:1073-1091`, stale comments `:142,:1065-1072,:1099` | −34 | **V** — `throwAggregated` SURVIVES (5 other live sites: `SessionHandle.ts:872,963`; `StreamSnapshotStore.ts:1704`; `SessionStores.ts:431`; `executionLifecycle.ts:167`) | PR 3 |
+| Extension registrations: polling `extension.ts:299-307` (+3 imports), recording hook `:293` (→ `killActiveRecording` internalizes, `audio.ts:26-27,:140`), UsageLog dual registration `:294,:495-499` | −15 | **V** | PRs 5, 8 |
+| Desktop window-root ledger (`index.ts:1101-1145`) + `pendingDesktopDiffHostDispose` hand-off (`:158-169,:1108-1117,:1246`) + mutable-closure disposers (`:1228-1269`) | −70 | **V** — `ElectronCompositionRoot.vitest.ts:93-118` source-text pins retire (~35 test L) | PR 7 |
+| `AgentLaunchResources.ts` whole file (98) → store `move()` | −68 min | **V** — all consumers `AgentLaunchContext.ts:75,:290,:634,:643,:646`; `AgentLaunchResources.vitest.ts` (24) retires whole | PR 8 |
+| `agentCliSessionStores.ts` singletons + shutdown wiring (`:6-10,:19-29`) → session-keyed | −12 | **V** — `packages/agent/src/index.ts:34-35,:306,:309` re-exports die/become accessors; `AgentPackage.vitest.ts` surface pin drops 2 names | PR 8 |
+| Stream→execution resolver dedup (`SessionStores.ts:314-334` vs `SessionHandle.ts:689-730`) | −25..−35 | **V** — `SessionRestartRepair.vitest.ts:88` re-anchors | PR 8 |
+| `clearInlineAgents` (`agentRegistry.ts:149` + barrel) delete-or-wire | −10 or 0 | **V** — production-dead; consumers are 2 test files only | ruling |
+
+### 7.3 Ratchet / baseline pruning obligations per wave
+
+All `host-agent-import-baseline.json` prunes are **CI-forced same-commit**: the ratchet is set-based and "a listed specifier with no live import is stale headroom and also fails" (baseline semantics header; enforced by `hostAgentDeepImportRatchet.vitest.ts:158`).
+
+- **Wave A:** prune exactly one `hosts.cli` row — `@agent/modelHandlers/support/contextUtilization` (sole CLI import `statusBarDisplay.ts:3`, dies with B5; shared symbol keeps 6 `src/` consumers — row goes, module stays). **V** — the other 13 CLI rows all retain live imports post-wave (`@agent/core/state/TaskState` via `cliNdjsonProgressEvents.ts:1`, frozen NDJSON). Standing watch: `@agent/trace`'s survivor margin after B2+B4 is 3 files — if a later wave removes them, that row becomes a same-commit prune too. Ratchet scope is `packages/cli/src` only, so `tui-harness.tsx` never masks a row — but the harness IS workspace-type-checked, so its rewires land in the same PR.
+- **Projection-zero:** prune `@agent/followUp/ToolUseFollowUpQueueManager` (sole: `chatSessionController.ts:22`) when its import dies; `TaskState` likely keeps (NDJSON). **V-adj:** the stale `WebviewUpdater.ts` row at `shared-schemas-deep-import-baseline.json:547` (file deleted by #10611) is **voluntary hygiene, not CI-forced** — that ratchet only rejects new imports and surface shrink; prune opportunistically, don't block a wave on it.
+- **Contracts:** §2.1 PR must regenerate `shared-schemas-deep-import-baseline.json` in-PR (surface-shrink gate fails on the deleted `CLI_CORE_SETTING_PATHS`/`EXTENSION_ONLY_CORE_SETTING_PATHS` exports independent of importers). knip orphan sweep per PR: `enabledFlag`, the 7 `*_PROVIDER_SETTING` exports, `saveProviderApiKey`/`providerApiKey.ts`, `ProviderSettingDef.defaultValue`. No `@agent/*` baseline movement expected (`approvalAdapter.ts` imports via `@tools`); re-verify on the toolEdit PR. `SettingsCredentialActions` lands under `src/controllers/` (outside the shared-schemas ratchet); verify no new `architecture-edges` pair (mirrors existing `SettingsAgentActions` edges).
+- **Lifecycle:** `approvalPolicyAuthorityRatchet.vitest.ts:45` hardcodes `approvalAdapter.ts` by name — move the row if the file renames. `AgentPackage.vitest.ts` fenced-surface list drops `CodexThreads`/`ClaudeAgentSessions`.
+- **Wave D:** `transcriptResidencyLeaseSites` allowlist row moves from `subscribeStreamLog` to `StreamLogFeed`.
+
+### 7.4 Revival list — dead→live obligations the new architecture creates
+
+1. **`thinkingActive`/`compactingActive` have no fact-rail writer** — both derive from the log rail (`subscribeStreamLog.ts:376-383`); promotion requires a **new session-owned fact emission** (allowed via `SessionHandle.events`, but net-new wire vocabulary the docs don't cost). Highest-risk promotion row.
+2. **`contextState` becomes backend-written** (`streamState.ts:157` is frontend-owned today; `CONTEXT_STATE` is a log entry parsed at `logSlice.ts:135`) — same rail problem, plus the CLI's first-ever reader (zero refs in packages/cli today).
+3. **`WORKFLOW_TASK_STATUS_LABEL.cancelled` goes live** — its 5 consumers (`SubagentList.tsx:289`, `WorkflowRunDetails.tsx:87,164`, `workflowPlainOutput.ts:33`, `workflowCallFormatter.ts:92`, `copy/workflowCall.ts:162`) start receiving a previously unproducible key; `waiting` deletes.
+4. **Desktop `loginWithDeviceCode`** (C9) — desktop gains a device-code consumer it has never had.
+5. **Desktop `UsageLogService.initialize` + `refreshModelListStateIfNeeded`** (V2) — dormant flush-timer/retired-model paths go live; first desktop writers for `editorType`/`extensionVersion`.
+6. **AppSignals in desktop/CLI** (V7) — zero refs in either package today; wiring is net-add, uncosted.
+7. **Per-subagent `resumable` roster row** (§4) — new webview affordance + action plumbing.
+8. **U1 retention policy** — deleting the `finishedAt` filter (`sessionSignalsAdapter.ts:208`) forces `resetPerRunChildState` (`SessionState.ts:310-332`) to grow a declared per-host retention policy.
+9. **Shared tombstone writer** beside `clearStream` (fixes applier re-minting ~`:353`; deletes CLI `childExecutions.ts:353-434`).
+10. **`clearInlineAgents`** — delete-or-wire; "wire" is a revival (new lifecycle-registration caller).
+11. **Smaller:** CLI gains C2 early-bail, C4 degraded-store, C21 lease-active message; desktop gains C12 `docsCommand`; Electron secrets gain the PQueue; `RETAINED_FINISHED_CHILDREN_CAP` gains a cross-package import; `isEmptyUsage` gains 2 host consumers; `getProposalFileGroups`/`buildDelegationSections` gain CLI transcript consumers (§4 parity); `SessionState.getStreamTabInfo` gains the CLI (C20).
+
+Every revival row is a §5b ledger entry: the PR introducing it must name its paired deletion.
+
+### 7.5 Not-removable negatives register (checked; keep as R8 guards in PR bodies)
+
+- **`SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES` deletion — REFUTED.** The "only two consumers" premise is false; the export does **not** delete with §2.4. Treat as keep (or at most the setup-module's own derivation) until a fresh consumer census says otherwise.
+- **`STREAM_TRANSITION_CAUSE`** — keeps: `src/agent/runtime` (SessionHandle, StreamStatusService, AgentRunLifecycle, AgentLaunchContext, restartRepair), `nativeSubagentStrategy.ts:52`, `streamStatus.ts`, `tui-harness.tsx:67`.
+- **`contentStore.ts` (127 L) — dispute upheld:** Lit-DOM modality (content-addressable registry; `LogList.ts:53`, `htmlBuilders.ts:35`, `toolFormatters.ts:48`, cleared at `streamLifecycleSlice.ts:215,241`). Deletable only under B-2's Lit-template adoption; the claimed −127 is **not** in any wave total.
+- **`streamMetaSlice.ts`** — whole-module death only under projection-zero; `UPDATE_STREAM_STATUS:99-142` carries real policy, `UPDATE_STREAM_METADATA` carries the description-race buffer (`streamLifecycleSlice.ts:32`).
+- **`approvalAdapter.ts` (319 L)** — headless `HostInteractions` impl + 3 shape converters keep; §2.2 reshapes ~40-60 L only. Allowlisted by name at `approvalPolicyAuthorityRatchet.vitest.ts:45`.
+- **`classifyRejection`** (4 tool consumers) and **`cancellationResultFor`** (keeps and grows — toolEdit joins) — only the `:567` hand-written literal dies.
+- **`streamStatusDisplay.ts`** — §2.7.2's exemplar idiom; gains a sibling, loses nothing. **`subagentFollowup.ts`** — zero removal (comment fix only). **`htmlMarkdownNormalize.ts`** — relocation, net ≈ 0.
+- **`syncSlice.ts`, `streamStateMerge.ts`, `inquirySlice.ts`, `logSlice.ts`** — handlers of kept messages; survive (syncSlice becomes the primary content path).
+- **`WebviewBridge.ts`** — survives projection-zero (LOG_DELTA is a kept path); only Wave D reshapes it.
+- **`STREAM_STATUS` / `streamStatusToLifecycleStatus`** — trace-viewer-reachable; fence, don't delete. Runtime `streamStatus` registry vitest uses are a different surface — not casualties.
+- **`replayTrace.ts` compat readers + `legacyTraceIdentity` (`:105-163`)** — fenced permanent. **`providers.ts` survivor set** — `providerDisplayName`, `KIMI_CODE_BASE_URL`, defaults, `PROVIDER_STATE_ENTRIES` all keep.
+- **`LogMessageDataSchema` + `toLogMessage`** — B-2-gated only; threading through ~20 formatter files makes this a retyping cascade, not a deletion. Distinct from fenced `LegacyLogMessageSchema`.
+- **Lifecycle survivors:** `SessionScope.vitest.ts` (pins isolation, not choreography), `throwAggregated`, sessionExitController signal handlers (`handOffCliShutdownSignalHandlers`, SIGTSTP/SIGCONT, `printResumeHintOnExit`), the entire `executionRegistry.ts` surface (1,002 L — nothing loses its last consumer; cross-root verbs kept by ruling), extension double-dispose comment (`extension.ts:289-292`).
+- **`desktopAgentExecution.ts` sheds ~0 in projection-zero** — its registry is inbound + host-specific handlers; `UPDATE_RECORDING:583`, `UPDATE_FOLLOW_UP_TEXT:912,983`, `GETTING_STARTED_ACTION:953` all keep. Any claim otherwise is an R8 error.
+- **`executionListing.ts` / `historyViewMessages.ts`** — both keep (§2.6.4 derives the triple only). **`ProviderSettingSchema`/`ProviderSettingDefSchema`** — survive as wire/derivation shapes (ruling-dependent for Models-tab rows).
+- **Stale sub-claim narrowed:** the audit's "approvalQueue recomputes relativePath/line counts" did not reproduce outside `DiffView.statsFromHunks:52-63` — only that ~15 L dies (C17); `diffHunks.ts` keeps (3 consumers).
+
+### 7.6 Honest totals and reconciliation against the first-order estimate
+
+Production LOC, net, by wave (adversarial corrections applied):
+
+| Wave | Production net | Test/fixture net (separate ledger) |
+|---|---|---|
+| Wave A | −983..−1,058 | ≈ −1,900 deletable (+ smaller retarget set) |
+| B-1 / B-2 | −49 / +60 (flagged) | messageIndex + `TaskGroupListIndex.vitest.ts` partial |
+| Wave C compliant | −323..−423 (−450..−550 **minus** the upheld contentStore dispute ~127) | `StreamContentSync` (309) retargets |
+| Wave D | −180 | `WebviewBridge.vitest.ts` (546) reshapes |
+| Contracts §2.1–2.9 | −400..−600 | `stateSettings.vitest` −90..−100; ~15 files section-rewrite (no whole-file deaths) |
+| Retirement | −130 now / −120 dated | 8 `cleanupAllApprovals` unwinds |
+| Lifecycle | ≈ −240 (−300 deleted / +60 added: DisposableStore, self-registrations, `followUps.dispose`) | `SessionExitLease` (166) + `AgentLaunchResources.vitest` (24) retire; ~150 rewrite |
+| **Compliant program total** | **≈ −2,000..−2,400** | **≈ −3,000..−4,500 net (gross churn 8,000+)** |
+| Projection-zero (gated) | **−400..−600 further** | −400..−500 further |
+
+**Reconciliation with the program's existing ≈ −2,100..−2,500 first-order estimate — read carefully to avoid double-counting:**
+
+1. **Already inside the estimate:** every production row in §7.2's Wave A, compliant-wire, contracts, and lifecycle tables. The cascades are the *verification* of the first-order figures, not an addition — Wave A's −983..−1,058 matches the proposal band; the contracts families and lifecycle nets are the same LOC the docs already count. The second-order sweep **corrects the estimate downward by ~127** (contentStore is not removable under Wave C), landing the compliant program at ≈ **−2,000..−2,400** — the low end of the published band, honestly stated.
+2. **Genuinely additional, production:** projection-zero-only rows (§7.2 third table) ≈ **−400..−600**, hard-gated on the two named §4b supersessions plus the bandwidth measurement — outside the first-order estimate by the docs' own accounting, and it stays outside until the supersession PR lands.
+3. **Genuinely additional, non-production:** the test/fixture cascade — **uncosted in all four program docs** — ≈ −1,900 in Wave A alone; program-wide net ≈ −3,000..−4,500 with gross churn above 8,000 L (`SubagentListDisplay` 1,592, `RunProgressRenderer` 1,336, `DesktopSettingsIpc` 1,092 sections, `RunChatSignalOwnership` 531 mostly dies, whole-file deaths listed per wave above). Keep this on a separate ledger line; never fold it into the production total.
+4. **Zero-LOC obligations:** ratchet/baseline prunes (§7.3) and the revival ledger (§7.4). Revivals are net-**adds** the first-order estimate does not offset — each must carry its §5b paired deletion in-PR, which is what keeps the grand total from silently eroding.
+
+Grand total if the projection-zero supersessions land: ≈ **−2,400..−3,000 production**, plus the test ledger. Quote the compliant figure (−2,000..−2,400) in any external summary; quote the gated figure only with its gate named.
