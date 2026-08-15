@@ -5,9 +5,11 @@
  * integration. Per-workspace sessions are cached: the first request that
  * targets a file in a given Lake project spawns `lake env lean --server`
  * from that project root; subsequent requests from any agent reuse the
- * same session. A server stops when the agent run that started it ends;
- * an unused one is otherwise stopped after thirty minutes. Sessions are
- * also torn down on platform shutdown.
+ * same session. A server is attributed to the agent run that started it,
+ * and a later run that reuses the server takes over that attribution; the
+ * server stops when its attributed run ends. An unused one is otherwise
+ * stopped after thirty minutes. Sessions are also torn down on platform
+ * shutdown.
  */
 
 // Node imports
@@ -271,9 +273,9 @@ export function createDirectLspLeanAdapter(
   }
 
   /**
-   * Run-end hook: stop the servers the ended run started. A session still
-   * leased by an in-flight request (a shared worktree's other run) is left
-   * running; its last lease re-arms the idle timer, which stays the
+   * Run-end hook: stop the servers attributed to the ended run. A session
+   * still leased by an in-flight request (a shared worktree's other run) is
+   * left running; its last lease re-arms the idle timer, which stays the
    * backstop. Sessions started outside any run have no attribution and are
    * likewise left to the idle timeout.
    */
@@ -415,7 +417,16 @@ export function createDirectLspLeanAdapter(
       return getOrStartSessionLocked(root, generation, runId);
     }
     if (existing) {
-      return leaseSession(root, existing.session);
+      const session = await leaseSession(root, existing.session);
+      // Reuse moves the attribution to the run currently using the session,
+      // so a shared worktree's server is stopped by the run that last used it
+      // rather than by the run that happened to spawn it. An outside-run
+      // request leaves the existing attribution intact: it did not start the
+      // server and has no run end to stop it at.
+      if (runId !== undefined && existing.startedByRunId !== runId) {
+        existing.startedByRunId = runId;
+      }
+      return session;
     }
     await evictForNewSession(root, generation);
     throwIfStopped(generation);
@@ -700,7 +711,7 @@ interface TrackedLeanSession {
   session: LeanSession;
   lastUsedAt: number;
   inFlight: number;
-  /** Agent run that started this server, when it started inside one. */
+  /** Agent run this server is attributed to (the starter, or a later reuser). */
   startedByRunId?: ExecutionId;
   idleTimer?: ReturnType<typeof setTimeout>;
   disposing?: Promise<void>;

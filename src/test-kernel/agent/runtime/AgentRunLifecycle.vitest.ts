@@ -360,6 +360,68 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
+  it('does not stop the Lean servers when a tool-use run parks at WAITING', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-lean-server-stop-waiting',
+    );
+    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
+    setLeanLanguageServices({
+      executeFileCommand: vi.fn(),
+      getGoalState: vi.fn(),
+      getTermGoal: vi.fn(),
+      getHoverInfo: vi.fn(),
+      fetchDiagnosticsForFile: vi.fn(),
+      executeProjectCommand: vi.fn(),
+      stopSessionsForRun,
+    } as LeanLanguageServices);
+
+    try {
+      const result = await runFlowWithLifecycle(ctx, async () =>
+        waitingResult(executionId, streamId),
+      );
+
+      // WAITING is a suspension, not a terminal run end: the server must
+      // survive the parked run so a resume reuses it instead of paying a cold
+      // spawn.
+      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+      expect(stopSessionsForRun).not.toHaveBeenCalled();
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('does not stop the Lean servers when a subagent run ends', async () => {
+    await initLifecycleTestPlatform(true);
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-lean-server-stop-subagent',
+    );
+    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
+    setLeanLanguageServices({
+      executeFileCommand: vi.fn(),
+      getGoalState: vi.fn(),
+      getTermGoal: vi.fn(),
+      getHoverInfo: vi.fn(),
+      fetchDiagnosticsForFile: vi.fn(),
+      executeProjectCommand: vi.fn(),
+      stopSessionsForRun,
+    } as LeanLanguageServices);
+
+    try {
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+        { isSubagent: true },
+      );
+
+      // The parent run owns the worktree, so a subagent's own terminal
+      // boundary must not stop a server the parent may still reuse.
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      expect(stopSessionsForRun).not.toHaveBeenCalled();
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
   // A completed session marks first-run onboarding done, except for the
   // built-in setup agent, which must leave the flag untouched.
   const onboardingCases = [

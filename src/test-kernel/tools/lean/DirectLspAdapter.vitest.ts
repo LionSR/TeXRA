@@ -729,6 +729,58 @@ describe('createDirectLspLeanAdapter', () => {
       }
     },
   );
+
+  fakeLakeIt(
+    'reattributes a reused server to the run that leases it',
+    async () => {
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        idleTimeoutMs: 0,
+      });
+      try {
+        await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
+        await asRun('e00002', () => adapter.fetchDiagnosticsForFile(filePath));
+        expect(await countStarts()).toBe(1);
+
+        // The server now belongs to the run that last used it, so the
+        // original run's end leaves it running.
+        await adapter.stopSessionsForRun?.('e00001');
+        expect(activeServerRoots()).toEqual([projectRoot]);
+
+        await adapter.stopSessionsForRun?.('e00002');
+        expect(activeServerRoots()).toEqual([]);
+      } finally {
+        await adapter.dispose();
+      }
+    },
+  );
+
+  fakeLakeIt(
+    'reattributes a restarted server to the restarting run',
+    async () => {
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        idleTimeoutMs: 0,
+      });
+      try {
+        await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
+        await asRun('e00002', () =>
+          adapter.executeProjectCommand('restart_server'),
+        );
+        expect(await countStarts()).toBe(2);
+
+        // The replacement process was started by e00002, so e00001's end must
+        // leave it alone and e00002's end must dispose it.
+        await adapter.stopSessionsForRun?.('e00001');
+        expect(activeServerRoots()).toEqual([projectRoot]);
+
+        await adapter.stopSessionsForRun?.('e00002');
+        expect(activeServerRoots()).toEqual([]);
+      } finally {
+        await adapter.dispose();
+      }
+    },
+  );
 });
 
 /** Run `fn` with the ambient run context of the given agent run. */

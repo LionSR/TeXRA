@@ -657,6 +657,24 @@ export async function runFlowWithLifecycle(
     finalizedRunFailures.add(finalizedFailure);
     throw finalizedFailure;
   };
+  /**
+   * Stop the Lean servers attributed to this run when it genuinely ends.
+   * Subagent runs never stop servers themselves: the worktree belongs to the
+   * parent run that delegated the work, so a subagent's own terminal boundary
+   * must not tear down a server the parent still needs. The parent either
+   * reuses the server (the direct adapter re-attributes it on lease) or the
+   * server falls back to the idle timeout.
+   */
+  const stopLeanServersIfRunEnded = async (): Promise<void> => {
+    if (options?.isSubagent) return;
+    try {
+      await stopLeanServersForEndedRun(executionId);
+    } catch (leanStopError) {
+      logger.warn('Failed to stop Lean servers after the run ended', {
+        data: { agentIdentifier, streamId, error: leanStopError },
+      });
+    }
+  };
   try {
     // Publish run identity/config before the RUNNING transition so progress
     // backends can create the initial StreamExecutionState with the real
@@ -713,6 +731,11 @@ export async function runFlowWithLifecycle(
           handle,
           ctx.parentStage.id,
         );
+        // A parked run that a later stop/kill tears down has ended here,
+        // through the suspended-handle path instead of the success/error arms.
+        // Stop its Lean servers on that path too; the WAITING return above
+        // deliberately did not.
+        await stopLeanServersIfRunEnded();
       });
       return result;
     }
@@ -774,18 +797,16 @@ export async function runFlowWithLifecycle(
         data: { agentIdentifier, streamId, error: cancelError },
       });
     }
-    // Stop the Lean servers this run started in its worktree(s) so they do
-    // not idle until the timeout after the run is gone (CLI/desktop; a host
+    // Stop the Lean servers attributed to this run in its worktree(s) so they
+    // do not idle until the timeout after the run is gone (CLI/desktop; a host
     // whose Lean integration owns server lifetime no-ops here). Servers still
     // leased by another run's in-flight request survive on the idle-timeout
     // backstop. Guarded like the cancel above: a failing stop must not
-    // replace the result this run already published.
-    try {
-      await stopLeanServersForEndedRun(executionId);
-    } catch (leanStopError) {
-      logger.warn('Failed to stop Lean servers after the run ended', {
-        data: { agentIdentifier, streamId, error: leanStopError },
-      });
+    // replace the result this run already published. A WAITING suspension is
+    // not a run end, so its return skips this and leaves the stop to the
+    // suspended-handle teardown if a later kill actually ends the run.
+    if (!keepLeaseWatcher) {
+      await stopLeanServersIfRunEnded();
     }
     // Release long-lived resources (e.g., WebSocket connections, keepalive
     // intervals) to prevent leaks when handler instances are discarded after
