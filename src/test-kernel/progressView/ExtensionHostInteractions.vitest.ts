@@ -610,6 +610,81 @@ describe('createExtensionHostInteractions', () => {
     await expect(result).resolves.toEqual({ action: 'cancel' });
   });
 
+  it('removes a canceled preparation from the retry map', async () => {
+    const abortSpy = vi.spyOn(AbortController.prototype, 'abort');
+    try {
+      const { interactions } = createInteractions({
+        session: createTestSession(),
+      });
+      const preparation = createDeferredPreparation();
+
+      const result = interactions.requestRetry?.(
+        {
+          requestId: 'retry:cancel-map',
+          streamId: STREAM_A,
+          operation: 'First invocation',
+        },
+        { prepareRetry: preparation.prepareRetry },
+      );
+      const personal = interactions.submitRetryWithPersonalCredentials(
+        STREAM_A,
+        'retry:cancel-map',
+      );
+      await vi.waitFor(() =>
+        expect(preparation.prepareRetry).toHaveBeenCalledOnce(),
+      );
+
+      interactions.cancel({ streamId: STREAM_A, kind: 'retry' });
+      await expect(personal).resolves.toBe(false);
+      await expect(result).resolves.toEqual({ action: 'cancel' });
+      expect(preparation.signal()?.aborted).toBe(true);
+
+      const abortsFor = (signal: AbortSignal | undefined) =>
+        abortSpy.mock.instances.filter(
+          (instance) => (instance as AbortController).signal === signal,
+        ).length;
+      expect(abortsFor(preparation.signal())).toBe(1);
+
+      // If the canceled preparation stayed in the retry map, a replacement
+      // request would abort its old controller again before overwriting the
+      // entry. Removal keeps the old controller's abort count at exactly one.
+      const replacement = interactions.requestRetry?.({
+        requestId: 'retry:after-cancel',
+        streamId: STREAM_A,
+        operation: 'Replacement invocation',
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(abortsFor(preparation.signal())).toBe(1);
+
+      interactions.cancel({ streamId: STREAM_A, kind: 'retry' });
+      await expect(replacement).resolves.toEqual({ action: 'cancel' });
+    } finally {
+      abortSpy.mockRestore();
+    }
+  });
+
+  it('wraps cancel-path settlement when the dismiss transport throws', async () => {
+    const { handlers, interactions } = createInteractions({
+      session: createTestSession(),
+    });
+    const result = interactions.requestRetry?.({
+      requestId: 'retry:cancel-settlement',
+      streamId: STREAM_A,
+      operation: 'Model invocation',
+    });
+    handlers.transport.retry.dismiss.mockImplementationOnce(() => {
+      throw new Error('Progress view dismiss transport unavailable.');
+    });
+
+    expect(
+      interactions.submitRetryDecision(STREAM_A, 'retry:cancel-settlement', {
+        action: 'cancel',
+      }),
+    ).toBe(true);
+    await expect(result).resolves.toEqual({ action: 'cancel' });
+    expect(handlers.transport.retry.dismiss).toHaveBeenCalledWith('stream-a');
+  });
+
   it('does not abort preparations outside the cancellation scope', async () => {
     const { interactions } = createInteractions({
       session: createTestSession(),

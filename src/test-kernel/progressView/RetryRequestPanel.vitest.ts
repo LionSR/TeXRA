@@ -119,6 +119,26 @@ describe('retry-request-panel', () => {
     expect(actions).toEqual([{ action: 'retry' }]);
   });
 
+  it('offers the API-key switch for an exclusive model on upstream-credit depletion', async () => {
+    const element = await mountPanel({
+      model: 'kimiCoding',
+      errorDetails: {
+        exhaustionReason: 'upstream-credit',
+        isRelayError: false,
+        userRetryable: true,
+      },
+    });
+
+    const buttons = [
+      ...(element.shadowRoot?.querySelectorAll(
+        '.retry-request__actions wa-button',
+      ) ?? []),
+    ];
+    expect(buttons.map((button) => button.getAttribute('data-action'))).toEqual(
+      ['useOwnApiKey', 'retry', 'cancel'],
+    );
+  });
+
   it('marks retry action buttons with action ids for shared sizing styles', async () => {
     const element = await mountPanel();
 

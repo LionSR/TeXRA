@@ -14,6 +14,10 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { providerDisplayName } from '@shared/constants/providers';
+import {
+  isKimiCodeExclusiveModel,
+  isKimiSubscriptionEligible,
+} from '@shared/model/kimiCodeRetryGate';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { coalesceAsync } from '@utils/core';
 import {
@@ -30,11 +34,7 @@ import {
   resolveCodexSubscriptionCapabilities,
   resolveXaiSubscriptionCapabilities,
 } from './providerCapabilities';
-import {
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
-  kimiCodeEffectiveConfig,
-} from './kimiCodeSubscriptionRouting';
+import { kimiCodeEffectiveConfig } from './kimiCodeSubscriptionRouting';
 import {
   buildBaseModelOption,
   buildBasicModelOptionsData,
