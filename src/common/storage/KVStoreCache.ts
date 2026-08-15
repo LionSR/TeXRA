@@ -20,6 +20,16 @@ import { LRUCache } from 'lru-cache';
 
 import { KVStore } from '@common/storage/KVStore';
 
+/**
+ * Largest `max` the cache accepts. lru-cache preallocates its key/val lists
+ * with `Array.from({ length: max })`, which throws `RangeError: Invalid array
+ * length` once `max` reaches 2**32 and still attempts a ~4.3B-element
+ * allocation at 2**32 - 1 (the largest valid array length). Cap one below
+ * that so an unsizable `max` fails early with the KVStoreCache-scoped
+ * RangeError instead of inside lru-cache.
+ */
+const MAX_BOUNDED_HANDLES = 2 ** 32 - 2;
+
 export class KVStoreCache<
   TId extends NonNullable<unknown>,
   TStore extends KVStore = KVStore,
@@ -37,15 +47,20 @@ export class KVStoreCache<
     private readonly create: (id: TId) => TStore,
     { max }: { max?: number } = {},
   ) {
-    if (max !== undefined && (!Number.isSafeInteger(max) || max < 1)) {
+    if (
+      max !== undefined &&
+      (!Number.isSafeInteger(max) || max < 1 || max > MAX_BOUNDED_HANDLES)
+    ) {
       // lru-cache already rejects every invalid max at construction, so
       // there is no silent no-cache mode to prevent — but with its own
-      // TypeError (0, -1, 1.5, NaN, Infinity) or a generic Error (integers
-      // beyond the safe range, whose per-cap index array it cannot size).
+      // TypeError (0, -1, 1.5, NaN, Infinity), a generic Error (integers
+      // beyond the safe range, whose per-cap index array it cannot size),
+      // or an array-length RangeError (safe integers larger than
+      // MAX_BOUNDED_HANDLES, whose key/val lists it cannot preallocate).
       // Guard here so every invalid max fails early with one
       // KVStoreCache-scoped RangeError.
       throw new RangeError(
-        `KVStoreCache max must be a positive safe integer (got ${max}); omit it for an unbounded cache`,
+        `KVStoreCache max must be a positive safe integer no larger than ${MAX_BOUNDED_HANDLES} (got ${max}); omit it for an unbounded cache`,
       );
     }
     this.handles = max === undefined ? new Map() : new LRUCache({ max });

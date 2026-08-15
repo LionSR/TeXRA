@@ -20,16 +20,16 @@ export interface StandardPricingConfig {
   cacheDiscountFactor: number;
   /**
    * Long-context billing tier (xAI). Once a request's total prompt tokens —
-   * cached included — exceed the model's threshold, the provider bills every
+   * cached included — reach the model's threshold, the provider bills every
    * token of that request at the tier's rates, output tokens included, so the
    * complete tuple switches, not just the input rate.
    */
   longContextTier?: LongContextPricingTier;
 }
 
-/** Rates that apply to the whole request past `thresholdTokens` prompt tokens. */
+/** Rates that apply to the whole request once the prompt reaches `thresholdTokens`. */
 export interface LongContextPricingTier {
-  /** Total prompt tokens above which the tier applies (exclusive boundary). */
+  /** Total prompt tokens at which the tier applies (inclusive boundary). */
   thresholdTokens: number;
   inputPrice: number;
   outputPrice: number;
@@ -63,7 +63,7 @@ export function computeStandardPrice(
   // tier: providers scale the cached rate by the same discount factor.
   const tier =
     config.longContextTier &&
-    tokens.inputTokens > config.longContextTier.thresholdTokens
+    tokens.inputTokens >= config.longContextTier.thresholdTokens
       ? config.longContextTier
       : undefined;
   const inputPrice = tier?.inputPrice ?? config.inputPrice;
