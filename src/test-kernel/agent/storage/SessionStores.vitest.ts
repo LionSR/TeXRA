@@ -94,6 +94,38 @@ describe('SessionStores deletion coordination', () => {
     });
   });
 
+  it('deletes the sidecar-named execution when the summary mirror diverges', async () => {
+    await withSession(async (session) => {
+      const stream = 'divergent@test#bbb00002' as StreamTabId;
+      const summaryExecutionId = 'aaa00001' as ExecutionId;
+      const sidecarExecutionId = 'bbb00002' as ExecutionId;
+      session.transcripts.ensureStream(stream);
+      session.transcripts.recordSummaryMeta(stream, {
+        executionId: summaryExecutionId,
+      });
+      const snapshots = new StreamSnapshotStore();
+      ownExecution(snapshots, stream, sidecarExecutionId);
+      await snapshots.flush();
+      const deleteExecution = deletionSpy();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        deleteExecution,
+      });
+
+      await expect(stores.deleteStream(stream)).resolves.toBe('deleted');
+
+      expect(deleteExecution).toHaveBeenCalledWith(
+        sidecarExecutionId,
+        expect.anything(),
+      );
+      expect(deleteExecution).not.toHaveBeenCalledWith(
+        summaryExecutionId,
+        expect.anything(),
+      );
+    });
+  });
+
   it('projects child detachment when durable discovery fails', async () => {
     await withSession(async (session) => {
       const parent = 'discovery-failure-parent' as StreamTabId;

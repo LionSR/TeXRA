@@ -87,8 +87,8 @@ async function restorePersistedGeneration(
   let executionId: string | undefined;
   try {
     executionId =
-      session.transcripts.getSummaryMeta(streamId)?.executionId ??
-      (await session.snapshots.readPersistedExecutionId(streamId));
+      (await session.snapshots.readPersistedExecutionId(streamId)) ??
+      session.transcripts.getSummaryMeta(streamId)?.executionId;
   } catch (error) {
     logger.warn(
       `Cannot restore continuation generation for ${streamId}: persisted execution identity is unreadable.`,

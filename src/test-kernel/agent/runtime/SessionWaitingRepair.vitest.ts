@@ -124,6 +124,22 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
   });
 
+  it('prefers the persisted sidecar FK over a divergent summary mirror', async () => {
+    seedCancelled();
+    // Flush the run.start fact so the sidecar carries the authoritative FK.
+    await session.snapshots.flush();
+    const divergentExecutionId = `c${executionId.slice(1)}` as ExecutionId;
+    session.transcripts.recordSummaryMeta(streamId, {
+      executionId: divergentExecutionId,
+    });
+    mockResumable();
+
+    await expect(repair()).resolves.toBe(true);
+
+    expect(deriveResumability).toHaveBeenCalledWith(executionId);
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+  });
+
   it('leaves the terminal phase alone when the execution is not resumable', async () => {
     seedCancelled();
     deriveResumability.mockResolvedValue({
@@ -170,7 +186,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     const first = repair();
     const second = repair();
 
-    expect(deriveResumability).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
 
     deferred.resolve();
     await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
@@ -210,6 +226,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     mockDeferredProbe(deferred);
 
     const first = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
     const second = repair();
 
@@ -227,6 +244,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     mockDeferredProbe(deferred);
 
     const pending = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
     session.status.clearStream(streamId);
     // Public residency reset - the per-stream evict is store-internal.
     session.snapshots.evictAll();
@@ -242,8 +260,10 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     mockDeferredProbe(deferred);
 
     const pending = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
     const replacementExecutionId = `c${executionId.slice(1)}` as ExecutionId;
     ownStream(replacementExecutionId);
+    await session.snapshots.flush();
     deferred.resolve();
 
     await expect(pending).resolves.toBe(false);
@@ -262,9 +282,12 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     );
 
     const original = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
     const replacementExecutionId = `d${executionId.slice(1)}` as ExecutionId;
     ownStream(replacementExecutionId);
+    await session.snapshots.flush();
     const replacement = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(2));
 
     expect(deriveResumability).toHaveBeenNthCalledWith(1, executionId);
     expect(deriveResumability).toHaveBeenNthCalledWith(
@@ -285,6 +308,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     mockDeferredProbe(deferred);
 
     const pending = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
     session.status.clearStream(streamId);
     seedCancelled();
     deferred.resolve();
@@ -300,6 +324,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     mockDeferredProbe(deferred);
 
     const first = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
     const firstRejection = expect(first).rejects.toBe(failure);
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
     session.status.transition(streamId, STREAM_PHASE.WAITING, 'wait');
@@ -321,19 +346,20 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
       .mockImplementationOnce(() => secondDeferred.promise);
 
     const first = repair();
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
     session.status.clearStream(streamId);
     seedCancelled();
     const second = repair();
-    expect(deriveResumability).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(2));
 
     firstDeferred.resolve();
     await expect(first).resolves.toBe(false);
 
     const third = repair();
-    expect(deriveResumability).toHaveBeenCalledTimes(2);
     secondDeferred.resolve();
 
     await expect(Promise.all([second, third])).resolves.toEqual([true, true]);
+    expect(deriveResumability).toHaveBeenCalledTimes(2);
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
   });
 });

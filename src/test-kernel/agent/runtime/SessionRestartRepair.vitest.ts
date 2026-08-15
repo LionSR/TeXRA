@@ -11,6 +11,7 @@ import {
 import * as waitingDetection from '@agent/storage/detectWaitingStreams';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
+import * as restartRepair from '@agent/runtime/restartRepair';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { platform } from '@platform/platform';
 import {
@@ -410,6 +411,69 @@ describe('SessionHandle restart repair', () => {
     await expect(
       session.repairWaitingIfResumable(parkedStreamId),
     ).resolves.toBe(true);
+    expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
+  });
+
+  it('resolves waiting-stream ownership from the sidecar FK when the summary mirror diverges', async () => {
+    const sidecarExecutionId = 'b0a00007' as ExecutionId;
+    const summaryExecutionId = 'b0a00008' as ExecutionId;
+    const settledStream = 'settled#divergent-mirror' as StreamTabId;
+
+    const transcripts = await StreamLogStore.open();
+    appendRunningGroup(transcripts, settledStream, 'settled-divergent-group');
+    await transcripts.endRunningGroupsForStreams(
+      [settledStream],
+      2_000,
+      RUN_OUTCOME.COMPLETED,
+    );
+    await transcripts.flush();
+    transcripts.recordSummaryMeta(settledStream, {
+      executionId: summaryExecutionId,
+    });
+    await seedSidecarFk(settledStream, sidecarExecutionId);
+
+    const executionStore = getExecutionStore(sidecarExecutionId);
+    await executionStore.writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await executionStore.write(flowKey(sidecarExecutionId), validFlowRecord);
+
+    const session = openDeferredSession(transcripts);
+    await session.waitUntilReady();
+
+    // The summary mirror names a different (non-resumable) execution; repair
+    // must follow the persisted sidecar FK and park the stream as WAITING.
+    expect(session.status.get(settledStream)).toBe(STREAM_PHASE.WAITING);
+  });
+
+  it('preloads parked WAITING streams before publishing restart status', async () => {
+    const parkedExecutionId = 'b0a00009' as ExecutionId;
+    const parkedStreamId = 'parked#waiting-preload' as StreamTabId;
+
+    const transcripts = await StreamLogStore.open();
+    transcripts.ensureStream(parkedStreamId);
+    await transcripts.flush();
+    await seedSidecarFk(parkedStreamId, parkedExecutionId);
+
+    const executionStore = getExecutionStore(parkedExecutionId);
+    await executionStore.writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await executionStore.write(flowKey(parkedExecutionId), validFlowRecord);
+
+    const session = openDeferredSession(transcripts);
+    const preload = vi.spyOn(session.snapshots, 'preload');
+    const repair = vi.spyOn(restartRepair, 'repairRestartedStreams');
+
+    await session.waitUntilReady();
+
+    expect(preload).toHaveBeenCalledTimes(2);
+    expect([...preload.mock.calls[1][0]]).toEqual([parkedStreamId]);
+    expect(preload.mock.invocationCallOrder[1]).toBeLessThan(
+      repair.mock.invocationCallOrder[0],
+    );
     expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
   });
 

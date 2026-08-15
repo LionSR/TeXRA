@@ -3592,6 +3592,9 @@ describe('sessionSignalsAdapter run facts', () => {
         category: AgentCategory.ToolUse,
         conversation: { toolCallCount: 3 },
       });
+      // `StreamSlice.files` is dead state after #10498: `run.config` file
+      // lists are no longer projected into the TUI slice at all.
+      expect(streams.get().get(root)).not.toHaveProperty('files');
     });
   });
 

@@ -9,7 +9,7 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import type { ToolUseFollowUpTarget } from '@agent/runtime/executionRegistry';
 import type { LiveToolUseFlowContext } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { StreamTabId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 
 function mockTryResume(): Mock<() => Promise<boolean>> {
@@ -49,11 +49,11 @@ function activeTarget(
 
 const id = (value: string) => value as StreamTabId;
 
-/** Stub the summary-mirror execution-id read the durable-producer path performs. */
+/** Stub the persisted sidecar FK the durable-producer path reads first. */
 function mockPersistedExecution(session: SessionHandle): void {
-  vi.spyOn(session.transcripts, 'getSummaryMeta').mockReturnValue({
-    executionId: 'persisted-execution',
-  } as never);
+  vi.spyOn(session.snapshots, 'readPersistedExecutionId').mockResolvedValue(
+    'persisted-execution' as ExecutionId,
+  );
 }
 
 /**

@@ -43,7 +43,11 @@ import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import {
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
@@ -316,11 +320,12 @@ export class SessionHandle {
   async repairWaitingIfResumable(streamId: StreamTabId): Promise<boolean> {
     // A parked WAITING stream is not part of the bounded startup seed, so its
     // in-memory record may be absent. Resolve the execution id from the
-    // always-resident summary mirror first and fall back to the one-file
-    // sidecar read — never through the full synchronous snapshot record.
+    // authoritative one-file sidecar FK first; fall back to the
+    // always-resident summary mirror only when no persisted sidecar FK exists
+    // (legacy streams) — never through the full synchronous snapshot record.
     const executionId =
-      this.transcripts.getSummaryMeta(streamId)?.executionId ??
-      (await this.snapshots.readPersistedExecutionId(streamId));
+      (await this.snapshots.readPersistedExecutionId(streamId)) ??
+      this.transcripts.getSummaryMeta(streamId)?.executionId;
     const inFlight = this.waitingRepairProbes.get(streamId);
     if (
       inFlight &&
@@ -359,12 +364,12 @@ export class SessionHandle {
   ): Promise<boolean> {
     const resumability = await deriveResumability(executionId);
     if (!resumability.resumable) return false;
-    // Re-resolve through the summary mirror / one-file sidecar read rather
-    // than the synchronous snapshot record: this probe commonly runs for a
-    // parked WAITING stream that was deliberately not seeded at startup.
+    // Re-resolve through the one-file sidecar FK / summary-mirror fallback
+    // rather than the synchronous snapshot record: this probe commonly runs
+    // for a parked WAITING stream that was deliberately not seeded at startup.
     const currentExecutionId =
-      this.transcripts.getSummaryMeta(streamId)?.executionId ??
-      (await this.snapshots.readPersistedExecutionId(streamId));
+      (await this.snapshots.readPersistedExecutionId(streamId)) ??
+      this.transcripts.getSummaryMeta(streamId)?.executionId;
     if (
       currentExecutionId !== executionId ||
       !this.status.isCurrentGeneration(streamId, statusGeneration)
@@ -587,26 +592,21 @@ export class SessionHandle {
     ) {
       return;
     }
-    const snapshotExecutionIds = this.snapshots.getExecutionIdMap();
-    const executionIds = new Map(snapshotExecutionIds);
+    const executionIds = new Map<StreamTabId, ExecutionId>();
     const unresolvedStreams = new Set<StreamTabId>();
     for (const streamId of this.transcripts.keys()) {
-      if (executionIds.has(streamId)) continue;
       // The stream→execution reverse edge is the persisted sidecar FK;
-      // name resemblance is never ownership. A stream without one stays
-      // unmapped and is skipped by repair. Read the always-resident summary
-      // mirror first; only legacy summaries that predate the mirror fall back
-      // to the one-file sidecar read.
-      const summaryExecutionId =
-        this.transcripts.getSummaryMeta(streamId)?.executionId;
-      if (summaryExecutionId) {
-        executionIds.set(streamId, summaryExecutionId);
-        continue;
-      }
+      // name resemblance is never ownership. Read that authority first and
+      // fall back to the always-resident summary mirror only for legacy
+      // streams without a persisted FK. A stream with neither stays unmapped
+      // and is skipped by repair.
       try {
         const persisted =
           await this.snapshots.readPersistedExecutionId(streamId);
-        if (persisted) executionIds.set(streamId, persisted);
+        if (persisted) {
+          executionIds.set(streamId, persisted);
+          continue;
+        }
       } catch (error) {
         // A transient storage failure proves nothing about this stream. Leave
         // it out of this pass — repairing it unmapped would skip its lease
@@ -616,6 +616,12 @@ export class SessionHandle {
           `Skipped restart repair for stream ${streamId}: its execution identity could not be read`,
           { data: error },
         );
+        continue;
+      }
+      const summaryExecutionId =
+        this.transcripts.getSummaryMeta(streamId)?.executionId;
+      if (summaryExecutionId) {
+        executionIds.set(streamId, summaryExecutionId);
       }
     }
     let waitingStreams: Set<StreamTabId>;
@@ -638,11 +644,22 @@ export class SessionHandle {
           .getUnfinishedStreamIds()
           .filter(
             (streamId) =>
-              !snapshotExecutionIds.has(streamId) &&
-              !unresolvedStreams.has(streamId),
+              !executionIds.has(streamId) && !unresolvedStreams.has(streamId),
           ),
       );
     }
+    if (
+      generation !== this.storageGeneration ||
+      this.restartRepairAbort.signal.aborted
+    ) {
+      return;
+    }
+
+    // Parked WAITING streams were deliberately left out of the bounded
+    // startup seed, so seed them now — before repair publishes their WAITING
+    // status — because synchronous status readers (the extension's status-bar
+    // usage total) resolve usage from the seeded snapshot record.
+    await this.snapshots.preload([...waitingStreams]);
     if (
       generation !== this.storageGeneration ||
       this.restartRepairAbort.signal.aborted
