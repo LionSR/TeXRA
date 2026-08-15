@@ -7,7 +7,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
-import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
@@ -365,7 +364,6 @@ describe('CLI platform init', () => {
       releaseResumeState = () => resolve(undefined);
     });
     const pendingResume = resolveAndResumeStream(streamId, {
-      interactions: new SessionHostInteractions(),
       streamStatus: { isActiveOrResuming: () => false },
       resolveResumeState: () => pendingResumeState,
       resumeToolUse: vi.fn(async () => false),
