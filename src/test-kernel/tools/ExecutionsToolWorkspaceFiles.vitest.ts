@@ -2,8 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Node imports
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,6 +23,7 @@ import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
+import { withTempDir } from '@test/support/tempDirPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import { StorageFS } from '@utils/files/storageFS';
@@ -82,22 +82,9 @@ const toolUseMeta = {
   category: 'toolUse',
 } as const;
 
-/** Creates a temp workspace dir for the test body, then always removes it. */
-async function withTempWorkspace(
-  run: (workspace: string) => Promise<void>,
-): Promise<void> {
-  const workspace = await mkdtemp(path.join(tmpdir(), 'texra-exec-files-'));
-  try {
-    await run(workspace);
-  } finally {
-    await rm(workspace, { recursive: true, force: true });
-  }
-}
-
 /** Installs a real filesystem-backed storage root for sidecar persistence tests. */
 async function withTempStorage(run: () => Promise<void>): Promise<void> {
-  const root = await mkdtemp(path.join(tmpdir(), 'texra-exec-storage-'));
-  try {
+  await withTempDir('texra-exec-storage-', async (root) => {
     await installPlatform(
       {
         workspacePath: path.join(root, 'workspace'),
@@ -106,9 +93,7 @@ async function withTempStorage(run: () => Promise<void>): Promise<void> {
       { fs: nodeFilesystem },
     );
     await run();
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+  });
 }
 
 /** Writes a stream sidecar work plan for the run and returns its stream id. */
@@ -420,7 +405,7 @@ describe('ExecutionsTool', () => {
   );
 
   it('lists and reads persisted workspace files for tool-use executions', async () => {
-    await withTempWorkspace(async (workspace) => {
+    await withTempDir('texra-exec-files-', async (workspace) => {
       await writeFile(path.join(workspace, 'review.md'), '# report\n');
       mocks.readConfig.mockResolvedValue({
         ...config,
@@ -445,7 +430,7 @@ describe('ExecutionsTool', () => {
   });
 
   it('refuses unrecorded workspace file reads', async () => {
-    await withTempWorkspace(async (workspace) => {
+    await withTempDir('texra-exec-files-', async (workspace) => {
       await writeFile(path.join(workspace, 'secret.md'), 'secret');
       mocks.readConfig.mockResolvedValue({
         ...config,
@@ -528,7 +513,7 @@ describe('ExecutionsTool', () => {
   });
 
   it('reads recorded files inside a top-level workspace directory', async () => {
-    await withTempWorkspace(async (workspace) => {
+    await withTempDir('texra-exec-files-', async (workspace) => {
       await mkdir(path.join(workspace, 'workspace'));
       await writeFile(path.join(workspace, 'review.md'), 'wrong');
       await writeFile(path.join(workspace, 'workspace', 'review.md'), 'nested');

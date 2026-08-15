@@ -4,7 +4,11 @@ import { z } from 'zod';
 // Internal imports
 import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
 import { convertToolSchema } from '@agent/modelHandlers/toolConversion';
-import type { ToolResult } from '@shared/schemas';
+import {
+  JsonValueSchema,
+  type JsonValue,
+  type ToolResult,
+} from '@shared/schemas';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -13,9 +17,6 @@ type StructuredOutputSchema<TSchema extends z.ZodType = z.ZodType> = {
   readonly jsonSchema: Record<string, unknown>;
   readonly zodSchema: TSchema;
 };
-
-const JsonValueSchema = z.json();
-type JsonValue = z.infer<typeof JsonValueSchema>;
 
 /** Name of the synthetic tool the model calls to submit its final result. */
 const SUBMIT_OUTPUT_TOOL_NAME = 'submit_output';

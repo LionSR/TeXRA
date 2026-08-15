@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, utimes, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
@@ -8,11 +7,9 @@ import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
+import { errnoError } from '@test/support/fsTestUtils';
+import { withTempDir } from '@test/support/tempDirPlatform';
 import { GlobTool } from '@tools/glob';
-
-function fsError(code: string, message: string): Error {
-  return Object.assign(new Error(message), { code });
-}
 
 function failStatFor(
   workspacePath: string,
@@ -31,27 +28,27 @@ function failStatFor(
 async function withGlobWorkspace(
   run: (workspacePath: string) => Promise<void>,
 ): Promise<void> {
-  const workspacePath = await mkdtemp(path.join(tmpdir(), 'texra-glob-tool-'));
-  await installPlatform({ workspacePath }, { fs: nodeFilesystem });
-  try {
-    await Promise.all(
-      [
-        'new.tex',
-        'old.tex',
-        'vanished.tex',
-        'blocked.tex',
-        'unreadable.tex',
-      ].map((name) => writeFile(path.join(workspacePath, name), name)),
-    );
-    await writeFile(path.join(workspacePath, '.gitignore'), 'dist/\n');
-    await utimes(path.join(workspacePath, 'old.tex'), 1, 1);
-    await utimes(path.join(workspacePath, 'new.tex'), 2, 2);
-    await run(workspacePath);
-  } finally {
-    vi.restoreAllMocks();
-    await installPlatform();
-    await rm(workspacePath, { recursive: true, force: true });
-  }
+  await withTempDir('texra-glob-tool-', async (workspacePath) => {
+    await installPlatform({ workspacePath }, { fs: nodeFilesystem });
+    try {
+      await Promise.all(
+        [
+          'new.tex',
+          'old.tex',
+          'vanished.tex',
+          'blocked.tex',
+          'unreadable.tex',
+        ].map((name) => writeFile(path.join(workspacePath, name), name)),
+      );
+      await writeFile(path.join(workspacePath, '.gitignore'), 'dist/\n');
+      await utimes(path.join(workspacePath, 'old.tex'), 1, 1);
+      await utimes(path.join(workspacePath, 'new.tex'), 2, 2);
+      await run(workspacePath);
+    } finally {
+      vi.restoreAllMocks();
+      await installPlatform();
+    }
+  });
 }
 
 describe('GlobTool match metadata', () => {
@@ -70,11 +67,11 @@ describe('GlobTool match metadata', () => {
   it.each([
     {
       fileName: 'vanished.tex',
-      error: fsError('ENOENT', 'match disappeared'),
+      error: errnoError('ENOENT', 'match disappeared'),
     },
     {
       fileName: 'blocked.tex',
-      error: fsError('ENOTDIR', 'parent changed'),
+      error: errnoError('ENOTDIR', 'parent changed'),
     },
   ])(
     'omits a match whose metadata lookup fails with $error.code',
@@ -95,7 +92,7 @@ describe('GlobTool match metadata', () => {
       failStatFor(
         workspacePath,
         'unreadable.tex',
-        fsError('EACCES', 'match is unreadable'),
+        errnoError('EACCES', 'match is unreadable'),
       );
 
       await expect(
@@ -109,10 +106,7 @@ describe('GlobTool match metadata', () => {
 
   it('does not pass unrestricted external paths to the workspace ignore matcher', async () => {
     await withGlobWorkspace(async () => {
-      const externalPath = await mkdtemp(
-        path.join(tmpdir(), 'texra-glob-external-'),
-      );
-      try {
+      await withTempDir('texra-glob-external-', async (externalPath) => {
         const externalDistPath = path.join(externalPath, 'dist');
         await mkdir(externalDistPath);
         await writeFile(
@@ -131,9 +125,7 @@ describe('GlobTool match metadata', () => {
 
         expect(result).toMatchObject({ status: 'executed' });
         expect(result.output).toContain('external.tex');
-      } finally {
-        await rm(externalPath, { recursive: true, force: true });
-      }
+      });
     });
   });
 });
