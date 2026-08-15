@@ -184,7 +184,10 @@ export async function getAgentPath(
   // Mark "presented" only when a live host confirmed it rendered the
   // targeted banner. A queued replay instead marks the error as presentation
   // pending; the replay either attaches the presented marker on confirmed
-  // delivery or emits the generic fallback on non-delivery.
+  // delivery or emits the generic fallback on non-delivery. A live-host emit
+  // that throws synchronously is normalized to `false` by
+  // `SessionHostInteractions.emit`, so that path leaves the marker unset and
+  // lets the launch catch emit the generic fallback on the same host.
   if (delivered) attachErrorPresented(err);
   throw err;
 }
@@ -216,11 +219,13 @@ async function validateModelExists(
   );
   // As with `getAgentPath`: mark only after a live host confirms the
   // instruction was rendered (or let the queued replay settle the marker and
-  // fallback itself). The extension resolves its emit when the instruction is
-  // handed off to VS Code, not when the dialog is dismissed, so launch
-  // cleanup no longer waits on user interaction there. Desktop resolves with
-  // its window-modal dialog (#10399) — a wait bounded by the modal itself,
-  // since the user must dismiss it to keep using the window.
+  // fallback itself). A live-host emit that throws synchronously is likewise
+  // normalized to `false`, leaving the marker unset for the launch catch.
+  // The extension resolves its emit when the instruction is handed off to VS
+  // Code, not when the dialog is dismissed, so launch cleanup no longer waits
+  // on user interaction there. Desktop resolves with its window-modal dialog
+  // (#10399) — a wait bounded by the modal itself, since the user must
+  // dismiss it to keep using the window.
   if (delivered) attachErrorPresented(err);
   throw err;
 }
