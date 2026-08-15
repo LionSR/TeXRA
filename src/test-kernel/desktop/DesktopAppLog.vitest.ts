@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -101,24 +101,30 @@ describe('desktop app log', () => {
   });
 
   it('redacts descendants of a separator-terminated workspace root', async () => {
-    await writeDesktopLog('Opened C:\\Users\\alice\\paper.tex');
+    // Derived account name: a real home of C:\Users\<name> must not
+    // redact this path before the separator-terminated workspace prefix.
+    const account = `texra-redact-${basename(homedir())}`;
+    await writeDesktopLog(`Opened C:\\Users\\${account}\\paper.tex`);
     const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
 
     const snapshot = readDesktopLogSnapshot({ workspacePath: 'C:\\' });
 
-    expect(snapshot.text).toBe('Opened [path]Users\\alice\\paper.tex');
+    expect(snapshot.text).toBe(`Opened [path]Users\\${account}\\paper.tex`);
   });
 
   it('redacts a POSIX-root path without rewriting URLs or relative separators', async () => {
+    // Derived non-home path: a real home of /Users/<name> must not rewrite
+    // this first and double-redact through the '/' branch.
+    const nonHomePath = `/Users/${basename(homedir())}-other/paper.tex`;
     await writeDesktopLog(
-      'Opened /Users/alice/paper.tex; fetched https://example.com; read src/file.ts',
+      `Opened ${nonHomePath}; fetched https://example.com; read src/file.ts`,
     );
     const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
 
     const snapshot = readDesktopLogSnapshot({ workspacePath: '/' });
 
     expect(snapshot.text).toBe(
-      'Opened [path]Users/alice/paper.tex; fetched https://example.com; read src/file.ts',
+      `Opened [path]${nonHomePath.slice(1)}; fetched https://example.com; read src/file.ts`,
     );
   });
 
@@ -155,14 +161,22 @@ describe('desktop app log', () => {
     });
 
     it('redacts home paths before a shorter workspace prefix that contains them', async () => {
-      await writeDesktopLog(`home ${homedir()}/a.txt; other /Users/bob/b.txt`);
+      const home = homedir();
+      const root = dirname(home);
+      const homeFile = join(home, 'a.txt');
+      // The sibling extends basename(home), so the '-' follower defeats a
+      // home-prefix boundary match and it can never equal the real home.
+      const siblingFile = join(root, `${basename(home)}-sibling`, 'b.txt');
+      await writeDesktopLog(`home ${homeFile}; other ${siblingFile}`);
       const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
 
-      const snapshot = readDesktopLogSnapshot({ workspacePath: '/Users' });
+      const snapshot = readDesktopLogSnapshot({ workspacePath: root });
 
-      // Shortest-first would leak the account name as '[path]/<user>/a.txt'
-      // on hosts whose home directory sits under /Users.
-      expect(snapshot.text).toBe('home [path]/a.txt; other [path]/bob/b.txt');
+      // home is always nested under dirname(home), so shortest-first ordering
+      // leaks the account name as '[path]/<user>/a.txt' on every POSIX host.
+      expect(snapshot.text).toBe(
+        `home [path]${homeFile.slice(home.length)}; other [path]${siblingFile.slice(root.length)}`,
+      );
     });
 
     it('treats regex metacharacters in a Windows workspace path literally', async () => {
@@ -174,7 +188,9 @@ describe('desktop app log', () => {
 
       const snapshot = readDesktopLogSnapshot({ workspacePath });
 
-      // An unescaped pattern would let '.' match 'X' and redact the sibling.
+      // Pins escapeRegExp both ways: unescaped, '\w' becomes a character
+      // class that cannot match the literal backslash (the real prefix stops
+      // redacting), and a bare '.' would also match the sibling's 'X'.
       expect(snapshot.text).toBe(
         'dir [path]\\a.tex and C:\\work\\projXec\\b.tex',
       );
@@ -207,29 +223,36 @@ describe('desktop app log', () => {
     });
 
     it('redacts repeated descendants of a trailing-slash POSIX prefix only', async () => {
-      const workspacePath = '/Users/alice/';
+      // Derived from basename(home) so neither path can equal or contain the
+      // real home directory on any host.
+      const account = `texra-redact-${basename(homedir())}`;
+      const workspacePath = `/Users/${account}/`;
       await writeDesktopLog(
-        `a ${workspacePath}docs/one.tex; b ${workspacePath}drafts/two.tex; keep /Users/alice-other/c.tex`,
+        `a ${workspacePath}docs/one.tex; b ${workspacePath}drafts/two.tex; keep /Users/${account}-other/c.tex`,
       );
       const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
 
       const snapshot = readDesktopLogSnapshot({ workspacePath });
 
       expect(snapshot.text).toBe(
-        'a [path]docs/one.tex; b [path]drafts/two.tex; keep /Users/alice-other/c.tex',
+        `a [path]docs/one.tex; b [path]drafts/two.tex; keep /Users/${account}-other/c.tex`,
       );
     });
 
     it('redacts a POSIX-root workspace at string start and after quotes, preserving drive and URL separators', async () => {
+      // Extends basename(home) with '-other', so the real home prefix never
+      // boundary-matches it (a '/Users/alice' home would otherwise rewrite it
+      // first and the '/' branch would double-redact the remainder).
+      const nonHomePath = `/Users/${basename(homedir())}-other/x.tex`;
       await writeDesktopLog(
-        `/Users/alice/x.tex; ("C:/work/project"); fetch https://example.com/a; log "/etc/hosts"`,
+        `${nonHomePath}; ("C:/work/project"); fetch https://example.com/a; log "/etc/hosts"`,
       );
       const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
 
       const snapshot = readDesktopLogSnapshot({ workspacePath: '/' });
 
       expect(snapshot.text).toBe(
-        `[path]Users/alice/x.tex; ("C:/work/project"); fetch https://example.com/a; log "[path]etc/hosts"`,
+        `[path]${nonHomePath.slice(1)}; ("C:/work/project"); fetch https://example.com/a; log "[path]etc/hosts"`,
       );
     });
 
