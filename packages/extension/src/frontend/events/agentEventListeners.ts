@@ -11,6 +11,8 @@ import * as vscode from 'vscode';
 
 import {
   dispatchPresentationEvent,
+  toPresentationDelivery,
+  type PresentationDelivery,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
@@ -71,9 +73,9 @@ const INSTRUCTION_ACTION_VIEW: Record<
   },
 };
 
-function handleRequestShowInstruction(
+async function handleRequestShowInstruction(
   payload: RequestShowInstructionPayload,
-): void {
+): Promise<boolean> {
   const actions = (payload.actions ?? []).map((token) => {
     const view = INSTRUCTION_ACTION_VIEW[token];
     return {
@@ -83,28 +85,48 @@ function handleRequestShowInstruction(
     };
   });
 
-  showInstructionWithSuppress(
-    payload.key,
-    payload.message,
-    actions,
-    payload.showSuppress,
-  ).catch((err) =>
+  try {
+    // Report delivery once VS Code has accepted the dialog, not once the user
+    // dismisses it: `validateModelExists` awaits this emit, and keeping launch
+    // cleanup tied to modal dismissal would leave the reserved stream STARTING
+    // for as long as the notification is open.
+    await showInstructionWithSuppress(
+      payload.key,
+      payload.message,
+      actions,
+      payload.showSuppress,
+      { deferDismissal: true },
+    );
+    return true;
+  } catch (err) {
     logger.warn(
       CHANNEL,
       `Failed to show instruction "${payload.key}": ${toErrorMessage(err)}`,
-    ),
-  );
+    );
+    return false;
+  }
 }
 
 async function handleShowAgentConfigBanner(
   payload: ShowAgentConfigBannerPayload,
-): Promise<void> {
-  const view = await getMainWebview(CHANNEL);
-  view?.webview.postMessage({
-    command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-    agentName: payload.agentName,
-    customDirSet: true,
-  });
+): Promise<boolean> {
+  try {
+    const view = await getMainWebview(CHANNEL);
+    if (!view) return false;
+    return (
+      (await view.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+        agentName: payload.agentName,
+        customDirSet: true,
+      })) !== false
+    );
+  } catch (err) {
+    logger.warn(
+      CHANNEL,
+      `Failed to show agent config banner for "${payload.agentName}": ${toErrorMessage(err)}`,
+    );
+    return false;
+  }
 }
 
 function handleRequestShowError({ message }: RequestShowErrorPayload): void {
@@ -174,8 +196,10 @@ export function createAgentPresentationHost(
     emit<K extends RuntimePresentationEvent>(
       event: K,
       payload: RuntimePresentationEventPayloads[K],
-    ): void {
-      dispatchPresentationEvent(handlers, event, payload);
+    ): PresentationDelivery {
+      return toPresentationDelivery(
+        dispatchPresentationEvent(handlers, event, payload),
+      );
     },
   };
 }

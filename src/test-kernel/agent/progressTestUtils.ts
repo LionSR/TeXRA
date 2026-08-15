@@ -154,7 +154,12 @@ export function runEventsOfType<T extends AgentEvent['type']>(
   });
 }
 
-export function createRecordingHost(): {
+interface RecordingHostOptions {
+  /** What the fake host's `emit` reports as its presentation delivery. */
+  readonly emitDelivery?: boolean;
+}
+
+export function createRecordingHost(options: RecordingHostOptions = {}): {
   events: RecordedProgressEvent[];
   interactions: HostInteractions;
   decisions: RecordingHostDecisions;
@@ -254,7 +259,10 @@ export function createRecordingHost(): {
     },
   };
   const interactions: HostInteractions = {
-    emit: (event, payload) => events.push({ event, payload }),
+    emit: (event, payload) => {
+      events.push({ event, payload });
+      return options.emitDelivery ?? false;
+    },
     setApprovalBypassState: (update) =>
       events.push({ event: 'setApprovalBypassState', payload: update }),
     requestBashApproval: (request) => {

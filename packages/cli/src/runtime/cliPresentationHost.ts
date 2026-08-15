@@ -23,13 +23,14 @@ import {
   attachRunProgressRenderer,
   createRunProgressRenderer,
 } from './runProgressRenderer';
+import { missingAgentMessage } from './agents';
 import type { CliContext } from './cliContext';
 
 export interface CliRuntimeHost {
   emit<K extends RuntimePresentationEvent>(
     event: K,
     payload: RuntimePresentationEventPayloads[K],
-  ): void;
+  ): boolean;
   attachRunProgressRenderer(events: SessionEventHub): () => void;
   prepareInteractivePrompt?: () => void;
   emitApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
@@ -59,13 +60,13 @@ const INSTRUCTION_ACTION_HINT: Partial<Record<InstructionAction, string>> = {
 } satisfies Record<InstructionAction, string>;
 
 /**
- * Builds the NDJSON-mode handler map. None of these events have an NDJSON
- * wire representation of their own today, so `requestOpenFile`,
- * `showAgentConfigBanner`, and `requestEnsureProgressView` are deliberate
- * no-ops here (unlike the text-mode handlers below, which still surface a
- * debug log for the events they don't render). Building this per `logger`
- * keeps the handlers closed over the specific `Logger` instance in play at
- * call time (an ndjson sink is created lazily via `ensureLogger()`).
+ * Builds the NDJSON-mode handler map. `requestOpenFile` and
+ * `requestEnsureProgressView` have no NDJSON wire representation today and
+ * stay deliberate no-ops; every other event returns `true` when it rendered
+ * a user-visible record so the session can report delivery. Building this
+ * per `logger` keeps the handlers closed over the specific `Logger` instance
+ * in play at call time (an ndjson sink is created lazily via
+ * `ensureLogger()`).
  */
 function createRuntimePresentationNdjsonHandlers(
   logger: Logger,
@@ -73,6 +74,7 @@ function createRuntimePresentationNdjsonHandlers(
   return {
     requestShowError: (payload) => {
       logger.error(payload.message);
+      return true;
     },
     requestShowInstruction: (payload) => {
       logger.info(payload.message, {
@@ -80,10 +82,14 @@ function createRuntimePresentationNdjsonHandlers(
         actions: payload.actions,
         showSuppress: payload.showSuppress,
       });
+      return true;
     },
-    requestOpenFile: () => undefined,
-    showAgentConfigBanner: () => undefined,
-    requestEnsureProgressView: () => undefined,
+    requestOpenFile: () => false,
+    showAgentConfigBanner: ({ agentName }) => {
+      logger.error(missingAgentMessage(agentName));
+      return true;
+    },
+    requestEnsureProgressView: () => false,
   };
 }
 
@@ -107,11 +113,12 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   }
 
   /**
-   * Text-mode (non-NDJSON) handler map. `requestOpenFile`,
-   * `showAgentConfigBanner`, and `requestEnsureProgressView` have no
-   * dedicated text-mode presentation today, so each falls back to the same
-   * quiet debug log the pre-refactor `else` branch produced for "everything
-   * else" — reproduced per-key here rather than as a catch-all, so a future
+   * Text-mode (non-NDJSON) handler map. `requestOpenFile` and
+   * `requestEnsureProgressView` have no dedicated text-mode presentation
+   * today, so they stay no-ops and report no delivery. `showAgentConfigBanner`
+   * is rendered as a visible, actionable "agent not found" error so CLI
+   * launch failures surface once through the targeted path. Reproduced
+   * per-key here rather than as a catch-all, so a future
    * `RuntimePresentationEventPayloads` addition is a compile error to decide
    * on rather than a silent fall-through.
    */
@@ -120,6 +127,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       requestShowError: (payload) => {
         runProgress?.preserve();
         ensureLogger().error(payload.message);
+        return true;
       },
       requestShowInstruction: (payload) => {
         // Not gated by quietLogs (below): unlike the debug fallback, this is
@@ -132,11 +140,21 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
               .join(', ')})`
           : '';
         ensureLogger().info(`${payload.message}${hint}`);
+        return true;
       },
-      requestOpenFile: () => logDebugEvent('requestOpenFile'),
-      showAgentConfigBanner: () => logDebugEvent('showAgentConfigBanner'),
-      requestEnsureProgressView: () =>
-        logDebugEvent('requestEnsureProgressView'),
+      requestOpenFile: () => {
+        logDebugEvent('requestOpenFile');
+        return false;
+      },
+      showAgentConfigBanner: ({ agentName }) => {
+        runProgress?.preserve();
+        ensureLogger().error(missingAgentMessage(agentName));
+        return true;
+      },
+      requestEnsureProgressView: () => {
+        logDebugEvent('requestEnsureProgressView');
+        return false;
+      },
     };
 
   return {
@@ -156,17 +174,20 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     emit<K extends RuntimePresentationEvent>(
       event: K,
       payload: RuntimePresentationEventPayloads[K],
-    ) {
-      if (closed) return;
+    ): boolean {
+      if (closed) return false;
 
       if (context.outputFormat === 'ndjson') {
         ndjsonHandlers ??=
           createRuntimePresentationNdjsonHandlers(ensureLogger());
-        dispatchPresentationEvent(ndjsonHandlers, event, payload);
-        return;
+        return (
+          dispatchPresentationEvent(ndjsonHandlers, event, payload) === true
+        );
       }
 
-      dispatchPresentationEvent(textModeHandlers, event, payload);
+      return (
+        dispatchPresentationEvent(textModeHandlers, event, payload) === true
+      );
     },
     async close() {
       closed = true;

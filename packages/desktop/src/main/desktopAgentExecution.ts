@@ -9,7 +9,9 @@ import {
   detachSubagentsOnStop,
   dispatchPresentationEvent,
   polishTextWithAI,
+  toPresentationDelivery,
   trackTerminalResultPresentation,
+  type PresentationDelivery,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
@@ -229,13 +231,16 @@ export class DesktopProgressBridge {
               .join(', ')})`
           : '';
         void this.options.host.showInfoMessage(`${instruction.message}${hint}`);
+        return true;
       },
       showAgentConfigBanner: ({ agentName }) => {
-        this.postToRenderer({
-          command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-          agentName,
-          customDirSet: true,
-        });
+        return (
+          this.postToRenderer({
+            command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+            agentName,
+            customDirSet: true,
+          }) !== false
+        );
       },
       requestOpenFile: (data: RequestOpenFilePayload) => {
         // Desktop has no editor integration to preview through, so the
@@ -1005,10 +1010,12 @@ export class DesktopProgressBridge {
   private handlePresentationEvent<K extends RuntimePresentationEvent>(
     event: K,
     payload: RuntimePresentationEventPayloads[K],
-  ): void {
-    if (this.disposed) return;
+  ): PresentationDelivery {
+    if (this.disposed) return false;
 
-    dispatchPresentationEvent(this.presentationEventHandlers, event, payload);
+    return toPresentationDelivery(
+      dispatchPresentationEvent(this.presentationEventHandlers, event, payload),
+    );
   }
 
   private syncFullView(): void {

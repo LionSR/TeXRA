@@ -115,7 +115,10 @@ function createPortSession(): {
   const uiEvents: UiEvent[] = [];
   const emitted: string[] = [];
   const presentationSink: Required<Pick<HostInteractions, 'emit'>> = {
-    emit: (event) => emitted.push(event),
+    emit: (event) => {
+      emitted.push(event);
+      return true;
+    },
   };
   const handlers = createHandlerSet(uiEvents);
   const session = createTestSession();
@@ -739,6 +742,21 @@ describe('session.interactions request bookkeeping', () => {
       session.useHostInteractions({ emit, cancel: vi.fn() });
       await Promise.resolve();
       expect(emit).not.toHaveBeenCalled();
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('reports replayable notices queued before host attach as not delivered', () => {
+    const session = createTestSession();
+    try {
+      expect(
+        session.interactions.emit(
+          'showAgentConfigBanner',
+          { agentName: 'ghost' },
+          { replayWhenAttached: true },
+        ),
+      ).toBe(false);
     } finally {
       session.dispose();
     }

@@ -22,7 +22,10 @@ import {
 } from '@agent/core/state/executionRequests';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
-import { hasErrorPresentedMarker } from '@common/errors/sdkError/errorMetadata';
+import {
+  hasErrorPresentationPending,
+  hasErrorPresentedMarker,
+} from '@common/errors/sdkError/errorMetadata';
 import { tryPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
@@ -274,7 +277,7 @@ export async function executeCliRequest(
       beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
       emit: (event, payload) => {
         if (event === 'requestShowError') failurePresented = true;
-        presentationHost.emit(event, payload);
+        return presentationHost.emit(event, payload);
       },
       setApprovalBypassState: (update) =>
         presentationHost.emitApprovalBypassState(update),
@@ -558,16 +561,18 @@ export async function executeCliRequest(
     } else if (
       !failurePresented &&
       !terminalResult.isHandled() &&
-      !hasErrorPresentedMarker(err)
+      !hasErrorPresentedMarker(err) &&
+      !hasErrorPresentationPending(err)
     ) {
       // A failure before lifecycle startup has no `result` event. Preserve the
       // ordinary toast path when it ran, and provide the missing direct fallback
       // while the presentation host is still attached. A launch failure that
-      // already presented itself via a targeted notification (e.g. the
-      // model-not-recognized instruction) is marked -- this CLI-local
-      // `failurePresented` flag only tracks `requestShowError`, so it would
-      // otherwise re-surface that failure a second time here. Agent-not-found
-      // remains unmarked because its banner is a no-op on CLI hosts.
+      // already presented itself through a targeted notification is marked by
+      // the delivery-confirmed throw site (model-not-recognized, and now also
+      // agent-not-found because `showAgentConfigBanner` renders a visible CLI
+      // error) -- this CLI-local `failurePresented` flag only tracks
+      // `requestShowError`, so it would otherwise re-surface that failure a
+      // second time here.
       session.interactions.emit('requestShowError', {
         message: toErrorMessage(err),
       });
