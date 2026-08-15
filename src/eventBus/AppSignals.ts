@@ -17,18 +17,12 @@ export interface AppSignalPayloads {
    */
   githubTokenInvalid: { message: string };
 
-  /** Active PR-activity subscription keys changed. */
-  prSubscriptionsChanged: { keys: readonly string[] };
-  /** Active PR-activity owners changed. */
-  prSubscriptionBindingsChanged: undefined;
-  /** Active repo-activity subscription keys changed. */
-  repoSubscriptionsChanged: { keys: readonly string[] };
-  /** Active repo-activity owners changed. */
-  repoSubscriptionBindingsChanged: undefined;
-  /** Active issue-activity subscription keys changed. */
-  issueSubscriptionsChanged: { keys: readonly string[] };
-  /** Active issue-activity owners changed. */
-  issueSubscriptionBindingsChanged: undefined;
+  /**
+   * The active GitHub subscriptions (PR, repo, or issue) or their stream owners
+   * changed. Keyless on purpose: every listener re-reads the full subscription
+   * list, so which kind changed carries no information.
+   */
+  githubSubscriptionsChanged: undefined;
 
   /**
    * External tool availability was re-probed. Frontends refresh their

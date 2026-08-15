@@ -3,7 +3,7 @@
  * polling sources.
  *
  * Subclasses implement only `pollOne()` — the actual endpoints to hit and
- * per-tick state to mutate — plus the few format / event hooks that name the
+ * per-tick state to mutate — plus the error-formatting hook that names the
  * subscription type. Everything around it
  * (subscribe/unsubscribe, change-listener fan-out, the tick loop with
  * `tickInFlight` guard, classification of GitHub errors into auth /
@@ -198,9 +198,6 @@ export abstract class PollingSourceBase<
   /** Subclass: format a halted-subscription error event for the listener. */
   protected abstract formatErrorEvent(key: K, state: S, detail: string): string;
 
-  /** Subclass: publish the externally visible subscription-changed event. */
-  protected abstract emitKeysChangedEvent(keys: readonly K[]): void;
-
   activeKeys(): readonly K[] {
     return [...this.subscriptions.keys()];
   }
@@ -377,7 +374,7 @@ export abstract class PollingSourceBase<
         this.logger.warn('Keys-changed listener threw', { data: err });
       }
     }
-    this.emitKeysChangedEvent(keys);
+    appSignals.emit('githubSubscriptionsChanged', undefined);
   }
 
   private ensureTimer(): void {
