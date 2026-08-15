@@ -101,7 +101,10 @@ type TestableBridge = {
   interactions: {
     emit(event: string, payload: unknown): void;
   };
-  handlePresentationEvent(event: string, payload: unknown): void;
+  handlePresentationEvent(
+    event: string,
+    payload: unknown,
+  ): boolean | Promise<boolean>;
   syncFullView(): void;
   completeWebviewReady(): Promise<void>;
   sendFollowUp(
@@ -985,6 +988,117 @@ describe('DesktopProgressBridge', () => {
       'API key not found. Set your API key in Settings and run again. ' +
         '(set your API key in Settings, see the configuration guide)',
     );
+  });
+
+  it('observes the instruction dialog promise before reporting delivery', async () => {
+    // The concrete showInfoMessage awaits dialog.showMessageBox, which can
+    // reject while its window is being torn down. Delivery must be reported
+    // from that promise's settlement — not synchronously — so a rejected
+    // dialog reads as non-delivery instead of an unhandled rejection plus a
+    // falsely "presented" launch error (#10399).
+    const messages: unknown[] = [];
+    let resolveDialog: (() => void) | undefined;
+    let rejectDialog: ((error: unknown) => void) | undefined;
+    const showInfoMessage = vi.fn(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          resolveDialog = resolve;
+          rejectDialog = reject;
+        }),
+    );
+    const bridge = await createBridge(messages, { showInfoMessage });
+
+    const instruction = {
+      key: 'modelNotRecognized',
+      message: 'Model "gone" is not recognized.',
+      showSuppress: false,
+    };
+    const delivery = bridge.handlePresentationEvent(
+      'requestShowInstruction',
+      instruction,
+    );
+    expect(showInfoMessage).toHaveBeenCalledOnce();
+
+    // Nothing is reported until the dialog settles.
+    const settled: unknown[] = [];
+    void Promise.resolve(delivery).then((value) => settled.push(value));
+    await Promise.resolve();
+    expect(settled).toEqual([]);
+
+    resolveDialog?.();
+    await expect(Promise.resolve(delivery)).resolves.toBe(true);
+
+    const rejected = bridge.handlePresentationEvent(
+      'requestShowInstruction',
+      instruction,
+    );
+    rejectDialog?.(new Error('window destroyed'));
+    await expect(Promise.resolve(rejected)).resolves.toBe(false);
+  });
+
+  it('reports error-dialog and file-open delivery from their host promises', async () => {
+    // Non-targeted handlers implement the same PresentationDelivery contract
+    // as the targeted ones: a rendered surface reports `true`, a failed one
+    // reports `false` — neither voids the promise and reports nothing
+    // (#10400).
+    const messages: unknown[] = [];
+    const errorDialogs: Array<{
+      resolve: () => void;
+      reject: (error: unknown) => void;
+    }> = [];
+    const showErrorMessage = vi.fn(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          errorDialogs.push({ resolve, reject });
+        }),
+    );
+    const opens: Array<{
+      resolve: () => void;
+      reject: (error: unknown) => void;
+    }> = [];
+    const openPath = vi.fn(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          opens.push({ resolve, reject });
+        }),
+    );
+    const bridge = await createBridge(messages, {
+      showErrorMessage,
+      openPath,
+    });
+    const filePayload = {
+      location: {
+        kind: 'runStorage',
+        absolutePath: '/runs/exec-1/output/paper.pdf',
+        relativePath: 'output/paper.pdf',
+      },
+    };
+
+    const shownError = bridge.handlePresentationEvent('requestShowError', {
+      message: 'Root run failed',
+    });
+    errorDialogs.at(-1)?.resolve();
+    await expect(Promise.resolve(shownError)).resolves.toBe(true);
+
+    const failedError = bridge.handlePresentationEvent('requestShowError', {
+      message: 'Root run failed',
+    });
+    errorDialogs.at(-1)?.reject(new Error('window destroyed'));
+    await expect(Promise.resolve(failedError)).resolves.toBe(false);
+
+    const opened = bridge.handlePresentationEvent(
+      'requestOpenFile',
+      filePayload,
+    );
+    opens.at(-1)?.resolve();
+    await expect(Promise.resolve(opened)).resolves.toBe(true);
+
+    const failedOpen = bridge.handlePresentationEvent(
+      'requestOpenFile',
+      filePayload,
+    );
+    opens.at(-1)?.reject(new Error('no external viewer'));
+    await expect(Promise.resolve(failedOpen)).resolves.toBe(false);
   });
 
   it('ignores late runtime presentation events after disposal', async () => {

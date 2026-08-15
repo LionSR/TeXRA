@@ -218,7 +218,9 @@ async function validateModelExists(
   // instruction was rendered (or let the queued replay settle the marker and
   // fallback itself). The extension resolves its emit when the instruction is
   // handed off to VS Code, not when the dialog is dismissed, so launch
-  // cleanup no longer waits on user interaction.
+  // cleanup no longer waits on user interaction there. Desktop resolves with
+  // its window-modal dialog (#10399) — a wait bounded by the modal itself,
+  // since the user must dismiss it to keep using the window.
   if (delivered) attachErrorPresented(err);
   throw err;
 }
