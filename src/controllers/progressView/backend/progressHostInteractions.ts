@@ -1,5 +1,6 @@
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type {
+  PresentationDelivery,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
@@ -126,7 +127,7 @@ export function createProgressHostInteractions(
     emit<K extends RuntimePresentationEvent>(
       event: K,
       payload: RuntimePresentationEventPayloads[K],
-    ): boolean | Promise<boolean> {
+    ): PresentationDelivery {
       return options.interactions.emit(event, payload);
     },
 

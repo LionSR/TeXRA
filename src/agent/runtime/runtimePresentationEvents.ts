@@ -6,6 +6,8 @@ import type {
   ShowAgentConfigBannerPayload,
 } from '@shared/schemas';
 
+import type { HostInteractions } from './HostInteractions';
+
 /**
  * Host-presentation requests emitted by agent/runtime code.
  *
@@ -26,6 +28,25 @@ export type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;
 export interface AgentRuntimeEmitOptions {
   /** Retain a presentation event until a temporarily detached UI returns. */
   readonly replayWhenAttached?: boolean;
+  /**
+   * Invoked synchronously when `replayWhenAttached` retains the event because
+   * no host is attached. Callers use this to record "presentation is pending"
+   * without claiming it was delivered.
+   */
+  readonly onReplayScheduled?: () => void;
+  /**
+   * Invoked once a retained event is actually replayed to a host and that
+   * host reports delivery. This is the only queued path that may record a
+   * confirmed-presentation marker.
+   */
+  readonly onReplayDelivered?: () => void;
+  /**
+   * Invoked once a retained event is actually replayed to a host and that
+   * host reports non-delivery (or rejects). The callback receives the host
+   * that performed the replay so the caller can present its fallback surface
+   * on the same host.
+   */
+  readonly onReplayNotDelivered?: (interactions: HostInteractions) => unknown;
 }
 
 /**

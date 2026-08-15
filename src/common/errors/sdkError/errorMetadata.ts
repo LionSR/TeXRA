@@ -122,6 +122,21 @@ const errorPresentedMarker = createErrorMarker('errorPresented');
 export const attachErrorPresented = errorPresentedMarker.attach;
 export const hasErrorPresentedMarker = errorPresentedMarker.has;
 
+const errorPresentationPendingMarker = createErrorMarker(
+  'errorPresentationPending',
+);
+
+/** Marks an error whose targeted notification was retained for replay because
+ *  no host was attached at the throw site. The queued replay owns the
+ *  delivery decision: when it runs it either attaches `errorPresented` (on
+ *  confirmed delivery) or emits the caller-supplied fallback. Generic
+ *  fallback gates treat this marker exactly like `errorPresented` so they do
+ *  not queue a second surface before that replay settles. */
+export const attachErrorPresentationPending =
+  errorPresentationPendingMarker.attach;
+export const hasErrorPresentationPending =
+  errorPresentationPendingMarker.has;
+
 export const providerErrorMetadata =
   createErrorMetadata<ProviderError>('providerError');
 

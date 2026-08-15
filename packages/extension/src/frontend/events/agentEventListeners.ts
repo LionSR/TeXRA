@@ -12,6 +12,7 @@ import * as vscode from 'vscode';
 import {
   dispatchPresentationEvent,
   toPresentationDelivery,
+  type PresentationDelivery,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
@@ -85,11 +86,16 @@ async function handleRequestShowInstruction(
   });
 
   try {
+    // Report delivery once VS Code has accepted the dialog, not once the user
+    // dismisses it: `validateModelExists` awaits this emit, and keeping launch
+    // cleanup tied to modal dismissal would leave the reserved stream STARTING
+    // for as long as the notification is open.
     await showInstructionWithSuppress(
       payload.key,
       payload.message,
       actions,
       payload.showSuppress,
+      { deferDismissal: true },
     );
     return true;
   } catch (err) {
@@ -190,7 +196,7 @@ export function createAgentPresentationHost(
     emit<K extends RuntimePresentationEvent>(
       event: K,
       payload: RuntimePresentationEventPayloads[K],
-    ): boolean | Promise<boolean> {
+    ): PresentationDelivery {
       return toPresentationDelivery(
         dispatchPresentationEvent(handlers, event, payload),
       );

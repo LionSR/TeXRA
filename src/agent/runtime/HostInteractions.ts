@@ -473,13 +473,33 @@ export class SessionHostInteractions implements HostInteractions {
       return active.interactions.emit?.(event, payload) ?? false;
     }
     if (options.replayWhenAttached && !this.disposed) {
-      // A retained replay is delivery the session has accepted: treating it
-      // as delivered now is what keeps the generic fallback from queueing a
-      // second copy of the same notice that would re-surface after attach.
-      this.queuePresentationReplay((interactions) =>
-        interactions.emit?.(event, payload),
-      );
-      return true;
+      // A retained replay is not delivery: nothing has been rendered yet, so
+      // the caller must not treat this as confirmed presentation. The replay
+      // closure reports the eventual delivery result back through the
+      // option callbacks once a live host actually renders (or declines) it.
+      this.queuePresentationReplay((interactions) => {
+        const delivered = interactions.emit?.(event, payload);
+        if (!options.onReplayDelivered && !options.onReplayNotDelivered) {
+          return delivered;
+        }
+        return Promise.resolve(delivered).then(
+          (value) => {
+            if (value === true) {
+              options.onReplayDelivered?.();
+            } else {
+              options.onReplayNotDelivered?.(interactions);
+            }
+          },
+          (error: unknown) => {
+            logger.warn('Replayed presentation notice failed', {
+              data: error,
+            });
+            options.onReplayNotDelivered?.(interactions);
+          },
+        );
+      });
+      options.onReplayScheduled?.();
+      return false;
     }
     return false;
   }

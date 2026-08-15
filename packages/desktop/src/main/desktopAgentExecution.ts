@@ -11,6 +11,7 @@ import {
   polishTextWithAI,
   toPresentationDelivery,
   trackTerminalResultPresentation,
+  type PresentationDelivery,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
@@ -1009,7 +1010,7 @@ export class DesktopProgressBridge {
   private handlePresentationEvent<K extends RuntimePresentationEvent>(
     event: K,
     payload: RuntimePresentationEventPayloads[K],
-  ): boolean | Promise<boolean> {
+  ): PresentationDelivery {
     if (this.disposed) return false;
 
     return toPresentationDelivery(

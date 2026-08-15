@@ -154,7 +154,7 @@ export function runEventsOfType<T extends AgentEvent['type']>(
   });
 }
 
-export interface RecordingHostOptions {
+interface RecordingHostOptions {
   /** What the fake host's `emit` reports as its presentation delivery. */
   readonly emitDelivery?: boolean;
 }

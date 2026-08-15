@@ -747,6 +747,21 @@ describe('session.interactions request bookkeeping', () => {
     }
   });
 
+  it('reports replayable notices queued before host attach as not delivered', () => {
+    const session = createTestSession();
+    try {
+      expect(
+        session.interactions.emit(
+          'showAgentConfigBanner',
+          { agentName: 'ghost' },
+          { replayWhenAttached: true },
+        ),
+      ).toBe(false);
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('cancels each adapter presentation before a host handoff redispatches it', async () => {
     const session = createTestSession();
     const first = createControllablePlanAdapter();
