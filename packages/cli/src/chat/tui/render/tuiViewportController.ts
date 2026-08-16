@@ -29,7 +29,18 @@ export function createTuiViewportController(inkRef: {
 }): TuiViewportController {
   return {
     repaintTranscript(): void {
-      inkRef.current?.repaint(TRANSCRIPT_VIEWPORT_REPAINT_OPTIONS);
+      const target = inkRef.current;
+      if (target === undefined) {
+        // The first effect cascade can flush synchronously inside Ink's
+        // initial render(), before it returns the instance for `inkRef`.
+        // Defer past that assignment instead of dropping the repaint; the
+        // remounted `<Static>` is committed by the time the microtask runs.
+        queueMicrotask(() => {
+          inkRef.current?.repaint(TRANSCRIPT_VIEWPORT_REPAINT_OPTIONS);
+        });
+        return;
+      }
+      target.repaint(TRANSCRIPT_VIEWPORT_REPAINT_OPTIONS);
     },
     repaintAfterTerminalResume(): void {
       // Terminal resume cannot safely call repaint(TRANSCRIPT_VIEWPORT_REPAINT_OPTIONS)

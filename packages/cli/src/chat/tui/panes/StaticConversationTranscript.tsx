@@ -577,6 +577,32 @@ function executionLabelsEqual(
   return true;
 }
 
+/** Rendering-relevant item equality: entries compare by reference (they are
+ *  immutable log rows), headers by the fields `SessionHeaderBlock` draws. A
+ *  rebuilt state that matches item-for-item needs no `<Static>` remount. */
+function staticTranscriptItemsEquivalent(
+  left: readonly StaticTranscriptItem[],
+  right: readonly StaticTranscriptItem[],
+): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((item, index) => {
+    const other = right[index];
+    if (item.kind !== other.kind || item.id !== other.id) return false;
+    if (item.kind === 'header' && other.kind === 'header') {
+      return (
+        item.compact === other.compact &&
+        item.identityLine === other.identityLine &&
+        item.meta === other.meta
+      );
+    }
+    return (
+      item.kind === 'entry' &&
+      other.kind === 'entry' &&
+      item.entry === other.entry
+    );
+  });
+}
+
 function shouldWaitForChildIdentity({
   currentItems,
   parentStream,
@@ -1016,7 +1042,7 @@ export function advanceStaticTranscriptState(
   const status = slice?.status;
 
   if (isHardReset) {
-    return buildStaticTranscriptState({
+    const rebuilt = buildStaticTranscriptState({
       childStreamEntries,
       executionLabels,
       maxRows,
@@ -1029,6 +1055,22 @@ export function advanceStaticTranscriptState(
       streams,
       width,
     });
+    // A hard reset that rebuilds the current state unchanged — the normal
+    // startup path, where the initial useState build already ran with no
+    // streams — must not bump the repaint epoch. The `<Static>` remount would
+    // replay the session header through Ink's append-only static write while
+    // the replace-semantics repaint cannot fire yet (the first effect
+    // cascade still runs inside Ink's initial render(), before the instance
+    // is available to the viewport controller), doubling the header.
+    if (
+      rebuilt.ownerKey === current.ownerKey &&
+      rebuilt.layoutWidth === current.layoutWidth &&
+      executionLabelsEqual(rebuilt.executionLabels, current.executionLabels) &&
+      staticTranscriptItemsEquivalent(rebuilt.items, current.items)
+    ) {
+      return current;
+    }
+    return rebuilt;
   }
 
   if (current.ownerKey !== ownerKey) {

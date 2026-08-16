@@ -1326,6 +1326,88 @@ describe('CLI conversation transcript', () => {
     expect(missingAgain.repaintEpoch).toBe(missing.repaintEpoch);
   });
 
+  it('does not bump the repaint epoch when a hard reset rebuilds the state unchanged', () => {
+    // Startup: the initial build already ran with no streams, so the first
+    // advance hits the hard-reset path with identical inputs. Bumping the
+    // epoch here remounts `<Static>` before the replace-semantics repaint can
+    // fire, replaying the session header into the terminal a second time.
+    const initial = buildStaticTranscriptState({
+      childStreamEntries: new Map(),
+      maxRows: undefined,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      repaintEpoch: 0,
+      scrollbackStreamId: undefined,
+      streams: new Map(),
+      width: 80,
+    });
+
+    const advanced = advanceStaticTranscriptState(initial, {
+      childStreamEntries: new Map(),
+      maxRows: undefined,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      scrollbackStreamId: undefined,
+      streams: new Map(),
+      width: 80,
+    });
+
+    expect(advanced).toBe(initial);
+    expect(advanced.repaintEpoch).toBe(initial.repaintEpoch);
+  });
+
+  it('still remounts and repaints when a hard reset actually drops entries', () => {
+    const settled = entry('a1', 'assistant', 'ok', true);
+    const streamsWithEntries = new Map<StreamTabId, StreamSlice>([
+      [STREAM_ID, sliceWithEntries(STREAM_ID, [settled])],
+    ]);
+    const initial = buildStaticTranscriptState({
+      childStreamEntries: new Map(),
+      maxRows: undefined,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      repaintEpoch: 0,
+      scrollbackStreamId: STREAM_ID,
+      streams: streamsWithEntries,
+      width: 80,
+    });
+    expect(initial.items.map((item) => item.id)).toEqual([
+      'session-header',
+      'a1',
+    ]);
+
+    const reset = advanceStaticTranscriptState(initial, {
+      childStreamEntries: new Map(),
+      maxRows: undefined,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      scrollbackStreamId: undefined,
+      streams: new Map(),
+      width: 80,
+    });
+
+    expect(reset.items.map((item) => item.id)).toEqual(['session-header']);
+    expect(reset.repaintEpoch).toBe(initial.repaintEpoch + 1);
+
+    const resetAgain = advanceStaticTranscriptState(reset, {
+      childStreamEntries: new Map(),
+      maxRows: undefined,
+      meta: SESSION_META,
+      ownerKey: 'root',
+      parentStream: new Map(),
+      scrollbackStreamId: undefined,
+      streams: new Map(),
+      width: 80,
+    });
+
+    expect(resetAgain).toBe(reset);
+    expect(resetAgain.repaintEpoch).toBe(reset.repaintEpoch);
+  });
+
   it('recomputes ring totals and trims when the layout width shrinks', () => {
     const budgets: StaticTranscriptRingBudgets = {
       rowHighWater: 6,
@@ -1880,6 +1962,31 @@ describe('CLI conversation transcript', () => {
 
     expect(calls).toEqual([{ clearScrollback: true, preserveStatic: false }]);
     expect(staticTranscriptRepaintEpoch.get()).toBe(1);
+  });
+
+  it('defers a repaint requested before the Ink instance is available', async () => {
+    // Startup: the first effect cascade can flush synchronously inside Ink's
+    // initial render(), before it returns the instance. The repaint must land
+    // after the assignment instead of being dropped.
+    const inkRef: {
+      current?: { repaint: (options: TuiRepaintOptions) => void };
+    } = {};
+    const calls: TuiRepaintOptions[] = [];
+    const controller = createTuiViewportController(inkRef);
+
+    controller.repaintTranscript();
+    expect(calls).toEqual([]);
+
+    inkRef.current = {
+      repaint: (options) => {
+        calls.push(options);
+      },
+    };
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(calls).toEqual([{ clearScrollback: true, preserveStatic: false }]);
   });
 
   it('detects generated inquiry continuation rows only', () => {
