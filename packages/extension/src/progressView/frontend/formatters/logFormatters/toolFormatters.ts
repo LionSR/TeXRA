@@ -15,10 +15,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
 import type { LogMessageData } from '@shared/schemas';
-import {
-  malformedToolUseFallback,
-  normalizeToolUseData,
-} from '@shared/toolUse';
+import { normalizeToolUseForRender } from '@shared/toolUse';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   DELEGATION_TOOL_CATEGORY,
@@ -76,8 +73,7 @@ export function formatToolUseTemplate(
   options?: { executionLabels?: ExecutionLabels },
 ): FormatResult {
   const { timestamp, data } = message;
-  const normalizedToolLog =
-    normalizeToolUseData(data) ?? malformedToolUseFallback(data);
+  const normalizedToolLog = normalizeToolUseForRender(data);
   // Malformed payloads still produce a visible failed tool row through the
   // shared fallback, instead of falling through to the default log template.
   // Keep the raw value local to this render so fallback sections can include

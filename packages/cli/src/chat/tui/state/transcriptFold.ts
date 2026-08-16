@@ -35,10 +35,7 @@ import {
   hasIncompleteEmbeddedSubagentFollowup,
   summarizeFollowupMessage,
 } from '@shared/subagentFollowup';
-import {
-  malformedToolUseFallback,
-  normalizeToolUseData,
-} from '@shared/toolUse';
+import { normalizeToolUseForRender } from '@shared/toolUse';
 import {
   applyCompactionActivityEntries,
   COMPACTION_ACTIVITY_LABEL,
@@ -303,8 +300,7 @@ function renderLogEntryFresh(
     // Malformed tool payloads render as a visible failed tool row instead of
     // being dropped. Both hosts share this fallback so a bad payload cannot
     // silently vanish from the transcript or fall through to default text.
-    const toolUse =
-      normalizeToolUseData(entry.data) ?? malformedToolUseFallback(entry.data);
+    const toolUse = normalizeToolUseForRender(entry.data);
     // Never finalize here. The settled-prefix promotion advances over a tool
     // row only once it completes AND every entry before it has promoted, so a
     // fast tool can't jump ahead of still-streaming assistant text in
