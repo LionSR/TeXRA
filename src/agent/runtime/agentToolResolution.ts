@@ -24,7 +24,7 @@
 
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
-import * as logUtils from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
@@ -45,6 +45,8 @@ import {
   SharedToolInjectionRegistry,
   type ToolInjectionRegistry,
 } from './toolInjection';
+
+const log = createLog('AgentToolResolution');
 
 export interface ResolveAgentToolsInput {
   tools: AgentToolUseSetting['tools'];
@@ -84,8 +86,7 @@ async function availableDelegationModelNamesForTools(
   } catch (err) {
     // Couldn't load model options — skip the delegation annotation rather than
     // fail the run, but log so the missing "Available models:" line is traceable.
-    logUtils.warn(
-      'AgentToolResolution',
+    log.warn(
       `Could not load model options for delegation annotation: ${toErrorMessage(
         err,
       )}`,

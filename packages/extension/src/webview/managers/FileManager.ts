@@ -21,7 +21,7 @@ import {
 } from '@frontend/files/fileSelectionRegistry';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   CurrentFileType,
@@ -62,6 +62,7 @@ type GetCurrentFileMessage = MessageFor<
 >;
 
 const CHANNEL = 'FileManager';
+const log = createLog(CHANNEL);
 
 export class FileManager extends BaseWebviewManager {
   async handleRequestEditedFile(
@@ -71,7 +72,7 @@ export class FileManager extends BaseWebviewManager {
       ? await getFileLister().listEditedFiles(getFileStem(message.baseFile))
       : [];
     if (message.notifyWhenEmpty && files.length === 0) {
-      logger.debug(CHANNEL, 'No edited files were found during refresh.');
+      log.debug('No edited files were found during refresh.');
     }
     this.postMessage({ command: MAIN_VIEW_COMMANDS.SET_EDITED_FILE, files });
   }
@@ -93,7 +94,7 @@ export class FileManager extends BaseWebviewManager {
       ? MULTIPLE_FILE_COMMANDS.get(fileType)
       : undefined;
     if (!commands) {
-      logger.warn(CHANNEL, `Unsupported multiple file selection: ${fileType}`);
+      log.warn(`Unsupported multiple file selection: ${fileType}`);
       return;
     }
     try {
@@ -176,8 +177,8 @@ export class FileManager extends BaseWebviewManager {
     currentOpenFile: string,
   ): Promise<void> {
     if (plan.log) {
-      const logFn = plan.log.level === 'info' ? logger.info : logger.warn;
-      logFn(CHANNEL, plan.log.message);
+      const logFn = plan.log.level === 'info' ? log.info : log.warn;
+      logFn(plan.log.message);
     }
 
     if (plan.notification) {
@@ -221,8 +222,7 @@ export class FileManager extends BaseWebviewManager {
         commitLabel,
       });
     } else {
-      logger.info(
-        CHANNEL,
+      log.info(
         `Commit ${commitHash} from ${fileName} was not found in repository history`,
       );
       vscode.window.showInformationMessage(
@@ -285,7 +285,7 @@ export class FileManager extends BaseWebviewManager {
     options: { notifyWhenEmpty?: boolean; preserveBaseFile?: boolean } = {},
   ): void {
     if (options.notifyWhenEmpty && files.length === 0) {
-      logger.debug(CHANNEL, 'No base files were found during refresh.');
+      log.debug('No base files were found during refresh.');
     }
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
@@ -305,7 +305,7 @@ export class FileManager extends BaseWebviewManager {
 
   private getOpenedFiles(): string[] {
     if (!WorkspaceFS.getPath()) {
-      logger.warn(CHANNEL, 'No workspace path found for opened files');
+      log.warn('No workspace path found for opened files');
       return [];
     }
 
@@ -324,7 +324,7 @@ export class FileManager extends BaseWebviewManager {
       ...new Set(fileUris.map((uri) => WorkspaceFS.relativePath(uri.fsPath))),
     ];
 
-    logger.debug(CHANNEL, `Found opened files: ${relevantFiles.join(', ')}`);
+    log.debug(`Found opened files: ${relevantFiles.join(', ')}`);
     return relevantFiles;
   }
 
@@ -342,8 +342,7 @@ export class FileManager extends BaseWebviewManager {
       if ((stat.type & vscode.FileType.File) === 0) return null;
       return resolved.relativePath;
     } catch (error) {
-      logger.debug(
-        CHANNEL,
+      log.debug(
         `Dropped file could not be read: ${decodedPath}: ${toErrorMessage(error)}`,
       );
       return null;
