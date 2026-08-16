@@ -3,6 +3,7 @@ import {
   deleteExecution,
   getExecutionStore,
 } from '@agent/storage';
+import { tryDefaultSession } from '@agent/runtime';
 import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   type ValidatedExecutionRequest,
@@ -26,16 +27,51 @@ import {
   htmlExportErrorMessage,
 } from '@controllers/settingsView/HistoryActionOutcomes';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
+import { createLog } from '@logger/logUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExecutionId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 import {
   cleanupExecutionAdjacentStreamState,
   openStandaloneStreamStores,
+  type AdjacentStreamStores,
 } from '@transcript/adjacentStreamCleanup';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const log = createLog('HistoryActions');
 
 type HistoryExportFormat = 'md' | 'tex' | 'html';
 export type HistoryOpenKind = 'text' | 'pdf' | 'external';
+
+/**
+ * The extension and desktop hosts run `HistoryActions` in the same process
+ * as their live `SessionHandle` — reuse its resident `transcripts`/
+ * `snapshots` pair so a delete here is immediately visible there too
+ * (otherwise the Progress rail's in-memory registry would keep listing a
+ * stream whose sidecars were just deleted through a second, independent
+ * store pair until the process reloads it). No live session (CLI's one-shot
+ * `history` command) falls back to a standalone pair. Either way, a store
+ * that fails to open (e.g. one corrupt, unrelated persisted stream) must not
+ * block deleting the requested execution — warn once and let the caller
+ * proceed with no adjacent-state cleanup for this call.
+ */
+async function resolveAdjacentStreamStores(): Promise<
+  AdjacentStreamStores | undefined
+> {
+  const session = tryDefaultSession();
+  if (session) {
+    return { streamLogs: session.transcripts, snapshots: session.snapshots };
+  }
+  try {
+    return await openStandaloneStreamStores();
+  } catch (error) {
+    log.warn(
+      `Could not open the transcript store for history cleanup; deleted executions may leave orphaned sidecars: ${toErrorMessage(error)}`,
+      { data: error },
+    );
+    return undefined;
+  }
+}
 
 export interface HistoryActionPorts {
   getChatExportController(): Promise<ChatExportController>;
@@ -61,11 +97,12 @@ export class HistoryActions {
 
   async deleteItem(historyId: string): Promise<void> {
     const executionId = historyId as ExecutionId;
-    const stores = await openStandaloneStreamStores();
+    const stores = await resolveAdjacentStreamStores();
     const outcome = describeDeleteExecutionResult(
       await deleteExecution(executionId, {
-        beforeDelete: () =>
-          cleanupExecutionAdjacentStreamState(executionId, stores),
+        beforeDelete: stores
+          ? () => cleanupExecutionAdjacentStreamState(executionId, stores)
+          : undefined,
       }),
     );
     if (outcome.kind !== 'deleted') {
@@ -89,10 +126,12 @@ export class HistoryActions {
     ) {
       return;
     }
-    const stores = await openStandaloneStreamStores();
+    const stores = await resolveAdjacentStreamStores();
     const result = await deleteAllExecutions({
-      beforeDelete: (executionId) =>
-        cleanupExecutionAdjacentStreamState(executionId, stores),
+      beforeDelete: stores
+        ? (executionId) =>
+            cleanupExecutionAdjacentStreamState(executionId, stores)
+        : undefined,
     });
     await GoalStore.forgetByExecutionIds(result.deleted);
     const outcome = describeClearHistoryResult(result);

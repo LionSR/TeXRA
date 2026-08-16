@@ -51,6 +51,7 @@
       "readOutputFiles",
       "readPersistedExecutionId",
       "reconcileStagedDeletions",
+      "setParentStream",
       "stageDeleteStream"
     ]
   },

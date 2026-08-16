@@ -1374,7 +1374,16 @@ export class StreamSnapshotStore {
     this.publishSummaryMeta(stream);
   }
 
-  private setParentStream(
+  /**
+   * Persist a child stream's parent edge directly. The `setParentStream`
+   * session event (handled above) is how a live session normally reaches
+   * this — routed through `SessionEventHub` so the session can also update
+   * its in-memory execution registry and emit UI-facing facts. A caller with
+   * no live session (no `SessionEventHub` to route through) has no other way
+   * to persist the same edge, so this stays public for that direct case —
+   * e.g. detaching a deleted parent's children when no session is running.
+   */
+  setParentStream(
     child: StreamTabId,
     parent: StreamTabId | null | undefined,
   ): void {
