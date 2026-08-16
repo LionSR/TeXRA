@@ -111,7 +111,7 @@ interface TestRetryServices {
   setting: { temperature: number };
   modelCell: Pick<
     ModelCell,
-    'getClient' | 'rebind' | 'route' | 'handler' | 'swap'
+    'getClient' | 'rebind' | 'route' | 'handler' | 'swap' | 'modelId'
   >;
 }
 
@@ -120,6 +120,8 @@ function testRetryModelCell(
   rebind: TestRebind = async () => undefined,
   route?: ModelCredentialRoute,
   handlerConfig: object = {},
+  // `createRetryNode`'s config model, so the cell and run config agree.
+  modelId = 'sonnet46',
 ): TestRetryServices['modelCell'] {
   // The handler stub only feeds the Kimi Code fallback probe, which reads
   // `config` and finds no Kimi fields on it, so a swap never fires here.
@@ -127,6 +129,7 @@ function testRetryModelCell(
     getClient: async () => ({}),
     rebind,
     route,
+    modelId,
     handler: {
       config: handlerConfig,
     } as TestRetryServices['modelCell']['handler'],
