@@ -73,11 +73,12 @@ export function markArtifactStreamHydrated(streamId: StreamTabId): void {
 
 /** Prepare reconciliation for an authoritative full-set `load` of `retained`.
  *  `load` evicts every other record, so capture the markers it will evict up
- *  front; the returned reconcile() drops exactly those stale markers and marks
- *  the retained streams hydrated. Call it right after `load` and again after
- *  focus: a stale in-flight preload that re-adds an evicted stream is cleared
- *  either way, while a stream legitimately preloaded after the load is
- *  preserved (it was never in the captured stale set). */
+ *  front (plus the active stream, whose first focus preload may still be in
+ *  flight with no marker yet); the returned reconcile() drops exactly those
+ *  stale markers and marks the retained streams hydrated. Call it right after
+ *  `load` and again after focus: a stale in-flight preload that re-adds an
+ *  evicted stream is cleared either way, while a stream legitimately preloaded
+ *  after the load is preserved (it was never in the captured stale set). */
 export function beginLoadedStreamsReconcile(
   retained: readonly StreamTabId[],
 ): () => void {
@@ -86,6 +87,8 @@ export function beginLoadedStreamsReconcile(
   for (const streamId of hydratedArtifactStreams) {
     if (!retainedSet.has(streamId)) stale.add(streamId);
   }
+  const active = activeStreamId.get();
+  if (active !== undefined && !retainedSet.has(active)) stale.add(active);
   return () => {
     for (const streamId of stale) hydratedArtifactStreams.delete(streamId);
     for (const streamId of retained) hydratedArtifactStreams.add(streamId);
