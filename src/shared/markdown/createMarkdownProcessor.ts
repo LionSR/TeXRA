@@ -242,8 +242,16 @@ interface BegEndEnvironmentMatch {
   readonly lineContentStarts: readonly number[];
 }
 
+interface SourceRange {
+  readonly start: number;
+  readonly end: number;
+}
+
 interface BegEndEnvironmentProbe {
-  collect(content: string): readonly BegEndEnvironmentMatch[];
+  collect(
+    content: string,
+    excludedRanges?: readonly SourceRange[],
+  ): readonly BegEndEnvironmentMatch[];
 }
 
 // A tiny markdown-it block probe that records exactly where texmath's
@@ -277,7 +285,20 @@ function createBegEndEnvironmentProbe(
   let active = false;
   let matches: BegEndEnvironmentMatch[] = [];
   let closersByEnv = new Map<string, number[]>();
+  let excludedRanges: readonly SourceRange[] = [];
   const beginEnvPattern = /\\begin\{([a-z]+)\}/y;
+
+  const isInsideExcludedRange = (position: number): boolean => {
+    let low = 0;
+    let high = excludedRanges.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (excludedRanges[mid]!.start <= position) low = mid + 1;
+      else high = mid;
+    }
+    const range = excludedRanges[low - 1];
+    return range !== undefined && position < range.end;
+  };
 
   const firstCloserAfter = (closers: readonly number[], openEnd: number) => {
     let low = 0;
@@ -298,6 +319,7 @@ function createBegEndEnvironmentProbe(
   ): boolean => {
     if (!active) return false;
     const pos = state.bMarks[startLine]! + state.tShift[startLine]!;
+    if (isInsideExcludedRange(pos)) return false;
     const source = state.src;
     if (source.charCodeAt(pos) !== 0x5c) return false;
     beginEnvPattern.lastIndex = pos;
@@ -341,8 +363,12 @@ function createBegEndEnvironmentProbe(
   });
 
   return {
-    collect(content: string): readonly BegEndEnvironmentMatch[] {
+    collect(
+      content: string,
+      ranges: readonly SourceRange[] = [],
+    ): readonly BegEndEnvironmentMatch[] {
       matches = [];
+      excludedRanges = ranges;
       // Most messages have no environment delimiters; skip both markdown
       // parses entirely in that case.
       if (!content.includes('\\begin{') || !content.includes('\\end{')) {
@@ -577,6 +603,21 @@ function protectRenderInlineDollarSpans(
   return pieces.join('');
 }
 
+// Display-math ranges texmath would consume before its `beg_end` block rule
+// runs. The render/normalize shields apply these same display patterns after
+// environment shielding, so an environment opener inside one of these ranges
+// must not be shielded first.
+function findDisplayMathRanges(content: string): SourceRange[] {
+  const ranges: SourceRange[] = [];
+  for (const pattern of DISPLAY_MATH_SPAN_PATTERNS) {
+    for (const match of content.matchAll(pattern)) {
+      const start = match.index ?? 0;
+      ranges.push({ start, end: start + match[0].length });
+    }
+  }
+  return ranges.sort((a, b) => a.start - b.start);
+}
+
 function protectLatexMathSpansWithEnvironment(
   content: string,
   environmentProbe: BegEndEnvironmentProbe,
@@ -593,7 +634,10 @@ function protectLatexMathSpansWithEnvironment(
   // regex sees. Inline/display spans are shielded afterwards; the shared
   // fixpoint restore still resolves a `\begin{…}…\end{…}` placeholder nested
   // inside a later `$$…$$` / `\[…\]` fence.
-  const matches = environmentProbe.collect(content);
+  const matches = environmentProbe.collect(
+    content,
+    findDisplayMathRanges(content),
+  );
   const envProtected = applyEnvironmentShields(
     content,
     matches,

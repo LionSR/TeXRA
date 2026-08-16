@@ -113,6 +113,28 @@ function quoteHtmlBlock(body: string): string {
     .join('\n');
 }
 
+// Convert innermost `<blockquote>` wrappers that contain an environment opener
+// into markdown blockquote prefixes, iterating so nested wrappers are handled
+// outside-in after their inner wrappers are converted. Blockquotes without an
+// environment stay for the existing normalization pass.
+function quoteBlockquoteEnvironmentWrappers(content: string): string {
+  const innerBlockquoteEnvironment = new RegExp(
+    `<blockquote${HTML_ATTRIBUTES}${HTML_TAG_END}((?:(?!<blockquote)[\\s\\S])*?)<\\/blockquote>`,
+    'gi',
+  );
+  let out = content;
+  for (;;) {
+    let changed = false;
+    out = out.replaceAll(innerBlockquoteEnvironment, (match, body: string) => {
+      if (!/\\begin\{[a-z]+\}/.test(body)) return match;
+      changed = true;
+      return quoteHtmlBlock(body);
+    });
+    if (!changed) break;
+  }
+  return out;
+}
+
 function headingMarker(level: string): string {
   const parsed = Number.parseInt(level, 10);
   const depth = Number.isFinite(parsed) ? clamp(parsed, 1, 6) : 3;
@@ -324,12 +346,11 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
 
   const literalDollarProtection = protectLiteralMathSyntax(summarized);
   // Convert supported blockquote wrappers to markdown prefixes before math
-  // shielding so an environment immediately inside `<blockquote>` is seen at a
-  // `> \begin{...}` block start. The body is only re-prefixed, never mutated.
-  const blockquotePrefixed = literalDollarProtection.content.replaceAll(
-    BLOCKQUOTE_TAG_RE,
-    (match, body: string) =>
-      /^\s*\\begin\{[a-z]+\}/.test(body) ? quoteHtmlBlock(body) : match,
+  // shielding so an environment inside `<blockquote>` (including nested
+  // wrappers) is seen at a `> \begin{...}` block start. The body is only
+  // re-prefixed, never mutated.
+  const blockquotePrefixed = quoteBlockquoteEnvironmentWrappers(
+    literalDollarProtection.content,
   );
   const mathProtection = protectLatexMathSpansForNormalize(blockquotePrefixed);
   const mathProtected = literalDollarProtection.restore(mathProtection.content);
