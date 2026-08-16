@@ -24,6 +24,7 @@ import {
   ResumeAdmissionCancelledError,
   type ExecuteAgentOptions,
 } from './executeAgent';
+import { AgentExecutionHandle } from './ExecutionHandle';
 import { getStreamTabId } from './streamTab';
 import { defaultSession } from './SessionHandle';
 import type { AgentFlowResult } from './AgentFlowResult';
@@ -105,137 +106,171 @@ export async function runAgent(
   const shouldRegister =
     registerExecutionOption ?? request.executionId === undefined;
   const runSession = executeAgentOptions.session ?? defaultSession();
-
-  // Resolved before registerExecution so the stored record and the run agree
-  // on the model.
-  const config = preferHelperModel
-    ? await applyHelperModelPreference(request.config)
-    : request.config;
-
-  const userFollowUpSupport =
-    config.agentCategory === AgentCategory.ToolUse &&
-    executeAgentOptions.stopAfterCycle !== true
-      ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
-      : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
-
-  if (shouldRegister) {
-    await registerExecution(executionId, config, config.agent, {
-      streamId: getStreamTabId(config.agent, { executionId }),
-      identity: { kind: 'agent', agent: config.agent },
-      userFollowUpSupport,
-    });
-  } else {
-    const lease = await acquireResumedExecutionLease(
-      executionId,
-      canAcquireResumeLease,
-    );
-    if (lease === 'cancelled') {
-      throw new ResumeAdmissionCancelledError(executionId);
-    }
-  }
-
-  const runWithOwnership = captureOwnedExecutionLease(executionId);
-  onExecutionLeaseAcquired?.(runWithOwnership, executionId);
-  return await runWithOwnership(async () => {
-    let lifecycleStarted = false;
-    let runResult: AgentFlowResult | undefined;
-    let runFailure: { error: unknown } | undefined;
-    let finalArtifactsHandled = false;
-    let previousTerminalOutcome: RunOutcome | undefined;
-    let resumedStreamId: StreamTabId | undefined;
-    const callerOnRun = executeAgentOptions.onRun;
-    try {
-      // A resumed execution is no longer described by the terminal facts its
-      // previous run persisted; drop them before this run writes anything a
-      // reader would project them onto.
-      if (!shouldRegister) {
-        const cleared = await clearTerminalExecutionState(executionId);
-        resumedStreamId = cleared.streamId;
-        previousTerminalOutcome = cleared.previousOutcome;
-      }
-      const result = await executeAgent(config, executionId, {
-        ...executeAgentOptions,
-        // Forward the session resolved above: without it the launch context
-        // redefaults to the ambient `currentSession()`, which can disagree
-        // with the lease handling's `runSession` inside another run's async
-        // context.
-        session: runSession,
-        streamTabIdOverride: resumedStreamId,
-        userFollowUpSupport,
-        onRun: async (handle) => {
-          lifecycleStarted = true;
-          await callerOnRun?.(handle);
-        },
-      });
-      runResult = result;
-    } catch (error) {
-      runFailure = { error };
-      const restoredOutcome = shouldRegister
-        ? RUN_OUTCOME.FAILED
-        : previousTerminalOutcome;
-      if (!lifecycleStarted && restoredOutcome !== undefined) {
-        // finalizeExecutionWithLease already marks the owned lease undurable
-        // when the terminal status did not reach disk; this site only needs
-        // to fold the persistence error into the run failure.
-        const finalization = await finalizeExecutionWithLease({
+  const launchAbortController = new AbortController();
+  const launchSignal = executeAgentOptions.launchSignal
+    ? AbortSignal.any([
+        executeAgentOptions.launchSignal,
+        launchAbortController.signal,
+      ])
+    : launchAbortController.signal;
+  const launchStreamId = getStreamTabId(request.config.agent, { executionId });
+  const launchHandle = runSession.executions.getHandle(executionId)
+    ? undefined
+    : new AgentExecutionHandle(
+        {
+          streamId: launchStreamId,
           executionId,
-          outcome: restoredOutcome,
-          flowRecord: shouldRegister ? 'delete' : 'preserve',
+          identity: { kind: 'agent', agent: request.config.agent },
+          category: request.config.agentCategory,
+        },
+        launchStreamId,
+      );
+  const detachLaunchInterrupt = launchHandle?.attachInterruptHandler({
+    interrupt: () => launchAbortController.abort(),
+  });
+  if (launchHandle) runSession.executions.track(launchHandle);
+
+  try {
+    // Resolved before registerExecution so the stored record and the run agree
+    // on the model.
+    const config = preferHelperModel
+      ? await applyHelperModelPreference(request.config)
+      : request.config;
+
+    const userFollowUpSupport =
+      config.agentCategory === AgentCategory.ToolUse &&
+      executeAgentOptions.stopAfterCycle !== true
+        ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
+        : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
+
+    if (shouldRegister) {
+      await registerExecution(executionId, config, config.agent, {
+        streamId: getStreamTabId(config.agent, { executionId }),
+        identity: { kind: 'agent', agent: config.agent },
+        userFollowUpSupport,
+      });
+    } else {
+      const lease = await acquireResumedExecutionLease(
+        executionId,
+        canAcquireResumeLease,
+      );
+      if (lease === 'cancelled') {
+        throw new ResumeAdmissionCancelledError(executionId);
+      }
+    }
+
+    const runWithOwnership = captureOwnedExecutionLease(executionId);
+    onExecutionLeaseAcquired?.(runWithOwnership, executionId);
+    return await runWithOwnership(async () => {
+      let lifecycleStarted = false;
+      let runResult: AgentFlowResult | undefined;
+      let runFailure: { error: unknown } | undefined;
+      let finalArtifactsHandled = false;
+      let previousTerminalOutcome: RunOutcome | undefined;
+      let resumedStreamId: StreamTabId | undefined;
+      const callerOnRun = executeAgentOptions.onRun;
+      try {
+        // A resumed execution is no longer described by the terminal facts its
+        // previous run persisted; drop them before this run writes anything a
+        // reader would project them onto.
+        if (!shouldRegister) {
+          const cleared = await clearTerminalExecutionState(executionId);
+          resumedStreamId = cleared.streamId;
+          previousTerminalOutcome = cleared.previousOutcome;
+        }
+        const result = await executeAgent(config, executionId, {
+          ...executeAgentOptions,
+          launchSignal,
+          // Forward the session resolved above: without it the launch context
+          // redefaults to the ambient `currentSession()`, which can disagree
+          // with the lease handling's `runSession` inside another run's async
+          // context.
+          session: runSession,
+          streamTabIdOverride: resumedStreamId,
+          userFollowUpSupport,
+          onRun: async (handle) => {
+            lifecycleStarted = true;
+            await callerOnRun?.(handle);
+          },
         });
-        if (finalization.status === 'failed') {
-          runFailure = {
-            error: new AggregateError(
-              [error, finalization.error],
-              `Execution ${executionId} failed before lifecycle startup and its terminal status could not be persisted`,
-            ),
-          };
+        runResult = result;
+      } catch (error) {
+        runFailure = { error };
+        const restoredOutcome = shouldRegister
+          ? RUN_OUTCOME.FAILED
+          : previousTerminalOutcome;
+        if (!lifecycleStarted && restoredOutcome !== undefined) {
+          // finalizeExecutionWithLease already marks the owned lease undurable
+          // when the terminal status did not reach disk; this site only needs
+          // to fold the persistence error into the run failure.
+          const finalization = await finalizeExecutionWithLease({
+            executionId,
+            outcome: restoredOutcome,
+            flowRecord: shouldRegister ? 'delete' : 'preserve',
+          });
+          if (finalization.status === 'failed') {
+            runFailure = {
+              error: new AggregateError(
+                [error, finalization.error],
+                `Execution ${executionId} failed before lifecycle startup and its terminal status could not be persisted`,
+              ),
+            };
+          }
         }
       }
-    }
 
-    const artifactFailures: unknown[] = [];
-    try {
-      finalArtifactsHandled = (await beforeLeaseRelease?.()) === true;
-    } catch (error) {
-      artifactFailures.push(error);
-      // Host-owned final state failed to persist: poison the lease so the
-      // drain below completes as abandon rather than releasing a record
-      // whose host-side artifacts are not durable.
-      markOwnedExecutionLeaseUndurable(executionId);
-    }
-    if (!finalArtifactsHandled) {
-      // A failed host hook may already have abandoned ownership. Still try
-      // the ordinary drain: callbacks can also fail before touching session
-      // artifacts, and preserving those artifacts is worth the attempt. If
-      // ownership is gone, the resulting lease-lost error remains secondary
-      // to the host hook's original failure in the aggregate below.
+      const artifactFailures: unknown[] = [];
       try {
-        await runSession.releaseExecutionLease(executionId);
+        finalArtifactsHandled = (await beforeLeaseRelease?.()) === true;
       } catch (error) {
         artifactFailures.push(error);
+        // Host-owned final state failed to persist: poison the lease so the
+        // drain below completes as abandon rather than releasing a record
+        // whose host-side artifacts are not durable.
+        markOwnedExecutionLeaseUndurable(executionId);
       }
-    }
+      if (!finalArtifactsHandled) {
+        // A failed host hook may already have abandoned ownership. Still try
+        // the ordinary drain: callbacks can also fail before touching session
+        // artifacts, and preserving those artifacts is worth the attempt. If
+        // ownership is gone, the resulting lease-lost error remains secondary
+        // to the host hook's original failure in the aggregate below.
+        try {
+          await runSession.releaseExecutionLease(executionId);
+        } catch (error) {
+          artifactFailures.push(error);
+        }
+      }
 
-    if (artifactFailures.length > 0) {
-      const artifactFailure =
-        artifactFailures.length === 1
-          ? artifactFailures[0]
-          : new AggregateError(
-              artifactFailures,
-              `Execution ${executionId} has multiple final artifact failures`,
-            );
-      if (runFailure) {
-        throw new AggregateError(
-          [runFailure.error, artifactFailure],
-          `Execution ${executionId} failed and its final artifacts could not be persisted`,
-        );
+      if (artifactFailures.length > 0) {
+        const artifactFailure =
+          artifactFailures.length === 1
+            ? artifactFailures[0]
+            : new AggregateError(
+                artifactFailures,
+                `Execution ${executionId} has multiple final artifact failures`,
+              );
+        if (runFailure) {
+          throw new AggregateError(
+            [runFailure.error, artifactFailure],
+            `Execution ${executionId} failed and its final artifacts could not be persisted`,
+          );
+        }
+        throw artifactFailure;
       }
-      throw artifactFailure;
+      if (runFailure) throw runFailure.error;
+      if (!runResult) {
+        throw new Error(`Execution ${executionId} finished without a result.`);
+      }
+      return runResult;
+    });
+  } finally {
+    detachLaunchInterrupt?.();
+    if (
+      launchHandle &&
+      runSession.executions.getHandle(executionId) === launchHandle
+    ) {
+      runSession.executions.untrack(executionId);
     }
-    if (runFailure) throw runFailure.error;
-    if (!runResult) {
-      throw new Error(`Execution ${executionId} finished without a result.`);
-    }
-    return runResult;
-  });
+  }
 }

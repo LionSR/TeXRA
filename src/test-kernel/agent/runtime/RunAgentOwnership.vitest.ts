@@ -51,10 +51,23 @@ const CONFIG = AgentConfigSchema.parse({
   model: 'test-model',
 });
 const flushArtifacts = vi.fn();
+let trackedHandle:
+  import('@agent/runtime/ExecutionHandle').AgentExecutionHandle | undefined;
 // The real exit choreography over the fake's flushArtifacts and the mocked
 // lease verbs, so the existing renew/flush/complete/abandon assertions keep
 // observing the same tree through its one owner.
 const SESSION = {
+  executions: {
+    track: vi.fn((handle) => {
+      trackedHandle = handle;
+    }),
+    getHandle: vi.fn((executionId) =>
+      trackedHandle?.executionId === executionId ? trackedHandle : undefined,
+    ),
+    untrack: vi.fn((executionId) => {
+      if (trackedHandle?.executionId === executionId) trackedHandle = undefined;
+    }),
+  },
   flushArtifacts,
   releaseExecutionLease: SessionHandle.prototype.releaseExecutionLease,
 } as never;
@@ -83,6 +96,7 @@ function launch(options: RunOptions = {}): ReturnType<typeof runAgent> {
 describe('runAgent execution ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    trackedHandle = undefined;
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.acquireResumedExecutionLease.mockResolvedValue('acquired');
     mocks.clearTerminalExecutionState.mockResolvedValue({
@@ -94,6 +108,24 @@ describe('runAgent execution ownership', () => {
     flushArtifacts.mockResolvedValue(undefined);
     mocks.finalizeExecution.mockResolvedValue(FINALIZE_RESULT);
     mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
+  });
+
+  it('makes a fresh launch interruptible before registration settles', async () => {
+    let finishRegistration!: () => void;
+    mocks.registerExecution.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRegistration = resolve;
+        }),
+    );
+
+    const run = launch({ registerExecution: true });
+    expect(trackedHandle?.interrupt()).toBe(true);
+    finishRegistration();
+    await run;
+
+    const executeOptions = mocks.executeAgent.mock.calls[0]?.[2];
+    expect(executeOptions?.launchSignal?.aborted).toBe(true);
   });
 
   it('registers and releases an explicitly identified fresh run', async () => {

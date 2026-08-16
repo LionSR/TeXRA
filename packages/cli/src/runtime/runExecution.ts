@@ -299,12 +299,12 @@ export async function executeCliRequest(
         writeLine: writeTextStderr,
       })
     : () => undefined;
+  const launchExecutionId = request.executionId;
   let ownedExecutionId: ExecutionId | undefined;
   const launchAbortController = new AbortController();
   let shutdownRequested = false;
   let shutdownInterrupted = false;
   let workflowOutputPublicationCommitted = false;
-  let runLifecycleStarted = false;
   let shutdownArtifactFailure: unknown;
   let shutdownFinalizationFailureReported = false;
   const reportFinalizationFailure = (error: unknown): void => {
@@ -408,18 +408,12 @@ export async function executeCliRequest(
       // detached child cannot outlive the exiting CLI process, so the
       // detach-on-stop toggle is not consulted on this path.
       const interruptionAccepted =
-        !workflowOutputPublicationCommitted && ownedExecutionId
-          ? session.executions.kill(ownedExecutionId, {
+        !workflowOutputPublicationCommitted && launchExecutionId
+          ? session.executions.kill(launchExecutionId, {
               detachActiveChildren: false,
             })
           : false;
-      // Before lifecycle registration, the launch signal is the cancellation
-      // authority. Afterwards, only an accepted registry stop may replace the
-      // run's own terminal verdict with CANCELLED.
-      shutdownInterrupted =
-        (!workflowOutputPublicationCommitted && !runLifecycleStarted) ||
-        interruptionAccepted ||
-        shutdownInterrupted;
+      shutdownInterrupted = interruptionAccepted || shutdownInterrupted;
       let resumableCheckpoint:
         Extract<ResumabilityDecision, { resumable: true }> | undefined;
       if (shutdownInterrupted && ownedExecutionId) {
@@ -497,21 +491,6 @@ export async function executeCliRequest(
         onExecutionLeaseAcquired: (runWithOwnership, executionId) => {
           ownedExecutionId = executionId;
           settleLeaseScope(runWithOwnership);
-          if (shutdownRequested && !runLifecycleStarted) {
-            shutdownInterrupted = true;
-          }
-        },
-        onRun: () => {
-          runLifecycleStarted = true;
-          // Acquisition precedes registry tracking. If shutdown landed in
-          // between, interrupt as soon as the canonical handle becomes live.
-          if (shutdownRequested && ownedExecutionId) {
-            // Same deliberate cascade as the shutdown-phase kill above.
-            shutdownInterrupted =
-              session.executions.kill(ownedExecutionId, {
-                detachActiveChildren: false,
-              }) || shutdownInterrupted;
-          }
         },
         stopAfterCycle: options.stopAfterCycle,
         approvalPromptsUnavailable: cliApprovalPromptsUnavailable(

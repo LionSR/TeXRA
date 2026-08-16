@@ -2,18 +2,15 @@
 //
 // Extracted from runChatTui's `runChat` so the exit subsystem — the SIGINT/
 // SIGTERM/SIGHUP/SIGTSTP/SIGCONT handlers, the double-tap-to-exit confirmation,
-// and the two teardown paths (a synchronous signal exit vs the graceful
-// waitUntilExit teardown) — lives as one cohesive unit instead of ~14 closures
+// and the cause-aware teardown — lives as one cohesive unit instead of ~14 closures
 // co-captured in the 870-line entry function. This is pure code motion: every
 // closure body is unchanged; the only difference is that the runtime session
 // values the closures used to capture directly now arrive via an explicit
 // {@link SessionExitControllerContext}.
 //
-// Teardown ownership (unchanged from the inline version): a signal exit runs
-// `exitNow()`, which does the full teardown and `process.exit()`s itself; its
-// `ink.unmount()` resolves `waitUntilExit` and re-enters `gracefulTeardown()`,
-// which no-ops via the `exiting` guard so the drain / hint / cleanup never run
-// twice.
+// Teardown ownership: signal and ordinary exits enter one memoized operation.
+// A signal cause restores terminal modes synchronously before its first await,
+// then skips the graceful queue/run drain and exits with the signal code.
 
 import { completeOwnedExecutionLease } from '@agent/storage';
 import { readCliCwd } from '@cli/runtime/cliContext';
@@ -113,9 +110,13 @@ interface SessionExitController {
   readonly requestInputExit: () => void;
   /** Hand off the platform signal owner and install this controller's handlers. */
   readonly install: () => void;
-  /** The post-`waitUntilExit` graceful teardown (no-ops after a signal exit). */
+  /** The post-`waitUntilExit` graceful teardown (joins a signal teardown). */
   readonly gracefulTeardown: () => Promise<void>;
 }
+
+type ExitCause =
+  | { readonly kind: 'graceful' }
+  | { readonly kind: 'signal'; readonly exitCode: number };
 
 export function createSessionExitController(
   ctx: SessionExitControllerContext,
@@ -126,10 +127,7 @@ export function createSessionExitController(
   // whether a second Ctrl-C confirms the exit already requested by the first.
   let exitConfirmationExpiresAt = 0;
   const terminalJobControlSupported = supportsTerminalJobControl();
-  // Set once a signal exit (exitNow) starts: its ink.unmount() resolves
-  // waitUntilExit and re-enters gracefulTeardown, which guards on this to avoid
-  // draining persistence / printing the resume hint a second time.
-  let exiting = false;
+  let teardownPromise: Promise<void> | undefined;
   const clearExitConfirmation = (): void => {
     exitConfirmationExpiresAt = 0;
     clearTransientNotice();
@@ -205,26 +203,6 @@ export function createSessionExitController(
       // process.exit below remains the terminal owner when shutdown fails.
     }
   };
-  const exitNow = (exitCode: number): void => {
-    const resumableIdle = ctx.isResumableIdle();
-    exiting = true;
-    ctx.suspendTerminalTitle();
-    removeProcessHandlers();
-    clearExitConfirmation();
-    ink.unmount();
-    cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
-    // Print the resume hint last, after Ink has torn down and the terminal modes
-    // are restored, so it lands at the bottom of the transcript and stays in
-    // scrollback (copyable). cleanupTerminalModes no longer disturbs the screen.
-    printResumeHintOnExit();
-    // Synchronous signal exits (SIGINT double-tap / SIGTERM / SIGHUP) own the
-    // whole teardown here (gracefulTeardown skips when `exiting`), so drain
-    // persistence and run platform shutdown before exiting. Both steps settle
-    // their own failures so none escape under --unhandled-rejections=strict.
-    void persistBeforePlatformShutdown(resumableIdle).finally(() =>
-      process.exit(exitCode),
-    );
-  };
   const armExit = (): void => {
     exitConfirmationExpiresAt = Date.now() + EXIT_CONFIRMATION_TTL_MS;
     setTransientNotice('Press Ctrl-C again to exit', {
@@ -246,7 +224,10 @@ export function createSessionExitController(
         requestInputExit();
         return;
       case 'force-exit':
-        exitNow(CliExitCode.Interrupted);
+        void teardown({
+          kind: 'signal',
+          exitCode: CliExitCode.Interrupted,
+        });
         return;
       case 'preserve-exit':
         // Resumable-idle: exit WITHOUT interrupting. This preserves the
@@ -255,8 +236,8 @@ export function createSessionExitController(
         // terminal status too; an intentional idle exit after a successful turn
         // should not report SIGINT/130.
         //
-        // exitNow() calls process.exit, leaving the flow on disk.
-        exitNow(session.runExitCode);
+        // Signal teardown calls process.exit, leaving the flow on disk.
+        void teardown({ kind: 'signal', exitCode: session.runExitCode });
         return;
       case 'interrupt-and-arm-exit':
         session.stopRequested = true;
@@ -274,7 +255,7 @@ export function createSessionExitController(
       session.stopRequested = true;
       ctx.interruptActive();
     }
-    exitNow(exitCode);
+    void teardown({ kind: 'signal', exitCode });
   };
   const handleSigterm = (): void => handleTermSignal(143);
   const handleSighup = (): void => handleTermSignal(129);
@@ -324,62 +305,78 @@ export function createSessionExitController(
     }
   };
 
-  const gracefulTeardown = async (): Promise<void> => {
-    // A signal exit (SIGINT/SIGTERM/SIGHUP) runs exitNow(), which does the full
-    // teardown and process.exit()s itself; its ink.unmount() resolves
-    // waitUntilExit and re-enters here. Skip the entire graceful teardown in
-    // that case — re-running it would duplicate the drain / hint / cleanup, and
-    // the resumableIdle process.exit() below would race exitNow's async exit,
-    // dropping the flush and the signal exit code.
-    if (exiting) return;
+  const beginTeardown = (cause: ExitCause): Promise<void> => {
     removeProcessHandlers();
     clearExitConfirmation();
-    let disposalFailed = false;
-    let disposalFailure: unknown;
-    try {
-      ctx.disposables.dispose();
-    } catch (error) {
-      disposalFailed = true;
-      disposalFailure = error;
+    if (cause.kind === 'signal') {
+      const resumableIdle = ctx.isResumableIdle();
+      ctx.suspendTerminalTitle();
+      ink.unmount();
+      // This synchronous prefix is load-bearing: force/signal exits must restore
+      // the terminal before the first await so a stalled flush cannot strand raw
+      // mode or emulator keyboard state.
+      cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
+      printResumeHintOnExit();
+      return persistBeforePlatformShutdown(resumableIdle).finally(() =>
+        process.exit(cause.exitCode),
+      );
     }
-    await ctx.followUpQueue.onIdle();
-    // A suspended (idle/WAITING) root session is resumable: its flow record
-    // survives only if we DON'T interrupt the flow (interrupt clears it). See
-    // chatTuiIsResumableIdleOnExit for the live-flow check that distinguishes
-    // this state from a resume slot that is still rehydrating.
-    const resumableIdle = ctx.isResumableIdle();
-    if (chatTuiRunPending(session) && !resumableIdle) {
-      session.stopRequested = true;
-      ctx.interruptActive();
-      // Only await a run we actually interrupted/finished. A resumableIdle run
-      // is parked at the WAIT node and its runPromise NEVER resolves, so
-      // awaiting it would hang the process here.
-      await session.runPromise;
-    }
-    await persistAndReleaseResumableIdleLease(resumableIdle);
-    cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
-    ctx.disposeTerminalRestoreOnExit();
-    // Print the resume hint after the terminal modes are restored, but before
-    // resetCliState() clears the stream tree the hint is built from.
-    printResumeHintOnExit();
-    resetCliState();
-    if (resumableIdle) {
-      // The dangling runPromise keeps the event loop alive, so a normal return
-      // would never let the process exit. Force-exit here, AFTER persistence is
-      // flushed and the resume hint is printed, preserving the suspended flow
-      // record on disk for `texra resume`. Run platform shutdown first so queued
-      // usage logs flush — bin/texra.ts's finally won't on exit().
-      if (disposalFailed) {
-        log.error(
-          `Session resource disposal failed during exit: ${toErrorMessage(disposalFailure)}`,
-        );
+
+    return (async () => {
+      let disposalFailed = false;
+      let disposalFailure: unknown;
+      try {
+        ctx.disposables.dispose();
+      } catch (error) {
+        disposalFailed = true;
+        disposalFailure = error;
       }
-      await runPlatformShutdown();
-      if (disposalFailed) session.runExitCode = CliExitCode.AgentError;
-      process.exit(session.runExitCode);
-    }
-    if (disposalFailed) throw disposalFailure;
+      await ctx.followUpQueue.onIdle();
+      // A suspended (idle/WAITING) root session is resumable: its flow record
+      // survives only if we DON'T interrupt the flow (interrupt clears it). See
+      // chatTuiIsResumableIdleOnExit for the live-flow check that distinguishes
+      // this state from a resume slot that is still rehydrating.
+      const resumableIdle = ctx.isResumableIdle();
+      if (chatTuiRunPending(session) && !resumableIdle) {
+        session.stopRequested = true;
+        ctx.interruptActive();
+        // Only await a run we actually interrupted/finished. A resumableIdle run
+        // is parked at the WAIT node and its runPromise NEVER resolves, so
+        // awaiting it would hang the process here.
+        await session.runPromise;
+      }
+      await persistAndReleaseResumableIdleLease(resumableIdle);
+      cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
+      ctx.disposeTerminalRestoreOnExit();
+      // Print the resume hint after the terminal modes are restored, but before
+      // resetCliState() clears the stream tree the hint is built from.
+      printResumeHintOnExit();
+      resetCliState();
+      if (resumableIdle) {
+        // The dangling runPromise keeps the event loop alive, so a normal return
+        // would never let the process exit. Force-exit here, AFTER persistence is
+        // flushed and the resume hint is printed, preserving the suspended flow
+        // record on disk for `texra resume`. Run platform shutdown first so queued
+        // usage logs flush — bin/texra.ts's finally won't on exit().
+        if (disposalFailed) {
+          log.error(
+            `Session resource disposal failed during exit: ${toErrorMessage(disposalFailure)}`,
+          );
+        }
+        await runPlatformShutdown();
+        if (disposalFailed) session.runExitCode = CliExitCode.AgentError;
+        process.exit(session.runExitCode);
+      }
+      if (disposalFailed) throw disposalFailure;
+    })();
   };
+
+  const teardown = (cause: ExitCause): Promise<void> => {
+    teardownPromise ??= beginTeardown(cause);
+    return teardownPromise;
+  };
+
+  const gracefulTeardown = (): Promise<void> => teardown({ kind: 'graceful' });
 
   return {
     handleSigint,

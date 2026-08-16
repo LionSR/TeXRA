@@ -5,6 +5,8 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RunAgentOptions } from '@agent/runtime/runAgent';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
 import { AgentError } from '@common/errors';
@@ -179,6 +181,7 @@ type LeaseOptions = {
   openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
   onRun?: () => void;
   launchSignal?: AbortSignal;
+  session?: SessionHandle;
   onExecutionLeaseAcquired?: (
     scope: (operation: () => unknown) => unknown,
     executionId: ExecutionId,
@@ -194,11 +197,30 @@ function stubHangingRun(handleOptions: (options: LeaseOptions) => void): {
   resolve: (result: unknown) => void;
 } {
   let resolveRun!: (result: unknown) => void;
-  mocks.runAgent.mockImplementation(async (_request, options: LeaseOptions) => {
+  mocks.runAgent.mockImplementation(async (request, options: LeaseOptions) => {
     handleOptions(options);
-    return new Promise((resolve) => {
-      resolveRun = resolve;
-    });
+    const executionId = request.executionId as ExecutionId;
+    const streamId = `chat#${executionId}` as StreamTabId;
+    const launchHandle = new AgentExecutionHandle(
+      {
+        streamId,
+        executionId,
+        identity: { kind: 'agent', agent: 'chat' },
+        category: 'toolUse',
+      },
+      streamId,
+    );
+    launchHandle.attachInterruptHandler({ interrupt: () => undefined });
+    options.session?.executions.track(launchHandle);
+    try {
+      return await new Promise((resolve) => {
+        resolveRun = resolve;
+      });
+    } finally {
+      if (options.session?.executions.getHandle(executionId) === launchHandle) {
+        options.session.executions.untrack(executionId);
+      }
+    }
   });
   return { resolve: (result: unknown) => resolveRun(result) };
 }
