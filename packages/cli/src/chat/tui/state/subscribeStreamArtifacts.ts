@@ -2,8 +2,9 @@
 //
 // The shared `StreamSnapshotStore` is the single accumulator for round
 // artifacts and per-run usage: `preload` seeds its memory from disk and
-// replays any live deltas recorded meanwhile on top. The TUI no longer copies
-// the round-artifact fields into `StreamSlice`; renderers read the canonical
+// replays any live deltas recorded meanwhile on top. Hydration no longer
+// copies the round-artifact fields into `StreamSlice` (the live-fact adapter
+// still maintains the pre-hydration mirror); renderers read the canonical
 // projection (`projectStreamArtifacts`) directly, and this module owns only the
 // async preload edge plus the invalidation that makes those reads repaint.
 //
