@@ -263,9 +263,10 @@ export class ProgressApiKeyRetryController {
     request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
     before: ProgressApiRoutingSnapshot,
   ): Promise<ProgressApiKeyPreparationResult> {
-    // Each switch is recorded right after its setter lands, so a setter that
-    // throws midway rolls back exactly the prefix that succeeded instead of
-    // stranding global toggles the retry will never use.
+    // Each attempted switch is registered for compensation before its setter
+    // is awaited: a setter can mutate in memory and then reject on
+    // persistence, so a throw midway must roll back every switch that may
+    // have landed instead of stranding global toggles the retry never uses.
     let disabledIncludedModelAccess = false;
     let disabledChatGptSubscription = false;
     const disabledCodingPlans: ExhaustionReason[] = [];
@@ -276,8 +277,8 @@ export class ProgressApiKeyRetryController {
       // which otherwise may still prefer included access over the stored key.
       // A direct-key failure leaves relay untouched for other providers.
       if (this.shouldDisableIncludedModelAccess(request)) {
-        await this.deps.setUseIncludedModelAccess(false);
         disabledIncludedModelAccess = true;
+        await this.deps.setUseIncludedModelAccess(false);
         this.deps.invalidateModelOptionsCache();
       }
 
@@ -289,8 +290,8 @@ export class ProgressApiKeyRetryController {
         this.deps.getPreferChatGptSubscription() &&
         this.isSubscriptionExhausted(request)
       ) {
-        await this.deps.setPreferChatGptSubscription(false);
         disabledChatGptSubscription = true;
+        await this.deps.setPreferChatGptSubscription(false);
         this.deps.invalidateModelOptionsCache();
       }
 
@@ -321,8 +322,8 @@ export class ProgressApiKeyRetryController {
           request.kimiCodeRoutedOnFailure === true &&
           this.isDualBackendKimiCodeModel(request.model);
         if (toggle.getEnabled() && (planExhaustion || kimiCodeCreditReroute)) {
-          await toggle.setEnabled(false);
           disabledCodingPlans.push(toggle.exhaustionReason);
+          await toggle.setEnabled(false);
           this.deps.invalidateModelOptionsCache();
         }
       }
@@ -427,8 +428,18 @@ export class ProgressApiKeyRetryController {
         firstFailure ??= error;
       }
     }
+    // Invalidate whenever a rollback was scheduled, even after a restore
+    // failure: a setter that mutated in memory before rejecting leaves the
+    // cached options describing the wrong routing. A failed invalidation
+    // must not replace the restore failure the caller can act on.
+    if (restores.length > 0) {
+      try {
+        this.deps.invalidateModelOptionsCache();
+      } catch (error) {
+        firstFailure ??= error;
+      }
+    }
     if (firstFailure !== undefined) throw firstFailure;
-    if (restores.length > 0) this.deps.invalidateModelOptionsCache();
   }
 
   /**
