@@ -9,7 +9,7 @@ import type {
   StreamTabId,
   UsageRoute,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, UsageProviderSchema } from '@shared/schemas';
 import {
   USAGE_LOG_FLUSH_OUTCOME,
   UsageLogService,
@@ -217,7 +217,6 @@ export class UsageMonitor {
           cost: roundCost,
           usageRoute,
         },
-        latestUsage.provider,
       );
     } catch (error) {
       logger.error(`Error printing ${runKind} statistics`, { data: error });
@@ -273,12 +272,12 @@ export class UsageMonitor {
       | 'reasoningTokens'
       | 'cost'
     > & { cacheMissInputTokens: number; usageRoute?: UsageRoute },
-    provider: NonNullable<
-      AgentRunStateSnapshot['usageAccumulator']['latestUsage']
-    >['provider'],
   ): Promise<void> {
     try {
       const { config } = this.modelInfo;
+      const provider = UsageProviderSchema.catch('unknown').parse(
+        config.provider,
+      );
       const cachedInputTokens = usage.cachedInputTokens ?? 0;
       const usedRelay = usage.usageRoute === 'relay';
 

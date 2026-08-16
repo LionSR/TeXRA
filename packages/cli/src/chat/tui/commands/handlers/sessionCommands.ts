@@ -150,7 +150,7 @@ export async function showCliSessionStatus(
       }),
       approval: formatTexraApprovalPolicy(context.getApprovalPolicy()),
       approvalBypasses: slice?.bypass,
-      status: slice?.status ?? 'not started',
+      status: slice?.status,
       substate: slice?.substate,
       activeChildSessions,
       goal: activeStreamId ? GoalStore.getForStream(activeStreamId) : undefined,

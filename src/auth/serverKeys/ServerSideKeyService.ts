@@ -14,9 +14,10 @@
  * - free tier: Included non-premium models (up to $3/M input)
  */
 
+import type { ModelProvider } from 'llm-zoo';
+
 import type { StateStore } from '@platform/interfaces';
 import type { SpendingStatus, SpendingStatusError } from '@shared/schemas';
-import type { ServerSideProvider } from '@shared/constants/providers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { SupabaseClient } from '../SupabaseClient';
 import {
@@ -42,7 +43,7 @@ interface ServerSideKeyLogger {
 const ANONYMOUS_FETCH_BACKOFF_MS = 30_000;
 
 /** Path suffixes for relay URLs, matching SDK expectations. */
-const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
+const RELAY_PATH_SUFFIXES: Partial<Record<ModelProvider, string>> = {
   openai: '/v1',
   xai: '/v1',
   deepseek: '/v1',
@@ -240,8 +241,8 @@ export class ServerSideKeyService {
     if (!options.preserveTierCache) this.tierService.clearCache();
   }
 
-  isProviderOnServer(provider: string): boolean {
-    return this.tierService.getProviders().includes(provider.toLowerCase());
+  isProviderOnServer(provider: ModelProvider): boolean {
+    return this.tierService.getProviders().includes(provider);
   }
 
   private isAccessCacheValid(): boolean {
@@ -413,7 +414,10 @@ export class ServerSideKeyService {
     return this.tierService.isModelAvailable(userTier, modelName);
   }
 
-  shouldUseServerSideKeysSync(provider: string, modelName?: string): boolean {
+  shouldUseServerSideKeysSync(
+    provider: ModelProvider,
+    modelName?: string,
+  ): boolean {
     if (
       !this.useIncludedModelAccess ||
       !this.isProviderOnServer(provider) ||
@@ -428,9 +432,8 @@ export class ServerSideKeyService {
     return this.tierService.getExpirationDate();
   }
 
-  getRelayBaseUrl(provider: string): string {
-    const normalizedProvider = provider.toLowerCase() as ServerSideProvider;
-    const suffix = RELAY_PATH_SUFFIXES[normalizedProvider] ?? '';
-    return `${this.baseUrl}/functions/v1/relay/${normalizedProvider}${suffix}`;
+  getRelayBaseUrl(provider: ModelProvider): string {
+    const suffix = RELAY_PATH_SUFFIXES[provider] ?? '';
+    return `${this.baseUrl}/functions/v1/relay/${provider}${suffix}`;
   }
 }

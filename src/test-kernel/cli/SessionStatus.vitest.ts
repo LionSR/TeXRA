@@ -13,7 +13,7 @@ function sessionStatus(overrides: Partial<CliSessionStatusInput> = {}): string {
     model: 'harness-model',
     modelAccess: 'personal',
     approval: 'ask',
-    status: 'running',
+    status: STREAM_PHASE.RUNNING,
     queuedFollowUpMessages: [],
     ...overrides,
   });
@@ -134,7 +134,7 @@ describe('CLI session status formatter', () => {
 
   it('omits session lines before the first run starts', () => {
     const status = sessionStatus({
-      status: 'not started',
+      status: undefined,
     });
 
     expect(status).not.toContain('session:');
@@ -144,7 +144,7 @@ describe('CLI session status formatter', () => {
   it('reports an empty follow-up queue explicitly', () => {
     expect(
       sessionStatus({
-        status: 'waiting',
+        status: STREAM_PHASE.WAITING,
       }),
     ).toContain('queued follow-ups: 0');
   });
@@ -163,7 +163,7 @@ describe('CLI session status formatter', () => {
     const status = sessionStatus({
       approval: 'ask before privileged actions',
       approvalBypasses: { superYolo: true, bash: true, toolEdit: true },
-      status: 'waiting',
+      status: STREAM_PHASE.WAITING,
     });
 
     expect(status).toContain(
@@ -176,7 +176,7 @@ describe('CLI session status formatter', () => {
     const status = sessionStatus({
       modelAccess: 'included',
       approval: 'ask before privileged actions',
-      status: 'stopped',
+      status: STREAM_PHASE.CANCELLED,
       goal: {
         status: 'active',
         objective:
@@ -226,7 +226,6 @@ describe('CLI session status formatter', () => {
   it('uses the footer label for an idle waiting stream', () => {
     expect(formatCliStatusLabel(STREAM_PHASE.WAITING)).toBe('idle');
     expect(formatCliStatusLabel(undefined, undefined, true)).toBe('');
-    expect(formatCliStatusLabel('stopped', undefined, true)).toBe('stopped');
     expect(
       sessionStatus({
         agent: 'research',

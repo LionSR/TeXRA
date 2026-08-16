@@ -16,9 +16,6 @@ import { WorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
  *    `StreamLifecycleStatusSchema` and `StreamSnapshot.status` (§8.3's
  *    permanent boundary — a static exported file stays legacy-shaped
  *    forever).
- * 2. Display tolerance for that input
- *    (`@shared/streams/streamStatusDisplay`).
- *
  * The trait table that used to hang off this enum is gone: membership
  * questions are answered by the `StreamPhase` predicates in
  * `@shared/streams/streamStatus` (`isActivePhase`, `isInFlightPhase`,
@@ -164,21 +161,17 @@ export const StreamSubstateSchema = z.enum(STREAM_SUBSTATE);
 export type StreamSubstate = z.infer<typeof StreamSubstateSchema>;
 
 export function executionStatusToRunOutcome(
-  status: string | undefined,
+  status: ExecutionStatus | undefined,
 ): RunOutcome | undefined {
-  const runOutcome = RunOutcomeSchema.safeParse(status);
-  if (runOutcome.success) return runOutcome.data;
-
-  const parsed = ExecutionStatusSchema.safeParse(status);
-  if (!parsed.success) return undefined;
-
-  switch (parsed.data) {
+  switch (status) {
     case EXECUTION_STATUS.COMPLETED:
       return RUN_OUTCOME.COMPLETED;
     case EXECUTION_STATUS.INTERRUPTED:
       return RUN_OUTCOME.CANCELLED;
     case EXECUTION_STATUS.ERROR:
       return RUN_OUTCOME.FAILED;
+    case undefined:
+      return undefined;
   }
 }
 

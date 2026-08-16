@@ -25,14 +25,11 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { readPlatformSetting } from './platformSettings';
 
 const PROVIDERS: ReadonlyMap<string, ProviderStateEntry> = new Map(
-  PROVIDER_STATE_ENTRIES.map((provider) => [
-    provider.id.toLowerCase(),
-    provider,
-  ]),
+  PROVIDER_STATE_ENTRIES.map((provider) => [provider.id, provider]),
 );
 
 function entry(provider: string): ProviderStateEntry | undefined {
-  return PROVIDERS.get(provider.toLowerCase());
+  return PROVIDERS.get(provider);
 }
 
 /** Non-catalog fallback — see the module-level "Canonical read path" note. */
