@@ -36,6 +36,10 @@ export const LATEXDIFF_TEMP_FILE_LOCATIONS = [
 export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
   'texra.toolUse.requireEditApproval';
 
+/** Canonical config key for the per-session child-run concurrency budget. */
+export const CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY =
+  'texra.childRunConcurrencyBudget';
+
 export type LatexdiffTempFileLocation =
   (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number];
 
@@ -52,6 +56,21 @@ export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = {
   description:
     'Additional automatic retries after the initial model request (0–5). Long-running background requests retain at least two recovery retries.',
 } as const;
+
+/**
+ * Bounds, default, and copy for `childRunConcurrencyBudget`. The value caps the
+ * number of live native child model conversations one session runs at once.
+ * Shared by {@link ChildRunConcurrencyBudgetSchema}, the runtime reader, and the
+ * settings-view Multi-Agent tab so the schema, runtime, and UI cannot disagree
+ * about the range.
+ */
+export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
+  defaultValue: 16,
+  min: 1,
+  max: 100,
+  description:
+    'Maximum number of live native child model conversations one session may run at once. Detached subagents beyond this wait for a slot to free.',
+} as const);
 
 export const DEFAULT_CORE_SETTINGS = {
   agentOutputs: {
@@ -132,6 +151,7 @@ export const DEFAULT_CORE_SETTINGS = {
     requireEditApproval: true,
     requireBashApproval: true,
   },
+  childRunConcurrencyBudget: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
 };
 
 const stringRecord = (
@@ -163,6 +183,13 @@ export const ModelRetryMaxAttemptsSchema = z
   .max(MODEL_RETRY_MAX_ATTEMPTS_SETTING.max)
   .describe(MODEL_RETRY_MAX_ATTEMPTS_SETTING.description)
   .prefault(MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue);
+
+export const ChildRunConcurrencyBudgetSchema = z
+  .int()
+  .min(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min)
+  .max(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max)
+  .describe(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description)
+  .prefault(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue);
 
 /**
  * Field shape for {@link CoreSettingsSchema}.
@@ -239,6 +266,7 @@ export const CoreSettingsShape = {
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.xaiGrok),
+  childRunConcurrencyBudget: ChildRunConcurrencyBudgetSchema,
   maxImageDimension: numberField(
     DEFAULT_CORE_SETTINGS.maxImageDimension,
     'Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.',
@@ -429,6 +457,7 @@ type AssertNever<T extends never> = T;
  */
 export const CORE_SETTING_PATHS = [
   'agentOutputs.autoOpenFinal',
+  'childRunConcurrencyBudget',
   'goal.enabled',
   'model.useOpenAIResponsesAPI',
   'model.useGoogleInteractionsServerState',
@@ -506,6 +535,7 @@ type _AssertCorePathsExhaustive = AssertNever<
  */
 export const CLI_CORE_SETTING_PATHS = [
   'agentOutputs.autoOpenFinal',
+  'childRunConcurrencyBudget',
   'goal.enabled',
   'model.useOpenAIResponsesAPI',
   'model.useGoogleInteractionsServerState',

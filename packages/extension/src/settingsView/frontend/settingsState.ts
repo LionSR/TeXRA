@@ -54,6 +54,7 @@ import type {
 } from '@shared/schemas';
 import {
   AGENT_SKILLS_ENABLED_DEFAULT,
+  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   byCategory,
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
@@ -185,6 +186,17 @@ export const orchestratorAgents = trackedSignal<string[]>(() => []);
 export const reliabilitySettings = trackedSignal<NumberSetting[]>(() => []);
 export const allowOrchestratorKill = trackedSignal(() => true);
 export const detachSubagentsOnStop = trackedSignal(() => false);
+export const childRunConcurrencyBudget = trackedSignal<number>(
+  () => CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
+);
+/**
+ * Monotonic acknowledgement generation for the multi-agent payload. Incremented
+ * on every outbound multi-agent settings message — including a rebroadcast that
+ * carries the same values after a rejected/failed write — so SettingsApp
+ * re-renders the Multi-Agent branch and `live()` can restore the acknowledged
+ * committed value on the number input.
+ */
+export const multiAgentSettingsRevision = trackedSignal<number>(() => 0);
 
 // ---------------------------------------------------------------------------
 // Approval and tool-safety settings state

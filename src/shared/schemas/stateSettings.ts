@@ -41,6 +41,8 @@ import {
 } from '@shared/schemas/agentCliSettings';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import {
+  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   CoreSettingsShape,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
 } from '@shared/schemas/coreSettings';
@@ -878,6 +880,16 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: 'src/agent/prompt/userVars.ts',
     cliRuntimeReachability: AGENT_SKILLS_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'agent-skills',
+  },
+  {
+    key: CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+    schema: CoreSettingsShape.childRunConcurrencyBudget,
+    title: 'Child-run concurrency budget',
+    description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
+    category: 'multi-agent',
+    store: 'config',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'multi-agent',
   },
   {
     key: 'texra.telemetry.enabled',

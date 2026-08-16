@@ -156,6 +156,7 @@ export function createDesktopSettingsIpc(
       buildReliabilityAndOrchestrationMessage({
         workspaceState,
         globalState,
+        config: options.config,
         getReliabilitySettings: () => [],
       }),
     );

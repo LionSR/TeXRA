@@ -11,9 +11,11 @@ import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 import {
   agentSkillsEnabled,
   allowOrchestratorKill,
+  childRunConcurrencyBudget,
   customPresets,
   detachSubagentsOnStop,
   goalItems,
+  multiAgentSettingsRevision,
   orchestratorAgents,
   reliabilitySettings,
   telemetryEnabled,
@@ -58,5 +60,7 @@ export const multiAgentHandlers = {
     reliabilitySettings.set(data.reliabilitySettings);
     allowOrchestratorKill.set(data.allowOrchestratorKill);
     detachSubagentsOnStop.set(data.detachSubagentsOnStop);
+    childRunConcurrencyBudget.set(data.childRunConcurrencyBudget);
+    multiAgentSettingsRevision.set(multiAgentSettingsRevision.get() + 1);
   },
 } satisfies Partial<SettingsViewOutboundHandlerRegistry>;
