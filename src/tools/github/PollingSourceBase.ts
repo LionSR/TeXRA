@@ -412,15 +412,19 @@ export abstract class PollingSourceBase<
    * Keyed on the lifecycle instance rather than the disposable because
    * extension reactivation (and the test harness) replaces the whole
    * `LifecycleHost`; a stale registration must be swapped for one on the new
-   * host instead of skipping the re-registration.
+   * host instead of skipping the re-registration. The callback also clears the
+   * marker so a drained lifecycle can never satisfy the idempotency guard on a
+   * later subscribe.
    */
   private registerShutdownIfNeeded(): void {
     const lifecycle = tryPlatform()?.lifecycle;
     if (!lifecycle || this.shutdownLifecycle === lifecycle) return;
     this.shutdownRegistration?.dispose();
-    this.shutdownRegistration = lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
-      this.disposeAll(),
-    );
+    this.shutdownRegistration = lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => {
+      this.shutdownRegistration = undefined;
+      this.shutdownLifecycle = undefined;
+      this.disposeAll();
+    });
     this.shutdownLifecycle = lifecycle;
   }
 
