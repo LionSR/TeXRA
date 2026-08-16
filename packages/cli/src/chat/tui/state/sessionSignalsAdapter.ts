@@ -172,10 +172,14 @@ class TuiSessionRenderer implements SessionRendererPort {
 
   onMissingOutputsChanged(streamId: StreamTabId): void {
     const missingOutputsByRound = this.snapshots.getMissingOutputs(streamId);
+    // The projection reads the store directly, so a disk-restored clear must
+    // still invalidate the memo even when the slice mirror is empty (hydration
+    // no longer copies this field into the slice).
+    bumpStreamArtifactRevision();
     // `clearMissingOutputs` on a stream with no slice (or an already-empty
-    // record) must stay a no-op: calling `patchStream` would mint a slice via
-    // the `emptySlice` fallback — and un-retire the id — just to hold an
-    // empty record.
+    // record) must stay a no-op for the slice patch: calling `patchStream`
+    // would mint a slice via the `emptySlice` fallback — and un-retire the id —
+    // just to hold an empty record.
     const current = streams.get().get(streamId)?.missingOutputsByRound;
     if (
       Object.keys(missingOutputsByRound).length === 0 &&
@@ -184,7 +188,6 @@ class TuiSessionRenderer implements SessionRendererPort {
       return;
     }
     patchStream(streamId, (slice) => ({ ...slice, missingOutputsByRound }));
-    bumpStreamArtifactRevision();
   }
 
   onCompileFailuresChanged(streamId: StreamTabId): void {
