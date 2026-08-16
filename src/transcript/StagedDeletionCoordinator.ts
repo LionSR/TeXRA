@@ -544,10 +544,18 @@ export class StagedDeletionCoordinator {
             // its fresh sidecar writes buffered here (the stream stayed in
             // `deletionStates`). Replay them so the new incarnation's sidecars
             // survive the commit instead of being discarded with the deletion
-            // state.
+            // state. A replay write failure must not demote the supersede: the
+            // deletion still did not commit, so report superseded regardless.
             if (shouldDelete && !shouldDelete()) {
               superseded = true;
-              await this.drainStagedWrites(stream, state);
+              try {
+                await this.drainStagedWrites(stream, state);
+              } catch (error) {
+                log.warn(
+                  `Stream ${stream} was superseded, but buffered sidecar replay was incomplete.`,
+                  { data: error },
+                );
+              }
             }
           } finally {
             this.settleStagedDeletion(stream, state);

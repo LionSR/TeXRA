@@ -91,10 +91,16 @@ export class SessionStores {
         children: readonly StreamTabId[],
       ) => void | Promise<void>)
     | undefined;
+  /**
+   * Single-flight per stream, then per guard reference. The guard is stable per
+   * incarnation (`SessionState` memoizes it), so two removals of the same
+   * identity at the same incarnation share one promise, while a re-claimed
+   * identity's new guard starts its own deletion independently. `undefined`
+   * is the slot for unguarded deletions.
+   */
   private readonly pendingStreamDeletions = new Map<
-    | StreamTabId
-    | { readonly stream: StreamTabId; readonly guard: () => boolean },
-    Promise<DeleteStreamResult>
+    StreamTabId,
+    Map<(() => boolean) | undefined, Promise<DeleteStreamResult>>
   >();
   private pendingDeleteAll: Promise<DeleteAllStreamsResult> | undefined;
   private readonly deletionQueue = new PQueue({ concurrency: 1 });
@@ -154,15 +160,17 @@ export class SessionStores {
     guard: (() => boolean) | undefined,
     start: () => Promise<DeleteStreamResult>,
   ): Promise<DeleteStreamResult> {
-    // Guarded removals are keyed by their guard, not just the stream: two
-    // different incarnation fences for the same identity must never reuse or
-    // misattribute one pending promise.
-    const key = guard ? { stream, guard } : stream;
-    const existing = this.pendingStreamDeletions.get(key);
+    let byGuard = this.pendingStreamDeletions.get(stream);
+    if (!byGuard) {
+      byGuard = new Map();
+      this.pendingStreamDeletions.set(stream, byGuard);
+    }
+    const existing = byGuard.get(guard);
     if (existing) return existing;
     const pending = start();
-    this.pendingStreamDeletions.set(key, pending);
-    const finish = (): void => this.finishStreamDeletion(key, pending);
+    byGuard.set(guard, pending);
+    const finish = (): void =>
+      this.finishStreamDeletion(stream, guard, pending);
     void pending.then(finish, finish);
     return pending;
   }
@@ -186,7 +194,9 @@ export class SessionStores {
       this.pendingDeleteAll !== undefined
     ) {
       await Promise.allSettled([
-        ...this.pendingStreamDeletions.values(),
+        ...[...this.pendingStreamDeletions.values()].flatMap((byGuard) => [
+          ...byGuard.values(),
+        ]),
         ...(this.pendingDeleteAll ? [this.pendingDeleteAll] : []),
       ]);
     }
@@ -204,14 +214,14 @@ export class SessionStores {
   }
 
   private finishStreamDeletion(
-    key:
-      | StreamTabId
-      | { readonly stream: StreamTabId; readonly guard: () => boolean },
+    stream: StreamTabId,
+    guard: (() => boolean) | undefined,
     pending: Promise<DeleteStreamResult>,
   ): void {
-    if (this.pendingStreamDeletions.get(key) === pending) {
-      this.pendingStreamDeletions.delete(key);
-    }
+    const byGuard = this.pendingStreamDeletions.get(stream);
+    if (byGuard?.get(guard) !== pending) return;
+    byGuard.delete(guard);
+    if (byGuard.size === 0) this.pendingStreamDeletions.delete(stream);
   }
 
   private async notifyDeleted(stream: StreamTabId): Promise<void> {
@@ -798,6 +808,12 @@ export class SessionStores {
       );
     }
     if (superseded) {
+      throw new StreamDeletionSupersededError(stream);
+    }
+    // Re-check before the awaited goal forget and before this method reports
+    // the deletion committed: a re-claim landing during the snapshot commit's
+    // child-detachment/flush must not forget the fresh incarnation's goal.
+    if (shouldDelete && !shouldDelete()) {
       throw new StreamDeletionSupersededError(stream);
     }
     if (this.goalEntries) {

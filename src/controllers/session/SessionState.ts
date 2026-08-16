@@ -535,10 +535,24 @@ export class SessionState {
       return 'superseded';
     }
 
+    // The command deletion path (no caller-supplied incarnation) fences facts
+    // racing the storage await here, exactly as the removeStream fact path
+    // does via `beginStreamRemoval`. When an expected incarnation is supplied
+    // the caller already installed the barrier and owns its retirement and
+    // buffered-fact replay, so this method must not touch that barrier on a
+    // retained outcome.
+    const ownsBarrier = options?.expectedIncarnation === undefined;
+    if (ownsBarrier) {
+      this.beginStreamRemoval(stream);
+    }
+
     const deletion = await this.stores.deleteStream(stream, {
       shouldDelete: this.deletionGuard(stream, expectedIncarnation),
     });
-    if (deletion !== 'deleted') return deletion;
+    if (deletion !== 'deleted') {
+      if (ownsBarrier) this.retireStreamTombstone(stream, expectedIncarnation);
+      return deletion;
+    }
     if (!this.isCurrentIncarnation(stream, expectedIncarnation)) {
       return 'superseded';
     }
@@ -557,11 +571,15 @@ export class SessionState {
       { data: { stack: new Error().stack } },
     );
 
-    // `deleteAll` reports the exact identities it committed as deleted; that
-    // result is the sole source for tombstoning. Deriving the deleted set from
-    // a pre-delete enumeration would reintroduce the TOCTOU this barrier
-    // exists to close: a stream discovered between enumeration and commit
-    // would be missed, and a retained identity would be wrongly tombstoned.
+    // Capture the ephemeral-only identity set before the bulk delete awaits:
+    // this operation may only clear/tombstone identities that existed when it
+    // began. A stream created during the bulk snapshot (a fresh run) is not in
+    // this set and must survive untouched. `deleteAll` still reports the exact
+    // durable identities it committed as `deleted`, and that result is the
+    // sole source for tombstoning durable streams — deriving them from a
+    // pre-delete enumeration would reintroduce the TOCTOU this barrier exists
+    // to close.
+    const preExistingEphemeral = this.ephemeralStreamIds();
     const deletion = await this.stores.deleteAll();
     const retained = new Set([...deletion.active, ...deletion.failed]);
     const clearIdentity = (stream: StreamTabId): void => {
@@ -574,9 +592,10 @@ export class SessionState {
     // Ephemeral-only identities (for example a RUNNING transition that created
     // execution/status state without ever minting a durable transcript) are
     // invisible to `SessionStores.deleteAll`, so the exact durable `deleted`
-    // set cannot contain them. Clear and tombstone them too, but never clear
-    // durable identities the bulk delete reported retained.
-    for (const stream of this.ephemeralStreamIds()) {
+    // set cannot contain them. Clear and tombstone the pre-existing ones too,
+    // but never clear durable identities the bulk delete reported retained and
+    // never clear a stream that appeared after the snapshot.
+    for (const stream of preExistingEphemeral) {
       if (retained.has(stream) || this._removedStreams.has(stream)) continue;
       clearIdentity(stream);
     }

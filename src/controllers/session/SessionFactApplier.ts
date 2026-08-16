@@ -265,10 +265,10 @@ export class SessionFactApplier {
   }
 
   /**
-   * The single application body for an admitted session fact. Extracted so a
-   * retained deletion can replay buffered facts through the same path the
-   * original admission would have taken, without re-running the re-claim gate
-   * or the removal refusal check.
+   * The single application body for an admitted session fact. Replay of
+   * buffered facts must NOT call this directly — it re-runs the admission
+   * path (`handleSessionFact`) so every identity a multi-stream fact names is
+   * revalidated against the tombstone set.
    */
   private applySessionFact(fact: SessionFact): void {
     // Wrap once, and RETURN each case so async handlers' promises reach
@@ -462,13 +462,20 @@ export class SessionFactApplier {
     if (pending) pending.facts.push({ kind: 'run', streamId, event });
   }
 
-  /** Reapply buffered facts in arrival order after a retained deletion. */
+  /**
+   * Reapply buffered facts in arrival order after a retained deletion. Goes
+   * back through the public admission paths rather than the raw apply bodies,
+   * so a multi-stream session fact (e.g. `setParentStream`) is revalidated
+   * against every identity it names — if another identity is still removed,
+   * the replayed fact is refused (and re-buffered/dropped) instead of being
+   * applied through a stale barrier.
+   */
   private replayDeferredFacts(facts: readonly DeferredFact[]): void {
     for (const deferred of facts) {
       if (deferred.kind === 'session') {
-        this.applySessionFact(deferred.fact);
+        this.handleSessionFact(deferred.fact);
       } else {
-        this.applyRunFact(deferred.streamId, deferred.event);
+        this.handleRunFact(deferred.streamId, deferred.event);
       }
     }
   }

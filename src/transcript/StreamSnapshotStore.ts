@@ -1164,6 +1164,10 @@ export class StreamSnapshotStore {
         // replayed back into the live namespace, so the stream still lives and
         // the child-detachment/projection/flush below must not run.
         if (await deletion.commit(shouldDelete)) return true;
+        // Re-check before the awaited detachment/flush below: a re-claim
+        // landing right after the staged copy was removed must not detach the
+        // fresh incarnation's children or flush against its live namespace.
+        if (shouldDelete && !shouldDelete()) return true;
         let children: StreamTabId[] = [];
         try {
           children = await this.detachPersistedChildren(stream);
