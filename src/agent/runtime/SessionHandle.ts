@@ -34,7 +34,6 @@ import pMap from 'p-map';
 import PQueue from 'p-queue';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
@@ -46,6 +45,7 @@ import {
 } from '@agent/storage/executionLease';
 import { deriveResumability } from '@agent/storage/resumability';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -85,7 +85,7 @@ import {
 } from './restartRepair';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 
-const logger = createChannelTrace('sessionHandle');
+const logger = createLog('sessionHandle');
 
 /** Bounded fan-out for restart repair's sidecar ownership/preload sweeps. */
 const RESTART_REPAIR_IO_CONCURRENCY = 8;

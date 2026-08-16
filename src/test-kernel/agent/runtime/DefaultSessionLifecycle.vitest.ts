@@ -15,6 +15,28 @@ vi.mock('@agent/trace', async (importOriginal) => {
   };
 });
 
+// SessionHandle now binds `createLog('sessionHandle')` at import time, so
+// the warn spy intercepts that factory for the `sessionHandle` channel
+// only; the graph's other `createLog` consumers keep the real factory, and
+// the `@agent/trace` mock above still covers the remaining
+// `createChannelTrace` singletons (e.g. `executionRegistry`).
+vi.mock('@logger/logUtils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@logger/logUtils')>();
+  return {
+    ...actual,
+    createLog: vi.fn((channel: string) =>
+      channel === 'sessionHandle'
+        ? {
+            debug: vi.fn(),
+            info: vi.fn(),
+            warn: channelTraceMocks.warn,
+            error: vi.fn(),
+          }
+        : actual.createLog(channel),
+    ),
+  };
+});
+
 beforeEach(() => {
   vi.resetModules();
   channelTraceMocks.warn.mockReset();
