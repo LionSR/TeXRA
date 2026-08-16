@@ -1,6 +1,8 @@
-import pRetry, { AbortError } from 'p-retry';
+import { Duration, Effect, Schedule } from 'effect';
+import { AbortError } from 'p-retry';
 
 import { createLog } from '@logger/logUtils';
+import { ensureError } from '@utils/errors/errorMessage';
 
 /** Flow transition action - typically 'default' or a custom action name */
 export type Action = string;
@@ -174,75 +176,82 @@ class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
         `Node maxRetries must be >= 1, got ${this.maxRetries}. Using 1.`,
       );
     }
-    const effectiveMaxRetries = Math.max(1, this.maxRetries);
+    const autoRetries = Math.max(1, this.maxRetries) - 1;
 
-    // Track the last exec error so we can forward it to execFallback when
-    // the abort signal fires during the inter-retry delay (p-retry would
-    // otherwise rethrow signal.reason, discarding the original failure).
+    // State the Effect error channel cannot carry: on abort we must forward
+    // the last *exec* failure rather than the cancellation, and the manual
+    // phase must collapse the automatic schedule to a single attempt.
     let lastExecError: Error | undefined;
     let attemptThrew = false;
-    const runAttempts = async (retries: number): Promise<unknown> => {
+    let manualPhase = false;
+
+    const cancelled = (): Error =>
+      lastExecError ?? new Error('Operation cancelled by user');
+
+    const attempt = Effect.suspend(() => {
       attemptThrew = false;
-      return await pRetry(
-        async () => {
-          // Throw AbortError at each attempt start so p-retry surfaces it
-          // immediately (before any delay) and skips onFailedAttempt.
-          if (this.signal?.aborted)
-            throw new AbortError('Operation cancelled by user');
-          try {
-            return await this.exec(prepRes);
-          } catch (error) {
-            attemptThrew = true;
-            throw error;
-          }
-        },
-        {
-          retries,
-          minTimeout: this.wait * 1000,
-          factor: 1, // linear (fixed) delay to preserve existing behaviour
-          randomize: false, // explicit: default is false; no jitter on fixed delays
-          signal: this.signal, // aborts an attempt or inter-retry delay early
-          shouldRetry: ({ error }) => {
-            lastExecError = error;
-            if (this.signal?.aborted) return false;
-            return this.shouldAutoRetry(error);
-          },
-        },
-      );
-    };
-
-    let retryError: Error;
-    try {
-      return await runAttempts(effectiveMaxRetries - 1);
-    } catch (e) {
-      // User cancellation surfaces here as p-retry's aborted-delay rejection
-      // (signal.reason) or as the unwrapped error from our pre-attempt check
-      // (p-retry rethrows an AbortError's originalError, not the AbortError).
-      // Forward the recorded exec failure when one exists.
-      if (this.signal?.aborted) {
-        return await this.execFallback(prepRes, lastExecError ?? (e as Error));
-      }
-      retryError = e as Error;
-    }
-
-    for (;;) {
-      const shouldRetry = await this.retryPrompt(prepRes, retryError);
-      if (!shouldRetry || this.signal?.aborted) {
-        return await this.execFallback(prepRes, retryError);
-      }
-
-      try {
-        return await runAttempts(0);
-      } catch (e) {
-        const approvedError = e as Error;
-        if (this.signal?.aborted) {
-          return await this.execFallback(
-            prepRes,
-            attemptThrew ? approvedError : retryError,
+      if (this.signal?.aborted) return Effect.fail(cancelled());
+      return Effect.tryPromise({
+        try: () => this.exec(prepRes),
+        catch: (cause) => {
+          attemptThrew = true;
+          // p-retry stays the retry engine under `src/tools`, so a tool can
+          // still surface its `AbortError` wrapper here; unwrap to the error
+          // the prompt and fallback are supposed to see.
+          lastExecError = ensureError(
+            cause instanceof AbortError
+              ? (cause.originalError ?? cause)
+              : cause,
           );
-        }
-        retryError = approvedError;
-      }
+          return lastExecError;
+        },
+      }).pipe(
+        // Must run to completion: fiber interruption would cancel the `catch`
+        // above, losing which error the fallback has to forward.
+        Effect.uninterruptible,
+        // An abort that lands mid-attempt discards a late success.
+        Effect.flatMap((value) =>
+          this.signal?.aborted
+            ? Effect.fail(cancelled())
+            : Effect.succeed(value),
+        ),
+      );
+    });
+
+    const automatic = Schedule.recurs(autoRetries).pipe(
+      Schedule.addDelay(() => Duration.millis(this.wait * 1000)),
+      Schedule.check(() => !manualPhase),
+    );
+
+    const program = attempt.pipe(
+      Effect.retry({
+        schedule: automatic,
+        while: (error) =>
+          this.signal?.aborted !== true && this.shouldAutoRetry(error),
+      }),
+      Effect.retry({
+        while: (error) =>
+          Effect.promise(async () => {
+            if (this.signal?.aborted) return false;
+            manualPhase = true;
+            const granted = await this.retryPrompt(prepRes, error);
+            return granted && this.signal?.aborted !== true;
+          }),
+      }),
+      Effect.catchAll((error) =>
+        Effect.promise(() => this.execFallback(prepRes, error)),
+      ),
+    );
+
+    try {
+      // The signal drives fiber interruption so an abort lands during the
+      // inter-retry delay; attempts above are uninterruptible, so a pending
+      // interrupt is deferred until the in-flight attempt has recorded its
+      // outcome.
+      return await Effect.runPromise(program, { signal: this.signal });
+    } catch {
+      // Only interruption escapes `catchAll`.
+      return await this.execFallback(prepRes, cancelled());
     }
   }
 }

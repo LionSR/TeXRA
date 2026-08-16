@@ -126,6 +126,7 @@
     "delay": "^7.0.0",
     "diff-match-patch": "^1.0.5",
     "dotenv": "^17.4.2",
+    "effect": "^3.22.1",
     "escape-string-regexp": "^5.0.0",
     "execa": "^10.0.1",
     "fast-json-stable-stringify": "^2.1.0",
