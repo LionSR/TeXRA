@@ -23,6 +23,12 @@ interface RetainedParent {
   readonly streamId: StreamTabId;
   /** One-based, first-seen order within `streamId`. */
   readonly order: number;
+  /** The shared roster's retention stamp: set once the roster for
+   *  `streamId` lists this row as retained (`finishedAt`), cleared if the
+   *  row goes live again. Membership of a marked placement follows that
+   *  roster exactly — omission (cap eviction) drops the placement. Absent
+   *  for rows only ever seen live, whose placement survives omission. */
+  readonly finishedAt?: number;
 }
 
 type ParentProvenance =
@@ -232,6 +238,10 @@ function summaryUnchanged(
     a.executionId === b.executionId &&
     a.startedAt === b.startedAt &&
     a.elapsed === b.elapsed &&
+    // `finishedAt` is stamped once and frozen, but it is the retention
+    // marker: without comparing it, the live -> retained transition of an
+    // otherwise-identical row would read as a no-op.
+    a.finishedAt === b.finishedAt &&
     sameIdentity(a.identity, b.identity) &&
     a.workflowPhase === b.workflowPhase
   );
@@ -266,11 +276,22 @@ function subagentEntryUnchanged(
 }
 
 /**
- * `child.activity` roster snapshot for one parent: the
- * accepted children become the complete active-membership snapshot for that
- * parent at this hub position. A late roster from an incompatible (explicitly
- * edged-elsewhere, or promoted) child cannot resurrect active membership or
- * overwrite a newer parent's summary metadata.
+ * `child.activity` roster snapshot for one parent. The applier's roster is
+ * complete for that parent at this hub position and splits by `finishedAt`
+ * presence (the schema contract): rows without it are the active-membership
+ * snapshot; rows with it are finished children retained for display —
+ * history, never active membership. A placement whose row was recorded as
+ * retained is dropped exactly when the roster stops listing it (the
+ * applier's retained-cap eviction); a row only ever seen live keeps its
+ * placement on omission — the applier never emits a finished non-process
+ * child without `finishedAt`, so an omitted live-only row is a process
+ * child it never retains (or a direct unit-level projection). A late roster
+ * from an incompatible (explicitly edged-elsewhere, or promoted) child
+ * cannot resurrect active membership or overwrite a newer parent's summary
+ * metadata — but a *retained* row still refreshes the historical
+ * placement's marker when that placement names this parent (post-promotion
+ * roster refreshes land here, e.g. "keep subagents running"), because
+ * retained membership follows the shared roster, not current topology.
  */
 export function projectChildRoster(
   parentStreamId: StreamTabId,
@@ -279,13 +300,25 @@ export function projectChildRoster(
   const current = CHILD_STREAMS.get();
   if (current.get(parentStreamId)?.kind === 'removed') return;
 
-  const accepted = new Map<StreamTabId, ActiveChildInfo>();
+  const snapshotIds = new Set<StreamTabId>();
+  const live = new Map<StreamTabId, ActiveChildInfo>();
+  const retainedRows = new Map<StreamTabId, ActiveChildInfo>();
+  const incompatibleRetainedRows = new Map<StreamTabId, ActiveChildInfo>();
   for (const child of children) {
+    snapshotIds.add(child.childStreamId);
     const entry = current.get(child.childStreamId);
     if (entry?.kind === 'removed') continue;
     const parent = currentParent(entry);
-    if (parent !== undefined && parent !== parentStreamId) continue;
-    accepted.set(child.childStreamId, child);
+    const compatible = parent === undefined || parent === parentStreamId;
+    if (child.finishedAt === undefined) {
+      // Incompatible live rows are rejected outright.
+      if (!compatible) continue;
+      live.set(child.childStreamId, child);
+    } else if (compatible) {
+      retainedRows.set(child.childStreamId, child);
+    } else {
+      incompatibleRetainedRows.set(child.childStreamId, child);
+    }
   }
 
   let maxRetainedOrder = 0;
@@ -301,7 +334,8 @@ export function projectChildRoster(
   let changed = false;
 
   // Clear active membership for entries previously active under this parent
-  // but absent or incompatible with this snapshot.
+  // but absent or incompatible with this snapshot — including rows that
+  // arrived as retained history this time.
   for (const [childStreamId, entry] of current) {
     if (
       entry.kind === 'removed' ||
@@ -310,40 +344,114 @@ export function projectChildRoster(
     ) {
       continue;
     }
-    if (accepted.has(childStreamId)) continue;
+    if (live.has(childStreamId)) continue;
     out.set(childStreamId, { ...entry, active: false });
     changed = true;
   }
 
-  for (const [childStreamId, child] of accepted) {
-    const currentEntry = out.get(childStreamId);
-    const entry = currentEntry?.kind === 'live' ? currentEntry : undefined;
-    const {
-      childStreamId: _childStreamId,
-      status: _status,
-      ...summary
-    } = child;
-    const existingRetained = retainedParent(entry);
-    const retained =
-      existingRetained ??
-      ({
-        streamId: parentStreamId,
-        order: ++maxRetainedOrder,
-      } satisfies RetainedParent);
-    let parent = entry?.parent;
-    if (!parent) {
-      parent = { kind: 'roster', retained };
-    } else if (parent.kind === 'explicit' && !parent.retained) {
-      parent = { ...parent, retained };
+  // Live rows first, then retained history: the applier's emission order, so
+  // first-seen retained order matches the roster.
+  for (const [rows, active] of [
+    [live, true],
+    [retainedRows, false],
+  ] as const) {
+    for (const [childStreamId, child] of rows) {
+      const currentEntry = out.get(childStreamId);
+      const entry = currentEntry?.kind === 'live' ? currentEntry : undefined;
+      const {
+        childStreamId: _childStreamId,
+        status: _status,
+        ...summary
+      } = child;
+      const existingRetained = retainedParent(entry);
+      // The placement's `finishedAt` marker tracks the shared roster's view
+      // of the row: a retained row stamps it, a live row clears it
+      // (re-live). Only placements naming THIS parent are marked — history
+      // retained from an earlier parent stays that parent's to sync.
+      const marker = active ? undefined : child.finishedAt;
+      let retained = existingRetained;
+      if (!retained) {
+        retained = {
+          streamId: parentStreamId,
+          order: ++maxRetainedOrder,
+          ...(marker !== undefined ? { finishedAt: marker } : {}),
+        } satisfies RetainedParent;
+      } else if (
+        retained.streamId === parentStreamId &&
+        retained.finishedAt !== marker
+      ) {
+        retained = {
+          streamId: retained.streamId,
+          order: retained.order,
+          ...(marker !== undefined ? { finishedAt: marker } : {}),
+        };
+      }
+      let parent = entry?.parent;
+      if (!parent) {
+        parent = { kind: 'roster', retained };
+      } else if (!parent.retained || parent.retained !== retained) {
+        parent =
+          parent.kind === 'roster'
+            ? { kind: 'roster', retained }
+            : { ...parent, retained };
+      }
+      const nextEntry: LiveChildStreamEntry = {
+        ...(entry ?? { kind: 'live' as const }),
+        summary,
+        active,
+        parent,
+      };
+      if (subagentEntryUnchanged(entry, nextEntry)) continue;
+      out.set(childStreamId, nextEntry);
+      changed = true;
     }
-    const nextEntry: LiveChildStreamEntry = {
-      ...(entry ?? { kind: 'live' as const }),
-      summary,
-      active: true,
-      parent,
-    };
-    if (subagentEntryUnchanged(entry, nextEntry)) continue;
-    out.set(childStreamId, nextEntry);
+  }
+
+  // Retained rows under an incompatible current topology (promoted or
+  // explicitly edged elsewhere) still refresh the historical placement's
+  // marker when that placement names this parent. Only the marker moves:
+  // active membership stays untouched and summary metadata is never
+  // overwritten from a stale parent's roster.
+  for (const [childStreamId, child] of incompatibleRetainedRows) {
+    const entry = out.get(childStreamId);
+    if (entry?.kind !== 'live') continue;
+    // Incompatible current topology with a placement naming this parent is
+    // always an explicit edge (a roster-kind placement naming this parent
+    // IS the compatible case).
+    const parent = entry.parent;
+    if (parent?.kind !== 'explicit') continue;
+    const retained = parent.retained;
+    if (retained?.streamId !== parentStreamId) continue;
+    if (retained.finishedAt === child.finishedAt) continue;
+    out.set(childStreamId, {
+      ...entry,
+      parent: {
+        ...parent,
+        retained: { ...retained, finishedAt: child.finishedAt },
+      },
+    });
+    changed = true;
+  }
+
+  // Retained-membership sync: once a placement carries the roster's
+  // retention stamp, it is dropped as soon as the roster stops listing the
+  // row — the applier only drops retained rows via its cap, so this
+  // propagates cap evictions exactly, including for rows promoted before
+  // the roster refresh. Live-only rows are untouched (see the contract
+  // above). A roster-kind parent whose placement is dropped degrades to an
+  // explicit top-level edge, mirroring `applyChildStreamRemoval`'s
+  // conversion.
+  for (const [childStreamId, entry] of out) {
+    if (entry.kind === 'removed') continue;
+    const retained = retainedParent(entry);
+    if (retained?.streamId !== parentStreamId) continue;
+    if (retained.finishedAt === undefined) continue;
+    if (snapshotIds.has(childStreamId)) continue;
+    const parent: ParentProvenance =
+      entry.parent?.kind === 'explicit'
+        ? { kind: 'explicit', streamId: entry.parent.streamId }
+        : { kind: 'explicit', streamId: null };
+    out.set(childStreamId, { ...entry, parent });
     changed = true;
   }
 
@@ -479,8 +587,11 @@ export function activeSubagentsFor(
 
 /**
  * Retained child-stream history for a parent, in first-seen order. Survives
- * roster omission and terminal status; only explicit removal of the child or
- * this parent erases the association.
+ * terminal status, and — for rows only ever seen live — roster omission;
+ * once the placement carries the roster's retention stamp (`finishedAt`),
+ * membership mirrors the parent's shared roster exactly, so cap eviction
+ * erases the association, as does explicit removal of the child or this
+ * parent.
  */
 export function retainedChildStreamsFor(
   parentStreamId: StreamTabId,
