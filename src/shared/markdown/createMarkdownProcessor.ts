@@ -124,44 +124,20 @@ function restoreLatexReferences(
 const INLINE_MATH_SPAN_PATTERN =
   /(?<!\\)\$(?!\$)[^\n$]+?(?<![\\$])\$(?:\$(?!\$)[^\n$]+?(?<![\\$])\$)*/g;
 
-// Render-time inline `$…$` mirrors texmath's `dollars` inline rule exactly:
-// the same `$_pre`/`$_post` adjacency guards (no digit before the opener, no
-// whitespace just inside either delimiter, no digit after the closer) and the
-// same single-span body. texmath's body is `(?:[^\s\\]|\S.*?[^\s\\])`,
-// whose first alternative lets a one-character body match and whose second
-// permits interior `$` — so `Cost $5 then *ten* $x$` is one math span whose
-// body ends at the *last* dollar, while `Cost $5 then *ten* $10` is prose
-// (the only closer is preceded by whitespace). Adjacent spans are matched
-// back-to-back by the global scan, keeping `$a$$b$` verbatim.
-const RENDER_INLINE_MATH_SPAN_PATTERN =
-  /(?<![\\\d])\$((?:[^\s\\]|\S[^\n\r\u2028\u2029]*?[^\s\\]))\$(?!\d)/g;
-
-// Shared pattern vocabulary. Order matters: display fences before inline ones
-// so `$…$` never splits a `$$…$$`. Environments are shielded separately by the
-// container/fence-aware probe, never by a source-level regex.
-const MATH_SPAN_PATTERNS: readonly RegExp[] = [
+// Display and inline delimiter regexes used by the render shield before the
+// bounded inline-dollar scanner runs, and by the lax HTML-normalize shield.
+const DISPLAY_MATH_SPAN_PATTERNS: readonly RegExp[] = [
   /\$\$[\s\S]+?\$\$/g, // $$ … $$  (display, may span lines)
   /(?<!\\)\\\[[\s\S]+?(?<!\\)\\\]/g, // \[ … \]  (display)
   /(?<!\\)\\\([\s\S]+?(?<!\\)\\\)/g, // \( … \)  (inline)
-  INLINE_MATH_SPAN_PATTERN, // $ … $  (one or more adjacent inline spans, single line)
 ];
 
-// The render shield swaps in the texmath-adjacent inline pattern. The HTML
-// normalizer keeps the lax inline set above and shields environments through
-// the same block probe.
-const RENDER_MATH_SPAN_PATTERNS: readonly RegExp[] = MATH_SPAN_PATTERNS.map(
-  (pattern) =>
-    pattern === INLINE_MATH_SPAN_PATTERN
-      ? RENDER_INLINE_MATH_SPAN_PATTERN
-      : pattern,
-);
-// Fail loud rather than silently render-shield with the lax inline pattern if
-// MATH_SPAN_PATTERNS ever drops or renames the inline entry.
-if (!RENDER_MATH_SPAN_PATTERNS.includes(RENDER_INLINE_MATH_SPAN_PATTERN)) {
-  throw new Error(
-    'MATH_SPAN_PATTERNS no longer carries the inline $…$ entry to swap',
-  );
-}
+// Lax HTML-normalize math pattern set: display fences first so `$…$` never
+// splits a `$$…$$`, then the intentionally lax inline `$…$` regex.
+const MATH_SPAN_PATTERNS: readonly RegExp[] = [
+  ...DISPLAY_MATH_SPAN_PATTERNS,
+  INLINE_MATH_SPAN_PATTERN,
+];
 
 // Replace every match of `patterns` with an indexed `@@<tag>-N@@` placeholder,
 // appending the captured matches to `items` so later shields share one restore
@@ -373,6 +349,14 @@ function createBegEndEnvironmentProbe(
         return matches;
       }
 
+      // Cheap compatibility precheck: only pay for a markdown parse when at
+      // least one lowercase opener name also has a lowercase closer.
+      const openerNames = new Set<string>();
+      for (const opener of content.matchAll(/\\begin\{([a-z]+)\}/g)) {
+        openerNames.add(opener[1]!);
+      }
+      if (openerNames.size === 0) return matches;
+
       closersByEnv = new Map();
       const closerPattern = /\\(?:end)\{([a-z]+)\}/g;
       for (const closer of content.matchAll(closerPattern)) {
@@ -380,6 +364,9 @@ function createBegEndEnvironmentProbe(
         const positions = closersByEnv.get(name) ?? [];
         positions.push(closer.index);
         closersByEnv.set(name, positions);
+      }
+      if (![...openerNames].some((name) => closersByEnv.has(name))) {
+        return matches;
       }
 
       active = true;
@@ -487,10 +474,110 @@ function applyEnvironmentShields(
   return pieces.join('');
 }
 
+type InlineDollarProtector = (
+  content: string,
+  tag: string,
+  items: string[],
+) => string;
+
+const REGEX_SPACE_RE = /\s/u;
+
+function isAsciiDigitCode(code: number): boolean {
+  return code >= 0x30 && code <= 0x39;
+}
+
+function isLineTerminatorCode(code: number): boolean {
+  return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
+}
+
+// Bounded linear replacement for a render-time inline-dollar regex. The
+// texmath body allows interior `$`, which makes a regex backtrack over the
+// rest of the line for every currency token. Precompute the next valid closer
+// per offset (a `$` preceded by a non-space, non-backslash character), then
+// scan openers once.
+function protectRenderInlineDollarSpans(
+  content: string,
+  tag: string,
+  items: string[],
+): string {
+  const nextValidDollar = new Int32Array(content.length);
+  let next = -1;
+  for (let index = content.length - 1; index >= 0; index--) {
+    if (isLineTerminatorCode(content.charCodeAt(index))) {
+      nextValidDollar[index] = -1;
+      next = -1;
+      continue;
+    }
+    if (content[index] === '$' && index > 0) {
+      const previous = content[index - 1];
+      if (previous !== '\\' && !REGEX_SPACE_RE.test(previous)) {
+        next = index;
+        nextValidDollar[index] = index;
+        continue;
+      }
+    }
+    nextValidDollar[index] = next;
+  }
+
+  const pieces: string[] = [];
+  let copiedUntil = 0;
+  let matched = false;
+  let index = 0;
+  while (index < content.length) {
+    if (content[index] !== '$') {
+      index++;
+      continue;
+    }
+    // texmath's `$_pre`: no backslash and no ASCII digit before the opener.
+    if (
+      index > 0 &&
+      (content[index - 1] === '\\' ||
+        isAsciiDigitCode(content.charCodeAt(index - 1)))
+    ) {
+      index++;
+      continue;
+    }
+    if (index + 1 >= content.length) break;
+    const first = content[index + 1];
+    // texmath's body starts with `\S` — a backslash is allowed as the first
+    // body character (e.g. `$\{…\}$`); only whitespace/line terminators are not.
+    if (REGEX_SPACE_RE.test(first)) {
+      index++;
+      continue;
+    }
+    const closer =
+      index + 2 < content.length ? nextValidDollar[index + 2]! : -1;
+    if (closer === -1) {
+      index++;
+      continue;
+    }
+    // texmath's `$_post`: no ASCII digit after the closer (end is allowed).
+    if (
+      closer + 1 < content.length &&
+      isAsciiDigitCode(content.charCodeAt(closer + 1))
+    ) {
+      index++;
+      continue;
+    }
+
+    pieces.push(content.slice(copiedUntil, index));
+    const itemIndex = items.push(content.slice(index, closer + 1)) - 1;
+    pieces.push(`@@${tag}-${itemIndex}@@`);
+    copiedUntil = closer + 1;
+    matched = true;
+    index = closer + 1;
+  }
+
+  if (!matched) return content;
+  pieces.push(content.slice(copiedUntil));
+  return pieces.join('');
+}
+
 function protectLatexMathSpansWithEnvironment(
   content: string,
-  patterns: readonly RegExp[],
   environmentProbe: BegEndEnvironmentProbe,
+  patterns: readonly RegExp[],
+  protectInlineDollars?: InlineDollarProtector,
 ): {
   content: string;
   restore: (value: string) => string;
@@ -516,9 +603,12 @@ function protectLatexMathSpansWithEnvironment(
     items,
     true,
   );
+  const final = protectInlineDollars
+    ? protectInlineDollars(patternProtected, selectedTag, items)
+    : patternProtected;
   const placeholder = new RegExp(`@@${selectedTag}-(\\d+)@@`, 'g');
   return {
-    content: patternProtected,
+    content: final,
     restore: (value) => restorePlaceholders(value, placeholder, items),
   };
 }
@@ -574,8 +664,8 @@ export function protectLatexMathSpansForNormalize(content: string): {
   );
   return protectLatexMathSpansWithEnvironment(
     source,
-    MATH_SPAN_PATTERNS,
     normalizeEnvironmentProbe,
+    MATH_SPAN_PATTERNS,
   );
 }
 
@@ -638,7 +728,6 @@ export function createMarkdownProcessor(
     const mathProtection = config.protectLatexMath
       ? protectLatexMathSpansWithEnvironment(
           refProtected,
-          RENDER_MATH_SPAN_PATTERNS,
           (environmentProbe ??= createBegEndEnvironmentProbe(
             createProbeMarkdownIt({
               breaks: config.renderer.options.breaks,
@@ -646,6 +735,8 @@ export function createMarkdownProcessor(
               html: config.renderer.options.html,
             }),
           )),
+          DISPLAY_MATH_SPAN_PATTERNS,
+          protectRenderInlineDollarSpans,
         )
       : { content: refProtected, restore: (value: string) => value };
     const mathProtected = mathProtection.content;
