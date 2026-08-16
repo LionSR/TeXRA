@@ -138,22 +138,29 @@ const MALFORMED_TOOL_USE_TEXT = 'Malformed tool payload';
 /**
  * Host-neutral fallback for a `toolUse` row whose payload `safeParse` fails.
  * Both renderers substitute this normalized view instead of dropping the row
- * (CLI) or falling through to the default log template (webview). The raw
- * payload is retained as `input` so a non-object value still has a visible
- * body; unknown tool names and unstructured object outputs never reach this
- * path because they still parse through {@link ToolUseLogSchema}.
+ * (CLI) or falling through to the default log template (webview). The row is
+ * kept live (no `status`) until the source settles, so a temporarily
+ * malformed payload can still be replaced by a later corrected one in the
+ * append-only transcript. Only independently usable fields are preserved:
+ * `input` is re-read from `data.input`, never the whole payload, so a
+ * partially valid `read`/`bash` row cannot dump output the valid renderer
+ * would have suppressed. Unknown tool names and unstructured object outputs
+ * never reach this path because they still parse through
+ * {@link ToolUseLogSchema}.
  */
 export function malformedToolUseFallback(data: unknown): NormalizedToolUse {
+  const toolName =
+    isObject(data) && typeof data.toolName === 'string' ? data.toolName : '';
+  const input = isObject(data) && 'input' in data ? data.input : undefined;
   return {
-    toolName: '',
+    toolName,
     errorText: MALFORMED_TOOL_USE_TEXT,
     outputText: '',
     userInstructionText: '',
-    input: data,
+    input,
     isError: true,
     isUserFeedback: false,
     headerSummary: MALFORMED_TOOL_USE_TEXT,
-    status: TOOL_USE_STATUS.FAILED,
   };
 }
 
