@@ -215,7 +215,10 @@ async function createInteractions(handlers = createHandlers()) {
   const toolEditApprovals = {
     approvePendingForStream: vi.fn(async (): Promise<void> => {}),
     cancel: vi.fn(),
-    requestApproval: vi.fn(async () => ({ action: 'apply' })),
+    requestApproval: vi.fn(async () => ({
+      action: 'apply' as const,
+      appliedContent: 'new',
+    })),
   };
   const sessionEvents: SessionEvent[] = [];
   session.events.subscribe((event) => sessionEvents.push(event), {
@@ -318,7 +321,7 @@ describe('createDesktopHostInteractions', () => {
 
     await expect(
       interactions.requestToolEditApproval(request),
-    ).resolves.toEqual({ action: 'apply' });
+    ).resolves.toEqual({ action: 'apply', appliedContent: 'new' });
     // The controller owns its window session (options.session), so the call
     // carries only the request and the caller's interaction options.
     expect(toolEditApprovals.requestApproval).toHaveBeenCalledWith(
