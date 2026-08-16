@@ -128,6 +128,35 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
   };
 }
 
+/**
+ * Visible failure text both hosts render when a `toolUse` payload cannot be
+ * parsed. Kept beside {@link normalizeToolUseData} so the CLI and progress
+ * view can't drift on the wording of the shared malformed-payload policy.
+ */
+const MALFORMED_TOOL_USE_TEXT = 'Malformed tool payload';
+
+/**
+ * Host-neutral fallback for a `toolUse` row whose payload `safeParse` fails.
+ * Both renderers substitute this normalized view instead of dropping the row
+ * (CLI) or falling through to the default log template (webview). The raw
+ * payload is retained as `input` so a non-object value still has a visible
+ * body; unknown tool names and unstructured object outputs never reach this
+ * path because they still parse through {@link ToolUseLogSchema}.
+ */
+export function malformedToolUseFallback(data: unknown): NormalizedToolUse {
+  return {
+    toolName: '',
+    errorText: MALFORMED_TOOL_USE_TEXT,
+    outputText: '',
+    userInstructionText: '',
+    input: data,
+    isError: true,
+    isUserFeedback: false,
+    headerSummary: MALFORMED_TOOL_USE_TEXT,
+    status: TOOL_USE_STATUS.FAILED,
+  };
+}
+
 // ============================================================================
 // Shared tool limits
 // ============================================================================
