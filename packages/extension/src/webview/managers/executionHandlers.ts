@@ -11,7 +11,7 @@ import {
 } from '@common/teams/TeamPlan';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   FileOperationMessage,
@@ -21,6 +21,7 @@ import type {
 import { pathToLocation } from '@utils/files/fileLocation';
 
 const CHANNEL = 'ExecutionHandlers';
+const log = createLog(CHANNEL);
 
 type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
   MainViewInboundMessage,
@@ -145,8 +146,7 @@ export function handleMultipleOperation(
 ): void {
   const inputFiles = message.inputFiles ?? [];
   const label = message.command.startsWith('pack') ? 'Packing' : 'Cleaning';
-  logger.info(
-    CHANNEL,
+  log.info(
     `${label} multiple files: ${message.inputFile}, ${inputFiles.join(', ')}`,
   );
   void vscode.commands.executeCommand(

@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,
@@ -20,6 +20,7 @@ import { pathToLocation } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'OpenBuildUtils';
+const log = createLog(CHANNEL);
 
 /**
  * Resolve `latex-workshop.latex.outDir` by expanding all LaTeX Workshop
@@ -83,7 +84,8 @@ export async function invokeLatexWorkshopBuild(
   try {
     await vscode.commands.executeCommand('latex-workshop.build', uri);
   } catch (err) {
-    logger.warn(channel, `${warnLabel}: ${toErrorMessage(err)}`);
+    const log = createLog(channel);
+    log.warn(`${warnLabel}: ${toErrorMessage(err)}`);
   }
 }
 
@@ -209,8 +211,7 @@ async function prepareLatexBuild(
     // writeLine only shows `data` when texra.logger.debugMode is on
     // (default off), and this failure's whole point is to be visible
     // without needing to enable debug logging.
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Internal LaTeX compilation failed for ${uri.fsPath}:\n${compiled.logTail}`,
       { data: { sourceFile: uri.fsPath, logTail: compiled.logTail } },
     );
@@ -251,19 +252,13 @@ export function scheduleViewerDisplay(): Promise<boolean> {
                   ),
                 )
                 .then(undefined, (err: unknown) => {
-                  logger.warn(
-                    CHANNEL,
-                    `Viewer refresh failed: ${toErrorMessage(err)}`,
-                  );
+                  log.warn(`Viewer refresh failed: ${toErrorMessage(err)}`);
                 });
             }, LATEX_VIEWER_REFRESH_DELAY_MS);
             resolve(true);
           },
           (err: unknown) => {
-            logger.warn(
-              CHANNEL,
-              `Viewer display failed: ${toErrorMessage(err)}`,
-            );
+            log.warn(`Viewer display failed: ${toErrorMessage(err)}`);
             resolve(false);
           },
         );

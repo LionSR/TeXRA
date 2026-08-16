@@ -18,7 +18,7 @@ import { isFileNotFoundError } from '@common/errors';
 import { appSignals } from '@eventBus/AppSignals';
 
 // Local imports - logging
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 
 // Local imports - platform
 import type { ConfigTarget, StorageProvider } from '@platform/interfaces';
@@ -32,6 +32,8 @@ import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
 
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const log = createLog('extension');
 
 /** Whether JsonStore can create its file beneath the deepest existing directory. */
 async function canCreateOrWrite(filePath: string): Promise<boolean> {
@@ -63,8 +65,7 @@ async function openWorkspaceConfigStore(
         return projectStore;
       }
     } catch (error) {
-      logger.warn(
-        'extension',
+      log.warn(
         `Cannot open project .texra/config.json; using the internal workspace config store. Cause: ${toErrorMessage(error)}`,
       );
     }

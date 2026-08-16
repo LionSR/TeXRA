@@ -57,6 +57,12 @@ vi.mock('@frontend/ui/errorHandlingUtils', () => ({
 }));
 
 vi.mock('@logger/logUtils', () => ({
+  createLog: (channel: string) => ({
+    debug: vi.fn(),
+    info: (message: string) => mocks.info(channel, message),
+    warn: (message: string) => mocks.warn(channel, message),
+    error: (message: string) => mocks.error(channel, message),
+  }),
   warn: mocks.warn,
   error: mocks.error,
   info: mocks.info,

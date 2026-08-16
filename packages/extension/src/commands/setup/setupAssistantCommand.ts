@@ -14,7 +14,7 @@ import {
   SETUP_INSTRUCTION,
 } from '@controllers/onboarding/setupLaunch';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { agentName } from '@shared/schemas';
@@ -29,6 +29,7 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'SetupAssistant';
+const log = createLog(CHANNEL);
 
 interface LaunchModelResolution {
   model: string;
@@ -66,7 +67,7 @@ async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
     await globalSM
       .update(GlobalStateKey.USE_OPENROUTER, false)
       .then(undefined, (err) => {
-        logger.error(CHANNEL, 'Failed to restore useOpenRouter flag.', {
+        log.error('Failed to restore useOpenRouter flag.', {
           data: err,
         });
       });
@@ -262,7 +263,7 @@ export async function launchSetupAssistant(): Promise<
     }
     return 'launched';
   } catch (error) {
-    logger.error(CHANNEL, 'Setup assistant failed to launch.', { data: error });
+    log.error('Setup assistant failed to launch.', { data: error });
     void vscode.window.showErrorMessage(
       `Failed to launch setup assistant: ${toErrorMessage(error)}`,
     );

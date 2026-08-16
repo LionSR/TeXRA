@@ -91,6 +91,12 @@ vi.mock('@latex/latexdiff/mathMarkup', () => ({
 }));
 
 vi.mock('@logger/logUtils', () => ({
+  createLog: (channel: string) => ({
+    warn: (message: string) => mocks.warn(channel, message),
+    debug: (message: string) => mocks.debug(channel, message),
+    info: (message: string) => mocks.info(channel, message),
+    error: (message: string) => mocks.error(channel, message),
+  }),
   warn: mocks.warn,
   debug: mocks.debug,
   info: mocks.info,
