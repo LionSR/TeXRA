@@ -14,8 +14,10 @@
 > accounting applies to every PR; R8 consumer-greps are named per entry.
 
 Scoreboard: **~230 defensive sites censused → ~180 removable across 10
-families (est. net −700..−800 LoC of pure defense + one whole
-silent-failure class), gated by ~25 LoC of root-level catches (§3), with
+families (est. net −660..−710 LoC of pure defense — the sum of the
+per-entry nets, −685..−735 before entry #9's +25 gate cost — plus one
+whole silent-failure class), gated by ~25 LoC of root-level catches (§3),
+with
 a boundary charter (§2) so sweeps don't overshoot into the ~350 sites
 that are true boundaries.**
 
@@ -31,17 +33,17 @@ handler: it is **throw, and rely on the layer's existing catcher**. That
 only works where the catcher is loud, so this map is the safety argument
 cited by every REMOVE below. Verified per layer at this HEAD:
 
-| Layer                                                   | What a throw does today                                                                                                                 | Catcher (file:line)                                                               | Loud?                                           |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Run path (flow/node/model-handler/runtime inside a run) | `finalizeFailedRun` → `classifyAgentError` → terminal FAILED result, structured error, log + subagent delivery; double-finalize guarded | `src/agent/runtime/AgentRunLifecycle.ts:572,576` (guard `:788`)                   | **Yes** — FAILED state + per-host error surface |
-| Tool call                                               | caught, normalized, returned as `{status:'error', error}` tool result; the model sees the text and adapts; run survives                 | `src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts:316` | **Yes** (to the model and transcript)           |
-| CLI command / CLI background                            | root catch → stderr `TeXRA CLI failed: …` + nonzero exit; `CliUsageError` → exit 2; unhandled rejection → Node ≥15 default crash        | `packages/cli/src/bin/texra.ts:13-27`, `packages/cli/src/commands/root.ts:189`    | **Yes** everywhere                              |
-| Extension command                                       | registered verbatim ("no wrapping" by design) → VS Code's own error notification + ExtHost log                                          | `packages/extension/src/commands/_shared/registerCommands.ts:32`                  | **Yes**                                         |
-| Extension view-message dispatch                         | `dispatchInbound` onError forwards async rejections but only `log.error('Error handling message')` — no user surface                    | `src/shared/webview/dispatcher.ts:176-177`                                        | **Log-only** — gate G2                          |
-| Desktop main IPC                                        | `ipcMain.on` fire-and-forget; rejection → `onAsyncError?.` → `reportAsyncError = console.error`                                         | `packages/desktop/src/main/hostBridge.ts:30-34`, `index.ts:308`                   | **No** — gate G1                                |
-| Desktop main post-startup background                    | fatal-startup handlers removed after import; no process-level rejection surface                                                         | `packages/desktop/src/main/bootstrap.ts:9-15`                                     | **No** — gate G1                                |
-| Desktop renderer / webview frontends                    | `unhandledrejection` listener installed only on the bootstrap-failure path; normal path bare                                            | `packages/desktop/src/renderer/main.ts:1237-1241`                                 | **No** — gate G3                                |
-| ExtHost background (non-command async)                  | no `unhandledRejection` handler anywhere in the extension host                                                                          | (absent)                                                                          | **No** — gate G2                                |
+| Layer                                                   | What a throw does today                                                                                                                                                                                                                                    | Catcher (file:line)                                                               | Loud?                                           |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Run path (flow/node/model-handler/runtime inside a run) | `finalizeFailedRun` → `classifyAgentError` → terminal FAILED result, structured error, log + subagent delivery; double-finalize guarded                                                                                                                    | `src/agent/runtime/AgentRunLifecycle.ts:572,576` (guard `:788`)                   | **Yes** — FAILED state + per-host error surface |
+| Tool call                                               | caught, normalized, returned as `{status:'error', error}` tool result; the model sees the text and adapts; run survives                                                                                                                                    | `src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts:316` | **Yes** (to the model and transcript)           |
+| CLI command / CLI background                            | root catch → stderr `TeXRA CLI failed: …` + nonzero exit; `CliUsageError` → exit 2; unhandled rejection → Node ≥15 default crash                                                                                                                           | `packages/cli/src/bin/texra.ts:13-27`, `packages/cli/src/commands/root.ts:189`    | **Yes** everywhere                              |
+| Extension command                                       | registered verbatim ("no wrapping" by design) → VS Code's own error notification + ExtHost log                                                                                                                                                             | `packages/extension/src/commands/_shared/registerCommands.ts:32`                  | **Yes**                                         |
+| Extension view-message dispatch                         | `dispatchInbound` forwards async rejections to `onError` (`src/shared/utils/dispatcher.ts:176-177`); the extension's `onError` only does `log.error('Error handling message')` — no user surface                                                           | `packages/extension/src/common/webview/BaseViewMessageHandler.ts:146-148`         | **Log-only** — gate G2                          |
+| Desktop main IPC                                        | `ipcMain.on` fire-and-forget; rejection → `onAsyncError?.` → `reportAsyncError = console.error`                                                                                                                                                            | `packages/desktop/src/main/hostBridge.ts:30-34`, `index.ts:308`                   | **No** — gate G1                                |
+| Desktop main post-startup background                    | fatal-startup handlers removed after import; no process handler installed — Node's default (`throw`) makes an unhandled rejection a **process crash**: loud but ungraceful, and any G1 handler must surface-then-rethrow or it would _suppress_ that crash | `packages/desktop/src/main/bootstrap.ts:9-15`                                     | **Crash-loud** — G1 refines, must not suppress  |
+| Desktop renderer / webview frontends                    | `unhandledrejection` listener installed only on the bootstrap-failure path; normal path bare                                                                                                                                                               | `packages/desktop/src/renderer/main.ts:1237-1241`                                 | **No** — gate G3                                |
+| ExtHost background (non-command async)                  | no `unhandledRejection` handler anywhere in the extension host                                                                                                                                                                                             | (absent)                                                                          | **No** — gate G2                                |
 
 Consequence, encoded throughout §1: **REMOVE verdicts on run-path, tool,
 and CLI code are executable today.** REMOVE verdicts whose throw would
@@ -104,15 +106,21 @@ map row: the CLI leg is loud today (`bin/texra.ts:13-27`); the
 **extension leg** of the representative write path
 (`SettingsViewMessageHandler.ts:437` →
 `BaseViewMessageHandler.dispatchInbound`) lands in the log-only
-`dispatcher.ts:176-177` onError — loud in the log, no user surface —
+`BaseViewMessageHandler.ts:146-148` onError (the dispatcher at
+`src/shared/utils/dispatcher.ts:176-177` only forwards) — loud in the
+log, no user surface —
 so extension-view-path sites want gate G2 first; the **desktop leg**
 lands in `reportAsyncError = console.error` (`index.ts:308`, entry #9's
 sink) — desktop sites are sequenced behind gate G1. Excluded: bootstrap
 callers keep `try*` (`packages/cli/src/runtime/initPlatform.ts`,
-`bin/texra.ts`, `packages/agent/src/index.ts`), and goalStore's read
+`bin/texra.ts`, `packages/agent/src/index.ts`), goalStore's read
 paths carry a written pre-init rationale (`goalStore.ts:57-60`; its
-`writeRaw` already uses throwing `platform()`) — documented KEEPs that
-shrink the removable set to ~35. **Execution shape:** mechanical
+`writeRaw` already uses throwing `platform()`), and — review-caught —
+`getServerSideKeyService()`'s `tryGlobalState` in
+`src/auth/serverKeys/index.ts` is deliberate platformless-SDK support
+(embedders that never call `initPlatform()` get a stateless service
+instead of a throw during model setup) — documented KEEPs that shrink
+the removable set to ~34. **Execution shape:** mechanical
 workflow sweep (CLI/run-path/extension-command sites now; extension
 view-message and desktop sites after G1/G2). R8: grep
 `tryPlatform\(\)|tryGlobalState\(\)|tryWorkspaceState\(\)`.
@@ -122,13 +130,18 @@ view-message and desktop sites after G1/G2). R8: grep
 
 Tolerant readers for record shapes only pre-cutover installs wrote,
 several running on LIVE parses. **Extent:** 7 mechanisms censused, ~250
-LoC; removable after corrections: **2 clean + 1 preconditioned + 1
-policy-gated**, ~120 LoC. Per mechanism:
+LoC; removable after corrections: **3 clean (two of them
+preconditioned in-row) + 1 preconditioned + 1 policy-gated**, ~120 LoC. Per mechanism:
 `src/agent/core/state/AgentWorkspaceState.ts:343-389` (legacy
 todos/plan union arms) and
 `src/agent/implementations/flows/tooluse/nodes/types.ts:163-176`
 (modelId-lift) — **REMOVE via age-out** per the #9590 disposal policy:
-era-check the cutover date, delete; an ancient record fails the resume
+era-check the cutover date, delete — with the review-caught
+precondition that `AgentWorkspaceState.emptySnapshot()` currently
+parses `{}` **through the legacy arm** and fresh reflection flows use it
+(`runReflectionFlow.ts:233,275`), so `emptySnapshot()` must construct a
+canonical `{ workPlan: {} }` snapshot first or every new reflection run
+breaks; then an ancient record fails the resume
 parse and lands in the existing not-resumable path (user sees a
 non-resumable session, not corruption; modelId-lift additionally has a
 config fallback). `src/shared/schemas/usage.ts:54-90`
@@ -159,12 +172,20 @@ drift burden per site in the corpus. (a) Resume double-read + drift
 check: `src/agent/runtime/SessionResumeRetrieval.ts:223`
 structuredClones the freshly-read record into `sourceShared`; sole
 consumer `runToolUseFlow.ts:468-476` does a **second disk read** and
-`isDeepStrictEqual` over the whole shared state to detect drift the
-executionLease machinery already excludes. DEFINE-AWAY: pass the
-retrieved record in; the existing
-`PersistedFlowStateError('invalid-shared')` throw already routes to
+`isDeepStrictEqual` over the whole shared state. _(Review-corrected:
+retrieval and lease acquisition are NOT atomic today —
+`resolveAndResumeStream` retrieves before `executeAgent` acquires the
+resumed-execution lease, so the second read + compare is the
+optimistic-concurrency check for that window; deleting it standalone
+would let a record updated-and-released in the window resume stale
+state.)_ DEFINE-AWAY **by making the window unrepresentable**: move
+retrieval under the lease (acquire-then-read); only then pass the
+retrieved record in and let the existing
+`PersistedFlowStateError('invalid-shared')` throw route to
 `classifyAgentError` → `finalizeFailedRun`
-(`AgentRunLifecycle.ts:565-585`) — same catcher, one read. (b)
+(`AgentRunLifecycle.ts:565-585`) — same catcher, one read, no window.
+Until that reorder lands, this sub-item is KEEP (matching the prior
+irreducibility register's "until lease exclusivity is proven" row). (b)
 `packages/cli/src/chat/tui/state/sessionSignalsAdapter.ts:51-93` +
 ~18 guard sites: staleness machinery whose own comments admit
 session-fact application is synchronous — `isStaleDispatch` can never
@@ -192,26 +213,32 @@ corruption becomes a silent default becomes permanent data loss.
 **Extent after corrections: 6 sites**, ~35 LoC. Representatives:
 `src/shared/schemas/streamSnapshot.ts:69-75` — `.catch` on EVERY field
 of "our own trusted disk format" (its words), including
-`schemaVersion.catch(...)`; REMOVE → strict parse, on failure warn +
-treat-as-absent (loud, non-destructive; read path
-`streamSnapshotRead.ts:183` is not run-critical, and per verifier this
-is no more destructive than today's per-field defaults feeding the same
-later write). `src/agent/runtime/UsageMonitor.ts:275`
+`schemaVersion.catch(...)`; REMOVE the silent `.catch`es → per-**field-group**
+strict parse with warn, retaining independent field recovery
+_(review-caught: a whole-object strict parse that treats failure as
+absence is MORE destructive than today — one malformed field would load
+an empty work plan and the next unrelated write would permanently erase
+the valid sibling fields; either keep per-field recovery loud, or make
+an unreadable file block subsequent whole-file writes)_. `src/agent/runtime/UsageMonitor.ts:275`
 `.catch('unknown')` masks a model-registry typo as `provider:'unknown'`
-in accounting rows forever; REMOVE, **with the verifier's correction to
+in accounting rows forever; REMOVE, **with two review corrections to
 the catch story**: the parse sits inside the method's own try whose
 catch at `UsageMonitor.ts:314-318` swallows everything at
-`logger.debug` — a plain `.parse` would die there, converting a
-silently-wrong row into a silently-dropped one. The fix hoists the
-parse above that try (so the throw reaches `AgentRunLifecycle.ts:576` →
-terminal FAILED) or loudens the catch to warn — which §15's
-no-downgrade-below-warn rule requires independently. Deflated to KEEP:
+`logger.debug`, AND `recordUsage`'s encompassing catch at
+`UsageMonitor.ts:215-217` swallows again above it — so a hoist alone
+cannot reach a terminal FAILED result. The honest outcome of this fix
+is **louder accounting failure, not run failure**: louden both catches
+to warn (which §15's no-downgrade-below-warn rule requires
+independently) and let the strict parse's throw surface there; only a
+deliberate decision to make accounting integrity run-fatal would change
+the outer catch. Deflated to KEEP:
 `telemetrySettingsHandlers.ts:9-14` carries a written rationale
 (non-authoritative view snapshot; runtime telemetry independently fails
 closed). Excluded: auth/JWT decoders (`codexJwt.ts:43-47`,
 `xaiJwt.ts:26`, `jwtDecode.ts:11` — external tokens, auth-credential
-register), OAuth/device-code responses, `updateChecker.ts:185` (npm
-registry), `taskGroup.ts:62-68` at the exported-trace boundary only.
+register), OAuth/device-code responses, `updateChecker.ts:185` (Homebrew formula
+output — the npm-registry path has no Zod `.catch`),
+`taskGroup.ts:62-68` at the exported-trace boundary only.
 **Execution shape:** PR-by-PR (each site has a distinct blast radius;
 UsageMonitor needs the hoist). **Est. net −35 LoC.**
 
@@ -219,8 +246,9 @@ UsageMonitor needs the hoist). **Est. net −35 LoC.**
 
 `interface ServerSideKeyLogger { error?(...) }` and siblings exist only
 so tests can pass partial mocks, forcing `?.` at every call site.
-**Extent:** 24 prod `.error?.(`/`.warn?.(` sites (verifier recount;
-claimed 26), 22 of them in four auth files:
+**Extent:** 24 prod optional logger-method sites
+(`.error?.(`/`.warn?.(` = 18, `.info?.(` = 6; verifier recount, claimed
+26), 22 of them in four auth files:
 `src/auth/serverKeys/ServerSideKeyService.ts:30-33` (the interface) ×5
 call sites, `src/auth/SupabaseSession.ts` ×7,
 `src/auth/serverKeys/TierService.ts` ×7, `supabaseSessionTypes.ts` ×3;
@@ -275,9 +303,11 @@ read (`packages/cli/src/runtime/history.ts:418`); carry memory misses
 as a typed field beside the bag (matches the no-deep-injection
 single-owner ruling — no new bag keys, no parameter-object growth);
 lowercase provider once at registry load. Excluded:
-`MainViewExecutionController.ts:88` (wire schema deliberately
-`partial()`; second parse applies defaults), `validateExecutionRequest`
-(shared boundary validator). **Execution shape:** 2-3 PRs by carrier;
+`MainViewExecutionController.ts:88` (a boundary validator whose wire
+schema prefaults defaults at its single parse —
+`ToolConfigFieldsSchema.prefault(DEFAULT_TOOL_CONFIG)`,
+`src/shared/schemas/toolConfig.ts:41-42`; no second parse exists),
+`validateExecutionRequest` (shared boundary validator). **Execution shape:** 2-3 PRs by carrier;
 not workflow-sweepable (each retype has type-level ripples).
 **Est. net −70 LoC.**
 
@@ -311,21 +341,30 @@ REMOVE).**
 
 The catch/switch/retry corpora are healthy overall (2026-07 audit, 880
 sites), but a fixed straggler list survived verification. **Extent
-after corrections: 11 sites**, ~35 LoC. Confirmed REMOVEs:
+after review corrections: 8 sites**, ~25 LoC. Confirmed REMOVEs:
 `src/latex/latexdiff.ts:81` bare catch→null (FNF-discriminate then
 rethrow; callers sit under tool-error return and run classification;
 ENOENT keeps the legitimate skip-diff, and the read precedes any diff
-write — no mid-write stranding);
-`src/agent/implementations/flows/reflection/output/diffComputation.ts:48`
-(debug + return `{}`); `packages/cli/src/commands/orchestrate.ts:132`
-catch-all→`false` around internal model selection (M1; CLI root catch
-is the landing zone); 3 assertNever gaps —
+write — no mid-write stranding); 2 assertNever gaps —
 `src/shared/copy/modelAccess.ts:97`,
-`packages/cli/src/runtime/modelAccess.ts:458`,
-`packages/cli/src/runtime/modelAccessRoute.ts:134` (a new route member
+`packages/cli/src/runtime/modelAccess.ts:458` (a new route member
 silently gets no copy/action); `src/agent/node/index.ts:172-177`
 maxRetries<1 log-and-clamp → throw in the constructor (reaches
-`finalizeFailedRun`). Verifier deflations:
+`finalizeFailedRun`). Review demotions:
+`packages/cli/src/commands/orchestrate.ts:132` is **KEEP-with-warn** —
+the catch converts an expected no-runnable-model rejection into
+`allowDefaultModelLaunch: false` so the orchestration TUI mounts with
+remediation controls; removing it would exit the CLI before the user
+can reach account/model recovery (louden to warn, keep the false);
+`.../reflection/output/diffComputation.ts:48` is **KEEP-with-warn** —
+it protects display enrichment of already-completed outputs, and
+removal would route an otherwise successful workflow through
+`finalizeFailedRun` when a base file moves post-generation;
+`packages/cli/src/runtime/modelAccessRoute.ts:134`'s `default: return
+undefined` is a **user-input boundary**, not an exhaustiveness gap —
+the switch normalizes an arbitrary `/api` argument string, and the
+default arm is what shows `MODEL_ACCESS_USAGE` for unknown input;
+excluded from the assertNever sweep. Verifier deflations:
 `src/utils/files/rulesUtils.ts:41-42` already logs WARN with the error
 — add FNF discrimination as an upgrade, not an unmasking;
 `packages/cli/src/runtime/cliContext.ts:221` is a commented
@@ -370,11 +409,16 @@ these lists stops and records it; it does not "fix" it.
 host):**
 
 - **G1 — desktop:** point `reportAsyncError` (`index.ts:308`) at the
-  renderer toast/log surface; restore a post-startup process-level
-  rejection handler after `bootstrap.ts:9-15` removes the fatal-startup
-  pair.
+  renderer toast/log surface. For post-startup process-level rejections,
+  Node's default (`throw`) already crashes loudly — any handler
+  installed here must **surface-then-rethrow (or terminate)**, never
+  swallow: converting the default crash into continued execution with
+  inconsistent main-process state is the one way this gate could make
+  things worse (review-caught).
 - **G2 — extension host:** add an ExtHost `unhandledRejection` surface,
-  and give `dispatchInbound`'s onError (`dispatcher.ts:176-177`) a
+  and give the view-dispatch `onError`
+  (`BaseViewMessageHandler.ts:146-148`; the dispatcher at
+  `src/shared/utils/dispatcher.ts:176-177` only forwards) a
   user-visible surface beyond `log.error`.
 - **G3 — desktop renderer/webview frontends:** install the
   `unhandledrejection` listener on the normal path, not only the
@@ -414,8 +458,11 @@ deletion runs the R8 consumer-grep named in its entry.
   finite-key rationale; follow-up-queue caps registered.
 - Existence pre-checks (29 `existsSync`) — concentrated at true FS
   boundaries; if-defined-then-call on required members: zero found.
-- Retry wrappers (6 pRetry sites) — all I/O, all shouldRetry-gated; the
-  flow engine defaults to no retry (`src/agent/node/index.ts:112`).
+- Retry wrappers (6 pRetry sites) — all I/O, all shouldRetry-gated
+  (review-corrected: the flow engine defaults to **one** attempt-retry,
+  `constructor(maxRetries = 1)` at `src/agent/node/index.ts:112`, and
+  clamps below 1 — the KEEP rests on the shouldRetry gating, not on a
+  no-retry default).
 - Error-message string matching (10 sites) — all external/provider wire
   text; own-error dispatch is instanceof everywhere (24 sites, all
   reachable narrows).
