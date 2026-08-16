@@ -743,18 +743,20 @@ fold-rejection annotations), and most controller `*Deps` interfaces
 
 The repo's largest frozen list
 (`config/ratchets/shared-schemas-deep-import-baseline.json`) records imports
-that reach past the published `@shared/schemas` barrel. Re-verification at
-implementation time found 281 migratable statements rather than the original
-387 estimate. A mechanical codemod plus the built-in baseline regen removes
-all of them, while folding `schemas/settingsView/{data,inbound}` (1,138 LoC)
-into the re-export shim all external consumers already use deletes the dual
-organizational scheme.
+that reach past the published `@shared/schemas` barrel. The baseline at
+#10609's merge base contained 278 statements rather than the original 387
+estimate: dependency review found 277 migratable statements and one
+cycle-constrained floor. (An earlier 281 count preceded three intervening
+baseline removals.) A mechanical codemod plus the built-in baseline regen
+removes all 277 migratable rows, while folding
+`schemas/settingsView/{data,inbound}` (1,138 LoC) into the re-export shim all
+external consumers already use deletes the dual organizational scheme.
 
 The measured low-layer scope cut is one statement, not ~20:
 `src/logger/logUtils.ts` must import `@shared/schemas/log` directly because the
 barrel reaches `logUtils` through `stateSettings` → `@shared/approvalPolicy` →
 `@logger/logUtils`; using the barrel would create a cycle. The ratchet records
-that exact row as its forced layering floor and rejects every new migratable
+that exact row as its documented cycle floor and rejects every new migratable
 entry, including a new import of the same leaf. Because the baseline therefore
 remains nonempty, its `totals > 0` sanity assertion stays in place.
 
@@ -882,7 +884,8 @@ assigned), `ProcessingContext`'s members are one-line forwards. Then
 relocate the directory under `implementations/flows/reflection/` (the same
 move as item 9's `ResponseCycleFlow`). Verifier correction: the relocation
 _does_ touch the shared-schemas ratchet (three files are listed in the
-baseline) — regenerate in the same PR, or land after B1 empties it.
+baseline) — regenerate in the same PR, or land after B1 removes its migratable
+rows.
 
 ### B8. BLOCKED — do not delete the "orphaned" inline-agent machinery or the legacy-storage migrations
 
