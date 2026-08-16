@@ -252,7 +252,7 @@ describe('VS Code tool edit approval', () => {
       controller.approvePendingForStream('stream-initializing'),
     ).resolves.toBeUndefined();
     await expect(approval).resolves.toMatchObject({
-      accepted: true,
+      action: 'apply',
       appliedContent: 'new\n',
     });
     expect(interactions.shown).toEqual([]);
@@ -274,7 +274,7 @@ describe('VS Code tool edit approval', () => {
     });
 
     controller.handleAction({ requestId, action: 'reject' });
-    await expect(approval).resolves.toMatchObject({ accepted: false });
+    await expect(approval).resolves.toMatchObject({ action: 'reject' });
   });
 
   it('approves a matching edit whose preview is already pending', async () => {
@@ -284,7 +284,7 @@ describe('VS Code tool edit approval', () => {
       controller.approvePendingForStream('stream-approval'),
     ).resolves.toBeUndefined();
     await expect(approval).resolves.toMatchObject({
-      accepted: true,
+      action: 'apply',
       appliedContent: 'new\n',
     });
   });
@@ -311,13 +311,13 @@ describe('VS Code tool edit approval', () => {
     await vi.waitFor(() => expect(other.interactions.shown).toHaveLength(1));
 
     await target.controller.approvePendingForStream('stream-target');
-    await expect(targetStream).resolves.toMatchObject({ accepted: true });
+    await expect(targetStream).resolves.toMatchObject({ action: 'apply' });
 
     target.controller.cancel({ streamId: 'stream-other' });
     other.controller.cancel({ streamId: 'stream-target' });
-    await expect(otherStream).resolves.toMatchObject({ accepted: false });
+    await expect(otherStream).resolves.toMatchObject({ action: 'reject' });
     await expect(otherSessionRequest).resolves.toMatchObject({
-      accepted: false,
+      action: 'reject',
     });
   });
 
@@ -336,7 +336,7 @@ describe('VS Code tool edit approval', () => {
     });
 
     await expect(approval).resolves.toMatchObject({
-      accepted: false,
+      action: 'reject',
       cause: 'Run ended.',
     });
     expect(interactions.shown).toEqual([]);
@@ -369,7 +369,7 @@ describe('VS Code tool edit approval', () => {
     });
     revealProgress?.();
 
-    await expect(approval).resolves.toMatchObject({ accepted: false });
+    await expect(approval).resolves.toMatchObject({ action: 'reject' });
     await Promise.resolve();
     expect(interactions.shown).toEqual([]);
   });
@@ -385,7 +385,7 @@ describe('VS Code tool edit approval', () => {
     });
 
     await expect(approval).resolves.toMatchObject({
-      accepted: false,
+      action: 'reject',
       cause: 'Stream resources released.',
     });
     expect(interactions.resolved).toEqual([{ requestId }]);
@@ -412,7 +412,7 @@ describe('VS Code tool edit approval', () => {
       action: 'reject',
     });
 
-    await expect(approval).resolves.toMatchObject({ accepted: false });
+    await expect(approval).resolves.toMatchObject({ action: 'reject' });
   });
 
   it('restores a failed approval prompt and accepts a later retry', async () => {
@@ -436,7 +436,7 @@ describe('VS Code tool edit approval', () => {
     controller.handleAction({ requestId, action: 'approve' });
 
     await expect(approval).resolves.toMatchObject({
-      accepted: true,
+      action: 'apply',
       appliedContent: 'beta after retry\n',
     });
     expect(getText).toHaveBeenCalledOnce();
@@ -455,7 +455,7 @@ describe('VS Code tool edit approval', () => {
     controller.handleAction({ requestId, action: 'approve' });
 
     await expect(approval).resolves.toMatchObject({
-      accepted: true,
+      action: 'apply',
       appliedContent: 'beta edited\n',
     });
     expect(getText).toHaveBeenCalledOnce();
@@ -478,6 +478,6 @@ describe('VS Code tool edit approval', () => {
     expect(vscodeMocks.showErrorMessage).not.toHaveBeenCalled();
 
     controller.handleAction({ requestId, action: 'reject' });
-    await expect(approval).resolves.toMatchObject({ accepted: false });
+    await expect(approval).resolves.toMatchObject({ action: 'reject' });
   });
 });

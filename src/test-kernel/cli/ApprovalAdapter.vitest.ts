@@ -230,7 +230,7 @@ describe('human input approval policy', () => {
       }),
       requestNewProofEdit,
     );
-    expect(result).toMatchObject({ accepted: false });
+    expect(result).toMatchObject({ action: 'reject' });
     expect(policyDenials).toBe(1);
     // The model routes around the denial, so the run's exit code is untouched.
     expect(runOutcomeExitCode(RUN_OUTCOME.COMPLETED)).toBe(CliExitCode.Success);
@@ -523,7 +523,7 @@ describe('buildToolEditApprovalContent', () => {
 
     const result = await requestNewProofEdit();
 
-    expect(result.accepted).toBe(false);
+    expect(result.action).toBe('reject');
     expect(promptSummary).toContain('Tool edit requested by write_file');
     expect(promptSummary).toContain('+\\section{Proof}');
     expect(promptSummary).toContain('+A concise proof.');
@@ -538,7 +538,7 @@ describe('buildToolEditApprovalContent', () => {
 
     const result = await requestNewProofEdit();
 
-    expect(result.accepted).toBe(true);
+    expect(result.action).toBe('apply');
     expect(tracker.events).toEqual(['before', 'prompt']);
   });
 
@@ -552,7 +552,7 @@ describe('buildToolEditApprovalContent', () => {
     const result = await requestNewProofEdit();
 
     expect(result).toMatchObject({
-      accepted: false,
+      action: 'reject',
       feedback: 'proof misses the p = 5 case',
     });
   });
@@ -566,7 +566,7 @@ describe('buildToolEditApprovalContent', () => {
 
     const result = await requestNewProofEdit();
 
-    expect(result).toEqual({ accepted: false });
+    expect(result).toEqual({ action: 'reject' });
   });
 
   it('preserves a failed edit prompt as an automatic cancellation', async () => {
@@ -581,7 +581,7 @@ describe('buildToolEditApprovalContent', () => {
     const result = await requestNewProofEdit();
 
     expect(result).toEqual({
-      accepted: false,
+      action: 'reject',
       cause: 'CLI approval prompt failed.',
     });
   });
@@ -628,7 +628,7 @@ describe('buildToolEditApprovalContent', () => {
     expect(summaries[0]).toContain('Tool edit requested by write_file');
     expect(summaries[1]).toBe('');
     expect(result).toMatchObject({
-      accepted: false,
+      action: 'reject',
       feedback: 'use the workspace-local file path',
     });
   });
@@ -790,7 +790,7 @@ describe('buildToolEditApprovalContent', () => {
     });
 
     expect(result).toMatchObject({
-      accepted: true,
+      action: 'apply',
       appliedContent: '\\section{Auto-approved}\n',
     });
   });

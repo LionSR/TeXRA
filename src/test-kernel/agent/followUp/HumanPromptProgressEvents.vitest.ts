@@ -288,7 +288,7 @@ describe('human prompt progress events', () => {
       testApprovalHandler = async (request) => {
         editApprovalRequests += 1;
         return {
-          accepted: true,
+          action: 'apply',
           appliedContent: request.proposedContent,
         };
       };
@@ -306,7 +306,7 @@ describe('human prompt progress events', () => {
 
       expect(editApprovalRequests).toBe(1);
       expect(editApproval).toMatchObject({
-        accepted: true,
+        action: 'apply',
         appliedContent: 'new',
       });
     } finally {

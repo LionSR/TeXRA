@@ -312,7 +312,7 @@ describe('desktop tool edit approval', () => {
       });
       await controller.approvePendingForStream('stream-target');
       await expect(target).resolves.toMatchObject({
-        accepted: true,
+        action: 'apply',
         appliedContent: 'new target\n',
       });
       expect(targetSettled).toBe(true);
@@ -325,7 +325,7 @@ describe('desktop tool edit approval', () => {
         requestId: otherRequest!.requestId,
         action: 'reject',
       });
-      await expect(other).resolves.toMatchObject({ accepted: false });
+      await expect(other).resolves.toMatchObject({ action: 'reject' });
     },
   );
 
@@ -359,7 +359,7 @@ describe('desktop tool edit approval', () => {
         action: 'reject',
       });
 
-      await expect(approval).resolves.toMatchObject({ accepted: false });
+      await expect(approval).resolves.toMatchObject({ action: 'reject' });
     },
   );
 
@@ -423,7 +423,7 @@ describe('desktop tool edit approval', () => {
         feedback: 'not yet',
       });
       await expect(resultPromise).resolves.toMatchObject({
-        accepted: false,
+        action: 'reject',
         feedback: 'not yet',
       });
       await vi.waitFor(async () => {
@@ -476,7 +476,7 @@ describe('desktop tool edit approval', () => {
         requestId: shown[0].requestId,
         action: 'reject',
       });
-      await expect(resultPromise).resolves.toMatchObject({ accepted: false });
+      await expect(resultPromise).resolves.toMatchObject({ action: 'reject' });
     },
   );
 
@@ -516,7 +516,7 @@ describe('desktop tool edit approval', () => {
       });
 
       await expect(resultPromise).resolves.toMatchObject({
-        accepted: true,
+        action: 'apply',
         appliedContent: 'beta\nwith user edits\nand more\n',
         lineChanges: { added: 3, removed: 1 },
       });
@@ -573,7 +573,7 @@ describe('desktop tool edit approval', () => {
       controller.handleAction({ requestId, action: 'approve' });
 
       await expect(resultPromise).resolves.toMatchObject({
-        accepted: true,
+        action: 'apply',
         appliedContent: 'beta after retry\n',
       });
       expect(resolved).toEqual([{ requestId }, { requestId }]);
@@ -629,7 +629,7 @@ describe('desktop tool edit approval', () => {
         requestId: shown[0].requestId,
         action: 'reject',
       });
-      await expect(resultPromise).resolves.toMatchObject({ accepted: false });
+      await expect(resultPromise).resolves.toMatchObject({ action: 'reject' });
     },
   );
 
@@ -682,7 +682,7 @@ describe('desktop tool edit approval', () => {
       await expect(pathExists(displayed[0].absolutePath)).resolves.toBe(true);
 
       controller.dispose();
-      await expect(resultPromise).resolves.toMatchObject({ accepted: false });
+      await expect(resultPromise).resolves.toMatchObject({ action: 'reject' });
       await vi.waitFor(async () => {
         await expect(pathExists(displayed[0].absolutePath)).resolves.toBe(
           false,
@@ -711,7 +711,7 @@ describe('desktop tool edit approval', () => {
       });
 
       await expect(resultPromise).resolves.toMatchObject({
-        accepted: false,
+        action: 'reject',
         cause: 'Owning execution ended.',
       });
       expect(interactions.shownToolEditPermissions).toEqual([]);
@@ -736,7 +736,7 @@ describe('desktop tool edit approval', () => {
       controller.dispose();
 
       await expect(resultPromise).resolves.toMatchObject({
-        accepted: false,
+        action: 'reject',
         cause: SESSION_DISPOSED_CAUSE,
       });
       expect(interactions.shownToolEditPermissions).toEqual([]);
@@ -787,7 +787,7 @@ describe('desktop tool edit approval', () => {
       });
 
       await expect(cancelledPromise).resolves.toMatchObject({
-        accepted: false,
+        action: 'reject',
         cause: 'Owning execution ended.',
       });
       expect(resolved).toEqual([{ requestId: cancelledRequest.requestId }]);
@@ -798,7 +798,7 @@ describe('desktop tool edit approval', () => {
         feedback: 'Retained request resolved normally.',
       });
       await expect(retainedPromise).resolves.toMatchObject({
-        accepted: false,
+        action: 'reject',
         feedback: 'Retained request resolved normally.',
       });
       await waitForEmptyDir(tempRoot);
@@ -838,7 +838,7 @@ describe('desktop tool edit approval', () => {
       cleanupApprovalsForStream('stream-cleanup', session);
 
       await expect(resultPromise).resolves.toMatchObject({
-        accepted: false,
+        action: 'reject',
         cause: 'Stream resources released.',
       });
       expect(resolved).toEqual([{ requestId: shown[0].requestId }]);

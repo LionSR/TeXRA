@@ -94,7 +94,7 @@ describe('tool edit approval controller', () => {
     testHost.staging.resolve();
 
     await expect(approval).resolves.toEqual({
-      accepted: false,
+      action: 'reject',
       cause: 'Stream resources released.',
     });
     // No prompt is ever published for a request that never reached the user,
@@ -115,7 +115,7 @@ describe('tool edit approval controller', () => {
     testHost.staging.resolve();
 
     await expect(approval).resolves.toEqual({
-      accepted: true,
+      action: 'apply',
       appliedContent: 'new',
     });
     expect(testHost.preview.readProposedContent).not.toHaveBeenCalled();
@@ -137,7 +137,7 @@ describe('tool edit approval controller', () => {
 
     controller.handleAction({ requestId, action: 'approve' });
     await expect(approval).resolves.toEqual({
-      accepted: true,
+      action: 'apply',
       appliedContent: 'edited by the user',
     });
 

@@ -198,7 +198,7 @@ describe('createTuiHostInteractions', () => {
     interactions.cancel({ streamId: 'stream-a' });
 
     await expect(editResult).resolves.toEqual({
-      accepted: false,
+      action: 'reject',
       cause: 'Session interrupted.',
     });
     expect(currentApproval.get()).toBeUndefined();
