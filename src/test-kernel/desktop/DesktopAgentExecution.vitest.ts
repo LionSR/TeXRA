@@ -117,7 +117,7 @@ type TestableBridge = {
     text: string,
     mediaFiles?: readonly string[],
   ): Promise<void>;
-  setActiveStream(streamId: StreamTabId): void;
+  setActiveStream(streamId: StreamTabId): void | Promise<void>;
   revealStream(streamId: StreamTabId): Promise<'revealed' | 'missing'>;
   progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
   streamLogs: {
@@ -2066,26 +2066,21 @@ describe('DesktopProgressBridge', () => {
     activateStream(bridge, 'first');
     activateStream(bridge, 'second');
     await settleProgressEvents();
-    bridge.setActiveStream('first');
+    await bridge.setActiveStream('first');
+    await settleProgressEvents();
     messages.length = 0;
 
     const deletePromise = deleteStreamViaInbound(bridge, 'second');
     activateStream(bridge, 'second');
     await deletePromise;
 
+    // The command barrier refuses selecting the stream being deleted, so the
+    // already-active fallback stays without a reactivation/recovery
+    // re-assertion (mirrors ProgressBackendStreamLifecycle).
     expect(
       progressMessages(messages, PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
-    ).toEqual([
-      {
-        activeStream: 'second',
-        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-      },
-      {
-        activeStream: 'first',
-        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-      },
-    ]);
-    expect(lastContentSync(messages)).toMatchObject({ stream: 'first' });
+    ).toEqual([]);
+    expect(bridge.streamLogs.get('second' as StreamTabId)).toBeUndefined();
   });
 
   it('emits delete-all cleanup before syncing an empty stream list', async () => {
