@@ -1,7 +1,6 @@
 /** Persisted-state auto-resume entry point for the VS Code host. */
 import * as vscode from 'vscode';
 
-import { createChannelTrace } from '@agent/trace';
 import {
   defaultSession,
   describeResumeFailure,
@@ -12,12 +11,13 @@ import {
   resumeStreamWithRecovery,
   trackTerminalResultPresentation,
 } from '@agent/runtime';
+import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
 
 import { runExecuteCommand } from './executeCommand';
 
-const logger = createChannelTrace('resumeFromResumeData');
+const logger = createLog('resumeFromResumeData');
 
 export function tryResumeFromResumeData(
   streamId: StreamTabId,

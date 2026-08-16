@@ -81,7 +81,13 @@ export async function resumeStreamWithRecovery(
   }
 }
 
-/** Resolve snapshot-backed metadata without collapsing read failure into absence. */
+/** Resolve snapshot-backed metadata without collapsing read failure into absence.
+ *
+ * Preload-then-read (#9947): a stream whose sidecar record is not resident yet
+ * must be seeded from disk before the synchronous reads can be trusted. Both
+ * fields are re-read after the seed rather than filled in individually, so a
+ * half-invalidated config/execution pair cannot survive into the resume.
+ */
 export async function resolveResumeStateFromSnapshots(
   snapshots: Pick<
     StreamSnapshotStore,
@@ -113,6 +119,12 @@ export async function resolveResumeStateFromSnapshots(
 }
 
 export interface ResumeStreamPorts {
+  /**
+   * The status machine of the session that owns this stream. The active/resuming
+   * guards must read the machine the run actually writes; reading the
+   * process-global default left both guards permanently false in multi-session
+   * hosts.
+   */
   readonly streamStatus: Pick<StreamStatusMachine, 'isActiveOrResuming'>;
   readonly isCancellationRequested?: () => boolean;
   resolveResumeState(streamId: StreamTabId): Promise<ResumeStateResolution>;
@@ -171,12 +183,18 @@ export async function resolveAndResumeStream(
       return false;
     }
 
+    // Re-check after the async retrieval window: `resumeInFlight` blocks only a
+    // second resume entry, not a concurrent non-resume run launch that flips
+    // this stream active/resuming while retrieval is awaited.
     if (ports.streamStatus.isActiveOrResuming(streamId)) return false;
 
     if (resume.type === 'toolUse') {
       return await ports.resumeToolUse(resume, recovery);
     }
 
+    // Workflow launch owns stream acquisition and status transitions through
+    // runAgent/buildAgentLaunchContext. Pre-marking the same stream RESUMING
+    // here would make the launch reject itself as already in flight.
     await ports.executeWorkflow(
       resume.agentConfig,
       resume.executionId,

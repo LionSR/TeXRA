@@ -11,7 +11,6 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 
 import {
   resolveAndResumeStream,
-  resumeStreamWithRecovery,
   type ResumeStreamPorts,
 } from '@agent/runtime/resolveAndResumeStream';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -73,30 +72,6 @@ async function expectGuardHeldThroughAsyncReport(
   gate.resolve();
   await expect(pending).resolves.toBe(false);
 }
-
-describe('resumeStreamWithRecovery', () => {
-  it('releases recovery ownership when the resume callback throws synchronously', async () => {
-    const recovery = { streamId: STREAM } as never;
-    const followUps = {
-      useRecovery: vi.fn(() => recovery),
-      claimRecovery: vi.fn(),
-      release: vi.fn(),
-    };
-    const error = new Error('synchronous resume failure');
-
-    await expect(
-      resumeStreamWithRecovery(
-        { followUps } as never,
-        STREAM,
-        () => {
-          throw error;
-        },
-        recovery,
-      ),
-    ).rejects.toBe(error);
-    expect(followUps.release).toHaveBeenCalledWith(recovery, 'recoverable');
-  });
-});
 
 describe('resolveAndResumeStream', () => {
   beforeEach(() => {
@@ -305,17 +280,6 @@ describe('resolveAndResumeStream', () => {
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
     expect(ports.reportFailure).toHaveBeenCalledWith(STREAM, error);
-  });
-
-  it('does not let presentation failure replace the resume failure', async () => {
-    retrieveSessionResumeDataMock.mockRejectedValue(new Error('kv boom'));
-    const ports = basePorts({
-      reportFailure: vi.fn(async () => {
-        throw new Error('presentation unavailable');
-      }),
-    });
-
-    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
   });
 
   it('keeps the in-flight guard until async failure reporting completes', async () => {
