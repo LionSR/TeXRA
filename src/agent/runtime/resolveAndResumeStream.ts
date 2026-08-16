@@ -129,6 +129,7 @@ export interface ResumeStreamPorts {
    * hosts.
    */
   readonly streamStatus: Pick<StreamStatusMachine, 'isActiveOrResuming'>;
+  /** Monotone per-attempt cancellation signal: once true it stays true. */
   readonly isCancellationRequested?: () => boolean;
   resolveResumeState(streamId: StreamTabId): Promise<ResumeStateResolution>;
   reportResumeStateResolution?(

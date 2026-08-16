@@ -69,11 +69,21 @@ function resumeDesktopStream(
     context.session,
     (event) => event.streamId === streamId,
   );
+  let transcriptMissing = false;
   let authoritativeStreamMissing = false;
-  const isResumeInvalidated = (): boolean =>
-    context.isCancellationRequested() ||
-    authoritativeStreamMissing ||
-    !context.session.transcripts.has(streamId);
+  const isResumeInvalidated = (): boolean => {
+    if (!transcriptMissing && !context.session.transcripts.has(streamId)) {
+      transcriptMissing = true;
+    }
+    return (
+      context.isCancellationRequested() ||
+      transcriptMissing ||
+      authoritativeStreamMissing
+    );
+  };
+  // Desktop-only durable multi-window fence: extension/CLI must not copy this
+  // check because only desktop reads the authoritative stream identity across
+  // windows/processes. Their in-process `transcripts.has()` is not durable.
   const canAcquireResumeLease = async (): Promise<boolean> => {
     if (isResumeInvalidated()) return false;
     if (!(await context.session.transcripts.hasAuthoritativeStream(streamId))) {
