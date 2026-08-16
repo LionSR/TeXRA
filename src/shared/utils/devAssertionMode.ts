@@ -7,7 +7,9 @@
  * `node:process` — `dispatcher.ts` (one of this function's two consumers)
  * is in the import closure of the webview frontends' Vite bundles, and an
  * explicit Node-builtin import here would put `node:process` on that
- * browser module graph.
+ * browser module graph. Safe in those bundles today only because no
+ * frontend caller reaches this function (Rollup tree-shakes it out); do
+ * not import it from webview frontend code.
  */
 export function isDevAssertionMode(): boolean {
   return (

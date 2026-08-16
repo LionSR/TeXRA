@@ -123,6 +123,11 @@ export function defaultPostCompactionContext(
 
 interface ExtractedModelResponse {
   text: string;
+  /**
+   * Raw provider usage from `ModelHandler.extractResponse`. This is the one
+   * place `core/` intentionally holds {@link ProviderUsage}: callers should
+   * prefer {@link normalizedUsage}; the raw field is for debug logging only.
+   */
   usage: ProviderUsage;
   stopReason: ProviderStopReason;
   thinking: string | null;
