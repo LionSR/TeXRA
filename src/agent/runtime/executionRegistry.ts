@@ -15,6 +15,8 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
+  AgentCategory,
+  isPlainAgentIdentity,
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_SUBSTATE,
@@ -692,6 +694,9 @@ export class ExecutionRegistry {
       result.push({
         executionId: handle.executionId,
         identity: handle.identity,
+        resumeEligible:
+          handle.category === AgentCategory.ToolUse &&
+          isPlainAgentIdentity(handle.identity),
         agentName: handle.agentName,
         status,
         startedAt: handle.startedAt,
