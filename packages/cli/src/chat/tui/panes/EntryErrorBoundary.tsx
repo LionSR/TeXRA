@@ -16,9 +16,11 @@ import { Component, type ReactNode } from 'react';
 
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { WARNING } from '@cli/tui/ui/glyphs';
-import * as logUtils from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
+
+const log = createLog('cli.tui');
 
 interface EntryErrorBoundaryProps {
   // Names the failed entry in the inline marker and the log line (e.g. its
@@ -61,8 +63,7 @@ export class EntryErrorBoundary extends Component<
     // so the inline marker below is the primary surfacing. Logging serves the
     // verbose / trace path and must never itself break the error unwind.
     try {
-      logUtils.error(
-        'cli.tui',
+      log.error(
         `transcript entry render failed (${this.props.label ?? 'entry'}): ${
           error instanceof Error
             ? (error.stack ?? error.message)

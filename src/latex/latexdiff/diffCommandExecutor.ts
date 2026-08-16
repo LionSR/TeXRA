@@ -61,6 +61,8 @@ interface DiffExecutionOptions {
 type CommandExecOptions = { channel: string; timeout: number; cwd?: string };
 
 export class DiffCommandExecutor {
+  private readonly log = createLog(this.channel);
+
   /**
    * `getTimeoutMs` is read fresh on every diff invocation so user updates to
    * `LATEXDIFF_TIMEOUT_MS` propagate to the next diff without rebuilding the
@@ -72,10 +74,6 @@ export class DiffCommandExecutor {
     private readonly channel: string,
     private readonly getTimeoutMs: () => number,
   ) {}
-
-  private get log() {
-    return createLog(this.channel);
-  }
 
   async executeDiff(
     inputFile: string,
