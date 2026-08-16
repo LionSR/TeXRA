@@ -209,9 +209,7 @@ export class ModelInvocationNode<
    * the failed model's registry config and swap it in (the mid-run replacement
    * the model switcher also uses); the next attempt then builds its client
    * against the Moonshot fallback. Both the rebuild probe and the swap id come
-   * from the `failedModel` pair captured when the panel opened, so the
-   * replacement still describes the handler that failed even if the panel
-   * outlived a mid-run `switchModel`.
+   * from the `failedModel` pair captured when the panel opened.
    */
   private async prepareRetryForCredentialSelection(
     selection: ModelCredentialSelection,
@@ -228,6 +226,18 @@ export class ModelInvocationNode<
       failedModel.modelId,
       this.services.runScope.session.responseTextProcessing,
     );
+    // A model switch is allowed while the retry panel waits, and the fallback
+    // build above is async: if the cell no longer holds the captured pair,
+    // swapping would silently undo the user's newer switch. Dispose the
+    // stale fallback and prepare the handler that is actually live instead.
+    if (
+      modelCell.handler.config !== failedModel.config ||
+      modelCell.modelId !== failedModel.modelId
+    ) {
+      fallback?.dispose();
+      await modelCell.rebind(selection, signal);
+      return;
+    }
     if (!fallback) {
       await modelCell.rebind(selection, signal);
       return;
