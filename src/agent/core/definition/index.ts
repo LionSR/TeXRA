@@ -5,8 +5,9 @@
  * One curated barrel the hosts (CLI, desktop, extension) import instead of
  * deep-reaching `AgentConfig.ts` by path. It exposes only the stable config
  * contract hosts name at their launch/resume seams — the parsed launch
- * configuration schema (`AgentConfigSchema`) and its input/output types
- * (`AgentConfig`, `AgentConfigPayload`) — decoupling host code from the
+ * configuration schema (`AgentConfigSchema`), its parsed output type
+ * (`AgentConfig`), and the partial launch-time input type
+ * (`AgentConfigPayload`) — decoupling host code from the
  * definition directory's internal file layout, per the module-level barrel
  * pattern set by `@agent/runtime` (#10011), `@agent/storage` (#10531), and
  * `@agent/followUp` (#10650). The R-b deep-import width ratchet

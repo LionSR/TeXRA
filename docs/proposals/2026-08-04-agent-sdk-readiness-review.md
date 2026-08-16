@@ -126,8 +126,11 @@ extension's model-handler / text-enhancement imports and its
 `review/`+`agentCreator/`+`goal/` composition imports (see §4).
 
 The invariant to hold while doing this (per CLAUDE.md): **never widen a
-baseline.** Each promotion into the Tier-1 barrel should _shrink_ the matching
-host list, not add a new export without a consumer.
+baseline.** A promotion into the Tier-1 barrel should _shrink_ the matching
+host list where a cluster has more than one deep specifier; where a cluster
+already has one deep specifier per host, the promotion may swap that deep
+specifier 1-for-1 for the barrel door instead of a numeric shrink. Either way,
+never add a new export without a consumer.
 
 ---
 
@@ -198,7 +201,10 @@ These are small and independent of the strategic Tier-1 program:
    The final `core/definition/AgentConfig` cluster folded behind a new curated
    `src/agent/core/definition/index.ts` barrel (`AgentConfigSchema`,
    `AgentConfig`, `AgentConfigPayload`), migrating every host off the deep
-   `@agent/core/definition/AgentConfig` path and completing #10024.
+   `@agent/core/definition/AgentConfig` path. Because that cluster already had
+   one deep specifier per host, the baseline change is a 1-for-1 door swap
+   (cli 13→13, desktop 11→11, extension 14→14, total 45→45) with no widening,
+   completing #10024.
 
 2. **Stabilize the withheld interaction contract.** The `HostInteractions`
    docstring (`index.ts:42-47`) and the hard-deny `requestRetry`
@@ -230,6 +236,6 @@ package promotion until the module-level barrels have proven the host-boundary
 surface; see §5.1 and review `pullrequestreview-4918028384`. #10531 continued
 the fold-in behind the pre-existing module-level `@agent/storage` barrel, and
 #10650 folded the `followUp` cluster behind a new curated
-`src/agent/followUp/index.ts` barrel, and the final PR folded the
+`src/agent/followUp/index.ts` barrel. #10712 folded the
 `core/definition/AgentConfig` cluster behind a new curated
 `src/agent/core/definition/index.ts` barrel; #10024 has no remaining clusters.

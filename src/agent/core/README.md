@@ -47,13 +47,17 @@ are the single home for all pre-init platform accessors.
 
 ## Importing
 
-Use the `@agent/core/<module>/<File>` alias, e.g.
+Inside `src/agent`, use the `@agent/core/<module>/<File>` alias, e.g.
 
 ```ts
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { TaskState } from '@agent/core/state/TaskState';
 ```
 
-There is intentionally no `@agent/core` barrel — import from the specific
-module so dependency edges stay explicit (and re-export shims are not left
-behind, per the repo's anti-shim convention).
+There is intentionally no top-level `@agent/core` barrel — internal `src/agent`
+code imports from the specific module so dependency edges stay explicit (and
+re-export shims are not left behind, per the repo's anti-shim convention).
+
+Cross-host consumers (CLI, desktop, extension) that need the stable config
+contract instead reach the curated `@agent/core/definition` barrel:
+`AgentConfigSchema`, `AgentConfig`, and `AgentConfigPayload`.
