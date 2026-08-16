@@ -11,10 +11,10 @@
  *
  * Known blind spot, documented rather than hidden: for the thinking tags the
  * export side is vacuous — `assistantBlockToNode` suppresses them (returns
- * null), which is also what its `default` arm does, so no behavioral probe
- * can distinguish "recognized and suppressed" from "unrecognized". The
- * format side distinguishes them (suppressed vs. JSON dump), so drift there
- * is still caught.
+ * null), which is also what its `case undefined` arm does with
+ * unrecognized tags, so no behavioral probe can distinguish "recognized and
+ * suppressed" from "unrecognized". The format side distinguishes them
+ * (suppressed vs. JSON dump), so drift there is still caught.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -54,9 +54,9 @@ function probeBlock(tag: string): Record<string, unknown> {
 /**
  * Bucket assigned by `formatConversationBlock` (via the exported
  * `formatConversationContent`). `hideProviderReasoning` collapses the
- * thinking arm to `''`, which the default arm (a JSON dump) can never
- * produce for a non-empty probe block — so every recognized tag lands in a
- * bucket and every unrecognized one returns undefined.
+ * thinking arm to `''`, which the `case undefined` arm (a JSON dump) can
+ * never produce for a non-empty probe block — so every recognized tag lands
+ * in a bucket and every unrecognized one returns undefined.
  */
 function formatBucket(tag: string): BlockBucket | undefined {
   const out = formatConversationContent([probeBlock(tag)], {
