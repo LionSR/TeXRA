@@ -4,11 +4,12 @@ import * as vscode from 'vscode';
 // Local imports
 import { globalSM } from '@common/state';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 
 const NEVER_REMIND = 'Never remind again';
 const CHANNEL = 'instruction';
+const log = createLog(CHANNEL);
 
 async function handleInstructionChoice(
   stateKey: string,
@@ -52,7 +53,7 @@ export async function showInstructionWithSuppress(
         handleInstructionChoice(stateKey, showSuppress, actions, choice),
       )
       .catch((error: unknown) => {
-        logger.warn(CHANNEL, `Failed to settle instruction "${key}"`, {
+        log.warn(`Failed to settle instruction "${key}"`, {
           data: error,
         });
       });

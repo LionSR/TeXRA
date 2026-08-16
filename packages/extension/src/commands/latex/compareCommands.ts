@@ -19,7 +19,7 @@ import {
   siblingLocation,
   type CommitAcceptedFilePorts,
 } from '@latex/acceptedFileTarget';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latexTiming';
 import { workflowOutputCopyStem } from '@shared/constants/workflowOutput';
@@ -27,6 +27,7 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'CompareCommands';
+const log = createLog(CHANNEL);
 
 function validateFileLocations(
   inputLocation: FileLocation | null | undefined,
@@ -62,7 +63,7 @@ const COMMIT_PORTS: CommitAcceptedFilePorts = {
     appSignals.emit('workspaceFilesWritten', { absolutePaths: [absolutePath] }),
   showInfo: (message) => {
     vscode.window.showInformationMessage(message);
-    logger.info(CHANNEL, message);
+    log.info(message);
   },
   deleteFile: deleteDiffFileNonFatal,
 };
@@ -127,8 +128,7 @@ export async function handleCompare(
     } catch (err) {
       const message = toErrorMessage(err);
       if (message.includes(`command '${contextKeyCommandId}' not found`)) {
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Could not check Progress view location: command '${contextKeyCommandId}' not found`,
         );
       } else {
@@ -147,8 +147,7 @@ export async function handleCompare(
       registerDiffRefresh(editedUri, baseUri, title);
     }, DIFF_REGISTRATION_DELAY_MS);
 
-    logger.info(
-      CHANNEL,
+    log.info(
       `Opened diff comparison between ${baseFileName} and ${editedFileName}`,
     );
   } catch (err) {

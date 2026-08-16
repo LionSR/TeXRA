@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { nanoid } from 'nanoid';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -48,6 +48,7 @@ export interface ViewBundle {
 export class BundledViewContentProvider {
   private readonly channel: string;
   private readonly viewPath: string;
+  private readonly log: ReturnType<typeof createLog>;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -59,6 +60,7 @@ export class BundledViewContentProvider {
     // Default: convert 'HistoryView' to 'historyView'
     this.viewPath =
       viewPath ?? viewName.charAt(0).toLowerCase() + viewName.slice(1);
+    this.log = createLog(this.channel);
   }
 
   public getHtmlContent(webview: vscode.Webview): string {
@@ -70,7 +72,7 @@ export class BundledViewContentProvider {
         'index.html',
       );
 
-      logger.debug(this.channel, `Generated HTML content for ${this.viewName}`);
+      this.log.debug(`Generated HTML content for ${this.viewName}`);
 
       return buildWebviewHtml(webview, htmlPath, {
         commonStyleUri: this.buildUri(webview, [
@@ -90,10 +92,7 @@ export class BundledViewContentProvider {
         ]),
       });
     } catch (err) {
-      logger.error(
-        this.channel,
-        `Error generating HTML content: ${toErrorMessage(err)}`,
-      );
+      this.log.error(`Error generating HTML content: ${toErrorMessage(err)}`);
       return '<html><body>Error loading content</body></html>';
     }
   }

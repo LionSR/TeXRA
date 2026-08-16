@@ -5,12 +5,14 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
 import { getGitAPI } from './gitExtensionTypes';
+
+const log = createLog('extension');
 
 export function resolveCommonRootFromGitdir(
   repoRoot: string,
@@ -89,8 +91,7 @@ export async function resolveGitCommonRoot(
     ) {
       return undefined;
     }
-    logger.warn(
-      'extension',
+    log.warn(
       `Failed to resolve git common root for ${workspacePath}: ${toErrorMessage(error)}`,
     );
     return undefined;

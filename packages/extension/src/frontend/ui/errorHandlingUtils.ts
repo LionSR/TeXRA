@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import { formatError } from '@common/errors';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Valid documentation identifiers for error messages. */
@@ -13,8 +13,9 @@ export function logErrorMessage(
   prefix: string,
   err: unknown,
 ): string {
+  const log = createLog(channel);
   const message = formatError(prefix, err);
-  logger.error(channel, message);
+  log.error(message);
   return message;
 }
 
@@ -34,7 +35,8 @@ export async function showLoggedMessage(
   channel: string,
   message: string,
 ): Promise<string> {
-  logger.error(channel, message);
+  const log = createLog(channel);
+  log.error(message);
   await vscode.window.showErrorMessage(message);
   return message;
 }
@@ -44,7 +46,8 @@ export async function showLoggedInfoMessage(
   channel: string,
   message: string,
 ): Promise<string> {
-  logger.info(channel, message);
+  const log = createLog(channel);
+  log.info(message);
   await vscode.window.showInformationMessage(message);
   return message;
 }
@@ -56,16 +59,14 @@ export async function showLoggedMessageWithDocs(
   docId: DocId,
   actionLabel = 'View Docs',
 ): Promise<void> {
-  logger.error(channel, message);
+  const log = createLog(channel);
+  log.error(message);
   const selection = await vscode.window.showErrorMessage(message, actionLabel);
   if (selection !== actionLabel) return;
 
   try {
     await vscode.commands.executeCommand('texra.openDoc', docId);
   } catch (err) {
-    logger.error(
-      channel,
-      `Failed to open documentation: ${toErrorMessage(err)}`,
-    );
+    log.error(`Failed to open documentation: ${toErrorMessage(err)}`);
   }
 }

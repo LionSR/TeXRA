@@ -10,9 +10,10 @@ import {
   RestoreRunConfigInputSchema,
 } from '@controllers/mainView/MainViewStateRestoreController';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 
 const CHANNEL = 'stateRestoreCommand';
+const log = createLog(CHANNEL);
 
 const RESTORE_MALFORMED_MESSAGE =
   'Cannot restore state: persisted task data is malformed or from an incompatible version';
@@ -29,13 +30,13 @@ async function restoreState(
   state: unknown,
   executeImmediately?: boolean,
 ): Promise<boolean> {
-  logger.debug(CHANNEL, 'Restoring main webview state', {
+  log.debug('Restoring main webview state', {
     data: { executeImmediately },
   });
 
   const parsed = RestoreRunConfigInputSchema.safeParse(state);
   if (!parsed.success) {
-    logger.info(CHANNEL, RESTORE_MALFORMED_MESSAGE, {
+    log.info(RESTORE_MALFORMED_MESSAGE, {
       data: { validationError: z.prettifyError(parsed.error) },
     });
     await vscode.window.showErrorMessage(RESTORE_MALFORMED_MESSAGE);
@@ -51,7 +52,7 @@ async function restoreState(
     // probe for a live webview here or to invoke showMainView twice.
     setPendingState(nextState, executeImmediately);
     await vscode.commands.executeCommand('texra.showMainView');
-    logger.info(CHANNEL, 'State stored for restoration', {
+    log.info('State stored for restoration', {
       data: { executeImmediately },
     });
     return true;

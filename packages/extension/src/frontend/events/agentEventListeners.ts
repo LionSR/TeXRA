@@ -21,7 +21,7 @@ import {
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import {
   INSTRUCTION_ACTION,
@@ -36,6 +36,7 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'agentEventListeners';
+const log = createLog(CHANNEL);
 
 function handleRequestOpenFile(
   payload: RequestOpenFilePayload,
@@ -43,8 +44,7 @@ function handleRequestOpenFile(
   return openBuildDisplayIfTex(payload.location, {
     preserveFocus: payload.preserveFocus,
   }).catch((err) => {
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Failed to open file ${payload.location.absolutePath}: ${toErrorMessage(err)}`,
     );
     return false;
@@ -108,8 +108,7 @@ async function handleRequestShowInstruction(
     // failed run.
     return true;
   } catch (err) {
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Failed to show instruction "${payload.key}": ${toErrorMessage(err)}`,
     );
     return false;
@@ -130,8 +129,7 @@ async function handleShowAgentConfigBanner(
       })) !== false
     );
   } catch (err) {
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Failed to show agent config banner for "${payload.agentName}": ${toErrorMessage(err)}`,
     );
     return false;
@@ -147,17 +145,11 @@ function handleRequestShowError({ message }: RequestShowErrorPayload): boolean {
     // is logged instead of becoming an unhandled rejection.
     const toast = vscode.window.showErrorMessage(message);
     void Promise.resolve(toast).catch((err: unknown) => {
-      logger.warn(
-        CHANNEL,
-        `Error toast failed after handoff: ${toErrorMessage(err)}`,
-      );
+      log.warn(`Error toast failed after handoff: ${toErrorMessage(err)}`);
     });
     return true;
   } catch (err) {
-    logger.warn(
-      CHANNEL,
-      `Failed to show the error toast: ${toErrorMessage(err)}`,
-    );
+    log.warn(`Failed to show the error toast: ${toErrorMessage(err)}`);
     return false;
   }
 }
@@ -173,10 +165,7 @@ async function handleRequestEnsureProgressView(
   } catch (err) {
     // A failed reveal is a diagnostic, not non-delivery: fall through to the
     // visibility re-check and, when provided, the toast handoff below (#10554).
-    logger.warn(
-      CHANNEL,
-      `Failed to reveal the progress view: ${toErrorMessage(err)}`,
-    );
+    log.warn(`Failed to reveal the progress view: ${toErrorMessage(err)}`);
   }
 
   // Delivery is the reveal actually becoming visible, not the reveal command
@@ -207,8 +196,7 @@ async function handleRequestEnsureProgressView(
       } catch (err) {
         // The toast handoff already established delivery; a failed retry is
         // a diagnostic, not non-delivery, so it must not downgrade the event.
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Failed to retry the progress-view reveal: ${toErrorMessage(err)}`,
         );
       }
@@ -242,8 +230,7 @@ function createPresentationEventHandlers(
     requestEnsureProgressView: (payload) =>
       handleRequestEnsureProgressView(payload, progressViewProvider).catch(
         (err) => {
-          logger.warn(
-            CHANNEL,
+          log.warn(
             `Failed to reveal the progress view: ${toErrorMessage(err)}`,
           );
           return false;
