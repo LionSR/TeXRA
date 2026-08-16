@@ -170,13 +170,34 @@ frozen deep-import lists, not another lint rule.
 
 ### Testing discipline
 
-Tests are production maintenance work. Add them when they protect a consequential
-current contract, a difficult invariant, or a reproduced defect. Do not create
-tests for speculative abstractions, trivial data plumbing, implementation details,
-or compatibility behavior that the product does not intend to preserve. Prefer a
-small behavioral test at the true boundary over repeated unit tests of pass-through
-layers. When code or a historical format is retired, delete tests and fixtures that
-exist only for that retired behavior instead of rewriting them around the new
+Tests are production maintenance work, and this project breaks internal
+interfaces often and on purpose. A test pinned to a seam that is about to churn
+is not safety — it is merge friction the next refactor has to pay down. The
+default for a PR is **zero new tests**; a test must earn its place — protecting
+a consequential current contract, a difficult invariant, or a reproduced
+defect — and is never proof of work or PR padding. Concretely:
+
+- A behavior-preserving refactor adds no new tests; the existing suite passing
+  is the evidence.
+- A bug fix gets at most one regression test that reproduces the defect, at the
+  narrowest boundary that exhibits it.
+- A new feature gets a small number of behavioral tests at its durable
+  boundary — the wire contract, the schema, the user-visible output — not a
+  unit test for each internal layer the data passes through.
+- Extend the module's existing suite rather than adding a new test file. Add
+  one only when the module has no existing suite (one suite per module,
+  path-mirrored under `src/test-kernel/`) or for one named cross-module
+  scenario, stated in the PR body. Collapse 4+ structurally identical cases
+  into `test.each`.
+- Do not test what `npm run typecheck` or a Zod schema already guarantees, and
+  do not create tests for speculative abstractions, trivial data plumbing,
+  implementation details, or compatibility behavior that the product does not
+  intend to preserve.
+
+The same discipline applies in review: do not ask an author to add tests unless
+the diff leaves a consequential contract or reproduced defect unprotected. When
+code or a historical format is retired, delete tests and fixtures that exist
+only for that retired behavior instead of rewriting them around the new
 implementation.
 
 ### Zod v4 Schema Patterns
