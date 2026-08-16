@@ -342,21 +342,23 @@ export class SessionFactApplier {
                 // only the owning barrier retires the tombstone and replays.
                 if (!created) return;
                 this.finishPendingDeletion(streamId, pending);
-                if (
-                  outcome === 'active' ||
-                  outcome === 'failed' ||
-                  outcome === 'superseded'
-                ) {
+                const retired =
+                  (outcome === 'active' ||
+                    outcome === 'failed' ||
+                    outcome === 'superseded') &&
                   this.state.retireStreamTombstone(
                     streamId,
                     expectedIncarnation,
                   );
-                }
                 // A retained deletion still lives: replay the facts buffered
                 // while it was provisional so status/stage/roster/metadata are
-                // not stuck stale. A committed or superseded deletion discards
-                // them (the stream is gone, or a fresh incarnation owns it).
-                if (outcome === 'active' || outcome === 'failed') {
+                // not stuck stale. Replay only when the retirement above
+                // actually removed THIS removal's barrier — a superseded
+                // deletion whose identity a fresh run re-claimed (or a newer
+                // deletion B owns) must never replay through that newer
+                // barrier. A committed deletion discards them (the stream is
+                // gone).
+                if ((outcome === 'active' || outcome === 'failed') && retired) {
                   this.replayDeferredFacts(pending.facts);
                 }
               },

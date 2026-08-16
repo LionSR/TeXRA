@@ -12,11 +12,8 @@ import {
 import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import {
-  StreamDeletionSupersededError,
-  type StreamLogStore,
-  type StreamSnapshotStore,
-} from '@transcript';
+import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
+import { StreamDeletionSupersededError } from '@transcript/StreamLogStore';
 import type { StagedStreamSnapshotDeletion } from '@transcript/StagedDeletionCoordinator';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 import { throwAggregated, unique } from '@utils/core';
@@ -783,7 +780,7 @@ export class SessionStores {
     }
 
     const cleanup = await Promise.allSettled([
-      snapshotDeletion.commit(),
+      snapshotDeletion.commit(shouldDelete),
       this.goalEntries?.forget(stream),
     ]);
     for (const result of cleanup) {

@@ -480,14 +480,20 @@ export class SessionState {
    * (`active`/`failed`/`superseded`): the stream still lives, so its facts
    * must flow again. A fresh deletion B may already have installed its own
    * barrier for a newer incarnation; this retirement must never remove that.
+   * Returns whether it actually removed the barrier: callers that buffer facts
+   * across a provisional deletion must replay them only when this returns
+   * true, so a superseded deletion A can never replay through deletion B's
+   * newer barrier.
    */
   retireStreamTombstone(
     stream: StreamTabId,
     expectedIncarnation: number,
-  ): void {
+  ): boolean {
     if (this._removedStreams.get(stream) === expectedIncarnation) {
       this._removedStreams.delete(stream);
+      return true;
     }
+    return false;
   }
 
   private incarnationOf(stream: StreamTabId): number {
@@ -613,11 +619,19 @@ export class SessionState {
     this.logger.info('[Persistence] State load complete');
   }
 
-  /** Drop workspace-scoped caches before loading a replacement storage root. */
+  /**
+   * Drop workspace-scoped caches before loading a replacement storage root.
+   * The incarnation generations and deletion-guard memoization are identity
+   * projections over the old root's stream ids, so they reset with the
+   * tombstones: a re-claimed identity in the new root must start from
+   * incarnation 0 again.
+   */
   resetAfterStorageRootChange(): void {
     this._sessionState.clear();
     this._streamStates.clear();
     this._removedStreams.clear();
+    this._streamIncarnations.clear();
+    this._deletionGuards.clear();
   }
 
   /**
