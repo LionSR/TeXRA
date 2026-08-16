@@ -69,8 +69,8 @@ export interface RunToolUseFlowInput<
   /** Abort this run's sticky signal. */
   interrupt: () => void;
   setting: AgentToolUseSetting;
-  /** Canonical shared state and the persisted value observed during retrieval. */
-  resume?: Readonly<{ shared: PreparedShared; sourceShared: unknown }>;
+  /** Canonical shared state loaded after the execution lease is acquired. */
+  resume?: Readonly<{ shared: PreparedShared }>;
   /** One batch already drained by an external child-turn owner. */
   drainedFollowUps?: readonly FollowUpQueueBatchItem[];
   /**
@@ -461,13 +461,9 @@ export async function runToolUseFlow<C = unknown>(
 
     if (flowRecord) logger.debug('Resuming tool-use flow from persistence');
     if (flowRecord && input.resume) {
-      // Retrieval owns the single migration/validation boundary. The second
-      // read may be self-healed only when it still matches the exact value
-      // retrieval observed; any intervening drift must fail loudly instead of
-      // being overwritten by the earlier canonical copy.
-      if (!isDeepStrictEqual(flowRecord.shared, input.resume.sourceShared)) {
-        throw new PersistedFlowStateError(executionId, 'invalid-shared');
-      }
+      // `resumeToolUseFromResumeData` reloads the record only after it owns
+      // the execution lease. This is therefore the same authoritative record
+      // it handed to the flow, with no optimistic-concurrency window to check.
       const resumedShared: PreparedShared = stampCompatibilityKey(
         input.resume.shared,
         compatibilityKey,
