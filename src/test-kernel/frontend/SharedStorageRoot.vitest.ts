@@ -16,8 +16,10 @@ vi.mock('@platform/defaults/legacyDataMigration', () => ({
   mergeLegacyWorkspaceStorageBucket: mocks.mergeLegacyWorkspaceStorageBucket,
 }));
 vi.mock('@logger/logUtils', () => ({
-  info: vi.fn(),
-  warn: mocks.warn,
+  createLog: (channel: string) => ({
+    info: vi.fn(),
+    warn: (message: string) => mocks.warn(channel, message),
+  }),
 }));
 
 // Local imports - extension
