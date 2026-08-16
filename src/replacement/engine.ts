@@ -6,8 +6,9 @@ import { LRUCache } from 'lru-cache';
 
 import { createLog } from '@logger/logUtils';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { assertNever } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   ReplacementCategory,
@@ -40,6 +41,7 @@ import {
   LEGACY_UNBRACED_S_MIGRATION,
   MAX_STYLE_REPLACEMENTS,
   MAX_REGEX_REPLACEMENTS,
+  restoreLatexSectionSign,
 } from './maxRules';
 import {
   EQUATION_MACRO_REPLACEMENTS,
@@ -54,17 +56,51 @@ import {
 const log = createLog('ReplacementEngine');
 
 /**
- * High-level APIs for applying text replacement rules.
+ * Single policy owner for replacement rules. Call sites route through one of
+ * these methods instead of composing lower-level rules themselves, so rule
+ * selection, ordering, and failure handling stay in this module.
  */
-const replacementEngine = {
-  /** Apply all configured non-regex replacement rules. */
-  applyNonRegex(text: string): string {
-    const processed = applyReplacements(text, getAllReplacements()).trim();
-    return shouldWrapCritiqueInAlign()
-      ? wrapCritiqueInAlign(processed)
-      : processed;
-  },
 
+function applyNonRegexPolicy(text: string): string {
+  const processed = applyReplacements(text, getAllReplacements()).trim();
+  return shouldWrapCritiqueInAlign()
+    ? wrapCritiqueInAlign(processed)
+    : processed;
+}
+
+function applyAllPolicy(text: string): string {
+  const replacements = getAllReplacements();
+  const wrapCritique = shouldWrapCritiqueInAlign();
+  const maxStyleEnabled = getConfig<string[]>(
+    'texra.latex.enabledReplacements',
+    DEFAULT_CORE_SETTINGS.latex.enabledReplacements,
+  ).includes('max_style');
+  const maxStyleRegexEnabled = getConfig<string[]>(
+    'texra.latex.enabledReplacementsRegex',
+    DEFAULT_CORE_SETTINGS.latex.enabledReplacementsRegex,
+  ).includes('max_style_regex');
+
+  let result = applyReplacements(text, replacements, {
+    cleanupPasses: false,
+  }).trim();
+  if (wrapCritique) result = wrapCritiqueInAlign(result);
+  result = applyReplacements(result, getAllReplacementsRegex(), {
+    cleanupPasses: false,
+  }).trim();
+  // The legacy unbraced S migration is a compatibility rule, not an
+  // opt-in regex replacement: run it whenever the direct max-style group
+  // produced the persisted output it repairs. When `max_style_regex` is
+  // enabled, MAX_REGEX_REPLACEMENTS already contains the same rule.
+  if (maxStyleEnabled && !maxStyleRegexEnabled) {
+    result = applyReplacements(result, LEGACY_UNBRACED_S_MIGRATION, {
+      cleanupPasses: false,
+    }).trim();
+  }
+  result = applyReplacements(result, replacements).trim();
+  return wrapCritique ? wrapCritiqueInAlign(result) : result;
+}
+
+const replacementEngine = {
   /**
    * Apply every replacement rule in the recommended order. Non-regex
    * replacements run before and after regex replacements to fix artifacts they
@@ -72,35 +108,35 @@ const replacementEngine = {
    * whole-document cleanup runs once at the end instead of after each pass.
    */
   applyAll(text: string): string {
-    const replacements = getAllReplacements();
-    const wrapCritique = shouldWrapCritiqueInAlign();
-    const maxStyleEnabled = getConfig<string[]>(
-      'texra.latex.enabledReplacements',
-      DEFAULT_CORE_SETTINGS.latex.enabledReplacements,
-    ).includes('max_style');
-    const maxStyleRegexEnabled = getConfig<string[]>(
-      'texra.latex.enabledReplacementsRegex',
-      DEFAULT_CORE_SETTINGS.latex.enabledReplacementsRegex,
-    ).includes('max_style_regex');
+    return applyAllPolicy(text);
+  },
 
-    let result = applyReplacements(text, replacements, {
-      cleanupPasses: false,
-    }).trim();
-    if (wrapCritique) result = wrapCritiqueInAlign(result);
-    result = applyReplacements(result, getAllReplacementsRegex(), {
-      cleanupPasses: false,
-    }).trim();
-    // The legacy unbraced S migration is a compatibility rule, not an
-    // opt-in regex replacement: run it whenever the direct max-style group
-    // produced the persisted output it repairs. When `max_style_regex` is
-    // enabled, MAX_REGEX_REPLACEMENTS already contains the same rule.
-    if (maxStyleEnabled && !maxStyleRegexEnabled) {
-      result = applyReplacements(result, LEGACY_UNBRACED_S_MIGRATION, {
-        cleanupPasses: false,
-      }).trim();
+  /**
+   * Purpose-specific replacement policy entry point. Call sites request the
+   * exact ordered profile they need instead of composing lower-level rules at
+   * the call site. Both special-purpose profiles have production consumers:
+   * `xml-content` backs XML output normalization and `tex-write` backs
+   * `.tex` file writes.
+   */
+  applyFor(text: string, purpose: 'xml-content' | 'tex-write'): string {
+    switch (purpose) {
+      case 'xml-content':
+        // XML output normalization runs the full non-regex pipeline (which
+        // already covers latex_xml) and then the fenced-LaTeX-block regex.
+        // The fenced-block pass is deliberate and unconditional here: it is
+        // part of this purpose's contract, independent of the
+        // `enabledReplacementsRegex` config that gates applyAll's regex pass.
+        return applyReplacements(
+          applyNonRegexPolicy(text),
+          FENCED_LATEX_BLOCK_REPLACEMENTS,
+        );
+      case 'tex-write':
+        // Writing a .tex file runs the full pipeline and then restores the
+        // LaTeX built-in section sign from the KaTeX-only destination.
+        return restoreLatexSectionSign(applyAllPolicy(text));
+      default:
+        return assertNever(purpose, 'Unknown replacement purpose');
     }
-    result = applyReplacements(result, replacements).trim();
-    return wrapCritique ? wrapCritiqueInAlign(result) : result;
   },
 };
 
