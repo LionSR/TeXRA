@@ -2,7 +2,7 @@ import type { ReviewIssueReport } from '@agent/review/reviewIssues';
 import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import { createLog } from '@logger/logUtils';
 import type {
-  AgentProposal,
+  AgentProposalPermission,
   FileLocation,
   PlanApprovalPermission,
   ProgressPermissionKind as PendingInteractionKind,
@@ -186,10 +186,11 @@ export interface HostBashApprovalRequest {
   readonly streamId?: StreamTabId | null;
 }
 
-export type HostAgentProposalRequest = AgentProposal & {
-  readonly proposalId: string;
-  readonly streamId: StreamTabId;
-};
+/**
+ * Host-facing proposal request. Reuses the canonical permission payload while
+ * preserving the readonly host-interaction contract.
+ */
+export type HostAgentProposalRequest = Readonly<AgentProposalPermission>;
 
 /**
  * The retry payload the runtime hands to hosts. This is deliberately an alias
