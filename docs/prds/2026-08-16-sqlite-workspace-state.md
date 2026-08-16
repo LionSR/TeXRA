@@ -93,6 +93,11 @@ Corollaries:
 - Rows own **existence**: a stream, execution, or run exists iff its row
   exists. Deletion is one transaction with `ON DELETE CASCADE`.
 - No app-owned live state in files; no user documents in the database.
+- **One named permanent exception:** the workspace bucket's `state.json`
+  (host UI/settings state — `PersistedState`, opened by the CLI in
+  `cliStateStores.ts` and by desktop in its platform wiring). §8 keeps UI
+  state out of SQL by design, so `state.json` stays a file, on the
+  architecture test's allowlist, and appears in the target layout.
 - Derived tables (FTS index, stats caches) keep the #9434 derived-tier
   contract: discard-and-rebuild from authoritative rows, never migrate.
 - The rule is enforced by an architecture test (§7): persistence writes
@@ -107,9 +112,9 @@ workspace storage today                     workspace storage after
 ├── streamLogs/           991 MB            ├── texra.db      (all app state + FTS)
 ├── streamLogSummaries/   7.5 MB            ├── original/     (user document snapshots)
 ├── streamData/           5,274 files       ├── memories/     (user-editable documents)
-├── executions/ executionLeases/            └── taskRuns/     (legacy, until #6981
-├── executionLocks/ memories/ original/                        retention drains it)
-├── taskRuns/             (legacy)
+├── executions/ executionLeases/            ├── state.json    (host UI state, §2 exception)
+├── executionLocks/ memories/ original/     └── taskRuns/     (legacy, until #6981
+├── taskRuns/  state.json                                      retention drains it)
 ```
 
 Legacy `taskRuns/` (`WORKSPACE_STORAGE_LAYOUT.legacyRuns`) is grandfathered:
@@ -119,9 +124,14 @@ one deliberate exception to the §2 rule, time-bounded by retention.
 
 Engine: `node:sqlite` (fallback: `better-sqlite3`, accepting the packaging
 cost, if Stage 0 finds the built-in flagged or unfit on any host). Schema and
-migrations: `drizzle-orm` + `drizzle-kit` (pure TS, no runtime codegen,
-`drizzle-zod` bridges into the existing Zod-SSOT doctrine; `kysely` is the
-named alternative if schema-first proves a bad fit). Pragmas at open:
+migrations: `drizzle-orm` + `drizzle-kit` (pure TS, no runtime codegen;
+`kysely` is the named alternative). **SSOT direction is fixed:** the domain
+Zod schemas in `src/shared/schemas/` remain the single source of truth —
+Drizzle table definitions are relational _projections_ of them, pinned by
+compile-time assertions (column payload types `satisfies` the corresponding
+`z.infer` types). Domain schemas are never generated from tables;
+`drizzle-zod` output, if used at all, validates rows at the storage
+boundary only and never replaces a domain schema. Pragmas at open:
 `journal_mode=WAL`, `busy_timeout`, `foreign_keys=ON` — cheap, O(1) settings
 only. Integrity checking is **not** a per-open step (even `quick_check`
 scans the database, which would reintroduce O(history) startup against §9):
@@ -169,7 +179,12 @@ FTS (§3.4).
 ```
 -- authoritative: a row's existence IS the fact
 streams          (id PK, incarnation, tombstone, created_ts,
-                  parent_stream_id)
+                  parent_stream_id FK → streams(id) ON DELETE SET NULL)
+                  -- SET NULL, not CASCADE: deleting a parent DETACHES its
+                  -- children (today's deleteAdjacentStreamState semantics —
+                  -- it emits setParentStream(null) and retains the child
+                  -- transcripts); cascading the self-edge would recursively
+                  -- delete every descendant.
 entries          (stream_id FK CASCADE, seq, entry_id, settlement_seq NULL,
                   timestamp, entry JSON, text NULL)  UNIQUE(stream_id, seq)
 executions       (id PK, stream_id FK CASCADE, meta JSON, config JSON)
@@ -179,7 +194,8 @@ run_usage        (stream_id FK CASCADE, storage_key, usage JSON,
                   -- double-count SUM/GROUP BY analytics
 round_facts      (stream_id FK CASCADE, kind {output|missing|compile},
                   round, payload JSON)
-work_plans       (stream_id FK CASCADE, plan JSON, todos JSON)
+work_plans       (stream_id PK FK CASCADE, plan JSON, todos JSON)
+                  -- PK: one canonical plan slot per stream (upsert target)
 leases/locks     (execution-scoped rows; WAL provides cross-process safety)
 
 -- derived: rebuildable from authoritative rows, never row-authoritative
@@ -189,8 +205,12 @@ stream_summaries (stream_id PK FK CASCADE, last_ts, has_running_group,
 entries_fts      (FTS5, contentless)
 ```
 
-Every child FK carries `ON DELETE CASCADE` explicitly — SQLite's default is
-`NO ACTION`, which would _reject_ the parent delete instead of cascading it.
+Every child-**table** FK (`entries`, `executions`, `run_usage`,
+`round_facts`, `work_plans`, `stream_summaries`) carries `ON DELETE CASCADE`
+explicitly — SQLite's default is `NO ACTION`, which would _reject_ the
+parent delete instead of cascading it. The one self-referential edge
+(`streams.parent_stream_id`) is `ON DELETE SET NULL` to preserve the
+existing detach-children semantics.
 
 The authoritative/derived split is a table boundary, deliberately: the #9434
 discard-and-rebuild contract applies to `stream_summaries` and `entries_fts`
@@ -220,20 +240,20 @@ and flagged: `sqlite-vec` embedding search over `memories/`.
 Measured 2026-08-16 at `origin/main` 6fd0317 (+ #10702 draft). Storage layer
 in scope ≈ 8,400 LoC.
 
-| File                                                                                     | Today  | After | Net                                                |
-| ---------------------------------------------------------------------------------------- | ------ | ----- | -------------------------------------------------- |
-| `StagedDeletionCoordinator.ts`                                                           | 612    | 0     | −612                                               |
-| `StreamLogStore.ts`                                                                      | 1,739  | ~650  | −1,050                                             |
-| `StreamSnapshotStore.ts`                                                                 | 2,164  | ~850  | −1,300                                             |
-| `streamSnapshotRead.ts`                                                                  | 307    | ~50   | −250                                               |
-| `SessionStores.ts` (deletion orchestration)                                              | 777    | ~430  | −350                                               |
-| `executionRegistry.ts` (lease/lock portion)                                              | 1,007  | —     | −200 (softest; per-item study owed)                |
-| `streamDataPaths` + `ResidentStreamRegistry` + `KVStore(+Cache)`                         | 373    | ~50   | −320 (KV retires when `ExecutionKVStore` migrates) |
-| #10702 machinery (draft)                                                                 | +1,076 | ~150  | −900                                               |
-| `completedRunArchive.ts`                                                                 | 370    | ~320  | −50                                                |
-| **Gross deletion**                                                                       |        |       | **≈ −5,000**                                       |
-| Adds: schema (~200) + engine adapter (~200) + migrate-on-open importer (~300, temporary) |        |       | **+700**                                           |
-| **Net production**                                                                       |        |       | **≈ −4,300** (range −3,800..−4,800)                |
+| File                                                                                     | Today  | After | Net                                                  |
+| ---------------------------------------------------------------------------------------- | ------ | ----- | ---------------------------------------------------- |
+| `StagedDeletionCoordinator.ts`                                                           | 612    | 0     | −612                                                 |
+| `StreamLogStore.ts`                                                                      | 1,739  | ~650  | −1,050                                               |
+| `StreamSnapshotStore.ts`                                                                 | 2,164  | ~850  | −1,300                                               |
+| `streamSnapshotRead.ts`                                                                  | 307    | ~50   | −250                                                 |
+| `SessionStores.ts` (deletion orchestration)                                              | 777    | ~430  | −350                                                 |
+| `executionRegistry.ts` (lease/lock portion)                                              | 1,007  | —     | −200 (softest; per-item study owed)                  |
+| `streamDataPaths` + `ResidentStreamRegistry` + `KVStore(+Cache)`                         | 373    | ~50   | −320 (KV retires at Stage 6 with `ExecutionKVStore`) |
+| #10702 machinery (draft)                                                                 | +1,076 | ~150  | −900                                                 |
+| `completedRunArchive.ts`                                                                 | 370    | ~320  | −50                                                  |
+| **Gross deletion**                                                                       |        |       | **≈ −5,000**                                         |
+| Adds: schema (~200) + engine adapter (~200) + migrate-on-open importer (~300, temporary) |        |       | **+700**                                             |
+| **Net production**                                                                       |        |       | **≈ −4,300** (range −3,800..−4,800)                  |
 
 Test footprint pinned to deleted machinery: `StreamLogStoreLoad` 2,083,
 `StreamSnapshotStore.vitest` 2,961, `SessionStores.vitest` 748,
@@ -253,9 +273,10 @@ data on first open (read files → insert rows → rename old dir to
 same PR (build-implies-delete). No long-term mirroring or dual-write.
 The importer, the `*.pre-sqlite-backup` dirs, and their compatibility tests
 have a retirement condition fixed at birth: Stage 1 files the removal issue,
-and the removal PR lands **two releases or 90 days after Stage 6 ships,
-whichever comes first** — the temporary path has an owner and a deadline
-from day one, per the AGENTS.md compatibility-machinery rule.
+and the removal PR lands **no earlier than 90 days AND two shipped releases
+after Stage 6 — whichever comes later** — so a frequent release cadence can
+never shorten the three-month import window the AGENTS.md
+compatibility-machinery rule guarantees upgrading users.
 Archived `trace.json` readers (B3) are untouched — exports are produced from
 rows; export compat is not storage compat.
 
@@ -283,7 +304,14 @@ rows; export compat is not storage compat.
   fan-out only). Record the identity ruling: **stream ids are never
   reused** — a workflow relaunch mints a fresh id; the deterministic slot
   maps to the current id.
-- **Stage 6 — leases/locks → rows/WAL.**
+- **Stage 6 — execution records, then leases/locks → rows/WAL.** This stage
+  now explicitly includes `ExecutionKVStore` and flow-checkpoint persistence
+  (`executions/{id}/*.json`: meta, config, reports, results, turn state,
+  child records, checkpoints) — deferring it would leave authoritative app
+  state in files after "completion", contradicting §7 and §9. The KV layer
+  retires here. Leases/locks migrate **last within the stage, deliberately**:
+  the file-based execution lock must stay available to fence the earlier
+  stages' migrations (see §6 mixed-version fencing).
 - **Stage 7 — feature payoffs.** FTS5, retention policy, usage analytics.
 
 Ordering with other programs: independent of Waves A–C (different band, no
@@ -295,9 +323,10 @@ Stage 4).
 ## 6. Risks and mitigations
 
 - **Corruption blast radius** (one DB vs per-stream files): bounded per
-  workspace; `integrity_check` at open; `openOrEphemeral` degradation path
+  workspace; integrity checks on recovery paths and periodic maintenance
+  only (per §3.1 — never per-open); `openOrEphemeral` degradation path
   unchanged; `VACUUM INTO` backups; the migration's renamed
-  `*.pre-sqlite-backup` dirs are retained for a deprecation window.
+  `*.pre-sqlite-backup` dirs are retained per the §5 retirement condition.
 - **`node:sqlite` maturity/flags**: Stage 0 gate; `better-sqlite3` fallback
   accepted with its packaging cost named.
 - **Hot-path throughput**: Stage 4 benchmark gate before the swap ships.
@@ -309,6 +338,18 @@ Stage 4).
   a review reject.
 - **Migration failure**: migrate-on-open is idempotent per store; rollback =
   revert the release + restore the renamed dir. Rows-or-files, never both.
+- **Mixed-version hosts during migration** (an old file-backed CLI and a
+  migrated extension sharing one workspace): WAL fences database
+  connections, not legacy filesystem writers. Three-part mitigation:
+  (1) the importer takes the existing file-based execution lock before
+  migrating — which is why that lock migrates last (Stage 6) — so a
+  _running_ legacy host's writers are excluded by the same protocol they
+  already honor; (2) the importer is idempotent and **re-entrant**: every
+  open that finds recreated legacy dirs re-imports and re-renames them, so
+  a stale-version host's late writes are absorbed on the next new-host open
+  rather than silently lost; (3) concurrent mixed-version access during the
+  migration window is documented as unsupported — writes are absorbed
+  late, not dropped, but old-host reads may be stale until it upgrades.
 - **Scope creep toward SQL-as-UI-state**: §8 non-goals; the architecture
   test only allowlists the two stores' modules for DB access.
 
@@ -319,9 +360,16 @@ delta/emission contract and `StreamLog` in-memory model; #9434 derived-tier
 discard-and-rebuild; the loud-degradation rule (strengthened: `NOT NULL` /
 `CHECK` / FK constraints reject corrupt writes at the source); frozen store
 public surfaces (`store-public-surface-baseline`); hosts-as-renderers plane
-rules untouched. **Added:** the §2 rule, pinned by a new architecture test —
-app-state persistence outside `texra.db` fails CI unless the path is on the
-documents/export allowlist.
+rules untouched. **Added:** the §2 rule, pinned by a new architecture test.
+The test lands at Stage 1 as a **shrinking ratchet, not a strict gate**: it
+starts with an explicit allowlist of the not-yet-migrated directories
+(`streamLogSummaries/`, `streamData/`, `streamLogs/`, `executions/`,
+lease/lock files) plus the permanent entries (documents, exports,
+`state.json`), and each migration stage removes its directory from the
+baseline in the same PR — the same only-shrinks discipline as
+`host-agent-import-baseline`. A Stage-1-strict test would fail CI by
+construction while Stages 2–6 still write files. Strict (permanent entries
+only) is the exit criterion of Stage 6.
 
 ## 8. Non-goals
 
@@ -340,8 +388,9 @@ normalization of entry payload internals; no publication of this doc
 - Kill -9 during streaming loses at most the current throttle window; the
   recovery sweep finalizes orphans from an indexed query.
 - All ratchets green; no store public-surface change; Waves A–C unaffected.
-- `WORKSPACE_STORAGE_LAYOUT` shrinks to `{ texra.db, original, memories }`
-  plus legacy `taskRuns/` until #6981 retention drains it (§3.1 exception).
+- `WORKSPACE_STORAGE_LAYOUT` shrinks to
+  `{ texra.db, original, memories, state.json }` (§2 exception) plus legacy
+  `taskRuns/` until #6981 retention drains it (§3.1 exception).
 
 ## 10. Open questions
 
@@ -349,7 +398,8 @@ normalization of entry payload internals; no publication of this doc
    actual schema, not in the abstract.
 2. Are `memories/` user-editable documents (stay files) or app state (rows)?
    Owner call.
-3. `ExecutionKVStore` / flow-checkpoint persistence: migrate in Stage 6 or a
-   later phase 2? (KV layer cannot retire until this moves.)
+3. Within Stage 6, the ordering of execution-record sub-migrations (meta vs
+   turn state vs flow checkpoints) — an in-stage sequencing detail; the
+   stage assignment itself is settled (§5).
 4. Retention defaults (age? size cap per workspace?) once Stage 7 makes
    policy one statement.
