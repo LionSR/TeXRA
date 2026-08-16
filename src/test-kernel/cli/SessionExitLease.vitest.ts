@@ -39,6 +39,7 @@ vi.mock('@cli/tui/terminalCleanup', () => ({
 
 import * as executionLease from '@agent/storage/executionLease';
 import { createSessionExitController } from '@cli/chat/tui/sessionExitController';
+import { DisposableStore } from '@platform/disposable';
 
 describe('CLI session exit lease ownership', () => {
   let completeLeaseSpy: ReturnType<typeof vi.spyOn>;
@@ -63,6 +64,8 @@ describe('CLI session exit lease ownership', () => {
   function controller(options: {
     readonly resumableIdle: boolean;
     readonly flushArtifacts?: () => Promise<void>;
+    readonly disposables?: DisposableStore;
+    readonly disposeTerminalRestoreOnExit?: () => void;
   }) {
     return createSessionExitController({
       ink: { unmount: vi.fn() } as never,
@@ -77,7 +80,9 @@ describe('CLI session exit lease ownership', () => {
       canResume: false,
       clearItermProgress: false,
       kittyKeyboardEnabled: false,
-      disposers: [],
+      disposables: options.disposables ?? new DisposableStore(),
+      disposeTerminalRestoreOnExit:
+        options.disposeTerminalRestoreOnExit ?? vi.fn(),
       followUpQueue: { onIdle: vi.fn().mockResolvedValue(undefined) } as never,
       getApprovalPolicy: () => 'yolo',
       flushArtifacts:
@@ -122,6 +127,26 @@ describe('CLI session exit lease ownership', () => {
 
     expect(completeLeaseSpy).not.toHaveBeenCalled();
     expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  it('finishes critical teardown before surfacing a disposal failure', async () => {
+    const disposables = new DisposableStore();
+    disposables.add(() => {
+      throw new Error('detach failed');
+    });
+    const disposeTerminalRestoreOnExit = vi.fn();
+
+    await expect(
+      controller({
+        resumableIdle: false,
+        disposables,
+        disposeTerminalRestoreOnExit,
+      }).gracefulTeardown(),
+    ).rejects.toThrow('detach failed');
+
+    expect(mocks.cleanupTerminalModes).toHaveBeenCalledOnce();
+    expect(disposeTerminalRestoreOnExit).toHaveBeenCalledOnce();
+    expect(mocks.resetCliState).toHaveBeenCalledOnce();
   });
 
   it('releases the lease on the resumable-idle signal exit path', async () => {

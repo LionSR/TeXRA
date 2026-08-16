@@ -75,9 +75,10 @@ rows that change:
   self-registered process-shutdown backstop, scoped to the two
   recording-capable hosts.)_
 - **View root:** presentation leases get a store backstop (7 hand-released
-  sites today); the CLI's `disposers` arrays and the TUI's
-  `RESET_HOOKS`/generation machinery are recognized as a view-root store
-  in disguise and migrate onto the real one.
+  sites today); the CLI's one-shot `disposers` array and the extension's
+  provider/view disposable arrays migrate onto it. TUI `RESET_HOOKS` stay
+  repeatable unless a scope-remount deletion is proven; they are not one-shot
+  disposables.
 
 Cross-root edges stay as the two existing verbs
 (`deleteStreamAfterOwnedExecutionRelease`, `detachActiveChildren`); the
@@ -100,12 +101,10 @@ Grounds (evidence over fashion):
   with the extension's ~5s deactivate budget — the sync-dispose/async-drain
   split is precisely why VS Code standardized this way. `Symbol.dispose`
   is native since Node 20.4; TS6 downlevels `using` on our ES2022 floor.
-- Store semantics: idempotent, LIFO, per-child try/catch with aggregated
-  errors (SessionHandle's `throwAggregated` already does this by hand),
-  **add-after-disposed disposes immediately and warns** (kills
-  register-after-teardown races), `move()` as the only transfer (subsumes
-  the hand-rolled `AgentLaunchResources.transfer()/fail()`), plus a vitest
-  leaked-disposable assertion (the VS Code test trick).
+- Store semantics: idempotent LIFO, isolated child failures aggregated with
+  `throwAggregated`, and **immediate add-after-disposed**. `move()` and global
+  leak assertions stay deferred until a consumer deletes an existing mechanism
+  in the same PR; the store does not speculate those surfaces into existence.
 - Cancellation: `{signal}` threading stays; mechanical upgrades only
   (`AbortSignal.any`, `AbortSignal.timeout`, `throwIfAborted()`); the
   existing `onAbort` bridge remains the sanctioned signal→disposer adapter.
@@ -248,8 +247,9 @@ split avoids), `signal-exit` (Ink already embeds it; keep one exit matrix).
 
 1. **Leak triage** (no new machinery): polling unref + self-registration;
    recording backstop. Deletes the extension-only registrations.
-2. **`DisposableStore` + vitest leak assertion**; first consumers = the CLI
-   `disposers` arrays and TUI `RESET_HOOKS` (both delete).
+2. **`DisposableStore` + focused lifecycle coverage** replaces the CLI session
+   `disposers` array, execution-interaction detachers, and the extension's
+   provider/view disposable arrays. `RESET_HOOKS` stay repeatable.
 3. **Session-root consolidation**: ctor-into-store; `followUps.dispose()`;
    `teardownOwners` = one line. Deletes the comment-enforced order.
 4. **Lease settlement at the session root** (after 3). Deletes the CLI-UI

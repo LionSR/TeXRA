@@ -343,7 +343,7 @@ export class MainViewProvider
       (message) => this.messageHandler.handleMessage(message, webviewView),
     );
 
-    this._viewDisposables.push(
+    this._viewDisposables.add(
       webviewView.onDidDispose(this.cleanupView.bind(this)),
     );
 

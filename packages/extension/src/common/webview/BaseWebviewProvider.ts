@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { DisposableStore } from '@platform/disposable';
 import { getSharedLocalResourceRoots } from './resourceRoots';
 
 export interface PanelOptions {
@@ -19,8 +20,8 @@ export interface PanelOptions {
  */
 export abstract class BaseWebviewProvider {
   protected _view?: vscode.WebviewView | vscode.WebviewPanel;
-  protected readonly _disposables: vscode.Disposable[] = [];
-  protected _viewDisposables: vscode.Disposable[] = [];
+  protected readonly _disposables = new DisposableStore();
+  protected _viewDisposables = new DisposableStore();
 
   protected abstract contentProvider: {
     getHtmlContent(webview: vscode.Webview): string;
@@ -45,10 +46,12 @@ export abstract class BaseWebviewProvider {
       webviewView.webview,
     );
 
-    this._viewDisposables.push(
+    this._viewDisposables.add(
       webviewView.webview.onDidReceiveMessage((message) =>
         this.messageHandler.handleMessage(message, webviewView),
       ),
+    );
+    this._viewDisposables.add(
       webviewView.onDidDispose(this.cleanupView.bind(this)),
     );
   }
@@ -89,15 +92,14 @@ export abstract class BaseWebviewProvider {
   }
 
   protected cleanupView(): void {
-    this._viewDisposables.forEach((d) => d.dispose());
-    this._viewDisposables = [];
+    this._viewDisposables.dispose();
+    this._viewDisposables = new DisposableStore();
     this._view = undefined;
     this.messageHandler.clearActiveView?.();
   }
 
   public dispose(): void {
     this.cleanupView();
-    this._disposables.forEach((d) => d.dispose());
-    this._disposables.length = 0;
+    this._disposables.dispose();
   }
 }
