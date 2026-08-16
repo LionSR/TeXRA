@@ -353,6 +353,126 @@ describe('task-group-list ungrouped message indexes', () => {
   });
 });
 
+describe('task-group-list renumbered resync ordering', () => {
+  it('reorders cached ungrouped rows when an ordinary upsert renumbers seqNos', () => {
+    const live: LogMessageData[] = [
+      { ...createMessage('m1', 'one', 100), seqNo: 1 },
+      { ...createMessage('m2', 'two', 200), seqNo: 2 },
+      { ...createMessage('m3', 'three', 300), seqNo: 3 },
+    ];
+    const list = createList(live);
+
+    // Hydration merges disk history before live appends and renumbers seqNos,
+    // then WebviewBridge replays getRange(0) as one ordinary upsert frame.
+    // logSlice keeps live rows at their old flat indices while the disk rows
+    // append at the tail, so `messages` is not itself in seqNo order.
+    const disk: LogMessageData[] = [
+      { ...createMessage('d1', 'disk one', 50), seqNo: 1 },
+      { ...createMessage('d2', 'disk two', 60), seqNo: 2 },
+    ];
+    const renumbered: LogMessageData[] = [
+      { ...live[0], seqNo: 3 },
+      { ...live[1], seqNo: 4 },
+      { ...live[2], seqNo: 5 },
+      ...disk,
+    ];
+
+    list.index.apply({
+      terminal: false,
+      wasTerminal: false,
+      groups: [],
+      previousGroups: [],
+      groupsChanged: false,
+      messages: renumbered,
+      previousMessages: live,
+      messagesChanged: true,
+      deltaIndices: [0, 1, 2],
+    });
+
+    expect(list.index.ungrouped.map((message) => message.id)).toEqual([
+      'd1',
+      'd2',
+      'm1',
+      'm2',
+      'm3',
+    ]);
+    expect(list.index.ungrouped.map((message) => message.seqNo)).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
+  });
+
+  it('reorders cached grouped rows when an ordinary upsert renumbers seqNos', () => {
+    const group = createGroup('g1', STREAM_PHASE.RUNNING);
+    const live: LogMessageData[] = [
+      { ...createMessage('m1', 'one', 100, group.id), seqNo: 1 },
+      { ...createMessage('m2', 'two', 200, group.id), seqNo: 2 },
+      { ...createMessage('m3', 'three', 300, group.id), seqNo: 3 },
+    ];
+    const list = createList(live);
+    list.groups = [group];
+    list.index.rebuildTree([group], live);
+    list.index.rebuildTimeline();
+
+    const disk: LogMessageData[] = [
+      { ...createMessage('d1', 'disk one', 50, group.id), seqNo: 1 },
+      { ...createMessage('d2', 'disk two', 60, group.id), seqNo: 2 },
+    ];
+    const renumbered: LogMessageData[] = [
+      { ...live[0], seqNo: 3 },
+      { ...live[1], seqNo: 4 },
+      { ...live[2], seqNo: 5 },
+      ...disk,
+    ];
+
+    list.index.apply({
+      terminal: false,
+      wasTerminal: false,
+      groups: [group],
+      previousGroups: [group],
+      groupsChanged: false,
+      messages: renumbered,
+      previousMessages: live,
+      messagesChanged: true,
+      deltaIndices: [0, 1, 2],
+    });
+
+    const node = list.index.tree[0];
+    expect(node?.messages.map((message) => message.id)).toEqual([
+      'd1',
+      'd2',
+      'm1',
+      'm2',
+      'm3',
+    ]);
+    expect(node?.messages.map((message) => message.seqNo)).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
+  });
+
+  it('keeps cached rows in place when seqNo does not change', () => {
+    const original: LogMessageData[] = [
+      { ...createMessage('m1', 'one', 100), seqNo: 1 },
+      { ...createMessage('m2', 'two', 200), seqNo: 2 },
+    ];
+    const list = createList(original);
+    const ungroupedBefore = list.index.ungrouped;
+
+    const updated: LogMessageData = { ...original[1], text: 'two updated' };
+    const next: LogMessageData[] = [original[0], updated];
+
+    list.index.updateCachedMessageRefs(next, original, [1]);
+
+    // Stable reference behavior: no rebuild, the same array is mutated in
+    // place and the updated object lands at the same index.
+    expect(list.index.ungrouped).toBe(ungroupedBefore);
+    expect(list.index.ungrouped[1]).toBe(updated);
+    expect(list.index.ungrouped.map((message) => message.id)).toEqual([
+      'm1',
+      'm2',
+    ]);
+  });
+});
+
 describe('task-group-list orphan re-rooting', () => {
   it('renders a group whose parent is absent as a root, with its subtree and messages', () => {
     const list = createList([]);
