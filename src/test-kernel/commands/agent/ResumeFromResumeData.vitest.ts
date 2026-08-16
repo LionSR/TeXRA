@@ -2,6 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as vscode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
   resolveAndResumeStream: vi.fn(
@@ -9,7 +10,10 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
-vi.mock('@agent/runtime/resolveAndResumeStream', () => ({
+vi.mock('@agent/runtime/resolveAndResumeStream', async (importActual) => ({
+  ...(await importActual<
+    typeof import('@agent/runtime/resolveAndResumeStream')
+  >()),
   resolveAndResumeStream: mocks.resolveAndResumeStream,
 }));
 vi.mock('@commands/agent/executeCommand', () => ({
@@ -49,6 +53,21 @@ describe('tryResumeFromResumeData ports', () => {
 
     expect(ports.isCancellationRequested?.()).toBe(false);
     has.mockRestore();
+  });
+
+  it('presents a pre-lifecycle workflow failure through the guarded warning', async () => {
+    const showWarningMessage = vi
+      .spyOn(vscode.window, 'showWarningMessage')
+      .mockResolvedValue(undefined);
+    const error = new Error('workflow bootstrap failed');
+
+    const ports = await capturePorts();
+    await ports.reportFailure?.(STREAM, error);
+
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      'Resume failed: workflow bootstrap failed',
+    );
+    showWarningMessage.mockRestore();
   });
 
   it('tells the user when there is no resumable session state', async () => {

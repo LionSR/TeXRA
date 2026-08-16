@@ -11,6 +11,7 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 
 import {
   resolveAndResumeStream,
+  resumeStreamWithRecovery,
   type ResumeStreamPorts,
 } from '@agent/runtime/resolveAndResumeStream';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -27,8 +28,11 @@ import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 const STREAM = 'stream:resume' as StreamTabId;
 
 const RESOLVED_STATE = {
-  runState: { agent: 'a', model: 'm' } as never,
-  executionId: 'exec-1' as never,
+  status: 'resolved' as const,
+  state: {
+    runState: { agent: 'a', model: 'm' } as never,
+    executionId: 'exec-1' as never,
+  },
 };
 
 function basePorts(
@@ -39,6 +43,7 @@ function basePorts(
     resolveResumeState: vi.fn(async () => RESOLVED_STATE),
     resumeToolUse: vi.fn(async () => true),
     executeWorkflow: vi.fn(async () => {}),
+    reportResumeStateResolution: vi.fn(),
     reportNoResumableSession: vi.fn(),
     reportFailure: vi.fn(),
     ...overrides,
@@ -69,6 +74,30 @@ async function expectGuardHeldThroughAsyncReport(
   await expect(pending).resolves.toBe(false);
 }
 
+describe('resumeStreamWithRecovery', () => {
+  it('releases recovery ownership when the resume callback throws synchronously', async () => {
+    const recovery = { streamId: STREAM } as never;
+    const followUps = {
+      useRecovery: vi.fn(() => recovery),
+      claimRecovery: vi.fn(),
+      release: vi.fn(),
+    };
+    const error = new Error('synchronous resume failure');
+
+    await expect(
+      resumeStreamWithRecovery(
+        { followUps } as never,
+        STREAM,
+        () => {
+          throw error;
+        },
+        recovery,
+      ),
+    ).rejects.toBe(error);
+    expect(followUps.release).toHaveBeenCalledWith(recovery, 'recoverable');
+  });
+});
+
 describe('resolveAndResumeStream', () => {
   beforeEach(() => {
     retrieveSessionResumeDataMock.mockReset();
@@ -98,7 +127,7 @@ describe('resolveAndResumeStream', () => {
     const ports = basePorts({
       resolveResumeState: vi.fn(async () => ({
         ...RESOLVED_STATE,
-        parentStreamId,
+        state: { ...RESOLVED_STATE.state, parentStreamId },
       })),
     });
 
@@ -237,12 +266,19 @@ describe('resolveAndResumeStream', () => {
     expect(ports.resumeToolUse).toHaveBeenCalled();
   });
 
-  it('returns false (host owns its messaging) when no state resolves', async () => {
+  it('reports a persisted-state read failure separately from missing resume data', async () => {
+    const error = new Error('snapshot disk offline');
+    const resolution = { status: 'read-failed' as const, error };
     const ports = basePorts({
-      resolveResumeState: vi.fn(async () => undefined),
+      resolveResumeState: vi.fn(async () => resolution),
     });
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
+    expect(ports.reportResumeStateResolution).toHaveBeenCalledWith(
+      STREAM,
+      resolution,
+      'Persisted run state could not be read (snapshot disk offline). The resume was not started; retry once the storage issue is resolved.',
+    );
     expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
     expect(ports.reportNoResumableSession).not.toHaveBeenCalled();
   });

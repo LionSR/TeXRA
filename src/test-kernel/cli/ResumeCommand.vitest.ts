@@ -8,6 +8,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import {
   acquireFreshExecutionLease,
+  ExecutionLeaseActiveError,
   releaseOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
@@ -404,6 +405,18 @@ describe('runResumeExecution', () => {
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       `Could not load session ${EXECUTION_ID}: KV timeout`,
+    );
+  });
+
+  it('classifies lease contention that races the resume pre-check as usage', async () => {
+    stubWorkflowResume(WORKFLOW_CONFIG);
+    mocks.executeCliWorkflowConfig.mockRejectedValue(
+      new ExecutionLeaseActiveError(EXECUTION_ID, Date.now()),
+    );
+
+    await expect(run(cliContext())).resolves.toBe(CliExitCode.Usage);
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      `Execution ${EXECUTION_ID} is active in TeXRA.`,
     );
   });
 });

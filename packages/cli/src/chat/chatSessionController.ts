@@ -9,6 +9,7 @@ import { getExecutionStore } from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
+  describeResumeFailure,
   detachSubagentsOnStop,
   resolveAndResumeStream,
   resumeQueuedToolUseFromResumeData,
@@ -326,16 +327,24 @@ export function createChatSessionController(
     // A launch failure already rendered through a targeted presentation
     // (e.g. the model-not-recognized instruction) is marked -- skip the
     // generic transcript line so the TUI doesn't show the same failure twice.
+    const resumeFailure = describeResumeFailure(error);
     if (
       !session.stopRequested &&
       !hasErrorPresentedMarker(error) &&
       !hasErrorPresentationPending(error)
     ) {
-      appendLocalErrorTranscript(toErrorMessage(error));
+      appendLocalErrorTranscript(
+        resumeFailure.kind === 'lease-active'
+          ? resumeFailure.message
+          : toErrorMessage(error),
+      );
     }
-    session.runExitCode = session.stopRequested
-      ? CliExitCode.Success
-      : CliExitCode.AgentError;
+    session.runExitCode = CliExitCode.AgentError;
+    if (session.stopRequested) {
+      session.runExitCode = CliExitCode.Success;
+    } else if (resumeFailure.kind === 'lease-active') {
+      session.runExitCode = CliExitCode.Usage;
+    }
   };
 
   // Build the runtime host shared by start and resume. Root completion marks
@@ -701,9 +710,8 @@ export function createChatSessionController(
               streamStatus: runtimeSession.status,
               isCancellationRequested,
               resolveResumeState: async () => ({
-                runState: config,
-                executionId,
-                parentStreamId,
+                status: 'resolved',
+                state: { runState: config, executionId, parentStreamId },
               }),
               resumeToolUse: (resume, claimedRecovery) =>
                 resumeQueuedToolUseFromResumeData(streamId, resume, {
