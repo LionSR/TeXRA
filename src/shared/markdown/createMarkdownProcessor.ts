@@ -179,6 +179,12 @@ if (!RENDER_MATH_SPAN_PATTERNS.includes(RENDER_INLINE_MATH_SPAN_PATTERN)) {
   );
 }
 
+// The HTML normalizer keeps the lax inline `$…$` contract but drops the lax
+// environment regex: its environments are container-aware too, so a continued
+// ordered-list environment is shielded before tag normalization can touch it.
+const NORMALIZE_MATH_SPAN_PATTERNS: readonly RegExp[] =
+  MATH_SPAN_PATTERNS.filter((pattern) => pattern !== BEG_END_MATH_SPAN_PATTERN);
+
 // Replace every match of `patterns` with an indexed `@@<tag>-N@@` placeholder,
 // appending the captured matches to `items` so later shields share one restore
 // pass. `tag` must already be collision-free (see selectPlaceholderTag).
@@ -295,18 +301,25 @@ interface BegEndEnvironmentProbe {
 // what lets `10. Formula:\n    \begin{align}` open an environment on the
 // indented continuation line. The probe returns true to consume a match (but
 // pushes no token), so the recorded match set follows texmath's parse exactly.
-function createBegEndEnvironmentProbe(
-  renderer: MarkdownItInstance,
-): BegEndEnvironmentProbe {
+function createProbeMarkdownIt(options: {
+  readonly breaks: boolean;
+  readonly linkify: boolean;
+  readonly html: boolean;
+}): MarkdownItInstance {
   const probe = new MarkdownIt({
-    breaks: renderer.options.breaks,
-    linkify: renderer.options.linkify,
-    html: renderer.options.html,
+    breaks: options.breaks,
+    linkify: options.linkify,
+    html: options.html,
   });
-  if (renderer.options.linkify) {
+  if (options.linkify) {
     probe.linkify.set({ fuzzyLink: true, urlAuth: true });
   }
+  return probe;
+}
 
+function createBegEndEnvironmentProbe(
+  probe: MarkdownItInstance,
+): BegEndEnvironmentProbe {
   let active = false;
   let matches: BegEndEnvironmentMatch[] = [];
   let closersByEnv = new Map<string, number[]>();
@@ -395,8 +408,11 @@ function createBegEndEnvironmentProbe(
       }
 
       active = true;
-      probe.parse(content, {});
-      active = false;
+      try {
+        probe.parse(content, {});
+      } finally {
+        active = false;
+      }
 
       // Keep the earlier deliberate fence-decline: texmath would match across
       // a fenced-code boundary, but shielding that would swallow the fence and
@@ -483,7 +499,7 @@ function applyEnvironmentShields(
   return pieces.join('');
 }
 
-function protectLatexMathSpansForRender(
+function protectLatexMathSpansWithEnvironment(
   content: string,
   patterns: readonly RegExp[],
   environmentProbe: BegEndEnvironmentProbe,
@@ -567,6 +583,29 @@ export function protectLatexMathSpans(
   };
 }
 
+let normalizeEnvironmentProbe: BegEndEnvironmentProbe | undefined;
+
+/**
+ * `htmlMarkdownNormalize`'s math shield: the lax inline `$…$` set plus the
+ * container/fence-aware environment probe. The normalize pass runs before the
+ * renderer, so it needs the same list-continuation/blockquote awareness or a
+ * `<br>` inside `10. Formula:\n    \begin{align}` would be mutated before the
+ * render shield can protect it.
+ */
+export function protectLatexMathSpansForNormalize(content: string): {
+  content: string;
+  restore: (value: string) => string;
+} {
+  normalizeEnvironmentProbe ??= createBegEndEnvironmentProbe(
+    createProbeMarkdownIt({ breaks: false, linkify: true, html: false }),
+  );
+  return protectLatexMathSpansWithEnvironment(
+    content,
+    NORMALIZE_MATH_SPAN_PATTERNS,
+    normalizeEnvironmentProbe,
+  );
+}
+
 // LaTeX backslash-macros whose trailing character is CommonMark-escapable
 // punctuation, so markdown-it's parser strips the backslash (`\;`→`;`,
 // `\(`→`(`, …). These are the math spacing macros (`\,` `\;` `\:` `\!`), the
@@ -608,6 +647,13 @@ export function createMarkdownProcessor(
     }
     missCount += 1;
 
+    // The CLI shield records offsets against the string markdown-it parses.
+    // markdown-it core normalizes CRLF / bare CR to LF before block rules run,
+    // so normalize once here and let the whole render pipeline operate on LF.
+    const source = config.protectLatexMath
+      ? content.replaceAll(/\r\n?/g, '\n')
+      : content;
+
     // Protect in widening order (refs → math spans → stray macros); restore in
     // reverse so a ref placeholder revealed inside a restored span is still
     // formatted. After span protection, only out-of-span macros remain to net.
@@ -615,12 +661,18 @@ export function createMarkdownProcessor(
       content: refProtected,
       refs,
       placeholder: refPlaceholder,
-    } = protectLatexReferences(content);
+    } = protectLatexReferences(source);
     const mathProtection = config.protectLatexMath
-      ? protectLatexMathSpansForRender(
+      ? protectLatexMathSpansWithEnvironment(
           refProtected,
           RENDER_MATH_SPAN_PATTERNS,
-          (environmentProbe ??= createBegEndEnvironmentProbe(config.renderer)),
+          (environmentProbe ??= createBegEndEnvironmentProbe(
+            createProbeMarkdownIt({
+              breaks: config.renderer.options.breaks,
+              linkify: config.renderer.options.linkify,
+              html: config.renderer.options.html,
+            }),
+          )),
         )
       : { content: refProtected, restore: (value: string) => value };
     const mathProtected = mathProtection.content;

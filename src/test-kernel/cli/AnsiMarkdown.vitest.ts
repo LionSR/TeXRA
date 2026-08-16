@@ -1023,10 +1023,11 @@ describe('renderAnsiMarkdown', () => {
   // part of the texmath body, not a closing delimiter. texmath's `dollars`
   // rule spans `$a = \$5$` as one math block (its body permits interior `$`),
   // so the CLI shield must keep the whole span verbatim instead of letting
-  // markdown turn `\$` into `$` and mis-splitting later dollars.
-  it('keeps an escaped \$ inside an inline math span verbatim', () => {
-    const plain = renderPlain('A price $a = \$5$ here');
-    expect(plain).toContain('$a = \$5$');
+  // markdown turn `\$` into `$` and mis-splitting later dollars. The fixture
+  // uses a doubled backslash so the runtime string contains a real `\$`.
+  it('keeps an escaped \\$ inside an inline math span verbatim', () => {
+    const plain = renderPlain('A price $a = \\$5$ here');
+    expect(plain).toContain('$a = \\$5$');
     expect(plain).toContain('here');
   });
 });

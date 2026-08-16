@@ -1,5 +1,5 @@
 import { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
-import { protectLatexMathSpans } from '@shared/markdown/createMarkdownProcessor';
+import { protectLatexMathSpansForNormalize } from '@shared/markdown/createMarkdownProcessor';
 import { clamp } from '@utils/core';
 
 // Only exact supported tag names enter the presentation grammar. Suffixes such
@@ -314,11 +314,18 @@ function protectLiteralMathSyntax(content: string): {
 }
 
 export function normalizeKnownHtmlForCliMarkdown(content: string): string {
-  const summarized = summarizeEmbeddedSubagentFollowups(content);
+  // Normalize once so the container-aware math shield and the later renderer
+  // both slice the same LF string markdown-it will parse.
+  const summarized = summarizeEmbeddedSubagentFollowups(content).replaceAll(
+    /\r\n?/g,
+    '\n',
+  );
   if (!KNOWN_HTML_TAG_RE.test(summarized)) return summarized;
 
   const literalDollarProtection = protectLiteralMathSyntax(summarized);
-  const mathProtection = protectLatexMathSpans(literalDollarProtection.content);
+  const mathProtection = protectLatexMathSpansForNormalize(
+    literalDollarProtection.content,
+  );
   const mathProtected = literalDollarProtection.restore(mathProtection.content);
   if (!KNOWN_HTML_TAG_RE.test(mathProtected)) return summarized;
 
