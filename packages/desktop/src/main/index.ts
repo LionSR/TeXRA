@@ -51,6 +51,9 @@ import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { killActiveRecording } from '@tools/media/audio';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
+import { debounce } from '@utils/core';
+import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   readGitEnvironmentSummary,
   readRecentCommits,
@@ -301,10 +304,6 @@ function createWindow(options: {
     options.processSession,
     options.workspacePath,
   );
-  const reportAsyncError = (error: unknown) => console.error(error);
-  installDesktopNavigationPolicy(window.webContents, {
-    onAsyncError: reportAsyncError,
-  });
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
   } = {};
@@ -334,6 +333,20 @@ function createWindow(options: {
   const showErrorMessage = async (message: string) => {
     await dialog.showMessageBox(window, { message, type: 'error' });
   };
+  const reportAsyncError = (error: unknown) => {
+    console.error('Desktop asynchronous operation failed:', error);
+    void showErrorMessage(
+      `A desktop operation failed: ${toErrorMessage(error)}`,
+    ).catch((notificationError: unknown) => {
+      console.error(
+        'Failed to display desktop asynchronous operation error:',
+        notificationError,
+      );
+    });
+  };
+  installDesktopNavigationPolicy(window.webContents, {
+    onAsyncError: reportAsyncError,
+  });
   const showInfoMessage = async (message: string) => {
     await dialog.showMessageBox(window, { type: 'info', message });
   };

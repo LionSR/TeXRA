@@ -3,6 +3,34 @@ import { app, dialog } from 'electron';
 let fatalStartupErrorReported = false;
 
 export function reportFatalStartupError(error: unknown): void {
+  reportFatalDesktopError(error, {
+    title: 'TeXRA failed to start',
+    message: 'TeXRA hit a startup error before the desktop window was ready.',
+  });
+}
+
+/**
+ * Installs the fatal post-startup rejection path. Unhandled main-process
+ * failures cannot safely continue with a partially-updated Electron state.
+ */
+export function installPostStartupRejectionHandler(): () => void {
+  const report = (error: unknown) => {
+    reportFatalDesktopError(error, {
+      title: 'TeXRA encountered a fatal error',
+      message: 'TeXRA hit an unrecoverable error after startup and must close.',
+    });
+  };
+  process.on('unhandledRejection', report);
+
+  return () => {
+    process.off('unhandledRejection', report);
+  };
+}
+
+function reportFatalDesktopError(
+  error: unknown,
+  options: { title: string; message: string },
+): void {
   if (fatalStartupErrorReported) return;
   fatalStartupErrorReported = true;
 
@@ -12,12 +40,8 @@ export function reportFatalStartupError(error: unknown): void {
 
   const showFailureDialog = () => {
     dialog.showErrorBox(
-      'TeXRA failed to start',
-      [
-        'TeXRA hit a startup error before the desktop window was ready.',
-        '',
-        detail,
-      ].join('\n'),
+      options.title,
+      [options.message, '', detail].join('\n'),
     );
     app.quit();
   };

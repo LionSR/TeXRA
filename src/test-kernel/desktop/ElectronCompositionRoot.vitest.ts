@@ -36,6 +36,10 @@ function readDesktopPlatformIndex(): Promise<string> {
   return readFile(desktopSourcePath('main', 'platform', 'index.ts'), 'utf8');
 }
 
+function readDesktopBootstrap(): Promise<string> {
+  return readFile(desktopSourcePath('main', 'bootstrap.ts'), 'utf8');
+}
+
 // Asserts each needle first occurs after the anchor, in the given order.
 function expectOrderedAfter(
   source: string,
@@ -140,6 +144,26 @@ describe('desktop composition root and launch environment', () => {
     expect(initPlatformFiles).toEqual([
       'packages/desktop/src/main/platform/index.ts',
     ]);
+  });
+
+  it('surfaces desktop async failures and terminates after post-startup rejections', async () => {
+    const [indexSource, bootstrapSource] = await Promise.all([
+      readDesktopMainIndex(),
+      readDesktopBootstrap(),
+    ]);
+
+    expect(indexSource).toContain(
+      "console.error('Desktop asynchronous operation failed:', error);",
+    );
+    expect(indexSource).toContain(
+      '`A desktop operation failed: ${toErrorMessage(error)}`',
+    );
+    expect(indexSource).toContain(
+      'installDesktopNavigationPolicy(window.webContents',
+    );
+    expect(bootstrapSource).toMatch(
+      /await import\('\.\/index\.js'\);\s*removeFatalStartupHandlers\(\);\s*installPostStartupRejectionHandler\(\);/u,
+    );
   });
 
   it('repairs PATH before platform services and bundled agents are initialized', async () => {
