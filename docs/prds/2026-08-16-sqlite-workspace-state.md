@@ -200,9 +200,14 @@ contract returns every stream id from the always-resident summaries map,
 and startup paths iterate it (`SessionState.load`, desktop wiring), so
 freezing it verbatim would force loading all ids before startup and defeat
 the O(visible page) criterion no index can rescue. Stage 2 adds a
-paginated listing surface and migrates the startup callers to it in the
-same PR family; `keys()` remains for non-startup callers during the
-transition and retires with a ratchet-baseline shrink, not a widen.
+paginated listing surface and migrates **every startup-wide scan** to it
+or to indexed queries in the same PR family — not only `SessionState.load`
+and the desktop wiring, but the scans they invoke:
+`SessionStores.sweepLeftoverStreams()` (builds complete sets from
+`streamLogs.keys()`) and `SessionHandle.runRestartRepair()` (iterates the
+full registry; becomes the §3.3 partial-index recovery query). `keys()`
+remains for non-startup callers during the transition and retires with a
+ratchet-baseline shrink, not a widen.
 
 Entry payloads remain opaque JSON in a single column (Tier 3 stays Tier 3);
 this PRD does not normalize entry internals. A separate `text` column feeds
@@ -227,7 +232,14 @@ streams           (id PK, incarnation, created_ts,
                    -- (insert stream → insert execution → set pointer).
 entries           (stream_id FK CASCADE, seq, entry_id,
                    settlement_seq NULL, timestamp, entry JSON, text NULL)
-                   UNIQUE(stream_id, seq)
+                   UNIQUE(stream_id, seq)  UNIQUE(stream_id, entry_id)
+                   -- the second unique index serves the actual mutation
+                   -- path: update/settle/appendText address entries by id,
+                   -- and the mixed-version importer tests id-presence per
+                   -- entry — without it both scan the stream's rows,
+                   -- making the O(changed rows) hot-path claim false on
+                   -- long transcripts. Also the dedup constraint if
+                   -- admission retries.
 executions        (id PK, stream_id NULL FK CASCADE, meta JSON, config JSON)
                    -- stream_id is NULLABLE by domain fact, not convenience:
                    -- ExecutionMetaCoreSchema.streamId is optional, and
@@ -529,9 +541,17 @@ rows; export compat is not storage compat.
   unrenamed would break the rename-based backstop. Stage 5 therefore
   imports and deletes the KV `*.json` files individually (copies to the
   versioned backup tree), leaves the artifacts in place, and detects
-  legacy recreations **per file**: the KV filenames are a fixed set, so a
-  legacy rewrite recreates a detectable file even though the directory
-  never moves.
+  legacy recreations **per file**. The KV filename set is **not** assumable
+  as fixed: `ExecutionKVStore.write()` takes arbitrary keys, and production
+  registries persist keys (`codex_thread_id.json`,
+  `claude_agent_session_id.json`) that today's `isKVFile` does not even
+  recognize — a filename-list classifier would either lose resumable
+  session state or delete user JSON. Stage 5 therefore opens with a
+  boundary PR: artifacts move under the stable `files/` subtree, and KV
+  writes are constrained to a manifest (known keys + one namespaced prefix
+  for generic keys). After that, **root-level `*.json` is app state by
+  construction**; anything at the root the manifest cannot classify is
+  quarantined in `migration_records` with a `warn`, never deleted.
   **Non-KV artifacts under `executions/{id}/` stay as files**: workflow
   output files and original snapshots are run _documents_ — read by
   `AcceptRunFilesTool` and `ExecutionsTool.listFiles`, reviewed and accepted
