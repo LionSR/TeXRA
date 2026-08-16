@@ -14,7 +14,6 @@ import type { StreamTabId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { waitForRecordedEvent } from '@test/support/asyncTestUtils';
 import {
-  cleanupAllApprovals,
   proposalApprovals,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
@@ -79,7 +78,8 @@ describe('human prompt progress events', () => {
   });
 
   afterEach(() => {
-    cleanupAllApprovals();
+    defaultSession().approvals.clearAll();
+    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
     detachHostInteractions();
     detachHostInteractions = () => {};
     testApprovalHandler = undefined;

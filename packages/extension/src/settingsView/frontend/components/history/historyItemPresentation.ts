@@ -1,5 +1,9 @@
 import type { HistoryItem, HistoryRunStatus } from '@shared/schemas';
-import { AgentCategory, HISTORY_RUN_STATUS } from '@shared/schemas';
+import {
+  AgentCategory,
+  HISTORY_RUN_STATUS,
+  HISTORY_RUN_STATUS_LABEL,
+} from '@shared/schemas';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
 import { formatShortDateTime } from '@utils/text/stringUtils';
 
@@ -23,11 +27,26 @@ interface HistoryStatusBadge {
  * badge would hide that crash from the list.
  */
 const HISTORY_STATUS_BADGES: Record<HistoryRunStatus, HistoryStatusBadge> = {
-  [HISTORY_RUN_STATUS.RESUMABLE]: { label: 'Resumable', variant: 'warning' },
-  [HISTORY_RUN_STATUS.COMPLETED]: { label: 'Completed', variant: 'success' },
-  [HISTORY_RUN_STATUS.CANCELLED]: { label: 'Cancelled', variant: 'neutral' },
-  [HISTORY_RUN_STATUS.FAILED]: { label: 'Failed', variant: 'danger' },
-  [HISTORY_RUN_STATUS.UNKNOWN]: { label: 'Unknown', variant: 'neutral' },
+  [HISTORY_RUN_STATUS.RESUMABLE]: {
+    label: HISTORY_RUN_STATUS_LABEL[HISTORY_RUN_STATUS.RESUMABLE],
+    variant: 'warning',
+  },
+  [HISTORY_RUN_STATUS.COMPLETED]: {
+    label: HISTORY_RUN_STATUS_LABEL[HISTORY_RUN_STATUS.COMPLETED],
+    variant: 'success',
+  },
+  [HISTORY_RUN_STATUS.CANCELLED]: {
+    label: HISTORY_RUN_STATUS_LABEL[HISTORY_RUN_STATUS.CANCELLED],
+    variant: 'neutral',
+  },
+  [HISTORY_RUN_STATUS.FAILED]: {
+    label: HISTORY_RUN_STATUS_LABEL[HISTORY_RUN_STATUS.FAILED],
+    variant: 'danger',
+  },
+  [HISTORY_RUN_STATUS.UNKNOWN]: {
+    label: HISTORY_RUN_STATUS_LABEL[HISTORY_RUN_STATUS.UNKNOWN],
+    variant: 'neutral',
+  },
 };
 
 /** The one presentation model shared by history rendering and search. */

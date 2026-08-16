@@ -32,6 +32,17 @@ export const HISTORY_RUN_STATUS = {
   UNKNOWN: 'unknown',
 } as const;
 
+export const HISTORY_RUN_STATUS_LABEL = {
+  [HISTORY_RUN_STATUS.RESUMABLE]: 'Resumable',
+  [HISTORY_RUN_STATUS.COMPLETED]: 'Completed',
+  [HISTORY_RUN_STATUS.CANCELLED]: 'Cancelled',
+  [HISTORY_RUN_STATUS.FAILED]: 'Failed',
+  [HISTORY_RUN_STATUS.UNKNOWN]: 'Unknown',
+} as const satisfies Record<
+  (typeof HISTORY_RUN_STATUS)[keyof typeof HISTORY_RUN_STATUS],
+  string
+>;
+
 const HistoryRunStatusSchema = z.enum(HISTORY_RUN_STATUS);
 export type HistoryRunStatus = z.infer<typeof HistoryRunStatusSchema>;
 

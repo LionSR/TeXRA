@@ -33,11 +33,6 @@ import {
   getDisabledToolNames,
   getUnavailableToolNamesCached,
 } from '@tools/toolAvailability';
-import { withoutDiagnosticsAddCommand } from '@tools/DiagnosticsTool';
-import {
-  DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
-  DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
-} from '@tools/diagnosticsRuntimeCapabilities';
 import {
   availableModelNamesFromOptions,
   visibleDelegationAgentsBlock,
@@ -118,12 +113,6 @@ export async function resolveAgentTools({
   const disabled = getDisabledToolNames();
   const unavailable = getUnavailableToolNamesCached();
   const runtimeUnavailable = new Set(runtimeUnavailableTools ?? []);
-  const diagnosticsReadUnavailable = runtimeUnavailable.has(
-    DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
-  );
-  const diagnosticsAddUnavailable =
-    !diagnosticsReadUnavailable &&
-    runtimeUnavailable.has(DIAGNOSTICS_ADD_RUNTIME_CAPABILITY);
 
   const toolConfigs = Array.isArray(tools) ? tools : [];
 
@@ -150,7 +139,7 @@ export async function resolveAgentTools({
       logger.warn(`Declared tool not found in registry: ${def.name}`);
       continue;
     }
-    resolved.push(runtimeNarrowToolDefinition(def, diagnosticsAddUnavailable));
+    resolved.push(def);
     resolvedNames.add(def.name);
   }
   for (const injection of toolInjections.list()) {
@@ -159,9 +148,7 @@ export async function resolveAgentTools({
     if (!passesRuntimeGates(injection.toolName)) continue;
     const tool = effectiveRegistry.get(injection.toolName);
     if (tool) {
-      resolved.push(
-        runtimeNarrowToolDefinition(tool.definition, diagnosticsAddUnavailable),
-      );
+      resolved.push(tool.definition);
       resolvedNames.add(injection.toolName);
     } else {
       logger.warn(`Injected tool not found in registry: ${injection.toolName}`);
@@ -175,13 +162,6 @@ export async function resolveAgentTools({
       annotateDelegationTool(tool, availableModelNames),
     ),
   };
-}
-
-function runtimeNarrowToolDefinition(
-  tool: ToolDefinition,
-  diagnosticsAddUnavailable: boolean,
-): ToolDefinition {
-  return diagnosticsAddUnavailable ? withoutDiagnosticsAddCommand(tool) : tool;
 }
 
 /**

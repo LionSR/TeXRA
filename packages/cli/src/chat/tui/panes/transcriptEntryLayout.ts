@@ -133,6 +133,7 @@ export const WORKFLOW_TASK_STATUS_STYLE = {
   completed: { marker: TODO_DONE, color: COLOR_SUCCESS },
   cached: { marker: TICK, color: COLOR_SUCCESS },
   skipped: { marker: SKIP_CIRCLE, color: COLOR_BORDER },
+  cancelled: { marker: SKIP_CIRCLE, color: COLOR_BORDER },
   failed: { marker: CROSS, color: COLOR_ERROR },
 } as const satisfies Record<
   WorkflowCallProgress['status'],

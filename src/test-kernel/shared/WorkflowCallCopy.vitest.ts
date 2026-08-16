@@ -143,9 +143,10 @@ describe('workflow call copy', () => {
         { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
         { id: 'b', label: 'B', status: 'cached' },
         { id: 'c', label: 'C', status: 'skipped', reason: 'not-reached' },
-        { id: 'd', label: 'D', status: 'failed', error: 'nope' },
+        { id: 'd', label: 'D', status: 'cancelled' },
+        { id: 'e', label: 'E', status: 'failed', error: 'nope' },
       ]),
-    ).toEqual({ done: 4, total: 4 });
+    ).toEqual({ done: 5, total: 5 });
   });
 
   it('leaves planned and running calls outstanding', () => {
