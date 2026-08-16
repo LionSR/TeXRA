@@ -17,7 +17,11 @@ import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { appSignals } from '@eventBus/AppSignals';
 
-import { SHUTDOWN_PHASE, type Disposable } from '@platform/interfaces';
+import {
+  SHUTDOWN_PHASE,
+  type Disposable,
+  type LifecycleHost,
+} from '@platform/interfaces';
 import { tryPlatform } from '@platform/platform';
 import { jitteredExponentialBackoffMs } from '@utils/core';
 import {
@@ -182,6 +186,7 @@ export abstract class PollingSourceBase<
   >();
   private timer: ReturnType<typeof setInterval> | undefined;
   private shutdownRegistration: Disposable | undefined;
+  private shutdownLifecycle: LifecycleHost | undefined;
   private tickInFlight = false;
 
   constructor(protected readonly config: PollingSourceConfig) {
@@ -398,19 +403,25 @@ export abstract class PollingSourceBase<
   }
 
   /**
-   * Register `disposeAll` with the platform shutdown registry exactly once.
-   * Uses `tryPlatform()` so the base stays usable in browser/test contexts
-   * where no platform is installed, and defers to the first subscription so
-   * the shared singletons (constructed at module load, before `initPlatform()`)
-   * still register once the platform exists.
+   * Register `disposeAll` with the platform shutdown registry exactly once per
+   * lifecycle instance. Uses `tryPlatform()` so the base stays usable in
+   * browser/test contexts where no platform is installed, and defers to the
+   * first subscription so the shared singletons (constructed at module load,
+   * before `initPlatform()`) still register once the platform exists.
+   *
+   * Keyed on the lifecycle instance rather than the disposable because
+   * extension reactivation (and the test harness) replaces the whole
+   * `LifecycleHost`; a stale registration must be swapped for one on the new
+   * host instead of skipping the re-registration.
    */
   private registerShutdownIfNeeded(): void {
-    if (this.shutdownRegistration) return;
     const lifecycle = tryPlatform()?.lifecycle;
-    if (!lifecycle) return;
+    if (!lifecycle || this.shutdownLifecycle === lifecycle) return;
+    this.shutdownRegistration?.dispose();
     this.shutdownRegistration = lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
       this.disposeAll(),
     );
+    this.shutdownLifecycle = lifecycle;
   }
 
   private async tick(): Promise<void> {
