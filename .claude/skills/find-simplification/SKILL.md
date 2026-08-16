@@ -12,13 +12,13 @@ This skill turns a broad "find things to simplify" request into evidence-backed 
 - Read `AGENTS.md` — especially "Code quality rules" (earned from the 2026-07 simplification campaign), "Pragmatic implementations", "Discouraged factory patterns", "Flattening abstraction layers", "Compatibility and format retirement", and "Testing discipline". These are the standing rules a simplification proposal is judged against.
 - Read the review-checklist sections that encode past over-corrections: [§13 abstraction-cost guardrails](../code-review/references/review-checklist.md) (the Refactor-LOC lesson: 22 "reduction" PRs netted +5,046 LoC) and §14 fewer-elements rulings (R1, R5–R8). A proposal that would net-add elements needs its justification built in from the start.
 - Skim `docs/architecture/` before judging anything under `src/agent/`, `src/platform/`, or the PocketFlow flows; simplifications that fight the host/agnostic split or the event-ownership model need extra evidence. `docs/proposals/` and `docs/dev/audits/` record settled design decisions — check them before proposing to collapse a seam.
-- Check the tech-debt tournament ledger issue (LionSR/TeXRA#8974) for the do-not-do list, and search `is:issue label:tech-debt` (open and closed) before writing anything new — a recently rejected or already-filed candidate is a duplicate, not a find.
+- Search `is:issue label:tech-debt` (open and closed) and the relevant per-proposal `Tracking:` issues before writing anything new — a recently rejected or already-filed candidate is a duplicate, not a find.
 
 ## Settled Surfaces — Do Not Propose Collapsing
 
 Treat these as intentional by default; removing an unused method *inside* one can still be valid, but collapsing the seam itself must beat the recorded rationale:
 
-- The four checked-in ratchets under `config/ratchets/` (`host-agent-import`, `shared-schemas-deep-import`, `host-agent-mock`, `architecture-edges`). Baselines freeze remaining edges — they shrink, never widen. Proposing to *shrink* one is a good candidate; proposing to delete the ratchet mechanism is not.
+- The five checked-in architectural ratchets under `config/ratchets/` (`host-agent-import-baseline.json`, `shared-schemas-deep-import-baseline.json`, `host-agent-mock-baseline.json`, `architecture-edges-baseline.json`, and `store-public-surface-baseline.json`). Baselines freeze remaining edges or public surface — they shrink, never widen. Proposing to *shrink* one is a good candidate; proposing to delete the ratchet mechanism is not.
 - The frozen `@agent/*` SDK surface (`packages/agent/`). There is no `@texra/core` workspace package (deleted by #7099); do not propose recreating it.
 - The trimmed PocketFlow engine (`src/agent/node/index.ts`). It deliberately lacks upstream `BatchNode`/`BatchFlow`, parallel variants, and the `params` channel — do not propose re-adding them, and do not propose replacing the engine without reading it first.
 - The four hosts (extension, desktop, CLI, trace-viewer) and the platform-ports composition root. Desktop has had no public release, which makes desktop state a *simplification* source (no migration machinery allowed), not a target.
@@ -70,10 +70,10 @@ A genuinely *new* dependency can still be the right answer, but the proposal mus
 For every symbol or behavior, classify consumers before writing:
 
 - Production corpus: `src/`, `packages/*/src`, `packages/extension/resources/`, `prompts/`, `supabase/functions/`, and loader/config paths (`package.json` contributions, settings schema, command registration).
-- Non-production corpus: `src/test-kernel/`, docs, `slides/`, snapshots, comments.
+- Non-production corpus: `src/test-kernel/`, docs, snapshots, comments.
 - Ambiguous corpus: `scripts/` and `docs/scripts/` — some are release/CI tooling that counts as production. Inspect usage before classifying.
 
-Use `rg` first: the exact symbol, `.name(` and `name(`, command IDs and config keys as string literals, event names, and any wire strings. VS Code command contributions and settings keys are consumed through `package.json`, not imports — grep both. `npm run check:dead-code` (knip) can help, but it is not a substitute for reading public interfaces, dynamic event names, tests, and docs. When a ratchet baseline lists the symbol, the find is proving the baseline entry can shrink, not discovering the dead code.
+Use `rg` first: the exact symbol, `.name(` and `name(`, command IDs and config keys as string literals, event names, and any wire strings. VS Code commands are wired through `packages/extension/package.json` contributions and `packages/extension/src/commands.ts`; settings keys are declared in `src/shared/schemas/coreSettings.ts` or `stateSettings.ts` and consumed by the native settings view. Grep those boundaries as well as imports. `npm run check:dead-code` (knip) can help, but it is not a substitute for reading public interfaces, dynamic event names, tests, and docs. When a ratchet baseline lists the symbol, the find is proving the baseline entry can shrink, not discovering the dead code.
 
 Reject or downgrade a candidate when:
 
@@ -86,7 +86,7 @@ Reject or downgrade a candidate when:
 
 This repo has no inline-TODO convention and no notes tree; durable findings go to one of two places:
 
-- **A dated proposal** under `docs/proposals/yyyy-mm-dd-topic.md` for a design-level simplification (collapsing a seam, retiring a format, replacing machinery). Follow the existing proposals' style: problem with consumer evidence, exact proposal, what we give up, acceptance criteria, risks.
+- **A dated proposal** under `docs/proposals/`, named yyyy-mm-dd-topic.md, for a design-level simplification (collapsing a seam, retiring a format, replacing machinery). Follow the existing proposals' style: problem with consumer evidence, exact proposal, what we give up, acceptance criteria, risks.
 - **A GitHub issue** labeled `tech-debt` for a bounded deletion, in the style of the tournament's children (e.g. #8746): title, evidence with `path:line` citations and grepped consumer counts, estimated net LoC and element delta, risk level. Dedupe against existing `label:tech-debt` issues (open *and* closed) first; consolidate into the existing issue that owns the topic rather than filing a duplicate.
 
 Be concrete enough that an implementing PR can follow the trail. Avoid vague "simplify this package" write-ups. One proposal or issue per durable candidate; do not pad the count with thin finds.
@@ -103,7 +103,7 @@ Diff the sibling branch against `origin/main`, not against the current PR branch
 
 ## Validation And PR Hygiene
 
-For docs-only proposal work, run `npm run format` and `git diff --check`. For code-touching implementation, run the checks AGENTS.md requires before committing: `npm run format`, `npm run compile:safe` (or targeted `typecheck:*` during development), `npm run lint`, `npm test`, and `npm run check:dead-code-ratchet` when exports were deleted (the baseline shrinks in the same PR).
+For docs-only proposal work, run `npm run format`, `npm run check:guidance-refs`, and `git diff --check`. For code-touching implementation, run the checks AGENTS.md requires before committing: `npm run format`, `npm run compile:safe` (or targeted `typecheck:*` during development), `npm run lint`, `npm test`, and `npm run check:dead-code-ratchet` when exports were deleted (the baseline shrinks in the same PR).
 
 A PR implementing a simplification is usually titled `refactor:` / `simplify:` / `consolidate:` / `dedupe:` — which activates the letter-level template requirements (checklist §14): the body must carry `## Net elements (R6)` (files, `^[+-]export` symbols, class/interface/enum declarations, net LoC from `git diff --stat origin/main`) and `## Consumer counts (R8)` (grepped subscriber/caller counts for every deleted emit path or public symbol). Build implies delete in the same PR; a net-positive-LOC "reduction" needs its stated reason. Use Conventional Commits.
 
