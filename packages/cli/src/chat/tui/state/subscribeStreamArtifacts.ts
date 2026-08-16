@@ -74,14 +74,17 @@ export function markArtifactStreamHydrated(streamId: StreamTabId): void {
 /** Prepare reconciliation for an authoritative full-set `load` of `retained`.
  *  `load` evicts every other record, so capture the markers it will evict up
  *  front (plus the active stream, whose first focus preload may still be in
- *  flight with no marker yet); the returned reconcile() drops exactly those
- *  stale markers and marks the retained streams hydrated. Call it right after
- *  `load` and again after focus: a stale in-flight preload that re-adds an
- *  evicted stream is cleared either way, while a stream legitimately preloaded
- *  after the load is preserved (it was never in the captured stale set). */
-export function beginLoadedStreamsReconcile(
-  retained: readonly StreamTabId[],
-): () => void {
+ *  flight with no marker yet). The returned `dropStale()` removes only the
+ *  stale markers (for a load whose async seed rejects after the synchronous
+ *  eviction); `reconcile()` drops them and marks the retained streams hydrated.
+ *  Call `reconcile()` right after a successful `load` and again after focus: a
+ *  stale in-flight preload that re-adds an evicted stream is cleared either
+ *  way, while a stream legitimately preloaded after the load is preserved (it
+ *  was never in the captured stale set). */
+export function beginLoadedStreamsReconcile(retained: readonly StreamTabId[]): {
+  readonly dropStale: () => void;
+  readonly reconcile: () => void;
+} {
   const retainedSet = new Set(retained);
   const stale = new Set<StreamTabId>();
   for (const streamId of hydratedArtifactStreams) {
@@ -89,10 +92,17 @@ export function beginLoadedStreamsReconcile(
   }
   const active = activeStreamId.get();
   if (active !== undefined && !retainedSet.has(active)) stale.add(active);
-  return () => {
+
+  const apply = (markRetained: boolean): void => {
     for (const streamId of stale) hydratedArtifactStreams.delete(streamId);
-    for (const streamId of retained) hydratedArtifactStreams.add(streamId);
+    if (markRetained) {
+      for (const streamId of retained) hydratedArtifactStreams.add(streamId);
+    }
     bumpStreamArtifactRevision();
+  };
+  return {
+    dropStale: () => apply(false),
+    reconcile: () => apply(true),
   };
 }
 

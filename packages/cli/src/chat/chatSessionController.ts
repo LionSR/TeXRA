@@ -543,15 +543,22 @@ export function createChatSessionController(
 
       const sessionContext = beginRunContext(resolution.agentConfig, 'history');
 
-      const reconcileLoadedStreams = beginLoadedStreamsReconcile([
+      const loadedStreamsReconcile = beginLoadedStreamsReconcile([
         resolution.streamId,
       ]);
 
       await runtimeSession.transcripts.ensureLoaded(resolution.streamId);
-      await snapshotStore.load([resolution.streamId]);
-      // Drop the markers `load` just evicted before the awaited read/patch can
-      // render a stale pre-resume projection.
-      reconcileLoadedStreams();
+      try {
+        await snapshotStore.load([resolution.streamId]);
+      } catch (error) {
+        // `load` evicts synchronously before its async seed, so on rejection the
+        // evicted markers are stale while the retained root was never seeded.
+        loadedStreamsReconcile.dropStale();
+        throw error;
+      }
+      // Drop the markers `load` evicted and mark the retained root before the
+      // awaited read/patch can render a stale pre-resume projection.
+      loadedStreamsReconcile.reconcile();
       const restored = await snapshotStore.read(resolution.streamId);
       // A rehydrated stream never re-emits `run.start`, so its identity is
       // seeded from the durable store (ExecutionMeta by FK) on this cold
@@ -579,7 +586,7 @@ export function createChatSessionController(
       // previous stream that re-added it during the awaited read above is cleared
       // again, while any stream preloaded in the meantime is preserved. Later
       // hydrations for the old stream also fail requestIsCurrent.
-      reconcileLoadedStreams();
+      loadedStreamsReconcile.reconcile();
 
       const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
         setupRunHost(sessionContext);
