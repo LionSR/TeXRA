@@ -65,7 +65,6 @@ export function createSettingsAgentControllers(
         workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
       ),
     resolveAgent: getRosterAgent,
-    fallbackTeamId: null,
   });
 
   const state: SettingsAgentCatalogState = {

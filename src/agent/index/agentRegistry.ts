@@ -409,7 +409,6 @@ export function createWorkspaceAgentRosterController(): AgentRosterController<Ag
         workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
       ),
     resolveAgent: getRosterAgent,
-    fallbackTeamId: null,
   });
 }
 
