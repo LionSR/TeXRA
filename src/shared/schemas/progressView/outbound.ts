@@ -14,7 +14,7 @@ import {
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { SetThemeMessageSchema } from '../commonViewMessages';
 import { commandOnly } from '../messageFactories';
-import { GoalStateSchema, GoalStatusSchema } from '../goal';
+import { GoalStatusSchema } from '../goal';
 import { AgentCategory } from '../agent';
 
 import { StreamTabIdSchema } from '../identifiers';
@@ -23,8 +23,6 @@ import {
   AgentOptionDataSchema,
   ModelOptionDataSchema,
 } from '../mainView/state';
-import { CompileFailureSchema, OutputFileInfoSchema } from '../output';
-import { roundIndexedRecord } from '../roundIndexed';
 import { InquiryThreadUpdatedEventSchema } from '../inquiry';
 import {
   AgentProposalPermissionSchema,
@@ -40,15 +38,8 @@ import {
   StreamSubstateSchema,
   StreamTabInfoSchema,
 } from '../stream';
-import {
-  ActiveChildInfoSchema,
-  ConversationProgressSchema,
-  StreamStageSchema,
-  StreamMetadataSchema,
-} from '../streamState';
-import { PlanSchema } from '../plan';
-import { TodoItemSchema } from '../todo';
-import { RunUsageMapSchema, TokenUsageStatsSchema } from '../usage';
+import { StreamMetadataSchema } from '../streamState';
+import { pickProjection } from './projectionShape';
 import {
   ProgressViewPlacementSchema,
   StreamScopedBaseSchema,
@@ -94,27 +85,29 @@ const ReleaseStreamContentMessageSchema = z.strictObject({
   stream: StreamTabIdSchema,
 });
 
-const UpdateConversationProgressMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS),
-  progress: ConversationProgressSchema,
-});
+export const UpdateConversationProgressMessageSchema =
+  StreamScopedBaseSchema.extend({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS),
+    progress: pickProjection('conversationProgress'),
+  });
 
 const UpdateStageMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STAGE),
-  stage: StreamStageSchema,
+  stage: pickProjection('stage'),
 });
 
 const UpdateStreamBadgesMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES),
-  subagents: z.array(ActiveChildInfoSchema),
+  subagents: pickProjection('subagents'),
 });
 
-const UpdateStreamDescriptionMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION),
-  description: z.string(),
-});
+export const UpdateStreamDescriptionMessageSchema =
+  StreamScopedBaseSchema.extend({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION),
+    description: z.string(),
+  });
 
-const UpdateStreamStatusMessageSchema = StreamScopedBaseSchema.extend({
+export const UpdateStreamStatusMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS),
   status: StreamPhaseSchema,
   substate: StreamSubstateSchema.optional(),
@@ -132,53 +125,54 @@ const LogDeltaMessageSchema = z.object({
 
 // Round-keyed update messages share one shape: a stream id, an optional
 // `rounds` record of per-round arrays, and an optional `reset` flag. The
-// generic `command`/element params keep each `command` literal distinct so the
-// outbound discriminated union still narrows.
+// generic `command`/`rounds` params keep each `command` literal distinct so the
+// outbound discriminated union still narrows; the `rounds` schema itself comes
+// from the canonical projection shape.
 function RoundUpdateMessageSchema<C extends string, T extends z.ZodType>(
   command: C,
-  elementSchema: T,
+  roundsSchema: T,
 ) {
   return StreamScopedBaseSchema.extend({
     command: z.literal(command),
-    rounds: roundIndexedRecord(elementSchema).optional(),
+    rounds: roundsSchema.optional(),
     reset: z.boolean().optional(),
   });
 }
 
-const UpdateFilesMessageSchema = RoundUpdateMessageSchema(
+export const UpdateFilesMessageSchema = RoundUpdateMessageSchema(
   PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
-  OutputFileInfoSchema,
+  pickProjection('files'),
 );
 
-const UpdateMissingOutputsMessageSchema = RoundUpdateMessageSchema(
+export const UpdateMissingOutputsMessageSchema = RoundUpdateMessageSchema(
   PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
-  z.string(),
+  pickProjection('missing'),
 );
 
-const UpdateCompileFailuresMessageSchema = RoundUpdateMessageSchema(
+export const UpdateCompileFailuresMessageSchema = RoundUpdateMessageSchema(
   PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
-  CompileFailureSchema,
+  pickProjection('compileFailures'),
 );
 
 const UpdateTodosMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_TODOS),
-  todos: z.array(TodoItemSchema),
+  todos: pickProjection('todos'),
 });
 
 const UpdatePlanMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PLAN),
-  plan: PlanSchema.nullable(),
+  plan: pickProjection('plan'),
 });
 
 const UpdateRunUsageMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE),
   runId: z.string(),
-  usage: TokenUsageStatsSchema,
+  usage: pickProjection('runUsage').valueType,
 });
 
 const UpdateQueuedFollowUpsMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS),
-  messages: z.array(z.string()),
+  messages: pickProjection('queuedFollowUps'),
 });
 
 const PermissionKindSchema = z.enum(PERMISSION_KIND);
@@ -241,7 +235,9 @@ const BypassTypeSchema = z.enum(APPROVAL_BYPASS_KINDS);
 const UpdateBypassMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS),
   type: BypassTypeSchema,
-  bypassActive: z.boolean(),
+  // The three bypass flags share one boolean schema on the projection;
+  // the envelope maps `type` to the matching flag.
+  bypassActive: pickProjection('bashBypass'),
 });
 
 // `error` is only ever populated (and only ever read) on the `polishError`
@@ -291,21 +287,13 @@ const UpdateInquiryThreadMessageSchema = z.object({
 const StreamContentRenderFields = {
   command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
   action: z.literal('render'),
-  stream: StreamTabIdSchema,
+  stream: pickProjection('stream'),
   // Per-run usage is shared by both stream kinds. The frontend derives the
   // cumulative session total from this canonical map.
-  runUsage: RunUsageMapSchema,
+  runUsage: pickProjection('runUsage'),
   // Active state is all-or-nothing. Partial tab-activation snapshots would
   // preserve unrelated stale fields in the frontend.
-  activeState: z
-    .strictObject({
-      conversationProgress: ConversationProgressSchema,
-      stage: StreamStageSchema.nullable(),
-      badges: z.strictObject({
-        subagents: z.array(ActiveChildInfoSchema),
-      }),
-    })
-    .optional(),
+  activeState: pickProjection('activeState').optional(),
 };
 
 const ClearStreamContentMessageSchema = z.strictObject({
@@ -316,27 +304,14 @@ const ClearStreamContentMessageSchema = z.strictObject({
 const WorkflowStreamContentMessageSchema = z.strictObject({
   ...StreamContentRenderFields,
   category: z.literal(AgentCategory.Workflow),
-  outputs: z.strictObject({
-    files: roundIndexedRecord(OutputFileInfoSchema),
-    missing: roundIndexedRecord(z.string()),
-    compileFailures: roundIndexedRecord(CompileFailureSchema),
-  }),
+  outputs: pickProjection('outputs'),
 });
 
 const ToolUseStreamContentMessageSchema = z.strictObject({
   ...StreamContentRenderFields,
   category: z.literal(AgentCategory.ToolUse),
-  workPlan: z.strictObject({
-    todos: z.array(TodoItemSchema),
-    plan: PlanSchema.nullable(),
-    queuedFollowUps: z.array(z.string()),
-  }),
-  controls: z.strictObject({
-    bashBypass: z.boolean(),
-    toolEditBypass: z.boolean(),
-    superYoloBypass: z.boolean(),
-    goal: GoalStateSchema,
-  }),
+  workPlan: pickProjection('workPlan'),
+  controls: pickProjection('controls'),
 });
 
 /** Full tab snapshots, one branch per stream category. */
@@ -364,6 +339,8 @@ export type StreamContentRenderPayload = Extract<
 
 const GoalActiveUpdatedMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.GOAL_ACTIVE_UPDATED),
+  // Flattened envelope over the projection's `controls.goal`
+  // (`GoalStateSchema`); the flattening is this arm's wire contract.
   active: z.boolean(),
   status: GoalStatusSchema.optional(),
   objective: z.string().optional(),

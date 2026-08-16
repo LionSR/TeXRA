@@ -37,6 +37,16 @@
       "name": "packages/trace-viewer/vite.standalone.config.ts"
     },
     {
+      "file": "src/shared/schemas/progressView/projectionShape.ts",
+      "category": "exports",
+      "name": "StreamContentProjectionShapeSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/projectionShape.ts",
+      "category": "types",
+      "name": "StreamContentProjectionShape"
+    },
+    {
       "file": "src/test-kernel/support/setupFakePlatform.ts",
       "category": "files",
       "name": "src/test-kernel/support/setupFakePlatform.ts"
