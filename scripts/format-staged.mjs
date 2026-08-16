@@ -40,6 +40,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -203,9 +204,25 @@ function isConfigPointerPath(spec) {
   return isRelativeSpecifier(spec) || isAbsolute(spec);
 }
 
-/** True when `path` is a regular file in the working tree. */
+/** Stat `path` the way Node's module loader probes candidates: any
+ * filesystem error (ELOOP, ENOTDIR, EACCES, ...) is a non-match, not an
+ * exception, so a bad probe never aborts resolution of the later candidates
+ * Node would still try. Returns undefined when the probe fails. */
+function statProbe(path) {
+  try {
+    return statSync(path);
+  } catch {
+    return undefined;
+  }
+}
+
+/** True when `path` is a regular file in the working tree. Node's
+ * LOAD_AS_FILE/tryExtensions classify with stat, so a symlink to a file
+ * counts: admitting the link as a candidate makes an untracked one a loud
+ * "not staged" skip instead of a silent fall-through to a fallback Node
+ * would never load. */
 function isWorktreeFile(path) {
-  return lstatSync(path, { throwIfNoEntry: false })?.isFile() === true;
+  return statProbe(path)?.isFile() === true;
 }
 
 /** Return the `main` entry of a dependency directory's package.json. The
@@ -277,7 +294,15 @@ function resolveConfigDepPath(configDir, spec, kind) {
   push(base);
   for (const ext of CJS_FILE_EXTENSIONS) push(`${base}${ext}`);
 
-  if (lstatSync(base, { throwIfNoEntry: false })?.isDirectory()) {
+  // Node applies LOAD_AS_DIRECTORY only when LOAD_AS_FILE found no file:
+  // an admitted file candidate wins outright and the directory's package
+  // main/index.* are never inspected, so an irrelevant directory beside the
+  // winner (for example an untracked symlinked package) must not force a
+  // skip either. stat, not lstat: Node's LOAD_AS_DIRECTORY follows a
+  // symlinked dependency directory too. Candidates reached through the link
+  // traverse a worktree symlink, which verifyConfigDep rejects loudly, so
+  // following the link here can never verify the wrong file.
+  if (candidates.length === 0 && statProbe(base)?.isDirectory()) {
     const main = readPackageMain(base);
     if (main) {
       const mainTarget = resolve(base, normalizeSpecifier(main));
@@ -289,7 +314,11 @@ function resolveConfigDepPath(configDir, spec, kind) {
       // an unstaged edit to the real main drive Prettier.
       push(mainTarget);
       for (const ext of CJS_FILE_EXTENSIONS) push(`${mainTarget}${ext}`);
-      if (lstatSync(mainTarget, { throwIfNoEntry: false })?.isDirectory()) {
+      // stat, not lstat: Node's LOAD_AS_DIRECTORY follows symlinks, so a
+      // main target that links to a directory resolves to its index.*.
+      // Classifying the link itself would skip those candidates and verify
+      // the package-level index.* fallback Node never loads (#10602).
+      if (statProbe(mainTarget)?.isDirectory()) {
         for (const indexName of CJS_INDEX_EXTENSIONS) {
           push(join(mainTarget, indexName));
         }
@@ -312,6 +341,29 @@ function verifyConfigDep(configDir, spec, kind = 'exact') {
       `config dependency ${spec} resolves outside the repository; skipped ` +
         'auto-staging.',
     );
+  }
+  // Node loads a module by realpath and resolves its own relative
+  // dependencies from the real directory, so an index blob at a lexical path
+  // passing through a worktree symlink proves nothing about the dependency
+  // context Node actually sees: walk the components from the repository root
+  // down and reject the dependency when any of them is a symlink.
+  let current = process.cwd();
+  for (const segment of depRel.split('/')) {
+    current = join(current, segment);
+    let stat;
+    try {
+      stat = lstatSync(current);
+    } catch {
+      // Does not resolve in the worktree; the existence checks below skip.
+      break;
+    }
+    if (stat.isSymbolicLink()) {
+      throw new SkipError(
+        `${depRel} resolves through a worktree symlink while the staged ` +
+          'config depends on it; skipped auto-staging so the realpath ' +
+          'target and its uncommitted dependencies stay out of the commit.',
+      );
+    }
   }
   const stagedDep = readIndexFile(depRel);
   if (!stagedDep) {
