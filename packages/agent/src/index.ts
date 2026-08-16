@@ -5,7 +5,7 @@
 // pinning the runtime's internal file layout — the same fold-in the three hosts
 // took in #10011. These never reach the emitted declarations, so they carry no
 // provider-type leak risk.
-import { createChannelTrace, type AgentEvent } from '@agent/trace';
+import type { AgentEvent } from '@agent/trace';
 import { loadAgents, resolveAgent } from '@agent/index';
 import {
   runAgent as runValidatedAgent,
@@ -26,6 +26,7 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
 // Local imports - config and host services
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { createLog } from '@logger/logUtils';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeHost';
 import type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
@@ -88,7 +89,7 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
 }
 
 let runtimeInitialized = false;
-const logger = createChannelTrace('agentPackage');
+const logger = createLog('agentPackage');
 
 function releaseOrWarn(message: string, release: () => void): void {
   try {
