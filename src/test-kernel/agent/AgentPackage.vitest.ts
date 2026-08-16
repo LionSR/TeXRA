@@ -40,8 +40,8 @@ vi.mock('@agent/core/definition/AgentConfig', () => ({
   AgentConfigSchema: { parse: (value: unknown) => value },
 }));
 
-vi.mock('@agent/trace', () => ({
-  createChannelTrace: () => ({ warn: mocks.warn }),
+vi.mock('@logger/logUtils', () => ({
+  createLog: () => ({ warn: mocks.warn }),
 }));
 
 vi.mock('@agent/index', () => ({
