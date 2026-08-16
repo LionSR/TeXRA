@@ -144,6 +144,12 @@ type SharedStateMigrationResult =
 /**
  * Parse persisted shared state once, normalizing the workspace snapshot and
  * pre-`modelId` model identity before live flow code sees it.
+ *
+ * Malformed known fields come back as `{success: false}`; invalid nested
+ * workspace-snapshot data instead throws its ZodError through `safeParse`
+ * (the snapshot union migrates via `.transform`). Both failure modes are
+ * loud, and both callers already handle the throw at their existing
+ * boundaries.
  */
 export function migrateSharedState(
   shared: unknown,
