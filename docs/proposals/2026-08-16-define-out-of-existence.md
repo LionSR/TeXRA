@@ -40,14 +40,14 @@ census. Format: machinery → construction-level fix → what deletes.
   at all sites; phantom-resume becomes a type error. (~25 LoC + the C5
   fallback already tabled.)
 - **D2. Optional resume-cancellation predicates** — `canAcquireResumeLease`
-  - `isCancellationRequested` threaded optionally through 4 layers; the
-    edge is "host forgets the guard" — and **the extension is the live
-    producer** (it computes the predicate and never threads it down;
-    audit-doc V4b). **Fix (adjusted on verification):** a **required sync**
-    `isCancellationRequested` on `ResumeQueuedToolUseOptions` (the
-    flow-attachment consumer is synchronous and cannot await); the async
-    lease refinement stays a separate member. Closes the extension hole by
-    construction; deletes the optional-threading arms (~20 LoC).
+  plus `isCancellationRequested` threaded optionally through 4 layers; the
+  edge is "host forgets the guard" — and **the extension is the live
+  producer** (it computes the predicate and never threads it down;
+  audit-doc V4b). **Fix (adjusted on verification):** a **required sync**
+  `isCancellationRequested` on `ResumeQueuedToolUseOptions` (the
+  flow-attachment consumer is synchronous and cannot await); the async
+  lease refinement stays a separate member. Closes the extension hole by
+  construction; deletes the optional-threading arms (~20 LoC).
 - **D3. `compensateFailedActivation`'s trace guard** — `runTrace?` and
   `activatedStreamId?` are two independent optionals with a single writer
   that always sets both. **Fix:** one atomic
