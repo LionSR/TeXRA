@@ -12,7 +12,7 @@ import type {
 } from '@shared/schemas';
 import { isModelOptionAvailable } from '@shared/schemas';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import { unique } from '@utils/core';
+import { assertNever, unique } from '@utils/core';
 import { getGLMCodingPlan } from '@utils/config/providerConfig';
 
 // Local file imports
@@ -455,8 +455,19 @@ function formatCliModelRecovery(
       return 'Choose an active model.';
     case 'provider-unavailable':
       return 'Choose a supported provider route or another model.';
-    default:
+    case 'subscription-access':
+    case 'copilot-access':
       return undefined;
+    case 'copilot-consent-required':
+      return 'Grant GitHub Copilot access, or choose another model.';
+    case 'copilot-unavailable':
+      return 'Enable GitHub Copilot access, or choose another model.';
+    case 'unknown-model':
+      return 'Choose a model that is available in the current registry.';
+    case undefined:
+      return undefined;
+    default:
+      return assertNever(availability, 'Unhandled model availability');
   }
 }
 

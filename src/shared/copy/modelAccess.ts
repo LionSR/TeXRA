@@ -15,6 +15,7 @@
 
 import type { UsageRoute } from '@shared/schemas';
 import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
+import { assertNever } from '@utils/core';
 
 /** Model calls paid for by your TeXRA plan. */
 export const INCLUDED_ACCESS = {
@@ -94,7 +95,12 @@ export function usageRouteBadge(
         compactLabel: OWN_API_KEYS.compactLabel,
         subscription: false,
       };
-    default:
+    case 'kimi-code-subscription':
+    case 'glm-coding-plan-subscription':
+      throw new Error(`Missing coding-plan copy for usage route: ${route}`);
+    case undefined:
       return undefined;
+    default:
+      return assertNever(route, 'Unhandled usage route');
   }
 }

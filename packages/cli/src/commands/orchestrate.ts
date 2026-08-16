@@ -8,6 +8,7 @@ import {
   teamTexraHostedMissingNames,
 } from '@common/teams/TeamPlan';
 import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
+import { createLog } from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import type { ApiAccessMode } from '@shared/schemas';
@@ -52,6 +53,8 @@ import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '../runtime/modelAccess';
+
+const log = createLog('orchestrate');
 import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import { loadCliApiStatus } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
@@ -129,7 +132,10 @@ async function canLaunchWithDefaultModel(
       accessList: models,
     });
     return true;
-  } catch {
+  } catch (error) {
+    log.warn(
+      `Unable to select the default CLI model: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return false;
   }
 }

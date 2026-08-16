@@ -46,7 +46,7 @@ async function computeDiffStats(
     // Preserve diff-match-patch's omitted-argument default: checkLines=true.
     return diffLineChanges(baseContent, outContent, { checkLines: true });
   } catch (err) {
-    log.debug(`Failed to compute diff stats: ${toErrorMessage(err)}`);
+    log.warn(`Failed to compute diff stats: ${toErrorMessage(err)}`);
     return {};
   }
 }
