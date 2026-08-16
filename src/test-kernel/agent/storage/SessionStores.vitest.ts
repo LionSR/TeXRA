@@ -289,10 +289,10 @@ describe('SessionStores deletion coordination', () => {
       const bulk = stores.deleteAll();
       unblockDeletion();
 
-      await expect(Promise.all([single, bulk])).resolves.toEqual([
-        'deleted',
-        { active: new Set(), failed: new Set() },
-      ]);
+      const [singleResult, bulkResult] = await Promise.all([single, bulk]);
+      expect(singleResult).toBe('deleted');
+      expect(bulkResult.active).toEqual(new Set());
+      expect(bulkResult.failed).toEqual(new Set());
       expect(releases).toEqual([stream]);
     });
   });

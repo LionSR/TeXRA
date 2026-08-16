@@ -286,7 +286,11 @@ describe('ProgressBackend cleanup', () => {
 
       // A log-only stream carries no sidecar FK, so it owns no execution:
       // its stream state clears and the leased execution stays untouched.
-      expect(retained).toEqual({ active: new Set(), failed: new Set() });
+      expect(retained).toEqual({
+        active: new Set(),
+        failed: new Set(),
+        deleted: new Set([stream]),
+      });
       expect(backend.state.streamLogs.has(stream)).toBe(false);
       await expectStored(`executions/${executionId}`, true);
     } finally {
@@ -313,6 +317,7 @@ describe('ProgressBackend cleanup', () => {
       expect(retained).toEqual({
         active: new Set(),
         failed: new Set(),
+        deleted: new Set([stream]),
       });
       expect(backend.state.streamLogs.has(stream)).toBe(false);
       await expectStored(`executions/${executionId}`, false);
@@ -350,6 +355,7 @@ describe('ProgressBackend cleanup', () => {
       expect(result).toEqual({
         active: new Set(),
         failed: new Set([failed.stream]),
+        deleted: new Set([incomplete.stream, deleted.stream]),
       });
       expect(backend.state.streamLogs.has(failed.stream)).toBe(true);
       expect(backend.state.streamLogs.has(incomplete.stream)).toBe(false);
@@ -373,6 +379,7 @@ describe('ProgressBackend cleanup', () => {
       await expect(backend.state.clearAll()).resolves.toEqual({
         active: new Set(),
         failed: new Set(),
+        deleted: new Set([stream]),
       });
 
       expect(backend.state.streamLogs.has(stream)).toBe(false);
@@ -410,6 +417,7 @@ describe('ProgressBackend cleanup', () => {
       expect(result).toEqual({
         active: new Set(),
         failed: new Set([failedStream]),
+        deleted: new Set([deletedStream]),
       });
       expect(backend.state.streamLogs.has(failedStream)).toBe(true);
       expect(backend.state.streamLogs.has(deletedStream)).toBe(false);

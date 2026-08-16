@@ -65,6 +65,7 @@ function stubClearAll(
   vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
     active,
     failed: new Set(),
+    deleted: new Set(),
   });
 }
 
@@ -227,7 +228,11 @@ describe('ProgressBackend', () => {
 
     emitRemoveStream(target, streamId);
 
-    await vi.waitFor(() => expect(clearStream).toHaveBeenCalledWith(streamId));
+    await vi.waitFor(() =>
+      expect(clearStream).toHaveBeenCalledWith(streamId, {
+        expectedIncarnation: 0,
+      }),
+    );
   });
 
   it('refuses reserved stream identifiers before durable cleanup', async () => {
@@ -940,7 +945,11 @@ describe('ProgressBackend', () => {
     backend.presentation.select(deleting);
     vi.spyOn(backend.state, 'clearAll').mockImplementation(async () => {
       await clearGate;
-      return { active: new Set([requested]), failed: new Set() };
+      return {
+        active: new Set([requested]),
+        failed: new Set(),
+        deleted: new Set(),
+      };
     });
 
     const deletion = backend.deleteAllStreams();

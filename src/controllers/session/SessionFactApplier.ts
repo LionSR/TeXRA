@@ -53,9 +53,13 @@ export type SessionFactApplierOptions = {
    * the removal barrier's fate: `active`/`failed` mean the stream was
    * retained — still alive — so the applier retires the barrier and its
    * facts flow again; `deleted` (or a host that reports nothing) keeps it.
+   * The applier passes the incarnation captured when the barrier was set so
+   * the host can refuse to delete a deterministic identity that a fresh run
+   * re-claimed while the deletion was queued.
    */
   deleteStream: (
     stream: StreamTabId,
+    expectedIncarnation?: number,
   ) =>
     | void
     | DeleteStreamResult
@@ -196,6 +200,25 @@ export class SessionFactApplier {
    * activation, leases — must not react to a refused one.
    */
   handleSessionFact(fact: SessionFact): boolean {
+    // A committed tombstone is reopened only by a legitimate workflow
+    // attachment with live-execution evidence. The stream's current metadata
+    // still names the workflow identity (the snapshot projection of the fresh
+    // `run.start` landed before this applier), and the execution registry
+    // holds the freshly tracked handle. A delayed stale `run.start` cannot
+    // satisfy this gate because it carries no attachment and no live handle.
+    if (
+      fact.type === 'setActiveStream' &&
+      fact.payload.streamId !== null &&
+      this.state.isStreamRemoved(fact.payload.streamId) &&
+      this.state.getStreamMetadata(fact.payload.streamId).identity?.kind ===
+        'multiAgentWorkflow' &&
+      this.state.hasLiveStreamExecution(fact.payload.streamId)
+    ) {
+      // The fresh attachment is the first delivery for the new incarnation,
+      // even when a prior host delete left this applier's registry untouched.
+      this.registeredWithRenderer.delete(fact.payload.streamId);
+      this.state.claimStreamIdentity(fact.payload.streamId);
+    }
     if (
       fact.type !== 'removeStream' &&
       sessionFactStreamIds(fact).some((streamId) =>
@@ -248,21 +271,29 @@ export class SessionFactApplier {
             const { streamId } = fact.payload;
             // Provisional barrier: facts racing the host delete are refused
             // now, but the barrier becomes permanent only when the deletion
-            // actually commits. A retained/live/failed outcome retires the
-            // barrier so a still-live stream is not frozen for the rest of
-            // the session. The host delete option must surface that outcome
-            // even when presentation repair fails; any other rejection leaves
-            // the barrier in place and is logged by the event-error wrapper,
+            // actually commits. The captured incarnation travels with the
+            // host delete, so a workflow relaunch that claims the identity
+            // while the delete is queued makes the delete report
+            // `superseded` instead of erasing the fresh run. A
+            // retained/live/failed/superseded outcome retires the barrier so
+            // a still-live or freshly re-claimed stream is not frozen. The
+            // host delete option must surface that outcome even when
+            // presentation repair fails; any other rejection leaves the
+            // barrier in place and is logged by the event-error wrapper,
             // because the stream may have deleted.
-            this.state.markStreamRemoved(streamId);
+            const expectedIncarnation = this.state.beginStreamRemoval(streamId);
             this.registeredWithRenderer.delete(streamId);
-            return Promise.resolve(this.options.deleteStream(streamId)).then(
-              (outcome) => {
-                if (outcome === 'active' || outcome === 'failed') {
-                  this.state.retireStreamTombstone(streamId);
-                }
-              },
-            );
+            return Promise.resolve(
+              this.options.deleteStream(streamId, expectedIncarnation),
+            ).then((outcome) => {
+              if (
+                outcome === 'active' ||
+                outcome === 'failed' ||
+                outcome === 'superseded'
+              ) {
+                this.state.retireStreamTombstone(streamId);
+              }
+            });
           }
         }
         assertNever(fact, 'Unhandled session fact');
@@ -272,16 +303,12 @@ export class SessionFactApplier {
   }
 
   handleRunFact(streamId: StreamTabId, event: SessionRunFactEvent): void {
-    // `run.start` is the canonical claim on a stream identity. A deterministic
-    // stream id (a WorkflowScriptTool relaunch reuses `workflow#<executionId>`)
-    // legitimately re-claims a tombstoned id by starting a fresh run, so retire
-    // the tombstone before the shared gate below refuses the run's own facts.
-    if (event.type === 'run.start' && this.state.isStreamRemoved(streamId)) {
-      this.state.retireStreamTombstone(streamId);
-    }
-    // Any other run fact for a removed stream is stale by definition — for
+    // A run fact for a removed stream is stale by definition — for
     // `child.activity` the fact's stream is the parent, so this also keeps a
-    // late roster from re-minting a removed parent's state.
+    // late roster from re-minting a removed parent's state. A delayed
+    // `run.start` therefore cannot reopen a committed tombstone; the re-claim
+    // lives in `handleSessionFact`, on the workflow attachment that carries
+    // live-execution evidence for the new incarnation.
     if (this.state.isStreamRemoved(streamId)) return;
     // The table is exhaustive over `RunFactType`, so a slot always exists;
     // TypeScript just cannot correlate a union event with its own slot.

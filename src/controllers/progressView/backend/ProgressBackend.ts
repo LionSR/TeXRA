@@ -175,7 +175,8 @@ export class ProgressBackend {
     });
     this.hasPendingPermissions = ui.hasPendingPermissions;
     this.factApplier = new SessionFactApplier(this.state, this.renderer, {
-      deleteStream: (stream) => this.deleteStream(stream),
+      deleteStream: (stream, expectedIncarnation) =>
+        this.deleteStream(stream, expectedIncarnation),
     });
     this.setApprovalBypassState = ui.setApprovalBypassState;
   }
@@ -230,7 +231,14 @@ export class ProgressBackend {
     stream: PresentedStreamId,
     requestId?: string,
   ): Promise<void> {
-    if (stream && !this.state.streamLogs.has(stream)) {
+    // The fact path re-claims a deterministic workflow stream before it
+    // reaches this call; every other removed identity must not be focused,
+    // even when `streamLogs` still has a summary for a provisional removal
+    // that has not committed yet.
+    if (
+      stream &&
+      (this.state.isStreamRemoved(stream) || !this.state.streamLogs.has(stream))
+    ) {
       // A newer rejected request still supersedes every older hydration. Its
       // visual intent is settled back to the confirmed selection below.
       this.activationGeneration += 1;
@@ -455,34 +463,61 @@ export class ProgressBackend {
    */
   async deleteStream(
     stream: StreamTabId,
+    expectedIncarnation?: number,
   ): Promise<DeleteStreamResult | undefined> {
     const wasActive = this.presentation.activeStream === stream;
     const activationGeneration = this.activationGeneration;
     const storageGeneration = this.storageGeneration;
     const retained = await this.enqueuePreparedStorageOperation(
-      () => this.prepareStreamDeletion(stream),
-      (ownershipReadFailed) => {
+      // Pre-delete preparation is the one failure shape we can classify: it
+      // definitely did not delete anything, so report `failed` and let the
+      // applier retire the provisional barrier. A post-delete failure is
+      // ambiguous and stays a rejection, so the barrier is kept.
+      () =>
+        this.prepareStreamDeletion(stream).catch((error) => {
+          log.warn(
+            `Stream ${stream} was retained because deletion preparation failed`,
+            { data: error },
+          );
+          return true;
+        }),
+      (preparationRetained) => {
         if (storageGeneration !== this.storageGeneration) {
           return Promise.resolve(undefined);
         }
-        if (ownershipReadFailed) {
+        if (preparationRetained) {
           return Promise.resolve('failed' as const);
         }
-        return this.deleteStreamNow(stream, wasActive, activationGeneration);
+        return this.deleteStreamNow(
+          stream,
+          wasActive,
+          activationGeneration,
+          expectedIncarnation,
+        );
       },
     );
-    if (retained) {
-      // Best-effort presentation repair: a rebuild/notification failure must
-      // not make the deletion outcome disappear, or the session-fact applier
-      // would keep its provisional tombstone on a stream the store retained.
+    if (retained === 'active' || retained === 'failed') {
+      // Best-effort presentation repair, each failure isolated so a broken
+      // rebuild cannot suppress the retention notification and neither can
+      // make the deletion outcome disappear. The session-fact applier must
+      // still see `active`/`failed` and retire its provisional tombstone.
       try {
         await this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
+      } catch (error) {
+        log.warn(
+          'Failed to rebuild rendered streams after a retained deletion',
+          {
+            data: { stream, retained, error },
+          },
+        );
+      }
+      try {
         await this.lifecycle.notifyDeletionRetained(
           retained === 'active' ? 1 : 0,
           retained === 'failed' ? 1 : 0,
         );
       } catch (error) {
-        log.debug('Failed to rebuild/notify after a retained stream deletion', {
+        log.warn('Failed to notify after a retained stream deletion', {
           data: { stream, retained, error },
         });
       }
@@ -541,11 +576,15 @@ export class ProgressBackend {
     stream: StreamTabId,
     wasActive: boolean,
     activationGenerationAtStart: number,
-  ): Promise<'active' | 'failed' | undefined> {
+    expectedIncarnation?: number,
+  ): Promise<'active' | 'failed' | 'superseded' | undefined> {
     if (!canUseStreamDataDir(stream)) return undefined;
 
     const hadDeletableData = this.hasDeletableStreamData(stream);
-    const deletion = await this.state.clearStream(stream);
+    const deletion =
+      expectedIncarnation === undefined
+        ? await this.state.clearStream(stream)
+        : await this.state.clearStream(stream, { expectedIncarnation });
     if (deletion !== 'deleted') {
       return deletion;
     }
@@ -613,14 +652,30 @@ export class ProgressBackend {
       activationGeneration !== this.activationGeneration &&
       (this.latestActivationTarget === '' ||
         this.state.streamLogs.has(this.latestActivationTarget));
-    await this.lifecycle.rebuildRenderedStreams({
-      syncActiveStream: !outcome.allDeleted && !newerIntentControlsSelection,
-    });
+    try {
+      await this.lifecycle.rebuildRenderedStreams({
+        syncActiveStream: !outcome.allDeleted && !newerIntentControlsSelection,
+      });
+    } catch (error) {
+      log.warn('Failed to rebuild rendered streams after bulk deletion', {
+        data: { allDeleted: outcome.allDeleted, error },
+      });
+    }
     if (!outcome.allDeleted) {
-      await this.lifecycle.notifyDeletionRetained(
-        outcome.activeCount,
-        outcome.failedCount,
-      );
+      try {
+        await this.lifecycle.notifyDeletionRetained(
+          outcome.activeCount,
+          outcome.failedCount,
+        );
+      } catch (error) {
+        log.warn('Failed to notify after a retained bulk deletion', {
+          data: {
+            activeCount: outcome.activeCount,
+            failedCount: outcome.failedCount,
+            error,
+          },
+        });
+      }
     }
   }
 
