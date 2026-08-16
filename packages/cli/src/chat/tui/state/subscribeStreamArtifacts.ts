@@ -3,9 +3,13 @@
 // The shared `StreamSnapshotStore` is the single accumulator for round
 // artifacts and per-run usage: `preload` seeds its memory from disk and
 // replays any live deltas recorded meanwhile on top. The TUI no longer copies
-// that state into `StreamSlice`; renderers read the canonical projection
-// (`projectStreamArtifacts`) directly, and this module owns only the async
-// preload edge plus the invalidation that makes those reads repaint.
+// the round-artifact fields into `StreamSlice`; renderers read the canonical
+// projection (`projectStreamArtifacts`) directly, and this module owns only the
+// async preload edge plus the invalidation that makes those reads repaint.
+//
+// `cumulativeUsage` is the one exception: exit summaries and the workflow
+// dashboard still read it from `StreamSlice`, so hydration keeps mirroring just
+// that field until those consumers migrate to the projection.
 
 import { signal } from '@lit-labs/signals';
 
@@ -15,37 +19,63 @@ import {
   type StreamArtifactProjection,
   type StreamArtifactReader,
 } from '@controllers/session/StreamArtifactProjection';
-import { type StreamTabId } from '@shared/schemas';
+import { sumUsageStats, type StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   activeStreamId,
   getCliStateGeneration,
   isCliStreamRetired,
+  patchStream,
+  registerCliStateResetHook,
   setTransientNotice,
 } from './cliState';
 import { isChildStreamRemoved } from './childExecutions';
 import { subscribeToSignalChanges } from './signalSubscription';
 
-export type { StreamArtifactProjection, StreamArtifactReader };
-
-/** Bumped whenever an async preload changes what the projection reads. */
+/** Bumped whenever the artifact projection changes: after a focus/`/plan`
+ *  preload completes or when a live fact mutates the snapshot store. Renderers
+ *  subscribe to this to repaint, and the projection memo keys on it. */
 export const streamArtifactRevision = signal<number>(0);
 
-function bumpStreamArtifactRevision(): void {
+/** Streams whose durable artifacts finished a successful preload this session.
+ *  A stream absent here has no established disk provenance yet, so render-time
+ *  reads fall back to the slice mirror instead of hitting unseeded getters
+ *  (and their `warnIfUnseeded` noise) mid-preload (#10730). */
+const hydratedArtifactStreams = new Set<StreamTabId>();
+
+/** Per-stream projection memo, invalidated on `streamArtifactRevision`. The
+ *  four renderers share one read-only clone per revision instead of re-cloning
+ *  every round-indexed map and re-summing usage on each streaming repaint
+ *  (#10731). */
+const artifactProjectionMemo = new Map<StreamTabId, StreamArtifactProjection>();
+
+registerCliStateResetHook(() => {
+  hydratedArtifactStreams.clear();
+  artifactProjectionMemo.clear();
+  streamArtifactRevision.set(0);
+});
+
+/** Invalidate the projection memo and repaint artifact readers. */
+export function bumpStreamArtifactRevision(): void {
+  artifactProjectionMemo.clear();
   streamArtifactRevision.set(streamArtifactRevision.get() + 1);
 }
 
 /** Read the canonical artifact projection for one stream from the live session.
- *  Returns `undefined` when no default session exists yet (harness/tests),
- *  letting callers fall back to their slice mirrors exactly as before. */
+ *  Returns `undefined` when no default session exists yet (harness/tests) or
+ *  when the stream has not completed a preload this session, letting callers
+ *  fall back to their slice mirrors exactly as before. */
 export function readStreamArtifacts(
   streamId: StreamTabId,
 ): StreamArtifactProjection | undefined {
   const session = tryDefaultSession();
-  return session
-    ? projectStreamArtifacts(session.snapshots, streamId)
-    : undefined;
+  if (!session || !hydratedArtifactStreams.has(streamId)) return undefined;
+  const cached = artifactProjectionMemo.get(streamId);
+  if (cached !== undefined) return cached;
+  const projection = projectStreamArtifacts(session.snapshots, streamId);
+  artifactProjectionMemo.set(streamId, projection);
+  return projection;
 }
 
 function streamCanReceiveArtifacts(
@@ -94,6 +124,18 @@ export async function hydrateStreamArtifacts(
   if (!streamCanReceiveArtifacts(streamId, generation, requestIsCurrent)) {
     return false;
   }
+  // The store already ordered the seed against live facts (including a
+  // `clearMissingOutputs` reset — see its overlay `reset` flag), so its
+  // accumulated usage replaces the slice's. Round artifacts and the work plan
+  // no longer mirror here; renderers read `projectStreamArtifacts` directly.
+  const runUsage = [...store.getRunUsage(streamId).values()];
+  patchStream(streamId, (slice) => ({
+    ...slice,
+    cumulativeUsage: runUsage.length
+      ? sumUsageStats(runUsage)
+      : slice.cumulativeUsage,
+  }));
+  hydratedArtifactStreams.add(streamId);
   bumpStreamArtifactRevision();
   return true;
 }

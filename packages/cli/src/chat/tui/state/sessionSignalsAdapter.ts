@@ -10,6 +10,7 @@ import type {
   SessionRendererPort,
 } from '@controllers/session/SessionRendererPort';
 import { SessionState } from '@controllers/session/SessionState';
+import type { StreamArtifactReader } from '@controllers/session/StreamArtifactProjection';
 import {
   sumUsageStats,
   type ConversationProgress,
@@ -35,8 +36,8 @@ import {
   projectChildRoster,
   setParentStream,
 } from './childExecutions';
+import { bumpStreamArtifactRevision } from './subscribeStreamArtifacts';
 import { appendLocalAssistantTranscript } from './transcript';
-import type { StreamArtifactReader } from './subscribeStreamArtifacts';
 
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
@@ -166,6 +167,7 @@ class TuiSessionRenderer implements SessionRendererPort {
       ...slice,
       outputFilesByRound: this.snapshots.getOutputFiles(streamId),
     }));
+    bumpStreamArtifactRevision();
   }
 
   onMissingOutputsChanged(streamId: StreamTabId): void {
@@ -182,6 +184,7 @@ class TuiSessionRenderer implements SessionRendererPort {
       return;
     }
     patchStream(streamId, (slice) => ({ ...slice, missingOutputsByRound }));
+    bumpStreamArtifactRevision();
   }
 
   onCompileFailuresChanged(streamId: StreamTabId): void {
@@ -189,6 +192,7 @@ class TuiSessionRenderer implements SessionRendererPort {
       ...slice,
       compileFailuresByRound: this.snapshots.getCompileFailures(streamId),
     }));
+    bumpStreamArtifactRevision();
   }
 
   onRunUsageChanged(
@@ -204,6 +208,7 @@ class TuiSessionRenderer implements SessionRendererPort {
         ? sumUsageStats([...runUsage.values()])
         : slice.cumulativeUsage,
     }));
+    bumpStreamArtifactRevision();
   }
 
   // Live todos/plan use the event payload (same as LitSessionRenderer). The
@@ -214,12 +219,14 @@ class TuiSessionRenderer implements SessionRendererPort {
     patchStream(streamId, (slice) =>
       isDeepStrictEqual(slice.todos, todos) ? slice : { ...slice, todos },
     );
+    bumpStreamArtifactRevision();
   }
 
   onPlanChanged(streamId: StreamTabId, plan: Plan | null): void {
     patchStream(streamId, (slice) =>
       isDeepStrictEqual(slice.plan, plan) ? slice : { ...slice, plan },
     );
+    bumpStreamArtifactRevision();
   }
 
   onQueuedFollowUpsChanged(streamId: StreamTabId): void {
