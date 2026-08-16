@@ -25,10 +25,12 @@ import {
   FREE_TIER,
   type UserTier,
 } from '../config';
-import type { SupabaseSessionLog } from '../supabaseSessionTypes';
 import type { TierService } from './TierService';
 
-const CHANNEL = 'ServerSideKeyService';
+interface ServerSideKeyLogger {
+  error?(message: string, options?: { data?: unknown }): void;
+  info?(message: string, options?: { data?: unknown }): void;
+}
 
 /**
  * When the last access fetch was anonymous (dead session), the authenticated
@@ -143,7 +145,7 @@ export class ServerSideKeyService {
     private readonly baseUrl: string,
     private readonly tierService: TierService,
     private readonly globalState: StateStore | null = null,
-    private readonly logger: SupabaseSessionLog = {},
+    private readonly logger: ServerSideKeyLogger = {},
     private readonly notifyIncludedModelAccessChanged: (
       enabled: boolean,
     ) => void = () => {},
@@ -219,10 +221,7 @@ export class ServerSideKeyService {
       try {
         this.notifyIncludedModelAccessChanged(value);
       } catch (error) {
-        this.logger.error?.(
-          CHANNEL,
-          `Event listener failed: ${toErrorMessage(error)}`,
-        );
+        this.logger.error?.(`Event listener failed: ${toErrorMessage(error)}`);
       }
     }
   }
@@ -271,7 +270,6 @@ export class ServerSideKeyService {
       // Denied by error (auth/network failure), not by policy — log so the two
       // are distinguishable.
       this.logger.error?.(
-        CHANNEL,
         `Access check failed, treating as denied: ${toErrorMessage(error)}`,
       );
       return { hasAccess: false, userTier: null };
@@ -344,11 +342,10 @@ export class ServerSideKeyService {
       let accessGranted = accessStatus.hasAccess && providers.length > 0;
 
       if (this.tierService.isAccessExpired()) {
-        this.logger.info?.(CHANNEL, 'User access has expired');
+        this.logger.info?.('User access has expired');
         accessGranted = false;
       } else if (!hasFullAccess && tierConfig === null) {
         this.logger.info?.(
-          CHANNEL,
           'Tier config unavailable for non-Ultra user, denying access',
         );
         accessGranted = false;
@@ -386,7 +383,6 @@ export class ServerSideKeyService {
       ) {
         this.quotaFlipApplied = true;
         this.logger.info?.(
-          CHANNEL,
           'Relay quota exhausted; switching useIncludedModelAccess off',
         );
         // Await so the persisted toggle state, the cleared cache, and
