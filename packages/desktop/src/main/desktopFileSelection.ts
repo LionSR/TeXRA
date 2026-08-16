@@ -24,6 +24,8 @@ import type {
   DesktopMessageHandler,
 } from './desktopIpcTypes.js';
 
+const logger = createLog('DesktopFileSelection');
+
 type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
   MainViewInboundMessage,
   { command: C }
@@ -192,9 +194,7 @@ export function createDesktopFileSelection(
       // The shared webview posts this for 'output' too, which the desktop has
       // no picker for. Say so rather than dropping it: handleMessage already
       // reported the message as handled.
-      createLog('DesktopFileSelection').warn(
-        `Unsupported multiple file selection: ${message.fileType}`,
-      );
+      logger.warn(`Unsupported multiple file selection: ${message.fileType}`);
       return;
     }
     const workspacePath = getWorkspacePath();
