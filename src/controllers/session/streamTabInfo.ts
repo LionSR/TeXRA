@@ -3,7 +3,7 @@ import { getStreamTabDisplayName } from '@agent/runtime/streamTab';
 import type { SessionStreamMetadata } from '@controllers/session/SessionState';
 import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
-import { getCleanAgentName, runIdentityName } from '@shared/schemas';
+import { getCleanAgentName, runIdentityDisplayName } from '@shared/schemas';
 
 export interface StreamTabInfoInputs {
   streamId: string;
@@ -40,7 +40,7 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   // exactly the same label as a resolved run: the agent name, with the full
   // id on `name` for tooltips and parallel-run disambiguation.
   const identityName = identity
-    ? getCleanAgentName(runIdentityName(identity))
+    ? runIdentityDisplayName(identity)
     : getStreamTabDisplayName(streamId);
 
   // Surface the full untruncated command for process streams (description
