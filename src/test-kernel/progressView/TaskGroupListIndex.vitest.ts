@@ -353,6 +353,55 @@ describe('task-group-list ungrouped message indexes', () => {
   });
 });
 
+describe('task-group-list renumbered resync ordering', () => {
+  it('reorders cached ungrouped rows when an ordinary upsert renumbers seqNos', () => {
+    const live: LogMessageData[] = [
+      { ...createMessage('m1', 'one', 100), seqNo: 1 },
+      { ...createMessage('m2', 'two', 200), seqNo: 2 },
+      { ...createMessage('m3', 'three', 300), seqNo: 3 },
+    ];
+    const list = createList(live);
+
+    // Hydration merges disk history before live appends and renumbers seqNos,
+    // then WebviewBridge replays getRange(0) as one ordinary upsert frame.
+    // logSlice keeps live rows at their old flat indices while the disk rows
+    // append at the tail, so `messages` is not itself in seqNo order.
+    const disk: LogMessageData[] = [
+      { ...createMessage('d1', 'disk one', 50), seqNo: 1 },
+      { ...createMessage('d2', 'disk two', 60), seqNo: 2 },
+    ];
+    const renumbered: LogMessageData[] = [
+      { ...live[0], seqNo: 3 },
+      { ...live[1], seqNo: 4 },
+      { ...live[2], seqNo: 5 },
+      ...disk,
+    ];
+
+    list.index.apply({
+      terminal: false,
+      wasTerminal: false,
+      groups: [],
+      previousGroups: [],
+      groupsChanged: false,
+      messages: renumbered,
+      previousMessages: live,
+      messagesChanged: true,
+      deltaIndices: [0, 1, 2],
+    });
+
+    expect(list.index.ungrouped.map((message) => message.id)).toEqual([
+      'd1',
+      'd2',
+      'm1',
+      'm2',
+      'm3',
+    ]);
+    expect(list.index.ungrouped.map((message) => message.seqNo)).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
+  });
+});
+
 describe('task-group-list orphan re-rooting', () => {
   it('renders a group whose parent is absent as a root, with its subtree and messages', () => {
     const list = createList([]);
