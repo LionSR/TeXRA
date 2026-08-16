@@ -248,7 +248,12 @@ export class SessionFactApplier {
             const { streamId } = fact.payload;
             // Provisional barrier: facts racing the host delete are refused
             // now, but the barrier becomes permanent only when the deletion
-            // actually commits — a retained stream is still alive.
+            // actually commits. A retained/live/failed outcome retires the
+            // barrier so a still-live stream is not frozen for the rest of
+            // the session. The host delete option must surface that outcome
+            // even when presentation repair fails; any other rejection leaves
+            // the barrier in place and is logged by the event-error wrapper,
+            // because the stream may have deleted.
             this.state.markStreamRemoved(streamId);
             this.registeredWithRenderer.delete(streamId);
             return Promise.resolve(this.options.deleteStream(streamId)).then(
@@ -267,7 +272,14 @@ export class SessionFactApplier {
   }
 
   handleRunFact(streamId: StreamTabId, event: SessionRunFactEvent): void {
-    // A run fact for a removed stream is stale by definition — for
+    // `run.start` is the canonical claim on a stream identity. A deterministic
+    // stream id (a WorkflowScriptTool relaunch reuses `workflow#<executionId>`)
+    // legitimately re-claims a tombstoned id by starting a fresh run, so retire
+    // the tombstone before the shared gate below refuses the run's own facts.
+    if (event.type === 'run.start' && this.state.isStreamRemoved(streamId)) {
+      this.state.retireStreamTombstone(streamId);
+    }
+    // Any other run fact for a removed stream is stale by definition — for
     // `child.activity` the fact's stream is the parent, so this also keeps a
     // late roster from re-minting a removed parent's state.
     if (this.state.isStreamRemoved(streamId)) return;
@@ -404,7 +416,9 @@ export class SessionFactApplier {
     next: StreamExecutionState['subagents'],
   ): void {
     // Rows naming a removed child stay removed: a stale roster cannot put a
-    // tombstoned identity back.
+    // tombstoned identity back. Both the incoming snapshot and the previously
+    // stored roster are filtered, so the retention step below cannot re-add a
+    // removed child as a finished row.
     next = next.filter(
       (child) => !this.state.isStreamRemoved(child.childStreamId),
     );
@@ -416,7 +430,9 @@ export class SessionFactApplier {
     this.state.getOrCreateStreamState(parentStreamId, category);
 
     this.state.updateStreamState(parentStreamId, (prev) => {
-      const previous = prev.subagents;
+      const previous = prev.subagents.filter(
+        (child) => !this.state.isStreamRemoved(child.childStreamId),
+      );
       const liveBefore = previous.filter(
         (child) => child.finishedAt === undefined,
       );
@@ -486,6 +502,12 @@ export class SessionFactApplier {
     // Land the status-machine phase in the parent rosters before this handler
     // can suspend, so rows are written in fact order and a slow active-phase
     // rehydrate can never overwrite a later phase.
+    //
+    // This pre-await write is deliberately residual: a removal landing during
+    // the rehydrate await below cannot undo it. That is safe because the child
+    // untrack path emits `child.activity` before `removeStream`, so the parent
+    // roster drop supersedes any status this row carries, and
+    // `updateChildRoster` filters tombstoned children before retention.
     const rosterParents = this.state.recordChildPhase(streamId, status);
 
     // Active phases keep the full log resident for runtime writes. Terminal

@@ -472,11 +472,20 @@ export class ProgressBackend {
       },
     );
     if (retained) {
-      await this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
-      await this.lifecycle.notifyDeletionRetained(
-        retained === 'active' ? 1 : 0,
-        retained === 'failed' ? 1 : 0,
-      );
+      // Best-effort presentation repair: a rebuild/notification failure must
+      // not make the deletion outcome disappear, or the session-fact applier
+      // would keep its provisional tombstone on a stream the store retained.
+      try {
+        await this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
+        await this.lifecycle.notifyDeletionRetained(
+          retained === 'active' ? 1 : 0,
+          retained === 'failed' ? 1 : 0,
+        );
+      } catch (error) {
+        log.debug('Failed to rebuild/notify after a retained stream deletion', {
+          data: { stream, retained, error },
+        });
+      }
     }
     return retained;
   }

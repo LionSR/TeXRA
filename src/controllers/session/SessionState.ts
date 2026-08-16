@@ -24,6 +24,7 @@ import {
 } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
+import { unique } from '@utils/core';
 
 /**
  * Config-derived display fields: undefined until the stream's `RunConfig`
@@ -113,13 +114,22 @@ export class SessionState {
   private readonly _streamStates = new Map<StreamTabId, StreamExecutionState>();
   private readonly _sessionState = new Map<StreamTabId, StreamSessionState>();
   /**
-   * Identities removed this session. Removal is final for a stream identity:
-   * the fact applier refuses any later fact naming a removed stream, so a
-   * stale status, roster, edge, or attachment fact cannot re-mint the state
-   * deletion dropped. This set is the single owner of that rejection. It is
-   * deliberately uncapped: tombstones retire only at storage-root reset —
-   * the proven horizon for in-flight facts — because evicting one would
-   * silently reopen resurrection for its stream.
+   * Identities removed this session, in in-memory session state only. The
+   * fact applier refuses any later fact naming a removed stream, so a stale
+   * status, roster, edge, or attachment fact cannot re-mint the transcript,
+   * execution, or metadata state deletion dropped. This set is the single
+   * owner of that rejection.
+   *
+   * Durable sidecar finality is owned by {@link SessionStores} + the snapshot
+   * store's staged-deletion/eviction write guards, not by this tombstone; its
+   * "removal is final" semantics are scoped to this in-memory projection.
+   *
+   * Lifecycle: deliberately uncapped, because every eviction policy invented
+   * so far reopens resurrection for an evicted id and would be a false
+   * finality claim. An entry retires when a fresh run legitimately re-claims
+   * the identity (`run.start` → {@link SessionFactApplier}), or when the whole
+   * storage root is replaced (`resetAfterStorageRootChange`). Otherwise it
+   * lives for the session — the proven horizon for in-flight facts.
    */
   private readonly _removedStreams = new Set<StreamTabId>();
 
@@ -383,8 +393,8 @@ export class SessionState {
   /**
    * Tombstone a removed stream identity. Written provisionally when a
    * `removeStream` fact lands and permanently when a deletion commits below;
-   * read by the fact applier, which rejects every later fact for the
-   * identity.
+   * read by the fact applier, which rejects every later fact for the identity
+   * until a fresh run re-claims it.
    */
   markStreamRemoved(stream: StreamTabId): void {
     this._removedStreams.add(stream);
@@ -396,9 +406,10 @@ export class SessionState {
   }
 
   /**
-   * Drop the tombstone without touching stream state: a removal whose
-   * durable delete ended in retention (`active`/`failed`) means the stream
-   * still lives, so its facts must flow again.
+   * Drop the tombstone without touching stream state. Two callers: a removal
+   * whose durable delete ended in retention (`active`/`failed`) — the stream
+   * still lives, so its facts must flow again — and a fresh `run.start` that
+   * legitimately re-claims a deterministic stream identity.
    */
   retireStreamTombstone(stream: StreamTabId): void {
     this._removedStreams.delete(stream);
@@ -428,9 +439,26 @@ export class SessionState {
       ...this._streamStates.keys(),
       ...Array.from(this.streamStatus.entries(), ([stream]) => stream),
     ]);
+    // `deleteAll` sweeps snapshot-only identities too (persisted sidecars and
+    // interrupted staged deletions) that have no resident transcript and thus
+    // no key in `knownStreams`. Capture them before the delete so a
+    // snapshot-only stream that is actually removed is tombstoned as well —
+    // otherwise a late fact could re-mint an identity the all-delete dropped.
+    let snapshotStreams: StreamTabId[] = [];
+    try {
+      snapshotStreams = unique([
+        ...(await this.snapshots.listPersistedStreams()),
+        ...(await this.snapshots.listStagedDeletions()),
+      ]);
+    } catch (error) {
+      this.logger.warn(
+        '[Persistence] Failed to enumerate snapshot-only streams before clearAll; only in-memory identities will be tombstoned.',
+        { data: error },
+      );
+    }
     const deletion = await this.stores.deleteAll();
     const retainedStreams = new Set([...deletion.active, ...deletion.failed]);
-    for (const stream of knownStreams) {
+    for (const stream of unique([...knownStreams, ...snapshotStreams])) {
       if (retainedStreams.has(stream)) continue;
       this.streamStatus.clearStream(stream);
       this._sessionState.delete(stream);
