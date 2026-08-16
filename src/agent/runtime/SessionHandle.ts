@@ -46,6 +46,7 @@ import {
 import { deriveResumability } from '@agent/storage/resumability';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
+import { DisposableStore } from '@platform/disposable';
 import { platform } from '@platform/platform';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -186,6 +187,8 @@ export class SessionHandle {
   private readonly restartRepairRetry = new RestartRepairRetryScheduler();
   private readonly restartRepairAbort = new AbortController();
   private storageGeneration = 0;
+  /** LIFO owner for the session's constructor-registered teardown. */
+  private readonly teardown = new DisposableStore();
   constructor(init: SessionHandleInit) {
     if (init.transcripts.mode.kind === 'read-only') {
       throw new Error(
@@ -245,6 +248,29 @@ export class SessionHandle {
     // process-wide registry: a host drains the session it is shutting down.
     this.flushers = init.flushers ?? new Map<string, RunTraceFlushEntry>();
     liveSessions.add(this);
+    // Register teardown in reverse LIFO order so `teardown.dispose()` runs the
+    // session's shutdown sequence top-to-bottom: drain traces, abort and
+    // dispose restart repair, then unwind each owner in dependency order,
+    // finally leaving `liveSessions`.
+    this.teardown.add(() => {
+      liveSessions.delete(this);
+    });
+    this.teardown.add(() => this.missedTerminalResults.clear());
+    this.teardown.add(() => {
+      for (const detach of [...this.resultListenerDetachers]) detach();
+    });
+    this.teardown.add(() => this.artifactFlushers.clear());
+    this.teardown.add(() => this.detachSnapshotEvents());
+    this.teardown.add(() => this.interactions.dispose());
+    this.teardown.add(() => this.modelRetries.dispose());
+    // Drop bypass state before the interaction slot settles pending approvals.
+    this.teardown.add(() => this.approvals.clearAll());
+    this.teardown.add(() => this.executions.dispose());
+    this.teardown.add(() => this.followUps.dispose());
+    this.teardown.add(() => this.subscriptions.dispose());
+    this.teardown.add(() => this.restartRepairRetry.dispose());
+    this.teardown.add(() => this.restartRepairAbort.abort());
+    this.teardown.add(() => this.flushPendingTraces());
     if (
       this.transcripts.mode.kind === 'persistent' &&
       init.restartRepair !== 'deferred'
@@ -994,7 +1020,6 @@ export class SessionHandle {
    * after teardown must not reach host closures.
    */
   private readonly resultListenerDetachers = new Set<() => void>();
-  private disposeStarted = false;
 
   /**
    * Subscribe to terminal `result` events for runs in this session. Hosts hold
@@ -1078,47 +1103,12 @@ export class SessionHandle {
   }
 
   /**
-   * Tear down everything this session owns. Order matters: drain this session's
-   * pending trace writes, drop subscription disposers, dispose the execution
-   * registry, settle pending host interactions via `interactions.dispose()`,
-   * and drop result listeners. Deregistration from `liveSessions` happens even
-   * when either phase fails, and every collected failure returns only after
-   * teardown has been attempted.
+   * Tear down everything this session owns through the constructor-registered
+   * LIFO store. The store aggregates each disposer's failure and still runs
+   * the remaining disposers, including the final `liveSessions` removal.
    */
   dispose(): void {
-    if (this.disposeStarted) return;
-    this.disposeStarted = true;
-
-    const failures: unknown[] = [];
-    try {
-      this.flushPendingTraces();
-    } catch (error) {
-      failures.push(error);
-    }
-    try {
-      this.teardownOwners();
-    } catch (error) {
-      failures.push(error);
-    } finally {
-      liveSessions.delete(this);
-    }
-    throwAggregated(failures, 'Session teardown failed');
-  }
-
-  /** Dispose the runtime owners and drop result listeners. */
-  private teardownOwners(): void {
-    this.restartRepairAbort.abort();
-    this.restartRepairRetry.dispose();
-    this.subscriptions.dispose();
-    this.executions.dispose();
-    // Drop bypass state before the interaction slot settles pending approvals.
-    this.approvals.clearAll();
-    this.modelRetries.dispose();
-    this.interactions.dispose();
-    this.detachSnapshotEvents();
-    this.artifactFlushers.clear();
-    for (const detach of [...this.resultListenerDetachers]) detach();
-    this.missedTerminalResults.clear();
+    this.teardown.dispose();
   }
 }
 

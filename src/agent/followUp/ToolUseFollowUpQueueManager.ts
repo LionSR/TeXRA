@@ -86,6 +86,7 @@ export class ToolUseFollowUpQueue {
   private readonly releaseObservers = new Set<
     (streamId: StreamTabId) => void
   >();
+  private disposed = false;
 
   onRelease(observer: (streamId: StreamTabId) => void): () => void {
     this.releaseObservers.add(observer);
@@ -122,6 +123,7 @@ export class ToolUseFollowUpQueue {
     streamId: StreamTabId,
     generationId: string,
   ): boolean {
+    if (this.disposed) return false;
     if (this.terminal.has(streamId)) return false;
     const entry = this.entries.get(streamId);
     if (entry) {
@@ -201,6 +203,7 @@ export class ToolUseFollowUpQueue {
     admission: 'live_owner' | 'recoverable' | 'existing_recoverable',
     expectedGenerationId?: string,
   ): FollowUpSubmission {
+    if (this.disposed) return { kind: 'unavailable' };
     if (this.terminal.has(streamId)) return { kind: 'unavailable' };
 
     let entry = this.entries.get(streamId);
@@ -322,6 +325,24 @@ export class ToolUseFollowUpQueue {
     this.terminal.set(streamId, true);
     this.notifyReleaseObservers(streamId);
     return true;
+  }
+
+  /**
+   * Dispose the session-owned boundary: every live entry queue, then the
+   * entry map, terminal tombstones, and release observers. The entry paths a
+   * detached producer can still reach after teardown (`submit` recoverable
+   * admission and `restorePersistedGeneration`) refuse to rebuild, so a late
+   * child result cannot leak a queue nobody will drain.
+   */
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    for (const entry of this.entries.values()) {
+      entry.queue.dispose();
+    }
+    this.entries.clear();
+    this.terminal.clear();
+    this.releaseObservers.clear();
   }
 
   private notifyReleaseObservers(streamId: StreamTabId): void {
