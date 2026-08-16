@@ -63,7 +63,6 @@ import {
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
-import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createRunContext, withRunContext } from './RunContext';
@@ -99,7 +98,7 @@ export interface AgentLaunchContext extends AgentCore {
 
 export interface AgentLaunchInput {
   config: AgentConfig;
-  executionId?: ExecutionId;
+  executionId: ExecutionId;
   streamTabIdOverride?: StreamTabId;
   /** Fires after streamId is assigned but before setActiveStream is emitted. */
   onBeforeActivation?: (streamId: StreamTabId) => void;
@@ -289,12 +288,12 @@ function beginRunStage(
 async function assembleAgentLaunchContext(
   input: AgentLaunchInput & { session: SessionHandle },
   executionId: ExecutionId,
-  interactions: SessionHostInteractions,
   streamId: StreamTabId,
   resources: AgentLaunchResources,
 ): Promise<AgentLaunchContext> {
   input.signal?.throwIfAborted();
   const fullConfig = input.config;
+  const interactions = input.session.interactions;
   // Resolve by the source the delegation captured at validation time, so launch
   // lands on the exact entry validation/display resolved. When no source is
   // pinned (direct launches, restored records), resolution falls to the
@@ -625,7 +624,7 @@ export async function buildAgentLaunchContext(
   const launchSession = input.session ?? currentSession();
   const interactions = launchSession.interactions;
   const streamStatus = launchSession.status;
-  const executionId = input.executionId ?? generateExecutionId();
+  const executionId = input.executionId;
   // One mint of this run's stream id: an override is used as-is (resume
   // paths pass the streamId stamped on execution metadata), and otherwise
   // the freshly minted id is both the reservation and the run's identity.
@@ -641,7 +640,6 @@ export async function buildAgentLaunchContext(
     const ctx = await assembleAgentLaunchContext(
       { ...input, session: launchSession },
       executionId,
-      interactions,
       streamId,
       resources,
     );

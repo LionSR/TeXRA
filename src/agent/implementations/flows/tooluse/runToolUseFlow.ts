@@ -14,7 +14,6 @@ import {
 } from '@agent/runtime/ModelFactory';
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   PersistedFlow,
   PersistedFlowStateError,
@@ -81,11 +80,11 @@ export interface RunToolUseFlowInput<
    */
   takePendingFollowUps?: () => readonly FollowUpQueueBatchItem[];
   onFollowUpConsumed?: () => void;
-  /** When true, delegation tools are filtered out to prevent nesting, and
-   *  every completed model cycle suspends at WAITING (see `ToolUseWaitNode`)
-   *  instead of blocking in-flow for the next follow-up. A resumed flow may
-   *  first consume `drainedFollowUps`; the child-run loop still owns
-   *  delivery and every later turn boundary. */
+  /** When true, the subagent prompt variant is used and every completed model
+   *  cycle suspends at WAITING (see `ToolUseWaitNode`) instead of blocking
+   *  in-flow for the next follow-up. A resumed flow may first consume
+   *  `drainedFollowUps`; the child-run loop still owns delivery and every later
+   *  turn boundary. */
   isSubagent?: boolean;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
@@ -136,8 +135,6 @@ export interface ToolUseFlowContext {
   readonly ownerSession: SessionHandle;
   readonly session: ToolUseSessionLifecycle;
   readonly modelHandler: RunModelHandler;
-  readonly interactions: SessionHostInteractions;
-  readonly model: string;
   interrupt(): void;
   requestImmediateCompaction(): void;
   modelSwitchDisabledReason(model: string): string | undefined;
@@ -366,10 +363,6 @@ export async function runToolUseFlow<C = unknown>(
     session: sessionLifecycle,
     get modelHandler() {
       return services.modelCell.handler;
-    },
-    interactions: runSession.interactions,
-    get model() {
-      return services.modelCell.modelId;
     },
     interrupt(): void {
       input.interrupt();

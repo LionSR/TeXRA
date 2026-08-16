@@ -21,7 +21,14 @@ import {
 import { defaultSession } from './SessionHandle';
 import type { ToolUseResumeData } from './SessionResumeRetrieval';
 
-export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
+export interface ResumeQueuedToolUseOptions extends Pick<
+  SubagentRunOptions,
+  | 'session'
+  | 'tools'
+  | 'approvalPromptsUnavailable'
+  | 'onApprovalPolicyDenial'
+  | 'runtimeUnavailableTools'
+> {
   /** Recovery ownership synchronously claimed by the submission boundary. */
   readonly recovery?: RecoveryContinuation;
   /** Recheck canonical admission atomically while acquiring the resumed lease. */
@@ -30,9 +37,8 @@ export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
   readonly isCancellationRequested?: () => boolean;
   /**
    * Fires with the resumed run's raw outcome — terminal or WAITING — right
-   * after the call returns successfully. Additive to `onRunError`, which only
-   * covers the terminal branch; native child-run strategies use this to
-   * recover the WAITING result value that would otherwise be discarded by
+   * after the call returns successfully. Native child-run strategies use this
+   * to recover the WAITING result value that would otherwise be discarded by
    * this function's own boolean return.
    */
   readonly onResult?: (result: AgentRuntimeFlowResult) => void;
@@ -137,15 +143,10 @@ export async function resumeQueuedToolUseFromResumeData(
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
       onApprovalPolicyDenial: options.onApprovalPolicyDenial,
       runtimeUnavailableTools: options.runtimeUnavailableTools,
-      parentStreamId: options.parentStreamId ?? resume.parentStreamId,
-      workflowPhase: options.workflowPhase,
+      parentStreamId: resume.parentStreamId,
       onFollowUpConsumed: () => {
         followUps = [];
-        options.onFollowUpConsumed?.();
       },
-      onProgress: options.onProgress,
-      onRunError: options.onRunError,
-      onRun: options.onRun,
       ...(options.canAcquireResumeLease && {
         canAcquireResumeLease: options.canAcquireResumeLease,
       }),
