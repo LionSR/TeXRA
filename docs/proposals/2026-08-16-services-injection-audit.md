@@ -221,3 +221,13 @@ The seams census found 8 seams/families of the "one production impl; seam exists
 **Tail (optional, either PR 2 or 3):** C11 desktop Pick.
 
 Aggregate if all mechanical batches land: ≈ −50 to −60 LoC, ~−25 elements, zero new constructs — before C13/C14, which carry the only remaining upside (−40/−50 and a net-negative seam sweep respectively) and both sit behind explicit gates.
+
+---
+
+## 6. Resolution addendum (2026-08-16)
+
+**C13 — approval trio is resolved; do-not-refile.** Current main post-#10647 already freezes `approvalPromptsUnavailable`, `runtimeUnavailableTools`, and `stopAfterCycle` in the per-launch `ToolPolicy` (`src/agent/core/flows/BaseFlowServices.ts:26-45`, frozen by `createToolPolicy`), carried on `AgentLaunchContext` (`src/agent/runtime/AgentLaunchContext.ts:120`, `:510`) and projected into the ambient context through `withExecutionRunContext` (`:138-154`). That is the accepted single-owner shape: launch-scoped policy frozen at the boundary, never re-derived from mutable session state. `onApprovalPolicyDenial` stays explicit on the projection boundary because it is a caller-injected callback, not a session-derived fact (`:142`, `:154`) — correct and intentional, not residue.
+
+**C12 is not pursued.** Its three-site `userFollowUpSupport` derivation premise is stale on current main: `single-cycle` collapsed into the launch-scoped `stopAfterCycle` (`ToolPolicy`) via #10647, and the remaining derivations are entry-point-specific rather than one shared rule.
+
+**C14 is dropped.** The Tier-3 test-seam house ruling was closed not-planned in #10675 (the test-seam portion is out under the maintainer's no-more-testing direction); the production projection-zero/bandwidth gate is tracked separately under #10672.

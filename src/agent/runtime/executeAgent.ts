@@ -122,6 +122,7 @@ async function launchToolUseRun(
   lifecycle: FlowLifecycleControl,
   shared: SubagentRunOptions & {
     readonly setting: AgentToolUseSetting;
+    readonly onFollowUpConsumed?: () => void;
     /**
      * Fresh launches take this from the caller; resume derives it from
      * persisted lineage, because the rebuilt system prompt would otherwise drop
@@ -293,8 +294,6 @@ export interface SubagentRunOptions {
   readonly tools?: readonly ITool[];
   /** Parent stream ID for subagent lineage tracking. Defaults to own streamId. */
   parentStreamId?: StreamTabId;
-  /** Fires when a tool-use session consumes queued follow-up instructions. */
-  onFollowUpConsumed?: () => void;
   /** Fires on meaningful progress: todo changes and tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
@@ -345,7 +344,10 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   streamTabIdOverride?: StreamTabId;
   /** The caller owns presentation for failures before the run lifecycle. */
   suppressErrorNotification?: boolean;
-  /** When true, proposal tools are filtered out to prevent nesting. */
+  /**
+   * Selects subagent prompt and presentation defaults and allows tool-use
+   * cycles to suspend at WAITING for the child-run loop.
+   */
   isSubagent?: boolean;
   /**
    * When true, enforce that an explicitly supplied category matches the
@@ -507,6 +509,8 @@ export async function executeAgent(
 }
 
 export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
+  /** Fires when the resumed tool-use session consumes queued follow-ups. */
+  readonly onFollowUpConsumed?: () => void;
   /** Recheck canonical admission atomically while acquiring the resumed lease. */
   readonly canAcquireResumeLease?: () => boolean | Promise<boolean>;
   /**

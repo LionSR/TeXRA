@@ -150,10 +150,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly subscriptionUsage: SubscriptionUsageReader;
   public readonly signInChatGpt: () => Promise<void>;
 
-  constructor(
-    context: vscode.ExtensionContext,
-    subscriptionUsage: SubscriptionUsageReader = new SubscriptionUsageService(),
-  ) {
+  constructor(context: vscode.ExtensionContext) {
     super('SettingsView');
 
     const ctx: SettingsHandlerContext = {
@@ -188,7 +185,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       refreshSpendingStatus: () =>
         getServerSideKeyService().refreshSpendingStatus(),
     });
-    this.subscriptionUsage = subscriptionUsage;
+    this.subscriptionUsage = new SubscriptionUsageService();
     this.profileKeyController = new SettingsProfileKeyController({
       prompt: new VscodePromptHost(),
       externalOpener: new VscodeExternalOpener(),
