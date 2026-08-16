@@ -148,10 +148,11 @@ const RENDER_INLINE_MATH_SPAN_PATTERN =
 const BEG_END_MATH_SPAN_PATTERN =
   /(?<=^(?:(?:[ \t]*>[ \t]?)|(?:[ \t]*(?:[-+*]|\d+[.)])[ \t]+))*[ ]{0,3})\\begin\{([a-z]+)\}(?:(?!^(?:(?:[ \t]*>[ \t]?)|(?:[ \t]*(?:[-+*]|\d+[.)])[ \t]+))*[ ]{0,3}(?:`{3,}|~{3,}))[\s\S])+?(?<!\\)\\end\{\1\}/gm;
 
-// Math spans whose body must reach the renderer verbatim in the lax
-// (htmlMarkdownNormalize) path. Order matters: display fences before inline
-// ones so `$…$` never splits a `$$…$$`, and the environment rule last so a
-// `\begin{…}…\end{…}` nested inside a fence is consumed with its fence.
+// Shared pattern vocabulary. Order matters: display fences before inline ones
+// so `$…$` never splits a `$$…$$`, and the legacy environment regex stays last
+// for the fail-loud identity swap below. The render and HTML-normalize shields
+// both derive their active sets from this list and drop the environment regex
+// in favour of the container/fence-aware probe.
 const MATH_SPAN_PATTERNS: readonly RegExp[] = [
   /\$\$[\s\S]+?\$\$/g, // $$ … $$  (display, may span lines)
   /(?<!\\)\\\[[\s\S]+?(?<!\\)\\\]/g, // \[ … \]  (display)
@@ -161,9 +162,9 @@ const MATH_SPAN_PATTERNS: readonly RegExp[] = [
 ];
 
 // The render shield swaps in the texmath-adjacent inline pattern and drops
-// the lax environment regex; environments are shielded by the block-state
-// probe instead (see protectLatexMathSpansForRender). htmlMarkdownNormalize
-// keeps the lax default set above.
+// the legacy environment regex; environments are shielded by the block-state
+// probe instead. The HTML normalizer keeps the lax inline pattern but likewise
+// drops the environment regex (see NORMALIZE_MATH_SPAN_PATTERNS).
 const RENDER_MATH_SPAN_PATTERNS: readonly RegExp[] = MATH_SPAN_PATTERNS.filter(
   (pattern) => pattern !== BEG_END_MATH_SPAN_PATTERN,
 ).map((pattern) =>
@@ -556,31 +557,6 @@ function restorePlaceholders(
     if (next === restored) return restored;
     restored = next;
   }
-}
-
-/** Shields complete LaTeX math spans while another transform runs. */
-export function protectLatexMathSpans(
-  content: string,
-  patterns: readonly RegExp[] = MATH_SPAN_PATTERNS,
-): {
-  content: string;
-  restore: (value: string) => string;
-} {
-  const protectedMath = protectByPatterns(
-    content,
-    patterns,
-    'LATEX-MATH',
-    true,
-  );
-  return {
-    content: protectedMath.content,
-    restore: (value) =>
-      restorePlaceholders(
-        value,
-        protectedMath.placeholder,
-        protectedMath.items,
-      ),
-  };
 }
 
 let normalizeEnvironmentProbe: BegEndEnvironmentProbe | undefined;
