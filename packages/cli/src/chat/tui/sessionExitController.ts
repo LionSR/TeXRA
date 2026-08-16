@@ -28,9 +28,12 @@ import {
   restoreTuiInputModes,
   supportsTerminalJobControl,
 } from '@cli/tui/terminalCleanup';
+import { createLog } from '@logger/logUtils';
+import type { DisposableStore } from '@platform/disposable';
 import { tryPlatform } from '@platform/platform';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { assertNever } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   resetCliState,
@@ -52,6 +55,7 @@ import {
 import type PQueue from 'p-queue';
 import type { Instance as InkInstance } from 'ink';
 
+const log = createLog('cli.sessionExit');
 const EXIT_CONFIRMATION_TTL_MS = 800;
 
 /**
@@ -76,7 +80,9 @@ interface SessionExitControllerContext {
   /** Re-arm the Kitty keyboard protocol on SIGCONT when the terminal supports it. */
   readonly kittyKeyboardEnabled: boolean;
   /** Session-scoped subscriptions torn down on graceful exit. */
-  readonly disposers: ReadonlyArray<() => void>;
+  readonly disposables: DisposableStore;
+  /** Removes the process-exit terminal backstop after terminal restoration. */
+  readonly disposeTerminalRestoreOnExit: () => void;
   /** Follow-up delivery queue drained before a graceful exit returns. */
   readonly followUpQueue: PQueue;
   /** Reads the live approval policy for the resume hint. */
@@ -328,7 +334,14 @@ export function createSessionExitController(
     if (exiting) return;
     removeProcessHandlers();
     clearExitConfirmation();
-    for (const dispose of ctx.disposers) dispose();
+    let disposalFailed = false;
+    let disposalFailure: unknown;
+    try {
+      ctx.disposables.dispose();
+    } catch (error) {
+      disposalFailed = true;
+      disposalFailure = error;
+    }
     await ctx.followUpQueue.onIdle();
     // A suspended (idle/WAITING) root session is resumable: its flow record
     // survives only if we DON'T interrupt the flow (interrupt clears it). See
@@ -345,6 +358,7 @@ export function createSessionExitController(
     }
     await persistAndReleaseResumableIdleLease(resumableIdle);
     cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
+    ctx.disposeTerminalRestoreOnExit();
     // Print the resume hint after the terminal modes are restored, but before
     // resetCliState() clears the stream tree the hint is built from.
     printResumeHintOnExit();
@@ -355,9 +369,16 @@ export function createSessionExitController(
       // flushed and the resume hint is printed, preserving the suspended flow
       // record on disk for `texra resume`. Run platform shutdown first so queued
       // usage logs flush — bin/texra.ts's finally won't on exit().
+      if (disposalFailed) {
+        log.error(
+          `Session resource disposal failed during exit: ${toErrorMessage(disposalFailure)}`,
+        );
+      }
       await runPlatformShutdown();
+      if (disposalFailed) session.runExitCode = CliExitCode.AgentError;
       process.exit(session.runExitCode);
     }
+    if (disposalFailed) throw disposalFailure;
   };
 
   return {

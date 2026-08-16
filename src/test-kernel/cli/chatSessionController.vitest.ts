@@ -169,6 +169,7 @@ import {
   chatTuiSigintAction,
   TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
+import { DisposableStore } from '@platform/disposable';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -254,7 +255,7 @@ function makeInit(
     session: makeSession(),
     runtimeSession: mocks.defaultSession(),
     getSessionContext: () => makeSessionContext(),
-    disposers: [],
+    disposables: new DisposableStore(),
     followUpQueue: new PQueue({ concurrency: 1 }),
     snapshotStore: new StreamSnapshotStore(),
     ...overrides,
@@ -816,8 +817,10 @@ describe('createChatSessionController', () => {
     );
 
     const session = makeSession();
-    const disposers: Array<() => void> = [];
-    const ctrl = createChatSessionController(makeInit({ session, disposers }));
+    const disposables = new DisposableStore();
+    const ctrl = createChatSessionController(
+      makeInit({ session, disposables }),
+    );
     ctrl.startRootRun(makeRunRequest('Delegate the calculation.'));
     await vi.waitFor(() => expect(session.streamId).toBe(rootStream));
 
@@ -848,7 +851,7 @@ describe('createChatSessionController', () => {
     expect(detachResultToast).toHaveBeenCalledOnce();
     expect(detachRunFacts).not.toHaveBeenCalled();
 
-    for (const dispose of disposers) dispose();
+    disposables.dispose();
     expect(detachRunFacts).toHaveBeenCalledOnce();
     expect(disposeAdapter).toHaveBeenCalledOnce();
     executions.dispose();
