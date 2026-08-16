@@ -15,7 +15,10 @@ irrelevant TypeScript findings.
 Prioritize correctness, security, platform decoupling, type safety, Zod v4
 schema correctness, PocketFlow invariants, webview lifecycle issues,
 configuration and storage correctness, and CI/toolchain hygiene. Do not run
-`npm test`, and do not ask the author to add speculative abstractions.
+`npm test`, and do not ask the author to add speculative abstractions. Do not
+ask the author to add tests beyond the bar in `AGENTS.md` "Testing discipline":
+flag a missing test only when the PR fixes a reproduced defect and ships
+without its regression test.
 
 Conversely, flag pass-through layers this pull request newly introduces — wrapper
 functions that only forward to a single callee, single-use two-layer factories,
