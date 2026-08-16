@@ -699,6 +699,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       buildReliabilityAndOrchestrationMessage({
         workspaceState: workspaceSM,
         globalState: globalSM,
+        config: platform().config,
         getReliabilitySettings: () =>
           this.profileController.getReliabilitySettings(),
       }),

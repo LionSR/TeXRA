@@ -68,6 +68,7 @@ import {
   bashApprovalEnabled,
   chatgptAuth,
   grokAuth,
+  childRunConcurrencyBudget,
   claudeAgentEffort,
   claudeAgentModel,
   claudeAgentPermissionMode,
@@ -79,6 +80,7 @@ import {
   customAgentDirIsDefault,
   customPresets,
   detachSubagentsOnStop,
+  multiAgentSettingsRevision,
   editApprovalEnabled,
   gitAuthorEmail,
   gitAuthorName,
@@ -429,16 +431,23 @@ export class SettingsApp extends SettingsAppBase {
             .unsupportedCommands=${unsupportedCommands.get()}
           ></agents-tab>
         `;
-      case 'multi-agent':
+      case 'multi-agent': {
+        // Touch the acknowledgement generation so a same-value rebroadcast
+        // after a rejected/failed write still re-renders this branch and lets
+        // live() restore the committed number-row value.
+        multiAgentSettingsRevision.get();
         return html`
           <multi-agent-tab
             .customPresets=${customPresets.get()}
             .orchestratorAgents=${orchestratorAgents.get()}
             .allowOrchestratorKill=${allowOrchestratorKill.get()}
             .detachSubagentsOnStop=${detachSubagentsOnStop.get()}
+            .childRunConcurrencyBudget=${childRunConcurrencyBudget.get()}
             .worktreeSupport=${gitWorktreeSupport.get()}
+            .ackGeneration=${multiAgentSettingsRevision.get()}
           ></multi-agent-tab>
         `;
+      }
       case 'tools':
         return html`
           <tools-tab

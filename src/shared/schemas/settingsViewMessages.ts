@@ -33,6 +33,7 @@ import {
 } from './agent';
 import { AgentModePresetSchema } from './agentPresets';
 import { AgentSkillsEnabledSchema } from './agentSkills';
+import { ChildRunConcurrencyBudgetSchema } from './coreSettings';
 import { ModelAvailabilityFieldsSchema } from './mainView/state';
 import {
   NumberSettingSchema,
@@ -373,6 +374,7 @@ const UpdateReliabilityAndOrchestrationMessageSchema = z.object({
   reliabilitySettings: z.array(NumberSettingSchema).prefault([]),
   allowOrchestratorKill: z.boolean().prefault(true),
   detachSubagentsOnStop: z.boolean().prefault(false),
+  childRunConcurrencyBudget: ChildRunConcurrencyBudgetSchema,
 });
 export type UpdateReliabilityAndOrchestrationMessage = z.infer<
   typeof UpdateReliabilityAndOrchestrationMessageSchema

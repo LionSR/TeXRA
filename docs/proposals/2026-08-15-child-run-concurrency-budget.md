@@ -1,7 +1,7 @@
 # One child-run concurrency budget
 
-Status: design note (Wave-4 prerequisite for item 4 of
-`2026-08-14-delegation-flow-substrate-consolidation.md`)
+Status: landed (see #10640). Originally a design note / Wave-4 prerequisite
+for item 4 of `2026-08-14-delegation-flow-substrate-consolidation.md`.
 Date: 2026-08-15
 
 ## The resource being budgeted
@@ -39,9 +39,9 @@ ruling is:
 - **Count-based, default 16.** High enough that real concurrent-workflow
   usage (double-digit simultaneous detached runs is normal operating
   practice here) never queues, low enough to stop a runaway recursive
-  fan-out from opening unbounded model conversations. v1 ships this as a
-  module constant; the user-facing core setting (Zod schema + native
-  settings view wiring) is recorded follow-up, not part of this change.
+  fan-out from opening unbounded model conversations. v1 shipped this as a
+  module constant; the user-facing core setting (Zod schema + native settings
+  view wiring) landed as follow-up #10640 (see "Landed implementation" below).
   Per-provider-key partitioning is **rejected** (maintainer ruling,
   2026-08-15: overengineering). The per-session count budget is the final
   shape; do not re-propose provider-key partitioning.
@@ -111,3 +111,23 @@ execution, and a queued launch aborts cleanly if its parent is cancelled
   overengineering; see the scope ruling above).
 - No cap on root runs or agent-CLI children.
 - No change to engine semaphore, lifetime call cap, or fan-out caps.
+
+## Landed implementation
+
+Issue #10640 lands the previously-cut user-facing setting:
+
+- Canonical key: `texra.childRunConcurrencyBudget`.
+- Default: 16; allowed range 1–100 (integer), validated by
+  `ChildRunConcurrencyBudgetSchema`.
+- Persistence: workspace-scoped `.texra/config.json` (the settings-view catalog
+  row omits `configTarget`, so the write path uses the workspace target).
+- Surface: the native VS Code/desktop settings view Multi-Agent tab only. The
+  CLI `/config` panel does not surface it, but the CLI still recognizes and
+  honors the key because the runtime reads it.
+- Runtime: `childRunBudgetFor` re-reads the configured value on every call and
+  live re-pins the session queue unless the caller explicitly pinned it with an
+  explicit `concurrency` argument (tracked by a `WeakSet`, so the existing
+  explicit test seams stay authoritative). Absent and invalid persisted values
+  both resolve to 16.
+- Provider-key partitioning remains rejected (maintainer ruling) — this
+  implementation is per-session count-based only.
