@@ -135,19 +135,33 @@ const INLINE_MATH_SPAN_PATTERN =
 const RENDER_INLINE_MATH_SPAN_PATTERN =
   /(?<![\\\d])\$(?!\$)(?!\s)[^\n$]+?(?<![\\$\s])\$(?!\d)(?:\$(?!\$)(?!\s)[^\n$]+?(?<![\\$\s])\$(?!\d))*/g;
 
+// Environment spans mirror texmath's `beg_end` block rule, so the opener is
+// only recognized where that rule can start one: at a block line start, after
+// optional blockquote/list container prefixes and up to three spaces of
+// indentation. An inline `prefix \begin{…}` stays prose, an escaped `\\begin`
+// never opens (the anchor admits no preceding backslash), four-space
+// indentation stays a code block, and starred variants like `align*` remain
+// unshielded in both hosts (texmath's `[a-z]+` name class excludes them). The
+// closer must be an unescaped `\end` naming the same environment, and a span
+// that would cross a fenced-code boundary is declined: texmath never sees
+// fenced content, so an opener inside one fence pairing a closer inside
+// another would swallow the intervening prose into the placeholder —
+// declining under-shields to the pre-fix rendering instead. Unmatched here,
+// markdown-it eats `\\` row breaks as escapes and turns `*…*` inside the
+// body into emphasis.
+const BEG_END_MATH_SPAN_PATTERN =
+  /(?<=^(?:(?:[ \t]*>[ \t]?)|(?:[ \t]*(?:[-+*]|\d+[.)])[ \t]+))*[ ]{0,3})\\begin\{([a-z]+)\}(?:(?!^(?:(?:[ \t]*>[ \t]?)|(?:[ \t]*(?:[-+*]|\d+[.)])[ \t]+))*[ ]{0,3}(?:`{3,}|~{3,}))[\s\S])+?(?<!\\)\\end\{\1\}/gm;
+
 // Math spans whose body must reach the renderer verbatim. Order matters: the
 // display fences are matched before the inline ones so `$…$` never splits a
 // `$$…$$`, and the environment rule comes last so a `\begin{…}…\end{…}`
-// nested inside a fence is consumed with its fence. The environment rule
-// mirrors texmath's `beg_end` block rule (lowercase-letter names, same-name
-// close), which the webview enables; unmatched here, markdown-it eats `\\`
-// row breaks as escapes and turns `*…*` inside the body into emphasis.
+// nested inside a fence is consumed with its fence.
 const MATH_SPAN_PATTERNS: readonly RegExp[] = [
   /\$\$[\s\S]+?\$\$/g, // $$ … $$  (display, may span lines)
   /(?<!\\)\\\[[\s\S]+?(?<!\\)\\\]/g, // \[ … \]  (display)
   /(?<!\\)\\\([\s\S]+?(?<!\\)\\\)/g, // \( … \)  (inline)
   INLINE_MATH_SPAN_PATTERN, // $ … $  (one or more adjacent inline spans, single line)
-  /\\begin\{([a-z]+)\}[\s\S]+?\\end\{\1\}/g, // \begin{env} … \end{env}  (texmath beg_end)
+  BEG_END_MATH_SPAN_PATTERN, // \begin{env} … \end{env}  (texmath beg_end)
 ];
 
 // The processor's render shield swaps in the texmath-adjacent inline pattern;
