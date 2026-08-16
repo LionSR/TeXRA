@@ -57,10 +57,7 @@ export async function migrateLegacyVscodeStorage(
   context: vscode.ExtensionContext,
   storage: StorageProvider,
 ): Promise<void> {
-  const migrationLogger = {
-    info: (message: string) => log.info(message),
-    warn: (message: string) => log.warn(message),
-  };
+  const migrationLogger = { info: log.info, warn: log.warn };
   async function migrateBucket(
     getSourcePath: () => string | undefined,
     getTargetPath: () => string,

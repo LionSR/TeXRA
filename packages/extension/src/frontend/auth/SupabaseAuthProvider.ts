@@ -67,11 +67,17 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       },
       log: {
         warn: (source, message, options) =>
-          logger.warn(source, message, options),
+          options === undefined
+            ? logger.warn(source, message)
+            : logger.warn(source, message, options),
         error: (source, message, options) =>
-          logger.error(source, message, options),
+          options === undefined
+            ? logger.error(source, message)
+            : logger.error(source, message, options),
         info: (source, message, options) =>
-          logger.info(source, message, options),
+          options === undefined
+            ? logger.info(source, message)
+            : logger.info(source, message, options),
       },
     });
     SupabaseAuthProvider.instance = this;

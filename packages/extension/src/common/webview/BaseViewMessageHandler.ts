@@ -58,6 +58,7 @@ export abstract class BaseViewMessageHandler<
 > {
   protected readonly logger: ViewMessageLogger;
   protected readonly channel: string;
+  private readonly log: ReturnType<typeof logger.createLog>;
 
   /**
    * Active webview reference, tracked on every dispatch. Subclasses access it
@@ -68,11 +69,7 @@ export abstract class BaseViewMessageHandler<
   constructor(protected readonly viewName: string) {
     this.logger = logger;
     this.channel = `${viewName}MessageHandler`;
-  }
-
-  /** Channel-bound log for this handler's own inbound diagnostics. */
-  private get log() {
-    return logger.createLog(this.channel);
+    this.log = logger.createLog(this.channel);
   }
 
   /**
