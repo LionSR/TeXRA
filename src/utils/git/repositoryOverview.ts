@@ -18,6 +18,7 @@
 
 import { executeCommand } from '@utils/system/execUtils';
 import { isGitRepository } from '@utils/git/isGitRepository';
+import { splitOutputLines } from '@utils/text/stringUtils';
 
 import { COMMIT_LABEL_FORMAT, splitCommitLines } from './commitLogFormat';
 
@@ -164,7 +165,7 @@ export async function readGitEnvironmentSummary(
       ),
     ]);
   const { additions, deletions } = parseNumstat(numstatOutput);
-  const changedFiles = splitNonEmptyLines(statusOutput).length;
+  const changedFiles = splitOutputLines(statusOutput ?? '').length;
   const branch =
     branchOutput && branchOutput !== 'HEAD' ? branchOutput : undefined;
   const upstream = upstreamOutput || undefined;
@@ -192,17 +193,13 @@ export async function readGitEnvironmentSummary(
   };
 }
 
-function splitNonEmptyLines(output: string | undefined): string[] {
-  return output?.split(/\r?\n/).filter(Boolean) ?? [];
-}
-
 function parseNumstat(output: string | undefined): {
   additions: number;
   deletions: number;
 } {
   let additions = 0;
   let deletions = 0;
-  for (const line of splitNonEmptyLines(output)) {
+  for (const line of splitOutputLines(output ?? '')) {
     const [added = '', deleted = ''] = line.split('\t');
     additions += parseGitCount(added);
     deletions += parseGitCount(deleted);
