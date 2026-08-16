@@ -185,18 +185,17 @@ export type UserQuestionAnswers = z.infer<typeof UserQuestionAnswersSchema>;
  * has a single source of truth. See docs/proposals/2026-05-31-tui-extension-sharing.md
  * (Rung 1).
  */
-const ApprovalDecisionSchema = z.object({
-  accepted: z.boolean(),
+export type ApprovalDecision = {
+  accepted: boolean;
   /**
    * Free-text payload carried with the decision. For rejections this is the
    * user's reject-with-feedback note; for an ExternalInquiry accept it is the
    * answer the agent gets back.
    */
-  userMessage: z.string().optional(),
+  userMessage?: string | undefined;
   /** Structured answers for an AskUserQuestion request. */
-  userQuestionAnswers: UserQuestionAnswersSchema.optional(),
-});
-export type ApprovalDecision = z.infer<typeof ApprovalDecisionSchema>;
+  userQuestionAnswers?: UserQuestionAnswers | undefined;
+};
 
 export const UserQuestionPermissionSchema = PermissionBaseSchema.extend({
   questions: z.array(UserQuestionPromptSchema).min(1).max(3),
