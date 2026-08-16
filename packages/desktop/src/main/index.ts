@@ -50,6 +50,7 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory, agentKeyOf, type AgentSource } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
+import { killActiveRecording } from '@tools/media/audio';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { debounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
@@ -1228,6 +1229,7 @@ if (protocolLifecycle.shouldContinue) {
         disposeAgentResumeHandler();
       });
       registerAgentShutdownHandlers(lifecycle);
+      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
       // Agent shutdown runs first so its final events enter the process-owned
       // stores. Flush in BEFORE so persistence cannot be delayed by a later
       // ON-phase language-service disposal.
