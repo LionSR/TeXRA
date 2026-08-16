@@ -1374,16 +1374,7 @@ export class StreamSnapshotStore {
     this.publishSummaryMeta(stream);
   }
 
-  /**
-   * Persist a child stream's parent edge directly. The `setParentStream`
-   * session event (handled above) is how a live session normally reaches
-   * this — routed through `SessionEventHub` so the session can also update
-   * its in-memory execution registry and emit UI-facing facts. A caller with
-   * no live session (no `SessionEventHub` to route through) has no other way
-   * to persist the same edge, so this stays public for that direct case —
-   * e.g. detaching a deleted parent's children when no session is running.
-   */
-  setParentStream(
+  private setParentStream(
     child: StreamTabId,
     parent: StreamTabId | null | undefined,
   ): void {
@@ -1474,7 +1465,13 @@ export class StreamSnapshotStore {
     return this.records.get(stream)?.meta?.parentStreamId;
   }
 
-  /** Find and seed children before their canonical parent-detach facts emit. */
+  /**
+   * Find children of `parent`, clear their durable parent edges, and seed
+   * them so a follow-up `onCommitted` projection (session registry / UI
+   * facts) can run against resident records. Edge clearing stays here so
+   * callers with no session — history delete, CLI cleanup — still detach
+   * without widening this store's public surface.
+   */
   private async detachPersistedChildren(
     parent: StreamTabId,
   ): Promise<StreamTabId[]> {
@@ -1500,7 +1497,13 @@ export class StreamSnapshotStore {
       }
     }
     await this.preload(children);
-    return children.filter((child) => this.getParentStreamId(child) === parent);
+    const attached = children.filter(
+      (child) => this.getParentStreamId(child) === parent,
+    );
+    for (const child of attached) {
+      this.setParentStream(child, null);
+    }
+    return attached;
   }
 
   /** Read-only view of stream→executionId for waiting-stream detection. */

@@ -46,39 +46,19 @@ export interface AdjacentStreamStores {
 }
 
 /**
- * Detach every child stream discovered under the deleted parent by clearing
- * its persisted `parentStreamId`. A live session instead routes this through
- * `SessionEventHub` (`createSessionStores`'s `onChildrenDetached`), which
- * also updates the session's in-memory execution registry and skips a
- * still-active child; this module has no session to route through and no
- * execution registry to consult, so it writes the persisted edge directly
- * for every discovered child. `deleteExecution`'s inactive-lease guard
- * already guarantees the parent itself is not active by the time this runs;
- * an independently-active child keeps running unaffected — only its
- * persisted parent pointer (now genuinely dangling) is cleared.
- */
-function detachChildren(
-  stores: AdjacentStreamStores,
-  children: readonly StreamTabId[],
-): void {
-  for (const child of children) {
-    stores.snapshots.setParentStream(child, null);
-  }
-}
-
-/**
  * Delete a stream's transcript log and snapshot sidecars as one unit, rolling
  * the snapshot side back if the transcript delete fails so neither is left
- * half-deleted.
+ * half-deleted. Child parent-edge clearing is owned by
+ * `StreamSnapshotStore.stageDeleteStream` itself (no session callback needed
+ * here); a live Progress session still passes `onChildrenDetached` for
+ * in-memory registry / UI projection on top of that durable detach.
  */
 async function deleteAdjacentStreamState(
   stream: StreamTabId,
   stores: AdjacentStreamStores,
 ): Promise<void> {
   const snapshotDeletion: StagedStreamSnapshotDeletion =
-    await stores.snapshots.stageDeleteStream(stream, (children) =>
-      detachChildren(stores, children),
-    );
+    await stores.snapshots.stageDeleteStream(stream);
   try {
     await stores.streamLogs.delete(stream);
   } catch (error) {
