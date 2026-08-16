@@ -81,9 +81,9 @@ function resumeDesktopStream(
       authoritativeStreamMissing
     );
   };
-  // Desktop-only durable multi-window fence: extension/CLI must not copy this
-  // check because only desktop reads the authoritative stream identity across
-  // windows/processes. Their in-process `transcripts.has()` is not durable.
+  // Desktop-only durable multi-window resume fence: extension/CLI must not copy
+  // it because their resume admission is owned by one in-process transcript
+  // store, while desktop must fence stream identity across windows/processes.
   const canAcquireResumeLease = async (): Promise<boolean> => {
     if (isResumeInvalidated()) return false;
     if (!(await context.session.transcripts.hasAuthoritativeStream(streamId))) {
