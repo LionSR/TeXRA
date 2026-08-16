@@ -135,6 +135,50 @@ function quoteBlockquoteEnvironmentWrappers(content: string): string {
   return out;
 }
 
+const MARKDOWN_BLOCKQUOTE_PREFIX_RE = /^(?:(?:[ \t]*>[ \t]?))+/u;
+
+function markdownBlockquotePrefix(prefix: string): string {
+  return MARKDOWN_BLOCKQUOTE_PREFIX_RE.exec(prefix)?.[0] ?? '';
+}
+
+function replaceBrWithQuotePrefix(source: string, offset: number): string {
+  const lineStart = source.lastIndexOf('\n', offset - 1) + 1;
+  const linePrefix = source.slice(lineStart, offset);
+  const quotePrefix = markdownBlockquotePrefix(linePrefix);
+  return quotePrefix === '' ? '\n' : `\n${quotePrefix}`;
+}
+
+const HEADING_ENV_RE = new RegExp(
+  `<h([1-6])${HTML_ATTRIBUTES}${HTML_TAG_END}([\\s\\S]*?)<\\/h\\1>`,
+  'gi',
+);
+
+// Expose environments inside the block containers this normalizer otherwise
+// converts, before math shielding. Paragraph/div wrappers are removed (the
+// same output the normalizer produces later), and heading wrappers that
+// contain an environment become temporary structural markers so their body
+// starts at a block line for the probe and can be re-marked after shielding.
+const PARAGRAPH_ENV_RE = new RegExp(
+  `<(p|div)${HTML_ATTRIBUTES}${HTML_TAG_END}([\\s\\S]*?)<\\/\\1>`,
+  'gi',
+);
+
+function exposeHtmlBlockEnvironments(content: string): string {
+  const blockquoted = quoteBlockquoteEnvironmentWrappers(content);
+  const paragraphEnvironmentsRemoved = blockquoted.replaceAll(
+    PARAGRAPH_ENV_RE,
+    (match, _tag: string, body: string) =>
+      /\\begin\{[a-z]+\}/.test(body) ? `\n\n${body.trim()}\n\n` : match,
+  );
+  return paragraphEnvironmentsRemoved.replaceAll(
+    HEADING_ENV_RE,
+    (match, level: string, body: string) =>
+      /\\begin\{[a-z]+\}/.test(body)
+        ? `\n\n@@HTML-HEADING-${level}@@\n${body.trim()}\n@@/HTML-HEADING-${level}@@\n\n`
+        : match,
+  );
+}
+
 function headingMarker(level: string): string {
   const parsed = Number.parseInt(level, 10);
   const depth = Number.isFinite(parsed) ? clamp(parsed, 1, 6) : 3;
@@ -345,16 +389,20 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
   if (!KNOWN_HTML_TAG_RE.test(summarized)) return summarized;
 
   const literalDollarProtection = protectLiteralMathSyntax(summarized);
-  // Convert supported blockquote wrappers to markdown prefixes before math
-  // shielding so an environment inside `<blockquote>` (including nested
-  // wrappers) is seen at a `> \begin{...}` block start. The body is only
-  // re-prefixed, never mutated.
-  const blockquotePrefixed = quoteBlockquoteEnvironmentWrappers(
+  // Expose environments inside every supported block container before math
+  // shielding: blockquotes become `>` prefixes, paragraph/div wrappers are
+  // removed, and heading wrappers containing an environment become temporary
+  // structural markers. Bodies are only re-prefixed or un-wrapped, never text-
+  // mutated here.
+  const blockContainerExposed = exposeHtmlBlockEnvironments(
     literalDollarProtection.content,
   );
-  const mathProtection = protectLatexMathSpansForNormalize(blockquotePrefixed);
+  const mathProtection = protectLatexMathSpansForNormalize(
+    blockContainerExposed,
+  );
   const mathProtected = literalDollarProtection.restore(mathProtection.content);
-  if (!KNOWN_HTML_TAG_RE.test(mathProtected)) {
+  const hasHeadingMarkers = /@@HTML-HEADING-\d@@/.test(mathProtected);
+  if (!KNOWN_HTML_TAG_RE.test(mathProtected) && !hasHeadingMarkers) {
     return literalDollarProtection.restore(
       mathProtection.restore(mathProtection.content),
     );
@@ -366,7 +414,9 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
       (_match, level: string, body: string) =>
         `\n\n${headingMarker(level)} ${body.trim()}\n\n`,
     )
-    .replaceAll(/<br\s*\/?\s*>/gi, '\n')
+    .replaceAll(/<br\s*\/?\s*>/gi, (_match, offset: number, source: string) =>
+      replaceBrWithQuotePrefix(source, offset),
+    )
     .replaceAll(/<\/(?:p|div)>/gi, '\n\n')
     .replaceAll(PARAGRAPH_OPEN_TAG_RE, '')
     .replaceAll(STRONG_OPEN_TAG_RE, '**')
@@ -375,6 +425,11 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
     .replaceAll(/<\/(?:em|i)>/gi, '_')
     .replaceAll(CODE_OPEN_TAG_RE, '`')
     .replaceAll(/<\/code>/gi, '`')
+    .replaceAll(
+      /@@HTML-HEADING-(\d)@@\n([\s\S]*?)\n@@\/HTML-HEADING-\1@@/g,
+      (_match, level: string, body: string) =>
+        `\n\n${headingMarker(level)} ${body.trim()}\n\n`,
+    )
     .replaceAll(BLOCKQUOTE_TAG_RE, (_match, body: string) =>
       quoteHtmlBlock(mathProtection.restore(body)),
     )
