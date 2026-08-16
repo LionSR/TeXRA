@@ -53,7 +53,7 @@ describe('Concurrent session tool edit approval handlers', () => {
         request: ToolEditApprovalRequest,
       ): Promise<ToolEditApprovalResult> => {
         seen.push(request);
-        return { accepted: true, appliedContent };
+        return { action: 'apply', appliedContent };
       };
     }
 
@@ -107,7 +107,13 @@ describe('Concurrent session tool edit approval handlers', () => {
     expect(seenByA.map((request) => request.path)).toEqual(['a.tex']);
     expect(seenByB.map((request) => request.path)).toEqual(['b.tex']);
 
-    expect(resultA).toMatchObject({ accepted: true, appliedContent: 'from-a' });
-    expect(resultB).toMatchObject({ accepted: true, appliedContent: 'from-b' });
+    expect(resultA).toMatchObject({
+      action: 'apply',
+      appliedContent: 'from-a',
+    });
+    expect(resultB).toMatchObject({
+      action: 'apply',
+      appliedContent: 'from-b',
+    });
   });
 });

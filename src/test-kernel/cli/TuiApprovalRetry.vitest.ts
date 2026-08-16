@@ -563,7 +563,7 @@ describe('TUI retry approvals', () => {
     currentApproval.get()?.decide({ accepted: true, bypass: 'toolEdit' });
 
     await expect(result).resolves.toEqual({
-      accepted: true,
+      action: 'apply',
       appliedContent: 'new',
     });
     expect(streams.get().get('edit-bypass-stream')?.bypass.toolEdit).toBe(true);
@@ -704,7 +704,7 @@ describe('TUI retry approvals', () => {
 
     await expect(proposal).resolves.toEqual({ action: 'approve' });
     await expect(edit).resolves.toEqual({
-      accepted: true,
+      action: 'apply',
       appliedContent: 'new',
     });
     await expect(bash).resolves.toEqual({ action: 'approve' });

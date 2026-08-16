@@ -9,6 +9,7 @@
 
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
+  cancellationResultFor,
   matchesCancelSelector,
   type HostInteractionCancelSelector,
   type HostInteractionOptions,
@@ -222,7 +223,7 @@ export class ToolEditApprovalController {
         return;
       case 'reject':
         this.settle(payload.requestId, {
-          accepted: false,
+          action: 'reject',
           feedback: payload.feedback?.trim() || undefined,
         });
         return;
@@ -252,7 +253,7 @@ export class ToolEditApprovalController {
       if (state.request.streamId !== streamId) continue;
       if (state.phase === 'initializing') {
         state.resolution ??= {
-          accepted: true,
+          action: 'apply',
           appliedContent: state.request.proposedContent,
         };
         continue;
@@ -279,10 +280,7 @@ export class ToolEditApprovalController {
       ) {
         continue;
       }
-      const rejection: ToolEditApprovalResult = {
-        accepted: false,
-        cause: selector.cause,
-      };
+      const rejection = cancellationResultFor('toolEdit', selector.cause);
       if (state.phase === 'initializing') {
         state.resolution ??= rejection;
         continue;
@@ -306,10 +304,10 @@ export class ToolEditApprovalController {
   private discard(requestId: string): void {
     const state = this.requests.get(requestId);
     if (state?.phase === 'initializing') {
-      state.resolution ??= { accepted: false };
+      state.resolution ??= { action: 'reject' };
       return;
     }
-    this.settle(requestId, { accepted: false });
+    this.settle(requestId, { action: 'reject' });
   }
 
   private settle(requestId: string, result: ToolEditApprovalResult): void {
@@ -363,7 +361,7 @@ export class ToolEditApprovalController {
       this.publishPrompt(entry);
       return;
     }
-    this.settle(entry.requestId, { accepted: true, appliedContent });
+    this.settle(entry.requestId, { action: 'apply', appliedContent });
   }
 
   private async publishPromptWhenVisible(
