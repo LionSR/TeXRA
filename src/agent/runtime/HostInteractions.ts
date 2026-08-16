@@ -178,7 +178,7 @@ export type RetryResult =
  * and every host render the same contract; a field added to the permission
  * payload is available here without a hand-maintained mirror.
  */
-export type HostPlanApprovalRequest = PlanApprovalPermission;
+export type HostPlanApprovalRequest = Readonly<PlanApprovalPermission>;
 
 export interface HostBashApprovalRequest {
   readonly command: string;
