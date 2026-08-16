@@ -419,11 +419,11 @@ export class DesktopProgressBridge {
             logger.error('Desktop merge execution failed', {
               data: toLogData(error),
             });
-            if (!terminalResult.isHandled()) {
+            terminalResult.reportUnhandled(() =>
               this.session.interactions.emit('requestShowError', {
                 message: `Merge failed: ${toErrorMessage(error)}`,
-              });
-            }
+              }),
+            );
           })
           .finally(terminalResult.dispose);
       },

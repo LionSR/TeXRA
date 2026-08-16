@@ -446,8 +446,15 @@ describe('completedRunArchive facade', () => {
       const { config: runState, executionId: resolvedExecutionId } =
         snapshots.getRunMetadata(requestedStreamId);
       return runState && resolvedExecutionId
-        ? { runState, executionId: resolvedExecutionId }
-        : undefined;
+        ? {
+            status: 'resolved' as const,
+            state: { runState, executionId: resolvedExecutionId },
+          }
+        : {
+            status: 'incomplete' as const,
+            runState,
+            executionId: resolvedExecutionId,
+          };
     });
     const reportFailure = vi.fn();
     try {

@@ -70,8 +70,11 @@ export {
 
 // resolveAndResumeStream
 export {
+  describeResumeFailure,
+  describeResumeStateResolution,
   resolveAndResumeStream,
   resolveResumeStateFromSnapshots,
+  resumeStreamWithRecovery,
 } from './resolveAndResumeStream';
 
 // detachSubagentsOnStop

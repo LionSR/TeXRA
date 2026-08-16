@@ -1,109 +1,99 @@
-/**
- * Persisted-state auto-resume entry point for the VS Code host.
- *
- * Used by:
- *   - `texra.sendFollowUp` (auto-resume when a follow-up lands on a
- *     WAITING / children_running stream).
- *   - `AgentResumePort.tryResumeStream` (the progress view's Resume button on
- *     tool-use streams, and the inquiry continuation path).
- *
- * This is a thin adapter: the host-neutral {@link resolveAndResumeStream}
- * orchestrator owns the guard, retrieval, and tool-use/workflow branch; the
- * extension supplies only how it resolves persisted state and launches a run.
- */
+/** Persisted-state auto-resume entry point for the VS Code host. */
 import * as vscode from 'vscode';
 
-import { createChannelTrace } from '@agent/trace';
 import {
   defaultSession,
+  describeResumeFailure,
+  describeResumeStateResolution,
   resolveAndResumeStream,
   resolveResumeStateFromSnapshots,
   resumeQueuedToolUseFromResumeData,
+  resumeStreamWithRecovery,
+  trackTerminalResultPresentation,
 } from '@agent/runtime';
-import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
 
 import { runExecuteCommand } from './executeCommand';
 
-const CHANNEL = 'resumeFromResumeData';
-
-const logger = createChannelTrace(CHANNEL);
-
-async function showResumeError(error: unknown): Promise<void> {
-  const message = logErrorMessage(
-    CHANNEL,
-    'Failed to resume tool-use session',
-    error,
-  );
-  await vscode.window.showWarningMessage(message);
-}
+const logger = createLog('resumeFromResumeData');
 
 export function tryResumeFromResumeData(
   streamId: StreamTabId,
   recovery?: RecoveryContinuation,
 ): Promise<boolean> {
   const session = defaultSession();
-  const claimedRecovery = recovery
-    ? session.followUps.useRecovery(recovery)
-    : session.followUps.claimRecovery(streamId, true);
-  if (!claimedRecovery) return Promise.resolve(false);
-  return resolveAndResumeStream(
+  return resumeStreamWithRecovery(
+    session,
     streamId,
-    {
-      // The extension runs on the default session for this host-path caller
-      // (outside any run ALS), so its status plane is the same one every other
-      // unmigrated default-session caller reads through `defaultSession()`.
-      streamStatus: session.status,
-      // A stream deleted while asynchronous resume preparation runs must not be
-      // resurrected by the resume that was already in flight.
-      isCancellationRequested: () => !session.transcripts.has(streamId),
-      resolveResumeState: async (id) => {
-        const resolution = await resolveResumeStateFromSnapshots(
-          session.snapshots,
-          id,
+    (claimedRecovery) => {
+      const terminalResult = trackTerminalResultPresentation(
+        session,
+        (event) => event.streamId === streamId,
+      );
+      const reportResumeFailure = async (error: unknown): Promise<void> => {
+        logger.error(`Failed to resume stream: ${streamId}`, { data: error });
+        await terminalResult.reportUnhandled(() =>
+          vscode.window.showWarningMessage(
+            describeResumeFailure(error).message,
+          ),
         );
-        if (resolution.status === 'resolved') return resolution.state;
-        if (resolution.status === 'read-failed') {
-          logger.warn(`Failed to read persisted resume data for ${id}`, {
-            data: resolution.error,
-          });
-          return undefined;
-        }
-        logger.warn(
-          resolution.executionId === undefined
-            ? `No execution ID found for stream: ${id}`
-            : `No run config found for stream: ${id}`,
-        );
-        return undefined;
-      },
-      // Extension wrapper around the host-neutral tool-use resume: it
-      // supplies the extension runtime host and surfaces failures as a
-      // warning toast.
-      resumeToolUse: (resume, recovery) =>
-        resumeQueuedToolUseFromResumeData(resume.streamId, resume, {
-          recovery,
-          onError: showResumeError,
-        }),
-      executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
-        runExecuteCommand({
-          config,
-          executionId,
-          modelHandlerCompatibilityKey,
-        }),
-      reportNoResumableSession: async (id) => {
-        logger.warn(`No resumable session state for stream: ${id}`);
-        await session.interactions.showInfoMessage(
-          'This run cannot be resumed. Start a new run instead.',
-          { replayWhenAttached: true },
-        );
-      },
-      reportFailure: (id, error) => {
-        logger.error(`Failed to resume stream: ${id}`, { data: error });
-      },
+      };
+      return resolveAndResumeStream(
+        streamId,
+        {
+          streamStatus: session.status,
+          isCancellationRequested: () => !session.transcripts.has(streamId),
+          resolveResumeState: (id) =>
+            resolveResumeStateFromSnapshots(session.snapshots, id),
+          reportResumeStateResolution: async (id, resolution) => {
+            if (resolution.status === 'read-failed') {
+              logger.warn(`Failed to read persisted resume data for ${id}`, {
+                data: resolution.error,
+              });
+            } else {
+              logger.warn(
+                resolution.executionId === undefined
+                  ? `No execution ID found for stream: ${id}`
+                  : `No run config found for stream: ${id}`,
+              );
+            }
+            // Deliberate C3/V4a host parity: unresolved persisted state
+            // (read-failed/incomplete) surfaces here even on the automatic
+            // follow-up resume path, which was previously silent.
+            await session.interactions.showInfoMessage(
+              describeResumeStateResolution(resolution),
+              { replayWhenAttached: true },
+            );
+          },
+          resumeToolUse: (resume, claimedRecovery) =>
+            resumeQueuedToolUseFromResumeData(resume.streamId, resume, {
+              recovery: claimedRecovery,
+              onError: reportResumeFailure,
+            }),
+          executeWorkflow: (
+            config,
+            executionId,
+            modelHandlerCompatibilityKey,
+          ) =>
+            runExecuteCommand({
+              config,
+              executionId,
+              modelHandlerCompatibilityKey,
+            }),
+          reportNoResumableSession: async (id) => {
+            logger.warn(`No resumable session state for stream: ${id}`);
+            await session.interactions.showInfoMessage(
+              'This run cannot be resumed. Start a new run instead.',
+              { replayWhenAttached: true },
+            );
+          },
+          reportFailure: (_id, error) => reportResumeFailure(error),
+        },
+        claimedRecovery,
+      ).finally(terminalResult.dispose);
     },
-    claimedRecovery,
-  ).finally(() => {
-    session.followUps.release(claimedRecovery, 'recoverable');
-  });
+    recovery,
+  );
 }
