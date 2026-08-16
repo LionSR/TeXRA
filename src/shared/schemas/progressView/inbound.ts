@@ -49,12 +49,7 @@ function fileWithBaseCommand<T extends string>(command: T) {
   });
 }
 
-/**
- * One arm of an `action`-discriminated union: the base fields plus a single
- * literal `action` and an optional `feedback` string. Shared shape for every
- * "reject" (and "skip") arm below — each differs only in its base fields and
- * discriminator literal.
- */
+/** Shared reject/skip arm: base fields + literal action + optional feedback. */
 function actionWithFeedback<Base extends z.ZodRawShape, Action extends string>(
   base: Base,
   action: Action,
