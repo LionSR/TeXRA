@@ -1,4 +1,6 @@
 // Node imports
+import { mkdtempSync } from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -530,7 +532,11 @@ class FakeWorkspaceProvider implements WorkspaceProvider {
 class FakeStorageProvider implements StorageProvider {
   constructor(
     private readonly storagePath = '/workspace/.texra/storage',
-    private readonly globalStoragePath = '/global/.texra/storage',
+    // A real directory: instance-presence sockets are genuine OS objects that
+    // live under the global storage root even when everything else is faked.
+    private readonly globalStoragePath = mkdtempSync(
+      path.join(os.tmpdir(), 'texra-fake-global-'),
+    ),
   ) {}
 
   getStoragePath(): string {

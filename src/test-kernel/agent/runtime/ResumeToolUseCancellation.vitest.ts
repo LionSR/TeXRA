@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   runFlowWithLifecycle: vi.fn(),
   runToolUseFlow: vi.fn(),
   acquireResumedExecutionLease: vi.fn(),
-  renewOwnedExecutionLease: vi.fn(),
+  validateOwnedExecutionLease: vi.fn(),
   runWithExecutionLeaseWriteFence: vi.fn(
     async (_executionId: ExecutionId, operation: () => Promise<unknown>) =>
       operation(),
@@ -21,16 +21,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
-  // `executionListing`'s entrance stamper reads this constant at module
-  // load; keep it defined when the lease module is mocked.
-  EXECUTION_LEASE_STALE_MS: 120_000,
   abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
   captureOwnedExecutionLease:
     (_executionId: ExecutionId) => (operation: () => unknown) =>
       operation(),
   completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
-  renewOwnedExecutionLease: mocks.renewOwnedExecutionLease,
+  validateOwnedExecutionLease: mocks.validateOwnedExecutionLease,
   runWithExecutionLeaseWriteFence: mocks.runWithExecutionLeaseWriteFence,
   releaseOwnedExecutionLeaseAfterFailure:
     mocks.releaseOwnedExecutionLeaseAfterFailure,

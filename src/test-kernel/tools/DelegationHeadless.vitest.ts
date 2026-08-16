@@ -105,7 +105,7 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ownsExecutionLease: vi.fn(() => true),
   // The session's one exit choreography runs for real over these inert lease
   // verbs; completion mirrors production's explicit released/retained outcome.
-  renewOwnedExecutionLease: vi.fn(async () => {}),
+  validateOwnedExecutionLease: vi.fn(async () => {}),
   abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
   completeOwnedExecutionLease: vi.fn(async (executionId: ExecutionId) => {
     if (mocks.undurableExecutionIds.has(executionId)) {

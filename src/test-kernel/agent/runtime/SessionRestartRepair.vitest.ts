@@ -5,7 +5,6 @@ import { flowKey } from '@agent/node/persistedFlow';
 import {
   acquireFreshExecutionLease,
   completeOwnedExecutionLease,
-  EXECUTION_LEASE_STALE_MS,
   resetExecutionLeaseCoordinationForTests,
 } from '@agent/storage/executionLease';
 import * as waitingDetection from '@agent/storage/detectWaitingStreams';
@@ -22,7 +21,11 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { writeForeignLease } from '@test/support/executionLeaseFixtures';
+import {
+  startForeignInstance,
+  writeForeignLease,
+  writeOrphanedLease,
+} from '@test/support/executionLeaseFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   appendTranscriptEntry,
@@ -180,10 +183,7 @@ describe('SessionHandle restart repair', () => {
     await executionStore.writeMeta({ timestamp: META_TIMESTAMP });
     await executionStore.write(flowKey(executionId), { invalid: true });
 
-    await writeForeignLease(
-      executionId,
-      Date.now() - EXECUTION_LEASE_STALE_MS - 1,
-    );
+    await writeOrphanedLease(executionId);
 
     const session = openDeferredSession(transcripts);
     await session.waitUntilReady();
@@ -913,10 +913,11 @@ describe('SessionHandle restart repair', () => {
     expect(transitionHooks.afterStorageFinalize).toHaveBeenCalledOnce();
   });
 
-  it('restores delayed lease repair after a root replacement rolls back', async () => {
+  it('restores owner-exit lease repair after a root replacement rolls back', async () => {
     vi.useFakeTimers({
       now: new Date('2026-07-28T12:00:00.000Z'),
     });
+    const foreign = await startForeignInstance();
     const rollbackExecutionId = '9355abcd' as ExecutionId;
     const rollbackStreamId = `crashed#${rollbackExecutionId}` as StreamTabId;
     const storage = platform().storage;
@@ -948,7 +949,7 @@ describe('SessionHandle restart repair', () => {
     await executionStore.write(flowKey(rollbackExecutionId), {
       invalid: true,
     });
-    await writeForeignLease(rollbackExecutionId);
+    await writeForeignLease(rollbackExecutionId, undefined, foreign.owner);
 
     const session = openDeferredSession(transcripts);
 
@@ -968,7 +969,7 @@ describe('SessionHandle restart repair', () => {
       expect(activeRoot).toBe('old');
       expect(session.status.get(rollbackStreamId)).toBe(STREAM_PHASE.RUNNING);
 
-      await vi.advanceTimersByTimeAsync(EXECUTION_LEASE_STALE_MS + 1);
+      await foreign.shutdown();
       await vi.waitFor(() => {
         expect(session.status.get(rollbackStreamId)).toBe(STREAM_PHASE.FAILED);
       });

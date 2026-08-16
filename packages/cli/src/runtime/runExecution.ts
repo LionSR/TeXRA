@@ -378,7 +378,7 @@ export async function executeCliRequest(
         }
         if (
           canAdvertiseRecovery &&
-          (lease?.status === 'missing' || lease?.status === 'stale')
+          (lease?.status === 'missing' || lease?.status === 'orphaned')
         ) {
           settleRecoveryNoticeStarted();
           await options.onInterruptedExecutionFinalized(executionId);

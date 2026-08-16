@@ -3,10 +3,8 @@ import {
   type FinalizeExecutionInput,
   type FinalizeExecutionResult,
 } from '@agent/storage/executionLifecycle';
-import {
-  EXECUTION_LEASE_STALE_MS,
-  runWithInactiveExecutionLease as defaultRunWithInactiveExecutionLease,
-} from '@agent/storage/executionLease';
+import { runWithInactiveExecutionLease as defaultRunWithInactiveExecutionLease } from '@agent/storage/executionLease';
+import type { InstanceOwnerRecord } from '@agent/storage/instancePresence';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { deriveResumability } from '@agent/storage/resumability';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -45,7 +43,7 @@ export interface RestartRepairOptions {
     executionId: ExecutionId,
     operation: () => Promise<T>,
   ) => Promise<
-    | { readonly status: 'active'; readonly heartbeatAt: number }
+    | { readonly status: 'active'; readonly owner: InstanceOwnerRecord }
     | { readonly status: 'performed'; readonly value: T }
   >;
   logger?: RestartRepairLogger;
@@ -68,39 +66,20 @@ export interface RestartRepairOptions {
   ) => boolean;
 }
 
-export interface RestartRepairResult {
-  /** Earliest time a fresh lease skipped at startup can be checked again. */
-  nextLeaseCheckAt?: number;
+/** One stream skipped because its execution's owner is provably alive. */
+export interface ActiveOwnerSkip {
+  readonly streamId: StreamTabId;
+  readonly executionId: ExecutionId;
+  readonly owner: InstanceOwnerRecord;
 }
 
-/** Owns the single delayed retry used to revisit leases left fresh by a crash. */
-export class RestartRepairRetryScheduler {
-  private timer: ReturnType<typeof setTimeout> | undefined;
-  private disposed = false;
-
-  schedule(nextLeaseCheckAt: number | undefined, retry: () => void): void {
-    this.cancel();
-    if (this.disposed || nextLeaseCheckAt === undefined) return;
-    this.timer = setTimeout(
-      () => {
-        this.timer = undefined;
-        if (this.disposed) return;
-        retry();
-      },
-      Math.max(0, nextLeaseCheckAt - Date.now()),
-    );
-    this.timer.unref();
-  }
-
-  dispose(): void {
-    this.disposed = true;
-    this.cancel();
-  }
-
-  cancel(): void {
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = undefined;
-  }
+export interface RestartRepairResult {
+  /**
+   * Streams left untouched because a live owner holds their execution. The
+   * caller watches each owner's instance exit and re-runs repair on that
+   * kernel-pushed event; nothing here is ever revisited on a clock.
+   */
+  readonly activeOwners: ActiveOwnerSkip[];
 }
 
 const RESTART_REPAIR_PHASES: ReadonlySet<StreamPhase> = new Set([
@@ -231,7 +210,7 @@ async function writeFailedOutcome(
 export async function repairRestartedStreams(
   options: RestartRepairOptions,
 ): Promise<RestartRepairResult> {
-  const result: RestartRepairResult = {};
+  const result: RestartRepairResult = { activeOwners: [] };
   const now = options.now ?? Date.now();
 
   for (const streamId of repairCandidates(
@@ -285,12 +264,13 @@ export async function repairRestartedStreams(
           )(executionId, repair)
         : { status: 'performed' as const, value: await repair() };
       if (repaired.status === 'active') {
-        const nextLeaseCheckAt =
-          repaired.heartbeatAt + EXECUTION_LEASE_STALE_MS + 1;
-        result.nextLeaseCheckAt = Math.min(
-          result.nextLeaseCheckAt ?? Number.POSITIVE_INFINITY,
-          nextLeaseCheckAt,
-        );
+        if (executionId) {
+          result.activeOwners.push({
+            streamId,
+            executionId,
+            owner: repaired.owner,
+          });
+        }
         options.logger?.debug(
           `Skipped restart repair for active execution ${executionId}`,
         );
