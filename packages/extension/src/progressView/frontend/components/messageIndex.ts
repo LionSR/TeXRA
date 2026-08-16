@@ -421,10 +421,11 @@ export class MessageIndex {
   }
 
   /**
-   * Whether any replaced ref in this batch changed its comparator order key
-   * (wire `seqNo`, or the timestamp fallback for rows without a sequence).
-   * Equal keys keep the stable in-place replacement path; the caller rebuilds
-   * the homogeneous arrays when this is true.
+   * Whether any replaced ref in this batch changed its order key. The
+   * homogeneous arrays are ordered by `(usable seqNo, timestamp)`, so compare
+   * those two fields directly: `compareMessages(prev, next) !== 0` would
+   * miss a seqNo presence/value change whenever the timestamp-fallback
+   * tie-break reports equality.
    */
   private orderingKeyChanged(
     messages: readonly LogMessageData[],
@@ -433,7 +434,8 @@ export class MessageIndex {
     upTo: number,
   ): boolean {
     const changed = (prev: LogMessageData, next: LogMessageData): boolean =>
-      next !== prev && compareMessages(prev, next) !== 0;
+      next !== prev &&
+      (prev.seqNo !== next.seqNo || prev.timestamp !== next.timestamp);
 
     if (deltaIndices) {
       for (const index of deltaIndices) {
@@ -451,14 +453,15 @@ export class MessageIndex {
 
   /**
    * Re-derive the homogeneous message arrays (`node.messages` / `ungrouped`)
-   * from the current snapshot in comparator order. Used when a delta batch
-   * changed ordering keys, where in-place replacement cannot preserve the
-   * sorted invariant. The group tree shape and the time-only timeline are
-   * left untouched; the caller's `updateTimelineMessageRefs` pass refreshes
-   * timeline message refs.
+   * from the current snapshot in rebuild order — the same
+   * `compareMessagesForRebuild` fallback `rebuildTree` uses. Used when a
+   * delta batch changed ordering keys, where in-place replacement cannot
+   * preserve the sorted invariant. The group tree shape and the time-only
+   * timeline are left untouched; the caller's `updateTimelineMessageRefs`
+   * pass refreshes timeline message refs.
    */
   private rebuildMessageArrays(messages: readonly LogMessageData[]): void {
-    const sorted = messages.toSorted(compareMessages);
+    const sorted = messages.toSorted(compareMessagesForRebuild);
     const messagesByGroup = new Map<string, LogMessageData[]>();
     const ungrouped: LogMessageData[] = [];
 
