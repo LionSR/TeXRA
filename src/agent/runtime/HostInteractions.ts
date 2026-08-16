@@ -4,7 +4,7 @@ import { createLog } from '@logger/logUtils';
 import type {
   AgentProposal,
   FileLocation,
-  Plan,
+  PlanApprovalPermission,
   ProgressPermissionKind as PendingInteractionKind,
   RetryPermission,
   StreamTabId,
@@ -172,12 +172,13 @@ export type RetryResult =
   // the `failed` fallback (→ RUN_OUTCOME.FAILED) instead of `cancelled`. See #7331.
   | { action: 'deny'; reason?: string; feedback?: never };
 
-export interface HostPlanApprovalRequest {
-  readonly approvalId: string;
-  readonly streamId: StreamTabId;
-  readonly plan: Plan;
-  readonly goalEnabled: boolean;
-}
+/**
+ * The plan-approval payload the runtime hands to hosts. This is deliberately
+ * an alias of the shared {@link PlanApprovalPermission} schema so the runtime
+ * and every host render the same contract; a field added to the permission
+ * payload is available here without a hand-maintained mirror.
+ */
+export type HostPlanApprovalRequest = PlanApprovalPermission;
 
 export interface HostBashApprovalRequest {
   readonly command: string;
@@ -561,7 +562,7 @@ export class SessionHostInteractions implements HostInteractions {
   ): Promise<ToolEditApprovalResult> {
     return this.enqueue<ToolEditApprovalResult>(
       'toolEdit',
-      request.streamId as StreamTabId | null | undefined,
+      request.streamId,
       (interactions) =>
         interactions.requestToolEditApproval?.(request, options),
       (cause) => ({ accepted: false, cause }),
