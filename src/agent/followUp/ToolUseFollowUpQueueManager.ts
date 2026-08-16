@@ -119,26 +119,30 @@ export class ToolUseFollowUpQueue {
     return this.claim(entry, streamId, kind);
   }
 
-  /** Restore a generation read from the stream's authoritative flow record. */
+  /**
+   * Restore a generation read from the stream's authoritative flow record.
+   * Distinguishes session dispose from terminal/mismatch rejection so callers
+   * can label diagnostics accurately.
+   */
   restorePersistedGeneration(
     streamId: StreamTabId,
     generationId: string,
-  ): boolean {
-    if (this.disposed) return false;
-    if (this.terminal.has(streamId)) return false;
+  ): 'restored' | 'disposed' | 'unavailable' {
+    if (this.disposed) return 'disposed';
+    if (this.terminal.has(streamId)) return 'unavailable';
     const entry = this.entries.get(streamId);
     if (entry) {
       if (entry.generationId === generationId) {
         entry.generationProvisional = false;
-        return true;
+        return 'restored';
       }
-      if (!entry.generationProvisional) return false;
+      if (!entry.generationProvisional) return 'unavailable';
       entry.generationId = generationId;
       entry.generationProvisional = false;
-      return true;
+      return 'restored';
     }
     this.createEntry(streamId, generationId);
-    return true;
+    return 'restored';
   }
 
   /**
