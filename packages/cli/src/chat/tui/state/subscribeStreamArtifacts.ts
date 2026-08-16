@@ -2,38 +2,51 @@
 //
 // The shared `StreamSnapshotStore` is the single accumulator for round
 // artifacts and per-run usage: `preload` seeds its memory from disk and
-// replays any live deltas recorded meanwhile on top, so the focused-stream
-// load just copies the store's accumulated state into the slice — there is
-// no CLI-side live/durable merge.
+// replays any live deltas recorded meanwhile on top. The TUI no longer copies
+// that state into `StreamSlice`; renderers read the canonical projection
+// (`projectStreamArtifacts`) directly, and this module owns only the async
+// preload edge plus the invalidation that makes those reads repaint.
 
+import { signal } from '@lit-labs/signals';
+
+import { tryDefaultSession } from '@agent/runtime';
 import {
-  sumUsageStats,
-  type StreamTabId,
-  type WorkPlanSnapshot,
-} from '@shared/schemas';
-import type { StreamSnapshotStore } from '@transcript';
+  projectStreamArtifacts,
+  type StreamArtifactProjection,
+  type StreamArtifactReader,
+} from '@controllers/session/StreamArtifactProjection';
+import { type StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   activeStreamId,
   getCliStateGeneration,
   isCliStreamRetired,
-  patchStream,
   setTransientNotice,
 } from './cliState';
 import { isChildStreamRemoved } from './childExecutions';
 import { subscribeToSignalChanges } from './signalSubscription';
 
-/** The store surface the TUI projects accumulated artifact/usage state from. */
-export type StreamArtifactReader = Pick<
-  StreamSnapshotStore,
-  | 'preload'
-  | 'getOutputFiles'
-  | 'getMissingOutputs'
-  | 'getCompileFailures'
-  | 'getRunUsage'
-  | 'getWorkPlan'
->;
+export type { StreamArtifactProjection, StreamArtifactReader };
+
+/** Bumped whenever an async preload changes what the projection reads. */
+export const streamArtifactRevision = signal<number>(0);
+
+function bumpStreamArtifactRevision(): void {
+  streamArtifactRevision.set(streamArtifactRevision.get() + 1);
+}
+
+/** Read the canonical artifact projection for one stream from the live session.
+ *  Returns `undefined` when no default session exists yet (harness/tests),
+ *  letting callers fall back to their slice mirrors exactly as before. */
+export function readStreamArtifacts(
+  streamId: StreamTabId,
+): StreamArtifactProjection | undefined {
+  const session = tryDefaultSession();
+  return session
+    ? projectStreamArtifacts(session.snapshots, streamId)
+    : undefined;
+}
 
 function streamCanReceiveArtifacts(
   streamId: StreamTabId,
@@ -49,9 +62,10 @@ function streamCanReceiveArtifacts(
 }
 
 /**
- * Preload and project one stream from the canonical artifact accumulator.
- * Callers own request currentness: focus hydration invalidates on a focus
- * change, while `/plan` keeps the stream id it captured before awaiting.
+ * Preload one stream from the canonical artifact accumulator and invalidate
+ * the artifact projection. Callers own request currentness: focus hydration
+ * invalidates on a focus change, while `/plan` keeps the stream id it
+ * captured before awaiting.
  */
 export async function hydrateStreamArtifacts(
   store: StreamArtifactReader,
@@ -80,22 +94,7 @@ export async function hydrateStreamArtifacts(
   if (!streamCanReceiveArtifacts(streamId, generation, requestIsCurrent)) {
     return false;
   }
-  // The store already ordered the seed against live facts (including a
-  // `clearMissingOutputs` reset — see its overlay `reset` flag), so its
-  // accumulated state replaces the slice's wholesale.
-  const runUsage = [...store.getRunUsage(streamId).values()];
-  const workPlan: WorkPlanSnapshot = store.getWorkPlan(streamId);
-  patchStream(streamId, (slice) => ({
-    ...slice,
-    outputFilesByRound: store.getOutputFiles(streamId),
-    missingOutputsByRound: store.getMissingOutputs(streamId),
-    compileFailuresByRound: store.getCompileFailures(streamId),
-    todos: workPlan.todos,
-    plan: workPlan.plan,
-    cumulativeUsage: runUsage.length
-      ? sumUsageStats(runUsage)
-      : slice.cumulativeUsage,
-  }));
+  bumpStreamArtifactRevision();
   return true;
 }
 
