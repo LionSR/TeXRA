@@ -7,7 +7,7 @@ export const LOG_LEVELS = {
   DEBUG: 'debug',
 } as const;
 
-const LogLevelSchema = z.enum(LOG_LEVELS);
+export const LogLevelSchema = z.enum(LOG_LEVELS);
 export type LogLevel = z.infer<typeof LogLevelSchema>;
 
 /**
@@ -54,7 +54,7 @@ export const MESSAGE_TYPES = {
   DEFAULT: 'default',
 } as const;
 
-const MessageTypeSchema = z.enum(MESSAGE_TYPES);
+export const MessageTypeSchema = z.enum(MESSAGE_TYPES);
 
 export type MessageType = z.infer<typeof MessageTypeSchema>;
 
@@ -76,7 +76,7 @@ export const STREAM_LOG_ENTRY_TYPES = {
   GROUP_END: 'group-end',
 } as const;
 
-const StreamLogEntryTypeSchema = z.enum(STREAM_LOG_ENTRY_TYPES);
+export const StreamLogEntryTypeSchema = z.enum(STREAM_LOG_ENTRY_TYPES);
 
 const LoadedMediaMetadataSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -110,48 +110,8 @@ export const FileListEntrySchema = z.object({
 
 export type FileListEntry = z.infer<typeof FileListEntrySchema>;
 
-export const StreamLogEntrySchema = z.strictObject({
-  seqNo: z.int().positive(),
-  /**
-   * Monotone order in which immutable transcript rows became printable.
-   * Unlike seqNo, this is assigned when an existing row settles, so cold
-   * reconstruction preserves the same append-only chronology as a live UI.
-   */
-  settlementSeqNo: z.int().positive().optional(),
-  id: z.string().min(1),
-  type: StreamLogEntryTypeSchema,
-  level: LogLevelSchema,
-  timestamp: z.number(),
-  groupId: z.string().optional(),
-  messageType: MessageTypeSchema.optional(),
-  text: z.string().optional(),
-  verbose: z.boolean().optional(),
-  data: z.unknown().optional(),
-});
-
-export type StreamLogEntry = z.infer<typeof StreamLogEntrySchema>;
-
 export const StreamLogTextDeltaSchema = z.strictObject({
   id: z.string().min(1),
   appendText: z.string().min(1),
 });
 export type StreamLogTextDelta = z.infer<typeof StreamLogTextDeltaSchema>;
-
-const LogMessageDataSchema = z.strictObject({
-  id: z.string().min(1),
-  /**
-   * Wire append sequence of the source `StreamLogEntry`, carried through so
-   * the frontend can order live rows by `seqNo` instead of wall-clock
-   * `timestamp`. Optional for archived/compat rows predating sequence
-   * tracking; ordering falls back to `timestamp` when it is absent.
-   */
-  seqNo: z.int().positive().optional(),
-  text: z.string(),
-  level: LogLevelSchema,
-  timestamp: z.number(),
-  groupId: z.string().optional(),
-  messageType: MessageTypeSchema.optional(),
-  verbose: z.boolean().optional(),
-  data: z.unknown().optional(),
-});
-export type LogMessageData = z.infer<typeof LogMessageDataSchema>;

@@ -18,7 +18,8 @@ import { GoalStatusSchema } from '../goal';
 import { AgentCategory } from '../agent';
 
 import { StreamTabIdSchema } from '../identifiers';
-import { StreamLogEntrySchema, StreamLogTextDeltaSchema } from '../log';
+import { StreamLogTextDeltaSchema } from '../log';
+import { StreamLogEntrySchema } from '../streamLogEntry';
 import {
   AgentOptionDataSchema,
   ModelOptionDataSchema,

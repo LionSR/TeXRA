@@ -1,5 +1,4 @@
 import {
-  CompactionActivityDataSchema,
   MESSAGE_TYPES,
   type CompactionActivityOutcome,
   type StreamLogEntry,
@@ -106,9 +105,7 @@ export function applyCompactionActivityEntries(
       continue;
     }
 
-    const parsed = CompactionActivityDataSchema.safeParse(entry.data);
-    if (!parsed.success) continue;
-    const { operationId, state } = parsed.data;
+    const { operationId, state } = entry.data;
     const existingIndex = projection.indexByOperationId.get(operationId);
 
     if (state === 'started') {

@@ -15,6 +15,7 @@ import {
   STREAM_PHASE,
   STREAM_STATUS,
   WorkflowCallProgressSchema,
+  StreamPhaseSchema,
   type GettingStartedAction,
   type LogMessageData,
   type StreamLifecycleStatus,
@@ -428,8 +429,7 @@ export class TaskGroupList extends LitElement {
     if (group.kind !== 'phase') return nothing;
     const calls = messages.flatMap((message) => {
       if (message.messageType !== MESSAGE_TYPES.WORKFLOW_TASK) return [];
-      const parsed = WorkflowCallProgressSchema.safeParse(message.data);
-      return parsed.success ? [parsed.data] : [];
+      return [message.data];
     });
     const { done, total } = workflowPhaseCallProgress(calls);
     if (total === 0) return nothing;

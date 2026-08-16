@@ -4,6 +4,7 @@ import {
   LOG_LEVELS,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
+  StreamLogEntrySchema,
   STREAM_PHASE,
   type StreamLogEntry,
   type TaskGroup,
@@ -35,80 +36,17 @@ function entry(
     | typeof STREAM_LOG_ENTRY_TYPES.GROUP_END,
   overrides: GroupEntryOverrides = {},
 ): StreamLogEntry {
-  return {
+  return StreamLogEntrySchema.parse({
     seqNo: type === STREAM_LOG_ENTRY_TYPES.GROUP_START ? 1 : 2,
     id,
     type,
     level: LOG_LEVELS.INFO,
     timestamp: type === STREAM_LOG_ENTRY_TYPES.GROUP_START ? 100 : 200,
     ...overrides,
-  };
+  });
 }
 
 describe('task-group StreamLog projection', () => {
-  it('distinguishes absent attempt identity from malformed ownership', () => {
-    const taskGroups = projectTaskGroupsFromStreamLog([
-      entry('valid-phase', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
-        text: 'Explore',
-        data: { kind: 'phase' },
-      }),
-      entry('invalid-phase', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
-        text: 'Stale phase',
-        data: { kind: 'phase', attemptId: '' },
-      }),
-    ]);
-
-    expect(taskGroups).toMatchObject([
-      {
-        id: 'valid-phase',
-        name: 'Explore',
-        kind: 'phase',
-      },
-    ]);
-    expect(taskGroups.some((group) => group.id === 'invalid-phase')).toBe(
-      false,
-    );
-  });
-
-  it('removes a projected group when its terminal ownership is malformed', () => {
-    const taskGroups = projectTaskGroupsFromStreamLog([
-      entry('valid-phase', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
-        text: 'Explore',
-        data: { kind: 'phase', attemptId: 'attempt-1' },
-      }),
-      entry('neighbor', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
-        text: 'Verify',
-        data: { kind: 'phase', attemptId: 'attempt-1' },
-      }),
-      entry('valid-phase', STREAM_LOG_ENTRY_TYPES.GROUP_END, {
-        text: 'Explore',
-        data: {
-          kind: 'phase',
-          attemptId: '',
-          status: RUN_OUTCOME.COMPLETED,
-          endTime: 200,
-        },
-      }),
-      entry('neighbor', STREAM_LOG_ENTRY_TYPES.GROUP_END, {
-        text: 'Verify',
-        data: {
-          kind: 'phase',
-          attemptId: 'attempt-1',
-          status: RUN_OUTCOME.COMPLETED,
-          endTime: 250,
-        },
-      }),
-    ]);
-
-    expect(taskGroups).toEqual([
-      expect.objectContaining({
-        id: 'neighbor',
-        status: RUN_OUTCOME.COMPLETED,
-        endTime: 250,
-      }),
-    ]);
-  });
-
   it('projects group metadata and completes groups in source order', () => {
     const taskGroups = projectTaskGroupsFromStreamLog([
       entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
@@ -182,6 +120,7 @@ describe('task-group StreamLog projection', () => {
     const taskGroups = projectTaskGroupsFromStreamLog([
       entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
         text: 'Run: auditor',
+        data: {},
       }),
     ]);
     const staleIndex = new Map([['run-1', 4]]);
