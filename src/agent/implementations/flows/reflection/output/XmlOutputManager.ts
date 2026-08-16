@@ -74,10 +74,6 @@ export class XmlOutputManager {
     private readonly streamId: string,
   ) {}
 
-  private async processXmlContent(content: string): Promise<string> {
-    return replacementEngine.applyXmlContent(content);
-  }
-
   private extractMultipleDocumentsByRegex(
     outputContent: string,
     preferredName?: string,
@@ -456,7 +452,7 @@ export class XmlOutputManager {
       `Ensuring correct XML structure: ${fileLocation.absolutePath}`,
     );
     const originalContent = await AbsoluteFS.read(fileLocation.absolutePath);
-    let content = await this.processXmlContent(originalContent);
+    let content = replacementEngine.applyXmlContent(originalContent);
 
     const closeTag = `</${OUTPUT_DOCUMENTS_TAG}>`;
     const openTag = `<${OUTPUT_DOCUMENTS_TAG}>`;
