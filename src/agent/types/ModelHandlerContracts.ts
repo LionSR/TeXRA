@@ -1,10 +1,10 @@
 // Local imports
-import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import type { LanguageModelToolCallPart } from '@platform/languageModel';
 
 // Local file imports
 import type { ProviderMessage } from './ProviderMessage';
+import type { ProviderUsage } from './ProviderUsage';
 import type { ProviderStopReason } from './StopReasonTypes';
 
 // Third-party imports

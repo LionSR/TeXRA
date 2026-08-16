@@ -109,6 +109,10 @@ async function hasClaudeOauthCredential(
 
   const configDir = resolveClaudeConfigDir(env.CLAUDE_CONFIG_DIR);
   try {
+    // Raw node:fs/promises, not platform().fs: FileSystemProvider
+    // (@platform/interfaces) exposes no access/existence-check primitive, only
+    // `stat`, which would need this same try/catch for a not-found error — so
+    // routing through it buys nothing for this single boolean check.
     await access(path.join(configDir, '.credentials.json'));
     return true;
   } catch {
