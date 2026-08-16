@@ -155,6 +155,11 @@ export async function runAgent(
       }
       const result = await executeAgent(config, executionId, {
         ...executeAgentOptions,
+        // Forward the session resolved above: without it the launch context
+        // redefaults to the ambient `currentSession()`, which can disagree
+        // with the lease handling's `runSession` inside another run's async
+        // context.
+        session: runSession,
         streamTabIdOverride: resumedStreamId,
         userFollowUpSupport,
         onRun: async (handle) => {
