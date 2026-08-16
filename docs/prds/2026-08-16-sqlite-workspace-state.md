@@ -91,13 +91,20 @@ in the 22.9–22.12 window.
 Corollaries:
 
 - Rows own **existence**: a stream, execution, or run exists iff its row
-  exists. Deletion is one transaction with `ON DELETE CASCADE`.
+  exists. Deletion is one transaction with `ON DELETE CASCADE`, and the same
+  transaction inserts the deleted id into the `stream_tombstones` fence
+  table (§3.3) — existence and the late-fact fence are separate tables, so
+  neither invariant compromises the other.
 - No app-owned live state in files; no user documents in the database.
-- **One named permanent exception:** the workspace bucket's `state.json`
-  (host UI/settings state — `PersistedState`, opened by the CLI in
-  `cliStateStores.ts` and by desktop in its platform wiring). §8 keeps UI
-  state out of SQL by design, so `state.json` stays a file, on the
-  architecture test's allowlist, and appears in the target layout.
+- **One named permanent exception:** the workspace bucket's `state.json` —
+  narrowed to genuine host UI/settings state (`PersistedState`, opened by
+  the CLI in `cliStateStores.ts` and by desktop in its platform wiring). §8
+  keeps UI state out of SQL by design, so that file stays, on the
+  architecture test's allowlist, in the target layout. The narrowing is
+  load-bearing: `GoalStore` currently persists **durable goal lifecycle
+  records** through the same `workspaceState` file, and those are app state,
+  not UI — they move to `goals` rows (§3.3) so stream deletion's cascade
+  covers them instead of today's separate best-effort `goalEntries.forget`.
 - Derived tables (FTS index, stats caches) keep the #9434 derived-tier
   contract: discard-and-rebuild from authoritative rows, never migrate.
 - The rule is enforced by an architecture test (§7): persistence writes
@@ -178,39 +185,76 @@ FTS (§3.4).
 
 ```
 -- authoritative: a row's existence IS the fact
-streams          (id PK, incarnation, tombstone, created_ts,
-                  parent_stream_id FK → streams(id) ON DELETE SET NULL)
-                  -- SET NULL, not CASCADE: deleting a parent DETACHES its
-                  -- children (today's deleteAdjacentStreamState semantics —
-                  -- it emits setParentStream(null) and retains the child
-                  -- transcripts); cascading the self-edge would recursively
-                  -- delete every descendant.
-entries          (stream_id FK CASCADE, seq, entry_id, settlement_seq NULL,
-                  timestamp, entry JSON, text NULL)  UNIQUE(stream_id, seq)
-executions       (id PK, stream_id FK CASCADE, meta JSON, config JSON)
-run_usage        (stream_id FK CASCADE, storage_key, usage JSON,
-                  PRIMARY KEY (stream_id, storage_key))   -- upsert target;
-                  -- without it, migration retries / concurrent hosts
-                  -- double-count SUM/GROUP BY analytics
-round_facts      (stream_id FK CASCADE, kind {output|missing|compile},
-                  round, payload JSON)
-work_plans       (stream_id PK FK CASCADE, plan JSON, todos JSON)
-                  -- PK: one canonical plan slot per stream (upsert target)
-leases/locks     (execution-scoped rows; WAL provides cross-process safety)
+streams           (id PK, incarnation, created_ts,
+                   parent_stream_id FK → streams(id) ON DELETE SET NULL,
+                   current_execution_id FK → executions(id)
+                     ON DELETE SET NULL NULL)
+                   -- parent edge: SET NULL, not CASCADE — deleting a parent
+                   -- DETACHES its children (today's
+                   -- deleteAdjacentStreamState semantics); cascading the
+                   -- self-edge would recursively delete every descendant.
+                   -- current_execution_id: the ONE execution whose config/
+                   -- description/resume state the stream currently shows —
+                   -- replaced on run.start (StreamSnapshotStore's existing
+                   -- pointer semantics); nullable breaks the FK cycle
+                   -- (insert stream → insert execution → set pointer).
+entries           (stream_id FK CASCADE, seq, entry_id,
+                   settlement_seq NULL, timestamp, entry JSON, text NULL)
+                   UNIQUE(stream_id, seq)
+executions        (id PK, stream_id FK CASCADE, meta JSON, config JSON)
+execution_records (execution_id FK CASCADE, key, payload JSON,
+                   PRIMARY KEY (execution_id, key))
+                   -- keyed home for EVERYTHING ExecutionKVStore owns today:
+                   -- report, workspace-files, result-meta, turn state,
+                   -- per-child records, generic keys, flow/workflow
+                   -- checkpoints. A catch-all record table so Stage 6 has a
+                   -- destination for every record without later schema
+                   -- drift; individual keys may be promoted to typed
+                   -- columns via ordinary migrations when queries need them.
+run_usage         (stream_id FK CASCADE, storage_key, usage JSON,
+                   PRIMARY KEY (stream_id, storage_key))  -- upsert target
+round_facts       (stream_id FK CASCADE, kind {output|missing|compile},
+                   round, payload JSON,
+                   PRIMARY KEY (stream_id, kind, round))
+                   -- one payload per (stream, kind, round) slot — the
+                   -- sidecars' map semantics; deterministic upsert target.
+work_plans        (stream_id PK FK CASCADE, plan JSON, plan_summary NULL,
+                   todos JSON)
+                   -- plan_summary is a distinct durable field in
+                   -- StreamSnapshotSchema (compaction falls back to it when
+                   -- the full plan is absent) — losing it in projection
+                   -- would be a lossy migration.
+goals             (stream_id PK FK CASCADE, goal JSON)
+                   -- moved OUT of state.json (§2): durable goal lifecycle
+                   -- records join the cascade; today's separate best-effort
+                   -- goalEntries.forget after deletion disappears.
+stream_tombstones (id PK, incarnation, deleted_at)
+                   -- the late-fact fence, deliberately NOT an FK child of
+                   -- streams: it is written in the SAME transaction that
+                   -- hard-deletes the streams row and must outlive it.
+                   -- Resolves the exists-iff-row / fence contradiction:
+                   -- existence lives in streams, the deleted-id fence lives
+                   -- here. Small, append-only, prunable by retention.
+leases/locks      (execution-scoped rows; WAL provides cross-process safety)
 
 -- derived: rebuildable from authoritative rows, never row-authoritative
-stream_summaries (stream_id PK FK CASCADE, last_ts, has_running_group,
-                  has_running_streaming_text,
-                  has_nonterminal_workflow_call, summary_meta JSON)
-entries_fts      (FTS5, contentless)
+stream_summaries  (stream_id PK FK CASCADE, last_ts, has_running_group,
+                   has_running_streaming_text,
+                   has_nonterminal_workflow_call, summary_meta JSON)
+                   INDEX (last_ts DESC, stream_id)
+                   -- the cursor-pagination index IS the O(visible page)
+                   -- startup claim; without it, ORDER BY last_ts scans and
+                   -- sorts every summary row. Part of Stage 1, not later.
+entries_fts       (FTS5, contentless)
 ```
 
-Every child-**table** FK (`entries`, `executions`, `run_usage`,
-`round_facts`, `work_plans`, `stream_summaries`) carries `ON DELETE CASCADE`
-explicitly — SQLite's default is `NO ACTION`, which would _reject_ the
-parent delete instead of cascading it. The one self-referential edge
-(`streams.parent_stream_id`) is `ON DELETE SET NULL` to preserve the
-existing detach-children semantics.
+Every child-**table** FK (`entries`, `executions`, `execution_records`,
+`run_usage`, `round_facts`, `work_plans`, `goals`, `stream_summaries`)
+carries `ON DELETE CASCADE` explicitly — SQLite's default is `NO ACTION`,
+which would _reject_ the parent delete instead of cascading it. Two edges
+are deliberately different: `streams.parent_stream_id` is
+`ON DELETE SET NULL` (detach-children semantics), and `stream_tombstones`
+has no FK at all (it must survive its stream's deletion).
 
 The authoritative/derived split is a table boundary, deliberately: the #9434
 discard-and-rebuild contract applies to `stream_summaries` and `entries_fts`
@@ -218,12 +262,15 @@ as whole tables (recompute from `streams`/`entries`), never to `streams`
 rows — a malformed summary must not be able to take the authoritative row,
 and its cascade, down with it.
 
-`streams.incarnation` + a terminal tombstone bit replace #10702's generation
-protocol; compare-and-set (`… WHERE id = ? AND incarnation = ?`) is the
-entire fencing mechanism. The one-bit tombstone and the single fact-admission
-gate in `SessionFactApplier` (the reducer — `SessionEventHub` is fan-out
-only, not admission) remain — that residue is essential as long as facts are
-async.
+Deletion semantics, stated implementably for Stage 5: **hard-delete the
+`streams` row (cascades every child table) and insert `(id, incarnation,
+deleted_at)` into `stream_tombstones` in the same transaction.** The fence
+check (`SessionFactApplier` admission) consults `stream_tombstones`;
+compare-and-set on `streams.incarnation`
+(`… WHERE id = ? AND incarnation = ?`) is the entire fencing mechanism for
+mutations. The fence table and the single fact-admission gate in
+`SessionFactApplier` (the reducer — `SessionEventHub` is fan-out only, not
+admission) are the essential residue while facts are async.
 
 ### 3.4 Capabilities unlocked (not counted in the ledger)
 
@@ -289,29 +336,41 @@ rows; export compat is not storage compat.
   and the architecture test (§7). On acceptance of this PRD, close #10773
   with a pointer here (diagnosis absorbed, prescription superseded) and file
   the importer-removal issue (§5 retirement condition).
-- **Stage 2 — summaries table.** The pilot: `streamLogSummaries/` is
-  contractually derived and discardable (#9434), so worst case is a rebuild.
-  Deletes the mtime-staleness heuristic and scan-on-open.
-- **Stage 3 — `streamData/` sidecars → rows.** The big machinery win in
-  `StreamSnapshotStore` (seed chains, provenance, overlays, write mutexes).
+- **Stage 2 — registry rows + summaries table.** The `streams` registry
+  migrates FIRST, not at Stage 5: every later stage inserts child rows with
+  enforced FKs to `streams`, so the parent rows must exist before any child
+  table has data. The Stage-2 importer derives them from the authoritative
+  transcript registry (the `streamLogs/` directory listing — today's
+  registration authority), giving the registry exactly one migration owner;
+  deriving parents from the discardable summary cache could omit streams.
+  `stream_summaries` (derived, #9434-discardable — worst case is a rebuild)
+  rides along as the pilot payload, deleting the mtime-staleness heuristic
+  and scan-on-open.
+- **Stage 3 — `streamData/` sidecars + goal entries → rows.** The big
+  machinery win in `StreamSnapshotStore` (seed chains, provenance, overlays,
+  write mutexes), plus `GoalStore`'s durable goal records out of
+  `state.json` into `goals` rows (§2 narrowing).
 - **Stage 4 — transcript entries → rows.** `StreamLogStore` engine swap;
   clobber machinery deletes; partial hydration lands. Gate: a benchmark PR
   proving the 300 ms batched-transaction path sustains streaming append load
   (~200 mutations/s) with headroom.
-- **Stage 5 — registry, incarnation, terminal tombstone.** #10702's
-  machinery collapses to the column + the fact-admission gate in
+- **Stage 5 — incarnation + tombstone-fence semantics.** With registry rows
+  already in place since Stage 2, this stage lands only the deletion
+  protocol: hard-delete + same-transaction `stream_tombstones` insert
+  (§3.3), the incarnation compare-and-set, and the fact-admission gate in
   `SessionFactApplier` (the reducer owns admission; `SessionEventHub` stays
-  fan-out only). Record the identity ruling: **stream ids are never
-  reused** — a workflow relaunch mints a fresh id; the deterministic slot
-  maps to the current id.
+  fan-out only) — collapsing #10702's machinery. Record the identity
+  ruling: **stream ids are never reused** — a workflow relaunch mints a
+  fresh id; the deterministic slot maps to the current id.
 - **Stage 6 — execution records, then leases/locks → rows/WAL.** This stage
   now explicitly includes `ExecutionKVStore` and flow-checkpoint persistence
   (`executions/{id}/*.json`: meta, config, reports, results, turn state,
   child records, checkpoints) — deferring it would leave authoritative app
   state in files after "completion", contradicting §7 and §9. The KV layer
   retires here. Leases/locks migrate **last within the stage, deliberately**:
-  the file-based execution lock must stay available to fence the earlier
-  stages' migrations (see §6 mixed-version fencing).
+  the legacy lease files are the liveness signal the importer's quiesce
+  check reads to detect running file-backed hosts (§6 mixed-version
+  fencing) — they must stay file-based until every data migration is done.
 - **Stage 7 — feature payoffs.** FTS5, retention policy, usage analytics.
 
 Ordering with other programs: independent of Waves A–C (different band, no
@@ -340,16 +399,25 @@ Stage 4).
   revert the release + restore the renamed dir. Rows-or-files, never both.
 - **Mixed-version hosts during migration** (an old file-backed CLI and a
   migrated extension sharing one workspace): WAL fences database
-  connections, not legacy filesystem writers. Three-part mitigation:
-  (1) the importer takes the existing file-based execution lock before
-  migrating — which is why that lock migrates last (Stage 6) — so a
-  _running_ legacy host's writers are excluded by the same protocol they
-  already honor; (2) the importer is idempotent and **re-entrant**: every
-  open that finds recreated legacy dirs re-imports and re-renames them, so
-  a stale-version host's late writes are absorbed on the next new-host open
-  rather than silently lost; (3) concurrent mixed-version access during the
-  migration window is documented as unsupported — writes are absorbed
-  late, not dropped, but old-host reads may be stale until it upgrades.
+  connections, not legacy filesystem writers — and no _new_ lock can be
+  honored by _old_ code. The per-execution locks are also too narrow: they
+  fence only `ExecutionKVStore` mutations, not transcript or `streamData`
+  writers. Honest mitigation, three parts:
+  (1) **Quiesce check, not lock:** before migrating, the importer reads the
+  legacy lease files (`executionLeases/`) — artifacts old hosts already
+  maintain and new code can inspect — and **defers migration while any live
+  legacy execution is present**; leases staying file-based until Stage 6 is
+  what keeps this signal readable (why leases/locks migrate last).
+  (2) **A workspace-scoped migration fence between new hosts** (one
+  marker/lock the importer holds), so two migrated hosts cannot
+  double-import concurrently.
+  (3) **Re-entrant idempotent import as the backstop** for the case no fence
+  can cover (a legacy host that starts writing mid-import): every open that
+  finds recreated legacy dirs re-imports and re-renames them, so late
+  legacy writes are absorbed on the next new-host open rather than lost.
+  Concurrent mixed-version access during the window is documented as
+  unsupported — writes absorbed late, not dropped; old-host reads may be
+  stale until it upgrades.
 - **Scope creep toward SQL-as-UI-state**: §8 non-goals; the architecture
   test only allowlists the two stores' modules for DB access.
 
