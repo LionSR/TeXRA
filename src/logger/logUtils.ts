@@ -23,7 +23,7 @@ import { redactSecrets } from '@logger/redaction';
 // Deliberate deep import: the '@shared/schemas' barrel transitively imports
 // this module (stateSettings → '@shared/approvalPolicy' → here), so importing
 // the barrel would create an import cycle. Recorded in the shared-schemas
-// deep-import baseline.
+// deep-import baseline as its documented cycle floor.
 import { LOG_LEVELS, type LogLevel } from '@shared/schemas/log';
 import { serializeError } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';

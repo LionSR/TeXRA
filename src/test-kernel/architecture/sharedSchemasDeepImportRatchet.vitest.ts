@@ -4,21 +4,17 @@
 // past it into `@shared/schemas/<leaf>` are. Clones the checked-in-baseline +
 // AST-scanning vitest pattern from hostAgentDeepImportRatchet.vitest.ts.
 //
-// The one design requirement: deep imports are recorded in TWO classes, and
-// they are gated differently, because they mean opposite things.
+// Deep imports are recorded in three classes with distinct semantics.
 //
-//   forced     — the statement names at least one symbol the barrel does not
-//                re-export. The author had no barrel path to use, so this is a
-//                report that a leaf module is missing from the published
-//                surface, NOT a contributor error. Gated only on the SET of
-//                off-surface specifiers: another statement against an
-//                already-off-surface module passes; pushing a *new* module off
-//                the surface fails.
-//   gratuitous — every name is reachable through `@shared/schemas`. The barrel
-//                was simply not used. Gated hard, per specifier, on count.
+//   floors      — exact published statements that cannot use the barrel without
+//                 creating a dependency cycle. Any new statement fails.
+//   forced      — the statement names a symbol the barrel does not re-export.
+//                 Any new off-surface statement fails.
+//   gratuitous  — every name is reachable through `@shared/schemas`, with no
+//                 documented layering constraint. Any new statement fails.
 //
-// Collapsing the two into one number would peg the total at the forced floor
-// forever, which reads as a broken ratchet (cf. #8900) and gets it deleted.
+// Keeping floors separate lets a later barrel widening reclassify an ordinary
+// forced import as gratuitous instead of silently grandfathering it.
 //
 // Regenerate after an intentional change:
 //   TEXRA_UPDATE_SHARED_SCHEMAS_BASELINE=1 npx vitest run \
@@ -48,15 +44,16 @@ const SEMANTICS =
   'barrel into a leaf module, keyed by specifier, valued by the importing ' +
   "file ('(type-only)' marks an `import type` statement, so a file that " +
   'splits its value and type imports contributes two distinct entries). ' +
-  "'forced' statements name at least one symbol the barrel does not " +
-  're-export: they are a report that a leaf module is missing from the ' +
-  'published surface, and only a NEW off-surface specifier fails the ratchet. ' +
-  "'gratuitous' statements could have used the barrel verbatim; their per-" +
-  'specifier count may not grow. Classification is computed against ' +
+  "'floors' are exact published statements that cannot use the barrel " +
+  "without creating a dependency cycle. 'forced' statements name a symbol " +
+  "the barrel does not re-export. 'gratuitous' statements could use the " +
+  'barrel verbatim and have no documented layering constraint. Any new entry ' +
+  'in any class fails. ' +
+  'Classification is computed against ' +
   'src/shared/schemas/index.ts at test time, so widening the barrel ' +
   'reclassifies statements automatically (and requires regenerating this ' +
   'file in the same PR). The leaf-aware published-surface snapshot preserves ' +
-  'the exact type/value bindings used by baseline gratuitous imports, so those ' +
+  'the exact type/value bindings used by published deep imports, so those ' +
   'bindings may not contract even if their importers move. Scan covers ' +
   'repo-root src/ and every packages/*/src directory, excluding only the ' +
   'surface interior src/shared/schemas/ (test-kernel files are ratcheted ' +
@@ -75,6 +72,7 @@ type PublishedSurface = Record<string, PublishedLeafSurface>;
 interface SchemasBaseline {
   semantics: string;
   surface: PublishedSurface;
+  floors: DeepImports;
   forced: DeepImports;
   gratuitous: DeepImports;
 }
@@ -546,15 +544,21 @@ function isLeafFullyPublished(
   );
 }
 
-function collectCurrent(): Pick<
+interface CollectedSchemas extends Pick<
   SchemasBaseline,
-  'surface' | 'forced' | 'gratuitous'
+  'surface' | 'floors' | 'forced' | 'gratuitous'
 > {
+  scannedTestKernelFiles: number;
+}
+
+function collectCurrent(documentedFloors: DeepImports = {}): CollectedSchemas {
   const moduleMemo = new Map<string, ModuleExports>();
   const fullSurface = publishedSurface(moduleMemo);
   const referencedSurface: MutablePublishedSurface = new Map();
+  const floors: DeepImports = {};
   const forced: DeepImports = {};
   const gratuitous: DeepImports = {};
+  let scannedTestKernelFiles = 0;
 
   for (const root of scanRoots()) {
     for (const file of sourceFilesUnder(resolve(REPO_ROOT, root), {
@@ -562,6 +566,7 @@ function collectCurrent(): Pick<
       missingDirReturnsEmpty: true,
     })) {
       const repoPath = toRepoPath(file);
+      if (repoPath.startsWith('src/test-kernel/')) scannedTestKernelFiles += 1;
       if (repoPath.startsWith(SURFACE_INTERIOR)) continue;
       // Cheap text gate before the parser: only ~300 of ~2k files can match,
       // and parsing the rest is what makes this ratchet slow enough to starve
@@ -574,7 +579,7 @@ function collectCurrent(): Pick<
         const resolvedSpaces = reference.bindings?.map((binding) =>
           reachableSpace(fullSurface, reference.specifier, binding, moduleMemo),
         );
-        const isGratuitous =
+        const isPublished =
           reference.bindings == null
             ? isLeafFullyPublished(
                 fullSurface,
@@ -583,8 +588,13 @@ function collectCurrent(): Pick<
                 reference.typeOnly,
               )
             : resolvedSpaces?.every((space) => space != null) === true;
-        const bucket = isGratuitous ? gratuitous : forced;
-        if (isGratuitous) {
+        const entry = reference.typeOnly ? `${repoPath} (type-only)` : repoPath;
+        const isDocumentedFloor =
+          isPublished &&
+          documentedFloors[reference.specifier]?.includes(entry) === true;
+        let bucket = forced;
+        if (isPublished) bucket = isDocumentedFloor ? floors : gratuitous;
+        if (isPublished) {
           if (reference.bindings == null) {
             const published = fullSurface[reference.specifier];
             for (const space of ['type', 'value'] as const) {
@@ -611,9 +621,7 @@ function collectCurrent(): Pick<
             }
           }
         }
-        (bucket[reference.specifier] ??= []).push(
-          reference.typeOnly ? `${repoPath} (type-only)` : repoPath,
-        );
+        (bucket[reference.specifier] ??= []).push(entry);
       }
     }
   }
@@ -628,8 +636,10 @@ function collectCurrent(): Pick<
     );
   return {
     surface: sortPublishedSurface(referencedSurface),
+    floors: sorted(floors),
     forced: sorted(forced),
     gratuitous: sorted(gratuitous),
+    scannedTestKernelFiles,
   };
 }
 
@@ -638,6 +648,15 @@ function total(imports: DeepImports): number {
     (sum, entries) => sum + entries.length,
     0,
   );
+}
+
+function addedEntries(current: DeepImports, baseline: DeepImports): string[] {
+  return Object.entries(current).flatMap(([specifier, entries]) => {
+    const allowed = new Set(baseline[specifier] ?? []);
+    return entries
+      .filter((entry) => !allowed.has(entry))
+      .map((entry) => `${specifier}: ${entry}`);
+  });
 }
 
 function contractedSurface(
@@ -723,6 +742,7 @@ describe('@shared/schemas deep-import ratchet', () => {
           value: ['RuntimeSchema'],
         },
       },
+      floors: {},
       forced: { [specifier]: ['src/already-forced.ts'] },
       gratuitous: { [specifier]: ['src/old.ts'] },
     };
@@ -794,69 +814,43 @@ describe('@shared/schemas deep-import ratchet', () => {
     ).toBe('value');
   });
 
-  // One scan for the whole suite; every case reads the same snapshot.
-  const current = collectCurrent();
+  const baselineBeforeUpdate = JSON.parse(
+    readFileSync(BASELINE_PATH, 'utf8'),
+  ) as SchemasBaseline;
+  // Use the pre-write snapshot only to classify explicitly documented floors.
+  const current = collectCurrent(baselineBeforeUpdate.floors);
   if (process.env.TEXRA_UPDATE_SHARED_SCHEMAS_BASELINE === '1') {
-    writeFileSync(
-      BASELINE_PATH,
-      `${JSON.stringify({ semantics: SEMANTICS, ...current }, null, 2)}\n`,
-    );
+    const snapshot: SchemasBaseline = {
+      semantics: SEMANTICS,
+      surface: current.surface,
+      floors: current.floors,
+      forced: current.forced,
+      gratuitous: current.gratuitous,
+    };
+    writeFileSync(BASELINE_PATH, `${JSON.stringify(snapshot, null, 2)}\n`);
   }
+  // Regen runs gate against what they just wrote, not the stale input snapshot.
   const baseline = JSON.parse(
     readFileSync(BASELINE_PATH, 'utf8'),
   ) as SchemasBaseline;
 
   it('does not add gratuitous @shared/schemas deep imports', () => {
-    const specifiers = [
-      ...new Set([
-        ...Object.keys(baseline.gratuitous),
-        ...Object.keys(current.gratuitous),
-      ]),
-    ].toSorted((a, b) => a.localeCompare(b));
-    const grown = specifiers.filter(
-      (specifier) =>
-        (current.gratuitous[specifier]?.length ?? 0) >
-        (baseline.gratuitous[specifier]?.length ?? 0),
-    );
-    const report = grown
-      .map((specifier) => {
-        const allowed = new Set(baseline.gratuitous[specifier] ?? []);
-        const added = (current.gratuitous[specifier] ?? []).filter(
-          (entry) => !allowed.has(entry),
-        );
-        return `  ${specifier}: ${allowed.size} -> ${current.gratuitous[specifier]?.length ?? 0}\n${added
-          .map((entry) => `    + ${entry}`)
-          .join('\n')}`;
-      })
-      .join('\n');
+    const added = addedEntries(current.gratuitous, baseline.gratuitous);
     expect(
-      grown,
-      `Every name in these statements is already exported by '@shared/schemas'; import the barrel instead.\n${report}\n\n` +
-        `If the growth is intentional (e.g. the barrel was widened, reclassifying forced statements), regenerate ${BASELINE_FILE} in this PR.`,
+      added,
+      `Every name in these statements is already exported by '@shared/schemas'; import the barrel instead.\n` +
+        added.map((entry) => `  + ${entry}`).join('\n') +
+        `\n\nIf the growth is intentional (e.g. the barrel was widened, reclassifying forced statements), regenerate ${BASELINE_FILE} in this PR.`,
     ).toEqual([]);
   });
 
-  it('scans test-kernel files so their deep imports stay ratcheted', () => {
-    // The scan must actually cover src/test-kernel. A revert of
-    // `excludeTestKernel: false` would still pass the count-growth cases below
-    // (they only fail on growth, never shrinkage), so pin one known entry.
-    expect(current.gratuitous['@shared/schemas/todo']).toContain(
-      'src/test-kernel/architecture/SharedLiteralImmutability.vitest.ts',
-    );
-  });
-
-  it('does not push a new module off the published @shared/schemas surface', () => {
-    // A forced statement against an already-off-surface module is allowed: the
-    // author has no barrel path. A NEW off-surface specifier is a widening of
-    // the gap and needs the surface-membership decision, not a silent baseline.
-    const newlyForced = Object.keys(current.forced)
-      .filter((specifier) => !(specifier in baseline.forced))
-      .toSorted((a, b) => a.localeCompare(b));
+  it('does not add off-surface @shared/schemas deep imports', () => {
+    const added = addedEntries(current.forced, baseline.forced);
     expect(
-      newlyForced,
-      `These statements name symbols '@shared/schemas' does not re-export, from modules that were not previously off-surface:\n` +
-        newlyForced.map((specifier) => `  + ${specifier}`).join('\n') +
-        `\n\nEither import a symbol the barrel publishes, or land the surface-membership decision and regenerate ${BASELINE_FILE}.`,
+      added,
+      `These statements name symbols '@shared/schemas' does not re-export:\n` +
+        added.map((entry) => `  + ${entry}`).join('\n') +
+        `\n\nEither publish and import the symbol through the barrel, or land the surface-membership decision and regenerate ${BASELINE_FILE}.`,
     ).toEqual([]);
   });
 
@@ -870,12 +864,12 @@ describe('@shared/schemas deep-import ratchet', () => {
     ).toEqual([]);
   });
 
-  it('keeps forced and gratuitous separate, sorted, and duplicate-free', () => {
-    // Separation is the point of this ratchet: a combined count could never
-    // fall below the forced floor and would be read as permanently stuck.
+  it('keeps floors, forced, and gratuitous sorted and duplicate-free', () => {
+    // Separate keys preserve each class's distinct migration policy.
     expect(Object.keys(baseline)).toEqual([
       'semantics',
       'surface',
+      'floors',
       'forced',
       'gratuitous',
     ]);
@@ -889,7 +883,7 @@ describe('@shared/schemas deep-import ratchet', () => {
         );
       }
     }
-    for (const key of ['forced', 'gratuitous'] as const) {
+    for (const key of ['floors', 'forced', 'gratuitous'] as const) {
       for (const [specifier, entries] of Object.entries(baseline[key])) {
         // Sorted AND distinct: a duplicated entry would inflate the allowed
         // count and silently weaken the ratchet.
@@ -898,8 +892,13 @@ describe('@shared/schemas deep-import ratchet', () => {
         );
       }
     }
-    expect(total(baseline.forced) + total(baseline.gratuitous)).toBeGreaterThan(
-      0,
-    );
+    // Pin collectCurrent's scope: excluding test-kernel again must fail even
+    // though no test-kernel deep import remains in the baseline.
+    expect(current.scannedTestKernelFiles).toBeGreaterThan(0);
+    expect(
+      total(baseline.floors) +
+        total(baseline.forced) +
+        total(baseline.gratuitous),
+    ).toBeGreaterThan(0);
   });
 });
