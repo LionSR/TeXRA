@@ -81,8 +81,8 @@ import {
 } from './tui/state/transcript';
 import { syncStreamLog } from './tui/state/subscribeStreamLog';
 import {
+  beginLoadedStreamsReconcile,
   markArtifactStreamHydrated,
-  markLoadedStreamsHydrated,
 } from './tui/state/subscribeStreamArtifacts';
 
 type InterruptedFollowUp = Pick<
@@ -543,12 +543,15 @@ export function createChatSessionController(
 
       const sessionContext = beginRunContext(resolution.agentConfig, 'history');
 
+      const reconcileLoadedStreams = beginLoadedStreamsReconcile([
+        resolution.streamId,
+      ]);
+
       await runtimeSession.transcripts.ensureLoaded(resolution.streamId);
       await snapshotStore.load([resolution.streamId]);
-      // `load` evicts every other stream, so reconcile the hydration markers to
-      // the retained root before the awaited read/patch/focus below can render
-      // a stale pre-resume projection.
-      markLoadedStreamsHydrated([resolution.streamId]);
+      // Drop the markers `load` just evicted before the awaited read/patch can
+      // render a stale pre-resume projection.
+      reconcileLoadedStreams();
       const restored = await snapshotStore.read(resolution.streamId);
       // A rehydrated stream never re-emits `run.start`, so its identity is
       // seeded from the durable store (ExecutionMeta by FK) on this cold
@@ -572,11 +575,11 @@ export function createChatSessionController(
       });
       syncStreamLog(resolution.streamId);
       focusStream(resolution.streamId);
-      // An in-flight focus preload for the previous stream can resolve during
-      // the awaited read/patch above and re-add it (its requestIsCurrent still
-      // passes until focus moves). Re-reconcile now that focus has moved, so any
-      // such stale marker is cleared and later hydrations fail requestIsCurrent.
-      markLoadedStreamsHydrated([resolution.streamId]);
+      // Re-reconcile now that focus has moved: a stale in-flight preload for the
+      // previous stream that re-added it during the awaited read above is cleared
+      // again, while any stream preloaded in the meantime is preserved. Later
+      // hydrations for the old stream also fail requestIsCurrent.
+      reconcileLoadedStreams();
 
       const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
         setupRunHost(sessionContext);

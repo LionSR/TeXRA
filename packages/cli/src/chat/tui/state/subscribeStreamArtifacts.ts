@@ -71,15 +71,26 @@ export function markArtifactStreamHydrated(streamId: StreamTabId): void {
   bumpStreamArtifactRevision();
 }
 
-/** Reconcile the hydration markers with an authoritative full-set `load`:
- *  `load` evicts every stream not in `streamIds`, so drop the markers for the
- *  evicted records and mark only the retained streams hydrated. */
-export function markLoadedStreamsHydrated(
-  streamIds: readonly StreamTabId[],
-): void {
-  hydratedArtifactStreams.clear();
-  for (const streamId of streamIds) hydratedArtifactStreams.add(streamId);
-  bumpStreamArtifactRevision();
+/** Prepare reconciliation for an authoritative full-set `load` of `retained`.
+ *  `load` evicts every other record, so capture the markers it will evict up
+ *  front; the returned reconcile() drops exactly those stale markers and marks
+ *  the retained streams hydrated. Call it right after `load` and again after
+ *  focus: a stale in-flight preload that re-adds an evicted stream is cleared
+ *  either way, while a stream legitimately preloaded after the load is
+ *  preserved (it was never in the captured stale set). */
+export function beginLoadedStreamsReconcile(
+  retained: readonly StreamTabId[],
+): () => void {
+  const retainedSet = new Set(retained);
+  const stale = new Set<StreamTabId>();
+  for (const streamId of hydratedArtifactStreams) {
+    if (!retainedSet.has(streamId)) stale.add(streamId);
+  }
+  return () => {
+    for (const streamId of stale) hydratedArtifactStreams.delete(streamId);
+    for (const streamId of retained) hydratedArtifactStreams.add(streamId);
+    bumpStreamArtifactRevision();
+  };
 }
 
 /** Read the canonical artifact projection for one stream from the live session.

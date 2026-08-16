@@ -49,7 +49,6 @@ import { WORKFLOW_TASK_STATUS_STYLE } from './transcriptEntryLayout';
 // Local imports - TUI state and controls
 import { childElapsed } from '../state/childControls';
 import {
-  readStreamArtifacts,
   streamArtifactRevision,
   streamPreferredUsage,
 } from '../state/subscribeStreamArtifacts';
@@ -743,12 +742,7 @@ export function SubagentList(
             <SessionRow
               isListRoot={session.id === props.listRootStreamId}
               active={state.active}
-              cumulativeUsage={
-                session.active
-                  ? (readStreamArtifacts(session.id)?.cumulativeUsage ??
-                    session.slice?.cumulativeUsage)
-                  : session.slice?.cumulativeUsage
-              }
+              cumulativeUsage={streamPreferredUsage(session.id, session.slice)}
               focused={state.focused}
               hiddenRowSummary={hiddenRowSummary}
               metadataColumn={metadataColumn}
