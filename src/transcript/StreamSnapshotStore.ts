@@ -35,6 +35,7 @@ import {
   isEmptyUsage,
   OutputFileInfoListSchema,
   PersistedWorkPlanSchema,
+  STREAM_SNAPSHOT_SCHEMA_VERSION,
   STREAM_TAB_META_SCHEMA_VERSION,
   planSummaryLine,
   RoundKeySchema,
@@ -1519,6 +1520,7 @@ export class StreamSnapshotStore {
       stream,
       STREAM_DATA_KEYS.WORK_PLAN,
       PersistedWorkPlanSchema.parse({
+        schemaVersion: STREAM_SNAPSHOT_SCHEMA_VERSION,
         todos: plan.todos,
         plan: plan.plan,
         planSummary: plan.planSummary,
