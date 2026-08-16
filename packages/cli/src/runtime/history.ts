@@ -17,7 +17,6 @@ import { tryDefaultSession, type AgentConfig } from '@agent/runtime';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { createLog } from '@logger/logUtils';
 import type {
   ExecutionId,
   ExecutionMeta,
@@ -37,10 +36,8 @@ import {
 } from '@transcript';
 import {
   cleanupExecutionAdjacentStreamState,
-  openStandaloneStreamStores,
-  type AdjacentStreamStores,
+  resolveAdjacentStreamStores,
 } from '@transcript/adjacentStreamCleanup';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { readCliResumeDataForListing } from './toolUseResumeData';
 import {
@@ -321,32 +318,16 @@ export async function stageCliHistoryTraceViewerAssets(params: {
   return 'staged';
 }
 
-const log = createLog('CliHistory');
-
 /**
  * A live session (rare for the one-shot `history` command, but not
  * impossible) already has its `transcripts`/`snapshots` open — reuse them
- * rather than opening a second, independent pair. Either way, a store that
- * fails to open (e.g. one corrupt, unrelated persisted stream) must not
- * block deleting the requested execution — warn once and proceed with no
- * adjacent-state cleanup for this call.
+ * rather than opening a second, independent pair.
  */
-async function resolveAdjacentStreamStores(): Promise<
-  AdjacentStreamStores | undefined
-> {
+function liveStreamStores() {
   const session = tryDefaultSession();
-  if (session) {
-    return { streamLogs: session.transcripts, snapshots: session.snapshots };
-  }
-  try {
-    return await openStandaloneStreamStores();
-  } catch (error) {
-    log.warn(
-      `Could not open the transcript store for history cleanup; deleted executions may leave orphaned sidecars: ${toErrorMessage(error)}`,
-      { data: error },
-    );
-    return undefined;
-  }
+  return session
+    ? { streamLogs: session.transcripts, snapshots: session.snapshots }
+    : undefined;
 }
 
 export async function deleteCliHistory(options: {
@@ -357,7 +338,7 @@ export async function deleteCliHistory(options: {
   if (!options.all && !id) {
     throw new Error('Expected an execution id, or --all.');
   }
-  const stores = await resolveAdjacentStreamStores();
+  const stores = await resolveAdjacentStreamStores(liveStreamStores());
   if (options.all) {
     const result = await deleteAllExecutions({
       beforeDelete: stores

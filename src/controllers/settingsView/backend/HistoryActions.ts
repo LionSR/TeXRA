@@ -26,18 +26,14 @@ import {
   htmlExportErrorMessage,
 } from '@controllers/settingsView/HistoryActionOutcomes';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
-import { createLog } from '@logger/logUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExecutionId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 import {
   cleanupExecutionAdjacentStreamState,
-  openStandaloneStreamStores,
+  resolveAdjacentStreamStores,
   type AdjacentStreamStores,
 } from '@transcript/adjacentStreamCleanup';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-
-const log = createLog('HistoryActions');
 
 type HistoryExportFormat = 'md' | 'tex' | 'html';
 export type HistoryOpenKind = 'text' | 'pdf' | 'external';
@@ -76,30 +72,11 @@ export class HistoryActions {
     await this.ports.postMessage(await buildHistoryMessage());
   }
 
-  /**
-   * A store that fails to open (e.g. one corrupt, unrelated persisted
-   * stream) must not block deleting the requested execution — warn once and
-   * let the caller proceed with no adjacent-state cleanup for this call.
-   */
-  private async resolveAdjacentStreamStores(): Promise<
-    AdjacentStreamStores | undefined
-  > {
-    const live = this.ports.getLiveStreamStores?.();
-    if (live) return live;
-    try {
-      return await openStandaloneStreamStores();
-    } catch (error) {
-      log.warn(
-        `Could not open the transcript store for history cleanup; deleted executions may leave orphaned sidecars: ${toErrorMessage(error)}`,
-        { data: error },
-      );
-      return undefined;
-    }
-  }
-
   async deleteItem(historyId: string): Promise<void> {
     const executionId = historyId as ExecutionId;
-    const stores = await this.resolveAdjacentStreamStores();
+    const stores = await resolveAdjacentStreamStores(
+      this.ports.getLiveStreamStores?.(),
+    );
     const outcome = describeDeleteExecutionResult(
       await deleteExecution(executionId, {
         beforeDelete: stores
@@ -128,7 +105,9 @@ export class HistoryActions {
     ) {
       return;
     }
-    const stores = await this.resolveAdjacentStreamStores();
+    const stores = await resolveAdjacentStreamStores(
+      this.ports.getLiveStreamStores?.(),
+    );
     const result = await deleteAllExecutions({
       beforeDelete: stores
         ? (executionId) =>

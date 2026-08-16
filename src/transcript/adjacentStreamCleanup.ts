@@ -106,11 +106,49 @@ async function deleteAdjacentStreamState(
  * pair per operation (not per execution) and let it be garbage-collected
  * when done.
  */
-export async function openStandaloneStreamStores(): Promise<AdjacentStreamStores> {
+async function openStandaloneStreamStores(): Promise<AdjacentStreamStores> {
   return {
     streamLogs: await StreamLogStore.open(),
     snapshots: new StreamSnapshotStore(),
   };
+}
+
+/**
+ * Resolve the stores a caller should clean up through: a host-provided live
+ * session's stores when usable, otherwise a standalone pair.
+ *
+ * A live `StreamLogStore` can be in `ephemeral` mode — a host degrades to it
+ * when its persistent transcript directory failed to open at startup
+ * (`StreamLogStore.openOrEphemeral`), and deliberately never touches disk
+ * again for the rest of that process's life. `StreamLogStore.delete()`
+ * silently no-ops its on-disk removal in that mode (by design — it has
+ * nothing trustworthy to reconcile against), so reusing an ephemeral live
+ * store here would commit the snapshot deletion and let the execution
+ * directory go while the transcript log sidecar and its index entry are
+ * never actually removed — recreating the exact orphan this module exists
+ * to prevent, silently. Skip it and fall through to a real, targeted
+ * persistent open instead.
+ *
+ * A store that fails to open (e.g. one corrupt, unrelated persisted stream)
+ * must not block deleting the requested execution — warn once and return
+ * `undefined` so the caller proceeds with no adjacent-state cleanup for this
+ * call.
+ */
+export async function resolveAdjacentStreamStores(
+  liveStreamStores: AdjacentStreamStores | undefined,
+): Promise<AdjacentStreamStores | undefined> {
+  if (liveStreamStores && liveStreamStores.streamLogs.mode.kind !== 'ephemeral') {
+    return liveStreamStores;
+  }
+  try {
+    return await openStandaloneStreamStores();
+  } catch (error) {
+    log.warn(
+      `Could not open the transcript store for history cleanup; deleted executions may leave orphaned sidecars: ${toErrorMessage(error)}`,
+      { data: error },
+    );
+    return undefined;
+  }
 }
 
 /**
