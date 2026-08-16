@@ -327,7 +327,8 @@ export class SessionFactApplier {
             // presentation repair fails; any other rejection leaves the
             // barrier in place and is logged by the event-error wrapper,
             // because the stream may have deleted.
-            const expectedIncarnation = this.state.beginStreamRemoval(streamId);
+            const { incarnation: expectedIncarnation } =
+              this.state.beginStreamRemoval(streamId);
             this.registeredWithRenderer.delete(streamId);
             const { pending, created } = this.beginPendingDeletion(
               streamId,
@@ -477,6 +478,66 @@ export class SessionFactApplier {
       } else {
         this.handleRunFact(deferred.streamId, deferred.event);
       }
+    }
+  }
+
+  /**
+   * Begin a command-owned removal barrier and pending buffer, so facts racing
+   * a host command deletion are buffered exactly as they are for a
+   * `removeStream` fact. Returns `created === false` when a fact-path barrier
+   * already owns the identity; the caller must then skip the deletion and
+   * leave that barrier untouched.
+   */
+  beginCommandRemoval(streamId: StreamTabId): {
+    incarnation: number;
+    created: boolean;
+  } {
+    const { incarnation, created } = this.state.beginStreamRemoval(streamId);
+    this.registeredWithRenderer.delete(streamId);
+    if (created) this.beginPendingDeletion(streamId, incarnation);
+    return { incarnation, created };
+  }
+
+  /**
+   * Complete a command-owned removal once its host delete resolves. A retained
+   * (`active`/`failed`) outcome retires the barrier and replays buffered facts;
+   * a committed outcome discards the buffer; anything the command path reports
+   * as `undefined` (reserved id, no durable data, storage-root change) retires
+   * the barrier because nothing was deleted.
+   */
+  completeCommandRemoval(
+    streamId: StreamTabId,
+    incarnation: number,
+    outcome: DeleteStreamResult | undefined,
+    created: boolean,
+  ): void {
+    if (!created) return;
+    const pending = this.pendingDeletions.get(streamId);
+    if (pending && pending.incarnation === incarnation) {
+      this.finishPendingDeletion(streamId, pending);
+    }
+    const retired =
+      outcome !== 'deleted' &&
+      this.state.retireStreamTombstone(streamId, incarnation);
+    if (retired && (outcome === 'active' || outcome === 'failed') && pending) {
+      this.replayDeferredFacts(pending.facts);
+    }
+  }
+
+  /**
+   * Drop a command-owned buffer on an ambiguous failure: keep the barrier (the
+   * stream may have deleted) but discard the buffered facts, exactly as the
+   * fact path does on a rejected host delete.
+   */
+  abortCommandRemoval(
+    streamId: StreamTabId,
+    incarnation: number,
+    created: boolean,
+  ): void {
+    if (!created) return;
+    const pending = this.pendingDeletions.get(streamId);
+    if (pending && pending.incarnation === incarnation) {
+      this.finishPendingDeletion(streamId, pending);
     }
   }
 

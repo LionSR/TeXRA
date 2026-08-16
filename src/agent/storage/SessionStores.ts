@@ -183,6 +183,10 @@ export class SessionStores {
     const hadCanonicalStream = this.streamLogs.has(stream);
     const result = await this.deleteStreamOnce(stream, shouldDelete);
     if (result === 'deleted' && hadCanonicalStream) {
+      // Re-check immediately before the canonical-deleted notify: a re-claim
+      // landing during the goal-forget await (inside `deleteStreamOnce`) must
+      // not clear the fresh incarnation's resources.
+      if (shouldDelete && !shouldDelete()) return 'superseded';
       await this.notifyDeleted(stream);
     }
     return result;

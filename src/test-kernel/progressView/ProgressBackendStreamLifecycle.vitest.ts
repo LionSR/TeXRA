@@ -283,7 +283,9 @@ describe('ProgressBackend', () => {
       releaseLease();
       await deletion;
 
-      expect(clearStream).toHaveBeenCalledWith(stream);
+      expect(clearStream).toHaveBeenCalledWith(stream, {
+        expectedIncarnation: 0,
+      });
       expect(backend.state.streamLogs.has(stream)).toBe(false);
     } finally {
       releaseLease();
@@ -701,7 +703,7 @@ describe('ProgressBackend', () => {
   });
 
   it('recovers when an inactive stream becomes selected during deletion', async () => {
-    const { backend, messages } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
     const fallback = 'surviving-fallback' as StreamTabId;
     const deleting = 'selected-while-deleting' as StreamTabId;
     const releaseClear = gateClearStream(backend);
@@ -712,17 +714,18 @@ describe('ProgressBackend', () => {
 
     const deletion = backend.deleteStream(deleting);
     await vi.waitFor(() =>
-      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting),
+      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting, {
+        expectedIncarnation: 0,
+      }),
     );
     await backend.activateStream(deleting);
     releaseClear();
     await deletion;
 
     expect(backend.presentation.activeStream).toBe(fallback);
-    expect(messages).toContainEqual({
-      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-      activeStream: fallback,
-    });
+    // The command barrier refuses selecting the stream being deleted, so the
+    // fallback stays active without a recovery re-assertion.
+    expect(backend.state.streamLogs.has(deleting)).toBe(false);
   });
 
   it('preserves explicit deselection during active-stream deletion', async () => {
@@ -737,7 +740,9 @@ describe('ProgressBackend', () => {
 
     const deletion = backend.deleteStream(deleting);
     await vi.waitFor(() =>
-      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting),
+      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting, {
+        expectedIncarnation: 0,
+      }),
     );
     backend.presentation.select('');
     releaseClear();
@@ -771,7 +776,9 @@ describe('ProgressBackend', () => {
 
     const deletion = backend.deleteStream(deleting);
     await vi.waitFor(() =>
-      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting),
+      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting, {
+        expectedIncarnation: 0,
+      }),
     );
     const activation = backend.activateStream(requested, 'pending-request');
     await vi.waitFor(() =>
@@ -816,7 +823,9 @@ describe('ProgressBackend', () => {
 
     const deletion = backend.deleteStream(deleting);
     await vi.waitFor(() =>
-      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting),
+      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting, {
+        expectedIncarnation: 0,
+      }),
     );
     const activation = backend.activateStream(requested, 'failed-request');
     await vi.waitFor(() =>
@@ -859,7 +868,9 @@ describe('ProgressBackend', () => {
 
     const deletion = backend.deleteStream(deleting);
     await vi.waitFor(() =>
-      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting),
+      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting, {
+        expectedIncarnation: 0,
+      }),
     );
     await backend.activateStream(committed);
     vi.spyOn(backend.state.snapshots, 'preload').mockImplementationOnce(

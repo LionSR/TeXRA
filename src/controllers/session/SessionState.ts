@@ -425,16 +425,24 @@ export class SessionState {
 
   /**
    * Begin a removal barrier for `stream`, capturing its current incarnation.
-   * Idempotent: if a barrier is already in place (a `removeStream` fact
-   * racing a direct delete), the first captured incarnation is kept so a
-   * later claim is measured against the original removal, not the re-entry.
+   * Explicit ownership: `created` is true only when this call installed a new
+   * barrier. When a barrier already exists (a `removeStream` fact racing a
+   * direct delete, or a command racing a fact-path removal) the existing
+   * incarnation is returned with `created === false`, so a caller that finds
+   * one can avoid starting a second deletion or touching/retiring a barrier
+   * it does not own.
    */
-  beginStreamRemoval(stream: StreamTabId): number {
+  beginStreamRemoval(stream: StreamTabId): {
+    incarnation: number;
+    created: boolean;
+  } {
     const existing = this._removedStreams.get(stream);
-    if (existing !== undefined) return existing;
+    if (existing !== undefined) {
+      return { incarnation: existing, created: false };
+    }
     const incarnation = this.incarnationOf(stream);
     this._removedStreams.set(stream, incarnation);
-    return incarnation;
+    return { incarnation, created: true };
   }
 
   /**
@@ -535,24 +543,14 @@ export class SessionState {
       return 'superseded';
     }
 
-    // The command deletion path (no caller-supplied incarnation) fences facts
-    // racing the storage await here, exactly as the removeStream fact path
-    // does via `beginStreamRemoval`. When an expected incarnation is supplied
-    // the caller already installed the barrier and owns its retirement and
-    // buffered-fact replay, so this method must not touch that barrier on a
-    // retained outcome.
-    const ownsBarrier = options?.expectedIncarnation === undefined;
-    if (ownsBarrier) {
-      this.beginStreamRemoval(stream);
-    }
-
+    // The removal barrier is installed by the caller (the fact applier for a
+    // `removeStream` fact, or `ProgressBackend` for a host command) before
+    // this storage await, and that caller owns its retirement and buffered-fact
+    // replay. This method only commits the durable delete and the tombstone.
     const deletion = await this.stores.deleteStream(stream, {
       shouldDelete: this.deletionGuard(stream, expectedIncarnation),
     });
-    if (deletion !== 'deleted') {
-      if (ownsBarrier) this.retireStreamTombstone(stream, expectedIncarnation);
-      return deletion;
-    }
+    if (deletion !== 'deleted') return deletion;
     if (!this.isCurrentIncarnation(stream, expectedIncarnation)) {
       return 'superseded';
     }

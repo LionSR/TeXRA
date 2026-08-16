@@ -468,34 +468,59 @@ export class ProgressBackend {
     const wasActive = this.presentation.activeStream === stream;
     const activationGeneration = this.activationGeneration;
     const storageGeneration = this.storageGeneration;
-    const retained = await this.enqueuePreparedStorageOperation(
-      // Pre-delete preparation is the one failure shape we can classify: it
-      // definitely did not delete anything, so report `failed` and let the
-      // applier retire the provisional barrier. A post-delete failure is
-      // ambiguous and stays a rejection, so the barrier is kept.
-      () =>
-        this.prepareStreamDeletion(stream).catch((error) => {
-          log.warn(
-            `Stream ${stream} was retained because deletion preparation failed`,
-            { data: error },
+
+    // A host command (no caller incarnation) owns its removal barrier and
+    // pending buffer through the applier, exactly like a `removeStream` fact.
+    // If a fact-path barrier already owns this identity, do not start a second
+    // deletion or touch that barrier.
+    let commandRemoval: { incarnation: number; created: boolean } | undefined;
+    if (expectedIncarnation === undefined) {
+      commandRemoval = this.factApplier.beginCommandRemoval(stream);
+      if (!commandRemoval.created) return 'superseded';
+      expectedIncarnation = commandRemoval.incarnation;
+    }
+
+    let retained: DeleteStreamResult | undefined;
+    try {
+      retained = await this.enqueuePreparedStorageOperation(
+        // Pre-delete preparation is the one failure shape we can classify: it
+        // definitely did not delete anything, so report `failed` and let the
+        // applier retire the provisional barrier. A post-delete failure is
+        // ambiguous and stays a rejection, so the barrier is kept.
+        () =>
+          this.prepareStreamDeletion(stream).catch((error) => {
+            log.warn(
+              `Stream ${stream} was retained because deletion preparation failed`,
+              { data: error },
+            );
+            return true;
+          }),
+        (preparationRetained) => {
+          if (storageGeneration !== this.storageGeneration) {
+            return Promise.resolve(undefined);
+          }
+          if (preparationRetained) {
+            return Promise.resolve('failed' as const);
+          }
+          return this.deleteStreamNow(
+            stream,
+            wasActive,
+            activationGeneration,
+            expectedIncarnation,
           );
-          return true;
-        }),
-      (preparationRetained) => {
-        if (storageGeneration !== this.storageGeneration) {
-          return Promise.resolve(undefined);
-        }
-        if (preparationRetained) {
-          return Promise.resolve('failed' as const);
-        }
-        return this.deleteStreamNow(
+        },
+      );
+    } catch (error) {
+      if (commandRemoval) {
+        this.factApplier.abortCommandRemoval(
           stream,
-          wasActive,
-          activationGeneration,
-          expectedIncarnation,
+          commandRemoval.incarnation,
+          commandRemoval.created,
         );
-      },
-    );
+      }
+      throw error;
+    }
+
     if (retained === 'active' || retained === 'failed') {
       // Best-effort presentation repair, each failure isolated so a broken
       // rebuild cannot suppress the retention notification and neither can
@@ -521,6 +546,15 @@ export class ProgressBackend {
           data: { stream, retained, error },
         });
       }
+    }
+
+    if (commandRemoval) {
+      this.factApplier.completeCommandRemoval(
+        stream,
+        commandRemoval.incarnation,
+        retained,
+        commandRemoval.created,
+      );
     }
     return retained;
   }
