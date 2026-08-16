@@ -25,9 +25,10 @@
 import {
   classifyProviderMessageBlockType,
   CONVERSATION_BLOCK_TYPES,
+  type ProviderMessageBlockCategory,
 } from '@agent/types/ConversationBlockTypes';
 import { extractWebFetchResultFields } from '@agent/types/ServerTools';
-import { isObject } from '@utils/core';
+import { assertNever, isObject } from '@utils/core';
 
 const DEFAULT_TRUNCATION_MARKER = '...';
 
@@ -273,8 +274,13 @@ function formatConversationBlock(
   // `@agent/export/normalizeConversation` via `classifyProviderMessageBlockType`
   // (`@agent/types/ConversationBlockTypes`) — one switch recognizes the tags;
   // each module maps the category into its own output shape (a truncated
-  // marker string here vs. a structured `ExportNode` there).
-  switch (classifyProviderMessageBlockType(block.type)) {
+  // marker string here vs. a structured `ExportNode` there). The switch is
+  // exhaustive over `ProviderMessageBlockCategory` (`default: assertNever`),
+  // so a category added to the classifier fails here at compile time instead
+  // of silently falling into the JSON dump.
+  const category: ProviderMessageBlockCategory | undefined =
+    classifyProviderMessageBlockType(block.type);
+  switch (category) {
     case 'image-attachment':
       return '[image attachment]';
     case 'document-attachment':
@@ -307,12 +313,17 @@ function formatConversationBlock(
       return formatWebSearchResultMarker(block.content, options);
     case 'web-fetch-tool-result':
       return formatWebFetchResultMarker(block, options);
-    default:
+    // Unrecognized tags — including the deliberately unclassified
+    // `input_text`/`output_text` literals (see the classifier's docstring) —
+    // keep the JSON-dump fallback.
+    case undefined:
       return truncate(
         stringifyConversationValue(block),
         options.toolBlockLimit,
         options,
       );
+    default:
+      return assertNever(category, 'Unhandled provider message block category');
   }
 }
 
