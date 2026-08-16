@@ -137,7 +137,10 @@ async function openStandaloneStreamStores(): Promise<AdjacentStreamStores> {
 export async function resolveAdjacentStreamStores(
   liveStreamStores: AdjacentStreamStores | undefined,
 ): Promise<AdjacentStreamStores | undefined> {
-  if (liveStreamStores && liveStreamStores.streamLogs.mode.kind !== 'ephemeral') {
+  if (
+    liveStreamStores &&
+    liveStreamStores.streamLogs.mode.kind !== 'ephemeral'
+  ) {
     return liveStreamStores;
   }
   try {
