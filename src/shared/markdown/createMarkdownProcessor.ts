@@ -6,6 +6,7 @@
 // isolated — the cached values are not interchangeable between renderers.
 
 import { LRUCache } from 'lru-cache';
+import MarkdownIt, { type StateBlock } from 'markdown-it';
 
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
@@ -123,39 +124,34 @@ function restoreLatexReferences(
 const INLINE_MATH_SPAN_PATTERN =
   /(?<!\\)\$(?!\$)[^\n$]+?(?<![\\$])\$(?:\$(?!\$)[^\n$]+?(?<![\\$])\$)*/g;
 
-// Render-time inline `$…$` adds the adjacency guards the webview's texmath
-// applies to its `dollars` inline rule (`$_pre`/`$_post`): no digit before
-// the opener, no whitespace just inside either delimiter, and no digit after
-// the closer. `Cost $5 then *ten* $10` is prose to texmath (its emphasis
-// stays live), so the CLI renderer must not shield it as math either. The
-// HTML normalizer keeps the lax form above: there a math-shaped span's tags
-// deliberately stay literal — the conservative choice while deciding which
-// HTML to convert — pinned by the "preserves complete inline math beside
-// token characters" suite.
+// Render-time inline `$…$` mirrors texmath's `dollars` inline rule exactly:
+// the same `$_pre`/`$_post` adjacency guards (no digit before the opener, no
+// whitespace just inside either delimiter, no digit after the closer) and the
+// same single-span body. texmath's body is `(?:[^\s\\]|\S.*?[^\s\\])`,
+// whose first alternative lets a one-character body match and whose second
+// permits interior `$` — so `Cost $5 then *ten* $x$` is one math span whose
+// body ends at the *last* dollar, while `Cost $5 then *ten* $10` is prose
+// (the only closer is preceded by whitespace). Adjacent spans are matched
+// back-to-back by the global scan, keeping `$a$$b$` verbatim.
 const RENDER_INLINE_MATH_SPAN_PATTERN =
-  /(?<![\\\d])\$(?!\$)(?!\s)[^\n$]+?(?<![\\$\s])\$(?!\d)(?:\$(?!\$)(?!\s)[^\n$]+?(?<![\\$\s])\$(?!\d))*/g;
+  /(?<![\\\d])\$((?:[^\s\\]|\S[^\n]*?[^\s\\]))\$(?!\d)/g;
 
-// Environment spans mirror texmath's `beg_end` block rule, so the opener is
-// only recognized where that rule can start one: at a block line start, after
-// optional blockquote/list container prefixes and up to three spaces of
-// indentation. An inline `prefix \begin{…}` stays prose, an escaped `\\begin`
-// never opens (the anchor admits no preceding backslash), four-space
-// indentation stays a code block, and starred variants like `align*` remain
-// unshielded in both hosts (texmath's `[a-z]+` name class excludes them). The
-// closer must be an unescaped `\end` naming the same environment, and a span
-// that would cross a fenced-code boundary is declined: texmath never sees
-// fenced content, so an opener inside one fence pairing a closer inside
-// another would swallow the intervening prose into the placeholder —
-// declining under-shields to the pre-fix rendering instead. Unmatched here,
-// markdown-it eats `\\` row breaks as escapes and turns `*…*` inside the
-// body into emphasis.
+// Lax environment shielding used by `htmlMarkdownNormalize`: that path has no
+// markdown-it block state to consult, so it keeps the previous line-anchored
+// regex. It recognizes a `\\begin{env}…\\end{env}` only where a texmath block
+// could start at top level (line start, optional blockquote/list prefix, up to
+// three spaces) and declines any span that would cross a fenced-code boundary
+// rather than swallowing the intervening prose into a placeholder. The render
+// shield below does not use this regex; it delegates to the container/fence-
+// aware probe so list-continuation offsets and fenced interiors match
+// markdown-it exactly.
 const BEG_END_MATH_SPAN_PATTERN =
   /(?<=^(?:(?:[ \t]*>[ \t]?)|(?:[ \t]*(?:[-+*]|\d+[.)])[ \t]+))*[ ]{0,3})\\begin\{([a-z]+)\}(?:(?!^(?:(?:[ \t]*>[ \t]?)|(?:[ \t]*(?:[-+*]|\d+[.)])[ \t]+))*[ ]{0,3}(?:`{3,}|~{3,}))[\s\S])+?(?<!\\)\\end\{\1\}/gm;
 
-// Math spans whose body must reach the renderer verbatim. Order matters: the
-// display fences are matched before the inline ones so `$…$` never splits a
-// `$$…$$`, and the environment rule comes last so a `\begin{…}…\end{…}`
-// nested inside a fence is consumed with its fence.
+// Math spans whose body must reach the renderer verbatim in the lax
+// (htmlMarkdownNormalize) path. Order matters: display fences before inline
+// ones so `$…$` never splits a `$$…$$`, and the environment rule last so a
+// `\begin{…}…\end{…}` nested inside a fence is consumed with its fence.
 const MATH_SPAN_PATTERNS: readonly RegExp[] = [
   /\$\$[\s\S]+?\$\$/g, // $$ … $$  (display, may span lines)
   /(?<!\\)\\\[[\s\S]+?(?<!\\)\\\]/g, // \[ … \]  (display)
@@ -164,13 +160,16 @@ const MATH_SPAN_PATTERNS: readonly RegExp[] = [
   BEG_END_MATH_SPAN_PATTERN, // \begin{env} … \end{env}  (texmath beg_end)
 ];
 
-// The processor's render shield swaps in the texmath-adjacent inline pattern;
-// htmlMarkdownNormalize keeps the lax default set above.
-const RENDER_MATH_SPAN_PATTERNS: readonly RegExp[] = MATH_SPAN_PATTERNS.map(
-  (pattern) =>
-    pattern === INLINE_MATH_SPAN_PATTERN
-      ? RENDER_INLINE_MATH_SPAN_PATTERN
-      : pattern,
+// The render shield swaps in the texmath-adjacent inline pattern and drops
+// the lax environment regex; environments are shielded by the block-state
+// probe instead (see protectLatexMathSpansForRender). htmlMarkdownNormalize
+// keeps the lax default set above.
+const RENDER_MATH_SPAN_PATTERNS: readonly RegExp[] = MATH_SPAN_PATTERNS.filter(
+  (pattern) => pattern !== BEG_END_MATH_SPAN_PATTERN,
+).map((pattern) =>
+  pattern === INLINE_MATH_SPAN_PATTERN
+    ? RENDER_INLINE_MATH_SPAN_PATTERN
+    : pattern,
 );
 // Fail loud rather than silently render-shield with the lax inline pattern if
 // MATH_SPAN_PATTERNS ever drops or renames the inline entry.
@@ -181,15 +180,15 @@ if (!RENDER_MATH_SPAN_PATTERNS.includes(RENDER_INLINE_MATH_SPAN_PATTERN)) {
 }
 
 // Replace every match of `patterns` with an indexed `@@<tag>-N@@` placeholder,
-// returning the captured matches so restorePlaceholders can reinstate them.
-function protectByPatterns(
+// appending the captured matches to `items` so later shields share one restore
+// pass. `tag` must already be collision-free (see selectPlaceholderTag).
+function protectPatternsInto(
   content: string,
   patterns: readonly RegExp[],
   tag: string,
-  preserveBlockquotePrefixes = false,
-): { content: string; items: string[]; placeholder: RegExp } {
-  const items: string[] = [];
-  const selectedTag = selectPlaceholderTag(content, tag);
+  items: string[],
+  preserveBlockquotePrefixes: boolean,
+): string {
   let out = content;
   for (const pattern of patterns) {
     out = out.replaceAll(pattern, (match, ...args: unknown[]) => {
@@ -233,7 +232,7 @@ function protectByPatterns(
           );
         if (!isQuotedSpan) {
           const index = items.push(match) - 1;
-          return `@@${selectedTag}-${index}@@`;
+          return `@@${tag}-${index}@@`;
         }
         return lines
           .map((line, lineIndex) => {
@@ -242,18 +241,276 @@ function protectByPatterns(
             const contentPrefix =
               lineIndex === 0 ? '' : (availablePrefixes[lineIndex - 1] ?? '');
             const index = items.push(line.slice(contentPrefix.length)) - 1;
-            return `${retainedPrefix}@@${selectedTag}-${index}@@`;
+            return `${retainedPrefix}@@${tag}-${index}@@`;
           })
           .join('\n');
       }
       const index = items.push(match) - 1;
-      return `@@${selectedTag}-${index}@@`;
+      return `@@${tag}-${index}@@`;
     });
   }
+  return out;
+}
+
+function protectByPatterns(
+  content: string,
+  patterns: readonly RegExp[],
+  tag: string,
+  preserveBlockquotePrefixes = false,
+): { content: string; items: string[]; placeholder: RegExp } {
+  const items: string[] = [];
+  const selectedTag = selectPlaceholderTag(content, tag);
+  const protectedContent = protectPatternsInto(
+    content,
+    patterns,
+    selectedTag,
+    items,
+    preserveBlockquotePrefixes,
+  );
   return {
-    content: out,
+    content: protectedContent,
     items,
     placeholder: new RegExp(`@@${selectedTag}-(\\d+)@@`, 'g'),
+  };
+}
+
+interface BegEndEnvironmentMatch {
+  readonly start: number;
+  readonly end: number;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly lineContentStarts: readonly number[];
+}
+
+interface BegEndEnvironmentProbe {
+  collect(content: string): readonly BegEndEnvironmentMatch[];
+}
+
+// A tiny markdown-it block probe that records exactly where texmath's
+// `beg_end` rule would open an environment. It is a faithful container/fence-
+// aware replacement for the source-level regex: it runs inside markdown-it's
+// block parser, so it inherits bMarks/tShift, container prefix stripping, lazy
+// list continuations, and fence consumption for free. It also installs the
+// same paragraph-interruption rule the webview's texmath plugin uses, which is
+// what lets `10. Formula:\n    \begin{align}` open an environment on the
+// indented continuation line. The probe returns true to consume a match (but
+// pushes no token), so the recorded match set follows texmath's parse exactly.
+function createBegEndEnvironmentProbe(
+  renderer: MarkdownItInstance,
+): BegEndEnvironmentProbe {
+  const probe = new MarkdownIt({
+    breaks: renderer.options.breaks,
+    linkify: renderer.options.linkify,
+    html: renderer.options.html,
+  });
+  if (renderer.options.linkify) {
+    probe.linkify.set({ fuzzyLink: true, urlAuth: true });
+  }
+
+  let active = false;
+  let matches: BegEndEnvironmentMatch[] = [];
+  let closersByEnv = new Map<string, number[]>();
+  const beginEnvPattern = /\\begin\{([a-z]+)\}/y;
+
+  const firstCloserAfter = (closers: readonly number[], openEnd: number) => {
+    let low = 0;
+    let high = closers.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (closers[mid]! > openEnd) high = mid;
+      else low = mid + 1;
+    }
+    return low < closers.length ? closers[low]! : undefined;
+  };
+
+  const rule = (
+    state: StateBlock,
+    startLine: number,
+    _endLine: number,
+    silent: boolean,
+  ): boolean => {
+    if (!active) return false;
+    const pos = state.bMarks[startLine]! + state.tShift[startLine]!;
+    const source = state.src;
+    if (source.charCodeAt(pos) !== 0x5c) return false;
+    beginEnvPattern.lastIndex = pos;
+    const opener = beginEnvPattern.exec(source);
+    if (opener === null) return false;
+    const name = opener[1]!;
+    const openEnd = beginEnvPattern.lastIndex;
+    const closers = closersByEnv.get(name);
+    if (closers === undefined) return false;
+    const closeStart = firstCloserAfter(closers, openEnd);
+    if (closeStart === undefined) return false;
+    const closeEnd = closeStart + 4 + name.length + 2; // \end{name}
+    let low = 0;
+    let high = state.bMarks.length - 1;
+    while (low < high) {
+      const mid = (low + high + 1) >> 1;
+      if (state.bMarks[mid]! <= closeStart) low = mid;
+      else high = mid - 1;
+    }
+    const closerLine = low;
+    if (silent) return true;
+
+    const lineContentStarts: number[] = [];
+    for (let line = startLine; line <= closerLine; line++) {
+      lineContentStarts.push(state.bMarks[line]! + state.tShift[line]!);
+    }
+    matches.push({
+      start: pos,
+      end: closeEnd,
+      startLine,
+      endLine: closerLine,
+      lineContentStarts,
+    });
+    state.line = closerLine + 1;
+    return true;
+  };
+
+  probe.block.ruler.before('fence', 'texra_beg_end_probe', rule, {});
+  probe.block.ruler.before('paragraph', 'texra_beg_end_probe_interrupt', rule, {
+    alt: ['paragraph', 'reference', 'blockquote', 'list'],
+  });
+
+  return {
+    collect(content: string): readonly BegEndEnvironmentMatch[] {
+      matches = [];
+      closersByEnv = new Map();
+      const closerPattern = /\\(?:end)\{([a-z]+)\}/g;
+      for (const closer of content.matchAll(closerPattern)) {
+        const name = closer[1]!;
+        const positions = closersByEnv.get(name) ?? [];
+        positions.push(closer.index);
+        closersByEnv.set(name, positions);
+      }
+
+      active = false;
+      const fenceTokens = probe.parse(content, {});
+      const fenceRanges: Array<readonly [number, number]> = [];
+      for (const token of fenceTokens) {
+        if (token.type === 'fence' && token.map !== null) {
+          fenceRanges.push([token.map[0], token.map[1]]);
+        }
+      }
+
+      active = true;
+      probe.parse(content, {});
+      active = false;
+
+      // Keep the earlier deliberate fence-decline: texmath would match across
+      // a fenced-code boundary, but shielding that would swallow the fence and
+      // its prose into a math placeholder. Under-shield instead. This is the
+      // one documented divergence from the webview's beg_end parse.
+      return matches.filter(
+        (match) =>
+          !fenceRanges.some(
+            ([start, end]) => match.startLine < end && match.endLine >= start,
+          ),
+      );
+    },
+  };
+}
+
+// Blockquote markers markdown-it will still need to see after an environment
+// is shielded. The leading indentation before each `>` and the marker itself
+// stay visible; any extra whitespace after the marker is list/continuation
+// indent and is restored from the placeholder instead, matching the existing
+// `\[…\]` blockquote-prefix behaviour.
+function retainedBlockquotePrefix(prefix: string): string {
+  return /^(?:(?:[ \t]*>[ \t]?))+/u.exec(prefix)?.[0] ?? '';
+}
+
+const LIST_MARKER_PREFIX_RE = /^(?:[ \t]*(?:[-+*]|\d+[.)])[ \t]+)/u;
+
+function lineBoundaries(content: string): {
+  readonly lineStarts: number[];
+  readonly lineEnds: number[];
+} {
+  const lineStarts = [0];
+  const lineEnds: number[] = [];
+  for (let index = 0; index < content.length; index++) {
+    if (content.charCodeAt(index) === 10) {
+      lineEnds.push(index);
+      lineStarts.push(index + 1);
+    }
+  }
+  lineEnds.push(content.length);
+  return { lineStarts, lineEnds };
+}
+
+function applyEnvironmentShields(
+  content: string,
+  matches: readonly BegEndEnvironmentMatch[],
+  tag: string,
+  items: string[],
+): string {
+  if (matches.length === 0) return content;
+  const { lineStarts, lineEnds } = lineBoundaries(content);
+  const sorted = [...matches].sort((a, b) => a.start - b.start);
+  const pieces: string[] = [];
+  let copiedUntil = 0;
+  for (const match of sorted) {
+    if (match.start < copiedUntil) continue;
+    pieces.push(content.slice(copiedUntil, lineStarts[match.startLine]!));
+    for (let line = match.startLine; line <= match.endLine; line++) {
+      const contentStart = match.lineContentStarts[line - match.startLine]!;
+      const lineStart = lineStarts[line]!;
+      const lineEnd = lineEnds[line]!;
+      const fullPrefix = content.slice(lineStart, contentStart);
+      const retained = retainedBlockquotePrefix(fullPrefix);
+      const remainder = fullPrefix.slice(retained.length);
+      const hasListMarker = LIST_MARKER_PREFIX_RE.test(remainder);
+      // Keep list markers visible on the line; move extra blockquote-
+      // continuation indent into the item so markdown-it does not strip it
+      // when it builds the list-item paragraph content.
+      const moveIndentIntoItem = retained.length > 0 && !hasListMarker;
+      pieces.push(moveIndentIntoItem ? retained : fullPrefix);
+      const isLast = line === match.endLine;
+      const contentEnd = isLast ? match.end : lineEnd;
+      const item =
+        (moveIndentIntoItem ? remainder : '') +
+        content.slice(contentStart, contentEnd);
+      if (item.length > 0) {
+        const index = items.push(item) - 1;
+        pieces.push(`@@${tag}-${index}@@`);
+      }
+      if (!isLast) pieces.push(content.slice(lineEnd, lineStarts[line + 1]!));
+    }
+    copiedUntil = match.end;
+  }
+  pieces.push(content.slice(copiedUntil));
+  return pieces.join('');
+}
+
+function protectLatexMathSpansForRender(
+  content: string,
+  patterns: readonly RegExp[],
+  environmentProbe: BegEndEnvironmentProbe,
+): {
+  content: string;
+  restore: (value: string) => string;
+} {
+  const items: string[] = [];
+  const selectedTag = selectPlaceholderTag(content, 'LATEX-MATH');
+  const patternProtected = protectPatternsInto(
+    content,
+    patterns,
+    selectedTag,
+    items,
+    true,
+  );
+  const matches = environmentProbe.collect(patternProtected);
+  const envProtected = applyEnvironmentShields(
+    patternProtected,
+    matches,
+    selectedTag,
+    items,
+  );
+  const placeholder = new RegExp(`@@${selectedTag}-(\\d+)@@`, 'g');
+  return {
+    content: envProtected,
+    restore: (value) => restorePlaceholders(value, placeholder, items),
   };
 }
 
@@ -340,6 +597,7 @@ export function createMarkdownProcessor(
   });
   let hitCount = 0;
   let missCount = 0;
+  let environmentProbe: BegEndEnvironmentProbe | undefined;
 
   const processor = ((content: string): string => {
     const key = hashContent(content);
@@ -359,7 +617,11 @@ export function createMarkdownProcessor(
       placeholder: refPlaceholder,
     } = protectLatexReferences(content);
     const mathProtection = config.protectLatexMath
-      ? protectLatexMathSpans(refProtected, RENDER_MATH_SPAN_PATTERNS)
+      ? protectLatexMathSpansForRender(
+          refProtected,
+          RENDER_MATH_SPAN_PATTERNS,
+          (environmentProbe ??= createBegEndEnvironmentProbe(config.renderer)),
+        )
       : { content: refProtected, restore: (value: string) => value };
     const mathProtected = mathProtection.content;
     const macroProtection = config.protectLatexMath
