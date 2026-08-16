@@ -182,25 +182,6 @@ export function createDispatcher<TMessage extends CommandMessage>(
 }
 
 /**
- * Dev/test-only outbound-message assertions. Mirrors `createDispatcher`'s
- * inbound-side validation, but for the send side of the same schemas: a
- * webview/desktop IPC boundary that already has an outbound Zod schema but
- * never runs the payload through it before posting.
- *
- * Both `assertOutboundMessage` and `assertKnownOutboundMessage` are no-ops
- * outside `isDevAssertionMode()` — zero `safeParse` cost in production. Some
- * of these boundaries (desktop's single `postToRenderer` channel carries
- * high-frequency progress-stream chunks, e.g. `LOG_DELTA`) are hot enough
- * that even a cheap parse per message is worth avoiding outside dev/test;
- * production keeps sending the TypeScript-typed payload as-is (a
- * compile-time type-assert, not a runtime check) exactly as it did before
- * this validation existed, so there is no prod behavior or wire-format
- * change. Dev/test throws immediately on a mismatch — schema and producer
- * have drifted — rather than logging, since these are the same runs where
- * `npm test` / CI would otherwise treat drift as silently passing.
- */
-
-/**
  * True when a discriminated-union `safeParse` failure means "this message's
  * `command` doesn't belong to this schema at all" (Zod's "no matching
  * discriminator" case) rather than "the command matched but a field is
@@ -221,11 +202,28 @@ function isUnrecognizedCommand(error: z.ZodError): boolean {
 }
 
 /**
- * Asserts (dev/test only) that `message` conforms to `schema` — for a send
- * boundary where every message is known to belong to exactly one outbound
- * domain (e.g. `BaseWebviewManager.postMessage`, which only ever sends
- * `MainViewMessage`s). Throws on any mismatch, including a `command` the
- * schema doesn't recognize at all.
+ * Dev/test-only outbound-message assertions. Mirrors `createDispatcher`'s
+ * inbound-side validation, but for the send side of the same schemas: a
+ * webview/desktop IPC boundary that already has an outbound Zod schema but
+ * never runs the payload through it before posting.
+ *
+ * Both this function and `assertKnownOutboundMessage` are no-ops outside
+ * `isDevAssertionMode()` — zero `safeParse` cost in production. Some of
+ * these boundaries (desktop's single `postToRenderer` channel carries
+ * high-frequency progress-stream chunks, e.g. `LOG_DELTA`) are hot enough
+ * that even a cheap parse per message is worth avoiding outside dev/test;
+ * production keeps sending the TypeScript-typed payload as-is (a
+ * compile-time type-assert, not a runtime check) exactly as it did before
+ * this validation existed, so there is no prod behavior or wire-format
+ * change. Dev/test throws immediately on a mismatch — schema and producer
+ * have drifted — rather than logging, since these are the same runs where
+ * `npm test` / CI would otherwise treat drift as silently passing.
+ *
+ * Asserts that `message` conforms to `schema` — for a send boundary where
+ * every message is known to belong to exactly one outbound domain (e.g.
+ * `BaseWebviewManager.postMessage`, which only ever sends `MainViewMessage`s).
+ * Throws on any mismatch, including a `command` the schema doesn't recognize
+ * at all.
  */
 export function assertOutboundMessage<TMessage extends CommandMessage>(
   schema: z.ZodType<TMessage>,

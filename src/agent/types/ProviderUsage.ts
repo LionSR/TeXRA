@@ -9,9 +9,13 @@ import type { ChatUsage as OpenRouterChatUsage } from '@openrouter/sdk/models';
  * Raw provider wire-format usage types. Lives beside {@link ModelHandlerContracts}
  * (not in `core/usage/`) because it's the same kind of thing as the tool-call
  * SDK types there: a plain data contract between `ModelHandler`/`IModelHandler`
- * and each provider's SDK, not a normalized domain value. Every handler
- * converts its own member of {@link ProviderUsage} into {@link NormalizedUsage}
- * at the boundary — `core/` only ever sees the normalized shape.
+ * and each provider's SDK, not a normalized domain value.
+ *
+ * The raw shape does cross into `core/` — `core/flows/CommonCycleTypes.ts`'s
+ * `extractModelResponse` receives it from `ModelHandler.extractResponse` and
+ * immediately hands it to `ModelHandler.normalizeUsage` to produce a
+ * {@link NormalizedUsage} — but `core/usage/` (the value-object layer:
+ * `RunUsageAccumulator`) never sees anything but the normalized shape.
  */
 
 /**
