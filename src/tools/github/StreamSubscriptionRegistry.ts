@@ -62,18 +62,14 @@ interface BoundSubscription {
   expectedGenerationId: string | undefined;
 }
 
-export class StreamSubscriptionRegistry<
-  K extends string,
-  Input,
-> implements Disposable {
+export class StreamSubscriptionRegistry<K extends string, Input> {
   private readonly logger: Pick<AgentTrace, 'info' | 'warn'>;
   private readonly perStream = new Map<
     StreamTabId,
     Map<K, BoundSubscription>
   >();
-  private sourceHook: Disposable | undefined;
+  private sourceHooksRegistered = false;
   private readonly releaseHooks = new Map<SessionHandle, () => void>();
-  private disposed = false;
 
   constructor(
     private readonly opts: StreamSubscriptionRegistryOptions<K, Input>,
@@ -83,9 +79,6 @@ export class StreamSubscriptionRegistry<
 
   /** Returns true if a new subscription was created, false if it already existed. */
   bind(streamId: StreamTabId, input: Input): boolean {
-    if (this.disposed) {
-      throw new Error(`${this.opts.name} has been disposed.`);
-    }
     const key = this.opts.keyOf(input);
     // Capture the session HERE: bind() runs inside the run's AsyncLocalStorage
     // (the github tool's execute()), but onEvent fires later from a detached
@@ -208,41 +201,21 @@ export class StreamSubscriptionRegistry<
     }));
   }
 
-  /** Dispose every binding and stop observing the polling source. */
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    if (this.sourceHook) {
-      this.disposeSafe(this.sourceHook, 'source hook disposal');
-      this.sourceHook = undefined;
-    }
-    for (const detach of this.releaseHooks.values()) detach();
-    this.releaseHooks.clear();
-    const bindings = [...this.perStream.values()].flatMap((bound) => [
-      ...bound.values(),
-    ]);
-    this.perStream.clear();
-    for (const binding of bindings) {
-      this.disposeSafe(binding.disposable, 'registry disposal');
-    }
-    if (bindings.length > 0) this.emitBindingsChanged();
-  }
-
   private ensureHooks(session: SessionHandle): void {
     this.ensureReleaseHook(session);
-    if (this.sourceHook) return;
+    if (this.sourceHooksRegistered) return;
     // The polling source can detach subscriptions unilaterally (PR closed,
     // auth failure, 24 h unreachable). Listen to the source directly; the
     // progress event is for UI refresh, not for internal bookkeeping.
-    this.sourceHook = this.opts.source.onKeysChanged((keys) => {
+    this.opts.source.onKeysChanged((keys) => {
       this.pruneMissingSourceKeys(keys);
     });
+    this.sourceHooksRegistered = true;
   }
 
   private ensureReleaseHook(session: SessionHandle): void {
     if (this.releaseHooks.has(session)) return;
     const detach = session.followUps.onRelease((streamId) => {
-      if (this.disposed) return;
       const bound = this.perStream.get(streamId);
       if (!bound) return;
       const owned = [...bound].filter(([, binding]) => {
