@@ -37,9 +37,8 @@ export interface ResumeQueuedToolUseOptions extends Pick<
   readonly isCancellationRequested?: () => boolean;
   /**
    * Fires with the resumed run's raw outcome — terminal or WAITING — right
-   * after the call returns successfully. Additive to `onRunError`, which only
-   * covers the terminal branch; native child-run strategies use this to
-   * recover the WAITING result value that would otherwise be discarded by
+   * after the call returns successfully. Native child-run strategies use this
+   * to recover the WAITING result value that would otherwise be discarded by
    * this function's own boolean return.
    */
   readonly onResult?: (result: AgentRuntimeFlowResult) => void;
