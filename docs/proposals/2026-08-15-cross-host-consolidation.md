@@ -550,19 +550,23 @@ login` does not sign in the GUI hosts and vice-versa. Ruling: is
   tool-availability/token/model-access half is **new**. → Wire desktop (and
   where sensible CLI TUI) subscriptions; where a host deliberately won't
   react, fence it at the signal declaration.
-- **V8. `detachActiveChildren` bypasses its own SSOT — 1 bug + 2 sites to
-  document.** `detachSubagentsOnStop.ts:17` documents itself as "shared by
-  every host" and is honored at 4 sites; `chatSessionController.ts:856-858`
-  (`stopStream`) hardcodes `true` — that is the plain bug (the same TUI
-  applies two policies depending on which surface the user stops from).
-  _(Narrowed after review:)_ the `runExecution.ts:409,505` optionless
-  `kill(id)` sites are on the **process-shutdown path**, where cascade-kill
-  is correct — a detached child cannot outlive the exiting CLI process, and
-  applying the toggle there would strand children without finalization. Fix:
-  `stopStream` consults the SSOT; the shutdown sites pass an explicit
-  `{detachActiveChildren: false}` with a comment declaring the deliberate
-  cascade (per the lifecycle doc §4). (CP2's "CLI has no setter" half
-  remains a separate decision.)
+- **V8. `detachActiveChildren` "SSOT bypass" — ruled deliberate divergence;
+  2 shutdown sites documented.** `detachSubagentsOnStop.ts:17` documents
+  itself as "shared by every host" and is honored at 4 sites;
+  `chatSessionController.ts:856-858` (`stopStream`) hardcodes `true`.
+  _(Corrected after re-audit against #9009:)_ the hardcode is deliberate
+  action-semantic divergence, not a bypass — bare Escape is the
+  focus-scoped gesture ("Stop only the focused stream", `App.tsx:149-150`)
+  and always detaches descendants, while the configured stop surfaces
+  (root stop, extension/desktop stop, orchestrator kill) consult the
+  setting. The `runExecution.ts:409,505` `kill(id)` sites are on the
+  **process-shutdown path**, where cascade-kill is correct — a detached
+  child cannot outlive the exiting CLI process, and applying the toggle
+  there would strand children without finalization. Landed: the shutdown
+  sites pass an explicit `{detachActiveChildren: false}` with a comment
+  declaring the deliberate cascade (per the lifecycle doc §4); `stopStream`
+  keeps its #9009 contract. (CP2's "CLI has no setter" half remains a
+  separate decision.)
 - **V9. "Resumable" has two truth sources.** GUI hosts:
   `deriveResumability(id)` with typed causes
   (`HistoryMessageBuilder.ts:36-42`, `resumability.ts:82`). CLI:
@@ -718,8 +722,9 @@ Re-checked at this HEAD during the sweep:
   truth-source facet with current line numbers.
 - **DR8 (usage totals):** still open; §2 C13's predicate row is a smaller,
   independent slice.
-- **CP2 (detach policy):** the SSOT-bypass half is now §3 V8 (plain bug,
-  2 sites); the CLI-setter half remains CP2's decision.
+- **CP2 (detach policy):** the stream-stop half is now §3 V8 (ruled
+  deliberate divergence, 2 shutdown sites documented); the CLI-setter half
+  remains CP2's decision.
 - **CP4/CP5 (headless vocabularies):** unchanged; reaffirmed by the
   projection sweep (three hand-maintained run-fact filter arrays,
   `RUN_PROGRESS_RUN_FACT_TYPES` at `runProgressRenderer.ts:43-48`).
@@ -767,7 +772,7 @@ Band 1 items are independent, PR-sized, and net-negative; Band 2 items each
 start with a one-paragraph ruling (several are recorded above as plain bugs
 needing none). Suggested order:
 
-1. **Plain bugs, no ruling** — V8 (detach bypass, 2 sites), V2 (desktop
+1. **Plain bugs, no ruling** — V2 (desktop
    `UsageLogService.initialize` + `refreshModelListStateIfNeeded`), §4i
    (silent CLI render failures), §4k (math patterns + tests), V1a's missing
    host argument at `desktopSettingsIpc.ts:258`.

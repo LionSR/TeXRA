@@ -880,7 +880,9 @@ describe('executeCliRequest', () => {
       publishLeaseScope?.(runWithOwnership, 'exec-1' as ExecutionId);
       publishRun?.();
       await Promise.resolve();
-      expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1');
+      expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1', {
+        detachActiveChildren: false,
+      });
       expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
 
       mocks.readCliRunOutcomeState.mockResolvedValueOnce({
