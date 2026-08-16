@@ -9,7 +9,10 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
-vi.mock('@agent/runtime/resolveAndResumeStream', () => ({
+vi.mock('@agent/runtime/resolveAndResumeStream', async (importActual) => ({
+  ...(await importActual<
+    typeof import('@agent/runtime/resolveAndResumeStream')
+  >()),
   resolveAndResumeStream: mocks.resolveAndResumeStream,
 }));
 vi.mock('@commands/agent/executeCommand', () => ({

@@ -27,8 +27,11 @@ import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 const STREAM = 'stream:resume' as StreamTabId;
 
 const RESOLVED_STATE = {
-  runState: { agent: 'a', model: 'm' } as never,
-  executionId: 'exec-1' as never,
+  status: 'resolved' as const,
+  state: {
+    runState: { agent: 'a', model: 'm' } as never,
+    executionId: 'exec-1' as never,
+  },
 };
 
 function basePorts(
@@ -39,6 +42,7 @@ function basePorts(
     resolveResumeState: vi.fn(async () => RESOLVED_STATE),
     resumeToolUse: vi.fn(async () => true),
     executeWorkflow: vi.fn(async () => {}),
+    reportResumeStateResolution: vi.fn(),
     reportNoResumableSession: vi.fn(),
     reportFailure: vi.fn(),
     ...overrides,
@@ -98,7 +102,7 @@ describe('resolveAndResumeStream', () => {
     const ports = basePorts({
       resolveResumeState: vi.fn(async () => ({
         ...RESOLVED_STATE,
-        parentStreamId,
+        state: { ...RESOLVED_STATE.state, parentStreamId },
       })),
     });
 
@@ -237,12 +241,18 @@ describe('resolveAndResumeStream', () => {
     expect(ports.resumeToolUse).toHaveBeenCalled();
   });
 
-  it('returns false (host owns its messaging) when no state resolves', async () => {
+  it('reports a persisted-state read failure separately from missing resume data', async () => {
+    const error = new Error('snapshot disk offline');
+    const resolution = { status: 'read-failed' as const, error };
     const ports = basePorts({
-      resolveResumeState: vi.fn(async () => undefined),
+      resolveResumeState: vi.fn(async () => resolution),
     });
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
+    expect(ports.reportResumeStateResolution).toHaveBeenCalledWith(
+      STREAM,
+      resolution,
+    );
     expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
     expect(ports.reportNoResumableSession).not.toHaveBeenCalled();
   });

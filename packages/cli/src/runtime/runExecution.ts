@@ -563,7 +563,6 @@ export async function executeCliRequest(
       primaryRunFailure = { error: err };
     } else if (
       !failurePresented &&
-      !terminalResult.isHandled() &&
       !hasErrorPresentedMarker(err) &&
       !hasErrorPresentationPending(err)
     ) {
@@ -576,9 +575,11 @@ export async function executeCliRequest(
       // error) -- this CLI-local `failurePresented` flag only tracks
       // `requestShowError`, so it would otherwise re-surface that failure a
       // second time here.
-      session.interactions.emit('requestShowError', {
-        message: toErrorMessage(err),
-      });
+      terminalResult.reportUnhandled(() =>
+        session.interactions.emit('requestShowError', {
+          message: toErrorMessage(err),
+        }),
+      );
     }
   }
 

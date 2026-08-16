@@ -1,15 +1,17 @@
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
+  describeResumeFailure,
+  describeResumeStateResolution,
   resolveAndResumeStream,
   resolveResumeStateFromSnapshots,
   resumeQueuedToolUseFromResumeData,
+  resumeStreamWithRecovery,
   trackTerminalResultPresentation,
   type SessionHandle,
 } from '@agent/runtime';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   DESKTOP_UNAVAILABLE_TOOLS,
   launchDesktopAgent,
@@ -47,14 +49,12 @@ export class DesktopProcessResumeOwner {
   ): Promise<boolean> {
     const context = this.context;
     if (!context) return Promise.resolve(false);
-    const claimedRecovery = recovery
-      ? context.session.followUps.useRecovery(recovery)
-      : context.session.followUps.claimRecovery(streamId, true);
-    if (!claimedRecovery) return Promise.resolve(false);
-    return resumeDesktopStream(streamId, context, claimedRecovery).finally(
-      () => {
-        context.session.followUps.release(claimedRecovery, 'recoverable');
-      },
+    return resumeStreamWithRecovery(
+      context.session,
+      streamId,
+      (claimedRecovery) =>
+        resumeDesktopStream(streamId, context, claimedRecovery),
+      recovery,
     );
   }
 }
@@ -86,22 +86,21 @@ function resumeDesktopStream(
     context.logger.error(`Failed to resume desktop stream ${id}`, {
       data: toLogData(error),
     });
-    if (terminalResult.isHandled()) return;
-    context.session.interactions.emit(
-      'requestShowError',
-      { message: `Resume failed: ${toErrorMessage(error)}` },
-      { replayWhenAttached: true },
+    terminalResult.reportUnhandled(() =>
+      context.session.interactions.emit(
+        'requestShowError',
+        { message: describeResumeFailure(error).message },
+        { replayWhenAttached: true },
+      ),
     );
   };
   return resolveAndResumeStream(
     streamId,
     {
       streamStatus: context.session.status,
-      resolveResumeState: async (id) => {
-        const resolution = await resolveResumeStateFromSnapshots(
-          context.session.snapshots,
-          id,
-        );
+      resolveResumeState: (id) =>
+        resolveResumeStateFromSnapshots(context.session.snapshots, id),
+      reportResumeStateResolution: async (id, resolution) => {
         if (resolution.status === 'read-failed') {
           context.logger.warn(
             `Failed to read persisted resume data for ${id}`,
@@ -109,26 +108,11 @@ function resumeDesktopStream(
               data: toLogData(resolution.error),
             },
           );
-          // A failed read is not proof of absence: falling through would tell
-          // the user no run state exists (a false data-loss diagnosis) when
-          // the state may be intact behind a transient storage error.
-          if (!isResumeInvalidated()) {
-            await context.session.interactions.showInfoMessage(
-              `Persisted run state could not be read (${toErrorMessage(resolution.error)}). The resume was not started; retry once the storage issue is resolved.`,
-              { replayWhenAttached: true },
-            );
-          }
-          return undefined;
         }
-        if (isResumeInvalidated()) return undefined;
-        if (resolution.status === 'resolved') return resolution.state;
         await context.session.interactions.showInfoMessage(
-          resolution.status === 'incomplete' && resolution.runState
-            ? 'This stream has no persisted execution id. Start a new run instead.'
-            : 'No persisted run state was found for this stream. Start a new run instead.',
+          describeResumeStateResolution(resolution),
           { replayWhenAttached: true },
         );
-        return undefined;
       },
       resumeToolUse: (snapshot, claimedRecovery) =>
         resumeQueuedToolUseFromResumeData(snapshot.streamId, snapshot, {
@@ -142,14 +126,8 @@ function resumeDesktopStream(
       executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
         launchDesktopAgent(
           { config, executionId },
-          {
-            session: context.session,
-            canAcquireResumeLease,
-          },
-          {
-            modelHandlerCompatibilityKey,
-            suppressErrorNotification: true,
-          },
+          { session: context.session, canAcquireResumeLease },
+          { modelHandlerCompatibilityKey, suppressErrorNotification: true },
         ),
       reportNoResumableSession: () =>
         context.session.interactions.showInfoMessage(
