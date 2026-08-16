@@ -146,7 +146,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { setGoalSessionBashAutoApproval } from '@tools/goal';
 import {
-  cleanupAllApprovals,
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
   proposalApprovals,
@@ -413,7 +412,8 @@ beforeEach(() => {
 
 afterEach(() => {
   clearApprovals();
-  cleanupAllApprovals();
+  defaultSession().approvals.clearAll();
+  defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
   resetCliState();
   mocks.retryCopyFailure = undefined;
   mocks.apiKeyExistsUncached.mockReset();

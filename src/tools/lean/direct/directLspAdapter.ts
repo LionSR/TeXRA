@@ -64,8 +64,6 @@ const LAKE_PROJECT_ARGS = {
 export interface DirectLspLeanAdapterOptions {
   /** Path or name of the `lake` binary (defaults to `lake` on PATH). */
   lakeCommand?: string;
-  /** Override the project-root locator (mostly for tests). */
-  resolveWorkspaceRoot?: (filePath: string) => Promise<string | null>;
   /**
    * Optional cap on simultaneous `lean --server` processes. Unset means no
    * capacity eviction — parallel worktrees stay up until they go idle.
@@ -100,8 +98,7 @@ export function createDirectLspLeanAdapter(
   options: DirectLspLeanAdapterOptions = {},
 ): LeanLanguageServices & { dispose(): Promise<void> } {
   const lakeCommand = options.lakeCommand ?? 'lake';
-  const resolveRoot =
-    options.resolveWorkspaceRoot ?? defaultResolveWorkspaceRoot;
+  const resolveRoot = defaultResolveWorkspaceRoot;
   const maxSessions =
     options.maxSessions == null ? undefined : Math.max(1, options.maxSessions);
   const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_LEAN_IDLE_TIMEOUT_MS;

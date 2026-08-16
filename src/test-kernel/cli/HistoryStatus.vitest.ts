@@ -130,7 +130,7 @@ describe('CLI history status formatting', () => {
       hasFlowRecord: true,
     });
 
-    expect(text).toContain('Status: resumable');
+    expect(text).toContain('Status: Resumable');
     expect(text).toContain('Flow record: present');
     expect(text).not.toContain(`Status: ${EXECUTION_STATUS.COMPLETED}`);
   });

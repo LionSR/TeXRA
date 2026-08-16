@@ -5,9 +5,9 @@ import '@test/support/defaultSessionTestSetup';
 // wolframScriptUtils argument handling).
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { StreamTabId } from '@shared/schemas';
-import { cleanupAllApprovals } from '@tools/approval';
 import {
   wolframApprovalCommand,
   wolframRunSummary,
@@ -40,7 +40,8 @@ async function dispatchWolfram(streamId: StreamTabId, code: string) {
 
 describe('WolframTool approval', () => {
   afterEach(() => {
-    cleanupAllApprovals();
+    defaultSession().approvals.clearAll();
+    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
     vi.restoreAllMocks();
   });
 

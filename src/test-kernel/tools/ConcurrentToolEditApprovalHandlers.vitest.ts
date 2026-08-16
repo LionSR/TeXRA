@@ -6,11 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
-import { cleanupAllApprovals } from '@tools/approval';
 import {
   requestToolEditApproval,
   type ToolEditApprovalRequest,
@@ -35,11 +34,13 @@ describe('Concurrent session tool edit approval handlers', () => {
   }
 
   beforeEach(() => {
-    cleanupAllApprovals();
+    defaultSession().approvals.clearAll();
+    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
   });
 
   afterEach(() => {
-    cleanupAllApprovals();
+    defaultSession().approvals.clearAll();
+    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
     for (const session of testSessions.splice(0)) session.dispose();
   });
 

@@ -13,6 +13,7 @@ import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
 import {
   RUN_OUTCOME,
   WORKFLOW_CALL_STATUS,
+  WORKFLOW_EXECUTION_LIFECYCLE,
   type RunOutcome,
   type WorkflowCallProgress,
   type WorkflowCallTerminalProgress,
@@ -23,7 +24,7 @@ import {
   formatWorkflowCallLine,
   WORKFLOW_CALL_UNFINISHED_NOTE,
 } from '@shared/copy/workflowCall';
-import { assertNever, generateShortId } from '@utils/core';
+import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -44,6 +45,22 @@ type WorkflowScriptRunWithProgressOptions = Omit<
    */
   readonly onActivity?: (line: string) => void;
 };
+
+const WORKFLOW_CALL_STATUS_PROJECTION = {
+  [WORKFLOW_CALL_STATUS.PLANNED]: 'planned',
+  [WORKFLOW_CALL_STATUS.STAGE_BLOCKED]: 'planned',
+  [WORKFLOW_CALL_STATUS.QUEUED]: 'planned',
+  [WORKFLOW_CALL_STATUS.STARTING]: 'running',
+  [WORKFLOW_CALL_STATUS.RUNNING]: 'running',
+  [WORKFLOW_CALL_STATUS.COMPLETED]: 'completed',
+  [WORKFLOW_CALL_STATUS.CACHED]: 'cached',
+  [WORKFLOW_CALL_STATUS.SKIPPED]: 'skipped',
+  [WORKFLOW_CALL_STATUS.FAILED]: 'failed',
+  [WORKFLOW_CALL_STATUS.CANCELLED]: 'cancelled',
+} as const satisfies Record<
+  WorkflowExecutionCall['status'],
+  WorkflowCallProgress['status']
+>;
 
 interface PhaseStage {
   readonly handle: StageHandle;
@@ -171,14 +188,15 @@ function settledWorkflowCall(
       return { ...identity, status: 'completed', ...spent };
     case WORKFLOW_CALL_STATUS.CACHED:
       return { ...identity, status: 'cached' };
+    case WORKFLOW_CALL_STATUS.CANCELLED:
+      return { ...identity, status: 'cancelled', ...spent };
     case WORKFLOW_CALL_STATUS.SKIPPED:
       // The sweep settles not-reached plans; a user skip settles itself.
       return settled.settledBySweep
         ? { ...identity, status: 'skipped', reason: 'not-reached' }
         : { ...identity, status: 'skipped', reason: 'user', ...spent };
     default:
-      // Failed, cancelled (the card vocabulary has no cancelled outcome), and
-      // the non-terminal states left behind when the snapshot could not be
+      // Failed and the non-terminal states left behind when the snapshot could not be
       // persisted at all.
       return {
         ...identity,
@@ -332,32 +350,6 @@ export async function runPersistedWorkflowScriptWithProgress(
     onActivity?.(event.message);
   };
 
-  const cardStatusFor = (
-    status: WorkflowExecutionCall['status'],
-  ): WorkflowCallProgress['status'] => {
-    switch (status) {
-      case WORKFLOW_CALL_STATUS.PLANNED:
-      case WORKFLOW_CALL_STATUS.STAGE_BLOCKED:
-      case WORKFLOW_CALL_STATUS.QUEUED:
-        return 'planned';
-      case WORKFLOW_CALL_STATUS.STARTING:
-      case WORKFLOW_CALL_STATUS.RUNNING:
-        return 'running';
-      case WORKFLOW_CALL_STATUS.COMPLETED:
-        return 'completed';
-      case WORKFLOW_CALL_STATUS.CACHED:
-        return 'cached';
-      case WORKFLOW_CALL_STATUS.SKIPPED:
-        return 'skipped';
-      case WORKFLOW_CALL_STATUS.FAILED:
-      case WORKFLOW_CALL_STATUS.CANCELLED:
-        // The card vocabulary has no cancelled outcome.
-        return 'failed';
-      default:
-        return assertNever(status, 'Unhandled workflow call status');
-    }
-  };
-
   /** Progress-only terminal metadata, read off the snapshot's own record. */
   const terminalMetadata = (call: WorkflowExecutionCall) => {
     const model = call.model ?? call.attempts.at(-1)?.model;
@@ -400,6 +392,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         };
       }
       case 'completed':
+      case 'cancelled':
         return { ...identity, status, ...terminalMetadata(call) };
       case 'skipped':
         // The sweep settles not-reached plans; a user skip settles itself.
@@ -447,7 +440,7 @@ export async function runPersistedWorkflowScriptWithProgress(
       }
       for (const call of snapshot.calls) {
         const projected = projectedCalls.get(call.id);
-        let status = cardStatusFor(call.status);
+        let status = WORKFLOW_CALL_STATUS_PROJECTION[call.status];
         // A retry re-queues a running call; keep its card running rather than
         // flickering back to planned (the old start-latch behavior).
         if (status === 'planned' && projected?.status === 'running') {
@@ -463,6 +456,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         const hydratedHistory =
           status === 'completed' ||
           status === 'failed' ||
+          status === 'cancelled' ||
           status === 'skipped' ||
           status === 'cached' ||
           call.attempts.length > 0 ||
@@ -512,6 +506,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         if (
           status === 'completed' ||
           status === 'failed' ||
+          status === 'cancelled' ||
           status === 'skipped'
         ) {
           if (status === 'failed') {
@@ -553,6 +548,9 @@ export async function runPersistedWorkflowScriptWithProgress(
     return result;
   } finally {
     closed = true;
+    if (lastSnapshot?.lifecycle === WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED) {
+      runOutcome = RUN_OUTCOME.CANCELLED;
+    }
     const settledById = new Map(
       (lastSnapshot?.calls ?? []).map((call) => [call.id, call]),
     );
@@ -572,11 +570,7 @@ export async function runPersistedWorkflowScriptWithProgress(
       recordTerminalActivity(call);
     }
     for (const phase of phases.values()) {
-      phase.handle.end(
-        runOutcome === RUN_OUTCOME.COMPLETED && !phase.failed
-          ? RUN_OUTCOME.COMPLETED
-          : RUN_OUTCOME.FAILED,
-      );
+      phase.handle.end(phase.failed ? RUN_OUTCOME.FAILED : runOutcome);
     }
   }
 }

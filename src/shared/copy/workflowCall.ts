@@ -53,6 +53,7 @@ export function formatWorkflowCallMetadataParts(
   const hasTerminalMetadata =
     call.status === 'completed' ||
     call.status === 'failed' ||
+    call.status === 'cancelled' ||
     (call.status === 'skipped' && call.reason === 'user');
   if (!hasTerminalMetadata) {
     return [];
@@ -88,10 +89,9 @@ export function workflowPhaseCallProgress(
  * progress view can never disagree on whether a workflow had failed calls.
  * Mirrors `workflowPhaseCallProgress` in taking a caller-selected call list.
  *
- * `WorkflowCallProgress` carries no `cancelled` variant: a cancelled attempt
- * surfaces in the transcript as a `failed` call, so this count already
- * captures it. Snapshot consumers (`/executions`) derive their own per-status
- * tallies with `deriveWorkflowCounts` and do not need this helper.
+ * Cancelled calls remain distinct from failures and do not contribute to this
+ * tally. Snapshot consumers (`/executions`) derive their own per-status tallies
+ * with `deriveWorkflowCounts` and do not need this helper.
  */
 export function workflowCallFailureTally(
   calls: readonly WorkflowCallProgress[],

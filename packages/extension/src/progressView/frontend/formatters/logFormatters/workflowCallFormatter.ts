@@ -27,6 +27,7 @@ function statusIcon(call: WorkflowCallProgress): TemplateResult {
     case 'cached':
       return waIcon('check');
     case 'skipped':
+    case 'cancelled':
       return waIcon('circle-stop');
     case 'failed':
       return waIcon('circle-exclamation');
