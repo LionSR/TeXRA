@@ -1,7 +1,6 @@
 import {
   selectAutoOpenFinalOutput,
-  type AgentRunHandle,
-  type ModelHandlerCompatibilityKey,
+  type RunAgentOptions,
   type SessionHandle,
 } from '@agent/runtime';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
@@ -27,19 +26,13 @@ export interface DesktopAgentLaunchContext {
   readonly canAcquireResumeLease?: () => boolean | Promise<boolean>;
 }
 
-export interface DesktopAgentLaunchOptions {
-  readonly modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
-  /**
-   * Run on the configured helper model instead of the request's own model. Only
-   * the compile-fixer action opts in, matching the extension, where the same
-   * flag rides on the `texra.execute` payload.
-   */
-  readonly preferHelperModel?: boolean;
-  /** Observe the concrete run identity used by process-session result events. */
-  readonly onRun?: (handle: AgentRunHandle) => void | Promise<void>;
-  /** The caller owns presentation for failures before the run lifecycle. */
-  readonly suppressErrorNotification?: boolean;
-}
+export type DesktopAgentLaunchOptions = Pick<
+  RunAgentOptions,
+  | 'modelHandlerCompatibilityKey'
+  | 'preferHelperModel'
+  | 'onRun'
+  | 'suppressErrorNotification'
+>;
 
 /** Start a desktop run with process-owned dependencies only. */
 export async function launchDesktopAgent(

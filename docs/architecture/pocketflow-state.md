@@ -66,7 +66,7 @@ summing native payloads to compute total cost.
   mutating `run` and `workspace` as the model is invoked and response processed.
 - **Reflection run flow** keeps track of run progress through `AgentRunStateSnapshot`
   and persists round/tool states for later inspection.
-- **Tool-use flows** pass state slices through `shared.state.stateSlices` as
+- **Tool-use flows** pass state slices through `shared.stateSlices` as
   individual snapshots, reconstructing class instances only when needed.
 
 By passing state slices directly (without wrapper classes for round/run state),

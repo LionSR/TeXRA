@@ -74,10 +74,6 @@ export interface RunReflectionFlowInput<
   setting: AgentWorkflowSetting;
   storageKey: StorageKey;
   parentStage: StageHandle;
-  getOutputFileLocation?: (
-    round: number,
-  ) => AgentFileLocation | Promise<AgentFileLocation>;
-  workflowOutputPolicy?: WorkflowOutputPolicy;
 }
 
 export interface RunReflectionFlowResult {
@@ -148,36 +144,35 @@ export async function runReflectionFlow<C = unknown>(
     userRequestTemplateCount(prompt.userRequest),
   );
 
-  const getOutputFileLocation =
-    input.getOutputFileLocation ??
-    (async (round: number): Promise<AgentFileLocation> => {
-      const canonical = fileService.createLocation(
-        workflowOutputPath({ ext: WORKFLOW_RAW_OUTPUT_EXT, round }),
+  const getOutputFileLocation = async (
+    round: number,
+  ): Promise<AgentFileLocation> => {
+    const canonical = fileService.createLocation(
+      workflowOutputPath({ ext: WORKFLOW_RAW_OUTPUT_EXT, round }),
+    ) as AgentFileLocation;
+    // Resume-from-pre-refactor compat: if a round was partially written on an
+    // older build that used `.tex` for non-scratchpad agents, keep using that
+    // file on resume so initializeOutputAndPrefill sees the existing content
+    // instead of starting a fresh round at output.xml.
+    if (!(await AbsoluteFS.exists(canonical.absolutePath))) {
+      const legacy = fileService.createLocation(
+        workflowOutputPath({ ext: WORKFLOW_DOCUMENT_OUTPUT_EXT, round }),
       ) as AgentFileLocation;
-      // Resume-from-pre-refactor compat: if a round was partially written on an
-      // older build that used `.tex` for non-scratchpad agents, keep using that
-      // file on resume so initializeOutputAndPrefill sees the existing content
-      // instead of starting a fresh round at output.xml.
-      if (!(await AbsoluteFS.exists(canonical.absolutePath))) {
-        const legacy = fileService.createLocation(
-          workflowOutputPath({ ext: WORKFLOW_DOCUMENT_OUTPUT_EXT, round }),
-        ) as AgentFileLocation;
-        if (await AbsoluteFS.exists(legacy.absolutePath)) {
-          return legacy;
-        }
+      if (await AbsoluteFS.exists(legacy.absolutePath)) {
+        return legacy;
       }
-      return canonical;
-    });
+    }
+    return canonical;
+  };
 
-  const workflowOutputPolicy: WorkflowOutputPolicy =
-    input.workflowOutputPolicy ?? {
-      shouldAutoOpenPdfOrLog: () =>
-        readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF),
-      shouldRejectOnCompileFailure: () =>
-        readPlatformSetting<boolean>(
-          WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-        ),
-    };
+  const workflowOutputPolicy: WorkflowOutputPolicy = {
+    shouldAutoOpenPdfOrLog: () =>
+      readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF),
+    shouldRejectOnCompileFailure: () =>
+      readPlatformSetting<boolean>(
+        WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+      ),
+  };
 
   const services: ReflectionServices<C> = {
     ...input,
