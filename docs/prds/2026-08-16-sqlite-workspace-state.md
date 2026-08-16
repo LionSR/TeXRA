@@ -217,7 +217,14 @@ streams           (id PK, incarnation, created_ts,
 entries           (stream_id FK CASCADE, seq, entry_id,
                    settlement_seq NULL, timestamp, entry JSON, text NULL)
                    UNIQUE(stream_id, seq)
-executions        (id PK, stream_id FK CASCADE, meta JSON, config JSON)
+executions        (id PK, stream_id NULL FK CASCADE, meta JSON, config JSON)
+                   -- stream_id is NULLABLE by domain fact, not convenience:
+                   -- ExecutionMetaCoreSchema.streamId is optional, and
+                   -- executionListing deliberately retains execution
+                   -- directories with no stream mapping. Those import with
+                   -- a NULL edge so their records and artifacts keep a
+                   -- destination at Stage 5; they are listed as today and
+                   -- leave via retention or explicit delete.
 execution_records (execution_id FK CASCADE, key, payload JSON,
                    PRIMARY KEY (execution_id, key))
                    -- keyed home for EVERYTHING ExecutionKVStore owns today:
@@ -412,17 +419,28 @@ rows; export compat is not storage compat.
   authoritative transcript registry (the `streamLogs/` directory listing —
   today's registration authority), giving the registry exactly one migration
   owner; deriving parents from the discardable summary cache could omit
-  streams. **Execution identity rows** (`executions`: id + stream edge, from
-  the durable `ExecutionMeta`) import here too — Stage 3 sets
-  `streams.current_execution_id` from `streamData/meta.json`, and with
-  `foreign_keys=ON` that pointer needs its target row to exist first.
+  streams. **Execution identity rows** (`executions`: id + stream edge
+  where one exists — `streamId` is optional in `ExecutionMetaCoreSchema`,
+  and unmapped execution directories import with a NULL edge per §3.3)
+  import here too — Stage 3 sets `streams.current_execution_id` from
+  `streamData/meta.json`, and with `foreign_keys=ON` that pointer needs its
+  target row to exist first.
   `stream_summaries` (derived, #9434-discardable — worst case is a rebuild)
   rides along as the pilot payload, deleting the mtime-staleness heuristic
   and scan-on-open.
 - **Stage 3 — `streamData/` sidecars + goal entries → rows.** The big
   machinery win in `StreamSnapshotStore` (seed chains, provenance, overlays,
-  write mutexes), plus `GoalStore`'s durable goal records out of
-  `state.json` into `goals` rows (§2 narrowing).
+  write mutexes), plus `GoalStore`'s durable goal records into `goals` rows
+  (§2 narrowing). **Goal sources are per-host and one of them is not a
+  file this importer can see:** CLI and desktop persist goals in the bucket
+  `state.json`, but the extension persists them in VS Code's
+  `context.workspaceState` Memento (`workspaceSM` via
+  `stateManager.ts` — the `state.vscdb` VS Code owns). Goal import
+  therefore runs **per host, at that host's first migrated open**, each
+  host extracting from its own legacy source and upserting by stream with
+  one deterministic merge rule — newest `updatedAt` wins, ties keep the
+  existing row — then clearing its legacy keys. Legacy goal reads retire
+  only after the compat window, not at Stage 3.
 - **Stage 4 — transcript entries → rows.** `StreamLogStore` engine swap;
   clobber machinery deletes; partial hydration lands. Gate: a benchmark PR
   proving the 300 ms batched-transaction path sustains streaming append load
@@ -521,6 +539,15 @@ seq)` would drop or overwrite one side when both hosts wrote the same
   already in rows keeps its row version. Concurrent mixed-version access
   during the window remains documented as unsupported — writes absorbed
   late, not dropped; old-host reads may be stale until it upgrades.
+  **Goals need their own reconciliation lane:** the dir-based backstop
+  cannot see them, because goal keys live inside the permanent `state.json`
+  (and the extension's Memento), which is never renamed — a legacy host
+  mutating a goal after Stage 3 recreates no detectable legacy directory.
+  During the compat window, every migrated open therefore re-checks the
+  legacy goal keys in its host's legacy source and reconciles by the same
+  deterministic rule (Stage 3: newest `updatedAt` wins), clearing absorbed
+  keys — a late legacy goal write is absorbed on the next open instead of
+  being shadowed forever by a stale row.
 - **Scope creep toward SQL-as-UI-state**: §8 non-goals; the architecture
   test only allowlists the two stores' modules for DB access.
 
@@ -534,8 +561,10 @@ public surfaces (`store-public-surface-baseline`); hosts-as-renderers plane
 rules untouched. **Added:** the §2 rule, pinned by a new architecture test.
 The test lands at Stage 1 as a **shrinking ratchet, not a strict gate**: it
 starts with an explicit allowlist of the not-yet-migrated directories
-(`streamLogSummaries/`, `streamData/`, `streamLogs/`, `executions/` KV
-records, lease/lock files) plus the **permanent entries**: documents,
+(`streamLogSummaries/`, `streamData/`, `streamData.deleting/` — the staged-
+deletion namespace `StagedDeletionCoordinator` renames into until it
+retires at Stage 6 — `streamLogs/`, `executions/` KV records, lease/lock
+files) plus the **permanent entries**: documents,
 exports, `state.json`, the per-execution artifacts area (§5 Stage 5), and
 `_workspace.json` — the bucket→workspace identity sidecar
 `WorkspaceStorageProvider.getStoragePath()` writes before any store (and
