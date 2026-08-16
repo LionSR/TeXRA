@@ -11,6 +11,7 @@ describe('AgentLaunchResources', () => {
     const unattachedTrace = {
       trace: noopTrace,
       handleStatus: vi.fn(),
+      flushSpills: vi.fn(),
       dispose: vi.fn(),
     };
     expect(() =>

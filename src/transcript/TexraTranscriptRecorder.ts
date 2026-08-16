@@ -62,6 +62,9 @@ import type { StreamLogAppendInput, StreamLogUpdatePatch } from './StreamLog';
 import type { TranscriptWriter } from './StreamLogStore';
 
 const STREAM_UPDATE_THROTTLE_MS = 50;
+const MAX_TRANSCRIPT_ENTRY_BYTES = 50 * 1024;
+const MAX_TRANSCRIPT_ENTRY_LINES = 2_000;
+const TRANSCRIPT_PREVIEW_LINES = 40;
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -165,6 +168,7 @@ type StageMetadata = Pick<
 export interface TranscriptRecorderHandle {
   unsubscribe(): void;
   flushPending(): void;
+  flushSpills(): Promise<void>;
   /**
    * Consume one canonical `status` session fact for this recorder's stream.
    * Status travels only on the session-fact rail (it is not an `AgentEvent`),
@@ -174,13 +178,56 @@ export interface TranscriptRecorderHandle {
   handleStatus(event: StatusEvent): void;
 }
 
+export interface TranscriptSpillWriter {
+  readonly pathFor: (entryId: string) => string;
+  write(path: string, content: string): Promise<void>;
+}
+
+function boundedTranscriptPreview(text: string): string {
+  const lines = text.split('\n');
+  if (
+    text.length <= MAX_TRANSCRIPT_ENTRY_BYTES &&
+    lines.length <= MAX_TRANSCRIPT_ENTRY_LINES
+  ) {
+    return text;
+  }
+  const head = lines.slice(0, TRANSCRIPT_PREVIEW_LINES).join('\n');
+  const tail = lines.slice(-TRANSCRIPT_PREVIEW_LINES).join('\n');
+  return `${head}\n\n… output truncated; full output is stored separately …\n\n${tail}`;
+}
+
 export function attachTranscriptRecorder(
   trace: AgentTrace,
   writer: TranscriptWriter,
+  spillWriter?: TranscriptSpillWriter,
 ): TranscriptRecorderHandle {
   const { streamId } = writer;
   const streams = new Map<string, StreamSinkState>();
   let pendingFailure: unknown;
+  const pendingSpills = new Set<Promise<void>>();
+  const queueSpill = (id: string, text: string): string | undefined => {
+    if (boundedTranscriptPreview(text) === text || !spillWriter)
+      return undefined;
+    const path = spillWriter.pathFor(id);
+    const pending = spillWriter
+      .write(path, text)
+      .finally(() => pendingSpills.delete(pending));
+    pendingSpills.add(pending);
+    return path;
+  };
+  const boundToolOutput = (
+    id: string,
+    result: Partial<ToolUseLog>,
+  ): ToolUseLog => {
+    if (typeof result.output !== 'string') return result as ToolUseLog;
+    const output = redactSecrets(result.output);
+    const spillPath = queueSpill(id, output);
+    return {
+      ...result,
+      output: boundedTranscriptPreview(output),
+      ...(spillPath && { outputSpillPath: spillPath }),
+    } as ToolUseLog;
+  };
   const recordFailure = (error: unknown): void => {
     pendingFailure ??= error;
     for (const state of streams.values()) {
@@ -244,9 +291,11 @@ export function attachTranscriptRecorder(
     }
 
     if (state.ended) {
+      const text = redactSecrets(state.buffer);
+      const spillPath = queueSpill(id, text);
       writer.settle(id, {
-        text: redactSecrets(state.buffer),
-        data: { status: 'completed' },
+        text: boundedTranscriptPreview(text),
+        data: { status: 'completed', ...(spillPath && { spillPath }) },
       });
     }
   };
@@ -396,7 +445,7 @@ export function attachTranscriptRecorder(
           const patch = {
             messageType: MESSAGE_TYPES.TOOL_USE,
             data: {
-              ...redactedResult,
+              ...boundToolOutput(event.logId, redactedResult),
               status: event.status,
             } as ToolUseLog,
           } satisfies StreamLogUpdatePatch;
@@ -729,6 +778,9 @@ export function attachTranscriptRecorder(
       }
     },
     flushPending,
+    flushSpills: async () => {
+      await Promise.all([...pendingSpills]);
+    },
     handleStatus,
   };
 }

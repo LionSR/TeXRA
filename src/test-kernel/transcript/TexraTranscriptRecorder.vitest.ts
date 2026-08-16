@@ -626,6 +626,43 @@ describe('attachTranscriptRecorder record-time secret redaction', () => {
 });
 
 describe('attachTranscriptRecorder timer failure boundary', () => {
+  it('spills redacted oversized terminal output and keeps a bounded preview', async () => {
+    const trace = new TraceEmitter();
+    const streamId = 'stream:spill' as StreamTabId;
+    const store = StreamLogStore.ephemeral('test');
+    store.ensureStream(streamId);
+    const writes: Array<{ path: string; content: string }> = [];
+    const recorder = attachTranscriptRecorder(
+      trace,
+      store.acquireWriter(streamId, streamId),
+      {
+        pathFor: (id) => `executions/test/toolOutput/${id}.txt`,
+        write: async (path, content) => {
+          writes.push({ path, content });
+        },
+      },
+    );
+
+    const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    output.append(`${'line\n'.repeat(2_100)}API_KEY=super-secret-value`);
+    output.finalize();
+    recorder.flushPending();
+    await recorder.flushSpills();
+
+    const entry = store.get(streamId)?.getRange(0).at(-1);
+    expect(entry?.text?.length).toBeLessThan(50 * 1024);
+    expect(entry?.text).toContain('full output is stored separately');
+    expect(dataOf(entry).spillPath).toBe(
+      `executions/test/toolOutput/${output.id}.txt`,
+    );
+    expect(writes).toEqual([
+      expect.objectContaining({
+        path: `executions/test/toolOutput/${output.id}.txt`,
+        content: expect.not.stringContaining('super-secret-value'),
+      }),
+    ]);
+  });
+
   it('latches a delayed write failure instead of throwing from the timer', () => {
     vi.useFakeTimers();
     const trace = new TraceEmitter();

@@ -378,6 +378,9 @@ async function assembleAgentLaunchContext(
     transcriptWriter,
   );
   const runTrace = resources.ownRunTrace(rawRunTrace, () => {
+    const removeSpillFlusher = session.useArtifactFlusher(
+      rawRunTrace.flushSpills,
+    );
     const detachTrace = session.attachRunTrace(rawRunTrace.trace, streamId);
     // Status is a session fact, not an AgentEvent: bridge the hub's canonical
     // status rail into the recorder's transcript-boundary port.
@@ -385,6 +388,7 @@ async function assembleAgentLaunchContext(
       rawRunTrace.handleStatus,
     );
     return () => {
+      removeSpillFlusher();
       detachStatus();
       detachTrace();
     };

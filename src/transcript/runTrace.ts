@@ -15,7 +15,9 @@ import {
   type StatusEvent,
 } from '@agent/trace';
 import type { StreamTabId } from '@shared/schemas';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { aggregateError } from '@utils/core';
+import { StorageFS } from '@utils/files/storageFS';
 
 import { attachTranscriptRecorder } from './TexraTranscriptRecorder';
 import type { StreamLogStore, TranscriptWriter } from './StreamLogStore';
@@ -30,6 +32,7 @@ export interface RunTrace {
    * and detach it alongside `dispose`.
    */
   readonly handleStatus: (event: StatusEvent) => void;
+  readonly flushSpills: () => Promise<void>;
   readonly dispose: () => void;
 }
 
@@ -86,7 +89,11 @@ export function createRunTrace(
       channel: streamId,
       isAgent: true,
     });
-    transcript = attachTranscriptRecorder(trace, writer);
+    transcript = attachTranscriptRecorder(trace, writer, {
+      pathFor: (entryId) =>
+        `${WORKSPACE_STORAGE_LAYOUT.runs}/${ownerKey}/toolOutput/${entryId}.txt`,
+      write: (path, content) => StorageFS.writeAtomic(path, content),
+    });
   } catch (error) {
     const failures = [error];
     collectFailure(failures, () => unsubscribeChannel?.());
@@ -120,6 +127,7 @@ export function createRunTrace(
   return {
     trace,
     handleStatus: (event) => transcript.handleStatus(event),
+    flushSpills: () => transcript.flushSpills(),
     dispose: () => {
       if (disposed) return;
       disposed = true;
