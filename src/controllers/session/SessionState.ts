@@ -451,23 +451,31 @@ export class SessionState {
   }
 
   /**
-   * Drop the tombstone without touching stream state. Two callers: a removal
-   * whose durable delete ended in retention (`active`/`failed`/`superseded`) —
-   * the stream still lives, so its facts must flow again — and a fresh
-   * workflow attachment that legitimately re-claims a deterministic identity.
+   * Drop the tombstone only if it still belongs to `expectedIncarnation`.
+   * Used when a removal's durable delete ended in retention
+   * (`active`/`failed`/`superseded`): the stream still lives, so its facts
+   * must flow again. A fresh deletion B may already have installed its own
+   * barrier for a newer incarnation; this retirement must never remove that.
    */
-  retireStreamTombstone(stream: StreamTabId): void {
-    this._removedStreams.delete(stream);
+  retireStreamTombstone(
+    stream: StreamTabId,
+    expectedIncarnation: number,
+  ): void {
+    if (this._removedStreams.get(stream) === expectedIncarnation) {
+      this._removedStreams.delete(stream);
+    }
+  }
+
+  /** The incarnation a committed/provisional removal captured, if any. */
+  removedStreamIncarnation(stream: StreamTabId): number | undefined {
+    return this._removedStreams.get(stream);
   }
 
   private incarnationOf(stream: StreamTabId): number {
     return this._streamIncarnations.get(stream) ?? 0;
   }
 
-  private isCurrentIncarnation(
-    stream: StreamTabId,
-    incarnation: number,
-  ): boolean {
+  isCurrentIncarnation(stream: StreamTabId, incarnation: number): boolean {
     return this.incarnationOf(stream) === incarnation;
   }
 
@@ -510,13 +518,32 @@ export class SessionState {
     // exists to close: a stream discovered between enumeration and commit
     // would be missed, and a retained identity would be wrongly tombstoned.
     const deletion = await this.stores.deleteAll();
-    for (const stream of deletion.deleted) {
+    const retained = new Set([...deletion.active, ...deletion.failed]);
+    const clearIdentity = (stream: StreamTabId): void => {
       this.streamStatus.clearStream(stream);
       this._sessionState.delete(stream);
       this._streamStates.delete(stream);
       this._removedStreams.set(stream, this.incarnationOf(stream));
+    };
+    for (const stream of deletion.deleted) clearIdentity(stream);
+    // Ephemeral-only identities (for example a RUNNING transition that created
+    // execution/status state without ever minting a durable transcript) are
+    // invisible to `SessionStores.deleteAll`, so the exact durable `deleted`
+    // set cannot contain them. Clear and tombstone them too, but never clear
+    // durable identities the bulk delete reported retained.
+    for (const stream of this.ephemeralStreamIds()) {
+      if (retained.has(stream) || this._removedStreams.has(stream)) continue;
+      clearIdentity(stream);
     }
     return deletion;
+  }
+
+  private ephemeralStreamIds(): Set<StreamTabId> {
+    return new Set<StreamTabId>([
+      ...this._streamStates.keys(),
+      ...this._sessionState.keys(),
+      ...Array.from(this.streamStatus.entries(), ([stream]) => stream),
+    ]);
   }
 
   async load(stateOwnership: 'backend' | 'session' = 'backend'): Promise<void> {
@@ -547,11 +574,18 @@ export class SessionState {
     this.logger.info('[Persistence] State load complete');
   }
 
-  /** Drop workspace-scoped caches before loading a replacement storage root. */
-  resetAfterStorageRootChange(): void {
+  /**
+   * Drop workspace-scoped caches before loading a replacement storage root.
+   * On a failed/rolled-back replacement the storage root and identity space
+   * are unchanged, so tombstones must survive; pass `preserveTombstones` for
+   * that reload path.
+   */
+  resetAfterStorageRootChange(options?: {
+    readonly preserveTombstones?: boolean;
+  }): void {
     this._sessionState.clear();
     this._streamStates.clear();
-    this._removedStreams.clear();
+    if (!options?.preserveTombstones) this._removedStreams.clear();
   }
 
   /**

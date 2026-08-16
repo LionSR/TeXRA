@@ -12,16 +12,17 @@ import {
 import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
+import {
+  StreamDeletionSupersededError,
+  type StreamLogStore,
+  type StreamSnapshotStore,
+} from '@transcript';
 import type { StagedStreamSnapshotDeletion } from '@transcript/StagedDeletionCoordinator';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 import { throwAggregated, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('SessionStores');
-
-/** A queued deletion was invalidated because a newer run claimed the stream. */
-class SupersededStreamDeletionError extends Error {}
 
 type DeleteExecutionFn = (
   executionId: ExecutionId,
@@ -94,7 +95,7 @@ export class SessionStores {
       ) => void | Promise<void>)
     | undefined;
   private readonly pendingStreamDeletions = new Map<
-    StreamTabId,
+    StreamTabId | { readonly stream: StreamTabId; readonly guard: () => boolean },
     Promise<DeleteStreamResult>
   >();
   private pendingDeleteAll: Promise<DeleteAllStreamsResult> | undefined;
@@ -120,9 +121,10 @@ export class SessionStores {
     stream: StreamTabId,
     options?: { readonly shouldDelete?: () => boolean },
   ): Promise<DeleteStreamResult> {
-    return this.trackStreamDeletion(stream, () =>
+    const shouldDelete = options?.shouldDelete;
+    return this.trackStreamDeletion(stream, shouldDelete, () =>
       this.enqueueDeletion(() =>
-        this.deleteStreamAndNotify(stream, options?.shouldDelete),
+        this.deleteStreamAndNotify(stream, shouldDelete),
       ),
     );
   }
@@ -130,7 +132,7 @@ export class SessionStores {
   deleteStreamAfterOwnedExecutionRelease(
     stream: StreamTabId,
   ): Promise<DeleteStreamResult> {
-    return this.trackStreamDeletion(stream, async () => {
+    return this.trackStreamDeletion(stream, undefined, async () => {
       // Track the whole wait so a presentation attaching during terminal
       // artifact persistence cannot replay a stream already marked removed.
       // If the ownership read fails here, report `failed` immediately rather
@@ -151,13 +153,18 @@ export class SessionStores {
 
   private trackStreamDeletion(
     stream: StreamTabId,
+    guard: (() => boolean) | undefined,
     start: () => Promise<DeleteStreamResult>,
   ): Promise<DeleteStreamResult> {
-    const existing = this.pendingStreamDeletions.get(stream);
+    // Guarded removals are keyed by their guard, not just the stream: two
+    // different incarnation fences for the same identity must never reuse or
+    // misattribute one pending promise.
+    const key = guard ? { stream, guard } : stream;
+    const existing = this.pendingStreamDeletions.get(key);
     if (existing) return existing;
     const pending = start();
-    this.pendingStreamDeletions.set(stream, pending);
-    const finish = (): void => this.finishStreamDeletion(stream, pending);
+    this.pendingStreamDeletions.set(key, pending);
+    const finish = (): void => this.finishStreamDeletion(key, pending);
     void pending.then(finish, finish);
     return pending;
   }
@@ -199,11 +206,11 @@ export class SessionStores {
   }
 
   private finishStreamDeletion(
-    stream: StreamTabId,
+    key: StreamTabId | { readonly stream: StreamTabId; readonly guard: () => boolean },
     pending: Promise<DeleteStreamResult>,
   ): void {
-    if (this.pendingStreamDeletions.get(stream) === pending) {
-      this.pendingStreamDeletions.delete(stream);
+    if (this.pendingStreamDeletions.get(key) === pending) {
+      this.pendingStreamDeletions.delete(key);
     }
   }
 
@@ -273,7 +280,7 @@ export class SessionStores {
       try {
         await this.deleteAdjacentStreamState(stream, shouldDelete);
       } catch (error) {
-        if (error instanceof SupersededStreamDeletionError) return 'superseded';
+        if (error instanceof StreamDeletionSupersededError) return 'superseded';
         log.warn(
           `Stream ${stream} was retained because cleanup was incomplete: ${toErrorMessage(error)}`,
           { data: error },
@@ -324,7 +331,7 @@ export class SessionStores {
       const result = await this.deleteExecution(executionId, {
         beforeDelete: async () => {
           if (shouldDelete && !shouldDelete()) {
-            throw new SupersededStreamDeletionError();
+            throw new StreamDeletionSupersededError();
           }
           await cleanup();
           cleanupCompleted = true;
@@ -332,7 +339,7 @@ export class SessionStores {
       });
       return { kind: 'completed', result };
     } catch (error) {
-      if (error instanceof SupersededStreamDeletionError) {
+      if (error instanceof StreamDeletionSupersededError) {
         return { kind: 'superseded' };
       }
       return cleanupCompleted
@@ -743,13 +750,23 @@ export class SessionStores {
           { data: rollbackError },
         );
       }
-      throw new SupersededStreamDeletionError();
+      throw new StreamDeletionSupersededError(stream);
     }
     try {
       // The transcript registry is the commit point for tab visibility.
       // Snapshot sidecars are only renamed before this, so a failure can roll
-      // them back without reconstructing state from partial files.
-      await this.streamLogs.delete(stream);
+      // them back without reconstructing state from partial files. The guard
+      // travels into `delete` itself so it is re-checked after the durable
+      // transcript delete but before in-memory state is forgotten.
+      await this.streamLogs.delete(stream, { shouldDelete });
+      // `delete` re-checked the guard before forgetting in-memory state. This
+      // final check runs with no await between it and the snapshot commit, so
+      // a re-claim that landed during the transcript I/O above can roll the
+      // snapshot staging back instead of having its buffered sidecar writes
+      // discarded by `commit`.
+      if (shouldDelete && !shouldDelete()) {
+        throw new StreamDeletionSupersededError(stream);
+      }
     } catch (error) {
       try {
         await snapshotDeletion.rollback();

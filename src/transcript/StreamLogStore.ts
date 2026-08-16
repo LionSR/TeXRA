@@ -46,6 +46,32 @@ const STREAM_LOG_LOAD_CONCURRENCY = 8;
 const LOG_TAG = 'StreamLogStore';
 const log = createLog(LOG_TAG);
 
+/**
+ * A deletion guard decided the stream was re-claimed while the delete was
+ * committed. Thrown inside {@link StreamLogStore.delete} so the caller can
+ * roll adjacent snapshot staging back instead of discarding a fresh
+ * incarnation's buffered writes.
+ */
+export class StreamDeletionSupersededError extends Error {
+  constructor(readonly subject?: string) {
+    super(
+      subject === undefined
+        ? 'Stream deletion superseded'
+        : `Stream deletion superseded for ${subject}`,
+    );
+    this.name = 'StreamDeletionSupersededError';
+  }
+}
+
+export interface StreamLogDeleteOptions {
+  /**
+   * Re-checked inside the serialized deletion: once after pending writes drain
+   * and again after the durable transcript delete but before in-memory state is
+   * forgotten. Returning `false` aborts the delete.
+   */
+  readonly shouldDelete?: () => boolean;
+}
+
 type StreamLogListener = (streamId: StreamTabId, delta: StreamLogDelta) => void;
 
 /**
@@ -957,17 +983,32 @@ export class StreamLogStore {
     };
   }
 
-  async delete(streamId: StreamTabId): Promise<void> {
+  async delete(
+    streamId: StreamTabId,
+    options?: StreamLogDeleteOptions,
+  ): Promise<void> {
     this.assertWritableStore('delete a transcript stream');
     this.writeTombstones.add(streamId);
     this.saveThrottle.cancel();
 
     try {
       await this.executeWrite();
+      // A re-claim may have landed while pending writes drained. Refuse before
+      // the irreversible durable delete so its transcript is never erased.
+      if (options?.shouldDelete && !options.shouldDelete()) {
+        throw new StreamDeletionSupersededError(streamId);
+      }
       if (this.mode.kind !== 'ephemeral') {
         log.info(`Deleting stream: ${streamId}`);
         await this.kv().delete(streamId);
         await this.deleteSummaryCache(streamId);
+      }
+      // The durable delete is irreversible. Re-check again before forgetting
+      // in-memory state: a re-claim that landed while the KV delete was in
+      // flight kept its resident transcript alive, and `forgetStreamState`
+      // must not drop it.
+      if (options?.shouldDelete && !options.shouldDelete()) {
+        throw new StreamDeletionSupersededError(streamId);
       }
       // The summaries map is the progress tab registry. Commit its removal
       // only after durable deletion succeeds so callers can retain and retry a
