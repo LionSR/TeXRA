@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/runtime';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import type { ChatExportController } from '@controllers/settingsView/ChatExportController';
 import {

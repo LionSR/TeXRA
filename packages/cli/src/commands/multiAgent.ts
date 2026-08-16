@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import type { AgentConfigPayload } from '@agent/runtime';
 import { canLaunchTeam, teamPlanHasGaps } from '@common/teams/TeamPlan';
 import { byCategory, AgentCategory } from '@shared/schemas';
 

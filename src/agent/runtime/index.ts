@@ -126,3 +126,10 @@ export type { WorkflowFlowResult } from './AgentFlowResult';
 
 // core/state projection used by the CLI's frozen progress wire.
 export { agentConfigToTaskState } from '../core/state/agentConfigToTaskState';
+
+// core/definition config contract used by host launch/resume seams.
+export {
+  AgentConfigSchema,
+  type AgentConfig,
+  type AgentConfigPayload,
+} from '../core/definition/AgentConfig';
