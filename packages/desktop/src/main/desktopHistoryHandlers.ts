@@ -10,6 +10,7 @@ import {
 } from '@controllers/settingsView/backend/HistoryActions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewInboundHandlerRegistry } from '@shared/schemas';
+import type { AdjacentStreamStores } from '@transcript/adjacentStreamCleanup';
 
 type DesktopHistoryHandlerRegistry = Pick<
   SettingsViewInboundHandlerRegistry,
@@ -36,6 +37,11 @@ export interface DesktopHistoryOptions {
   readonly showWarningMessage: (message: string) => Promise<void>;
   readonly showErrorMessage: (message: string) => Promise<void>;
   readonly onError: (error: unknown) => void;
+  /** The desktop main process's live session's transcript/snapshot pair —
+   *  see `HistoryActionPorts.getLiveStreamStores`. Desktop's process session
+   *  is never registered as `defaultSession()`, so this must be threaded in
+   *  explicitly rather than reached for via that global accessor. */
+  readonly getLiveStreamStores: () => AdjacentStreamStores | undefined;
 }
 
 export interface DesktopHistorySettingsController {
@@ -66,6 +72,7 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
       showError: dependencies.showErrorMessage,
       confirm: dependencies.confirmAction,
       reportDetail: (message) => dependencies.onError(new Error(message)),
+      getLiveStreamStores: dependencies.getLiveStreamStores,
     };
     this.actions = new HistoryActions(ports);
     this.handlers = {

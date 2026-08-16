@@ -329,7 +329,21 @@ export async function deleteExecution(
           await getExecutionStore(executionId).clear();
           status = 'deleted';
         } catch (error) {
-          if (!isFileNotFoundError(error)) throw error;
+          if (!isFileNotFoundError(error)) {
+            if (options.beforeDelete) {
+              // `beforeDelete` already ran and did not throw, so any cleanup
+              // it performed (irreversible once committed — see
+              // `@transcript/adjacentStreamCleanup`) has already happened.
+              // This retained execution directory can now reference deleted
+              // state; report that loudly rather than let it surface only as
+              // "delete failed" with no explanation.
+              log.warn(
+                `Execution ${executionId}'s pre-delete cleanup completed, but its storage directory could not be removed: ${toErrorMessage(error)}`,
+                { data: error },
+              );
+            }
+            throw error;
+          }
         }
       }
       return { status, executionId };

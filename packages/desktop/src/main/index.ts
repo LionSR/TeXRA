@@ -835,6 +835,10 @@ function createWindow(options: {
     showWarningMessage,
     showErrorMessage: settingsUi.showErrorMessage,
     onError: settingsUi.onError,
+    getLiveStreamStores: () => ({
+      streamLogs: options.processSession.transcripts,
+      snapshots: options.processSession.snapshots,
+    }),
   });
   // Cross-host history refresh: the shared ~/.texra executions dir
   // is written by the CLI and extension too, so the settings history list

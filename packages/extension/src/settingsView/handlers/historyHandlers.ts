@@ -2,6 +2,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
+import { tryDefaultSession } from '@agent/runtime';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import { ChatExportController } from '@controllers/settingsView/ChatExportController';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
@@ -55,6 +56,12 @@ export class HistoryHandlers {
       confirm: confirmModal,
       reportDetail: (message, data) =>
         ctx.logger.error(ctx.channel, message, { data }),
+      getLiveStreamStores: () => {
+        const session = tryDefaultSession();
+        return session
+          ? { streamLogs: session.transcripts, snapshots: session.snapshots }
+          : undefined;
+      },
     };
     this.actions = new HistoryActions(ports);
   }
