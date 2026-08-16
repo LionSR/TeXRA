@@ -119,9 +119,13 @@ workspace storage today                     workspace storage after
 ├── streamLogs/           991 MB            ├── texra.db      (all app state + FTS)
 ├── streamLogSummaries/   7.5 MB            ├── original/     (user document snapshots)
 ├── streamData/           5,274 files       ├── memories/     (user-editable documents)
-├── executions/ executionLeases/            ├── state.json    (host UI state, §2 exception)
-├── executionLocks/ memories/ original/     └── taskRuns/     (legacy, until #6981
-├── taskRuns/  state.json                                      retention drains it)
+├── executions/ executionLeases/            ├── executions/{id}/files
+├── executionLocks/ memories/ original/     │                 (run artifacts: outputs +
+├── taskRuns/  state.json  _workspace.json  │                  snapshots — documents)
+                                            ├── state.json    (host UI state, §2 exception)
+                                            ├── _workspace.json (bucket identity, §7)
+                                            └── taskRuns/     (legacy, until #6981
+                                                               retention drains it)
 ```
 
 Legacy `taskRuns/` (`WORKSPACE_STORAGE_LAYOUT.legacyRuns`) is grandfathered:
@@ -207,7 +211,7 @@ execution_records (execution_id FK CASCADE, key, payload JSON,
                    -- keyed home for EVERYTHING ExecutionKVStore owns today:
                    -- report, workspace-files, result-meta, turn state,
                    -- per-child records, generic keys, flow/workflow
-                   -- checkpoints. A catch-all record table so Stage 6 has a
+                   -- checkpoints. A catch-all record table so Stage 5 has a
                    -- destination for every record without later schema
                    -- drift; individual keys may be promoted to typed
                    -- columns via ordinary migrations when queries need them.
@@ -235,7 +239,17 @@ stream_tombstones (id PK, incarnation, deleted_at)
                    -- Resolves the exists-iff-row / fence contradiction:
                    -- existence lives in streams, the deleted-id fence lives
                    -- here. Small, append-only, prunable by retention.
-leases/locks      (execution-scoped rows; WAL provides cross-process safety)
+execution_leases  (execution_id PK FK CASCADE, owner_token, acquired_at,
+                   heartbeat_at, generation)
+                   -- WAL serializes writes; it does NOT provide ownership.
+                   -- These fields carry what the lease files carry today:
+                   -- acquire = transactional compare-and-set (INSERT, or
+                   -- UPDATE … WHERE owner_token = ? / heartbeat stale),
+                   -- heartbeat = UPDATE … WHERE owner_token = ?,
+                   -- release = DELETE … WHERE owner_token = ?, and
+                   -- `generation` fences a displaced continuation from
+                   -- writing under a later owner. Full protocol spec is
+                   -- part of Stage 1's schema design; cutover is Stage 7.
 
 -- derived: rebuildable from authoritative rows, never row-authoritative
 stream_summaries  (stream_id PK FK CASCADE, last_ts, has_running_group,
@@ -245,8 +259,21 @@ stream_summaries  (stream_id PK FK CASCADE, last_ts, has_running_group,
                    -- the cursor-pagination index IS the O(visible page)
                    -- startup claim; without it, ORDER BY last_ts scans and
                    -- sorts every summary row. Part of Stage 1, not later.
+                   PARTIAL INDEX ON (stream_id) WHERE has_running_group
+                     OR has_running_streaming_text
+                     OR has_nonterminal_workflow_call
+                   -- the orphan-recovery predicate: after kill/reload the
+                   -- sweep asks "which streams have unfinished work" — an
+                   -- unindexed scan of every summary would contradict the
+                   -- §9 indexed-recovery criterion. Almost always tiny
+                   -- (only unfinished streams have rows in it).
 entries_fts       (FTS5, contentless)
 ```
+
+Two access-path indexes ride the authoritative side:
+`INDEX executions(stream_id)` — SQLite does not auto-index child FK columns,
+so without it every stream deletion scans the whole executions table to
+find its cascade, and stream→execution history queries are O(table).
 
 Every child-**table** FK (`entries`, `executions`, `execution_records`,
 `run_usage`, `round_facts`, `work_plans`, `goals`, `stream_summaries`)
@@ -262,7 +289,7 @@ as whole tables (recompute from `streams`/`entries`), never to `streams`
 rows — a malformed summary must not be able to take the authoritative row,
 and its cascade, down with it.
 
-Deletion semantics, stated implementably for Stage 5: **hard-delete the
+Deletion semantics, stated implementably for Stage 6: **hard-delete the
 `streams` row (cascades every child table) and insert `(id, incarnation,
 deleted_at)` into `stream_tombstones` in the same transaction.** The fence
 check (`SessionFactApplier` admission) consults `stream_tombstones`;
@@ -295,7 +322,7 @@ in scope ≈ 8,400 LoC.
 | `streamSnapshotRead.ts`                                                                  | 307    | ~50   | −250                                                 |
 | `SessionStores.ts` (deletion orchestration)                                              | 777    | ~430  | −350                                                 |
 | `executionRegistry.ts` (lease/lock portion)                                              | 1,007  | —     | −200 (softest; per-item study owed)                  |
-| `streamDataPaths` + `ResidentStreamRegistry` + `KVStore(+Cache)`                         | 373    | ~50   | −320 (KV retires at Stage 6 with `ExecutionKVStore`) |
+| `streamDataPaths` + `ResidentStreamRegistry` + `KVStore(+Cache)`                         | 373    | ~50   | −320 (KV retires at Stage 5 with `ExecutionKVStore`) |
 | #10702 machinery (draft)                                                                 | +1,076 | ~150  | −900                                                 |
 | `completedRunArchive.ts`                                                                 | 370    | ~320  | −50                                                  |
 | **Gross deletion**                                                                       |        |       | **≈ −5,000**                                         |
@@ -316,14 +343,21 @@ execution) applies — **re-verify each file's numbers in its own PR.**
 Phased adoption is fine; **dual ownership is banned**. Each stage is one PR
 family: swap the engine behind the frozen store surface, migrate that store's
 data on first open (read files → insert rows → rename old dir to
-`*.pre-sqlite-backup`), and delete that store's coordination machinery in the
-same PR (build-implies-delete). No long-term mirroring or dual-write.
+`*.pre-sqlite-backup` → **verification pass: re-run the import over the
+renamed snapshot**), and delete that store's coordination machinery in the
+same PR (build-implies-delete). The verification pass closes the
+read-and-rename race: a legacy write landing after the importer's read but
+before the rename would otherwise be carried into the backup without ever
+reaching rows — and, with no live legacy dir left, never trigger a
+re-import. Because inserts are keyed and idempotent, re-importing the
+renamed snapshot folds exactly the interval's writes and nothing else. No
+long-term mirroring or dual-write.
 The importer, the `*.pre-sqlite-backup` dirs, and their compatibility tests
 have a retirement condition fixed at birth: Stage 1 files the removal issue,
 and the removal PR lands **no earlier than 90 days AND two shipped releases
-after Stage 6 — whichever comes later** — so a frequent release cadence can
-never shorten the three-month import window the AGENTS.md
-compatibility-machinery rule guarantees upgrading users.
+after Stage 7 (the final migration stage) — whichever comes later** — so a
+frequent release cadence can never shorten the three-month import window the
+AGENTS.md compatibility-machinery rule guarantees upgrading users.
 Archived `trace.json` readers (B3) are untouched — exports are produced from
 rows; export compat is not storage compat.
 
@@ -336,13 +370,17 @@ rows; export compat is not storage compat.
   and the architecture test (§7). On acceptance of this PRD, close #10773
   with a pointer here (diagnosis absorbed, prescription superseded) and file
   the importer-removal issue (§5 retirement condition).
-- **Stage 2 — registry rows + summaries table.** The `streams` registry
-  migrates FIRST, not at Stage 5: every later stage inserts child rows with
-  enforced FKs to `streams`, so the parent rows must exist before any child
-  table has data. The Stage-2 importer derives them from the authoritative
-  transcript registry (the `streamLogs/` directory listing — today's
-  registration authority), giving the registry exactly one migration owner;
-  deriving parents from the discardable summary cache could omit streams.
+- **Stage 2 — registry rows + execution identity rows + summaries table.**
+  The `streams` registry migrates FIRST: every later stage inserts child
+  rows with enforced FKs to `streams`, so the parent rows must exist before
+  any child table has data. The Stage-2 importer derives them from the
+  authoritative transcript registry (the `streamLogs/` directory listing —
+  today's registration authority), giving the registry exactly one migration
+  owner; deriving parents from the discardable summary cache could omit
+  streams. **Execution identity rows** (`executions`: id + stream edge, from
+  the durable `ExecutionMeta`) import here too — Stage 3 sets
+  `streams.current_execution_id` from `streamData/meta.json`, and with
+  `foreign_keys=ON` that pointer needs its target row to exist first.
   `stream_summaries` (derived, #9434-discardable — worst case is a rebuild)
   rides along as the pilot payload, deleting the mtime-staleness heuristic
   and scan-on-open.
@@ -354,24 +392,35 @@ rows; export compat is not storage compat.
   clobber machinery deletes; partial hydration lands. Gate: a benchmark PR
   proving the 300 ms batched-transaction path sustains streaming append load
   (~200 mutations/s) with headroom.
-- **Stage 5 — incarnation + tombstone-fence semantics.** With registry rows
-  already in place since Stage 2, this stage lands only the deletion
-  protocol: hard-delete + same-transaction `stream_tombstones` insert
-  (§3.3), the incarnation compare-and-set, and the fact-admission gate in
-  `SessionFactApplier` (the reducer owns admission; `SessionEventHub` stays
-  fan-out only) — collapsing #10702's machinery. Record the identity
-  ruling: **stream ids are never reused** — a workflow relaunch mints a
-  fresh id; the deterministic slot maps to the current id.
-- **Stage 6 — execution records, then leases/locks → rows/WAL.** This stage
-  now explicitly includes `ExecutionKVStore` and flow-checkpoint persistence
-  (`executions/{id}/*.json`: meta, config, reports, results, turn state,
-  child records, checkpoints) — deferring it would leave authoritative app
-  state in files after "completion", contradicting §7 and §9. The KV layer
-  retires here. Leases/locks migrate **last within the stage, deliberately**:
+- **Stage 5 — execution records → rows.** `ExecutionKVStore` and
+  flow-checkpoint persistence (`executions/{id}/*.json`: reports, results,
+  workspace-file lists, turn state, child records, generic keys,
+  checkpoints) move into `execution_records`; the KV layer retires here.
+  **This deliberately precedes the deletion-protocol cutover**: while these
+  records live in files, "delete a stream" cannot be one transaction — it
+  would still need fallible filesystem cleanup, i.e. exactly the
+  half-deletion/compensation problem the next stage claims to remove.
+  **Non-KV artifacts under `executions/{id}/` stay as files**: workflow
+  output files and original snapshots are run _documents_ — read by
+  `AcceptRunFilesTool` and `ExecutionsTool.listFiles`, reviewed and accepted
+  by the user — so they fall under the §2 documents clause, live in a
+  per-execution artifacts area on the permanent allowlist, and are removed
+  by the same file sweeper that handles exports when their execution row
+  is deleted.
+- **Stage 6 — deletion protocol: incarnation + tombstone fence.** With every
+  app-state datum in rows by now, this stage lands the one-transaction
+  deletion for real: hard-delete + same-transaction `stream_tombstones`
+  insert (§3.3), the incarnation compare-and-set, and the fact-admission
+  gate in `SessionFactApplier` (the reducer owns admission;
+  `SessionEventHub` stays fan-out only) — collapsing #10702's machinery.
+  Record the identity ruling: **stream ids are never reused** — a workflow
+  relaunch mints a fresh id; the deterministic slot maps to the current id.
+- **Stage 7 — leases/locks → rows (final migration stage).** Cutover to the
+  `execution_leases` table and its CAS protocol (§3.3). Last, deliberately:
   the legacy lease files are the liveness signal the importer's quiesce
   check reads to detect running file-backed hosts (§6 mixed-version
   fencing) — they must stay file-based until every data migration is done.
-- **Stage 7 — feature payoffs.** FTS5, retention policy, usage analytics.
+- **Stage 8 — feature payoffs.** FTS5, retention policy, usage analytics.
 
 Ordering with other programs: independent of Waves A–C (different band, no
 shared PRs); #10774 (settled ⇒ immutable) should land before Stage 4 so the
@@ -395,8 +444,16 @@ Stage 4).
   signatures, and the session event plane is untouched. A PR introducing a
   transaction parameter outside `src/transcript/` + `src/agent/storage/` is
   a review reject.
-- **Migration failure**: migrate-on-open is idempotent per store; rollback =
-  revert the release + restore the renamed dir. Rows-or-files, never both.
+- **Migration failure and rollback policy**: migrate-on-open is idempotent
+  per store; a migration that fails **at open, before any new write**, rolls
+  back by reverting the release and restoring the renamed dir. But once a
+  migrated release has been _used_ — appends, deletions, goal changes
+  committed to rows only — restoring the backup would silently discard that
+  work, so **rollback is forward-only after first post-migration use**: fix
+  in place on the migrated release; the backups exist for failed-migration
+  recovery and the guaranteed import window, not as a downgrade path. (A
+  reverse row→file exporter is deliberately not built — it would be dual
+  ownership with a delay, the exact §5 ban.) Rows-or-files, never both.
 - **Mixed-version hosts during migration** (an old file-backed CLI and a
   migrated extension sharing one workspace): WAL fences database
   connections, not legacy filesystem writers — and no _new_ lock can be
@@ -406,18 +463,19 @@ Stage 4).
   (1) **Quiesce check, not lock:** before migrating, the importer reads the
   legacy lease files (`executionLeases/`) — artifacts old hosts already
   maintain and new code can inspect — and **defers migration while any live
-  legacy execution is present**; leases staying file-based until Stage 6 is
+  legacy execution is present**; leases staying file-based until Stage 7 is
   what keeps this signal readable (why leases/locks migrate last).
   (2) **A workspace-scoped migration fence between new hosts** (one
   marker/lock the importer holds), so two migrated hosts cannot
   double-import concurrently.
   (3) **Re-entrant idempotent import as the backstop** for the case no fence
   can cover (a legacy host that starts writing mid-import): every open that
-  finds recreated legacy dirs re-imports and re-renames them, so late
-  legacy writes are absorbed on the next new-host open rather than lost.
-  Concurrent mixed-version access during the window is documented as
-  unsupported — writes absorbed late, not dropped; old-host reads may be
-  stale until it upgrades.
+  finds recreated legacy dirs re-imports and re-renames them, and the §5
+  post-rename verification pass folds writes that landed inside the
+  read-and-rename interval itself, so late legacy writes are absorbed
+  rather than lost. Concurrent mixed-version access during the window is
+  documented as unsupported — writes absorbed late, not dropped; old-host
+  reads may be stale until it upgrades.
 - **Scope creep toward SQL-as-UI-state**: §8 non-goals; the architecture
   test only allowlists the two stores' modules for DB access.
 
@@ -431,13 +489,22 @@ public surfaces (`store-public-surface-baseline`); hosts-as-renderers plane
 rules untouched. **Added:** the §2 rule, pinned by a new architecture test.
 The test lands at Stage 1 as a **shrinking ratchet, not a strict gate**: it
 starts with an explicit allowlist of the not-yet-migrated directories
-(`streamLogSummaries/`, `streamData/`, `streamLogs/`, `executions/`,
-lease/lock files) plus the permanent entries (documents, exports,
-`state.json`), and each migration stage removes its directory from the
-baseline in the same PR — the same only-shrinks discipline as
-`host-agent-import-baseline`. A Stage-1-strict test would fail CI by
-construction while Stages 2–6 still write files. Strict (permanent entries
-only) is the exit criterion of Stage 6.
+(`streamLogSummaries/`, `streamData/`, `streamLogs/`, `executions/` KV
+records, lease/lock files) plus the **permanent entries**: documents,
+exports, `state.json`, the per-execution artifacts area (§5 Stage 5), and
+`_workspace.json` — the bucket→workspace identity sidecar
+`WorkspaceStorageProvider.getStoragePath()` writes before any store (and
+therefore the database) can open; it cannot live in the DB it locates, so
+it must be in the initial baseline (a ratchet can only shrink — omitting it
+at Stage 1 could not be repaired later without widening). Each migration
+stage removes its directory from the baseline in the same PR — the same
+only-shrinks discipline as `host-agent-import-baseline`. A Stage-1-strict
+test would fail CI by construction while Stages 2–7 still write files.
+After Stage 7 one **temporary** entry remains alongside the permanent set:
+`*.pre-sqlite-backup`, which the §5 retirement window requires for 90 days
+and two releases — the importer-removal PR deletes the backups and this
+ratchet entry together. Strict (permanent entries only) is that removal
+PR's exit criterion, not Stage 7's.
 
 ## 8. Non-goals
 
@@ -457,8 +524,9 @@ normalization of entry payload internals; no publication of this doc
   recovery sweep finalizes orphans from an indexed query.
 - All ratchets green; no store public-surface change; Waves A–C unaffected.
 - `WORKSPACE_STORAGE_LAYOUT` shrinks to
-  `{ texra.db, original, memories, state.json }` (§2 exception) plus legacy
-  `taskRuns/` until #6981 retention drains it (§3.1 exception).
+  `{ texra.db, original, memories, state.json, _workspace.json }` plus the
+  per-execution artifacts area (§5 Stage 5) and legacy `taskRuns/` until
+  #6981 retention drains it (§3.1 exception).
 
 ## 10. Open questions
 
@@ -466,8 +534,8 @@ normalization of entry payload internals; no publication of this doc
    actual schema, not in the abstract.
 2. Are `memories/` user-editable documents (stay files) or app state (rows)?
    Owner call.
-3. Within Stage 6, the ordering of execution-record sub-migrations (meta vs
-   turn state vs flow checkpoints) — an in-stage sequencing detail; the
+3. Within Stage 5, the ordering of execution-record sub-migrations (reports
+   vs turn state vs flow checkpoints) — an in-stage sequencing detail; the
    stage assignment itself is settled (§5).
 4. Retention defaults (age? size cap per workspace?) once Stage 7 makes
    policy one statement.
