@@ -29,6 +29,10 @@ import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBui
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExecutionId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
+import {
+  cleanupExecutionAdjacentStreamState,
+  openStandaloneStreamStores,
+} from '@transcript/adjacentStreamCleanup';
 
 type HistoryExportFormat = 'md' | 'tex' | 'html';
 export type HistoryOpenKind = 'text' | 'pdf' | 'external';
@@ -57,8 +61,12 @@ export class HistoryActions {
 
   async deleteItem(historyId: string): Promise<void> {
     const executionId = historyId as ExecutionId;
+    const stores = await openStandaloneStreamStores();
     const outcome = describeDeleteExecutionResult(
-      await deleteExecution(executionId),
+      await deleteExecution(executionId, {
+        beforeDelete: () =>
+          cleanupExecutionAdjacentStreamState(executionId, stores),
+      }),
     );
     if (outcome.kind !== 'deleted') {
       await this.ports.showWarning(
@@ -81,7 +89,11 @@ export class HistoryActions {
     ) {
       return;
     }
-    const result = await deleteAllExecutions();
+    const stores = await openStandaloneStreamStores();
+    const result = await deleteAllExecutions({
+      beforeDelete: (executionId) =>
+        cleanupExecutionAdjacentStreamState(executionId, stores),
+    });
     await GoalStore.forgetByExecutionIds(result.deleted);
     const outcome = describeClearHistoryResult(result);
     if (outcome.kind === 'cleared') {

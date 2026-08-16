@@ -345,18 +345,29 @@ export async function deleteExecution(
  * Delete every unleased execution and report deleted, raced-away, and active
  * execution IDs separately.
  */
-export async function deleteAllExecutions(): Promise<DeleteAllExecutionsResult> {
+export interface DeleteAllExecutionsOptions {
+  /** Per-execution cleanup that must succeed under its inactive lease before
+   *  storage removal — see {@link DeleteExecutionOptions.beforeDelete}. */
+  readonly beforeDelete?: (executionId: ExecutionId) => Promise<void>;
+}
+
+export async function deleteAllExecutions(
+  options: DeleteAllExecutionsOptions = {},
+): Promise<DeleteAllExecutionsResult> {
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);
   // Validate every present lease before the first irreversible deletion. A
   // malformed record fails closed without leaving callers with partial work
   // hidden behind an AggregateError.
   await Promise.all(executionDirs.map(inspectExecutionLease));
+  const { beforeDelete } = options;
   const results = await pMap(
     executionDirs,
     async (id) => {
       try {
-        return await deleteExecution(id);
+        return await deleteExecution(id, {
+          beforeDelete: beforeDelete ? () => beforeDelete(id) : undefined,
+        });
       } catch (error) {
         return {
           status: 'failed' as const,
