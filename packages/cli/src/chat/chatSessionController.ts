@@ -7,12 +7,15 @@ import PQueue from 'p-queue';
 
 import { getExecutionStore } from '@agent/storage';
 import {
+  AgentConfigSchema,
   attachTerminalResultToast,
   detachSubagentsOnStop,
   resolveAndResumeStream,
   resumeQueuedToolUseFromResumeData,
   resumeToolUseFromResumeData,
   runAgent,
+  type AgentConfig,
+  type AgentConfigPayload,
   type SessionHandle,
   type ToolUseResumeData,
 } from '@agent/runtime';
@@ -20,11 +23,6 @@ import type {
   FollowUpQueueInput,
   FollowUpRecoveryLease,
 } from '@agent/followUp';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-  type AgentConfigPayload,
-} from '@agent/core/definition';
 import { chatAgentSupportsDelegation } from '@cli/runtime/agents';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';

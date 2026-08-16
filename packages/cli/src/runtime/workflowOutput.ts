@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import type { AgentEntry } from '@agent/index';
-import type { AgentConfigPayload } from '@agent/core/definition';
+import type { AgentConfigPayload } from '@agent/runtime';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import type { OutputFileSummary } from '@shared/schemas';
 import {

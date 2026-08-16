@@ -59,5 +59,5 @@ code imports from the specific module so dependency edges stay explicit (and
 re-export shims are not left behind, per the repo's anti-shim convention).
 
 Cross-host consumers (CLI, desktop, extension) that need the stable config
-contract instead reach the curated `@agent/core/definition` barrel:
+contract reach the already-approved `@agent/runtime` barrel:
 `AgentConfigSchema`, `AgentConfig`, and `AgentConfigPayload`.
