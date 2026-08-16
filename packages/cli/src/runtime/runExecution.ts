@@ -13,7 +13,7 @@ import {
   type OwnedExecutionLeaseScope,
   type ResumabilityDecision,
 } from '@agent/storage';
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import type { AgentConfigPayload } from '@agent/core/definition';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,

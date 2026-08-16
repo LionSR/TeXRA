@@ -18,7 +18,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { currentSession, runAgent } from '@agent/runtime';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/definition';
 import { collectReviewDiff, isPathInChangeSet } from '@agent/review/reviewDiff';
 import {
   buildFixInstruction,

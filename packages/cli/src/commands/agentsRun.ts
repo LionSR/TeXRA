@@ -1,4 +1,4 @@
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import type { AgentConfigPayload } from '@agent/core/definition';
 
 import { AgentCategory } from '@shared/schemas';
 import {

@@ -4,7 +4,7 @@ import { z, ZodError } from 'zod';
 
 // Local imports
 import { ModelHandlerCompatibilityKeySchema, runAgent } from '@agent/runtime';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/definition';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';

@@ -3,7 +3,7 @@ import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from '@agent/runtime';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';

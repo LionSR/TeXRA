@@ -9,7 +9,7 @@ import type {
   SessionEventHub,
   SessionFact,
 } from '@agent/runtime';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition';
 import { redactSecrets } from '@logger/redaction';
 import type {
   ActiveChildInfo,

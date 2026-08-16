@@ -24,7 +24,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
   type AgentConfigPayload,
-} from '@agent/core/definition/AgentConfig';
+} from '@agent/core/definition';
 import { chatAgentSupportsDelegation } from '@cli/runtime/agents';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
