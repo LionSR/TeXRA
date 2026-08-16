@@ -40,8 +40,8 @@ that affect the truth, scope, or reproducibility of the scientific content:
   explanation.
 - Scientific computing and coding correctness when it bears on the above:
   API/schema mismatches, race conditions, data loss, command-execution risks,
-  numerical instability, missing tests for changed behavior, and code paths that
-  silently change a derivation, experiment, figure, table, or formal statement.
+  numerical instability, and code paths that silently change a derivation,
+  experiment, figure, table, or formal statement.
 - LaTeX and exposition correctness: when the pull request changes `.tex`,
   `.bib`, `.sty`, `.cls`, or related manuscript files, inspect the changed
   source. Check whether equations, references, labels, theorem statements,
@@ -49,7 +49,11 @@ that affect the truth, scope, or reproducibility of the scientific content:
   and consistent with the surrounding text.
 
 Avoid style nits unless they obscure correctness or make future changes
-substantially harder. Do not invent issues merely to have comments. One
+substantially harder. Do not invent issues merely to have comments. Do not ask
+the author to add tests: the repository deliberately keeps its test surface
+small because internal interfaces change often (`AGENTS.md` "Testing
+discipline"). Flag a missing test only when the pull request fixes a
+reproduced defect and ships without its regression test. One
 repository convention is worth enforcing on changed TypeScript lines: the
 modern-TypeScript patterns in `AGENTS.md` ("ES2023+ Patterns") — `node:`
 prefixed builtin imports, `.toSorted()` over spread-then-sort, `for...of`
@@ -118,7 +122,7 @@ Return exactly one JSON object and no Markdown fence. Use this schema:
 The `body` string must start with `## TeXRA Code Review`. If there are
 findings, list them in order of severity. For each finding, explain the issue
 and the smallest reasonable fix. If no actionable issues are found, say so
-plainly and mention any residual risk or test gap. Mathematical and physical
+plainly and mention any residual risk. Mathematical and physical
 claims should be stated precisely; name the theorem, definition, equation,
 lemma, model, approximation, or manuscript section involved.
 
