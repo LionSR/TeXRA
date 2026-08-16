@@ -24,13 +24,14 @@ import {
 import {
   classifyProviderMessageBlockType,
   CONVERSATION_BLOCK_TYPES,
+  type ProviderMessageBlockCategory,
 } from '@agent/types/ConversationBlockTypes';
 import {
   ANTHROPIC_SERVER_TOOL_BLOCK_TYPES,
   extractWebFetchResultFields,
   WebSearchResultEntrySchema,
 } from '@agent/types/ServerTools';
-import { isObject } from '@utils/core';
+import { assertNever, isObject } from '@utils/core';
 import type { Part } from '@google/genai';
 import type {
   ChatCompletionMessageParam,
@@ -246,15 +247,28 @@ function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
       if (b.text) parts.push({ type: 'text', text: b.text });
       continue;
     }
-    switch (classifyProviderMessageBlockType(b.type)) {
+    const category: ProviderMessageBlockCategory | undefined =
+      classifyProviderMessageBlockType(b.type);
+    switch (category) {
       case 'image-attachment':
         parts.push({ type: 'attachment', attachmentType: 'image' });
         break;
       case 'document-attachment':
         parts.push({ type: 'attachment', attachmentType: 'document' });
         break;
-      default:
+      // Every other recognized block carries no user part — thinking and the
+      // tool blocks are assistant-side (tool results reach the export via
+      // `extractToolResultText`); `undefined` covers unrecognized tags.
+      case 'thinking':
+      case 'tool-use':
+      case 'tool-result':
+      case 'server-tool-use':
+      case 'web-search-tool-result':
+      case 'web-fetch-tool-result':
+      case undefined:
         break;
+      default:
+        assertNever(category, 'Unhandled provider message block category');
     }
   }
   return parts;
@@ -291,7 +305,10 @@ function asClassifiedBlock<T extends ContentBlock['type']>(
 // `@agent/storage/conversationFormat` via `classifyProviderMessageBlockType`
 // (`@agent/types/ConversationBlockTypes`) — one switch recognizes the tags;
 // each module maps the category into its own output shape (a structured
-// `ExportNode` here vs. a truncated marker string there).
+// `ExportNode` here vs. a truncated marker string there). Both category
+// switches in this module are exhaustive over `ProviderMessageBlockCategory`
+// (`default: assertNever`), so a category added to the classifier fails at
+// compile time here instead of silently dropping the block.
 function assistantBlockToNode(block: ContentBlock): ExportNode | null {
   // Anthropic: 'text', OpenAI Response API: 'output_text'. Text tags stay
   // per-literal (see `blocksToUserParts` for the user-side split).
@@ -301,7 +318,9 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
       : null;
   }
 
-  switch (classifyProviderMessageBlockType(block.type)) {
+  const category: ProviderMessageBlockCategory | undefined =
+    classifyProviderMessageBlockType(block.type);
+  switch (category) {
     case 'thinking':
       return null;
 
@@ -365,8 +384,15 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
       };
     }
 
-    default:
+    // Attachment blocks belong to user messages (`blocksToUserParts`); on the
+    // assistant side they — like unrecognized tags (`undefined`) — produce no
+    // export node.
+    case 'image-attachment':
+    case 'document-attachment':
+    case undefined:
       return null;
+    default:
+      return assertNever(category, 'Unhandled provider message block category');
   }
 }
 
