@@ -2,7 +2,7 @@
 
 import { useInput, useWindowSize } from 'ink';
 
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import {
@@ -40,10 +40,6 @@ const WORK_PLAN_LOADING_TEXT = 'Loading work plan…';
 const BORDER_ROWS = 2;
 const FOOTER_MARGIN_ROWS = 1;
 
-function wrappedRows(text: string, width: number): number {
-  return wrapAnsiToWidth(text, Math.max(1, width)).split('\n').length;
-}
-
 export function workPlanReaderLayout({
   availableRows,
   contentWidth,
@@ -61,12 +57,12 @@ export function workPlanReaderLayout({
 } {
   const rows = Math.max(1, Math.floor(availableRows));
   const width = Math.max(1, Math.floor(contentWidth));
-  const footerRows = wrappedRows(
+  const footerRows = wrappedRowCount(
     hints.map(keyHintText).join(KEY_HINT_SEPARATOR),
     width,
   );
   const showFooter = rows >= BORDER_ROWS + 1 + FOOTER_MARGIN_ROWS + footerRows;
-  const titleRows = wrappedRows(title, width);
+  const titleRows = wrappedRowCount(title, width);
   const footerFixedRows = showFooter ? FOOTER_MARGIN_ROWS + footerRows : 0;
   const showTitle = rows >= BORDER_ROWS + 1 + footerFixedRows + titleRows;
   return {

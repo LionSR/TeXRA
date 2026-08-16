@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
-import { COLOR_ACCENT } from '@cli/tui/ui/colors';
+import { COLOR_ACCENT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
 } from '@cli/tui/ui/theme';
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import {
   AgentCategory,
   agentProposalCategoryLabel,
@@ -31,10 +31,6 @@ export interface AgentProposalProps {
 const FILE_LIMIT = 5;
 const AGENT_PROPOSAL_HIDDEN_NOUN = 'prompt rows';
 
-function wrappedRows(text: string, width: number): number {
-  return wrapAnsiToWidth(text, clampModalWidth(width)).split('\n').length;
-}
-
 function fileGroupText(label: string, files: readonly string[]): string {
   const visible = files.slice(0, FILE_LIMIT);
   const hidden = files.length - visible.length;
@@ -55,33 +51,39 @@ export function agentProposalMetadataRows({
     payload.workflowScript
   ) {
     const workflow = payload.workflowScript;
+    const clampedWidth = clampModalWidth(width);
     return (
       3 +
-      wrappedRows(
+      wrappedRowCount(
         `${workflow.name} · ${workflow.tasks.length} tasks · ${workflow.phases.length} phases`,
-        width,
+        clampedWidth,
       ) +
-      wrappedRows(`Script: ${workflow.scriptPath}`, width)
+      wrappedRowCount(`Script: ${workflow.scriptPath}`, clampedWidth)
     );
   }
+  const clampedWidth = clampModalWidth(width);
   return (
     1 +
-    wrappedRows(
+    wrappedRowCount(
       `Model: ${payload.model} · Category: ${agentProposalCategoryLabel(payload.agentCategory)}`,
-      width,
+      clampedWidth,
     ) +
     (payload.workingDirectory
-      ? wrappedRows(`Directory: ${payload.workingDirectory}`, width)
+      ? wrappedRowCount(`Directory: ${payload.workingDirectory}`, clampedWidth)
       : 0) +
     (fileGroups.length > 0
       ? 1 +
         fileGroups.reduce(
           (rows, group) =>
-            rows + wrappedRows(fileGroupText(group.label, group.files), width),
+            rows +
+            wrappedRowCount(
+              fileGroupText(group.label, group.files),
+              clampedWidth,
+            ),
           0,
         )
       : 0) +
-    wrappedRows(DELEGATION_APPROVAL_COPY.cliExplanation, width)
+    wrappedRowCount(DELEGATION_APPROVAL_COPY.cliExplanation, clampedWidth)
   );
 }
 
@@ -151,7 +153,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
               <Text bold>Default: </Text>
               {props.payload.agent} ({props.payload.model})
             </Text>
-            <Text color="yellow">
+            <Text color={COLOR_WARNING}>
               May run tasks concurrently and incur high model cost.
             </Text>
             <Text dimColor>Script: {workflowScript.scriptPath}</Text>

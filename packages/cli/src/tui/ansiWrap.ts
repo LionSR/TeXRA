@@ -115,3 +115,7 @@ export function wrapAnsiToWidth(
     )
     .join('\n');
 }
+
+export function wrappedRowCount(text: string, width: number): number {
+  return wrapAnsiToWidth(text, width).split('\n').length;
+}
