@@ -10,7 +10,6 @@ import {
   type ProviderMessage,
 } from '@agent/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
-import type { ProviderUsage } from '@agent/types/ProviderUsage';
 import type { FinalTool } from '@agent/types/ModelHandlerContracts';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
@@ -123,17 +122,11 @@ export function defaultPostCompactionContext(
 
 interface ExtractedModelResponse {
   text: string;
-  /**
-   * Raw provider usage from `ModelHandler.extractResponse`. This is the one
-   * place `core/` intentionally holds {@link ProviderUsage}: callers should
-   * prefer {@link normalizedUsage}; the raw field is for debug logging only.
-   */
-  usage: ProviderUsage;
+  /** Provider-independent usage from the model-handler boundary. */
+  usage: NormalizedUsage | undefined;
   stopReason: ProviderStopReason;
   thinking: string | null;
   useStreaming: boolean;
-  /** `undefined` when raw usage is skipped or the handler reports none. */
-  normalizedUsage: NormalizedUsage | undefined;
 }
 
 type ExtractModelResponseOptions = {
@@ -155,28 +148,31 @@ export function extractModelResponse(
   const modelHandler = services.modelCell.handler;
   const thinking = modelHandler.processThinkingBlock(response, workspace);
   const useStreaming = modelHandler.getStreamingConfig();
-  const { text, usage, stopReason } = modelHandler.extractResponse(
+  const { text, usage, stopReason } = modelHandler.extractNormalizedResponse(
     response,
     endTag,
+    responseTimeMs ?? 0,
+    options.normalizeNullUsage === true,
   );
-
-  let normalizedUsage: NormalizedUsage | undefined;
-  if (usage != null || options.normalizeNullUsage === true) {
-    normalizedUsage = modelHandler.normalizeUsage(usage, responseTimeMs ?? 0);
-    if (normalizedUsage) {
-      const usageRoute =
-        normalizedUsage.usageRoute ??
-        modelHandler.getLastCredentialUsageRoute();
-      if (usageRoute !== undefined) {
-        normalizedUsage = { ...normalizedUsage, usageRoute };
-      }
-      const { inputTokens } = normalizedUsage;
-      const contextWindow = modelHandler.getEffectiveContextWindow();
-      if (inputTokens > 0 && contextWindow > 0) {
-        logger.contextState({ inputTokens, contextWindow });
-      }
+  let normalizedUsage = usage;
+  if (normalizedUsage) {
+    const usageRoute =
+      normalizedUsage.usageRoute ?? modelHandler.getLastCredentialUsageRoute();
+    if (usageRoute !== undefined) {
+      normalizedUsage = { ...normalizedUsage, usageRoute };
+    }
+    const { inputTokens } = normalizedUsage;
+    const contextWindow = modelHandler.getEffectiveContextWindow();
+    if (inputTokens > 0 && contextWindow > 0) {
+      logger.contextState({ inputTokens, contextWindow });
     }
   }
 
-  return { text, usage, stopReason, thinking, useStreaming, normalizedUsage };
+  return {
+    text,
+    usage: normalizedUsage,
+    stopReason,
+    thinking,
+    useStreaming,
+  };
 }

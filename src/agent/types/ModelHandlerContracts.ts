@@ -5,6 +5,7 @@ import type { LanguageModelToolCallPart } from '@platform/languageModel';
 // Local file imports
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderUsage } from './ProviderUsage';
+import type { NormalizedUsage } from './NormalizedUsage';
 import type { ProviderStopReason } from './StopReasonTypes';
 
 // Third-party imports
@@ -135,6 +136,16 @@ export interface ExtractResponseResult {
   text: string;
   /** Usage/token statistics from the provider */
   usage: ProviderUsage;
+  /** Reason why the model stopped generating */
+  stopReason: ProviderStopReason;
+}
+
+/** Provider response data after usage crosses the model-handler boundary. */
+export interface ExtractNormalizedResponseResult {
+  /** Extracted response text */
+  text: string;
+  /** Unified usage statistics, when the provider reports them. */
+  usage: NormalizedUsage | undefined;
   /** Reason why the model stopped generating */
   stopReason: ProviderStopReason;
 }
