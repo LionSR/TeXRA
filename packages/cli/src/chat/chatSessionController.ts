@@ -45,6 +45,7 @@ import {
   hasErrorPresentationPending,
   hasErrorPresentedMarker,
 } from '@common/errors/sdkError/errorMetadata';
+import type { DisposableStore } from '@platform/disposable';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   RUN_OUTCOME,
@@ -174,8 +175,8 @@ export interface ChatSessionControllerInit {
   /** Build a {@link CliContext} keyed on the current model. */
   readonly getSessionContext: (model: string) => CliContext;
 
-  /** Disposer list shared with the TUI lifecycle. */
-  readonly disposers: Array<() => void>;
+  /** Disposable owner shared with the TUI session lifecycle. */
+  readonly disposables: DisposableStore;
 
   /** Serial queue for follow-up message delivery (cleared on resume). */
   readonly followUpQueue: PQueue;
@@ -191,7 +192,7 @@ export function createChatSessionController(
     session,
     runtimeSession,
     getSessionContext,
-    disposers,
+    disposables,
     followUpQueue,
     snapshotStore,
   } = init;
@@ -203,7 +204,7 @@ export function createChatSessionController(
   // projecting status, output, and approval-related facts after the root
   // promise settles. Installing this once also avoids duplicate projections
   // when another root starts while an earlier detached child is still alive.
-  disposers.push(
+  disposables.add(
     attachSessionSignalsAdapter({
       events: runtimeSession.events,
       session: runtimeSession,
@@ -387,7 +388,7 @@ export function createChatSessionController(
         void presentationHost.close();
       },
     );
-    disposers.push(() => ownership.release());
+    disposables.add(() => ownership.release());
 
     return {
       presentationHost,

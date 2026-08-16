@@ -39,6 +39,7 @@ vi.mock('@cli/tui/terminalCleanup', () => ({
 
 import * as executionLease from '@agent/storage/executionLease';
 import { createSessionExitController } from '@cli/chat/tui/sessionExitController';
+import { DisposableStore } from '@platform/disposable';
 
 describe('CLI session exit lease ownership', () => {
   let completeLeaseSpy: ReturnType<typeof vi.spyOn>;
@@ -77,7 +78,8 @@ describe('CLI session exit lease ownership', () => {
       canResume: false,
       clearItermProgress: false,
       kittyKeyboardEnabled: false,
-      disposers: [],
+      disposables: new DisposableStore(),
+      disposeTerminalRestoreOnExit: vi.fn(),
       followUpQueue: { onIdle: vi.fn().mockResolvedValue(undefined) } as never,
       getApprovalPolicy: () => 'yolo',
       flushArtifacts:

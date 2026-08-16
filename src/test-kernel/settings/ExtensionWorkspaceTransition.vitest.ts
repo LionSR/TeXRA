@@ -49,7 +49,16 @@ vi.mock('vscode', () => ({
 
 vi.mock('@common/webview', () => ({
   BaseWebviewProvider: class {
-    protected readonly _disposables: Array<{ dispose(): void }> = [];
+    protected readonly _disposables = {
+      items: [] as Array<{ dispose(): void }>,
+      add(disposable: { dispose(): void }) {
+        this.items.push(disposable);
+        return disposable;
+      },
+      dispose() {
+        for (const disposable of this.items.reverse()) disposable.dispose();
+      },
+    };
 
     getActiveWebview(): undefined {
       return undefined;
@@ -60,7 +69,7 @@ vi.mock('@common/webview', () => ({
     }
 
     dispose(): void {
-      for (const disposable of this._disposables) disposable.dispose();
+      this._disposables.dispose();
     }
   },
   BundledViewContentProvider: class {},
