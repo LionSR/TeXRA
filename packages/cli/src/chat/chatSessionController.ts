@@ -175,7 +175,7 @@ export interface ChatSessionControllerInit {
   /** Build a {@link CliContext} keyed on the current model. */
   readonly getSessionContext: (model: string) => CliContext;
 
-  /** Disposer list shared with the TUI lifecycle. */
+  /** Disposable owner shared with the TUI session lifecycle. */
   readonly disposables: DisposableStore;
 
   /** Serial queue for follow-up message delivery (cleared on resume). */

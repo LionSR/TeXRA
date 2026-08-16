@@ -23,6 +23,7 @@ import {
   runCliPlatformShutdownSequence,
 } from '@cli/runtime/initPlatform';
 import { writeTextStdout } from '@cli/runtime/logSinks';
+import { createLog } from '@logger/logUtils';
 import {
   cleanupTerminalModes,
   restoreTuiInputModes,
@@ -32,6 +33,7 @@ import type { DisposableStore } from '@platform/disposable';
 import { tryPlatform } from '@platform/platform';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { assertNever } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   resetCliState,
@@ -53,6 +55,7 @@ import {
 import type PQueue from 'p-queue';
 import type { Instance as InkInstance } from 'ink';
 
+const log = createLog('cli.sessionExit');
 const EXIT_CONFIRMATION_TTL_MS = 800;
 
 /**
@@ -366,6 +369,11 @@ export function createSessionExitController(
       // flushed and the resume hint is printed, preserving the suspended flow
       // record on disk for `texra resume`. Run platform shutdown first so queued
       // usage logs flush — bin/texra.ts's finally won't on exit().
+      if (disposalFailed) {
+        log.error(
+          `Session resource disposal failed during exit: ${toErrorMessage(disposalFailure)}`,
+        );
+      }
       await runPlatformShutdown();
       if (disposalFailed) session.runExitCode = CliExitCode.AgentError;
       process.exit(session.runExitCode);

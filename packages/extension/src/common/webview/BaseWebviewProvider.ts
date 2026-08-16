@@ -92,14 +92,21 @@ export abstract class BaseWebviewProvider {
   }
 
   protected cleanupView(): void {
-    this._viewDisposables.dispose();
+    const disposables = this._viewDisposables;
     this._viewDisposables = new DisposableStore();
-    this._view = undefined;
-    this.messageHandler.clearActiveView?.();
+    try {
+      disposables.dispose();
+    } finally {
+      this._view = undefined;
+      this.messageHandler.clearActiveView?.();
+    }
   }
 
   public dispose(): void {
-    this.cleanupView();
-    this._disposables.dispose();
+    try {
+      this.cleanupView();
+    } finally {
+      this._disposables.dispose();
+    }
   }
 }

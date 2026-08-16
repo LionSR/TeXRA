@@ -24,9 +24,9 @@ export class DisposableStore implements Disposable {
     this.disposed = true;
 
     const failures: unknown[] = [];
-    for (let i = this.disposables.length - 1; i >= 0; i--) {
+    for (const disposable of this.disposables.toReversed()) {
       try {
-        disposeOne(this.disposables[i]);
+        disposeOne(disposable);
       } catch (error) {
         failures.push(error);
       }
