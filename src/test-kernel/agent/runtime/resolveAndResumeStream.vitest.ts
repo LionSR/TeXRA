@@ -277,7 +277,6 @@ describe('resolveAndResumeStream', () => {
     expect(ports.reportResumeStateResolution).toHaveBeenCalledWith(
       STREAM,
       resolution,
-      'Persisted run state could not be read (snapshot disk offline). The resume was not started; retry once the storage issue is resolved.',
     );
     expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
     expect(ports.reportNoResumableSession).not.toHaveBeenCalled();
@@ -306,6 +305,17 @@ describe('resolveAndResumeStream', () => {
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
     expect(ports.reportFailure).toHaveBeenCalledWith(STREAM, error);
+  });
+
+  it('does not let presentation failure replace the resume failure', async () => {
+    retrieveSessionResumeDataMock.mockRejectedValue(new Error('kv boom'));
+    const ports = basePorts({
+      reportFailure: vi.fn(async () => {
+        throw new Error('presentation unavailable');
+      }),
+    });
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
   });
 
   it('keeps the in-flight guard until async failure reporting completes', async () => {

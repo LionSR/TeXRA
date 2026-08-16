@@ -2,6 +2,7 @@ import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
   describeResumeFailure,
+  describeResumeStateResolution,
   resolveAndResumeStream,
   resolveResumeStateFromSnapshots,
   resumeQueuedToolUseFromResumeData,
@@ -99,7 +100,7 @@ function resumeDesktopStream(
       streamStatus: context.session.status,
       resolveResumeState: (id) =>
         resolveResumeStateFromSnapshots(context.session.snapshots, id),
-      reportResumeStateResolution: async (id, resolution, message) => {
+      reportResumeStateResolution: async (id, resolution) => {
         if (resolution.status === 'read-failed') {
           context.logger.warn(
             `Failed to read persisted resume data for ${id}`,
@@ -108,9 +109,10 @@ function resumeDesktopStream(
             },
           );
         }
-        await context.session.interactions.showInfoMessage(message, {
-          replayWhenAttached: true,
-        });
+        await context.session.interactions.showInfoMessage(
+          describeResumeStateResolution(resolution),
+          { replayWhenAttached: true },
+        );
       },
       resumeToolUse: (snapshot, claimedRecovery) =>
         resumeQueuedToolUseFromResumeData(snapshot.streamId, snapshot, {

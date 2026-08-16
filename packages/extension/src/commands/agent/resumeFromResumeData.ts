@@ -5,6 +5,7 @@ import { createChannelTrace } from '@agent/trace';
 import {
   defaultSession,
   describeResumeFailure,
+  describeResumeStateResolution,
   resolveAndResumeStream,
   resolveResumeStateFromSnapshots,
   resumeQueuedToolUseFromResumeData,
@@ -46,7 +47,7 @@ export function tryResumeFromResumeData(
           isCancellationRequested: () => !session.transcripts.has(streamId),
           resolveResumeState: (id) =>
             resolveResumeStateFromSnapshots(session.snapshots, id),
-          reportResumeStateResolution: async (id, resolution, message) => {
+          reportResumeStateResolution: async (id, resolution) => {
             if (resolution.status === 'read-failed') {
               logger.warn(`Failed to read persisted resume data for ${id}`, {
                 data: resolution.error,
@@ -58,9 +59,10 @@ export function tryResumeFromResumeData(
                   : `No run config found for stream: ${id}`,
               );
             }
-            await session.interactions.showInfoMessage(message, {
-              replayWhenAttached: true,
-            });
+            await session.interactions.showInfoMessage(
+              describeResumeStateResolution(resolution),
+              { replayWhenAttached: true },
+            );
           },
           resumeToolUse: (resume, claimedRecovery) =>
             resumeQueuedToolUseFromResumeData(resume.streamId, resume, {

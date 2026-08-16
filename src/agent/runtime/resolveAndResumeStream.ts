@@ -34,7 +34,7 @@ type UnresolvedResumeState = Exclude<
   { readonly status: 'resolved' }
 >;
 
-export interface ResumeFailureDescription {
+interface ResumeFailureDescription {
   readonly kind: 'lease-active' | 'unexpected';
   readonly message: string;
 }
@@ -119,7 +119,6 @@ export interface ResumeStreamPorts {
   reportResumeStateResolution?(
     streamId: StreamTabId,
     resolution: UnresolvedResumeState,
-    message: string,
   ): void | Promise<void>;
   resumeToolUse(
     resume: ToolUseResumeData,
@@ -155,11 +154,7 @@ export async function resolveAndResumeStream(
     const resolution = await ports.resolveResumeState(streamId);
     if (isCancellationRequested()) return false;
     if (resolution.status !== 'resolved') {
-      await ports.reportResumeStateResolution?.(
-        streamId,
-        resolution,
-        describeResumeStateResolution(resolution),
-      );
+      await ports.reportResumeStateResolution?.(streamId, resolution);
       return false;
     }
 
@@ -190,7 +185,11 @@ export async function resolveAndResumeStream(
     return true;
   } catch (error) {
     if (isCancellationRequested()) return false;
-    await ports.reportFailure?.(streamId, error);
+    try {
+      await ports.reportFailure?.(streamId, error);
+    } catch {
+      // Presentation failures must not replace the resume failure they report.
+    }
     return false;
   }
 }

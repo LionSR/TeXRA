@@ -119,7 +119,6 @@ export function trackTerminalResultPresentation(
   session: SessionHandle,
   matches: (event: ResultEvent) => boolean,
 ): {
-  isHandled(): boolean;
   reportUnhandled<T>(report: () => T): T | undefined;
   dispose(): void;
 } {
@@ -130,7 +129,6 @@ export function trackTerminalResultPresentation(
       terminalResultToast(event) !== null || event.error?.kind === 'abort';
   });
   return {
-    isHandled: () => handled,
     reportUnhandled: (report) => (handled ? undefined : report()),
     dispose,
   };
