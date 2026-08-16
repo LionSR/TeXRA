@@ -99,7 +99,8 @@ export const logEntryStyles = css`
     background: var(--wa-color-danger-fill-quiet);
   }
 
-  .workflow-task--skipped {
+  .workflow-task--skipped,
+  .workflow-task--cancelled {
     opacity: var(--opacity-subtle);
   }
 

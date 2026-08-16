@@ -11,7 +11,7 @@ import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
 import { BaseTool } from './base';
 
 /** Convert a tool's Zod input schema into the JSON Schema `parameters` every `ToolDefinition` carries. */
-export function toToolParameters(schema: ZodType): Record<string, unknown> {
+function toToolParameters(schema: ZodType): Record<string, unknown> {
   return toJSONSchema(schema, TOOL_JSON_SCHEMA_OPTIONS) as Record<
     string,
     unknown

@@ -13,7 +13,6 @@ const log = createLog('configUtils');
 interface UpdateConfigOptions {
   target?: ConfigTarget;
   prefix?: boolean;
-  ifUnset?: boolean;
 }
 
 function configProvider() {
@@ -91,15 +90,11 @@ export async function updateConfig<T>(
   value: T,
   options: UpdateConfigOptions = {},
 ): Promise<void> {
-  const { target = 'workspace', prefix = true, ifUnset = false } = options;
+  const { target = 'workspace', prefix = true } = options;
 
   const key = prefix && !path.startsWith('texra.') ? `texra.${path}` : path;
   const provider = configProvider();
   if (!provider) return;
-
-  if (ifUnset && provider.isExplicitlySet(key)) {
-    return; // Setting already exists, don't update
-  }
 
   await provider.update(key, value, target);
 }

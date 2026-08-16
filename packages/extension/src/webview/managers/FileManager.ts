@@ -248,7 +248,6 @@ export class FileManager extends BaseWebviewManager {
       command: MAIN_VIEW_COMMANDS.SET_OPENED_FILES,
       files: filteredFiles,
       fileType,
-      shouldFilter: true,
     });
   }
 
@@ -275,7 +274,6 @@ export class FileManager extends BaseWebviewManager {
         command: MAIN_VIEW_COMMANDS.SET_OPENED_FILES,
         files: [...droppedFiles],
         fileType,
-        shouldFilter: true,
       });
     }
 

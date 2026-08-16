@@ -7,7 +7,6 @@ import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { MESSAGE_TYPES, type Plan, type StreamTabId } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { cleanupAllApprovals } from '@tools/approval';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import { createRecordingHost } from '../progressTestUtils';
 
@@ -117,7 +116,7 @@ describe('session-owned transcripts and follow-up queues', () => {
   });
 });
 
-describe('cleanupAllApprovals scope', () => {
+describe('approval reset scope', () => {
   it("clears only the given session's pending interactions", async () => {
     const a = createTestSession();
     const b = createTestSession();
@@ -141,7 +140,8 @@ describe('cleanupAllApprovals scope', () => {
         goalEnabled: false,
       });
 
-      cleanupAllApprovals(a);
+      a.approvals.clearAll();
+      a.interactions.cancel({ cause: 'All approvals cleared.' });
 
       await expect(planA).resolves.toEqual({ action: 'reject' });
       // Session B's request is untouched and still resolvable.

@@ -24,6 +24,7 @@ import type {
 } from '@shared/schemas';
 import {
   ExecutionIdSchema,
+  HISTORY_RUN_STATUS_LABEL,
   resolveHistoryRunStatus,
   RunOutcomeSchema,
 } from '@shared/schemas';
@@ -67,7 +68,7 @@ export interface CliHistoryEntry {
 
 export interface CliHistoryDetails {
   readonly id: ExecutionId;
-  readonly status: string;
+  readonly status: HistoryRunStatus;
   readonly meta: ExecutionMeta | null;
   readonly config: AgentConfig | null;
   readonly result: ReturnType<typeof unwrapResultMeta> | null;
@@ -448,7 +449,7 @@ export function formatCliHistoryDetailsText(
   const cliOutputFile = config?.cliOutputFile?.trim();
   const lines = [
     `Execution: ${details.id}`,
-    `Status: ${details.status}`,
+    `Status: ${HISTORY_RUN_STATUS_LABEL[details.status]}`,
     `Timestamp: ${meta?.timestamp ?? 'unknown'}`,
     `Agent: ${config?.agent ?? 'unknown'}`,
     `Model: ${model ?? 'unknown'}`,

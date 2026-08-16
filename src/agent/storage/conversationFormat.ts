@@ -30,8 +30,6 @@ import {
 import { extractWebFetchResultFields } from '@agent/types/ServerTools';
 import { assertNever, isObject } from '@utils/core';
 
-const DEFAULT_TRUNCATION_MARKER = '...';
-
 const HIDDEN_PROVIDER_REASONING_MARKER = '[provider reasoning hidden]';
 
 export interface ConversationFormatOptions {
@@ -39,8 +37,6 @@ export interface ConversationFormatOptions {
   readonly textLimit?: number;
   /** Truncate tool_use/tool_result (and Google functionCall/functionResponse) block text at this many chars. Omit for no limit. */
   readonly toolBlockLimit?: number;
-  /** Suffix appended to a truncated value. Defaults to `'...'`. */
-  readonly truncationMarker?: string;
   /** Render a `[tool_use: ...]` marker for tool-call blocks. Defaults to `true`. */
   readonly includeToolUseMarkers?: boolean;
   /** Include the call's input/args in the tool_use marker (`name(json)` vs bare `name`). Defaults to `true`. */
@@ -76,8 +72,7 @@ function truncate(
   options: ConversationFormatOptions,
 ): string {
   if (maxLen === undefined || str.length <= maxLen) return str;
-  const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
-  return `${str.slice(0, Math.max(maxLen - marker.length, 0))}${marker}`;
+  return `${str.slice(0, Math.max(maxLen - 3, 0))}...`;
 }
 
 function hasProviderReasoningBlock(content: unknown): boolean {

@@ -2,6 +2,8 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { defaultSession } from '@agent/runtime/SessionHandle';
+
 import {
   createProgressViewCommandHandlers as createSharedProgressViewCommandHandlers,
   createProgressViewSecondTierHandlers,
@@ -20,7 +22,6 @@ import type {
 import { assertSupported, unsupported } from '@shared/utils/dispatcher';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
-  cleanupAllApprovals,
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
   proposalApprovals,
@@ -400,7 +401,8 @@ describe('createProgressViewCommandHandlers - follow-up', () => {
 
 describe('createProgressViewCommandHandlers - bypass toggles', () => {
   afterEach(() => {
-    cleanupAllApprovals();
+    defaultSession().approvals.clearAll();
+    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
   });
 
   it('sets tool-edit and bash together from the shield preset', async () => {
