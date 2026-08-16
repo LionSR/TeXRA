@@ -111,7 +111,7 @@ function runAccept(
 async function acceptAll(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
-  return { accepted: true, appliedContent: request.proposedContent };
+  return { action: 'apply', appliedContent: request.proposedContent };
 }
 
 /** Collects workspaceFilesWritten payloads until disposed. */
@@ -189,7 +189,7 @@ describe('accept_run_files progress events', () => {
     stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
     testApprovalHandler = async () => ({
-      accepted: false,
+      action: 'reject',
       feedback: 'keep the original normalization',
     });
 
@@ -213,7 +213,7 @@ describe('accept_run_files progress events', () => {
     });
     stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
-    testApprovalHandler = async () => ({ accepted: false, cause: undefined });
+    testApprovalHandler = async () => ({ action: 'reject', cause: undefined });
 
     const result = await runAccept(tool, [
       { path: 'output.tex', original: 'paper.tex' },
@@ -236,8 +236,8 @@ describe('accept_run_files progress events', () => {
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
     testApprovalHandler = async (request) =>
       request.path === 'first.tex'
-        ? { accepted: false, reason: 'Denied by approval policy.' }
-        : { accepted: false, cause: 'Session disposed.' };
+        ? { action: 'reject', reason: 'Denied by approval policy.' }
+        : { action: 'reject', cause: 'Session disposed.' };
 
     const result = await runAccept(tool, [
       { path: 'first.tex', original: 'first.tex' },
@@ -292,7 +292,7 @@ describe('accept_run_files progress events', () => {
     testApprovalHandler = async (request) => {
       approvalOriginal = request.originalContent;
       approvalProposed = request.proposedContent;
-      return { accepted: true, appliedContent: request.proposedContent };
+      return { action: 'apply', appliedContent: request.proposedContent };
     };
 
     const result = await runAccept(tool, [
@@ -320,7 +320,7 @@ describe('accept_run_files progress events', () => {
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('same content');
     testApprovalHandler = async (request) => {
       approvals++;
-      return { accepted: true, appliedContent: request.proposedContent };
+      return { action: 'apply', appliedContent: request.proposedContent };
     };
 
     const result = await runAccept(tool, [
@@ -347,7 +347,7 @@ describe('accept_run_files progress events', () => {
     const write = stubWorkspaceFiles(true, '');
     testApprovalHandler = async (request) => {
       approvals++;
-      return { accepted: true, appliedContent: request.proposedContent };
+      return { action: 'apply', appliedContent: request.proposedContent };
     };
 
     const result = await runAccept(tool, [

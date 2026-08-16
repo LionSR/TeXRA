@@ -43,7 +43,7 @@ async function installPlatform(
   approvalRequests = [];
   testApprovalHandler = async (request) => {
     approvalRequests.push(request);
-    return { accepted: true, appliedContent: request.proposedContent };
+    return { action: 'apply', appliedContent: request.proposedContent };
   };
   await installFakePlatform({ workspacePath: '/workspace', config, files });
   detachHostInteractions();
@@ -110,7 +110,7 @@ describe('Tool edit approval gating', () => {
     const tool = new WriteFileTool();
     const write = stubWorkspaceFile({ exists: true, content: 'old content' });
     testApprovalHandler = async () => ({
-      accepted: true,
+      action: 'apply',
       appliedContent: 'reviewed content',
     });
 
@@ -128,7 +128,7 @@ describe('Tool edit approval gating', () => {
     const write = stubWorkspaceFile({ exists: true, content: 'base' });
 
     testApprovalHandler = async () => ({
-      accepted: false,
+      action: 'reject',
       feedback: 'Rejected by user',
     });
 
@@ -150,7 +150,7 @@ describe('Tool edit approval gating', () => {
     const tool = new WriteFileTool();
     const write = stubWorkspaceFile({ exists: true, content: 'base' });
     testApprovalHandler = async () => ({
-      accepted: false,
+      action: 'reject',
       cause: 'Session disposed.',
     });
 
@@ -169,7 +169,7 @@ describe('Tool edit approval gating', () => {
     const tool = new WriteFileTool();
     const write = stubWorkspaceFile({ exists: true, content: 'base' });
     testApprovalHandler = async () => ({
-      accepted: false,
+      action: 'reject',
       cause: undefined,
     });
 
@@ -271,12 +271,12 @@ describe('Tool edit approval gating', () => {
 
     assert.strictEqual(handlerCalls, 1);
     setToolEditApprovalSessionBypass(TEST_STREAM_ID, true, { silent: true });
-    firstApproval.resolve({ accepted: true, appliedContent: 'first.txt' });
+    firstApproval.resolve({ action: 'apply', appliedContent: 'first.txt' });
 
     const results = await Promise.all([firstRequest, secondRequest]);
     assert.deepStrictEqual(
-      results.map((result) => result.accepted),
-      [true, true],
+      results.map((result) => result.action),
+      ['apply', 'apply'],
     );
     assert.strictEqual(handlerCalls, 1);
   });
