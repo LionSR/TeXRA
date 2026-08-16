@@ -126,7 +126,7 @@ import {
 } from '../src/chat/tui/state/approvalQueue';
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
 import { attachSessionSignalsAdapter } from '../src/chat/tui/state/sessionSignalsAdapter';
-import { invalidateStaticTranscriptForRepaint } from '../src/chat/tui/state/staticTranscriptRepaint';
+import { notifyStaticTranscriptErased } from '../src/chat/tui/state/staticTranscriptRepaint';
 import { createTuiHostInteractions } from '../src/chat/tui/state/subscribeApprovals';
 import { subscribeStreamStatus } from '../src/chat/tui/state/subscribeStreamStatus';
 import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
@@ -2312,19 +2312,13 @@ function resetHarnessForClear(): void {
       // The harness reset is best-effort; visible cliState is reset below.
     });
   }
-  const historyIsEmpty = [...streams.get().values()].every(
-    (slice) => slice.entries.length === 0,
-  );
   resetCliState(meta);
   activeStreamIdSignal.set(STREAM_ID);
   // Mirror the real /clear handler (runChatTui.tsx): erase the terminal
-  // outside Ink, then invalidate the transcript only when the state rebuild
-  // is a no-op (empty history), so the remount repaint restores the session
-  // header without transiently rewriting cleared rows.
+  // outside Ink, then notify the erase epoch so the transcript rebuilds
+  // after the reset state commits and repaints the session header.
   clearTerminalScrollback();
-  if (historyIsEmpty) {
-    invalidateStaticTranscriptForRepaint();
-  }
+  notifyStaticTranscriptErased();
 }
 
 function handleHarnessSlashCommand(line: string): boolean {

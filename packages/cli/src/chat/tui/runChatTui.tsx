@@ -92,7 +92,7 @@ import {
   streams as streamsSignal,
 } from './state/cliState';
 import { subscribeStreamArtifacts } from './state/subscribeStreamArtifacts';
-import { invalidateStaticTranscriptForRepaint } from './state/staticTranscriptRepaint';
+import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
@@ -461,24 +461,15 @@ export async function runChat(
         // is already torn down — nothing actionable to surface here.
       });
     }
-    // Whether any finalized transcript rows exist — checked before the reset
-    // clears the stream view.
-    const historyIsEmpty = [...streamsSignal.get().values()].every(
-      (slice) => slice.entries.length === 0,
-    );
     resetCliState(meta);
     clearTerminalScrollback();
-    // The erase above happened outside Ink, so the already-printed static
-    // header is gone from the terminal. When finalized rows existed, the
-    // hard-reset rebuild differs from the current state and bumps the
-    // repaint epoch on its own — remounting only after the rebuilt items
-    // commit. With an empty history the rebuild is a no-op that skips the
-    // bump, so only then invalidate explicitly; an unconditional
-    // invalidation would remount with the stale items and transiently
-    // rewrite the rows that were just cleared.
-    if (historyIsEmpty) {
-      invalidateStaticTranscriptForRepaint();
-    }
+    // The erase above happened outside Ink, so everything the static
+    // transcript printed is gone from the terminal — even when the state
+    // rebuild is a no-op (empty history) that would skip the repaint-epoch
+    // bump. The erase epoch forces a rebuild after the reset state commits,
+    // so the remounted `<Static>` repaints the header without ever carrying
+    // the cleared rows.
+    notifyStaticTranscriptErased();
   };
 
   // Pre-register the slash commands the input palette uses.
