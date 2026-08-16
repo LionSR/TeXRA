@@ -185,29 +185,28 @@ codex/claude process kill paths uniform, crash-swept process rows uniform.
 **The ad-hoc layer is stop/quit _policy_** — which events consult the
 detach SSOT and what quitting means for children:
 
-| Event                      | extension                         | desktop             | CLI                                                                     |
-| -------------------------- | --------------------------------- | ------------------- | ----------------------------------------------------------------------- |
-| user stop (active)         | detach toggle                     | detach toggle       | detach toggle                                                           |
-| stop specific stream       | toggle                            | toggle              | **hardcoded detach** (`stopStream`) — same TUI, two policies by surface |
-| headless shutdown          | —                                 | —                   | **hardcoded cascade-kill** (optionless `kill`)                          |
-| host quit, native children | abandon → repair                  | abandon → repair    | headless: kill+await; TUI: interrupt on ^C, abandon on ^C^C             |
-| host quit, foreground bash | orphans (deliberate resume-first) | orphans             | **killed** on normal quit gestures (verifier-caught asymmetry)          |
-| toggle backing store       | Memento (worktree-shared)         | shared `state.json` | same `state.json`; **no CLI surface to set either toggle**              |
-| detached-child approvals   | always-attached UI                | always-attached UI  | explicit `interactionOwnership` (sole writer)                           |
+| Event                      | extension                         | desktop             | CLI                                                                                                  |
+| -------------------------- | --------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------- |
+| user stop (active)         | detach toggle                     | detach toggle       | detach toggle                                                                                        |
+| stop specific stream       | toggle                            | toggle              | **hardcoded detach** (`stopStream`) — deliberate: focused Escape always detaches descendants (#9009) |
+| headless shutdown          | —                                 | —                   | **explicit cascade-kill** (`kill` with `{detachActiveChildren: false}`)                              |
+| host quit, native children | abandon → repair                  | abandon → repair    | headless: kill+await; TUI: interrupt on ^C, abandon on ^C^C                                          |
+| host quit, foreground bash | orphans (deliberate resume-first) | orphans             | **killed** on normal quit gestures (verifier-caught asymmetry)                                       |
+| toggle backing store       | Memento (worktree-shared)         | shared `state.json` | same `state.json`; **no CLI surface to set either toggle**                                           |
+| detached-child approvals   | always-attached UI                | always-attached UI  | explicit `interactionOwnership` (sole writer)                                                        |
 
 **The fix — no new concept.** The SSOT already exists
 (`detachSubagentsOnStop()`); a policy-event table beside it would be an
 invented concept wearing a consolidation costume (the reward-hack the
 maintainer flagged: "cleaner" by adding vocabulary). The actual fix is
-three call-site repairs and one sentence of documentation:
+two headless call-site repairs and one sentence of documentation:
 
-1. `stopStream` calls the SSOT like its siblings (the audit doc's V8).
-2. The two optionless headless `kill` sites pass an explicit
+1. The two optionless headless `kill` sites pass an explicit
    `{detachActiveChildren: false}` with a comment stating headless
    shutdown deliberately cascades — the behavior is probably correct;
    what's wrong is that it's an _accident of a default_ instead of a
    written decision.
-3. The quit asymmetry (GUI abandon-to-repair vs CLI kill) gets one
+2. The quit asymmetry (GUI abandon-to-repair vs CLI kill) gets one
    paragraph at `detachSubagentsOnStop`'s declaration — the existing
    documentation home — not a new contract object.
 
@@ -265,8 +264,8 @@ split avoids), `signal-exit` (Ink already embeds it; keep one exit matrix).
    keyed; recording view/window-scoped; delete-or-wire `clearInlineAgents`;
    collapse the duplicated stream→execution resolver).
 9. **The §4 stop/quit call-site repairs (no table — §4's rework is the
-   spec: `stopStream` → SSOT, explicit documented options at the two
-   shutdown sites, one doc paragraph at the SSOT declaration) + LaTeX
+   spec: explicit documented options at the two shutdown sites, one doc
+   paragraph at the SSOT declaration) + LaTeX
    signal threading + `using` adoption in tests/new scopes + Lean
    single-owner registration.**
 
