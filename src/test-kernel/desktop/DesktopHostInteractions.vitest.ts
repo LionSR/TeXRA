@@ -23,6 +23,7 @@ import type {
 } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import type { ToolEditApprovalResult } from '@tools/approval/toolEditApproval';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.ts';
 
@@ -37,7 +38,7 @@ interface DesktopHostInteractions {
     proposedContent: string;
     sourceTool: string;
     streamId?: StreamTabId;
-  }): Promise<{ accepted: boolean }>;
+  }): Promise<ToolEditApprovalResult>;
   requestBashApproval(request: {
     command: string;
     streamId?: StreamTabId;
@@ -214,7 +215,10 @@ async function createInteractions(handlers = createHandlers()) {
   const toolEditApprovals = {
     approvePendingForStream: vi.fn(async (): Promise<void> => {}),
     cancel: vi.fn(),
-    requestApproval: vi.fn(async () => ({ accepted: true })),
+    requestApproval: vi.fn(async () => ({
+      action: 'apply' as const,
+      appliedContent: 'new',
+    })),
   };
   const sessionEvents: SessionEvent[] = [];
   session.events.subscribe((event) => sessionEvents.push(event), {
@@ -317,7 +321,7 @@ describe('createDesktopHostInteractions', () => {
 
     await expect(
       interactions.requestToolEditApproval(request),
-    ).resolves.toEqual({ accepted: true });
+    ).resolves.toEqual({ action: 'apply', appliedContent: 'new' });
     // The controller owns its window session (options.session), so the call
     // carries only the request and the caller's interaction options.
     expect(toolEditApprovals.requestApproval).toHaveBeenCalledWith(

@@ -950,7 +950,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('delegates tool edit approval to the session approval controller', async () => {
-    const approvalResult = { accepted: true };
+    const approvalResult = { action: 'apply', appliedContent: 'B' } as const;
     const session = createTestSession();
     const { interactions, toolEditApprovals } = createInteractions({ session });
     toolEditApprovals.requestApproval.mockResolvedValue(approvalResult);

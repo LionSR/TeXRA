@@ -221,7 +221,7 @@ Parameters map directly to subagent-result delivery attributes:
         sourceTool: 'accept_run_files',
       });
 
-      if (!approval.accepted) {
+      if (approval.action !== 'apply') {
         rejected++;
         firstRejectedPath ??= entry.original;
         if ('cause' in approval) {
