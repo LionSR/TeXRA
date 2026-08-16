@@ -33,7 +33,6 @@ import {
   getDisabledToolNames,
   getUnavailableToolNamesCached,
 } from '@tools/toolAvailability';
-import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import {
   availableModelNamesFromOptions,
   visibleDelegationAgentsBlock,
@@ -114,9 +113,6 @@ export async function resolveAgentTools({
   const disabled = getDisabledToolNames();
   const unavailable = getUnavailableToolNamesCached();
   const runtimeUnavailable = new Set(runtimeUnavailableTools ?? []);
-  const diagnosticsReadUnavailable = runtimeUnavailable.has(
-    DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
-  );
 
   const toolConfigs = Array.isArray(tools) ? tools : [];
 

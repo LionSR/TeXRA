@@ -21,8 +21,7 @@ import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
  *
  * The diagnostics tool requires a session diagnostics provider for
  * `list`/`count`. The CLI has no diagnostics integration, so the whole tool is
- * hidden rather than returning a successful empty result. Hosts with read
- * support may instead hide only the `diagnostics.add` command.
+ * hidden rather than returning a successful empty result.
  *
  * Subagents inherit these exclusions through `runtimeUnavailableTools` on the
  * run context.
