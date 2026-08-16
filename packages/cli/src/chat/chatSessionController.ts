@@ -80,6 +80,7 @@ import {
   moveLocalTranscriptToStream,
 } from './tui/state/transcript';
 import { syncStreamLog } from './tui/state/subscribeStreamLog';
+import { markArtifactStreamHydrated } from './tui/state/subscribeStreamArtifacts';
 
 type InterruptedFollowUp = Pick<
   FollowUpQueueInput,
@@ -564,6 +565,10 @@ export function createChatSessionController(
       });
       syncStreamLog(resolution.streamId);
       focusStream(resolution.streamId);
+      // The direct `snapshotStore.load` above bypasses the focus-hydration
+      // owner; mark the stream hydrated so a focused-stream no-op (focus is
+      // already this stream) still invalidates the projection memo.
+      markArtifactStreamHydrated(resolution.streamId);
 
       const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
         setupRunHost(sessionContext);
@@ -700,6 +705,9 @@ export function createChatSessionController(
             : slice,
         );
         focusStream(streamId);
+        // Direct `snapshotStore.preload` above: mark hydrated so the memo is
+        // invalidated even when this stream was already focused.
+        markArtifactStreamHydrated(streamId);
         session.runExitCode = CliExitCode.Success;
 
         let resumedOutcome: TurnOutcome = RUN_OUTCOME.COMPLETED;

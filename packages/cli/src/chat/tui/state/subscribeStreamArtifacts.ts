@@ -62,6 +62,15 @@ export function bumpStreamArtifactRevision(): void {
   streamArtifactRevision.set(streamArtifactRevision.get() + 1);
 }
 
+/** Mark a stream's durable artifacts hydrated and invalidate the projection
+ *  memo. The focus-hydration owner calls this on success; direct store
+ *  load/preload paths (resume) call it after their own seed so a focused
+ *  stream loaded outside the focus subscription still repaints. */
+export function markArtifactStreamHydrated(streamId: StreamTabId): void {
+  hydratedArtifactStreams.add(streamId);
+  bumpStreamArtifactRevision();
+}
+
 /** Read the canonical artifact projection for one stream from the live session.
  *  Returns `undefined` when no default session exists yet (harness/tests) or
  *  when the stream has not completed a preload this session, letting callers
@@ -135,8 +144,7 @@ export async function hydrateStreamArtifacts(
       ? sumUsageStats(runUsage)
       : slice.cumulativeUsage,
   }));
-  hydratedArtifactStreams.add(streamId);
-  bumpStreamArtifactRevision();
+  markArtifactStreamHydrated(streamId);
   return true;
 }
 
