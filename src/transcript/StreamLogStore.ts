@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { KVStore } from '@common/storage/KVStore';
 import { KVStoreCache } from '@common/storage/KVStoreCache';
-import * as log from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import {
   AgentCategorySchema,
   END_GROUP_STATUS,
@@ -44,6 +44,7 @@ export const STREAM_LOG_SUMMARIES_DIR =
   WORKSPACE_STORAGE_LAYOUT.streamLogSummaries;
 const STREAM_LOG_LOAD_CONCURRENCY = 8;
 const LOG_TAG = 'StreamLogStore';
+const log = createLog(LOG_TAG);
 
 type StreamLogListener = (streamId: StreamTabId, delta: StreamLogDelta) => void;
 
@@ -456,7 +457,7 @@ export class StreamLogStore {
       return await open();
     } catch (error) {
       const reason = `Persistent transcript opening failed: ${toErrorMessage(error)}`;
-      log.warn(LOG_TAG, reason);
+      log.warn(reason);
       return StreamLogStore.ephemeral(reason);
     }
   }
@@ -865,7 +866,6 @@ export class StreamLogStore {
         // retry succeeds and reunites the in-memory view with persisted data.
         this.ensureStreamState(streamId).loadFailed = true;
         log.warn(
-          LOG_TAG,
           `Failed to reload stream ${streamId} from disk: ` +
             toErrorMessage(err),
         );
@@ -949,11 +949,11 @@ export class StreamLogStore {
     first: number | undefined;
     last: number | undefined;
   } {
-    const log = this.streams.get(streamId)?.log;
+    const residentLog = this.streams.get(streamId)?.log;
     const summary = this.summaries.get(streamId);
     return {
-      first: log?.firstTimestamp ?? summary?.firstTimestamp,
-      last: log?.lastTimestamp ?? summary?.lastTimestamp,
+      first: residentLog?.firstTimestamp ?? summary?.firstTimestamp,
+      last: residentLog?.lastTimestamp ?? summary?.lastTimestamp,
     };
   }
 
@@ -965,7 +965,7 @@ export class StreamLogStore {
     try {
       await this.executeWrite();
       if (this.mode.kind !== 'ephemeral') {
-        log.info(LOG_TAG, `Deleting stream: ${streamId}`);
+        log.info(`Deleting stream: ${streamId}`);
         await this.kv().delete(streamId);
         await this.deleteSummaryCache(streamId);
       }
@@ -999,7 +999,7 @@ export class StreamLogStore {
       this.forgetAllStreamState();
       if (this.mode.kind === 'ephemeral') return;
 
-      log.info(LOG_TAG, `Clearing all ${count} streams`);
+      log.info(`Clearing all ${count} streams`);
       await this.kv().deleteDir();
       await this.clearSummaryCache();
     } finally {
@@ -1329,10 +1329,7 @@ export class StreamLogStore {
     this.clearing = false;
     this.stateRevision += 1;
 
-    log.info(
-      LOG_TAG,
-      `Loaded ${this.summaries.size} stream summaries (file-backed)`,
-    );
+    log.info(`Loaded ${this.summaries.size} stream summaries (file-backed)`);
   }
 
   private async loadStreamSummary(
@@ -1386,7 +1383,6 @@ export class StreamLogStore {
       const condition =
         error instanceof SyntaxError ? 'corrupt' : 'unavailable';
       log.warn(
-        LOG_TAG,
         `Ignoring ${condition} summary cache for ${streamId}; rebuilding from the stream log: ${toErrorMessage(error)}`,
       );
       return undefined;
@@ -1416,7 +1412,6 @@ export class StreamLogStore {
       // Derived tier (#9434): discard the stale-shaped cache loudly and
       // rebuild from the authoritative stream log — never migrate in place.
       log.warn(
-        LOG_TAG,
         `Discarding a stale-shaped summary cache entry; rebuilding from the stream log: ${result.error.issues
           .map(
             (issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`,
@@ -1556,7 +1551,7 @@ export class StreamLogStore {
   private disableSummaryCacheMaintenance(message: string): void {
     if (!this.summaryCacheMaintenanceEnabled) return;
     this.summaryCacheMaintenanceEnabled = false;
-    log.warn(LOG_TAG, message);
+    log.warn(message);
   }
 
   private markDirty(streamId: StreamTabId): void {
@@ -1673,7 +1668,6 @@ export class StreamLogStore {
     if (parsed.preservedRawEntries.length > 0) {
       const count = parsed.preservedRawEntries.length;
       log.warn(
-        LOG_TAG,
         `Stream ${streamId}: ${formatResultCount(count, 'persisted transcript entry')} did not parse; ` +
           `preserving raw for round-trip on save.`,
       );
@@ -1712,7 +1706,7 @@ export class StreamLogStore {
 
     if (toWrite.length === 0) return;
 
-    log.debug(LOG_TAG, `Writing ${toWrite.length} dirty stream(s)`);
+    log.debug(`Writing ${toWrite.length} dirty stream(s)`);
     const writeGeneration = this.writeGeneration;
 
     // Write streams one at a time. Each KV write serializes the stream's full

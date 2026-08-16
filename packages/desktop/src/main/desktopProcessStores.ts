@@ -1,13 +1,13 @@
-import { createChannelTrace } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime';
 import { createSessionStores } from '@controllers/session/sessionStores';
+import { createLog } from '@logger/logUtils';
 import { toLogData } from './desktopLogUtils.js';
 
 /**
  * Load the process-owned desktop stores and attach their lifecycle hooks.
  */
 export async function initializeDesktopProcessStores(session: SessionHandle) {
-  const logger = createChannelTrace('DesktopProcessStores');
+  const logger = createLog('DesktopProcessStores');
   const stores = createSessionStores(session);
   await stores.sweepLeftoverStreams();
 

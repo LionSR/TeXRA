@@ -40,9 +40,18 @@ vi.mock('@agent/core/definition/AgentConfig', () => ({
   AgentConfigSchema: { parse: (value: unknown) => value },
 }));
 
-vi.mock('@agent/trace', () => ({
-  createChannelTrace: () => ({ warn: mocks.warn }),
-}));
+vi.mock('@logger/logUtils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@logger/logUtils')>();
+  return {
+    ...actual,
+    createLog: () => ({
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: mocks.warn,
+      error: vi.fn(),
+    }),
+  };
+});
 
 vi.mock('@agent/index', () => ({
   loadAgents: mocks.loadAgents,

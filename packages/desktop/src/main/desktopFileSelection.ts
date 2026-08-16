@@ -1,6 +1,5 @@
 import { isAbsolute, resolve } from 'node:path';
 
-import { createChannelTrace } from '@agent/trace';
 import {
   getEditedFileListConfig,
   getFileListConfig,
@@ -10,6 +9,7 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -23,6 +23,8 @@ import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
 } from './desktopIpcTypes.js';
+
+const logger = createLog('DesktopFileSelection');
 
 type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
   MainViewInboundMessage,
@@ -192,9 +194,7 @@ export function createDesktopFileSelection(
       // The shared webview posts this for 'output' too, which the desktop has
       // no picker for. Say so rather than dropping it: handleMessage already
       // reported the message as handled.
-      createChannelTrace('DesktopFileSelection').warn(
-        `Unsupported multiple file selection: ${message.fileType}`,
-      );
+      logger.warn(`Unsupported multiple file selection: ${message.fileType}`);
       return;
     }
     const workspacePath = getWorkspacePath();
