@@ -26,6 +26,7 @@ import { ensureStreamState, type StreamLogs } from '../store';
 function toLogMessage(entry: StreamLogEntry): LogMessageData {
   return {
     id: entry.id,
+    seqNo: entry.seqNo,
     text: entry.text ?? '',
     level: entry.level,
     timestamp: entry.timestamp,
@@ -56,6 +57,7 @@ function syncCompactionProjectionChanges(
     const id = `compaction:${block.operationId}`;
     const nextLog: LogMessageData = {
       id,
+      seqNo: block.startPosition,
       text: '',
       level: 'info',
       timestamp: block.startedAt,
