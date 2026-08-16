@@ -51,7 +51,7 @@ export interface ToolEditApprovalRequest {
   readonly originalContent: string;
   readonly proposedContent: string;
   readonly sourceTool: string;
-  readonly streamId?: string | null;
+  readonly streamId?: StreamTabId | null;
 }
 
 /**
