@@ -10,6 +10,7 @@ import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
+import { ResumeAdmissionCancelledError } from './executeAgent';
 import type { SessionHandle } from './SessionHandle';
 import type { StreamStatusMachine } from './StreamStatusService';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
@@ -211,6 +212,10 @@ export async function resolveAndResumeStream(
     return true;
   } catch (error) {
     if (isCancellationRequested()) return false;
+    // A workflow resume that loses the admission race is an expected
+    // cancellation, not a resume failure. Tool-use already classifies this
+    // same error as a silent `false`; the workflow branch must match it.
+    if (error instanceof ResumeAdmissionCancelledError) return false;
     try {
       await ports.reportFailure?.(streamId, error);
     } catch {
