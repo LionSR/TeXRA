@@ -1019,13 +1019,15 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('\\*');
   });
 
-  // Regression for the Cursor Bugbot finding: an escaped `\$` (a literal dollar
-  // in LaTeX) must not be treated as a closing `$` delimiter, or it mis-splits
-  // the span and cascades into later `$`. With both delimiters guarded, the
-  // fragment isn't protected — markdown handles `\$` → `$` instead.
-  it('does not treat an escaped \\$ as a closing math delimiter', () => {
+  // Regression for the Cursor Bugbot finding: an escaped `\$` inside a span is
+  // part of the texmath body, not a closing delimiter. texmath's `dollars`
+  // rule spans `$a = \$5$` as one math block (its body permits interior `$`),
+  // so the CLI shield must keep the whole span verbatim instead of letting
+  // markdown turn `\$` into `$` and mis-splitting later dollars. The fixture
+  // uses a doubled backslash so the runtime string contains a real `\$`.
+  it('keeps an escaped \\$ inside an inline math span verbatim', () => {
     const plain = renderPlain('A price $a = \\$5$ here');
-    expect(plain).not.toContain('$a = \\$');
+    expect(plain).toContain('$a = \\$5$');
     expect(plain).toContain('here');
   });
 });

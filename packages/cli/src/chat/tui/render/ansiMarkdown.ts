@@ -507,8 +507,9 @@ function processorFor(
     formatLatexReference: (refType, label) =>
       style.dim(style.underline(`\\${refType}{${label}}`)),
     // The CLI shows LaTeX source verbatim (math rendering is disabled), so
-    // shield `$…$` / `$$…$$` / `\(…\)` / `\[…\]` spans from markdown-it, which
-    // would otherwise strip `\(`→`(`, `\;`→`;` and eat `_{…}` subscripts.
+    // shield `$…$` / `$$…$$` / `\(…\)` / `\[…\]` spans and
+    // `\begin{env}…\end{env}` environments from markdown-it, which would
+    // otherwise strip `\(`→`(`, `\;`→`;` and eat `_{…}` subscripts.
     protectLatexMath: true,
   });
   processorCache.set(key, processor);
