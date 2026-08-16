@@ -202,15 +202,16 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   }
 
   private ensureHooks(session: SessionHandle): void {
+    if (!this.sourceHooksRegistered) {
+      // The polling source can detach subscriptions unilaterally (PR closed,
+      // auth failure, 24 h unreachable). Listen to the source directly; the
+      // progress event is for UI refresh, not for internal bookkeeping.
+      this.opts.source.onKeysChanged((keys) => {
+        this.pruneMissingSourceKeys(keys);
+      });
+      this.sourceHooksRegistered = true;
+    }
     this.ensureReleaseHook(session);
-    if (this.sourceHooksRegistered) return;
-    // The polling source can detach subscriptions unilaterally (PR closed,
-    // auth failure, 24 h unreachable). Listen to the source directly; the
-    // progress event is for UI refresh, not for internal bookkeeping.
-    this.opts.source.onKeysChanged((keys) => {
-      this.pruneMissingSourceKeys(keys);
-    });
-    this.sourceHooksRegistered = true;
   }
 
   private ensureReleaseHook(session: SessionHandle): void {
@@ -248,9 +249,9 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     const removedOwners = new Set<SessionHandle>();
     let removed = false;
     for (const [streamId, bound] of [...this.perStream]) {
-      for (const key of [...bound.keys()]) {
+      for (const [key, binding] of [...bound]) {
         if (!active.has(key)) {
-          removedOwners.add(bound.get(key)!.owner);
+          removedOwners.add(binding.owner);
           bound.delete(key);
           removed = true;
         }
