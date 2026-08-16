@@ -49,6 +49,18 @@ function fileWithBaseCommand<T extends string>(command: T) {
   });
 }
 
+/** Shared reject/skip arm: base fields + literal action + optional feedback. */
+function actionWithFeedback<Base extends z.ZodRawShape, Action extends string>(
+  base: Base,
+  action: Action,
+) {
+  return z.strictObject({
+    ...base,
+    action: z.literal(action),
+    feedback: z.string().optional(),
+  });
+}
+
 const UseOwnApiKeyMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY),
   requestId: z.string(),
@@ -129,11 +141,7 @@ const ToolEditApprovalActionMessageSchema = z.discriminatedUnion('action', [
     ...ToolEditActionMessageBase,
     action: z.enum(['approve', 'openDiff', 'showLatexdiff', 'previewProposed']),
   }),
-  z.strictObject({
-    ...ToolEditActionMessageBase,
-    action: z.literal('reject'),
-    feedback: z.string().optional(),
-  }),
+  actionWithFeedback(ToolEditActionMessageBase, 'reject'),
 ]);
 
 const BashActionMessageBase = {
@@ -145,11 +153,7 @@ const BashApprovalActionMessageSchema = z.discriminatedUnion('action', [
     ...BashActionMessageBase,
     action: z.literal('approve'),
   }),
-  z.strictObject({
-    ...BashActionMessageBase,
-    action: z.literal('reject'),
-    feedback: z.string().optional(),
-  }),
+  actionWithFeedback(BashActionMessageBase, 'reject'),
 ]);
 
 const ProposalActionMessageBase = {
@@ -163,11 +167,7 @@ const AgentProposalActionMessageSchema = z.discriminatedUnion('action', [
     model: z.string().optional(),
     agent: z.string().optional(),
   }),
-  z.strictObject({
-    ...ProposalActionMessageBase,
-    action: z.literal('reject'),
-    feedback: z.string().optional(),
-  }),
+  actionWithFeedback(ProposalActionMessageBase, 'reject'),
   z.strictObject({
     ...ProposalActionMessageBase,
     action: z.literal('setup'),
@@ -186,11 +186,7 @@ const PlanApprovalActionMessageSchema = z.discriminatedUnion('action', [
     ...PlanActionMessageBase,
     action: z.enum(['approve', 'approve_and_goal']),
   }),
-  z.strictObject({
-    ...PlanActionMessageBase,
-    action: z.literal('reject'),
-    feedback: z.string().optional(),
-  }),
+  actionWithFeedback(PlanActionMessageBase, 'reject'),
 ]);
 
 const ExternalInquiryActionMessageSchema = z.discriminatedUnion('action', [
@@ -219,16 +215,8 @@ const UserQuestionActionMessageSchema = z.discriminatedUnion('action', [
     action: z.literal('submit'),
     answers: UserQuestionAnswersSchema,
   }),
-  z.strictObject({
-    ...UserQuestionActionMessageBase,
-    action: z.literal('reject'),
-    feedback: z.string().optional(),
-  }),
-  z.strictObject({
-    ...UserQuestionActionMessageBase,
-    action: z.literal('skip'),
-    feedback: z.string().optional(),
-  }),
+  actionWithFeedback(UserQuestionActionMessageBase, 'reject'),
+  actionWithFeedback(UserQuestionActionMessageBase, 'skip'),
 ]);
 
 const RestoreProposalConfigMessageSchema = z.object({
