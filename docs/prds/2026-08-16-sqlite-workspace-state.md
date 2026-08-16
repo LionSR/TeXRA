@@ -306,9 +306,13 @@ and `INDEX streams(current_execution_id)` (the `SET NULL` probe on
 execution deletion). Ownership integrity: the pointer FK alone proves the
 target execution _exists_, not that it _belongs to this stream_ — a
 misapplied row could point stream A at stream B's execution. Enforce the
-pair with a composite FK — `UNIQUE(executions.id, stream_id)` plus
-`FOREIGN KEY (current_execution_id, id) REFERENCES
-executions(id, stream_id)` — or an equivalent trigger.
+pair with a **trigger** validating `executions.stream_id = streams.id`
+whenever the pointer is set. A composite FK
+(`FOREIGN KEY (current_execution_id, id) REFERENCES
+executions(id, stream_id)`) is **invalid** here: SQLite applies the
+`ON DELETE` action to every child column, so `SET NULL` on execution
+deletion would try to null `streams.id` itself — violating the primary key
+or destroying the stream's identity. Trigger, not composite FK.
 
 Derived-flag atomicity: the `stream_summaries` recovery flags are the
 recovery sweep's _only_ predicate, so they commit **in the same transaction
@@ -432,15 +436,24 @@ rows; export compat is not storage compat.
   machinery win in `StreamSnapshotStore` (seed chains, provenance, overlays,
   write mutexes), plus `GoalStore`'s durable goal records into `goals` rows
   (§2 narrowing). **Goal sources are per-host and one of them is not a
-  file this importer can see:** CLI and desktop persist goals in the bucket
-  `state.json`, but the extension persists them in VS Code's
-  `context.workspaceState` Memento (`workspaceSM` via
-  `stateManager.ts` — the `state.vscdb` VS Code owns). Goal import
-  therefore runs **per host, at that host's first migrated open**, each
-  host extracting from its own legacy source and upserting by stream with
-  one deterministic merge rule — newest `updatedAt` wins, ties keep the
-  existing row — then clearing its legacy keys. Legacy goal reads retire
-  only after the compat window, not at Stage 3.
+  file this importer can see:** the CLI persists goals in the bucket
+  `state.json`, and the extension persists them in VS Code's
+  `context.workspaceState` Memento (`workspaceSM` via `stateManager.ts` —
+  the `state.vscdb` VS Code owns). Goal import therefore runs **per
+  released host with legacy state** — CLI and extension each extract from
+  their own legacy source at first migrated open, upserting by stream with
+  one deterministic merge rule: newest `updatedAt` wins, ties keep the
+  existing row. **Desktop gets no legacy extraction path** — it has no
+  released state to preserve, and repository policy is that unreleased
+  hosts adopt the current format directly (AGENTS.md compatibility rule).
+  **Orphan goals are quarantined, not imported:** a legacy goal naming a
+  stream absent from the Stage-2 registry (a failed best-effort cleanup, or
+  the unregistered-goal path) has no FK parent — the importer logs it at
+  `warn` and records it under a quarantine key in `execution_records`-style
+  storage rather than failing the migration on an FK violation. The
+  importer **never mutates the legacy source during the compat window**
+  (see §6's ledger scheme); one final absorb clears it when the window
+  closes. Legacy goal reads retire then, not at Stage 3.
 - **Stage 4 — transcript entries → rows.** `StreamLogStore` engine swap;
   clobber machinery deletes; partial hydration lands. Gate: a benchmark PR
   proving the 300 ms batched-transaction path sustains streaming append load
@@ -535,19 +548,31 @@ seq)` would drop or overwrite one side when both hosts wrote the same
   stream. The importer instead inserts entries whose `entry_id` is not yet
   present, assigning fresh seqs after the row-side head — the same union
   semantics as today's merge-disk-under-live-appends — and emits the
-  existing `reset: true` delta so fold consumers resync; an `entry_id`
-  already in rows keeps its row version. Concurrent mixed-version access
-  during the window remains documented as unsupported — writes absorbed
-  late, not dropped; old-host reads may be stale until it upgrades.
-  **Goals need their own reconciliation lane:** the dir-based backstop
-  cannot see them, because goal keys live inside the permanent `state.json`
-  (and the extension's Memento), which is never renamed — a legacy host
-  mutating a goal after Stage 3 recreates no detectable legacy directory.
-  During the compat window, every migrated open therefore re-checks the
-  legacy goal keys in its host's legacy source and reconciles by the same
-  deterministic rule (Stage 3: newest `updatedAt` wins), clearing absorbed
-  keys — a late legacy goal write is absorbed on the next open instead of
-  being shadowed forever by a stale row.
+  existing `reset: true` delta so fold consumers resync. **A matching
+  `entry_id` is reconciled, not assumed unchanged:** a legacy host may have
+  appended text to or settled an entry after the importer copied it, so
+  per-id the rule is settlement-monotonic — a settled copy supersedes an
+  unsettled row, and between two unsettled copies the one with more
+  accumulated text wins; only when the row side has a live writer for that
+  stream does the writer's version win outright (single-writer authority is
+  the existing invariant). Concurrent mixed-version access during the
+  window remains documented as unsupported — this reconciliation makes late
+  writes best-effort-absorbed rather than silently dropped; old-host reads
+  may be stale until it upgrades.
+  **Goals need their own reconciliation lane, and it must see deletions:**
+  the dir-based backstop cannot cover goals, because goal keys live inside
+  the permanent `state.json` (and the extension's Memento), which is never
+  renamed — a legacy host mutating **or forgetting** a goal after Stage 3
+  recreates no detectable legacy directory, and an absent key carries no
+  timestamp to compare. The scheme is therefore a **read-only ledger diff**:
+  the importer never mutates the legacy source during the window; instead
+  it keeps an absorbed-keys ledger in rows (key + value hash + `updatedAt`
+  at absorption) and, on every migrated open, diffs the legacy source
+  against the ledger — key present and newer → update the row; key present
+  in the ledger but **absent from the source → the legacy host deleted it →
+  delete the row**; key absent from both → nothing. Leaving the legacy
+  source untouched is what makes absence unambiguous. One final absorb
+  clears source and ledger together when the compat window closes.
 - **Scope creep toward SQL-as-UI-state**: §8 non-goals; the architecture
   test only allowlists the two stores' modules for DB access.
 
