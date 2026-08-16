@@ -16,7 +16,7 @@
 // Local imports
 import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
-import { tryGlobalState } from '@platform/platform';
+import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
@@ -77,8 +77,7 @@ export function getDisabledToolNames(): ReadonlySet<string> {
 export async function seedDisabledToolDefaults(
   versionStateKey: string,
 ): Promise<void> {
-  const state = tryGlobalState();
-  if (!state) return;
+  const state = platform().globalState;
 
   const lastKnownVersion = state.get<string>(versionStateKey);
   const disabledTools = state.get<string[]>(GlobalStateKey.DISABLED_TOOLS);

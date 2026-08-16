@@ -30,7 +30,7 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { createLog } from '@logger/logUtils';
 import type { DisposableStore } from '@platform/disposable';
-import { tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -190,7 +190,7 @@ export function createSessionExitController(
   // is idempotent-safe to call again, so the normal return path can still
   // rely on bin/texra.ts's own `finally`.
   const runPlatformShutdown = (): Promise<void> =>
-    runCliPlatformShutdownSequence(tryPlatform()?.lifecycle);
+    runCliPlatformShutdownSequence(platform().lifecycle);
   const persistBeforePlatformShutdown = async (
     resumableIdle: boolean,
   ): Promise<void> => {

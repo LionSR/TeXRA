@@ -24,7 +24,7 @@ import {
   hasErrorPresentationPending,
   hasErrorPresentedMarker,
 } from '@common/errors/sdkError/errorMetadata';
-import { tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
 import { aggregateError, generateExecutionId } from '@utils/core';
@@ -397,7 +397,7 @@ export async function executeCliRequest(
     })();
     return shutdownStatusFinalized;
   };
-  const disposeShutdownStatus = tryPlatform()?.lifecycle.onShutdown(
+  const disposeShutdownStatus = platform().lifecycle.onShutdown(
     SHUTDOWN_PHASE.BEFORE,
     async () => {
       shutdownRequested = true;
@@ -583,7 +583,7 @@ export async function executeCliRequest(
     }
   }
 
-  disposeShutdownStatus?.dispose();
+  disposeShutdownStatus.dispose();
   let finalizationCompleted = false;
   const cleanupFailures: unknown[] = [];
   try {

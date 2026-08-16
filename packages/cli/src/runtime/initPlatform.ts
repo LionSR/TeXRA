@@ -378,7 +378,7 @@ export async function initCliPlatform(
   }
 
   if (!supabaseAuthInitialized) {
-    initializeCliSupabaseAuth(cliPlatformLog, context.storageRoot);
+    initializeCliSupabaseAuth(cliPlatformLog);
     supabaseAuthInitialized = true;
   }
 
