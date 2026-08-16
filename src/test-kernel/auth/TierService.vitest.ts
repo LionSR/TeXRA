@@ -278,10 +278,8 @@ describe('TierService', () => {
       failureReason: 'usage query unavailable',
       limit: 300,
     });
-    expect(warn).toHaveBeenCalledWith(
-      'TierService',
-      'Relay spend check failed',
-      { data: { failureReason: 'usage query unavailable' } },
-    );
+    expect(warn).toHaveBeenCalledWith('Relay spend check failed', {
+      data: { failureReason: 'usage query unavailable' },
+    });
   });
 });
