@@ -59,6 +59,9 @@ export function tryResumeFromResumeData(
                   : `No run config found for stream: ${id}`,
               );
             }
+            // Deliberate C3/V4a host parity: unresolved persisted state
+            // (read-failed/incomplete) surfaces here even on the automatic
+            // follow-up resume path, which was previously silent.
             await session.interactions.showInfoMessage(
               describeResumeStateResolution(resolution),
               { replayWhenAttached: true },

@@ -77,6 +77,9 @@ export async function resumeStreamWithRecovery(
   try {
     return await run(claimedRecovery);
   } finally {
+    // The wrapped tool-use resume releases this same lease in its own finally;
+    // release() is ownership-checked and returns false on the second call, so
+    // this outer release is the no-op safety net for workflow/throw paths.
     session.followUps.release(claimedRecovery, 'recoverable');
   }
 }
@@ -166,7 +169,11 @@ export async function resolveAndResumeStream(
     const resolution = await ports.resolveResumeState(streamId);
     if (isCancellationRequested()) return false;
     if (resolution.status !== 'resolved') {
-      await ports.reportResumeStateResolution?.(streamId, resolution);
+      try {
+        await ports.reportResumeStateResolution?.(streamId, resolution);
+      } catch {
+        // An info-presenter failure must not become a resume-failure toast.
+      }
       return false;
     }
 
