@@ -92,6 +92,7 @@ import {
   streams as streamsSignal,
 } from './state/cliState';
 import { subscribeStreamArtifacts } from './state/subscribeStreamArtifacts';
+import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
@@ -462,6 +463,13 @@ export async function runChat(
     }
     resetCliState(meta);
     clearTerminalScrollback();
+    // The erase above happened outside Ink, so everything the static
+    // transcript printed is gone from the terminal — even when the state
+    // rebuild is a no-op (empty history) that would skip the repaint-epoch
+    // bump. The erase epoch forces a rebuild after the reset state commits,
+    // so the remounted `<Static>` repaints the header without ever carrying
+    // the cleared rows.
+    notifyStaticTranscriptErased();
   };
 
   // Pre-register the slash commands the input palette uses.

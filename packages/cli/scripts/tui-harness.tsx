@@ -126,9 +126,11 @@ import {
 } from '../src/chat/tui/state/approvalQueue';
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
 import { attachSessionSignalsAdapter } from '../src/chat/tui/state/sessionSignalsAdapter';
+import { notifyStaticTranscriptErased } from '../src/chat/tui/state/staticTranscriptRepaint';
 import { createTuiHostInteractions } from '../src/chat/tui/state/subscribeApprovals';
 import { subscribeStreamStatus } from '../src/chat/tui/state/subscribeStreamStatus';
 import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
+import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
 import { parseCliApiMode } from '../src/runtime/apiAccessMode';
@@ -2312,10 +2314,11 @@ function resetHarnessForClear(): void {
   }
   resetCliState(meta);
   activeStreamIdSignal.set(STREAM_ID);
-  inkRef.current?.repaint({
-    clearScrollback: true,
-    preserveStatic: false,
-  });
+  // Mirror the real /clear handler (runChatTui.tsx): erase the terminal
+  // outside Ink, then notify the erase epoch so the transcript rebuilds
+  // after the reset state commits and repaints the session header.
+  clearTerminalScrollback();
+  notifyStaticTranscriptErased();
 }
 
 function handleHarnessSlashCommand(line: string): boolean {
