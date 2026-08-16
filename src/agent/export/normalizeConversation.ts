@@ -257,8 +257,10 @@ function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
         parts.push({ type: 'attachment', attachmentType: 'document' });
         break;
       // Every other recognized block carries no user part — thinking and the
-      // tool blocks are assistant-side (tool results reach the export via
-      // `extractToolResultText`); `undefined` covers unrecognized tags.
+      // tool blocks are assistant-side. A tool-result tag only reaches this
+      // switch inside a plain user message (results answering an assistant
+      // tool use go through `extractToolResultText` instead), so it is
+      // dropped here; `undefined` covers unrecognized tags.
       case 'thinking':
       case 'tool-use':
       case 'tool-result':
