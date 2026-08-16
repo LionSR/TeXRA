@@ -6,7 +6,7 @@ import {
   persistChildRunResultMeta,
   type ResumabilityDecision,
 } from '@agent/storage';
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import type { AgentConfigPayload } from '@agent/runtime';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
