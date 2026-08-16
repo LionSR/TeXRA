@@ -205,9 +205,11 @@ class TuiSessionRenderer implements SessionRendererPort {
     if (this.isStaleDispatch(streamId)) return;
     // The shared applier already computed this roster — live rows plus the
     // finished children it retains for display (phase-merged, 200-capped) —
-    // so project it whole. `finishedAt` presence alone marks a retained row
-    // (schema contract); dropping those rows here was the #9021-class bug
-    // (single-substrate plan, U1).
+    // so project it whole; filtering retained rows out here was the
+    // #9021-class bug (single-substrate plan, U1). `projectChildRoster`
+    // splits by `finishedAt` presence (schema contract): live rows are
+    // active membership, retained rows are display history whose membership
+    // follows the shared roster (cap evictions included).
     projectChildRoster(streamId, badges.subagents);
   }
 
