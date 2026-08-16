@@ -4,6 +4,7 @@ import {
   attachTerminalResultToast,
   runAgent,
   trackTerminalResultPresentation,
+  type AgentConfigPayload,
   type RunAgentOptions,
 } from '@agent/runtime';
 import {
@@ -13,7 +14,6 @@ import {
   type OwnedExecutionLeaseScope,
   type ResumabilityDecision,
 } from '@agent/storage';
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,

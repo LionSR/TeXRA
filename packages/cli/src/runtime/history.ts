@@ -13,7 +13,7 @@ import {
   unwrapResultMeta,
   type AgentExecutionListingEntry,
 } from '@agent/storage';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/runtime';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';

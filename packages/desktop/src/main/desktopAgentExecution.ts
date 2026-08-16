@@ -11,6 +11,7 @@ import {
   polishTextWithAI,
   toPresentationDelivery,
   trackTerminalResultPresentation,
+  type AgentConfig,
   type PresentationDelivery,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
@@ -19,7 +20,6 @@ import {
   type SessionHostInteractions,
 } from '@agent/runtime';
 import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   validateExecutionRequest,
   type ExecutionRequest,

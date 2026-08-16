@@ -5,11 +5,11 @@ import path from 'node:path';
 import { getAgent } from '@agent/index';
 import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
 import type {
+  AgentConfig,
   SessionEvent,
   SessionEventHub,
   SessionFact,
 } from '@agent/runtime';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { redactSecrets } from '@logger/redaction';
 import type {
   ActiveChildInfo,
