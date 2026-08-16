@@ -25,6 +25,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { SupabaseUriHandler } from './UriHandler';
 
 const CHANNEL = 'SupabaseAuthProvider';
+const log = logger.createLog(CHANNEL);
 
 const AUTH_URI_HANDLER_NOT_INITIALIZED =
   'OAuth handler not initialized. Restart the extension.';
@@ -64,7 +65,20 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
         }
       },
-      log: logger,
+      log: {
+        warn: (source, message, options) =>
+          options === undefined
+            ? logger.warn(source, message)
+            : logger.warn(source, message, options),
+        error: (source, message, options) =>
+          options === undefined
+            ? logger.error(source, message)
+            : logger.error(source, message, options),
+        info: (source, message, options) =>
+          options === undefined
+            ? logger.info(source, message)
+            : logger.info(source, message, options),
+      },
     });
     SupabaseAuthProvider.instance = this;
   }
@@ -140,25 +154,19 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       if (!result.success) {
         if (result.isAuthError) {
-          logger.error(CHANNEL, `Sign-in failed: ${result.error}`);
+          log.error(`Sign-in failed: ${result.error}`);
           this.notifier.showError(`Sign-in failed: ${result.error}`);
         } else {
-          logger.debug(CHANNEL, `Auth callback ignored: ${result.error}`);
+          log.debug(`Auth callback ignored: ${result.error}`);
         }
         return;
       }
 
       await this.storeSession(result.session);
       this.notifier.showInfo(`Signed in as ${result.session.account.label}`);
-      logger.info(
-        CHANNEL,
-        `Late sign-in successful for ${result.session.account.label}`,
-      );
+      log.info(`Late sign-in successful for ${result.session.account.label}`);
     } catch (error) {
-      logger.error(
-        CHANNEL,
-        `Error processing auth callback: ${toErrorMessage(error)}`,
-      );
+      log.error(`Error processing auth callback: ${toErrorMessage(error)}`);
       this.notifier.showError(`Sign-in failed: ${toErrorMessage(error)}`);
     } finally {
       this.isProcessingCallback = false;
@@ -202,7 +210,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       return [this.toVSCodeSession(session)];
     } catch (error) {
-      logger.error(CHANNEL, `Error loading session: ${toErrorMessage(error)}`);
+      log.error(`Error loading session: ${toErrorMessage(error)}`);
       return [];
     }
   }
@@ -227,7 +235,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private async buildOAuthOptions(): Promise<{ redirectTo: string }> {
     if (vscode.env.uiKind === vscode.UIKind.Web) {
       const callbackInfo = await getExternalAuthCallbackInfo();
-      logger.info(CHANNEL, `OAuth callback URI (web): ${callbackInfo.fullUrl}`);
+      log.info(`OAuth callback URI (web): ${callbackInfo.fullUrl}`);
       // In Codespaces/web the tunnel routing token must ride on redirect_to
       // (fullUrl already carries ?state=TUNNEL). Passing it as queryParams.state
       // instead overwrites GoTrue's own OAuth state on /authorize, which makes
@@ -248,7 +256,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     const redirectTo =
       `${AUTH_BRIDGE_URL}/${encodeURIComponent(vscode.env.uriScheme)}` +
       `/${encodeURIComponent(getExtensionId())}`;
-    logger.info(CHANNEL, `OAuth callback URI (desktop): ${redirectTo}`);
+    log.info(`OAuth callback URI (desktop): ${redirectTo}`);
     return { redirectTo };
   }
 
@@ -389,7 +397,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     invalidateModelOptionsCache();
     await refreshRemoteAgentCatalogAfterSignOut(
       invalidateRemoteAgentsAfterSignOut,
-      (message) => logger.warn(CHANNEL, message),
+      (message) => log.warn(message),
     );
     this._onDidChangeSessions.fire({
       added: [],
@@ -443,8 +451,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
           if (!result.success) {
             if (result.error === 'Missing authorization code in callback') {
-              logger.error(
-                CHANNEL,
+              log.error(
                 `Missing authorization code in OAuth callback. Has query: ${!!uri.query}`,
               );
             }
@@ -454,8 +461,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
           resolve(result.session);
         } catch (error) {
-          logger.error(
-            CHANNEL,
+          log.error(
             `Error processing OAuth callback: ${toErrorMessage(error)}`,
           );
           reject(error);

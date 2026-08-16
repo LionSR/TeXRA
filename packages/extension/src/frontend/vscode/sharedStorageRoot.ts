@@ -21,7 +21,7 @@ import {
   EXTERNAL_INQUIRY_THREADS_DIR,
   WORKSPACE_STORAGE_LAYOUT,
 } from '@common/storage/storageLayout';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { StorageProvider } from '@platform/interfaces';
 import {
   mergeLegacyStorageBucket,
@@ -39,6 +39,8 @@ type BucketMigration = (
   },
 ) => Promise<void>;
 
+const log = createLog('extension');
+
 const mergeTaskRuns: BucketMigration = (sourcePath, targetPath, options) =>
   mergeLegacyStorageBucket(sourcePath, targetPath, {
     ...options,
@@ -55,10 +57,7 @@ export async function migrateLegacyVscodeStorage(
   context: vscode.ExtensionContext,
   storage: StorageProvider,
 ): Promise<void> {
-  const migrationLogger = {
-    info: (message: string) => logger.info('extension', message),
-    warn: (message: string) => logger.warn('extension', message),
-  };
+  const migrationLogger = { info: log.info, warn: log.warn };
   async function migrateBucket(
     getSourcePath: () => string | undefined,
     getTargetPath: () => string,
