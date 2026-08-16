@@ -121,6 +121,32 @@ let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 // handlers registered by a second activate() in the same process.
 let lifecycleHost: LifecycleHost | undefined;
 
+function installUnhandledRejectionSurface(
+  subscriptions: vscode.Disposable[],
+): void {
+  const report = (error: unknown) => {
+    log.error('Unhandled extension-host rejection', { data: error });
+    void vscode.window
+      .showErrorMessage(
+        `TeXRA encountered an unrecoverable error: ${toErrorMessage(error)}`,
+      )
+      .then(undefined, (notificationError: unknown) => {
+        log.error('Failed to display unhandled rejection error', {
+          data: notificationError,
+        });
+      });
+    // Installing an unhandled-rejection listener otherwise suppresses Node's
+    // default fatal path. The host must not continue after an unowned failure.
+    setImmediate(() => {
+      throw error;
+    });
+  };
+  process.on('unhandledRejection', report);
+  subscriptions.push({
+    dispose: () => process.off('unhandledRejection', report),
+  });
+}
+
 async function refreshApiKeyStatus() {
   if (!apiKeyStatusBarItem) {
     return;
@@ -147,6 +173,7 @@ async function refreshApiKeyStatus() {
 }
 
 export async function activate(context: vscode.ExtensionContext) {
+  installUnhandledRejectionSurface(context.subscriptions);
   const workspaceFolders = vscode.workspace.workspaceFolders;
 
   if (!workspaceFolders || workspaceFolders.length !== 1) {

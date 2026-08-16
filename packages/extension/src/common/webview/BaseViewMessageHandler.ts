@@ -146,6 +146,9 @@ export abstract class BaseViewMessageHandler<
         this.log.error('Error handling message', {
           data: error,
         });
+        void vscode.window.showErrorMessage(
+          `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
+        );
       }
     });
 
