@@ -585,11 +585,11 @@ function executionLabelsEqual(
 /** Rendering-relevant item equality: entries compare by reference (they are
  *  immutable log rows), headers by the values `SessionHeaderBlock` draws —
  *  `identityLine` and `compact` directly, plus the `SessionMeta` fields the
- *  block renders (`version`, `apiMode`, `cwd`). The `SessionMeta` fields are
- *  compared individually rather than by object reference because
- *  `patchSessionMeta`/`resetCliState` always spread into a fresh object, even
- *  for content-identical patches. A rebuilt state that matches item-for-item
- *  needs no `<Static>` remount. */
+ *  block renders (`version`, `apiMode`, and `cwd` in the full header only).
+ *  The `SessionMeta` fields are compared individually rather than by object
+ *  reference because `patchSessionMeta`/`resetCliState` always spread into a
+ *  fresh object, even for content-identical patches. A rebuilt state that
+ *  matches item-for-item needs no `<Static>` remount. */
 function staticTranscriptItemsEquivalent(
   left: readonly StaticTranscriptItem[],
   right: readonly StaticTranscriptItem[],
@@ -604,7 +604,7 @@ function staticTranscriptItemsEquivalent(
         item.identityLine === other.identityLine &&
         item.meta.version === other.meta.version &&
         item.meta.apiMode === other.meta.apiMode &&
-        item.meta.cwd === other.meta.cwd
+        (item.compact || item.meta.cwd === other.meta.cwd)
       );
     }
     return (
@@ -1094,13 +1094,16 @@ export function advanceStaticTranscriptState(
       streams,
       width,
     });
-    // A hard reset that rebuilds the current state unchanged — the normal
-    // startup path, where the initial useState build already ran with no
-    // streams — must not bump the repaint epoch. The `<Static>` remount would
-    // replay the session header through Ink's append-only static write while
-    // the replace-semantics repaint cannot fire yet (the first effect
+    // A hard reset that rebuilds the current *render inputs* unchanged — the
+    // normal startup path, where the initial useState build already ran with
+    // no streams — must not bump the repaint epoch. The `<Static>` remount
+    // would replay the session header through Ink's append-only static write
+    // while the replace-semantics repaint cannot fire yet (the first effect
     // cascade still runs inside Ink's initial render(), before the instance
-    // is available to the viewport controller), doubling the header.
+    // is available to the viewport controller), doubling the header. Only
+    // render inputs are compared: `rowCount`/`byteCount` are deterministic
+    // functions of those fields, and a stale `scan` cursor is recovered by
+    // `incrementalStaticTranscriptEntries` on the next non-empty advance.
     if (
       rebuilt.ownerKey === current.ownerKey &&
       rebuilt.layoutWidth === current.layoutWidth &&

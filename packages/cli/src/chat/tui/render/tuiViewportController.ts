@@ -38,10 +38,13 @@ export function createTuiViewportController(inkRef: {
         // so re-issue the invalidation instead: the fresh render-key change
         // remounts `<Static>` in a normal post-mount commit whose
         // layout-effect repaint runs synchronously with the instance set.
+        // Exactly one microtask is sufficient because the only production
+        // caller (`runChatTui`) assigns `inkRef.current = ink` synchronously
+        // immediately after `render()` returns; the callback runs after that
+        // stack unwinds.
         queueMicrotask(() => {
-          // If the instance still does not exist the app never mounted (or
-          // is already exiting); re-invalidating would only re-enter this
-          // branch forever.
+          // Defensive only: a future caller whose instance never mounts must
+          // not invalidate again, or it would re-enter this branch forever.
           if (inkRef.current !== undefined) {
             invalidateStaticTranscriptForRepaint();
           }

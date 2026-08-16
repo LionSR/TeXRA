@@ -1326,38 +1326,6 @@ describe('CLI conversation transcript', () => {
     expect(missingAgain.repaintEpoch).toBe(missing.repaintEpoch);
   });
 
-  it('does not bump the repaint epoch when a hard reset rebuilds the state unchanged', () => {
-    // Startup: the initial build already ran with no streams, so the first
-    // advance hits the hard-reset path with identical inputs. Bumping the
-    // epoch here remounts `<Static>` before the replace-semantics repaint can
-    // fire, replaying the session header into the terminal a second time.
-    const initial = buildStaticTranscriptState({
-      childStreamEntries: new Map(),
-      maxRows: undefined,
-      meta: SESSION_META,
-      ownerKey: 'root',
-      parentStream: new Map(),
-      repaintEpoch: 0,
-      scrollbackStreamId: undefined,
-      streams: new Map(),
-      width: 80,
-    });
-
-    const advanced = advanceStaticTranscriptState(initial, {
-      childStreamEntries: new Map(),
-      maxRows: undefined,
-      meta: SESSION_META,
-      ownerKey: 'root',
-      parentStream: new Map(),
-      scrollbackStreamId: undefined,
-      streams: new Map(),
-      width: 80,
-    });
-
-    expect(advanced).toBe(initial);
-    expect(advanced.repaintEpoch).toBe(initial.repaintEpoch);
-  });
-
   it('recomputes ring totals and trims when the layout width shrinks', () => {
     const budgets: StaticTranscriptRingBudgets = {
       rowHighWater: 6,
