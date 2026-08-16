@@ -146,6 +146,15 @@ describe('desktop renderer bootstrap fallback', () => {
     );
   });
 
+  it('renders the fatal fallback for unhandled rejections on every startup path', () => {
+    const source = loadRendererMain();
+
+    expect(source).toMatch(
+      /window\.addEventListener\('unhandledrejection',[\s\S]*?event\.preventDefault\(\);[\s\S]*?renderBootstrapFallback\(event\.reason\);/u,
+    );
+    expect(source).not.toContain('if (bootstrapFailed)');
+  });
+
   it('renders a Reload control and a "continue without saved secrets" affordance', () => {
     const source = loadRendererMain();
     expect(source).toContain('Reload');

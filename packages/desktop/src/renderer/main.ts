@@ -1224,6 +1224,13 @@ function installShellSignalWatcher(): void {
 }
 
 let bootstrapFailed = false;
+window.addEventListener('unhandledrejection', (event) => {
+  event.preventDefault();
+  bootstrapFailed = true;
+  console.error('TeXRA desktop renderer unhandled rejection', event.reason);
+  renderBootstrapFallback(event.reason);
+});
+
 try {
   logsController.rerenderViewer();
   rerenderShell();
@@ -1232,12 +1239,6 @@ try {
   bootstrapFailed = true;
   console.error('TeXRA desktop renderer bootstrap failed', error);
   renderBootstrapFallback(error);
-}
-
-if (bootstrapFailed) {
-  window.addEventListener('unhandledrejection', (event) => {
-    console.error('Unhandled rejection after bootstrap failure', event.reason);
-  });
 }
 
 // =============================================================================
