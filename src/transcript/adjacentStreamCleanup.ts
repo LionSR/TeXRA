@@ -85,12 +85,20 @@ async function deleteAdjacentStreamState(
  * in-process store pair is no different in kind. Callers should open one
  * pair per operation (not per execution) and let it be garbage-collected
  * when done.
+ *
+ * Unlike interactive session startup, a one-shot history command has no
+ * resident store that already ran `reconcileStagedDeletions`. Without that
+ * pass, a prior interrupted `stageDeleteStream` leaves the sidecar in the
+ * staged namespace and the next delete for the same stream fails with an
+ * unreconciled-deletion error — so every standalone open reconciles against
+ * the transcript registry first, matching `SessionStores.deleteAll` /
+ * `sweepLeftoverStreams`.
  */
 async function openStandaloneStreamStores(): Promise<AdjacentStreamStores> {
-  return {
-    streamLogs: await StreamLogStore.open(),
-    snapshots: new StreamSnapshotStore(),
-  };
+  const streamLogs = await StreamLogStore.open();
+  const snapshots = new StreamSnapshotStore();
+  await snapshots.reconcileStagedDeletions(new Set(streamLogs.keys()));
+  return { streamLogs, snapshots };
 }
 
 /**
