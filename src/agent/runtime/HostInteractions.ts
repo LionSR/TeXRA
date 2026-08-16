@@ -174,9 +174,9 @@ export type RetryResult =
 
 /**
  * The plan-approval payload the runtime hands to hosts. This is deliberately
- * an alias of the shared {@link PlanApprovalPermission} schema so the runtime
- * and every host render the same contract; a field added to the permission
- * payload is available here without a hand-maintained mirror.
+ * an alias of the type inferred from `PlanApprovalPermissionSchema` so the
+ * runtime and every host render the same contract; a field added to the
+ * permission payload is available here without a hand-maintained mirror.
  */
 export type HostPlanApprovalRequest = Readonly<PlanApprovalPermission>;
 
