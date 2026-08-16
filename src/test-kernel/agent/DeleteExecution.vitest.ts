@@ -100,4 +100,17 @@ describe('deleteExecution', () => {
     ).rejects.toThrow('sidecar cleanup failed');
     expect(mocks.clear).not.toHaveBeenCalled();
   });
+
+  it('reports when cleanup committed before storage removal failed', async () => {
+    mocks.exists.mockResolvedValue(true);
+    mocks.clear.mockRejectedValue(new Error('permission denied'));
+
+    await expect(
+      deleteExecution('a73039a36ec6' as ExecutionId, {
+        beforeDelete: async () => {},
+      }),
+    ).rejects.toThrow(
+      "Execution a73039a36ec6's pre-delete cleanup completed, but its storage directory could not be removed: permission denied",
+    );
+  });
 });

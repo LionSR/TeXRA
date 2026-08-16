@@ -334,12 +334,11 @@ export async function deleteExecution(
               // `beforeDelete` already ran and did not throw, so any cleanup
               // it performed (irreversible once committed — see
               // `@transcript/adjacentStreamCleanup`) has already happened.
-              // This retained execution directory can now reference deleted
-              // state; report that loudly rather than let it surface only as
-              // "delete failed" with no explanation.
-              log.warn(
+              // Preserve that fact in the propagated error so both single and
+              // bulk callers can report the partial deletion accurately.
+              throw new Error(
                 `Execution ${executionId}'s pre-delete cleanup completed, but its storage directory could not be removed: ${toErrorMessage(error)}`,
-                { data: error },
+                { cause: error },
               );
             }
             throw error;
