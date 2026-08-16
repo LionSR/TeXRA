@@ -14,7 +14,7 @@
  */
 
 import { appSignals } from '@eventBus/AppSignals';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { tryGlobalState } from '@platform/platform';
 import { SUPABASE_CONFIG } from '../config';
 import { TierService } from './TierService';
@@ -22,6 +22,9 @@ import { ServerSideKeyService } from './ServerSideKeyService';
 
 // Service class
 export { ServerSideKeyService };
+
+const log = createLog('ServerSideKeyService');
+const tierServiceLog = createLog('TierService');
 
 // ==========================================================================
 // Singleton Instance
@@ -54,8 +57,7 @@ export function getServerSideKeyService(): ServerSideKeyService {
   if (_instance && !(_constructedStateless && state)) return _instance;
 
   if (!state) {
-    logger.warn(
-      'ServerSideKeyService',
+    log.warn(
       'No platform state store; included model access is off for this ' +
         'process. Call initPlatform() before the first model call to use ' +
         'relay access, or configure a provider API key.',
@@ -65,9 +67,9 @@ export function getServerSideKeyService(): ServerSideKeyService {
   const baseUrl = SUPABASE_CONFIG.url;
   _instance = new ServerSideKeyService(
     baseUrl,
-    new TierService(baseUrl, logger),
+    new TierService(baseUrl, tierServiceLog),
     state,
-    logger,
+    log,
     (enabled) => appSignals.emit('includedModelAccessChanged', enabled),
   );
   _constructedStateless = !state;

@@ -15,7 +15,7 @@ import { quote as shellQuote } from 'shell-quote';
 import treeKill from 'tree-kill';
 
 // Internal imports
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -136,8 +136,7 @@ function logExecutionErrorAndBuildResult(
   options: { quiet?: boolean; channel?: string },
 ): ExecResult {
   if (!options.quiet) {
-    logger.error(
-      options.channel ?? CHANNEL,
+    createLog(options.channel ?? CHANNEL).error(
       `Error executing command: ${toErrorMessage(err)}`,
     );
   }
@@ -156,7 +155,7 @@ function logCommandStderr(
     truncate && normalizedStderr.length > MAX_OUTPUT_LENGTH
       ? `...${normalizedStderr.slice(-MAX_OUTPUT_LENGTH)}`
       : normalizedStderr;
-  logger.debug(channel, `Command stderr: ${stderrForLog}`);
+  createLog(channel).debug(`Command stderr: ${stderrForLog}`);
 }
 
 function workspacePathOrProcessCwd(): string {
@@ -193,8 +192,7 @@ function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
   if (IS_WINDOWS) {
     treeKill(pid, signal, (error) => {
       if (error) {
-        logger.debug(
-          CHANNEL,
+        createLog(CHANNEL).debug(
           `tree-kill failed for pid ${pid} (${signal}): ${toErrorMessage(error)}`,
         );
       }
@@ -363,8 +361,7 @@ export async function executeCommand(
     if (mode === 'process') {
       const [cmd, ...args] = command;
       if (!options.quiet) {
-        logger.debug(
-          logChannel,
+        createLog(logChannel).debug(
           `Running command: ${shellQuote([cmd, ...args])}`,
         );
       }
@@ -375,7 +372,7 @@ export async function executeCommand(
       });
     } else {
       if (!options.quiet) {
-        logger.debug(logChannel, `Running command: ${command}`);
+        createLog(logChannel).debug(`Running command: ${command}`);
       }
       // Shell commands with pipes (e.g. "find / | head -2") create child
       // processes that inherit stdout.  execa's built-in timeout only kills
@@ -522,8 +519,7 @@ export function executeCommandSync(
     };
     const logChannel = options.channel ?? CHANNEL;
     if (!options.quiet) {
-      logger.debug(
-        logChannel,
+      createLog(logChannel).debug(
         `Running command: ${shellQuote([cmd, ...args])}`,
       );
     }

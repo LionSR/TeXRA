@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Internal imports
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { FileOpResult } from '@shared/schemas';
 import { getCleanAgentName } from '@shared/schemas';
 import {
@@ -30,14 +30,15 @@ import {
   resolveHousekeepingTargets,
 } from './utils';
 
+const log = createLog(CHANNEL);
+
 export async function runPackSingle(
   model: string,
   inputFile: string,
   agent: string,
   outputFolder?: string,
 ): Promise<FileOpResult> {
-  logger.info(
-    CHANNEL,
+  log.info(
     `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${outputFolder}`,
   );
 
@@ -72,11 +73,11 @@ export async function runPackSingle(
       (copiedFiles.length === 1 && copiedFiles[0] === inputFile));
 
   if (noFilesToPack) {
-    logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
+    log.warn(`No files found to pack for ${inputFile}`);
     return { status: 'noFiles' };
   }
 
-  logger.debug(CHANNEL, buildFileListLog(movedFiles, copiedFiles));
+  log.debug(buildFileListLog(movedFiles, copiedFiles));
 
   const resolvedOutputFolder =
     outputFolder ||
@@ -85,11 +86,11 @@ export async function runPackSingle(
       HISTORY_DIR,
       `${generateTimestamp()}_${baseName}_${agent}_${model}`,
     );
-  logger.debug(CHANNEL, `Output folder: ${resolvedOutputFolder}`);
+  log.debug(`Output folder: ${resolvedOutputFolder}`);
 
   try {
     await WorkspaceFS.createDir(resolvedOutputFolder);
-    logger.debug(CHANNEL, `Created output directory: ${resolvedOutputFolder}`);
+    log.debug(`Created output directory: ${resolvedOutputFolder}`);
 
     const operations = await moveAndCopyFiles(
       movedFiles,
@@ -98,8 +99,8 @@ export async function runPackSingle(
     );
 
     if (operations.length > 0) {
-      logger.info(CHANNEL, `Files packed into ${resolvedOutputFolder}`);
-      logger.debug(CHANNEL, `File operations:\n${operations.join('\n')}`);
+      log.info(`Files packed into ${resolvedOutputFolder}`);
+      log.debug(`File operations:\n${operations.join('\n')}`);
     }
 
     await cleanupTempFiles(inputDir, filePatterns, movedFiles, copiedFiles);
@@ -107,7 +108,7 @@ export async function runPackSingle(
     return { status: 'success', outputFolder: resolvedOutputFolder };
   } catch (err) {
     const message = toErrorMessage(err);
-    logger.error(CHANNEL, `Error during file operations: ${message}`);
+    log.error(`Error during file operations: ${message}`);
     return { status: 'error', error: message };
   }
 }
@@ -118,11 +119,10 @@ export async function runPackMultiple(
   agent: string,
   inputFiles: string[],
 ): Promise<FileOpResult> {
-  logger.debug(
-    CHANNEL,
+  log.debug(
     `Starting multiple packing with model=${model}, inputFile=${inputFile}, agent=${agent}`,
   );
-  logger.debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
+  log.debug(`Additional files: ${inputFiles.join(', ')}`);
 
   const baseName = path.parse(inputFile).name;
   const outputDir = path.dirname(inputFile);
@@ -131,7 +131,7 @@ export async function runPackMultiple(
     HISTORY_DIR,
     `${generateTimestamp()}_${baseName}_multiple_${agent}_${model}`,
   );
-  logger.debug(CHANNEL, `Common output folder: ${commonOutputFolder}`);
+  log.debug(`Common output folder: ${commonOutputFolder}`);
 
   try {
     const allFilesToPack = [inputFile, ...inputFiles];
@@ -157,15 +157,15 @@ export async function runPackMultiple(
     );
 
     if (anyFilesPacked || xmlFilesPacked) {
-      logger.info(CHANNEL, `All files packed into ${commonOutputFolder}`);
+      log.info(`All files packed into ${commonOutputFolder}`);
       return { status: 'success', outputFolder: commonOutputFolder };
     }
 
-    logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
+    log.warn(`No files found to pack for ${inputFile}`);
     return { status: 'noFiles' };
   } catch (err) {
     const message = toErrorMessage(err);
-    logger.error(CHANNEL, `Error during multiple pack operation: ${message}`);
+    log.error(`Error during multiple pack operation: ${message}`);
     return { status: 'error', error: message };
   }
 }
@@ -284,8 +284,7 @@ async function packAdditionalXmlFiles(
         // The two layouts can yield identical destination names (when the
         // agent's first-name chunk equals its clean name). Skip the second
         // candidate rather than failing the rename onto an existing file.
-        logger.debug(
-          CHANNEL,
+        log.debug(
           `Skipping ${filePath}: destination ${destPath} already exists`,
         );
         continue;
@@ -294,7 +293,7 @@ async function packAdditionalXmlFiles(
       if (!outputFolderExists && !anyPacked) {
         await WorkspaceFS.createDir(commonOutputFolder);
       }
-      logger.debug(CHANNEL, `Found additional XML file: ${filePath}`);
+      log.debug(`Found additional XML file: ${filePath}`);
       await WorkspaceFS.rename(filePath, destPath);
       anyPacked = true;
     }
