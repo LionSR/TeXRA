@@ -35,6 +35,10 @@ import { SubagentList } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import { type ChildListValue } from '../state/childListSelection';
 import { inputBarContentRows } from '../state/cliState';
+import {
+  readStreamArtifacts,
+  streamArtifactRevision,
+} from '../state/subscribeStreamArtifacts';
 import { staticTranscriptRepaintEpoch } from '../state/staticTranscriptRepaint';
 import {
   workflowDashboardPanelItemCount,
@@ -131,6 +135,13 @@ export function ConversationRegion({
   const activeSlice = snapshot.activeStreamId
     ? snapshot.streams.get(snapshot.activeStreamId)
     : undefined;
+  useSignal(streamArtifactRevision);
+  const activeArtifacts =
+    snapshot.activeStreamId && activeSlice
+      ? readStreamArtifacts(snapshot.activeStreamId)
+      : undefined;
+  const activeTodos = activeArtifacts?.todos ?? activeSlice?.todos ?? [];
+  const activePlan = activeArtifacts?.plan ?? activeSlice?.plan ?? null;
   const queuedFollowUpMessages = activeSlice?.queuedFollowUpMessages ?? [];
   const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;
@@ -158,8 +169,8 @@ export function ConversationRegion({
       });
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
     foregroundOpen,
-    hasPlan: activeSlice?.plan != null,
-    todos: activeSlice?.todos ?? [],
+    hasPlan: activePlan != null,
+    todos: activeTodos,
   });
   const transcriptWidth = clampModalWidth(columns);
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
@@ -179,7 +190,7 @@ export function ConversationRegion({
   // background workflow cannot expand over the conversation by default.
   const todosPlanContentRows =
     hasTodosPlanPanel && activeSlice
-      ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
+      ? todosPlanPanelRowCount(activeTodos, activePlan)
       : 0;
   const workflowDashboardItemCount = workflowDashboardPanelItemCount(
     snapshot.workflowDashboard,

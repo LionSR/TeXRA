@@ -20,6 +20,7 @@ import {
   clearTransientNotice,
   finishWorkPlanReaderRequest,
   openInfoPane,
+  patchStream,
   sessionMeta,
   setTransientNotice,
   streams,
@@ -32,6 +33,7 @@ import {
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { activeStreamParentOrSelfId } from '@cli/chat/tui/state/streamViews';
+import { projectStreamArtifacts } from '@controllers/session/StreamArtifactProjection';
 import {
   isCodexSubscriptionActive,
   isKimiCodeSubscriptionActive,
@@ -83,12 +85,19 @@ export async function showCliWorkPlan(
     },
   );
   if (!hydrated || !workPlanReaderRequestIsCurrent(request)) return;
-  const slice = streams.get().get(streamId);
-  if (!slice || (slice.plan === null && slice.todos.length === 0)) {
+  const projection = projectStreamArtifacts(snapshots, streamId);
+  if (projection.plan === null && projection.todos.length === 0) {
     if (!cancelWorkPlanReaderRequest(request)) return;
     setTransientNotice('The focused session has no work plan.');
     return;
   }
+  // The foreground reader still renders from the slice until the StreamSlice
+  // container collapses (Wave A cliState); patch only the two fields it reads.
+  patchStream(streamId, (slice) => ({
+    ...slice,
+    todos: projection.todos,
+    plan: projection.plan,
+  }));
   finishWorkPlanReaderRequest(request);
 }
 

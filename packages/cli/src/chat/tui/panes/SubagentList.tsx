@@ -24,6 +24,7 @@ import {
   WORKFLOW_TASK_STATUS_LABEL,
   isTerminalWorkflowCallProgress,
   type StreamTabId,
+  type TokenUsageStats,
   type WorkflowCallProgress,
   type WorkflowControlAction,
 } from '@shared/schemas';
@@ -48,6 +49,10 @@ import { WORKFLOW_TASK_STATUS_STYLE } from './transcriptEntryLayout';
 // Local imports - TUI state and controls
 import { childElapsed } from '../state/childControls';
 import {
+  readStreamArtifacts,
+  streamArtifactRevision,
+} from '../state/subscribeStreamArtifacts';
+import {
   childListStreamId,
   childStreamListValue,
   workflowTaskListValue,
@@ -67,6 +72,7 @@ import {
   childStatusColor,
   pendingApprovalRowDisplay,
 } from './SubagentListDisplay';
+import { useSignal } from '../state/useSignal';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 import type { StreamSlice } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
@@ -101,6 +107,7 @@ function PhaseHeader({
 
 function SessionRow({
   active,
+  cumulativeUsage,
   focused,
   hiddenRowSummary,
   isListRoot,
@@ -110,6 +117,7 @@ function SessionRow({
   session,
 }: {
   readonly active: boolean;
+  readonly cumulativeUsage?: TokenUsageStats | undefined;
   readonly focused: boolean;
   readonly hiddenRowSummary: string | undefined;
   readonly isListRoot: boolean;
@@ -153,8 +161,7 @@ function SessionRow({
   const metadata = metadataColumn
     ? childRowMetadataText({
         elapsed,
-        outputTokens: (session.slice?.cumulativeUsage ?? session.slice?.usage)
-          ?.outputTokens,
+        outputTokens: (cumulativeUsage ?? session.slice?.usage)?.outputTokens,
         toolCallCount: session.slice?.conversation?.toolCallCount,
       })
     : undefined;
@@ -608,6 +615,7 @@ export function SubagentList(
   props: SubagentListProps = {},
 ): React.JSX.Element | null {
   const sessions = props.sessions ?? [];
+  useSignal(streamArtifactRevision);
   const startedAts = useMemo(
     () => sessions.map((session) => session.slice?.runStartedAt),
     [sessions],
@@ -730,6 +738,12 @@ export function SubagentList(
             <SessionRow
               isListRoot={session.id === props.listRootStreamId}
               active={state.active}
+              cumulativeUsage={
+                session.active
+                  ? (readStreamArtifacts(session.id)?.cumulativeUsage ??
+                    session.slice?.cumulativeUsage)
+                  : session.slice?.cumulativeUsage
+              }
               focused={state.focused}
               hiddenRowSummary={hiddenRowSummary}
               metadataColumn={metadataColumn}
