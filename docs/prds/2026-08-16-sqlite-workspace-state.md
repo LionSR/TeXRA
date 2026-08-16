@@ -118,7 +118,7 @@ Corollaries:
 
 ```
 workspace storage today                     workspace storage after
-├── streamLogs/           991 MB            ├── texra.db      (all app state + FTS)
+├── streamLogs/           991 MB            ├── texra.db (+-wal/-shm — engine family)
 ├── streamLogSummaries/   7.5 MB            ├── original/     (user document snapshots)
 ├── streamData/           5,274 files       ├── memories/     (user-editable documents)
 ├── executions/ executionLeases/            ├── executions/{id}/files
@@ -301,13 +301,19 @@ execution_leases  (execution_id PK FK CASCADE, owner_token, acquired_at,
                    -- part of Stage 1's schema design; cutover is Stage 6.
 
 -- derived: rebuildable from authoritative rows, never row-authoritative
-stream_summaries  (stream_id PK FK CASCADE, last_ts, has_running_group,
+stream_summaries  (stream_id PK FK CASCADE, last_ts NOT NULL,
+                   has_running_group,
                    has_running_streaming_text,
                    has_nonterminal_workflow_call, summary_meta JSON)
                    INDEX (last_ts DESC, stream_id)
                    -- the cursor-pagination index IS the O(visible page)
                    -- startup claim; without it, ORDER BY last_ts scans and
                    -- sorts every summary row. Part of Stage 1, not later.
+                   -- last_ts is NOT NULL by definition: a registered-empty
+                   -- stream (no entries yet) carries its created_ts — a
+                   -- NULL cursor would break keyset pagination (SQL tuple
+                   -- comparisons with NULL never advance) and drop empty
+                   -- streams from later pages.
                    PARTIAL INDEX ON (stream_id) WHERE has_running_group
                      OR has_running_streaming_text
                      OR has_nonterminal_workflow_call
@@ -455,10 +461,25 @@ rows; export compat is not storage compat.
   deleted or never persisted (`ExecutionListing.vitest.ts` pins this), so
   an edge naming a stream absent from the migrated registry imports as
   NULL with a `warn` — importing it verbatim would fail the FK and abort
-  the migration.
+  the migration. The Stage-3 pointer assignment closes the reverse case:
+  when `streamData/meta.json` names an execution whose row imported with a
+  NULL edge, the sidecar itself is the ownership evidence — the importer
+  **attaches** the execution (`stream_id := streams.id`) before setting the
+  pointer, satisfying the ownership trigger; a sidecar naming a missing
+  execution row imports the pointer as NULL with a `warn`.
   `stream_summaries` (derived, #9434-discardable — worst case is a rebuild)
   rides along as the pilot payload, deleting the mtime-staleness heuristic
-  and scan-on-open.
+  and scan-on-open. **Authority bridge, stated explicitly:** until Stage 4
+  retires the transcript files, `streamLogs/{id}` existence remains the
+  registration authority and the `streams` rows are a **maintained
+  mirror** — every migrated open reconciles rows against the file listing
+  (new file → insert row; file gone → delete row + tombstone, in one
+  transaction), because during the gap a legacy host can create or delete
+  a file-backed stream the row registry would otherwise miss, and the
+  directory cannot be renamed while migrated hosts still read entry
+  payloads from it. Authority flips to rows in the Stage-4 PR that
+  retires the files; FK children imported at Stage 3 hang off the mirror
+  and follow its reconciliation.
 - **Stage 3 — `streamData/` sidecars + goal entries → rows.** The big
   machinery win in `StreamSnapshotStore` (seed chains, provenance, overlays,
   write mutexes). **Dangling `parentStreamId` edges get the same treatment
@@ -474,8 +495,11 @@ rows; export compat is not storage compat.
   the `state.vscdb` VS Code owns). Goal import therefore runs **per
   released host with legacy state** — CLI and extension each extract from
   their own legacy source at first migrated open, upserting by stream with
-  one deterministic merge rule: newest `updatedAt` wins, ties keep the
-  existing row. **Desktop gets no legacy extraction path** — it has no
+  one deterministic merge rule: newest `updatedAt` wins; equal timestamps
+  resolve by fixed source priority (extension over CLI — arbitrary but
+  stable), then by value-hash order as the final tie-breaker. "Ties keep
+  the existing row" would be order-dependent across hosts: whichever host
+  opened first would win, making otherwise identical upgrades diverge. **Desktop gets no legacy extraction path** — it has no
   released state to preserve, and repository policy is that unreleased
   hosts adopt the current format directly (AGENTS.md compatibility rule).
   **Orphan goals are quarantined, not imported:** a legacy goal naming a
@@ -499,6 +523,15 @@ rows; export compat is not storage compat.
   records live in files, "delete a stream" cannot be one transaction — it
   would still need fallible filesystem cleanup, i.e. exactly the
   half-deletion/compensation problem the next stage claims to remove.
+  **The cutover is file-level, not a directory rename:** KV JSON and
+  user-facing artifacts coexist under `executions/{id}/` today — renaming
+  the tree would hide live documents at a backup path, while leaving it
+  unrenamed would break the rename-based backstop. Stage 5 therefore
+  imports and deletes the KV `*.json` files individually (copies to the
+  versioned backup tree), leaves the artifacts in place, and detects
+  legacy recreations **per file**: the KV filenames are a fixed set, so a
+  legacy rewrite recreates a detectable file even though the directory
+  never moves.
   **Non-KV artifacts under `executions/{id}/` stay as files**: workflow
   output files and original snapshots are run _documents_ — read by
   `AcceptRunFilesTool` and `ExecutionsTool.listFiles`, reviewed and accepted
@@ -652,7 +685,10 @@ deletion namespace `StagedDeletionCoordinator` renames into, retained in
 the baseline through the **Stage-7** deletion-protocol cutover that retires
 the coordinator — `streamLogs/`, `executions/` KV records, lease/lock
 files) plus the **permanent entries**: documents,
-exports, the settings files (`state.json`, `config.json`), the
+exports, the SQLite engine file family (`texra.db`, `texra.db-wal`,
+`texra.db-shm` — WAL mode creates the companions beside the database
+whenever it is open; a layout test rejecting them would reject every
+active workspace), the settings files (`state.json`, `config.json`), the
 per-execution artifacts area (§5 Stage 5), the user-media caches
 (`pasted/` from `savePastedImageBuffer`, `recordings/` from the audio
 tool — live writers today that the ratchet must not reject), and
@@ -668,7 +704,11 @@ After Stage 6 one **temporary** entry remains alongside the permanent set:
 `*.pre-sqlite-backup`, which the §5 retirement window requires for 90 days
 and two releases — the importer-removal PR deletes the backups and this
 ratchet entry together. Strict (permanent entries only) is that removal
-PR's exit criterion, not Stage 6's.
+PR's exit criterion, not Stage 6's — and strictness is additionally
+conditional on legacy `taskRuns/` having drained under #6981's own
+retirement condition, which is independent of the importer window: if the
+importer retires first, `taskRuns/` remains a shrinking temporary entry
+until #6981 removes it, never a re-widen.
 
 ## 8. Non-goals
 
