@@ -312,6 +312,11 @@ interface PersistedFlowRunOptions {
   readonly onFlowRecordDisposition?: (
     disposition: 'preserve' | 'delete',
   ) => void;
+  /**
+   * Keep the session alive after the run so a test can assert on its
+   * follow-up queue before the session-root teardown disposes it.
+   */
+  readonly deferDispose?: boolean;
 }
 
 async function runPersistedFlow(
@@ -383,7 +388,9 @@ async function runPersistedFlow(
       ),
     );
   } finally {
-    session.dispose();
+    if (!options.deferDispose) {
+      session.dispose();
+    }
   }
 }
 
@@ -1483,6 +1490,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           },
         },
         session,
+        deferDispose: true,
       });
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
@@ -1491,7 +1499,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       ]);
     } finally {
       readSpy.mockRestore();
-      session.followUps.terminalize(streamId);
+      session.dispose();
     }
   });
 
@@ -1549,6 +1557,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           modelHandler: responseModelHandler([]),
           session,
           takePendingFollowUps: () => [],
+          deferDispose: true,
         }),
       ).rejects.toBe(abortError);
       expect(session.followUps.getAll(streamId)).toEqual([
@@ -1556,7 +1565,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       ]);
     } finally {
       writeSpy.mockRestore();
-      session.followUps.terminalize(streamId);
+      session.dispose();
     }
   });
 
@@ -1612,6 +1621,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           },
           modelHandler: responseModelHandler([]),
           session,
+          deferDispose: true,
         }),
       ).rejects.toBe(abortError);
       expect(session.followUps.getAll(streamId)).toEqual([
@@ -1619,7 +1629,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       ]);
     } finally {
       writeSpy.mockRestore();
-      session.followUps.terminalize(streamId);
+      session.dispose();
     }
   });
 

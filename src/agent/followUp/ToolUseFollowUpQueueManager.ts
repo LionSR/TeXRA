@@ -109,6 +109,7 @@ export class ToolUseFollowUpQueue {
     kind: Exclude<FollowUpConsumerKind, 'recovery'>,
     generationId?: string,
   ): FollowUpConsumerLease | undefined {
+    if (this.disposed) return undefined;
     if (this.terminal.has(streamId)) return undefined;
     const entry =
       this.entries.get(streamId) ?? this.createEntry(streamId, generationId);
@@ -150,6 +151,7 @@ export class ToolUseFollowUpQueue {
     streamId: StreamTabId,
     executionId: ExecutionId,
   ): FollowUpConsumerLease | undefined {
+    if (this.disposed) return undefined;
     if (!streamId.endsWith(`#${executionId}`)) {
       throw new Error(
         `Child stream ${streamId} does not belong to execution ${executionId}.`,
@@ -167,6 +169,7 @@ export class ToolUseFollowUpQueue {
     streamId: StreamTabId,
     createIfMissing = false,
   ): FollowUpRecoveryLease | undefined {
+    if (this.disposed) return undefined;
     if (this.terminal.has(streamId)) return undefined;
     const entry =
       this.entries.get(streamId) ??
@@ -319,6 +322,7 @@ export class ToolUseFollowUpQueue {
 
   /** Terminalize a stream; any outstanding lease becomes stale immediately. */
   terminalize(streamId: StreamTabId): boolean {
+    if (this.disposed) return false;
     const entry = this.entries.get(streamId);
     entry?.queue.dispose();
     this.entries.delete(streamId);
@@ -329,20 +333,24 @@ export class ToolUseFollowUpQueue {
 
   /**
    * Dispose the session-owned boundary: every live entry queue, then the
-   * entry map, terminal tombstones, and release observers. The entry paths a
-   * detached producer can still reach after teardown (`submit` recoverable
-   * admission and `restorePersistedGeneration`) refuse to rebuild, so a late
-   * child result cannot leak a queue nobody will drain.
+   * entry map, terminal tombstones, and release observers. The state clears
+   * in a `finally` so one queue's disposal failure cannot leave the map,
+   * tombstones, or observers behind. Entry-creating paths refuse to rebuild
+   * afterwards, so a late detached producer cannot leak a queue nobody will
+   * drain.
    */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    for (const entry of this.entries.values()) {
-      entry.queue.dispose();
+    try {
+      for (const entry of this.entries.values()) {
+        entry.queue.dispose();
+      }
+    } finally {
+      this.entries.clear();
+      this.terminal.clear();
+      this.releaseObservers.clear();
     }
-    this.entries.clear();
-    this.terminal.clear();
-    this.releaseObservers.clear();
   }
 
   private notifyReleaseObservers(streamId: StreamTabId): void {
