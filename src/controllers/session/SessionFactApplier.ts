@@ -1,3 +1,4 @@
+import type { DeleteStreamResult } from '@agent/storage';
 import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
@@ -47,8 +48,43 @@ type RunFactHandlers = {
 };
 
 export type SessionFactApplierOptions = {
-  deleteStream: (stream: StreamTabId) => void | Promise<void>;
+  /**
+   * Host durable-delete for a removed stream. The resolved outcome decides
+   * the removal barrier's fate: `active`/`failed` mean the stream was
+   * retained — still alive — so the applier retires the barrier and its
+   * facts flow again; `deleted` (or a host that reports nothing) keeps it.
+   */
+  deleteStream: (
+    stream: StreamTabId,
+  ) =>
+    | void
+    | DeleteStreamResult
+    | undefined
+    | Promise<void | DeleteStreamResult | undefined>;
 };
+
+/**
+ * Every stream identity a session fact names, in one place: the removal
+ * tombstone guards all of them, so an identity extracted anywhere else would
+ * be a fact the tombstone does not own. `removeStream` is listed for
+ * completeness but is never refused — it is the tombstone writer.
+ */
+function sessionFactStreamIds(fact: SessionFact): StreamTabId[] {
+  switch (fact.type) {
+    case 'status':
+      return [fact.streamId];
+    case 'removeStream':
+      return [fact.payload.streamId];
+    case 'setParentStream':
+      return fact.payload.parentStreamId
+        ? [fact.payload.childStreamId, fact.payload.parentStreamId]
+        : [fact.payload.childStreamId];
+    case 'inquiryThreadUpdated':
+      return fact.payload.parentStreamId ? [fact.payload.parentStreamId] : [];
+    default:
+      return fact.payload.streamId ? [fact.payload.streamId] : [];
+  }
+}
 
 /**
  * Host-neutral session fact applier: mutates {@link SessionState} and notifies
@@ -153,7 +189,21 @@ export class SessionFactApplier {
     this.renderer.onStreamMetadataChanged(streamId, options);
   }
 
-  handleSessionFact(fact: SessionFact): void {
+  /**
+   * Apply one session fact. Returns whether the fact was admitted: a fact
+   * naming a removed stream is stale and refused (removal is final), and
+   * callers that react to a fact beyond state application — presentation
+   * activation, leases — must not react to a refused one.
+   */
+  handleSessionFact(fact: SessionFact): boolean {
+    if (
+      fact.type !== 'removeStream' &&
+      sessionFactStreamIds(fact).some((streamId) =>
+        this.state.isStreamRemoved(streamId),
+      )
+    ) {
+      return false;
+    }
     // Wrap once, and RETURN each case so async handlers' promises reach
     // `withEventErrorHandling` (a discarded promise would let a post-await
     // rejection escape its thenable check as an unhandled rejection).
@@ -194,16 +244,33 @@ export class SessionFactApplier {
             );
           case 'setParentStream':
             return this.handleSetParentStream(fact.payload);
-          case 'removeStream':
-            this.registeredWithRenderer.delete(fact.payload.streamId);
-            return this.options.deleteStream(fact.payload.streamId);
+          case 'removeStream': {
+            const { streamId } = fact.payload;
+            // Provisional barrier: facts racing the host delete are refused
+            // now, but the barrier becomes permanent only when the deletion
+            // actually commits — a retained stream is still alive.
+            this.state.markStreamRemoved(streamId);
+            this.registeredWithRenderer.delete(streamId);
+            return Promise.resolve(this.options.deleteStream(streamId)).then(
+              (outcome) => {
+                if (outcome === 'active' || outcome === 'failed') {
+                  this.state.retireStreamTombstone(streamId);
+                }
+              },
+            );
+          }
         }
         assertNever(fact, 'Unhandled session fact');
       },
     );
+    return true;
   }
 
   handleRunFact(streamId: StreamTabId, event: SessionRunFactEvent): void {
+    // A run fact for a removed stream is stale by definition — for
+    // `child.activity` the fact's stream is the parent, so this also keeps a
+    // late roster from re-minting a removed parent's state.
+    if (this.state.isStreamRemoved(streamId)) return;
     // The table is exhaustive over `RunFactType`, so a slot always exists;
     // TypeScript just cannot correlate a union event with its own slot.
     const handle = this.runFactHandlers[event.type] as (
@@ -336,6 +403,11 @@ export class SessionFactApplier {
     parentStreamId: StreamTabId,
     next: StreamExecutionState['subagents'],
   ): void {
+    // Rows naming a removed child stay removed: a stale roster cannot put a
+    // tombstoned identity back.
+    next = next.filter(
+      (child) => !this.state.isStreamRemoved(child.childStreamId),
+    );
     // Roster facts can arrive before RUNNING/config creates the parent state
     // (TUI child-event-order `roster-first`). Provision a ToolUse bucket so
     // retention still runs; a later run.config refreshes the real category.
@@ -406,6 +478,11 @@ export class SessionFactApplier {
     previousPhase?: StreamPhase,
     substate?: StreamSubstate,
   ): Promise<void> {
+    // A status for a removed stream is stale: removal is final, so the
+    // transition must not re-mint the transcript or execution state the
+    // removal dropped. Public entry (hosts also reach this method directly),
+    // so the refusal lives here and not only in `handleSessionFact`.
+    if (this.state.isStreamRemoved(streamId)) return;
     // Land the status-machine phase in the parent rosters before this handler
     // can suspend, so rows are written in fact order and a slow active-phase
     // rehydrate can never overwrite a later phase.
@@ -423,6 +500,10 @@ export class SessionFactApplier {
         await this.state.streamLogs.ensureLoaded(streamId);
       }
     }
+    // The rehydrate await is an interleaving window: a removal that landed
+    // during it makes every mutation below — eviction, run-state minting,
+    // renderer notification — stale. Revalidate before any of them.
+    if (this.state.isStreamRemoved(streamId)) return;
 
     // Settlement watermark for status-time compaction finalization. Read after
     // any active-phase rehydrate and before inactive unfocused eviction —

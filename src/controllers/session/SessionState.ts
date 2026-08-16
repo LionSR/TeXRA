@@ -112,6 +112,16 @@ export class SessionState {
   // -- Ephemeral state (session-only, not persisted) --------------------------
   private readonly _streamStates = new Map<StreamTabId, StreamExecutionState>();
   private readonly _sessionState = new Map<StreamTabId, StreamSessionState>();
+  /**
+   * Identities removed this session. Removal is final for a stream identity:
+   * the fact applier refuses any later fact naming a removed stream, so a
+   * stale status, roster, edge, or attachment fact cannot re-mint the state
+   * deletion dropped. This set is the single owner of that rejection. It is
+   * deliberately uncapped: tombstones retire only at storage-root reset —
+   * the proven horizon for in-flight facts — because evicting one would
+   * silently reopen resurrection for its stream.
+   */
+  private readonly _removedStreams = new Set<StreamTabId>();
 
   readonly streamStatus: StreamStatusMachine;
   readonly followUps: ToolUseFollowUpQueue;
@@ -370,6 +380,30 @@ export class SessionState {
 
   // -- Lifecycle --------------------------------------------------------------
 
+  /**
+   * Tombstone a removed stream identity. Written provisionally when a
+   * `removeStream` fact lands and permanently when a deletion commits below;
+   * read by the fact applier, which rejects every later fact for the
+   * identity.
+   */
+  markStreamRemoved(stream: StreamTabId): void {
+    this._removedStreams.add(stream);
+  }
+
+  /** Whether `stream` was removed this session and must not be resurrected. */
+  isStreamRemoved(stream: StreamTabId): boolean {
+    return this._removedStreams.has(stream);
+  }
+
+  /**
+   * Drop the tombstone without touching stream state: a removal whose
+   * durable delete ended in retention (`active`/`failed`) means the stream
+   * still lives, so its facts must flow again.
+   */
+  retireStreamTombstone(stream: StreamTabId): void {
+    this._removedStreams.delete(stream);
+  }
+
   async clearStream(stream: StreamTabId): Promise<DeleteStreamResult> {
     const deletion = await this.stores.deleteStream(stream);
     if (deletion !== 'deleted') return deletion;
@@ -377,6 +411,7 @@ export class SessionState {
     this.streamStatus.clearStream(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
+    this.markStreamRemoved(stream);
 
     return 'deleted';
   }
@@ -400,6 +435,7 @@ export class SessionState {
       this.streamStatus.clearStream(stream);
       this._sessionState.delete(stream);
       this._streamStates.delete(stream);
+      this.markStreamRemoved(stream);
     }
     return deletion;
   }
@@ -436,6 +472,7 @@ export class SessionState {
   resetAfterStorageRootChange(): void {
     this._sessionState.clear();
     this._streamStates.clear();
+    this._removedStreams.clear();
   }
 
   /**

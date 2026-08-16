@@ -1,4 +1,5 @@
 // Local imports
+import type { DeleteStreamResult } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import {
@@ -95,7 +96,9 @@ export interface ProgressViewLifecycleCommandActions {
     stream: StreamTabId | '',
     requestId: string,
   ): Promise<void> | void;
-  deleteStream(stream: StreamTabId): Promise<void> | void;
+  deleteStream(
+    stream: StreamTabId,
+  ): Promise<DeleteStreamResult | undefined> | void;
   deleteAllStreams(): Promise<void> | void;
   stopStream(stream: StreamTabId): Promise<void> | void;
 }
@@ -226,8 +229,10 @@ export function createProgressViewCommandHandlers(
   return {
     [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
       lifecycle.setActiveStream(data.stream, data.requestId),
-    [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (data) =>
-      lifecycle.deleteStream(data.stream),
+    [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: async (data) => {
+      // The outcome matters to the session-fact applier, not the dispatcher.
+      await lifecycle.deleteStream(data.stream);
+    },
     [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => lifecycle.deleteAllStreams(),
     [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: (data) =>
       lifecycle.stopStream(data.stream),

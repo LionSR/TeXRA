@@ -1,7 +1,7 @@
 import PQueue from 'p-queue';
 
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
-import type { SessionStores } from '@agent/storage';
+import type { DeleteStreamResult, SessionStores } from '@agent/storage';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import {
   defaultSession,
@@ -428,12 +428,13 @@ export class ProgressBackend {
   /** Inject a session fact (tests / rare host seeds). Prefer the hub in production. */
   applySessionFact(
     ...args: Parameters<SessionFactApplier['handleSessionFact']>
-  ): void {
-    this.factApplier.handleSessionFact(...args);
+  ): boolean {
+    const admitted = this.factApplier.handleSessionFact(...args);
     const [fact] = args;
-    if (fact.type === 'setActiveStream') {
+    if (admitted && fact.type === 'setActiveStream') {
       this.handleStreamPresentationRequest(fact.payload);
     }
+    return admitted;
   }
 
   /** Inject a run fact (tests / rare host seeds). Prefer the hub in production. */
@@ -447,7 +448,14 @@ export class ProgressBackend {
     });
   }
 
-  async deleteStream(stream: StreamTabId): Promise<void> {
+  /**
+   * Delete a stream's durable state. Resolves to the retention outcome so the
+   * session-fact applier can keep its removal barrier provisional until the
+   * deletion commits: `active`/`failed` mean the stream still lives.
+   */
+  async deleteStream(
+    stream: StreamTabId,
+  ): Promise<DeleteStreamResult | undefined> {
     const wasActive = this.presentation.activeStream === stream;
     const activationGeneration = this.activationGeneration;
     const storageGeneration = this.storageGeneration;
@@ -470,6 +478,7 @@ export class ProgressBackend {
         retained === 'failed' ? 1 : 0,
       );
     }
+    return retained;
   }
 
   /** Whether local durable state exists for `stream` (log or task snapshot). */
@@ -762,8 +771,11 @@ export class ProgressBackend {
       this.session.events.subscribe(
         (sessionEvent) => {
           if (sessionEvent.scope !== 'session') return;
-          this.factApplier.handleSessionFact(sessionEvent.event);
-          if (sessionEvent.event.type === 'setActiveStream') {
+          const admitted = this.factApplier.handleSessionFact(
+            sessionEvent.event,
+          );
+          // A refused attachment (removed stream) must not activate or lease.
+          if (admitted && sessionEvent.event.type === 'setActiveStream') {
             this.handleStreamPresentationRequest(sessionEvent.event.payload);
           }
         },
