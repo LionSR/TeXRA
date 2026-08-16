@@ -95,7 +95,6 @@ describe('stream data usage parsing', () => {
         outputTokens: '2',
         cost: '0',
         cacheReadInputTokens: '3',
-        viaChatGptSubscription: true,
         usageRoute: 'chatgpt-subscription',
       },
     });
@@ -106,30 +105,10 @@ describe('stream data usage parsing', () => {
       cacheCreationInputTokens: 0,
       usageRoute: 'chatgpt-subscription',
     });
-    expect(usage.get('run')).not.toHaveProperty('viaChatGptSubscription');
-  });
-
-  it('normalizes persisted legacy subscription markers to usageRoute', () => {
-    const { usage } = parseUsageData({
-      run: {
-        inputTokens: 10,
-        outputTokens: 2,
-        cost: 0,
-        viaChatGptSubscription: true,
-      },
-    });
-
-    expect(usage.get('run')).toMatchObject({
-      inputTokens: 10,
-      outputTokens: 2,
-      cost: 0,
-      usageRoute: 'chatgpt-subscription',
-    });
-    expect(usage.get('run')).not.toHaveProperty('viaChatGptSubscription');
   });
 
   it.each([
-    ['subscription marker', { viaChatGptSubscription: 'yes' }],
+    ['retired subscription marker', { viaChatGptSubscription: true }],
     ['usage route', { usageRoute: 'unknown-route' }],
   ])('preserves a run with a malformed %s', (_field, malformedField) => {
     const warnSpy = mockWarn();

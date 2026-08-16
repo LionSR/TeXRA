@@ -486,13 +486,12 @@ export async function runToolUseFlow<C = unknown>(
           cause: migrationResult.error,
         });
       }
-      // Defensive fallback only: no resume handoff means the resume
-      // boundary above was never consulted for this call (e.g. a fresh
-      // launch that happens to find a leftover record for its execution
-      // id). Migrate/backfill here so PersistedFlow.ensureRecord never sees
-      // a stale legacy shape. Model-based compatibility inference for
-      // keyless records lives at the resume-retrieval boundary
-      // (SessionResumeRetrieval); this path stamps the active handler's key.
+      // Defensive fallback only: no resume handoff means the resume boundary
+      // above was never consulted for this call (e.g. a fresh launch that
+      // finds a leftover record for its execution id). Normalize the parsed
+      // record before `PersistedFlow.ensureRecord` sees it. Model-based
+      // compatibility inference for keyless records lives at the
+      // resume-retrieval boundary; this path stamps the active handler's key.
       let migratedData = migrationResult.data;
       let shouldWriteShared = migrationResult.migrated;
       if (migratedData.continuationGenerationId !== continuationGenerationId) {

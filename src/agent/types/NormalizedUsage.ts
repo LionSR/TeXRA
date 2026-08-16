@@ -9,7 +9,6 @@ import {
   TokenUsageStatsBaseSchema,
   UsageProviderSchema,
   UsageRouteSchema,
-  withLegacyUsageRoute,
 } from '@shared/schemas';
 
 /**
@@ -53,8 +52,6 @@ const NormalizedUsageBaseSchema = TokenUsageStatsBaseSchema.pick({
   _native: z.unknown().optional(),
 });
 
-export const NormalizedUsageSchema = withLegacyUsageRoute(
-  NormalizedUsageBaseSchema,
-);
+export const NormalizedUsageSchema = NormalizedUsageBaseSchema;
 
 export type NormalizedUsage = z.infer<typeof NormalizedUsageSchema>;

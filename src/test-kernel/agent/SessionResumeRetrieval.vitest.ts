@@ -53,6 +53,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { testModelCell } from './modelCellTestUtils';
+import { reflectionFlowShared } from './progressTestUtils';
 import { roundModelHandler } from './toolUseRoundTestUtils';
 
 const CONFIG = AgentConfigSchema.parse({
@@ -412,7 +413,7 @@ describe('retrieveSessionResumeData', () => {
     });
   });
 
-  it('rejects a malformed legacy MODEL user variable at the shared-state boundary', () => {
+  it('rejects a malformed MODEL user variable at the shared-state boundary', () => {
     const result = migrateSharedState({
       messages: [],
       continuationGenerationId: CONTINUATION_GENERATION_ID,
@@ -432,11 +433,13 @@ describe('retrieveSessionResumeData', () => {
     const executionId = 'workflow-current-conversation' as ExecutionId;
     const streamId =
       'reflection@gpt54#workflow-current-conversation' as StreamTabId;
-    await writeFlowRecord(executionId, {
-      currentRound: 1,
-      totalRounds: 2,
-      conversation: [{ role: 'user', content: 'Continue.' }],
-    });
+    await writeFlowRecord(
+      executionId,
+      reflectionFlowShared({
+        currentRound: 1,
+        conversation: [{ role: 'user', content: 'Continue.' }],
+      }),
+    );
 
     await expect(
       retrieveSessionResumeData(streamId, executionId, WORKFLOW_CONFIG),
@@ -478,7 +481,7 @@ describe('retrieveSessionResumeData', () => {
     });
   });
 
-  it('derives a missing model id from the legacy MODEL variable', () => {
+  it('does not derive a missing model id from the MODEL user variable', () => {
     const result = migrateSharedState({
       messages: [],
       continuationGenerationId: CONTINUATION_GENERATION_ID,
@@ -486,12 +489,9 @@ describe('retrieveSessionResumeData', () => {
       stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt55' }),
     });
 
-    expect(result).toMatchObject({
-      success: true,
-      data: { modelId: 'gpt55' },
-      // The derivation is a migration: the record must be rewritten with it.
-      migrated: true,
-    });
+    expect(result).toMatchObject({ success: true, migrated: false });
+    if (!result.success) return;
+    expect(result.data).not.toHaveProperty('modelId');
   });
 
   it('keeps a persisted model id over the MODEL variable', () => {
@@ -543,7 +543,7 @@ describe('retrieveSessionResumeData', () => {
     expect(resume.agentConfig.model).toBe('gpt55');
   });
 
-  it('lifts the legacy MODEL variable into the model id at the boundary', async () => {
+  it('uses the launch model when only MODEL contains a retired identity', async () => {
     const executionId = 'abc123-legacy-model' as ExecutionId;
     const streamId = 'chat@gpt54#abc123-legacy-model' as StreamTabId;
     await writeFlowRecord(executionId, {
@@ -555,8 +555,8 @@ describe('retrieveSessionResumeData', () => {
 
     const resume = await retrieveToolUseResume(streamId, executionId);
 
-    expect(resume.shared.modelId).toBe('gpt55');
-    expect(resume.agentConfig.model).toBe('gpt55');
+    expect(resume.shared.modelId).toBeUndefined();
+    expect(resume.agentConfig.model).toBe(CONFIG.model);
   });
 
   it('falls back to the launch model when nothing persisted a model', async () => {
@@ -1702,68 +1702,16 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     });
   });
 
-  it.each([
-    { name: 'direct stored-state recovery', withResume: false },
-    { name: 'retrieved canonical resume', withResume: true },
-  ])(
-    'migrates a legacy workspace before strict validation: $name',
-    async ({ withResume }) => {
-      const suffix = withResume ? 'retrieved' : 'stored';
-      const executionId = `abc141-${suffix}` as ExecutionId;
-      const streamId = `chat@gpt54#abc141-${suffix}` as StreamTabId;
-      const legacyWorkspaceSnapshot = {
-        todos: [
-          {
-            content: 'Ship the fix',
-            status: 'in_progress',
-            activeForm: 'Shipping the fix',
-          },
-        ],
-        plan: { objective: 'Migrate legacy workspace snapshots on resume' },
-      };
-      await writeFlowRecord(
-        executionId,
-        {
-          messages: [{ role: 'user', content: 'Continue.' }],
-          continuationGenerationId: CONTINUATION_GENERATION_ID,
-          shouldSkipCycle: true,
-          stateSlices: {
-            runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-            workspaceSnapshot: legacyWorkspaceSnapshot,
-            userChannels: {
-              input: Object.freeze({ MODEL: 'gpt54' }),
-              transient: {},
-            },
-          },
-        },
-        {
-          cursor: { nextNodeId: 'start/default' },
-          nodes: [{ action: 'default', nodeId: 'start' }],
-        },
-      );
+  it('rejects a retired workspace snapshot at the tool-use resume boundary', () => {
+    const result = migrateSharedState({
+      ...VALID_TOOL_USE_SHARED,
+      stateSlices: {
+        runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+        workspaceSnapshot: { todos: [], plan: null },
+        userChannels: { input: Object.freeze({}), transient: {} },
+      },
+    });
 
-      const resume = withResume
-        ? await retrieveToolUseResume(streamId, executionId)
-        : undefined;
-      const result = await runPersistedFlow(executionId, streamId, resume);
-      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
-
-      const healedRecord = await readFlowRecord(executionId);
-      const healedShared = ToolUseRunSharedCanonicalSchema.parse(
-        healedRecord?.shared,
-      );
-      expect(healedShared.modelId).toBe('gpt54');
-      expect(healedShared.stateSlices).not.toBeNull();
-      if (!healedShared.stateSlices) return;
-      const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(
-        healedShared.stateSlices.workspaceSnapshot,
-      );
-      expect(workspaceState.workPlan.todos).toEqual(
-        legacyWorkspaceSnapshot.todos,
-      );
-      expect(workspaceState.workPlan.plan).toEqual(
-        legacyWorkspaceSnapshot.plan,
-      );
-    },
-  );
+    expect(result.success).toBe(false);
+  });
 });

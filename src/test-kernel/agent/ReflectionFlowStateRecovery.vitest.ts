@@ -204,7 +204,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
     expect(await store.read(key)).toEqual(stored);
   });
 
-  it('migrates a valid legacy workspace snapshot before canonical writes', async () => {
+  it('rejects and preserves a retired workspace snapshot', async () => {
     const { key, run, store } = recoveryCase('legacy-workspace');
     const todo = {
       content: 'Preserve legacy workflow state',
@@ -226,13 +226,12 @@ describe('runReflectionFlow persisted-state recovery', () => {
     };
     await store.write(key, flowRecord(legacyShared));
 
-    const result = await run();
-
-    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-    const stored = await store.read<FlowRecord>(key);
-    const shared = ReflectionFlowStateCanonicalSchema.parse(stored?.shared);
-    expect(shared.workspaceSnapshot.workPlan.todos).toEqual([todo]);
-    expect(Object.hasOwn(shared.workspaceSnapshot, 'todos')).toBe(false);
+    await expect(run()).rejects.toMatchObject({
+      name: PersistedFlowStateError.name,
+      reason: 'invalid-shared',
+      cause: expect.objectContaining({ name: 'ZodError' }),
+    });
+    expect(await store.read(key)).toEqual(flowRecord(legacyShared));
   });
 
   it('clears a persisted cancellation latch when resuming a workflow', async () => {

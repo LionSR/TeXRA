@@ -9,8 +9,6 @@
  * - Workflow: agentConfig + executionId + transcript-format key
  */
 
-import { z } from 'zod';
-
 import {
   deriveResumability,
   RESUMABILITY_CAUSE,
@@ -18,7 +16,7 @@ import {
 } from '@agent/storage';
 import type { FlowRecord } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { ProviderMessageArraySchema } from '@agent/types/ProviderMessage';
+import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import {
   migrateSharedState,
   type PreparedShared,
@@ -115,17 +113,6 @@ function resumeRetrievalError(
     { cause: error },
   );
 }
-
-/**
- * Minimal schema for validating workflow flow record exists and has resumable state.
- * Full validation happens when the flow actually resumes.
- */
-const WorkflowFlowRecordStateSchema = z.looseObject({
-  currentRound: z.int().nonnegative(),
-  totalRounds: z.int().nonnegative(),
-  conversation: ProviderMessageArraySchema,
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
-});
 
 /**
  * Retrieve resume data for a WAITING session.
@@ -247,11 +234,7 @@ async function retrieveWorkflowResumeData(
     const flowRecord = await probeResumableFlowRecord(executionId, 'workflow');
     if (!flowRecord) return null;
 
-    // Minimal validation - just verify essential fields exist.
-    // Full state validation happens when the flow actually resumes.
-    const parseResult = WorkflowFlowRecordStateSchema.safeParse(
-      flowRecord.shared,
-    );
+    const parseResult = ReflectionFlowStateSchema.safeParse(flowRecord.shared);
     if (!parseResult.success) {
       logger.warn(`Invalid workflow flow record for execution: ${executionId}`);
       return null;

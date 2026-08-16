@@ -7,7 +7,6 @@ import {
   type AgentRunStateSnapshot,
 } from '@agent/core/state/AgentState';
 import {
-  AgentWorkspaceCurrentSnapshotSchema,
   AgentWorkspaceStateSnapshotSchema,
   type AgentWorkspaceState,
 } from '@agent/core/state/AgentWorkspaceState';
@@ -23,16 +22,10 @@ import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerC
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { JsonValueSchema, RetryErrorInfoSchema } from '@shared/schemas';
 
-import { currentModelFromUserChannels } from '../modelSwitchState';
-
 const StateSlicesSchema = z.object({
   runStateSnapshot: AgentRunStateSnapshotSchema,
   workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
   userChannels: UserVariableChannelsSchema,
-});
-
-const StateSlicesCanonicalSchema = StateSlicesSchema.extend({
-  workspaceSnapshot: AgentWorkspaceCurrentSnapshotSchema,
 });
 
 export type StateSlicesSnapshot = z.output<typeof StateSlicesSchema>;
@@ -57,8 +50,7 @@ const ToolUseRunSharedSchema = z.object({
   continuationGenerationId: z.uuid(),
   /**
    * The model the run is on, mirroring the live `ModelCell`. This is the
-   * resume SSOT for model identity; the `MODEL` user variable is the legacy
-   * record of it, read only when this field is absent.
+   * resume SSOT for model identity.
    */
   modelId: z.string().optional(),
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullable()
@@ -77,10 +69,8 @@ const ToolUseRunSharedSchema = z.object({
   structured: JsonValueSchema.optional(),
 });
 
-/** Per-step schema after the one-time legacy workspace migration. */
-export const ToolUseRunSharedCanonicalSchema = ToolUseRunSharedSchema.extend({
-  stateSlices: StateSlicesCanonicalSchema.nullable(),
-});
+/** Per-step schema for the canonical persisted shared state. */
+export const ToolUseRunSharedCanonicalSchema = ToolUseRunSharedSchema;
 
 export type ToolUseRunShared = z.output<typeof ToolUseRunSharedSchema>;
 
@@ -142,16 +132,9 @@ type SharedStateMigrationResult =
   | { success: false; error: z.ZodError };
 
 /**
- * Parse persisted shared state once, normalizing the workspace snapshot and
- * pre-`modelId` model identity before live flow code sees it.
- *
- * Malformed known fields — and workspace-snapshot data a snapshot union
- * arm rejects before its `.transform` runs — come back as
- * `{success: false}`. Only a validation failure reached by the nested
- * `.parse()` inside a union arm's `.transform` (post-discrimination)
- * throws its ZodError through `safeParse`. Both failure modes are loud,
- * and both callers already handle the throw at their existing
- * boundaries.
+ * Parse persisted shared state once before live flow code sees it. Malformed
+ * known fields return `{success: false}` and are handled by the existing
+ * resume boundary.
  */
 export function migrateSharedState(
   shared: unknown,
@@ -159,23 +142,9 @@ export function migrateSharedState(
   const parsed = ToolUseRunSharedSchema.safeParse(shared);
   if (!parsed.success) return parsed;
 
-  // Records written before `modelId` existed carry the run's model only in the
-  // `MODEL` user variable. Lift it here, at the one deserialization boundary,
-  // so no downstream reader has to know the field can be absent. A record with
-  // neither leaves `modelId` unset and the caller falls back to its config.
-  const derivedModelId =
-    parsed.data.modelId ??
-    (parsed.data.stateSlices
-      ? currentModelFromUserChannels(parsed.data.stateSlices.userChannels)
-      : undefined);
-  const data =
-    derivedModelId === undefined
-      ? parsed.data
-      : { ...parsed.data, modelId: derivedModelId };
-
   return {
     success: true,
-    data,
-    migrated: !isDeepStrictEqual(shared, data),
+    data: parsed.data,
+    migrated: !isDeepStrictEqual(shared, parsed.data),
   };
 }

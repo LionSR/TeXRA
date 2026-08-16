@@ -19,7 +19,6 @@ import {
   TokenUsageStatsBaseSchema,
   UsageRouteSchema,
   isEmptyUsage,
-  withLegacyUsageRoute,
   type TokenUsageStats,
 } from './usage';
 
@@ -81,14 +80,12 @@ const numericUsageParsingShape = Object.fromEntries(
  * loudly on failure, instead of defaulting to zero. Never wrap this in
  * `.catch()` for persisted/cost data — see `parseUsageData`'s docs and #7464.
  */
-export const TokenUsageStatsParsingBaseSchema = withLegacyUsageRoute(
-  z.object({
-    ...numericUsageParsingShape,
-    usageRoute: UsageRouteSchema.optional(),
-    // The numeric fields are derived from `TokenUsageStatsBaseSchema.shape` above;
-    // TypeScript cannot recover the required keys through `Object.fromEntries`.
-  }),
-) as z.ZodType<TokenUsageStats>;
+export const TokenUsageStatsParsingBaseSchema = z.strictObject({
+  ...numericUsageParsingShape,
+  usageRoute: UsageRouteSchema.optional(),
+  // The numeric fields are derived from `TokenUsageStatsBaseSchema.shape` above;
+  // TypeScript cannot recover the required keys through `Object.fromEntries`.
+}) as unknown as z.ZodType<TokenUsageStats>;
 
 export interface ParsedUsageData {
   /** Successfully parsed, non-empty per-run usage. */
