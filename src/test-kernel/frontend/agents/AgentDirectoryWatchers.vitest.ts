@@ -100,6 +100,12 @@ vi.mock('@frontend/ui/dialogs', () => ({
 }));
 
 vi.mock('@logger/logUtils', () => ({
+  createLog: () => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  }),
   debug: vi.fn(),
   info: vi.fn(),
   warn: vi.fn(),

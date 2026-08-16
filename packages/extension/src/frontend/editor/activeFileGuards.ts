@@ -6,7 +6,7 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'ActiveFileGuards';
@@ -112,6 +112,8 @@ export async function runGuardedLatexCommand(
 ): Promise<void> {
   const { channel, action, saveDocument = false, errorMessage } = options;
 
+  const log = createLog(channel);
+
   try {
     const guardResult = await getActiveLatexEditor(saveDocument);
 
@@ -119,9 +121,9 @@ export async function runGuardedLatexCommand(
       const failure = GUARD_FAILURE_MESSAGES[guardResult.status];
       const logLine = `Cannot ${action}: ${failure.logTail}`;
       if (failure.level === 'error') {
-        logger.error(channel, logLine);
+        log.error(logLine);
       } else {
-        logger.warn(channel, logLine);
+        log.warn(logLine);
       }
       return;
     }

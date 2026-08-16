@@ -17,7 +17,7 @@ import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import { runLatexFormatter } from '@latex/formatter/texFormatter';
 import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { AgentCategory } from '@shared/schemas';
 import { delay } from '@utils/core';
 
@@ -25,6 +25,8 @@ import {
   getIndentTeXNotification,
   showLatexHousekeepingNotification,
 } from './latexHousekeepingNotifications';
+
+const log = createLog(CHANNEL);
 
 export async function handleIndentTeX(): Promise<void> {
   try {
@@ -47,8 +49,7 @@ export async function handleFixCompilation(): Promise<void> {
       errorMessage: 'Error launching LaTeX compilation fixer',
     },
     async ({ editor, relativePath }) => {
-      logger.info(
-        CHANNEL,
+      log.info(
         `Launching tool-use agent to fix compilation for: ${relativePath}`,
       );
 
@@ -79,7 +80,7 @@ export async function handleIndentCurrentTeX(): Promise<void> {
       errorMessage: 'Error in indentTeX command',
     },
     async ({ relativePath }) => {
-      logger.debug(CHANNEL, `Indenting LaTeX file: ${relativePath}`);
+      log.debug(`Indenting LaTeX file: ${relativePath}`);
 
       const success = await runLatexFormatter(relativePath);
 
@@ -104,7 +105,7 @@ export async function handleGetTeXCount(): Promise<void> {
       errorMessage: 'Error getting tex count',
     },
     async ({ relativePath }) => {
-      logger.debug(CHANNEL, `Getting tex count for: ${relativePath}`);
+      log.debug(`Getting tex count for: ${relativePath}`);
 
       const countingMode = await vscode.window.showQuickPick<
         vscode.QuickPickItem & { value: TexcountMode }

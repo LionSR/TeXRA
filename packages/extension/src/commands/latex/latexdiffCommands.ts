@@ -37,7 +37,7 @@ import {
   describeMathMarkupOption,
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
@@ -51,6 +51,8 @@ import {
   getLatexdiffPackNotifications,
   showLatexHousekeepingNotification,
 } from './latexHousekeepingNotifications';
+
+const log = createLog(CHANNEL);
 
 type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
 
@@ -66,7 +68,7 @@ async function withLatexdiffTool<T>(
 ): Promise<T | undefined> {
   try {
     if (!(await checkToolInstalled(tool))) {
-      logger.warn(CHANNEL, `${tool} is not installed; command will not run.`);
+      log.warn(`${tool} is not installed; command will not run.`);
       return undefined;
     }
     return await action();
@@ -106,7 +108,7 @@ async function promptForLatexdiffMathMarkup(): Promise<
     prompt: `Saved default: ${configuredMode} — press Enter to accept, or pick another`,
   });
   if (!pick) {
-    logger.debug(CHANNEL, 'Math markup selection cancelled by user');
+    log.debug('Math markup selection cancelled by user');
   }
   return pick?.value;
 }
@@ -177,8 +179,7 @@ async function restorePreparedViewerTarget(
   } catch (err) {
     // The original setup error still propagates; a failed restore is a reason
     // to skip the argument-free viewer rather than open a stale/unrelated PDF.
-    logger.warn(
-      CHANNEL,
+    log.warn(
       `Failed to restore the last prepared diff before viewer handoff: ${toErrorMessage(err)}`,
     );
     return false;
@@ -214,8 +215,7 @@ async function prepareLatexdiffResultsAndScheduleViewer(
         );
         if (opened) {
           lastProcessedLocation = opened.diffLocation;
-          logger.debug(
-            CHANNEL,
+          log.debug(
             `Successfully generated diff: ${opened.diffFilePath}${suffix}`,
           );
           if (opened.viewerReady) {
@@ -224,8 +224,7 @@ async function prepareLatexdiffResultsAndScheduleViewer(
           }
         }
       } else if (!result.success) {
-        logger.warn(
-          CHANNEL,
+        log.warn(
           `Failed to generate diff${suffix}: ${result.message ?? 'Unknown error'}`,
         );
       }
@@ -261,10 +260,7 @@ async function runDiffAndOpen(
 ): Promise<void> {
   const mathMarkup = await promptForLatexdiffMathMarkup();
   if (!mathMarkup) return;
-  logger.info(
-    CHANNEL,
-    `Running ${toolLabel} with math markup mode: ${mathMarkup}`,
-  );
+  log.info(`Running ${toolLabel} with math markup mode: ${mathMarkup}`);
 
   const result = await runDiff(mathMarkup);
   if (!result.success || !result.diffFileName) {
@@ -356,8 +352,7 @@ async function handlePackLatexdiffvc(
     'latexdiff-vc',
     'Error packing LaTeX diff',
     async () => {
-      logger.debug(
-        CHANNEL,
+      log.debug(
         `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
       );
       const fileToUse = baseFile ?? inputFile;
@@ -375,8 +370,7 @@ async function handleCleanLatexdiffvc(
     'latexdiff-vc',
     'Error cleaning LaTeX diff',
     async () => {
-      logger.debug(
-        CHANNEL,
+      log.debug(
         `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}`,
       );
       const fileToUse = baseFile ?? inputFile;
@@ -392,10 +386,7 @@ async function handleRunLatexdiff(
     'latexdiff',
     'Error running LaTeX diffs',
     async () => {
-      logger.debug(
-        CHANNEL,
-        `Command called with config: ${JSON.stringify(config)}`,
-      );
+      log.debug(`Command called with config: ${JSON.stringify(config)}`);
 
       const { agent, model, inputFile } = config;
 
@@ -410,19 +401,13 @@ async function handleRunLatexdiff(
       const mathMarkup = await promptForLatexdiffMathMarkup();
       if (!mathMarkup) return;
 
-      logger.info(
-        CHANNEL,
-        `Running latexdiff with math markup mode: ${mathMarkup}`,
-      );
+      log.info(`Running latexdiff with math markup mode: ${mathMarkup}`);
 
       const generateBetweenRoundDiffs = workspaceSM.get<boolean>(
         WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
         LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
       );
-      logger.debug(
-        CHANNEL,
-        `Between-round diffs enabled: ${generateBetweenRoundDiffs}`,
-      );
+      log.debug(`Between-round diffs enabled: ${generateBetweenRoundDiffs}`);
 
       const outputsByRound = normalizeRunLatexdiffOutputsByRound(
         config.outputsByRound,

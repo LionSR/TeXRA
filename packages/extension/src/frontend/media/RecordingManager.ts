@@ -3,11 +3,12 @@ import * as vscode from 'vscode';
 
 // Local imports - media utilities
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'RecordingManager';
+const log = createLog(CHANNEL);
 
 type RecordingMessageInput =
   { status: 'started' | 'stopped' } | { status: 'error'; error: string };
@@ -47,7 +48,7 @@ export class RecordingManager {
       }
     } catch (error) {
       const errorMsg = toErrorMessage(error);
-      logger.error(CHANNEL, `Error starting recording: ${errorMsg}`);
+      log.error(`Error starting recording: ${errorMsg}`);
       this.notifyError(webviewView.webview, errorMsg);
     }
   }
@@ -86,7 +87,7 @@ export class RecordingManager {
       );
     } catch (error) {
       const errorMsg = toErrorMessage(error);
-      logger.error(CHANNEL, `Error stopping recording: ${errorMsg}`);
+      log.error(`Error stopping recording: ${errorMsg}`);
       this.notifyError(webviewView.webview, errorMsg);
       acknowledgeStop();
     }

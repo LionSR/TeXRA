@@ -5,13 +5,14 @@ import * as vscode from 'vscode';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runCleanSingle, runCleanMultiple } from '@housekeeping/clean';
 import { runCleanRunDir } from '@housekeeping/runDirOps';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 
 import type { FileOpResult } from '@shared/schemas';
 import { type CleanConfig } from './fileOpSchemas';
 import { runFileOp } from './fileOpRunner';
 
 const CHANNEL = 'cleanCommands';
+const log = createLog(CHANNEL);
 
 function showCleanResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
@@ -50,7 +51,7 @@ export async function handleCleanMultiple(
   inputFiles: string[] = [],
 ): Promise<void> {
   if (inputFiles.length > 0) {
-    logger.debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
+    log.debug(`Additional files: ${inputFiles.join(', ')}`);
   }
   const result =
     inputFiles.length > 0
@@ -62,10 +63,7 @@ export async function handleCleanMultiple(
 }
 
 export async function handleClean(config: CleanConfig): Promise<void> {
-  logger.debug(
-    CHANNEL,
-    `Clean command called with config: ${JSON.stringify(config)}`,
-  );
+  log.debug(`Clean command called with config: ${JSON.stringify(config)}`);
   await runFileOp(config, {
     runSingle: runCleanSingle,
     runMultiple: runCleanMultiple,

@@ -15,7 +15,7 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
@@ -28,6 +28,7 @@ import { extendEnvPath } from '@utils/system/platformPaths';
 import { isGitRepository } from '@utils/git/isGitRepository';
 
 const CHANNEL = 'gitCommands';
+const log = createLog(CHANNEL);
 
 export function registerGitCommands(context: vscode.ExtensionContext): void {
   // `isGitRepository`, `getRecentCommits`, and `findCommitInHistory`
@@ -164,7 +165,7 @@ async function promptGitMissing(): Promise<void> {
     ? (['Copy Command', 'Run in Terminal', 'Open git-scm.com'] as const)
     : (['Open git-scm.com'] as const);
 
-  logger.error(CHANNEL, message);
+  log.error(message);
   const selected = await vscode.window.showErrorMessage(message, ...actions);
   if (selected === 'Copy Command' && command) {
     await vscode.env.clipboard.writeText(command);
@@ -198,7 +199,7 @@ function buildOverleafClonePorts(
         true,
       ),
     showInvalidToken: async (spec, message) => {
-      logger.error(CHANNEL, message);
+      log.error(message);
       const action = await vscode.window.showErrorMessage(
         message,
         ...(spec.tokenHint ? (['How to get a token'] as const) : []),
@@ -213,7 +214,7 @@ function buildOverleafClonePorts(
     listWorkspaceEntries: async (workspacePath) =>
       (await WorkspaceFS.readDir(workspacePath)).map(([name]) => name),
     showWorkspaceUnreadable: (e) => {
-      logger.error(CHANNEL, `readDir failed: ${toErrorMessage(e)}`);
+      log.error(`readDir failed: ${toErrorMessage(e)}`);
       void vscode.window.showErrorMessage('Cannot read workspace folder.');
     },
     showWorkspaceNotEmpty: () => {
@@ -260,7 +261,7 @@ function buildOverleafClonePorts(
       void vscode.window.showErrorMessage(message);
     },
     logCloneError: (message) => {
-      logger.error(CHANNEL, `Clone failed: ${message}`);
+      log.error(`Clone failed: ${message}`);
     },
   };
 }

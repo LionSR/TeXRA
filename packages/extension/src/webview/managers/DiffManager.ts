@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   LatexdiffMessage,
@@ -12,6 +12,10 @@ import { BaseWebviewManager } from './BaseWebviewManager';
 
 export class DiffManager extends BaseWebviewManager {
   private readonly channel = 'DiffManager';
+
+  private get log() {
+    return createLog(this.channel);
+  }
 
   handleLatexdiff(message: LatexdiffMessage): void {
     void vscode.commands.executeCommand(
@@ -56,7 +60,7 @@ export class DiffManager extends BaseWebviewManager {
       const infoMessage = isGitRepo
         ? 'No recent commits found for this repository.'
         : 'This workspace is not a Git repository.';
-      logger.info(this.channel, infoMessage);
+      this.log.info(infoMessage);
       void vscode.window.showInformationMessage(infoMessage);
     }
 

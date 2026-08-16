@@ -8,11 +8,12 @@ import * as vscode from 'vscode';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const CHANNEL = 'FigCommands';
+const log = createLog(CHANNEL);
 
 export async function handleExtractTikzFigures(): Promise<void> {
   await runGuardedLatexCommand(
@@ -22,10 +23,7 @@ export async function handleExtractTikzFigures(): Promise<void> {
       errorMessage: 'extractTikzFigures command failed',
     },
     async ({ relativePath: filePath }) => {
-      logger.debug(
-        CHANNEL,
-        `Processing LaTeX file for TikZ figures: ${filePath}`,
-      );
+      log.debug(`Processing LaTeX file for TikZ figures: ${filePath}`);
 
       const labeledTikzPictures = await TikzPictureManager.extract(
         pathToLocation(filePath),
@@ -67,10 +65,7 @@ export async function handleCompileTikzFigures(): Promise<void> {
       errorMessage: 'compileTikzFigures command failed',
     },
     async ({ relativePath: filePath }) => {
-      logger.debug(
-        CHANNEL,
-        `Processing LaTeX file for TikZ compilation: ${filePath}`,
-      );
+      log.debug(`Processing LaTeX file for TikZ compilation: ${filePath}`);
 
       await vscode.window.withProgress(
         {

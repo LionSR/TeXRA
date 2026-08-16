@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { nanoid } from 'nanoid';
 
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -49,6 +49,10 @@ export class BundledViewContentProvider {
   private readonly channel: string;
   private readonly viewPath: string;
 
+  private get log() {
+    return createLog(this.channel);
+  }
+
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly viewName: string,
@@ -70,7 +74,7 @@ export class BundledViewContentProvider {
         'index.html',
       );
 
-      logger.debug(this.channel, `Generated HTML content for ${this.viewName}`);
+      this.log.debug(`Generated HTML content for ${this.viewName}`);
 
       return buildWebviewHtml(webview, htmlPath, {
         commonStyleUri: this.buildUri(webview, [
@@ -90,10 +94,7 @@ export class BundledViewContentProvider {
         ]),
       });
     } catch (err) {
-      logger.error(
-        this.channel,
-        `Error generating HTML content: ${toErrorMessage(err)}`,
-      );
+      this.log.error(`Error generating HTML content: ${toErrorMessage(err)}`);
       return '<html><body>Error loading content</body></html>';
     }
   }
