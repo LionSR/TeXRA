@@ -6,8 +6,9 @@ import { LRUCache } from 'lru-cache';
 
 import { createLog } from '@logger/logUtils';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { assertNever } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   ReplacementCategory,
@@ -100,11 +101,6 @@ function applyAllPolicy(text: string): string {
 }
 
 const replacementEngine = {
-  /** Apply all configured non-regex replacement rules. */
-  applyNonRegex(text: string): string {
-    return applyNonRegexPolicy(text);
-  },
-
   /**
    * Apply every replacement rule in the recommended order. Non-regex
    * replacements run before and after regex replacements to fix artifacts they
@@ -138,6 +134,8 @@ const replacementEngine = {
         // Writing a .tex file runs the full pipeline and then restores the
         // LaTeX built-in section sign from the KaTeX-only destination.
         return restoreLatexSectionSign(applyAllPolicy(text));
+      default:
+        return assertNever(purpose, 'Unknown replacement purpose');
     }
   },
 };
