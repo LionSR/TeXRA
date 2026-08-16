@@ -17,7 +17,12 @@ import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { appSignals } from '@eventBus/AppSignals';
 
-import type { Disposable } from '@platform/interfaces';
+import {
+  SHUTDOWN_PHASE,
+  type Disposable,
+  type LifecycleHost,
+} from '@platform/interfaces';
+import { tryPlatform } from '@platform/platform';
 import { jitteredExponentialBackoffMs } from '@utils/core';
 import {
   createBoundedIdSet,
@@ -180,6 +185,8 @@ export abstract class PollingSourceBase<
     (keys: readonly K[]) => void
   >();
   private timer: ReturnType<typeof setInterval> | undefined;
+  private shutdownRegistration: Disposable | undefined;
+  private shutdownLifecycle: LifecycleHost | undefined;
   private tickInFlight = false;
 
   constructor(protected readonly config: PollingSourceConfig) {
@@ -378,10 +385,13 @@ export abstract class PollingSourceBase<
   }
 
   private ensureTimer(): void {
+    this.registerShutdownIfNeeded();
     if (this.timer) return;
     this.timer = setInterval(() => {
       void this.tick();
     }, this.config.pollIntervalMs);
+    // A polling timer must never keep a host process alive on its own.
+    this.timer.unref?.();
     // Fire an immediate tick so first-subscribe doesn't wait a full interval.
     void this.tick();
   }
@@ -390,6 +400,32 @@ export abstract class PollingSourceBase<
     if (!this.timer) return;
     clearInterval(this.timer);
     this.timer = undefined;
+  }
+
+  /**
+   * Register `disposeAll` with the platform shutdown registry exactly once per
+   * lifecycle instance. Uses `tryPlatform()` so the base stays usable in
+   * browser/test contexts where no platform is installed, and defers to the
+   * first subscription so the shared singletons (constructed at module load,
+   * before `initPlatform()`) still register once the platform exists.
+   *
+   * Keyed on the lifecycle instance rather than the disposable because
+   * extension reactivation (and the test harness) replaces the whole
+   * `LifecycleHost`; a stale registration must be swapped for one on the new
+   * host instead of skipping the re-registration. The callback also clears the
+   * marker so a drained lifecycle can never satisfy the idempotency guard on a
+   * later subscribe.
+   */
+  private registerShutdownIfNeeded(): void {
+    const lifecycle = tryPlatform()?.lifecycle;
+    if (!lifecycle || this.shutdownLifecycle === lifecycle) return;
+    this.shutdownRegistration?.dispose();
+    this.shutdownRegistration = lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => {
+      this.shutdownRegistration = undefined;
+      this.shutdownLifecycle = undefined;
+      this.disposeAll();
+    });
+    this.shutdownLifecycle = lifecycle;
   }
 
   private async tick(): Promise<void> {
