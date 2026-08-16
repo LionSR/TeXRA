@@ -24,6 +24,7 @@ import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApp
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import type { ExtensionTexraConfig } from '@frontend/vscode/texraConfig';
+import { DisposableStore } from '@platform/disposable';
 import type { WorkspaceProvider } from '@platform/interfaces';
 import type {
   AgentProposalPermission,
@@ -58,7 +59,7 @@ type ProgressTarget =
   | {
       readonly placement: 'editor';
       readonly panel: vscode.WebviewPanel;
-      readonly disposables: vscode.Disposable[];
+      readonly disposables: DisposableStore;
       ready: boolean;
     };
 
@@ -199,15 +200,15 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       runtimeSession.interactions,
       { replayWhenAttached: true },
     );
-    this._disposables.push(
-      { dispose: this.detachHostInteractions },
-      { dispose: () => this.toolEditApprovals.dispose() },
-      { dispose: detachTerminalResultToast },
-    );
+    this._disposables.add({ dispose: this.detachHostInteractions });
+    this._disposables.add({
+      dispose: () => this.toolEditApprovals.dispose(),
+    });
+    this._disposables.add({ dispose: detachTerminalResultToast });
 
     ProgressViewProvider._instance = this;
 
-    this._disposables.push(
+    this._disposables.add(
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
         const transition = this.config.enqueueWorkspaceTransition(
           this.workspace.getWorkspacePath(),
@@ -226,6 +227,8 @@ export class ProgressViewProvider extends BaseWebviewProvider {
           },
         );
       }),
+    );
+    this._disposables.add(
       vscode.window.onDidChangeActiveColorTheme(({ kind }) => {
         // The webview only needs the THEME_SET message here (BaseWebviewApp's
         // onThemeChange swaps the body class); rebuilding metadata for every
@@ -240,7 +243,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
   public async initialize(): Promise<void> {
     await this.backend.load();
-    this._disposables.push({
+    this._disposables.add({
       dispose: appSignals.on('extensionDeactivating', () => {
         this.backend.markAllRunningTasksAsCancelled();
       }),
@@ -451,19 +454,21 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       },
     );
     panel.iconPath = new vscode.ThemeIcon('pulse');
-    const disposables: vscode.Disposable[] = [];
+    const disposables = new DisposableStore();
     // Claim the target before wiring content: the webview's ready handshake
     // can only arrive after this synchronous block, and it needs the panel to
     // already be the target it reports readiness for.
     this.target = { placement: 'editor', panel, disposables, ready: false };
 
-    disposables.push(
-      this.setupWebviewContent(panel),
+    disposables.add(this.setupWebviewContent(panel));
+    disposables.add(
       panel.onDidChangeViewState((e) => {
         if (e.webviewPanel.visible) {
           this.syncFullView();
         }
       }),
+    );
+    disposables.add(
       panel.onDidDispose(() => {
         this.releaseEditorTarget();
       }),
@@ -487,8 +492,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     const target = this.target;
     if (target?.placement !== 'editor') return;
     this.target = undefined;
-    for (const disposable of target.disposables) disposable.dispose();
-    if (options.disposePanel) target.panel.dispose();
+    try {
+      target.disposables.dispose();
+    } finally {
+      if (options.disposePanel) target.panel.dispose();
+    }
   }
 
   private getActiveWebview(): vscode.Webview | undefined {
