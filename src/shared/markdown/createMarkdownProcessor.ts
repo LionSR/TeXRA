@@ -702,6 +702,32 @@ let normalizeEnvironmentProbe: BegEndEnvironmentProbe | undefined;
  * too: the probe and `applyEnvironmentShields` must always slice the same LF
  * string markdown-it's block parser sees.
  */
+/**
+ * Inline/display math shield for the HTML normalizer's first pass. It keeps
+ * the lax inline `$…$` contract but leaves environments for the second,
+ * structural pass so HTML block containers can be unwrapped in between.
+ */
+export function protectLatexMathSpansForNormalizeInline(content: string): {
+  content: string;
+  restore: (value: string) => string;
+} {
+  const protectedMath = protectByPatterns(
+    content,
+    MATH_SPAN_PATTERNS,
+    'LATEX-MATH',
+    true,
+  );
+  return {
+    content: protectedMath.content,
+    restore: (value) =>
+      restorePlaceholders(
+        value,
+        protectedMath.placeholder,
+        protectedMath.items,
+      ),
+  };
+}
+
 export function protectLatexMathSpansForNormalize(content: string): {
   content: string;
   restore: (value: string) => string;

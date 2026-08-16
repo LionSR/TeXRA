@@ -1,5 +1,8 @@
 import { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
-import { protectLatexMathSpansForNormalize } from '@shared/markdown/createMarkdownProcessor';
+import {
+  protectLatexMathSpansForNormalize,
+  protectLatexMathSpansForNormalizeInline,
+} from '@shared/markdown/createMarkdownProcessor';
 import { clamp } from '@utils/core';
 
 // Only exact supported tag names enter the presentation grammar. Suffixes such
@@ -113,26 +116,98 @@ function quoteHtmlBlock(body: string): string {
     .join('\n');
 }
 
-// Convert innermost `<blockquote>` wrappers that contain an environment opener
-// into markdown blockquote prefixes, iterating so nested wrappers are handled
-// outside-in after their inner wrappers are converted. Blockquotes without an
-// environment stay for the existing normalization pass.
-function quoteBlockquoteEnvironmentWrappers(content: string): string {
-  const innerBlockquoteEnvironment = new RegExp(
-    `<blockquote${HTML_ATTRIBUTES}${HTML_TAG_END}((?:(?!<blockquote)[\\s\\S])*?)<\\/blockquote>`,
-    'gi',
-  );
+const BLOCKQUOTE_OPEN_CAPTURE_RE = new RegExp(
+  `<(blockquote)${HTML_ATTRIBUTES}${HTML_TAG_END}`,
+  'gi',
+);
+const BLOCKQUOTE_CLOSE_CAPTURE_RE = /<\/(blockquote)>/gi;
+
+interface HtmlTagEvent {
+  readonly index: number;
+  readonly end: number;
+  readonly name: string;
+  readonly closing: boolean;
+}
+
+interface HtmlTagPair {
+  readonly start: number;
+  readonly end: number;
+  readonly bodyStart: number;
+  readonly bodyEnd: number;
+  readonly name: string;
+}
+
+function findBlockquotePairs(content: string): HtmlTagPair[] {
+  const events: HtmlTagEvent[] = [];
+  for (const match of content.matchAll(BLOCKQUOTE_OPEN_CAPTURE_RE)) {
+    const index = match.index ?? 0;
+    events.push({
+      index,
+      end: index + match[0].length,
+      name: match[1]!.toLowerCase(),
+      closing: false,
+    });
+  }
+  for (const match of content.matchAll(BLOCKQUOTE_CLOSE_CAPTURE_RE)) {
+    const index = match.index ?? 0;
+    events.push({
+      index,
+      end: index + match[0].length,
+      name: match[1]!.toLowerCase(),
+      closing: true,
+    });
+  }
+  events.sort((a, b) => a.index - b.index);
+
+  const stack: Array<{ name: string; start: number; bodyStart: number }> = [];
+  const pairs: HtmlTagPair[] = [];
+  for (const event of events) {
+    if (!event.closing) {
+      stack.push({
+        name: event.name,
+        start: event.index,
+        bodyStart: event.end,
+      });
+      continue;
+    }
+    for (let index = stack.length - 1; index >= 0; index--) {
+      if (stack[index]!.name !== event.name) continue;
+      const open = stack[index]!;
+      stack.splice(index, 1);
+      pairs.push({
+        start: open.start,
+        end: event.end,
+        bodyStart: open.bodyStart,
+        bodyEnd: event.index,
+        name: event.name,
+      });
+      break;
+    }
+  }
+  return pairs.sort((a, b) => a.start - b.start);
+}
+
+function convertEnvironmentBlockquotes(content: string): string {
   let out = content;
   for (;;) {
-    let changed = false;
-    out = out.replaceAll(innerBlockquoteEnvironment, (match, body: string) => {
-      if (!/\\begin\{[a-z]+\}/.test(body)) return match;
-      changed = true;
-      return quoteHtmlBlock(body);
-    });
-    if (!changed) break;
+    const pair = findBlockquotePairs(out).find((candidate) =>
+      /\\begin\{[a-z]+\}/.test(
+        out.slice(candidate.bodyStart, candidate.bodyEnd),
+      ),
+    );
+    if (pair === undefined) break;
+    out =
+      out.slice(0, pair.start) +
+      quoteHtmlBlock(out.slice(pair.bodyStart, pair.bodyEnd)) +
+      out.slice(pair.end);
   }
   return out;
+}
+
+function removeParagraphDivWrappers(content: string): string {
+  return content
+    .replaceAll(PARAGRAPH_OPEN_TAG_RE, '')
+    .replaceAll(/<\/(?:p|div)>/gi, '\n\n');
 }
 
 const MARKDOWN_BLOCKQUOTE_PREFIX_RE = /^(?:(?:[ \t]*>[ \t]?))+/u;
@@ -141,42 +216,34 @@ function markdownBlockquotePrefix(prefix: string): string {
   return MARKDOWN_BLOCKQUOTE_PREFIX_RE.exec(prefix)?.[0] ?? '';
 }
 
-function replaceBrWithQuotePrefix(source: string, offset: number): string {
-  const lineStart = source.lastIndexOf('\n', offset - 1) + 1;
+function computeLineStarts(content: string): number[] {
+  const lineStarts = [0];
+  for (let index = 0; index < content.length; index++) {
+    if (content.charCodeAt(index) === 10) lineStarts.push(index + 1);
+  }
+  return lineStarts;
+}
+
+function lineStartAt(lineStarts: readonly number[], offset: number): number {
+  let low = 0;
+  let high = lineStarts.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (lineStarts[mid]! <= offset) low = mid + 1;
+    else high = mid;
+  }
+  return lineStarts[low - 1] ?? 0;
+}
+
+function replaceBrWithQuotePrefixAt(
+  lineStarts: readonly number[],
+  source: string,
+  offset: number,
+): string {
+  const lineStart = lineStartAt(lineStarts, offset);
   const linePrefix = source.slice(lineStart, offset);
   const quotePrefix = markdownBlockquotePrefix(linePrefix);
   return quotePrefix === '' ? '\n' : `\n${quotePrefix}`;
-}
-
-const HEADING_ENV_RE = new RegExp(
-  `<h([1-6])${HTML_ATTRIBUTES}${HTML_TAG_END}([\\s\\S]*?)<\\/h\\1>`,
-  'gi',
-);
-
-// Expose environments inside the block containers this normalizer otherwise
-// converts, before math shielding. Paragraph/div wrappers are removed (the
-// same output the normalizer produces later), and heading wrappers that
-// contain an environment become temporary structural markers so their body
-// starts at a block line for the probe and can be re-marked after shielding.
-const PARAGRAPH_ENV_RE = new RegExp(
-  `<(p|div)${HTML_ATTRIBUTES}${HTML_TAG_END}([\\s\\S]*?)<\\/\\1>`,
-  'gi',
-);
-
-function exposeHtmlBlockEnvironments(content: string): string {
-  const blockquoted = quoteBlockquoteEnvironmentWrappers(content);
-  const paragraphEnvironmentsRemoved = blockquoted.replaceAll(
-    PARAGRAPH_ENV_RE,
-    (match, _tag: string, body: string) =>
-      /\\begin\{[a-z]+\}/.test(body) ? `\n\n${body.trim()}\n\n` : match,
-  );
-  return paragraphEnvironmentsRemoved.replaceAll(
-    HEADING_ENV_RE,
-    (match, level: string, body: string) =>
-      /\\begin\{[a-z]+\}/.test(body)
-        ? `\n\n@@HTML-HEADING-${level}@@\n${body.trim()}\n@@/HTML-HEADING-${level}@@\n\n`
-        : match,
-  );
 }
 
 function headingMarker(level: string): string {
@@ -389,50 +456,39 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
   if (!KNOWN_HTML_TAG_RE.test(summarized)) return summarized;
 
   const literalDollarProtection = protectLiteralMathSyntax(summarized);
-  // Expose environments inside every supported block container before math
-  // shielding: blockquotes become `>` prefixes, paragraph/div wrappers are
-  // removed, and heading wrappers containing an environment become temporary
-  // structural markers. Bodies are only re-prefixed or un-wrapped, never text-
-  // mutated here.
-  const blockContainerExposed = exposeHtmlBlockEnvironments(
+  // First shield inline/display math so paragraph/div wrapper removal cannot
+  // touch HTML-shaped LaTeX, then remove those wrappers and convert
+  // environment-containing blockquotes, then shield environments.
+  const inlineMathProtection = protectLatexMathSpansForNormalizeInline(
     literalDollarProtection.content,
   );
-  const mathProtection = protectLatexMathSpansForNormalize(
-    blockContainerExposed,
+  const structural = removeParagraphDivWrappers(
+    convertEnvironmentBlockquotes(inlineMathProtection.content),
   );
-  const mathProtected = literalDollarProtection.restore(mathProtection.content);
-  const hasHeadingMarkers = /@@HTML-HEADING-\d@@/.test(mathProtected);
-  if (!KNOWN_HTML_TAG_RE.test(mathProtected) && !hasHeadingMarkers) {
-    return literalDollarProtection.restore(
-      mathProtection.restore(mathProtection.content),
-    );
-  }
+  const envMathProtection = protectLatexMathSpansForNormalize(structural);
+  const protectedContent = envMathProtection.content;
+  const restoreMath = (value: string): string =>
+    inlineMathProtection.restore(envMathProtection.restore(value));
 
-  const normalized = mathProtected
+  const lineStarts = computeLineStarts(protectedContent);
+  const normalized = protectedContent
+    .replaceAll(/<br\s*\/?\s*>/gi, (_match, offset: number) =>
+      replaceBrWithQuotePrefixAt(lineStarts, protectedContent, offset),
+    )
     .replaceAll(
       HEADING_TAG_RE,
       (_match, level: string, body: string) =>
         `\n\n${headingMarker(level)} ${body.trim()}\n\n`,
     )
-    .replaceAll(/<br\s*\/?\s*>/gi, (_match, offset: number, source: string) =>
-      replaceBrWithQuotePrefix(source, offset),
-    )
-    .replaceAll(/<\/(?:p|div)>/gi, '\n\n')
-    .replaceAll(PARAGRAPH_OPEN_TAG_RE, '')
     .replaceAll(STRONG_OPEN_TAG_RE, '**')
     .replaceAll(/<\/(?:strong|b)>/gi, '**')
     .replaceAll(EMPHASIS_OPEN_TAG_RE, '_')
     .replaceAll(/<\/(?:em|i)>/gi, '_')
     .replaceAll(CODE_OPEN_TAG_RE, '`')
     .replaceAll(/<\/code>/gi, '`')
-    .replaceAll(
-      /@@HTML-HEADING-(\d)@@\n([\s\S]*?)\n@@\/HTML-HEADING-\1@@/g,
-      (_match, level: string, body: string) =>
-        `\n\n${headingMarker(level)} ${body.trim()}\n\n`,
-    )
     .replaceAll(BLOCKQUOTE_TAG_RE, (_match, body: string) =>
-      quoteHtmlBlock(mathProtection.restore(body)),
+      quoteHtmlBlock(restoreMath(body)),
     )
     .trim();
-  return literalDollarProtection.restore(mathProtection.restore(normalized));
+  return literalDollarProtection.restore(restoreMath(normalized));
 }
