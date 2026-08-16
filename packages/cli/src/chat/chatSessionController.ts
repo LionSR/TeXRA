@@ -80,7 +80,10 @@ import {
   moveLocalTranscriptToStream,
 } from './tui/state/transcript';
 import { syncStreamLog } from './tui/state/subscribeStreamLog';
-import { markArtifactStreamHydrated } from './tui/state/subscribeStreamArtifacts';
+import {
+  markArtifactStreamHydrated,
+  markLoadedStreamsHydrated,
+} from './tui/state/subscribeStreamArtifacts';
 
 type InterruptedFollowUp = Pick<
   FollowUpQueueInput,
@@ -542,9 +545,10 @@ export function createChatSessionController(
 
       await runtimeSession.transcripts.ensureLoaded(resolution.streamId);
       await snapshotStore.load([resolution.streamId]);
-      // Invalidate the memo as soon as the direct seed lands, before the
-      // awaited read/patch/focus below can render a stale pre-resume projection.
-      markArtifactStreamHydrated(resolution.streamId);
+      // `load` evicts every other stream, so reconcile the hydration markers to
+      // the retained root before the awaited read/patch/focus below can render
+      // a stale pre-resume projection.
+      markLoadedStreamsHydrated([resolution.streamId]);
       const restored = await snapshotStore.read(resolution.streamId);
       // A rehydrated stream never re-emits `run.start`, so its identity is
       // seeded from the durable store (ExecutionMeta by FK) on this cold

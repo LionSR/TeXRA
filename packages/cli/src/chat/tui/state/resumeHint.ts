@@ -23,7 +23,7 @@ import {
   retainedChildStreamsFor,
   type ChildStreamEntries,
 } from './childExecutions';
-import { readStreamArtifacts } from './subscribeStreamArtifacts';
+import { streamPreferredUsage } from './subscribeStreamArtifacts';
 import type { StreamSlice } from './cliState';
 
 export interface ResumeTarget {
@@ -114,12 +114,10 @@ export function collectResumeUsage(
   const usages: TokenUsageStats[] = [];
 
   for (const [streamId, slice] of streams) {
-    // Durable usage lives in the canonical store projection; the slice mirrors
-    // only what the live-fact adapter has written (the pre-hydration fallback).
-    const usage: TokenUsageStats | undefined =
-      readStreamArtifacts(streamId)?.cumulativeUsage ??
-      slice.cumulativeUsage ??
-      slice.usage;
+    const usage: TokenUsageStats | undefined = streamPreferredUsage(
+      streamId,
+      slice,
+    );
     if (!usage || !usageHasTokens(usage)) continue;
     usages.push(usage);
   }

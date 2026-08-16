@@ -19,7 +19,7 @@ import {
   type StreamArtifactProjection,
   type StreamArtifactReader,
 } from '@controllers/session/StreamArtifactProjection';
-import { type StreamTabId } from '@shared/schemas';
+import { type StreamTabId, type TokenUsageStats } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -28,6 +28,7 @@ import {
   isCliStreamRetired,
   registerCliStateResetHook,
   setTransientNotice,
+  type StreamSlice,
 } from './cliState';
 import { isChildStreamRemoved } from './childExecutions';
 import { subscribeToSignalChanges } from './signalSubscription';
@@ -63,10 +64,21 @@ export function bumpStreamArtifactRevision(): void {
 
 /** Mark a stream's durable artifacts hydrated and invalidate the projection
  *  memo. The focus-hydration owner calls this on success; direct store
- *  load/preload paths (resume) call it after their own seed so a focused
- *  stream loaded outside the focus subscription still repaints. */
+ *  preload paths (resume) call it after their own seed so a focused stream
+ *  loaded outside the focus subscription still repaints. */
 export function markArtifactStreamHydrated(streamId: StreamTabId): void {
   hydratedArtifactStreams.add(streamId);
+  bumpStreamArtifactRevision();
+}
+
+/** Reconcile the hydration markers with an authoritative full-set `load`:
+ *  `load` evicts every stream not in `streamIds`, so drop the markers for the
+ *  evicted records and mark only the retained streams hydrated. */
+export function markLoadedStreamsHydrated(
+  streamIds: readonly StreamTabId[],
+): void {
+  hydratedArtifactStreams.clear();
+  for (const streamId of streamIds) hydratedArtifactStreams.add(streamId);
   bumpStreamArtifactRevision();
 }
 
@@ -84,6 +96,23 @@ export function readStreamArtifacts(
   const projection = projectStreamArtifacts(session.snapshots, streamId);
   artifactProjectionMemo.set(streamId, projection);
   return projection;
+}
+
+/** The usage a caller presents for one stream: the canonical store projection
+ *  (durable + live) first, then the live-fact slice mirror, then the latest
+ *  per-run usage. Owned here so the exit summary and the workflow dashboard
+ *  can't drift in precedence. */
+export function streamPreferredUsage(
+  streamId: StreamTabId | undefined,
+  slice: StreamSlice | undefined,
+): TokenUsageStats | undefined {
+  return (
+    (streamId !== undefined
+      ? readStreamArtifacts(streamId)?.cumulativeUsage
+      : undefined) ??
+    slice?.cumulativeUsage ??
+    slice?.usage
+  );
 }
 
 function streamCanReceiveArtifacts(

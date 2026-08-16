@@ -51,6 +51,7 @@ import { childElapsed } from '../state/childControls';
 import {
   readStreamArtifacts,
   streamArtifactRevision,
+  streamPreferredUsage,
 } from '../state/subscribeStreamArtifacts';
 import {
   childListStreamId,
@@ -241,12 +242,7 @@ function workflowTaskMetadata(
   nowMs: number,
 ): string | undefined {
   const terminal = isTerminalWorkflowCallProgress(call);
-  const usage =
-    (streamId !== undefined
-      ? readStreamArtifacts(streamId)?.cumulativeUsage
-      : undefined) ??
-    child?.cumulativeUsage ??
-    child?.usage;
+  const usage = streamPreferredUsage(streamId, child);
   let elapsed: string | undefined;
   let model: string | undefined;
   let cost: number | undefined;
