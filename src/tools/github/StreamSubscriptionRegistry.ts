@@ -12,7 +12,6 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import { deliverLiveNotification } from '@agent/followUp/liveNotification';
 import {
   currentSession,
@@ -20,6 +19,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 
 import { appSignals } from '@eventBus/AppSignals';
+import { createLog } from '@logger/logUtils';
 import type { Disposable } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -74,7 +74,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   constructor(
     private readonly opts: StreamSubscriptionRegistryOptions<K, Input>,
   ) {
-    this.logger = opts.logger ?? createChannelTrace(opts.name);
+    this.logger = opts.logger ?? createLog(opts.name);
   }
 
   /** Returns true if a new subscription was created, false if it already existed. */
