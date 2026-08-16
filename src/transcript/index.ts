@@ -15,7 +15,6 @@ export {
   StreamLogStore,
   STREAM_LOGS_DIR,
   STREAM_LOG_SUMMARIES_DIR,
-  type StreamLogDeleteOptions,
 } from './StreamLogStore';
 export {
   StreamLog,

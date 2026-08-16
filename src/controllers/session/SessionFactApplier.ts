@@ -47,6 +47,26 @@ type RunFactHandlers = {
   ) => void | Promise<void>;
 };
 
+/**
+ * A fact whose stream was provisionally removed while its deletion was still
+ * in flight. Buffered until the delete outcome is known, then either replayed
+ * (the deletion was retained and the stream is still live) or discarded (the
+ * deletion committed or was superseded).
+ */
+type DeferredFact =
+  | { readonly kind: 'session'; readonly fact: SessionFact }
+  | {
+      readonly kind: 'run';
+      readonly streamId: StreamTabId;
+      readonly event: SessionRunFactEvent;
+    };
+
+/** A provisional removal barrier and the facts its async delete deferred. */
+interface PendingDeletion {
+  readonly incarnation: number;
+  readonly facts: DeferredFact[];
+}
+
 export type SessionFactApplierOptions = {
   /**
    * Host durable-delete for a removed stream. The resolved outcome decides
@@ -109,6 +129,15 @@ export class SessionFactApplier {
    * stream with the reopened view, so a stale "already delivered" entry here
    * cannot starve it. */
   private readonly registeredWithRenderer = new Set<StreamTabId>();
+
+  /**
+   * Provisional removal barriers by stream: the incarnation each captured and
+   * the facts arriving while its delete was still in flight. Keyed by stream,
+   * holding only the most recent barrier — a superseded deletion's buffer is
+   * dropped with it (its facts named a superseded incarnation), while a newer
+   * barrier installs its own.
+   */
+  private readonly pendingDeletions = new Map<StreamTabId, PendingDeletion>();
 
   /**
    * Run-fact dispatch table (see `RUN_FACT_EVENT_TYPES`); keys stay exhaustive.
@@ -225,8 +254,23 @@ export class SessionFactApplier {
         this.state.isStreamRemoved(streamId),
       )
     ) {
+      // Refused — but a provisional barrier (delete still in flight) buffers
+      // the fact so a retained deletion can replay it. A committed tombstone
+      // has no pending barrier, so the fact is simply stale and dropped.
+      this.deferSessionFact(fact);
       return false;
     }
+    this.applySessionFact(fact);
+    return true;
+  }
+
+  /**
+   * The single application body for an admitted session fact. Extracted so a
+   * retained deletion can replay buffered facts through the same path the
+   * original admission would have taken, without re-running the re-claim gate
+   * or the removal refusal check.
+   */
+  private applySessionFact(fact: SessionFact): void {
     // Wrap once, and RETURN each case so async handlers' promises reach
     // `withEventErrorHandling` (a discarded promise would let a post-await
     // rejection escape its thenable check as an unhandled rejection).
@@ -276,30 +320,60 @@ export class SessionFactApplier {
             // while the delete is queued makes the delete report
             // `superseded` instead of erasing the fresh run. A
             // retained/live/failed/superseded outcome retires the barrier so
-            // a still-live or freshly re-claimed stream is not frozen. The
+            // a still-live or freshly re-claimed stream is not frozen — but
+            // only when the barrier still carries THIS removal's incarnation,
+            // because a newer deletion B may already own the identity. The
             // host delete option must surface that outcome even when
             // presentation repair fails; any other rejection leaves the
             // barrier in place and is logged by the event-error wrapper,
             // because the stream may have deleted.
             const expectedIncarnation = this.state.beginStreamRemoval(streamId);
             this.registeredWithRenderer.delete(streamId);
+            const { pending, created } = this.beginPendingDeletion(
+              streamId,
+              expectedIncarnation,
+            );
             return Promise.resolve(
               this.options.deleteStream(streamId, expectedIncarnation),
-            ).then((outcome) => {
-              if (
-                outcome === 'active' ||
-                outcome === 'failed' ||
-                outcome === 'superseded'
-              ) {
-                this.state.retireStreamTombstone(streamId);
-              }
-            });
+            ).then(
+              (outcome) => {
+                // A prior removeStream fact for the same incarnation owns this
+                // deletion's settlement (the store dedups its delete promise);
+                // only the owning barrier retires the tombstone and replays.
+                if (!created) return;
+                this.finishPendingDeletion(streamId, pending);
+                if (
+                  outcome === 'active' ||
+                  outcome === 'failed' ||
+                  outcome === 'superseded'
+                ) {
+                  this.state.retireStreamTombstone(
+                    streamId,
+                    expectedIncarnation,
+                  );
+                }
+                // A retained deletion still lives: replay the facts buffered
+                // while it was provisional so status/stage/roster/metadata are
+                // not stuck stale. A committed or superseded deletion discards
+                // them (the stream is gone, or a fresh incarnation owns it).
+                if (outcome === 'active' || outcome === 'failed') {
+                  this.replayDeferredFacts(pending.facts);
+                }
+              },
+              (error) => {
+                // Ambiguous failure: keep the barrier (the stream may have
+                // deleted), but drop the provisional buffer — there is no
+                // outcome to replay against. The error still propagates to the
+                // event-error wrapper.
+                if (created) this.finishPendingDeletion(streamId, pending);
+                throw error;
+              },
+            );
           }
         }
         assertNever(fact, 'Unhandled session fact');
       },
     );
-    return true;
   }
 
   handleRunFact(streamId: StreamTabId, event: SessionRunFactEvent): void {
@@ -308,8 +382,20 @@ export class SessionFactApplier {
     // late roster from re-minting a removed parent's state. A delayed
     // `run.start` therefore cannot reopen a committed tombstone; the re-claim
     // lives in `handleSessionFact`, on the workflow attachment that carries
-    // live-execution evidence for the new incarnation.
-    if (this.state.isStreamRemoved(streamId)) return;
+    // live-execution evidence for the new incarnation. A provisional barrier
+    // buffers the fact so a retained deletion can replay it.
+    if (this.state.isStreamRemoved(streamId)) {
+      this.deferRunFact(streamId, event);
+      return;
+    }
+    this.applyRunFact(streamId, event);
+  }
+
+  /** The single application body for an admitted run fact. */
+  private applyRunFact(
+    streamId: StreamTabId,
+    event: SessionRunFactEvent,
+  ): void {
     // The table is exhaustive over `RunFactType`, so a slot always exists;
     // TypeScript just cannot correlate a union event with its own slot.
     const handle = this.runFactHandlers[event.type] as (
@@ -321,6 +407,68 @@ export class SessionFactApplier {
       `failed to handle ${event.type} fact`,
       () => handle(streamId, event),
     );
+  }
+
+  /**
+   * Open (or reuse) the provisional buffer for `streamId` at `incarnation`.
+   * A second `removeStream` for the same incarnation reuses the existing
+   * buffer and does not re-own the deletion settlement.
+   */
+  private beginPendingDeletion(
+    streamId: StreamTabId,
+    incarnation: number,
+  ): { readonly pending: PendingDeletion; readonly created: boolean } {
+    const existing = this.pendingDeletions.get(streamId);
+    if (existing && existing.incarnation === incarnation) {
+      return { pending: existing, created: false };
+    }
+    const pending: PendingDeletion = { incarnation, facts: [] };
+    this.pendingDeletions.set(streamId, pending);
+    return { pending, created: true };
+  }
+
+  private finishPendingDeletion(
+    streamId: StreamTabId,
+    pending: PendingDeletion,
+  ): void {
+    if (this.pendingDeletions.get(streamId) === pending) {
+      this.pendingDeletions.delete(streamId);
+    }
+  }
+
+  /**
+   * Buffer a refused session fact into the most recent provisional barrier it
+   * names. Facts naming only committed tombstones (no pending barrier) are
+   * stale and dropped.
+   */
+  private deferSessionFact(fact: SessionFact): void {
+    for (const streamId of sessionFactStreamIds(fact)) {
+      const pending = this.pendingDeletions.get(streamId);
+      if (pending) {
+        pending.facts.push({ kind: 'session', fact });
+        return;
+      }
+    }
+  }
+
+  /** Buffer a refused run fact for a provisional barrier, or drop it. */
+  private deferRunFact(
+    streamId: StreamTabId,
+    event: SessionRunFactEvent,
+  ): void {
+    const pending = this.pendingDeletions.get(streamId);
+    if (pending) pending.facts.push({ kind: 'run', streamId, event });
+  }
+
+  /** Reapply buffered facts in arrival order after a retained deletion. */
+  private replayDeferredFacts(facts: readonly DeferredFact[]): void {
+    for (const deferred of facts) {
+      if (deferred.kind === 'session') {
+        this.applySessionFact(deferred.fact);
+      } else {
+        this.applyRunFact(deferred.streamId, deferred.event);
+      }
+    }
   }
 
   private handleUpdateStreamDescription({

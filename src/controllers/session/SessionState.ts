@@ -141,6 +141,19 @@ export class SessionState {
    * proven horizon for in-flight facts.
    */
   private readonly _removedStreams = new Map<StreamTabId, number>();
+  /**
+   * Stable deletion guards, one per (stream, incarnation). `SessionStores`
+   * dedups its pending deletion by guard reference, so two removals of the
+   * same identity at the same incarnation must hand it the same function —
+   * otherwise a `removeStream` fact racing a direct delete would run the
+   * deletion twice. A re-claimed identity gets a new incarnation and a new
+   * guard, which is exactly what lets a superseded deletion and the fresh
+   * incarnation's deletion proceed independently.
+   */
+  private readonly _deletionGuards = new Map<
+    StreamTabId,
+    { readonly incarnation: number; readonly guard: () => boolean }
+  >();
 
   readonly streamStatus: StreamStatusMachine;
   readonly followUps: ToolUseFollowUpQueue;
@@ -261,11 +274,22 @@ export class SessionState {
   }
 
   /**
-   * Read effective metadata, creating the ephemeral record when needed. The
-   * transcript's first entry dates the tab as soon as one exists; until then
-   * the record's provisional timestamp stands in.
+   * Read effective metadata. For a live stream this lazily creates the
+   * ephemeral record and latches its provisional creation timestamp to the
+   * transcript's first entry, so a later eviction cannot move an established
+   * tab back to when this session first saw it. A removed stream is read
+   * read-only from the durable summary mirror: the tombstone gate calls this
+   * to inspect a re-claimed identity, and minting the ephemeral record here
+   * would undo the deletion the barrier exists to protect.
    */
   getStreamMetadata(stream: StreamTabId): Readonly<SessionStreamMetadata> {
+    if (this.isStreamRemoved(stream)) {
+      const firstTimestamp = this.streamLogs.getTimestampRange(stream).first;
+      return {
+        ...this.applySummaryMetadata(stream, {}),
+        creationTimestamp: firstTimestamp ?? Date.now(),
+      };
+    }
     const session = this.getOrCreateSession(stream);
     const firstTimestamp = this.streamLogs.getTimestampRange(stream).first;
     if (firstTimestamp !== undefined) {
@@ -466,17 +490,33 @@ export class SessionState {
     }
   }
 
-  /** The incarnation a committed/provisional removal captured, if any. */
-  removedStreamIncarnation(stream: StreamTabId): number | undefined {
-    return this._removedStreams.get(stream);
-  }
-
   private incarnationOf(stream: StreamTabId): number {
     return this._streamIncarnations.get(stream) ?? 0;
   }
 
-  isCurrentIncarnation(stream: StreamTabId, incarnation: number): boolean {
+  private isCurrentIncarnation(
+    stream: StreamTabId,
+    incarnation: number,
+  ): boolean {
     return this.incarnationOf(stream) === incarnation;
+  }
+
+  /** Stable per-incarnation fence for {@link SessionStores.deleteStream}. */
+  private deletionGuard(
+    stream: StreamTabId,
+    expectedIncarnation: number,
+  ): () => boolean {
+    const cached = this._deletionGuards.get(stream);
+    if (cached && cached.incarnation === expectedIncarnation) {
+      return cached.guard;
+    }
+    const guard = (): boolean =>
+      this.isCurrentIncarnation(stream, expectedIncarnation);
+    this._deletionGuards.set(stream, {
+      incarnation: expectedIncarnation,
+      guard,
+    });
+    return guard;
   }
 
   async clearStream(
@@ -490,8 +530,7 @@ export class SessionState {
     }
 
     const deletion = await this.stores.deleteStream(stream, {
-      shouldDelete: () =>
-        this.isCurrentIncarnation(stream, expectedIncarnation),
+      shouldDelete: this.deletionGuard(stream, expectedIncarnation),
     });
     if (deletion !== 'deleted') return deletion;
     if (!this.isCurrentIncarnation(stream, expectedIncarnation)) {
@@ -574,18 +613,11 @@ export class SessionState {
     this.logger.info('[Persistence] State load complete');
   }
 
-  /**
-   * Drop workspace-scoped caches before loading a replacement storage root.
-   * On a failed/rolled-back replacement the storage root and identity space
-   * are unchanged, so tombstones must survive; pass `preserveTombstones` for
-   * that reload path.
-   */
-  resetAfterStorageRootChange(options?: {
-    readonly preserveTombstones?: boolean;
-  }): void {
+  /** Drop workspace-scoped caches before loading a replacement storage root. */
+  resetAfterStorageRootChange(): void {
     this._sessionState.clear();
     this._streamStates.clear();
-    if (!options?.preserveTombstones) this._removedStreams.clear();
+    this._removedStreams.clear();
   }
 
   /**

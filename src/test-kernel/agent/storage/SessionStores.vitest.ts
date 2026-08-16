@@ -480,6 +480,39 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
       ).resolves.not.toBeNull();
     });
   });
+
+  it('refuses a deletion whose generation guard flips during the transcript delete', async () => {
+    await withSession(async (session) => {
+      const stream = 'tool@test#fence' as StreamTabId;
+      session.transcripts.ensureStream(stream);
+      const snapshots = new StreamSnapshotStore();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+      });
+
+      // The generation fence must stay atomic with the transcript commit. Flip
+      // the guard once `delete` is entered — a deterministic workflow re-claim
+      // landing while the transcript delete drains pending writes — and assert
+      // the delete reports `superseded` with the transcript still resident.
+      let reClaimed = false;
+      const shouldDelete = (): boolean => !reClaimed;
+      const originalDelete = session.transcripts.delete.bind(
+        session.transcripts,
+      );
+      vi.spyOn(session.transcripts, 'delete').mockImplementation(
+        async (streamId, options) => {
+          reClaimed = true;
+          return originalDelete(streamId, options);
+        },
+      );
+
+      await expect(stores.deleteStream(stream, { shouldDelete })).resolves.toBe(
+        'superseded',
+      );
+      expect(session.transcripts.has(stream)).toBe(true);
+    });
+  });
 });
 
 describe('SessionStores startup sweep', () => {

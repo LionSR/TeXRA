@@ -95,7 +95,8 @@ export class SessionStores {
       ) => void | Promise<void>)
     | undefined;
   private readonly pendingStreamDeletions = new Map<
-    StreamTabId | { readonly stream: StreamTabId; readonly guard: () => boolean },
+    | StreamTabId
+    | { readonly stream: StreamTabId; readonly guard: () => boolean },
     Promise<DeleteStreamResult>
   >();
   private pendingDeleteAll: Promise<DeleteAllStreamsResult> | undefined;
@@ -206,7 +207,9 @@ export class SessionStores {
   }
 
   private finishStreamDeletion(
-    key: StreamTabId | { readonly stream: StreamTabId; readonly guard: () => boolean },
+    key:
+      | StreamTabId
+      | { readonly stream: StreamTabId; readonly guard: () => boolean },
     pending: Promise<DeleteStreamResult>,
   ): void {
     if (this.pendingStreamDeletions.get(key) === pending) {
