@@ -5,8 +5,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { debugInternal, logInternal, type AgentTrace } from '@agent/trace';
 import { reportMissingOutputs } from '@agent/runtime/runFactEvents';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import replacementEngine, { applyReplacements } from '@replacement/engine';
+import replacementEngine from '@replacement/engine';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
 import { OUTPUT_DOCUMENT_TAG, OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
 import { getExtractedDocOutputFileName } from '@utils/files/outputFileUtils';
@@ -76,10 +75,7 @@ export class XmlOutputManager {
   ) {}
 
   private async processXmlContent(content: string): Promise<string> {
-    // applyNonRegex already applies all enabled non-regex categories
-    // (including latex_xml), so no need to re-apply them.
-    const normalized = replacementEngine.applyNonRegex(content);
-    return applyReplacements(normalized, FENCED_LATEX_BLOCK_REPLACEMENTS);
+    return replacementEngine.applyXmlContent(content);
   }
 
   private extractMultipleDocumentsByRegex(

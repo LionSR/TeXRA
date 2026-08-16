@@ -40,6 +40,7 @@ import {
   LEGACY_UNBRACED_S_MIGRATION,
   MAX_STYLE_REPLACEMENTS,
   MAX_REGEX_REPLACEMENTS,
+  restoreLatexSectionSign,
 } from './maxRules';
 import {
   EQUATION_MACRO_REPLACEMENTS,
@@ -54,7 +55,9 @@ import {
 const log = createLog('ReplacementEngine');
 
 /**
- * High-level APIs for applying text replacement rules.
+ * Single policy owner for replacement rules. Call sites route through one of
+ * these methods instead of composing lower-level rules themselves, so rule
+ * selection, ordering, and failure handling stay in this module.
  */
 const replacementEngine = {
   /** Apply all configured non-regex replacement rules. */
@@ -63,6 +66,16 @@ const replacementEngine = {
     return shouldWrapCritiqueInAlign()
       ? wrapCritiqueInAlign(processed)
       : processed;
+  },
+
+  /**
+   * Normalize a raw XML output document before parsing: run the full non-regex
+   * pipeline (which already covers latex_xml and the other enabled categories)
+   * and then the fenced-LaTeX-block regex, in that order.
+   */
+  applyXmlContent(text: string): string {
+    const normalized = this.applyNonRegex(text);
+    return applyReplacements(normalized, FENCED_LATEX_BLOCK_REPLACEMENTS);
   },
 
   /**
@@ -101,6 +114,14 @@ const replacementEngine = {
     }
     result = applyReplacements(result, replacements).trim();
     return wrapCritique ? wrapCritiqueInAlign(result) : result;
+  },
+
+  /**
+   * Apply the full replacement pipeline to a `.tex` file being written, then
+   * restore the LaTeX built-in section sign from the KaTeX-only destination.
+   */
+  applyTexWrite(text: string): string {
+    return restoreLatexSectionSign(this.applyAll(text));
   },
 };
 
