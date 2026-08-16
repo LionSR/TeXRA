@@ -86,11 +86,10 @@ duplicated stream→execution three-tier resolver collapses to one.
 
 ## 2. The one disposal idiom (industry-grounded)
 
-**Decision: sync `dispose(): void` with `[Symbol.dispose]` as an alias,
-composed by a ~60-line house `DisposableStore` in `src/platform/`;
-`using`/`await using` at function/test scope; AbortSignal as the only
-cancellation channel; async drain kept separate on `lifecycle.onShutdown`
-with join-with-deadline.**
+**Decision: sync `dispose(): void`, composed by a small house
+`DisposableStore` in `src/platform/`; AbortSignal as the only cancellation
+channel; async drain kept separate on `lifecycle.onShutdown` with
+join-with-deadline.**
 
 Grounds (evidence over fashion):
 
@@ -99,12 +98,12 @@ Grounds (evidence over fashion):
   exists at `src/platform/interfaces.ts:17` and is VS Code-compatible.
   Async-first would migrate 8 sites toward and ~150 away, and collides
   with the extension's ~5s deactivate budget — the sync-dispose/async-drain
-  split is precisely why VS Code standardized this way. `Symbol.dispose`
-  is native since Node 20.4; TS6 downlevels `using` on our ES2022 floor.
+  split is precisely why VS Code standardized this way.
 - Store semantics: idempotent LIFO, isolated child failures aggregated with
-  `throwAggregated`, and **immediate add-after-disposed**. `move()` and global
-  leak assertions stay deferred until a consumer deletes an existing mechanism
-  in the same PR; the store does not speculate those surfaces into existence.
+  `throwAggregated`, and **immediate add-after-disposed**. `[Symbol.dispose]`,
+  `move()`, and global leak assertions stay deferred until a consumer deletes
+  an existing mechanism in the same PR; the store does not speculate those
+  surfaces into existence.
 - Cancellation: `{signal}` threading stays; mechanical upgrades only
   (`AbortSignal.any`, `AbortSignal.timeout`, `throwIfAborted()`); the
   existing `onAbort` bridge remains the sanctioned signal→disposer adapter.
@@ -227,9 +226,7 @@ wasn't connected.
 ## 5. Industry patterns: adopted / rejected
 
 Adopted (all native or in-tree): the VS Code Disposable model (one sync
-shape + store + leak-assert), TC39 explicit resource management (`using`,
-`Symbol.dispose`; native `DisposableStack` deferred to a Node 24 floor —
-house store until then), AbortSignal structured cancellation
+shape + store), AbortSignal structured cancellation
 (`any`/`timeout`/`throwIfAborted`), the sync-dispose/async-drain split,
 structured concurrency as a _rule_ (scope owns children; `SessionHandle`
 and `childRunLoop` already are this), `p-queue`'s
@@ -265,8 +262,7 @@ split avoids), `signal-exit` (Ink already embeds it; keep one exit matrix).
    collapse the duplicated stream→execution resolver).
 9. **The §4 stop/quit call-site repairs (no table — §4's rework is the
    spec: explicit documented options at the two shutdown sites, one doc
-   paragraph at the SSOT declaration) + LaTeX
-   signal threading + `using` adoption in tests/new scopes + Lean
+   paragraph at the SSOT declaration) + LaTeX signal threading + Lean
    single-owner registration.**
 
 PRs 1–5 independent except 4-after-3; 6–9 ride on 2. Every step leaves the

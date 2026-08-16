@@ -35,8 +35,4 @@ export class DisposableStore implements Disposable {
 
     throwAggregated(failures, 'Multiple resources failed to dispose');
   }
-
-  [Symbol.dispose](): void {
-    this.dispose();
-  }
 }

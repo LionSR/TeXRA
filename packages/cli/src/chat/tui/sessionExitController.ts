@@ -23,12 +23,12 @@ import {
   runCliPlatformShutdownSequence,
 } from '@cli/runtime/initPlatform';
 import { writeTextStdout } from '@cli/runtime/logSinks';
-import { createLog } from '@logger/logUtils';
 import {
   cleanupTerminalModes,
   restoreTuiInputModes,
   supportsTerminalJobControl,
 } from '@cli/tui/terminalCleanup';
+import { createLog } from '@logger/logUtils';
 import type { DisposableStore } from '@platform/disposable';
 import { tryPlatform } from '@platform/platform';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
