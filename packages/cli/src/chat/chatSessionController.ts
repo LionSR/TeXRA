@@ -572,6 +572,11 @@ export function createChatSessionController(
       });
       syncStreamLog(resolution.streamId);
       focusStream(resolution.streamId);
+      // An in-flight focus preload for the previous stream can resolve during
+      // the awaited read/patch above and re-add it (its requestIsCurrent still
+      // passes until focus moves). Re-reconcile now that focus has moved, so any
+      // such stale marker is cleared and later hydrations fail requestIsCurrent.
+      markLoadedStreamsHydrated([resolution.streamId]);
 
       const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
         setupRunHost(sessionContext);
