@@ -569,15 +569,18 @@ export class SessionState {
       { data: { stack: new Error().stack } },
     );
 
-    // Capture the ephemeral-only identity set before the bulk delete awaits:
-    // this operation may only clear/tombstone identities that existed when it
-    // began. A stream created during the bulk snapshot (a fresh run) is not in
-    // this set and must survive untouched. `deleteAll` still reports the exact
-    // durable identities it committed as `deleted`, and that result is the
-    // sole source for tombstoning durable streams — deriving them from a
-    // pre-delete enumeration would reintroduce the TOCTOU this barrier exists
-    // to close.
-    const preExistingEphemeral = this.ephemeralStreamIds();
+    // Capture ephemeral-only identities before the bulk delete awaits: streams
+    // that already have a durable transcript are owned by `deleteAll`'s exact
+    // `deleted`/`active`/`failed` result, not by this sweep. Filtering to
+    // `!streamLogs.has` at capture time also keeps the sweep from treating
+    // ordinary durable streams (which also live in `_streamStates` /
+    // `streamStatus`) as ephemeral-only. A stream created during the bulk
+    // snapshot is absent from this set and must survive untouched.
+    const preExistingEphemeralOnly = new Set(
+      [...this.ephemeralStreamIds()].filter(
+        (stream) => !this.streamLogs.has(stream),
+      ),
+    );
     const deletion = await this.stores.deleteAll();
     const retained = new Set([...deletion.active, ...deletion.failed]);
     const clearIdentity = (stream: StreamTabId): void => {
@@ -591,10 +594,14 @@ export class SessionState {
     // execution/status state without ever minting a durable transcript) are
     // invisible to `SessionStores.deleteAll`, so the exact durable `deleted`
     // set cannot contain them. Clear and tombstone the pre-existing ones too,
-    // but never clear durable identities the bulk delete reported retained and
-    // never clear a stream that appeared after the snapshot.
-    for (const stream of preExistingEphemeral) {
+    // but never clear durable identities the bulk delete reported retained,
+    // never clear a stream that appeared after the snapshot, and never clear a
+    // pre-existing-ephemeral identity that minted a durable transcript during
+    // the await (it was invisible to `deleteAllOnce`'s enumeration and would
+    // otherwise be frozen while still writing).
+    for (const stream of preExistingEphemeralOnly) {
       if (retained.has(stream) || this._removedStreams.has(stream)) continue;
+      if (this.streamLogs.has(stream)) continue;
       clearIdentity(stream);
     }
     return deletion;
