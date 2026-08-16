@@ -134,43 +134,26 @@ const INLINE_MATH_SPAN_PATTERN =
 // (the only closer is preceded by whitespace). Adjacent spans are matched
 // back-to-back by the global scan, keeping `$a$$b$` verbatim.
 const RENDER_INLINE_MATH_SPAN_PATTERN =
-  /(?<![\\\d])\$((?:[^\s\\]|\S[^\n]*?[^\s\\]))\$(?!\d)/g;
-
-// Lax environment shielding used by `htmlMarkdownNormalize`: that path has no
-// markdown-it block state to consult, so it keeps the previous line-anchored
-// regex. It recognizes a `\\begin{env}…\\end{env}` only where a texmath block
-// could start at top level (line start, optional blockquote/list prefix, up to
-// three spaces) and declines any span that would cross a fenced-code boundary
-// rather than swallowing the intervening prose into a placeholder. The render
-// shield below does not use this regex; it delegates to the container/fence-
-// aware probe so list-continuation offsets and fenced interiors match
-// markdown-it exactly.
-const BEG_END_MATH_SPAN_PATTERN =
-  /(?<=^(?:(?:[ \t]*>[ \t]?)|(?:[ \t]*(?:[-+*]|\d+[.)])[ \t]+))*[ ]{0,3})\\begin\{([a-z]+)\}(?:(?!^(?:(?:[ \t]*>[ \t]?)|(?:[ \t]*(?:[-+*]|\d+[.)])[ \t]+))*[ ]{0,3}(?:`{3,}|~{3,}))[\s\S])+?(?<!\\)\\end\{\1\}/gm;
+  /(?<![\\\d])\$((?:[^\s\\]|\S[^\n\r\u2028\u2029]*?[^\s\\]))\$(?!\d)/g;
 
 // Shared pattern vocabulary. Order matters: display fences before inline ones
-// so `$…$` never splits a `$$…$$`, and the legacy environment regex stays last
-// for the fail-loud identity swap below. The render and HTML-normalize shields
-// both derive their active sets from this list and drop the environment regex
-// in favour of the container/fence-aware probe.
+// so `$…$` never splits a `$$…$$`. Environments are shielded separately by the
+// container/fence-aware probe, never by a source-level regex.
 const MATH_SPAN_PATTERNS: readonly RegExp[] = [
   /\$\$[\s\S]+?\$\$/g, // $$ … $$  (display, may span lines)
   /(?<!\\)\\\[[\s\S]+?(?<!\\)\\\]/g, // \[ … \]  (display)
   /(?<!\\)\\\([\s\S]+?(?<!\\)\\\)/g, // \( … \)  (inline)
   INLINE_MATH_SPAN_PATTERN, // $ … $  (one or more adjacent inline spans, single line)
-  BEG_END_MATH_SPAN_PATTERN, // \begin{env} … \end{env}  (texmath beg_end)
 ];
 
-// The render shield swaps in the texmath-adjacent inline pattern and drops
-// the legacy environment regex; environments are shielded by the block-state
-// probe instead. The HTML normalizer keeps the lax inline pattern but likewise
-// drops the environment regex (see NORMALIZE_MATH_SPAN_PATTERNS).
-const RENDER_MATH_SPAN_PATTERNS: readonly RegExp[] = MATH_SPAN_PATTERNS.filter(
-  (pattern) => pattern !== BEG_END_MATH_SPAN_PATTERN,
-).map((pattern) =>
-  pattern === INLINE_MATH_SPAN_PATTERN
-    ? RENDER_INLINE_MATH_SPAN_PATTERN
-    : pattern,
+// The render shield swaps in the texmath-adjacent inline pattern. The HTML
+// normalizer keeps the lax inline set above and shields environments through
+// the same block probe.
+const RENDER_MATH_SPAN_PATTERNS: readonly RegExp[] = MATH_SPAN_PATTERNS.map(
+  (pattern) =>
+    pattern === INLINE_MATH_SPAN_PATTERN
+      ? RENDER_INLINE_MATH_SPAN_PATTERN
+      : pattern,
 );
 // Fail loud rather than silently render-shield with the lax inline pattern if
 // MATH_SPAN_PATTERNS ever drops or renames the inline entry.
@@ -179,12 +162,6 @@ if (!RENDER_MATH_SPAN_PATTERNS.includes(RENDER_INLINE_MATH_SPAN_PATTERN)) {
     'MATH_SPAN_PATTERNS no longer carries the inline $…$ entry to swap',
   );
 }
-
-// The HTML normalizer keeps the lax inline `$…$` contract but drops the lax
-// environment regex: its environments are container-aware too, so a continued
-// ordered-list environment is shielded before tag normalization can touch it.
-const NORMALIZE_MATH_SPAN_PATTERNS: readonly RegExp[] =
-  MATH_SPAN_PATTERNS.filter((pattern) => pattern !== BEG_END_MATH_SPAN_PATTERN);
 
 // Replace every match of `patterns` with an indexed `@@<tag>-N@@` placeholder,
 // appending the captured matches to `items` so later shields share one restore
@@ -390,6 +367,12 @@ function createBegEndEnvironmentProbe(
   return {
     collect(content: string): readonly BegEndEnvironmentMatch[] {
       matches = [];
+      // Most messages have no environment delimiters; skip both markdown
+      // parses entirely in that case.
+      if (!content.includes('\\begin{') || !content.includes('\\end{')) {
+        return matches;
+      }
+
       closersByEnv = new Map();
       const closerPattern = /\\(?:end)\{([a-z]+)\}/g;
       for (const closer of content.matchAll(closerPattern)) {
@@ -399,6 +382,17 @@ function createBegEndEnvironmentProbe(
         closersByEnv.set(name, positions);
       }
 
+      active = true;
+      try {
+        probe.parse(content, {});
+      } finally {
+        active = false;
+      }
+      if (matches.length === 0) return matches;
+
+      // Only pay for a second (plain) parse when a candidate match could cross
+      // a fence; the probe parse consumed math blocks, so it cannot enumerate
+      // fences for the decline check.
       active = false;
       const fenceTokens = probe.parse(content, {});
       const fenceRanges: Array<readonly [number, number]> = [];
@@ -406,13 +400,6 @@ function createBegEndEnvironmentProbe(
         if (token.type === 'fence' && token.map !== null) {
           fenceRanges.push([token.map[0], token.map[1]]);
         }
-      }
-
-      active = true;
-      try {
-        probe.parse(content, {});
-      } finally {
-        active = false;
       }
 
       // Keep the earlier deliberate fence-decline: texmath would match across
@@ -510,23 +497,28 @@ function protectLatexMathSpansWithEnvironment(
 } {
   const items: string[] = [];
   const selectedTag = selectPlaceholderTag(content, 'LATEX-MATH');
-  const patternProtected = protectPatternsInto(
+  // Probe and shield environments against the pre-inline-shield content so the
+  // closer search sees the same literal `\end{name}` texmath's lazy block
+  // regex sees. Inline/display spans are shielded afterwards; the shared
+  // fixpoint restore still resolves a `\begin{…}…\end{…}` placeholder nested
+  // inside a later `$$…$$` / `\[…\]` fence.
+  const matches = environmentProbe.collect(content);
+  const envProtected = applyEnvironmentShields(
     content,
+    matches,
+    selectedTag,
+    items,
+  );
+  const patternProtected = protectPatternsInto(
+    envProtected,
     patterns,
     selectedTag,
     items,
     true,
   );
-  const matches = environmentProbe.collect(patternProtected);
-  const envProtected = applyEnvironmentShields(
-    patternProtected,
-    matches,
-    selectedTag,
-    items,
-  );
   const placeholder = new RegExp(`@@${selectedTag}-(\\d+)@@`, 'g');
   return {
-    content: envProtected,
+    content: patternProtected,
     restore: (value) => restorePlaceholders(value, placeholder, items),
   };
 }
@@ -543,11 +535,11 @@ function restorePlaceholders(
   items: string[],
 ): string {
   // An item can itself carry a placeholder when spans nest across patterns
-  // (an inline `$…$` inside a `\begin{…}…\end{…}` body), so run to a
-  // fixpoint instead of a single pass. Nesting is acyclic — a pattern's
-  // matches can capture earlier patterns' placeholders but never their own —
-  // and selectPlaceholderTag keeps placeholder-shaped user text out of the
-  // items, so the loop terminates.
+  // (a `\begin{…}…\end{…}` placeholder inside a later `$$…$$` / `\[…\]`
+  // fence), so run to a fixpoint instead of a single pass. Nesting is acyclic
+  // — a pattern's matches can capture earlier patterns' placeholders but never
+  // their own — and selectPlaceholderTag keeps placeholder-shaped user text
+  // out of the items, so the loop terminates.
   let restored = content;
   for (;;) {
     const next = restored.replaceAll(placeholder, (match, rawIndex) => {
@@ -567,17 +559,22 @@ let normalizeEnvironmentProbe: BegEndEnvironmentProbe | undefined;
  * renderer, so it needs the same list-continuation/blockquote awareness or a
  * `<br>` inside `10. Formula:\n    \begin{align}` would be mutated before the
  * render shield can protect it.
+ *
+ * CRLF / bare CR are normalized here defensively, and the caller normalizes
+ * too: the probe and `applyEnvironmentShields` must always slice the same LF
+ * string markdown-it's block parser sees.
  */
 export function protectLatexMathSpansForNormalize(content: string): {
   content: string;
   restore: (value: string) => string;
 } {
+  const source = content.replaceAll(/\r\n?/g, '\n');
   normalizeEnvironmentProbe ??= createBegEndEnvironmentProbe(
     createProbeMarkdownIt({ breaks: false, linkify: true, html: false }),
   );
   return protectLatexMathSpansWithEnvironment(
-    content,
-    NORMALIZE_MATH_SPAN_PATTERNS,
+    source,
+    MATH_SPAN_PATTERNS,
     normalizeEnvironmentProbe,
   );
 }
