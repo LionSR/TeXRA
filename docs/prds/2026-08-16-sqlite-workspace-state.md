@@ -461,7 +461,12 @@ rows; export compat is not storage compat.
   and scan-on-open.
 - **Stage 3 — `streamData/` sidecars + goal entries → rows.** The big
   machinery win in `StreamSnapshotStore` (seed chains, provenance, overlays,
-  write mutexes), plus `GoalStore`'s durable goal records into `goals` rows
+  write mutexes). **Dangling `parentStreamId` edges get the same treatment
+  as dangling execution edges:** today's best-effort child detachment can
+  fail while the parent deletion still commits (`stageDeleteStream` logs
+  and proceeds), so a supported legacy sidecar can name a parent absent
+  from the registry — the import verifies the edge and writes NULL with a
+  `warn` instead of aborting on the FK. Plus, plus `GoalStore`'s durable goal records into `goals` rows
   (§2 narrowing). **Goal sources are per-host and one of them is not a
   file this importer can see:** the CLI persists goals in the bucket
   `state.json`, and the extension persists them in VS Code's
@@ -574,7 +579,11 @@ Stage 4).
   double-import concurrently.
   (3) **Re-entrant idempotent import as the backstop** for the case no fence
   can cover (a legacy host that starts writing mid-import): every open that
-  finds recreated legacy dirs re-imports and re-renames them, and the §5
+  finds recreated legacy dirs re-imports and re-renames them — **to
+  versioned destinations** (`*.pre-sqlite-backup-N`, monotonic suffix): the
+  first backup occupies the unversioned name, so an unversioned re-rename
+  would collide with a nonempty directory and strand the backstop; the
+  retirement PR deletes every versioned backup together — and the §5
   post-rename verification pass folds writes that landed inside the
   read-and-rename interval itself, so late legacy writes are absorbed
   rather than lost. **Reconciliation is by entry id, never by seq:** a
@@ -584,7 +593,13 @@ seq)` would drop or overwrite one side when both hosts wrote the same
   stream. The importer instead inserts entries whose `entry_id` is not yet
   present, assigning fresh seqs after the row-side head — the same union
   semantics as today's merge-disk-under-live-appends — and emits the
-  existing `reset: true` delta so fold consumers resync. **A matching
+  existing `reset: true` delta so fold consumers resync. **Every re-import
+  checks `stream_tombstones` first:** after Stage 7, a legacy host can
+  recreate files for a stream already deleted in SQL, and admitting them
+  would either fail the entry FK or resurrect a fenced id against the
+  never-reuse ruling — data for tombstoned ids is quarantined in
+  `migration_records` (`source = 'tombstoned-reimport'`) with a `warn`,
+  never imported. **A matching
   `entry_id` is reconciled, not assumed unchanged:** a legacy host may have
   appended text to or settled an entry after the importer copied it, so
   per-id the rule is settlement-monotonic — a settled copy supersedes an
@@ -608,7 +623,11 @@ seq)` would drop or overwrite one side when both hosts wrote the same
   migrated open, diffs that host's legacy source against **that source's
   ledger only** — key present and newer → update the row; key present in
   the same source's ledger but **absent from that source → that host
-  deleted it → delete the row**; key absent from both → nothing. Scoping
+  deleted it → delete the row, but only if the canonical row still matches
+  that source's last absorbed value hash** (the ledger stores it) — if a
+  migrated host or another source has since written a newer goal, a stale
+  copy's absence must not erase it, so the deletion is skipped and the
+  ledger entry retired; key absent from both → nothing. Scoping
   absence per source is load-bearing: the extension absorbing a goal must
   not let a later CLI open — whose `state.json` never carried the key —
   read "ledger present, source absent" and delete a goal the CLI never
@@ -629,8 +648,9 @@ rules untouched. **Added:** the §2 rule, pinned by a new architecture test.
 The test lands at Stage 1 as a **shrinking ratchet, not a strict gate**: it
 starts with an explicit allowlist of the not-yet-migrated directories
 (`streamLogSummaries/`, `streamData/`, `streamData.deleting/` — the staged-
-deletion namespace `StagedDeletionCoordinator` renames into until it
-retires at Stage 6 — `streamLogs/`, `executions/` KV records, lease/lock
+deletion namespace `StagedDeletionCoordinator` renames into, retained in
+the baseline through the **Stage-7** deletion-protocol cutover that retires
+the coordinator — `streamLogs/`, `executions/` KV records, lease/lock
 files) plus the **permanent entries**: documents,
 exports, the settings files (`state.json`, `config.json`), the
 per-execution artifacts area (§5 Stage 5), the user-media caches
@@ -667,10 +687,12 @@ normalization of entry payload internals; no publication of this doc
 - Kill -9 during streaming loses at most the current throttle window; the
   recovery sweep finalizes orphans from an indexed query.
 - All ratchets green; no store public-surface change; Waves A–C unaffected.
-- `WORKSPACE_STORAGE_LAYOUT` shrinks to
-  `{ texra.db, original, memories, state.json, _workspace.json }` plus the
-  per-execution artifacts area (§5 Stage 5) and legacy `taskRuns/` until
-  #6981 retention drains it (§3.1 exception).
+- `WORKSPACE_STORAGE_LAYOUT` shrinks to the §7 permanent set —
+  `{ texra.db, original, memories, state.json, config.json,
+_workspace.json, pasted, recordings }` plus the per-execution artifacts
+  area (§5 Stage 5) — and legacy `taskRuns/` until #6981 retention drains
+  it (§3.1 exception). §7 and this criterion enumerate the same set by
+  construction; a divergence between the two lists is itself a defect.
 
 ## 10. Open questions
 
