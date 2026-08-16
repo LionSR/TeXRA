@@ -17,13 +17,14 @@ import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirect
 import { globalSM } from '@common/state';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { AGENT_SOURCE } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'AgentLoad';
+const log = createLog(CHANNEL);
 
 type AgentDirectoryEventType = 'create' | 'change' | 'delete';
 
@@ -242,14 +243,12 @@ class AgentDirectoryManager {
       watchedDirectories.push(entry.directory);
     }
 
-    logger.info(
-      CHANNEL,
+    log.info(
       `Agent directory watchers enabled: ${watchedDirectories.join(', ')}`,
     );
 
     if (skippedDirectories.length > 0) {
-      logger.debug(
-        CHANNEL,
+      log.debug(
         `Skipped external built-in agent directory watchers: ${skippedDirectories.join(', ')}`,
       );
     }
@@ -327,8 +326,7 @@ class AgentDirectoryManager {
       try {
         entries = await vscode.workspace.fs.readDirectory(uri);
       } catch (error) {
-        logger.debug(
-          CHANNEL,
+        log.debug(
           `Unable to scan agent directory ${uri.fsPath}: ${toErrorMessage(error)}`,
         );
         continue;
@@ -382,8 +380,7 @@ class AgentDirectoryManager {
       try {
         files = await vscode.workspace.fs.readDirectory(directory);
       } catch (error) {
-        logger.debug(
-          CHANNEL,
+        log.debug(
           `Unable to scan new agent directory ${directory.fsPath}: ${toErrorMessage(error)}`,
         );
         continue;
@@ -403,8 +400,7 @@ class AgentDirectoryManager {
 
   private scheduleAgentWatcherSetup(): void {
     void this.ensureAgentWatchers().catch((error) => {
-      logger.error(
-        CHANNEL,
+      log.error(
         `Failed to refresh agent directory watchers: ${toErrorMessage(error)}`,
       );
     });

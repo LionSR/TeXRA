@@ -1,6 +1,6 @@
 import { polishTextWithAI, FileContext } from '@agent/runtime';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewInboundMessage } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
@@ -12,6 +12,7 @@ import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
 import { BaseWebviewManager } from './BaseWebviewManager';
 
 const CHANNEL = 'InstructionManager';
+const log = createLog(CHANNEL);
 
 type PolishInstructionMessage = Extract<
   MainViewInboundMessage,
@@ -31,10 +32,7 @@ export class InstructionManager extends BaseWebviewManager {
         await StorageFS.ensureDir(PASTED_DIR);
         await StorageFS.cleanupOldFiles(PASTED_DIR, THREE_DAYS_MS);
       } catch (e) {
-        logger.warn(
-          CHANNEL,
-          `Error during initial cleanup: ${toErrorMessage(e)}`,
-        );
+        log.warn(`Error during initial cleanup: ${toErrorMessage(e)}`);
       }
     }, 100);
   }
@@ -64,8 +62,7 @@ export class InstructionManager extends BaseWebviewManager {
         command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
         error: toErrorMessage(error),
       });
-      logger.error(
-        CHANNEL,
+      log.error(
         `Error in handlePolishInstructionText: ${toErrorMessage(error)}`,
       );
     }

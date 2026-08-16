@@ -8,9 +8,10 @@ import {
   ArxivProcessor,
   type ArxivDownloadDestination,
 } from '@latex/arxivProcessor';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 
 const CHANNEL = 'arXivCommands';
+const log = createLog(CHANNEL);
 
 export async function downloadArXivSource(): Promise<void> {
   try {
@@ -66,7 +67,7 @@ export async function downloadArXivSource(): Promise<void> {
       },
       async (progress, token) => {
         token.onCancellationRequested(() => {
-          logger.info(CHANNEL, 'User cancelled the download');
+          log.info('User cancelled the download');
         });
 
         const downloadResult = await ArxivProcessor.downloadSource(arxivId, {

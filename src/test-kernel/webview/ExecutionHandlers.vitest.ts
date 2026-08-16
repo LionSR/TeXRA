@@ -56,7 +56,15 @@ vi.mock(
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   logErrorMessage: vi.fn(),
 }));
-vi.mock('@logger/logUtils', () => ({ info: vi.fn() }));
+vi.mock('@logger/logUtils', () => ({
+  createLog: () => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  }),
+  info: vi.fn(),
+}));
 vi.mock('@utils/files/fileLocation', () => ({
   pathToLocation: mocks.pathToLocation,
 }));

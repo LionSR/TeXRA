@@ -7,10 +7,11 @@ import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import { FILE_SELECTION_COMMAND_IDS } from '@frontend/files/fileSelectionRegistry';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'fileSelectionCommands';
+const log = createLog(CHANNEL);
 
 interface PickerOptions {
   openLabel: string;
@@ -31,7 +32,7 @@ async function announceSelection<T extends string | string[]>(
       ? `Selected files: ${result.join(', ')}`
       : `Selected file: ${result}`;
     vscode.window.showInformationMessage(message);
-    logger.info(CHANNEL, message);
+    log.info(message);
     return result;
   } catch (err) {
     await showLoggedErrorMessage(
