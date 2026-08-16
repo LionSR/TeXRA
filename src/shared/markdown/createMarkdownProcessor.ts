@@ -172,6 +172,13 @@ const RENDER_MATH_SPAN_PATTERNS: readonly RegExp[] = MATH_SPAN_PATTERNS.map(
       ? RENDER_INLINE_MATH_SPAN_PATTERN
       : pattern,
 );
+// Fail loud rather than silently render-shield with the lax inline pattern if
+// MATH_SPAN_PATTERNS ever drops or renames the inline entry.
+if (!RENDER_MATH_SPAN_PATTERNS.includes(RENDER_INLINE_MATH_SPAN_PATTERN)) {
+  throw new Error(
+    'MATH_SPAN_PATTERNS no longer carries the inline $…$ entry to swap',
+  );
+}
 
 // Replace every match of `patterns` with an indexed `@@<tag>-N@@` placeholder,
 // returning the captured matches so restorePlaceholders can reinstate them.
