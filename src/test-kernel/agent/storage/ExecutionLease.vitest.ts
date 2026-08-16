@@ -108,13 +108,31 @@ describe('cross-process execution leases', () => {
     await StorageFS.ensureDir(WORKSPACE_STORAGE_LAYOUT.executionLeases);
     await StorageFS.writeAtomic(
       executionLeasePath(executionId),
-      '{"version":1}',
+      '{"version":2}',
     );
 
     await expect(deleteExecution(executionId)).rejects.toThrow(
       'Failed to parse JSON',
     );
     expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
+  });
+
+  it('self-heals a retired heartbeat-era lease record on contact', async () => {
+    const executionId = 'c8644d' as ExecutionId;
+    await writeExecution(executionId);
+    await StorageFS.ensureDir(WORKSPACE_STORAGE_LAYOUT.executionLeases);
+    await StorageFS.writeAtomic(
+      executionLeasePath(executionId),
+      '{"version":1,"executionId":"c8644d","ownerToken":"00000000-0000-4000-8000-000000000009","acquiredAt":1,"heartbeatAt":1}',
+    );
+
+    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
+      status: 'orphaned',
+    });
+    await expect(deleteExecution(executionId)).resolves.toMatchObject({
+      status: 'deleted',
+    });
+    expect(await StorageFS.exists(executionLeasePath(executionId))).toBe(false);
   });
 
   it('rejects resume while another live owner holds the lease', async () => {
@@ -506,7 +524,7 @@ describe('cross-process execution leases', () => {
     await StorageFS.ensureDir(WORKSPACE_STORAGE_LAYOUT.executionLeases);
     await StorageFS.writeAtomic(
       executionLeasePath(malformedId),
-      '{"version":1}',
+      '{"version":2}',
     );
 
     await expect(deleteAllExecutions()).rejects.toThrow('Failed to parse JSON');

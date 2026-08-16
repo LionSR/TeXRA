@@ -171,15 +171,19 @@ self-kill, `isFresh`, the `heartbeatAt` field and every consumer of it
 `RestartRepairRetryScheduler` and `nextLeaseCheckAt`, and the v1 record
 schema.
 
-**Version-1 lease records are not recognized at all.** The schema knows only
-version 2; a leftover v1 file falls under the pre-existing policy that a
-malformed present record rejects deliberately and loudly. No freshness
-fallback, no orphan-classification arm, no transition reader. Release note:
-restart every TeXRA host after upgrading, and clear leftover
-`executionLeases/` directories once (`rm <storage>/executionLeases/*.json`) —
-until cleared, those executions refuse resume with a loud parse error rather
-than a silent guess. (Consistent with the standing ruling that
-intermediate-era data gets deleted early and loudly rather than age-gated.)
+**Version-1 lease records are tombstones.** No v1 semantics survive — no
+freshness fallback, no classification logic, no transition reader. The only
+recognition that remains is `{version: 1} ⇒ garbage from the retired
+protocol`: any locked code path deletes such a file on contact and proceeds
+as if it were absent, logged at `warn`, so upgrades self-heal without asking
+users to clean lease directories by hand. The unlocked classifier
+(`inspectExecutionLease`) reports a tombstone as `orphaned` and leaves the
+delete to the next locked path — an unlocked delete could race a concurrent
+acquisition that just replaced the file. Release note: restart every TeXRA
+host after upgrading (a still-running pre-upgrade host's live lease is a
+tombstone to the new code and will be reclaimed). (Consistent with the
+standing ruling that intermediate-era data gets deleted early and loudly
+rather than age-gated.)
 
 **Kept:** `withLeaseLock` (proper-lockfile mutual exclusion for record
 read-modify-write), `ownerToken` fencing and `runWithExecutionLeaseWriteFence`,
