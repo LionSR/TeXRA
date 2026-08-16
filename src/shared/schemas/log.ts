@@ -139,6 +139,13 @@ export type StreamLogTextDelta = z.infer<typeof StreamLogTextDeltaSchema>;
 
 const LogMessageDataSchema = z.strictObject({
   id: z.string().min(1),
+  /**
+   * Wire append sequence of the source `StreamLogEntry`, carried through so
+   * the frontend can order live rows by `seqNo` instead of wall-clock
+   * `timestamp`. Optional for archived/compat rows predating sequence
+   * tracking; ordering falls back to `timestamp` when it is absent.
+   */
+  seqNo: z.int().positive().optional(),
   text: z.string(),
   level: LogLevelSchema,
   timestamp: z.number(),

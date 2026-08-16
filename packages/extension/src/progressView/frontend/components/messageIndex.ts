@@ -1,6 +1,7 @@
 /** Group tree, ungrouped messages, and chronological timeline indices. */
 
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
+import { compareBySeqNo } from '@shared/streams/streamOrdering';
 
 export interface GroupTree {
   group: TaskGroup;
@@ -19,32 +20,76 @@ interface MessageLocation {
   timelineEntry?: MessageTimelineEntry;
 }
 
+/** The wall-clock fallback order key for a log message. */
+function messageTime(message: LogMessageData): number {
+  return message.timestamp ?? 0;
+}
+
+/** Full-rebuild fallback: messages missing a timestamp sort last. */
+function messageTimeForRebuild(message: LogMessageData): number {
+  return message.timestamp ?? Number.MAX_SAFE_INTEGER;
+}
+
+/** The wall-clock fallback order key for a task-group child. */
+function groupStartTime(group: TaskGroup): number {
+  return group.startTime;
+}
+
+/** Full-rebuild fallback: root groups missing a start time sort last. */
+function groupStartTimeForRebuild(group: TaskGroup): number {
+  return group.startTime ?? Number.MAX_SAFE_INTEGER;
+}
+
+function compareMessages(a: LogMessageData, b: LogMessageData): number {
+  return compareBySeqNo(a, b, (message) => message.seqNo, messageTime);
+}
+
+function compareMessagesForRebuild(
+  a: LogMessageData,
+  b: LogMessageData,
+): number {
+  return compareBySeqNo(
+    a,
+    b,
+    (message) => message.seqNo,
+    messageTimeForRebuild,
+  );
+}
+
+function compareGroups(a: TaskGroup, b: TaskGroup): number {
+  return compareBySeqNo(a, b, () => undefined, groupStartTime);
+}
+
+function compareRootGroups(a: TaskGroup, b: TaskGroup): number {
+  return compareBySeqNo(a, b, () => undefined, groupStartTimeForRebuild);
+}
+
+function compareTimeline(a: TimelineEntry, b: TimelineEntry): number {
+  return a.time - b.time;
+}
+
 /**
- * Insert into a time-sorted array in place and return the insertion index.
- * O(1) push when appending (common case — times increase), O(n) splice
- * otherwise.
+ * Insert into a comparator-sorted array in place and return the insertion
+ * index. O(1) push when appending (common case — order increases), O(n)
+ * splice otherwise.
  */
-function insertByTime<T>(
+function insertByOrder<T>(
   target: T[],
   entry: T,
-  timeOf: (item: T) => number,
+  compare: (a: T, b: T) => number,
 ): number {
-  const time = timeOf(entry);
-  const lastTime = target.length > 0 ? timeOf(target.at(-1)!) : -Infinity;
-  if (time >= lastTime) {
+  const last = target.length > 0 ? target.at(-1)! : undefined;
+  if (last !== undefined && compare(last, entry) <= 0) {
     target.push(entry);
     return target.length - 1;
   }
-  // findIndex always returns >= 0 here: we only reach this point when the
-  // target is non-empty and time < lastTime, so the last element satisfies
-  // the predicate.
-  const idx = target.findIndex((item) => timeOf(item) > time);
+  const idx = target.findIndex((item) => compare(entry, item) < 0);
+  if (idx < 0) {
+    target.push(entry);
+    return target.length - 1;
+  }
   target.splice(idx, 0, entry);
   return idx;
-}
-
-function messageTime(message: LogMessageData): number {
-  return message.timestamp ?? 0;
 }
 
 /** One reactive update of `groups` / `messages` / `terminal`. */
@@ -214,13 +259,10 @@ export class MessageIndex {
       }
     }
 
-    // Sort messages by timestamp and classify by groupId.
-    // JS engines use stable sort, so equal timestamps preserve original order.
-    const sortedMessages = messages.toSorted(
-      (a, b) =>
-        (a.timestamp ?? Number.MAX_SAFE_INTEGER) -
-        (b.timestamp ?? Number.MAX_SAFE_INTEGER),
-    );
+    // Sort messages by wire append sequence and classify by groupId. Rows
+    // without a usable sequence (archived/compat) fall back to timestamp.
+    // JS engines use stable sort, so equal order keys preserve original order.
+    const sortedMessages = messages.toSorted(compareMessagesForRebuild);
     const messagesByGroup = new Map<string, LogMessageData[]>();
     const ungrouped: LogMessageData[] = [];
     this.messageLocations.clear();
@@ -244,7 +286,7 @@ export class MessageIndex {
       const node: GroupTree = {
         group,
         children: (childrenMap.get(group.id) ?? [])
-          .sort((a, b) => a.startTime - b.startTime)
+          .sort(compareGroups)
           .map(buildNode),
         messages: messagesByGroup.get(group.id) ?? [],
       };
@@ -258,14 +300,10 @@ export class MessageIndex {
     // makes them degrade gracefully (rendered un-nested at the timeline top)
     // instead of vanishing silently along with their whole subtree and messages.
     // See docs/proposals/2026-05-30-progress-grouping-refactor.md (R2).
-    // Stable sort preserves original order for equal timestamps.
+    // Stable sort preserves original order for equal order keys.
     this.tree = groups
       .filter((g) => !g.parentGroupId || !groupMap.has(g.parentGroupId))
-      .sort(
-        (a, b) =>
-          (a.startTime ?? Number.MAX_SAFE_INTEGER) -
-          (b.startTime ?? Number.MAX_SAFE_INTEGER),
-      )
+      .sort(compareRootGroups)
       .map(buildNode);
     this.ungrouped = ungrouped;
   }
@@ -283,7 +321,7 @@ export class MessageIndex {
         time: t.group.startTime ?? 0,
         tree: t,
       })),
-    ].sort((a, b) => a.time - b.time);
+    ].sort(compareTimeline);
     this.timeline = timeline;
     for (const item of timeline) {
       if ('msg' in item) {
@@ -295,7 +333,7 @@ export class MessageIndex {
   /**
    * Incrementally classify messages appended since `startIndex`.
    * Avoids full tree rebuilds by classifying only new messages and inserting
-   * by timestamp.
+   * by append-sequence order (timestamp fallback).
    */
   appendNewMessages(
     messages: readonly LogMessageData[],
@@ -306,9 +344,9 @@ export class MessageIndex {
       const node = msg.groupId ? this.groupNodeIndex.get(msg.groupId) : null;
       if (node) {
         this.removeUngroupedEntry(msg.id);
-        insertByTime(node.messages, msg, messageTime);
+        insertByOrder(node.messages, msg, compareMessages);
       } else {
-        const index = insertByTime(this.ungrouped, msg, messageTime);
+        const index = insertByOrder(this.ungrouped, msg, compareMessages);
         this.reindexUngroupedFrom(index);
       }
     }
@@ -319,7 +357,7 @@ export class MessageIndex {
    * Grouped messages are already referenced via their tree node in timeline,
    * so we skip them here. Iterating the messages slice — rather than the
    * ungrouped array — keeps this correct when a message with an earlier
-   * timestamp gets spliced into the middle of `ungrouped` by
+   * order key gets spliced into the middle of `ungrouped` by
    * `appendNewMessages`.
    */
   appendToTimeline(
@@ -334,7 +372,7 @@ export class MessageIndex {
         time: messageTime(m),
         msg: m,
       };
-      insertByTime(this.timeline, entry, (item) => item.time);
+      insertByOrder(this.timeline, entry, compareTimeline);
       this.locationFor(entry.key).timelineEntry = entry;
     }
   }
