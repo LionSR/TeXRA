@@ -693,9 +693,9 @@ describe('Edge cases', () => {
   // code_execution_tool_result / bash_code_execution_tool_result /
   // text_editor_code_execution_tool_result are not emitted by any model
   // handler in this codebase (only server_tool_use, web_search_tool_result,
-  // and web_fetch_tool_result are — see AnthropicStreamHandler) and fall
-  // through to the switch's `default: return null`, same as any other
-  // unrecognized block type.
+  // and web_fetch_tool_result are — see AnthropicStreamHandler) and land
+  // in the switch's `case undefined` arm, same as any other unrecognized
+  // block type.
   it('does not map unused code-execution block types to a node', () => {
     const nodes = normalize([
       {
