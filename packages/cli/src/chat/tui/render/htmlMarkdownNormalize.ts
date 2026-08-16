@@ -323,11 +323,21 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
   if (!KNOWN_HTML_TAG_RE.test(summarized)) return summarized;
 
   const literalDollarProtection = protectLiteralMathSyntax(summarized);
-  const mathProtection = protectLatexMathSpansForNormalize(
-    literalDollarProtection.content,
+  // Convert supported blockquote wrappers to markdown prefixes before math
+  // shielding so an environment immediately inside `<blockquote>` is seen at a
+  // `> \begin{...}` block start. The body is only re-prefixed, never mutated.
+  const blockquotePrefixed = literalDollarProtection.content.replaceAll(
+    BLOCKQUOTE_TAG_RE,
+    (match, body: string) =>
+      /^\s*\\begin\{[a-z]+\}/.test(body) ? quoteHtmlBlock(body) : match,
   );
+  const mathProtection = protectLatexMathSpansForNormalize(blockquotePrefixed);
   const mathProtected = literalDollarProtection.restore(mathProtection.content);
-  if (!KNOWN_HTML_TAG_RE.test(mathProtected)) return summarized;
+  if (!KNOWN_HTML_TAG_RE.test(mathProtected)) {
+    return literalDollarProtection.restore(
+      mathProtection.restore(mathProtection.content),
+    );
+  }
 
   const normalized = mathProtected
     .replaceAll(

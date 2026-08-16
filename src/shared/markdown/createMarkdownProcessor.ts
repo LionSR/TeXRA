@@ -552,6 +552,10 @@ function protectRenderInlineDollarSpans(
       continue;
     }
     // texmath's `$_post`: no ASCII digit after the closer (end is allowed).
+    // When the first valid closer fails this guard, texmath's inline rule
+    // returns false for the current opener; it does not retry a later closer.
+    // Advance one character so the failed closer can be reconsidered as a new
+    // opener on the next iteration.
     if (
       closer + 1 < content.length &&
       isAsciiDigitCode(content.charCodeAt(closer + 1))
