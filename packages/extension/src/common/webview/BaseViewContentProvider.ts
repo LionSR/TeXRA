@@ -48,10 +48,7 @@ export interface ViewBundle {
 export class BundledViewContentProvider {
   private readonly channel: string;
   private readonly viewPath: string;
-
-  private get log() {
-    return createLog(this.channel);
-  }
+  private readonly log: ReturnType<typeof createLog>;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -63,6 +60,7 @@ export class BundledViewContentProvider {
     // Default: convert 'HistoryView' to 'historyView'
     this.viewPath =
       viewPath ?? viewName.charAt(0).toLowerCase() + viewName.slice(1);
+    this.log = createLog(this.channel);
   }
 
   public getHtmlContent(webview: vscode.Webview): string {
