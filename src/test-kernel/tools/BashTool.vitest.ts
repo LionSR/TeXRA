@@ -224,8 +224,8 @@ function mockStreamingCommand(
       stream(options);
       return {
         success: true,
-        stdout: null,
-        stderr: null,
+        stdout: '',
+        stderr: '',
         timedOut: false,
         exitCode: 0,
         ...result,
@@ -322,7 +322,7 @@ describe('BashTool', () => {
       success: true,
       // executeCommand trims trailing whitespace before returning stdout
       stdout: `${longOutput}\n`.trim(),
-      stderr: null,
+      stderr: '',
       timedOut: false,
     };
 

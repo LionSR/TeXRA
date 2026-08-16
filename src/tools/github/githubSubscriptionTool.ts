@@ -348,7 +348,7 @@ async function gitInDir(args: string[], cwd: string): Promise<string> {
       result.stderr ?? `git ${args.join(' ')} failed with no stderr.`,
     );
   }
-  return (result.stdout ?? '').trim();
+  return result.stdout.trim();
 }
 
 interface OpenPullSummary {

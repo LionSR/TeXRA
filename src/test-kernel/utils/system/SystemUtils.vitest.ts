@@ -132,7 +132,7 @@ describe('executeCommand', () => {
 
     assert.ok(result.success);
     assert.equal(result.stdout, stdout);
-    assert.equal(result.stderr, null);
+    assert.equal(result.stderr, '');
   });
 
   it('keeps stderr empty for ordinary nonzero exits with stdout only', async () => {
@@ -145,7 +145,7 @@ describe('executeCommand', () => {
     assert.equal(result.success, false);
     assert.equal(result.exitCode, 7);
     assert.equal(result.stdout, 'failure details');
-    assert.equal(result.stderr, null);
+    assert.equal(result.stderr, '');
     assert.equal(result.outputLimitExceeded, undefined);
   });
 
@@ -167,7 +167,7 @@ describe('executeCommand', () => {
     );
 
     assert.equal(result.success, true);
-    assert.equal(result.stdout, null);
+    assert.equal(result.stdout, '');
     assert.equal(streamed, '🙂');
   });
 
@@ -218,7 +218,7 @@ describe('executeCommand', () => {
     );
 
     assert.equal(result.success, true);
-    assert.equal(result.stdout, null);
+    assert.equal(result.stdout, '');
     assert.equal(streamedChars, outputChars);
     assert.equal(result.outputLimitExceeded, undefined);
   });
@@ -366,7 +366,7 @@ describe('executeCommandSync', () => {
     expect(result).toMatchObject({
       success: true,
       stdout: 'ok',
-      stderr: null,
+      stderr: '',
       timedOut: false,
       exitCode: 0,
     });
@@ -381,7 +381,7 @@ describe('executeCommandSync', () => {
 
     expect(result).toMatchObject({
       success: false,
-      stdout: null,
+      stdout: '',
       stderr: 'bad',
       timedOut: false,
       exitCode: 7,

@@ -57,7 +57,7 @@ async function readGit(
     maxBuffer: MAX_BUFFER_BYTES,
     quiet: !reportFailure,
   });
-  if (result.success) return result.stdout ?? '';
+  if (result.success) return result.stdout;
   if (reportFailure) {
     options.onError?.(
       new Error(
