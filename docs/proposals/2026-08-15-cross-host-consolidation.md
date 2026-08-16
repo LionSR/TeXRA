@@ -510,7 +510,9 @@ login` does not sign in the GUI hosts and vice-versa. Ruling: is
   `canAcquireResumeLease` rechecks it under the lease lock. Desktop alone
   also checks the durable authoritative stream identity
   (`desktopAgentResume.ts:84-94`), fenced as desktop-only — extension/CLI
-  must not copy it.
+  must not copy it. The rejected shared-default admission port would wrongly
+  centralize host-owned cancellation; the optional port instead documents the
+  monotone contract while each host retains its own lifecycle authority.
 - **V5. Only the CLI settles executions at exit.** CLI shutdown
   (`runExecution.ts:344-399`) kills, persists `CANCELLED` with `'preserve'`,
   releases the lease, derives resumability, then advertises recovery.

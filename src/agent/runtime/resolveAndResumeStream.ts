@@ -212,9 +212,10 @@ export async function resolveAndResumeStream(
     return true;
   } catch (error) {
     if (isCancellationRequested()) return false;
-    // A workflow resume that loses the admission race is an expected
-    // cancellation, not a resume failure. Tool-use already classifies this
-    // same error as a silent `false`; the workflow branch must match it.
+    // Shipped hosts share this attempt's monotone cancellation latch, so the
+    // preceding check handles their lost-admission path. Keep this fallback
+    // for a future host that supplies the lease guard without the optional
+    // cancellation port: it must still fail silently rather than toast.
     if (error instanceof ResumeAdmissionCancelledError) return false;
     try {
       await ports.reportFailure?.(streamId, error);
