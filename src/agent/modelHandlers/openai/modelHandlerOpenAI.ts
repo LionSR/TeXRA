@@ -9,7 +9,7 @@ import {
 
 // Local imports
 import { parseToolInput } from '@agent/core/flows/toolCallParsing';
-import type { ExtendedCompletionUsage } from '@agent/core/usage/ResponseUsage';
+import type { ExtendedCompletionUsage } from '@agent/types/ProviderUsage';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/types/mediaTypes';

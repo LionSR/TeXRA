@@ -7,7 +7,7 @@
  * overrides that delegate here with the model's pricing config and provider id.
  */
 
-import type { ExtendedCompletionUsage } from '@agent/core/usage/ResponseUsage';
+import type { ExtendedCompletionUsage } from '@agent/types/ProviderUsage';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   computeStandardPrice,
