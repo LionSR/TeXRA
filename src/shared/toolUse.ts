@@ -12,8 +12,10 @@ import {
   TOOL_USE_STATUS,
   ToolUseLogSchema,
   type NormalizedToolUse,
+  type ToolUseStatus,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
+import { truncateSummary } from '@utils/text/stringUtils';
 
 function trimmedOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -125,6 +127,98 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
       isError && validated.status === TOOL_USE_STATUS.COMPLETED
         ? TOOL_USE_STATUS.FAILED
         : validated.status,
+  };
+}
+
+/**
+ * Visible failure text both hosts render when a `toolUse` payload cannot be
+ * parsed. Kept beside {@link normalizeToolUseData} so the CLI and progress
+ * view can't drift on the wording of the shared malformed-payload policy.
+ */
+const MALFORMED_TOOL_USE_TEXT = 'Malformed tool payload';
+
+const TOOL_USE_STATUS_VALUES = new Set<string>(Object.values(TOOL_USE_STATUS));
+
+/** Recover a source-owned status without accepting an invalid enum member. */
+function validSourceToolUseStatus(data: unknown): ToolUseStatus | undefined {
+  if (!isObject(data)) return undefined;
+  const status = data.status;
+  return typeof status === 'string' && TOOL_USE_STATUS_VALUES.has(status)
+    ? (status as ToolUseStatus)
+    : undefined;
+}
+
+/**
+ * Bounded, value-safe reason for a failed `toolUse` parse. Primitive payloads
+ * get a short type/preview; object payloads report only the invalid field
+ * *paths*, never field values, so a partially valid `read`/`bash` row cannot
+ * leak its full output into the diagnostic.
+ */
+function malformedToolUseDiagnostic(data: unknown): string {
+  const reason = isObject(data)
+    ? malformedObjectReason(data)
+    : malformedPrimitiveReason(data);
+  return truncateSummary(`${MALFORMED_TOOL_USE_TEXT} (${reason})`, 160);
+}
+
+function malformedObjectReason(data: Record<string, unknown>): string {
+  const parsed = ToolUseLogSchema.safeParse(data);
+  if (parsed.success) return 'unparseable payload';
+  const fields = [
+    ...new Set(
+      parsed.error.issues
+        .map((issue) => issue.path.join('.'))
+        .filter((path) => path.length > 0),
+    ),
+  ];
+  return fields.length > 0
+    ? `invalid ${fields.join(', ')}`
+    : 'unparseable payload';
+}
+
+function malformedPrimitiveReason(data: unknown): string {
+  if (data === null) return 'received null';
+  if (typeof data === 'string') {
+    return `received string ${JSON.stringify(truncateSummary(data, 40))}`;
+  }
+  if (typeof data === 'number') return `received number ${String(data)}`;
+  if (typeof data === 'boolean') return `received boolean ${String(data)}`;
+  if (Array.isArray(data)) return `received array of length ${data.length}`;
+  return `received ${typeof data}`;
+}
+
+/**
+ * Single render-boundary normalization shared by both hosts. A parse failure
+ * becomes a visible failed tool row instead of being dropped (CLI) or falling
+ * through to the default log template (webview).
+ *
+ * The fallback keeps the row live unless the source itself carries a valid
+ * terminal `status`, so a temporarily malformed in-progress row can still be
+ * replaced by a later corrected payload in the append-only transcript. It
+ * preserves only independently usable fields (`toolName` when a string,
+ * `input` from `data.input`) and keeps the bounded diagnostic out of the
+ * normal tool input/output sections. Unknown tool names and unstructured
+ * object outputs never reach the fallback because they still parse through
+ * {@link ToolUseLogSchema}.
+ */
+export function normalizeToolUseForRender(data: unknown): NormalizedToolUse {
+  return normalizeToolUseData(data) ?? malformedToolUseFallback(data);
+}
+
+function malformedToolUseFallback(data: unknown): NormalizedToolUse {
+  const diagnostic = malformedToolUseDiagnostic(data);
+  const status = validSourceToolUseStatus(data);
+  return {
+    toolName:
+      isObject(data) && typeof data.toolName === 'string' ? data.toolName : '',
+    errorText: diagnostic,
+    outputText: '',
+    userInstructionText: '',
+    input: isObject(data) && 'input' in data ? data.input : undefined,
+    isError: true,
+    isUserFeedback: false,
+    headerSummary: diagnostic,
+    ...(status !== undefined ? { status } : {}),
   };
 }
 
