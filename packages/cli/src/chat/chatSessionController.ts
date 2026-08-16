@@ -548,16 +548,14 @@ export function createChatSessionController(
       ]);
 
       await runtimeSession.transcripts.ensureLoaded(resolution.streamId);
-      try {
-        await snapshotStore.load([resolution.streamId]);
-      } catch (error) {
-        // `load` evicts synchronously before its async seed, so on rejection the
-        // evicted markers are stale while the retained root was never seeded.
-        loadedStreamsReconcile.dropStale();
-        throw error;
-      }
-      // Drop the markers `load` evicted and mark the retained root before the
-      // awaited read/patch can render a stale pre-resume projection.
+      // `load` evicts synchronously before its async seed. Drop those markers
+      // before the await yields so `readStreamArtifacts` cannot project an
+      // evicted/unseeded record (and re-emit warnIfUnseeded) mid-seed. On
+      // rejection the retained root stays unmarked — it was never seeded.
+      loadedStreamsReconcile.dropStale();
+      await snapshotStore.load([resolution.streamId]);
+      // Mark the retained root before the awaited read/patch can render a
+      // stale pre-resume projection.
       loadedStreamsReconcile.reconcile();
       const restored = await snapshotStore.read(resolution.streamId);
       // A rehydrated stream never re-emits `run.start`, so its identity is

@@ -1133,6 +1133,11 @@ export class StreamSnapshotStore {
     }
   }
 
+  /** Whether an in-memory accumulator record currently exists for this stream. */
+  hasRecord(streamId: StreamTabId): boolean {
+    return this.records.get(streamId) !== undefined;
+  }
+
   evictAll(): void {
     this.records.evictAll();
     this.kvHandles.invalidateAll();

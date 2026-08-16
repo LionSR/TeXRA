@@ -74,13 +74,13 @@ export function markArtifactStreamHydrated(streamId: StreamTabId): void {
 /** Prepare reconciliation for an authoritative full-set `load` of `retained`.
  *  `load` evicts every other record, so capture the markers it will evict up
  *  front (plus the active stream, whose first focus preload may still be in
- *  flight with no marker yet). The returned `dropStale()` removes only the
- *  stale markers (for a load whose async seed rejects after the synchronous
- *  eviction); `reconcile()` drops them and marks the retained streams hydrated.
- *  Call `reconcile()` right after a successful `load` and again after focus: a
- *  stale in-flight preload that re-adds an evicted stream is cleared either
- *  way, while a stream legitimately preloaded after the load is preserved (it
- *  was never in the captured stale set). */
+ *  flight with no marker yet). Call `dropStale()` before awaiting `load` so the
+ *  hydration gate stays honest across the async seed window (eviction is sync
+ *  at the start of `load`); `reconcile()` after a successful `load` (and again
+ *  after focus) re-drops those stale markers and marks the retained streams
+ *  hydrated. A stale in-flight preload that re-adds an evicted stream is
+ *  cleared either way, while a stream legitimately preloaded after the load is
+ *  preserved (it was never in the captured stale set). */
 export function beginLoadedStreamsReconcile(retained: readonly StreamTabId[]): {
   readonly dropStale: () => void;
   readonly reconcile: () => void;
@@ -115,6 +115,14 @@ export function readStreamArtifacts(
 ): StreamArtifactProjection | undefined {
   const session = tryDefaultSession();
   if (!session || !hydratedArtifactStreams.has(streamId)) return undefined;
+  // Markers can outlive store records when a `load` eviction is not reconciled
+  // in time. Drop the orphan so callers fall back to the slice mirror instead
+  // of projecting empty unseeded getters (#10730).
+  if (!session.snapshots.hasRecord(streamId)) {
+    hydratedArtifactStreams.delete(streamId);
+    artifactProjectionMemo.delete(streamId);
+    return undefined;
+  }
   const cached = artifactProjectionMemo.get(streamId);
   if (cached !== undefined) return cached;
   const projection = projectStreamArtifacts(session.snapshots, streamId);
