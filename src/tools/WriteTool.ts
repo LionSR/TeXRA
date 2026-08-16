@@ -39,7 +39,7 @@ export class WriteFileTool extends defineTool({
     }
     const { path, displayPath, exists, originalContent } = prepared.target;
     const proposedContent = isTexFile(path)
-      ? replacementEngine.applyTexWrite(input.content)
+      ? replacementEngine.applyFor(input.content, 'tex-write')
       : input.content;
 
     return applyApprovedFileEdit({

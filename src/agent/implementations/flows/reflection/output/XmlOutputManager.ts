@@ -452,7 +452,7 @@ export class XmlOutputManager {
       `Ensuring correct XML structure: ${fileLocation.absolutePath}`,
     );
     const originalContent = await AbsoluteFS.read(fileLocation.absolutePath);
-    let content = replacementEngine.applyXmlContent(originalContent);
+    let content = replacementEngine.applyFor(originalContent, 'xml-content');
 
     const closeTag = `</${OUTPUT_DOCUMENTS_TAG}>`;
     const openTag = `<${OUTPUT_DOCUMENTS_TAG}>`;
