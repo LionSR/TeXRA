@@ -35,6 +35,7 @@ const VSCODE_FREE_ZONES = [
   'src/replacement',
   'src/eventBus',
   'src/hosts',
+  'packages/agent/src',
   'packages/extension/src/webview/frontend',
   'packages/extension/src/progressView/frontend',
   'packages/extension/src/settingsView/frontend',

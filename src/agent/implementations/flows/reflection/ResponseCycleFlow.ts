@@ -20,7 +20,7 @@ import {
   isTokenLimitStopReason,
   type ProviderStopReason,
 } from '@agent/types/StopReasonTypes';
-import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
+import type { ProviderUsage } from '@agent/types/ProviderUsage';
 import { K_SLICE } from '@agent/core/constants';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';

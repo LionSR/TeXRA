@@ -1,5 +1,3 @@
-import process from 'node:process';
-
 import type { AgentEvent, StatusEvent } from '@agent/trace';
 import { createLog } from '@logger/logUtils';
 import type {
@@ -14,6 +12,7 @@ import type {
   UpdateQueuedFollowUpsPayload,
   UpdateStreamDescriptionPayload,
 } from '@shared/schemas';
+import { isDevAssertionMode } from '@shared/utils/devAssertionMode';
 
 const logger = createLog('SessionEventHub');
 
@@ -79,12 +78,6 @@ interface SubscriberRegistration {
   readonly scope?: SessionEvent['scope'];
   readonly streamId?: StreamTabId;
   readonly types?: ReadonlySet<AgentEvent['type']>;
-}
-
-function isDevAssertionMode(): boolean {
-  return (
-    process.env.NODE_ENV === 'test' || process.env.TEXRA_DEV_ASSERTIONS === '1'
-  );
 }
 
 /**
