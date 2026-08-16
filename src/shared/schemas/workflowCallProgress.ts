@@ -83,6 +83,9 @@ export const WorkflowCallProgressSchema = z.discriminatedUnion('status', [
   }),
   WorkflowCallProgressBaseSchema.extend({
     status: z.literal('cancelled'),
+    // Cancelled is terminal but not a failure, so it intentionally omits the
+    // `error` field carried by `failed`; renderers surface it as a stopped
+    // state rather than as an exception.
     ...WorkflowCallTerminalMetadataSchema.shape,
   }),
   WorkflowCallSkippedProgressSchema,
