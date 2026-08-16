@@ -35,12 +35,13 @@ interface MarkdownProcessorConfig {
   /**
    * When true, shield LaTeX math from markdown-it so it reaches the renderer
    * verbatim. Without a math plugin, markdown-it treats the body of `$…$` /
-   * `$$…$$` / `\(…\)` / `\[…\]` spans as ordinary markdown and corrupts it two
-   * ways: its CommonMark escape rule strips the backslash before escapable
-   * punctuation (`\(`→`(`, `\;`→`;`, `\{`→`{`, `\,`→`,`), and its emphasis rule
-   * eats `_{…}` subscripts (`a_{i}b_{j}` → `a<em>i</em>b_{j}`). We protect the
-   * whole span, plus a safety net for stray spacing/brace macros (`\,` `\;`
-   * `\:` `\!` `\(` `\)` `\[` `\]` `\{` `\}`) outside any span.
+   * `$$…$$` / `\(…\)` / `\[…\]` spans and `\begin{env}…\end{env}` environments
+   * as ordinary markdown and corrupts it two ways: its CommonMark escape rule
+   * strips the backslash before escapable punctuation (`\(`→`(`, `\;`→`;`,
+   * `\{`→`{`, `\,`→`,`), and its emphasis rule eats `_{…}` subscripts
+   * (`a_{i}b_{j}` → `a<em>i</em>b_{j}`). We protect the whole span, plus a
+   * safety net for stray spacing/brace macros (`\,` `\;` `\:` `\!` `\(` `\)`
+   * `\[` `\]` `\{` `\}`) outside any span.
    *
    * Enabled by the CLI host, which deliberately shows LaTeX *source* verbatim
    * (terminal math rendering is disabled). The webview / HTML-export leave this
@@ -115,17 +116,48 @@ function restoreLatexReferences(
   });
 }
 
+// Inline `$…$` requires both delimiters to be unescaped (`\$` is a literal
+// dollar in LaTeX, not a delimiter) and on the same line, which keeps stray
+// currency `$` from being captured and avoids cascading mis-splits. One or
+// more adjacent spans chain so `$a$$b$` shields as a single unit.
+const INLINE_MATH_SPAN_PATTERN =
+  /(?<!\\)\$(?!\$)[^\n$]+?(?<![\\$])\$(?:\$(?!\$)[^\n$]+?(?<![\\$])\$)*/g;
+
+// Render-time inline `$…$` adds the adjacency guards the webview's texmath
+// applies to its `dollars` inline rule (`$_pre`/`$_post`): no digit before
+// the opener, no whitespace just inside either delimiter, and no digit after
+// the closer. `Cost $5 then *ten* $10` is prose to texmath (its emphasis
+// stays live), so the CLI renderer must not shield it as math either. The
+// HTML normalizer keeps the lax form above: there a math-shaped span's tags
+// deliberately stay literal — the conservative choice while deciding which
+// HTML to convert — pinned by the "preserves complete inline math beside
+// token characters" suite.
+const RENDER_INLINE_MATH_SPAN_PATTERN =
+  /(?<![\\\d])\$(?!\$)(?!\s)[^\n$]+?(?<![\\$\s])\$(?!\d)(?:\$(?!\$)(?!\s)[^\n$]+?(?<![\\$\s])\$(?!\d))*/g;
+
 // Math spans whose body must reach the renderer verbatim. Order matters: the
 // display fences are matched before the inline ones so `$…$` never splits a
-// `$$…$$`. Inline `$…$` requires both delimiters to be unescaped (`\$` is a
-// literal dollar in LaTeX, not a delimiter) and on the same line, which keeps
-// stray currency `$` from being captured and avoids cascading mis-splits.
+// `$$…$$`, and the environment rule comes last so a `\begin{…}…\end{…}`
+// nested inside a fence is consumed with its fence. The environment rule
+// mirrors texmath's `beg_end` block rule (lowercase-letter names, same-name
+// close), which the webview enables; unmatched here, markdown-it eats `\\`
+// row breaks as escapes and turns `*…*` inside the body into emphasis.
 const MATH_SPAN_PATTERNS: readonly RegExp[] = [
   /\$\$[\s\S]+?\$\$/g, // $$ … $$  (display, may span lines)
   /(?<!\\)\\\[[\s\S]+?(?<!\\)\\\]/g, // \[ … \]  (display)
   /(?<!\\)\\\([\s\S]+?(?<!\\)\\\)/g, // \( … \)  (inline)
-  /(?<!\\)\$(?!\$)[^\n$]+?(?<![\\$])\$(?:\$(?!\$)[^\n$]+?(?<![\\$])\$)*/g, // $ … $  (one or more adjacent inline spans, single line)
+  INLINE_MATH_SPAN_PATTERN, // $ … $  (one or more adjacent inline spans, single line)
+  /\\begin\{([a-z]+)\}[\s\S]+?\\end\{\1\}/g, // \begin{env} … \end{env}  (texmath beg_end)
 ];
+
+// The processor's render shield swaps in the texmath-adjacent inline pattern;
+// htmlMarkdownNormalize keeps the lax default set above.
+const RENDER_MATH_SPAN_PATTERNS: readonly RegExp[] = MATH_SPAN_PATTERNS.map(
+  (pattern) =>
+    pattern === INLINE_MATH_SPAN_PATTERN
+      ? RENDER_INLINE_MATH_SPAN_PATTERN
+      : pattern,
+);
 
 // Replace every match of `patterns` with an indexed `@@<tag>-N@@` placeholder,
 // returning the captured matches so restorePlaceholders can reinstate them.
@@ -215,20 +247,34 @@ function restorePlaceholders(
   placeholder: RegExp,
   items: string[],
 ): string {
-  return content.replaceAll(placeholder, (match, rawIndex) => {
-    const item = items[Number(rawIndex)];
-    return item ?? match;
-  });
+  // An item can itself carry a placeholder when spans nest across patterns
+  // (an inline `$…$` inside a `\begin{…}…\end{…}` body), so run to a
+  // fixpoint instead of a single pass. Nesting is acyclic — a pattern's
+  // matches can capture earlier patterns' placeholders but never their own —
+  // and selectPlaceholderTag keeps placeholder-shaped user text out of the
+  // items, so the loop terminates.
+  let restored = content;
+  for (;;) {
+    const next = restored.replaceAll(placeholder, (match, rawIndex) => {
+      const item = items[Number(rawIndex)];
+      return item ?? match;
+    });
+    if (next === restored) return restored;
+    restored = next;
+  }
 }
 
 /** Shields complete LaTeX math spans while another transform runs. */
-export function protectLatexMathSpans(content: string): {
+export function protectLatexMathSpans(
+  content: string,
+  patterns: readonly RegExp[] = MATH_SPAN_PATTERNS,
+): {
   content: string;
   restore: (value: string) => string;
 } {
   const protectedMath = protectByPatterns(
     content,
-    MATH_SPAN_PATTERNS,
+    patterns,
     'LATEX-MATH',
     true,
   );
@@ -292,7 +338,7 @@ export function createMarkdownProcessor(
       placeholder: refPlaceholder,
     } = protectLatexReferences(content);
     const mathProtection = config.protectLatexMath
-      ? protectLatexMathSpans(refProtected)
+      ? protectLatexMathSpans(refProtected, RENDER_MATH_SPAN_PATTERNS)
       : { content: refProtected, restore: (value: string) => value };
     const mathProtected = mathProtection.content;
     const macroProtection = config.protectLatexMath
