@@ -65,6 +65,13 @@ Do not create issues for:
 - Nitpick-level comments.
 - Speculative future work not discussed in the pull request.
 - Bot suggestions already addressed or dismissed.
+- Test-coverage suggestions ("add tests for X", "increase coverage", missing
+  test remarks from reviewers or bots). This repository deliberately keeps its
+  test surface small because internal interfaces break often — see `AGENTS.md`
+  "Testing discipline". File a test follow-up only for a gap the pull request
+  acknowledged and deferred: a reproduced defect that merged without its
+  regression test, or a consequential contract (wire, schema, user-visible
+  output) the diff leaves unprotected.
 
 For each genuine follow-up, create an issue with:
 
