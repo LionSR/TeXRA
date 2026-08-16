@@ -17,6 +17,7 @@ import {
 } from '@progressView/frontend/eventHandlers';
 
 import type { TraceDocument } from '@transcript';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { recordName, replayTrace } from './replayTrace';
 import { parseTraceData } from './traceDataSchema';
 
@@ -94,7 +95,7 @@ function renderLoadError(err: unknown): void {
   const heading = document.createElement('h1');
   heading.textContent = 'Unable to load trace';
   const detail = document.createElement('p');
-  detail.textContent = err instanceof Error ? err.message : String(err);
+  detail.textContent = toErrorMessage(err);
 
   errorRegion.append(heading, detail);
   // Replace (not append) — the empty <stream-conversation> mounted above has
