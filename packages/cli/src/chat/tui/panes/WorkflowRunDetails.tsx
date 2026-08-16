@@ -25,13 +25,14 @@ import {
   STREAM_PHASE,
   WORKFLOW_TASK_STATUS_LABEL,
   roundIndexedEntries,
+  type CompileFailure,
+  type OutputFileInfo,
+  type RoundIndexed,
   type TaskGroup,
   type TaskGroupStatus,
 } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import { formatCompactDuration } from '@utils/core';
-
-import type { StreamSlice } from '../state/cliState';
 
 type WorkflowRunDetailTone =
   'neutral' | 'muted' | 'success' | 'warning' | 'error';
@@ -43,13 +44,12 @@ export interface WorkflowRunDetailLine {
   readonly role: 'lifecycle' | 'outputHeading' | 'output' | 'alert';
 }
 
-type WorkflowRunFacts = Pick<
-  StreamSlice,
-  | 'taskGroups'
-  | 'outputFilesByRound'
-  | 'missingOutputsByRound'
-  | 'compileFailuresByRound'
->;
+type WorkflowRunFacts = {
+  readonly taskGroups: readonly TaskGroup[];
+  readonly outputFilesByRound: RoundIndexed<OutputFileInfo>;
+  readonly missingOutputsByRound: RoundIndexed<string>;
+  readonly compileFailuresByRound: RoundIndexed<CompileFailure>;
+};
 
 interface WorkflowRunDetailGroup {
   readonly key: string;

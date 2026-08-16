@@ -20,6 +20,10 @@ import {
   type ConversationEntry,
   type StreamSlice,
 } from '../state/cliState';
+import {
+  readStreamArtifacts,
+  streamArtifactRevision,
+} from '../state/subscribeStreamArtifacts';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import {
@@ -213,7 +217,10 @@ export function ConversationPane(
 ): React.JSX.Element {
   const activeStreamId = useSignal(activeStreamIdSignal);
   const streams = useSignal(streamsSignal);
+  useSignal(streamArtifactRevision);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  const artifacts =
+    activeStreamId && slice ? readStreamArtifacts(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
   const displayEntries = splitTranscriptEntries(entries, slice?.status).pending;
 
@@ -247,9 +254,20 @@ export function ConversationPane(
     0,
     maxRows - metadataRows - pendingRowReserve,
   );
+  const workflowFacts = slice
+    ? {
+        taskGroups: slice.taskGroups,
+        outputFilesByRound:
+          artifacts?.outputFilesByRound ?? slice.outputFilesByRound,
+        missingOutputsByRound:
+          artifacts?.missingOutputsByRound ?? slice.missingOutputsByRound,
+        compileFailuresByRound:
+          artifacts?.compileFailuresByRound ?? slice.compileFailuresByRound,
+      }
+    : undefined;
   const visibleWorkflowDetails =
     slice?.category === AgentCategory.Workflow
-      ? selectWorkflowRunDetailLines(slice, detailCapacity)
+      ? selectWorkflowRunDetailLines(workflowFacts, detailCapacity)
       : [];
   const detailRows = visibleWorkflowDetails.length;
   const visibleEntries = selectTranscriptEntriesForViewport(
