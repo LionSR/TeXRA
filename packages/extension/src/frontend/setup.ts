@@ -10,12 +10,14 @@ import {
 import { globalSM } from '@common/state';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { extendEnvPath } from '@utils/system/platformPaths';
+
+const log = createLog('extension');
 
 /**
  * Reconciles bundled agents in global storage from packaged resources.
@@ -39,18 +41,15 @@ export async function copyDefaultAgents(
         globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, version),
     },
     logger: {
-      info: (message, data) => logger.info('extension', message, { data }),
-      warn: (message, data) => logger.warn('extension', message, { data }),
+      info: (message, data) => log.info(message, { data }),
+      warn: (message, data) => log.warn(message, { data }),
     },
   });
 
   try {
     await sync.reconcile(currentVersion);
   } catch (err) {
-    logger.error(
-      'extension',
-      `Error copying default agents: ${toErrorMessage(err)}`,
-    );
+    log.error(`Error copying default agents: ${toErrorMessage(err)}`);
   }
 }
 
@@ -108,8 +107,7 @@ export async function registerAgentDirectoryRoots(
       try {
         await register();
       } catch (err) {
-        logger.error(
-          'extension',
+        log.error(
           `Failed to register agent directory root: ${toErrorMessage(err)}`,
         );
       }
@@ -127,10 +125,7 @@ export async function refreshCustomAgentRoot(): Promise<void> {
     const custom = await agentDirectories.custom();
     registerExternalRoot(custom, CUSTOM_AGENT_ROOT_OPTIONS);
   } catch (err) {
-    logger.error(
-      'extension',
-      `Failed to refresh custom agents root: ${toErrorMessage(err)}`,
-    );
+    log.error(`Failed to refresh custom agents root: ${toErrorMessage(err)}`);
   }
 }
 
@@ -145,11 +140,10 @@ export async function initializeLatexSupport(): Promise<void> {
     const extendedPath = extendEnvPath(process.env.PATH);
     if (extendedPath !== process.env.PATH) {
       process.env.PATH = extendedPath;
-      logger.info('extension', 'Extended process PATH with TeX directories');
+      log.info('Extended process PATH with TeX directories');
     }
   } catch (err) {
-    logger.warn(
-      'extension',
+    log.warn(
       `Failed to extend PATH with TeX directories: ${toErrorMessage(err)}`,
     );
   }
@@ -163,10 +157,7 @@ export async function initializeLatexSupport(): Promise<void> {
       // prompted to install a TeX extension they don't need. They'll still
       // discover it via the LaTeX settings tab or compile errors later.
       if (await workspaceContainsLatexFiles()) {
-        logger.info(
-          'extension',
-          'LaTeX Workshop extension not found, prompting installation',
-        );
+        log.info('LaTeX Workshop extension not found, prompting installation');
         await promptExtensionInstall({
           suppressKey: 'latex-workshop-install',
           message:
@@ -177,10 +168,7 @@ export async function initializeLatexSupport(): Promise<void> {
       }
     }
   } catch (err) {
-    logger.error(
-      'extension',
-      `Error initializing LaTeX support: ${toErrorMessage(err)}`,
-    );
+    log.error(`Error initializing LaTeX support: ${toErrorMessage(err)}`);
   }
 }
 

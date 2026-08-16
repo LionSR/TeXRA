@@ -68,7 +68,7 @@ import { migrateLegacyVscodeStorage } from '@frontend/vscode/sharedStorageRoot';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import * as logger from '@logger/logUtils';
+import { createLog, setOutputChannelFactory } from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
@@ -113,6 +113,9 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
+
+const log = createLog('extension');
+const authLog = createLog('SupabaseAuthProvider');
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
@@ -181,14 +184,12 @@ export async function activate(context: vscode.ExtensionContext) {
   const gitRepoRoot = await resolveGitCommonRoot(workspaceRoot);
 
   agentDirectories.initialize(context);
-  logger.setOutputChannelFactory((name) =>
-    vscode.window.createOutputChannel(name),
-  );
+  setOutputChannelFactory((name) => vscode.window.createOutputChannel(name));
   initializeBundledPrompts(path.join(context.extensionPath, 'resources'));
   initializeStateManagers(context, gitRepoRoot);
   const lifecycle = createLifecycleHost({
     onError: (phase, error) =>
-      logger.error('extension', `Lifecycle ${phase} handler failed`, {
+      log.error(`Lifecycle ${phase} handler failed`, {
         data: error,
       }),
   });
@@ -230,7 +231,7 @@ export async function activate(context: vscode.ExtensionContext) {
     languageModel,
     toolMissingHandler: async (message, openDocsCommand) => {
       const actions = openDocsCommand ? ['View Installation Guide'] : [];
-      logger.error('extension', message);
+      log.error(message);
       const choice = await vscode.window.showErrorMessage(message, ...actions);
       if (choice === 'View Installation Guide' && openDocsCommand) {
         const [command, ...args] = openDocsCommand.split(',');
@@ -345,8 +346,7 @@ export async function activate(context: vscode.ExtensionContext) {
         hasRunHistory,
       });
     } catch (err) {
-      logger.warn(
-        'extension',
+      log.warn(
         `Onboarding firstRunDone backfill failed: ${toErrorMessage(err)}`,
       );
     }
@@ -363,16 +363,10 @@ export async function activate(context: vscode.ExtensionContext) {
       try {
         await loadAgents({ includeRemote: false });
         void loadAgents().catch((err) => {
-          logger.warn(
-            'extension',
-            `Remote agent refresh failed: ${toErrorMessage(err)}`,
-          );
+          log.warn(`Remote agent refresh failed: ${toErrorMessage(err)}`);
         });
       } catch (err) {
-        logger.error(
-          'extension',
-          `Failed to initialize agent index: ${toErrorMessage(err)}`,
-        );
+        log.error(`Failed to initialize agent index: ${toErrorMessage(err)}`);
       }
     })(),
     (async () => {
@@ -388,12 +382,11 @@ export async function activate(context: vscode.ExtensionContext) {
         } = await refreshModelListStateIfNeeded(globalSM);
         if (!skipped) {
           if (previousVersion !== currentVersion) {
-            logger.info(
-              'extension',
+            log.info(
               `Model list version changed (${previousVersion ?? 'none'} -> ${currentVersion}), updating model list`,
             );
           }
-          logger.info('extension', 'Model list refresh completed successfully');
+          log.info('Model list refresh completed successfully');
           if (
             added.length > 0 ||
             removed.length > 0 ||
@@ -402,24 +395,19 @@ export async function activate(context: vscode.ExtensionContext) {
           ) {
             invalidateModelOptionsCache();
             if (added.length > 0 || removed.length > 0 || reordered) {
-              logger.info(
-                'extension',
+              log.info(
                 `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
               );
             }
             if (routePreferencesCleared.length > 0) {
-              logger.info(
-                'extension',
+              log.info(
                 `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
               );
             }
           }
         }
       } catch (err) {
-        logger.error(
-          'extension',
-          `Failed to refresh model list: ${toErrorMessage(err)}`,
-        );
+        log.error(`Failed to refresh model list: ${toErrorMessage(err)}`);
       }
     })(),
   ]);
@@ -442,8 +430,7 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
     if (!isSupabaseConfigured()) {
-      logger.warn(
-        'extension',
+      log.warn(
         'Supabase authentication is enabled but credentials are not configured. Please configure credentials in src/auth/config.ts before building.',
       );
     } else {
@@ -463,8 +450,7 @@ export async function activate(context: vscode.ExtensionContext) {
             await vscode.commands
               .executeCommand('texra.auth.signIn')
               .then(undefined, (err: unknown) =>
-                logger.error(
-                  'SupabaseAuthProvider',
+                authLog.error(
                   `Failed to trigger sign-in: ${toErrorMessage(err)}`,
                 ),
               );
@@ -484,7 +470,7 @@ export async function activate(context: vscode.ExtensionContext) {
       context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
       authProvider.setUriHandler(uriHandler);
 
-      logger.info('extension', 'Supabase authentication provider registered');
+      log.info('Supabase authentication provider registered');
 
       try {
         const extensionVersion =
@@ -499,8 +485,7 @@ export async function activate(context: vscode.ExtensionContext) {
           dispose: () => void UsageLogService.dispose(),
         });
       } catch (usageError) {
-        logger.warn(
-          'extension',
+        log.warn(
           `Usage logging service failed to initialize: ${toErrorMessage(usageError)}`,
         );
       }
@@ -509,8 +494,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const initError =
       error instanceof Error ? error : new Error(toErrorMessage(error));
     SupabaseClient.setInitError(initError);
-    logger.error(
-      'extension',
+    log.error(
       `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
     );
   }
@@ -522,7 +506,7 @@ export async function activate(context: vscode.ExtensionContext) {
   );
   await progressViewProvider.initialize();
 
-  logger.info('extension', 'TeXRA extension activated');
+  log.info('TeXRA extension activated');
 
   // Deferred off the activation tick: extendEnvPath() inside performs
   // synchronous glob probes of TeX install directories, which would
@@ -565,8 +549,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // fire-and-forget async work through this helper to log rejections
   // instead of letting them become unhandled promise rejections.
   const logRefreshFailure = (trigger: string) => (err: unknown) => {
-    logger.error(
-      'extension',
+    log.error(
       `Tool availability refresh failed (${trigger}): ${toErrorMessage(err)}`,
     );
   };
@@ -597,7 +580,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const disposeGitHubAuthListener = appSignals.on(
     'githubTokenInvalid',
     ({ message }) => {
-      logger.error('extension', `GitHub token rejected: ${message}`);
+      log.error(`GitHub token rejected: ${message}`);
       void vscode.window
         .showErrorMessage(
           `GitHub token rejected: ${message}`,
@@ -644,10 +627,7 @@ export async function activate(context: vscode.ExtensionContext) {
     apiKeyStatusRefreshQueue.add(refreshApiKeyStatus) as Promise<void>;
   const safeRefreshApiKeyStatus = () =>
     queueApiKeyStatusRefresh().catch((err) =>
-      logger.error(
-        'extension',
-        `API key status refresh failed: ${toErrorMessage(err)}`,
-      ),
+      log.error(`API key status refresh failed: ${toErrorMessage(err)}`),
     );
   void safeRefreshApiKeyStatus();
   // Without these listeners the pill stayed on "Get Started" forever after
@@ -754,10 +734,7 @@ export async function activate(context: vscode.ExtensionContext) {
       // recompute too: the State 0 card has no other signal when a key is
       // added outside the main view's own round-trip.
       await mainViewProvider.refreshOnboardingFunnel().catch((err) => {
-        logger.warn(
-          'extension',
-          `Onboarding funnel refresh failed: ${toErrorMessage(err)}`,
-        );
+        log.warn(`Onboarding funnel refresh failed: ${toErrorMessage(err)}`);
       });
     }),
   );

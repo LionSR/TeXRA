@@ -21,7 +21,7 @@ import {
   EXTERNAL_INQUIRY_THREADS_DIR,
   WORKSPACE_STORAGE_LAYOUT,
 } from '@common/storage/storageLayout';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { StorageProvider } from '@platform/interfaces';
 import {
   mergeLegacyStorageBucket,
@@ -38,6 +38,8 @@ type BucketMigration = (
     readonly logger: LegacyDataMigrationLogger;
   },
 ) => Promise<void>;
+
+const log = createLog('extension');
 
 const mergeTaskRuns: BucketMigration = (sourcePath, targetPath, options) =>
   mergeLegacyStorageBucket(sourcePath, targetPath, {
@@ -56,8 +58,8 @@ export async function migrateLegacyVscodeStorage(
   storage: StorageProvider,
 ): Promise<void> {
   const migrationLogger = {
-    info: (message: string) => logger.info('extension', message),
-    warn: (message: string) => logger.warn('extension', message),
+    info: (message: string) => log.info(message),
+    warn: (message: string) => log.warn(message),
   };
   async function migrateBucket(
     getSourcePath: () => string | undefined,

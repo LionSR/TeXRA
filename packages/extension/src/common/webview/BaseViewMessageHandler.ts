@@ -10,6 +10,30 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
+/** The channel-first logging surface this view and its subclasses use. */
+type ViewMessageLogger = {
+  debug: (
+    channel: string,
+    message: string,
+    options?: logger.LogUtilsOptions,
+  ) => void;
+  info: (
+    channel: string,
+    message: string,
+    options?: logger.LogUtilsOptions,
+  ) => void;
+  warn: (
+    channel: string,
+    message: string,
+    options?: logger.LogUtilsOptions,
+  ) => void;
+  error: (
+    channel: string,
+    message: string,
+    options?: logger.LogUtilsOptions,
+  ) => void;
+};
+
 type CommandMessage = { command: string };
 
 /** Type guard to check if a message has a command field */
@@ -32,7 +56,7 @@ function isCommandMessage(
 export abstract class BaseViewMessageHandler<
   T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,
 > {
-  protected readonly logger: typeof logger;
+  protected readonly logger: ViewMessageLogger;
   protected readonly channel: string;
 
   /**
@@ -44,6 +68,11 @@ export abstract class BaseViewMessageHandler<
   constructor(protected readonly viewName: string) {
     this.logger = logger;
     this.channel = `${viewName}MessageHandler`;
+  }
+
+  /** Channel-bound log for this handler's own inbound diagnostics. */
+  private get log() {
+    return logger.createLog(this.channel);
   }
 
   /**
@@ -107,24 +136,24 @@ export abstract class BaseViewMessageHandler<
     let unsupported = false;
     const handled = dispatcher(message, handlers, (error) => {
       if (error instanceof ZodError) {
-        this.logger.debug(this.channel, 'Message validation failed', {
+        this.log.debug('Message validation failed', {
           data: error,
         });
       } else if (error instanceof UnsupportedCommandError) {
         // Declared `unsupported(...)` in this host's registry: visible
         // feedback (toast), not a silent drop or an error-level log.
         unsupported = true;
-        this.logger.debug(this.channel, error.message);
+        this.log.debug(error.message);
         void vscode.window.showInformationMessage(error.reason);
       } else {
-        this.logger.error(this.channel, 'Error handling message', {
+        this.log.error('Error handling message', {
           data: error,
         });
       }
     });
 
     if (!handled && !unsupported && isCommandMessage(message)) {
-      this.logger.warn(this.channel, `Unhandled command: ${message.command}`);
+      this.log.warn(`Unhandled command: ${message.command}`);
     }
   }
 
