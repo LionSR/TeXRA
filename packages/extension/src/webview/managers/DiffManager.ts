@@ -12,10 +12,7 @@ import { BaseWebviewManager } from './BaseWebviewManager';
 
 export class DiffManager extends BaseWebviewManager {
   private readonly channel = 'DiffManager';
-
-  private get log() {
-    return createLog(this.channel);
-  }
+  private readonly log = createLog(this.channel);
 
   handleLatexdiff(message: LatexdiffMessage): void {
     void vscode.commands.executeCommand(
