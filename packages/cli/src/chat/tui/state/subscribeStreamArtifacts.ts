@@ -7,10 +7,9 @@
 // still maintains the pre-hydration mirror); renderers read the canonical
 // projection (`projectStreamArtifacts`) directly, and this module owns only the
 // async preload edge plus the invalidation that makes those reads repaint.
-//
-// `cumulativeUsage` is the one exception: exit summaries and the workflow
-// dashboard still read it from `StreamSlice`, so hydration keeps mirroring just
-// that field until those consumers migrate to the projection.
+// Exit summaries and workflow-task metadata read `readStreamArtifacts` the same
+// way the renderers do, so hydration no longer mirrors any field into the
+// slice.
 
 import { signal } from '@lit-labs/signals';
 
@@ -20,14 +19,13 @@ import {
   type StreamArtifactProjection,
   type StreamArtifactReader,
 } from '@controllers/session/StreamArtifactProjection';
-import { sumUsageStats, type StreamTabId } from '@shared/schemas';
+import { type StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   activeStreamId,
   getCliStateGeneration,
   isCliStreamRetired,
-  patchStream,
   registerCliStateResetHook,
   setTransientNotice,
 } from './cliState';
@@ -134,17 +132,6 @@ export async function hydrateStreamArtifacts(
   if (!streamCanReceiveArtifacts(streamId, generation, requestIsCurrent)) {
     return false;
   }
-  // The store already ordered the seed against live facts (including a
-  // `clearMissingOutputs` reset — see its overlay `reset` flag), so its
-  // accumulated usage replaces the slice's. Round artifacts and the work plan
-  // no longer mirror here; renderers read `projectStreamArtifacts` directly.
-  const runUsage = [...store.getRunUsage(streamId).values()];
-  patchStream(streamId, (slice) => ({
-    ...slice,
-    cumulativeUsage: runUsage.length
-      ? sumUsageStats(runUsage)
-      : slice.cumulativeUsage,
-  }));
   markArtifactStreamHydrated(streamId);
   return true;
 }

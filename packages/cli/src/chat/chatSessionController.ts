@@ -542,6 +542,9 @@ export function createChatSessionController(
 
       await runtimeSession.transcripts.ensureLoaded(resolution.streamId);
       await snapshotStore.load([resolution.streamId]);
+      // Invalidate the memo as soon as the direct seed lands, before the
+      // awaited read/patch/focus below can render a stale pre-resume projection.
+      markArtifactStreamHydrated(resolution.streamId);
       const restored = await snapshotStore.read(resolution.streamId);
       // A rehydrated stream never re-emits `run.start`, so its identity is
       // seeded from the durable store (ExecutionMeta by FK) on this cold
@@ -565,10 +568,6 @@ export function createChatSessionController(
       });
       syncStreamLog(resolution.streamId);
       focusStream(resolution.streamId);
-      // The direct `snapshotStore.load` above bypasses the focus-hydration
-      // owner; mark the stream hydrated so a focused-stream no-op (focus is
-      // already this stream) still invalidates the projection memo.
-      markArtifactStreamHydrated(resolution.streamId);
 
       const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
         setupRunHost(sessionContext);
@@ -667,6 +666,9 @@ export function createChatSessionController(
       let finalize = (): void => session.markRunCompleted();
       try {
         await snapshotStore.preload([streamId]);
+        // Invalidate the memo immediately after the direct seed, before the
+        // awaited metadata/patch/focus below can render a stale projection.
+        markArtifactStreamHydrated(streamId);
         const runMetadata = snapshotStore.getRunMetadata(streamId);
         const executionId =
           runMetadata.executionId ??
@@ -705,9 +707,6 @@ export function createChatSessionController(
             : slice,
         );
         focusStream(streamId);
-        // Direct `snapshotStore.preload` above: mark hydrated so the memo is
-        // invalidated even when this stream was already focused.
-        markArtifactStreamHydrated(streamId);
         session.runExitCode = CliExitCode.Success;
 
         let resumedOutcome: TurnOutcome = RUN_OUTCOME.COMPLETED;

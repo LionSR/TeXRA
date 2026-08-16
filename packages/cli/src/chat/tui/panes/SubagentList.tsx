@@ -237,10 +237,16 @@ function SessionRow({
 function workflowTaskMetadata(
   call: WorkflowCallProgress,
   child: StreamSlice | undefined,
+  streamId: StreamTabId | undefined,
   nowMs: number,
 ): string | undefined {
   const terminal = isTerminalWorkflowCallProgress(call);
-  const usage = child?.cumulativeUsage ?? child?.usage;
+  const usage =
+    (streamId !== undefined
+      ? readStreamArtifacts(streamId)?.cumulativeUsage
+      : undefined) ??
+    child?.cumulativeUsage ??
+    child?.usage;
   let elapsed: string | undefined;
   let model: string | undefined;
   let cost: number | undefined;
@@ -275,15 +281,17 @@ function WorkflowTaskRow({
   focused,
   nowMs,
   pendingKinds,
+  streamId,
 }: {
   readonly child: StreamSlice | undefined;
   readonly entry: WorkflowTaskEntry;
   readonly focused: boolean;
   readonly nowMs: number;
   readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
+  readonly streamId: StreamTabId | undefined;
 }): React.JSX.Element {
   const style = WORKFLOW_TASK_STATUS_STYLE[entry.task.status];
-  const metadata = workflowTaskMetadata(entry.task, child, nowMs);
+  const metadata = workflowTaskMetadata(entry.task, child, streamId, nowMs);
   const approval = pendingApprovalRowDisplay(pendingKinds);
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
@@ -431,6 +439,7 @@ function WorkflowDashboard({
         entry={entry}
         focused={state.focused}
         nowMs={nowMs}
+        streamId={childStreamId}
         pendingKinds={
           childStreamId === undefined
             ? undefined
