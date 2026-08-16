@@ -491,25 +491,26 @@ login` does not sign in the GUI hosts and vice-versa. Ruling: is
   `DETACH_SUBAGENTS_ON_STOP` — which is also the CP2 gap,
   `WORKFLOW_AUTO_OPEN_PDF`, `LATEXDIFF_*`, `LATEX_FORMATTER`,
   `telemetry.enabled`).
-- **V4. Extension resume is the weak sibling.** (a) silent `read-failed`
-  (fixed by C3); (b) passes no `canAcquireResumeLease`
-  (`resumeFromResumeData.ts:83-87`), so
-  `acquireResumedExecutionLease(id, undefined)`
-  (`executionLease.ts:665,631`) skips the atomic re-admission check inside
-  the lease lock — a stream deleted or relaunched during the async retrieval
-  window can still have its lease acquired; desktop and CLI both pass the
-  guard; (c) its cancellation is non-monotone — recomputed live from
-  `!session.transcripts.has(streamId)` (`:60`), so a stream re-created under
-  the same id _un-cancels_ a resume, where desktop latches
-  (`isResumeInvalidated`, `desktopAgentResume.ts:72-84`) and the CLI latches
-  with an explicit monotonicity comment
-  (`chatSessionController.ts:295-299,668-672`); (d) double-toast (fixed by
-  C11). Also: desktop is the sole non-core caller of
-  `hasAuthoritativeStream` (`desktopAgentResume.ts:79-82`) — plausibly a
-  multi-window concern, but nothing says so; either port it into the shared
-  admission shape or fence it. → Pick one admission-guard shape
-  (`canAcquireResumeLease` + latched cancellation) and make it the **ports
-  default** rather than an optional every host re-decides.
+- **V4. Extension resume was the weak sibling — V4b/c ruled + landed.** (a)
+  silent `read-failed` (fixed by C3); (b) the extension passed no
+  `canAcquireResumeLease`, so `acquireResumedExecutionLease(id, undefined)`
+  skipped the atomic re-admission check inside the lease lock
+  (`executionLease.ts:674-678,642`) — a stream deleted or relaunched during
+  the async retrieval window could still have its lease acquired; (c) its
+  cancellation was non-monotone — recomputed live from
+  `!session.transcripts.has(streamId)`, so a stream re-created under the
+  same id _un-cancelled_ a resume; (d) double-toast (fixed by C11).
+  **Ruling + landed shape:** each attempt owns one monotone host-cancellation
+  latch. The extension latches observed transcript absence
+  (`resumeFromResumeData.ts:35-46`) and forwards the same latch/guard to both
+  resume branches (`:82-102`); desktop latches host detach + transcript
+  absence + authoritative-stream absence (`desktopAgentResume.ts:72-94`); the
+  CLI already latched the same (`chatSessionController.ts:657-660,739`). The
+  same latch reaches `resolveAndResumeStream` and queued tool-use;
+  `canAcquireResumeLease` rechecks it under the lease lock. Desktop alone
+  also checks the durable authoritative stream identity
+  (`desktopAgentResume.ts:84-94`), fenced as desktop-only — extension/CLI
+  must not copy it.
 - **V5. Only the CLI settles executions at exit.** CLI shutdown
   (`runExecution.ts:344-399`) kills, persists `CANCELLED` with `'preserve'`,
   releases the lease, derives resumability, then advertises recovery.
@@ -786,9 +787,9 @@ needing none). Suggested order:
 4. **Rulings, then mechanics** — the CLI-transcript parity charter (§4, one
    decision unlocking a–h and C16), settings-store unification (V1, needs a
    migration design note), catalog SSOT (V3), lease-at-quit (V5),
-   `enforceCategory` (V6), AppSignals wiring scope (V7), resume admission
-   default (V4b/c), resumable truth source (V9/DR13), callback-binding bar
-   (V11b), approval-policy default fence (V12).
+   `enforceCategory` (V6), AppSignals wiring scope (V7), resumable truth
+   source (V9/DR13), callback-binding bar (V11b), approval-policy default
+   fence (V12). Resume admission (V4b/c) is no longer pending: ruled + landed.
 
 Everything here was found by scoped sweeps, not adjudicated line-by-line the
 way the 2026-07-09 audit was; treat each row as _verified-at-citation_ but

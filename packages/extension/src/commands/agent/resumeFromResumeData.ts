@@ -32,6 +32,18 @@ export function tryResumeFromResumeData(
         session,
         (event) => event.streamId === streamId,
       );
+      // Per-attempt monotone cancellation latch: once an observed transcript
+      // absence invalidates the attempt, re-creating the same stream id cannot
+      // make it admissible again. `canAcquireResumeLease` rechecks the same
+      // latch under the execution-lease lock.
+      let cancellationRequested = false;
+      const isCancellationRequested = (): boolean => {
+        if (!cancellationRequested && !session.transcripts.has(streamId)) {
+          cancellationRequested = true;
+        }
+        return cancellationRequested;
+      };
+      const canAcquireResumeLease = () => !isCancellationRequested();
       const reportResumeFailure = async (error: unknown): Promise<void> => {
         logger.error(`Failed to resume stream: ${streamId}`, { data: error });
         await terminalResult.reportUnhandled(() =>
@@ -44,7 +56,7 @@ export function tryResumeFromResumeData(
         streamId,
         {
           streamStatus: session.status,
-          isCancellationRequested: () => !session.transcripts.has(streamId),
+          isCancellationRequested,
           resolveResumeState: (id) =>
             resolveResumeStateFromSnapshots(session.snapshots, id),
           reportResumeStateResolution: async (id, resolution) => {
@@ -69,7 +81,10 @@ export function tryResumeFromResumeData(
           },
           resumeToolUse: (resume, claimedRecovery) =>
             resumeQueuedToolUseFromResumeData(resume.streamId, resume, {
+              session,
               recovery: claimedRecovery,
+              canAcquireResumeLease,
+              isCancellationRequested,
               onError: reportResumeFailure,
             }),
           executeWorkflow: (
@@ -77,11 +92,14 @@ export function tryResumeFromResumeData(
             executionId,
             modelHandlerCompatibilityKey,
           ) =>
-            runExecuteCommand({
-              config,
-              executionId,
-              modelHandlerCompatibilityKey,
-            }),
+            runExecuteCommand(
+              {
+                config,
+                executionId,
+                modelHandlerCompatibilityKey,
+              },
+              { canAcquireResumeLease },
+            ),
           reportNoResumableSession: async (id) => {
             logger.warn(`No resumable session state for stream: ${id}`);
             await session.interactions.showInfoMessage(
