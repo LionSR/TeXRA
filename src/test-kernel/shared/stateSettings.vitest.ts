@@ -456,6 +456,7 @@ const CLI_CORE_SETTING_READER_FILES = {
   'src/agent/runtime/selectAutoOpenFinalOutput.ts': [
     'agentOutputs.autoOpenFinal',
   ],
+  'src/agent/runtime/childRunBudget.ts': ['childRunConcurrencyBudget'],
   'src/tools/goal/goalFeatureFlag.ts': ['goal.enabled'],
   'src/agent/runtime/ModelFactory.ts': ['model.useOpenAIResponsesAPI'],
   'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts': [

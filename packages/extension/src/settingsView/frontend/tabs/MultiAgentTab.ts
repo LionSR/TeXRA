@@ -14,16 +14,27 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import { AGENT_MODE_PRESETS, type AgentModePreset } from '@shared/schemas';
+import {
+  AGENT_MODE_PRESETS,
+  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
+  type AgentModePreset,
+} from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+import {
+  renderSettingsNumberRow,
+  renderSettingsSectionHeading,
+} from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
 
 // Local imports - catalog-driven settings rows
-import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
+import {
+  postStateSetting,
+  renderStateSettingToggleRow,
+} from '../components/shared/stateSettingRows';
 
 @customElement('multi-agent-tab')
 export class MultiAgentTab extends LitElement {
@@ -39,6 +50,10 @@ export class MultiAgentTab extends LitElement {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-xs);
+      }
+
+      .setting-number-input {
+        width: 80px;
       }
 
       /* Team cards */
@@ -177,6 +192,10 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) allowOrchestratorKill = true;
   @property({ attribute: false }) detachSubagentsOnStop = false;
   @property({ attribute: false }) worktreeSupport = false;
+  @property({ attribute: false }) childRunConcurrencyBudget =
+    CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue;
+  /** Parent-owned acknowledgement generation; changes force a re-render even when all field values are unchanged. */
+  @property({ attribute: false }) ackGeneration = 0;
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
   /** Agent names that carry delegation tools, computed backend-side from the registry. */
   @property({ attribute: false }) orchestratorAgents: string[] = [];
@@ -305,7 +324,10 @@ export class MultiAgentTab extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <div class="multi-agent-container tab-content-container">
+      <div
+        class="multi-agent-container tab-content-container"
+        data-ack-generation=${this.ackGeneration}
+      >
         ${renderSettingsSectionHeading({
           title: 'Available teams',
           description: 'Select a team to activate it.',
@@ -345,6 +367,16 @@ export class MultiAgentTab extends LitElement {
             description:
               'Delegated agents can use isolated worktrees, with every tool call rooted in that worktree.',
             checked: this.worktreeSupport,
+          })}
+          ${renderSettingsNumberRow({
+            label: 'Child-run concurrency budget',
+            description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
+            value: this.childRunConcurrencyBudget,
+            min: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min,
+            max: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
+            step: 1,
+            onChange: (value) =>
+              postStateSetting(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, value),
           })}
         </div>
       </div>
