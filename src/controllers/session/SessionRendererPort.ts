@@ -39,7 +39,6 @@ export interface SessionRendererPort {
   onStreamStatusChanged(
     streamId: StreamTabId,
     status: StreamPhase,
-    logHead: number,
     lastTimestamp?: number,
     substate?: StreamSubstate,
   ): void;

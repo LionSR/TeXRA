@@ -75,6 +75,8 @@ type ConversationEntryOrigin =
       readonly sourceSeqNo?: number;
       /** Source-owned order in which this immutable row became printable. */
       readonly settlementSeqNo?: number;
+      /** Earlier printable position for a stable view of a mutable source row. */
+      readonly presentationSeqNo?: number;
       readonly syntheticKind?: never;
       readonly syntheticAfterSeq?: never;
       readonly syntheticAfterSettlementSeqNo?: never;
@@ -84,6 +86,7 @@ type ConversationEntryOrigin =
       readonly synthetic: true;
       readonly sourceSeqNo?: never;
       readonly settlementSeqNo?: never;
+      readonly presentationSeqNo?: never;
       /** Why the CLI synthesized this entry. */
       readonly syntheticKind: 'local';
       /** StreamLog head at the moment this row was appended. */

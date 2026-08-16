@@ -329,7 +329,6 @@ describe('stream meta frontend state', () => {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream: streamId,
       status: STREAM_PHASE.WAITING,
-      logHead: 1,
       lastTimestamp: 300,
     });
 
@@ -340,25 +339,24 @@ describe('stream meta frontend state', () => {
     });
   });
 
-  it('applies a queued provider outcome through the terminal status watermark', () => {
+  it('retains a provider outcome applied before terminal status', () => {
     const streamId = 'stream-a' as StreamTabId;
     const getState = seedStream(streamId, { status: STREAM_PHASE.RUNNING });
     startCompaction(streamId);
     const outcome = compactionOutcomeEntry();
 
-    dispatch(streamMetaHandlers, {
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
-      stream: streamId,
-      status: STREAM_PHASE.WAITING,
-      logHead: outcome.seqNo,
-      lastTimestamp: 300,
-    });
     dispatch(logHandlers, {
       command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
       streamId,
       entries: [outcome],
       updates: [],
       textDeltas: [],
+    });
+    dispatch(streamMetaHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+      stream: streamId,
+      status: STREAM_PHASE.WAITING,
+      lastTimestamp: 300,
     });
 
     const replayed = projectCompactionActivities(
@@ -380,7 +378,6 @@ describe('stream meta frontend state', () => {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream: streamId,
       status: STREAM_PHASE.RUNNING,
-      logHead: 0,
       substate: STREAM_SUBSTATE.STARTING,
     });
 
@@ -392,7 +389,6 @@ describe('stream meta frontend state', () => {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream: streamId,
       status: STREAM_PHASE.COMPLETED,
-      logHead: 0,
     });
 
     expect(getState().streamStates.get(streamId)?.status).toBe(

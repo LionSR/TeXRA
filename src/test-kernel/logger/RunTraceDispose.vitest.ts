@@ -71,6 +71,7 @@ describe('createRunTrace dispose', () => {
     const failure = new Error('delayed transcript write failed');
     const writer: TranscriptWriter = {
       streamId: 'failed-stream' as StreamTabId,
+      settlementHead: 0,
       append: vi.fn((entry) => ({ ...entry, seqNo: 0 })),
       appendSettled: vi.fn((entry) => ({ ...entry, seqNo: 0 })),
       update: vi.fn(),
@@ -116,6 +117,7 @@ describe('createRunTrace dispose', () => {
       get streamId(): StreamTabId {
         throw setupFailure;
       },
+      settlementHead: 0,
       append: vi.fn(),
       appendSettled: vi.fn(),
       update: vi.fn(),

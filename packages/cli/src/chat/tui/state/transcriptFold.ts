@@ -218,7 +218,7 @@ function renderErrorLogEntryText(
 
 /**
  * Fields every {@link ConversationEntry} shares, regardless of role: the
- * source identity plus the two spreads (`messageType`, `settlementSeqNo`)
+ * source identity plus optional source-owned presentation fields
  * that must stay absent — not merely `undefined` — when the source entry
  * doesn't carry them, matching {@link ConversationEntry}'s optional-key shape.
  */
@@ -235,6 +235,9 @@ function baseLogEntryFields<R extends ConversationEntry['role']>(
     ...(entry.messageType ? { messageType: entry.messageType } : {}),
     ...(entry.settlementSeqNo !== undefined
       ? { settlementSeqNo: entry.settlementSeqNo }
+      : {}),
+    ...(entry.presentationSeqNo !== undefined
+      ? { presentationSeqNo: entry.presentationSeqNo }
       : {}),
   };
 }

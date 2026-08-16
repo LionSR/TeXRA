@@ -1,3 +1,4 @@
+import { createLog } from '@logger/logUtils';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -8,6 +9,8 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
+
+const logger = createLog('StreamLog');
 
 export type StreamLogAppendInput = Omit<
   StreamLogEntry,
@@ -478,10 +481,13 @@ export class StreamLog {
     if (index === undefined) return undefined;
 
     const current = this.entries[index];
-    const settlementSeqNo =
-      settle && current.settlementSeqNo === undefined
-        ? this.settlementSeqCounter + 1
-        : current.settlementSeqNo;
+    if (current.settlementSeqNo !== undefined) {
+      logger.warn(`Ignoring update to settled transcript entry: ${id}`);
+      return undefined;
+    }
+    const settlementSeqNo = settle
+      ? this.settlementSeqCounter + 1
+      : current.settlementSeqNo;
     if (
       settlementSeqNo === current.settlementSeqNo &&
       Object.entries(patch).every(([key, value]) =>
@@ -496,9 +502,16 @@ export class StreamLog {
     // AgentTrace. Persisted entries are parsed when loaded from storage.
     // Spreading `current` reads its (possibly lazy) text getter, so this is
     // where a streaming entry's chunks are joined into a plain value.
+    const mergedData =
+      current.type === STREAM_LOG_ENTRY_TYPES.GROUP_START &&
+      patch.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
+      patch.data !== undefined
+        ? { ...current.data, ...patch.data }
+        : patch.data;
     const updated = {
       ...current,
       ...patch,
+      ...(mergedData !== undefined ? { data: mergedData } : {}),
       id: current.id,
       seqNo: current.seqNo,
       ...(settlementSeqNo !== undefined ? { settlementSeqNo } : {}),
@@ -524,6 +537,10 @@ export class StreamLog {
 
     const current = this.entries[index];
     if (current.type !== STREAM_LOG_ENTRY_TYPES.LOG) return undefined;
+    if (current.settlementSeqNo !== undefined) {
+      logger.warn(`Ignoring text append to settled transcript entry: ${id}`);
+      return undefined;
+    }
 
     let acc = this.streamingText.get(id);
     if (!acc) {

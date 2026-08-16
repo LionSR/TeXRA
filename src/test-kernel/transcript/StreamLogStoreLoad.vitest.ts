@@ -1031,7 +1031,13 @@ describe('StreamLogStore load', () => {
   it('rehydrates summarized streams with stale running groups', async () => {
     const storage = mockStorage({
       logs: {
-        alpha: [runningGroupEntry('alpha', 1, 100)],
+        alpha: [
+          {
+            ...runningGroupEntry('alpha', 1, 100),
+            // Pre-#10774 writers settled GROUP_START rows immediately.
+            settlementSeqNo: 1,
+          },
+        ],
       },
       summaries: {
         alpha: summary(100, 100, { hasRunningGroup: true }),
@@ -1270,6 +1276,7 @@ describe('StreamLogStore load', () => {
     };
     const legacyRunningStartEntry: StreamLogEntry = {
       seqNo: 3,
+      settlementSeqNo: 3,
       id: 'delta-legacy-running',
       type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
       level: LOG_LEVELS.INFO,
@@ -1305,6 +1312,9 @@ describe('StreamLogStore load', () => {
     expect(entries.find((e) => e.id === 'delta-legacy-running')?.data).toEqual({
       status: STREAM_PHASE.RUNNING,
     });
+    expect(
+      entries.find((e) => e.id === 'delta-legacy-running')?.settlementSeqNo,
+    ).toBeUndefined();
   });
 
   it('does not load selected streams whose summaries have no running group', async () => {

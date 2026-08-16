@@ -424,10 +424,6 @@ export class SessionFactApplier {
       }
     }
 
-    // Settlement watermark for status-time compaction finalization. Read after
-    // any active-phase rehydrate and before inactive unfocused eviction —
-    // summaries keep timestamps across release, but not the resident log head.
-    const logHead = this.state.streamLogs.get(streamId)?.head ?? 0;
     if (!isActivePhase(status)) {
       this.state.streamLogs.requestEviction(streamId);
     }
@@ -480,7 +476,6 @@ export class SessionFactApplier {
       this.renderer.onStreamStatusChanged(
         streamId,
         status,
-        logHead,
         lastTimestamp,
         substate,
       );

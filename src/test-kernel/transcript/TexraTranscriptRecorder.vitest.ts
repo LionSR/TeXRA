@@ -103,6 +103,7 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (issue #7993)',
     const endEntry = row(stage.id);
 
     expect(endEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
+    expect(endEntry?.settlementSeqNo).toBeDefined();
     expect(dataOf(endEntry).status).toBe(RUN_OUTCOME.COMPLETED);
   });
 

@@ -415,8 +415,8 @@ function transitionStopBeforeRunStart(ctx: AgentLaunchContext): void {
  * from the parent stage's trace (see `createRunTrace`'s `dispose`). Emitting
  * `stage.end` through an already-desubscribed trace reaches no subscriber, so
  * update the session's transcript store directly instead, mirroring exactly
- * what `TexraTranscriptRecorder`'s own `stage.end` handler writes for a
- * `kind: 'run'` stage (see `beginRunStage` in AgentLaunchContext.ts). Each
+ * what `TexraTranscriptRecorder`'s own `stage.end` handler writes. StreamLog
+ * carries the start row's stage metadata into the terminal row. Each
  * suspension opens its own stage id (fresh `nanoid` per `beginRunStage` call,
  * including on resume), so this can never double-close a stage some other turn
  * already ended.
@@ -435,12 +435,11 @@ async function closeSuspendedTranscriptGroup(
   );
   try {
     if (handle.executionLeaseLost) return;
-    writer.update(parentStageId, {
+    writer.settle(parentStageId, {
       type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
       data: {
         status: RUN_OUTCOME.CANCELLED,
         endTime: Date.now(),
-        kind: 'run',
       },
     });
   } finally {

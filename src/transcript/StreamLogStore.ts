@@ -12,6 +12,7 @@ import {
   END_GROUP_STATUS,
   ExecutionIdSchema,
   RUN_OUTCOME,
+  STREAM_PHASE,
   RunIdentitySchema,
   STREAM_LOG_ENTRY_TYPES,
   StreamLogEntrySchema,
@@ -115,6 +116,7 @@ export function ephemeralTranscriptWarning(reason: string): string {
 
 export interface TranscriptWriter {
   readonly streamId: StreamTabId;
+  readonly settlementHead: number;
   append(entry: StreamLogAppendInput): StreamLogEntry;
   appendSettled(entry: StreamLogAppendInput): StreamLogEntry;
   update(id: string, patch: StreamLogUpdatePatch): StreamLogEntry | undefined;
@@ -234,17 +236,36 @@ function normalizeGroupStatusEntry(entry: StreamLogEntry): StreamLogEntry {
   if (!isObject(entry.data) || typeof entry.data.status !== 'string') {
     return entry;
   }
+  let normalized = entry;
   switch (entry.data.status) {
     case END_GROUP_STATUS.STOPPED:
-      return {
+      normalized = {
         ...entry,
         data: { ...entry.data, status: RUN_OUTCOME.COMPLETED },
       };
+      break;
     case END_GROUP_STATUS.ERROR:
-      return { ...entry, data: { ...entry.data, status: RUN_OUTCOME.FAILED } };
-    default:
-      return entry;
+      normalized = {
+        ...entry,
+        data: { ...entry.data, status: RUN_OUTCOME.FAILED },
+      };
+      break;
   }
+
+  // Temporary reader introduced 2026-08-17 for pre-#10774 logs. Group-start
+  // rows used to allocate settlement order while still running, so recovery
+  // must first restore them to the canonical mutable shape before it can
+  // terminalize them through StreamLog.settle(). Retire after 2026-11-17,
+  // when those internal logs are outside the compatibility window.
+  if (
+    normalized.type === STREAM_LOG_ENTRY_TYPES.GROUP_START &&
+    normalized.data.status === STREAM_PHASE.RUNNING &&
+    normalized.settlementSeqNo !== undefined
+  ) {
+    const { settlementSeqNo: _legacySettlement, ...unsettled } = normalized;
+    return unsettled as StreamLogEntry;
+  }
+  return normalized;
 }
 
 /**
@@ -702,6 +723,10 @@ export class StreamLogStore {
 
     return {
       streamId,
+      get settlementHead() {
+        assertOwned();
+        return writerState.log?.settlementHead ?? 0;
+      },
       append: (entry) => {
         assertOwned();
         return this.appendEntry(streamId, entry, false);

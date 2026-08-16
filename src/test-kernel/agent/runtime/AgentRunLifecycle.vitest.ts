@@ -225,7 +225,7 @@ function seedOpenRunGroup(
     throw new Error('The fixture parent stage must carry an id.');
   }
   withTranscriptWriter(defaultSession().transcripts, streamId, (writer) =>
-    writer.appendSettled({
+    writer.append({
       id: parentStageId,
       type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
       level: 'info',

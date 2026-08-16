@@ -69,6 +69,13 @@ const streamLogSharedFields = {
    * reconstruction preserves the same append-only chronology as a live UI.
    */
   settlementSeqNo: z.int().positive().optional(),
+  /**
+   * Printable position captured for a row whose presentation becomes stable
+   * before the complete source row settles. Group headings use the current
+   * settlement cursor so cold replay matches live Static
+   * scrollback without claiming that the lifecycle row is immutable yet.
+   */
+  presentationSeqNo: z.number().nonnegative().optional(),
   id: z.string().min(1),
   level: LogLevelSchema,
   timestamp: z.number(),
