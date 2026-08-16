@@ -42,30 +42,16 @@ export const InstanceOwnerSchema = z.strictObject({
 export type InstanceOwnerRecord = z.infer<typeof InstanceOwnerSchema>;
 
 /**
- * A liveness verdict is a proof or an admission that no proof exists:
- * - `alive`: the owner's socket accepted and answered with its own banner.
- * - `dead`: the kernel states no such listener exists (`ECONNREFUSED` /
- *   `ENOENT`), or a *newer TeXRA instance* answered on a reused path.
- * - `unprovable`: anything else (timeout, permission error, foreign hostname,
- *   non-TeXRA banner). Callers must treat this as alive: we never reclaim on
- *   ambiguity.
+ * A liveness verdict is a proof or an admission that no proof exists. Callers
+ * must treat `unprovable` as alive: we never reclaim on ambiguity. Which
+ * observation yields which verdict is stated once, in {@link classifyPresence}.
  */
 export type InstanceLiveness = 'alive' | 'dead' | 'unprovable';
 
-interface PresenceServer {
-  readonly record: InstanceOwnerRecord;
-  readonly server: net.Server;
-}
-
-let presenceServer: Promise<PresenceServer> | undefined;
-let cleanupRegistered = false;
+let presenceRecord: Promise<InstanceOwnerRecord> | undefined;
 
 function isWindows(): boolean {
   return process.platform === 'win32';
-}
-
-function newInstanceId(): string {
-  return randomBytes(8).toString('hex');
 }
 
 function socketPathFor(instanceId: string): string {
@@ -77,7 +63,7 @@ function socketPathFor(instanceId: string): string {
   );
   if (Buffer.byteLength(preferred) <= MAX_SOCKET_PATH_BYTES) return preferred;
   // A tmp cleaner may unlink a live owner's socket file here; probes treat a
-  // missing file as death only with a pid proof (isDeathProofError). Loud so
+  // missing file as death only with a pid proof (classifyPresence). Loud so
   // a user hitting it can shorten their storage root.
   const fallback = path.join(os.tmpdir(), `texra-${instanceId}.sock`);
   log.warn(
@@ -87,8 +73,8 @@ function socketPathFor(instanceId: string): string {
   return fallback;
 }
 
-async function startPresenceServer(): Promise<PresenceServer> {
-  const instanceId = newInstanceId();
+async function startPresenceServer(): Promise<InstanceOwnerRecord> {
+  const instanceId = randomBytes(8).toString('hex');
   const socketPath = socketPathFor(instanceId);
   if (!isWindows()) {
     await mkdir(path.dirname(socketPath), { recursive: true, mode: 0o700 });
@@ -104,10 +90,11 @@ async function startPresenceServer(): Promise<PresenceServer> {
     server.once('error', reject);
     server.listen(socketPath, resolve);
   });
-  // Presence must never keep the process alive on its own.
+  // Presence must never keep the process alive on its own. The listening
+  // server stays rooted by the event loop's handle list, so nothing here needs
+  // to hold a reference to it.
   server.unref();
-  if (!cleanupRegistered && !isWindows()) {
-    cleanupRegistered = true;
+  if (!isWindows()) {
     process.once('exit', () => {
       try {
         unlinkSync(socketPath);
@@ -118,13 +105,10 @@ async function startPresenceServer(): Promise<PresenceServer> {
     });
   }
   return {
-    record: {
-      instanceId,
-      socketPath,
-      pid: process.pid,
-      hostname: os.hostname(),
-    },
-    server,
+    instanceId,
+    socketPath,
+    pid: process.pid,
+    hostname: os.hostname(),
   };
 }
 
@@ -133,16 +117,29 @@ async function startPresenceServer(): Promise<PresenceServer> {
  * the presence socket on first use and keeps it for the process lifetime.
  */
 export function ensureInstancePresence(): Promise<InstanceOwnerRecord> {
-  presenceServer ??= startPresenceServer().catch((error: unknown) => {
-    presenceServer = undefined;
+  presenceRecord ??= startPresenceServer().catch((error: unknown) => {
+    presenceRecord = undefined;
     throw error;
   });
-  return presenceServer.then((running) => running.record);
+  return presenceRecord;
 }
 
-/** Hostnames are case-insensitive on every platform TeXRA supports. */
-function isSameHost(owner: InstanceOwnerRecord): boolean {
-  return owner.hostname.toLowerCase() === os.hostname().toLowerCase();
+/**
+ * Hostnames are case-insensitive on every platform TeXRA supports. A cross-host
+ * owner is unprovable by construction — a local connect failure says nothing
+ * about a process on another machine — so both the probe and the exit watch
+ * refuse it here, loudly, before any socket is opened. `consequence` completes
+ * the warning: "…host <owner>; <consequence> from <this host>".
+ */
+function ownerIsOnThisHost(
+  owner: InstanceOwnerRecord,
+  consequence: string,
+): boolean {
+  if (owner.hostname.toLowerCase() === os.hostname().toLowerCase()) return true;
+  log.warn(
+    `Execution lease owner lives on host ${owner.hostname}; ${consequence} from ${os.hostname()}`,
+  );
+  return false;
 }
 
 /**
@@ -159,36 +156,86 @@ function pidProvablyDead(pid: number): boolean {
   }
 }
 
-function isDeathProofError(
-  error: unknown,
+/**
+ * Everything one presence connection can observe. The socket mechanics only
+ * *produce* these; {@link classifyPresence} alone decides what they mean.
+ */
+type PresenceOutcome =
+  | { readonly kind: 'banner'; readonly banner: string }
+  | { readonly kind: 'error'; readonly error: unknown }
+  | { readonly kind: 'timeout' }
+  | { readonly kind: 'closed' }
+  | { readonly kind: 'oversized' };
+
+/**
+ * The single source of liveness truth — every verdict in this module comes
+ * from this table, and nothing outside it decides alive/dead:
+ *
+ * | observed                            | verdict    | proof                            |
+ * | ----------------------------------- | ---------- | -------------------------------- |
+ * | our owner's own banner              | alive      | the owner answered on its socket |
+ * | another TeXRA banner                | dead       | the path was released and reused |
+ * | `ECONNREFUSED`                      | dead       | the kernel knows no listener     |
+ * | `ENOENT` + `kill(pid, 0)` => ESRCH  | dead       | socket gone *and* process gone   |
+ * | timeout / close / oversized / other | unprovable | no proof either way              |
+ *
+ * A cross-host owner never reaches here: {@link ownerIsOnThisHost} refuses it
+ * as unprovable before a socket is opened. `unprovable` is never reclaimed —
+ * callers must treat it as alive. The switch is exhaustive on purpose: a new
+ * outcome must be classified explicitly rather than defaulting.
+ */
+function classifyPresence(
+  outcome: PresenceOutcome,
   owner: InstanceOwnerRecord,
-): boolean {
-  if (!(error instanceof Error) || !('code' in error)) return false;
-  if (error.code === 'ECONNREFUSED') return true;
-  // A crashed owner leaves its socket file behind (ECONNREFUSED above), so a
-  // missing file means it was unlinked — by graceful exit, or from under a
-  // live owner (e.g. a tmp cleaner in the fallback directory). Death then
-  // additionally requires the recorded pid to be provably gone.
-  return error.code === 'ENOENT' && pidProvablyDead(owner.pid);
+): InstanceLiveness {
+  switch (outcome.kind) {
+    case 'banner':
+      if (outcome.banner === `${BANNER_PREFIX}${owner.instanceId}`) {
+        return 'alive';
+      }
+      // A different TeXRA instance answering on this path proves the recorded
+      // owner is gone: the path was released and reused.
+      return outcome.banner.startsWith(BANNER_PREFIX) ? 'dead' : 'unprovable';
+    case 'error': {
+      const { error } = outcome;
+      if (!(error instanceof Error) || !('code' in error)) return 'unprovable';
+      if (error.code === 'ECONNREFUSED') return 'dead';
+      // A crashed owner leaves its socket file behind (ECONNREFUSED above), so
+      // a missing file means it was unlinked — by graceful exit, or from under
+      // a live owner (e.g. a tmp cleaner in the fallback directory). Death then
+      // additionally requires the recorded pid to be provably gone.
+      return error.code === 'ENOENT' && pidProvablyDead(owner.pid)
+        ? 'dead'
+        : 'unprovable';
+    }
+    case 'timeout':
+    case 'closed':
+    case 'oversized':
+      return 'unprovable';
+  }
 }
 
-interface BannerConnection {
+interface PresenceConnection {
   readonly socket: net.Socket;
-  /** Resolves once, with the probe verdict for `owner`. */
-  readonly verdict: Promise<InstanceLiveness>;
+  /** Resolves once, with the first thing this connection observed. */
+  readonly outcome: Promise<PresenceOutcome>;
 }
 
-function connectForBanner(owner: InstanceOwnerRecord): BannerConnection {
+/** Transport only: connect and report what happened. No verdict lives here. */
+function connectForBanner(owner: InstanceOwnerRecord): PresenceConnection {
   const socket = net.connect(owner.socketPath);
-  const verdict = new Promise<InstanceLiveness>((resolve) => {
+  const outcome = new Promise<PresenceOutcome>((resolve) => {
     let settled = false;
-    const finish = (liveness: InstanceLiveness): void => {
+    const finish = (observed: PresenceOutcome): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve(liveness);
+      resolve(observed);
     };
-    const timer = setTimeout(() => finish('unprovable'), PROBE_TIMEOUT_MS);
+    const timer = setTimeout(
+      () => finish({ kind: 'timeout' }),
+      PROBE_TIMEOUT_MS,
+    );
     timer.unref();
     let buffered = '';
     socket.on('data', (chunk: Buffer) => {
@@ -196,27 +243,16 @@ function connectForBanner(owner: InstanceOwnerRecord): BannerConnection {
       const newline = buffered.indexOf('\n');
       if (newline === -1) {
         if (Buffer.byteLength(buffered) > MAX_BANNER_BYTES) {
-          finish('unprovable');
+          finish({ kind: 'oversized' });
         }
         return;
       }
-      const banner = buffered.slice(0, newline);
-      if (banner === `${BANNER_PREFIX}${owner.instanceId}`) {
-        finish('alive');
-      } else if (banner.startsWith(BANNER_PREFIX)) {
-        // A different TeXRA instance answering on this path proves the
-        // recorded owner is gone: the path was released and reused.
-        finish('dead');
-      } else {
-        finish('unprovable');
-      }
+      finish({ kind: 'banner', banner: buffered.slice(0, newline) });
     });
-    socket.on('error', (error: unknown) => {
-      finish(isDeathProofError(error, owner) ? 'dead' : 'unprovable');
-    });
-    socket.on('close', () => finish('unprovable'));
+    socket.on('error', (error: unknown) => finish({ kind: 'error', error }));
+    socket.on('close', () => finish({ kind: 'closed' }));
   });
-  return { socket, verdict };
+  return { socket, outcome };
 }
 
 /**
@@ -226,14 +262,9 @@ function connectForBanner(owner: InstanceOwnerRecord): BannerConnection {
 export async function probeInstance(
   owner: InstanceOwnerRecord,
 ): Promise<InstanceLiveness> {
-  if (!isSameHost(owner)) {
-    log.warn(
-      `Execution lease owner lives on host ${owner.hostname}; liveness is unprovable from ${os.hostname()}`,
-    );
-    return 'unprovable';
-  }
+  if (!ownerIsOnThisHost(owner, 'liveness is unprovable')) return 'unprovable';
   const connection = connectForBanner(owner);
-  const verdict = await connection.verdict;
+  const verdict = classifyPresence(await connection.outcome, owner);
   connection.socket.destroy();
   return verdict;
 }
@@ -245,9 +276,8 @@ interface InstanceExitWatch {
 
 const exitWatches = new Map<string, InstanceExitWatch>();
 
-function fireExitWatch(socketPath: string): void {
-  const watch = exitWatches.get(socketPath);
-  if (!watch) return;
+/** Callers must have just confirmed `watch` is the registered one for the path. */
+function fireExitWatch(socketPath: string, watch: InstanceExitWatch): void {
   exitWatches.delete(socketPath);
   watch.socket?.destroy();
   for (const listener of watch.listeners) {
@@ -271,13 +301,13 @@ async function runExitWatch(
     watch.socket = connection.socket;
     // Watch connections are held open; they must not keep the process alive.
     connection.socket.unref();
-    const liveness = await connection.verdict;
+    const liveness = classifyPresence(await connection.outcome, owner);
     if (exitWatches.get(owner.socketPath) !== watch) {
       connection.socket.destroy();
       return;
     }
     if (liveness === 'dead') {
-      fireExitWatch(owner.socketPath);
+      fireExitWatch(owner.socketPath, watch);
       return;
     }
     if (liveness === 'alive') {
@@ -313,12 +343,7 @@ export function watchInstanceExit(
   owner: InstanceOwnerRecord,
   listener: () => void,
 ): () => void {
-  // Mirror probeInstance's cross-host guard: a local connect failure says
-  // nothing about an owner on another machine, so the watch must never fire.
-  if (!isSameHost(owner)) {
-    log.warn(
-      `Execution lease owner lives on host ${owner.hostname}; its exit cannot be watched from ${os.hostname()}`,
-    );
+  if (!ownerIsOnThisHost(owner, 'its exit cannot be watched')) {
     return () => undefined;
   }
   const existing = exitWatches.get(owner.socketPath);

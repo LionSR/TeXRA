@@ -807,7 +807,6 @@ export class SessionHandle {
       waitingStreams,
       executionIds,
       repairStreams,
-      expectedStatusGenerations: statusGenerationsAtScan,
       isRepairCandidateCurrent: (streamId, expectedExecutionId) => {
         if (
           this.status.getGeneration(streamId) !==
@@ -843,14 +842,14 @@ export class SessionHandle {
     // the presence watch when that process exits, and only then does repair
     // re-run for its streams.
     this.disposeRestartRepairWatches();
-    for (const skipped of result.activeOwners) {
+    for (const { owner } of result.activeOwners) {
       // One watch per owner instance, not per execution: an owner holding
       // many executions must trigger exactly one repair pass when it exits.
-      const watchKey = skipped.owner.socketPath;
+      const watchKey = owner.socketPath;
       if (this.restartRepairWatches.has(watchKey)) continue;
       this.restartRepairWatches.set(
         watchKey,
-        watchInstanceExit(skipped.owner, () => {
+        watchInstanceExit(owner, () => {
           this.restartRepairWatches.delete(watchKey);
           if (this.restartRepairAbort.signal.aborted) return;
           void this.enqueueRestartRepair(() =>

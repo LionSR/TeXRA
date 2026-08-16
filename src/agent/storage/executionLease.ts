@@ -310,16 +310,6 @@ async function withLeaseLock<T>(
   );
 }
 
-type PersistedExecutionLiveness =
-  | {
-      readonly status: 'active';
-      readonly currentLease: ExecutionLeaseRecord;
-    }
-  | {
-      readonly status: 'inactive';
-      readonly currentLease: ExecutionLeaseRecord | undefined;
-    };
-
 /** Probe a lease's owner; unprovable verdicts classify as active. */
 async function leaseOwnerIsActive(
   executionId: ExecutionId,
@@ -333,23 +323,6 @@ async function leaseOwnerIsActive(
     );
   }
   return liveness !== 'dead';
-}
-
-/**
- * Classify a persisted lease by proving its owner's liveness. Reclamation
- * requires a death proof.
- */
-async function readPersistedExecutionLiveness(
-  executionId: ExecutionId,
-  root: string,
-): Promise<PersistedExecutionLiveness> {
-  const currentLease = await readLease(executionId, root);
-  if (!currentLease) {
-    return { status: 'inactive', currentLease: undefined };
-  }
-  return (await leaseOwnerIsActive(executionId, currentLease))
-    ? { status: 'active', currentLease }
-    : { status: 'inactive', currentLease };
 }
 
 function forgetOwnedLease(
@@ -433,11 +406,11 @@ async function runWithValidatedOwnership<T>(
 }
 
 /**
- * Carry this process's exact lease generation through asynchronous run work.
- * A continuation from a displaced owner keeps its original token and cannot
- * borrow a later local owner's lease for the same execution id.
+ * Carry this process's exact lease generation through asynchronous run work,
+ * so a delayed lifecycle root cannot borrow its successor. A continuation from
+ * a displaced owner keeps its original token and cannot borrow a later local
+ * owner's lease for the same execution id.
  */
-/** Capture the current generation so a delayed lifecycle root cannot borrow its successor. */
 export function captureOwnedExecutionLease(
   executionId: ExecutionId,
 ): OwnedExecutionLeaseScope {
@@ -584,15 +557,14 @@ async function acquireExecutionLease(
     return await withLeaseLock(
       executionId,
       async () => {
-        const liveness = await readPersistedExecutionLiveness(
-          executionId,
-          root,
-        );
-        if (liveness.status === 'active') {
-          throw new ExecutionLeaseActiveError(
-            executionId,
-            liveness.currentLease.owner,
-          );
+        // Reclamation requires a death proof: a lease whose owner is alive or
+        // merely unprovable refuses acquisition.
+        const currentLease = await readLease(executionId, root);
+        if (
+          currentLease &&
+          (await leaseOwnerIsActive(executionId, currentLease))
+        ) {
+          throw new ExecutionLeaseActiveError(executionId, currentLease.owner);
         }
         if ((await canAcquire?.()) === false) return 'cancelled' as const;
         const owner = await ensureInstancePresence();

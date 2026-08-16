@@ -75,17 +75,12 @@ export async function startForeignInstance(): Promise<ForeignInstance> {
   };
 }
 
-let sharedForeignInstance: Promise<ForeignInstance> | undefined;
-
 /**
  * One shared live listener serves every plain fixture lease in a worker; it
  * is unref'd so it never holds the process open, and worker exit is its
  * shutdown. Tests that need to *kill* the owner start their own instance.
  */
-function ensureLiveForeignInstance(): Promise<InstanceOwnerRecord> {
-  sharedForeignInstance ??= startForeignInstance();
-  return sharedForeignInstance.then((instance) => instance.owner);
-}
+let sharedForeignInstance: Promise<ForeignInstance> | undefined;
 
 let exitedChildPid: number | undefined;
 
@@ -97,17 +92,6 @@ let exitedChildPid: number | undefined;
 function provablyDeadPid(): number {
   exitedChildPid ??= spawnSync(process.execPath, ['-e', '']).pid;
   return exitedChildPid;
-}
-
-/** An owner identity whose socket provably has no listener. */
-function deadInstanceOwner(): InstanceOwnerRecord {
-  const instanceId = `test-dead-${randomUUID().slice(0, 8)}`;
-  return {
-    instanceId,
-    socketPath: fixtureSocketPath(instanceId),
-    pid: provablyDeadPid(),
-    hostname: os.hostname(),
-  };
 }
 
 async function writeLeaseFixture(
@@ -141,7 +125,7 @@ export async function writeForeignLease(
 ): Promise<void> {
   await writeLeaseFixture(
     executionId,
-    owner ?? (await ensureLiveForeignInstance()),
+    owner ?? (await (sharedForeignInstance ??= startForeignInstance())).owner,
     ownerToken,
   );
 }
@@ -154,5 +138,15 @@ export async function writeOrphanedLease(
   executionId: string,
   ownerToken: string = FOREIGN_OWNER_TOKEN,
 ): Promise<void> {
-  await writeLeaseFixture(executionId, deadInstanceOwner(), ownerToken);
+  const instanceId = `test-dead-${randomUUID().slice(0, 8)}`;
+  await writeLeaseFixture(
+    executionId,
+    {
+      instanceId,
+      socketPath: fixtureSocketPath(instanceId),
+      pid: provablyDeadPid(),
+      hostname: os.hostname(),
+    },
+    ownerToken,
+  );
 }
