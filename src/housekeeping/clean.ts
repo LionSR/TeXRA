@@ -3,7 +3,7 @@ import { globIterate } from 'glob';
 import { MODELS } from 'llm-zoo';
 
 // Internal imports
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { FileOpResult } from '@shared/schemas';
 import { EXCLUDED_DIRS } from '@shared/constants/latexTiming';
 import { unique } from '@utils/core';
@@ -19,6 +19,8 @@ import {
 } from './constants';
 import { findFilesFromPatterns, resolveHousekeepingTargets } from './utils';
 
+const log = createLog(CHANNEL);
+
 function toIgnoreGlobs(dirs: Iterable<string>): string[] {
   return [...dirs].map((dir) => `**/${dir}/**`);
 }
@@ -28,8 +30,7 @@ export async function runCleanSingle(
   inputFile: string,
   agent: string,
 ): Promise<FileOpResult> {
-  logger.info(
-    CHANNEL,
+  log.info(
     `Starting cleanup with model=${model}, inputFile=${inputFile}, agent=${agent}`,
   );
 
@@ -40,7 +41,7 @@ export async function runCleanSingle(
   const { inputDir, filePatterns } = targets;
 
   const extensions = [...TEMP_EXTENSIONS, ...PACK_EXTENSIONS];
-  logger.debug(CHANNEL, `Using extensions: ${extensions}`);
+  log.debug(`Using extensions: ${extensions}`);
 
   try {
     let foundFile = false;
@@ -49,21 +50,21 @@ export async function runCleanSingle(
       filePatterns,
       extensions,
     )) {
-      logger.debug(CHANNEL, `Deleting file: ${filePath}`);
+      log.debug(`Deleting file: ${filePath}`);
       await WorkspaceFS.delete(filePath);
       foundFile = true;
     }
 
     if (!foundFile) {
-      logger.warn(CHANNEL, `No matching files found to clean for ${inputFile}`);
+      log.warn(`No matching files found to clean for ${inputFile}`);
       return { status: 'noFiles' };
     }
 
-    logger.info(CHANNEL, `Cleanup complete for ${inputFile}`);
+    log.info(`Cleanup complete for ${inputFile}`);
     return { status: 'success' };
   } catch (err) {
     const message = toErrorMessage(err);
-    logger.error(CHANNEL, `Error during cleanup of ${inputFile}: ${message}`);
+    log.error(`Error during cleanup of ${inputFile}: ${message}`);
     return { status: 'error', error: message };
   }
 }
@@ -74,11 +75,10 @@ export async function runCleanMultiple(
   agent: string,
   inputFiles: string[],
 ): Promise<FileOpResult> {
-  logger.debug(
-    CHANNEL,
+  log.debug(
     `Starting multiple cleanup with model=${model}, inputFile=${inputFile}, agent=${agent}`,
   );
-  logger.debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
+  log.debug(`Additional files: ${inputFiles.join(', ')}`);
 
   const firstResult = await runCleanSingle(model, inputFile, agent);
   if (
@@ -97,12 +97,12 @@ export async function runCleanMultiple(
     anyCleaned ||= res.status === 'success';
   }
 
-  logger.info(CHANNEL, 'Cleanup complete for multiple files.');
+  log.info('Cleanup complete for multiple files.');
   return anyCleaned ? { status: 'success' } : { status: 'noFiles' };
 }
 
 export async function runCleanBuild(): Promise<void> {
-  logger.debug(CHANNEL, 'Starting build directory cleanup');
+  log.debug('Starting build directory cleanup');
 
   const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
@@ -120,20 +120,19 @@ export async function runCleanBuild(): Promise<void> {
   })) {
     try {
       await WorkspaceFS.delete(dir, { recursive: true, useTrash: false });
-      logger.debug(CHANNEL, `Removed build directory: ${dir}`);
+      log.debug(`Removed build directory: ${dir}`);
     } catch (err) {
-      logger.error(
-        CHANNEL,
+      log.error(
         `Error removing build directory ${dir}: ${toErrorMessage(err)}`,
       );
     }
   }
 
-  logger.info(CHANNEL, 'Build directories cleaned');
+  log.info('Build directories cleaned');
 }
 
 export async function runCleanOutput(): Promise<void> {
-  logger.debug(CHANNEL, 'Starting output directory cleanup');
+  log.debug('Starting output directory cleanup');
 
   const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
@@ -158,5 +157,5 @@ export async function runCleanOutput(): Promise<void> {
     await WorkspaceFS.delete(file);
   }
 
-  logger.info(CHANNEL, 'All AI Generated Output files cleaned');
+  log.info('All AI Generated Output files cleaned');
 }

@@ -1,5 +1,5 @@
 // Internal imports
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { executeCommand } from '@utils/system/execUtils';
@@ -72,6 +72,10 @@ export class DiffCommandExecutor {
     private readonly channel: string,
     private readonly getTimeoutMs: () => number,
   ) {}
+
+  private get log() {
+    return createLog(this.channel);
+  }
 
   async executeDiff(
     inputFile: string,
@@ -175,14 +179,11 @@ export class DiffCommandExecutor {
       cwd,
     };
 
-    logger.debug(this.channel, `Attempting ${commandType} with --flatten flag`);
+    this.log.debug(`Attempting ${commandType} with --flatten flag`);
     const result = await executeCommand(commandBuilder(true), execOptions);
 
     if (result.success) {
-      logger.debug(
-        this.channel,
-        `${commandType} completed successfully (with --flatten)`,
-      );
+      this.log.debug(`${commandType} completed successfully (with --flatten)`);
       return result;
     }
 
@@ -208,14 +209,10 @@ export class DiffCommandExecutor {
     commandType: string,
     execOptions: CommandExecOptions,
   ): Promise<ExecResult> {
-    logger.warn(
-      this.channel,
+    this.log.warn(
       'Bibliography compilation failed with --flatten, retrying without --flatten',
     );
-    logger.debug(
-      this.channel,
-      `Retrying ${commandType} without --flatten flag`,
-    );
+    this.log.debug(`Retrying ${commandType} without --flatten flag`);
 
     const result = await executeCommand(commandBuilder(false), execOptions);
 
@@ -231,10 +228,7 @@ export class DiffCommandExecutor {
       );
     }
 
-    logger.debug(
-      this.channel,
-      `${commandType} completed successfully (without --flatten)`,
-    );
+    this.log.debug(`${commandType} completed successfully (without --flatten)`);
     return result;
   }
 
