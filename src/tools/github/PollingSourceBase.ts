@@ -229,6 +229,10 @@ export abstract class PollingSourceBase<
   disposeAll(): void {
     this.subscriptions.clear();
     this.stopTimer();
+    // Release before notifying: a synchronous listener may re-subscribe, and
+    // that fresh subscription must register with the active lifecycle. The
+    // disposable's dispose is idempotent and never re-enters disposeAll.
+    this.clearShutdownRegistration();
     this.notifyKeysChanged();
   }
 
@@ -409,23 +413,26 @@ export abstract class PollingSourceBase<
    * first subscription so the shared singletons (constructed at module load,
    * before `initPlatform()`) still register once the platform exists.
    *
-   * Keyed on the lifecycle instance rather than the disposable because
-   * extension reactivation (and the test harness) replaces the whole
-   * `LifecycleHost`; a stale registration must be swapped for one on the new
-   * host instead of skipping the re-registration. The callback also clears the
-   * marker so a drained lifecycle can never satisfy the idempotency guard on a
-   * later subscribe.
+   * Re-checked on every subscribe, so a lifecycle replacement (extension
+   * reactivation or test-harness reinstall) is picked up on the next
+   * subscription. A live poller whose lifecycle is replaced without a
+   * subsequent subscribe is intentionally not self-healed: no production host
+   * installs a new lifecycle while the previous one is still live.
    */
   private registerShutdownIfNeeded(): void {
     const lifecycle = tryPlatform()?.lifecycle;
     if (!lifecycle || this.shutdownLifecycle === lifecycle) return;
-    this.shutdownRegistration?.dispose();
-    this.shutdownRegistration = lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => {
-      this.shutdownRegistration = undefined;
-      this.shutdownLifecycle = undefined;
-      this.disposeAll();
-    });
+    this.clearShutdownRegistration();
+    this.shutdownRegistration = lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
+      this.disposeAll(),
+    );
     this.shutdownLifecycle = lifecycle;
+  }
+
+  private clearShutdownRegistration(): void {
+    this.shutdownRegistration?.dispose();
+    this.shutdownRegistration = undefined;
+    this.shutdownLifecycle = undefined;
   }
 
   private async tick(): Promise<void> {
