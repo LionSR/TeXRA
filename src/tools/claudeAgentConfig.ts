@@ -109,6 +109,9 @@ async function hasClaudeOauthCredential(
 
   const configDir = resolveClaudeConfigDir(env.CLAUDE_CONFIG_DIR);
   try {
+    // Raw node:fs, not platform().fs: this path is outside the workspace
+    // platform() scopes to, and detection must work the same way regardless
+    // of which host (or no host) initialized platform() by this point.
     await access(path.join(configDir, '.credentials.json'));
     return true;
   } catch {

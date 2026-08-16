@@ -10,7 +10,7 @@ import {
   type ProviderMessage,
 } from '@agent/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
-import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
+import type { ProviderUsage } from '@agent/types/ProviderUsage';
 import type { FinalTool } from '@agent/types/ModelHandlerContracts';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';

@@ -6,6 +6,15 @@ import type { ResponseUsage as OpenAIResponseUsage } from 'openai/resources/resp
 import type { ChatUsage as OpenRouterChatUsage } from '@openrouter/sdk/models';
 
 /**
+ * Raw provider wire-format usage types. Lives beside {@link ModelHandlerContracts}
+ * (not in `core/usage/`) because it's the same kind of thing as the tool-call
+ * SDK types there: a plain data contract between `ModelHandler`/`IModelHandler`
+ * and each provider's SDK, not a normalized domain value. Every handler
+ * converts its own member of {@link ProviderUsage} into {@link NormalizedUsage}
+ * at the boundary — `core/` only ever sees the normalized shape.
+ */
+
+/**
  * Extended OpenAI usage type with additional fields used by various providers.
  *
  * This interface extends the `CompletionUsage` type from the OpenAI SDK to include

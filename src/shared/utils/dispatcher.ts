@@ -1,3 +1,4 @@
+import { isDevAssertionMode } from './devAssertionMode';
 import type { z } from 'zod';
 
 type CommandMessage = { command: string };
@@ -198,11 +199,6 @@ export function createDispatcher<TMessage extends CommandMessage>(
  * have drifted — rather than logging, since these are the same runs where
  * `npm test` / CI would otherwise treat drift as silently passing.
  */
-function isDevAssertionMode(): boolean {
-  return (
-    process.env.NODE_ENV === 'test' || process.env.TEXRA_DEV_ASSERTIONS === '1'
-  );
-}
 
 /**
  * True when a discriminated-union `safeParse` failure means "this message's
