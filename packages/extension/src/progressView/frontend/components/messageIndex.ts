@@ -10,8 +10,8 @@ export interface GroupTree {
 }
 
 export type TimelineEntry =
-  | { key: string; time: number; seqNo?: number; msg: LogMessageData }
-  | { key: string; time: number; seqNo?: number; tree: GroupTree };
+  | { key: string; time: number; msg: LogMessageData }
+  | { key: string; time: number; tree: GroupTree };
 
 type MessageTimelineEntry = Extract<TimelineEntry, { msg: LogMessageData }>;
 
@@ -25,8 +25,18 @@ function messageTime(message: LogMessageData): number {
   return message.timestamp ?? 0;
 }
 
-/** The wall-clock fallback order key for a task group. */
-function groupTime(group: TaskGroup): number {
+/** Full-rebuild fallback: messages missing a timestamp sort last. */
+function messageTimeForRebuild(message: LogMessageData): number {
+  return message.timestamp ?? Number.MAX_SAFE_INTEGER;
+}
+
+/** The wall-clock fallback order key for a task-group child. */
+function groupStartTime(group: TaskGroup): number {
+  return group.startTime;
+}
+
+/** Full-rebuild fallback: root groups missing a start time sort last. */
+function groupStartTimeForRebuild(group: TaskGroup): number {
   return group.startTime ?? Number.MAX_SAFE_INTEGER;
 }
 
@@ -34,17 +44,28 @@ function compareMessages(a: LogMessageData, b: LogMessageData): number {
   return compareBySeqNo(a, b, (message) => message.seqNo, messageTime);
 }
 
-function compareGroups(a: TaskGroup, b: TaskGroup): number {
-  return compareBySeqNo(a, b, () => undefined, groupTime);
-}
-
-function compareTimeline(a: TimelineEntry, b: TimelineEntry): number {
+function compareMessagesForRebuild(
+  a: LogMessageData,
+  b: LogMessageData,
+): number {
   return compareBySeqNo(
     a,
     b,
-    (entry) => entry.seqNo,
-    (entry) => entry.time,
+    (message) => message.seqNo,
+    messageTimeForRebuild,
   );
+}
+
+function compareGroups(a: TaskGroup, b: TaskGroup): number {
+  return compareBySeqNo(a, b, () => undefined, groupStartTime);
+}
+
+function compareRootGroups(a: TaskGroup, b: TaskGroup): number {
+  return compareBySeqNo(a, b, () => undefined, groupStartTimeForRebuild);
+}
+
+function compareTimeline(a: TimelineEntry, b: TimelineEntry): number {
+  return a.time - b.time;
 }
 
 /**
@@ -241,7 +262,7 @@ export class MessageIndex {
     // Sort messages by wire append sequence and classify by groupId. Rows
     // without a usable sequence (archived/compat) fall back to timestamp.
     // JS engines use stable sort, so equal order keys preserve original order.
-    const sortedMessages = messages.toSorted(compareMessages);
+    const sortedMessages = messages.toSorted(compareMessagesForRebuild);
     const messagesByGroup = new Map<string, LogMessageData[]>();
     const ungrouped: LogMessageData[] = [];
     this.messageLocations.clear();
@@ -282,7 +303,7 @@ export class MessageIndex {
     // Stable sort preserves original order for equal order keys.
     this.tree = groups
       .filter((g) => !g.parentGroupId || !groupMap.has(g.parentGroupId))
-      .sort(compareGroups)
+      .sort(compareRootGroups)
       .map(buildNode);
     this.ungrouped = ungrouped;
   }
@@ -293,7 +314,6 @@ export class MessageIndex {
       ...this.ungrouped.map((m) => ({
         key: m.id,
         time: m.timestamp ?? 0,
-        seqNo: m.seqNo,
         msg: m,
       })),
       ...this.tree.map((t) => ({
@@ -350,7 +370,6 @@ export class MessageIndex {
       const entry: MessageTimelineEntry = {
         key: m.id,
         time: messageTime(m),
-        seqNo: m.seqNo,
         msg: m,
       };
       insertByOrder(this.timeline, entry, compareTimeline);
