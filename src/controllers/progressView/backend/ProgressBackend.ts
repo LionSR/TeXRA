@@ -611,7 +611,10 @@ export class ProgressBackend {
     wasActive: boolean,
     activationGenerationAtStart: number,
     expectedIncarnation?: number,
-  ): Promise<'active' | 'failed' | 'superseded' | undefined> {
+  ): Promise<'deleted' | 'active' | 'failed' | 'superseded' | undefined> {
+    // `undefined` means the deletion never ran (reserved id / cannot-use data
+    // dir), not "deleted": the command path relies on a committed deletion
+    // being reported as `deleted` so it keeps the tombstone it just installed.
     if (!canUseStreamDataDir(stream)) return undefined;
 
     const hadDeletableData = this.hasDeletableStreamData(stream);
@@ -622,7 +625,10 @@ export class ProgressBackend {
     if (deletion !== 'deleted') {
       return deletion;
     }
-    if (!hadDeletableData) return undefined;
+    // `clearStream` deleted and tombstoned the stream, so report `deleted`
+    // even when it had no durable data (ephemeral-only): the caller must not
+    // retire the tombstone a stale fact could then resurrect through.
+    if (!hadDeletableData) return 'deleted';
 
     this.lifecycle.cleanupDeletedStream(stream);
     this.webviewBridge.clearStream(stream);
@@ -668,7 +674,7 @@ export class ProgressBackend {
       // changed; the active stream's content is still on screen and correct.
       await this.lifecycle.rebuildRenderedStreams({ syncActiveStream: false });
     }
-    return undefined;
+    return 'deleted';
   }
 
   async deleteAllStreams(): Promise<void> {
