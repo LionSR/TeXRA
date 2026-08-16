@@ -115,14 +115,6 @@ export function readStreamArtifacts(
 ): StreamArtifactProjection | undefined {
   const session = tryDefaultSession();
   if (!session || !hydratedArtifactStreams.has(streamId)) return undefined;
-  // Markers can outlive store records when a `load` eviction is not reconciled
-  // in time. Drop the orphan so callers fall back to the slice mirror instead
-  // of projecting empty unseeded getters (#10730).
-  if (!session.snapshots.hasRecord(streamId)) {
-    hydratedArtifactStreams.delete(streamId);
-    artifactProjectionMemo.delete(streamId);
-    return undefined;
-  }
   const cached = artifactProjectionMemo.get(streamId);
   if (cached !== undefined) return cached;
   const projection = projectStreamArtifacts(session.snapshots, streamId);
