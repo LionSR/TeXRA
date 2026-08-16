@@ -844,11 +844,14 @@ export class SessionHandle {
     // re-run for its streams.
     this.disposeRestartRepairWatches();
     for (const skipped of result.activeOwners) {
-      if (this.restartRepairWatches.has(skipped.executionId)) continue;
+      // One watch per owner instance, not per execution: an owner holding
+      // many executions must trigger exactly one repair pass when it exits.
+      const watchKey = skipped.owner.socketPath;
+      if (this.restartRepairWatches.has(watchKey)) continue;
       this.restartRepairWatches.set(
-        skipped.executionId,
+        watchKey,
         watchInstanceExit(skipped.owner, () => {
-          this.restartRepairWatches.delete(skipped.executionId);
+          this.restartRepairWatches.delete(watchKey);
           if (this.restartRepairAbort.signal.aborted) return;
           void this.enqueueRestartRepair(() =>
             this.runRestartRepair(generation),

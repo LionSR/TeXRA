@@ -87,19 +87,27 @@ What the old system conflated, and what happens to each job:
 - `probeInstance(owner)` → `'alive' | 'dead' | 'unprovable'`: connect with a
   short timeout, read the banner, verify the instance id, destroy.
   - banner matches → `alive`
-  - `ECONNREFUSED` / `ENOENT`, or a _valid_ banner naming a different instance
-    (path reused by a newer TeXRA process) → `dead`
+  - `ECONNREFUSED`, or a _valid_ banner naming a different instance (path
+    reused by a newer TeXRA process) → `dead`
+  - `ENOENT` (socket file unlinked — graceful exit, or a tmp cleaner racing a
+    live owner) → `dead` only together with a pid proof: `kill(pid, 0)`
+    throwing `ESRCH` is a kernel fact; success proves nothing (pid may be
+    recycled) → `unprovable`
   - timeout, other errors, non-TeXRA banner, or `owner.hostname` differing
-    from `os.hostname()` (shared home directory across machines) →
-    `unprovable` → treated as alive, logged at `warn`
+    (case-insensitively) from `os.hostname()` (shared home directory across
+    machines) → `unprovable` → treated as alive, logged at `warn`. The
+    hostname guard applies on every platform and equally to exit watches.
 - `watchInstanceExit(owner, listener)` → shared per-socket-path held
   connection; the kernel closes it when the owner process dies, firing the
   listeners. This replaces polling entirely: death is pushed, not sampled.
+  Inconclusive outcomes reconnect for a fresh verdict; a repeatedly
+  unprovable owner's watch gives up loudly, leaving a **bounded liveness
+  gap** (no automatic retrigger until the next natural repair pass) — a
+  deliberate fail-safe, never a reclaim hazard.
 - If the socket path would exceed the platform `sun_path` limit (~104 bytes on
-  macOS), fall back to a directory under `os.tmpdir()` with a `warn` log. In
-  that fallback `ENOENT` remains a death verdict; the residual risk (tmp
-  cleanup unlinking a live socket file) is bounded by the retained write
-  fence, and the fallback should be rare enough to be an incident, not a mode.
+  macOS), fall back to a directory under `os.tmpdir()` with a `warn` log; the
+  pid-proof rule above makes a cleaner-unlinked live socket `unprovable`
+  rather than dead.
 
 ### 3.2 Lease record v2
 
@@ -112,7 +120,7 @@ What the old system conflated, and what happens to each job:
   "owner": {
     "instanceId": "…",
     "socketPath": "…",
-    "pid": 12345, // diagnostics only — never a liveness input
+    "pid": 12345, // death-proof-only tiebreak (ESRCH) for unlinked sockets — never an aliveness input
     "hostname": "…", // cross-host guard → unprovable, never a death proof
   },
 }

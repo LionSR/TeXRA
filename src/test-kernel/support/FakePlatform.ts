@@ -529,14 +529,16 @@ class FakeWorkspaceProvider implements WorkspaceProvider {
   }
 }
 
+// A real directory: instance-presence sockets are genuine OS objects that
+// live under the global storage root even when everything else is faked.
+// Lazy and worker-shared so the thousands of per-test FakePlatform instances
+// that never touch presence do not litter os.tmpdir() with empty directories.
+let sharedFakeGlobalStoragePath: string | undefined;
+
 class FakeStorageProvider implements StorageProvider {
   constructor(
     private readonly storagePath = '/workspace/.texra/storage',
-    // A real directory: instance-presence sockets are genuine OS objects that
-    // live under the global storage root even when everything else is faked.
-    private readonly globalStoragePath = mkdtempSync(
-      path.join(os.tmpdir(), 'texra-fake-global-'),
-    ),
+    private globalStoragePath?: string,
   ) {}
 
   getStoragePath(): string {
@@ -544,6 +546,9 @@ class FakeStorageProvider implements StorageProvider {
   }
 
   getGlobalStoragePath(): string {
+    this.globalStoragePath ??= sharedFakeGlobalStoragePath ??= mkdtempSync(
+      path.join(os.tmpdir(), 'texra-fake-global-'),
+    );
     return this.globalStoragePath;
   }
 }

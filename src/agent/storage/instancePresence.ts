@@ -11,6 +11,12 @@ import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+// This module deliberately bypasses the Platform ports: presence is made of
+// kernel facts — real sockets, a 0o700 socket directory, a synchronous unlink
+// on process exit — that no host abstraction can virtualize without breaking
+// the proofs. A port here would be a single-caller wrapper over Node-only
+// primitives, which the factory guardrails forbid.
+
 const log = createLog('InstancePresence');
 
 const BANNER_PREFIX = 'texra-presence:';
@@ -20,10 +26,11 @@ const MAX_BANNER_BYTES = 256;
 const MAX_SOCKET_PATH_BYTES = 96;
 
 /**
- * Identity of the process that owns an execution lease. Liveness verdicts come
- * exclusively from probing `socketPath`; `pid` is a diagnostic breadcrumb for
- * humans reading a record, never a liveness input, and `hostname` only guards
- * against cross-machine probes of a shared home directory.
+ * Identity of the process that owns an execution lease. Liveness verdicts
+ * come from probing `socketPath`. `pid` is a diagnostic breadcrumb plus a
+ * death-proof-only tiebreak (ESRCH) where the socket file itself may have
+ * been unlinked from under a live owner — never an aliveness input. The
+ * `hostname` guards against cross-machine probes of a shared home directory.
  */
 export const InstanceOwnerSchema = z.strictObject({
   instanceId: z.string().min(1),
@@ -69,9 +76,9 @@ function socketPathFor(instanceId: string): string {
     `${instanceId}.sock`,
   );
   if (Buffer.byteLength(preferred) <= MAX_SOCKET_PATH_BYTES) return preferred;
-  // In the tmpdir fallback a cleaned-up socket file makes a live owner read as
-  // dead; the ownerToken write fence bounds that residual risk. Loud so a user
-  // hitting it can shorten their storage root.
+  // A tmp cleaner may unlink a live owner's socket file here; probes treat a
+  // missing file as death only with a pid proof (isDeathProofError). Loud so
+  // a user hitting it can shorten their storage root.
   const fallback = path.join(os.tmpdir(), `texra-${instanceId}.sock`);
   log.warn(
     `Instance presence socket path exceeds the platform limit; falling back to ${fallback}`,
@@ -133,12 +140,36 @@ export function ensureInstancePresence(): Promise<InstanceOwnerRecord> {
   return presenceServer.then((running) => running.record);
 }
 
-function isNoListenerError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    'code' in error &&
-    (error.code === 'ECONNREFUSED' || error.code === 'ENOENT')
-  );
+/** Hostnames are case-insensitive on every platform TeXRA supports. */
+function isSameHost(owner: InstanceOwnerRecord): boolean {
+  return owner.hostname.toLowerCase() === os.hostname().toLowerCase();
+}
+
+/**
+ * `kill(pid, 0)` throwing ESRCH is a kernel proof that no such process
+ * exists. Success proves nothing (the pid may be recycled), so this is a
+ * death-proof-only oracle.
+ */
+function pidProvablyDead(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    return error instanceof Error && 'code' in error && error.code === 'ESRCH';
+  }
+}
+
+function isDeathProofError(
+  error: unknown,
+  owner: InstanceOwnerRecord,
+): boolean {
+  if (!(error instanceof Error) || !('code' in error)) return false;
+  if (error.code === 'ECONNREFUSED') return true;
+  // A crashed owner leaves its socket file behind (ECONNREFUSED above), so a
+  // missing file means it was unlinked — by graceful exit, or from under a
+  // live owner (e.g. a tmp cleaner in the fallback directory). Death then
+  // additionally requires the recorded pid to be provably gone.
+  return error.code === 'ENOENT' && pidProvablyDead(owner.pid);
 }
 
 interface BannerConnection {
@@ -181,7 +212,7 @@ function connectForBanner(owner: InstanceOwnerRecord): BannerConnection {
       }
     });
     socket.on('error', (error: unknown) => {
-      finish(isNoListenerError(error) ? 'dead' : 'unprovable');
+      finish(isDeathProofError(error, owner) ? 'dead' : 'unprovable');
     });
     socket.on('close', () => finish('unprovable'));
   });
@@ -195,7 +226,7 @@ function connectForBanner(owner: InstanceOwnerRecord): BannerConnection {
 export async function probeInstance(
   owner: InstanceOwnerRecord,
 ): Promise<InstanceLiveness> {
-  if (!isWindows() && owner.hostname !== os.hostname()) {
+  if (!isSameHost(owner)) {
     log.warn(
       `Execution lease owner lives on host ${owner.hostname}; liveness is unprovable from ${os.hostname()}`,
     );
@@ -282,6 +313,14 @@ export function watchInstanceExit(
   owner: InstanceOwnerRecord,
   listener: () => void,
 ): () => void {
+  // Mirror probeInstance's cross-host guard: a local connect failure says
+  // nothing about an owner on another machine, so the watch must never fire.
+  if (!isSameHost(owner)) {
+    log.warn(
+      `Execution lease owner lives on host ${owner.hostname}; its exit cannot be watched from ${os.hostname()}`,
+    );
+    return () => undefined;
+  }
   const existing = exitWatches.get(owner.socketPath);
   if (existing) {
     existing.listeners.add(listener);

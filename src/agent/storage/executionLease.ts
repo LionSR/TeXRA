@@ -43,23 +43,15 @@ export const ExecutionLeaseSchema = z.strictObject({
 type ExecutionLeaseRecord = z.infer<typeof ExecutionLeaseSchema>;
 
 /**
- * A record from the retired heartbeat-era protocol is a tombstone: none of
- * its semantics survive, and locked code paths delete it on contact and
- * proceed as if it were absent, so upgrades self-heal without manual cleanup.
+ * The only surviving recognition of the retired heartbeat protocol: a
+ * `{version: 1}` file is a tombstone with no semantics.
  */
-const RetiredLeaseTombstoneSchema = z.looseObject({ version: z.literal(1) });
-
 const StoredLeaseSchema = z.union([
-  ExecutionLeaseSchema.transform((record) => ({
-    kind: 'v2' as const,
-    record,
-  })),
-  RetiredLeaseTombstoneSchema.transform(() => ({
-    kind: 'tombstone' as const,
-  })),
+  ExecutionLeaseSchema,
+  z
+    .looseObject({ version: z.literal(1) })
+    .transform(() => 'tombstone' as const),
 ]);
-
-type StoredLease = z.infer<typeof StoredLeaseSchema>;
 
 interface OwnedExecutionLease {
   readonly executionId: ExecutionId;
@@ -255,8 +247,8 @@ function coordinationPath(root: string, executionId: ExecutionId): string {
 async function readStoredLease(
   executionId: ExecutionId,
   root: string,
-): Promise<StoredLease | undefined> {
-  let stored: StoredLease;
+): Promise<ExecutionLeaseRecord | 'tombstone' | undefined> {
+  let stored: ExecutionLeaseRecord | 'tombstone';
   try {
     stored = await StorageFS.readJson(
       leasePath(root, executionId),
@@ -266,32 +258,31 @@ async function readStoredLease(
     if (isFileNotFoundError(error)) return undefined;
     throw error;
   }
-  if (stored.kind === 'v2' && stored.record.executionId !== executionId) {
+  if (stored !== 'tombstone' && stored.executionId !== executionId) {
     throw new Error(
-      `Execution lease identity mismatch: expected ${executionId}, found ${stored.record.executionId}.`,
+      `Execution lease identity mismatch: expected ${executionId}, found ${stored.executionId}.`,
     );
   }
   return stored;
 }
 
 /**
- * Read the lease record inside a locked code path, deleting a retired-era
- * tombstone on contact. Only lock holders may call this: an unlocked delete
- * could race a concurrent acquisition that just replaced the file.
+ * Locked read that deletes a retired tombstone on contact, so upgrades
+ * self-heal. Only lock holders may call this — an unlocked delete could race
+ * a concurrent acquisition that just replaced the file — so the unlocked
+ * classifier (inspectExecutionLease) reads without healing instead.
  */
-async function readLeaseHealingTombstone(
+async function readLease(
   executionId: ExecutionId,
   root: string,
 ): Promise<ExecutionLeaseRecord | undefined> {
   const stored = await readStoredLease(executionId, root);
-  if (stored?.kind === 'tombstone') {
-    log.warn(
-      `Deleted retired heartbeat-era lease record for execution ${executionId}`,
-    );
-    await StorageFS.delete(leasePath(root, executionId));
-    return undefined;
-  }
-  return stored?.record;
+  if (stored !== 'tombstone') return stored;
+  log.warn(
+    `Deleted retired heartbeat-era lease record for execution ${executionId}`,
+  );
+  await StorageFS.delete(leasePath(root, executionId));
+  return undefined;
 }
 
 async function writeLease(
@@ -352,7 +343,7 @@ async function readPersistedExecutionLiveness(
   executionId: ExecutionId,
   root: string,
 ): Promise<PersistedExecutionLiveness> {
-  const currentLease = await readLeaseHealingTombstone(executionId, root);
+  const currentLease = await readLease(executionId, root);
   if (!currentLease) {
     return { status: 'inactive', currentLease: undefined };
   }
@@ -430,10 +421,7 @@ async function runWithValidatedOwnership<T>(
   return withLeaseLock(
     lease.executionId,
     async () => {
-      const current = await readLeaseHealingTombstone(
-        lease.executionId,
-        lease.storageRoot,
-      );
+      const current = await readLease(lease.executionId, lease.storageRoot);
       if (current?.ownerToken !== lease.ownerToken) {
         forgetOwnedLease(lease, { notifyLoss: true });
         throw new ExecutionLeaseLostError(lease.executionId);
@@ -537,7 +525,7 @@ export async function runWithExecutionLeaseWriteFence<T>(
   return withLeaseLock(
     executionId,
     async () => {
-      if (await readLeaseHealingTombstone(executionId, root)) {
+      if (await readLease(executionId, root)) {
         throw new ExecutionLeaseLostError(executionId);
       }
       return operation();
@@ -579,7 +567,7 @@ async function acquireExecutionLease(
         const validated = await withLeaseLock(
           executionId,
           async () => {
-            const current = await readLeaseHealingTombstone(executionId, root);
+            const current = await readLease(executionId, root);
             if (current?.ownerToken !== existingOwnership.ownerToken) {
               forgetOwnedLease(existingOwnership, { notifyLoss: true });
               return 'lost' as const;
@@ -767,7 +755,7 @@ async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
     await withLeaseLock(
       executionId,
       async () => {
-        const current = await readLeaseHealingTombstone(executionId, root);
+        const current = await readLease(executionId, root);
         if (current?.ownerToken !== ownership.ownerToken) {
           return;
         }
@@ -791,10 +779,9 @@ export async function inspectExecutionLease(
   const root = storageRoot();
   // Classification runs without the lease lock, so a retired-era tombstone is
   // reported as orphaned here and deleted by the next locked path instead.
-  const stored = await readStoredLease(executionId, root);
-  if (!stored) return { status: 'missing' };
-  if (stored.kind === 'tombstone') return { status: 'orphaned' };
-  const record = stored.record;
+  const record = await readStoredLease(executionId, root);
+  if (!record) return { status: 'missing' };
+  if (record === 'tombstone') return { status: 'orphaned' };
   const local = ownedLeases.get(ownershipKey(root, executionId));
   if (local?.ownerToken === record.ownerToken) {
     return {
@@ -828,12 +815,15 @@ export async function runWithInactiveExecutionLease<T>(
   return withLeaseLock(
     executionId,
     async () => {
-      const currentLease = await readLeaseHealingTombstone(executionId, root);
+      const currentLease = await readLease(executionId, root);
       const local = ownedLeases.get(ownershipKey(root, executionId));
       if (local && currentLease?.ownerToken === local.ownerToken) {
         // The record names this live process; no probe is needed. A local
         // owner is protected by its own existence, never by any clock.
-        return { status: 'active', owner: currentLease.owner };
+        // Report our own presence identity, not the record's copy: a record
+        // whose owner field was tampered to name a dead instance must not
+        // seed an exit watch that fires while this live owner still runs.
+        return { status: 'active', owner: await ensureInstancePresence() };
       }
       if (local) {
         forgetOwnedLease(local, { notifyLoss: true });

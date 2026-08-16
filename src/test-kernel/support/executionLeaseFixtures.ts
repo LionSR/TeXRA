@@ -1,4 +1,5 @@
 // Node imports
+import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import * as net from 'node:net';
@@ -58,10 +59,13 @@ export async function startForeignInstance(): Promise<ForeignInstance> {
   });
   server.unref();
   return {
+    // The pid is a death-proof-only input consulted on ENOENT: recording an
+    // already-exited pid makes shutdown() (which unlinks the socket file)
+    // read as process death, while the live listener still probes alive.
     owner: {
       instanceId,
       socketPath,
-      pid: process.pid,
+      pid: provablyDeadPid(),
       hostname: os.hostname(),
     },
     shutdown: async () => {
@@ -83,13 +87,25 @@ function ensureLiveForeignInstance(): Promise<InstanceOwnerRecord> {
   return sharedForeignInstance.then((instance) => instance.owner);
 }
 
+let exitedChildPid: number | undefined;
+
+/**
+ * A pid the kernel proves dead (ESRCH): a child spawned and already exited.
+ * Needed because a missing socket file is a death proof only together with a
+ * provably dead pid.
+ */
+function provablyDeadPid(): number {
+  exitedChildPid ??= spawnSync(process.execPath, ['-e', '']).pid;
+  return exitedChildPid;
+}
+
 /** An owner identity whose socket provably has no listener. */
 function deadInstanceOwner(): InstanceOwnerRecord {
   const instanceId = `test-dead-${randomUUID().slice(0, 8)}`;
   return {
     instanceId,
     socketPath: fixtureSocketPath(instanceId),
-    pid: 0,
+    pid: provablyDeadPid(),
     hostname: os.hostname(),
   };
 }

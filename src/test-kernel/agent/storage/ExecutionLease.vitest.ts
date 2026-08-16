@@ -36,6 +36,7 @@ import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {
   executionLeasePath,
+  startForeignInstance,
   writeForeignLease,
   writeOrphanedLease,
 } from '@test/support/executionLeaseFixtures';
@@ -133,6 +134,39 @@ describe('cross-process execution leases', () => {
       status: 'deleted',
     });
     expect(await StorageFS.exists(executionLeasePath(executionId))).toBe(false);
+  });
+
+  it('classifies a reused socket path answered by another instance as orphaned', async () => {
+    const executionId = 'b8644e' as ExecutionId;
+    const foreign = await startForeignInstance();
+    await writeForeignLease(executionId, undefined, {
+      ...foreign.owner,
+      instanceId: 'displaced-instance',
+    });
+
+    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
+      status: 'orphaned',
+    });
+    await foreign.shutdown();
+  });
+
+  it('treats a cross-host owner as unprovable and never reclaims it', async () => {
+    const executionId = 'b8644f' as ExecutionId;
+    await writeForeignLease(executionId, undefined, {
+      instanceId: 'other-host-instance',
+      socketPath: '/nonexistent/texra-other.sock',
+      pid: 1,
+      hostname: 'texra-some-other-host',
+    });
+    const operation = vi.fn(async () => 'removed');
+
+    await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
+      status: 'foreign',
+    });
+    await expect(
+      runWithInactiveExecutionLease(executionId, operation),
+    ).resolves.toMatchObject({ status: 'active' });
+    expect(operation).not.toHaveBeenCalled();
   });
 
   it('rejects resume while another live owner holds the lease', async () => {

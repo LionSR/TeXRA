@@ -36,9 +36,6 @@ vi.mock('@agent/storage/executionLifecycle', () => ({
   hasPersistedParent: mocks.hasPersistedParent,
 }));
 vi.mock('@agent/storage/executionLease', () => ({
-  // `executionListing`'s entrance stamper reads this constant at module
-  // load; keep it defined when the lease module is mocked.
-  EXECUTION_LEASE_STALE_MS: 120_000,
   abandonOwnedExecutionLease: vi.fn(),
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
   captureOwnedExecutionLease:
