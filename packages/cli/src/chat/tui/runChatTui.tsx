@@ -92,6 +92,7 @@ import {
   streams as streamsSignal,
 } from './state/cliState';
 import { subscribeStreamArtifacts } from './state/subscribeStreamArtifacts';
+import { invalidateStaticTranscriptForRepaint } from './state/staticTranscriptRepaint';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
@@ -462,6 +463,11 @@ export async function runChat(
     }
     resetCliState(meta);
     clearTerminalScrollback();
+    // The erase above happened outside Ink, so the already-printed static
+    // header is gone from the terminal even when the state rebuild is a
+    // no-op (empty history) that skips the repaint-epoch bump. Invalidate
+    // explicitly so the transcript remounts and repaints the header.
+    invalidateStaticTranscriptForRepaint();
   };
 
   // Pre-register the slash commands the input palette uses.

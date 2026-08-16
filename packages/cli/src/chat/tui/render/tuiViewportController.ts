@@ -29,14 +29,30 @@ export function createTuiViewportController(inkRef: {
 }): TuiViewportController {
   return {
     repaintTranscript(): void {
+      if (process.env.TEXRA_DEBUG_STATIC) {
+        void import('node:fs').then((fs) =>
+          fs.appendFileSync(
+            '/tmp/tui-debug.log',
+            `repaintTranscript called, inkRef.current=${String(inkRef.current !== undefined)}\n`,
+          ),
+        );
+      }
       const target = inkRef.current;
       if (target === undefined) {
         // The first effect cascade can flush synchronously inside Ink's
-        // initial render(), before it returns the instance for `inkRef`.
-        // Defer past that assignment instead of dropping the repaint; the
-        // remounted `<Static>` is committed by the time the microtask runs.
+        // initial render(), before it returns the instance for `inkRef`. A
+        // direct repaint deferred past that point would run after `<Static>`
+        // advanced its item cursor and race Ink's static-output bookkeeping,
+        // so re-issue the invalidation instead: the fresh render-key change
+        // remounts `<Static>` in a normal post-mount commit whose
+        // layout-effect repaint runs synchronously with the instance set.
         queueMicrotask(() => {
-          inkRef.current?.repaint(TRANSCRIPT_VIEWPORT_REPAINT_OPTIONS);
+          // If the instance still does not exist the app never mounted (or
+          // is already exiting); re-invalidating would only re-enter this
+          // branch forever.
+          if (inkRef.current !== undefined) {
+            invalidateStaticTranscriptForRepaint();
+          }
         });
         return;
       }

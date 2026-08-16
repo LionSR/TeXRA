@@ -861,6 +861,17 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'slash-clear-empty',
+    cols: 100,
+    env: { HARNESS_ENTRIES: '0' },
+    keys: ['/clear', '\r'],
+    frame: 'viewport',
+    // /clear erases the terminal outside Ink; with no finalized entries the
+    // state rebuild is a no-op, so the header must be repainted through the
+    // explicit transcript invalidation in the /clear handler.
+    expect: ['TeXRA', 'agent: chat · model: harness-model'],
+  },
+  {
     name: 'unknown-slash-suggestion',
     cols: 100,
     env: { HARNESS_ENTRIES: '4' },

@@ -578,8 +578,13 @@ function executionLabelsEqual(
 }
 
 /** Rendering-relevant item equality: entries compare by reference (they are
- *  immutable log rows), headers by the fields `SessionHeaderBlock` draws. A
- *  rebuilt state that matches item-for-item needs no `<Static>` remount. */
+ *  immutable log rows), headers by the values `SessionHeaderBlock` draws —
+ *  `identityLine` and `compact` directly, plus the `SessionMeta` fields the
+ *  block renders (`version`, `apiMode`, `cwd`). The `SessionMeta` fields are
+ *  compared individually rather than by object reference because
+ *  `patchSessionMeta`/`resetCliState` always spread into a fresh object, even
+ *  for content-identical patches. A rebuilt state that matches item-for-item
+ *  needs no `<Static>` remount. */
 function staticTranscriptItemsEquivalent(
   left: readonly StaticTranscriptItem[],
   right: readonly StaticTranscriptItem[],
@@ -592,7 +597,9 @@ function staticTranscriptItemsEquivalent(
       return (
         item.compact === other.compact &&
         item.identityLine === other.identityLine &&
-        item.meta === other.meta
+        item.meta.version === other.meta.version &&
+        item.meta.apiMode === other.meta.apiMode &&
+        item.meta.cwd === other.meta.cwd
       );
     }
     return (
@@ -1317,6 +1324,14 @@ export function StaticConversationTranscript({
   useLayoutEffect(() => {
     const previous = previousRenderKey.current;
     previousRenderKey.current = repaintKey;
+    if (process.env.TEXRA_DEBUG_STATIC) {
+      void import('node:fs').then((fs) =>
+        fs.appendFileSync(
+          '/tmp/tui-debug.log',
+          `${JSON.stringify({ previous, repaintKey, renderKey, epoch: state.repaintEpoch, width: normalizedWidth, ownerKey, itemCount: items.length, kinds: items.map((i) => i.kind).join(',') })}\n`,
+        ),
+      );
+    }
     if (previous !== undefined && previous !== repaintKey) {
       onRenderKeyChange?.();
     }
