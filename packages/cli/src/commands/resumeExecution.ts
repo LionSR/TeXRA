@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { resolveAndResumeStream } from '@agent/runtime';
+import { describeResumeFailure, resolveAndResumeStream } from '@agent/runtime';
 import { getExecutionStore, inspectExecutionLease } from '@agent/storage';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -157,7 +157,10 @@ export async function runResumeExecution(
   let failureExitCode: CliExitCode = CliExitCode.AgentError;
   const resumed = await resolveAndResumeStream(streamId, {
     streamStatus: session.status,
-    resolveResumeState: async () => ({ runState: config, executionId: id }),
+    resolveResumeState: async () => ({
+      status: 'resolved',
+      state: { runState: config, executionId: id },
+    }),
     resumeToolUse: async (resume) => {
       const { runChat } = await import('../chat/tui/runChatTui');
       const result = await runChat(context, {
@@ -199,7 +202,11 @@ export async function runResumeExecution(
     },
     reportFailure: (_streamId, error) => {
       failed = true;
-      if (error instanceof CliUsageError) {
+      const description = describeResumeFailure(error);
+      if (description.kind === 'lease-active') {
+        failureExitCode = CliExitCode.Usage;
+        writeTextStderr(description.message);
+      } else if (error instanceof CliUsageError) {
         failureExitCode = CliExitCode.Usage;
         writeTextStderr(error.message);
       } else {

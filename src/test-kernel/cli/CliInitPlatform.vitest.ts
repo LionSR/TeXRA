@@ -396,8 +396,17 @@ describe('CLI platform init', () => {
 
     const streamId = 'stream:cli-resume' as StreamTabId;
     let releaseResumeState!: () => void;
-    const pendingResumeState = new Promise<undefined>((resolve) => {
-      releaseResumeState = () => resolve(undefined);
+    const pendingResumeState = new Promise<{
+      status: 'incomplete';
+      runState: undefined;
+      executionId: undefined;
+    }>((resolve) => {
+      releaseResumeState = () =>
+        resolve({
+          status: 'incomplete',
+          runState: undefined,
+          executionId: undefined,
+        });
     });
     const pendingResume = resolveAndResumeStream(streamId, {
       streamStatus: { isActiveOrResuming: () => false },

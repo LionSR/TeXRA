@@ -49,7 +49,10 @@ vi.mock('@agent/storage', () => ({
   getExecutionStore: mocks.getExecutionStore,
 }));
 
-vi.mock('@agent/runtime/resolveAndResumeStream', () => ({
+vi.mock('@agent/runtime/resolveAndResumeStream', async (importActual) => ({
+  ...(await importActual<
+    typeof import('@agent/runtime/resolveAndResumeStream')
+  >()),
   resolveAndResumeStream: mocks.resolveAndResumeStream,
 }));
 
