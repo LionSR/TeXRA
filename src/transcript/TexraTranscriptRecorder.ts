@@ -188,8 +188,8 @@ export function attachTranscriptRecorder(
       state.enabled = false;
     }
   };
-  // Stage presentation lives only on stage.start — `store.update` at
-  // stage.end replaces `data` wholesale (see StreamLog.update), so without
+  // Stage presentation lives only on stage.start — `store.settle` at
+  // stage.end replaces `data` wholesale (see StreamLog.settle), so without
   // this the persisted GROUP_END row would forget whether the stage was the
   // root "Run:" stage or a nested round/phase/session. Replayed legacy traces
   // rely on that distinction to tell a root run's terminal status apart from
@@ -324,7 +324,7 @@ export function attachTranscriptRecorder(
           if (event.kind === 'round' || event.kind === 'session') {
             pendingModelResponseId = undefined;
           }
-          writer.appendSettled({
+          writer.append({
             id: event.id,
             type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
             level: 'info',
@@ -344,7 +344,7 @@ export function attachTranscriptRecorder(
         case 'stage.end': {
           const metadata = stageMetadata.get(event.id);
           stageMetadata.delete(event.id);
-          writer.update(event.id, {
+          writer.settle(event.id, {
             type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
             data: {
               status: event.status ?? RUN_OUTCOME.COMPLETED,

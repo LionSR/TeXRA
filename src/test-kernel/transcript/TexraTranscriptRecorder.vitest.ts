@@ -101,6 +101,7 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (issue #7993)',
     const endEntry = row(stage.id);
 
     expect(endEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
+    expect(endEntry?.settlementSeqNo).toBeDefined();
     expect(dataOf(endEntry).status).toBe(RUN_OUTCOME.COMPLETED);
   });
 
@@ -195,7 +196,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
     );
     expect(modelResponseEntries).toHaveLength(1);
     expect(modelResponseEntries[0]?.id).toBe(output.id);
-    expect(modelResponseEntries[0]?.text).toBe('Done \\checkmark');
+    expect(modelResponseEntries[0]?.text).toBe('Done ✓');
   });
 
   it('appends a fresh MODEL_RESPONSE entry when the round never streamed', () => {

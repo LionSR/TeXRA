@@ -96,6 +96,26 @@ describe('StreamLog', () => {
     expect(delta.textChunks).toEqual([]);
   });
 
+  it('warns and drops late updates to settled entries', () => {
+    const log = new StreamLog();
+    const settled = log.appendSettled({
+      id: 'complete',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1,
+      text: 'done',
+      messageType: MESSAGE_TYPES.DEFAULT,
+    });
+    log.drainEmission();
+
+    expect(log.update('complete', { text: 'late change' })).toBeUndefined();
+    expect(log.settle('complete', { text: 'late change' })).toBeUndefined();
+    expect(log.getRange(0).find((entry) => entry.id === 'complete')).toEqual(
+      settled,
+    );
+    expect(log.drainEmission().dirtied).toEqual([]);
+  });
+
   it('assigns one durable settlement order when rows become printable', () => {
     const log = new StreamLog();
     const header = log.appendSettled({
@@ -138,7 +158,7 @@ describe('StreamLog', () => {
 
     expect(header.settlementSeqNo).toBe(1);
     expect(completed?.settlementSeqNo).toBe(2);
-    expect(revised?.settlementSeqNo).toBe(2);
+    expect(revised).toBeUndefined();
     expect(later.settlementSeqNo).toBe(3);
   });
 

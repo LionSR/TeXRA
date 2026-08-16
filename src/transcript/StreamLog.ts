@@ -1,3 +1,4 @@
+import { createLog } from '@logger/logUtils';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -9,6 +10,8 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
+
+const logger = createLog('StreamLog');
 
 export type StreamLogAppendInput = Omit<
   StreamLogEntry,
@@ -479,10 +482,13 @@ export class StreamLog {
     if (index === undefined) return undefined;
 
     const current = this.entries[index];
-    const settlementSeqNo =
-      settle && current.settlementSeqNo === undefined
-        ? this.settlementSeqCounter + 1
-        : current.settlementSeqNo;
+    if (current.settlementSeqNo !== undefined) {
+      logger.warn(`Ignoring update to settled transcript entry: ${id}`);
+      return undefined;
+    }
+    const settlementSeqNo = settle
+      ? this.settlementSeqCounter + 1
+      : current.settlementSeqNo;
     if (
       settlementSeqNo === current.settlementSeqNo &&
       Object.entries(patch).every(([key, value]) =>
