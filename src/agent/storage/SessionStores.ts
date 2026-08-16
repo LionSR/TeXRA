@@ -779,16 +779,36 @@ export class SessionStores {
       throw error;
     }
 
-    const cleanup = await Promise.allSettled([
-      snapshotDeletion.commit(shouldDelete),
-      this.goalEntries?.forget(stream),
-    ]);
-    for (const result of cleanup) {
-      if (result.status === 'fulfilled') continue;
+    // The snapshot commit is the irreversible sidecar delete. Inspect its
+    // supersede result rather than swallowing it in `allSettled`: a re-claim
+    // landing during the staged copy's delete must report `superseded`, not
+    // `deleted`, so `deleteStreamOnce` skips the canonical-deleted notify and
+    // this removal never forgets the fresh incarnation's goal or clears its
+    // resources.
+    let superseded = false;
+    try {
+      superseded = await snapshotDeletion.commit(shouldDelete);
+    } catch (error) {
+      // The transcript already committed, so a snapshot-cleanup failure keeps
+      // the deletion `deleted`; it is logged here and still followed by goal
+      // cleanup, matching the prior best-effort auxiliary-cleanup contract.
       log.warn(
-        `Stream ${stream} was deleted, but auxiliary cleanup was incomplete: ${toErrorMessage(result.reason)}`,
-        { data: result.reason },
+        `Stream ${stream} was deleted, but snapshot commit was incomplete: ${toErrorMessage(error)}`,
+        { data: error },
       );
+    }
+    if (superseded) {
+      throw new StreamDeletionSupersededError(stream);
+    }
+    if (this.goalEntries) {
+      try {
+        await this.goalEntries.forget(stream);
+      } catch (error) {
+        log.warn(
+          `Stream ${stream} was deleted, but goal cleanup was incomplete: ${toErrorMessage(error)}`,
+          { data: error },
+        );
+      }
     }
   }
 
