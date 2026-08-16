@@ -67,6 +67,11 @@ interface ToolExecutionResult {
   logRef: { logId: string | undefined; groupId: string | undefined };
 }
 
+interface SafeToolInvocation {
+  result: ToolResult;
+  extracted: ExtractedToolAttachments;
+}
+
 function endsToolUseTurn(result: ToolExecutionResult | null): boolean {
   return result?.result.status === 'executed' && result.result.endTurn === true;
 }
@@ -279,17 +284,18 @@ export class ToolUseDispatchNode<C> extends Node<
     onExecutionReady: (() => void) | undefined,
     onToolOutput: ((chunk: string) => void) | undefined,
     signal: AbortSignal,
-  ): Promise<ToolResult> {
+  ): Promise<SafeToolInvocation> {
     if (!tool) {
-      return {
+      const result: ToolResult = {
         status: 'error',
         error: `Unknown tool ${call.name}`,
       };
+      return { result, extracted: extractToolAttachments(result) };
     }
 
     const options = this.services;
     try {
-      return await withToolFileInteractionContext(
+      const result = await withToolFileInteractionContext(
         {
           tracker: options.workspace.interactions,
           workPlanState: options.workspace.workPlan,
@@ -313,13 +319,15 @@ export class ToolUseDispatchNode<C> extends Node<
         },
         () => tool.call(parsedInput),
       );
+      return { result, extracted: extractToolAttachments(result) };
     } catch (err) {
       const { message, diagnostics } = normalizeToolCallError(call.name, err);
-      return {
+      const result: ToolResult = {
         status: 'error',
         error: message.trim() || 'Tool execution failed.',
         ...(diagnostics ? { diagnostics } : {}),
       };
+      return { result, extracted: extractToolAttachments(result) };
     }
   }
 
@@ -379,7 +387,7 @@ export class ToolUseDispatchNode<C> extends Node<
 
     // Every call runs under the run's one signal, so a single interrupt
     // cancels the whole in-flight batch.
-    const result = await this.invokeToolSafely(
+    const { result, extracted } = await this.invokeToolSafely(
       call,
       tool,
       parsedInput,
@@ -419,7 +427,6 @@ export class ToolUseDispatchNode<C> extends Node<
       result.lineChanges = trackedEdits.lineChanges;
     }
 
-    const extracted = extractToolAttachments(result);
     const editedFiles = trackedEdits.paths.map((path) => ({
       path,
       ok: true,
