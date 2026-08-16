@@ -29,7 +29,29 @@ export function createTuiViewportController(inkRef: {
 }): TuiViewportController {
   return {
     repaintTranscript(): void {
-      inkRef.current?.repaint(TRANSCRIPT_VIEWPORT_REPAINT_OPTIONS);
+      const target = inkRef.current;
+      if (target === undefined) {
+        // The first effect cascade can flush synchronously inside Ink's
+        // initial render(), before it returns the instance for `inkRef`. A
+        // direct repaint deferred past that point would run after `<Static>`
+        // advanced its item cursor and race Ink's static-output bookkeeping,
+        // so re-issue the invalidation instead: the fresh render-key change
+        // remounts `<Static>` in a normal post-mount commit whose
+        // layout-effect repaint runs synchronously with the instance set.
+        // Exactly one microtask is sufficient because the only production
+        // caller (`runChatTui`) assigns `inkRef.current = ink` synchronously
+        // immediately after `render()` returns; the callback runs after that
+        // stack unwinds.
+        queueMicrotask(() => {
+          // Defensive only: a future caller whose instance never mounts must
+          // not invalidate again, or it would re-enter this branch forever.
+          if (inkRef.current !== undefined) {
+            invalidateStaticTranscriptForRepaint();
+          }
+        });
+        return;
+      }
+      target.repaint(TRANSCRIPT_VIEWPORT_REPAINT_OPTIONS);
     },
     repaintAfterTerminalResume(): void {
       // Terminal resume cannot safely call repaint(TRANSCRIPT_VIEWPORT_REPAINT_OPTIONS)

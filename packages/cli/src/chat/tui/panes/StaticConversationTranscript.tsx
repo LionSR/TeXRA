@@ -28,6 +28,7 @@ import {
   parentStream as parentStreamSignal,
   type ChildStreamEntries,
 } from '../state/childExecutions';
+import { staticTranscriptEraseEpoch } from '../state/staticTranscriptRepaint';
 import { streamViewForId } from '../state/streamViews';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
@@ -73,6 +74,10 @@ export interface StaticTranscriptState {
    *  hard reset, fold rebuild) so the `<Static>` identity remounts and
    *  `onRenderKeyChange` repaints the bounded tail with replace semantics. */
   readonly repaintEpoch: number;
+  /** The last `staticTranscriptEraseEpoch` the state was rebuilt for. An
+   *  out-of-band terminal erase (`/clear`) forces a rebuild and repaint even
+   *  when the items themselves are unchanged. */
+  readonly eraseRequest: number;
 }
 
 export interface StaticTranscriptRingBudgets {
@@ -577,6 +582,39 @@ function executionLabelsEqual(
   return true;
 }
 
+/** Rendering-relevant item equality: entries compare by reference (they are
+ *  immutable log rows), headers by the values `SessionHeaderBlock` draws —
+ *  `identityLine` and `compact` directly, plus the `SessionMeta` fields the
+ *  block renders (`version`, `apiMode`, and `cwd` in the full header only).
+ *  The `SessionMeta` fields are compared individually rather than by object
+ *  reference because `patchSessionMeta`/`resetCliState` always spread into a
+ *  fresh object, even for content-identical patches. A rebuilt state that
+ *  matches item-for-item needs no `<Static>` remount. */
+function staticTranscriptItemsEquivalent(
+  left: readonly StaticTranscriptItem[],
+  right: readonly StaticTranscriptItem[],
+): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((item, index) => {
+    const other = right[index];
+    if (item.kind !== other.kind || item.id !== other.id) return false;
+    if (item.kind === 'header' && other.kind === 'header') {
+      return (
+        item.compact === other.compact &&
+        item.identityLine === other.identityLine &&
+        item.meta.version === other.meta.version &&
+        item.meta.apiMode === other.meta.apiMode &&
+        (item.compact || item.meta.cwd === other.meta.cwd)
+      );
+    }
+    return (
+      item.kind === 'entry' &&
+      other.kind === 'entry' &&
+      item.entry === other.entry
+    );
+  });
+}
+
 function shouldWaitForChildIdentity({
   currentItems,
   parentStream,
@@ -911,6 +949,7 @@ function scanStaticTranscriptFromStart(
 export function buildStaticTranscriptState({
   childStreamEntries,
   executionLabels,
+  eraseRequest,
   maxRows,
   meta,
   ownerKey,
@@ -932,6 +971,7 @@ export function buildStaticTranscriptState({
   readonly scrollbackStreamId: StreamTabId | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly width?: number;
+  readonly eraseRequest?: number;
 }): StaticTranscriptState {
   const built = buildStaticTranscriptItems({
     currentItems: [],
@@ -975,6 +1015,7 @@ export function buildStaticTranscriptState({
     layoutWidth: width,
     executionLabels,
     repaintEpoch,
+    eraseRequest: eraseRequest ?? 0,
   };
 }
 
@@ -983,6 +1024,7 @@ export function advanceStaticTranscriptState(
   {
     childStreamEntries,
     executionLabels,
+    eraseRequest = current.eraseRequest,
     maxRows,
     meta,
     ownerKey,
@@ -994,6 +1036,7 @@ export function advanceStaticTranscriptState(
   }: {
     readonly childStreamEntries: ChildStreamEntries;
     readonly executionLabels?: ExecutionLabels;
+    readonly eraseRequest?: number;
     readonly maxRows?: number;
     readonly meta: SessionMeta;
     readonly ownerKey: string;
@@ -1015,9 +1058,14 @@ export function advanceStaticTranscriptState(
   const entries = slice?.entries;
   const status = slice?.status;
 
-  if (isHardReset) {
+  // An out-of-band terminal erase (`/clear`) forces a rebuild even when the
+  // items are unchanged — the terminal no longer shows them. Running here,
+  // after the reset state committed, keeps the remounted `<Static>` free of
+  // stale rows.
+  if (eraseRequest !== current.eraseRequest) {
     return buildStaticTranscriptState({
       childStreamEntries,
+      eraseRequest,
       executionLabels,
       maxRows,
       meta,
@@ -1031,9 +1079,46 @@ export function advanceStaticTranscriptState(
     });
   }
 
+  if (isHardReset) {
+    const rebuilt = buildStaticTranscriptState({
+      childStreamEntries,
+      eraseRequest,
+      executionLabels,
+      maxRows,
+      meta,
+      ownerKey,
+      parentStream,
+      repaintEpoch: current.repaintEpoch + 1,
+      ringBudgets,
+      scrollbackStreamId,
+      streams,
+      width,
+    });
+    // A hard reset that rebuilds the current *render inputs* unchanged — the
+    // normal startup path, where the initial useState build already ran with
+    // no streams — must not bump the repaint epoch. The `<Static>` remount
+    // would replay the session header through Ink's append-only static write
+    // while the replace-semantics repaint cannot fire yet (the first effect
+    // cascade still runs inside Ink's initial render(), before the instance
+    // is available to the viewport controller), doubling the header. Only
+    // render inputs are compared: `rowCount`/`byteCount` are deterministic
+    // functions of those fields, and a stale `scan` cursor is recovered by
+    // `incrementalStaticTranscriptEntries` on the next non-empty advance.
+    if (
+      rebuilt.ownerKey === current.ownerKey &&
+      rebuilt.layoutWidth === current.layoutWidth &&
+      executionLabelsEqual(rebuilt.executionLabels, current.executionLabels) &&
+      staticTranscriptItemsEquivalent(rebuilt.items, current.items)
+    ) {
+      return current;
+    }
+    return rebuilt;
+  }
+
   if (current.ownerKey !== ownerKey) {
     return buildStaticTranscriptState({
       childStreamEntries,
+      eraseRequest,
       executionLabels,
       maxRows,
       meta,
@@ -1095,6 +1180,7 @@ export function advanceStaticTranscriptState(
   if (plan.rebuild) {
     return buildStaticTranscriptState({
       childStreamEntries,
+      eraseRequest,
       executionLabels,
       maxRows,
       meta,
@@ -1185,6 +1271,7 @@ export function advanceStaticTranscriptState(
     layoutWidth: width,
     executionLabels,
     repaintEpoch: nextRepaintEpoch,
+    eraseRequest,
   };
 }
 
@@ -1212,6 +1299,7 @@ export function StaticConversationTranscript({
   const sessionMeta = useSignal(sessionMetaSignal);
   const parentStream = useSignal(parentStreamSignal);
   const childStreamEntries = useSignal(childStreamEntriesSignal);
+  const eraseRequest = useSignal(staticTranscriptEraseEpoch);
 
   const buildFreshItems = (): readonly StaticTranscriptItem[] =>
     buildStaticTranscriptItems({
@@ -1229,6 +1317,7 @@ export function StaticConversationTranscript({
   const [state, setState] = useState<StaticTranscriptState>(() =>
     buildStaticTranscriptState({
       childStreamEntries,
+      eraseRequest,
       executionLabels: subagentExecutionLabels,
       maxRows,
       meta: sessionMeta,
@@ -1247,6 +1336,7 @@ export function StaticConversationTranscript({
     setState((current) =>
       advanceStaticTranscriptState(current, {
         childStreamEntries,
+        eraseRequest,
         executionLabels: subagentExecutionLabels,
         maxRows,
         meta: sessionMeta,
@@ -1260,6 +1350,7 @@ export function StaticConversationTranscript({
     );
   }, [
     childStreamEntries,
+    eraseRequest,
     maxRows,
     ownerKey,
     parentStream,
