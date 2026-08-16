@@ -13,14 +13,19 @@
 > an adversarial verifier whose brief was to **prove the edge reachable**
 > (a wrong verdict here deletes a load-bearing guard, the worst failure
 > class this audit could produce). 4 of 8 race candidates and 1 of 8
-> wave-1 candidates were struck down that way and are recorded in §4 so
+> wave-1 candidates were struck down that way and are recorded in §3/§4
+> (the wave-1 refutation lives in §3, the race refutations in §4) so
 > they are never re-flagged.
 
 The scoreboard: **~40 race mechanisms + ~30 edge handlers censused →
-15 verified deletions (≈ −350..−400 LoC of pure handling machinery),
+19 verified deletions (D1–D19: 15 from the two invented-edge waves + 4
+from the race census; ≈ −350..−400 LoC of pure handling machinery),
 2 structural findings that delete whole apparatuses, and ~35 honest
 negatives** (guards that survived attack and stay, several with named
-crash/cross-process/user-simultaneity boundaries).
+crash/cross-process/user-simultaneity boundaries). Reconciliation for
+citers: the ~70 censused mechanisms resolve to 19 deletions + 2
+structural + 2 kept-with-adjustment (§3) + ~35 negatives; the remainder
+are the briefly-noted rows already owned by other program docs.
 
 ## 1. Verified deletions — the edge becomes unrepresentable
 
@@ -98,17 +103,23 @@ census. Format: machinery → construction-level fix → what deletes.
 - **D12. The TUI `isStaleDispatch` generation apparatus (~70 LoC)** —
   verified **zero producers**: `SessionEventHub.emit` is fully synchronous
   with no replay-on-attach; the adapter skips the applier's only async
-  handler; both `resetCliState` producers run in separate tasks. The guard
+  handler; and the single `resetCliState` producer
+  (`sessionExitController.ts:351`, review-corrected from "both") runs in
+  a separate task, never reentrantly inside a dispatch. The guard
   cannot fire. _This falsifies the lifecycle doc's "generation machinery =
   view-root store in disguise, migrate it" ruling — it deletes outright._
   Rider: if U2 ever makes a renderer callback async, the guard belongs at
   that single async point, not restored globally.
-- **D13. The webview `pendingDescriptions` race buffer (~30 LoC)** — the
-  description-before-registration edge cannot occur (same-task synchronous
-  emission, FIFO postMessage), and in every constructible detached-window
-  interleaving the buffered value is never the only copy (durable-meta
-  merge + roster description backstop). Outcome identical with and without
-  the buffer.
+- **D13. The webview `pendingDescriptions` race buffer (~30 LoC)** —
+  _(wording corrected on review:)_ the description-before-registration
+  ordering genuinely occurs (`childStream.ts` emits the description
+  before `setActiveStream` in the same task; FIFO postMessage preserves
+  that order) — the buffer is deletable because the edge is **backed
+  up, not impossible**: `setStreamDescription` updates `SessionState`
+  before the metadata message is built, so `UPDATE_STREAM_METADATA`
+  already carries the description (durable-meta merge + roster
+  backstop). Outcome identical with and without the buffer in every
+  constructible interleaving.
 - **D14. `StreamScopedPayload.executionId`** — no emitter sets it, no
   consumer reads it; the three NDJSON spreads always take the empty arm,
   so the public wire is **byte-identical** after deletion (~15 LoC).
@@ -120,11 +131,15 @@ census. Format: machinery → construction-level fix → what deletes.
   roster (retention stamps normally) → explicit null edges
   (`setParentStream` already preserves retained placements). The
   marker-refresh third loop becomes unreachable and deletes (~30 LoC +
-  comment mass). Two verified riders: `sessionStores.onChildrenDetached`
+  comment mass). Three verified riders: `sessionStores.onChildrenDetached`
   (the second null-edge emitter, fires on stream deletion) is safe but
   must not move ahead of roster emission; the reorder changes public
   NDJSON fact _order_ (same information) — note for headless-parity
-  review. This is the clean ending for the #10693 WATCH: the machinery
+  review; and (review-added) the implementing PR must re-confirm that
+  after the null edges the detaching parent emits **no further
+  retained-bearing `child.activity` tick** — the loop's guard fires for
+  any retained row made incompatible by a later roster tick, so
+  "unreachable" rests on that emission-order fact. This is the clean ending for the #10693 WATCH: the machinery
   its reviews hardened gets deleted by making the edge impossible.
 
 ### 1e. Race machinery (census — verified)
@@ -136,17 +151,30 @@ census. Format: machinery → construction-level fix → what deletes.
   identity-checked commit covers the one irreducible boundary
   (credential-change vs in-flight fetch). Deletes `generations`,
   `latestRequests`, `nextRequestId`, both re-dispatch branches
-  (~50-60 LoC). Implementation caveat: use a TTL cache shape +
+  (~50-60 LoC). Implementation caveats: use a TTL cache shape +
   delete-before-call for forceRefresh (the shared `coalesceAsync` lacks
-  TTL).
+  TTL); and — review-caught (P1) — the promise-identity check only stops
+  a stale result entering the **cache**, it does not change what the
+  already-in-flight caller **receives**, so the implementing PR must
+  either keep a single invalidation-version fence for the return path or
+  explicitly accept one-stale-read-on-a-read-only-display semantics and
+  update the old-account regression scenario
+  (`SubscriptionUsageService.vitest.ts:874-900`) to pin the chosen
+  behavior. The choice is the PR's declared R6 line, not an accident.
 - **D17. `ServerSideKeyService._activeFetchToken`** → promise-identity
   compare (~10 LoC; representation swap, the boundary stays guarded).
 - **D18. The CLI's dual exit teardown** — `exitNow` duplicates
   `gracefulTeardown` (~30 LoC) and forces the `exiting` re-entry guard.
   One cause-parameterized teardown with exactly one caller; verified
   feasible including the double-tap-Ctrl-C escape semantics (force causes
-  skip the queue drain and `runPromise` await). The guard genuinely
-  deletes.
+  skip the queue drain and `runPromise` await). Load-bearing rider
+  (review-caught): **terminal-mode restoration must stay synchronous
+  before any await on the force/signal path** — today `exitNow` does
+  `cleanupTerminalModes` + the resume hint synchronously before its
+  fire-and-forget drain (`sessionExitController.ts:208-220`); a unified
+  teardown that awaited anything before restoring modes on that path
+  would regress a previously-shipped terminal bug class. The guard
+  genuinely deletes.
 - **D19. `runExecution`'s launch-window flags (narrowed)** — register a
   stub handle synchronously at `executionId` assignment so `kill(id)` is
   authoritative from t0; deletes the `onRun` re-check,
@@ -168,8 +196,13 @@ census. Format: machinery → construction-level fix → what deletes.
   suppression — and independently, **D-adjacent finding: the in-memory
   dedup set is producer-less today** (cross-restart redeliveries carry
   _different_ ids, so the set couldn't dedup the one real replay source
-  anyway). Deleting the dedup arm now is a maintainer ruling against
-  #9664's declared future-outbox intent — flagged for your call;
+  anyway). _(Framing corrected on review: #9664 shipped the in-memory
+  check-and-add as its deliverable and explicitly documented it as "not
+  crash-safe exactly-once; no outbox, per the issue's durability
+  threshold", deferring an outbox "only if reproduction warrants" — so
+  the deletion ruling is against #9664's shipped transport-level
+  suppression, and its own durability-threshold language supports the
+  producer-less finding.)_ Flagged for the maintainer's call;
   `turnToken` attribution stays either way.
 
 ## 3. Kept with adjustment
