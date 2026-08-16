@@ -96,9 +96,11 @@ Corollaries:
   table (§3.3) — existence and the late-fact fence are separate tables, so
   neither invariant compromises the other.
 - No app-owned live state in files; no user documents in the database.
-- **One named permanent exception:** the workspace bucket's `state.json` —
-  narrowed to genuine host UI/settings state (`PersistedState`, opened by
-  the CLI in `cliStateStores.ts` and by desktop in its platform wiring). §8
+- **One named permanent exception — the settings files:** the workspace
+  bucket's `state.json` (host UI/settings state — `PersistedState`, opened
+  by the CLI in `cliStateStores.ts` and by desktop in its platform wiring)
+  and the bucket `config.json` that `initializeElectronPlatform` falls back
+  to when no workspace exists or `.texra/config.json` is not writable. §8
   keeps UI state out of SQL by design, so that file stays, on the
   architecture test's allowlist, in the target layout. The narrowing is
   load-bearing: `GoalStore` currently persists **durable goal lifecycle
@@ -122,7 +124,8 @@ workspace storage today                     workspace storage after
 ├── executions/ executionLeases/            ├── executions/{id}/files
 ├── executionLocks/ memories/ original/     │                 (run artifacts: outputs +
 ├── taskRuns/  state.json  _workspace.json  │                  snapshots — documents)
-                                            ├── state.json    (host UI state, §2 exception)
+                                            ├── state.json  config.json
+                                            │                 (host settings, §2 exception)
                                             ├── _workspace.json (bucket identity, §7)
                                             └── taskRuns/     (legacy, until #6981
                                                                retention drains it)
@@ -147,8 +150,17 @@ boundary only and never replaces a domain schema. Pragmas at open:
 only. Integrity checking is **not** a per-open step (even `quick_check`
 scans the database, which would reintroduce O(history) startup against §9):
 it runs on recovery paths (a failed open, a suspected-corruption error) and
-as periodic maintenance, with the existing `openOrEphemeral` degradation
-path on failure. Backup: `VACUUM INTO`.
+as periodic maintenance. Backup: `VACUUM INTO`.
+
+Degradation generalizes with the consolidation: today's
+`StreamLogStore.openOrEphemeral()` covers only the transcript directory,
+which is wrong the moment every store shares one database — a failed
+`texra.db` open would leave transcript reads degraded while execution,
+snapshot, goal, and lease operations kept failing independently. The
+replacement is a **database-wide degraded mode** with the same contract the
+transcript store's ephemeral mode has today: one loud warning, an in-memory
+adapter serving every store, resume disabled for the session. One database,
+one degradation decision — never a per-store patchwork.
 
 ### 3.2 Transcript entries are rows (supersedes #10773's JSONL prescription)
 
@@ -238,7 +250,15 @@ stream_tombstones (id PK, incarnation, deleted_at)
                    -- hard-deletes the streams row and must outlive it.
                    -- Resolves the exists-iff-row / fence contradiction:
                    -- existence lives in streams, the deleted-id fence lives
-                   -- here. Small, append-only, prunable by retention.
+                   -- here. Small, append-only, and retained INDEFINITELY
+                   -- by default: age-based pruning would reopen the race it
+                   -- exists to close (a sufficiently delayed fact arriving
+                   -- after the prune sees neither a live row nor a fence
+                   -- and could re-mint a "never reused" id). Pruning is
+                   -- permitted only under a proof condition tied to
+                   -- producer lifetime (no lease, event-plane buffer, or
+                   -- resumable execution can still reference the id) —
+                   -- specified at Stage 6, not assumed.
 execution_leases  (execution_id PK FK CASCADE, owner_token, acquired_at,
                    heartbeat_at, generation)
                    -- WAL serializes writes; it does NOT provide ownership.
@@ -270,10 +290,25 @@ stream_summaries  (stream_id PK FK CASCADE, last_ts, has_running_group,
 entries_fts       (FTS5, contentless)
 ```
 
-Two access-path indexes ride the authoritative side:
-`INDEX executions(stream_id)` — SQLite does not auto-index child FK columns,
-so without it every stream deletion scans the whole executions table to
-find its cascade, and stream→execution history queries are O(table).
+Access-path indexes ride the authoritative side — SQLite does not
+auto-index child FK columns, and each of these is probed by a delete or an
+advertised query: `INDEX executions(stream_id)` (stream deletion's cascade
+probe; stream→execution history), `INDEX streams(parent_stream_id)` (the
+`SET NULL` probe on parent deletion; the §3.4 recursive topology queries),
+and `INDEX streams(current_execution_id)` (the `SET NULL` probe on
+execution deletion). Ownership integrity: the pointer FK alone proves the
+target execution _exists_, not that it _belongs to this stream_ — a
+misapplied row could point stream A at stream B's execution. Enforce the
+pair with a composite FK — `UNIQUE(executions.id, stream_id)` plus
+`FOREIGN KEY (current_execution_id, id) REFERENCES
+executions(id, stream_id)` — or an equivalent trigger.
+
+Derived-flag atomicity: the `stream_summaries` recovery flags are the
+recovery sweep's _only_ predicate, so they commit **in the same transaction
+as the entry batch that changes them** (the store already computes them
+incrementally; the write batch carries both). A kill between an entry
+commit and a separate flag commit would otherwise hide an unfinished
+stream from the partial index permanently.
 
 Every child-**table** FK (`entries`, `executions`, `execution_records`,
 `run_usage`, `round_facts`, `work_plans`, `goals`, `stream_summaries`)
@@ -432,8 +467,10 @@ Stage 4).
 
 - **Corruption blast radius** (one DB vs per-stream files): bounded per
   workspace; integrity checks on recovery paths and periodic maintenance
-  only (per §3.1 — never per-open); `openOrEphemeral` degradation path
-  unchanged; `VACUUM INTO` backups; the migration's renamed
+  only (per §3.1 — never per-open); degradation via the database-wide
+  degraded mode (§3.1 — the transcript-only `openOrEphemeral` generalizes;
+  one open failure, one loud decision covering every store, resume
+  disabled); `VACUUM INTO` backups; the migration's renamed
   `*.pre-sqlite-backup` dirs are retained per the §5 retirement condition.
 - **`node:sqlite` maturity/flags**: Stage 0 gate; `better-sqlite3` fallback
   accepted with its packaging cost named.
@@ -473,9 +510,17 @@ Stage 4).
   finds recreated legacy dirs re-imports and re-renames them, and the §5
   post-rename verification pass folds writes that landed inside the
   read-and-rename interval itself, so late legacy writes are absorbed
-  rather than lost. Concurrent mixed-version access during the window is
-  documented as unsupported — writes absorbed late, not dropped; old-host
-  reads may be stale until it upgrades.
+  rather than lost. **Reconciliation is by entry id, never by seq:** a
+  legacy host rewrites whole arrays and allocates seqNos from its own
+  resident copy, so a blind seq-keyed upsert against `UNIQUE(stream_id,
+seq)` would drop or overwrite one side when both hosts wrote the same
+  stream. The importer instead inserts entries whose `entry_id` is not yet
+  present, assigning fresh seqs after the row-side head — the same union
+  semantics as today's merge-disk-under-live-appends — and emits the
+  existing `reset: true` delta so fold consumers resync; an `entry_id`
+  already in rows keeps its row version. Concurrent mixed-version access
+  during the window remains documented as unsupported — writes absorbed
+  late, not dropped; old-host reads may be stale until it upgrades.
 - **Scope creep toward SQL-as-UI-state**: §8 non-goals; the architecture
   test only allowlists the two stores' modules for DB access.
 
