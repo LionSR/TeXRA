@@ -384,6 +384,13 @@ export class MessageIndex {
    *
    * When delta indices are supplied they are used directly; otherwise the
    * caller-side range is scanned with O(1) reference comparison.
+   *
+   * A resync that renumbers entries (hydration merging disk history under
+   * live appends) replays the whole log through this ordinary upsert path.
+   * Replacing renumbered rows in place would leave the homogeneous arrays
+   * (`node.messages` / `ungrouped`) out of comparator order, so detect an
+   * ordering-key change up front and rebuild those arrays from the current
+   * snapshot instead. The time-only timeline is deliberately untouched.
    */
   updateCachedMessageRefs(
     messages: readonly LogMessageData[],
@@ -391,6 +398,11 @@ export class MessageIndex {
     deltaIndices: readonly number[] | null,
     upTo: number = messages.length,
   ): void {
+    if (this.orderingKeyChanged(messages, prevMessages, deltaIndices, upTo)) {
+      this.rebuildMessageArrays(messages);
+      return;
+    }
+
     if (deltaIndices) {
       for (const index of deltaIndices) {
         if (index < 0 || index >= upTo || index >= messages.length) continue;
@@ -405,6 +417,80 @@ export class MessageIndex {
       if (messages[i] !== prevMessages[i]) {
         this.replaceSingleMessage(messages[i]);
       }
+    }
+  }
+
+  /**
+   * Whether any replaced ref in this batch changed its order key. The
+   * homogeneous arrays are ordered by `(usable seqNo, timestamp)`, so compare
+   * those two fields directly: `compareMessages(prev, next) !== 0` would
+   * miss a seqNo presence/value change whenever the timestamp-fallback
+   * tie-break reports equality.
+   */
+  private orderingKeyChanged(
+    messages: readonly LogMessageData[],
+    prevMessages: readonly LogMessageData[],
+    deltaIndices: readonly number[] | null,
+    upTo: number,
+  ): boolean {
+    const changed = (prev: LogMessageData, next: LogMessageData): boolean =>
+      next !== prev &&
+      (prev.seqNo !== next.seqNo || prev.timestamp !== next.timestamp);
+
+    if (deltaIndices) {
+      for (const index of deltaIndices) {
+        if (index < 0 || index >= upTo || index >= messages.length) continue;
+        if (changed(prevMessages[index], messages[index])) return true;
+      }
+      return false;
+    }
+
+    for (let i = upTo - 1; i >= 0; i--) {
+      if (changed(prevMessages[i], messages[i])) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Re-derive the homogeneous message arrays (`node.messages` / `ungrouped`)
+   * from the current snapshot in rebuild order — the same
+   * `compareMessagesForRebuild` fallback `rebuildTree` uses. Used when a
+   * delta batch changed ordering keys, where in-place replacement cannot
+   * preserve the sorted invariant. The group tree shape and the time-only
+   * timeline are left untouched; the caller's `updateTimelineMessageRefs`
+   * pass refreshes timeline message refs.
+   */
+  private rebuildMessageArrays(messages: readonly LogMessageData[]): void {
+    const sorted = messages.toSorted(compareMessagesForRebuild);
+    const messagesByGroup = new Map<string, LogMessageData[]>();
+    const ungrouped: LogMessageData[] = [];
+
+    for (const msg of sorted) {
+      const node = msg.groupId
+        ? this.groupNodeIndex.get(msg.groupId)
+        : undefined;
+      if (node) {
+        const bucket = messagesByGroup.get(node.group.id);
+        if (bucket) bucket.push(msg);
+        else messagesByGroup.set(node.group.id, [msg]);
+      } else {
+        ungrouped.push(msg);
+      }
+    }
+
+    for (const node of this.groupNodeIndex.values()) {
+      node.messages = messagesByGroup.get(node.group.id) ?? [];
+    }
+    this.ungrouped = ungrouped;
+
+    // Rebuild ungrouped indices without discarding timeline refs. Iterate the
+    // location map (rather than only reindexing the new array) so stale
+    // indices on messages that left the ungrouped array are dropped too.
+    for (const location of this.messageLocations.values()) {
+      delete location.ungroupedIndex;
+    }
+    for (let i = 0; i < ungrouped.length; i++) {
+      this.locationFor(ungrouped[i].id).ungroupedIndex = i;
     }
   }
 
