@@ -2312,13 +2312,19 @@ function resetHarnessForClear(): void {
       // The harness reset is best-effort; visible cliState is reset below.
     });
   }
+  const historyIsEmpty = [...streams.get().values()].every(
+    (slice) => slice.entries.length === 0,
+  );
   resetCliState(meta);
   activeStreamIdSignal.set(STREAM_ID);
   // Mirror the real /clear handler (runChatTui.tsx): erase the terminal
-  // outside Ink, then invalidate the transcript so the remount repaint
-  // restores the session header even when the state rebuild is a no-op.
+  // outside Ink, then invalidate the transcript only when the state rebuild
+  // is a no-op (empty history), so the remount repaint restores the session
+  // header without transiently rewriting cleared rows.
   clearTerminalScrollback();
-  invalidateStaticTranscriptForRepaint();
+  if (historyIsEmpty) {
+    invalidateStaticTranscriptForRepaint();
+  }
 }
 
 function handleHarnessSlashCommand(line: string): boolean {

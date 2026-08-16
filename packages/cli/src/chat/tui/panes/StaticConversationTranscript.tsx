@@ -1324,14 +1324,6 @@ export function StaticConversationTranscript({
   useLayoutEffect(() => {
     const previous = previousRenderKey.current;
     previousRenderKey.current = repaintKey;
-    if (process.env.TEXRA_DEBUG_STATIC) {
-      void import('node:fs').then((fs) =>
-        fs.appendFileSync(
-          '/tmp/tui-debug.log',
-          `${JSON.stringify({ previous, repaintKey, renderKey, epoch: state.repaintEpoch, width: normalizedWidth, ownerKey, itemCount: items.length, kinds: items.map((i) => i.kind).join(',') })}\n`,
-        ),
-      );
-    }
     if (previous !== undefined && previous !== repaintKey) {
       onRenderKeyChange?.();
     }

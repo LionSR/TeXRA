@@ -29,14 +29,6 @@ export function createTuiViewportController(inkRef: {
 }): TuiViewportController {
   return {
     repaintTranscript(): void {
-      if (process.env.TEXRA_DEBUG_STATIC) {
-        void import('node:fs').then((fs) =>
-          fs.appendFileSync(
-            '/tmp/tui-debug.log',
-            `repaintTranscript called, inkRef.current=${String(inkRef.current !== undefined)}\n`,
-          ),
-        );
-      }
       const target = inkRef.current;
       if (target === undefined) {
         // The first effect cascade can flush synchronously inside Ink's

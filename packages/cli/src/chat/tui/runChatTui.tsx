@@ -461,13 +461,24 @@ export async function runChat(
         // is already torn down — nothing actionable to surface here.
       });
     }
+    // Whether any finalized transcript rows exist — checked before the reset
+    // clears the stream view.
+    const historyIsEmpty = [...streamsSignal.get().values()].every(
+      (slice) => slice.entries.length === 0,
+    );
     resetCliState(meta);
     clearTerminalScrollback();
     // The erase above happened outside Ink, so the already-printed static
-    // header is gone from the terminal even when the state rebuild is a
-    // no-op (empty history) that skips the repaint-epoch bump. Invalidate
-    // explicitly so the transcript remounts and repaints the header.
-    invalidateStaticTranscriptForRepaint();
+    // header is gone from the terminal. When finalized rows existed, the
+    // hard-reset rebuild differs from the current state and bumps the
+    // repaint epoch on its own — remounting only after the rebuilt items
+    // commit. With an empty history the rebuild is a no-op that skips the
+    // bump, so only then invalidate explicitly; an unconditional
+    // invalidation would remount with the stale items and transiently
+    // rewrite the rows that were just cleared.
+    if (historyIsEmpty) {
+      invalidateStaticTranscriptForRepaint();
+    }
   };
 
   // Pre-register the slash commands the input palette uses.
