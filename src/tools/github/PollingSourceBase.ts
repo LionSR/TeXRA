@@ -17,7 +17,8 @@ import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { appSignals } from '@eventBus/AppSignals';
 
-import type { Disposable } from '@platform/interfaces';
+import { SHUTDOWN_PHASE, type Disposable } from '@platform/interfaces';
+import { tryPlatform } from '@platform/platform';
 import { jitteredExponentialBackoffMs } from '@utils/core';
 import {
   createBoundedIdSet,
@@ -180,6 +181,7 @@ export abstract class PollingSourceBase<
     (keys: readonly K[]) => void
   >();
   private timer: ReturnType<typeof setInterval> | undefined;
+  private shutdownRegistration: Disposable | undefined;
   private tickInFlight = false;
 
   constructor(protected readonly config: PollingSourceConfig) {
@@ -378,10 +380,13 @@ export abstract class PollingSourceBase<
   }
 
   private ensureTimer(): void {
+    this.registerShutdownIfNeeded();
     if (this.timer) return;
     this.timer = setInterval(() => {
       void this.tick();
     }, this.config.pollIntervalMs);
+    // A polling timer must never keep a host process alive on its own.
+    this.timer.unref?.();
     // Fire an immediate tick so first-subscribe doesn't wait a full interval.
     void this.tick();
   }
@@ -390,6 +395,22 @@ export abstract class PollingSourceBase<
     if (!this.timer) return;
     clearInterval(this.timer);
     this.timer = undefined;
+  }
+
+  /**
+   * Register `disposeAll` with the platform shutdown registry exactly once.
+   * Uses `tryPlatform()` so the base stays usable in browser/test contexts
+   * where no platform is installed, and defers to the first subscription so
+   * the shared singletons (constructed at module load, before `initPlatform()`)
+   * still register once the platform exists.
+   */
+  private registerShutdownIfNeeded(): void {
+    if (this.shutdownRegistration) return;
+    const lifecycle = tryPlatform()?.lifecycle;
+    if (!lifecycle) return;
+    this.shutdownRegistration = lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
+      this.disposeAll(),
+    );
   }
 
   private async tick(): Promise<void> {

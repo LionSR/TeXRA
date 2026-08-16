@@ -100,9 +100,6 @@ import {
   refreshToolAvailability,
   seedDisabledToolDefaults,
 } from '@tools/toolAvailability';
-import { SharedIssuePollingSource } from '@tools/github/IssuePollingSource';
-import { SharedPRPollingSource } from '@tools/github/PRPollingSource';
-import { SharedRepoPollingSource } from '@tools/github/RepoPollingSource';
 import { killActiveRecording } from '@tools/media/audio';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
@@ -297,15 +294,6 @@ export async function activate(context: vscode.ExtensionContext) {
     runtimeSession.flushArtifacts(),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearStoreCache());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
-    SharedPRPollingSource.disposeAll(),
-  );
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
-    SharedRepoPollingSource.disposeAll(),
-  );
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
-    SharedIssuePollingSource.disposeAll(),
-  );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
     appSignals.emit('extensionDeactivating', undefined),
   );
