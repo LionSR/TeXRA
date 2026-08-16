@@ -127,6 +127,9 @@ workspace storage today                     workspace storage after
                                             ├── state.json  config.json
                                             │                 (host settings, §2 exception)
                                             ├── _workspace.json (bucket identity, §7)
+                                            ├── pasted/  recordings/
+                                            │                 (user-media caches: pasted
+                                            │                  images, audio — documents)
                                             └── taskRuns/     (legacy, until #6981
                                                                retention drains it)
 ```
@@ -191,7 +194,15 @@ resident count`) or restricting suffix loads to read-only display paths.
 The in-memory `StreamLog` object and the delta/emission protocol are
 **unchanged** — they are the UI contract. Only the persistence layer beneath
 `StreamLogStore` swaps; the store's public surface stays frozen (the
-store-public-surface ratchet is what makes this a swap, not a rewrite).
+store-public-surface ratchet is what makes this a swap, not a rewrite) —
+**with one scheduled, additive exception**: the synchronous `keys()`
+contract returns every stream id from the always-resident summaries map,
+and startup paths iterate it (`SessionState.load`, desktop wiring), so
+freezing it verbatim would force loading all ids before startup and defeat
+the O(visible page) criterion no index can rescue. Stage 2 adds a
+paginated listing surface and migrates the startup callers to it in the
+same PR family; `keys()` remains for non-startup callers during the
+transition and retires with a ratchet-baseline shrink, not a widen.
 
 Entry payloads remain opaque JSON in a single column (Tier 3 stays Tier 3);
 this PRD does not normalize entry internals. A separate `text` column feeds
@@ -251,6 +262,17 @@ goals             (stream_id PK FK CASCADE, goal JSON)
                    -- moved OUT of state.json (§2): durable goal lifecycle
                    -- records join the cascade; today's separate best-effort
                    -- goalEntries.forget after deletion disappears.
+migration_records (source, key, payload JSON, absorbed_at,
+                   PRIMARY KEY (source, key))
+                   -- importer-owned bookkeeping with a schema home so Stage
+                   -- 3 needs no drift: the per-source absorbed-goal ledgers
+                   -- (source = 'goal-ledger:cli' / 'goal-ledger:extension')
+                   -- and the orphan-goal quarantine
+                   -- (source = 'goal-quarantine'). Deliberately NOT
+                   -- execution_records: that table's key requires an
+                   -- execution_id, and these records exist precisely when a
+                   -- valid parent is missing. Deleted whole with the
+                   -- importer at the §5 retirement.
 stream_tombstones (id PK, incarnation, deleted_at)
                    -- the late-fact fence, deliberately NOT an FK child of
                    -- streams: it is written in the SAME transaction that
@@ -265,7 +287,7 @@ stream_tombstones (id PK, incarnation, deleted_at)
                    -- permitted only under a proof condition tied to
                    -- producer lifetime (no lease, event-plane buffer, or
                    -- resumable execution can still reference the id) —
-                   -- specified at Stage 6, not assumed.
+                   -- specified at Stage 7, not assumed.
 execution_leases  (execution_id PK FK CASCADE, owner_token, acquired_at,
                    heartbeat_at, generation)
                    -- WAL serializes writes; it does NOT provide ownership.
@@ -276,7 +298,7 @@ execution_leases  (execution_id PK FK CASCADE, owner_token, acquired_at,
                    -- release = DELETE … WHERE owner_token = ?, and
                    -- `generation` fences a displaced continuation from
                    -- writing under a later owner. Full protocol spec is
-                   -- part of Stage 1's schema design; cutover is Stage 7.
+                   -- part of Stage 1's schema design; cutover is Stage 6.
 
 -- derived: rebuildable from authoritative rows, never row-authoritative
 stream_summaries  (stream_id PK FK CASCADE, last_ts, has_running_group,
@@ -335,7 +357,7 @@ as whole tables (recompute from `streams`/`entries`), never to `streams`
 rows — a malformed summary must not be able to take the authoritative row,
 and its cascade, down with it.
 
-Deletion semantics, stated implementably for Stage 6: **hard-delete the
+Deletion semantics, stated implementably for Stage 7: **hard-delete the
 `streams` row (cascades every child table) and insert `(id, incarnation,
 deleted_at)` into `stream_tombstones` in the same transaction.** The fence
 check (`SessionFactApplier` admission) consults `stream_tombstones`;
@@ -401,7 +423,7 @@ long-term mirroring or dual-write.
 The importer, the `*.pre-sqlite-backup` dirs, and their compatibility tests
 have a retirement condition fixed at birth: Stage 1 files the removal issue,
 and the removal PR lands **no earlier than 90 days AND two shipped releases
-after Stage 7 (the final migration stage) — whichever comes later** — so a
+after Stage 6 (the final migration stage) — whichever comes later** — so a
 frequent release cadence can never shorten the three-month import window the
 AGENTS.md compatibility-machinery rule guarantees upgrading users.
 Archived `trace.json` readers (B3) are untouched — exports are produced from
@@ -428,7 +450,12 @@ rows; export compat is not storage compat.
   and unmapped execution directories import with a NULL edge per §3.3)
   import here too — Stage 3 sets `streams.current_execution_id` from
   `streamData/meta.json`, and with `foreign_keys=ON` that pointer needs its
-  target row to exist first.
+  target row to exist first. **A present edge is verified, not trusted:**
+  the execution-listing contract retains executions whose named stream was
+  deleted or never persisted (`ExecutionListing.vitest.ts` pins this), so
+  an edge naming a stream absent from the migrated registry imports as
+  NULL with a `warn` — importing it verbatim would fail the FK and abort
+  the migration.
   `stream_summaries` (derived, #9434-discardable — worst case is a rebuild)
   rides along as the pilot payload, deleting the mtime-staleness heuristic
   and scan-on-open.
@@ -449,8 +476,9 @@ rows; export compat is not storage compat.
   **Orphan goals are quarantined, not imported:** a legacy goal naming a
   stream absent from the Stage-2 registry (a failed best-effort cleanup, or
   the unregistered-goal path) has no FK parent — the importer logs it at
-  `warn` and records it under a quarantine key in `execution_records`-style
-  storage rather than failing the migration on an FK violation. The
+  `warn` and records it in `migration_records`
+  (`source = 'goal-quarantine'`, §3.3) rather than failing the migration on
+  an FK violation. The
   importer **never mutates the legacy source during the compat window**
   (see §6's ledger scheme); one final absorb clears it when the window
   closes. Legacy goal reads retire then, not at Stage 3.
@@ -473,19 +501,26 @@ rows; export compat is not storage compat.
   per-execution artifacts area on the permanent allowlist, and are removed
   by the same file sweeper that handles exports when their execution row
   is deleted.
-- **Stage 6 — deletion protocol: incarnation + tombstone fence.** With every
-  app-state datum in rows by now, this stage lands the one-transaction
-  deletion for real: hard-delete + same-transaction `stream_tombstones`
-  insert (§3.3), the incarnation compare-and-set, and the fact-admission
-  gate in `SessionFactApplier` (the reducer owns admission;
-  `SessionEventHub` stays fan-out only) — collapsing #10702's machinery.
-  Record the identity ruling: **stream ids are never reused** — a workflow
-  relaunch mints a fresh id; the deterministic slot maps to the current id.
-- **Stage 7 — leases/locks → rows (final migration stage).** Cutover to the
-  `execution_leases` table and its CAS protocol (§3.3). Last, deliberately:
-  the legacy lease files are the liveness signal the importer's quiesce
-  check reads to detect running file-backed hosts (§6 mixed-version
-  fencing) — they must stay file-based until every data migration is done.
+- **Stage 6 — leases/locks → rows (final migration stage).** Cutover to the
+  `execution_leases` table and its CAS protocol (§3.3). Positioned after
+  every **data** migration (Stages 2–5) so the legacy lease files remain
+  the liveness signal the importer's quiesce check reads (§6 mixed-version
+  fencing) — and positioned **before** the deletion-protocol cutover,
+  deliberately: today's deletion runs under
+  `runWithInactiveExecutionLease`'s filesystem lock, and a bare row
+  transaction cannot replace that guard while leases are still files. Once
+  leases are rows, the delete transaction itself checks the lease row —
+  the guard and the delete become one atomic unit.
+- **Stage 7 — deletion protocol: incarnation + tombstone fence.** With
+  every app-state datum **including leases** in rows, this stage lands the
+  one-transaction deletion for real: hard-delete + same-transaction
+  `stream_tombstones` insert (§3.3), the incarnation compare-and-set
+  (lease row checked in the same transaction, replacing
+  `runWithInactiveExecutionLease`), and the fact-admission gate in
+  `SessionFactApplier` (the reducer owns admission; `SessionEventHub`
+  stays fan-out only) — collapsing #10702's machinery. Record the identity
+  ruling: **stream ids are never reused** — a workflow relaunch mints a
+  fresh id; the deterministic slot maps to the current id.
 - **Stage 8 — feature payoffs.** FTS5, retention policy, usage analytics.
 
 Ordering with other programs: independent of Waves A–C (different band, no
@@ -531,8 +566,9 @@ Stage 4).
   (1) **Quiesce check, not lock:** before migrating, the importer reads the
   legacy lease files (`executionLeases/`) — artifacts old hosts already
   maintain and new code can inspect — and **defers migration while any live
-  legacy execution is present**; leases staying file-based until Stage 7 is
-  what keeps this signal readable (why leases/locks migrate last).
+  legacy execution is present**; leases staying file-based until Stage 6 is
+  what keeps this signal readable (why leases/locks migrate after every
+  data migration).
   (2) **A workspace-scoped migration fence between new hosts** (one
   marker/lock the importer holds), so two migrated hosts cannot
   double-import concurrently.
@@ -566,13 +602,19 @@ seq)` would drop or overwrite one side when both hosts wrote the same
   recreates no detectable legacy directory, and an absent key carries no
   timestamp to compare. The scheme is therefore a **read-only ledger diff**:
   the importer never mutates the legacy source during the window; instead
-  it keeps an absorbed-keys ledger in rows (key + value hash + `updatedAt`
-  at absorption) and, on every migrated open, diffs the legacy source
-  against the ledger — key present and newer → update the row; key present
-  in the ledger but **absent from the source → the legacy host deleted it →
-  delete the row**; key absent from both → nothing. Leaving the legacy
-  source untouched is what makes absence unambiguous. One final absorb
-  clears source and ledger together when the compat window closes.
+  it keeps an absorbed-keys ledger in rows (`migration_records`, **keyed by
+  `(legacy source, key)`** — the CLI's `state.json` and the extension's
+  Memento are separate sources with separate ledgers) and, on every
+  migrated open, diffs that host's legacy source against **that source's
+  ledger only** — key present and newer → update the row; key present in
+  the same source's ledger but **absent from that source → that host
+  deleted it → delete the row**; key absent from both → nothing. Scoping
+  absence per source is load-bearing: the extension absorbing a goal must
+  not let a later CLI open — whose `state.json` never carried the key —
+  read "ledger present, source absent" and delete a goal the CLI never
+  owned. Leaving the legacy sources untouched is what makes absence
+  unambiguous. One final absorb clears each source and its ledger together
+  when the compat window closes.
 - **Scope creep toward SQL-as-UI-state**: §8 non-goals; the architecture
   test only allowlists the two stores' modules for DB access.
 
@@ -590,7 +632,10 @@ starts with an explicit allowlist of the not-yet-migrated directories
 deletion namespace `StagedDeletionCoordinator` renames into until it
 retires at Stage 6 — `streamLogs/`, `executions/` KV records, lease/lock
 files) plus the **permanent entries**: documents,
-exports, `state.json`, the per-execution artifacts area (§5 Stage 5), and
+exports, the settings files (`state.json`, `config.json`), the
+per-execution artifacts area (§5 Stage 5), the user-media caches
+(`pasted/` from `savePastedImageBuffer`, `recordings/` from the audio
+tool — live writers today that the ratchet must not reject), and
 `_workspace.json` — the bucket→workspace identity sidecar
 `WorkspaceStorageProvider.getStoragePath()` writes before any store (and
 therefore the database) can open; it cannot live in the DB it locates, so
@@ -598,12 +643,12 @@ it must be in the initial baseline (a ratchet can only shrink — omitting it
 at Stage 1 could not be repaired later without widening). Each migration
 stage removes its directory from the baseline in the same PR — the same
 only-shrinks discipline as `host-agent-import-baseline`. A Stage-1-strict
-test would fail CI by construction while Stages 2–7 still write files.
-After Stage 7 one **temporary** entry remains alongside the permanent set:
+test would fail CI by construction while Stages 2–6 still write files.
+After Stage 6 one **temporary** entry remains alongside the permanent set:
 `*.pre-sqlite-backup`, which the §5 retirement window requires for 90 days
 and two releases — the importer-removal PR deletes the backups and this
 ratchet entry together. Strict (permanent entries only) is that removal
-PR's exit criterion, not Stage 7's.
+PR's exit criterion, not Stage 6's.
 
 ## 8. Non-goals
 
@@ -636,5 +681,5 @@ normalization of entry payload internals; no publication of this doc
 3. Within Stage 5, the ordering of execution-record sub-migrations (reports
    vs turn state vs flow checkpoints) — an in-stage sequencing detail; the
    stage assignment itself is settled (§5).
-4. Retention defaults (age? size cap per workspace?) once Stage 7 makes
+4. Retention defaults (age? size cap per workspace?) once Stage 8 makes
    policy one statement.
