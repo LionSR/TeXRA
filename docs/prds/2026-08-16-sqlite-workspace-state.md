@@ -59,10 +59,10 @@ revalidation. That is the recurring maintenance cost this PRD removes.
   them (§3.2 on why it is not for us).
 - **sst/opencode** made SQLite (Drizzle) the source of truth for
   sessions/messages/parts/events. Their storage engine choice is validated at
-  production scale on Bun/Node; their *app-level transaction semantics*
+  production scale on Bun/Node; their _app-level transaction semantics_
   (ambient transaction context, post-commit effect queues) are the documented
-  cautionary tale (`specs/storage/remove-opencode-db.md`) — §6 bans importing
-  that shape here.
+  cautionary tale (`specs/storage/remove-opencode-db.md` in the opencode
+  repo, not a local path) — §6 bans importing that shape here.
 - **VS Code itself** stores extension state in SQLite (`state.vscdb`); the
   platform this project embeds in already made this call.
 
@@ -70,10 +70,16 @@ revalidation. That is the recurring maintenance cost this PRD removes.
 
 The Electron PRD (2026-05-02 §5.2) rejected `better-sqlite3` for a then-valid
 reason: native dep + asar unpacking + migration tooling. `node:sqlite` ships
-inside the Node runtime — zero dependencies, synchronous API. Verified
-version floors: workspace `engines.node >= 22.9.0`, desktop Electron ^43,
-extension `vscode ^1.125.0` — all three hosts run Node 22+ runtimes carrying
-`node:sqlite`. Flag status per host is Stage 0's job to confirm.
+inside the Node runtime — zero dependencies, synchronous API. Version floors,
+stated precisely: `engines.node >= 22.9.0` is declared in `packages/cli` and
+`packages/agent` (the root manifest has no `engines` field); desktop is
+Electron ^43; extension targets `vscode ^1.125.0`. `node:sqlite` landed in
+Node 22.5.0 but stayed behind `--experimental-sqlite` until 22.13.0 (unflag:
+nodejs/node#55890, also 23.4.0), so the 22.9–22.12 window carries it only
+behind the flag. The Electron 43 and VS Code 1.125 runtimes are past the
+unflag point; the CLI floor is the gap. Stage 0's concrete go/no-go: raise
+the CLI/agent floor to `>= 22.13.0` (preferred) or verify flagged operation
+in the 22.9–22.12 window.
 
 ## 2. The rule
 
@@ -100,24 +106,33 @@ Corollaries:
 workspace storage today                     workspace storage after
 ├── streamLogs/           991 MB            ├── texra.db      (all app state + FTS)
 ├── streamLogSummaries/   7.5 MB            ├── original/     (user document snapshots)
-├── streamData/           5,274 files       └── memories/     (user-editable documents)
-├── executions/ executionLeases/
-├── executionLocks/ memories/ original/
+├── streamData/           5,274 files       ├── memories/     (user-editable documents)
+├── executions/ executionLeases/            └── taskRuns/     (legacy, until #6981
+├── executionLocks/ memories/ original/                        retention drains it)
+├── taskRuns/             (legacy)
 ```
+
+Legacy `taskRuns/` (`WORKSPACE_STORAGE_LAYOUT.legacyRuns`) is grandfathered:
+it stays read-only on its existing #6981 retention path, is never migrated
+into rows, and its layout key retires when that policy drains it. It is the
+one deliberate exception to the §2 rule, time-bounded by retention.
 
 Engine: `node:sqlite` (fallback: `better-sqlite3`, accepting the packaging
 cost, if Stage 0 finds the built-in flagged or unfit on any host). Schema and
 migrations: `drizzle-orm` + `drizzle-kit` (pure TS, no runtime codegen,
 `drizzle-zod` bridges into the existing Zod-SSOT doctrine; `kysely` is the
 named alternative if schema-first proves a bad fit). Pragmas at open:
-`journal_mode=WAL`, `busy_timeout`, `foreign_keys=ON`, `integrity_check`
-(quick) with the existing `openOrEphemeral` degradation path on failure.
-Backup: `VACUUM INTO`.
+`journal_mode=WAL`, `busy_timeout`, `foreign_keys=ON` — cheap, O(1) settings
+only. Integrity checking is **not** a per-open step (even `quick_check`
+scans the database, which would reintroduce O(history) startup against §9):
+it runs on recovery paths (a failed open, a suspected-corruption error) and
+as periodic maintenance, with the existing `openOrEphemeral` degradation
+path on failure. Backup: `VACUUM INTO`.
 
 ### 3.2 Transcript entries are rows (supersedes #10773's JSONL prescription)
 
 JSONL was the right call in a no-database architecture. Once the database
-exists, a second bespoke file format *is* a mixed architecture — and the
+exists, a second bespoke file format _is_ a mixed architecture — and the
 inferior fit: TeXRA entries mutate until settled (`update`/`settle`/
 `appendText`), so JSONL needs patch-lines, fold-on-read, and close-time
 compaction — a hand-rolled LSM tree. Rows fit the mutation model natively:
@@ -126,8 +141,17 @@ compaction — a hand-rolled LSM tree. Rows fit the mutation model natively:
   never written again. The existing 300 ms save throttle batches dirty rows
   in one transaction — same cadence, O(changed rows) instead of O(stream).
 - **Partial hydration**, which files structurally cannot give: opening a
-  historical stream is `SELECT … ORDER BY seq DESC LIMIT n`, paging older on
-  demand. Third independent attack on the memory PRD's problem.
+  historical stream can read `SELECT … ORDER BY seq DESC LIMIT n`, paging
+  older on demand. Third independent attack on the memory PRD's problem.
+  **Not free at the in-memory layer:** today's `StreamLog` constructor
+  renumbers entries from 1, `head` equals the resident count, and consumers
+  treat `getRange(0)` as the complete log — a naive suffix load would
+  renumber, collide the next append with `UNIQUE(stream_id, seq)`, and
+  silently truncate resyncs. Consuming partial hydration therefore requires
+  a base-seq-aware `StreamLog` (absolute sequence base; `head = base +
+resident count`) or restricting suffix loads to read-only display paths.
+  This is scheduled as explicit Stage 4 design work; until it lands, live
+  and writable streams hydrate fully, exactly as today.
 - Transcripts join the same deletion cascade as everything else, so the
   #10702 problem class ends uniformly.
 
@@ -143,25 +167,42 @@ FTS (§3.4).
 ### 3.3 Schema sketch (finalized in Stage 1, not incrementally)
 
 ```
-streams        (id PK, incarnation, tombstone, created_ts, last_ts,
-                has_running_group, has_running_streaming_text,
-                has_nonterminal_workflow_call, parent_stream_id,
-                summary_meta JSON)
-entries        (stream_id FK CASCADE, seq, entry_id, settlement_seq NULL,
-                timestamp, entry JSON, text NULL)  UNIQUE(stream_id, seq)
-executions     (id PK, stream_id FK, meta JSON, config JSON)
-run_usage      (stream_id FK CASCADE, storage_key, usage JSON)
-round_facts    (stream_id FK CASCADE, kind {output|missing|compile},
-                round, payload JSON)
-work_plans     (stream_id FK CASCADE, plan JSON, todos JSON)
-leases/locks   (execution-scoped rows; WAL provides cross-process safety)
-entries_fts    (FTS5, contentless, derived; rebuildable)
+-- authoritative: a row's existence IS the fact
+streams          (id PK, incarnation, tombstone, created_ts,
+                  parent_stream_id)
+entries          (stream_id FK CASCADE, seq, entry_id, settlement_seq NULL,
+                  timestamp, entry JSON, text NULL)  UNIQUE(stream_id, seq)
+executions       (id PK, stream_id FK CASCADE, meta JSON, config JSON)
+run_usage        (stream_id FK CASCADE, storage_key, usage JSON,
+                  PRIMARY KEY (stream_id, storage_key))   -- upsert target;
+                  -- without it, migration retries / concurrent hosts
+                  -- double-count SUM/GROUP BY analytics
+round_facts      (stream_id FK CASCADE, kind {output|missing|compile},
+                  round, payload JSON)
+work_plans       (stream_id FK CASCADE, plan JSON, todos JSON)
+leases/locks     (execution-scoped rows; WAL provides cross-process safety)
+
+-- derived: rebuildable from authoritative rows, never row-authoritative
+stream_summaries (stream_id PK FK CASCADE, last_ts, has_running_group,
+                  has_running_streaming_text,
+                  has_nonterminal_workflow_call, summary_meta JSON)
+entries_fts      (FTS5, contentless)
 ```
+
+Every child FK carries `ON DELETE CASCADE` explicitly — SQLite's default is
+`NO ACTION`, which would _reject_ the parent delete instead of cascading it.
+
+The authoritative/derived split is a table boundary, deliberately: the #9434
+discard-and-rebuild contract applies to `stream_summaries` and `entries_fts`
+as whole tables (recompute from `streams`/`entries`), never to `streams`
+rows — a malformed summary must not be able to take the authoritative row,
+and its cascade, down with it.
 
 `streams.incarnation` + a terminal tombstone bit replace #10702's generation
 protocol; compare-and-set (`… WHERE id = ? AND incarnation = ?`) is the
-entire fencing mechanism. The one-bit tombstone and the single fact-gate at
-`SessionEventHub` remain — that residue is essential as long as facts are
+entire fencing mechanism. The one-bit tombstone and the single fact-admission
+gate in `SessionFactApplier` (the reducer — `SessionEventHub` is fan-out
+only, not admission) remain — that residue is essential as long as facts are
 async.
 
 ### 3.4 Capabilities unlocked (not counted in the ledger)
@@ -179,20 +220,20 @@ and flagged: `sqlite-vec` embedding search over `memories/`.
 Measured 2026-08-16 at `origin/main` 6fd0317 (+ #10702 draft). Storage layer
 in scope ≈ 8,400 LoC.
 
-| File | Today | After | Net |
-| --- | --- | --- | --- |
-| `StagedDeletionCoordinator.ts` | 612 | 0 | −612 |
-| `StreamLogStore.ts` | 1,739 | ~650 | −1,050 |
-| `StreamSnapshotStore.ts` | 2,164 | ~850 | −1,300 |
-| `streamSnapshotRead.ts` | 307 | ~50 | −250 |
-| `SessionStores.ts` (deletion orchestration) | 777 | ~430 | −350 |
-| `executionRegistry.ts` (lease/lock portion) | 1,002 | — | −200 (softest; per-item study owed) |
-| `streamDataPaths` + `ResidentStreamRegistry` + `KVStore(+Cache)` | 373 | ~50 | −320 (KV retires when `ExecutionKVStore` migrates) |
-| #10702 machinery (draft) | +1,076 | ~150 | −900 |
-| `completedRunArchive.ts` | 370 | ~320 | −50 |
-| **Gross deletion** | | | **≈ −5,000** |
-| Adds: schema (~200) + engine adapter (~200) + migrate-on-open importer (~300, temporary) | | | **+700** |
-| **Net production** | | | **≈ −4,300** (range −3,800..−4,800) |
+| File                                                                                     | Today  | After | Net                                                |
+| ---------------------------------------------------------------------------------------- | ------ | ----- | -------------------------------------------------- |
+| `StagedDeletionCoordinator.ts`                                                           | 612    | 0     | −612                                               |
+| `StreamLogStore.ts`                                                                      | 1,739  | ~650  | −1,050                                             |
+| `StreamSnapshotStore.ts`                                                                 | 2,164  | ~850  | −1,300                                             |
+| `streamSnapshotRead.ts`                                                                  | 307    | ~50   | −250                                               |
+| `SessionStores.ts` (deletion orchestration)                                              | 777    | ~430  | −350                                               |
+| `executionRegistry.ts` (lease/lock portion)                                              | 1,007  | —     | −200 (softest; per-item study owed)                |
+| `streamDataPaths` + `ResidentStreamRegistry` + `KVStore(+Cache)`                         | 373    | ~50   | −320 (KV retires when `ExecutionKVStore` migrates) |
+| #10702 machinery (draft)                                                                 | +1,076 | ~150  | −900                                               |
+| `completedRunArchive.ts`                                                                 | 370    | ~320  | −50                                                |
+| **Gross deletion**                                                                       |        |       | **≈ −5,000**                                       |
+| Adds: schema (~200) + engine adapter (~200) + migrate-on-open importer (~300, temporary) |        |       | **+700**                                           |
+| **Net production**                                                                       |        |       | **≈ −4,300** (range −3,800..−4,800)                |
 
 Test footprint pinned to deleted machinery: `StreamLogStoreLoad` 2,083,
 `StreamSnapshotStore.vitest` 2,961, `SessionStores.vitest` 748,
@@ -210,6 +251,11 @@ family: swap the engine behind the frozen store surface, migrate that store's
 data on first open (read files → insert rows → rename old dir to
 `*.pre-sqlite-backup`), and delete that store's coordination machinery in the
 same PR (build-implies-delete). No long-term mirroring or dual-write.
+The importer, the `*.pre-sqlite-backup` dirs, and their compatibility tests
+have a retirement condition fixed at birth: Stage 1 files the removal issue,
+and the removal PR lands **two releases or 90 days after Stage 6 ships,
+whichever comes first** — the temporary path has an owner and a deadline
+from day one, per the AGENTS.md compatibility-machinery rule.
 Archived `trace.json` readers (B3) are untouched — exports are produced from
 rows; export compat is not storage compat.
 
@@ -218,8 +264,10 @@ rows; export compat is not storage compat.
   workspace; Electron 43 bundled Node minor. Go/no-go on the built-in vs
   `better-sqlite3`.
 - **Stage 1 — schema + adapter.** The full §3.3 schema lands as one design
-  (no incremental schema drift), plus open/migrate/integrity/backup adapter
-  and the architecture test (§7).
+  (no incremental schema drift), plus open/migrate/recovery/backup adapter
+  and the architecture test (§7). On acceptance of this PRD, close #10773
+  with a pointer here (diagnosis absorbed, prescription superseded) and file
+  the importer-removal issue (§5 retirement condition).
 - **Stage 2 — summaries table.** The pilot: `streamLogSummaries/` is
   contractually derived and discardable (#9434), so worst case is a rebuild.
   Deletes the mtime-staleness heuristic and scan-on-open.
@@ -230,9 +278,11 @@ rows; export compat is not storage compat.
   proving the 300 ms batched-transaction path sustains streaming append load
   (~200 mutations/s) with headroom.
 - **Stage 5 — registry, incarnation, terminal tombstone.** #10702's
-  machinery collapses to the column + the hub gate. Record the
-  identity ruling: **stream ids are never reused** — a workflow relaunch
-  mints a fresh id; the deterministic slot maps to the current id.
+  machinery collapses to the column + the fact-admission gate in
+  `SessionFactApplier` (the reducer owns admission; `SessionEventHub` stays
+  fan-out only). Record the identity ruling: **stream ids are never
+  reused** — a workflow relaunch mints a fresh id; the deterministic slot
+  maps to the current id.
 - **Stage 6 — leases/locks → rows/WAL.**
 - **Stage 7 — feature payoffs.** FTS5, retention policy, usage analytics.
 
@@ -290,7 +340,8 @@ normalization of entry payload internals; no publication of this doc
 - Kill -9 during streaming loses at most the current throttle window; the
   recovery sweep finalizes orphans from an indexed query.
 - All ratchets green; no store public-surface change; Waves A–C unaffected.
-- `WORKSPACE_STORAGE_LAYOUT` shrinks to `{ texra.db, original, memories }`.
+- `WORKSPACE_STORAGE_LAYOUT` shrinks to `{ texra.db, original, memories }`
+  plus legacy `taskRuns/` until #6981 retention drains it (§3.1 exception).
 
 ## 10. Open questions
 

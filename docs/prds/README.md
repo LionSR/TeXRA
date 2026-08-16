@@ -1,6 +1,6 @@
 ---
 created: 2026-06-21
-updated: 2026-08-11
+updated: 2026-08-16
 ---
 
 # PRD Index
@@ -24,6 +24,7 @@ that archived source branch, not `main`.
 
 | Document                                                                                                                                 | Created    | Updated    |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------- |
+| [PRD: One SQLite database per workspace for app-owned durable state](./2026-08-16-sqlite-workspace-state.md)                             | 2026-08-16 | 2026-08-16 |
 | [PRD: Transcript, persistence, and projection architecture for long-lived sessions](./2026-08-11-transcript-memory-architecture.md)      | 2026-08-11 | 2026-08-11 |
 | [PRD: xAI Responses API and `previous_response_id` for Grok](./2026-08-04-prd-xai-responses-previous-response-id.md)                     | 2026-08-04 | 2026-08-04 |
 | [PRD: Unified approval policy across CLI, desktop, and extension](./2026-08-03-prd-approval-policy-unification.md)                       | 2026-08-03 | 2026-08-03 |
