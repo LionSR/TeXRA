@@ -84,29 +84,16 @@ describe('OutputXmlSummarySchema — strict shape', () => {
   });
 });
 
-describe('ContextManagementDataSchema — legacy missing tokensAfter/utilizationAfter', () => {
-  const legacyBase = {
+describe('ContextManagementDataSchema', () => {
+  const base = {
     tokensBefore: 1000,
     contextWindow: 200_000,
     utilizationBefore: 5,
   };
 
-  it('defaults tokensAfter/utilizationAfter from the before-values on a pre-union entry', () => {
-    const result = ContextManagementDataSchema.parse({
-      ...legacyBase,
-      action: 'clear_tool_uses',
-    });
-
-    expect(result).toMatchObject({
-      action: 'clear_tool_uses',
-      tokensAfter: 1000,
-      utilizationAfter: 5,
-    });
-  });
-
   it('passes an already-populated tokens-freed entry through unchanged', () => {
     const result = ContextManagementDataSchema.parse({
-      ...legacyBase,
+      ...base,
       action: 'compaction',
       tokensAfter: 400,
       utilizationAfter: 2,
@@ -118,9 +105,15 @@ describe('ContextManagementDataSchema — legacy missing tokensAfter/utilization
   it('still requires originalMaxTokens/reducedMaxTokens for max_tokens_reduced', () => {
     expect(() =>
       ContextManagementDataSchema.parse({
-        ...legacyBase,
+        ...base,
         action: 'max_tokens_reduced',
       }),
+    ).toThrow();
+  });
+
+  it('rejects retired entries missing their completion statistics', () => {
+    expect(() =>
+      ContextManagementDataSchema.parse({ ...base, action: 'clear_tool_uses' }),
     ).toThrow();
   });
 });

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  StreamLogEntrySchema,
   type CompactionActivityData,
   type StreamLogEntry,
 } from '@shared/schemas';
@@ -27,7 +28,7 @@ function activityEntry(
   operationId: string,
   state: CompactionActivityData['state'],
 ): StreamLogEntry {
-  return {
+  return StreamLogEntrySchema.parse({
     seqNo,
     id: `event-${seqNo}`,
     type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -35,14 +36,14 @@ function activityEntry(
     timestamp: seqNo * 10,
     messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
     data: { activity: 'context_compaction', operationId, state },
-  };
+  });
 }
 
 function advancingEntry(
   seqNo: number,
   messageType: StreamLogEntry['messageType'] = MESSAGE_TYPES.MODEL_RESPONSE,
 ): StreamLogEntry {
-  return {
+  return StreamLogEntrySchema.parse({
     seqNo,
     id: `event-${seqNo}`,
     type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -50,7 +51,7 @@ function advancingEntry(
     timestamp: seqNo * 10,
     messageType,
     text: 'advanced',
-  };
+  });
 }
 
 describe('compaction activity projection', () => {
@@ -90,14 +91,11 @@ describe('compaction activity projection', () => {
     ]);
   });
 
-  it('ignores orphan terminals, malformed payloads, and obsolete records', () => {
-    const malformed: StreamLogEntry[] = [
-      activityEntry(1, 'orphan', 'completed'),
-      { ...activityEntry(2, 'bad', 'started'), data: { state: 'started' } },
-      { ...activityEntry(3, 'bad', 'started'), data: null },
-    ];
-
-    expect(projectCompactionActivities(malformed).blocks).toEqual([]);
+  it('ignores orphan terminal records', () => {
+    expect(
+      projectCompactionActivities([activityEntry(1, 'orphan', 'completed')])
+        .blocks,
+    ).toEqual([]);
   });
 
   it('matches full replay and incremental application', () => {

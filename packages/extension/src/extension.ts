@@ -69,6 +69,7 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog, setOutputChannelFactory } from '@logger/logUtils';
+import { redactSecrets } from '@logger/redaction';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
@@ -105,7 +106,7 @@ import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { StorageFS } from '@utils/files/storageFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -120,6 +121,32 @@ let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 // idempotency flag, so a stale module-level instance would silently swallow
 // handlers registered by a second activate() in the same process.
 let lifecycleHost: LifecycleHost | undefined;
+
+function installUnhandledRejectionSurface(
+  subscriptions: vscode.Disposable[],
+): void {
+  const report = (error: unknown) => {
+    log.error('Unhandled extension-host rejection', { data: error });
+    void vscode.window
+      .showErrorMessage(
+        `The extension host encountered an unrecoverable error: ${redactSecrets(toErrorMessage(error))}`,
+      )
+      .then(undefined, (notificationError: unknown) => {
+        log.error('Failed to display unhandled rejection error', {
+          data: notificationError,
+        });
+      });
+    // Installing an unhandled-rejection listener otherwise suppresses Node's
+    // default fatal path. The host must not continue after an unowned failure.
+    setImmediate(() => {
+      throw ensureError(error);
+    });
+  };
+  process.on('unhandledRejection', report);
+  subscriptions.push({
+    dispose: () => process.off('unhandledRejection', report),
+  });
+}
 
 async function refreshApiKeyStatus() {
   if (!apiKeyStatusBarItem) {
@@ -147,6 +174,7 @@ async function refreshApiKeyStatus() {
 }
 
 export async function activate(context: vscode.ExtensionContext) {
+  installUnhandledRejectionSurface(context.subscriptions);
   const workspaceFolders = vscode.workspace.workspaceFolders;
 
   if (!workspaceFolders || workspaceFolders.length !== 1) {

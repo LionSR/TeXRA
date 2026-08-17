@@ -16,6 +16,7 @@ export * from './usage';
 export * from './contextManagement';
 export * from './spendingStatus';
 export * from './onboarding';
+export * from './toolDefinition';
 
 // Layer 1b: Standalone schemas and shared settings
 export * from './agentSkills';
@@ -26,6 +27,7 @@ export * from './coreSettings';
 export * from './opResults';
 export * from './stateSettings';
 export * from './workflowScriptFiles';
+export * from './historyRunStatus';
 
 // Layer 2b: Depends on layer 1
 export * from './agentPresets';
@@ -42,6 +44,7 @@ export * from './workflowScriptDelivery';
 
 // Layer 3: Depends on layer 2
 export * from './log';
+export * from './streamLogEntry';
 export * from './taskGroup';
 export * from './todo';
 export * from './todoDisplay';
@@ -62,10 +65,9 @@ export * from './progressView';
 
 // Layer 6: Other view message schemas
 export * from './commonViewMessages';
-// Memory/History/Profile view-message schemas have a single public home in
-// settingsViewMessages (the canonical settings entry point), which re-exports
-// the symbols consumers need. They are not re-exported directly here, so each
-// family is published through exactly one barrel path.
+// Memory/Profile view-message schemas have a single public home in
+// settingsViewMessages. History status is shared with the CLI and is exported
+// above from its host-neutral leaf module.
 export * from './settingsViewMessages';
 export * from './subscriptionUsage';
 

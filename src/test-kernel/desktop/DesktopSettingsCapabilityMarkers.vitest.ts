@@ -4,7 +4,6 @@ import { LatexConfigPersistenceController } from '@controllers/settingsView/Late
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import { DefaultDesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
-import { DesktopHistoryHandlers } from '@desktop/main/desktopHistoryHandlers';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 import { unsupportedCommands } from '@shared/utils/dispatcher';
 import {
@@ -17,8 +16,6 @@ import { installPlatform } from '@test/support/setupPlatform';
 import {
   createStubDesktopAgentSettingsController,
   createStubDesktopCredentialSettingsController,
-  createStubDesktopHistoryOptions,
-  createStubDesktopHistorySettingsController,
   createStubDesktopToolingSettingsController,
 } from './desktopSettingsTestSupport';
 import { repoPath } from './desktopTestPaths.ts';
@@ -163,28 +160,12 @@ describe('desktop settings capability markers', () => {
     }
   });
 
-  it('matches the real agent and history controllers, which support every action', () => {
-    const domains = [
-      {
-        name: 'agent',
-        real: realAgentController().handlers,
-        stub: createStubDesktopAgentSettingsController().handlers,
-      },
-      {
-        name: 'history',
-        real: new DesktopHistoryHandlers(createStubDesktopHistoryOptions())
-          .handlers,
-        stub: createStubDesktopHistorySettingsController().handlers,
-      },
-    ];
+  it('matches the real agent controller, which supports every action', () => {
+    const real = realAgentController().handlers;
+    const stub = createStubDesktopAgentSettingsController().handlers;
 
-    for (const { name, real, stub } of domains) {
-      expect([name, unsupportedCommands(real)]).toEqual([name, []]);
-      expect([name, unsupportedCommands(stub)]).toEqual([
-        name,
-        unsupportedCommands(real),
-      ]);
-    }
+    expect(unsupportedCommands(real)).toEqual([]);
+    expect(unsupportedCommands(stub)).toEqual(unsupportedCommands(real));
   });
 
   it('matches the real tooling controller, which excludes VS Code extension installs', () => {

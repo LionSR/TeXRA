@@ -10,13 +10,19 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 }));
 
 import {
+  describeResumeFailure,
   resolveAndResumeStream,
   type ResumeStreamPorts,
 } from '@agent/runtime/resolveAndResumeStream';
+import { ResumeSessionUnavailableError } from '@agent/runtime/executeAgent';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
@@ -80,6 +86,18 @@ describe('resolveAndResumeStream', () => {
 
   afterEach(() => {
     clearStreamStatusForTest(defaultSession().status, STREAM);
+  });
+
+  it('describes a session that became unavailable during resume without masking it as storage failure', () => {
+    expect(
+      describeResumeFailure(
+        new ResumeSessionUnavailableError('exec-1' as ExecutionId),
+      ),
+    ).toEqual({
+      kind: 'not-resumable',
+      message:
+        'This session can no longer be resumed. Start a new run instead.',
+    });
   });
 
   it('routes a tool-use snapshot to the resume port', async () => {

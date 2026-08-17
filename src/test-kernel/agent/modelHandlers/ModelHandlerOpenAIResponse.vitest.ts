@@ -38,9 +38,8 @@ import {
   isProviderErrorAutoRetryable,
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
-import type { ToolDefinition } from '@model/ToolDefinition';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, type ToolDefinition } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';

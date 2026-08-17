@@ -12,7 +12,6 @@ import {
   deleteExecution,
 } from '@agent/storage/executionListing';
 import {
-  EXECUTION_LEASE_STALE_MS,
   ExecutionLeaseActiveError,
   ExecutionLeaseLostError,
   abandonOwnedExecutionLease,
@@ -26,9 +25,9 @@ import {
   ownsExecutionLease,
   releaseOwnedExecutionLease,
   resetExecutionLeaseCoordinationForTests,
-  renewOwnedExecutionLease,
   runWithInactiveExecutionLease,
   captureOwnedExecutionLeaseIfPresent,
+  validateOwnedExecutionLease,
   waitForOwnedExecutionLeaseRelease,
 } from '@agent/storage/executionLease';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
@@ -37,7 +36,9 @@ import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {
   executionLeasePath,
+  startForeignInstance,
   writeForeignLease,
+  writeOrphanedLease,
 } from '@test/support/executionLeaseFixtures';
 import { StorageFS } from '@utils/files/storageFS';
 
@@ -52,17 +53,6 @@ async function writeExecution(executionId: ExecutionId): Promise<void> {
 async function acquire(executionId: ExecutionId): Promise<void> {
   ownedExecutionIds.add(executionId);
   await acquireResumedExecutionLease(executionId);
-}
-
-async function writeStaleForeignLease(
-  executionId: ExecutionId,
-  ownerToken?: string,
-): Promise<void> {
-  await writeForeignLease(
-    executionId,
-    Date.now() - EXECUTION_LEASE_STALE_MS - 1,
-    ownerToken,
-  );
 }
 
 function bindRunExclusive() {
@@ -90,7 +80,7 @@ describe('cross-process execution leases', () => {
   it('protects a freshly leased execution from single deletion', async () => {
     const executionId = 'a8644a' as ExecutionId;
     await writeExecution(executionId);
-    await writeForeignLease(executionId, Date.now());
+    await writeForeignLease(executionId);
 
     await expect(deleteExecution(executionId)).resolves.toMatchObject({
       status: 'active',
@@ -99,16 +89,18 @@ describe('cross-process execution leases', () => {
     expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
   });
 
-  it('takes over a stale lease after the explicit horizon', async () => {
+  it('takes over an orphaned lease whose owner is provably dead', async () => {
     const executionId = 'b8644b' as ExecutionId;
-    const now = Date.now();
-    await writeForeignLease(executionId, now - EXECUTION_LEASE_STALE_MS - 1);
+    await writeOrphanedLease(executionId);
 
+    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
+      status: 'orphaned',
+    });
     await acquire(executionId);
 
-    await expect(
-      inspectExecutionLease(executionId, now),
-    ).resolves.toMatchObject({ status: 'owned' });
+    await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
+      status: 'owned',
+    });
   });
 
   it('fails closed when present lease state is malformed', async () => {
@@ -117,7 +109,7 @@ describe('cross-process execution leases', () => {
     await StorageFS.ensureDir(WORKSPACE_STORAGE_LAYOUT.executionLeases);
     await StorageFS.writeAtomic(
       executionLeasePath(executionId),
-      '{"version":1}',
+      '{"version":2}',
     );
 
     await expect(deleteExecution(executionId)).rejects.toThrow(
@@ -126,9 +118,60 @@ describe('cross-process execution leases', () => {
     expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
   });
 
-  it('rejects resume while another owner has a fresh lease', async () => {
+  it('self-heals a retired heartbeat-era lease record on contact', async () => {
+    const executionId = 'c8644d' as ExecutionId;
+    await writeExecution(executionId);
+    await StorageFS.ensureDir(WORKSPACE_STORAGE_LAYOUT.executionLeases);
+    await StorageFS.writeAtomic(
+      executionLeasePath(executionId),
+      '{"version":1,"executionId":"c8644d","ownerToken":"00000000-0000-4000-8000-000000000009","acquiredAt":1,"heartbeatAt":1}',
+    );
+
+    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
+      status: 'orphaned',
+    });
+    await expect(deleteExecution(executionId)).resolves.toMatchObject({
+      status: 'deleted',
+    });
+    expect(await StorageFS.exists(executionLeasePath(executionId))).toBe(false);
+  });
+
+  it('classifies a reused socket path answered by another instance as orphaned', async () => {
+    const executionId = 'b8644e' as ExecutionId;
+    const foreign = await startForeignInstance();
+    await writeForeignLease(executionId, undefined, {
+      ...foreign.owner,
+      instanceId: 'displaced-instance',
+    });
+
+    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
+      status: 'orphaned',
+    });
+    await foreign.shutdown();
+  });
+
+  it('treats a cross-host owner as unprovable and never reclaims it', async () => {
+    const executionId = 'b8644f' as ExecutionId;
+    await writeForeignLease(executionId, undefined, {
+      instanceId: 'other-host-instance',
+      socketPath: '/nonexistent/texra-other.sock',
+      pid: 1,
+      hostname: 'texra-some-other-host',
+    });
+    const operation = vi.fn(async () => 'removed');
+
+    await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
+      status: 'foreign',
+    });
+    await expect(
+      runWithInactiveExecutionLease(executionId, operation),
+    ).resolves.toMatchObject({ status: 'active' });
+    expect(operation).not.toHaveBeenCalled();
+  });
+
+  it('rejects resume while another live owner holds the lease', async () => {
     const executionId = 'd8644d' as ExecutionId;
-    await writeForeignLease(executionId, Date.now());
+    await writeForeignLease(executionId);
 
     await expect(
       acquireResumedExecutionLease(executionId),
@@ -172,13 +215,14 @@ describe('cross-process execution leases', () => {
 
   it('timestamps a resumed lease after asynchronous admission completes', async () => {
     vi.useFakeTimers({ now: new Date('2026-07-25T12:00:00.000Z') });
+    const admissionDelayMs = 90_000;
     const executionId = 'd86450' as ExecutionId;
-    const expectedHeartbeat = Date.now() + EXECUTION_LEASE_STALE_MS + 1_000;
+    const expectedAcquiredAt = Date.now() + admissionDelayMs;
 
     try {
       await expect(
         acquireResumedExecutionLease(executionId, async () => {
-          await vi.advanceTimersByTimeAsync(EXECUTION_LEASE_STALE_MS + 1_000);
+          await vi.advanceTimersByTimeAsync(admissionDelayMs);
           return true;
         }),
       ).resolves.toBe('acquired');
@@ -186,17 +230,14 @@ describe('cross-process execution leases', () => {
 
       const persisted = JSON.parse(
         await StorageFS.read(executionLeasePath(executionId)),
-      ) as { acquiredAt: number; heartbeatAt: number };
-      expect(persisted).toMatchObject({
-        acquiredAt: expectedHeartbeat,
-        heartbeatAt: expectedHeartbeat,
-      });
+      ) as { acquiredAt: number };
+      expect(persisted).toMatchObject({ acquiredAt: expectedAcquiredAt });
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('retains existing ownership through a transient resume heartbeat failure', async () => {
+  it('surfaces a transient resume validation failure without dropping ownership', async () => {
     const executionId = 'd86451' as ExecutionId;
     await acquire(executionId);
     vi.spyOn(platform().fileLocks, 'runExclusive').mockRejectedValueOnce(
@@ -205,7 +246,7 @@ describe('cross-process execution leases', () => {
 
     await expect(
       acquireResumedExecutionLease(executionId, () => true),
-    ).resolves.toBe('existing');
+    ).rejects.toThrow('temporary filesystem failure');
     expect(ownsExecutionLease(executionId)).toBe(true);
   });
 
@@ -247,7 +288,7 @@ describe('cross-process execution leases', () => {
     expect(settled).toBe(true);
   });
 
-  it('stops heartbeats but preserves the lease after durability failure', async () => {
+  it('stops claiming but preserves the lease after durability failure', async () => {
     const executionId = 'd86442' as ExecutionId;
     await acquire(executionId);
 
@@ -303,7 +344,6 @@ describe('cross-process execution leases', () => {
     await acquire(executionId);
     await writeForeignLease(
       executionId,
-      Date.now(),
       '00000000-0000-4000-8000-000000000002',
     );
 
@@ -315,29 +355,6 @@ describe('cross-process execution leases', () => {
     });
   });
 
-  it('fences the former owner when a heartbeat observes takeover', async () => {
-    vi.useFakeTimers();
-    const executionId = 'e8644f' as ExecutionId;
-    try {
-      await acquire(executionId);
-      const onLeaseLost = vi.fn();
-      onOwnedExecutionLeaseLost(executionId, onLeaseLost);
-      await writeForeignLease(
-        executionId,
-        Date.now(),
-        '00000000-0000-4000-8000-000000000003',
-      );
-
-      await vi.advanceTimersByTimeAsync(15_000);
-
-      expect(onLeaseLost).toHaveBeenCalledOnce();
-      expect(ownsExecutionLease(executionId)).toBe(false);
-      ownedExecutionIds.delete(executionId);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   it('fences an execution-store write immediately after takeover', async () => {
     const executionId = 'e86440' as ExecutionId;
     await acquire(executionId);
@@ -346,7 +363,6 @@ describe('cross-process execution leases', () => {
     await captureOwnedExecutionLease(executionId)(async () => {
       await writeForeignLease(
         executionId,
-        Date.now(),
         '00000000-0000-4000-8000-000000000004',
       );
 
@@ -382,7 +398,7 @@ describe('cross-process execution leases', () => {
         await writeExecution(executionId);
       }),
     );
-    await writeStaleForeignLease(
+    await writeOrphanedLease(
       executionId,
       '00000000-0000-4000-8000-000000000006',
     );
@@ -414,7 +430,7 @@ describe('cross-process execution leases', () => {
         return captureOwnedExecutionLeaseIfPresent(executionId);
       }),
     );
-    await writeStaleForeignLease(
+    await writeOrphanedLease(
       executionId,
       '00000000-0000-4000-8000-000000000007',
     );
@@ -429,72 +445,33 @@ describe('cross-process execution leases', () => {
 
   it('rejects unscoped writes while another owner has a lease', async () => {
     const executionId = 'e86446' as ExecutionId;
-    await writeForeignLease(executionId, Date.now());
+    await writeForeignLease(executionId);
 
     await expect(writeExecution(executionId)).rejects.toBeInstanceOf(
       ExecutionLeaseLostError,
     );
   });
 
-  it('never overlaps heartbeat work for the same execution', async () => {
-    const executionId = 'e86441' as ExecutionId;
-    vi.useFakeTimers();
-    const heartbeatGate = createDeferred();
-    try {
-      await acquire(executionId);
-      const originalRunExclusive = bindRunExclusive();
-      const runExclusive = vi
-        .spyOn(platform().fileLocks, 'runExclusive')
-        .mockImplementation(async (lockPath, operation) => {
-          await heartbeatGate.promise;
-          return originalRunExclusive(lockPath, operation);
-        });
-
-      await vi.advanceTimersByTimeAsync(15_000);
-      for (let index = 0; index < 5; index += 1) await Promise.resolve();
-      expect(runExclusive).toHaveBeenCalledOnce();
-
-      await vi.advanceTimersByTimeAsync(45_000);
-      expect(runExclusive).toHaveBeenCalledOnce();
-    } finally {
-      heartbeatGate.resolve();
-      vi.useRealTimers();
-    }
-  });
-
-  it('retains recent ownership through a transient heartbeat failure', async () => {
-    const executionId = 'e86442' as ExecutionId;
-    await acquire(executionId);
-    vi.spyOn(platform().fileLocks, 'runExclusive').mockRejectedValueOnce(
-      new Error('temporary filesystem failure'),
-    );
-
-    await expect(
-      renewOwnedExecutionLease(executionId),
-    ).resolves.toBeUndefined();
-    expect(ownsExecutionLease(executionId)).toBe(true);
-  });
-
-  it('rejects renewal when release starts during its heartbeat', async () => {
+  it('rejects validation when release starts during its lock wait', async () => {
     const executionId = 'e86443' as ExecutionId;
     await acquire(executionId);
     const originalRunExclusive = bindRunExclusive();
-    const heartbeatStarted = createDeferred();
-    const heartbeatGate = createDeferred();
+    const validationStarted = createDeferred();
+    const validationGate = createDeferred();
     vi.spyOn(platform().fileLocks, 'runExclusive').mockImplementationOnce(
       async (lockPath, operation) => {
-        heartbeatStarted.resolve();
-        await heartbeatGate.promise;
+        validationStarted.resolve();
+        await validationGate.promise;
         return originalRunExclusive(lockPath, operation);
       },
     );
 
-    const renewal = renewOwnedExecutionLease(executionId);
-    await heartbeatStarted.promise;
+    const validation = validateOwnedExecutionLease(executionId);
+    await validationStarted.promise;
     const release = releaseOwnedExecutionLease(executionId);
-    heartbeatGate.resolve();
+    validationGate.resolve();
 
-    await expect(renewal).rejects.toBeInstanceOf(ExecutionLeaseLostError);
+    await expect(validation).rejects.toBeInstanceOf(ExecutionLeaseLostError);
     await release;
     ownedExecutionIds.delete(executionId);
   });
@@ -525,13 +502,15 @@ describe('cross-process execution leases', () => {
     });
   });
 
-  it('keeps locally owned execution active even when its heartbeat is old', async () => {
+  it('keeps a locally owned execution active whatever its record claims', async () => {
     const executionId = 'f86440' as ExecutionId;
     await acquire(executionId);
     const persisted = JSON.parse(
       await StorageFS.read(executionLeasePath(executionId)),
     ) as { ownerToken: string };
-    await writeStaleForeignLease(executionId, persisted.ownerToken);
+    // Even a record naming a dead instance never lets maintenance reap the
+    // live local owner: token identity short-circuits before any probe.
+    await writeOrphanedLease(executionId, persisted.ownerToken);
     const operation = vi.fn(async () => 'removed');
 
     await expect(
@@ -540,11 +519,11 @@ describe('cross-process execution leases', () => {
     expect(operation).not.toHaveBeenCalled();
   });
 
-  it('lets locked maintenance clear a stale displaced local owner', async () => {
+  it('lets locked maintenance clear an orphaned displaced local owner', async () => {
     const executionId = 'f86441' as ExecutionId;
     await writeExecution(executionId);
     await acquire(executionId);
-    await writeStaleForeignLease(
+    await writeOrphanedLease(
       executionId,
       '00000000-0000-4000-8000-000000000005',
     );
@@ -561,7 +540,7 @@ describe('cross-process execution leases', () => {
     const activeId = 'a86441' as ExecutionId;
     await writeExecution(deletedId);
     await writeExecution(activeId);
-    await writeForeignLease(activeId, Date.now());
+    await writeForeignLease(activeId);
 
     await expect(deleteAllExecutions()).resolves.toEqual({
       deleted: [deletedId],
@@ -579,7 +558,7 @@ describe('cross-process execution leases', () => {
     await StorageFS.ensureDir(WORKSPACE_STORAGE_LAYOUT.executionLeases);
     await StorageFS.writeAtomic(
       executionLeasePath(malformedId),
-      '{"version":1}',
+      '{"version":2}',
     );
 
     await expect(deleteAllExecutions()).rejects.toThrow('Failed to parse JSON');

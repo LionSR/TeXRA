@@ -17,6 +17,7 @@ import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
   runIdentityDisplayName,
+  type StreamLifecycleStatus,
   type StreamState,
   type StreamSubstate,
   type StreamTabId,
@@ -129,7 +130,8 @@ class StreamTab extends LitElement {
   static override styles = [designTokens, streamTabStyles];
 
   @property({ attribute: false }) info!: StreamTabInfo;
-  @property({ type: String }) status: string = DEFAULT_STREAM_METADATA_STATUS;
+  @property({ attribute: false }) status: StreamLifecycleStatus =
+    DEFAULT_STREAM_METADATA_STATUS;
   @property({ attribute: false }) substate: StreamSubstate | undefined;
   @property({ attribute: false }) lastTimestamp: number | undefined = undefined;
   @property({ type: Boolean }) active = false;
@@ -156,7 +158,7 @@ class StreamTab extends LitElement {
 
   override render(): TemplateResult {
     const stream = this.info;
-    const status = this.status || DEFAULT_STREAM_METADATA_STATUS;
+    const status = this.status;
     const { label, displayKey } = progressHeaderStatus(status, this.substate);
     const statusKey = displayKey ?? status;
     const lifecycleStatusLabel = label ?? status;

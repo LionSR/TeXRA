@@ -6,8 +6,10 @@ import type { FinalizeExecutionResult } from '@agent/storage';
 import { noopTrace, TraceEmitter, type StatusEvent } from '@agent/trace';
 import {
   acquireResumedExecutionLease,
+  ExecutionLeaseLostError,
   inspectExecutionLease,
   releaseOwnedExecutionLease,
+  validateOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -238,7 +240,6 @@ function seedOpenRunGroup(
 
 describe('runFlowWithLifecycle', () => {
   it('interrupts and suppresses terminal persistence after lease takeover', async () => {
-    vi.useFakeTimers();
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-lease-takeover',
     );
@@ -247,7 +248,11 @@ describe('runFlowWithLifecycle', () => {
     try {
       const result = await runFlowWithLifecycle(ctx, async (handle) => {
         await writeForeignLease(executionId);
-        await vi.advanceTimersByTimeAsync(15_000);
+        // Displacement is discovered at the next fencing boundary, not on a
+        // clock: the failed validation notifies loss and interrupts the run.
+        await expect(
+          validateOwnedExecutionLease(executionId),
+        ).rejects.toBeInstanceOf(ExecutionLeaseLostError);
 
         expect(handle.executionLeaseLost).toBe(true);
         expect(ctx.runScope.signal.aborted).toBe(true);
@@ -260,7 +265,6 @@ describe('runFlowWithLifecycle', () => {
       await releaseOwnedExecutionLease(executionId);
       await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
       clearStreamStatusForTest(streamStatus, streamId);
-      vi.useRealTimers();
     }
   });
 

@@ -29,7 +29,11 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import '@shared/wa/spinner';
-import type { LogMessageData, TaskGroup } from '@shared/schemas';
+import type {
+  LogMessageData,
+  StreamLifecycleStatus,
+  TaskGroup,
+} from '@shared/schemas';
 import { designTokens } from '@shared/styles';
 import { postMessage } from '@shared/hostBridge';
 import { PersistedState } from '@shared/state/PersistedState';
@@ -68,7 +72,7 @@ interface CachedStream {
   messageGeneration: number;
   toggleStates: ToggleStateStore;
   ref: Ref<TaskGroupList>;
-  status: string | null;
+  status: StreamLifecycleStatus | null;
   /** Whether this cached stream is tool-use. */
   isToolUse: boolean;
   /** Whether to render this stream's logs in terminal style. */

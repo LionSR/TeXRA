@@ -2735,8 +2735,8 @@ describe('StreamSnapshotStore', () => {
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.todos).toEqual([]);
     expect(snap.plan).toBeNull();
-    // Each defaulted field must be logged loudly, not silently absorbed by
-    // PersistedWorkPlanSchema's per-field `.catch` (see #7464-style trap).
+    // Each recovered field must be logged loudly, not silently dropped before
+    // the next whole-file write can erase valid siblings.
     expect(warnSpy).toHaveBeenCalledWith(
       'StreamSnapshotStore',
       expect.stringContaining('"todos"'),
@@ -2757,9 +2757,8 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('logs loudly when workPlan.json has a malformed schemaVersion', async () => {
-    // A non-numeric schemaVersion also falls through PersistedWorkPlanSchema's
-    // per-field `.catch`, silently defaulting to the current version — must
-    // be logged like the other three fields, not swallowed.
+    // A non-numeric schemaVersion recovers to the current version, but must
+    // be logged like the other fields rather than swallowed.
     const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     await writeStreamFile(STREAM, 'workPlan.json', {
       schemaVersion: 'not-a-number',

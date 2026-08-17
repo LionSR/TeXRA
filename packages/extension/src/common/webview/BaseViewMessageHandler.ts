@@ -94,6 +94,15 @@ export abstract class BaseViewMessageHandler<
     this._activeView = webviewView;
   }
 
+  /** Keep a failed notification from becoming an unhandled host rejection. */
+  private reportNotificationFailure(notification: PromiseLike<unknown>): void {
+    void notification.then(undefined, (error: unknown) => {
+      this.log.error('Failed to display message notification', {
+        data: error,
+      });
+    });
+  }
+
   /** Post a message to the tracked active view, if one is available. */
   protected postToActiveView(message: unknown): void {
     this.getActiveView()?.webview.postMessage(message);
@@ -141,11 +150,18 @@ export abstract class BaseViewMessageHandler<
         // feedback (toast), not a silent drop or an error-level log.
         unsupported = true;
         this.log.debug(error.message);
-        void vscode.window.showInformationMessage(error.reason);
+        this.reportNotificationFailure(
+          vscode.window.showInformationMessage(error.reason),
+        );
       } else {
         this.log.error('Error handling message', {
           data: error,
         });
+        this.reportNotificationFailure(
+          vscode.window.showErrorMessage(
+            `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
+          ),
+        );
       }
     });
 

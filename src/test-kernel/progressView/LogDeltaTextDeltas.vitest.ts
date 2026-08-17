@@ -17,6 +17,8 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
+  ProgressViewOutboundMessageSchema,
+  StreamLogEntrySchema,
   createStreamState,
   type ProgressViewOutboundHandlerRegistry,
   type ProgressViewOutboundMessage,
@@ -58,9 +60,10 @@ function seedWorkflowStream(): () => ProgressState {
 const handlers: Partial<ProgressViewOutboundHandlerRegistry> = logHandlers;
 
 function dispatch(message: ProgressViewOutboundMessage) {
-  const handler = handlers[message.command];
+  const parsed = ProgressViewOutboundMessageSchema.parse(message);
+  const handler = handlers[parsed.command];
   expect(handler).toBeDefined();
-  assertSupported(handler!)(message as never);
+  assertSupported(handler!)(parsed as never);
 }
 
 function dispatchLogDelta(
@@ -111,6 +114,39 @@ describe('LOG_DELTA text deltas', () => {
     } as unknown as ProgressViewOutboundMessage);
 
     expect(getState().streamLogs.get(STREAM_ID)?.logs[0]?.text).toBe('hello');
+  });
+
+  it('recovers malformed rows without discarding their live delta batch', () => {
+    const getState = seedWorkflowStream();
+
+    const parsed = ProgressViewOutboundMessageSchema.parse({
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId: STREAM_ID,
+      entries: [
+        {
+          seqNo: 1,
+          id: 'malformed-file-list',
+          type: STREAM_LOG_ENTRY_TYPES.LOG,
+          level: LOG_LEVELS.INFO,
+          timestamp: 100,
+          messageType: MESSAGE_TYPES.FILE_LIST,
+          text: 'files',
+          data: [{ name: 'missing required path and ok fields' }],
+        },
+        modelResponseEntry('still delivered', 'completed'),
+      ],
+    });
+
+    const handler = handlers[parsed.command];
+    assertSupported(handler!)(parsed as never);
+
+    const logs = getState().streamLogs.get(STREAM_ID)?.logs;
+    expect(logs).toHaveLength(2);
+    expect(logs?.map((entry) => entry.text)).toEqual([
+      'files',
+      'still delivered',
+    ]);
+    expect(logs?.[0]?.messageType).toBe(MESSAGE_TYPES.DEFAULT);
   });
 
   it('appends streamed text without whole-entry replacement and finalizes via full update', () => {
@@ -196,35 +232,12 @@ describe('LOG_DELTA text deltas', () => {
     });
     expect(streamLogs?.updatedMessageIndices).toEqual([0]);
   });
-
-  it('keeps valid group-start fields when status is unrecognized', () => {
-    const getState = seedWorkflowStream();
-
-    dispatchLogDelta([
-      {
-        seqNo: 1,
-        id: 'group-1',
-        type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-        level: LOG_LEVELS.INFO,
-        timestamp: 100,
-        text: 'Round 1',
-        data: { status: 'bogus', kind: 'round', index: 1, total: 3 },
-      },
-    ]);
-
-    const group = getState().streamStates.get(STREAM_ID)?.taskGroups[0];
-    expect(group?.status).toBe(STREAM_PHASE.RUNNING);
-    expect(group?.kind).toBe('round');
-    expect(group?.index).toBe(1);
-    expect(group?.total).toBe(3);
-  });
 });
 
 // #7993 step 3: GROUP_END data.status is the native RunOutcome vocabulary
 // ('completed'/'cancelled'/'failed'). Legacy values the trace-viewer still
 // forwards raw ('stopped'/'error') map up to the native values
-// StreamLogStore.parsePersistedEntries would produce; anything else falls
-// back to STREAM_PHASE.COMPLETED.
+// StreamLogStore.parsePersistedEntries would produce.
 describe('LOG_DELTA GROUP_END task-group status (#7993 step 3)', () => {
   beforeEach(() => {
     resetProgressState();
@@ -243,7 +256,7 @@ describe('LOG_DELTA GROUP_END task-group status (#7993 step 3)', () => {
   }
 
   function groupEndEntry(id: string, status: unknown): StreamLogEntry {
-    return {
+    return StreamLogEntrySchema.parse({
       seqNo: 2,
       id,
       type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
@@ -251,18 +264,16 @@ describe('LOG_DELTA GROUP_END task-group status (#7993 step 3)', () => {
       timestamp: 200,
       text: 'Run: agent',
       data: { status, endTime: 200 },
-    };
+    });
   }
 
   it.each([
-    // Canonical RunOutcome values, legacy trace-viewer values mapped up to
-    // them, and the fallback for unrecognized statuses.
+    // Canonical RunOutcome values and legacy trace-viewer values mapped up.
     ['completed', RUN_OUTCOME.COMPLETED],
     ['cancelled', RUN_OUTCOME.CANCELLED],
     ['failed', RUN_OUTCOME.FAILED],
     ['stopped', RUN_OUTCOME.COMPLETED],
     ['error', RUN_OUTCOME.FAILED],
-    ['bogus', STREAM_PHASE.COMPLETED],
   ] as const)(
     'maps GROUP_END data.status %s to task-group status %s',
     (wireStatus, expectedStatus) => {
@@ -310,7 +321,7 @@ describe('LOG_DELTA active skill snapshots', () => {
   });
 
   function activeSkillsEntry(seqNo: number, data: unknown): StreamLogEntry {
-    return {
+    return StreamLogEntrySchema.parse({
       seqNo,
       settlementSeqNo: seqNo,
       id: `skills-${seqNo}`,
@@ -319,7 +330,7 @@ describe('LOG_DELTA active skill snapshots', () => {
       timestamp: seqNo,
       messageType: MESSAGE_TYPES.ACTIVE_SKILLS,
       data,
-    };
+    });
   }
 
   it('replays the latest stream-scoped snapshot and hides its metadata rows', () => {
@@ -376,26 +387,7 @@ describe('LOG_DELTA active skill snapshots', () => {
     });
   });
 
-  it('clears malformed latest data and never projects it onto workflow streams', () => {
-    const toolState = createInitialState();
-    toolState.streamStates.set(
-      STREAM_ID,
-      createStreamState(AgentCategory.ToolUse, {
-        activeSkills: [
-          {
-            name: 'stale',
-            description: 'Stale skill.',
-            source: 'user',
-          },
-        ],
-      }),
-    );
-    appState.set(toolState);
-    dispatchLogDelta([activeSkillsEntry(1, { skills: [{ path: '/secret' }] })]);
-    expect(appState.get().streamStates.get(STREAM_ID)).toMatchObject({
-      activeSkills: [],
-    });
-
+  it('never projects active skills onto workflow streams', () => {
     const workflowState = createInitialState();
     workflowState.streamStates.set(
       STREAM_ID,

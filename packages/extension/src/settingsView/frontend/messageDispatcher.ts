@@ -24,7 +24,6 @@ import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 import { agentSelectionHandlers } from './slices/agentSelectionSlice';
 import { approvalSettingsHandlers } from './slices/approvalSettingsSlice';
 import { gitHandlers } from './slices/gitSlice';
-import { historyHandlers } from './slices/historySlice';
 import { latexHandlers } from './slices/latexSlice';
 import { memoryHandlers } from './slices/memorySlice';
 import {
@@ -44,7 +43,6 @@ import { tabHandlers } from './slices/tabSlice';
 export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   ...tabHandlers,
   ...memoryHandlers,
-  ...historyHandlers,
   ...profileHandlers,
   ...modelSelectionHandlers,
   ...agentSelectionHandlers,

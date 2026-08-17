@@ -311,7 +311,7 @@ class AgentReviewServiceImpl {
       // a completed review from a failed or cancelled one. The run itself
       // is visible as a regular tool-use session in the progress view.
       const result = await runAgent(
-        { config },
+        { kind: 'fresh', config },
         {
           openWorkflowOutput: openFinalOutputIfAvailable,
           stopAfterCycle: true,

@@ -54,8 +54,8 @@ import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
 import {
   extractTouchedFiles,
-  migrateSharedState,
-  ToolUseRunSharedCanonicalSchema,
+  parseToolUseShared,
+  ToolUseRunSharedSchema,
   type PreparedShared,
   type ToolUseRunShared,
 } from './nodes/types';
@@ -69,8 +69,8 @@ export interface RunToolUseFlowInput<
   /** Abort this run's sticky signal. */
   interrupt: () => void;
   setting: AgentToolUseSetting;
-  /** Canonical shared state and the persisted value observed during retrieval. */
-  resume?: Readonly<{ shared: PreparedShared; sourceShared: unknown }>;
+  /** Canonical shared state loaded after the execution lease is acquired. */
+  resume?: Readonly<{ shared: PreparedShared }>;
   /** One batch already drained by an external child-turn owner. */
   drainedFollowUps?: readonly FollowUpQueueBatchItem[];
   /**
@@ -461,18 +461,17 @@ export async function runToolUseFlow<C = unknown>(
 
     if (flowRecord) logger.debug('Resuming tool-use flow from persistence');
     if (flowRecord && input.resume) {
-      // Retrieval owns the single migration/validation boundary. The second
-      // read may be self-healed only when it still matches the exact value
-      // retrieval observed; any intervening drift must fail loudly instead of
-      // being overwritten by the earlier canonical copy.
-      if (!isDeepStrictEqual(flowRecord.shared, input.resume.sourceShared)) {
-        throw new PersistedFlowStateError(executionId, 'invalid-shared');
-      }
+      // `resumeToolUseFromResumeData` reloads the record only after it owns
+      // the execution lease. This is therefore the same authoritative record
+      // it handed to the flow, with no optimistic-concurrency window to check.
       const resumedShared: PreparedShared = stampCompatibilityKey(
         input.resume.shared,
         compatibilityKey,
       );
       if (!isDeepStrictEqual(flowRecord.shared, resumedShared)) {
+        logger.debug(
+          'Healed a persisted tool-use shared-state mismatch after resume handoff.',
+        );
         flowRecord.shared = resumedShared;
         await kv.write(
           flowKey(executionId),
@@ -480,44 +479,43 @@ export async function runToolUseFlow<C = unknown>(
         );
       }
     } else if (flowRecord) {
-      const migrationResult = migrateSharedState(flowRecord.shared);
-      if (!migrationResult.success) {
+      const parsedShared = parseToolUseShared(flowRecord.shared);
+      if (!parsedShared.success) {
         throw new PersistedFlowStateError(executionId, 'invalid-shared', {
-          cause: migrationResult.error,
+          cause: parsedShared.error,
         });
       }
-      // Defensive fallback only: no resume handoff means the resume
-      // boundary above was never consulted for this call (e.g. a fresh
-      // launch that happens to find a leftover record for its execution
-      // id). Migrate/backfill here so PersistedFlow.ensureRecord never sees
-      // a stale legacy shape. Model-based compatibility inference for
-      // keyless records lives at the resume-retrieval boundary
-      // (SessionResumeRetrieval); this path stamps the active handler's key.
-      let migratedData = migrationResult.data;
-      let shouldWriteShared = migrationResult.migrated;
-      if (migratedData.continuationGenerationId !== continuationGenerationId) {
+      // Defensive fallback only: no resume handoff means the resume boundary
+      // above was never consulted for this call (e.g. a fresh launch that
+      // finds a leftover record for its execution id). Normalize the parsed
+      // record before `PersistedFlow.ensureRecord` sees it. Model-based
+      // compatibility inference for keyless records lives at the
+      // resume-retrieval boundary; this path stamps the active handler's key.
+      let sharedData = parsedShared.data;
+      let shouldWriteShared = parsedShared.changed;
+      if (sharedData.continuationGenerationId !== continuationGenerationId) {
         logger.debug(
           'Rebound leftover tool-use flow state to the fresh continuation generation.',
         );
-        migratedData = {
-          ...migratedData,
+        sharedData = {
+          ...sharedData,
           continuationGenerationId,
         };
         shouldWriteShared = true;
       }
-      const backfilled = stampCompatibilityKey(migratedData, compatibilityKey);
-      if (backfilled !== migratedData) {
+      const backfilled = stampCompatibilityKey(sharedData, compatibilityKey);
+      if (backfilled !== sharedData) {
         logger.debug(
           'Backfilled tool-use model-handler compatibility key in shared state.',
         );
-        migratedData = backfilled;
+        sharedData = backfilled;
         shouldWriteShared = true;
       }
       if (shouldWriteShared) {
-        if (migrationResult.migrated) {
+        if (parsedShared.changed) {
           logger.debug('Normalized persisted tool-use shared state');
         }
-        flowRecord.shared = migratedData;
+        flowRecord.shared = sharedData;
         await kv.write(
           flowKey(executionId),
           stampFlowRecordSchemaVersion(flowRecord),
@@ -545,7 +543,7 @@ export async function runToolUseFlow<C = unknown>(
         prepareNode,
         kv,
         executionId,
-        ToolUseRunSharedCanonicalSchema,
+        ToolUseRunSharedSchema,
       );
       activePersistedFlow = pf;
       pf.setServices(services);

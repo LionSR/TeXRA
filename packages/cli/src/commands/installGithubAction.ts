@@ -210,7 +210,7 @@ async function runInstallGithubAction(
   }
   if (!checkout.success) {
     writeTextStderr(
-      `Failed to check out branch "${branch}": ${checkout.stderr ?? ''}`,
+      `Failed to check out branch "${branch}": ${checkout.stderr}`,
     );
     return CliExitCode.AgentError;
   }
@@ -234,7 +234,7 @@ async function runInstallGithubAction(
 
   const add = git(root, 'add', '--', WORKFLOW_RELATIVE_PATH);
   if (!add.success) {
-    return abort(`Failed to stage the workflow: ${add.stderr ?? ''}`);
+    return abort(`Failed to stage the workflow: ${add.stderr}`);
   }
 
   const diff = git(
@@ -246,9 +246,7 @@ async function runInstallGithubAction(
     WORKFLOW_RELATIVE_PATH,
   );
   if (diff.exitCode !== 0 && diff.exitCode !== 1) {
-    return abort(
-      `Failed to inspect staged workflow changes: ${diff.stderr ?? ''}`,
-    );
+    return abort(`Failed to inspect staged workflow changes: ${diff.stderr}`);
   }
 
   const hasWorkflowChanges = diff.exitCode === 1;
@@ -262,7 +260,7 @@ async function runInstallGithubAction(
       WORKFLOW_RELATIVE_PATH,
     );
     if (!commit.success) {
-      return abort(`Failed to commit the workflow: ${commit.stderr ?? ''}`);
+      return abort(`Failed to commit the workflow: ${commit.stderr}`);
     }
     writeTextStdout(`Created ${WORKFLOW_RELATIVE_PATH} on branch "${branch}".`);
   } else {
@@ -297,7 +295,7 @@ async function runInstallGithubAction(
 
   const push = git(root, 'push', '-u', 'origin', branch);
   if (!push.success) {
-    writeTextStderr(`Failed to push "${branch}": ${push.stderr ?? ''}`);
+    writeTextStderr(`Failed to push "${branch}": ${push.stderr}`);
     writeTextStdout(
       `Once pushed, open ${compareUrl(slug, base, branch)} to propose the PR.`,
     );
@@ -328,7 +326,7 @@ async function runInstallGithubAction(
     );
     opened = pr.success;
     if (!pr.success) {
-      const diagnostic = pr.stderr ?? pr.stdout ?? '';
+      const diagnostic = pr.stderr || pr.stdout;
       writeTextStderr(
         diagnostic
           ? `gh pr create --web failed: ${diagnostic}`

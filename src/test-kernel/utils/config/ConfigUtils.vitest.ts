@@ -10,7 +10,9 @@ import { getValidatedConfig } from '@utils/config/configUtils';
 import {
   getProviderEndpoint,
   getProviderKeyUrl,
+  getProviderStreaming,
   getUseOpenRouter,
+  setProviderStreaming,
 } from '@utils/config/providerConfig';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
@@ -173,6 +175,18 @@ describe('getProviderEndpoint', () => {
 
   it('returns empty string for a provider with no endpoint key', () => {
     expect(getProviderEndpoint('not-a-real-provider')).toBe('');
+  });
+});
+
+describe('OpenRouter streaming', () => {
+  it('uses the same setting for API-key and model-dispatch spellings', async () => {
+    await installPlatform({
+      globalState: { [GlobalStateKey.STREAMING_OPENROUTER]: false },
+    });
+
+    expect(getProviderStreaming('openRouter')).toBe(false);
+    await setProviderStreaming('openRouter', true);
+    expect(getProviderStreaming('openrouter')).toBe(true);
   });
 });
 

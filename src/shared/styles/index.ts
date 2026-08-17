@@ -12,8 +12,6 @@ export { designTokens } from './litStyles';
 //   rendered markdown compose it, so it stays a direct import.
 // - './statusIndicatorStyles' — single-purpose 8px status dot with one
 //   consumer (the progress-view stream header).
-// Symbol-level: `searchHighlightStyles` from './historyStyles' is likewise
-// importable only from its module (single consumer in settings history).
 
 // Component styles
 export { selectStyles, compactFormControlStyles } from './selectStyles';
@@ -23,10 +21,3 @@ export { viewTabStyles } from './viewTabStyles';
 // Shared inline wa-callout banner chrome (agent-config, api-key, dependency,
 // login, getting-started, workflow-hint banners)
 export { bannerStyles, settingsBannerStyles } from './bannerStyles';
-
-// History/search styles
-export {
-  searchStyles,
-  historyListStyles,
-  historyStyles,
-} from './historyStyles';

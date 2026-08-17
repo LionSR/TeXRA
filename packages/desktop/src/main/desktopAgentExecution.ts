@@ -1264,7 +1264,7 @@ export class DesktopProgressBridge {
     options: DesktopRunExecutionOptions = {},
   ): Promise<void> {
     return launchDesktopAgent(
-      request,
+      { kind: 'fresh', ...request },
       {
         session: this.session,
       },

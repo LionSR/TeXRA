@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, watch, type FSWatcher } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,7 +44,6 @@ import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProce
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory, agentKeyOf, type AgentSource } from '@shared/schemas';
@@ -52,8 +51,6 @@ import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { killActiveRecording } from '@tools/media/audio';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
-import { debounce } from '@utils/core';
-import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import {
   readGitEnvironmentSummary,
   readRecentCommits,
@@ -91,7 +88,6 @@ import { DesktopPromptController } from './desktopPromptController.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import { DefaultDesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
-import { DesktopHistoryHandlers } from './desktopHistoryHandlers.js';
 import {
   createDesktopSettingsIpc,
   type DesktopSettingsUiHost,
@@ -820,52 +816,10 @@ function createWindow(options: {
     },
     onError: reportAsyncError,
   };
-  const historySettingsController = new DesktopHistoryHandlers({
-    resourcesPath: options.resourcesPath,
-    postToRenderer: postToRendererIfAlive,
-    // Rerun and restore use the same host-neutral owners as the extension,
-    // reached through the desktop execution bridge instead of VS Code commands.
-    runExecution: (request) =>
-      getAgentExecution().then((execution) => execution.runExecution(request)),
-    restoreRunConfig: async (config) =>
-      (await getAgentExecution()).restoreRunConfig(config),
-    openPath: settingsUi.openPath,
-    showInfoMessage: settingsUi.showInfoMessage,
-    confirmAction: settingsUi.confirmAction,
-    showWarningMessage,
-    showErrorMessage: settingsUi.showErrorMessage,
-    onError: settingsUi.onError,
-  });
-  // Cross-host history refresh: the shared ~/.texra executions dir
-  // is written by the CLI and extension too, so the settings history list
-  // re-posts when any host adds, finishes, or deletes a run. Best-effort: a
-  // watch failure only disables live refresh; manual refresh still works.
-  const executionsDir = join(
-    platform().storage.getStoragePath(),
-    RUNS_STORAGE_DIR,
-  );
-  const debouncedHistoryRepost = debounce(async () => {
-    try {
-      if (presentationAbort.signal.aborted) return;
-      await historySettingsController.postHistoryData();
-    } catch (error) {
-      reportAsyncError(error);
-    }
-  }, DEBOUNCE_OPTIONS_MS);
-  let executionsWatcher: FSWatcher | undefined;
-  try {
-    mkdirSync(executionsDir, { recursive: true });
-    executionsWatcher = watch(executionsDir, { recursive: true }, () => {
-      void debouncedHistoryRepost();
-    });
-  } catch (error) {
-    reportAsyncError(error);
-  }
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: postToRendererIfAlive,
     agentSettingsController,
     credentialSettingsController,
-    historySettingsController,
     toolingSettingsController,
     state: {
       globalState: platform().globalState,
@@ -941,9 +895,12 @@ function createWindow(options: {
         // process-owned run begins and therefore cannot retain the window for
         // the duration of the run.
         await getAgentExecution();
-        return launchDesktopAgent(preparation.request, {
-          session: options.processSession,
-        });
+        return launchDesktopAgent(
+          { kind: 'fresh', ...preparation.request },
+          {
+            session: options.processSession,
+          },
+        );
       },
       signInWithChatGpt: () => settingsIpc.signInChatGpt(),
       // The desktop shell can't host the VS Code getting-started walkthrough, so
@@ -1112,7 +1069,6 @@ function createWindow(options: {
     // discarding an earlier window's still-running cleanup.
     const current = desktopDiffHost.dispose().catch(reportAsyncError);
     pendingDesktopDiffHostDispose = diffHostDisposeQueue.add(() => current);
-    executionsWatcher?.close();
     if (mainWindow === window) {
       mainWindow = null;
       if (process.platform === 'darwin') {

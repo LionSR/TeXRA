@@ -2,12 +2,6 @@ import { HOST_BRIDGE_API_KEY, type HostBridgeApi } from './hostBridgeTypes';
 
 declare const acquireVsCodeApi: (() => HostBridgeApi) | undefined;
 
-const fallbackApi: HostBridgeApi = {
-  postMessage: () => undefined,
-  getState: () => undefined,
-  setState: () => undefined,
-};
-
 function resolveHostBridgeApi(): HostBridgeApi {
   const globalScope = globalThis as typeof globalThis & {
     [HOST_BRIDGE_API_KEY]?: HostBridgeApi;
@@ -22,10 +16,12 @@ function resolveHostBridgeApi(): HostBridgeApi {
     return api;
   }
 
-  return fallbackApi;
+  throw new Error(
+    'TeXRA host bridge is unavailable. Webview code must run inside a TeXRA host.',
+  );
 }
 
-/** Host bridge API instance (falls back to no-op in non-webview contexts). */
+/** Host bridge API instance for the active TeXRA webview host. */
 export const hostBridge: HostBridgeApi = resolveHostBridgeApi();
 
 /**
