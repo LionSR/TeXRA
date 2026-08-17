@@ -714,6 +714,19 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
       status: TOOL_USE_STATUS.IN_PROGRESS,
       result: { toolName: 'read', output: firstToolOutput },
     });
+    const liveToolData = ToolUseLogSchema.parse(
+      dataOf(
+        store
+          .get(streamId)
+          ?.getRange(0)
+          .find((candidate) => candidate.id === 'tool:spill'),
+      ),
+    );
+    expect(liveToolData.output).toContain(
+      'truncated while the tool is running',
+    );
+    expect(liveToolData.output).not.toContain('retained in run artifacts');
+    expect(liveToolData.spillPath).toBeUndefined();
     trace.toolEnd({
       logId: 'tool:spill',
       status: TOOL_USE_STATUS.COMPLETED,
