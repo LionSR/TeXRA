@@ -1,5 +1,6 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ModelProvider } from 'llm-zoo';
 
 // Local imports
 import { ULTRA_TIER } from '@auth/config';
@@ -269,13 +270,17 @@ describe('ServerSideKeyService anonymous access cache', () => {
 
     expect(await authenticatedFetch).toBe(true);
     expect(service.getUserTier()).toBe(ULTRA_TIER);
-    expect(service.shouldUseServerSideKeysSync('openai')).toBe(true);
+    expect(service.shouldUseServerSideKeysSync(ModelProvider.OPENAI)).toBe(
+      true,
+    );
 
     firstAuthentication.resolve(false);
     expect(await anonymousFetch).toBe(false);
 
     expect(service.getUserTier()).toBe(ULTRA_TIER);
-    expect(service.shouldUseServerSideKeysSync('openai')).toBe(true);
+    expect(service.shouldUseServerSideKeysSync(ModelProvider.OPENAI)).toBe(
+      true,
+    );
   });
 
   it('retries an authenticated Ultra check after a config fetch fails', async () => {
