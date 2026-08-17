@@ -73,7 +73,7 @@ function withSpillNotice(preview: string, notice: string): string {
   return preview ? `${preview}\n\n${notice}` : notice;
 }
 
-function hydratedTranscript(
+export function hydratedTranscript(
   slice: StreamSlice | undefined,
   spills: ReadonlyMap<string, SpillHydration>,
 ): StreamSlice | undefined {
