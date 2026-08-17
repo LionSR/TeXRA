@@ -43,13 +43,26 @@ function reportFatalDesktopError(
     error instanceof Error ? (error.stack ?? error.message) : String(error);
   console.error(`Fatal TeXRA desktop error:\n${detail}`);
 
-  const showFailureDialog = () => {
+  const showFailureDialog = (): void => {
+    if (options.forceExit) {
+      void dialog
+        .showMessageBox({
+          type: 'error',
+          title: options.title,
+          message: options.message,
+          detail,
+        })
+        .catch((dialogError: unknown) => {
+          console.error('Failed to display fatal TeXRA error:', dialogError);
+        })
+        .finally(() => app.exit(1));
+      return;
+    }
     dialog.showErrorBox(
       options.title,
       [options.message, '', detail].join('\n'),
     );
-    if (options.forceExit) app.exit(1);
-    else app.quit();
+    app.quit();
   };
 
   if (app.isReady()) {
