@@ -52,6 +52,6 @@ export async function findTranscriptSpillFile(
   spillPath: string,
 ): Promise<string | undefined> {
   const resolved = resolveTranscriptSpillPath(spillPath);
-  if (!resolved || !(await StorageFS.exists(resolved))) return undefined;
+  if (!resolved || !(await StorageFS.isFile(resolved))) return undefined;
   return StorageFS.fullPath(resolved);
 }
