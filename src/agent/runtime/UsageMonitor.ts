@@ -206,18 +206,15 @@ export class UsageMonitor {
 
       // Log to backend for analytics/billing. Relay-backed rounds wait for the
       // flush because the next relay request enforces the cap from DB state.
-      await this.logToBackend(
-        stateGlobal.totalResponseTimeMs,
-        {
-          inputTokens: roundInputTokens,
-          outputTokens: roundOutputTokens,
-          cachedInputTokens: roundCacheReadTokens,
-          cacheMissInputTokens: roundCacheMissTokens.billing,
-          reasoningTokens: roundReasoningTokens,
-          cost: roundCost,
-          usageRoute,
-        },
-      );
+      await this.logToBackend(stateGlobal.totalResponseTimeMs, {
+        inputTokens: roundInputTokens,
+        outputTokens: roundOutputTokens,
+        cachedInputTokens: roundCacheReadTokens,
+        cacheMissInputTokens: roundCacheMissTokens.billing,
+        reasoningTokens: roundReasoningTokens,
+        cost: roundCost,
+        usageRoute,
+      });
     } catch (error) {
       logger.error(`Error printing ${runKind} statistics`, { data: error });
     }
