@@ -1,6 +1,6 @@
 // Local imports
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
+import { platform, tryPlatform } from '@platform/platform';
 import type { ConfigTarget, Disposable } from '@platform/interfaces';
 import { ensureArray } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -33,6 +33,18 @@ function configProvider() {
  */
 export function getConfig<T>(path: string, defaultValue?: T): T {
   return configProvider().get(path, defaultValue);
+}
+
+/**
+ * Read configuration for an explicitly pre-initialization caller. Keep this
+ * exception narrow: ordinary product paths must use {@link getConfig} so an
+ * initialization-order defect remains observable.
+ */
+export function getConfigBeforePlatformInit<T>(
+  path: string,
+  defaultValue: T,
+): T {
+  return tryPlatform()?.config.get(path, defaultValue) ?? defaultValue;
 }
 
 /**
