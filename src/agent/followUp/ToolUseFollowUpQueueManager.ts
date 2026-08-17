@@ -4,6 +4,7 @@ import { LRUCache } from 'lru-cache';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { throwAggregated } from '@utils/core';
 import { KeyedMutex } from '@utils/core/keyedMutex';
 import {
   createBoundedIdSet,
@@ -89,6 +90,7 @@ export class ToolUseFollowUpQueue {
   private disposed = false;
 
   onRelease(observer: (streamId: StreamTabId) => void): () => void {
+    if (this.disposed) return () => {};
     this.releaseObservers.add(observer);
     return () => {
       this.releaseObservers.delete(observer);
@@ -346,15 +348,21 @@ export class ToolUseFollowUpQueue {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    const failures: unknown[] = [];
     try {
       for (const entry of this.entries.values()) {
-        entry.queue.dispose();
+        try {
+          entry.queue.dispose();
+        } catch (error) {
+          failures.push(error);
+        }
       }
     } finally {
       this.entries.clear();
       this.terminal.clear();
       this.releaseObservers.clear();
     }
+    throwAggregated(failures, 'Multiple follow-up queues failed to dispose');
   }
 
   private notifyReleaseObservers(streamId: StreamTabId): void {
