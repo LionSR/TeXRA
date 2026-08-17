@@ -21,6 +21,7 @@ import {
   terminalVisibleTranscriptText,
   trimAssistantTranscriptLead,
 } from '@cli/chat/tui/panes/transcriptEntries';
+import { hydratedTranscript } from '@cli/chat/tui/panes/TranscriptReader';
 import {
   advanceStaticTranscriptState,
   buildStaticTranscriptItems,
@@ -1950,6 +1951,57 @@ describe('CLI conversation transcript', () => {
     expect(lines.some((line) => line.includes('⎿ wide-output'))).toBe(true);
     expect(lines.some((line) => line.includes('segment segment'))).toBe(true);
     expect(lines.some((line) => line.length > 40)).toBe(false);
+  });
+
+  it('prints hydrated spill output once for detailed and compact tools', () => {
+    const bash = {
+      ...toolEntry('bash', 'completed', 'complete bash output'),
+      spillPath: 'executions/abcdef123456/toolOutput/bash.txt',
+    };
+    const readBase = toolEntry('read', 'completed', 'complete read output');
+    const read = {
+      ...readBase,
+      spillPath: 'executions/abcdef123456/toolOutput/read.txt',
+      toolUse: {
+        ...readBase.toolUse,
+        toolName: 'read',
+      },
+    };
+
+    const lines = transcriptToLines(
+      sliceWithEntries(STREAM_ID, [bash, read]),
+      80,
+    );
+
+    expect(
+      lines.filter((line) => line.includes('complete bash output')),
+    ).toHaveLength(1);
+    expect(
+      lines.filter((line) => line.includes('complete read output')),
+    ).toHaveLength(1);
+    expect(lines).toContain('Full output:');
+  });
+
+  it('keeps a failed compact-tool spill visible in the full transcript', () => {
+    const readBase = toolEntry('read', 'completed', 'preview');
+    const spillPath = 'executions/abcdef123456/toolOutput/read.txt';
+    const read = {
+      ...readBase,
+      spillPath,
+      toolUse: { ...readBase.toolUse, toolName: 'read' },
+    };
+    const notice =
+      '[Full output is unavailable because this run artifact was deleted.]';
+
+    const hydrated = hydratedTranscript(
+      sliceWithEntries(STREAM_ID, [read]),
+      new Map([[spillPath, { kind: 'failed' as const, notice }]]),
+    );
+
+    expect(hydrated?.entries[0]?.spillPath).toBe(spillPath);
+    expect(transcriptToLines(hydrated, 80)).toEqual(
+      expect.arrayContaining(['Full output:', expect.stringContaining(notice)]),
+    );
   });
 
   it('uses the full print width without Ink-only role padding', () => {

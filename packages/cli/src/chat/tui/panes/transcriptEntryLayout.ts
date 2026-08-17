@@ -387,12 +387,17 @@ export function fullTranscriptEntryLayout(
     width: printWidth,
   });
   if (entry.role !== 'tool') return layout;
+  // Spilled rows carry only a bounded preview in the normal transcript. The
+  // on-demand reader substitutes the artifact text before reaching this
+  // layout. Let the owning renderer append it for read/edit-style tools whose
+  // compact card intentionally omits ordinary output.
   return {
     ...layout,
     lines: wrapDisplayLines(
       toolUseDisplayLines(entry.toolUse, {
         elide: false,
         executionLabels,
+        includeCompactOutput: entry.spillPath !== undefined,
       }),
       layout.columns,
     ),

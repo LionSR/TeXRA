@@ -53,6 +53,7 @@ import {
   cleanupUnscopedApprovals,
   releaseStreamResources,
 } from '@tools/approval';
+import { findTranscriptSpillFile } from '@transcript';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -504,6 +505,26 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         file: {
           openFile: async (file, line) => {
             await this.runViewCommand('texra.openFile', [file, line]);
+          },
+          openSpillArtifact: async (spillPath) => {
+            try {
+              await defaultSession().flushArtifacts();
+              const file = await findTranscriptSpillFile(spillPath);
+              if (!file) {
+                await this.host.error(
+                  'Full output is unavailable because this run artifact was deleted.',
+                );
+                return;
+              }
+              const document = await vscode.workspace.openTextDocument(
+                vscode.Uri.file(file),
+              );
+              await vscode.window.showTextDocument(document, { preview: true });
+            } catch (error) {
+              await this.host.error(
+                `Full output could not be opened: ${toErrorMessage(error)}`,
+              );
+            }
           },
         },
         approval: {
