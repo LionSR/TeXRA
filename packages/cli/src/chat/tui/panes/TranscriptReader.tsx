@@ -27,6 +27,7 @@ import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from '../modals/ScrollableModalText';
+import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 import {
   streams as streamsSignal,
   type ConversationEntry,
@@ -56,12 +57,12 @@ async function loadSpill(
       ? { kind: 'failed', notice: MISSING_SPILL_TEXT }
       : {
           kind: 'failed',
-          notice: `[Unable to prepare full output: ${toErrorMessage(flushError)}]`,
+          notice: `[Unable to prepare full output. Close and reopen the transcript to retry: ${toErrorMessage(flushError)}]`,
         };
   } catch (error) {
     return {
       kind: 'failed',
-      notice: `[Unable to read full output. Check storage access and try again: ${toErrorMessage(error)}]`,
+      notice: `[Unable to read full output. Close and reopen the transcript to retry: ${toErrorMessage(error)}]`,
     };
   }
 }
@@ -94,7 +95,7 @@ function hydratedTranscript(
       ...entry,
       text:
         spill.kind === 'loaded'
-          ? spill.text
+          ? normalizeKnownHtmlForCliMarkdown(spill.text)
           : withSpillNotice(entry.text, spill.notice),
     };
   });
