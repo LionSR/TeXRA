@@ -119,6 +119,11 @@ export class SessionStores {
     if (executionId) await waitForOwnedExecutionLeaseRelease(executionId);
   }
 
+  /** Whether a host projection already owns deletion for this stream. */
+  hasPendingStreamDeletion(stream: StreamTabId): boolean {
+    return (this.pendingStreamDeletions.get(stream)?.size ?? 0) > 0;
+  }
+
   deleteStream(
     stream: StreamTabId,
     options?: { readonly shouldDelete?: () => boolean },

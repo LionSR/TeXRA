@@ -53,30 +53,39 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
         const { streamId } = sessionEvent.event.payload;
         const expectedIncarnation = streamIncarnations.get(streamId) ?? 0;
         pendingRemovals.set(streamId, expectedIncarnation);
-        // SessionStores tracks the lease barrier immediately so a window
-        // reattaching before terminal artifact persistence finishes cannot
-        // replay a stream already marked removed.
-        void stores
-          .deleteStreamAfterOwnedExecutionRelease(streamId, {
-            shouldDelete: deletionGuard(streamId, expectedIncarnation),
-          })
-          .then((outcome) => {
-            if (outcome === 'superseded') {
-              logger.info(
-                `Skipped deletion for re-claimed desktop stream ${streamId}`,
-              );
-            }
-          })
-          .catch((error: unknown) => {
-            logger.warn('Failed to delete a headless desktop stream', {
-              data: toLogData(error),
-            });
-          })
-          .finally(() => {
+        // Let a live ProgressBackend claim the deletion synchronously while
+        // this fact is dispatched. Only the process-level headless fallback
+        // starts in the following microtask, so the two hosts never create
+        // separate guard slots for the same removal.
+        queueMicrotask(() => {
+          if (stores.hasPendingStreamDeletion(streamId)) {
             if (pendingRemovals.get(streamId) === expectedIncarnation) {
               pendingRemovals.delete(streamId);
             }
-          });
+            return;
+          }
+          void stores
+            .deleteStreamAfterOwnedExecutionRelease(streamId, {
+              shouldDelete: deletionGuard(streamId, expectedIncarnation),
+            })
+            .then((outcome) => {
+              if (outcome === 'superseded') {
+                logger.info(
+                  `Skipped deletion for re-claimed desktop stream ${streamId}`,
+                );
+              }
+            })
+            .catch((error: unknown) => {
+              logger.warn('Failed to delete a headless desktop stream', {
+                data: toLogData(error),
+              });
+            })
+            .finally(() => {
+              if (pendingRemovals.get(streamId) === expectedIncarnation) {
+                pendingRemovals.delete(streamId);
+              }
+            });
+        });
       }
     },
     { scope: 'session' },
