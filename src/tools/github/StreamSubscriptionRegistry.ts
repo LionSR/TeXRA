@@ -29,7 +29,6 @@ export interface SubscriptionBinding<K extends string> {
 }
 
 interface PollingSourceLike<K extends string, Input> {
-  has(key: K): boolean;
   subscribe(input: Input, onEvent: (text: string) => void): Disposable;
   updateSubscription?(input: Input, onEvent: (text: string) => void): void;
   activeKeys(): readonly K[];
@@ -68,13 +67,17 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     StreamTabId,
     Map<K, BoundSubscription>
   >();
-  private sourceHooksRegistered = false;
   private readonly releaseHooks = new Map<SessionHandle, () => void>();
 
   constructor(
     private readonly opts: StreamSubscriptionRegistryOptions<K, Input>,
   ) {
     this.logger = opts.logger ?? createLog(opts.name);
+    // Source-key changes are internal bookkeeping. The registry emits the UI
+    // signal only after its binding map has reached the corresponding state.
+    opts.source.onKeysChanged((keys) => {
+      this.pruneMissingSourceKeys(keys);
+    });
   }
 
   /** Returns true if a new subscription was created, false if it already existed. */
@@ -84,14 +87,11 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     // (the github tool's execute()), but onEvent fires later from a detached
     // polling timer where the ALS is empty.
     const session = currentSession();
-    this.ensureHooks(session);
-    let bound = this.perStream.get(streamId);
-    if (!bound) {
-      bound = new Map();
-      this.perStream.set(streamId, bound);
-    }
+    const bound =
+      this.perStream.get(streamId) ?? new Map<K, BoundSubscription>();
     const existing = bound.get(key);
     if (existing) {
+      this.ensureReleaseHook(session);
       const previousOwner = existing.owner;
       existing.owner = session;
       existing.expectedGenerationId =
@@ -102,16 +102,9 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       this.opts.source.updateSubscription?.(input, existing.onEvent);
       return false;
     }
-    // Set a sentinel before subscribe() so list() returns correct owner
-    // data if the source's keys-changed hook fires synchronously inside
-    // subscribe() before the real disposable is available.
-    const subscription: BoundSubscription = {
-      disposable: { dispose: () => {} },
-      onEvent: () => {},
-      owner: session,
-      expectedGenerationId: session.followUps.currentGenerationId(streamId),
-    };
-    subscription.onEvent = (text: string) => {
+    const onEvent = (text: string) => {
+      const subscription = bound.get(key);
+      if (!subscription) return;
       deliverLiveNotification({
         streamId,
         followUp: text,
@@ -124,22 +117,18 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
         },
       });
     };
+    const disposable = this.opts.source.subscribe(input, onEvent);
+    const subscription: BoundSubscription = {
+      disposable,
+      onEvent,
+      owner: session,
+      expectedGenerationId: session.followUps.currentGenerationId(streamId),
+    };
     bound.set(key, subscription);
-    // The source emits githubSubscriptionsChanged synchronously during
-    // subscribe() for new keys (covering the UI refresh); emit here only for
-    // existing keys, where that source emission won't fire.
-    const keyIsNew = !this.opts.source.has(key);
-    let disposable: Disposable;
-    try {
-      disposable = this.opts.source.subscribe(input, subscription.onEvent);
-    } catch (err) {
-      this.removeBoundKey(streamId, bound, key);
-      this.detachReleaseHookIfUnused(session);
-      throw err;
-    }
-    subscription.disposable = disposable;
+    this.perStream.set(streamId, bound);
+    this.ensureReleaseHook(session);
     this.logger.info(`Bound subscription ${key} → stream ${streamId}`);
-    if (!keyIsNew) this.emitBindingsChanged();
+    this.emitBindingsChanged();
     return true;
   }
 
@@ -199,19 +188,6 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       key,
       streamIds: streamIdsByKey.get(key) ?? [],
     }));
-  }
-
-  private ensureHooks(session: SessionHandle): void {
-    if (!this.sourceHooksRegistered) {
-      // The polling source can detach subscriptions unilaterally (PR closed,
-      // auth failure, 24 h unreachable). Listen to the source directly; the
-      // progress event is for UI refresh, not for internal bookkeeping.
-      this.opts.source.onKeysChanged((keys) => {
-        this.pruneMissingSourceKeys(keys);
-      });
-      this.sourceHooksRegistered = true;
-    }
-    this.ensureReleaseHook(session);
   }
 
   private ensureReleaseHook(session: SessionHandle): void {
