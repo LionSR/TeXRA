@@ -183,8 +183,10 @@ export function getDefaultToolRegistry(): IToolRegistry {
 export function getDefaultUnavailableToolNames(
   host: ToolHost,
 ): readonly RegisteredToolName[] {
-  return Object.entries(getDefaultTools()).flatMap(([name, tool]) =>
-    tool.hosts?.[host]?.available === false ? [name as RegisteredToolName] : [],
+  return Object.keys(getDefaultTools()).flatMap((name) =>
+    isDefaultToolUnavailableOnHost(name as RegisteredToolName, host)
+      ? [name as RegisteredToolName]
+      : [],
   );
 }
 
