@@ -575,7 +575,7 @@ export class BashTool extends defineTool({
           const error = result.success
             ? undefined
             : new ToolError(
-                `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
+                `Background bash failed with exit code ${result.exitCode}.`,
               );
 
           const msg = formatBashDelivery(
@@ -592,10 +592,10 @@ export class BashTool extends defineTool({
             msg,
             {
               producer: 'backgroundBash',
-              exitCode: result.exitCode ?? (result.success ? 0 : 1),
+              exitCode: result.exitCode,
               wallTimeMs,
               success: result.success,
-              timedOut: result.timedOut ?? false,
+              timedOut: result.timedOut,
               command,
             },
             (kind, err) => logBackgroundFailure(`persist ${kind}`, err),

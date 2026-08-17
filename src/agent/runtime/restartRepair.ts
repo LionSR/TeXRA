@@ -53,12 +53,6 @@ export interface RestartRepairOptions {
   /** Stop before beginning another repair mutation after session teardown. */
   signal?: AbortSignal;
   /**
-   * Status generation captured before the async ownership/detection pass.
-   * Used with {@link isRepairCandidateCurrent} to drop candidates reused after
-   * discovery but before their turn in this sequential repair loop.
-   */
-  expectedStatusGenerations?: ReadonlyMap<StreamTabId, object | undefined>;
-  /**
    * Revalidate one candidate under its execution lease, immediately before
    * settlement/mutation. Return `false` to skip the stale candidate.
    */

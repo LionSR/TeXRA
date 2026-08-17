@@ -166,7 +166,7 @@ export class GrepTool extends defineTool({
     }
 
     // ripgrep exit codes: 0 = matches found, 1 = no matches, 2+ = error
-    const exitCode = result.exitCode ?? (result.success ? 0 : 1);
+    const exitCode = result.exitCode;
     if (exitCode >= 2) {
       throw new ToolError(
         `Regex error: ${result.stderr || `exit code ${exitCode}`}.\n` +

@@ -1314,7 +1314,6 @@ function seedWorkflowTimeline(): void {
     streamId: childStreamId,
     event: {
       type: 'addOutputFiles',
-      executionId,
       filesByRound: { 0: [output] },
       streamId: childStreamId,
     },
@@ -1324,7 +1323,6 @@ function seedWorkflowTimeline(): void {
     streamId: childStreamId,
     event: {
       type: 'updateCompileFailures',
-      executionId,
       filesByRound: {
         0: [
           {

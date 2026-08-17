@@ -409,7 +409,7 @@ async function assembleAgentLaunchContext(
       },
     },
   });
-  resources.markActivated(streamId);
+  resources.markActivated(streamId, runTrace);
 
   // Log the initial instruction as a user message so both workflow and
   // tool-use tabs display it inline with the stream log (no separate panel).
@@ -546,57 +546,42 @@ function acquireStreamOrThrow(
 /**
  * Saga-style compensation for a failed stream activation.
  *
- *  - Pre-activation failure (no `activatedStreamId`): the UI tab was never
+ *  - Pre-activation failure (no `activated` resources): the UI tab was never
  *    registered. Release the reserved lock if we held it, and publish a
  *    terminal rollback only if acquisition already emitted a visible status.
  *
- *  - Post-activation failure (`activatedStreamId` set): the UI tab is
+ *  - Post-activation failure (`activated` resources set): the UI tab is
  *    visible. Surface the failure on it and transition to FAILED so the
  *    tab doesn't hang in STARTING.
  */
 function compensateFailedActivation(args: {
   config: AgentConfig;
   reservedStreamId?: StreamTabId;
-  activatedStreamId?: StreamTabId;
+  activated?: { streamId: StreamTabId; runTrace: RunTrace };
   streamStatus: StreamStatusMachine;
   err: unknown;
-  // The run-trace from assembleAgentLaunchContext when it was created before the
-  // throw. Reused for the error log so we don't allocate a second one; outer
-  // catch disposes it after this returns.
-  runTrace?: RunTrace;
 }): void {
-  const {
-    config,
-    reservedStreamId,
-    activatedStreamId,
-    streamStatus,
-    err,
-    runTrace,
-  } = args;
+  const { config, reservedStreamId, activated, streamStatus, err } = args;
 
-  if (activatedStreamId) {
-    // `activatedStreamId` is set only after `runTrace` is created in
-    // `assembleAgentLaunchContext`, so runTrace is always present here in
-    // practice. Guard for defensiveness.
-    if (runTrace) {
-      logSdkError(
-        runTrace.trace,
-        `Failed to start agent ${config.agent}: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: `start ${config.agent}` },
-      );
-    }
+  if (activated) {
+    const { streamId, runTrace } = activated;
+    logSdkError(
+      runTrace.trace,
+      `Failed to start agent ${config.agent}: ${getSdkErrorMessage(err)}`,
+      err,
+      { operation: `start ${config.agent}` },
+    );
     if (
       !streamStatus.transitionToTerminal(
-        activatedStreamId,
+        streamId,
         STREAM_PHASE.FAILED,
         STREAM_TRANSITION_CAUSE.LIFECYCLE,
       )
     ) {
-      runTrace?.trace.warn('Failed to mark activation failure terminal', {
+      runTrace.trace.warn('Failed to mark activation failure terminal', {
         data: {
           agentIdentifier: config.agent,
-          streamId: activatedStreamId,
+          streamId,
         },
       });
     }
@@ -646,14 +631,13 @@ export async function buildAgentLaunchContext(
     resources.transfer();
     return ctx;
   } catch (err) {
-    resources.fail((activatedStreamId, runTrace) => {
+    resources.fail((activated) => {
       compensateFailedActivation({
         config,
         reservedStreamId,
-        activatedStreamId,
+        activated,
         streamStatus,
         err,
-        runTrace,
       });
     });
     if (

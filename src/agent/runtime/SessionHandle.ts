@@ -809,7 +809,6 @@ export class SessionHandle {
       waitingStreams,
       executionIds,
       repairStreams,
-      expectedStatusGenerations: statusGenerationsAtScan,
       isRepairCandidateCurrent: (streamId, expectedExecutionId) => {
         if (
           this.status.getGeneration(streamId) !==

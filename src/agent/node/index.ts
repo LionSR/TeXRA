@@ -11,7 +11,6 @@ const log = createLog('PocketFlow');
 // failure (ResponseCycleNode.post → FlowTransition.FINALIZE); without listing it
 // here, getNextNode logs a spurious "Flow ends: 'finalize' not found" warning on
 // every reflection-flow failure even though ending is the intended behavior.
-// (`waiting` is not terminal — ToolUseWaitNode wires it as a self-loop successor.)
 const TERMINAL_ACTIONS = new Set<Action>(['complete', 'finalize']);
 
 /**
@@ -111,7 +110,7 @@ class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
   signal?: AbortSignal;
   constructor(maxRetries: number = 1, wait: number = 0) {
     super();
-    this.maxRetries = maxRetries;
+    this.maxRetries = Math.max(1, maxRetries);
     this.wait = wait;
   }
 
@@ -169,12 +168,7 @@ class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
     return cloned;
   }
   async _exec(prepRes: unknown): Promise<unknown> {
-    if (this.maxRetries < 1) {
-      log.warn(
-        `Node maxRetries must be >= 1, got ${this.maxRetries}. Using 1.`,
-      );
-    }
-    const effectiveMaxRetries = Math.max(1, this.maxRetries);
+    const effectiveMaxRetries = this.maxRetries;
 
     // Track the last exec error so we can forward it to execFallback when
     // the abort signal fires during the inter-retry delay (p-retry would

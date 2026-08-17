@@ -21,9 +21,9 @@ const ExecResultSchema = z.strictObject({
    */
   stderr: z.string().nullable(),
   /** True if the command timed out */
-  timedOut: z.boolean().optional(),
-  /** Exit code from the command (undefined if not available) */
-  exitCode: z.int().optional(),
+  timedOut: z.boolean(),
+  /** Exit code from the command */
+  exitCode: z.int(),
   /** True when subprocess output exceeded the configured retained-output limit. */
   outputLimitExceeded: z.boolean().optional(),
 });

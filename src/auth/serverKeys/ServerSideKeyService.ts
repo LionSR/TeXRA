@@ -122,14 +122,6 @@ export class ServerSideKeyService {
   private accessFetchPromise: Promise<boolean> | null = null;
 
   /**
-   * Sentry token that changes each time a new access-fetch promise is
-   * installed. The completion handler of a previous fetch checks this
-   * against its captured token to avoid committing side-effects after a
-   * later overlapping call has superseded it.
-   */
-  private _activeFetchToken: object | null = null;
-
-  /**
    * One-shot guard so the auto-flip on quota exhaustion runs at most
    * once per session. After we flip useIncludedModelAccess to false on
    * detecting an exhausted quota, the user can re-enable manually; we
@@ -232,7 +224,6 @@ export class ServerSideKeyService {
     // can keep its spending-status explanation after the decision is gone.
     this.access = null;
     this.accessFetchPromise = null;
-    this._activeFetchToken = null;
     if (options.resetQuotaFlip) {
       this.quotaFlipApplied = false;
       this.quotaAutoSwitchActive = false;
@@ -319,14 +310,10 @@ export class ServerSideKeyService {
       return this.accessFetchPromise;
     }
 
-    // Start the fetch and store the promise synchronously so that
-    // overlapping calls see it. A sentinel token lets the completion
-    // handler detect whether the stored promise has been replaced by a
-    // later overlapping call; this avoids committing authentication
-    // metadata from a stale fetch.
-    const fetchToken = {};
-    this._activeFetchToken = fetchToken;
-    this.accessFetchPromise = (async () => {
+    // Start the fetch and store the promise synchronously so overlapping
+    // calls see it. Its completion handler compares the captured promise with
+    // the current one to avoid committing metadata from a stale fetch.
+    const fetchPromise = Promise.resolve().then(async () => {
       const authToken =
         (await SupabaseClient.getRelayAccessToken()) ?? undefined;
       const thisFetchAuthenticated = authToken !== undefined;
@@ -354,7 +341,7 @@ export class ServerSideKeyService {
       // Commit the complete access snapshot at one boundary. A superseded
       // fetch may return its own result to its caller, but it must not alter
       // the canonical tier, access decision, or authentication metadata.
-      const isLatest = this._activeFetchToken === fetchToken;
+      const isLatest = this.accessFetchPromise === fetchPromise;
       if (isLatest) {
         this.access = {
           granted: accessGranted,
@@ -395,9 +382,10 @@ export class ServerSideKeyService {
       }
 
       return accessGranted;
-    })();
+    });
+    this.accessFetchPromise = fetchPromise;
 
-    return this.accessFetchPromise;
+    return fetchPromise;
   }
 
   async canUseServerSideKeysForModel(modelName: string): Promise<boolean> {
