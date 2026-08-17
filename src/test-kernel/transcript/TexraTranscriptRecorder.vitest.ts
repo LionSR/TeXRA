@@ -213,6 +213,42 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
     expect(modelResponseEntries[0]?.text).toBe('The answer is 2.');
   });
 
+  it('bounds and spills a non-streaming finalized response', async () => {
+    const trace = new TraceEmitter();
+    const streamId = 'stream:non-stream-spill' as StreamTabId;
+    const store = StreamLogStore.ephemeral('test');
+    store.ensureStream(streamId);
+    const writes: Array<{ path: string; content: string }> = [];
+    const recorder = attachTranscriptRecorder(
+      trace,
+      store.acquireWriter(streamId, streamId),
+      {
+        pathFor: (id) => `executions/test/toolOutput/${id}.txt`,
+        write: async (path, content) => {
+          writes.push({ path, content });
+        },
+      },
+    );
+    const response = `${'line\n'.repeat(2_100)}API_KEY=non-stream-secret`;
+
+    trace.responseFinalized(response);
+    await recorder.flushSpills();
+
+    const entry = store.get(streamId)?.getRange(0).at(-1);
+    expect(entry?.messageType).toBe(MESSAGE_TYPES.MODEL_RESPONSE);
+    expect(entry?.text).toContain('retained in run artifacts');
+    expect(entry?.text).not.toContain('non-stream-secret');
+    expect(dataOf(entry).spillPath).toBe(
+      `executions/test/toolOutput/${entry?.id}.txt`,
+    );
+    expect(writes).toEqual([
+      {
+        path: `executions/test/toolOutput/${entry?.id}.txt`,
+        content: expect.not.stringContaining('non-stream-secret'),
+      },
+    ]);
+  });
+
   it('does not let an earlier round leak its stream id into a later round', () => {
     const { trace, rows } = attachRecorder();
 

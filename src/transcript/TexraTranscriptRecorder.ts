@@ -423,6 +423,27 @@ export function attachTranscriptRecorder(
     });
   };
 
+  const appendModelResponse = (
+    text: string,
+    groupId: string | undefined,
+  ): void => {
+    const id = generateShortId();
+    const redacted = redactSecrets(text);
+    const preview = boundedTranscriptPreview(redacted);
+    const spillPath = queueSpill(id, redacted, preview);
+    writer.appendSettled({
+      id,
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: 'info',
+      timestamp: Date.now(),
+      groupId,
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      text: preview,
+      data: spillPath ? { spillPath } : undefined,
+      verbose: isDebugModeEnabled(),
+    });
+  };
+
   const subscriber: AgentTraceSubscriber = (event: AgentEvent) => {
     if (pendingFailure !== undefined) throw pendingFailure;
     try {
@@ -718,17 +739,16 @@ export function attachTranscriptRecorder(
           const correlatorId = pendingModelResponseId;
           pendingModelResponseId = undefined;
           if (correlatorId) {
+            const text = redactSecrets(event.text);
+            const preview = boundedTranscriptPreview(text);
+            const spillPath = queueSpill(correlatorId, text, preview);
             writer.settle(correlatorId, {
-              text: redactSecrets(event.text),
-              data: { status: 'completed' },
+              text: preview,
+              data: { status: 'completed', ...(spillPath && { spillPath }) },
             });
             return;
           }
-          appendLog({
-            groupId: event.stageId,
-            messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-            text: event.text,
-          });
+          appendModelResponse(event.text, event.stageId);
           return;
         }
 

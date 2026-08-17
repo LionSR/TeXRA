@@ -378,8 +378,40 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
         kvStoreBacking.set(this.key(key), value);
       }
 
+      async readText(
+        key: string,
+        extension: string,
+      ): Promise<string | undefined> {
+        const value = kvStoreBacking.get(this.extensionKey(key, extension));
+        return typeof value === 'string' ? value : undefined;
+      }
+
+      async appendText(
+        key: string,
+        extension: string,
+        content: string,
+      ): Promise<void> {
+        const storageKey = this.extensionKey(key, extension);
+        kvStoreBacking.set(
+          storageKey,
+          `${String(kvStoreBacking.get(storageKey) ?? '')}${content}`,
+        );
+      }
+
+      async writeTextAtomic(
+        key: string,
+        extension: string,
+        content: string,
+      ): Promise<void> {
+        kvStoreBacking.set(this.extensionKey(key, extension), content);
+      }
+
       async delete(key: string): Promise<void> {
         kvStoreBacking.delete(this.key(key));
+      }
+
+      async deleteWithExtension(key: string, extension: string): Promise<void> {
+        kvStoreBacking.delete(this.extensionKey(key, extension));
       }
 
       async deleteDir(): Promise<void> {
@@ -392,8 +424,19 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
         return kvStoreBacking.has(this.key(key));
       }
 
+      async existsWithExtension(
+        key: string,
+        extension: string,
+      ): Promise<boolean> {
+        return kvStoreBacking.has(this.extensionKey(key, extension));
+      }
+
       async modifiedAt(): Promise<number | undefined> {
         return 1;
+      }
+
+      async modifiedAtWithExtension(): Promise<number | undefined> {
+        return undefined;
       }
 
       async listKeys(): Promise<string[]> {
@@ -405,12 +448,23 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
         }
         const prefix = `${this.dir}/`;
         return [...kvStoreBacking.keys()]
-          .filter((key) => key.startsWith(prefix))
+          .filter((key) => key.startsWith(prefix) && !key.endsWith('.jsonl'))
           .map((key) => key.slice(prefix.length));
+      }
+
+      async listKeysWithExtension(extension: string): Promise<string[]> {
+        const prefix = `${this.dir}/`;
+        return [...kvStoreBacking.keys()]
+          .filter((key) => key.startsWith(prefix) && key.endsWith(extension))
+          .map((key) => key.slice(prefix.length, -extension.length));
       }
 
       private key(key: string): string {
         return `${this.dir}/${key}`;
+      }
+
+      private extensionKey(key: string, extension: string): string {
+        return `${this.key(key)}${extension}`;
       }
     },
   }));

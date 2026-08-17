@@ -53,6 +53,14 @@ function storageFile(dir: string, key: string): string {
   return path.join(dir, `${encodeURIComponent(key)}.json`);
 }
 
+function journalFile(dir: string, key: string): string {
+  return path.join(dir, `${encodeURIComponent(key)}.jsonl`);
+}
+
+function isJournalFile(target: string): boolean {
+  return target.endsWith('.jsonl');
+}
+
 /** Which of the two stream-log directories a mocked target file lives in. */
 function areaOf(target: string): 'log' | 'summary' | null {
   if (target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`)) {
@@ -70,7 +78,7 @@ function writtenLog(
 }
 
 function streamKeyFromFile(target: string): string {
-  return decodeURIComponent(path.basename(target).replace(/\.json$/, ''));
+  return decodeURIComponent(path.basename(target).replace(/\.jsonl?$/, ''));
 }
 
 function notFound(): NodeJS.ErrnoException {
@@ -133,6 +141,19 @@ function writtenSummary(
   streamId: string,
 ): unknown {
   return writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, streamId));
+}
+
+function writtenJournal(
+  writes: ReadonlyMap<string, unknown>,
+  streamId: string,
+): unknown[] {
+  const raw = writes.get(journalFile(STREAM_LOGS_DIR, streamId));
+  if (typeof raw !== 'string') return [];
+  return raw
+    .trimEnd()
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 }
 
 function runningGroupEntry(
@@ -219,6 +240,7 @@ function mockStorage({
   onSummaryWrite,
   pauseLogWriteKey,
 }: MockStorageOptions): {
+  deletePersistedStream: (streamId: string) => void;
   deletes: string[];
   ensuredDirs: string[];
   fullLogReads: () => number;
@@ -233,13 +255,27 @@ function mockStorage({
   const deletes: string[] = [];
   const ensuredDirs: string[] = [];
   const writes = new Map<string, unknown>();
+  const journals: Record<string, string> = {};
+  const projectedLogs: Record<string, unknown[]> = {};
 
   vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) => {
     if (target !== STREAM_LOGS_DIR) throw notFound();
-    return Object.keys(logs).map((key) => [
-      `${encodeURIComponent(key)}.json`,
-      FileType.File,
-    ]);
+    return [
+      ...Object.keys(logs).map(
+        (key) =>
+          [`${encodeURIComponent(key)}.json`, FileType.File] as [
+            string,
+            number,
+          ],
+      ),
+      ...Object.keys(journals).map(
+        (key) =>
+          [`${encodeURIComponent(key)}.jsonl`, FileType.File] as [
+            string,
+            number,
+          ],
+      ),
+    ];
   });
 
   // KVStore reads raw strings through StorageFS, so hand back JSON
@@ -253,6 +289,12 @@ function mockStorage({
     }
 
     if (areaOf(target) === 'log') {
+      if (isJournalFile(target)) {
+        if (!Object.hasOwn(journals, key)) throw notFound();
+        fullLogReads += 1;
+        await onLogRead?.(key);
+        return journals[key];
+      }
       if (!Object.hasOwn(logs, key)) throw notFound();
       fullLogReads += 1;
       if (logReadError) throw logReadError;
@@ -272,7 +314,11 @@ function mockStorage({
   vi.spyOn(StorageFS, 'exists').mockImplementation(async (target) => {
     const key = streamKeyFromFile(target);
     if (areaOf(target) === 'summary') return Object.hasOwn(summaries, key);
-    if (areaOf(target) === 'log') return Object.hasOwn(logs, key);
+    if (areaOf(target) === 'log') {
+      return isJournalFile(target)
+        ? Object.hasOwn(journals, key)
+        : Object.hasOwn(logs, key);
+    }
     throw new Error(`Unexpected exists target: ${target}`);
   });
   vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) => {
@@ -282,7 +328,12 @@ function mockStorage({
       return fileStat(summaryMtimes[key] ?? 2);
     }
     if (areaOf(target) === 'log') {
-      if (!Object.hasOwn(logs, key)) throw notFound();
+      if (
+        isJournalFile(target)
+          ? !Object.hasOwn(journals, key)
+          : !Object.hasOwn(logs, key)
+      )
+        throw notFound();
       return fileStat(logMtimes[key] ?? 1);
     }
     throw new Error(`Unexpected stat target: ${target}`);
@@ -315,10 +366,94 @@ function mockStorage({
       typeof content === 'string'
         ? content
         : Buffer.from(content).toString('utf8');
+    if (areaOf(target) === 'log' && isJournalFile(target)) {
+      const key = streamKeyFromFile(target);
+      journals[key] = text;
+      writes.set(target, text);
+      for (const line of text.trimEnd().split('\n')) {
+        if (!line) continue;
+        const record = JSON.parse(line) as {
+          op: string;
+          entries?: unknown[];
+        };
+        if (record.op === 'seed') {
+          projectedLogs[key] = structuredClone(record.entries ?? []);
+          writes.set(storageFile(STREAM_LOGS_DIR, key), projectedLogs[key]);
+        }
+      }
+      return;
+    }
     writes.set(target, JSON.parse(text));
   };
   vi.spyOn(StorageFS, 'write').mockImplementation(recordWrite);
   vi.spyOn(StorageFS, 'writeAtomic').mockImplementation(recordWrite);
+  vi.spyOn(StorageFS, 'appendFile').mockImplementation(
+    async (target, content) => {
+      if (logWriteError && areaOf(target) === 'log') throw logWriteError;
+      const key = streamKeyFromFile(target);
+      if (
+        pauseLogWriteKey != null &&
+        !pausedLogWriteUsed &&
+        target === journalFile(STREAM_LOGS_DIR, pauseLogWriteKey)
+      ) {
+        pausedLogWriteUsed = true;
+        pausedWriteStarted.resolve();
+        await pausedWriteRelease.promise;
+      }
+      const text =
+        typeof content === 'string'
+          ? content
+          : Buffer.from(content).toString('utf8');
+      journals[key] = (journals[key] ?? '') + text;
+      writes.set(target, journals[key]);
+      // Keep the existing test helper's projected view in sync.
+      const projected =
+        projectedLogs[key] ??
+        (Array.isArray(logs[key]) ? structuredClone(logs[key]) : []);
+      for (const line of text.trimEnd().split('\n')) {
+        if (!line) continue;
+        const record = JSON.parse(line) as {
+          op: string;
+          entry?: StreamLogEntry;
+          id?: string;
+          patch?: Record<string, unknown>;
+          text?: string;
+          settled?: boolean;
+        };
+        if (record.op === 'ensure') continue;
+        if (record.op === 'append' && record.entry) {
+          projected.push(record.entry);
+          continue;
+        }
+        const entry = projected.find(
+          (value): value is Record<string, unknown> =>
+            typeof value === 'object' &&
+            value !== null &&
+            (value as Record<string, unknown>).id === record.id,
+        );
+        if (!entry) continue;
+        if (record.op === 'update' && record.patch) {
+          Object.assign(entry, record.patch);
+          if (record.settled && entry.settlementSeqNo === undefined) {
+            entry.settlementSeqNo =
+              Math.max(
+                projected.length,
+                0,
+                ...projected.map((value) =>
+                  typeof value === 'object' && value !== null
+                    ? (((value as Record<string, unknown>).settlementSeqNo as
+                        number | undefined) ?? 0)
+                    : 0,
+                ),
+              ) + 1;
+          }
+        }
+      }
+      projectedLogs[key] = projected;
+      writes.set(storageFile(STREAM_LOGS_DIR, key), projected);
+      await onLogWrite?.(key);
+    },
+  );
   vi.spyOn(StorageFS, 'delete').mockImplementation(async (target) => {
     if (logDeleteError && areaOf(target) === 'log') throw logDeleteError;
     if (
@@ -329,9 +464,22 @@ function mockStorage({
     }
     deletes.push(target);
     writes.delete(target);
+    if (areaOf(target) === 'log') {
+      const key = streamKeyFromFile(target);
+      if (isJournalFile(target)) delete journals[key];
+      else delete logs[key];
+      if (isJournalFile(target) || !Object.hasOwn(journals, key)) {
+        delete projectedLogs[key];
+      }
+    }
   });
 
   return {
+    deletePersistedStream: (streamId) => {
+      delete logs[streamId];
+      delete journals[streamId];
+      delete projectedLogs[streamId];
+    },
     deletes,
     ensuredDirs,
     fullLogReads: () => fullLogReads,
@@ -384,7 +532,6 @@ describe('StreamLogStore load', () => {
     await first.flush();
 
     expect(writtenLog(storage.writes, 'registered-empty')).toEqual([]);
-    logs['registered-empty'] = [];
 
     const second = await StreamLogStore.open();
     expect(second.keys()).toEqual(['registered-empty']);
@@ -395,9 +542,46 @@ describe('StreamLogStore load', () => {
     expect(storage.fullLogReads()).toBe(2);
   });
 
+  it('replays append-only mutations over an unchanged legacy array', async () => {
+    const legacy = [logEntry('alpha', 1, 100)];
+    const storage = mockStorage({
+      logs: { alpha: structuredClone(legacy) },
+      summaries: { alpha: summary(100, 100) },
+    });
+    const first = await StreamLogStore.open();
+    await first.ensureLoaded('alpha');
+    const writer = first.acquireWriter('alpha', 'execution-alpha');
+    writer.update('alpha-1', { level: LOG_LEVELS.ERROR });
+    writer.appendText('alpha-1', ' resumed');
+    writer.settle('alpha-1', {});
+    writer.close();
+    await first.flush();
+
+    expect(writtenJournal(storage.writes, 'alpha')).toMatchObject([
+      { op: 'seed' },
+      { op: 'update', id: 'alpha-1', settled: false },
+      {
+        op: 'update',
+        id: 'alpha-1',
+        settled: true,
+        patch: { text: 'alpha entry 1 resumed' },
+      },
+    ]);
+
+    const reopened = await StreamLogStore.open();
+    await reopened.ensureLoaded('alpha');
+    expect(reopened.get('alpha')?.getRange(0)).toMatchObject([
+      {
+        id: 'alpha-1',
+        level: LOG_LEVELS.ERROR,
+        text: 'alpha entry 1 resumed',
+      },
+    ]);
+  });
+
   it('distinguishes another process deletion from a stale local summary', async () => {
     const logs: Record<string, unknown> = { alpha: [] };
-    mockStorage({ logs, summaries: {} });
+    const storage = mockStorage({ logs, summaries: {} });
 
     const staleProcessStore = await StreamLogStore.open();
     expect(staleProcessStore.has('alpha')).toBe(true);
@@ -407,7 +591,7 @@ describe('StreamLogStore load', () => {
 
     // A different process commits deletion while this store retains the
     // summary it loaded at startup.
-    delete logs.alpha;
+    storage.deletePersistedStream('alpha');
 
     expect(staleProcessStore.has('alpha')).toBe(true);
     await expect(
@@ -1566,7 +1750,9 @@ describe('StreamLogStore load', () => {
     expect(writtenLog(storage.writes, 'alpha')).toEqual([
       expect.objectContaining({ id: 'alpha-1', seqNo: 1 }),
       unknownFutureEntry,
-      expect.objectContaining({ id: 'alpha-3', seqNo: 2 }),
+      // Legacy rows remain byte-for-byte in the base array; JSONL records
+      // carry their live sequence and are renumbered only when replayed.
+      expect.objectContaining({ id: 'alpha-3', seqNo: 3 }),
       malformedEntry,
       expect.objectContaining({ id: 'alpha-new', seqNo: 3 }),
     ]);
@@ -1656,7 +1842,7 @@ describe('StreamLogStore load', () => {
     );
   });
 
-  it('writes dirty transcripts sequentially', async () => {
+  it('persists unrelated transcripts independently', async () => {
     let activeWrites = 0;
     let maximumActiveWrites = 0;
     const storage = mockStorage({
@@ -1676,7 +1862,7 @@ describe('StreamLogStore load', () => {
 
     await store.flush();
 
-    expect(maximumActiveWrites).toBe(1);
+    expect(maximumActiveWrites).toBe(3);
     expect(
       ['alpha', 'beta', 'gamma'].every((streamId) =>
         storage.writes.has(storageFile(STREAM_LOGS_DIR, streamId)),
@@ -1695,13 +1881,13 @@ describe('StreamLogStore load', () => {
   });
 });
 
-describe('StreamLogStore save throttle', () => {
+describe('StreamLogStore append-only persistence', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
-  it('writes periodically under sustained sub-window appends and drains on flush', async () => {
+  it('persists streaming text only when the whole entry settles', async () => {
     let logWrites = 0;
     const storage = mockStorage({
       logs: {},
@@ -1715,26 +1901,25 @@ describe('StreamLogStore save throttle', () => {
 
     const writer = store.acquireWriter('alpha', 'execution-alpha');
     writer.append(namedEntry('m1', 1, ''));
-    // 20 chunks 100ms apart: a trailing debounce would reset its timer on
-    // every append and never write until the stream pauses; the max-wait
-    // throttle must produce a durable write per 300ms window regardless.
+    // Chunk-level records are deliberately not durable: independently
+    // redacted chunks can preserve a secret split across chunk boundaries.
     for (let i = 0; i < 20; i += 1) {
       writer.appendText('m1', `chunk-${i} `);
       await vi.advanceTimersByTimeAsync(100);
     }
-    expect(logWrites).toBeGreaterThanOrEqual(5);
+    expect(logWrites).toBe(1);
 
-    // The tail landed after the last periodic write; flush drains it.
-    const writesBeforeFlush = logWrites;
+    // Settlement materializes and persists the whole-buffer text once.
+    writer.settle('m1', {});
     writer.close();
     await store.flush();
-    expect(logWrites).toBeGreaterThan(writesBeforeFlush);
+    expect(logWrites).toBe(2);
     expect(writtenLog(storage.writes, 'alpha')[0]?.text).toBe(
       Array.from({ length: 20 }, (_, i) => `chunk-${i} `).join(''),
     );
   });
 
-  it('bounds the durability gap to one throttle window for a first append', async () => {
+  it('starts persistence on the next event-loop turn for a first append', async () => {
     const storage = mockStorage({ logs: {}, summaries: {} });
     const store = await StreamLogStore.open();
     vi.useFakeTimers();
@@ -1743,12 +1928,12 @@ describe('StreamLogStore save throttle', () => {
     writer.append(namedEntry('m1', 1, 'first entry'));
     expect(writtenLog(storage.writes, 'alpha')).toBeUndefined();
 
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(0);
     expect(writtenLog(storage.writes, 'alpha')).toHaveLength(1);
     writer.close();
   });
 
-  it('queues a save window that fires while a write batch is in flight', async () => {
+  it('serializes a later mutation behind an in-flight append', async () => {
     const bothWritesLanded = createDeferred();
     let logWrites = 0;
     const storage = mockStorage({
@@ -1765,16 +1950,14 @@ describe('StreamLogStore save throttle', () => {
 
     const writer = store.acquireWriter('alpha', 'execution-alpha');
     writer.append(namedEntry('m1', 1, ''));
-    writer.appendText('m1', 'first ');
-    await vi.advanceTimersByTimeAsync(300);
+    writer.update('m1', { text: 'first ' });
+    await vi.advanceTimersByTimeAsync(0);
     await storage.waitForPausedWrite();
 
-    // Mutate while the first batch's write hangs, and let a second window
-    // fire. An unserialized second batch would persist the newer snapshot
-    // during the pause and then get clobbered when the paused older write
-    // completes last; the queued batch must instead run after it.
-    writer.appendText('m1', 'second');
-    await vi.advanceTimersByTimeAsync(300);
+    // Mutate while the first append hangs. A concurrent append could land
+    // out of order; the later mutation must instead run after it.
+    writer.update('m1', { text: 'first second' });
+    await vi.advanceTimersByTimeAsync(0);
     storage.releasePausedWrite();
     await bothWritesLanded.promise;
     writer.close();
@@ -1794,10 +1977,10 @@ describe('StreamLogStore save throttle', () => {
 
     const writer = store.acquireWriter('alpha', 'execution-alpha');
     writer.append(namedEntry('m1', 1, 'first'));
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(0);
     await storage.waitForPausedWrite();
 
-    // A rollback reload must not resolve while a write batch is still
+    // A rollback reload must not resolve while an append is still
     // running against the pre-rollback adapters.
     let reloaded = false;
     const reload = store.reload({ discardPendingWrites: true }).then(() => {
@@ -1923,7 +2106,7 @@ describe('StreamLogStore summary metadata mirror', () => {
     expect(reopened.getSummaryMeta('alpha')).toEqual(META);
   });
 
-  it('does not persist dirty log fields through a metadata-only write', async () => {
+  it('carries metadata with the immediate log append', async () => {
     const storage = mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 200)] },
       summaries: { alpha: summary(200, 200) },
@@ -1935,7 +2118,13 @@ describe('StreamLogStore summary metadata mirror', () => {
     store.recordSummaryMeta('alpha', META);
     await delay(0);
 
-    expect(writtenSummary(storage.writes, 'alpha')).toBeUndefined();
+    expect(writtenJournal(storage.writes, 'alpha')).toEqual([
+      expect.objectContaining({ op: 'seed' }),
+      expect.objectContaining({
+        op: 'append',
+        entry: expect.objectContaining({ id: 'alpha-2' }),
+      }),
+    ]);
 
     await store.flush();
     expect(writtenSummary(storage.writes, 'alpha')).toMatchObject({
