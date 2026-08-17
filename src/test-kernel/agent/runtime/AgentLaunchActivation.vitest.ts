@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   hasPersistedParent: vi.fn(),
   load: vi.fn(),
   releaseOwnedExecutionLeaseAfterFailure: vi.fn(),
+  retrieveSessionResumeData: vi.fn(),
   resolve: vi.fn(),
 }));
 
@@ -44,6 +45,9 @@ vi.mock('@agent/storage/executionLease', () => ({
   completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
   releaseOwnedExecutionLeaseAfterFailure:
     mocks.releaseOwnedExecutionLeaseAfterFailure,
+}));
+vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
+  retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));
 
 import { noopTrace } from '@agent/trace';
@@ -174,6 +178,7 @@ describe('native agent launch activation', () => {
         agentConfig: config,
         shared: { modelHandlerCompatibilityKey: MODEL_HANDLER_KEY },
       });
+      mocks.retrieveSessionResumeData.mockResolvedValueOnce(resume);
 
       const payload = await captureActivation((session) =>
         resumeToolUseFromResumeData(resume, { session }),

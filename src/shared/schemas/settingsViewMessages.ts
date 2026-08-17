@@ -84,12 +84,6 @@ export { type Goal } from './goal';
 export { type MemoryViewItem, type MemoryPreview } from './memoryViewMessages';
 
 export {
-  HISTORY_RUN_STATUS_LABEL,
-  resolveHistoryRunStatus,
-  type HistoryRunStatus,
-} from './historyRunStatus';
-
-export {
   API_ACCESS_MODE_OPTIONS,
   DEFAULT_GLOBAL_STREAMING,
   DEFAULT_QUOTA_AUTO_SWITCHED,
