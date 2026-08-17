@@ -23,11 +23,12 @@ import {
   ephemeralTranscriptWarning,
   StreamLogStore,
   STREAM_LOGS_DIR,
-  STREAM_LOG_SUMMARIES_DIR,
   type StreamLogAppendInput,
 } from '@transcript';
 import { delay } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
+
+const LEGACY_STREAM_LOG_SUMMARIES_DIR = 'streamLogSummaries';
 
 interface MockStorageOptions {
   /** Values are usually arrays; non-array values simulate corrupt logs. */
@@ -35,18 +36,12 @@ interface MockStorageOptions {
   summaries: Record<string, unknown>;
   journals?: Record<string, string>;
   rawLogJson?: Record<string, string>;
-  rawSummaryJson?: Record<string, string>;
   logReadError?: Error;
-  summaryEnsureDirError?: Error;
-  summaryWriteError?: Error;
-  summaryDeleteError?: Error;
   logWriteError?: Error;
   logDeleteError?: Error;
-  logMtimes?: Record<string, number>;
-  summaryMtimes?: Record<string, number>;
   onLogRead?: (key: string) => Promise<void> | void;
   onLogWrite?: (key: string) => Promise<void> | void;
-  onSummaryWrite?: (key: string) => Promise<void> | void;
+  onCheckpointWrite?: (key: string) => Promise<void> | void;
   pauseLogWriteKey?: string;
 }
 
@@ -64,7 +59,7 @@ function isJournalFile(target: string): boolean {
 
 /** Which of the two stream-log directories a mocked target file lives in. */
 function areaOf(target: string): 'log' | 'summary' | null {
-  if (target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`)) {
+  if (target.startsWith(`${LEGACY_STREAM_LOG_SUMMARIES_DIR}${path.sep}`)) {
     return 'summary';
   }
   if (target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) return 'log';
@@ -141,20 +136,34 @@ function writtenSummary(
   writes: ReadonlyMap<string, unknown>,
   streamId: string,
 ): unknown {
-  return writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, streamId));
+  return writtenJournal(writes, streamId).findLast(
+    (record) =>
+      typeof record === 'object' &&
+      record !== null &&
+      (record as { op?: unknown }).op === 'checkpoint',
+  )?.summary;
 }
 
 function writtenJournal(
   writes: ReadonlyMap<string, unknown>,
   streamId: string,
-): unknown[] {
+): Array<Record<string, unknown>> {
   const raw = writes.get(journalFile(STREAM_LOGS_DIR, streamId));
   if (typeof raw !== 'string') return [];
   return raw
     .trimEnd()
     .split('\n')
     .filter(Boolean)
-    .map((line) => JSON.parse(line));
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+function writtenMutations(
+  writes: ReadonlyMap<string, unknown>,
+  streamId: string,
+): Array<Record<string, unknown>> {
+  return writtenJournal(writes, streamId).filter(
+    (record) => record.op !== 'checkpoint',
+  );
 }
 
 function runningGroupEntry(
@@ -228,18 +237,12 @@ function mockStorage({
   summaries,
   journals: initialJournals = {},
   rawLogJson = {},
-  rawSummaryJson = {},
   logReadError,
-  summaryEnsureDirError,
-  summaryWriteError,
-  summaryDeleteError,
   logWriteError,
   logDeleteError,
-  logMtimes = {},
-  summaryMtimes = {},
   onLogRead,
   onLogWrite,
-  onSummaryWrite,
+  onCheckpointWrite,
   pauseLogWriteKey,
 }: MockStorageOptions): {
   deletePersistedStream: (streamId: string) => void;
@@ -247,10 +250,12 @@ function mockStorage({
   ensuredDirs: string[];
   fullLogReads: () => number;
   releasePausedWrite: () => void;
+  setLogDeleteError: (error: Error | undefined) => void;
   waitForPausedWrite: () => Promise<void>;
   writes: Map<string, unknown>;
 } {
   let fullLogReads = 0;
+  let activeLogDeleteError = logDeleteError;
   let pausedLogWriteUsed = false;
   const pausedWriteStarted = createDeferred();
   const pausedWriteRelease = createDeferred();
@@ -261,6 +266,15 @@ function mockStorage({
   const projectedLogs: Record<string, unknown[]> = {};
 
   vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) => {
+    if (target === LEGACY_STREAM_LOG_SUMMARIES_DIR) {
+      return Object.keys(summaries).map(
+        (key) =>
+          [`${encodeURIComponent(key)}.json`, FileType.File] as [
+            string,
+            number,
+          ],
+      );
+    }
     if (target !== STREAM_LOGS_DIR) throw notFound();
     return [
       ...Object.keys(logs).map(
@@ -287,7 +301,7 @@ function mockStorage({
 
     if (areaOf(target) === 'summary') {
       if (!Object.hasOwn(summaries, key)) throw notFound();
-      return rawSummaryJson[key] ?? JSON.stringify(summaries[key]);
+      return JSON.stringify(summaries[key]);
     }
 
     if (areaOf(target) === 'log') {
@@ -309,9 +323,6 @@ function mockStorage({
 
   vi.spyOn(StorageFS, 'ensureDir').mockImplementation(async (target) => {
     ensuredDirs.push(target);
-    if (target === STREAM_LOG_SUMMARIES_DIR && summaryEnsureDirError) {
-      throw summaryEnsureDirError;
-    }
   });
   vi.spyOn(StorageFS, 'exists').mockImplementation(async (target) => {
     const key = streamKeyFromFile(target);
@@ -327,7 +338,7 @@ function mockStorage({
     const key = streamKeyFromFile(target);
     if (areaOf(target) === 'summary') {
       if (!Object.hasOwn(summaries, key)) throw notFound();
-      return fileStat(summaryMtimes[key] ?? 2);
+      return fileStat(2);
     }
     if (areaOf(target) === 'log') {
       if (
@@ -336,7 +347,7 @@ function mockStorage({
           : !Object.hasOwn(logs, key)
       )
         throw notFound();
-      return fileStat(logMtimes[key] ?? 1);
+      return fileStat(1);
     }
     throw new Error(`Unexpected stat target: ${target}`);
   });
@@ -345,9 +356,6 @@ function mockStorage({
     content: string | Uint8Array,
   ): Promise<void> => {
     if (logWriteError && areaOf(target) === 'log') throw logWriteError;
-    if (summaryWriteError && areaOf(target) === 'summary') {
-      throw summaryWriteError;
-    }
     if (
       pauseLogWriteKey != null &&
       !pausedLogWriteUsed &&
@@ -359,9 +367,6 @@ function mockStorage({
     }
     if (areaOf(target) === 'log') {
       await onLogWrite?.(streamKeyFromFile(target));
-    }
-    if (areaOf(target) === 'summary') {
-      await onSummaryWrite?.(streamKeyFromFile(target));
     }
 
     const text =
@@ -423,6 +428,10 @@ function mockStorage({
           settled?: boolean;
         };
         if (record.op === 'ensure') continue;
+        if (record.op === 'checkpoint') {
+          await onCheckpointWrite?.(key);
+          continue;
+        }
         if (record.op === 'append' && record.entry) {
           projected.push(record.entry);
           continue;
@@ -457,12 +466,8 @@ function mockStorage({
     },
   );
   vi.spyOn(StorageFS, 'delete').mockImplementation(async (target) => {
-    if (logDeleteError && areaOf(target) === 'log') throw logDeleteError;
-    if (
-      summaryDeleteError &&
-      (target === STREAM_LOG_SUMMARIES_DIR || areaOf(target) === 'summary')
-    ) {
-      throw summaryDeleteError;
+    if (activeLogDeleteError && areaOf(target) === 'log') {
+      throw activeLogDeleteError;
     }
     deletes.push(target);
     writes.delete(target);
@@ -486,6 +491,9 @@ function mockStorage({
     ensuredDirs,
     fullLogReads: () => fullLogReads,
     releasePausedWrite: () => pausedWriteRelease.resolve(),
+    setLogDeleteError: (error) => {
+      activeLogDeleteError = error;
+    },
     waitForPausedWrite: () =>
       pauseLogWriteKey == null ? Promise.resolve() : pausedWriteStarted.promise,
     writes,
@@ -559,7 +567,7 @@ describe('StreamLogStore load', () => {
     writer.close();
     await first.flush();
 
-    expect(writtenJournal(storage.writes, 'alpha')).toMatchObject([
+    expect(writtenMutations(storage.writes, 'alpha')).toMatchObject([
       { op: 'seed' },
       { op: 'update', id: 'alpha-1', settled: false },
       {
@@ -670,12 +678,15 @@ describe('StreamLogStore load', () => {
   it('reserves a writer across rehydration and a concurrent eviction', async () => {
     const readStarted = createDeferred();
     const readGate = createDeferred();
+    let reads = 0;
     mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 100)] },
       summaries: {
         alpha: summary(100, 100, { hasRunningGroup: false }),
       },
       onLogRead: async () => {
+        reads += 1;
+        if (reads !== 2) return;
         readStarted.resolve();
         await readGate.promise;
       },
@@ -733,12 +744,15 @@ describe('StreamLogStore load', () => {
   it('keeps a writer-owned rehydrate resident when focus clears eviction', async () => {
     const readStarted = createDeferred();
     const readGate = createDeferred();
+    let reads = 0;
     mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 100)] },
       summaries: {
         alpha: summary(100, 100, { hasRunningGroup: false }),
       },
       onLogRead: async () => {
+        reads += 1;
+        if (reads !== 2) return;
         readStarted.resolve();
         await readGate.promise;
       },
@@ -804,12 +818,15 @@ describe('StreamLogStore load', () => {
   it('honors eviction requested while a focused rehydrate is pending', async () => {
     const readStarted = createDeferred();
     const readGate = createDeferred();
+    let reads = 0;
     mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 100)] },
       summaries: {
         alpha: summary(100, 100, { hasRunningGroup: false }),
       },
       onLogRead: async () => {
+        reads += 1;
+        if (reads !== 2) return;
         readStarted.resolve();
         await readGate.promise;
       },
@@ -934,104 +951,20 @@ describe('StreamLogStore load', () => {
     await expect(StreamLogStore.open()).rejects.toBe(failure);
   });
 
-  it('opens from authoritative logs when the summary directory cannot be prepared', async () => {
-    const storage = mockStorage({
-      logs: { alpha: [logEntry('alpha', 1, 200)] },
-      summaries: {},
-      summaryEnsureDirError: new Error('summary directory is read-only'),
-    });
-    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-
-    const store = await StreamLogStore.open();
-
-    expect(store.keys()).toEqual(['alpha']);
-    expect(store.getTimestampRange('alpha').first).toBe(200);
-    expect(storage.fullLogReads()).toBe(1);
-    expect(warnSpy).toHaveBeenCalledWith(
-      'StreamLogStore',
-      expect.stringContaining('Failed to prepare transcript summary cache'),
-    );
-  });
-
-  it('opens from authoritative logs when summary cache writeback fails', async () => {
-    const storage = mockStorage({
-      logs: {
-        alpha: [logEntry('alpha', 1, 200)],
-        beta: [logEntry('beta', 1, 300)],
-      },
-      summaries: {},
-      summaryWriteError: new Error('summary write denied'),
-    });
-    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-
-    const store = await StreamLogStore.open();
-
-    expect(store.keys()).toEqual(['alpha', 'beta']);
-    expect(store.getTimestampRange('alpha').first).toBe(200);
-    expect(storage.fullLogReads()).toBe(2);
-    expect(warnSpy).toHaveBeenCalledWith(
-      'StreamLogStore',
-      expect.stringContaining('Failed to write transcript summary cache for'),
-    );
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it('deletes authoritative logs when summary cache deletion fails', async () => {
-    const storage = mockStorage({
-      logs: { alpha: [logEntry('alpha', 1, 200)] },
-      summaries: {
-        alpha: { firstTimestamp: 200, lastTimestamp: 200 },
-      },
-      summaryDeleteError: new Error('summary delete denied'),
-    });
-    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-    const store = await StreamLogStore.open();
-
-    await expect(store.delete('alpha')).resolves.toBeUndefined();
-
-    expect(storage.deletes).toContain(storageFile(STREAM_LOGS_DIR, 'alpha'));
-    expect(warnSpy).toHaveBeenCalledWith(
-      'StreamLogStore',
-      expect.stringContaining(
-        'Failed to delete transcript summary cache for alpha',
-      ),
-    );
-  });
-
   it('retains the stream registry when authoritative log deletion fails', async () => {
-    mockStorage({
+    const storage = mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 200)] },
       summaries: {
         alpha: { firstTimestamp: 200, lastTimestamp: 200 },
       },
-      logDeleteError: new Error('log delete denied'),
     });
     const store = await StreamLogStore.open();
+    storage.setLogDeleteError(new Error('log delete denied'));
 
     await expect(store.delete('alpha')).rejects.toThrow('log delete denied');
 
     expect(store.keys()).toEqual(['alpha']);
     expect(store.has('alpha')).toBe(true);
-  });
-
-  it('clears authoritative logs when summary cache clearing fails', async () => {
-    const storage = mockStorage({
-      logs: { alpha: [logEntry('alpha', 1, 200)] },
-      summaries: {
-        alpha: { firstTimestamp: 200, lastTimestamp: 200 },
-      },
-      summaryDeleteError: new Error('summary clear denied'),
-    });
-    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-    const store = await StreamLogStore.open();
-
-    await expect(store.clear()).resolves.toBeUndefined();
-
-    expect(storage.deletes).toContain(STREAM_LOGS_DIR);
-    expect(warnSpy).toHaveBeenCalledWith(
-      'StreamLogStore',
-      expect.stringContaining('Failed to clear transcript summary cache'),
-    );
   });
 
   it('preserves live state when a transactional reload fails', async () => {
@@ -1109,7 +1042,7 @@ describe('StreamLogStore load', () => {
     ).toHaveLength(oldRootPreparations + 1);
   });
 
-  it('uses stream summaries without reading full log files at startup', async () => {
+  it('folds authoritative logs at startup without making streams resident', async () => {
     const storage = mockStorage({
       logs: {
         alpha: [logEntry('alpha', 1, 200), logEntry('alpha', 2, 250)],
@@ -1123,109 +1056,15 @@ describe('StreamLogStore load', () => {
 
     const store = await StreamLogStore.open();
 
-    expect(storage.fullLogReads()).toBe(0);
+    expect(storage.fullLogReads()).toBe(2);
     expect(store.keys()).toEqual(['beta', 'alpha']);
     expect(store.get('alpha')).toBeUndefined();
     expect(store.getTimestampRange('alpha')).toEqual({ first: 200, last: 250 });
 
     await store.ensureLoaded('alpha');
 
-    expect(storage.fullLogReads()).toBe(1);
+    expect(storage.fullLogReads()).toBe(3);
     expect(store.get('alpha')?.size).toBe(2);
-  });
-
-  it('rebuilds from the authoritative log when a summary field has the wrong type', async () => {
-    // `hasRunningGroup: 'bad'` is exactly the case a per-field `.catch()`
-    // would silently coerce to `undefined` (not running) instead of failing
-    // the whole parse — masking a crash-recovery flag that should have
-    // triggered the orphan-recovery sweep. The summary schema has no
-    // per-field `.catch()`, so a malformed field invalidates the whole
-    // cached summary and falls back to the log, like malformed JSON does.
-    const storage = mockStorage({
-      logs: {
-        alpha: [logEntry('alpha', 1, 200), logEntry('alpha', 2, 250)],
-      },
-      summaries: {
-        alpha: {
-          firstTimestamp: 200,
-          lastTimestamp: 'bad',
-          hasRunningGroup: 'bad',
-        },
-      },
-    });
-
-    const store = await StreamLogStore.open();
-
-    expect(storage.fullLogReads()).toBe(1);
-    expect(store.keys()).toEqual(['alpha']);
-    expect(store.getTimestampRange('alpha')).toEqual({ first: 200, last: 250 });
-    expect(writtenSummary(storage.writes, 'alpha')).toEqual(
-      settledSummary(200, 250),
-    );
-  });
-
-  it('rebuilds malformed summary JSON from the authoritative stream log', async () => {
-    const storage = mockStorage({
-      logs: {
-        alpha: [logEntry('alpha', 1, 200), logEntry('alpha', 2, 250)],
-      },
-      summaries: { alpha: {} },
-      rawSummaryJson: { alpha: '{"firstTimestamp":' },
-    });
-    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-
-    const store = await StreamLogStore.open();
-
-    expect(storage.fullLogReads()).toBe(1);
-    expect(store.keys()).toEqual(['alpha']);
-    expect(store.getTimestampRange('alpha')).toEqual({ first: 200, last: 250 });
-    expect(warnSpy).toHaveBeenCalledWith(
-      'StreamLogStore',
-      expect.stringContaining('Ignoring corrupt summary cache for alpha'),
-    );
-    expect(writtenSummary(storage.writes, 'alpha')).toEqual(
-      settledSummary(200, 250),
-    );
-  });
-
-  it('falls back once for missing summaries and writes the sidecar cache', async () => {
-    const storage = mockStorage({
-      logs: {
-        alpha: [logEntry('alpha', 1, 200), logEntry('alpha', 2, 250)],
-      },
-      summaries: {},
-    });
-
-    const store = await StreamLogStore.open();
-
-    expect(storage.fullLogReads()).toBe(1);
-    expect(store.keys()).toEqual(['alpha']);
-    expect(store.get('alpha')).toBeUndefined();
-    expect(store.getTimestampRange('alpha').first).toBe(200);
-    expect(writtenSummary(storage.writes, 'alpha')).toEqual(
-      settledSummary(200, 250),
-    );
-  });
-
-  it('rebuilds stale summaries before trusting them', async () => {
-    const storage = mockStorage({
-      logs: {
-        alpha: [logEntry('alpha', 1, 200), logEntry('alpha', 2, 250)],
-      },
-      summaries: {
-        alpha: summary(1, 1, { hasRunningGroup: false }),
-      },
-      logMtimes: { alpha: 20 },
-      summaryMtimes: { alpha: 10 },
-    });
-
-    const store = await StreamLogStore.open();
-
-    expect(storage.fullLogReads()).toBe(1);
-    expect(store.getTimestampRange('alpha').first).toBe(200);
-    expect(writtenSummary(storage.writes, 'alpha')).toEqual(
-      settledSummary(200, 250),
-    );
   });
 
   it('does not register an orphaned summary once its log file is gone', async () => {
@@ -1246,7 +1085,7 @@ describe('StreamLogStore load', () => {
     expect(store.keys()).toEqual([]);
   });
 
-  it('rehydrates summarized streams with stale running groups', async () => {
+  it('rehydrates cold streams with stale running groups', async () => {
     const storage = mockStorage({
       logs: {
         alpha: [
@@ -1264,12 +1103,12 @@ describe('StreamLogStore load', () => {
 
     const store = await StreamLogStore.open();
 
-    expect(storage.fullLogReads()).toBe(0);
+    expect(storage.fullLogReads()).toBe(1);
 
     const affected = await store.endRunningGroupsForStreams(['alpha'], 300);
     await store.flush();
     expect(store.get('alpha')).toBeUndefined();
-    expect(storage.fullLogReads()).toBe(1);
+    expect(storage.fullLogReads()).toBe(2);
     const entry = writtenLog(storage.writes, 'alpha').at(0);
 
     expect(affected).toEqual(['alpha']);
@@ -1285,7 +1124,7 @@ describe('StreamLogStore load', () => {
     );
   });
 
-  it('reports unfinished streams from summaries without loading transcripts', async () => {
+  it('reports unfinished streams without making transcripts resident', async () => {
     const storage = mockStorage({
       logs: {
         group: [runningGroupEntry('group', 1, 100)],
@@ -1311,10 +1150,10 @@ describe('StreamLogStore load', () => {
     const store = await StreamLogStore.open();
 
     expect(store.getUnfinishedStreamIds()).toEqual(['group', 'streaming']);
-    expect(storage.fullLogReads()).toBe(0);
+    expect(storage.fullLogReads()).toBe(3);
   });
 
-  it('can close running groups for only selected summarized streams', async () => {
+  it('can close running groups for only selected cold streams', async () => {
     const storage = mockStorage({
       logs: {
         alpha: [runningGroupEntry('alpha', 1, 100)],
@@ -1332,7 +1171,7 @@ describe('StreamLogStore load', () => {
     await store.flush();
 
     expect(affected).toEqual(['alpha']);
-    expect(storage.fullLogReads()).toBe(1);
+    expect(storage.fullLogReads()).toBe(3);
     expect(store.get('alpha')).toBeUndefined();
     const entry = writtenLog(storage.writes, 'alpha').at(0);
     expect(entry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
@@ -1359,7 +1198,7 @@ describe('StreamLogStore load', () => {
     await store.flush();
 
     expect(affected).toEqual(['alpha']);
-    expect(storage.fullLogReads()).toBe(1);
+    expect(storage.fullLogReads()).toBe(2);
     expect(store.get('alpha')?.getRange(0).at(0)?.type).toBe(
       STREAM_LOG_ENTRY_TYPES.GROUP_END,
     );
@@ -1383,12 +1222,12 @@ describe('StreamLogStore load', () => {
 
     const store = await StreamLogStore.open();
 
-    expect(storage.fullLogReads()).toBe(0);
+    expect(storage.fullLogReads()).toBe(1);
 
     const affected = await store.endRunningGroupsForStreams(['gamma'], 300);
     await store.flush();
     expect(store.get('gamma')).toBeUndefined();
-    expect(storage.fullLogReads()).toBe(1);
+    expect(storage.fullLogReads()).toBe(2);
     const entry = writtenLog(storage.writes, 'gamma').at(0);
 
     expect(affected).toEqual(['gamma']);
@@ -1466,7 +1305,7 @@ describe('StreamLogStore load', () => {
 
     expect(affected).toEqual(['alpha']);
     expect(store.get('alpha')).toBeUndefined();
-    expect(storage.fullLogReads()).toBe(1);
+    expect(storage.fullLogReads()).toBe(2);
     const entry = writtenLog(storage.writes, 'alpha').at(0);
     expect(entry?.data).toEqual({
       status: RUN_OUTCOME.CANCELLED,
@@ -1562,7 +1401,7 @@ describe('StreamLogStore load', () => {
     await store.flush();
 
     expect(affected).toEqual(['beta']);
-    expect(storage.fullLogReads()).toBe(1);
+    expect(storage.fullLogReads()).toBe(3);
     expect(store.get('alpha')).toBeUndefined();
 
     expect(store.get('beta')).toBeUndefined();
@@ -1578,6 +1417,7 @@ describe('StreamLogStore load', () => {
     const readGate = createDeferred();
     let activeReads = 0;
     let maxActiveReads = 0;
+    const readsByStream = new Map<string, number>();
 
     const storage = mockStorage({
       logs: Object.fromEntries(
@@ -1596,7 +1436,10 @@ describe('StreamLogStore load', () => {
           },
         ]),
       ),
-      onLogRead: async () => {
+      onLogRead: async (streamId) => {
+        const reads = (readsByStream.get(streamId) ?? 0) + 1;
+        readsByStream.set(streamId, reads);
+        if (reads === 1) return;
         activeReads += 1;
         maxActiveReads = Math.max(maxActiveReads, activeReads);
         await readGate.promise;
@@ -1607,7 +1450,7 @@ describe('StreamLogStore load', () => {
     const store = await StreamLogStore.open();
 
     const endRunningGroups = store.endRunningGroupsForStreams(streamIds, 300);
-    await waitForCondition(() => storage.fullLogReads() === 8, {
+    await waitForCondition(() => storage.fullLogReads() === 28, {
       timeoutMessage:
         'Expected stale stream rehydrate reads to reach the concurrency cap',
     });
@@ -1620,7 +1463,7 @@ describe('StreamLogStore load', () => {
 
     expect(affected).toHaveLength(streamIds.length);
     expect(maxActiveReads).toBe(8);
-    expect(storage.fullLogReads()).toBe(streamIds.length);
+    expect(storage.fullLogReads()).toBe(streamIds.length * 2);
   });
 
   it('lets delete win over an in-flight stream write', async () => {
@@ -1643,13 +1486,15 @@ describe('StreamLogStore load', () => {
       false,
     );
     expect(
-      storage.writes.has(storageFile(STREAM_LOG_SUMMARIES_DIR, 'delete-me')),
+      storage.writes.has(
+        storageFile(LEGACY_STREAM_LOG_SUMMARIES_DIR, 'delete-me'),
+      ),
     ).toBe(false);
     expect(storage.deletes).toContain(
       storageFile(STREAM_LOGS_DIR, 'delete-me'),
     );
     expect(storage.deletes).toContain(
-      storageFile(STREAM_LOG_SUMMARIES_DIR, 'delete-me'),
+      storageFile(LEGACY_STREAM_LOG_SUMMARIES_DIR, 'delete-me'),
     );
   });
 
@@ -1719,9 +1564,9 @@ describe('StreamLogStore load', () => {
       expect(storage.writes.has(storageFile(STREAM_LOGS_DIR, 'alpha'))).toBe(
         true,
       );
-      expect(
-        storage.writes.has(storageFile(STREAM_LOG_SUMMARIES_DIR, 'alpha')),
-      ).toBe(true);
+      expect(writtenSummary(storage.writes, 'alpha')).toEqual(
+        settledSummary(500, 500),
+      );
     } finally {
       vi.useRealTimers();
     }
@@ -1761,7 +1606,7 @@ describe('StreamLogStore load', () => {
     );
   });
 
-  it('writes stream summaries with dirty log flushes', async () => {
+  it('writes summary checkpoints with dirty log flushes', async () => {
     const storage = mockStorage({ logs: {}, summaries: {} });
     const store = await StreamLogStore.open();
 
@@ -1878,39 +1723,16 @@ describe('StreamLogStore load', () => {
     ]);
   });
 
-  it('surfaces a non-array stream read and refuses memory-only appends', async () => {
+  it('refuses to open a non-array authoritative stream', async () => {
     const storage = mockStorage({
       logs: { gamma: { corrupted: 'not an array' } },
       summaries: {
         gamma: summary(100, 200, { hasRunningGroup: false }),
       },
     });
-    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-    const store = await StreamLogStore.open();
-    await expect(store.ensureLoaded('gamma')).rejects.toThrow(
+    await expect(StreamLogStore.open()).rejects.toThrow(
       'persisted log is not an array',
     );
-
-    // Parses-but-not-an-array is corrupt, not an empty log: the load fails
-    // loudly, exactly like unparseable JSON.
-    expect(store.get('gamma')).toBeUndefined();
-    expect(warnSpy).toHaveBeenCalledWith(
-      'StreamLogStore',
-      expect.stringContaining('Failed to reload stream gamma from disk'),
-    );
-
-    // Writer-only mutation surfaces the refusal at acquisition: a stream
-    // whose persisted log failed to load has no resident log, so no writer
-    // (and therefore no memory-only append) can be obtained.
-    expect(() =>
-      appendTranscriptEntry(
-        store,
-        'gamma',
-        namedEntry('gamma-new', 400, 'new entry'),
-      ),
-    ).toThrow('Cannot acquire a writer for released stream gamma');
-
-    expect(writtenLog(storage.writes, 'gamma')).toBeUndefined();
     expect(storage.writes.size).toBe(0);
   });
 
@@ -2280,7 +2102,7 @@ describe('StreamLogStore append-only persistence', () => {
   });
 });
 
-describe('StreamLogStore summary metadata mirror', () => {
+describe('StreamLogStore metadata checkpoints', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -2293,7 +2115,7 @@ describe('StreamLogStore summary metadata mirror', () => {
     model: 'deepseekproT',
   };
 
-  it('round-trips recorded summary metadata through the persisted cache', async () => {
+  it('round-trips recorded summary metadata through persistence', async () => {
     const storage = mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 200)] },
       summaries: { alpha: summary(200, 200) },
@@ -2310,12 +2132,18 @@ describe('StreamLogStore summary metadata mirror', () => {
       unknown
     >;
     expect(persisted).toMatchObject({ firstTimestamp: 200, meta: META });
+    expect(storage.deletes).toContain(LEGACY_STREAM_LOG_SUMMARIES_DIR);
+    const persistedJournal = storage.writes.get(
+      journalFile(STREAM_LOGS_DIR, 'alpha'),
+    );
+    expect(typeof persistedJournal).toBe('string');
 
-    // A fresh open serves the widened fields from the persisted cache alone.
+    // A fresh open serves the metadata from the canonical journal alone.
     vi.restoreAllMocks();
     mockStorage({
-      logs: { alpha: [logEntry('alpha', 1, 200)] },
-      summaries: { alpha: persisted },
+      logs: {},
+      summaries: {},
+      journals: { alpha: persistedJournal as string },
     });
     const reopened = await StreamLogStore.open();
     expect(reopened.getSummaryMeta('alpha')).toEqual(META);
@@ -2333,7 +2161,7 @@ describe('StreamLogStore summary metadata mirror', () => {
     store.recordSummaryMeta('alpha', META);
     await delay(0);
 
-    expect(writtenJournal(storage.writes, 'alpha')).toEqual([
+    expect(writtenMutations(storage.writes, 'alpha')).toEqual([
       expect.objectContaining({ op: 'seed' }),
       expect.objectContaining({
         op: 'append',
@@ -2354,7 +2182,7 @@ describe('StreamLogStore summary metadata mirror', () => {
     mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 200)] },
       summaries: { alpha: summary(200, 200) },
-      onSummaryWrite: async (streamId) => {
+      onCheckpointWrite: async (streamId) => {
         if (streamId !== 'alpha') return;
         summaryWriteStarted.resolve();
         await releaseSummaryWrite.promise;
@@ -2419,7 +2247,7 @@ describe('StreamLogStore summary metadata mirror', () => {
     mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 200)] },
       summaries: { alpha: summary(200, 200) },
-      onSummaryWrite: async (streamId) => {
+      onCheckpointWrite: async (streamId) => {
         if (streamId !== 'alpha') return;
         summaryWriteStarted.resolve();
         await releaseSummaryWrite.promise;
@@ -2438,7 +2266,7 @@ describe('StreamLogStore summary metadata mirror', () => {
     expect(store.getSummaryMeta('new-run')).toEqual(META);
   });
 
-  it('discards a stale-shaped summary cache loudly and rebuilds from the log', async () => {
+  it('ignores stale-shaped legacy summary metadata', async () => {
     const storage = mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 200)] },
       summaries: {
@@ -2456,8 +2284,40 @@ describe('StreamLogStore summary metadata mirror', () => {
     expect(store.getSummaryMeta('alpha')).toBeUndefined();
     expect(warnSpy).toHaveBeenCalledWith(
       'StreamLogStore',
-      expect.stringContaining('stale-shaped summary cache'),
+      expect.stringContaining('stale-shaped legacy summary'),
     );
+  });
+
+  it('does not resurrect legacy metadata after an explicit clearing checkpoint', async () => {
+    const journal = [
+      {
+        version: 1,
+        opId: '11111111-1111-4111-8111-111111111111',
+        op: 'seed',
+        entries: [logEntry('alpha', 1, 200)],
+      },
+      {
+        version: 1,
+        opId: '22222222-2222-4222-8222-222222222222',
+        op: 'checkpoint',
+        summary: settledSummary(200, 200),
+      },
+    ]
+      .map((record) => JSON.stringify(record))
+      .join('\n');
+    const storage = mockStorage({
+      logs: {},
+      summaries: { alpha: { ...summary(200, 200), meta: META } },
+      journals: { alpha: `${journal}\n` },
+    });
+
+    const store = await StreamLogStore.open();
+
+    expect(store.getSummaryMeta('alpha')).toBeUndefined();
+    expect(storage.writes.has(journalFile(STREAM_LOGS_DIR, 'alpha'))).toBe(
+      false,
+    );
+    expect(storage.deletes).toContain(LEGACY_STREAM_LOG_SUMMARIES_DIR);
   });
 
   it('discards a summary whose execution id violates the canonical schema', async () => {

@@ -41,8 +41,9 @@ import {
 } from './StreamLog';
 
 export const STREAM_LOGS_DIR = WORKSPACE_STORAGE_LAYOUT.streamLogs;
-export const STREAM_LOG_SUMMARIES_DIR =
-  WORKSPACE_STORAGE_LAYOUT.streamLogSummaries;
+// Temporary one-shot reader/cleanup for the retired derived summary tier.
+// Introduced 2026-08-17; remove after 2026-11-17.
+const LEGACY_STREAM_LOG_SUMMARIES_DIR = 'streamLogSummaries';
 const STREAM_LOG_LOAD_CONCURRENCY = 8;
 const STREAM_LOG_JOURNAL_EXTENSION = '.jsonl';
 const STREAM_LOG_JOURNAL_VERSION = 1;
@@ -56,8 +57,8 @@ type StreamLogListener = (streamId: StreamTabId, delta: StreamLogDelta) => void;
  * so sidebars and all-streams metadata paths never read the per-stream
  * sidecar files (#9947, PRD 2026-08-11). `StreamSnapshotStore` is the
  * authority and publishes a whole replacement object on every metadata
- * mutation and on every sidecar hydration (which lazily backfills legacy
- * summaries written before this field existed). Bounded scalars only:
+ * mutation and on every sidecar hydration. The canonical transcript journal
+ * carries it in checkpoint records. Bounded scalars only:
  * `command` carries a process run's command line, never an agent run's
  * full instruction text.
  */
@@ -74,15 +75,9 @@ const StreamSummaryMetaSchema = z.object({
 });
 export type StreamSummaryMeta = z.infer<typeof StreamSummaryMetaSchema>;
 
-// No per-field `.catch()`: this schema covers the crash-recovery flags
-// (`hasRunningGroup`, `hasRunningStreamingText`, `hasNonterminalWorkflowCall`)
-// that `hasSomethingRunning()` gates orphan recovery on. A `.catch()` here
-// would silently turn a malformed field into `undefined` (recovery skipped)
-// instead of failing the whole `safeParse`, which routes through the
-// "ignore cache, rebuild from stream log" fallback in `readSummary` — the
-// derived-tier discard+rebuild contract (#9434): a stale-shaped summary is
-// discarded and rebuilt from the authoritative stream log (its `meta` block
-// is rebuilt lazily by the snapshot store's next publish), never migrated.
+// No per-field `.catch()`: malformed legacy summary metadata must be rejected
+// as a unit instead of silently dropping crash-recovery flags or metadata.
+// Current summary flags are always derived from authoritative journal rows.
 const StreamLogSummarySchema = z.object({
   firstTimestamp: z.number().finite().optional(),
   lastTimestamp: z.number().finite().optional(),
@@ -101,6 +96,8 @@ interface StreamLoadResult {
 interface ParsedPersistedEntries {
   entries: StreamLogEntry[];
   preservedRawEntries: StreamLogPreservedRawEntry[];
+  summaryCheckpointSeen?: boolean;
+  summaryMeta?: StreamSummaryMeta;
 }
 
 const StreamLogJournalRecordSchema = z.discriminatedUnion('op', [
@@ -130,6 +127,12 @@ const StreamLogJournalRecordSchema = z.discriminatedUnion('op', [
     patch: z.looseObject({}),
     settled: z.boolean(),
   }),
+  z.object({
+    version: z.literal(STREAM_LOG_JOURNAL_VERSION),
+    opId: z.uuid(),
+    op: z.literal('checkpoint'),
+    summary: StreamLogSummarySchema,
+  }),
 ]);
 type StreamLogJournalRecord = z.infer<typeof StreamLogJournalRecordSchema>;
 type StreamLogJournalRecordInput =
@@ -145,7 +148,8 @@ type StreamLogJournalRecordInput =
       readonly id: string;
       readonly patch: StreamLogUpdatePatch;
       readonly settled: boolean;
-    };
+    }
+  | { readonly op: 'checkpoint'; readonly summary: StreamLogSummary };
 
 interface ParsedJsonlRecords {
   readonly entries: unknown[];
@@ -273,7 +277,7 @@ interface StreamState {
   journalNeedsTailRepair?: boolean;
   /** Current task in the per-stream persistence queue. */
   persistenceWork?: Promise<void>;
-  /** The derived summary must be refreshed after the journal prefix lands. */
+  /** A derived checkpoint must follow the pending journal prefix. */
   summaryDirty?: boolean;
   /** Last asynchronous persistence error, surfaced and retried by flush(). */
   persistenceError?: unknown;
@@ -469,7 +473,6 @@ export class StreamLogStore {
   private clearing = false;
   private stateRevision = 0;
   private pendingReload: Promise<void> | undefined;
-  private summaryCacheMaintenanceEnabled = true;
 
   private constructor(mode: StreamLogStoreMode) {
     this.mode = Object.freeze(mode);
@@ -507,9 +510,9 @@ export class StreamLogStore {
     }
   }
 
-  /** Handle over `STREAM_LOG_SUMMARIES_DIR`; same lifecycle as `kv()`. */
-  private summaryKv(): KVStore {
-    return this.kvHandles.get(STREAM_LOG_SUMMARIES_DIR);
+  /** Temporary reader for the retired summary sidecar directory. */
+  private legacySummaryKv(): KVStore {
+    return this.kvHandles.get(LEGACY_STREAM_LOG_SUMMARIES_DIR);
   }
 
   // -- StreamState record access -------------------------------------------
@@ -567,8 +570,8 @@ export class StreamLogStore {
   static async open(): Promise<StreamLogStore> {
     const store = new StreamLogStore({ kind: 'persistent' });
     await StorageFS.ensureDir(STREAM_LOGS_DIR);
-    await store.prepareSummaryCache();
     store.replaceSummaries(await store.readPersistentSummaries());
+    await store.cleanupLegacySummaryCache();
     return store;
   }
 
@@ -682,8 +685,8 @@ export class StreamLogStore {
 
   /**
    * The snapshot-owned display metadata mirrored into this stream's summary,
-   * or `undefined` for a stream whose summary predates the mirror (legacy
-   * rows backfill lazily on their next sidecar hydration). Metadata recorded
+   * or `undefined` for a stream whose journal predates metadata checkpoints.
+   * Metadata recorded
    * ahead of stream registration is served from the antechamber, so a run
    * fact that projects before `ensureStream` is never invisible.
    */
@@ -696,7 +699,7 @@ export class StreamLogStore {
 
   /**
    * Record the snapshot store's current metadata for a stream in its
-   * always-resident summary (memory now, summary cache asynchronously).
+   * always-resident summary (memory now, journal checkpoint asynchronously).
    * Whole-object replacement — the publisher owns field lifecycles — and a
    * deep-equal no-op gate, so the startup hydration sweep republishing
    * unchanged metadata for every stream costs no writes. A stream this store
@@ -1175,7 +1178,7 @@ export class StreamLogStore {
           streamId,
           STREAM_LOG_JOURNAL_EXTENSION,
         );
-        await this.deleteSummaryCache(streamId);
+        await this.deleteLegacySummaryEntry(streamId);
       }
       // The summaries map is the progress tab registry. Commit its removal
       // only after durable deletion succeeds so callers can retain and retry a
@@ -1206,7 +1209,7 @@ export class StreamLogStore {
 
       log.info(`Clearing all ${count} streams`);
       await this.kv().deleteDir();
-      await this.clearSummaryCache();
+      await this.cleanupLegacySummaryCache();
     } finally {
       this.writeTombstones.clear();
       this.clearing = false;
@@ -1577,8 +1580,6 @@ export class StreamLogStore {
     // resolve to, so the cached KV handles are dropped and re-resolve
     // against the new root on next access, before its first write.
     this.kvHandles.invalidateAll();
-    this.summaryCacheMaintenanceEnabled = true;
-    if (this.mode.kind === 'persistent') await this.prepareSummaryCache();
 
     const summaries = await this.readPersistentSummaries();
     if (revision !== this.stateRevision || this.pendingLoads().length > 0) {
@@ -1587,19 +1588,28 @@ export class StreamLogStore {
       );
     }
     this.replaceSummaries(summaries);
+    if (this.mode.kind === 'persistent') {
+      await this.cleanupLegacySummaryCache();
+    }
   }
 
   private async readPersistentSummaries(): Promise<
     Map<StreamTabId, StreamLogSummary>
   > {
-    const [legacyIds, journalIds] = await Promise.all([
+    const [legacyIds, journalIds, legacySummaryIds] = await Promise.all([
       this.kv().listKeys(),
       this.kv().listKeysWithExtension(STREAM_LOG_JOURNAL_EXTENSION),
+      this.legacySummaryKv().listKeys(),
     ]);
+    const legacySummaryIdSet = new Set(legacySummaryIds);
     const streamIds = [...new Set([...legacyIds, ...journalIds])];
     const results = await pMap(
       streamIds,
-      (streamId) => this.loadStreamSummary(streamId as StreamTabId),
+      (streamId) =>
+        this.loadStreamSummary(
+          streamId as StreamTabId,
+          legacySummaryIdSet.has(streamId),
+        ),
       { concurrency: STREAM_LOG_LOAD_CONCURRENCY },
     );
     const sortedResults = results
@@ -1650,67 +1660,54 @@ export class StreamLogStore {
 
   private async loadStreamSummary(
     streamId: StreamTabId,
+    readLegacyMeta = true,
   ): Promise<StreamLoadResult | null> {
-    const persistedSummary = await this.readSummary(streamId);
-    if (persistedSummary) {
-      return { streamId, summary: persistedSummary };
-    }
-
     // A discovered file may disappear before its read completes. Recheck the
     // union so neither a legacy array nor a journal-only empty registration is
     // resurrected after deletion.
     if (!(await this.hasPersistedStream(streamId))) return null;
     const entries = await this.readPersistedEntries(streamId);
     if (!entries) return null;
-    const summary = this.summarizeEntries(entries.entries);
-    // Empty transcripts have no timestamps, so their authoritative log file,
-    // rather than the optional summary cache, remains the registration marker.
-    if (entries.entries.length > 0 || entries.preservedRawEntries.length > 0) {
-      await this.maintainSummaryCache(streamId, summary);
+    let legacyMeta = entries.summaryMeta;
+    if (!entries.summaryCheckpointSeen && readLegacyMeta) {
+      legacyMeta = await this.readLegacySummaryMeta(streamId);
+    }
+    const summary = {
+      ...this.summarizeEntries(entries.entries),
+      ...(legacyMeta && { meta: legacyMeta }),
+    };
+    if (
+      this.mode.kind === 'persistent' &&
+      !entries.summaryCheckpointSeen &&
+      legacyMeta !== undefined
+    ) {
+      const checkpoint = toJournalRecord({ op: 'checkpoint', summary });
+      await this.kv().appendText(
+        streamId,
+        STREAM_LOG_JOURNAL_EXTENSION,
+        `${JSON.stringify(checkpoint)}\n`,
+      );
     }
     return { streamId, summary };
   }
 
-  private async readSummary(
+  private async readLegacySummaryMeta(
     streamId: StreamTabId,
-  ): Promise<StreamLogSummary | undefined> {
+  ): Promise<StreamSummaryMeta | undefined> {
     try {
-      const persisted = await this.summaryKv().read<unknown>(streamId);
-      const summary = this.parsePersistedSummary(persisted);
-      if (!summary) return undefined;
-
-      const [summaryMtime, legacyMtime, journalMtime] = await Promise.all([
-        this.summaryKv().modifiedAt(streamId),
-        this.kv().modifiedAt(streamId),
-        this.kv().modifiedAtWithExtension(
-          streamId,
-          STREAM_LOG_JOURNAL_EXTENSION,
-        ),
-      ]);
-      const logMtime = Math.max(
-        legacyMtime ?? -Infinity,
-        journalMtime ?? -Infinity,
-      );
-      // A missing log mtime means the authoritative log is gone (deleted, or
-      // never written) — orphaned summary, not merely stale. Trusting it here
-      // would register a stream that has no log to load, so `ensureLoaded`
-      // reads back an empty transcript instead of surfacing it as missing.
-      if (
-        summaryMtime !== undefined &&
-        (!Number.isFinite(logMtime) || summaryMtime < logMtime)
-      ) {
-        return undefined;
-      }
-
-      return summary;
-    } catch (error) {
-      const condition =
-        error instanceof SyntaxError ? 'corrupt' : 'unavailable';
+      const persisted = await this.legacySummaryKv().read<unknown>(streamId);
+      if (persisted === undefined) return undefined;
+      const parsed = StreamLogSummarySchema.safeParse(persisted);
+      if (parsed.success) return parsed.data.meta;
       log.warn(
-        `Ignoring ${condition} summary cache for ${streamId}; rebuilding from the stream log: ${toErrorMessage(error)}`,
+        `Ignoring stale-shaped legacy summary for ${streamId}: ${parsed.error.message}`,
       );
-      return undefined;
+    } catch (error) {
+      log.warn(
+        `Ignoring unavailable legacy summary for ${streamId}: ${toErrorMessage(error)}`,
+      );
     }
+    return undefined;
   }
 
   private summarizeEntries(
@@ -1727,32 +1724,6 @@ export class StreamLogStore {
     });
   }
 
-  private parsePersistedSummary(value: unknown): StreamLogSummary | undefined {
-    // A missing cache file (KVStore's quiet-missing `undefined`) is an
-    // ordinary rebuild, not a stale shape — nothing to warn about.
-    if (value === undefined) return undefined;
-    const result = StreamLogSummarySchema.safeParse(value);
-    if (!result.success) {
-      // Derived tier (#9434): discard the stale-shaped cache loudly and
-      // rebuild from the authoritative stream log — never migrate in place.
-      log.warn(
-        `Discarding a stale-shaped summary cache entry; rebuilding from the stream log: ${result.error.issues
-          .map(
-            (issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`,
-          )
-          .join('; ')}`,
-      );
-      return undefined;
-    }
-    if (
-      result.data.firstTimestamp === undefined &&
-      result.data.lastTimestamp === undefined
-    ) {
-      return undefined;
-    }
-    return result.data;
-  }
-
   private async persistStream(
     streamId: StreamTabId,
     expectedGeneration: number,
@@ -1761,7 +1732,14 @@ export class StreamLogStore {
       const state = this.streams.get(streamId);
       if (!state) return;
       const records = state.journalRecords?.slice() ?? [];
-      if (records.length > 0 && state.journalNeedsTailRepair) {
+      const summary = state.summaryDirty
+        ? this.summaries.get(streamId)
+        : undefined;
+      const checkpoint = summary
+        ? toJournalRecord({ op: 'checkpoint', summary: { ...summary } })
+        : undefined;
+      const recordsToWrite = checkpoint ? [...records, checkpoint] : records;
+      if (recordsToWrite.length > 0 && state.journalNeedsTailRepair) {
         const raw = await this.kv().readText(
           streamId,
           STREAM_LOG_JOURNAL_EXTENSION,
@@ -1778,15 +1756,17 @@ export class StreamLogStore {
         }
         state.journalNeedsTailRepair = false;
       }
-      if (records.length > 0) {
+      if (recordsToWrite.length > 0) {
+        if (checkpoint) state.summaryDirty = false;
         try {
           await this.kv().appendText(
             streamId,
             STREAM_LOG_JOURNAL_EXTENSION,
-            `${records.map((record) => JSON.stringify(record)).join('\n')}\n`,
+            `${recordsToWrite.map((record) => JSON.stringify(record)).join('\n')}\n`,
           );
         } catch (error) {
           state.journalNeedsTailRepair = true;
+          if (checkpoint) state.summaryDirty = true;
           throw error;
         }
         // Mutations can queue records while the append is in flight. Remove
@@ -1800,24 +1780,8 @@ export class StreamLogStore {
           streamId,
           STREAM_LOG_JOURNAL_EXTENSION,
         );
-        await this.deleteSummaryCache(streamId);
+        await this.deleteLegacySummaryEntry(streamId);
         return;
-      }
-      // A mutation can enqueue another journal record while the append above
-      // is in flight. Drain that record before writing the derived summary so
-      // the summary mtime remains at least as new as its authoritative log.
-      if ((state.journalRecords?.length ?? 0) > 0) continue;
-      if (state.summaryDirty) {
-        const summary = this.summaries.get(streamId);
-        state.summaryDirty = false;
-        try {
-          if (summary) {
-            await this.maintainSummaryCache(streamId, { ...summary });
-          }
-        } catch (error) {
-          state.summaryDirty = true;
-          throw error;
-        }
       }
       if (!this.hasPendingPersistence(streamId)) return;
     }
@@ -1863,61 +1827,24 @@ export class StreamLogStore {
     throw new Error(`Cannot ${operation} with a read-only transcript store.`);
   }
 
-  private async prepareSummaryCache(): Promise<void> {
+  private async deleteLegacySummaryEntry(streamId: StreamTabId): Promise<void> {
     try {
-      await StorageFS.ensureDir(STREAM_LOG_SUMMARIES_DIR);
+      await this.legacySummaryKv().delete(streamId);
     } catch (error) {
-      this.disableSummaryCacheMaintenance(
-        `Failed to prepare transcript summary cache; continuing with authoritative logs: ${toErrorMessage(error)}`,
+      log.warn(
+        `Failed to delete retired transcript summary for ${streamId}: ${toErrorMessage(error)}`,
       );
     }
   }
 
-  private async maintainSummaryCache(
-    streamId: StreamTabId,
-    summary: StreamLogSummary,
-  ): Promise<void> {
-    if (
-      this.mode.kind !== 'persistent' ||
-      !this.summaryCacheMaintenanceEnabled
-    ) {
-      return;
-    }
+  private async cleanupLegacySummaryCache(): Promise<void> {
     try {
-      await this.summaryKv().write(streamId, summary);
+      await this.legacySummaryKv().deleteDir();
     } catch (error) {
-      this.disableSummaryCacheMaintenance(
-        `Failed to write transcript summary cache for ${streamId}: ${toErrorMessage(error)}`,
+      log.warn(
+        `Failed to remove retired transcript summary directory: ${toErrorMessage(error)}`,
       );
     }
-  }
-
-  private async deleteSummaryCache(streamId: StreamTabId): Promise<void> {
-    if (!this.summaryCacheMaintenanceEnabled) return;
-    try {
-      await this.summaryKv().delete(streamId);
-    } catch (error) {
-      this.disableSummaryCacheMaintenance(
-        `Failed to delete transcript summary cache for ${streamId}: ${toErrorMessage(error)}`,
-      );
-    }
-  }
-
-  private async clearSummaryCache(): Promise<void> {
-    if (!this.summaryCacheMaintenanceEnabled) return;
-    try {
-      await this.summaryKv().deleteDir();
-    } catch (error) {
-      this.disableSummaryCacheMaintenance(
-        `Failed to clear transcript summary cache: ${toErrorMessage(error)}`,
-      );
-    }
-  }
-
-  private disableSummaryCacheMaintenance(message: string): void {
-    if (!this.summaryCacheMaintenanceEnabled) return;
-    this.summaryCacheMaintenanceEnabled = false;
-    log.warn(message);
   }
 
   private markPersistentChange(streamId: StreamTabId): void {
@@ -2114,6 +2041,8 @@ export class StreamLogStore {
 
     let currentBase = base;
     let logInstance = new StreamLog(base.entries, base.preservedRawEntries);
+    let summaryCheckpointSeen = false;
+    let summaryMeta: StreamSummaryMeta | undefined;
     let sawSeed = false;
     const seen = new Map<string, StreamLogJournalRecord>();
     let invalidRecords = 0;
@@ -2153,6 +2082,10 @@ export class StreamLogStore {
           break;
         }
         case 'ensure':
+          break;
+        case 'checkpoint':
+          summaryCheckpointSeen = true;
+          summaryMeta = record.summary.meta;
           break;
         case 'append': {
           const {
@@ -2194,6 +2127,8 @@ export class StreamLogStore {
     const parsed = {
       entries: logInstance.toJSON(),
       preservedRawEntries: currentBase.preservedRawEntries,
+      ...(summaryCheckpointSeen && { summaryCheckpointSeen }),
+      ...(summaryMeta && { summaryMeta }),
     };
     if (this.mode.kind === 'persistent' && legacyExists) {
       if (!sawSeed) {
