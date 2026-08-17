@@ -51,6 +51,7 @@ import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { killActiveRecording } from '@tools/media/audio';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   readGitEnvironmentSummary,
   readRecentCommits,
@@ -116,7 +117,10 @@ import {
   type DesktopSupabaseAuthHost,
 } from './desktopSupabaseAuth.js';
 import { buildDesktopMenuTemplate } from './desktopMenuTemplate.js';
-import { reportFatalStartupError } from './fatalStartupError.js';
+import {
+  isFatalDesktopShutdownRequested,
+  reportFatalStartupError,
+} from './fatalStartupError.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
@@ -301,10 +305,6 @@ function createWindow(options: {
     options.processSession,
     options.workspacePath,
   );
-  const reportAsyncError = (error: unknown) => console.error(error);
-  installDesktopNavigationPolicy(window.webContents, {
-    onAsyncError: reportAsyncError,
-  });
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
   } = {};
@@ -334,6 +334,23 @@ function createWindow(options: {
   const showErrorMessage = async (message: string) => {
     await dialog.showMessageBox(window, { message, type: 'error' });
   };
+  const reportAsyncError = (error: unknown) => {
+    console.error('Desktop asynchronous operation failed:', error);
+    void showErrorMessage(
+      `A desktop operation failed: ${toErrorMessage(error)}`,
+    ).catch((notificationError: unknown) => {
+      console.error(
+        'Failed to display desktop asynchronous operation error:',
+        notificationError,
+      );
+    });
+  };
+  const reportBackgroundError = (error: unknown) => {
+    console.error('Desktop background operation failed:', error);
+  };
+  installDesktopNavigationPolicy(window.webContents, {
+    onAsyncError: reportAsyncError,
+  });
   const showInfoMessage = async (message: string) => {
     await dialog.showMessageBox(window, { type: 'info', message });
   };
@@ -415,7 +432,7 @@ function createWindow(options: {
           await shell.openExternal(DESKTOP_RELEASES_PAGE_URL);
         }
       },
-    }).catch(reportAsyncError);
+    }).catch(reportBackgroundError);
   }
   const previewHost = createDesktopPreviewHost({
     shell,
@@ -492,6 +509,11 @@ function createWindow(options: {
   // observes a dirty Monaco buffer and refuses the unload, so every close path
   // (quit, workspace switch, window close) asks here and nowhere else.
   window.webContents.on('will-prevent-unload', (event) => {
+    if (isFatalDesktopShutdownRequested()) {
+      pendingWorkspaceRelaunch = undefined;
+      event.preventDefault();
+      return;
+    }
     const response = dialog.showMessageBoxSync(window, {
       type: 'warning',
       buttons: ['Keep Editing', 'Discard Changes'],
@@ -551,7 +573,9 @@ function createWindow(options: {
     signInForRemoteAgentCatalog,
     showInfoMessage,
     showWarningMessage,
-    showErrorMessage,
+    showErrorMessage: async (message) => {
+      await showErrorMessage(message).catch(reportBackgroundError);
+    },
     // Recompute the onboarding funnel after a run completes so a user's first
     // successful run leaves the setup card without waiting for a restart
     // (the run lifecycle has already persisted firstRunDone). Mirrors the
@@ -783,7 +807,7 @@ function createWindow(options: {
           outDir: true,
           autoRevealExclude: true,
         }),
-        onDetectionError: reportAsyncError,
+        onDetectionError: reportBackgroundError,
       }),
       latexConfigPersistenceController: new LatexConfigPersistenceController(),
     },
@@ -799,7 +823,7 @@ function createWindow(options: {
         const execution = await getAgentExecution();
         return await execution.revealStream(streamId);
       } catch (error) {
-        if (!presentationAbort.signal.aborted) reportAsyncError(error);
+        if (!presentationAbort.signal.aborted) reportBackgroundError(error);
         return 'unavailable';
       }
     },
@@ -923,7 +947,7 @@ function createWindow(options: {
       return { commits: [] as string[], isGitRepo: false };
     }
     return readRecentCommits(workspacePath, DESKTOP_RECENT_COMMIT_LIMIT, {
-      onError: reportAsyncError,
+      onError: reportBackgroundError,
     });
   };
   const getEnvironmentSummary = async () => {
@@ -933,7 +957,7 @@ function createWindow(options: {
     }
     return (
       (await readGitEnvironmentSummary(workspacePath, {
-        onError: reportAsyncError,
+        onError: reportBackgroundError,
       })) ?? EMPTY_DESKTOP_ENVIRONMENT_SUMMARY
     );
   };
@@ -968,7 +992,7 @@ function createWindow(options: {
         sessionId,
         exitCode,
       }),
-    onError: reportAsyncError,
+    onError: reportBackgroundError,
   });
   const browserViews = createDesktopBrowserViews({
     getWindow: () => (window.isDestroyed() ? undefined : window),
@@ -979,6 +1003,8 @@ function createWindow(options: {
         ...state,
       }),
     onError: reportAsyncError,
+    onBlockedExternalUrl: reportBackgroundError,
+    onExternalOpenError: reportBackgroundError,
   });
   const workspaceIpc = createDesktopWorkspaceIpc(
     { postToRenderer: postToRendererIfAlive },
@@ -1067,7 +1093,7 @@ function createWindow(options: {
     // here (so `disposed` flips immediately); the queue only orders when this
     // window's completion promise resolves, keeping a macOS dock-reopen from
     // discarding an earlier window's still-running cleanup.
-    const current = desktopDiffHost.dispose().catch(reportAsyncError);
+    const current = desktopDiffHost.dispose().catch(reportBackgroundError);
     pendingDesktopDiffHostDispose = diffHostDisposeQueue.add(() => current);
     if (mainWindow === window) {
       mainWindow = null;
@@ -1082,7 +1108,7 @@ function createWindow(options: {
         ?.then((execution) => execution.dispose())
         .catch((error: unknown) => {
           if (!(error instanceof Error && error.name === 'AbortError')) {
-            reportAsyncError(error);
+            reportBackgroundError(error);
           }
         });
     }
@@ -1099,7 +1125,7 @@ function createWindow(options: {
             workspaceRelaunch.selectedPath,
           );
         } catch (error) {
-          reportAsyncError(error);
+          reportBackgroundError(error);
         }
         // Consumed. The synchronous `window-all-closed` in this same turn has
         // already seen the pending value and deferred quitting; clearing here

@@ -54,8 +54,8 @@ export async function executeWolframCode(
       success: result.success,
       output: result.stdout,
       error: result.stderr,
-      timedOut: result.timedOut ?? false,
-      exitCode: result.exitCode ?? null,
+      timedOut: result.timedOut,
+      exitCode: result.exitCode,
     };
   } catch (err) {
     return wolframFailure(toErrorMessage(err));

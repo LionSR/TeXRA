@@ -3,7 +3,8 @@
  *
  * Host-neutral: reads from the platform secrets port (each host wires its own
  * secret store) with GitHub environment-variable fallbacks. The token is
- * persisted under `github.token` (set via the Git settings tab or CLI secrets),
+ * persisted under `github.token` (set via the Git settings tab, `/config` →
+ * GitHub token, or CLI secrets),
  * while the conventional env vars are `GH_TOKEN` and `GITHUB_TOKEN`; hence the
  * explicit fallback. Because every host wires `platform().secrets`, GitHub
  * tools work in the CLI and desktop too, not just the extension.
@@ -13,6 +14,13 @@ import type { PlatformSecrets } from '@platform/secrets';
 
 /** SecretStorage key under which the GitHub PAT is persisted. */
 export const GITHUB_TOKEN_STORAGE_KEY = 'github.token';
+
+/**
+ * GitHub "new personal access token" page, pre-filled with the description and
+ * scope the subscription poller needs. Opened verbatim by every host.
+ */
+export const GITHUB_TOKEN_CREATE_URL =
+  'https://github.com/settings/tokens/new?description=TeXRA%20PR%20subscription&scopes=repo';
 
 /** Environment variables accepted by GitHub tools, in precedence order. */
 const GITHUB_TOKEN_ENV_VARS = ['GH_TOKEN', 'GITHUB_TOKEN'] as const;

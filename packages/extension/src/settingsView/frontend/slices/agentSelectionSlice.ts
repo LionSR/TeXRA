@@ -7,11 +7,13 @@ import {
   agentSelectionItems,
   customAgentDir,
   customAgentDirIsDefault,
+  customAgentScanIssues,
 } from '../settingsState';
 
 export const agentSelectionHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION]: (data) => {
     agentSelectionItems.set(data.agents);
+    customAgentScanIssues.set(data.customAgentIssues);
   },
 
   [SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR]: (data) => {

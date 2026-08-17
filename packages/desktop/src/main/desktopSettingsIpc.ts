@@ -2,7 +2,6 @@ import type { SessionHandle } from '@agent/runtime';
 import { formatError } from '@common/errors';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import {
-  GITHUB_TOKEN_CREATE_URL,
   listGitHubSubscriptionEntries,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
@@ -29,6 +28,7 @@ import { buildReliabilityAndOrchestrationMessage } from '@shared/settingsView/ha
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import {
+  GITHUB_TOKEN_CREATE_URL,
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';

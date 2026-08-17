@@ -77,6 +77,7 @@ import {
   copilotRouteInfos,
   customAgentDir,
   customAgentDirIsDefault,
+  customAgentScanIssues,
   customPresets,
   detachSubagentsOnStop,
   multiAgentSettingsRevision,
@@ -406,6 +407,7 @@ export class SettingsApp extends SettingsAppBase {
             .agents=${agentSelectionItems.get()}
             .customAgentDir=${customAgentDir.get()}
             .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
+            .customAgentScanIssues=${customAgentScanIssues.get()}
             .initialSubTab=${agentSubTab.get()}
             .reliabilitySettings=${reliabilitySettings.get()}
             .unsupportedCommands=${unsupportedCommands.get()}

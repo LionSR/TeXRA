@@ -39,6 +39,7 @@ export {
   resolveAgentForLaunch,
   getAgentsByCategory,
   getAgentsBySource,
+  getCustomAgentScanIssues,
   refresh,
   invalidateRemoteAgentsAfterSignOut,
   // Typed data options

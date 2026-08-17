@@ -20,11 +20,7 @@ import {
   LEAN_PROJECT_COMMANDS,
   LEAN_SERVER_MODE_LABELS,
 } from '@tools/lean/leanTypes';
-import {
-  SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
-  setupSecrets,
-  texraScopedConfig,
-} from '@tools/setup/platform';
+import { setupSecrets, texraScopedConfig } from '@tools/setup/platform';
 
 const SHARED_LITERALS = [
   ['DEFAULT_POLLING_BACKOFF_CONFIG', DEFAULT_POLLING_BACKOFF_CONFIG],
@@ -42,10 +38,6 @@ const SHARED_LITERALS = [
   ['LEAN_PROJECT_COMMANDS entry', LEAN_PROJECT_COMMANDS.build],
   ['CORE_LATEX_TOOLS', CORE_LATEX_TOOLS],
   ['IMAGE_TOOLS', IMAGE_TOOLS],
-  [
-    'SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES',
-    SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
-  ],
   [
     'LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS',
     LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS,

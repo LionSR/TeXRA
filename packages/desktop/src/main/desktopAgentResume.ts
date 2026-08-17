@@ -12,10 +12,7 @@ import {
 } from '@agent/runtime';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
-import {
-  DESKTOP_UNAVAILABLE_TOOLS,
-  launchDesktopAgent,
-} from './desktopAgentLaunch.js';
+import { launchDesktopAgent } from './desktopAgentLaunch.js';
 import { toLogData } from './desktopLogUtils.js';
 
 interface DesktopResumeContext {
@@ -124,15 +121,18 @@ function resumeDesktopStream(
           { replayWhenAttached: true },
         );
       },
-      resumeToolUse: (snapshot, claimedRecovery) =>
-        resumeQueuedToolUseFromResumeData(snapshot.streamId, snapshot, {
+      resumeToolUse: async (snapshot, claimedRecovery) => {
+        const { getDefaultUnavailableToolNames } =
+          await import('@tools/registry');
+        return resumeQueuedToolUseFromResumeData(snapshot.streamId, snapshot, {
           session: context.session,
           recovery: claimedRecovery,
-          runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
+          runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
           canAcquireResumeLease,
           isCancellationRequested: isResumeInvalidated,
           onError: (error) => reportUnhandledFailure(streamId, error),
-        }),
+        });
+      },
       executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
         launchDesktopAgent(
           { kind: 'resume', config, executionId },

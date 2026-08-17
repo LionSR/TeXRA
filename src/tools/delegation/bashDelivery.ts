@@ -60,7 +60,7 @@ export function formatBashDelivery(
   stderr: BashDeliveryStreamExcerpt,
 ): string {
   const lines = [
-    `<exit-code>${result.exitCode ?? 'unknown'}</exit-code>`,
+    `<exit-code>${result.exitCode}</exit-code>`,
     `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
   ];
   const streams = [
