@@ -4,6 +4,7 @@ import { LRUCache } from 'lru-cache';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { throwAggregated } from '@utils/core';
 import { KeyedMutex } from '@utils/core/keyedMutex';
 import {
   createBoundedIdSet,
@@ -86,8 +87,10 @@ export class ToolUseFollowUpQueue {
   private readonly releaseObservers = new Set<
     (streamId: StreamTabId) => void
   >();
+  private disposed = false;
 
   onRelease(observer: (streamId: StreamTabId) => void): () => void {
+    if (this.disposed) return () => {};
     this.releaseObservers.add(observer);
     return () => {
       this.releaseObservers.delete(observer);
@@ -108,6 +111,7 @@ export class ToolUseFollowUpQueue {
     kind: Exclude<FollowUpConsumerKind, 'recovery'>,
     generationId?: string,
   ): FollowUpConsumerLease | undefined {
+    if (this.disposed) return undefined;
     if (this.terminal.has(streamId)) return undefined;
     const entry =
       this.entries.get(streamId) ?? this.createEntry(streamId, generationId);
@@ -117,25 +121,30 @@ export class ToolUseFollowUpQueue {
     return this.claim(entry, streamId, kind);
   }
 
-  /** Restore a generation read from the stream's authoritative flow record. */
+  /**
+   * Restore a generation read from the stream's authoritative flow record.
+   * Distinguishes session dispose from terminal/mismatch rejection so callers
+   * can label diagnostics accurately.
+   */
   restorePersistedGeneration(
     streamId: StreamTabId,
     generationId: string,
-  ): boolean {
-    if (this.terminal.has(streamId)) return false;
+  ): 'restored' | 'disposed' | 'unavailable' {
+    if (this.disposed) return 'disposed';
+    if (this.terminal.has(streamId)) return 'unavailable';
     const entry = this.entries.get(streamId);
     if (entry) {
       if (entry.generationId === generationId) {
         entry.generationProvisional = false;
-        return true;
+        return 'restored';
       }
-      if (!entry.generationProvisional) return false;
+      if (!entry.generationProvisional) return 'unavailable';
       entry.generationId = generationId;
       entry.generationProvisional = false;
-      return true;
+      return 'restored';
     }
     this.createEntry(streamId, generationId);
-    return true;
+    return 'restored';
   }
 
   /**
@@ -148,6 +157,7 @@ export class ToolUseFollowUpQueue {
     streamId: StreamTabId,
     executionId: ExecutionId,
   ): FollowUpConsumerLease | undefined {
+    if (this.disposed) return undefined;
     if (!streamId.endsWith(`#${executionId}`)) {
       throw new Error(
         `Child stream ${streamId} does not belong to execution ${executionId}.`,
@@ -165,6 +175,7 @@ export class ToolUseFollowUpQueue {
     streamId: StreamTabId,
     createIfMissing = false,
   ): FollowUpRecoveryLease | undefined {
+    if (this.disposed) return undefined;
     if (this.terminal.has(streamId)) return undefined;
     const entry =
       this.entries.get(streamId) ??
@@ -201,6 +212,7 @@ export class ToolUseFollowUpQueue {
     admission: 'live_owner' | 'recoverable' | 'existing_recoverable',
     expectedGenerationId?: string,
   ): FollowUpSubmission {
+    if (this.disposed) return { kind: 'unavailable' };
     if (this.terminal.has(streamId)) return { kind: 'unavailable' };
 
     let entry = this.entries.get(streamId);
@@ -316,12 +328,41 @@ export class ToolUseFollowUpQueue {
 
   /** Terminalize a stream; any outstanding lease becomes stale immediately. */
   terminalize(streamId: StreamTabId): boolean {
+    if (this.disposed) return false;
     const entry = this.entries.get(streamId);
     entry?.queue.dispose();
     this.entries.delete(streamId);
     this.terminal.set(streamId, true);
     this.notifyReleaseObservers(streamId);
     return true;
+  }
+
+  /**
+   * Dispose the session-owned boundary: every live entry queue, then the
+   * entry map, terminal tombstones, and release observers. The state clears
+   * in a `finally` so one queue's disposal failure cannot leave the map,
+   * tombstones, or observers behind. Entry-creating paths refuse to rebuild
+   * afterwards, so a late detached producer cannot leak a queue nobody will
+   * drain.
+   */
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    const failures: unknown[] = [];
+    try {
+      for (const entry of this.entries.values()) {
+        try {
+          entry.queue.dispose();
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+    } finally {
+      this.entries.clear();
+      this.terminal.clear();
+      this.releaseObservers.clear();
+    }
+    throwAggregated(failures, 'Multiple follow-up queues failed to dispose');
   }
 
   private notifyReleaseObservers(streamId: StreamTabId): void {
