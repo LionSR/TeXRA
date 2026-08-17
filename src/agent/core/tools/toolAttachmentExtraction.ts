@@ -2,7 +2,6 @@
 import {
   type FileReference,
   type ToolFileAttachment,
-  ToolFileAttachmentSchema,
   type ToolResult,
   ToolResultSchema,
   ValidationErrorDiagnosticsSchema,
@@ -28,14 +27,6 @@ export interface ExtractedToolAttachments {
 }
 
 /**
- * Type guard to check if a value is a valid ToolFileAttachment.
- * Uses Zod schema for validation.
- */
-function isToolFileAttachment(value: unknown): value is ToolFileAttachment {
-  return ToolFileAttachmentSchema.safeParse(value).success;
-}
-
-/**
  * Extracts file attachments from a tool result and returns a typed payload.
  * Binary data (base64Data, bytes) is stripped from the result.
  *
@@ -48,13 +39,10 @@ function isToolFileAttachment(value: unknown): value is ToolFileAttachment {
 export function extractToolAttachments(
   result: ToolResult,
 ): ExtractedToolAttachments {
-  const attachmentsCandidate = result.files;
-  const attachments: ToolFileAttachment[] = Array.isArray(attachmentsCandidate)
-    ? attachmentsCandidate.filter(isToolFileAttachment)
-    : [];
-
   const parsed = ToolResultSchema.parse(result);
   const status = parsed.status;
+  const attachments: ToolFileAttachment[] =
+    status === 'executed' ? (parsed.files ?? []) : [];
   const sanitizedResult: Record<string, unknown> = { status };
 
   for (const [key, value] of Object.entries(parsed)) {
@@ -96,6 +84,6 @@ export function extractToolAttachments(
 
   return {
     attachments,
-    sanitizedResult: ToolResultSchema.parse(sanitizedResult),
+    sanitizedResult: sanitizedResult as ToolResult,
   };
 }
