@@ -8,6 +8,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it, beforeAll } from 'vitest';
 
 // Local imports
+import { TERMINAL_OUTPUT_MAX_CHARS } from '@hosts/uiHosts';
 import type { ConfigProvider } from '@platform/interfaces';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -73,6 +74,15 @@ function setupTool(
 
 describe('SendToTerminalTool', () => {
   beforeAll(() => installApprovalSkippingPlatform());
+
+  it('advertises the host terminal capture limit', () => {
+    const { tool } = setupTool();
+    assert.ok(
+      tool.definition.description.includes(
+        `up to ${TERMINAL_OUTPUT_MAX_CHARS} characters`,
+      ),
+    );
+  });
 
   it('runs the command and returns exit code + captured output', async () => {
     const { tool, runs } = setupTool();
