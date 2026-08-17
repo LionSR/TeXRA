@@ -153,14 +153,17 @@ export class SessionStores {
     };
   }
 
-  hasStreamDeletionClaim(
-    stream: StreamTabId,
-    expectedIncarnation: number,
-  ): boolean {
-    return (
-      (this.streamDeletionClaims.get(stream)?.get(expectedIncarnation)?.size ??
-        0) > 0
-    );
+  /**
+   * Whether a live presentation currently owns this stream's removal.
+   *
+   * The desktop process store deliberately does not need to duplicate the
+   * state-side incarnation counter: it only decides whether to start a
+   * headless fallback in the removal microtask. Any outstanding claim means
+   * that a presentation already owns that decision, and claims are released
+   * when its deletion settles or fails.
+  */
+  hasStreamDeletionClaim(stream: StreamTabId): boolean {
+    return (this.streamDeletionClaims.get(stream)?.size ?? 0) !== 0;
   }
 
   deleteStream(
