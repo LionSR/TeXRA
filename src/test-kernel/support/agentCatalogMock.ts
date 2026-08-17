@@ -24,6 +24,7 @@ const agentCatalogMock = vi.hoisted(() => ({
   getAgent: vi.fn(),
   getAgentsByCategory: vi.fn(),
   getVisibleAgents: vi.fn(),
+  getCustomAgentScanIssues: vi.fn(() => []),
   loadAgents: vi.fn(),
   refresh: vi.fn(),
   resolveAgentForLaunch: vi.fn(),

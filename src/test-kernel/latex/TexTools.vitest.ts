@@ -26,7 +26,13 @@ vi.mock('@utils/system/toolUtils', async (importOriginal) => {
 const workspacePath = '/workspace';
 
 function execResult(success: boolean): ExecResult {
-  return { success, stdout: '', stderr: '', exitCode: success ? 0 : 1 };
+  return {
+    success,
+    stdout: '',
+    stderr: '',
+    timedOut: false,
+    exitCode: success ? 0 : 1,
+  };
 }
 
 function compile(

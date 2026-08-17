@@ -28,6 +28,7 @@ import {
 import type {
   AgentCategory,
   AgentModePreset,
+  AgentScanIssue,
   AgentSelectionItem,
   ByCategory,
   ChatGptAuthStatus,
@@ -164,6 +165,7 @@ export const agentSelectionItems = trackedSignal<
 >(() => byCategory(() => []));
 export const customAgentDir = trackedSignal(() => '');
 export const customAgentDirIsDefault = trackedSignal(() => true);
+export const customAgentScanIssues = trackedSignal<AgentScanIssue[]>(() => []);
 export const agentSubTab = trackedSignal<AgentCategory | undefined>(
   () => undefined,
 );

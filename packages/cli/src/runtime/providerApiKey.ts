@@ -7,24 +7,12 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import { platform } from '@platform/platform';
+import { looksLikeCredentialPlaceholder } from './credentialInput';
 
 export function loadProviderApiKeyStatuses(): Promise<
   Record<ApiProvider, ApiKeyStatus>
 > {
   return loadApiKeyStatusMap(platform().secrets, API_PROVIDERS);
-}
-
-const PLACEHOLDER_PATTERNS: readonly RegExp[] = [
-  /^(sk-?)?(x{3,}|\*{3,}|\.{3,}|<.*>|your[- _]?(?:api[- _]?)?key)/i,
-  /^(?:api[- _]?)?key[- _]?here$/i,
-  /^placeholder$/i,
-  /^example$/i,
-];
-
-function looksLikePlaceholder(key: string): boolean {
-  return (
-    key.length < 8 || PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(key))
-  );
 }
 
 /** Persist a provider key without exposing it outside the credential store. */
@@ -34,7 +22,7 @@ export async function saveProviderApiKey(
 ): Promise<void> {
   const trimmed = key.trim();
   if (!trimmed) throw new Error('API key is empty.');
-  if (looksLikePlaceholder(trimmed)) {
+  if (looksLikeCredentialPlaceholder(trimmed)) {
     throw new Error(
       `This looks like a placeholder rather than a ${provider} API key. Enter the key issued by the provider.`,
     );

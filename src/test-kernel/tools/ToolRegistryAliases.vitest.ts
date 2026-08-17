@@ -1,8 +1,34 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { resolveToolDefinitions } from '@tools/registry';
+import {
+  getDefaultToolRegistry,
+  getDefaultUnavailableToolNames,
+  resolveToolDefinitions,
+} from '@tools/registry';
 
 describe('tool registry resolution', () => {
+  it('derives product-host exclusions from each registered tool', () => {
+    expect(getDefaultUnavailableToolNames('cli')).toEqual([
+      'diagnostics',
+      'inline_comment',
+      'inquiry',
+      'invoke_command',
+      'install_vscode_extension',
+      'send_to_terminal',
+    ]);
+    expect(getDefaultUnavailableToolNames('desktop')).toEqual([
+      'diagnostics',
+      'inline_comment',
+      'invoke_command',
+      'install_vscode_extension',
+      'send_to_terminal',
+    ]);
+    expect(getDefaultUnavailableToolNames('extension')).toEqual([]);
+    expect(
+      getDefaultToolRegistry().get('inquiry')?.hosts?.cli?.reason,
+    ).toContain('graphical inquiry panel');
+  });
+
   it('replaces a declared contract with the registered tool definition', () => {
     const warn = vi.fn();
     const [tool] = resolveToolDefinitions(

@@ -14,7 +14,7 @@ export class AgentLaunchResources {
   private modelHandler?: DisposableModelHandler;
   private runTrace?: RunTrace;
   private parentStage?: StageHandle;
-  private activatedStreamId?: StreamTabId;
+  private activated?: { streamId: StreamTabId; runTrace: RunTrace };
 
   ownModelHandler<T extends DisposableModelHandler>(modelHandler: T): T {
     this.modelHandler = modelHandler;
@@ -45,8 +45,8 @@ export class AgentLaunchResources {
     return parentStage;
   }
 
-  markActivated(streamId: StreamTabId): void {
-    this.activatedStreamId = streamId;
+  markActivated(streamId: StreamTabId, runTrace: RunTrace): void {
+    this.activated = { streamId, runTrace };
   }
 
   transfer(): void {
@@ -55,11 +55,10 @@ export class AgentLaunchResources {
 
   fail(
     compensate: (
-      activatedStreamId: StreamTabId | undefined,
-      runTrace: RunTrace | undefined,
+      activated: { streamId: StreamTabId; runTrace: RunTrace } | undefined,
     ) => void,
   ): void {
-    const { modelHandler, runTrace, parentStage, activatedStreamId } = this;
+    const { modelHandler, runTrace, parentStage, activated } = this;
     this.clear();
 
     this.runCleanup(runTrace, 'end failed launch stage', () => {
@@ -69,7 +68,7 @@ export class AgentLaunchResources {
       modelHandler?.dispose();
     });
     this.runCleanup(runTrace, 'compensate failed launch activation', () => {
-      compensate(activatedStreamId, runTrace);
+      compensate(activated);
     });
     this.runCleanup(undefined, 'dispose failed launch trace', () => {
       runTrace?.dispose();
@@ -80,7 +79,7 @@ export class AgentLaunchResources {
     this.modelHandler = undefined;
     this.runTrace = undefined;
     this.parentStage = undefined;
-    this.activatedStreamId = undefined;
+    this.activated = undefined;
   }
 
   private runCleanup(
