@@ -502,6 +502,19 @@ export class StreamLogStore {
     return queue;
   }
 
+  private retirePersistenceQueueIfIdle(
+    streamId: StreamTabId,
+    queue: PQueue,
+  ): void {
+    if (
+      queue.pending === 0 &&
+      queue.size === 0 &&
+      this.persistenceQueues.get(streamId) === queue
+    ) {
+      this.persistenceQueues.delete(streamId);
+    }
+  }
+
   private async runInPersistenceQueue<T>(
     streamId: StreamTabId,
     task: () => Promise<T>,
@@ -510,13 +523,7 @@ export class StreamLogStore {
     try {
       return (await queue.add(task)) as T;
     } finally {
-      if (
-        queue.pending === 0 &&
-        queue.size === 0 &&
-        this.persistenceQueues.get(streamId) === queue
-      ) {
-        this.persistenceQueues.delete(streamId);
-      }
+      this.retirePersistenceQueueIfIdle(streamId, queue);
     }
   }
 
@@ -1437,13 +1444,7 @@ export class StreamLogStore {
         const current = this.streams.get(streamId);
         if (!current || current.persistenceWork !== work) return;
         current.persistenceWork = undefined;
-        if (
-          queue.pending === 0 &&
-          queue.size === 0 &&
-          this.persistenceQueues.get(streamId) === queue
-        ) {
-          this.persistenceQueues.delete(streamId);
-        }
+        this.retirePersistenceQueueIfIdle(streamId, queue);
         if (
           current.persistenceError === undefined &&
           expectedGeneration === this.writeGeneration &&
