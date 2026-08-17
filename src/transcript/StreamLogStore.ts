@@ -1151,8 +1151,11 @@ export class StreamLogStore {
     this.writeTombstones.add(streamId);
 
     try {
-      const pending = this.streams.get(streamId)?.persistenceWork;
-      if (pending) await Promise.allSettled([pending]);
+      const state = this.streams.get(streamId);
+      const pending = [state?.pendingLoad, state?.persistenceWork].filter(
+        (work): work is Promise<void> => work !== undefined,
+      );
+      if (pending.length > 0) await Promise.allSettled(pending);
       if (this.mode.kind !== 'ephemeral') {
         log.info(`Deleting stream: ${streamId}`);
         await this.kv().delete(streamId);
@@ -1181,7 +1184,9 @@ export class StreamLogStore {
 
     try {
       const pending = [...this.streams.values()].flatMap((state) =>
-        state.persistenceWork ? [state.persistenceWork] : [],
+        [state.pendingLoad, state.persistenceWork].filter(
+          (work): work is Promise<void> => work !== undefined,
+        ),
       );
       await Promise.allSettled(pending);
       this.forgetAllStreamState();
@@ -1509,7 +1514,7 @@ export class StreamLogStore {
     // Sample before the first await: run facts may arrive while pending writes
     // drain or the replacement adapters prepare, and the reload must not fold
     // those new-root facts into the state it is about to replace.
-    const revision = this.stateRevision;
+    let revision = this.stateRevision;
     if (discardPendingWrites) {
       // Invalidate and drain any in-flight batch before the adapters
       // repoint: a write started before a storage-root rollback must not
@@ -1518,9 +1523,12 @@ export class StreamLogStore {
       // drain keeps a mid-write stream from straddling the repoint.
       this.writeGeneration += 1;
       const pending = [...this.streams.values()].flatMap((state) =>
-        state.persistenceWork ? [state.persistenceWork] : [],
+        [state.pendingLoad, state.persistenceWork].filter(
+          (work): work is Promise<void> => work !== undefined,
+        ),
       );
       await Promise.allSettled(pending);
+      revision = this.stateRevision;
     } else if (this.mode.kind === 'persistent') {
       await this.flush();
     }

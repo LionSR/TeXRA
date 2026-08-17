@@ -1615,6 +1615,29 @@ describe('StreamLogStore load', () => {
     );
   });
 
+  it('lets delete drain a legacy load before removing its seed journal', async () => {
+    const loadStarted = createDeferred();
+    const releaseLoad = createDeferred();
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: { alpha: summary(100, 100) },
+      onLogRead: async () => {
+        loadStarted.resolve();
+        await releaseLoad.promise;
+      },
+    });
+    const store = await StreamLogStore.open();
+
+    const load = store.ensureLoaded('alpha');
+    await loadStarted.promise;
+    const deletion = store.delete('alpha');
+    releaseLoad.resolve();
+    await Promise.all([load, deletion]);
+
+    expect(store.has('alpha')).toBe(false);
+    expect((await StreamLogStore.open()).has('alpha')).toBe(false);
+  });
+
   it('flushes unrelated dirty streams when delete cancels a pending save', async () => {
     const storage = mockStorage({
       logs: {},
