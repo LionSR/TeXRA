@@ -99,6 +99,10 @@ export class SessionStores {
     StreamTabId,
     Map<number | undefined, Promise<DeleteStreamResult>>
   >();
+  private readonly streamDeletionClaims = new Map<
+    StreamTabId,
+    Map<number, Set<symbol>>
+  >();
   private pendingDeleteAll: Promise<DeleteAllStreamsResult> | undefined;
   private readonly deletionQueue = new PQueue({ concurrency: 1 });
 
@@ -118,9 +122,45 @@ export class SessionStores {
     if (executionId) await waitForOwnedExecutionLeaseRelease(executionId);
   }
 
-  /** Whether a host projection already owns deletion for this stream. */
-  hasPendingStreamDeletion(stream: StreamTabId): boolean {
-    return (this.pendingStreamDeletions.get(stream)?.size ?? 0) > 0;
+  /**
+   * Claim presentation ownership before deletion preparation reaches its
+   * first await. The process-level desktop fallback uses this synchronous
+   * signal to distinguish a live projection from a genuinely headless run.
+   */
+  claimStreamDeletion(
+    stream: StreamTabId,
+    expectedIncarnation: number,
+  ): () => void {
+    let byIncarnation = this.streamDeletionClaims.get(stream);
+    if (!byIncarnation) {
+      byIncarnation = new Map();
+      this.streamDeletionClaims.set(stream, byIncarnation);
+    }
+    let claims = byIncarnation.get(expectedIncarnation);
+    if (!claims) {
+      claims = new Set();
+      byIncarnation.set(expectedIncarnation, claims);
+    }
+    const claim = Symbol(stream);
+    claims.add(claim);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      claims.delete(claim);
+      if (claims.size === 0) byIncarnation.delete(expectedIncarnation);
+      if (byIncarnation.size === 0) this.streamDeletionClaims.delete(stream);
+    };
+  }
+
+  hasStreamDeletionClaim(
+    stream: StreamTabId,
+    expectedIncarnation: number,
+  ): boolean {
+    return (
+      (this.streamDeletionClaims.get(stream)?.get(expectedIncarnation)?.size ??
+        0) > 0
+    );
   }
 
   deleteStream(

@@ -479,6 +479,10 @@ export class ProgressBackend {
       if (!commandRemoval.created) return 'superseded';
       expectedIncarnation = commandRemoval.incarnation;
     }
+    const releaseDeletionClaim = this.state.stores.claimStreamDeletion(
+      stream,
+      expectedIncarnation,
+    );
 
     let retained: DeleteStreamResult | undefined;
     try {
@@ -511,6 +515,7 @@ export class ProgressBackend {
         },
       );
     } catch (error) {
+      releaseDeletionClaim();
       if (commandRemoval) {
         this.factApplier.abortCommandRemoval(
           stream,
@@ -520,6 +525,7 @@ export class ProgressBackend {
       }
       throw error;
     }
+    releaseDeletionClaim();
 
     if (retained === 'active' || retained === 'failed') {
       // Best-effort presentation repair, each failure isolated so a broken

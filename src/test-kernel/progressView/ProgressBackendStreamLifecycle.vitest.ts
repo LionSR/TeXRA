@@ -275,6 +275,7 @@ describe('ProgressBackend', () => {
       expect(session.executions.getAgentHandleByStream(stream)).toBeUndefined();
 
       const deletion = backend.deleteStream(stream);
+      expect(backend.state.stores.hasStreamDeletionClaim(stream, 0)).toBe(true);
       await vi.waitFor(() =>
         expect(waitForRelease).toHaveBeenCalledWith(stream),
       );
@@ -286,6 +287,9 @@ describe('ProgressBackend', () => {
       expect(clearStream).toHaveBeenCalledWith(stream, {
         expectedIncarnation: 0,
       });
+      expect(backend.state.stores.hasStreamDeletionClaim(stream, 0)).toBe(
+        false,
+      );
       expect(backend.state.streamLogs.has(stream)).toBe(false);
     } finally {
       releaseLease();

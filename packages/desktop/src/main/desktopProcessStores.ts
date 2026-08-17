@@ -53,12 +53,12 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
         const { streamId } = sessionEvent.event.payload;
         const expectedIncarnation = streamIncarnations.get(streamId) ?? 0;
         pendingRemovals.set(streamId, expectedIncarnation);
-        // Let a live ProgressBackend claim the deletion synchronously while
-        // this fact is dispatched. Only the process-level headless fallback
-        // starts in the following microtask, so the two hosts never create
-        // separate guard slots for the same removal.
+        // A live ProgressBackend claims this incarnation synchronously during
+        // fact dispatch, before its deletion preparation reaches an await.
+        // Check in the following microtask so the process fallback runs only
+        // when no presentation owns the removal.
         queueMicrotask(() => {
-          if (stores.hasPendingStreamDeletion(streamId)) {
+          if (stores.hasStreamDeletionClaim(streamId, expectedIncarnation)) {
             if (pendingRemovals.get(streamId) === expectedIncarnation) {
               pendingRemovals.delete(streamId);
             }
