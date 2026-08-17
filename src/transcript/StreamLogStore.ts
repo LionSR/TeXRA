@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import pMap from 'p-map';
+import PQueue from 'p-queue';
 import { z } from 'zod';
 
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
@@ -171,6 +172,9 @@ function parseJsonlEntries(
       if (tornTail) repairedText = lines.slice(0, index).join('\n') + '\n';
     }
   }
+  if (raw.length > 0 && !raw.endsWith('\n') && repairedText === undefined) {
+    repairedText = `${raw}\n`;
+  }
   return { entries, ...(repairedText !== undefined ? { repairedText } : {}) };
 }
 
@@ -265,7 +269,7 @@ interface StreamState {
   journalRecords?: StreamLogJournalRecord[];
   /** A failed append may have left a torn tail that must be repaired first. */
   journalNeedsTailRepair?: boolean;
-  /** Per-stream append chain; different streams persist independently. */
+  /** Current task in the per-stream persistence queue. */
   persistenceWork?: Promise<void>;
   /** The derived summary must be refreshed after the journal prefix lands. */
   summaryDirty?: boolean;
@@ -297,6 +301,36 @@ function toSummary(source: SummarySource): StreamLogSummary {
       ? { hasNonterminalWorkflowCall: true }
       : {}),
   };
+}
+
+function parsePersistedUpdate(
+  current: StreamLogEntry,
+  patch: Record<string, unknown>,
+): StreamLogUpdatePatch | undefined {
+  const mergedData =
+    current.type === STREAM_LOG_ENTRY_TYPES.GROUP_START &&
+    patch.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
+    isObject(patch.data)
+      ? { ...current.data, ...patch.data }
+      : patch.data;
+  const result = StreamLogEntrySchema.safeParse({
+    ...current,
+    ...patch,
+    ...(mergedData !== undefined ? { data: mergedData } : {}),
+    id: current.id,
+    seqNo: current.seqNo,
+    ...(current.settlementSeqNo !== undefined
+      ? { settlementSeqNo: current.settlementSeqNo }
+      : {}),
+  });
+  if (!result.success) return undefined;
+  const {
+    id: _id,
+    seqNo: _seqNo,
+    settlementSeqNo: _settlementSeqNo,
+    ...validatedPatch
+  } = result.data;
+  return validatedPatch;
 }
 
 /**
@@ -404,6 +438,8 @@ export class StreamLogStore {
   private readonly kvHandles = new KVStoreCache<string>(
     (dir) => new KVStore(dir, { compactJson: true }),
   );
+  /** One serial queue per active stream; different streams remain independent. */
+  private readonly persistenceQueues = new Map<StreamTabId, PQueue>();
 
   /**
    * Lightweight summary per stream (first/last timestamp). Populated at open
@@ -437,6 +473,33 @@ export class StreamLogStore {
   /** Handle over `STREAM_LOGS_DIR`; re-resolved after a storage-root reload. */
   private kv(): KVStore {
     return this.kvHandles.get(STREAM_LOGS_DIR);
+  }
+
+  private persistenceQueue(streamId: StreamTabId): PQueue {
+    let queue = this.persistenceQueues.get(streamId);
+    if (!queue) {
+      queue = new PQueue({ concurrency: 1 });
+      this.persistenceQueues.set(streamId, queue);
+    }
+    return queue;
+  }
+
+  private async runInPersistenceQueue<T>(
+    streamId: StreamTabId,
+    task: () => Promise<T>,
+  ): Promise<T> {
+    const queue = this.persistenceQueue(streamId);
+    try {
+      return (await queue.add(task)) as T;
+    } finally {
+      if (
+        queue.pending === 0 &&
+        queue.size === 0 &&
+        this.persistenceQueues.get(streamId) === queue
+      ) {
+        this.persistenceQueues.delete(streamId);
+      }
+    }
   }
 
   /** Handle over `STREAM_LOG_SUMMARIES_DIR`; same lifecycle as `kv()`. */
@@ -649,7 +712,9 @@ export class StreamLogStore {
     if (isDeepStrictEqual(summary.meta, meta)) return;
     summary.meta = meta;
     this.stateRevision += 1;
-    this.markPersistentChange(streamId);
+    if (this.mode.kind === 'persistent') {
+      this.markPersistentChange(streamId);
+    }
   }
 
   /** Land metadata recorded before this stream existed in the registry. */
@@ -682,7 +747,7 @@ export class StreamLogStore {
 
   /**
    * Drop heavy entries from memory while keeping the on-disk copy authoritative.
-   * If there are pending writes, queue the release so `executeWrite` can flush
+   * If there are pending writes, queue the release so `persistStream` can flush
    * first and actually evict afterwards; otherwise releases immediately.
    * Subsequent access must go through `ensureLoaded` to rehydrate.
    */
@@ -804,6 +869,8 @@ export class StreamLogStore {
           streamId,
           (log) => log.settle(id, patch),
           (updated) => {
+            // Chunk updates are intentionally memory-only. Settlement must
+            // persist the fully materialized entry, including accumulated text.
             const {
               id: _id,
               seqNo: _seqNo,
@@ -959,7 +1026,7 @@ export class StreamLogStore {
         }
         // Load recovered — saves can persist this stream again. If a save
         // was deferred while the load was in flight (dirty stream re-queued
-        // by executeWrite), flush it now so we don't wait for another
+        // by persistStream), flush it now so we don't wait for another
         // append to unblock it.
         const recovered = this.streams.get(streamId);
         if (recovered) recovered.loadFailed = false;
@@ -1301,10 +1368,23 @@ export class StreamLogStore {
     this.assertWritableStore('save transcripts');
     if (this.mode.kind !== 'persistent') return;
     const state = this.ensureStreamState(streamId);
-    if (state.persistenceWork || !this.hasPendingPersistence(streamId)) return;
+    if (
+      state.pendingLoad ||
+      state.persistenceWork ||
+      !this.hasPendingPersistence(streamId)
+    )
+      return;
     state.persistenceError = undefined;
     const expectedGeneration = this.writeGeneration;
-    const work = this.persistStream(streamId, expectedGeneration);
+    const queue = this.persistenceQueue(streamId);
+    const task = queue.add(() =>
+      this.persistStream(streamId, expectedGeneration),
+    );
+    const work = Promise.allSettled([task, queue.onIdle()]).then(
+      ([taskResult]) => {
+        if (taskResult.status === 'rejected') throw taskResult.reason;
+      },
+    );
     state.persistenceWork = work;
     void work
       .catch((error: unknown) => {
@@ -1315,6 +1395,13 @@ export class StreamLogStore {
         const current = this.streams.get(streamId);
         if (!current || current.persistenceWork !== work) return;
         current.persistenceWork = undefined;
+        if (
+          queue.pending === 0 &&
+          queue.size === 0 &&
+          this.persistenceQueues.get(streamId) === queue
+        ) {
+          this.persistenceQueues.delete(streamId);
+        }
         if (
           current.persistenceError === undefined &&
           expectedGeneration === this.writeGeneration &&
@@ -1712,6 +1799,7 @@ export class StreamLogStore {
     // `writeTombstones` guard is intentionally left untouched — its lifetime
     // is owned by `delete()`'s try/finally, not by this cascade.
     this.streams.delete(streamId);
+    this.persistenceQueues.delete(streamId);
     this.releaseRequests.delete(streamId);
     this.summaries.delete(streamId);
     this.pendingSummaryMeta.delete(streamId);
@@ -1722,6 +1810,7 @@ export class StreamLogStore {
     // is deliberately not cleared here — `clear()` owns and clears it in its
     // own finally block.
     this.streams.clear();
+    this.persistenceQueues.clear();
     this.releaseRequests.clear();
     this.summaries.clear();
     this.pendingSummaryMeta.clear();
@@ -1918,17 +2007,22 @@ export class StreamLogStore {
   private async readPersistedEntries(
     streamId: StreamTabId,
   ): Promise<ParsedPersistedEntries | undefined> {
+    return this.runInPersistenceQueue(streamId, () =>
+      this.readPersistedEntriesSerialized(streamId),
+    );
+  }
+
+  private async readPersistedEntriesSerialized(
+    streamId: StreamTabId,
+  ): Promise<ParsedPersistedEntries | undefined> {
     const journal = await this.kv().readText(
       streamId,
       STREAM_LOG_JOURNAL_EXTENSION,
     );
-    const legacy = await this.kv().read<unknown>(streamId);
-    if (journal === undefined && legacy === undefined) return undefined;
-    const base =
-      legacy === undefined
-        ? { entries: [], preservedRawEntries: [] }
-        : this.parsePersistedEntries(streamId, legacy);
     if (journal === undefined) {
+      const legacy = await this.kv().read<unknown>(streamId);
+      if (legacy === undefined) return undefined;
+      const base = this.parsePersistedEntries(streamId, legacy);
       if (this.mode.kind === 'persistent') {
         await this.replaceWithSeedJournal(streamId, legacy as unknown[]);
       }
@@ -1936,6 +2030,21 @@ export class StreamLogStore {
     }
 
     const parsedJournal = parseJsonlEntries(streamId, journal);
+    const parsedRecords = parsedJournal.entries.map((raw) =>
+      StreamLogJournalRecordSchema.safeParse(raw),
+    );
+    const journalHasSeed = parsedRecords.some(
+      (result) => result.success && result.data.op === 'seed',
+    );
+    const legacyExists = await this.kv().exists(streamId);
+    const legacy =
+      legacyExists && !journalHasSeed
+        ? await this.kv().read<unknown>(streamId)
+        : undefined;
+    const base =
+      legacy === undefined
+        ? { entries: [], preservedRawEntries: [] }
+        : this.parsePersistedEntries(streamId, legacy);
     if (
       parsedJournal.repairedText !== undefined &&
       this.mode.kind === 'persistent'
@@ -1952,8 +2061,7 @@ export class StreamLogStore {
     let sawSeed = false;
     const seen = new Map<string, StreamLogJournalRecord>();
     let invalidRecords = 0;
-    for (const raw of parsedJournal.entries) {
-      const result = StreamLogJournalRecordSchema.safeParse(raw);
+    for (const result of parsedRecords) {
       if (!result.success) {
         invalidRecords += 1;
         continue;
@@ -1998,10 +2106,20 @@ export class StreamLogStore {
           break;
         }
         case 'update':
-          if (record.settled) {
-            logInstance.settle(record.id, record.patch as StreamLogUpdatePatch);
-          } else {
-            logInstance.update(record.id, record.patch as StreamLogUpdatePatch);
+          {
+            const current = logInstance.getById(record.id);
+            const patch = current
+              ? parsePersistedUpdate(current, record.patch)
+              : (record.patch as StreamLogUpdatePatch);
+            if (!patch) {
+              invalidRecords += 1;
+              break;
+            }
+            if (record.settled) {
+              logInstance.settle(record.id, patch);
+            } else {
+              logInstance.update(record.id, patch);
+            }
           }
           break;
       }
@@ -2016,7 +2134,7 @@ export class StreamLogStore {
       entries: logInstance.toJSON(),
       preservedRawEntries: currentBase.preservedRawEntries,
     };
-    if (this.mode.kind === 'persistent' && legacy !== undefined) {
+    if (this.mode.kind === 'persistent' && legacyExists) {
       if (!sawSeed) {
         // One-time conversion of the unshipped JSON-plus-JSONL overlay shape,
         // as well as ordinary legacy arrays, into one canonical journal.
@@ -2025,7 +2143,7 @@ export class StreamLogStore {
           logInstance.toPersistedEntries(),
         );
       } else {
-        await this.kv().delete(streamId);
+        await this.deleteLegacyLog(streamId);
       }
     }
     return parsed;
@@ -2041,7 +2159,17 @@ export class StreamLogStore {
       STREAM_LOG_JOURNAL_EXTENSION,
       `${JSON.stringify(seed)}\n`,
     );
-    await this.kv().delete(streamId);
+    await this.deleteLegacyLog(streamId);
+  }
+
+  private async deleteLegacyLog(streamId: StreamTabId): Promise<void> {
+    try {
+      await this.kv().delete(streamId);
+    } catch (error) {
+      log.warn(
+        `Failed to remove retired transcript array for ${streamId}: ${toErrorMessage(error)}`,
+      );
+    }
   }
 
   private async hasPersistedStream(streamId: StreamTabId): Promise<boolean> {

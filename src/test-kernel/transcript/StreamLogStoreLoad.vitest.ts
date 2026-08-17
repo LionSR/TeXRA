@@ -33,6 +33,7 @@ interface MockStorageOptions {
   /** Values are usually arrays; non-array values simulate corrupt logs. */
   logs: Record<string, unknown>;
   summaries: Record<string, unknown>;
+  journals?: Record<string, string>;
   rawLogJson?: Record<string, string>;
   rawSummaryJson?: Record<string, string>;
   logReadError?: Error;
@@ -225,6 +226,7 @@ function fileStat(mtime: number): FileStat {
 function mockStorage({
   logs,
   summaries,
+  journals: initialJournals = {},
   rawLogJson = {},
   rawSummaryJson = {},
   logReadError,
@@ -255,7 +257,7 @@ function mockStorage({
   const deletes: string[] = [];
   const ensuredDirs: string[] = [];
   const writes = new Map<string, unknown>();
-  const journals: Record<string, string> = {};
+  const journals: Record<string, string> = { ...initialJournals };
   const projectedLogs: Record<string, unknown[]> = {};
 
   vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) => {
@@ -1885,6 +1887,83 @@ describe('StreamLogStore append-only persistence', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it('repairs a valid journal record that lacks its final newline', async () => {
+    const seed = JSON.stringify({
+      version: 1,
+      opId: '11111111-1111-4111-8111-111111111111',
+      op: 'seed',
+      entries: [logEntry('alpha', 1, 100)],
+    });
+    const storage = mockStorage({
+      logs: {},
+      summaries: {},
+      journals: { alpha: seed },
+    });
+
+    const store = await StreamLogStore.open();
+    await store.ensureLoaded('alpha');
+
+    expect(storage.writes.get(journalFile(STREAM_LOGS_DIR, 'alpha'))).toBe(
+      `${seed}\n`,
+    );
+    expect(store.get('alpha')?.getRange(0).at(0)?.id).toBe('alpha-1');
+  });
+
+  it('ignores an invalid update record without corrupting its entry', async () => {
+    const journal = [
+      {
+        version: 1,
+        opId: '11111111-1111-4111-8111-111111111111',
+        op: 'seed',
+        entries: [logEntry('alpha', 1, 100)],
+      },
+      {
+        version: 1,
+        opId: '22222222-2222-4222-8222-222222222222',
+        op: 'update',
+        id: 'alpha-1',
+        patch: { text: 42 },
+        settled: true,
+      },
+    ]
+      .map((record) => JSON.stringify(record))
+      .join('\n');
+    mockStorage({
+      logs: {},
+      summaries: {},
+      journals: { alpha: `${journal}\n` },
+    });
+
+    const store = await StreamLogStore.open();
+    await store.ensureLoaded('alpha');
+
+    expect(store.get('alpha')?.getRange(0).at(0)).toMatchObject({
+      id: 'alpha-1',
+      text: 'alpha entry 1',
+    });
+  });
+
+  it('loads a seeded journal without parsing a corrupt retired array', async () => {
+    const seed = JSON.stringify({
+      version: 1,
+      opId: '11111111-1111-4111-8111-111111111111',
+      op: 'seed',
+      entries: [logEntry('alpha', 1, 100)],
+    });
+    const storage = mockStorage({
+      logs: { alpha: [] },
+      summaries: {},
+      rawLogJson: { alpha: '{"corrupt":' },
+      journals: { alpha: `${seed}\n` },
+    });
+
+    const store = await StreamLogStore.open();
+    await store.ensureLoaded('alpha');
+
+    expect(store.get('alpha')?.getRange(0).at(0)?.id).toBe('alpha-1');
+    expect(storage.deletes).toContain(storageFile(STREAM_LOGS_DIR, 'alpha'));
   });
 
   it('persists streaming text only when the whole entry settles', async () => {
