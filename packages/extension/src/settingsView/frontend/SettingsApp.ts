@@ -1,7 +1,7 @@
 /** Main container for the unified settings view. */
 
 import { html, nothing, type TemplateResult } from 'lit';
-import { customElement, query } from 'lit/decorators.js';
+import { customElement } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
@@ -25,7 +25,7 @@ import {
   type SettingsTabPanelName,
   type SettingsViewOutboundHandlerRegistry,
 } from '@shared/schemas';
-import { assertSupported, isKnownUnsupported } from '@shared/utils/dispatcher';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
   registerTeXRAWebAwesomeIcons,
   waIcon,
@@ -45,7 +45,6 @@ import './tabs/MemoryTab';
 import './tabs/AccountTab';
 import './tabs/SubscriptionsTab';
 import './tabs/GoalTab';
-import './tabs/HistoryTab';
 import './tabs/ModelsTab';
 import './tabs/AgentsTab';
 import './tabs/MultiAgentTab';
@@ -91,7 +90,6 @@ import {
   globalStreamingDefault,
   goalItems,
   helperModel,
-  historyItems,
   inlineCriticismEnabled,
   latexConfigValues,
   latexConfigValuesLoaded,
@@ -123,7 +121,6 @@ import {
   unsupportedCommands,
   userEmail,
 } from './settingsState';
-import type { HistoryTab } from './tabs/HistoryTab';
 
 registerTeXRAWebAwesomeIcons();
 
@@ -139,9 +136,6 @@ const SettingsAppBase = SignalWatcher(
 export class SettingsApp extends SettingsAppBase {
   // Static 'styles' override lost through mixin type erasure; still works at runtime.
   static styles = [designTokens, commonViewStyles, settingsViewStyles];
-
-  // Tab refs
-  @query('history-tab') private historyTab?: HistoryTab;
 
   private monthlyProfileRefreshTimer?: ReturnType<typeof setTimeout>;
 
@@ -189,23 +183,9 @@ export class SettingsApp extends SettingsAppBase {
     }, delay);
   }
 
-  // Outbound message handlers (extension host → settings webview), composed
-  // from the domain slices under `./slices/` (see `messageDispatcher.ts`).
-  // HISTORY_CLEARED is overridden here to additionally clear the
-  // `<history-tab>` search box — a DOM ref this component owns via `@query`,
-  // not signal state, so it can't live in the slice itself. `assertSupported`
-  // narrows the `historySlice` entry out of the registry's
-  // `Handler | Unsupported` union (see `@shared/utils/dispatcher`), which is
-  // the narrowing the dispatcher would do were this not a direct call.
-  private readonly messageHandlers: SettingsViewOutboundHandlerRegistry = {
-    ...settingsViewHandlers,
-    [SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED]: (data) => {
-      assertSupported(
-        settingsViewHandlers[SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED],
-      )(data);
-      this.historyTab?.clearSearch();
-    },
-  };
+  /** Outbound message handlers composed from the settings state slices. */
+  private readonly messageHandlers: SettingsViewOutboundHandlerRegistry =
+    settingsViewHandlers;
 
   protected override handleMessage(raw: unknown): void {
     dispatchSettingsViewOutbound(raw, this.messageHandlers, (error) => {
@@ -502,13 +482,6 @@ export class SettingsApp extends SettingsAppBase {
         `;
       case 'shortcuts':
         return html`<shortcuts-tab></shortcuts-tab>`;
-      case 'history':
-        return html`
-          <history-tab
-            .items=${historyItems.get()}
-            .unsupportedCommands=${unsupportedCommands.get()}
-          ></history-tab>
-        `;
       case 'goal':
         return goalSupported
           ? html`<goal-tab .items=${goalItems.get()}></goal-tab>`

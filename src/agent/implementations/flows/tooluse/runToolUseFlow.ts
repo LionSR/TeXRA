@@ -54,7 +54,7 @@ import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
 import {
   extractTouchedFiles,
-  ToolUseRunSharedCanonicalSchema,
+  ToolUseRunSharedSchema,
   type PreparedShared,
   type ToolUseRunShared,
 } from './nodes/types';
@@ -502,7 +502,7 @@ export async function runToolUseFlow<C = unknown>(
         prepareNode,
         kv,
         executionId,
-        ToolUseRunSharedCanonicalSchema,
+        ToolUseRunSharedSchema,
       );
       activePersistedFlow = pf;
       pf.setServices(services);

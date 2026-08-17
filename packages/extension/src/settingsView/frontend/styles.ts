@@ -1,9 +1,6 @@
 // Third-party imports
 import { css, type CSSResult } from 'lit';
 
-// Shared history/search styles
-import { historyListStyles, searchStyles } from '@shared/styles';
-
 const settingsContainerStyles: CSSResult = css`
   :host {
     display: block;
@@ -224,8 +221,4 @@ const settingsContainerStyles: CSSResult = css`
   }
 `;
 
-export const settingsViewStyles = [
-  searchStyles,
-  historyListStyles,
-  settingsContainerStyles,
-];
+export const settingsViewStyles = [settingsContainerStyles];

@@ -76,8 +76,7 @@ async function executeLake(
     windowsHide: true,
     stdin: 'ignore',
   });
-  const stdout = result.stdout ?? '';
-  const stderr = result.stderr ?? '';
+  const { stdout, stderr } = result;
   const shouldUseShortMessage =
     result.isMaxBuffer ||
     result.exitCode === undefined ||

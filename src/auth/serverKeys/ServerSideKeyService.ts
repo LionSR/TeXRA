@@ -16,7 +16,6 @@
 
 import type { StateStore } from '@platform/interfaces';
 import type { SpendingStatus, SpendingStatusError } from '@shared/schemas';
-import type { ServerSideProvider } from '@shared/constants/providers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { SupabaseClient } from '../SupabaseClient';
 import {
@@ -25,12 +24,18 @@ import {
   FREE_TIER,
   type UserTier,
 } from '../config';
+import type { ModelProvider } from 'llm-zoo';
 import type { TierService } from './TierService';
 
 interface ServerSideKeyLogger {
-  error?(message: string, options?: { data?: unknown }): void;
-  info?(message: string, options?: { data?: unknown }): void;
+  error(message: string, options?: { data?: unknown }): void;
+  info(message: string, options?: { data?: unknown }): void;
 }
+
+const NOOP_SERVER_SIDE_KEY_LOGGER: ServerSideKeyLogger = {
+  error: () => undefined,
+  info: () => undefined,
+};
 
 /**
  * When the last access fetch was anonymous (dead session), the authenticated
@@ -42,7 +47,7 @@ interface ServerSideKeyLogger {
 const ANONYMOUS_FETCH_BACKOFF_MS = 30_000;
 
 /** Path suffixes for relay URLs, matching SDK expectations. */
-const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
+const RELAY_PATH_SUFFIXES: Partial<Record<ModelProvider, string>> = {
   openai: '/v1',
   xai: '/v1',
   deepseek: '/v1',
@@ -145,7 +150,7 @@ export class ServerSideKeyService {
     private readonly baseUrl: string,
     private readonly tierService: TierService,
     private readonly globalState: StateStore | null = null,
-    private readonly logger: ServerSideKeyLogger = {},
+    private readonly logger: ServerSideKeyLogger = NOOP_SERVER_SIDE_KEY_LOGGER,
     private readonly notifyIncludedModelAccessChanged: (
       enabled: boolean,
     ) => void = () => {},
@@ -221,7 +226,7 @@ export class ServerSideKeyService {
       try {
         this.notifyIncludedModelAccessChanged(value);
       } catch (error) {
-        this.logger.error?.(`Event listener failed: ${toErrorMessage(error)}`);
+        this.logger.error(`Event listener failed: ${toErrorMessage(error)}`);
       }
     }
   }
@@ -240,8 +245,8 @@ export class ServerSideKeyService {
     if (!options.preserveTierCache) this.tierService.clearCache();
   }
 
-  isProviderOnServer(provider: string): boolean {
-    return this.tierService.getProviders().includes(provider.toLowerCase());
+  isProviderOnServer(provider: ModelProvider): boolean {
+    return this.tierService.getProviders().includes(provider);
   }
 
   private isAccessCacheValid(): boolean {
@@ -269,7 +274,7 @@ export class ServerSideKeyService {
     } catch (error) {
       // Denied by error (auth/network failure), not by policy — log so the two
       // are distinguishable.
-      this.logger.error?.(
+      this.logger.error(
         `Access check failed, treating as denied: ${toErrorMessage(error)}`,
       );
       return { hasAccess: false, userTier: null };
@@ -342,10 +347,10 @@ export class ServerSideKeyService {
       let accessGranted = accessStatus.hasAccess && providers.length > 0;
 
       if (this.tierService.isAccessExpired()) {
-        this.logger.info?.('User access has expired');
+        this.logger.info('User access has expired');
         accessGranted = false;
       } else if (!hasFullAccess && tierConfig === null) {
-        this.logger.info?.(
+        this.logger.info(
           'Tier config unavailable for non-Ultra user, denying access',
         );
         accessGranted = false;
@@ -382,7 +387,7 @@ export class ServerSideKeyService {
         this.tierService.isQuotaExceeded()
       ) {
         this.quotaFlipApplied = true;
-        this.logger.info?.(
+        this.logger.info(
           'Relay quota exhausted; switching useIncludedModelAccess off',
         );
         // Await so the persisted toggle state, the cleared cache, and
@@ -413,7 +418,10 @@ export class ServerSideKeyService {
     return this.tierService.isModelAvailable(userTier, modelName);
   }
 
-  shouldUseServerSideKeysSync(provider: string, modelName?: string): boolean {
+  shouldUseServerSideKeysSync(
+    provider: ModelProvider,
+    modelName?: string,
+  ): boolean {
     if (
       !this.useIncludedModelAccess ||
       !this.isProviderOnServer(provider) ||
@@ -428,9 +436,8 @@ export class ServerSideKeyService {
     return this.tierService.getExpirationDate();
   }
 
-  getRelayBaseUrl(provider: string): string {
-    const normalizedProvider = provider.toLowerCase() as ServerSideProvider;
-    const suffix = RELAY_PATH_SUFFIXES[normalizedProvider] ?? '';
-    return `${this.baseUrl}/functions/v1/relay/${normalizedProvider}${suffix}`;
+  getRelayBaseUrl(provider: ModelProvider): string {
+    const suffix = RELAY_PATH_SUFFIXES[provider] ?? '';
+    return `${this.baseUrl}/functions/v1/relay/${provider}${suffix}`;
   }
 }
