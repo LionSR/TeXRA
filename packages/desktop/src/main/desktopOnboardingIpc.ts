@@ -2,6 +2,7 @@ import {
   planOnboardingFunnelTransition,
   type OnboardingFunnelState,
 } from '@controllers/onboarding/onboardingFunnel';
+import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefreshQueue';
 import { platform } from '@platform/platform';
 import type { StateStore } from '@platform/interfaces';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -64,8 +65,9 @@ export function createDesktopOnboardingIpc(
   // state. A latch coalesces overlapping requests: while one refresh is in
   // flight, a single re-run is queued and run once the current one settles, so
   // callers always observe a consistent terminal state.
-  let refreshChain: Promise<void> = Promise.resolve();
-  let rerunRequested = false;
+  const funnelRefreshQueue = new OnboardingRefreshQueue(
+    runOnboardingFunnelRefresh,
+  );
 
   function postCurrentState(): void {
     const dismissed = state.get<boolean>(
@@ -128,21 +130,7 @@ export function createDesktopOnboardingIpc(
   }
 
   function refreshOnboardingFunnel(): Promise<void> {
-    // If a refresh is already running, mark that another full pass is needed
-    // and return the chain tail — every caller resolves only once the queued
-    // pass has settled, so they all observe the same terminal funnel state.
-    rerunRequested = true;
-    refreshChain = refreshChain
-      .catch(() => undefined)
-      .then(async () => {
-        // Collapse multiple overlapping requests that arrived while a pass was
-        // running into a single re-run.
-        while (rerunRequested) {
-          rerunRequested = false;
-          await runOnboardingFunnelRefresh();
-        }
-      });
-    return refreshChain;
+    return funnelRefreshQueue.run();
   }
 
   async function dismiss(): Promise<void> {

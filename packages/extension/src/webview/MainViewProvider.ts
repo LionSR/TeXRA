@@ -1,5 +1,4 @@
 // Third-party imports
-import PQueue from 'p-queue';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -23,6 +22,7 @@ import {
   planOnboardingFunnelTransition,
   type OnboardingFunnelState,
 } from '@controllers/onboarding/onboardingFunnel';
+import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefreshQueue';
 import { appSignals } from '@eventBus/AppSignals';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import {
@@ -83,10 +83,9 @@ export class MainViewProvider
    * transition based on a stale previous funnel state, and collapse any burst
    * that arrives during a pass into one terminal re-run.
    */
-  private readonly onboardingFunnelRefreshQueue = new PQueue({
-    concurrency: 1,
-  });
-  private onboardingFunnelRerunRequested = false;
+  private readonly onboardingFunnelRefreshQueue = new OnboardingRefreshQueue(
+    () => this.refreshOnboardingFunnelSerially(),
+  );
 
   // Debounced refresh for agent option changes
   private debouncedRefreshAgentOptions = debounce(
@@ -211,13 +210,7 @@ export class MainViewProvider
    * hooks replay via refreshOptionsAndView — and after welcome-card actions.
    */
   refreshOnboardingFunnel(): Promise<void> {
-    this.onboardingFunnelRerunRequested = true;
-    return this.onboardingFunnelRefreshQueue.add(async () => {
-      while (this.onboardingFunnelRerunRequested) {
-        this.onboardingFunnelRerunRequested = false;
-        await this.refreshOnboardingFunnelSerially();
-      }
-    });
+    return this.onboardingFunnelRefreshQueue.run();
   }
 
   private async refreshOnboardingFunnelSerially(): Promise<void> {
