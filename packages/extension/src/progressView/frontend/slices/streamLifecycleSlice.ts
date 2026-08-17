@@ -29,7 +29,6 @@ import {
   unsupportedProgressCommands$,
 } from '../progressState';
 import { clearResolvedProposalIds } from './permissionSlice';
-import { pendingDescriptions, takePendingDescription } from './streamMetaSlice';
 import { mergeBackendOwnedState } from './streamStateMerge';
 import {
   clearCopyContentStore,
@@ -52,9 +51,7 @@ function updateStreamInfo(
   backendMetadata?: Record<string, StreamMetadata>,
 ): ProgressState {
   // Pre-compute merged states outside the draft (mergeBackendOwnedState uses
-  // create() internally, which cannot operate on draft proxies). Fold the
-  // pending-description drain into the same pass — no extra iteration.
-  // Explicit description on StreamTabInfo wins over the pending buffer.
+  // create() internally, which cannot operate on draft proxies).
   const mergedStates = new Map<string, StreamState>();
   const newStreamById = new Map<string, StreamTabInfo>();
   // Streams with no backend metadata and no prior state yet: routed through
@@ -73,23 +70,11 @@ function updateStreamInfo(
     } else if (!existing) {
       streamsNeedingDefaultState.push(stream);
     }
-    // Always drain the pending buffer so stale entries don't linger once the
-    // stream registers, even if the payload already carries a description.
-    // Stream-payload description wins (it's the authoritative value).
-    const pending = takePendingDescription(stream.name);
-    const description = stream.description ?? pending;
-    newStreamById.set(
-      stream.name,
-      description !== stream.description ? { ...stream, description } : stream,
-    );
+    newStreamById.set(stream.name, stream);
   }
 
-  // Clean up removed streams' pending-description buffer outside the
-  // mutative draft callback so the side effect doesn't run if the draft
-  // later throws.
   for (const key of state.streamStates.keys()) {
     if (!newStreamById.has(key)) {
-      pendingDescriptions.delete(key);
       deleteFollowUpInputTransientState(key);
     }
   }
@@ -220,7 +205,6 @@ export const streamLifecycleHandlers = {
     // Remove permissions for the deleted stream to prevent orphaned entries
     permissions$.set(removePermissionsForStream(permissions$.get(), streamId));
 
-    pendingDescriptions.delete(streamId);
     appState.set(
       create(appState.get(), (draft) => {
         deleteStreamState(draft, streamId);
@@ -241,8 +225,6 @@ export const streamLifecycleHandlers = {
     clearCopyContentStore();
     clearProposalInputStore();
     clearFollowUpInputTransientStateStore();
-    pendingDescriptions.clear();
-
     // Clear all permissions — no streams means no valid permissions
     permissions$.set([]);
 
