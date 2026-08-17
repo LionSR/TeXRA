@@ -837,8 +837,16 @@ export class DesktopProgressBridge {
         file: {
           openFile: (file, line) => this.options.host.openPath(file, line),
           openSpillArtifact: async (spillPath) => {
-            await this.session.flushArtifacts();
-            const file = await findTranscriptSpillFile(spillPath);
+            let file: string | undefined;
+            try {
+              await this.session.flushArtifacts();
+              file = await findTranscriptSpillFile(spillPath);
+            } catch (error) {
+              await this.options.host.showErrorMessage(
+                `Full output could not be opened: ${toErrorMessage(error)}`,
+              );
+              return;
+            }
             if (!file) {
               await this.options.host.showErrorMessage(
                 'Full output is unavailable because this run artifact was deleted.',

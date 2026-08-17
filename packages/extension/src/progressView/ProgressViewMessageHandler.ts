@@ -507,8 +507,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             await this.runViewCommand('texra.openFile', [file, line]);
           },
           openSpillArtifact: async (spillPath) => {
-            await defaultSession().flushArtifacts();
-            const file = await findTranscriptSpillFile(spillPath);
+            let file: string | undefined;
+            try {
+              await defaultSession().flushArtifacts();
+              file = await findTranscriptSpillFile(spillPath);
+            } catch (error) {
+              await this.host.error(
+                `Full output could not be opened: ${toErrorMessage(error)}`,
+              );
+              return;
+            }
             if (!file) {
               await this.host.error(
                 'Full output is unavailable because this run artifact was deleted.',
