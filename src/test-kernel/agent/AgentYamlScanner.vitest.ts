@@ -75,7 +75,7 @@ describe('agent YAML scanner', () => {
       ],
     });
 
-    const entries = await scanDirectory(agentDir, 'custom');
+    const { entries } = await scanDirectory(agentDir, 'custom');
 
     expect(entries.find((entry) => entry.name === 'child')?.rounds).toBe(4);
     expect(entries.find((entry) => entry.name === 'prompt-child')?.rounds).toBe(
@@ -91,7 +91,7 @@ describe('agent YAML scanner', () => {
       'Readable Helper.yaml': toolUseAgent('helper', 'help'),
     });
 
-    const entries = await scanDirectory(agentDir, 'custom');
+    const { entries } = await scanDirectory(agentDir, 'custom');
 
     expect(entries.map((entry) => entry.name)).toEqual(['helper']);
   });
@@ -108,7 +108,7 @@ describe('agent YAML scanner', () => {
       ],
     });
 
-    const entries = await scanDirectory(agentDir, 'custom');
+    const { entries } = await scanDirectory(agentDir, 'custom');
 
     expect(entries).toEqual([]);
   });
@@ -120,7 +120,7 @@ describe('agent YAML scanner', () => {
       'unique.yaml': toolUseAgent('unique', 'unique'),
     });
 
-    const entries = await scanDirectory(agentDir, 'custom');
+    const { entries } = await scanDirectory(agentDir, 'custom');
 
     expect(entries.map((entry) => entry.name)).toEqual(['unique']);
   });
@@ -131,8 +131,35 @@ describe('agent YAML scanner', () => {
       'valid.yaml': toolUseAgent('valid', 'hi'),
     });
 
-    const entries = await scanDirectory(agentDir, 'custom');
+    const { entries } = await scanDirectory(agentDir, 'custom');
 
     expect(entries.map((entry) => entry.name)).toEqual(['valid']);
+  });
+
+  it('reports skipped custom YAML files as scan issues', async () => {
+    const agentDir = await createAgentDir({
+      'broken.yaml': ['name: "unterminated'],
+      'retired.yaml': [
+        'name: retired',
+        'settings:',
+        '  agentCategory: workflow',
+        '  documentTag: documents',
+      ],
+      'valid.yaml': toolUseAgent('valid', 'hi'),
+    });
+
+    const { entries, issues } = await scanDirectory(agentDir, 'custom');
+
+    expect(entries.map((entry) => entry.name)).toEqual(['valid']);
+    expect(issues).toEqual([
+      expect.objectContaining({
+        path: 'broken.yaml',
+        message: expect.stringMatching(/unterminated|Nested mappings|YAML/iu),
+      }),
+      expect.objectContaining({
+        path: 'retired.yaml',
+        message: expect.stringContaining('documentTag'),
+      }),
+    ]);
   });
 });

@@ -22,6 +22,9 @@ All notable changes to this project will be documented in this file.
 - **An unknown agent name is reported once, with next-step guidance** — the
   error no longer appears twice, and command-line users now get the same
   "agent not found" hint as the other surfaces.
+- **Custom agents that fail to load now say why** — invalid YAML or retired
+  settings no longer vanish from Settings → Agents. The tab lists the skipped
+  files, and `texra agents list` writes the same reasons to stderr.
 - **Long Grok prompts report their true cost** — xAI raises per-token rates
   once a prompt crosses the model's long-context threshold; usage costs for
   those requests no longer underreport.
