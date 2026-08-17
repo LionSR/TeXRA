@@ -2,7 +2,13 @@
 // formatters must never emit a live anchor for a dangerous scheme even when
 // the schema layer has already been sanitized.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { LOG_LEVELS, type LogMessageData } from '@shared/schemas';
+import {
+  LOG_LEVELS,
+  LogMessageDataSchema,
+  MESSAGE_TYPES,
+  type LogMessageData,
+  type LogMessageOf,
+} from '@shared/schemas';
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 type WebFormatters =
@@ -23,8 +29,10 @@ beforeAll(async () => {
   ({ render } = await import('lit'));
 });
 
-function webSearchMessage(url: string): LogMessageData {
-  return {
+function webSearchMessage(
+  url: string,
+): LogMessageOf<typeof MESSAGE_TYPES.WEB_SEARCH> {
+  return LogMessageDataSchema.parse({
     id: 'web-search-1',
     text: '',
     level: LOG_LEVELS.INFO,
@@ -36,11 +44,13 @@ function webSearchMessage(url: string): LogMessageData {
       status: 'completed',
       results: [{ url, title: 'Click me', domain: 'example.com' }],
     },
-  };
+  }) as LogMessageOf<typeof MESSAGE_TYPES.WEB_SEARCH>;
 }
 
-function webFetchMessage(url: string): LogMessageData {
-  return {
+function webFetchMessage(
+  url: string,
+): LogMessageOf<typeof MESSAGE_TYPES.WEB_FETCH> {
+  return LogMessageDataSchema.parse({
     id: 'web-fetch-1',
     text: '',
     level: LOG_LEVELS.INFO,
@@ -51,7 +61,7 @@ function webFetchMessage(url: string): LogMessageData {
       title: 'Fetched page',
       status: 'completed',
     },
-  };
+  }) as LogMessageOf<typeof MESSAGE_TYPES.WEB_FETCH>;
 }
 
 function renderTemplate(template: Parameters<typeof render>[0]): HTMLElement {

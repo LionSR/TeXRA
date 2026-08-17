@@ -36,7 +36,6 @@ export function createToolUseResumeData(
       model: 'test-model',
       agentCategory: 'toolUse',
     }),
-    sourceShared: structuredClone(shared),
     ...overrides,
     shared,
   };

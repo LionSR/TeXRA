@@ -4,7 +4,7 @@ import stableStringify from 'fast-json-stable-stringify';
 // Local imports
 import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import type { ToolDefinition } from '@model/ToolDefinition';
+import type { ToolDefinition } from '@shared/schemas';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,

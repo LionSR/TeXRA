@@ -11,15 +11,12 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   ToolResultSchema,
-  ToolUseLogSchema,
   type ExecutionId,
   type ExecutionMeta,
   type StreamLogEntry,
+  type StreamLogEntryOf,
   type StreamTabId,
   type ToolUseLog,
-  UserMessagePayloadSchema,
-  WebFetchPayloadSchema,
-  WebSearchPayloadSchema,
 } from '@shared/schemas';
 import { assertNever, isObject } from '@utils/core';
 
@@ -147,10 +144,11 @@ function toolResultText(tool: ToolUseLog): string | undefined {
  * `[document attachment]`; otherwise keep the plain-string
  * `content` shape every other conversation consumer already expects.
  */
-function userMessageEntryToMessages(entry: StreamLogEntry): unknown[] {
+function userMessageEntryToMessages(
+  entry: StreamLogEntryOf<typeof MESSAGE_TYPES.USER_MESSAGE>,
+): unknown[] {
   if (!entry.text) return [];
-  const parsed = UserMessagePayloadSchema.safeParse(entry.data);
-  const attachments = parsed.success ? (parsed.data.attachments ?? []) : [];
+  const attachments = entry.data?.attachments ?? [];
   const role = archivedConversationRole(entry, 'user');
   if (attachments.length === 0) {
     return [{ role, content: entry.text }];
@@ -194,10 +192,10 @@ function thinkingEntryToMessages(entry: StreamLogEntry): unknown[] {
   ];
 }
 
-function toolUseEntryToMessages(entry: StreamLogEntry): unknown[] {
-  const parsed = ToolUseLogSchema.safeParse(entry.data);
-  if (!parsed.success) return [];
-  const tool = parsed.data;
+function toolUseEntryToMessages(
+  entry: StreamLogEntryOf<typeof MESSAGE_TYPES.TOOL_USE>,
+): unknown[] {
+  const tool = entry.data;
   const messages: unknown[] = [
     {
       role: 'assistant',
@@ -221,18 +219,19 @@ function toolUseEntryToMessages(entry: StreamLogEntry): unknown[] {
 }
 
 /** Anthropic-shaped `server_tool_use` + `web_search_tool_result` blocks. */
-function webSearchEntryToMessages(entry: StreamLogEntry): unknown[] {
-  const parsed = WebSearchPayloadSchema.safeParse(entry.data);
-  if (!parsed.success) return [];
+function webSearchEntryToMessages(
+  entry: StreamLogEntryOf<typeof MESSAGE_TYPES.WEB_SEARCH>,
+): unknown[] {
+  const data = entry.data;
   const blocks: unknown[] = [];
-  if (parsed.data.query) {
+  if (data.query) {
     blocks.push({
       type: 'server_tool_use',
       name: 'web_search',
-      input: { query: parsed.data.query },
+      input: { query: data.query },
     });
   }
-  const results = (parsed.data.results ?? [])
+  const results = (data.results ?? [])
     .filter((result) => result.url)
     .map((result) => ({
       type: 'web_search_result',
@@ -245,21 +244,23 @@ function webSearchEntryToMessages(entry: StreamLogEntry): unknown[] {
   return blocks.length > 0 ? [{ role: 'assistant', content: blocks }] : [];
 }
 
-function webFetchEntryToMessages(entry: StreamLogEntry): unknown[] {
-  const parsed = WebFetchPayloadSchema.safeParse(entry.data);
-  if (!parsed.success || !parsed.data.url) return [];
+function webFetchEntryToMessages(
+  entry: StreamLogEntryOf<typeof MESSAGE_TYPES.WEB_FETCH>,
+): unknown[] {
+  const data = entry.data;
+  if (!data.url) return [];
   return [
     {
       role: 'assistant',
       content: [
         {
           type: 'web_fetch_tool_result',
-          url: parsed.data.url,
-          ...(parsed.data.title !== undefined && { title: parsed.data.title }),
+          url: data.url,
+          ...(data.title !== undefined && { title: data.title }),
           // `page_content` is the field name normalizeConversationForExport's
           // ContentBlockSchema already recognizes for this block type (#7508).
-          ...(parsed.data.content !== undefined && {
-            page_content: parsed.data.content,
+          ...(data.content !== undefined && {
+            page_content: data.content,
           }),
         },
       ],

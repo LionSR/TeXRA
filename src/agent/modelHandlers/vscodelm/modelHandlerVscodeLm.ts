@@ -22,7 +22,6 @@ import {
 } from '@common/errors/sdkError/errorPatterns';
 import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import type { ToolDefinition } from '@model/ToolDefinition';
 import { copilotRouteForModel } from '@model/runtimeModelRegistry';
 import { platform } from '@platform/platform';
 import {
@@ -39,6 +38,7 @@ import {
 import type {
   FileLocation,
   MediaAttachmentKind,
+  ToolDefinition,
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas';

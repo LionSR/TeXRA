@@ -7,10 +7,8 @@
 
 import {
   END_GROUP_STATUS,
-  GroupLogPayloadSchema,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
-  TaskGroupStatusSchema,
   type EndGroupStatus,
   type StreamLogEntry,
   type TaskGroup,
@@ -27,12 +25,11 @@ import {
 function taskGroupEndStatus(
   value: TaskGroupStatus | EndGroupStatus | undefined,
 ): TaskGroupStatus {
-  const native = TaskGroupStatusSchema.safeParse(value);
-  if (native.success) return native.data;
   if (value === END_GROUP_STATUS.ERROR) return STREAM_PHASE.FAILED;
-  // Legacy `stopped`, an unrecognized value, and an absent one all read as a
-  // group that ended without a recorded failure.
-  return STREAM_PHASE.COMPLETED;
+  if (value === END_GROUP_STATUS.STOPPED || value === undefined) {
+    return STREAM_PHASE.COMPLETED;
+  }
+  return value;
 }
 
 /**
@@ -90,38 +87,22 @@ export function upsertTaskGroupFromStreamLog(
     taskGroupIndex.set(entry.id, groupIndex);
   }
 
-  // A missing payload is valid for legacy lifecycle rows. A present malformed
-  // payload is not: in particular, erasing corrupted attempt ownership would
-  // turn a phase row into an apparently unowned generic group.
-  const parsedPayload = GroupLogPayloadSchema.safeParse(
-    entry.data === undefined ? {} : entry.data,
-  );
-  if (!parsedPayload.success) {
-    // A malformed terminal row cannot safely settle the projected group, but
-    // retaining its valid start would leave the UI claiming that work is
-    // still running forever. Omit that presentation row without inventing a
-    // session outcome or accepting the corrupt ownership metadata.
-    if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END && groupIndex >= 0) {
-      taskGroups.splice(groupIndex, 1);
-      taskGroupIndex.delete(entry.id);
-      for (const [index, group] of taskGroups.entries()) {
-        if (index >= groupIndex) taskGroupIndex.set(group.id, index);
-      }
-    }
-    return true;
-  }
-  const payload = parsedPayload.data;
+  const payload = entry.data;
 
   if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START) {
     // GROUP_START only carries the native status vocabulary because the run
     // has not ended. Invalid or absent values therefore mean "running".
-    const startStatus = TaskGroupStatusSchema.safeParse(payload.status);
+    const startStatus =
+      payload.status === END_GROUP_STATUS.ERROR ||
+      payload.status === END_GROUP_STATUS.STOPPED
+        ? STREAM_PHASE.RUNNING
+        : (payload.status ?? STREAM_PHASE.RUNNING);
     const name = entry.text ?? payload.name ?? entry.id;
     const nextGroup: TaskGroup = {
       id: entry.id,
       name,
       startTime: entry.timestamp,
-      status: startStatus.success ? startStatus.data : STREAM_PHASE.RUNNING,
+      status: startStatus,
       ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
       ...taskGroupStageMetadata(name, payload.kind, payload.index),
       ...(payload.total !== undefined ? { total: payload.total } : {}),
