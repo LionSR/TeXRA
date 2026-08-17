@@ -143,7 +143,7 @@ export interface ResumeStreamPorts {
   ): Promise<boolean>;
   executeWorkflow(
     config: AgentConfig,
-    executionId: ExecutionId | undefined,
+    executionId: ExecutionId,
     modelHandlerCompatibilityKey:
       ModelHandlerCompatibilityKey | null | undefined,
   ): Promise<void>;

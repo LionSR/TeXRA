@@ -8,7 +8,7 @@ import {
 } from '@agent/storage/executionLease';
 import { finalizeExecutionWithLease } from '@agent/storage/terminalPersistence';
 
-import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -62,7 +62,6 @@ export interface RunAgentOptions extends Pick<
     scope: OwnedExecutionLeaseScope,
     executionId: ExecutionId,
   ) => void;
-  registerExecution?: boolean;
   /** Recheck canonical admission atomically while acquiring a resumed lease. */
   canAcquireResumeLease?: () => boolean | Promise<boolean>;
   /**
@@ -74,12 +73,24 @@ export interface RunAgentOptions extends Pick<
   preferHelperModel?: boolean;
 }
 
+export type RunAgentRequest =
+  | {
+      readonly kind: 'fresh';
+      readonly config: AgentConfig;
+      readonly executionId?: ExecutionId;
+    }
+  | {
+      readonly kind: 'resume';
+      readonly config: AgentConfig;
+      readonly executionId: ExecutionId;
+    };
+
 /**
  * START HERE — the high-level entry every host uses to run an agent.
  *
- * Validates-then-runs: assigns an executionId when the request omits one (a
- * fresh run), registers fresh runs in the execution store (resume reuses the
- * record; override via `registerExecution`), runs the agent, and — for a
+ * Validates-then-runs: assigns an executionId when a fresh request omits one,
+ * registers fresh runs in the execution store, reuses a resumed run's record,
+ * runs the agent, and — for a
  * workflow result — invokes `openWorkflowOutput` so the host can surface output.
  *
  * Use this unless you need per-chunk streaming/lifecycle callbacks or subagent
@@ -87,7 +98,7 @@ export interface RunAgentOptions extends Pick<
  * caller owns executionId generation and `registerExecution`.
  */
 export async function runAgent(
-  request: ValidatedExecutionRequest,
+  request: RunAgentRequest,
   options: RunAgentOptions,
 ): Promise<AgentFlowResult> {
   // Split the `runAgent`-only options off; the rest (`executeAgentOptions`) is
@@ -96,15 +107,13 @@ export async function runAgent(
   const {
     beforeLeaseRelease,
     onExecutionLeaseAcquired,
-    registerExecution: registerExecutionOption,
     canAcquireResumeLease,
     preferHelperModel,
     ...executeAgentOptions
   } = options;
 
   const executionId = request.executionId ?? generateExecutionId();
-  const shouldRegister =
-    registerExecutionOption ?? request.executionId === undefined;
+  const shouldRegister = request.kind === 'fresh';
   const runSession = executeAgentOptions.session ?? defaultSession();
   const launchAbortController = new AbortController();
   const launchSignal = executeAgentOptions.launchSignal

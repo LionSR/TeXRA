@@ -284,7 +284,7 @@ export function runAgent(input: RunAgentInput): AgentRun {
         ...(input.model ? { model: input.model } : {}),
       });
       return await runValidatedAgent(
-        { config },
+        { kind: 'fresh', config },
         {
           approvalPromptsUnavailable: true,
           launchSignal: stream.launchSignal,

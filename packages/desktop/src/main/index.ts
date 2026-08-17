@@ -941,9 +941,12 @@ function createWindow(options: {
         // process-owned run begins and therefore cannot retain the window for
         // the duration of the run.
         await getAgentExecution();
-        return launchDesktopAgent(preparation.request, {
-          session: options.processSession,
-        });
+        return launchDesktopAgent(
+          { kind: 'fresh', ...preparation.request },
+          {
+            session: options.processSession,
+          },
+        );
       },
       signInWithChatGpt: () => settingsIpc.signInChatGpt(),
       // The desktop shell can't host the VS Code getting-started walkthrough, so

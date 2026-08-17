@@ -6,6 +6,7 @@ import {
   trackTerminalResultPresentation,
   type AgentConfigPayload,
   type RunAgentOptions,
+  type RunAgentRequest,
 } from '@agent/runtime';
 import {
   deriveResumability,
@@ -14,10 +15,7 @@ import {
   type OwnedExecutionLeaseScope,
   type ResumabilityDecision,
 } from '@agent/storage';
-import {
-  validateExecutionRequest,
-  type ValidatedExecutionRequest,
-} from '@agent/core/state/executionRequests';
+import { validateExecutionRequest } from '@agent/core/state/executionRequests';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
@@ -66,7 +64,6 @@ type CliWorkflowOutputHandler = (
 interface CliExecuteOptions {
   /** Forwarded to `runAgent`. */
   readonly enforceCategory?: boolean;
-  readonly registerExecution?: boolean;
   /** Stop a tool-use execution after one model/tool cycle. */
   readonly stopAfterCycle?: boolean;
   /** Additional tools unavailable in this CLI runtime. */
@@ -105,8 +102,7 @@ export interface CliConfigExecuteOptions<
   readonly categoryMismatchMessage?: string;
   /**
    * Resume an existing execution under its persisted id instead of minting a
-   * fresh one. `runAgent` treats a request that carries an id as a resume and
-   * reuses its registered record.
+   * fresh one. The CLI turns this into explicit resume intent for `runAgent`.
    */
   readonly executionId?: ExecutionId;
 }
@@ -149,8 +145,11 @@ export async function executeCliConfig<
     return { ok: false, exitCode: CliExitCode.Usage };
   }
 
+  const request: RunAgentRequest = resumedExecutionId
+    ? { kind: 'resume', ...validation.request, executionId }
+    : { kind: 'fresh', ...validation.request, executionId };
   const execution = await executeCliRequest(
-    validation.request,
+    request,
     runContext,
     executeOptions,
   );
@@ -245,7 +244,7 @@ export async function executeCliToolUseConfig(
  * so the crash handler still reports it.
  */
 export async function executeCliRequest(
-  request: ValidatedExecutionRequest,
+  request: RunAgentRequest,
   runContext: CliContext,
   options: CliExecuteOptions = {},
 ): Promise<
@@ -471,7 +470,6 @@ export async function executeCliRequest(
       return await runAgent(request, {
         session,
         enforceCategory: options.enforceCategory,
-        registerExecution: options.registerExecution,
         openWorkflowOutput:
           openWorkflowOutput === undefined
             ? undefined
