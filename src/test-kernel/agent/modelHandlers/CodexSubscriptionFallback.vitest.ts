@@ -50,9 +50,11 @@ const config: ModelConfig = buildTestModelConfig({
 // gpt-5.5 declares a 1,050,000-token window over the OpenAI API, but the Codex
 // subscription backend enforces a far smaller ceiling — the override must clamp
 // the effective window to that ceiling while the subscription drives requests.
+// Use the real Codex output budget so the displayed window is 272k + 128k = 400k.
 const largeWindowConfig: ModelConfig = {
   ...config,
   contextWindow: 1_050_000,
+  maxOutputTokens: 128_000,
 };
 
 const LARGE_WINDOW_SUBSCRIPTION_CONTEXT =
@@ -142,8 +144,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
     const handler = await newSubscriptionHandler(largeWindowConfig);
 
     // The model's own 1.05M API window must not leak through on the
-    // subscription path. The displayed ceiling includes this fixture's output
-    // allowance in addition to the shared Codex input budget.
+    // subscription path, where the backend rejects requests past the ceiling.
     expect(handler.getEffectiveContextWindow()).toBe(
       LARGE_WINDOW_SUBSCRIPTION_CONTEXT,
     );
