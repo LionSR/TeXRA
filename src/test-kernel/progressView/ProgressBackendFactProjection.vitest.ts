@@ -999,6 +999,7 @@ describe('ProgressBackend', () => {
       await backend.state.flush();
       const expectedHead = backend.state.streamLogs.get(background)?.head;
       expect(expectedHead).toBeGreaterThan(0);
+
       messages.length = 0;
       await backend.applyStreamStatus(
         background,

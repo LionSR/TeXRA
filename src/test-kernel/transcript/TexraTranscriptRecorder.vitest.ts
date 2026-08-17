@@ -309,7 +309,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
     const response = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     response.append('Final answer');
 
-    trace.openStage('Next round', { kind: 'round' });
+    const nextRound = trace.openStage('Next round', { kind: 'round' });
     response.finalize();
 
     expect(row(response.id)).toMatchObject({
@@ -317,6 +317,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
       text: 'Final answer',
       data: { status: 'completed' },
     });
+    expect(row(nextRound.id)?.presentationSeqNo).toBe(1);
   });
 
   it('assigns source settlement order before terminal status projection', () => {

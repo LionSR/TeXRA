@@ -461,7 +461,11 @@ export function attachTranscriptRecorder(
           }
           writer.append({
             id: event.id,
-            presentationSeqNo: writer.settlementHead,
+            // Detached responses settle after this append but belong before
+            // the new heading. Reserve their pending settlement slots so cold
+            // replay preserves the live store order.
+            presentationSeqNo:
+              writer.settlementHead + detachedModelResponseIds.size,
             type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
             level: 'info',
             timestamp: Date.now(),
