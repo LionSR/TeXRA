@@ -93,8 +93,10 @@ function createProcessServices(
     modelCell: testModelCell({
       processThinkingBlock: vi.fn(() => null),
       getStreamingConfig: vi.fn(() => false),
-      extractResponse: vi.fn(() => ({ ...response, usage: {} })),
-      normalizeUsage: vi.fn(() => undefined),
+      extractNormalizedResponse: vi.fn(() => ({
+        ...response,
+        usage: undefined,
+      })),
     }),
     ...overrides,
   } as unknown as ResponseCycleServices<unknown>;

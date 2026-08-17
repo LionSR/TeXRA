@@ -105,13 +105,18 @@ export class ToolUseProcessNode<C> extends BaseNode<
     const services = this.services;
     const modelHandler = services.modelCell.handler;
 
-    const { text, stopReason, thinking, useStreaming, normalizedUsage } =
-      extractModelResponse(
-        prepRes.response,
-        prepRes.responseTimeMs,
-        '',
-        services,
-      );
+    const {
+      text,
+      stopReason,
+      thinking,
+      useStreaming,
+      usage: normalizedUsage,
+    } = extractModelResponse(
+      prepRes.response,
+      prepRes.responseTimeMs,
+      '',
+      services,
+    );
 
     if (thinking && !useStreaming) {
       const formatted = await formatContent(thinking);

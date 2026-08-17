@@ -204,7 +204,9 @@ describe('SessionStores deletion coordination', () => {
 
       await expect(stores.deleteStream(parent)).resolves.toBe('deleted');
       expect(session.transcripts.has(parent)).toBe(false);
-      expect(snapshots.getParentStreamId(child)).toBe(parent);
+      // Durable parent-edge detach is owned by the snapshot store commit, so
+      // a failed session projection must not leave a dangling parent pointer.
+      expect(snapshots.getParentStreamId(child)).toBeUndefined();
     });
   });
 

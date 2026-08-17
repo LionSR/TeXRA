@@ -20,7 +20,6 @@ import {
   isTokenLimitStopReason,
   type ProviderStopReason,
 } from '@agent/types/StopReasonTypes';
-import type { ProviderUsage } from '@agent/types/ProviderUsage';
 import { K_SLICE } from '@agent/core/constants';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
@@ -166,7 +165,6 @@ interface ProcessPrepResult {
 interface ProcessResultCommon {
   stopReason: ProviderStopReason;
   useStreaming: boolean;
-  responseUsage: ProviderUsage;
   normalizedUsage?: NormalizedUsage;
 }
 
@@ -262,11 +260,10 @@ class ResponseProcessNode<C> extends BaseNode<
       // Re-applying would run non-idempotent custom replacements twice.
       const {
         text: processedResponse,
-        usage: responseUsage,
+        usage: normalizedUsage,
         stopReason,
         thinking: thinkingContent,
         useStreaming,
-        normalizedUsage,
       } = extractModelResponse(
         prepRes.responseObject,
         prepRes.responseTimeMs,
@@ -284,7 +281,6 @@ class ResponseProcessNode<C> extends BaseNode<
         );
       }
       logger.debug(`Stop reason: ${stopReason}`);
-      logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
 
       if (thinkingContent && !useStreaming) {
         logger.info(thinkingContent, {
@@ -305,7 +301,6 @@ class ResponseProcessNode<C> extends BaseNode<
       const common = {
         stopReason,
         useStreaming,
-        responseUsage,
         normalizedUsage,
       };
 
@@ -396,12 +391,6 @@ class ResponseProcessNode<C> extends BaseNode<
         connector + result.processedResponse,
       );
     }
-
-    const responseUsage = result.responseUsage ?? {};
-    const usageSummary = Object.entries(responseUsage)
-      .map(([key, value]) => `${key}: ${value}`)
-      .join(', ');
-    logger.debug(`Usage summary: ${usageSummary}`);
 
     logger.debug(`Normalized usage: ${JSON.stringify(result.normalizedUsage)}`);
 

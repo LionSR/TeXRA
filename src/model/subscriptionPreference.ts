@@ -4,7 +4,7 @@
  * Off by default (experimental, opt-in). Provider modules supply only the
  * config key; read/write semantics stay identical.
  */
-import { tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 
 import type { ConfigTarget } from '@platform/interfaces';
 
@@ -23,14 +23,13 @@ export function createSubscriptionPreference(
   configKey: string,
 ): SubscriptionPreference {
   function isPrefer(): boolean {
-    return tryPlatform()?.config.get<boolean>(configKey, false) ?? false;
+    return platform().config.get<boolean>(configKey, false);
   }
 
   async function setPrefer(
     enabled: boolean,
   ): Promise<SubscriptionPreferenceUpdate> {
-    const host = tryPlatform();
-    if (!host) return { effective: false, target: 'global' };
+    const host = platform();
 
     const inspection = host.config.inspect<boolean>(configKey);
     const target: ConfigTarget =
