@@ -672,6 +672,35 @@ describe('retrieveSessionResumeData', () => {
 describe('runToolUseFlow consumes the resume boundary instead of re-parsing', () => {
   setupPlatform({ workspacePath: '/workspace' });
 
+  it('rejects a persisted record on a fresh launch', async () => {
+    const executionId = 'abc-flow-fresh-collision' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-flow-fresh-collision' as StreamTabId;
+    const snapshot = buildToolUseResumeData(executionId, streamId);
+    await writeFlowRecord(executionId, snapshot.shared);
+
+    await expect(
+      runPersistedFlow(executionId, streamId, undefined),
+    ).rejects.toMatchObject({
+      name: PersistedFlowStateError.name,
+      reason: 'unexpected-record',
+    });
+  });
+
+  it('preserves the validation cause for an invalid fresh-launch collision', async () => {
+    const executionId = 'abc-flow-invalid-fresh-collision' as ExecutionId;
+    const streamId =
+      'chat@gpt54#abc-flow-invalid-fresh-collision' as StreamTabId;
+    await writeFlowRecord(executionId, { messages: 'not-an-array' });
+
+    await expect(
+      runPersistedFlow(executionId, streamId, undefined),
+    ).rejects.toMatchObject({
+      name: PersistedFlowStateError.name,
+      reason: 'invalid-shared',
+      cause: expect.anything(),
+    });
+  });
+
   it('creates fresh shared state when the flow record is absent', async () => {
     const executionId = 'abc-flow-absent' as ExecutionId;
     const streamId = 'chat@gpt54#abc-flow-absent' as StreamTabId;
@@ -1349,9 +1378,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       cursor: { nextNodeId: null, lastAction: FlowTransition.COMPLETE },
     });
 
+    const resume = await retrieveToolUseResume(streamId, executionId);
     // The terminal cursor makes the flow exit COMPLETE without stepping any
     // node, leaving the declined-retry marker for the outcome derivation.
-    const result = await runPersistedFlow(executionId, streamId, undefined);
+    const result = await runPersistedFlow(executionId, streamId, resume);
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
     expect(await readFlowRecord(executionId)).toMatchObject({
