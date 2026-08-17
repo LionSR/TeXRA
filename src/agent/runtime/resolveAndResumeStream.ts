@@ -212,10 +212,11 @@ export async function resolveAndResumeStream(
     return true;
   } catch (error) {
     if (isCancellationRequested()) return false;
-    // Shipped hosts share this attempt's monotone cancellation latch, so the
-    // preceding check handles their lost-admission path. Keep this fallback
-    // for a future host that supplies the lease guard without the optional
-    // cancellation port: it must still fail silently rather than toast.
+    // Shipped hosts that pass the lease guard share this attempt's monotone
+    // cancellation latch, so the preceding check handles their lost-admission
+    // path. Keep this fallback for a future host that supplies the lease guard
+    // without the optional cancellation port: it must still fail silently
+    // rather than toast.
     if (error instanceof ResumeAdmissionCancelledError) return false;
     try {
       await ports.reportFailure?.(streamId, error);
