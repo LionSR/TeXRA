@@ -106,7 +106,6 @@ import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import {
   StreamLogStore,
   StreamSnapshotStore,
-  STREAM_LOG_SUMMARIES_DIR,
   STREAM_LOGS_DIR,
   type TraceDocument,
 } from '@transcript';
@@ -1108,6 +1107,9 @@ describe('CLI history runtime', () => {
     });
     await logs.flush();
     const persistedLogs = new KVStore(STREAM_LOGS_DIR, { compactJson: true });
+    await expect(
+      persistedLogs.existsWithExtension(streamId, '.jsonl'),
+    ).resolves.toBe(true);
     await persistedLogs.write(unrelated, { invalid: 'transcript' });
     const snapshots = new StreamSnapshotStore();
     snapshotFacts(snapshots).setRunConfig(streamId, config, executionId);
@@ -1122,14 +1124,16 @@ describe('CLI history runtime', () => {
       resolveAdjacentStreamCleanup(undefined),
     );
 
-    await expect(persistedLogs.exists(streamId)).resolves.toBe(false);
+    await expect(
+      persistedLogs.existsWithExtension(streamId, '.jsonl'),
+    ).resolves.toBe(false);
     await expect(persistedLogs.exists(unrelated)).resolves.toBe(true);
     await expect(
       new StreamSnapshotStore().readPersistedExecutionId(streamId),
     ).resolves.toBeUndefined();
   });
 
-  it('clears a deleted parent from its child stream summary mirror', async () => {
+  it('clears a deleted parent from its child stream checkpoint', async () => {
     const executionId = 'a1' as ExecutionId;
     const parentStream = 'chat@deepseek#a1' as StreamTabId;
     const childStream = 'chat@deepseek#child' as StreamTabId;
@@ -1151,16 +1155,8 @@ describe('CLI history runtime', () => {
       text: 'Child transcript',
     });
     await logs.flush();
-    // The always-resident summary mirror the progress rail reads — seeded
-    // as if a live session had published it while the parent still existed.
-    const summaries = new KVStore(STREAM_LOG_SUMMARIES_DIR, {
-      compactJson: true,
-    });
-    const childSummary = await summaries.read<{ meta?: object }>(childStream);
-    await summaries.write(childStream, {
-      ...childSummary,
-      meta: { ...childSummary?.meta, parentStreamId: parentStream },
-    });
+    logs.recordSummaryMeta(childStream, { parentStreamId: parentStream });
+    await logs.flush();
     const snapshots = new StreamSnapshotStore();
     snapshotFacts(snapshots).setRunConfig(parentStream, config, executionId);
     snapshotFacts(snapshots).setParentStream(childStream, parentStream);
@@ -1175,10 +1171,10 @@ describe('CLI history runtime', () => {
       resolveAdjacentStreamCleanup(undefined),
     );
 
-    const updatedChildSummary = await summaries.read<{
-      meta?: { parentStreamId?: string };
-    }>(childStream);
-    expect(updatedChildSummary?.meta?.parentStreamId).toBeUndefined();
+    const reloadedLogs = await StreamLogStore.open();
+    expect(
+      reloadedLogs.getSummaryMeta(childStream)?.parentStreamId,
+    ).toBeUndefined();
   });
 
   it('reports a sidecar cleanup failure before deleting execution storage', async () => {

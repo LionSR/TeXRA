@@ -201,6 +201,22 @@ function toJournalRecord(
   } as StreamLogJournalRecord;
 }
 
+function parseTrailingSummaryCheckpoint(
+  tail: string | undefined,
+): StreamLogSummary | undefined {
+  if (!tail?.endsWith('\n')) return undefined;
+  const line = tail.trimEnd().split('\n').at(-1);
+  if (!line) return undefined;
+  try {
+    const parsed = StreamLogJournalRecordSchema.safeParse(JSON.parse(line));
+    return parsed.success && parsed.data.op === 'checkpoint'
+      ? parsed.data.summary
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 type StreamLogStoreMode =
   | { readonly kind: 'persistent' }
   | { readonly kind: 'read-only' }
@@ -223,9 +239,11 @@ export function ephemeralTranscriptWarning(reason: string): string {
 export async function deletePersistedStreamLog(
   streamId: StreamTabId,
 ): Promise<void> {
-  await new KVStore(STREAM_LOGS_DIR, { compactJson: true }).delete(streamId);
+  const logs = new KVStore(STREAM_LOGS_DIR, { compactJson: true });
+  await logs.delete(streamId);
+  await logs.deleteWithExtension(streamId, STREAM_LOG_JOURNAL_EXTENSION);
   try {
-    await new KVStore(STREAM_LOG_SUMMARIES_DIR, {
+    await new KVStore(LEGACY_STREAM_LOG_SUMMARIES_DIR, {
       compactJson: true,
     }).delete(streamId);
   } catch (error) {
@@ -237,26 +255,44 @@ export async function deletePersistedStreamLog(
 }
 
 /**
- * Clear one known stream's parent-edge from its always-resident summary
- * mirror, without opening the transcript registry. `StreamSnapshotStore` is
- * the parent-edge authority and republishes this mirror on every live
- * mutation (#9947), but a targeted cleanup path with no attached
- * `summaryMetaSink` (history delete without a live session) can durably
- * detach a child in its sidecar while this mirror — what the progress rail
- * actually reads — keeps pointing at the deleted parent. Callers already
- * know the exact child stream ids to patch, so this stays a single-key
- * read-modify-write, not a registry sweep.
+ * Clear one known stream's parent-edge from its journal checkpoint without
+ * opening the transcript registry. The snapshot sidecar is authoritative,
+ * but history deletion without a live session has no `summaryMetaSink` to
+ * republish the detached edge. Callers already know the exact child stream
+ * ids, so this remains targeted tail I/O rather than a registry sweep.
  */
-export async function clearPersistedSummaryParentStream(
+export async function clearPersistedStreamParentMetadata(
   streamId: StreamTabId,
 ): Promise<void> {
-  const summaries = new KVStore(STREAM_LOG_SUMMARIES_DIR, {
+  const logs = new KVStore(STREAM_LOGS_DIR, { compactJson: true });
+  const tail = await logs.readTextTail(
+    streamId,
+    STREAM_LOG_JOURNAL_EXTENSION,
+    STREAM_LOG_CHECKPOINT_TAIL_BYTES,
+  );
+  const summary = parseTrailingSummaryCheckpoint(tail);
+  if (summary?.meta?.parentStreamId) {
+    const { parentStreamId: _parentStreamId, ...meta } = summary.meta;
+    const checkpoint = toJournalRecord({
+      op: 'checkpoint',
+      summary: { ...summary, meta },
+    });
+    await logs.appendText(
+      streamId,
+      STREAM_LOG_JOURNAL_EXTENSION,
+      `${JSON.stringify(checkpoint)}\n`,
+    );
+  }
+
+  // During the temporary retirement window, clear the same edge from a
+  // pre-checkpoint summary if one still exists.
+  const legacySummaries = new KVStore(LEGACY_STREAM_LOG_SUMMARIES_DIR, {
     compactJson: true,
   });
-  const summary = await summaries.read<StreamLogSummary>(streamId);
-  if (!summary?.meta?.parentStreamId) return;
-  const { parentStreamId: _parentStreamId, ...meta } = summary.meta;
-  await summaries.write(streamId, { ...summary, meta });
+  const legacySummary = await legacySummaries.read<StreamLogSummary>(streamId);
+  if (!legacySummary?.meta?.parentStreamId) return;
+  const { parentStreamId: _parentStreamId, ...meta } = legacySummary.meta;
+  await legacySummaries.write(streamId, { ...legacySummary, meta });
 }
 
 export interface TranscriptWriter {
@@ -1764,7 +1800,7 @@ export class StreamLogStore {
         STREAM_LOG_JOURNAL_EXTENSION,
         STREAM_LOG_CHECKPOINT_TAIL_BYTES,
       );
-      const checkpoint = this.parseTrailingSummaryCheckpoint(tail);
+      const checkpoint = parseTrailingSummaryCheckpoint(tail);
       if (checkpoint) return { streamId, summary: checkpoint };
     }
 
@@ -1805,24 +1841,6 @@ export class StreamLogStore {
       summary,
       ...(preserveLegacySummary && { preserveLegacySummary: true }),
     };
-  }
-
-  private parseTrailingSummaryCheckpoint(
-    tail: string | undefined,
-  ): StreamLogSummary | undefined {
-    if (!tail?.endsWith('\n')) return undefined;
-    const line = tail.trimEnd().split('\n').at(-1);
-    if (!line) return undefined;
-    try {
-      const parsed = StreamLogJournalRecordSchema.safeParse(JSON.parse(line));
-      return parsed.success && parsed.data.op === 'checkpoint'
-        ? parsed.data.summary
-        : undefined;
-    } catch {
-      // A malformed or torn trailing line is not a usable checkpoint. The
-      // caller falls back to full replay, which re-parses and warns loudly.
-      return undefined;
-    }
   }
 
   private async readLegacySummaryMeta(
