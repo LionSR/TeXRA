@@ -61,7 +61,7 @@ async function readGit(
   if (reportFailure) {
     options.onError?.(
       new Error(
-        result.stderr ?? `git ${args[0] ?? 'command'} exited unsuccessfully`,
+        result.stderr || `git ${args[0] ?? 'command'} exited unsuccessfully`,
       ),
     );
   }
