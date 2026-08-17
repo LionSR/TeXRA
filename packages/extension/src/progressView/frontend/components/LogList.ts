@@ -282,12 +282,13 @@ export class LogList extends LitElement {
 
   /**
    * Keyboard activation (Enter/Space) for the focusable transcript link spans
-   * (file-link / latex-ref). Copy buttons and the proposal-restore-link
-   * ("Setup") control are real `<wa-button>`/`<button>` elements and are
+   * (file-link / latex-ref). Copy buttons, the proposal-restore-link
+   * ("Setup") control, and spill-artifact buttons are real
+   * `<wa-button>`/`<button>` elements and are
    * already keyboard-activatable via native click synthesis (handled by the
    * click handler below), so they are intentionally excluded here to avoid
    * double-firing. proposal-restore-link additionally stops its own keydown
-   * from propagating this far — see stopSummaryToggleKeydown — since it sits
+   * from propagating this far — see stopSummaryToggleKeydown — since each sits
    * inside a `<wa-details>` summary and would otherwise also toggle the
    * panel.
    */
@@ -295,12 +296,7 @@ export class LogList extends LitElement {
     if (!(event instanceof KeyboardEvent)) return;
     if (event.key !== 'Enter' && event.key !== ' ') return;
     if (event.defaultPrevented) return;
-    if (
-      !getComposedPathElement<HTMLElement>(
-        event,
-        '.file-link, .latex-ref, .spill-artifact-link',
-      )
-    ) {
+    if (!getComposedPathElement<HTMLElement>(event, '.file-link, .latex-ref')) {
       return;
     }
     event.preventDefault();

@@ -2,6 +2,7 @@
 import * as path from 'node:path';
 
 // Local imports
+import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { ExecutionIdSchema } from '@shared/schemas';
 import { getPathSegments } from '@utils/core/pathCore';
@@ -15,7 +16,7 @@ import { StorageFS } from '@utils/files/storageFS';
 export function resolveTranscriptSpillPath(
   spillPath: string,
 ): string | undefined {
-  const posixPath = spillPath.replaceAll('\\\\', '/');
+  const posixPath = spillPath.replaceAll('\\', '/');
   const segments = getPathSegments(posixPath);
   if (
     segments.length !== 4 ||
@@ -37,5 +38,20 @@ export async function readTranscriptSpill(
   spillPath: string,
 ): Promise<string | undefined> {
   const resolved = resolveTranscriptSpillPath(spillPath);
-  return resolved ? StorageFS.read(resolved) : undefined;
+  if (!resolved) return undefined;
+  try {
+    return await StorageFS.read(resolved);
+  } catch (error) {
+    if (isFileNotFoundError(error)) return undefined;
+    throw error;
+  }
+}
+
+/** Resolve one existing spill to an absolute path for a native host opener. */
+export async function findTranscriptSpillFile(
+  spillPath: string,
+): Promise<string | undefined> {
+  const resolved = resolveTranscriptSpillPath(spillPath);
+  if (!resolved || !(await StorageFS.exists(resolved))) return undefined;
+  return StorageFS.fullPath(resolved);
 }

@@ -23,6 +23,7 @@ export {
 } from './StreamLog';
 export { createRunTrace, type RunTrace } from './runTrace';
 export {
+  findTranscriptSpillFile,
   readTranscriptSpill,
   resolveTranscriptSpillPath,
 } from './spillArtifacts';

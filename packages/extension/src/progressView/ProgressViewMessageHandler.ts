@@ -53,10 +53,9 @@ import {
   cleanupUnscopedApprovals,
   releaseStreamResources,
 } from '@tools/approval';
-import { resolveTranscriptSpillPath } from '@transcript';
+import { findTranscriptSpillFile } from '@transcript';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
-import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -247,20 +246,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
       // Second-tier shared progress command groups
       ...secondTierHandlers,
-
-      [PROGRESS_VIEW_COMMANDS.OPEN_SPILL_ARTIFACT]: async (data) => {
-        const spillPath = resolveTranscriptSpillPath(data.spillPath);
-        if (!spillPath || !(await StorageFS.exists(spillPath))) {
-          await this.host.error(
-            'Full output is unavailable because this run artifact was deleted.',
-          );
-          return;
-        }
-        const document = await vscode.workspace.openTextDocument(
-          vscode.Uri.file(StorageFS.fullPath(spillPath)),
-        );
-        await vscode.window.showTextDocument(document, { preview: true });
-      },
 
       // Override USE_OWN_API_KEY: the shared handler owns the generic case;
       // the extension adds VS Code-specific Copilot-subscription fallback
@@ -520,6 +505,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         file: {
           openFile: async (file, line) => {
             await this.runViewCommand('texra.openFile', [file, line]);
+          },
+          openSpillArtifact: async (spillPath) => {
+            const file = await findTranscriptSpillFile(spillPath);
+            if (!file) {
+              await this.host.error(
+                'Full output is unavailable because this run artifact was deleted.',
+              );
+              return;
+            }
+            const document = await vscode.workspace.openTextDocument(
+              vscode.Uri.file(file),
+            );
+            await vscode.window.showTextDocument(document, { preview: true });
           },
         },
         approval: {

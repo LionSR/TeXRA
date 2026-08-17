@@ -363,9 +363,10 @@ function renderLogEntryFresh(
   // moves on to a later entry. User/error rows can't change after they
   // appear, so they finalize immediately.
   const finalized = entry.settlementSeqNo !== undefined || role !== 'assistant';
+  const spillPath = spillPathOf(entry);
   const next: ConversationEntry = {
     ...baseLogEntryFields(entry, role, renderedText),
-    ...(spillPathOf(entry) ? { spillPath: spillPathOf(entry) } : {}),
+    ...(spillPath ? { spillPath } : {}),
     ...(assistantTranscript !== undefined &&
     hasIncompleteEmbeddedSubagentFollowup(assistantTranscript)
       ? { pendingEmbeddedSubagentFollowup: true }
