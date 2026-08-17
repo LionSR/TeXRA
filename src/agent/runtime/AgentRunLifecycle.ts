@@ -808,11 +808,11 @@ export async function runFlowWithLifecycle(
     // Stop the Lean servers attributed to this run in its worktree(s) so they
     // do not idle until the timeout after the run is gone (CLI/desktop; a host
     // whose Lean integration owns server lifetime no-ops here). Servers still
-    // leased by another run's in-flight request survive on the idle-timeout
-    // backstop. Guarded like the cancel above: a failing stop must not
-    // replace the result this run already published. A WAITING suspension is
-    // not a run end, so its return skips this and leaves the stop to the
-    // suspended-handle teardown if a later kill actually ends the run.
+    // leased by an in-flight request are disposed after their final lease
+    // ends. Guarded like the cancel above: a failing stop must not replace the
+    // result this run already published. A WAITING suspension is not a run
+    // end, so its return skips this and leaves the stop to the suspended-handle
+    // teardown if a later kill actually ends the run.
     if (!keepLeaseWatcher) {
       await runOnRunEnd();
     }

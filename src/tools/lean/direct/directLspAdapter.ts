@@ -175,10 +175,7 @@ export function createDirectLspLeanAdapter(
     tracked.inFlight = Math.max(0, tracked.inFlight - 1);
     if (tracked.inFlight > 0) return;
     tracked.lastUsedAt = now();
-    if (
-      tracked.pendingStopRunId !== undefined &&
-      tracked.pendingStopRunId === tracked.startedByRunId
-    ) {
+    if (tracked.pendingStopRunId !== undefined) {
       try {
         await disposeSession(root, 'run-end');
       } catch (error) {
