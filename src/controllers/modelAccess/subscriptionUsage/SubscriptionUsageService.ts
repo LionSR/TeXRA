@@ -127,7 +127,6 @@ export class SubscriptionUsageService {
     string,
     Promise<SubscriptionUsageSnapshot>
   >();
-  private readonly generations = new Map<SubscriptionUsageProvider, number>();
   private readonly latestRequests = new Map<
     SubscriptionUsageProvider,
     ResolvedRequest
@@ -195,8 +194,6 @@ export class SubscriptionUsageService {
       for (const key of this.pending.keys()) {
         if (key.startsWith(keyPrefix)) this.pending.delete(key);
       }
-      this.latestRequests.delete(target);
-      this.generations.set(target, (this.generations.get(target) ?? 0) + 1);
     }
   }
 
@@ -245,7 +242,10 @@ export class SubscriptionUsageService {
       return this.unavailable(provider, 'request_failed');
     }
 
-    if (!forceRefresh) {
+    if (forceRefresh) {
+      this.cache.delete(resolved.key);
+      this.pending.delete(resolved.key);
+    } else {
       const cached = this.cache.get(resolved.key);
       if (cached && cached.expiresAt > this.now()) return cached.snapshot;
     }
@@ -253,22 +253,19 @@ export class SubscriptionUsageService {
     const inFlight = this.pending.get(resolved.key);
     if (inFlight) return inFlight;
 
-    const generation = this.generations.get(provider) ?? 0;
     const request = this.fetchUsage(provider, resolved.variant).then(
       (snapshot) => {
-        if ((this.generations.get(provider) ?? 0) !== generation) {
-          return this.getUsage(provider, { forceRefresh: true });
+        if (this.pending.get(resolved.key) !== request) {
+          return this.getUsage(provider);
         }
         const latest = this.latestRequests.get(provider);
         if (latest && latest.key !== resolved.key) {
           return this.getUsageForRequest(provider, latest, false);
         }
-        if (this.pending.get(resolved.key) === request) {
-          this.cache.set(resolved.key, {
-            snapshot,
-            expiresAt: this.now() + this.cacheTtlMs,
-          });
-        }
+        this.cache.set(resolved.key, {
+          snapshot,
+          expiresAt: this.now() + this.cacheTtlMs,
+        });
         return snapshot;
       },
     );

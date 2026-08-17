@@ -20,21 +20,6 @@ import { settleCompactionActivityLogs } from './logSlice';
 import { mergeBackendOwnedState } from './streamStateMerge';
 import { appState, setStreamStateForId } from '../progressState';
 
-/**
- * Buffer for subagent descriptions that race their own UPDATE_STREAMS
- * registration. Lives as module state because it's purely transient plumbing
- * between two slices, not state the UI needs to observe.
- */
-export const pendingDescriptions = new Map<StreamTabId, string>();
-
-export function takePendingDescription(
-  streamId: StreamTabId,
-): string | undefined {
-  const desc = pendingDescriptions.get(streamId);
-  if (desc !== undefined) pendingDescriptions.delete(streamId);
-  return desc;
-}
-
 function upsertSortedStreamInfo(
   streams: Map<StreamTabId, StreamTabInfo>,
   streamInfo: StreamTabInfo,
@@ -55,12 +40,11 @@ function upsertSortedStreamInfo(
 export const streamMetaHandlers = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA]: (data) => {
     const name = data.streamInfo.name;
-    const pending = takePendingDescription(name);
 
     const prev = appState.get();
     const existingInfo = prev.streamById.get(name);
     const description =
-      data.streamInfo.description ?? pending ?? existingInfo?.description;
+      data.streamInfo.description ?? existingInfo?.description;
     const streamInfo =
       description !== data.streamInfo.description
         ? { ...data.streamInfo, description }
@@ -143,13 +127,9 @@ export const streamMetaHandlers = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION]: (data) => {
     const { stream, description } = data;
-    // Subagent description can race its own UPDATE_STREAMS registration; if
-    // the stream isn't in streamById yet, buffer out-of-band so
-    // streamLifecycleSlice can drain it on arrival.
-    if (!appState.get().streamById.has(stream)) {
-      pendingDescriptions.set(stream, description);
-      return;
-    }
+    // Registration metadata carries the same description, so an early patch
+    // can be ignored until the authoritative stream entry arrives.
+    if (!appState.get().streamById.has(stream)) return;
     appState.set(
       create(appState.get(), (draft) => {
         const existing = draft.streamById.get(stream);
