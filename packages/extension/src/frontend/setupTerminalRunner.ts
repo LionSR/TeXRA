@@ -13,13 +13,13 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - hosts
+// Local imports - common
 import {
+  TERMINAL_OUTPUT_MAX_CHARS,
   truncateTerminalOutput,
-  type TerminalRunRequest,
-  type TerminalRunResult,
-} from '@hosts/uiHosts';
-import { TERMINAL_OUTPUT_MAX_CHARS } from '@shared/constants/terminal';
+} from '@common/terminalOutput';
+// Local imports - hosts
+import type { TerminalRunRequest, TerminalRunResult } from '@hosts/uiHosts';
 
 import { raceWithTimeout } from './vscode/raceWithTimeout';
 
@@ -114,7 +114,7 @@ async function captureExecution(
 
   return {
     exitCode: result.timedOut ? undefined : result.value,
-    output: truncateTerminalOutput(output, TERMINAL_OUTPUT_MAX_CHARS),
+    output: truncateTerminalOutput(output),
     timedOut: result.timedOut,
   };
 }

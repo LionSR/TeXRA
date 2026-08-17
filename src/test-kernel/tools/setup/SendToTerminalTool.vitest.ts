@@ -8,9 +8,9 @@ import { strict as assert } from 'node:assert';
 import { describe, it, beforeAll } from 'vitest';
 
 // Local imports
+import { TERMINAL_OUTPUT_MAX_CHARS } from '@common/terminalOutput';
 import type { ConfigProvider } from '@platform/interfaces';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
-import { TERMINAL_OUTPUT_MAX_CHARS } from '@shared/constants/terminal';
 import { installPlatform } from '@test/support/setupPlatform';
 import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
 import {
