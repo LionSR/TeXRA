@@ -80,6 +80,10 @@ import {
   moveLocalTranscriptToStream,
 } from './tui/state/transcript';
 import { syncStreamLog } from './tui/state/subscribeStreamLog';
+import {
+  beginLoadedStreamsReconcile,
+  markArtifactStreamHydrated,
+} from './tui/state/subscribeStreamArtifacts';
 
 type InterruptedFollowUp = Pick<
   FollowUpQueueInput,
@@ -539,8 +543,23 @@ export function createChatSessionController(
 
       const sessionContext = beginRunContext(resolution.agentConfig, 'history');
 
+      const loadedStreamsReconcile = beginLoadedStreamsReconcile([
+        resolution.streamId,
+      ]);
+
       await runtimeSession.transcripts.ensureLoaded(resolution.streamId);
+      // `load` evicts synchronously before its async seed. Drop those markers
+      // before the await yields so `readStreamArtifacts` cannot project an
+      // evicted/unseeded record (and re-emit warnIfUnseeded) mid-seed. On
+      // rejection the retained root stays unmarked — it was never seeded. A
+      // previously hydrated retained root deliberately remains marked during
+      // reseeding: this keeps its canonical pre-resume projection visible at
+      // the cost of bounded warnIfUnseeded notices until the seed completes.
+      loadedStreamsReconcile.dropStale();
       await snapshotStore.load([resolution.streamId]);
+      // Mark the retained root before the awaited read/patch can render a
+      // stale pre-resume projection.
+      loadedStreamsReconcile.reconcile();
       const restored = await snapshotStore.read(resolution.streamId);
       // A rehydrated stream never re-emits `run.start`, so its identity is
       // seeded from the durable store (ExecutionMeta by FK) on this cold
@@ -564,6 +583,11 @@ export function createChatSessionController(
       });
       syncStreamLog(resolution.streamId);
       focusStream(resolution.streamId);
+      // Re-reconcile now that focus has moved: a stale in-flight preload for the
+      // previous stream that re-added it during the awaited read above is cleared
+      // again, while any stream preloaded in the meantime is preserved. Later
+      // hydrations for the old stream also fail requestIsCurrent.
+      loadedStreamsReconcile.reconcile();
 
       const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
         setupRunHost(sessionContext);
@@ -662,6 +686,9 @@ export function createChatSessionController(
       let finalize = (): void => session.markRunCompleted();
       try {
         await snapshotStore.preload([streamId]);
+        // Invalidate the memo immediately after the direct seed, before the
+        // awaited metadata/patch/focus below can render a stale projection.
+        markArtifactStreamHydrated(streamId);
         const runMetadata = snapshotStore.getRunMetadata(streamId);
         const executionId =
           runMetadata.executionId ??
