@@ -76,6 +76,11 @@ const providerApiKeyRuntime = vi.hoisted(() => ({
   load: vi.fn(),
   save: vi.fn(),
 }));
+const githubTokenRuntime = vi.hoisted(() => ({
+  load: vi.fn(),
+  save: vi.fn(),
+  remove: vi.fn(),
+}));
 
 vi.mock('@model/computeModelOptions', () => ({
   invalidateModelOptionsCache,
@@ -83,6 +88,11 @@ vi.mock('@model/computeModelOptions', () => ({
 vi.mock('@cli/runtime/providerApiKey', () => ({
   loadProviderApiKeyStatuses: providerApiKeyRuntime.load,
   saveProviderApiKey: providerApiKeyRuntime.save,
+}));
+vi.mock('@cli/runtime/githubToken', () => ({
+  loadGitHubTokenStatus: githubTokenRuntime.load,
+  saveGitHubToken: githubTokenRuntime.save,
+  removeGitHubToken: githubTokenRuntime.remove,
 }));
 
 function apiKeyStatuses(
@@ -102,6 +112,12 @@ beforeEach(() => {
   providerApiKeyRuntime.load.mockResolvedValue(apiKeyStatuses());
   providerApiKeyRuntime.save.mockReset();
   providerApiKeyRuntime.save.mockResolvedValue(undefined);
+  githubTokenRuntime.load.mockReset();
+  githubTokenRuntime.load.mockResolvedValue('none');
+  githubTokenRuntime.save.mockReset();
+  githubTokenRuntime.save.mockResolvedValue(undefined);
+  githubTokenRuntime.remove.mockReset();
+  githubTokenRuntime.remove.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -145,6 +161,19 @@ async function submitOpenAiApiKey(
   stdin.write('1');
   await waitFor(() => stdout.output.includes('Use my own provider API key'));
   stdin.write(key);
+  stdin.write('\r');
+}
+
+async function submitGitHubToken(
+  stdin: FakeStdin,
+  stdout: FakeStdout,
+  token = 'ghp_private-test-token',
+): Promise<void> {
+  stdin.write('3');
+  await waitFor(() => stdout.output.includes('Set token'));
+  stdin.write('1');
+  await waitFor(() => stdout.output.includes('Set GitHub token'));
+  stdin.write(token);
   stdin.write('\r');
 }
 
@@ -593,6 +622,27 @@ describe('CliConfigForm API-key status lifecycle', () => {
     await sleep(20);
     expect(stripAnsi(rendered.stdout.output)).toBe('');
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('saves a GitHub token from /config without rendering the secret', async () => {
+    githubTokenRuntime.load
+      .mockResolvedValueOnce('none')
+      .mockResolvedValueOnce('secret');
+    const rendered = await renderCliConfigForm();
+
+    try {
+      await waitFor(() => rendered.stdout.output.includes('GitHub token'));
+      rendered.stdout.output = '';
+      await submitGitHubToken(rendered.stdin, rendered.stdout);
+      await waitFor(() => githubTokenRuntime.save.mock.calls.length === 1);
+      expect(githubTokenRuntime.save).toHaveBeenCalledWith(
+        'ghp_private-test-token',
+      );
+      expect(rendered.stdout.output).not.toContain('ghp_private-test-token');
+      await waitFor(() => rendered.stdout.output.includes('Token set'));
+    } finally {
+      rendered.instance.unmount();
+    }
   });
 
   it('uses the same status-aware form in standalone config and /config', async () => {

@@ -65,6 +65,9 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
+- **Subscription usage no longer repeats the same percentages** — plan meters
+  show each window once, without a disclosure header that restates the same
+  5-hour and 7-day figures.
 - **Workflow runs trade the Follow-up chat panel for a Copy button** — the
   panel that started a tool-use chat from a workflow's outputs (agent picker,
   model picker, note box) is gone. In its place the run's header toolbar has a
@@ -95,6 +98,8 @@ All notable changes to this project will be documented in this file.
 
 #### Features
 
+- **`/config` can store a GitHub token** — set, replace, or remove the personal
+  access token used by GitHub subscriptions without leaving the CLI.
 - **`texra agents show` omits access-group tags** — remote agent details no
   longer print visibility labels.
 
