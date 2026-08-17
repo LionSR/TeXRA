@@ -30,11 +30,7 @@ import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { isInquiryContinuationText } from './transcriptEntries';
 import { loadedImageDisplayLines } from './loadedImageDisplay';
-import {
-  toolUseDisplayLines,
-  toolUseMarginBottomRows,
-  toolUseRendersOutput,
-} from './toolRenderers';
+import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';
 import type { ConversationEntry } from '../state/cliState';
 
 const DEFAULT_TRANSCRIPT_COLUMNS = 80;
@@ -393,22 +389,16 @@ export function fullTranscriptEntryLayout(
   if (entry.role !== 'tool') return layout;
   // Spilled rows carry only a bounded preview in the normal transcript. The
   // on-demand reader substitutes the artifact text before reaching this
-  // layout; append it explicitly so read/edit-style tools (whose compact card
-  // intentionally omits ordinary output) still expose their recovered value.
-  const spillOutput =
-    entry.spillPath && !toolUseRendersOutput(entry.toolUse)
-      ? ['Full output:', ...entry.toolUse.outputText.split('\n')]
-      : [];
+  // layout. Let the owning renderer append it for read/edit-style tools whose
+  // compact card intentionally omits ordinary output.
   return {
     ...layout,
     lines: wrapDisplayLines(
-      [
-        ...toolUseDisplayLines(entry.toolUse, {
-          elide: false,
-          executionLabels,
-        }),
-        ...spillOutput,
-      ],
+      toolUseDisplayLines(entry.toolUse, {
+        elide: false,
+        executionLabels,
+        includeCompactOutput: entry.spillPath !== undefined,
+      }),
       layout.columns,
     ),
   };
