@@ -386,6 +386,16 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
         return typeof value === 'string' ? value : undefined;
       }
 
+      async readTextTail(
+        key: string,
+        extension: string,
+        maxBytes: number,
+      ): Promise<string | undefined> {
+        const value = kvStoreBacking.get(this.extensionKey(key, extension));
+        if (typeof value !== 'string') return undefined;
+        return Buffer.from(value).subarray(-maxBytes).toString();
+      }
+
       async appendText(
         key: string,
         extension: string,
