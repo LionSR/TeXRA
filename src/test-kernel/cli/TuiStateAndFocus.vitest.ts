@@ -57,6 +57,10 @@ import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMod
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import {
+  markArtifactStreamHydrated,
+  readStreamArtifacts,
+} from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import {
   estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
@@ -3339,6 +3343,62 @@ describe('sessionSignalsAdapter run facts', () => {
 
       expect(streams.get().get(root)?.plan).toEqual(plan);
     });
+  });
+
+  it('invalidates a hydrated artifact memo when the slice already matches', () => {
+    const streamId = 'hydrated-artifact-memo' as StreamTabId;
+    const previousTodos: TodoItem[] = [
+      {
+        content: 'Previous durable task',
+        status: TODO_STATUS.PENDING,
+        activeForm: 'Keeping the previous durable task',
+      },
+    ];
+    const nextTodos: TodoItem[] = [
+      {
+        content: 'Current durable task',
+        status: TODO_STATUS.IN_PROGRESS,
+        activeForm: 'Refreshing the durable task',
+      },
+    ];
+    const session = defaultSession();
+    const detach = attachSessionSignalsAdapter({
+      events: session.events,
+      session,
+      snapshots: session.snapshots,
+    });
+    try {
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'updateTodos',
+          streamId,
+          todos: previousTodos,
+        },
+      });
+      markArtifactStreamHydrated(streamId);
+      expect(readStreamArtifacts(streamId)?.todos).toEqual(previousTodos);
+
+      // Reproduce a pre-hydration mirror already holding the incoming value.
+      // The event still changes the canonical snapshot store and must clear
+      // the memo even though the slice patch itself is a no-op.
+      patchStream(streamId, (slice) => ({ ...slice, todos: nextTodos }));
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'updateTodos',
+          streamId,
+          todos: nextTodos,
+        },
+      });
+
+      expect(readStreamArtifacts(streamId)?.todos).toEqual(nextTodos);
+    } finally {
+      detach();
+      session.snapshots.evictAll();
+    }
   });
 
   it('keeps a captured work-plan reader synchronized after focus moves', () => {

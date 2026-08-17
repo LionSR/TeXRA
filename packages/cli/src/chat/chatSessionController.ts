@@ -551,7 +551,10 @@ export function createChatSessionController(
       // `load` evicts synchronously before its async seed. Drop those markers
       // before the await yields so `readStreamArtifacts` cannot project an
       // evicted/unseeded record (and re-emit warnIfUnseeded) mid-seed. On
-      // rejection the retained root stays unmarked — it was never seeded.
+      // rejection the retained root stays unmarked — it was never seeded. A
+      // previously hydrated retained root deliberately remains marked during
+      // reseeding: this keeps its canonical pre-resume projection visible at
+      // the cost of bounded warnIfUnseeded notices until the seed completes.
       loadedStreamsReconcile.dropStale();
       await snapshotStore.load([resolution.streamId]);
       // Mark the retained root before the awaited read/patch can render a
