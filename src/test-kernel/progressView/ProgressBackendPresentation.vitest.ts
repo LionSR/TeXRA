@@ -48,7 +48,7 @@ function mockSuccessfulClear(
   } else {
     vi.spyOn(backend.state, 'clearAll').mockImplementation(async () => {
       await body();
-      return { active: new Set(), failed: new Set() };
+      return { active: new Set(), failed: new Set(), deleted: new Set() };
     });
   }
 }
@@ -168,6 +168,7 @@ async function expectRetentionNoticeDoesNotBlockStorageRootReplacement(
     vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
       active: new Set([stream]),
       failed: new Set(),
+      deleted: new Set(),
     });
   }
 

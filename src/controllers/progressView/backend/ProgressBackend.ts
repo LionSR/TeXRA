@@ -1,7 +1,7 @@
 import PQueue from 'p-queue';
 
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
-import type { SessionStores } from '@agent/storage';
+import type { DeleteStreamResult, SessionStores } from '@agent/storage';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import {
   defaultSession,
@@ -175,7 +175,8 @@ export class ProgressBackend {
     });
     this.hasPendingPermissions = ui.hasPendingPermissions;
     this.factApplier = new SessionFactApplier(this.state, this.renderer, {
-      deleteStream: (stream) => this.deleteStream(stream),
+      deleteStream: (stream, expectedIncarnation) =>
+        this.deleteStream(stream, expectedIncarnation),
     });
     this.setApprovalBypassState = ui.setApprovalBypassState;
   }
@@ -230,7 +231,14 @@ export class ProgressBackend {
     stream: PresentedStreamId,
     requestId?: string,
   ): Promise<void> {
-    if (stream && !this.state.streamLogs.has(stream)) {
+    // The fact path re-claims a deterministic workflow stream before it
+    // reaches this call; every other removed identity must not be focused,
+    // even when `streamLogs` still has a summary for a provisional removal
+    // that has not committed yet.
+    if (
+      stream &&
+      (this.state.isStreamRemoved(stream) || !this.state.streamLogs.has(stream))
+    ) {
       // A newer rejected request still supersedes every older hydration. Its
       // visual intent is settled back to the confirmed selection below.
       this.activationGeneration += 1;
@@ -428,12 +436,13 @@ export class ProgressBackend {
   /** Inject a session fact (tests / rare host seeds). Prefer the hub in production. */
   applySessionFact(
     ...args: Parameters<SessionFactApplier['handleSessionFact']>
-  ): void {
-    this.factApplier.handleSessionFact(...args);
+  ): boolean {
+    const admitted = this.factApplier.handleSessionFact(...args);
     const [fact] = args;
-    if (fact.type === 'setActiveStream') {
+    if (admitted && fact.type === 'setActiveStream') {
       this.handleStreamPresentationRequest(fact.payload);
     }
+    return admitted;
   }
 
   /** Inject a run fact (tests / rare host seeds). Prefer the hub in production. */
@@ -447,29 +456,107 @@ export class ProgressBackend {
     });
   }
 
-  async deleteStream(stream: StreamTabId): Promise<void> {
+  /**
+   * Delete a stream's durable state. Resolves to the retention outcome so the
+   * session-fact applier can keep its removal barrier provisional until the
+   * deletion commits: `active`/`failed` mean the stream still lives.
+   */
+  async deleteStream(
+    stream: StreamTabId,
+    expectedIncarnation?: number,
+  ): Promise<DeleteStreamResult | undefined> {
     const wasActive = this.presentation.activeStream === stream;
     const activationGeneration = this.activationGeneration;
     const storageGeneration = this.storageGeneration;
-    const retained = await this.enqueuePreparedStorageOperation(
-      () => this.prepareStreamDeletion(stream),
-      (ownershipReadFailed) => {
-        if (storageGeneration !== this.storageGeneration) {
-          return Promise.resolve(undefined);
-        }
-        if (ownershipReadFailed) {
-          return Promise.resolve('failed' as const);
-        }
-        return this.deleteStreamNow(stream, wasActive, activationGeneration);
-      },
-    );
-    if (retained) {
-      await this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
-      await this.lifecycle.notifyDeletionRetained(
-        retained === 'active' ? 1 : 0,
-        retained === 'failed' ? 1 : 0,
+
+    // A host command (no caller incarnation) owns its removal barrier and
+    // pending buffer through the applier, exactly like a `removeStream` fact.
+    // If a fact-path barrier already owns this identity, do not start a second
+    // deletion or touch that barrier.
+    let commandRemoval: { incarnation: number; created: boolean } | undefined;
+    if (expectedIncarnation === undefined) {
+      commandRemoval = this.factApplier.beginCommandRemoval(stream);
+      if (!commandRemoval.created) return 'superseded';
+      expectedIncarnation = commandRemoval.incarnation;
+    }
+
+    let retained: DeleteStreamResult | undefined;
+    try {
+      retained = await this.enqueuePreparedStorageOperation(
+        // Pre-delete preparation is the one failure shape we can classify: it
+        // definitely did not delete anything, so report `failed` and let the
+        // applier retire the provisional barrier. A post-delete failure is
+        // ambiguous and stays a rejection, so the barrier is kept.
+        () =>
+          this.prepareStreamDeletion(stream).catch((error) => {
+            log.warn(
+              `Stream ${stream} was retained because deletion preparation failed`,
+              { data: error },
+            );
+            return true;
+          }),
+        (preparationRetained) => {
+          if (storageGeneration !== this.storageGeneration) {
+            return Promise.resolve(undefined);
+          }
+          if (preparationRetained) {
+            return Promise.resolve('failed' as const);
+          }
+          return this.deleteStreamNow(
+            stream,
+            wasActive,
+            activationGeneration,
+            expectedIncarnation,
+          );
+        },
+      );
+    } catch (error) {
+      if (commandRemoval) {
+        this.factApplier.abortCommandRemoval(
+          stream,
+          commandRemoval.incarnation,
+          commandRemoval.created,
+        );
+      }
+      throw error;
+    }
+
+    if (retained === 'active' || retained === 'failed') {
+      // Best-effort presentation repair, each failure isolated so a broken
+      // rebuild cannot suppress the retention notification and neither can
+      // make the deletion outcome disappear. The session-fact applier must
+      // still see `active`/`failed` and retire its provisional tombstone.
+      try {
+        await this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
+      } catch (error) {
+        log.warn(
+          'Failed to rebuild rendered streams after a retained deletion',
+          {
+            data: { stream, retained, error },
+          },
+        );
+      }
+      try {
+        await this.lifecycle.notifyDeletionRetained(
+          retained === 'active' ? 1 : 0,
+          retained === 'failed' ? 1 : 0,
+        );
+      } catch (error) {
+        log.warn('Failed to notify after a retained stream deletion', {
+          data: { stream, retained, error },
+        });
+      }
+    }
+
+    if (commandRemoval) {
+      this.factApplier.completeCommandRemoval(
+        stream,
+        commandRemoval.incarnation,
+        retained,
+        commandRemoval.created,
       );
     }
+    return retained;
   }
 
   /** Whether local durable state exists for `stream` (log or task snapshot). */
@@ -523,15 +610,25 @@ export class ProgressBackend {
     stream: StreamTabId,
     wasActive: boolean,
     activationGenerationAtStart: number,
-  ): Promise<'active' | 'failed' | undefined> {
+    expectedIncarnation?: number,
+  ): Promise<'deleted' | 'active' | 'failed' | 'superseded' | undefined> {
+    // `undefined` means the deletion never ran (reserved id / cannot-use data
+    // dir), not "deleted": the command path relies on a committed deletion
+    // being reported as `deleted` so it keeps the tombstone it just installed.
     if (!canUseStreamDataDir(stream)) return undefined;
 
     const hadDeletableData = this.hasDeletableStreamData(stream);
-    const deletion = await this.state.clearStream(stream);
+    const deletion =
+      expectedIncarnation === undefined
+        ? await this.state.clearStream(stream)
+        : await this.state.clearStream(stream, { expectedIncarnation });
     if (deletion !== 'deleted') {
       return deletion;
     }
-    if (!hadDeletableData) return undefined;
+    // `clearStream` deleted and tombstoned the stream, so report `deleted`
+    // even when it had no durable data (ephemeral-only): the caller must not
+    // retire the tombstone a stale fact could then resurrect through.
+    if (!hadDeletableData) return 'deleted';
 
     this.lifecycle.cleanupDeletedStream(stream);
     this.webviewBridge.clearStream(stream);
@@ -577,7 +674,7 @@ export class ProgressBackend {
       // changed; the active stream's content is still on screen and correct.
       await this.lifecycle.rebuildRenderedStreams({ syncActiveStream: false });
     }
-    return undefined;
+    return 'deleted';
   }
 
   async deleteAllStreams(): Promise<void> {
@@ -595,14 +692,30 @@ export class ProgressBackend {
       activationGeneration !== this.activationGeneration &&
       (this.latestActivationTarget === '' ||
         this.state.streamLogs.has(this.latestActivationTarget));
-    await this.lifecycle.rebuildRenderedStreams({
-      syncActiveStream: !outcome.allDeleted && !newerIntentControlsSelection,
-    });
+    try {
+      await this.lifecycle.rebuildRenderedStreams({
+        syncActiveStream: !outcome.allDeleted && !newerIntentControlsSelection,
+      });
+    } catch (error) {
+      log.warn('Failed to rebuild rendered streams after bulk deletion', {
+        data: { allDeleted: outcome.allDeleted, error },
+      });
+    }
     if (!outcome.allDeleted) {
-      await this.lifecycle.notifyDeletionRetained(
-        outcome.activeCount,
-        outcome.failedCount,
-      );
+      try {
+        await this.lifecycle.notifyDeletionRetained(
+          outcome.activeCount,
+          outcome.failedCount,
+        );
+      } catch (error) {
+        log.warn('Failed to notify after a retained bulk deletion', {
+          data: {
+            activeCount: outcome.activeCount,
+            failedCount: outcome.failedCount,
+            error,
+          },
+        });
+      }
     }
   }
 
@@ -762,8 +875,11 @@ export class ProgressBackend {
       this.session.events.subscribe(
         (sessionEvent) => {
           if (sessionEvent.scope !== 'session') return;
-          this.factApplier.handleSessionFact(sessionEvent.event);
-          if (sessionEvent.event.type === 'setActiveStream') {
+          const admitted = this.factApplier.handleSessionFact(
+            sessionEvent.event,
+          );
+          // A refused attachment (removed stream) must not activate or lease.
+          if (admitted && sessionEvent.event.type === 'setActiveStream') {
             this.handleStreamPresentationRequest(sessionEvent.event.payload);
           }
         },

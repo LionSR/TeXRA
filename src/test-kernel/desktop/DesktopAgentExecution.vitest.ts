@@ -2060,7 +2060,7 @@ describe('DesktopProgressBridge', () => {
     expect(lastContentSync(messages)).toMatchObject({ stream: 'third' });
   });
 
-  it('falls back if a deleted stream is reactivated during deletion', async () => {
+  it('refuses desktop reactivation while a stream deletion is pending', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
 
@@ -2068,6 +2068,7 @@ describe('DesktopProgressBridge', () => {
     activateStream(bridge, 'second');
     await settleProgressEvents();
     bridge.setActiveStream('first');
+    await settleProgressEvents();
     messages.length = 0;
 
     const deletePromise = deleteStreamViaInbound(bridge, 'second');
@@ -2076,17 +2077,8 @@ describe('DesktopProgressBridge', () => {
 
     expect(
       progressMessages(messages, PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
-    ).toEqual([
-      {
-        activeStream: 'second',
-        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-      },
-      {
-        activeStream: 'first',
-        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-      },
-    ]);
-    expect(lastContentSync(messages)).toMatchObject({ stream: 'first' });
+    ).toEqual([]);
+    expect(lastStreamSync(messages)).toMatchObject({ activeStream: 'first' });
   });
 
   it('emits delete-all cleanup before syncing an empty stream list', async () => {

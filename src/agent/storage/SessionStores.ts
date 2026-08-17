@@ -13,6 +13,7 @@ import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
+import { StreamDeletionSupersededError } from '@transcript/StreamLogStore';
 import type { StagedStreamSnapshotDeletion } from '@transcript/StagedDeletionCoordinator';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 import { throwAggregated, unique } from '@utils/core';
@@ -51,9 +52,11 @@ export interface SessionStoresOptions {
 export interface DeleteAllStreamsResult {
   readonly active: ReadonlySet<StreamTabId>;
   readonly failed: ReadonlySet<StreamTabId>;
+  /** Streams whose adjacent durable state this call actually deleted. */
+  readonly deleted: ReadonlySet<StreamTabId>;
 }
 
-export type DeleteStreamResult = 'deleted' | 'active' | 'failed';
+export type DeleteStreamResult = 'deleted' | 'active' | 'failed' | 'superseded';
 
 /**
  * Result of removing an execution together with its adjacent stream state.
@@ -64,7 +67,8 @@ export type DeleteStreamResult = 'deleted' | 'active' | 'failed';
 type ExecutionDeletionOutcome =
   | { readonly kind: 'completed'; readonly result: DeleteExecutionResult }
   | { readonly kind: 'streams-deleted'; readonly error: unknown }
-  | { readonly kind: 'retained'; readonly error: unknown };
+  | { readonly kind: 'retained'; readonly error: unknown }
+  | { readonly kind: 'superseded' };
 
 /**
  * Coordinates the durable footprint for a progress stream.
@@ -87,9 +91,16 @@ export class SessionStores {
         children: readonly StreamTabId[],
       ) => void | Promise<void>)
     | undefined;
+  /**
+   * Single-flight per stream, then per guard reference. The guard is stable per
+   * incarnation (`SessionState` memoizes it), so two removals of the same
+   * identity at the same incarnation share one promise, while a re-claimed
+   * identity's new guard starts its own deletion independently. `undefined`
+   * is the slot for unguarded deletions.
+   */
   private readonly pendingStreamDeletions = new Map<
     StreamTabId,
-    Promise<DeleteStreamResult>
+    Map<(() => boolean) | undefined, Promise<DeleteStreamResult>>
   >();
   private pendingDeleteAll: Promise<DeleteAllStreamsResult> | undefined;
   private readonly deletionQueue = new PQueue({ concurrency: 1 });
@@ -110,9 +121,15 @@ export class SessionStores {
     if (executionId) await waitForOwnedExecutionLeaseRelease(executionId);
   }
 
-  deleteStream(stream: StreamTabId): Promise<DeleteStreamResult> {
-    return this.trackStreamDeletion(stream, () =>
-      this.enqueueDeletion(() => this.deleteStreamAndNotify(stream)),
+  deleteStream(
+    stream: StreamTabId,
+    options?: { readonly shouldDelete?: () => boolean },
+  ): Promise<DeleteStreamResult> {
+    const shouldDelete = options?.shouldDelete;
+    return this.trackStreamDeletion(stream, shouldDelete, () =>
+      this.enqueueDeletion(() =>
+        this.deleteStreamAndNotify(stream, shouldDelete),
+      ),
     );
   }
 
@@ -133,7 +150,7 @@ export class SessionStores {
   deleteStreamAfterOwnedExecutionRelease(
     stream: StreamTabId,
   ): Promise<DeleteStreamResult> {
-    return this.trackStreamDeletion(stream, async () => {
+    return this.trackStreamDeletion(stream, undefined, async () => {
       // Track the whole wait so a presentation attaching during terminal
       // artifact persistence cannot replay a stream already marked removed.
       // If the ownership read fails here, report `failed` immediately rather
@@ -154,23 +171,36 @@ export class SessionStores {
 
   private trackStreamDeletion(
     stream: StreamTabId,
+    guard: (() => boolean) | undefined,
     start: () => Promise<DeleteStreamResult>,
   ): Promise<DeleteStreamResult> {
-    const existing = this.pendingStreamDeletions.get(stream);
+    let byGuard = this.pendingStreamDeletions.get(stream);
+    if (!byGuard) {
+      byGuard = new Map();
+      this.pendingStreamDeletions.set(stream, byGuard);
+    }
+    const existing = byGuard.get(guard);
     if (existing) return existing;
     const pending = start();
-    this.pendingStreamDeletions.set(stream, pending);
-    const finish = (): void => this.finishStreamDeletion(stream, pending);
+    byGuard.set(guard, pending);
+    const finish = (): void =>
+      this.finishStreamDeletion(stream, guard, pending);
     void pending.then(finish, finish);
     return pending;
   }
 
   private async deleteStreamAndNotify(
     stream: StreamTabId,
+    shouldDelete?: () => boolean,
   ): Promise<DeleteStreamResult> {
+    if (shouldDelete && !shouldDelete()) return 'superseded';
     const hadCanonicalStream = this.streamLogs.has(stream);
-    const result = await this.deleteStreamOnce(stream);
+    const result = await this.deleteStreamOnce(stream, shouldDelete);
     if (result === 'deleted' && hadCanonicalStream) {
+      // Re-check immediately before the canonical-deleted notify: a re-claim
+      // landing during the goal-forget await (inside `deleteStreamOnce`) must
+      // not clear the fresh incarnation's resources.
+      if (shouldDelete && !shouldDelete()) return 'superseded';
       await this.notifyDeleted(stream);
     }
     return result;
@@ -182,7 +212,9 @@ export class SessionStores {
       this.pendingDeleteAll !== undefined
     ) {
       await Promise.allSettled([
-        ...this.pendingStreamDeletions.values(),
+        ...[...this.pendingStreamDeletions.values()].flatMap((byGuard) => [
+          ...byGuard.values(),
+        ]),
         ...(this.pendingDeleteAll ? [this.pendingDeleteAll] : []),
       ]);
     }
@@ -201,11 +233,13 @@ export class SessionStores {
 
   private finishStreamDeletion(
     stream: StreamTabId,
+    guard: (() => boolean) | undefined,
     pending: Promise<DeleteStreamResult>,
   ): void {
-    if (this.pendingStreamDeletions.get(stream) === pending) {
-      this.pendingStreamDeletions.delete(stream);
-    }
+    const byGuard = this.pendingStreamDeletions.get(stream);
+    if (byGuard?.get(guard) !== pending) return;
+    byGuard.delete(guard);
+    if (byGuard.size === 0) this.pendingStreamDeletions.delete(stream);
   }
 
   private async notifyDeleted(stream: StreamTabId): Promise<void> {
@@ -252,8 +286,10 @@ export class SessionStores {
 
   private async deleteStreamOnce(
     stream: StreamTabId,
+    shouldDelete?: () => boolean,
   ): Promise<DeleteStreamResult> {
     if (!canUseStreamDataDir(stream)) return 'deleted';
+    if (shouldDelete && !shouldDelete()) return 'superseded';
 
     let executionId: ExecutionId | undefined;
     try {
@@ -266,10 +302,13 @@ export class SessionStores {
       return 'failed';
     }
 
+    if (shouldDelete && !shouldDelete()) return 'superseded';
+
     if (!executionId) {
       try {
-        await this.deleteStreamSidecars(stream);
+        await this.deleteStreamSidecars(stream, shouldDelete);
       } catch (error) {
+        if (error instanceof StreamDeletionSupersededError) return 'superseded';
         log.warn(
           `Stream ${stream} was retained because cleanup was incomplete: ${toErrorMessage(error)}`,
           { data: error },
@@ -279,8 +318,10 @@ export class SessionStores {
       return 'deleted';
     }
 
-    const outcome = await this.deleteExecutionWithStreamState(executionId, () =>
-      this.deleteStreamSidecars(stream),
+    const outcome = await this.deleteExecutionWithStreamState(
+      executionId,
+      () => this.deleteStreamSidecars(stream, shouldDelete),
+      shouldDelete,
     );
     switch (outcome.kind) {
       case 'completed':
@@ -297,6 +338,8 @@ export class SessionStores {
           { data: outcome.error },
         );
         return 'failed';
+      case 'superseded':
+        return 'superseded';
     }
   }
 
@@ -308,17 +351,25 @@ export class SessionStores {
   private async deleteExecutionWithStreamState(
     executionId: ExecutionId,
     cleanup: () => Promise<void>,
+    shouldDelete?: () => boolean,
   ): Promise<ExecutionDeletionOutcome> {
+    if (shouldDelete && !shouldDelete()) return { kind: 'superseded' };
     let cleanupCompleted = false;
     try {
       const result = await this.deleteExecution(executionId, {
         beforeDelete: async () => {
+          if (shouldDelete && !shouldDelete()) {
+            throw new StreamDeletionSupersededError();
+          }
           await cleanup();
           cleanupCompleted = true;
         },
       });
       return { kind: 'completed', result };
     } catch (error) {
+      if (error instanceof StreamDeletionSupersededError) {
+        return { kind: 'superseded' };
+      }
       return cleanupCompleted
         ? { kind: 'streams-deleted', error }
         : { kind: 'retained', error };
@@ -420,10 +471,12 @@ export class SessionStores {
       streamsByExecution.set(executionId, streams);
     }
     const active = new Set<StreamTabId>();
+    const deleted = new Set<StreamTabId>();
     await Promise.all(
       streamsWithoutExecution.map(async (stream) => {
         try {
           await this.deleteStreamSidecars(stream);
+          deleted.add(stream);
           if (canonicalStreams.has(stream)) await this.notifyDeleted(stream);
         } catch (error) {
           log.warn(
@@ -453,11 +506,13 @@ export class SessionStores {
           if (outcome.result.status === 'active') {
             for (const stream of streams) active.add(stream);
           } else {
+            for (const stream of streams) deleted.add(stream);
             await this.notifyCanonicalDeletions(streams, canonicalStreams);
           }
           return;
         }
         if (outcome.kind === 'streams-deleted') {
+          for (const stream of streams) deleted.add(stream);
           log.warn(
             `Streams for execution ${executionId} were deleted, but execution cleanup was incomplete: ${toErrorMessage(outcome.error)}`,
             { data: outcome.error },
@@ -465,16 +520,27 @@ export class SessionStores {
           await this.notifyCanonicalDeletions(streams, canonicalStreams);
           return;
         }
+        if (outcome.kind === 'superseded') return;
         log.warn(
           `Failed to delete streams for execution ${executionId}: ${toErrorMessage(outcome.error)}`,
           { data: outcome.error },
         );
+        // `retained` means the execution deletion failed before its
+        // `beforeDelete` cleanup committed. With per-stream cleanup failures
+        // some streams in the group DID commit, so only those exact committed
+        // streams belong in `deleted`; the failed ones are the retained set.
+        // With no per-stream failures the cleanup never ran, so nothing
+        // committed and `deleted` must stay empty even for snapshot-only
+        // identities that have no canonical tab to report in `failed`.
         const retainedStreams =
           failedAdjacentStreams.size > 0
             ? failedAdjacentStreams
             : streams.filter((stream) => this.streamLogs.has(stream));
         for (const stream of retainedStreams) failed.add(stream);
         if (failedAdjacentStreams.size > 0) {
+          for (const stream of streams) {
+            if (!failedAdjacentStreams.has(stream)) deleted.add(stream);
+          }
           await this.notifyCanonicalDeletions(
             streams,
             canonicalStreams,
@@ -483,7 +549,7 @@ export class SessionStores {
         }
       }),
     );
-    return { active, failed };
+    return { active, failed, deleted };
   }
 
   /**
@@ -622,6 +688,7 @@ export class SessionStores {
               );
               return;
             }
+            if (outcome.kind === 'superseded') return;
             if (outcome.result.status === 'active') return;
             if (outcome.result.status === 'deleted') {
               sweptExecutionIds.push(executionId);
@@ -689,16 +756,45 @@ export class SessionStores {
     return swept;
   }
 
-  private async deleteStreamSidecars(stream: StreamTabId): Promise<void> {
+  private async deleteStreamSidecars(
+    stream: StreamTabId,
+    shouldDelete?: () => boolean,
+  ): Promise<void> {
     const snapshotDeletion = await this.snapshots.stageDeleteStream(
       stream,
       (children) => this.notifyChildrenDetached(stream, children),
     );
+    // The generation guard is re-checked after staging: `stageDeleteStream`
+    // awaits, and a workflow relaunch can claim the identity during that
+    // await. Only an unchanged generation may cross the transcript commit
+    // point below; a superseded deletion rolls its staging back and leaves
+    // the fresh incarnation untouched.
+    if (shouldDelete && !shouldDelete()) {
+      try {
+        await snapshotDeletion.rollback();
+      } catch (rollbackError) {
+        log.warn(
+          `Stream ${stream} deletion was superseded, but snapshot staging rollback was incomplete: ${toErrorMessage(rollbackError)}`,
+          { data: rollbackError },
+        );
+      }
+      throw new StreamDeletionSupersededError(stream);
+    }
     try {
       // The transcript registry is the commit point for tab visibility.
       // Snapshot sidecars are only renamed before this, so a failure can roll
-      // them back without reconstructing state from partial files.
-      await this.streamLogs.delete(stream);
+      // them back without reconstructing state from partial files. The guard
+      // travels into `delete` itself so it is re-checked after the durable
+      // transcript delete but before in-memory state is forgotten.
+      await this.streamLogs.delete(stream, { shouldDelete });
+      // `delete` re-checked the guard before forgetting in-memory state. This
+      // final check runs with no await between it and the snapshot commit, so
+      // a re-claim that landed during the transcript I/O above can roll the
+      // snapshot staging back instead of having its buffered sidecar writes
+      // discarded by `commit`.
+      if (shouldDelete && !shouldDelete()) {
+        throw new StreamDeletionSupersededError(stream);
+      }
     } catch (error) {
       try {
         await snapshotDeletion.rollback();
@@ -711,16 +807,42 @@ export class SessionStores {
       throw error;
     }
 
-    const cleanup = await Promise.allSettled([
-      snapshotDeletion.commit(),
-      this.goalEntries?.forget(stream),
-    ]);
-    for (const result of cleanup) {
-      if (result.status === 'fulfilled') continue;
+    // The snapshot commit is the irreversible sidecar delete. Inspect its
+    // supersede result rather than swallowing it in `allSettled`: a re-claim
+    // landing during the staged copy's delete must report `superseded`, not
+    // `deleted`, so `deleteStreamOnce` skips the canonical-deleted notify and
+    // this removal never forgets the fresh incarnation's goal or clears its
+    // resources.
+    let superseded = false;
+    try {
+      superseded = await snapshotDeletion.commit(shouldDelete);
+    } catch (error) {
+      // The transcript already committed, so a snapshot-cleanup failure keeps
+      // the deletion `deleted`; it is logged here and still followed by goal
+      // cleanup, matching the prior best-effort auxiliary-cleanup contract.
       log.warn(
-        `Stream ${stream} was deleted, but auxiliary cleanup was incomplete: ${toErrorMessage(result.reason)}`,
-        { data: result.reason },
+        `Stream ${stream} was deleted, but snapshot commit was incomplete: ${toErrorMessage(error)}`,
+        { data: error },
       );
+    }
+    if (superseded) {
+      throw new StreamDeletionSupersededError(stream);
+    }
+    // Re-check before the awaited goal forget and before this method reports
+    // the deletion committed: a re-claim landing during the snapshot commit's
+    // child-detachment/flush must not forget the fresh incarnation's goal.
+    if (shouldDelete && !shouldDelete()) {
+      throw new StreamDeletionSupersededError(stream);
+    }
+    if (this.goalEntries) {
+      try {
+        await this.goalEntries.forget(stream);
+      } catch (error) {
+        log.warn(
+          `Stream ${stream} was deleted, but goal cleanup was incomplete: ${toErrorMessage(error)}`,
+          { data: error },
+        );
+      }
     }
   }
 

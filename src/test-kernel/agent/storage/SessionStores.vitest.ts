@@ -291,10 +291,10 @@ describe('SessionStores deletion coordination', () => {
       const bulk = stores.deleteAll();
       unblockDeletion();
 
-      await expect(Promise.all([single, bulk])).resolves.toEqual([
-        'deleted',
-        { active: new Set(), failed: new Set() },
-      ]);
+      const [singleResult, bulkResult] = await Promise.all([single, bulk]);
+      expect(singleResult).toBe('deleted');
+      expect(bulkResult.active).toEqual(new Set());
+      expect(bulkResult.failed).toEqual(new Set());
       expect(releases).toEqual([stream]);
     });
   });
@@ -479,6 +479,39 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
       await expect(
         getExecutionStore(executionId).readMeta(),
       ).resolves.not.toBeNull();
+    });
+  });
+
+  it('refuses a deletion whose generation guard flips during the transcript delete', async () => {
+    await withSession(async (session) => {
+      const stream = 'tool@test#fence' as StreamTabId;
+      session.transcripts.ensureStream(stream);
+      const snapshots = new StreamSnapshotStore();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+      });
+
+      // The generation fence must stay atomic with the transcript commit. Flip
+      // the guard once `delete` is entered — a deterministic workflow re-claim
+      // landing while the transcript delete drains pending writes — and assert
+      // the delete reports `superseded` with the transcript still resident.
+      let reClaimed = false;
+      const shouldDelete = (): boolean => !reClaimed;
+      const originalDelete = session.transcripts.delete.bind(
+        session.transcripts,
+      );
+      vi.spyOn(session.transcripts, 'delete').mockImplementation(
+        async (streamId, options) => {
+          reClaimed = true;
+          return originalDelete(streamId, options);
+        },
+      );
+
+      await expect(stores.deleteStream(stream, { shouldDelete })).resolves.toBe(
+        'superseded',
+      );
+      expect(session.transcripts.has(stream)).toBe(true);
     });
   });
 });
