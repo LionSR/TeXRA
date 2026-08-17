@@ -676,7 +676,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const executionId = 'abc-flow-fresh-collision' as ExecutionId;
     const streamId = 'chat@gpt54#abc-flow-fresh-collision' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
-    await writeFlowRecord(executionId, snapshot.sourceShared);
+    await writeFlowRecord(executionId, snapshot.shared);
 
     await expect(
       runPersistedFlow(executionId, streamId, undefined),
