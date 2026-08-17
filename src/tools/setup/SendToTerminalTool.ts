@@ -8,14 +8,12 @@ import {
   requestBashApproval,
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
-import { tailWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from '../core/define';
 import { getSetupPlatform } from './platform';
 
 const DEFAULT_TIMEOUT_MS = 300_000;
-const OUTPUT_PREVIEW_MAX = 4_000;
 const TERMINAL_NAME_PREFIX = 'TeXRA: ';
 
 const SendToTerminalInputSchema = z.strictObject({
@@ -86,10 +84,8 @@ export class SendToTerminalTool extends defineTool({
     const summary = timedOut
       ? `"${name}" timed out after ${Math.round(timeoutMs / 1000)}s`
       : `"${name}" exited ${exitLabel}`;
-    const tail = output.trim()
-      ? '\n\n' + tailWithEllipsis(output, OUTPUT_PREVIEW_MAX)
-      : '';
+    const outputText = output.trim() ? `\n\n${output}` : '';
 
-    return executed(summary + tail, summary);
+    return executed(summary + outputText, summary);
   }
 }
