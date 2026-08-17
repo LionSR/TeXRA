@@ -76,6 +76,14 @@ export type SessionFactApplierOptions = {
    * The applier passes the incarnation captured when the barrier was set so
    * the host can refuse to delete a deterministic identity that a fresh run
    * re-claimed while the deletion was queued.
+   *
+   * A host that rebuilds retained presentation state must invoke
+   * `beforeRetainedRepair` with its `active`/`failed` outcome before that
+   * rebuild enumerates selectable streams. The callback retires the
+   * provisional removal barrier and replays buffered facts; rebuilding first
+   * would omit the still-live stream because selectable projections hide
+   * provisional removals. Hosts without a selectable-stream repair path may
+   * ignore the optional hook and let normal promise settlement retire it.
    */
   deleteStream: (
     stream: StreamTabId,
