@@ -385,7 +385,6 @@ export abstract class PollingSourceBase<
         this.logger.warn('Keys-changed listener threw', { data: err });
       }
     }
-    appSignals.emit('githubSubscriptionsChanged', undefined);
   }
 
   private ensureTimer(): void {

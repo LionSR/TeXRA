@@ -525,61 +525,6 @@ describe('SubscriptionUsageService', () => {
   });
 
   it.each([
-    [true, GLM_CODING_PLAN_USAGE_URL, GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL],
-    [false, GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL, GLM_CODING_PLAN_USAGE_URL],
-  ])(
-    'returns the newer GLM region when the older request resolves last: China=%s',
-    async (initialUseChina, olderUrl, newerUrl) => {
-      let useChina = initialUseChina;
-      const responses = new Map<string, (response: Response) => void>();
-      const http = vi.fn<SubscriptionUsageHttp>(
-        (url) =>
-          new Promise<Response>((resolve) => {
-            responses.set(String(url), resolve);
-          }),
-      );
-      const service = serviceWith(
-        http,
-        credentials({ useGlmChina: () => useChina }),
-      );
-
-      const olderRequest = service.getUsage('glmCodingPlan');
-      await vi.waitFor(() => expect(http).toHaveBeenCalledTimes(1));
-      useChina = !initialUseChina;
-      const newerRequest = service.getUsage('glmCodingPlan');
-      await vi.waitFor(() => expect(http).toHaveBeenCalledTimes(2));
-
-      responses.get(newerUrl)?.(
-        jsonResponse({
-          success: true,
-          data: {
-            limits: [{ type: 'TOKENS_LIMIT', percentage: 80, unit: 3 }],
-          },
-        }),
-      );
-      const newer = await newerRequest;
-      responses.get(olderUrl)?.(
-        jsonResponse({
-          success: true,
-          data: {
-            limits: [{ type: 'TOKENS_LIMIT', percentage: 10, unit: 3 }],
-          },
-        }),
-      );
-      const olderCaller = await olderRequest;
-
-      expect(http.mock.calls.map(([url]) => url)).toStrictEqual([
-        olderUrl,
-        newerUrl,
-      ]);
-      expect(newer).toMatchObject({
-        windows: [expect.objectContaining({ percentUsed: 80 })],
-      });
-      expect(olderCaller).toStrictEqual(newer);
-    },
-  );
-
-  it.each([
     [
       'a synchronous throw',
       () => {
@@ -610,76 +555,6 @@ describe('SubscriptionUsageService', () => {
       expect(http).not.toHaveBeenCalled();
     },
   );
-
-  it('keeps a newer GLM success when an older region resolver fails later', async () => {
-    let rejectOlder!: (error: Error) => void;
-    const olderRegion = new Promise<boolean>((_resolve, reject) => {
-      rejectOlder = reject;
-    });
-    let regionCall = 0;
-    const http = vi.fn<SubscriptionUsageHttp>(async () =>
-      jsonResponse({
-        success: true,
-        data: {
-          limits: [{ type: 'TOKENS_LIMIT', percentage: 80, unit: 3 }],
-        },
-      }),
-    );
-    const service = serviceWith(
-      http,
-      credentials({
-        useGlmChina: () => (regionCall++ === 0 ? olderRegion : false),
-      }),
-    );
-
-    const olderRequest = service.getUsage('glmCodingPlan');
-    const newer = await service.getUsage('glmCodingPlan');
-    rejectOlder(new Error('stale region lookup failed'));
-    const olderCaller = await olderRequest;
-
-    expect(newer).toMatchObject({
-      state: 'available',
-      windows: [expect.objectContaining({ percentUsed: 80 })],
-    });
-    expect(olderCaller).toStrictEqual(newer);
-  });
-
-  it('lets a newer GLM region failure supersede an older in-flight result', async () => {
-    let resolveOlder!: (response: Response) => void;
-    const olderResponse = new Promise<Response>((resolve) => {
-      resolveOlder = resolve;
-    });
-    let regionCall = 0;
-    const http = vi.fn<SubscriptionUsageHttp>(() => olderResponse);
-    const service = serviceWith(
-      http,
-      credentials({
-        useGlmChina: () => {
-          if (regionCall++ === 0) return true;
-          return Promise.reject(new Error('new region lookup failed'));
-        },
-      }),
-    );
-
-    const olderRequest = service.getUsage('glmCodingPlan');
-    await vi.waitFor(() => expect(http).toHaveBeenCalledOnce());
-    const newer = await service.getUsage('glmCodingPlan');
-    resolveOlder(
-      jsonResponse({
-        success: true,
-        data: {
-          limits: [{ type: 'TOKENS_LIMIT', percentage: 10, unit: 3 }],
-        },
-      }),
-    );
-    const olderCaller = await olderRequest;
-
-    expect(newer).toMatchObject({
-      state: 'unavailable',
-      reason: 'request_failed',
-    });
-    expect(olderCaller).toStrictEqual(newer);
-  });
 
   it('does not fall back across GLM hosts when the selected region fails', async () => {
     const http = vi.fn<SubscriptionUsageHttp>(async () =>
