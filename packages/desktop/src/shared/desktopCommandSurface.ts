@@ -74,7 +74,6 @@ export const DESKTOP_MENU_GROUPS = [
   ],
   [
     'texra.showMemory',
-    'texra.showAgentHistory',
     'texra.showModels',
     'texra.showAgents',
     'texra.showTools',
@@ -119,7 +118,6 @@ const DESKTOP_COMMAND_ICONS = {
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: 'picture-in-picture',
   'texra.mainView.reset': 'file-circle-plus',
   'texra.showMemory': 'database',
-  'texra.showAgentHistory': 'clock-rotate-left',
   'texra.showModels': 'server',
   'texra.showAgents': 'robot',
   'texra.showTools': 'screwdriver-wrench',
@@ -315,7 +313,6 @@ const DESKTOP_COMMAND_HANDLERS = {
   'texra.showDashboard': action((a) => a.showSettings()),
   'texra.mainView.reset': action((a) => a.resetMainView()),
   'texra.showMemory': action((a) => a.showSettings(SETTINGS_TAB.MEMORY)),
-  'texra.showAgentHistory': action((a) => a.showSettings(SETTINGS_TAB.HISTORY)),
   'texra.showModels': action((a) => a.showSettings(SETTINGS_TAB.MODELS)),
   'texra.showAgents': action((a) => a.showSettings(SETTINGS_TAB.AGENTS)),
   'texra.showTools': action((a) => a.showSettings(SETTINGS_TAB.TOOLS)),

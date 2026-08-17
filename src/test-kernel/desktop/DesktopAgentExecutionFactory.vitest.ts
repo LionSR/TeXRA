@@ -318,7 +318,7 @@ describe('createDesktopAgentExecution', () => {
 
     await execution.handleExecute({ command: 'execute' });
     expect(runAgent).toHaveBeenCalledWith(
-      request,
+      { kind: 'fresh', ...request },
       expect.objectContaining({
         openWorkflowOutput: expect.any(Function),
         runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),

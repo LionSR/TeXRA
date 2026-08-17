@@ -30,7 +30,6 @@ const ALLOWED_COMMAND_IDS = [
   // Settings dashboard tabs
   'texra.showDashboard',
   'texra.showMemory',
-  'texra.showAgentHistory',
   'texra.showModels',
   'texra.showAgents',
   'texra.showMultiAgent',

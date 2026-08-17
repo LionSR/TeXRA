@@ -135,7 +135,7 @@ function resumeDesktopStream(
       },
       executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
         launchDesktopAgent(
-          { config, executionId },
+          { kind: 'resume', config, executionId },
           { session: context.session, canAcquireResumeLease },
           { modelHandlerCompatibilityKey, suppressErrorNotification: true },
         ),

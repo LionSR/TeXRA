@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import { isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
@@ -39,6 +40,7 @@ export async function loadTexraRules(): Promise<string> {
       }
     }
   } catch (err) {
+    if (isFileNotFoundError(err)) return '';
     log.warn(`Failed to load ${RULES_FILE}: ${toErrorMessage(err)}`);
   }
   return '';

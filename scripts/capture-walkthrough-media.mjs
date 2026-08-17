@@ -190,7 +190,7 @@ const webviewViews = [
       ),
     },
     messages: [
-      { command: 'setTab', tabIndex: 2 },
+      { command: 'setTab', tabIndex: 1 },
       {
         command: 'updateProfile',
         authenticated: false,

@@ -10,7 +10,10 @@ import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
-import { ResumeAdmissionCancelledError } from './executeAgent';
+import {
+  ResumeAdmissionCancelledError,
+  ResumeSessionUnavailableError,
+} from './executeAgent';
 import type { SessionHandle } from './SessionHandle';
 import type { StreamStatusMachine } from './StreamStatusService';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
@@ -36,7 +39,7 @@ type UnresolvedResumeState = Exclude<
 >;
 
 interface ResumeFailureDescription {
-  readonly kind: 'lease-active' | 'unexpected';
+  readonly kind: 'lease-active' | 'not-resumable' | 'unexpected';
   readonly message: string;
 }
 
@@ -52,16 +55,20 @@ export function describeResumeStateResolution(
     : 'No persisted run state was found for this stream. Start a new run instead.';
 }
 
-/** Classify lease contention without making hosts recognize storage errors. */
+/** Classify expected resume outcomes without making hosts recognize storage errors. */
 export function describeResumeFailure(
   error: unknown,
 ): ResumeFailureDescription {
-  return error instanceof ExecutionLeaseActiveError
-    ? { kind: 'lease-active', message: error.message }
-    : {
-        kind: 'unexpected',
-        message: `Resume failed: ${toErrorMessage(error)}`,
-      };
+  if (error instanceof ExecutionLeaseActiveError) {
+    return { kind: 'lease-active', message: error.message };
+  }
+  if (error instanceof ResumeSessionUnavailableError) {
+    return { kind: 'not-resumable', message: error.message };
+  }
+  return {
+    kind: 'unexpected',
+    message: `Resume failed: ${toErrorMessage(error)}`,
+  };
 }
 
 /** Claim and release the byte-identical GUI recovery ownership triad. */
@@ -143,7 +150,7 @@ export interface ResumeStreamPorts {
   ): Promise<boolean>;
   executeWorkflow(
     config: AgentConfig,
-    executionId: ExecutionId | undefined,
+    executionId: ExecutionId,
     modelHandlerCompatibilityKey:
       ModelHandlerCompatibilityKey | null | undefined,
   ): Promise<void>;
@@ -212,9 +219,11 @@ export async function resolveAndResumeStream(
     return true;
   } catch (error) {
     if (isCancellationRequested()) return false;
-    // A workflow resume that loses the admission race is an expected
-    // cancellation, not a resume failure. Tool-use already classifies this
-    // same error as a silent `false`; the workflow branch must match it.
+    // Shipped hosts that pass the lease guard share this attempt's monotone
+    // cancellation latch, so the preceding check handles their lost-admission
+    // path. Keep this fallback for a future host that supplies the lease guard
+    // without the optional cancellation port: it must still fail silently
+    // rather than toast.
     if (error instanceof ResumeAdmissionCancelledError) return false;
     try {
       await ports.reportFailure?.(streamId, error);

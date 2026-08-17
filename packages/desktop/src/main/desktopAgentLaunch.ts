@@ -1,9 +1,9 @@
 import {
   selectAutoOpenFinalOutput,
   type RunAgentOptions,
+  type RunAgentRequest,
   type SessionHandle,
 } from '@agent/runtime';
-import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import type { RequestOpenFilePayload } from '@shared/schemas';
 import {
   createExternalLocation,
@@ -27,7 +27,7 @@ export type DesktopAgentLaunchOptions = Pick<
 
 /** Start a desktop run with process-owned dependencies only. */
 export async function launchDesktopAgent(
-  request: ValidatedExecutionRequest,
+  request: RunAgentRequest,
   context: DesktopAgentLaunchContext,
   options: DesktopAgentLaunchOptions = {},
 ): Promise<void> {

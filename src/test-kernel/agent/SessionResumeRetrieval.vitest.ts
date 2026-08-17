@@ -38,8 +38,7 @@ import {
   type ToolUseFlowAttachment,
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import {
-  migrateSharedState,
-  ToolUseRunSharedCanonicalSchema,
+  parseToolUseShared,
   type StateSlicesSnapshot,
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import {
@@ -53,6 +52,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { testModelCell } from './modelCellTestUtils';
+import { reflectionFlowShared } from './progressTestUtils';
 import { roundModelHandler } from './toolUseRoundTestUtils';
 
 const CONFIG = AgentConfigSchema.parse({
@@ -258,7 +258,6 @@ function responseModelHandler(
 function buildToolUseResumeData(
   executionId: ExecutionId,
   streamId: StreamTabId,
-  sourceShared?: unknown,
 ): ToolUseResumeData {
   const shared = {
     messages: [],
@@ -272,7 +271,6 @@ function buildToolUseResumeData(
     streamId,
     agentConfig: CONFIG,
     shared,
-    sourceShared: sourceShared ?? structuredClone(shared),
   };
 }
 
@@ -294,7 +292,6 @@ function buildResponseResumeData(
     streamId,
     agentConfig: CONFIG,
     shared,
-    sourceShared: structuredClone(shared),
   };
 }
 
@@ -401,7 +398,7 @@ describe('retrieveSessionResumeData', () => {
 
   it('rejects malformed fields at the shared-state boundary', () => {
     expect(
-      migrateSharedState({
+      parseToolUseShared({
         messages: [],
         shouldSkipCycle: 'false',
         stateSlices: null,
@@ -412,8 +409,8 @@ describe('retrieveSessionResumeData', () => {
     });
   });
 
-  it('rejects a malformed legacy MODEL user variable at the shared-state boundary', () => {
-    const result = migrateSharedState({
+  it('rejects a malformed MODEL user variable at the shared-state boundary', () => {
+    const result = parseToolUseShared({
       messages: [],
       continuationGenerationId: CONTINUATION_GENERATION_ID,
       shouldSkipCycle: false,
@@ -432,11 +429,13 @@ describe('retrieveSessionResumeData', () => {
     const executionId = 'workflow-current-conversation' as ExecutionId;
     const streamId =
       'reflection@gpt54#workflow-current-conversation' as StreamTabId;
-    await writeFlowRecord(executionId, {
-      currentRound: 1,
-      totalRounds: 2,
-      conversation: [{ role: 'user', content: 'Continue.' }],
-    });
+    await writeFlowRecord(
+      executionId,
+      reflectionFlowShared({
+        currentRound: 1,
+        conversation: [{ role: 'user', content: 'Continue.' }],
+      }),
+    );
 
     await expect(
       retrieveSessionResumeData(streamId, executionId, WORKFLOW_CONFIG),
@@ -460,7 +459,7 @@ describe('retrieveSessionResumeData', () => {
 
   it('preserves structured output at the persisted shared-state boundary', () => {
     const continuationGenerationId = '6f2051ec-5169-4fb5-9830-47aba9df665a';
-    const result = migrateSharedState({
+    const result = parseToolUseShared({
       messages: [],
       continuationGenerationId,
       shouldSkipCycle: false,
@@ -474,29 +473,26 @@ describe('retrieveSessionResumeData', () => {
         continuationGenerationId,
         structured: { title: 'Durable result' },
       }),
-      migrated: false,
+      changed: false,
     });
   });
 
-  it('derives a missing model id from the legacy MODEL variable', () => {
-    const result = migrateSharedState({
+  it('does not derive a missing model id from the MODEL user variable', () => {
+    const result = parseToolUseShared({
       messages: [],
       continuationGenerationId: CONTINUATION_GENERATION_ID,
       shouldSkipCycle: false,
       stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt55' }),
     });
 
-    expect(result).toMatchObject({
-      success: true,
-      data: { modelId: 'gpt55' },
-      // The derivation is a migration: the record must be rewritten with it.
-      migrated: true,
-    });
+    expect(result).toMatchObject({ success: true, changed: false });
+    if (!result.success) return;
+    expect(result.data).not.toHaveProperty('modelId');
   });
 
   it('keeps a persisted model id over the MODEL variable', () => {
     const continuationGenerationId = '8439c273-d7f7-442a-9930-e63e941263d8';
-    const result = migrateSharedState({
+    const result = parseToolUseShared({
       messages: [],
       continuationGenerationId,
       modelId: 'gpt55',
@@ -507,7 +503,7 @@ describe('retrieveSessionResumeData', () => {
     expect(result).toMatchObject({
       success: true,
       data: { continuationGenerationId, modelId: 'gpt55' },
-      migrated: false,
+      changed: false,
     });
   });
 
@@ -515,7 +511,7 @@ describe('retrieveSessionResumeData', () => {
     // The pre-fencing omission reader is retired: intermediate-era records
     // that never persisted a generation id fail the parse loudly instead of
     // being backfilled with a fresh UUID.
-    const result = migrateSharedState({
+    const result = parseToolUseShared({
       messages: [],
       shouldSkipCycle: false,
       stateSlices: null,
@@ -543,7 +539,7 @@ describe('retrieveSessionResumeData', () => {
     expect(resume.agentConfig.model).toBe('gpt55');
   });
 
-  it('lifts the legacy MODEL variable into the model id at the boundary', async () => {
+  it('uses the launch model when only MODEL contains a retired identity', async () => {
     const executionId = 'abc123-legacy-model' as ExecutionId;
     const streamId = 'chat@gpt54#abc123-legacy-model' as StreamTabId;
     await writeFlowRecord(executionId, {
@@ -555,8 +551,8 @@ describe('retrieveSessionResumeData', () => {
 
     const resume = await retrieveToolUseResume(streamId, executionId);
 
-    expect(resume.shared.modelId).toBe('gpt55');
-    expect(resume.agentConfig.model).toBe('gpt55');
+    expect(resume.shared.modelId).toBeUndefined();
+    expect(resume.agentConfig.model).toBe(CONFIG.model);
   });
 
   it('falls back to the launch model when nothing persisted a model', async () => {
@@ -685,12 +681,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     expect(result.outcome).toBe(STREAM_PHASE.WAITING);
     const stored = await readFlowRecord(executionId);
-    expect(ToolUseRunSharedCanonicalSchema.parse(stored?.shared)).toMatchObject(
-      {
-        messages: snapshot.shared.messages,
-        stateSlices: snapshot.shared.stateSlices,
-      },
-    );
+    expect(stored?.shared).toMatchObject({
+      messages: snapshot.shared.messages,
+      stateSlices: snapshot.shared.stateSlices,
+    });
   });
 
   it.each([
@@ -705,11 +699,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         `chat@gpt54#abc-flow-stale-response-${suffix}` as StreamTabId;
       const resume = buildResponseResumeData(executionId, streamId, 'A');
       if (persistRecord) {
-        await writeFlowRecord(
-          executionId,
-          resume.sourceShared,
-          WAITING_AT_START,
-        );
+        await writeFlowRecord(executionId, resume.shared, WAITING_AT_START);
       }
 
       const result = await runPersistedFlow(executionId, streamId, resume);
@@ -731,7 +721,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       const streamId =
         `chat@gpt54#abc-flow-fresh-resumed-response-${suffix}` as StreamTabId;
       const resume = buildResponseResumeData(executionId, streamId, prior);
-      await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
+      await writeFlowRecord(executionId, resume.shared, WAITING_AT_START);
 
       const result = await runPersistedFlow(executionId, streamId, resume, {
         modelHandler: responseModelHandler([{ text: fresh }]),
@@ -747,7 +737,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const streamId =
       'chat@gpt54#abc-flow-identical-partial-response' as StreamTabId;
     const resume = buildResponseResumeData(executionId, streamId, 'A');
-    await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
+    await writeFlowRecord(executionId, resume.shared, WAITING_AT_START);
 
     const result = await runPersistedFlow(executionId, streamId, resume, {
       modelHandler: responseModelHandler([{ text: 'A' }], {
@@ -787,9 +777,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const resume: ToolUseResumeData = {
       ...baseResume,
       shared,
-      sourceShared: structuredClone(shared),
     };
-    await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
+    await writeFlowRecord(executionId, resume.shared, WAITING_AT_START);
     const providerError = Object.assign(
       new Error('Answerless provider failure'),
       {
@@ -869,7 +858,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const executionId = 'abc-flow-compacted-response' as ExecutionId;
     const streamId = 'chat@gpt54#abc-flow-compacted-response' as StreamTabId;
     const resume = buildResponseResumeData(executionId, streamId, 'A');
-    await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
+    await writeFlowRecord(executionId, resume.shared, WAITING_AT_START);
 
     const result = await runPersistedFlow(executionId, streamId, resume, {
       modelHandler: responseModelHandler([
@@ -1050,7 +1039,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const snapshot: ToolUseResumeData = {
       ...base,
       shared: failedShared,
-      sourceShared: structuredClone(failedShared),
     };
     // A terminal cursor makes the resumed flow exit COMPLETE without stepping
     // any node, leaving the failed shared state exactly as persisted.
@@ -1128,7 +1116,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     };
     // A terminal cursor makes the resumed flow exit COMPLETE without stepping
     // any node, so the run completes without a structured result.
-    await writeFlowRecord(executionId, snapshot.sourceShared, {
+    await writeFlowRecord(executionId, snapshot.shared, {
       cursor: { nextNodeId: null, lastAction: FlowTransition.COMPLETE },
     });
     const session = createTestSession();
@@ -1149,21 +1137,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it.each([
-    {
-      name: 'invalid shared state',
-      reason: 'invalid-shared',
-      stored: {
-        flowName: 'texra',
-        shared: {
-          messages: [],
-          shouldSkipCycle: 'false',
-          stateSlices: null,
-        },
-        createdAt: '2026-01-01T00:00:00.000Z',
-        cursor: { nextNodeId: 'start' },
-        nodes: [],
-      },
-    },
     {
       name: 'legacy record without a replay cursor',
       reason: 'unsupported-record',
@@ -1223,9 +1196,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       const expectedError = {
         name: PersistedFlowStateError.name,
         reason,
-        ...(reason !== 'invalid-shared' && {
-          cause: expect.objectContaining({ name: 'ZodError' }),
-        }),
+        cause: expect.objectContaining({ name: 'ZodError' }),
       };
       await expect(
         runPersistedFlow(executionId, streamId, snapshot),
@@ -1395,11 +1366,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const store = getExecutionStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
     const storedShared = activeHandlerShared();
-    const snapshot = buildToolUseResumeData(
-      executionId,
-      streamId,
-      storedShared,
-    );
+    const snapshot = buildToolUseResumeData(executionId, streamId);
     await writeFlowRecord(executionId, storedShared);
     const abortError = createAbortError();
     // Reject the flow's first node-step persist with the provider's abort:
@@ -1500,11 +1467,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const streamId = 'chat@gpt54#abc-cancel-active-followup' as StreamTabId;
     const session = createTestSession();
     const storedShared = activeHandlerShared();
-    const snapshot = buildToolUseResumeData(
-      executionId,
-      streamId,
-      storedShared,
-    );
+    const snapshot = buildToolUseResumeData(executionId, streamId);
     await writeFlowRecord(executionId, storedShared);
     // `resumeQueuedToolUseFromResumeData` holds the recovery lease across the
     // whole host resume, so the flow borrows that consumer's queue instead of
@@ -1569,11 +1532,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const streamId = 'chat@gpt54#abc-cancel-child-followup' as StreamTabId;
     const session = createTestSession();
     const storedShared = activeHandlerShared();
-    const snapshot = buildToolUseResumeData(
-      executionId,
-      streamId,
-      storedShared,
-    );
+    const snapshot = buildToolUseResumeData(executionId, streamId);
     await writeFlowRecord(executionId, storedShared);
     const childLease = session.followUps.claimLive(streamId, 'child');
     expect(childLease).toBeDefined();
@@ -1702,68 +1661,16 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     });
   });
 
-  it.each([
-    { name: 'direct stored-state recovery', withResume: false },
-    { name: 'retrieved canonical resume', withResume: true },
-  ])(
-    'migrates a legacy workspace before strict validation: $name',
-    async ({ withResume }) => {
-      const suffix = withResume ? 'retrieved' : 'stored';
-      const executionId = `abc141-${suffix}` as ExecutionId;
-      const streamId = `chat@gpt54#abc141-${suffix}` as StreamTabId;
-      const legacyWorkspaceSnapshot = {
-        todos: [
-          {
-            content: 'Ship the fix',
-            status: 'in_progress',
-            activeForm: 'Shipping the fix',
-          },
-        ],
-        plan: { objective: 'Migrate legacy workspace snapshots on resume' },
-      };
-      await writeFlowRecord(
-        executionId,
-        {
-          messages: [{ role: 'user', content: 'Continue.' }],
-          continuationGenerationId: CONTINUATION_GENERATION_ID,
-          shouldSkipCycle: true,
-          stateSlices: {
-            runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-            workspaceSnapshot: legacyWorkspaceSnapshot,
-            userChannels: {
-              input: Object.freeze({ MODEL: 'gpt54' }),
-              transient: {},
-            },
-          },
-        },
-        {
-          cursor: { nextNodeId: 'start/default' },
-          nodes: [{ action: 'default', nodeId: 'start' }],
-        },
-      );
+  it('rejects a retired workspace snapshot at the tool-use resume boundary', () => {
+    const result = parseToolUseShared({
+      ...VALID_TOOL_USE_SHARED,
+      stateSlices: {
+        runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+        workspaceSnapshot: { todos: [], plan: null },
+        userChannels: { input: Object.freeze({}), transient: {} },
+      },
+    });
 
-      const resume = withResume
-        ? await retrieveToolUseResume(streamId, executionId)
-        : undefined;
-      const result = await runPersistedFlow(executionId, streamId, resume);
-      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
-
-      const healedRecord = await readFlowRecord(executionId);
-      const healedShared = ToolUseRunSharedCanonicalSchema.parse(
-        healedRecord?.shared,
-      );
-      expect(healedShared.modelId).toBe('gpt54');
-      expect(healedShared.stateSlices).not.toBeNull();
-      if (!healedShared.stateSlices) return;
-      const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(
-        healedShared.stateSlices.workspaceSnapshot,
-      );
-      expect(workspaceState.workPlan.todos).toEqual(
-        legacyWorkspaceSnapshot.todos,
-      );
-      expect(workspaceState.workPlan.plan).toEqual(
-        legacyWorkspaceSnapshot.plan,
-      );
-    },
-  );
+    expect(result.success).toBe(false);
+  });
 });

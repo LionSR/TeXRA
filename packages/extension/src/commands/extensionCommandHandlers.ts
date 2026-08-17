@@ -219,8 +219,6 @@ export const EXTENSION_COMMAND_HANDLERS = {
   'texra.showDashboard': (actions) => awaitTrue(actions.showSettings()),
   'texra.showMemory': (actions) =>
     awaitTrue(actions.showSettings(SETTINGS_TAB.MEMORY)),
-  'texra.showAgentHistory': (actions) =>
-    awaitTrue(actions.showSettings(SETTINGS_TAB.HISTORY)),
   'texra.showModels': (actions) =>
     awaitTrue(actions.showSettings(SETTINGS_TAB.MODELS)),
   'texra.showTools': (actions) =>

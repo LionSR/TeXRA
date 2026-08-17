@@ -2,35 +2,43 @@ import {
   STREAM_PHASE,
   STREAM_STATUS,
   STREAM_SUBSTATE,
-  StreamPhaseSchema,
   type PhaseStage,
   type RoundStage,
-  type StreamPhase,
+  type StreamLifecycleStatus,
   type StreamStage,
   type StreamSubstate,
 } from '@shared/schemas';
 
-export type StreamStatusDisplayKey = StreamPhase | StreamSubstate | 'ready';
+export type StreamStatusDisplayKey =
+  | Exclude<StreamLifecycleStatus, typeof STREAM_STATUS.READY>
+  | StreamSubstate
+  | 'ready';
 
 /**
  * Display key for a `StreamLifecycleStatus` (a `StreamPhase`, or the `ready`
- * idle sentinel every host defaults an unstarted stream to). Anything else —
- * including the retired 7-value `StreamStatus` vocabulary, which no live
- * producer emits and which every read boundary normalizes before it reaches a
- * renderer — has no key, and callers fall back to showing the raw string.
+ * idle sentinel every host defaults an unstarted stream to).
  */
 export function streamStatusDisplayKey(
-  status: string | undefined,
+  status: StreamLifecycleStatus,
+  substate?: StreamSubstate,
+): StreamStatusDisplayKey;
+
+export function streamStatusDisplayKey(
+  status: StreamLifecycleStatus | undefined,
+  substate?: StreamSubstate,
+): StreamStatusDisplayKey | undefined;
+
+export function streamStatusDisplayKey(
+  status: StreamLifecycleStatus | undefined,
   substate?: StreamSubstate,
 ): StreamStatusDisplayKey | undefined {
+  if (status === undefined) return undefined;
   if (status === STREAM_STATUS.READY) return 'ready';
-  const phase = StreamPhaseSchema.safeParse(status);
-  if (!phase.success) return undefined;
-  return substate ?? phase.data;
+  return substate ?? status;
 }
 
 export function streamStatusIndicatorClass(
-  status: string | undefined,
+  status: StreamLifecycleStatus | undefined,
   substate?: StreamSubstate,
 ): string | undefined {
   const key = streamStatusDisplayKey(status, substate);
@@ -77,28 +85,27 @@ interface FormatStreamStatusLabelOptions {
 }
 
 export function formatStreamStatusLabel(
-  status: string | undefined,
+  status: StreamLifecycleStatus | undefined,
   options: FormatStreamStatusLabelOptions & { readonly missingLabel: string },
 ): string;
 
 export function formatStreamStatusLabel(
-  status: string,
+  status: StreamLifecycleStatus,
   options?: FormatStreamStatusLabelOptions,
 ): string;
 
 export function formatStreamStatusLabel(
-  status: string | undefined,
+  status: StreamLifecycleStatus | undefined,
   options?: FormatStreamStatusLabelOptions,
 ): string | undefined;
 
 export function formatStreamStatusLabel(
-  status: string | undefined,
+  status: StreamLifecycleStatus | undefined,
   options: FormatStreamStatusLabelOptions = {},
 ): string | undefined {
   if (status == null) return options.missingLabel;
   const style = options.style ?? 'progressHeader';
   const key = streamStatusDisplayKey(status, options.substate);
-  if (!key) return status;
   return STREAM_STATUS_LABELS[style][key];
 }
 
@@ -108,11 +115,9 @@ export function formatStreamStatusLabel(
  * `streamStatusDisplayKey` are the same status→vocabulary lookup seen from
  * two sides (a label and the key that drives icon/state styling), so callers
  * that need both compute them together instead of double-parsing the status.
- * A status with no display key (unknown/legacy vocabulary) falls back to the
- * raw string as the label, matching `formatStreamStatusLabel`.
  */
 export function progressHeaderStatus(
-  status: string | undefined,
+  status: StreamLifecycleStatus | undefined,
   substate?: StreamSubstate,
 ): {
   label: string | undefined;

@@ -177,31 +177,26 @@ describe('settings view tab definitions', () => {
     );
   });
 
-  // `SETTINGS_TAB.X` indices cross the IPC boundary as `SET_TAB.tabIndex`, and
-  // the desktop e2e specs plus scripts/capture-walkthrough-media.mjs hand-copy
-  // the integer table. A reorder would keep every one of those call sites
-  // compiling and every hardcoded index "passing" while navigating to the wrong
-  // panel, so the mapping is pinned literally: adding a tab at the end is a
-  // one-line update here, and any other edit fails loudly.
+  // `SETTINGS_TAB.X` indices cross the IPC boundary as `SET_TAB.tabIndex`, so
+  // the mapping is pinned literally. A retired internal panel must disappear
+  // from this contract together with every producer and handler.
   it('pins the settings tab wire contract (index + panel name)', () => {
     expect(SETTINGS_TAB).toEqual({
       MEMORY: 0,
-      HISTORY: 1,
-      MODELS: 2,
-      AGENTS: 3,
-      MULTI_AGENT: 4,
-      TOOLS: 5,
-      AI_AGENTS: 6,
-      GIT: 7,
-      LATEX: 8,
-      GOAL: 9,
-      ACCOUNT: 10,
-      SHORTCUTS: 11,
-      SUBSCRIPTIONS: 12,
+      MODELS: 1,
+      AGENTS: 2,
+      MULTI_AGENT: 3,
+      TOOLS: 4,
+      AI_AGENTS: 5,
+      GIT: 6,
+      LATEX: 7,
+      GOAL: 8,
+      ACCOUNT: 9,
+      SHORTCUTS: 10,
+      SUBSCRIPTIONS: 11,
     });
     expect(SETTINGS_TAB_PANEL_NAMES).toEqual([
       'memory',
-      'history',
       'models',
       'agents',
       'multi-agent',

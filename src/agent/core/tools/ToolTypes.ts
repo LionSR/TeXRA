@@ -2,8 +2,7 @@
  * Core tool type definitions: ITool, IToolRegistry, MapToolRegistry.
  */
 
-import type { ToolDefinition } from '@model/ToolDefinition';
-import type { ToolResult } from '@shared/schemas';
+import type { ToolDefinition, ToolResult } from '@shared/schemas';
 
 /** Product hosts that expose the shared agent-tool registry. */
 export type ToolHost = 'cli' | 'desktop' | 'extension';

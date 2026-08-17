@@ -117,7 +117,7 @@ class AgentRunStream implements AgentRun {
   private iteratorClosed = false;
   private iteratorStarted = false;
   private failure: { readonly error: unknown } | undefined;
-  private interruptPending = false;
+  private readonly launchAbortController = new AbortController();
   readonly result: Promise<AgentFlowResult>;
 
   constructor(start: (stream: AgentRunStream) => Promise<AgentFlowResult>) {
@@ -130,7 +130,10 @@ class AgentRunStream implements AgentRun {
 
   attachHandle(handle: RuntimeAgentRunHandle): void {
     this.liveHandle = handle;
-    if (this.interruptPending) handle.interrupt();
+  }
+
+  get launchSignal(): AbortSignal {
+    return this.launchAbortController.signal;
   }
 
   attachEvents(session: RuntimeSessionHandle): void {
@@ -156,7 +159,7 @@ class AgentRunStream implements AgentRun {
     if (this.liveHandle) {
       this.liveHandle.interrupt();
     } else {
-      this.interruptPending = true;
+      this.launchAbortController.abort();
     }
   }
 
@@ -286,9 +289,10 @@ export function runAgent(input: RunAgentInput): AgentRun {
         ...(input.model ? { model: input.model } : {}),
       });
       return await runValidatedAgent(
-        { config },
+        { kind: 'fresh', config },
         {
           approvalPromptsUnavailable: true,
+          launchSignal: stream.launchSignal,
           onRun: (handle) => stream.attachHandle(handle),
           onStreamResolved: (streamId) => stream.selectStream(streamId),
           session,

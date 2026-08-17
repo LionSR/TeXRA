@@ -40,11 +40,11 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
   takeTail,
 } from '@common/errors/sdkError/errorPatterns';
-import type { ToolDefinition } from '@model/ToolDefinition';
 import { composeLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import type {
   FileLocation,
   MediaAttachmentKind,
+  ToolDefinition,
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas';

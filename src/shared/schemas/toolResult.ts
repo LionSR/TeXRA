@@ -20,7 +20,7 @@ export type FileReference = z.infer<typeof FileReferenceSchema>;
  * Schema for file attachments with optional binary data.
  * Extends FileReferenceSchema with binary payload fields.
  */
-export const ToolFileAttachmentSchema = FileReferenceSchema.extend({
+const ToolFileAttachmentSchema = FileReferenceSchema.extend({
   /** Base64 encoded payload when inline transport is supported */
   base64Data: z.string().optional(),
   /** Raw bytes for providers that require binary uploads */
