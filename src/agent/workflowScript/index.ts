@@ -6,10 +6,12 @@
  * directory keep direct imports so the barrel cannot create internal cycles.
  * `sandbox.ts` is deliberately excluded: it is an engine implementation seam,
  * and only the engine module plus its focused kernel suite may import it.
+ * `isWorkflowScriptCheckpointKvKey` is also excluded: low-level execution-KV
+ * cleanup imports that leaf predicate directly so listing history does not
+ * evaluate the QuickJS engine and embedded Wasm graph through this barrel.
  */
 export {
   deriveWorkflowScriptCheckpointId,
-  isWorkflowScriptCheckpointKvKey,
   workflowScriptCheckpointKvKey,
 } from './checkpointKey';
 export { parseWorkflowScript, WorkflowScriptParseError } from './parseScript';
