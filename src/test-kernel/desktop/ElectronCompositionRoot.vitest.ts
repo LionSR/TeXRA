@@ -116,7 +116,7 @@ describe('desktop composition root and launch environment', () => {
     );
     expect(source).not.toContain('createDesktopDiffHostDisposeQueue');
     expectOrderedAfter(source, "window.once('closed'", [
-      'desktopDiffHost.dispose().catch(reportAsyncError)',
+      'desktopDiffHost.dispose().catch(reportBackgroundError)',
       'diffHostDisposeQueue.add(() => current)',
     ]);
   });

@@ -51,8 +51,6 @@ import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { killActiveRecording } from '@tools/media/audio';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
-import { debounce } from '@utils/core';
-import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   readGitEnvironmentSummary,
@@ -119,7 +117,10 @@ import {
   type DesktopSupabaseAuthHost,
 } from './desktopSupabaseAuth.js';
 import { buildDesktopMenuTemplate } from './desktopMenuTemplate.js';
-import { reportFatalStartupError } from './fatalStartupError.js';
+import {
+  isFatalDesktopShutdownRequested,
+  reportFatalStartupError,
+} from './fatalStartupError.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
@@ -508,6 +509,10 @@ function createWindow(options: {
   // observes a dirty Monaco buffer and refuses the unload, so every close path
   // (quit, workspace switch, window close) asks here and nowhere else.
   window.webContents.on('will-prevent-unload', (event) => {
+    if (isFatalDesktopShutdownRequested()) {
+      event.preventDefault();
+      return;
+    }
     const response = dialog.showMessageBoxSync(window, {
       type: 'warning',
       buttons: ['Keep Editing', 'Discard Changes'],
@@ -1083,7 +1088,7 @@ function createWindow(options: {
     // here (so `disposed` flips immediately); the queue only orders when this
     // window's completion promise resolves, keeping a macOS dock-reopen from
     // discarding an earlier window's still-running cleanup.
-    const current = desktopDiffHost.dispose().catch(reportAsyncError);
+    const current = desktopDiffHost.dispose().catch(reportBackgroundError);
     pendingDesktopDiffHostDispose = diffHostDisposeQueue.add(() => current);
     if (mainWindow === window) {
       mainWindow = null;
@@ -1098,7 +1103,7 @@ function createWindow(options: {
         ?.then((execution) => execution.dispose())
         .catch((error: unknown) => {
           if (!(error instanceof Error && error.name === 'AbortError')) {
-            reportAsyncError(error);
+            reportBackgroundError(error);
           }
         });
     }
@@ -1115,7 +1120,7 @@ function createWindow(options: {
             workspaceRelaunch.selectedPath,
           );
         } catch (error) {
-          reportAsyncError(error);
+          reportBackgroundError(error);
         }
         // Consumed. The synchronous `window-all-closed` in this same turn has
         // already seen the pending value and deferred quitting; clearing here
