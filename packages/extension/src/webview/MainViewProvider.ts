@@ -1,4 +1,5 @@
 // Third-party imports
+import PQueue from 'p-queue';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -82,7 +83,9 @@ export class MainViewProvider
    * transition based on a stale previous funnel state, and collapse any burst
    * that arrives during a pass into one terminal re-run.
    */
-  private onboardingFunnelRefreshChain: Promise<void> = Promise.resolve();
+  private readonly onboardingFunnelRefreshQueue = new PQueue({
+    concurrency: 1,
+  });
   private onboardingFunnelRerunRequested = false;
 
   // Debounced refresh for agent option changes
@@ -209,15 +212,12 @@ export class MainViewProvider
    */
   refreshOnboardingFunnel(): Promise<void> {
     this.onboardingFunnelRerunRequested = true;
-    this.onboardingFunnelRefreshChain = this.onboardingFunnelRefreshChain
-      .catch(() => undefined)
-      .then(async () => {
-        while (this.onboardingFunnelRerunRequested) {
-          this.onboardingFunnelRerunRequested = false;
-          await this.refreshOnboardingFunnelSerially();
-        }
-      });
-    return this.onboardingFunnelRefreshChain;
+    return this.onboardingFunnelRefreshQueue.add(async () => {
+      while (this.onboardingFunnelRerunRequested) {
+        this.onboardingFunnelRerunRequested = false;
+        await this.refreshOnboardingFunnelSerially();
+      }
+    });
   }
 
   private async refreshOnboardingFunnelSerially(): Promise<void> {
