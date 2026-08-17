@@ -26,7 +26,7 @@ import { redactSecrets } from '@logger/redaction';
 // deep-import baseline as its documented cycle floor.
 import { LOG_LEVELS, type LogLevel } from '@shared/schemas/log';
 import { serializeError } from '@utils/core';
-import { getConfig } from '@utils/config/configUtils';
+import { getConfigBeforePlatformInit } from '@utils/config/configUtils';
 
 export interface LogUtilsOptions {
   data?: unknown;
@@ -120,7 +120,9 @@ export function disposeAgentChannel(channel: string): void {
  * place.
  */
 export function isDebugModeEnabled(): boolean {
-  return getConfig<boolean>('texra.logger.debugMode', false);
+  // Documented pre-init exception: fatal/startup reporting can log structured
+  // errors before a host has installed the platform composition root.
+  return getConfigBeforePlatformInit('texra.logger.debugMode', false);
 }
 
 /**

@@ -199,7 +199,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
     const queues = new ToolUseFollowUpQueue();
     const id = stream('stream:persisted-recovery');
     expect(queues.restorePersistedGeneration(id, 'persisted-generation')).toBe(
-      true,
+      'restored',
     );
 
     const submission = queues.submit(
@@ -262,11 +262,11 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
     expect(
       queues.restorePersistedGeneration(id, 'authoritative-generation'),
-    ).toBe(true);
+    ).toBe('restored');
     expect(queues.currentGenerationId(id)).toBe('authoritative-generation');
     expect(
       queues.restorePersistedGeneration(id, 'stale-producer-generation'),
-    ).toBe(false);
+    ).toBe('unavailable');
     expect(
       queues.submit(
         id,
@@ -303,7 +303,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
     queues.release(recovery, 'recoverable');
 
     expect(queues.restorePersistedGeneration(id, 'persisted-generation')).toBe(
-      true,
+      'restored',
     );
     expect(recovery.generationId).toBe('persisted-generation');
     expect(queues.currentGenerationId(id)).toBe('persisted-generation');
@@ -319,6 +319,26 @@ describe('ToolUseFollowUpQueue ownership', () => {
     expect(queues.submit(id, { text: 'late' }, 'recoverable')).toEqual({
       kind: 'unavailable',
     });
+  });
+
+  it('refuses to rebuild entries after dispose', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const executionId = 'disposed-execution' as ExecutionId;
+    const childId = stream(`stream#${executionId}`);
+    const liveId = stream('stream:disposed-live');
+    queues.claimLive(liveId, 'flow');
+    queues.dispose();
+
+    expect(queues.claimLive(liveId, 'flow')).toBeUndefined();
+    expect(queues.claimChildRun(childId, executionId)).toBeUndefined();
+    expect(queues.claimRecovery(liveId, true)).toBeUndefined();
+    expect(queues.restorePersistedGeneration(liveId, 'generation')).toBe(
+      'disposed',
+    );
+    expect(queues.submit(liveId, { text: 'late' }, 'recoverable')).toEqual({
+      kind: 'unavailable',
+    });
+    expect(queues.terminalize(liveId)).toBe(false);
   });
 });
 
