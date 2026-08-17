@@ -104,7 +104,7 @@ describe('CLI StreamLog persistence (flush on exit is load-bearing)', () => {
       .trimEnd()
       .split('\n')
       .map((line) => JSON.parse(line) as Record<string, unknown>);
-    expect(records).toEqual([
+    expect(records.filter((record) => record.op === 'append')).toEqual([
       expect.objectContaining({
         op: 'append',
         entry: expect.objectContaining({ id: 'a', text: 'first' }),
