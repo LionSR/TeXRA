@@ -21,7 +21,7 @@ import {
   runReflectionFlow,
   type RunReflectionFlowInput,
 } from '@agent/implementations/flows/reflection/runReflectionFlow';
-import { ReflectionFlowStateCanonicalSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
+import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import {
@@ -129,9 +129,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
     const stored = await store.read<FlowRecord>(key);
-    expect(
-      ReflectionFlowStateCanonicalSchema.parse(stored?.shared),
-    ).toMatchObject({
+    expect(ReflectionFlowStateSchema.parse(stored?.shared)).toMatchObject({
       currentRound: 0,
       totalRounds: 1,
       conversation: [],
@@ -248,8 +246,8 @@ describe('runReflectionFlow persisted-state recovery', () => {
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
     const stored = await store.read<FlowRecord>(key);
-    expect(
-      ReflectionFlowStateCanonicalSchema.parse(stored?.shared).continueRounds,
-    ).toBe(true);
+    expect(ReflectionFlowStateSchema.parse(stored?.shared).continueRounds).toBe(
+      true,
+    );
   });
 });

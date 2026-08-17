@@ -62,10 +62,3 @@ export const ReflectionFlowStateSchema = z.object({
 
 /** Shared state type for reflection flow nodes. */
 export type ReflectionFlowShared = z.infer<typeof ReflectionFlowStateSchema>;
-
-/**
- * Alias retained for the per-round persisted-flow contract. Workspace
- * snapshots have one supported schema, so resume and revalidation use the
- * same canonical validation.
- */
-export const ReflectionFlowStateCanonicalSchema = ReflectionFlowStateSchema;

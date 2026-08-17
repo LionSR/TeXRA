@@ -46,7 +46,6 @@ import { ResponseCycleNode } from './nodes/ResponseCycleNode';
 import { OutputNode } from './nodes/OutputNode';
 import {
   ReflectionFlowStateSchema,
-  ReflectionFlowStateCanonicalSchema,
   type ReflectionFlowShared,
 } from './ReflectionFlowState';
 import { RoundPersistedFlow } from './RoundPersistedFlow';
@@ -257,7 +256,7 @@ export async function runReflectionFlow<C = unknown>(
     ReflectionServices<C>
   >(prepContextNode, kv, {
     parentStage,
-    sharedSchema: ReflectionFlowStateCanonicalSchema,
+    sharedSchema: ReflectionFlowStateSchema,
     callbacks: {
       createRoundStage: (roundIndex, parent, shared) =>
         logger.openStage(`r${roundIndex}`, {

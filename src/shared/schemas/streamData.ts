@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { ExecutionIdSchema } from './identifiers';
 import { formatZodIssuesMessage } from './toolResult';
 import {
-  TokenUsageStatsBaseSchema,
+  TokenUsageStatsSchema,
   UsageRouteSchema,
   isEmptyUsage,
   type TokenUsageStats,
@@ -62,7 +62,7 @@ function isNumericUsageField(schema: z.ZodType): boolean {
 }
 
 const numericUsageParsingShape = Object.fromEntries(
-  Object.entries(TokenUsageStatsBaseSchema.shape)
+  Object.entries(TokenUsageStatsSchema.shape)
     .filter(([, schema]) => isNumericUsageField(schema))
     .map(([key, schema]) => [
       key,
@@ -83,7 +83,7 @@ const numericUsageParsingShape = Object.fromEntries(
 export const TokenUsageStatsParsingBaseSchema = z.strictObject({
   ...numericUsageParsingShape,
   usageRoute: UsageRouteSchema.optional(),
-  // The numeric fields are derived from `TokenUsageStatsBaseSchema.shape` above;
+  // The numeric fields are derived from `TokenUsageStatsSchema.shape` above;
   // TypeScript cannot recover the required keys through `Object.fromEntries`.
 }) as unknown as z.ZodType<TokenUsageStats>;
 

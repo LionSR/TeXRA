@@ -30,7 +30,7 @@ export const UsageRouteSchema = z.enum([
 
 export type UsageRoute = z.infer<typeof UsageRouteSchema>;
 
-export const TokenUsageStatsBaseSchema = z.strictObject({
+export const TokenUsageStatsSchema = z.strictObject({
   inputTokens: TokenCountSchema,
   outputTokens: TokenCountSchema,
   cost: z.number().nonnegative(),
@@ -41,9 +41,7 @@ export const TokenUsageStatsBaseSchema = z.strictObject({
   usageRoute: UsageRouteSchema.optional(),
 });
 
-export type TokenUsageStats = z.infer<typeof TokenUsageStatsBaseSchema>;
-
-export const TokenUsageStatsSchema = TokenUsageStatsBaseSchema;
+export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
 
 type EmptyUsageStats = Required<Omit<TokenUsageStats, 'usageRoute'>> &
   Pick<TokenUsageStats, 'usageRoute'>;
@@ -114,7 +112,7 @@ export const RunUsageMapSchema = z.record(z.string(), TokenUsageStatsSchema);
  * Extended token usage with per-round deltas. Note: percentageCached is
  * calculated from accumulated session totals for overall caching effectiveness.
  */
-export const ExtendedTokenUsageStatsSchema = TokenUsageStatsBaseSchema.extend({
+export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.extend({
   elapsedTime: z.number().nonnegative().optional(),
   percentageCached: z.number().nonnegative().optional(),
   toolUseTokens: TokenCountSchema.optional(),

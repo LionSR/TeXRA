@@ -324,15 +324,12 @@ const AgentWorkspaceSnapshotFieldsSchema = z.object({
  * Canonical shape of an `AgentWorkspaceState` snapshot. Persisted workspace
  * state has one supported format; an older record fails its resume parse.
  */
-export const AgentWorkspaceCurrentSnapshotSchema = z
+export const AgentWorkspaceStateSnapshotSchema = z
   .looseObject({ workPlan: z.unknown() })
   .refine(
     (record) => Object.hasOwn(record, 'workPlan') && record.workPlan != null,
   )
   .transform((record) => AgentWorkspaceSnapshotFieldsSchema.parse(record));
-
-export const AgentWorkspaceStateSnapshotSchema =
-  AgentWorkspaceCurrentSnapshotSchema;
 
 export type AgentWorkspaceSnapshot = z.output<
   typeof AgentWorkspaceStateSnapshotSchema
@@ -395,7 +392,7 @@ export class AgentWorkspaceState {
   static fromCanonicalSnapshot(
     snapshot: AgentWorkspaceSnapshot,
   ): AgentWorkspaceState {
-    const parsed = AgentWorkspaceCurrentSnapshotSchema.parse(snapshot);
+    const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);
     return AgentWorkspaceState.fromParsedFields(parsed);
   }
 
