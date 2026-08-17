@@ -17,17 +17,14 @@ import type { AgentConfig } from '@agent/runtime';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import type {
-  ExecutionId,
-  ExecutionMeta,
-  HistoryRunStatus,
-} from '@shared/schemas';
+import type { ExecutionId, ExecutionMeta } from '@shared/schemas';
+import { ExecutionIdSchema, RunOutcomeSchema } from '@shared/schemas';
 import {
-  ExecutionIdSchema,
+  HISTORY_RUN_STATUS,
   HISTORY_RUN_STATUS_LABEL,
   resolveHistoryRunStatus,
-  RunOutcomeSchema,
-} from '@shared/schemas';
+  type HistoryRunStatus,
+} from '@shared/schemas/historyRunStatus';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import {
@@ -414,9 +411,14 @@ export function formatInvalidExportFormatText(raw: string): string {
  * 'resumable'/'unknown' pass through unchanged. Internal and human-readable
  * output keeps `HistoryRunStatus`.
  */
-function toNdjsonHistoryStatus(status: string): string {
-  const outcome = RunOutcomeSchema.safeParse(status);
-  return outcome.success ? runOutcomeToExecutionStatus(outcome.data) : status;
+function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
+  if (
+    status === HISTORY_RUN_STATUS.RESUMABLE ||
+    status === HISTORY_RUN_STATUS.UNKNOWN
+  ) {
+    return status;
+  }
+  return runOutcomeToExecutionStatus(RunOutcomeSchema.parse(status));
 }
 
 export function cliHistoryNdjsonRecords(
