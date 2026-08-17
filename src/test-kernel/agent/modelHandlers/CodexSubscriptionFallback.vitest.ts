@@ -7,10 +7,7 @@ import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import { CODEX_BACKEND_BASE_URL, resetCodexCoordinator } from '@auth/codex';
 import { setServerSideKeyService } from '@auth/serverKeys';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
-import {
-  CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
-  CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
-} from '@model/providerCapabilities';
+import { CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT } from '@model/providerCapabilities';
 import {
   setPreferCodexSubscription,
   isPreferCodexSubscription,
@@ -53,10 +50,15 @@ const config: ModelConfig = buildTestModelConfig({
 // gpt-5.5 declares a 1,050,000-token window over the OpenAI API, but the Codex
 // subscription backend enforces a far smaller ceiling — the override must clamp
 // the effective window to that ceiling while the subscription drives requests.
+// Use the real Codex output budget so the displayed window is 272k + 128k = 400k.
 const largeWindowConfig: ModelConfig = {
   ...config,
   contextWindow: 1_050_000,
+  maxOutputTokens: 128_000,
 };
+
+const LARGE_WINDOW_SUBSCRIPTION_CONTEXT =
+  CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT + largeWindowConfig.maxOutputTokens;
 
 const ONE_MILLION_INPUT_TOKENS = {
   input_tokens: 1_000_000,
@@ -144,14 +146,14 @@ describe('ModelHandlerCodex subscription fallback', () => {
     // The model's own 1.05M API window must not leak through on the
     // subscription path, where the backend rejects requests past the ceiling.
     expect(handler.getEffectiveContextWindow()).toBe(
-      CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
+      LARGE_WINDOW_SUBSCRIPTION_CONTEXT,
     );
   });
 
   it('restores the full model window after falling back to the API key', async () => {
     const handler = await newSubscriptionHandler(largeWindowConfig);
     expect(handler.getEffectiveContextWindow()).toBe(
-      CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
+      LARGE_WINDOW_SUBSCRIPTION_CONTEXT,
     );
 
     // "Use your own API key" routes to the real OpenAI API, which honors the
@@ -252,7 +254,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
 
     await setPreferCodexSubscription(false);
     expect(handler.getEffectiveContextWindow()).toBe(
-      CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
+      LARGE_WINDOW_SUBSCRIPTION_CONTEXT,
     );
     expect(handler.computePrice(RAW_USAGE)).toBe(0);
     expect(handler.getLastCredentialUsageRoute()).toBe('chatgpt-subscription');
