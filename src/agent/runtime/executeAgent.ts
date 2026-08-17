@@ -79,6 +79,14 @@ export class ResumeAdmissionCancelledError extends Error {
   }
 }
 
+/** A claimed execution no longer has the persisted tool-use state to resume. */
+export class ResumeSessionUnavailableError extends Error {
+  constructor(readonly executionId: ExecutionId) {
+    super('This session can no longer be resumed. Start a new run instead.');
+    this.name = 'ResumeSessionUnavailableError';
+  }
+}
+
 /** Create the awaited round-finalized callback used by agent flows. */
 function createUsageRecordingCallback(
   ctx: AgentLaunchContext,
@@ -645,7 +653,12 @@ async function resumeToolUseWithOwnedLease(
   return result;
 }
 
-/** Resume a persisted tool-use session after claiming its execution lease. */
+/**
+ * Resume a persisted tool-use session after claiming its execution lease.
+ * Whether the run is a subagent — and can therefore legitimately resolve
+ * WAITING again — comes from persisted lineage (`hasPersistedParent`), never
+ * from the caller.
+ */
 export async function resumeToolUseFromResumeData(
   resume: ToolUseResumeData,
   options: ResumeToolUseFromResumeDataOptions = {},
@@ -658,28 +671,31 @@ export async function resumeToolUseFromResumeData(
     throw new ResumeAdmissionCancelledError(resume.executionId);
   }
   return await captureOwnedExecutionLease(resume.executionId)(async () => {
+    let leasedResume: ToolUseResumeData;
     try {
       // The caller's lookup only decides whether a resume may be attempted.
       // Its shared state is never launched: reload after the lease is owned so
       // this process has a single authoritative persisted snapshot.
-      const leasedResume = await retrieveSessionResumeData(
+      const retrievedResume = await retrieveSessionResumeData(
         resume.streamId,
         resume.executionId,
         resume.agentConfig,
         { parentStreamId: resume.parentStreamId },
       );
-      if (leasedResume?.type !== 'toolUse') {
-        throw new Error(
-          `Execution ${resume.executionId} no longer has a resumable tool-use session.`,
-        );
+      if (retrievedResume?.type !== 'toolUse') {
+        throw new ResumeSessionUnavailableError(resume.executionId);
       }
-      return await resumeToolUseWithOwnedLease(leasedResume, options);
+      leasedResume = retrievedResume;
     } catch (error) {
       throw await releaseOwnedExecutionLeaseAfterFailure(
         resume.executionId,
         error,
       );
     }
+    // `resumeToolUseWithOwnedLease` owns release after its launch boundary,
+    // including its own setup failures. Keep it outside the retrieval guard so
+    // a run failure is not released twice by nested rollback paths.
+    return await resumeToolUseWithOwnedLease(leasedResume, options);
   });
 }
 

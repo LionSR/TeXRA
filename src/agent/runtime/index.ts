@@ -99,7 +99,10 @@ export { resumeQueuedToolUseFromResumeData } from './resumeQueuedToolUse';
 export type { ManualCompactionRequestResult } from './executionRegistry';
 
 // executeAgent
-export { resumeToolUseFromResumeData } from './executeAgent';
+export {
+  resumeToolUseFromResumeData,
+  ResumeSessionUnavailableError,
+} from './executeAgent';
 
 // textEnhancement
 export { polishTextWithAI } from './textEnhancement';

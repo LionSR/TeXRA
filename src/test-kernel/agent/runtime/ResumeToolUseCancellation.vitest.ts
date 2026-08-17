@@ -75,6 +75,7 @@ import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import {
   resumeToolUseFromResumeData,
   ResumeAdmissionCancelledError,
+  ResumeSessionUnavailableError,
 } from '@agent/runtime/executeAgent';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -254,6 +255,9 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       snapshot.executionId,
       storageError,
     );
+    expect(mocks.releaseOwnedExecutionLeaseAfterFailure).toHaveBeenCalledTimes(
+      1,
+    );
   });
 
   it('resolves execution lineage before activating the resume stream', async () => {
@@ -273,6 +277,9 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       snapshot.executionId,
       storageError,
     );
+    expect(mocks.releaseOwnedExecutionLeaseAfterFailure).toHaveBeenCalledTimes(
+      1,
+    );
   });
 
   it('does not build a launch context when canonical admission is withdrawn under the lease lock', async () => {
@@ -291,6 +298,16 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       }),
     ).rejects.toBeInstanceOf(ResumeAdmissionCancelledError);
 
+    expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
+  });
+
+  it('reports a reloaded session that is no longer resumable distinctly', async () => {
+    const snapshot = createToolUseResumeData();
+    mocks.retrieveSessionResumeData.mockResolvedValueOnce(null);
+
+    await expect(resumeToolUseFromResumeData(snapshot)).rejects.toBeInstanceOf(
+      ResumeSessionUnavailableError,
+    );
     expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
   });
 

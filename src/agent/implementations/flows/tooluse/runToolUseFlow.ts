@@ -469,6 +469,9 @@ export async function runToolUseFlow<C = unknown>(
         compatibilityKey,
       );
       if (!isDeepStrictEqual(flowRecord.shared, resumedShared)) {
+        logger.debug(
+          'Healed a persisted tool-use shared-state mismatch after resume handoff.',
+        );
         flowRecord.shared = resumedShared;
         await kv.write(
           flowKey(executionId),
