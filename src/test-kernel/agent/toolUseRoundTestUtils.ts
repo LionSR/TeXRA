@@ -81,9 +81,7 @@ export function roundModelHandler(overrides: Record<string, unknown>) {
       text,
       stopReason,
       usage:
-        usage == null
-          ? undefined
-          : (normalizeUsage?.(usage, responseTimeMs) ?? usage),
+        usage == null ? undefined : normalizeUsage?.(usage, responseTimeMs),
     };
   };
   return handler;
