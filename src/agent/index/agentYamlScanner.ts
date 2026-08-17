@@ -4,6 +4,7 @@ import * as path from 'node:path';
 
 import { glob } from 'glob';
 import pMap from 'p-map';
+import { ZodError, type ZodIssue } from 'zod';
 
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import {
@@ -15,7 +16,7 @@ import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { createLog } from '@logger/logUtils';
 import type { AgentScanIssue, AgentSource } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import { groupBy, isObject } from '@utils/core';
+import { groupBy } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { AgentEntry } from './agentEntry';
@@ -160,7 +161,7 @@ function relativeScanPath(dir: string, yamlPath: string): string {
 }
 
 function formatScanFailure(error: unknown): string {
-  if (isObject(error) && Array.isArray(error.issues)) {
+  if (error instanceof ZodError) {
     const formatted = error.issues
       .map((issue) => formatSchemaIssue(issue))
       .filter((part) => part.length > 0);
@@ -169,16 +170,13 @@ function formatScanFailure(error: unknown): string {
   return toErrorMessage(error);
 }
 
-function formatSchemaIssue(issue: unknown): string {
-  if (!isObject(issue)) return '';
-  const where = Array.isArray(issue.path) ? issue.path.join('.') : '';
+function formatSchemaIssue(issue: ZodIssue): string {
+  const where = issue.path.join('.');
   const prefix = where ? `${where}: ` : '';
-  if (issue.code === 'unrecognized_keys' && Array.isArray(issue.keys)) {
-    return `${prefix}unrecognized keys ${issue.keys.filter((key) => typeof key === 'string').join(', ')}`;
+  if (issue.code === 'unrecognized_keys') {
+    return `${prefix}unrecognized keys ${issue.keys.join(', ')}`;
   }
-  return typeof issue.message === 'string' && issue.message
-    ? `${prefix}${issue.message}`
-    : '';
+  return issue.message ? `${prefix}${issue.message}` : '';
 }
 
 type InheritedBlockName = 'prompts' | 'settings';
