@@ -116,6 +116,39 @@ describe('LOG_DELTA text deltas', () => {
     expect(getState().streamLogs.get(STREAM_ID)?.logs[0]?.text).toBe('hello');
   });
 
+  it('recovers malformed rows without discarding their live delta batch', () => {
+    const getState = seedWorkflowStream();
+
+    const parsed = ProgressViewOutboundMessageSchema.parse({
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId: STREAM_ID,
+      entries: [
+        {
+          seqNo: 1,
+          id: 'malformed-file-list',
+          type: STREAM_LOG_ENTRY_TYPES.LOG,
+          level: LOG_LEVELS.INFO,
+          timestamp: 100,
+          messageType: MESSAGE_TYPES.FILE_LIST,
+          text: 'files',
+          data: [{ name: 'missing required path and ok fields' }],
+        },
+        modelResponseEntry('still delivered', 'completed'),
+      ],
+    });
+
+    const handler = handlers[parsed.command];
+    assertSupported(handler!)(parsed as never);
+
+    const logs = getState().streamLogs.get(STREAM_ID)?.logs;
+    expect(logs).toHaveLength(2);
+    expect(logs?.map((entry) => entry.text)).toEqual([
+      'files',
+      'still delivered',
+    ]);
+    expect(logs?.[0]?.messageType).toBe(MESSAGE_TYPES.DEFAULT);
+  });
+
   it('appends streamed text without whole-entry replacement and finalizes via full update', () => {
     const getState = seedWorkflowStream();
 
