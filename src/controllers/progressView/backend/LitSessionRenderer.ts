@@ -108,6 +108,7 @@ export class LitSessionRenderer implements SessionRendererPort {
   onStreamStatusChanged(
     streamId: StreamTabId,
     status: StreamPhase,
+    logHead: number,
     lastTimestamp?: number,
     substate?: StreamSubstate,
   ): void {
@@ -115,6 +116,7 @@ export class LitSessionRenderer implements SessionRendererPort {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream: streamId,
       status,
+      logHead,
       lastTimestamp,
       ...(substate ? { substate } : {}),
     });

@@ -97,7 +97,7 @@ export const streamMetaHandlers = {
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data) => {
-    const { stream, status, lastTimestamp, substate } = data;
+    const { stream, status, logHead, lastTimestamp, substate } = data;
     const previous = appState.get();
     const wasSettled = isTranscriptSettlementPhase(
       previous.streamStates.get(stream)?.status,
@@ -127,10 +127,7 @@ export const streamMetaHandlers = {
           if (!streamLogs) return;
           const updatedMessageIndices = settleCompactionActivityLogs(
             streamLogs,
-            {
-              throughSeqNo: streamLogs.compactionProjection.maxAppliedSeqNo,
-              finishedAt: lastTimestamp,
-            },
+            { throughSeqNo: logHead, finishedAt: lastTimestamp },
           );
           if (updatedMessageIndices.length === 0) return;
           draft.streamLogs.set(stream, {

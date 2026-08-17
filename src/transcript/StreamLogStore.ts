@@ -391,8 +391,11 @@ function normalizeGroupStatusEntry(entry: StreamLogEntry): StreamLogEntry {
     normalized.data.status === STREAM_PHASE.RUNNING &&
     normalized.settlementSeqNo !== undefined
   ) {
-    const { settlementSeqNo: _legacySettlement, ...unsettled } = normalized;
-    return unsettled as StreamLogEntry;
+    const { settlementSeqNo: legacySettlement, ...unsettled } = normalized;
+    return {
+      ...unsettled,
+      presentationSeqNo: unsettled.presentationSeqNo ?? legacySettlement,
+    } as StreamLogEntry;
   }
   return normalized;
 }

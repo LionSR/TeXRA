@@ -1245,6 +1245,9 @@ describe('StreamLogStore load', () => {
     // endRunningGroupsForStreams() defaults to RUN_OUTCOME.FAILED, the orphan
     // sweep's caller-classified default.
     expect(entry?.data).toEqual({ status: RUN_OUTCOME.FAILED, endTime: 300 });
+    const reloaded = await StreamLogStore.open();
+    await reloaded.ensureLoaded('alpha');
+    expect(reloaded.get('alpha')?.getRange(0).at(0)?.presentationSeqNo).toBe(1);
     expect(writtenSummary(storage.writes, 'alpha')).toEqual(
       settledSummary(100, 100),
     );
@@ -1501,6 +1504,9 @@ describe('StreamLogStore load', () => {
     expect(
       entries.find((e) => e.id === 'delta-legacy-running')?.settlementSeqNo,
     ).toBeUndefined();
+    expect(
+      entries.find((e) => e.id === 'delta-legacy-running')?.presentationSeqNo,
+    ).toBe(3);
   });
 
   it('does not load selected streams whose summaries have no running group', async () => {

@@ -296,16 +296,31 @@ export function attachTranscriptRecorder(
   const boundToolOutput = (
     id: string,
     result: Partial<ToolUseLog>,
+    persistSpill = true,
   ): ToolUseLog => {
     if (typeof result.output !== 'string') return result as ToolUseLog;
     const output = result.output;
     const preview = boundedTranscriptPreview(output);
-    const spillPath = queueSpill(id, output, preview);
+    const spillPath = persistSpill
+      ? queueSpill(id, output, preview)
+      : undefined;
     return {
       ...result,
       output: preview,
       ...(spillPath && { spillPath }),
     } as ToolUseLog;
+  };
+  const boundModelResponse = (
+    id: string,
+    text: string,
+  ): { text: string; data: Record<string, string> } => {
+    const redacted = redactSecrets(text);
+    const preview = boundedTranscriptPreview(redacted);
+    const spillPath = queueSpill(id, redacted, preview);
+    return {
+      text: preview,
+      data: { status: 'completed', ...(spillPath && { spillPath }) },
+    };
   };
   const recordFailure = (error: unknown): void => {
     pendingFailure ??= error;
@@ -326,16 +341,17 @@ export function attachTranscriptRecorder(
   // session stage can contain several model invocations, so the outer stage is
   // too coarse to be the only reset boundary.
   let pendingModelResponseId: string | undefined;
+  const detachedModelResponseIds = new Set<string>();
 
   const settlePendingModelResponse = (): void => {
     if (!pendingModelResponseId) return;
     const id = pendingModelResponseId;
     pendingModelResponseId = undefined;
-    // An active stream is still mutable and the lifecycle boundary will flush
-    // and settle it. A stream.end row has already been fully materialized and
-    // only awaits either authoritative response.finalized text or this next
-    // model/tool boundary.
-    if (!streams.has(id)) writer.settle(id, {});
+    // An active stream remains mutable until stream.end materializes its final
+    // text. Remember that it crossed the model/tool boundary so stream.end can
+    // settle it even though it is no longer the current response correlator.
+    if (streams.has(id)) detachedModelResponseIds.add(id);
+    else writer.settle(id, {});
   };
 
   const flushStream = (state: StreamSinkState, id: string): void => {
@@ -378,13 +394,7 @@ export function attachTranscriptRecorder(
     }
 
     if (state.ended) {
-      const text = redactSecrets(state.buffer);
-      const preview = boundedTranscriptPreview(text);
-      const spillPath = queueSpill(id, text, preview);
-      const patch = {
-        text: preview,
-        data: { status: 'completed', ...(spillPath && { spillPath }) },
-      };
+      const patch = boundModelResponse(id, state.buffer);
       if (state.messageType === MESSAGE_TYPES.MODEL_RESPONSE) {
         // The raw stream ends before response.finalized carries the
         // authoritative post-replacement text. Keep this row mutable until
@@ -434,27 +444,6 @@ export function attachTranscriptRecorder(
     });
   };
 
-  const appendModelResponse = (
-    text: string,
-    groupId: string | undefined,
-  ): void => {
-    const id = generateShortId();
-    const redacted = redactSecrets(text);
-    const preview = boundedTranscriptPreview(redacted);
-    const spillPath = queueSpill(id, redacted, preview);
-    writer.appendSettled({
-      id,
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: 'info',
-      timestamp: Date.now(),
-      groupId,
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      text: preview,
-      data: spillPath ? { spillPath } : undefined,
-      verbose: isDebugModeEnabled(),
-    });
-  };
-
   const subscriber: AgentTraceSubscriber = (event: AgentEvent) => {
     if (pendingFailure !== undefined) throw pendingFailure;
     try {
@@ -492,7 +481,11 @@ export function attachTranscriptRecorder(
           }
           writer.append({
             id: event.id,
-            presentationSeqNo: writer.settlementHead,
+            // Detached responses settle after this append but belong before
+            // the new heading. Reserve their pending settlement slots so cold
+            // replay preserves the live store order.
+            presentationSeqNo:
+              writer.settlementHead + detachedModelResponseIds.size,
             type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
             level: 'info',
             timestamp: Date.now(),
@@ -560,13 +553,18 @@ export function attachTranscriptRecorder(
           const patch = {
             messageType: MESSAGE_TYPES.TOOL_USE,
             data: {
-              ...boundToolOutput(event.logId, redactedResult),
+              ...boundToolOutput(
+                event.logId,
+                redactedResult,
+                event.status !== TOOL_USE_STATUS.IN_PROGRESS,
+              ),
               status: event.status,
             } as ToolUseLog,
           } satisfies StreamLogUpdatePatch;
           if (event.status === TOOL_USE_STATUS.IN_PROGRESS) {
-            writer.update(event.logId, patch);
-            activeToolEntries.set(event.logId, patch.data);
+            if (writer.update(event.logId, patch)) {
+              activeToolEntries.set(event.logId, patch.data);
+            }
           } else {
             writer.settle(event.logId, patch);
             activeToolEntries.delete(event.logId);
@@ -737,6 +735,9 @@ export function attachTranscriptRecorder(
           state.ended = true;
           flushStream(state, event.id);
           streams.delete(event.id);
+          if (detachedModelResponseIds.delete(event.id)) {
+            writer.settle(event.id, {});
+          }
           return;
         }
 
@@ -750,16 +751,23 @@ export function attachTranscriptRecorder(
           const correlatorId = pendingModelResponseId;
           pendingModelResponseId = undefined;
           if (correlatorId) {
-            const text = redactSecrets(event.text);
-            const preview = boundedTranscriptPreview(text);
-            const spillPath = queueSpill(correlatorId, text, preview);
-            writer.settle(correlatorId, {
-              text: preview,
-              data: { status: 'completed', ...(spillPath && { spillPath }) },
-            });
+            writer.settle(
+              correlatorId,
+              boundModelResponse(correlatorId, event.text),
+            );
             return;
           }
-          appendModelResponse(event.text, event.stageId);
+          const id = generateShortId();
+          writer.appendSettled({
+            id,
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: 'info',
+            timestamp: Date.now(),
+            groupId: event.stageId,
+            messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+            ...boundModelResponse(id, event.text),
+            verbose: isDebugModeEnabled(),
+          });
           return;
         }
 
@@ -875,6 +883,7 @@ export function attachTranscriptRecorder(
         flushStream(state, id);
         if (state.messageType === MESSAGE_TYPES.MODEL_RESPONSE) {
           writer.settle(id, {});
+          detachedModelResponseIds.delete(id);
           if (pendingModelResponseId === id) pendingModelResponseId = undefined;
         }
         streams.delete(id);
@@ -913,7 +922,9 @@ export function attachTranscriptRecorder(
     flushPending,
     flushSpills: async () => {
       await Promise.all([...pendingSpills]);
-      if (pendingSpillFailure !== undefined) throw pendingSpillFailure;
+      const failure = pendingSpillFailure;
+      pendingSpillFailure = undefined;
+      if (failure !== undefined) throw failure;
     },
     handleStatus,
   };
