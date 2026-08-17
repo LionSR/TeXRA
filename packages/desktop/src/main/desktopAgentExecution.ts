@@ -95,7 +95,9 @@ import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { cleanupUnscopedApprovals } from '@tools/approval';
 import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
+import { resolveTranscriptSpillPath } from '@transcript';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
+import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -944,6 +946,16 @@ export class DesktopProgressBridge {
       ...createProgressViewSecondTierHandlers(secondTierActions),
 
       // Host-specific handlers below
+      [PROGRESS_VIEW_COMMANDS.OPEN_SPILL_ARTIFACT]: async (data) => {
+        const spillPath = resolveTranscriptSpillPath(data.spillPath);
+        if (!spillPath || !(await StorageFS.exists(spillPath))) {
+          await this.options.host.showErrorMessage(
+            'Full output is unavailable because this run artifact was deleted.',
+          );
+          return;
+        }
+        await this.options.host.openPath(StorageFS.fullPath(spillPath));
+      },
       // Getting-started actions from the progress empty-state. openWalkthrough
       // has a desktop equivalent; the remaining four actions are VS Code-only.
       [PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION]: async (data) => {
