@@ -16,6 +16,7 @@ export * from './usage';
 export * from './contextManagement';
 export * from './spendingStatus';
 export * from './onboarding';
+export * from './toolDefinition';
 
 // Layer 1b: Standalone schemas and shared settings
 export * from './agentSkills';

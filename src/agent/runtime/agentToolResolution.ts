@@ -25,8 +25,8 @@
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import { createLog } from '@logger/logUtils';
-import type { ToolDefinition } from '@model/ToolDefinition';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import type { ToolDefinition } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
