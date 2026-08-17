@@ -120,6 +120,8 @@ export function disposeAgentChannel(channel: string): void {
  * place.
  */
 export function isDebugModeEnabled(): boolean {
+  // Documented pre-init exception: fatal/startup reporting can log structured
+  // errors before a host has installed the platform composition root.
   return (
     tryPlatform()?.config.get<boolean>('texra.logger.debugMode', false) ?? false
   );
