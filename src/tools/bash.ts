@@ -28,7 +28,7 @@ import {
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { BASH_CHILD_STREAM_PREFIX } from '@agent/runtime/streamTab';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
@@ -299,7 +299,7 @@ export class BashTool extends defineTool({
     const runContext = contexts?.runContext;
     const cwd =
       parseWorkingDirectory(getRunContextWorkingDirectory(runContext)) ??
-      tryPlatform()?.workspace.getWorkspacePath();
+      platform().workspace.getWorkspacePath();
 
     // Request approval before executing the command.
     const approval = await requestBashApproval({ command: input.command, cwd });

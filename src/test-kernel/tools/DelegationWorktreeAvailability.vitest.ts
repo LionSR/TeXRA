@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ToolDefinition } from '@model/ToolDefinition';
+import type { ToolDefinition } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   isWorktreeSupportEnabled: vi.fn(),

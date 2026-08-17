@@ -28,6 +28,7 @@ const completed = {
   files: [],
   totalCostUsd: 0,
 };
+const isCancellationRequested = (): boolean => false;
 
 function snapshot() {
   return createToolUseResumeData({ streamId: STREAM });
@@ -75,6 +76,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
     await expect(
       resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         session,
+        isCancellationRequested,
         tools,
         onFollowUpQueueReady: () => {
           expect(
@@ -105,6 +107,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
 
     const first = resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
       session,
+      isCancellationRequested,
       onError: vi.fn(),
     });
     await vi.waitFor(() =>
@@ -113,6 +116,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
     await expect(
       resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         session,
+        isCancellationRequested,
         onError: vi.fn(),
       }),
     ).resolves.toBe(false);
@@ -129,6 +133,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
     await expect(
       resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         session,
+        isCancellationRequested,
         onError: vi.fn(),
       }),
     ).resolves.toBe(false);
@@ -146,6 +151,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
 
     const resuming = resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
       session,
+      isCancellationRequested,
       onError: vi.fn(),
     });
     await vi.waitFor(() =>
@@ -183,6 +189,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
       resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         session,
         recovery,
+        isCancellationRequested,
         onError: vi.fn(),
       }),
     ).resolves.toBe(true);

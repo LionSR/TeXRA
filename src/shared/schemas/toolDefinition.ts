@@ -1,6 +1,6 @@
 import { z, type ZodType } from 'zod';
 
-import { AgentCategorySchema } from '@shared/schemas';
+import { AgentCategorySchema } from './agent';
 
 /**
  * Zod schema for validating tool definition structure.

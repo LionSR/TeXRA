@@ -33,13 +33,13 @@ import {
 } from '@common/errors/sdkError/providerErrorFormat';
 import { includedModelAccess } from '@model/includedModelAccess';
 import type { ResolvedModelConfig } from '@model/openRouterRouting';
-import type { ToolDefinition } from '@model/ToolDefinition';
 import {
   DEFAULT_CORE_SETTINGS,
   ModelRetryMaxAttemptsSchema,
   STREAM_PHASE,
   toRetryErrorInfo,
   type RetryErrorInfo,
+  type ToolDefinition,
 } from '@shared/schemas';
 import { isKimiCodeExclusiveModel } from '@shared/model/kimiCodeRetryGate';
 import { generateShortId } from '@utils/core';

@@ -18,7 +18,8 @@ import { GoalStatusSchema } from '../goal';
 import { AgentCategory } from '../agent';
 
 import { StreamTabIdSchema } from '../identifiers';
-import { StreamLogEntrySchema, StreamLogTextDeltaSchema } from '../log';
+import { StreamLogTextDeltaSchema } from '../log';
+import { StreamLogEntryBatchSchema } from '../streamLogEntry';
 import {
   AgentOptionDataSchema,
   ModelOptionDataSchema,
@@ -118,8 +119,8 @@ export const UpdateStreamStatusMessageSchema = StreamScopedBaseSchema.extend({
 const LogDeltaMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.LOG_DELTA),
   streamId: StreamTabIdSchema,
-  entries: z.array(StreamLogEntrySchema),
-  updates: z.array(StreamLogEntrySchema).prefault([]),
+  entries: StreamLogEntryBatchSchema,
+  updates: StreamLogEntryBatchSchema.prefault([]),
   textDeltas: z.array(StreamLogTextDeltaSchema).prefault([]),
 });
 

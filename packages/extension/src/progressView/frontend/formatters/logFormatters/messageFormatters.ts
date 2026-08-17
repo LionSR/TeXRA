@@ -23,11 +23,11 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - shared schemas and utilities
 import {
-  ErrorLogDataSchema,
-  UserMessagePayloadSchema,
+  MESSAGE_TYPES,
   type ErrorLogData,
   type LogLevel,
   type LogMessageData,
+  type LogMessageOf,
 } from '@shared/schemas';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -49,13 +49,10 @@ function buildLevelIcon(level: LogLevel): TemplateResult {
 
 /** Format user message entry as TemplateResult. */
 export function formatUserMessageTemplate(
-  message: LogMessageData,
+  message: LogMessageOf<typeof MESSAGE_TYPES.USER_MESSAGE>,
 ): FormatResult {
   const { id, text, timestamp, data } = message;
-  const payload = UserMessagePayloadSchema.safeParse(data);
-  const workflowSummary = payload.success
-    ? (payload.data.workflowSummary ?? null)
-    : null;
+  const workflowSummary = data?.workflowSummary ?? null;
   // prettier-ignore
   return html`<user-message .text=${text ?? ''} .logId=${id} .timestamp=${timestamp} .workflowSummary=${workflowSummary}></user-message>`;
 }
@@ -103,16 +100,14 @@ const ERROR_DETAIL_FIELDS = [
 ] as const satisfies ReadonlyArray<keyof ErrorLogData>;
 
 /** Format error message as TemplateResult. */
-export function formatErrorTemplate(message: LogMessageData): FormatResult {
+export function formatErrorTemplate(
+  message: LogMessageOf<typeof MESSAGE_TYPES.ERROR>,
+): FormatResult {
   const { id, groupId, timestamp, text, data } = message;
   const { fullTimestamp, timeDisplay, tooltipTimestamp } =
     formatDisplayTimestamp(new Date(timestamp));
 
-  // Parse error data with schema - use empty object if invalid
-  const parseResult = ErrorLogDataSchema.safeParse(data);
-  const errorData: Partial<ErrorLogData> = parseResult.success
-    ? parseResult.data
-    : {};
+  const errorData: Partial<ErrorLogData> = data ?? {};
   const isRelayError = errorData.isRelayError === true;
 
   // Build summary text (used for display and duplicate detection)

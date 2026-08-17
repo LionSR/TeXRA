@@ -17,6 +17,7 @@ import {
   STREAM_STATUS,
   STREAM_LOG_ENTRY_TYPES,
   StreamSnapshotSchema,
+  StreamLogEntrySchema,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -72,12 +73,12 @@ function stageEntry(
     Partial<Pick<TraceEntry, 'groupId'>>,
 ): TraceEntry {
   const { groupId, ...rest } = entry;
-  return {
+  return StreamLogEntrySchema.parse({
     ...rest,
     level: LOG_LEVELS.INFO,
     messageType: MESSAGE_TYPES.DEFAULT,
     ...(groupId === undefined ? {} : { groupId }),
-  };
+  });
 }
 
 function legacyTrace(

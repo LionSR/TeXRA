@@ -7,9 +7,13 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - formatter helpers
-import type { LogMessageData, MessageType } from '@shared/schemas';
+import {
+  MESSAGE_TYPES,
+  type LogMessageData,
+  type LogMessageOf,
+  type MessageType,
+} from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   isStreamingTextLogMessage,
@@ -38,10 +42,14 @@ import {
 } from './logFormatters/toolFormatters/webFormatters';
 import { formatWorkflowCallTemplate } from './logFormatters/workflowCallFormatter';
 
-type TemplateFormatterFn = (
-  message: LogMessageData,
+type TemplateFormatterFn<T extends MessageType> = (
+  message: LogMessageOf<T>,
   options?: FormatOptions & { isRunning?: boolean },
 ) => FormatResult;
+
+type TemplateFormatterMap = {
+  [T in MessageType]?: TemplateFormatterFn<T>;
+};
 
 /** Message types that render nothing when the formatter produces no result. */
 const NULLABLE_TYPES: Set<MessageType> = new Set([
@@ -63,10 +71,10 @@ function formatRenderError(label: string, errorMsg: string): TemplateResult {
  * `label` may be a fixed string or a function deriving the label from the
  * message (e.g. naming the tool in a tool-use error card).
  */
-function wrapWithErrorHandling(
-  fn: TemplateFormatterFn,
-  label: string | ((message: LogMessageData) => string),
-): TemplateFormatterFn {
+function wrapWithErrorHandling<T extends MessageType>(
+  fn: TemplateFormatterFn<T>,
+  label: string | ((message: LogMessageOf<T>) => string),
+): TemplateFormatterFn<T> {
   return (message, options) => {
     const resolvedLabel = typeof label === 'function' ? label(message) : label;
     try {
@@ -79,18 +87,24 @@ function wrapWithErrorHandling(
 }
 
 /** Name the tool in formatter errors so a bad card is actionable. */
-function getToolUseRenderLabel(message: LogMessageData): string {
-  const data = message.data;
-  if (!isObject(data)) return 'tool use';
-  const toolName = typeof data.toolName === 'string' ? data.toolName : '';
+function getToolUseRenderLabel(
+  message: LogMessageOf<typeof MESSAGE_TYPES.TOOL_USE>,
+): string {
+  const toolName = message.data.toolName ?? '';
   return toolName.trim() ? `tool use (${toolName.trim()})` : 'tool use';
 }
 
 /** Map of message types to their formatter functions. */
-const TEMPLATE_FORMATTERS: Partial<Record<MessageType, TemplateFormatterFn>> = {
+const TEMPLATE_FORMATTERS: TemplateFormatterMap = {
   // Collapsible content banners
-  thinking: wrapWithErrorHandling(formatBannerContentTemplate, 'thinking'),
-  scratchpad: wrapWithErrorHandling(formatBannerContentTemplate, 'scratchpad'),
+  thinking: wrapWithErrorHandling<typeof MESSAGE_TYPES.THINKING>(
+    formatBannerContentTemplate,
+    'thinking',
+  ),
+  scratchpad: wrapWithErrorHandling<typeof MESSAGE_TYPES.SCRATCHPAD>(
+    formatBannerContentTemplate,
+    'scratchpad',
+  ),
 
   // Tool/search/fetch results
   toolUse: wrapWithErrorHandling(formatToolUseTemplate, getToolUseRenderLabel),
@@ -98,7 +112,7 @@ const TEMPLATE_FORMATTERS: Partial<Record<MessageType, TemplateFormatterFn>> = {
   webFetch: wrapWithErrorHandling(formatWebFetchTemplate, 'web fetch'),
 
   // Model response
-  modelResponse: wrapWithErrorHandling(
+  modelResponse: wrapWithErrorHandling<typeof MESSAGE_TYPES.MODEL_RESPONSE>(
     formatBannerContentTemplate,
     'Assistant',
   ),
@@ -109,7 +123,10 @@ const TEMPLATE_FORMATTERS: Partial<Record<MessageType, TemplateFormatterFn>> = {
     formatMissingOutputsTemplate,
     'missing outputs',
   ),
-  latexdiff: wrapWithErrorHandling(formatLatexdiffTemplate, 'latexdiff'),
+  latexdiff: wrapWithErrorHandling<typeof MESSAGE_TYPES.LATEXDIFF>(
+    formatLatexdiffTemplate,
+    'latexdiff',
+  ),
   statistics: wrapWithErrorHandling(formatStatisticsTemplate, 'statistics'),
   contextManagement: wrapWithErrorHandling(
     formatContextManagementTemplate,
@@ -122,12 +139,11 @@ const TEMPLATE_FORMATTERS: Partial<Record<MessageType, TemplateFormatterFn>> = {
 
   // Special cases
   contextState: () => null, // Displayed in footer
-  contextCompactionActivity: wrapWithErrorHandling(
-    formatCompactionActivityTemplate,
-    'context compaction activity',
-  ),
+  contextCompactionActivity: wrapWithErrorHandling<
+    typeof MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY
+  >(formatCompactionActivityTemplate, 'context compaction activity'),
   userMessage: wrapWithErrorHandling(formatUserMessageTemplate, 'user message'),
-  progressStatus: wrapWithErrorHandling(
+  progressStatus: wrapWithErrorHandling<typeof MESSAGE_TYPES.PROGRESS_STATUS>(
     formatProgressStatusTemplate,
     'progress status',
   ),
@@ -153,7 +169,10 @@ export function formatLogEntry(
   const formatter = messageType ? TEMPLATE_FORMATTERS[messageType] : undefined;
 
   if (messageType && formatter) {
-    const result = formatter(logMessage, templateOptions);
+    // Runtime lookup preserves the messageType/payload correlation encoded by
+    // TemplateFormatterMap; TypeScript cannot retain that correlation through
+    // an indexed access over the full MessageType union.
+    const result = formatter(logMessage as never, templateOptions);
     if (result) return result;
     if (NULLABLE_TYPES.has(messageType)) return nothing;
   }
