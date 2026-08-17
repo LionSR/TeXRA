@@ -69,6 +69,8 @@ const MAX_TRANSCRIPT_ENTRY_LINES = 2_000;
 const TRANSCRIPT_PREVIEW_LINES = 40;
 const TRANSCRIPT_TRUNCATION_MARKER =
   '\n\n… output truncated in transcript; retained in run artifacts …\n\n';
+const LIVE_TOOL_TRUNCATION_MARKER =
+  '\n\n… output truncated while the tool is running …\n\n';
 const UTF8_ENCODER = new TextEncoder();
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
@@ -188,7 +190,10 @@ export interface TranscriptSpillWriter {
   write(path: string, content: string): Promise<void>;
 }
 
-function boundedTranscriptPreview(text: string): string {
+function boundedTranscriptPreview(
+  text: string,
+  marker = TRANSCRIPT_TRUNCATION_MARKER,
+): string {
   const lines = text.split('\n');
   if (
     UTF8_ENCODER.encode(text).length <= MAX_TRANSCRIPT_ENTRY_BYTES &&
@@ -197,8 +202,7 @@ function boundedTranscriptPreview(text: string): string {
     return text;
   }
   const contentBudget =
-    MAX_TRANSCRIPT_ENTRY_BYTES -
-    UTF8_ENCODER.encode(TRANSCRIPT_TRUNCATION_MARKER).length;
+    MAX_TRANSCRIPT_ENTRY_BYTES - UTF8_ENCODER.encode(marker).length;
   const head = utf8Prefix(
     lines.slice(0, TRANSCRIPT_PREVIEW_LINES).join('\n'),
     Math.floor(contentBudget / 2),
@@ -207,7 +211,7 @@ function boundedTranscriptPreview(text: string): string {
     lines.slice(-TRANSCRIPT_PREVIEW_LINES).join('\n'),
     Math.ceil(contentBudget / 2),
   );
-  return `${head}${TRANSCRIPT_TRUNCATION_MARKER}${tail}`;
+  return `${head}${marker}${tail}`;
 }
 
 function utf8Prefix(text: string, byteBudget: number): string {
@@ -303,7 +307,10 @@ export function attachTranscriptRecorder(
   ): ToolUseLog => {
     if (typeof result.output !== 'string') return result as ToolUseLog;
     const output = result.output;
-    const preview = boundedTranscriptPreview(output);
+    const preview = boundedTranscriptPreview(
+      output,
+      persistSpill ? TRANSCRIPT_TRUNCATION_MARKER : LIVE_TOOL_TRUNCATION_MARKER,
+    );
     const spillPath = persistSpill
       ? queueSpill(id, output, preview)
       : undefined;
