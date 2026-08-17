@@ -79,6 +79,7 @@ interface CacheEntry {
 }
 
 interface ResolvedRequest {
+  readonly id: number;
   readonly key: string;
   readonly variant: boolean | string | undefined;
   readonly variantResolutionFailed: boolean;
@@ -126,6 +127,11 @@ export class SubscriptionUsageService {
     string,
     Promise<SubscriptionUsageSnapshot>
   >();
+  private readonly latestRequests = new Map<
+    SubscriptionUsageProvider,
+    ResolvedRequest
+  >();
+  private nextRequestId = 0;
 
   constructor(init: SubscriptionUsageServiceInit = {}) {
     this.http = init.http ?? fetch;
@@ -195,6 +201,7 @@ export class SubscriptionUsageService {
     provider: SubscriptionUsageProvider,
     options: { readonly forceRefresh?: boolean } = {},
   ): Promise<SubscriptionUsageSnapshot> {
+    const requestId = ++this.nextRequestId;
     const adapter = this.adapters[provider];
     let variant: boolean | string | undefined;
     let variantResolutionFailed = false;
@@ -208,10 +215,17 @@ export class SubscriptionUsageService {
       ? 'variant-error'
       : (variant ?? 'default');
     const resolved: ResolvedRequest = {
+      id: requestId,
       key: `${provider}:${variantKey}`,
       variant,
       variantResolutionFailed,
     };
+    const latest = this.latestRequests.get(provider);
+    if (!latest || latest.id < requestId) {
+      this.latestRequests.set(provider, resolved);
+    } else if (latest.key !== resolved.key) {
+      return this.getUsageForRequest(provider, latest, false);
+    }
     return this.getUsageForRequest(
       provider,
       resolved,
@@ -243,6 +257,10 @@ export class SubscriptionUsageService {
       (snapshot) => {
         if (this.pending.get(resolved.key) !== request) {
           return this.getUsage(provider);
+        }
+        const latest = this.latestRequests.get(provider);
+        if (latest && latest.key !== resolved.key) {
+          return this.getUsageForRequest(provider, latest, false);
         }
         this.cache.set(resolved.key, {
           snapshot,

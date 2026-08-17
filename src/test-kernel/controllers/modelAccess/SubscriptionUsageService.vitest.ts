@@ -525,6 +525,58 @@ describe('SubscriptionUsageService', () => {
   });
 
   it.each([
+    [true, GLM_CODING_PLAN_USAGE_URL, GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL],
+    [false, GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL, GLM_CODING_PLAN_USAGE_URL],
+  ])(
+    'returns the newer GLM region when the older request resolves last: China=%s',
+    async (initialUseChina, olderUrl, newerUrl) => {
+      let useChina = initialUseChina;
+      const responses = new Map<string, (response: Response) => void>();
+      const http = vi.fn<SubscriptionUsageHttp>(
+        (url) =>
+          new Promise<Response>((resolve) => {
+            responses.set(String(url), resolve);
+          }),
+      );
+      const service = serviceWith(
+        http,
+        credentials({ useGlmChina: () => useChina }),
+      );
+
+      const olderRequest = service.getUsage('glmCodingPlan');
+      await vi.waitFor(() => expect(http).toHaveBeenCalledTimes(1));
+      useChina = !initialUseChina;
+      const newerRequest = service.getUsage('glmCodingPlan');
+      await vi.waitFor(() => expect(http).toHaveBeenCalledTimes(2));
+
+      responses.get(newerUrl)?.(
+        jsonResponse({
+          success: true,
+          data: {
+            limits: [{ type: 'TOKENS_LIMIT', percentage: 80, unit: 3 }],
+          },
+        }),
+      );
+      const newer = await newerRequest;
+      responses.get(olderUrl)?.(
+        jsonResponse({
+          success: true,
+          data: {
+            limits: [{ type: 'TOKENS_LIMIT', percentage: 10, unit: 3 }],
+          },
+        }),
+      );
+      const olderCaller = await olderRequest;
+
+      expect(http.mock.calls.map(([url]) => url)).toStrictEqual([
+        olderUrl,
+        newerUrl,
+      ]);
+      expect(olderCaller).toStrictEqual(newer);
+    },
+  );
+
+  it.each([
     [
       'a synchronous throw',
       () => {
