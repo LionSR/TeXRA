@@ -1103,6 +1103,7 @@ function observeSurfaceResizes(): void {
 }
 
 function rerenderShell(): void {
+  if (bootstrapFailed) return;
   render(shellTemplate(), appRoot);
   logsController.setActive(
     activeWorkbenchTab(shellState, 'right')?.kind === 'logs' ||
@@ -1154,8 +1155,17 @@ function renderBootstrapFallback(error: unknown): void {
   );
 }
 
+function reportRuntimeFailure(error: unknown): void {
+  const shouldReload = window.confirm(
+    `TeXRA encountered an unexpected error.\n\n${toBootstrapErrorMessage(error)}\n\nReload TeXRA now?`,
+  );
+  if (shouldReload) window.location.reload();
+}
+
 function recoverFromBootstrapFallback(): void {
   try {
+    bootstrapFailed = false;
+    bootstrapComplete = false;
     logsController.rerenderViewer();
     rerenderShell();
     // Recovery must wire rail tabs / conversation events and install the
@@ -1164,10 +1174,10 @@ function recoverFromBootstrapFallback(): void {
     wireRailTabs();
     wireConversation();
     installShellSignalWatcher();
-    bootstrapFailed = false;
     postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
     postWebviewReady();
     document.body.dataset.desktopReady = 'true';
+    bootstrapComplete = true;
   } catch (recoveryError) {
     console.error('TeXRA desktop renderer recovery failed', recoveryError);
     bootstrapFailed = true;
@@ -1224,10 +1234,15 @@ function installShellSignalWatcher(): void {
 }
 
 let bootstrapFailed = false;
+let bootstrapComplete = false;
 window.addEventListener('unhandledrejection', (event) => {
   event.preventDefault();
-  bootstrapFailed = true;
   console.error('TeXRA desktop renderer unhandled rejection', event.reason);
+  if (bootstrapComplete) {
+    reportRuntimeFailure(event.reason);
+    return;
+  }
+  bootstrapFailed = true;
   renderBootstrapFallback(event.reason);
 });
 
@@ -1482,6 +1497,7 @@ if (!bootstrapFailed) {
   postWebviewReady();
   if (hasWorkspace) void editorPane.refresh();
   document.body.dataset.desktopReady = 'true';
+  bootstrapComplete = true;
 }
 
 // Sole owner of "the workspace has unsaved editor changes": the main process
