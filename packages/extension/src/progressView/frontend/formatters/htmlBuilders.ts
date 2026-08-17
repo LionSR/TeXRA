@@ -116,6 +116,12 @@ export function stopSummaryToggleKeydown(event: Event): void {
   event.stopPropagation();
 }
 
+/** Build the one row-local opener for recorder-owned full output. */
+export function buildSpillArtifactButton(spillPath: string): TemplateResult {
+  // prettier-ignore
+  return html`<button type="button" class="spill-artifact-link proposal-banner-setup" data-spill-path=${spillPath} title="Show full output" @keydown=${stopSummaryToggleKeydown}>${waIcon('file-lines')} Show full output</button>`;
+}
+
 /** Build a copy button for banner content. */
 export function buildCopyButton(
   title: string,

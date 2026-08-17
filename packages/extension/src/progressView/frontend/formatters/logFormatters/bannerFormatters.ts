@@ -19,12 +19,11 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 // Local imports - shared schemas
 import type { LogMessageData } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { processMarkdownContent } from '../markdownRenderer';
-import { buildDetailsSummary, stopSummaryToggleKeydown } from '../htmlBuilders';
+import { buildDetailsSummary, buildSpillArtifactButton } from '../htmlBuilders';
 import type { FormatResult } from '../baseLogFormatter';
 
 type BannerConfig = {
@@ -129,7 +128,7 @@ export function formatBannerContentTemplate(
       contentId: id ? `${config.copyIdPrefix}:${id}` : undefined,
     },
     extraContent: spillPath
-      ? html`<button type="button" class="spill-artifact-link proposal-banner-setup" data-spill-path=${spillPath} title="Show full output" @keydown=${stopSummaryToggleKeydown}>${waIcon('file-lines')} Full output</button>`
+      ? buildSpillArtifactButton(spillPath)
       : undefined,
   })}${contentTemplate}</wa-details>`;
 }

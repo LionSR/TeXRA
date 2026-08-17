@@ -30,7 +30,11 @@ import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { isInquiryContinuationText } from './transcriptEntries';
 import { loadedImageDisplayLines } from './loadedImageDisplay';
-import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';
+import {
+  toolUseDisplayLines,
+  toolUseMarginBottomRows,
+  toolUseRendersOutput,
+} from './toolRenderers';
 import type { ConversationEntry } from '../state/cliState';
 
 const DEFAULT_TRANSCRIPT_COLUMNS = 80;
@@ -391,9 +395,10 @@ export function fullTranscriptEntryLayout(
   // on-demand reader substitutes the artifact text before reaching this
   // layout; append it explicitly so read/edit-style tools (whose compact card
   // intentionally omits ordinary output) still expose their recovered value.
-  const spillOutput = entry.spillPath
-    ? ['Full output:', ...entry.toolUse.outputText.split('\n')]
-    : [];
+  const spillOutput =
+    entry.spillPath && !toolUseRendersOutput(entry.toolUse)
+      ? ['Full output:', ...entry.toolUse.outputText.split('\n')]
+      : [];
   return {
     ...layout,
     lines: wrapDisplayLines(

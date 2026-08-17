@@ -107,6 +107,7 @@ interface ProgressViewRunCommandActions {
 
 export interface ProgressViewFileCommandActions {
   openFile(file: string, line?: number): Promise<void> | void;
+  openSpillArtifact(spillPath: string): Promise<void> | void;
   openTaskStorage(stream: StreamTabId): Promise<void> | void;
   compareOriginal(file: string, base?: string): Promise<void> | void;
   comparePrevious(
@@ -237,6 +238,8 @@ export function createProgressViewCommandHandlers(
 
     [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: (data) =>
       file.openFile(data.file, data.line),
+    [PROGRESS_VIEW_COMMANDS.OPEN_SPILL_ARTIFACT]: (data) =>
+      file.openSpillArtifact(data.spillPath),
     [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]: (data) =>
       file.openTaskStorage(data.stream),
     [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]: (data) =>

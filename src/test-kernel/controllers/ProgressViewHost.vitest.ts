@@ -106,6 +106,7 @@ function createHostHarness(
       },
       file: {
         openFile: vi.fn(),
+        openSpillArtifact: vi.fn(),
       },
       approval: {
         approvePendingDelegatedWork: vi.fn(async () => undefined),

@@ -332,6 +332,12 @@ function toolRowOptions(
   return plain;
 }
 
+/** Whether this tool kind's full-detail row already includes raw output. */
+export function toolUseRendersOutput(toolUse: NormalizedToolUse): boolean {
+  return toolRowOptions(toolUse, toolUsePatchGroups(toolUse) !== undefined)
+    .showOutput;
+}
+
 function buildStyledLines(
   toolUse: NormalizedToolUse,
   options: DisplayLineOptions,
