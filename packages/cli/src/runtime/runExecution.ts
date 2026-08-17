@@ -25,6 +25,7 @@ import {
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
+import { getDefaultUnavailableToolNames } from '@tools/registry';
 import { aggregateError, generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -47,7 +48,6 @@ import {
   runOutcomeExitCode,
   type ExecuteAgentResult,
 } from './terminalStatus';
-import { CLI_UNAVAILABLE_TOOLS } from './unavailableTools';
 import { attachWorkflowPlainOutput } from './workflowPlainOutput';
 import type { CliContext } from './cliContext';
 
@@ -498,7 +498,7 @@ export async function executeCliRequest(
         onApprovalPolicyDenial: () =>
           warnApprovalDenied(runContext, 'Tool or edit approval'),
         runtimeUnavailableTools: [
-          ...CLI_UNAVAILABLE_TOOLS,
+          ...getDefaultUnavailableToolNames('cli'),
           ...(options.runtimeUnavailableTools ?? []),
         ],
       });

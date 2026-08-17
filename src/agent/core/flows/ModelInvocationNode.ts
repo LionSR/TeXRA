@@ -44,7 +44,6 @@ import {
 import { isKimiCodeExclusiveModel } from '@shared/model/kimiCodeRetryGate';
 import { generateShortId } from '@utils/core';
 import { getValidatedConfig } from '@utils/config/configUtils';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { FlowTransition } from './FlowTransitions';
 
@@ -165,7 +164,6 @@ export class ModelInvocationNode<
   private readonly _config: ModelInvocationConfig<TShared, TServices>;
   protected _userCancelled = false;
   protected _hasAttemptedTokenRefresh = false;
-  protected _persistent401Error: Error | null = null;
   private _retryLifecycle: RetryLifecycleState | undefined;
 
   constructor(config: ModelInvocationConfig<TShared, TServices>) {
@@ -177,7 +175,6 @@ export class ModelInvocationNode<
     const cloned = super.clone();
     cloned._userCancelled = false;
     cloned._hasAttemptedTokenRefresh = false;
-    cloned._persistent401Error = null;
     cloned._retryLifecycle = undefined;
     return cloned;
   }
@@ -320,7 +317,6 @@ export class ModelInvocationNode<
     const refreshed = await includedModelAccess().getAccessToken(true);
     if (!refreshed) {
       logger.debug('Token refresh failed, skipping auto-retries');
-      this._persistent401Error = ensureError(originalError);
       throw originalError;
     }
 
@@ -340,7 +336,6 @@ export class ModelInvocationNode<
         isUnauthorizedProviderError(retryFormatted)
       ) {
         logger.debug('Still 401 after token refresh, skipping auto-retries');
-        this._persistent401Error = ensureError(retryErr);
       }
       throw retryErr;
     }
@@ -364,10 +359,6 @@ export class ModelInvocationNode<
     });
 
     try {
-      if (this._persistent401Error) {
-        throw this._persistent401Error;
-      }
-
       // Build (or reuse) the client this attempt will run on before reading
       // the credential route it captured. Client preparation is part of the
       // retry attempt and must therefore remain inside this lifecycle guard.
@@ -506,7 +497,6 @@ export class ModelInvocationNode<
       if (this._retryLifecycle) {
         this._retryLifecycle.nextAttemptSource = result.retrySource ?? 'human';
       }
-      this._persistent401Error = null;
       this._hasAttemptedTokenRefresh = false;
       // Always refresh the client on manual retry. The user may have
       // taken actions between failure and retry that change how the

@@ -91,7 +91,7 @@ describe('subscription usage rendering', () => {
   beforeEach(() => mocks.postMessage.mockClear());
   afterEach(() => vi.useRealTimers());
 
-  it('renders native collapsed summaries, accessible meters, and one refresh action', async () => {
+  it('renders accessible meters and one refresh action', async () => {
     const tab = await mountTab();
 
     expect(mocks.postMessage).toHaveBeenCalledWith(
@@ -113,8 +113,7 @@ describe('subscription usage rendering', () => {
     const kimiRow = getKimiUsageRow(tab);
     expect(kimiRow).not.toBeNull();
     await kimiRow!.updateComplete;
-    const details = kimiRow!.shadowRoot?.querySelector('wa-details');
-    expect(details?.closest('.settings-row-text')).not.toBeNull();
+    expect(kimiRow!.shadowRoot?.querySelector('wa-details')).toBeNull();
     const styleText = (
       kimiRow!.constructor as unknown as {
         styles: readonly { cssText: string }[];
@@ -124,15 +123,16 @@ describe('subscription usage rendering', () => {
       .join('\n');
     expect(styleText).toContain('flex: 1 1 100%');
     expect(styleText).toContain('min-width: 0');
-    expect(details?.getAttribute('summary')).toContain(
-      '5-hour: 25% · 7-day: 100%',
-    );
+    const text = kimiRow!.shadowRoot?.textContent ?? '';
+    expect(text).toContain('Kimi Code plan usage');
+    expect(text.split('5-hour: 25%')).toHaveLength(2);
+    expect(text.split('7-day: 100%')).toHaveLength(2);
     const meters = kimiRow!.shadowRoot?.querySelectorAll('progress');
     expect(meters).toHaveLength(2);
     expect(meters?.[0]?.getAttribute('aria-label')).toBe(
       'Kimi Code 5-hour usage: 25% used',
     );
-    expect(kimiRow!.shadowRoot?.textContent).toContain('resets in 1d 21h');
+    expect(text).toContain('resets in 1d 21h');
     expect(tab.shadowRoot?.textContent).not.toContain('Grok usage unavailable');
   });
 

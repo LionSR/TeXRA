@@ -141,7 +141,6 @@ function projectCliRunFact(
         event: 'addOutputFiles',
         payload: {
           streamId: event.streamId,
-          ...(event.executionId ? { executionId: event.executionId } : {}),
           filesByRound: event.filesByRound,
         },
       };
@@ -150,7 +149,6 @@ function projectCliRunFact(
         event: 'updateMissingOutputs',
         payload: {
           streamId: event.streamId,
-          ...(event.executionId ? { executionId: event.executionId } : {}),
           filesByRound: event.filesByRound,
         },
       };
@@ -159,7 +157,6 @@ function projectCliRunFact(
         event: 'updateCompileFailures',
         payload: {
           streamId: event.streamId,
-          ...(event.executionId ? { executionId: event.executionId } : {}),
           filesByRound: event.filesByRound,
         },
       };

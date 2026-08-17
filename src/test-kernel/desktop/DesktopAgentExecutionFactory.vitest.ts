@@ -11,8 +11,7 @@ import {
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
-import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
-import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
+import { getDefaultUnavailableToolNames } from '@tools/registry';
 
 // Local file imports
 import {
@@ -348,11 +347,7 @@ describe('createDesktopAgentExecution', () => {
       { kind: 'fresh', ...request },
       expect.objectContaining({
         openWorkflowOutput: expect.any(Function),
-        runtimeUnavailableTools: [
-          ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
-          'inline_comment',
-          DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
-        ],
+        runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
       }),
     );
   });

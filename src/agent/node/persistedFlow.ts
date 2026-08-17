@@ -91,7 +91,11 @@ export const PersistedFlowRecordEnvelopeSchema = z
   .pipe(PersistedFlowRecordObjectSchema);
 
 export type PersistedFlowStateErrorReason =
-  'read-failed' | 'unsupported-record' | 'missing-shared' | 'invalid-shared';
+  | 'read-failed'
+  | 'unsupported-record'
+  | 'missing-shared'
+  | 'invalid-shared'
+  | 'unexpected-record';
 
 /** Persisted flow state cannot be read or resumed safely. */
 export class PersistedFlowStateError extends Error {
@@ -110,6 +114,8 @@ export class PersistedFlowStateError extends Error {
           return `Persisted flow state for run "${runId}" is missing its shared state.`;
         case 'invalid-shared':
           return `Persisted shared state for flow run "${runId}" is invalid.`;
+        case 'unexpected-record':
+          return `A persisted flow record exists for run "${runId}", but no resume handoff was provided.`;
       }
     })();
     super(message, options);

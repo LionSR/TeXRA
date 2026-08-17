@@ -2,7 +2,11 @@
 import stableStringify from 'fast-json-stable-stringify';
 
 // Local imports
-import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
+import type {
+  ITool,
+  IToolRegistry,
+  ToolHost,
+} from '@agent/core/tools/ToolTypes';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ToolDefinition } from '@shared/schemas';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
@@ -75,6 +79,7 @@ import {
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
+let defaultToolsInstance: ReturnType<typeof createDefaultTools> | null = null;
 
 /**
  * Canonical tool factory — single source of truth for all registered tools.
@@ -144,6 +149,11 @@ function createDefaultTools() {
   } satisfies Record<string, ITool>;
 }
 
+function getDefaultTools(): ReturnType<typeof createDefaultTools> {
+  defaultToolsInstance ??= createDefaultTools();
+  return defaultToolsInstance;
+}
+
 /** Union of all tool names registered in the default registry. */
 export type RegisteredToolName = keyof ReturnType<typeof createDefaultTools>;
 
@@ -164,9 +174,28 @@ type _CanonicalDelegationNamesAreRegistered = AssertNever<
 /** Lazy singleton accessor for the default tool registry. */
 export function getDefaultToolRegistry(): IToolRegistry {
   if (!defaultRegistryInstance) {
-    defaultRegistryInstance = new MapToolRegistry(createDefaultTools());
+    defaultRegistryInstance = new MapToolRegistry(getDefaultTools());
   }
   return defaultRegistryInstance;
+}
+
+/** Derive a host's static exclusions from the tools that own those capabilities. */
+export function getDefaultUnavailableToolNames(
+  host: ToolHost,
+): readonly RegisteredToolName[] {
+  return Object.keys(getDefaultTools()).flatMap((name) =>
+    isDefaultToolUnavailableOnHost(name as RegisteredToolName, host)
+      ? [name as RegisteredToolName]
+      : [],
+  );
+}
+
+/** Whether a registered tool declares itself unavailable on a product host. */
+export function isDefaultToolUnavailableOnHost(
+  name: RegisteredToolName,
+  host: ToolHost,
+): boolean {
+  return getDefaultTools()[name].hosts?.[host]?.available === false;
 }
 
 /** Valid tool name pattern: starts with letter/underscore, followed by alphanumeric/underscores. */

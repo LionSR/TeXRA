@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import {
   type AgentRosterController,
   getAgent,
+  getCustomAgentScanIssues,
   loadAgents,
   refresh as refreshAgents,
 } from '@agent/index';
@@ -119,6 +120,7 @@ export class AgentHandlers {
       await buildAgentSelectionMessage({
         loadAgents,
         buildSelectionItems: () => this.catalogController.buildSelectionItems(),
+        getCustomAgentScanIssues,
       }),
     );
   }
