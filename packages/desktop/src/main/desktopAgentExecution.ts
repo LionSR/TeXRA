@@ -853,7 +853,13 @@ export class DesktopProgressBridge {
               );
               return;
             }
-            await this.options.host.openPath(file);
+            try {
+              await this.options.host.openPath(file);
+            } catch (error) {
+              await this.options.host.showErrorMessage(
+                `Full output could not be opened: ${toErrorMessage(error)}`,
+              );
+            }
           },
         },
         approval: {
