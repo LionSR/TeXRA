@@ -1431,12 +1431,16 @@ export class StreamLogStore {
       const loads = this.pendingLoads();
       if (loads.length > 0) await Promise.allSettled(loads);
 
+      const loadFailures: Error[] = [];
       for (const [streamId, state] of this.streams) {
         if (this.shouldSkipWrite(streamId, this.writeGeneration)) continue;
         if (state.loadFailed && this.hasPendingPersistence(streamId)) {
-          throw new Error(
-            `Cannot flush stream ${streamId} because its persisted transcript failed to load.`,
+          loadFailures.push(
+            new Error(
+              `Cannot flush stream ${streamId} because its persisted transcript failed to load.`,
+            ),
           );
+          continue;
         }
         if (this.hasPendingPersistence(streamId)) {
           this.schedulePersistence(streamId);
@@ -1451,14 +1455,28 @@ export class StreamLogStore {
         .filter(
           ([streamId]) =>
             !this.shouldSkipWrite(streamId, this.writeGeneration) &&
+            this.streams.get(streamId)?.loadFailed !== true &&
             this.hasPendingPersistence(streamId),
         )
         .map(([streamId]) => streamId);
-      if (pending.length === 0) return;
+      if (pending.length === 0) {
+        if (loadFailures.length > 0) {
+          throw new AggregateError(
+            loadFailures,
+            `Transcript flush skipped ${loadFailures.length} stream(s) whose persisted transcript failed to load.`,
+          );
+        }
+        return;
+      }
       if (attempt === MAX_WRITE_RETRIES) {
-        const errors = [...this.streams.values()].flatMap((state) =>
-          state.persistenceError === undefined ? [] : [state.persistenceError],
-        );
+        const errors = [
+          ...loadFailures,
+          ...[...this.streams.values()].flatMap((state) =>
+            state.persistenceError === undefined
+              ? []
+              : [state.persistenceError],
+          ),
+        ];
         throw new AggregateError(
           errors,
           `Transcript flush failed after ${MAX_WRITE_RETRIES} retries; ${pending.length} stream(s) remain pending.`,
@@ -2073,9 +2091,12 @@ export class StreamLogStore {
     let sawSeed = false;
     const seen = new Map<string, StreamLogJournalRecord>();
     let invalidRecords = 0;
-    for (const result of parsedRecords) {
+    const invalidJournalValues: unknown[] = [];
+    for (const [index, result] of parsedRecords.entries()) {
       if (!result.success) {
         invalidRecords += 1;
+        const raw = parsedJournal.entries[index];
+        if (raw !== undefined) invalidJournalValues.push(raw);
         continue;
       }
       const record = result.data;
@@ -2125,6 +2146,8 @@ export class StreamLogStore {
               : (record.patch as StreamLogUpdatePatch);
             if (!patch) {
               invalidRecords += 1;
+              const raw = parsedJournal.entries[index];
+              if (raw !== undefined) invalidJournalValues.push(raw);
               break;
             }
             if (record.settled) {
@@ -2138,7 +2161,7 @@ export class StreamLogStore {
     }
     if (invalidRecords > 0) {
       log.warn(
-        `Stream ${streamId}: ${formatResultCount(invalidRecords, 'journal record')} did not parse; preserving the raw lines in place.`,
+        `Stream ${streamId}: ${formatResultCount(invalidRecords, 'journal record')} did not parse; preserving the raw values.`,
       );
     }
 
@@ -2150,10 +2173,10 @@ export class StreamLogStore {
       if (!sawSeed) {
         // One-time conversion of the unshipped JSON-plus-JSONL overlay shape,
         // as well as ordinary legacy arrays, into one canonical journal.
-        await this.replaceWithSeedJournal(
-          streamId,
-          logInstance.toPersistedEntries(),
-        );
+        await this.replaceWithSeedJournal(streamId, [
+          ...logInstance.toPersistedEntries(),
+          ...invalidJournalValues,
+        ]);
       } else {
         await this.deleteLegacyLog(streamId);
       }

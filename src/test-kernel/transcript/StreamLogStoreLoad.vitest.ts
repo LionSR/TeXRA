@@ -1867,6 +1867,26 @@ describe('StreamLogStore load', () => {
     );
   });
 
+  it('flushes healthy streams before reporting a failed-load stream', async () => {
+    const storage = mockStorage({ logs: {}, summaries: {} });
+    const store = await StreamLogStore.open();
+    appendTranscriptEntry(store, 'blocked', logEntry('blocked', 1, 100));
+    appendTranscriptEntry(store, 'healthy', logEntry('healthy', 1, 200));
+
+    const state = (
+      store as unknown as {
+        streams: Map<string, { loadFailed?: boolean }>;
+      }
+    ).streams.get('blocked');
+    if (!state) throw new Error('Expected blocked stream state');
+    state.loadFailed = true;
+
+    await expect(store.flush()).rejects.toThrow(
+      'skipped 1 stream(s) whose persisted transcript failed to load',
+    );
+    expect(writtenLog(storage.writes, 'healthy')).toHaveLength(1);
+  });
+
   it('persists unrelated transcripts independently', async () => {
     let activeWrites = 0;
     let maximumActiveWrites = 0;
@@ -1966,6 +1986,38 @@ describe('StreamLogStore append-only persistence', () => {
       id: 'alpha-1',
       text: 'alpha entry 1',
     });
+  });
+
+  it('preserves invalid overlay records when replacing a legacy array', async () => {
+    const invalidRecord = {
+      version: 1,
+      opId: '22222222-2222-4222-8222-222222222222',
+      op: 'future-operation',
+      payload: { keep: true },
+    };
+    const append = {
+      version: 1,
+      opId: '11111111-1111-4111-8111-111111111111',
+      op: 'append',
+      entry: logEntry('alpha', 2, 200),
+      settled: false,
+    };
+    const storage = mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: {},
+      journals: {
+        alpha: `${JSON.stringify(invalidRecord)}\n${JSON.stringify(append)}\n`,
+      },
+    });
+
+    await StreamLogStore.open();
+
+    expect(writtenJournal(storage.writes, 'alpha')).toEqual([
+      expect.objectContaining({
+        op: 'seed',
+        entries: expect.arrayContaining([invalidRecord]),
+      }),
+    ]);
   });
 
   it('loads a seeded journal without parsing a corrupt retired array', async () => {
