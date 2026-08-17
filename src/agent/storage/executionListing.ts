@@ -353,16 +353,16 @@ export async function deleteExecution(
   return guarded.value;
 }
 
-/**
- * Delete every unleased execution and report deleted, raced-away, and active
- * execution IDs separately.
- */
 export interface DeleteAllExecutionsOptions {
   /** Per-execution cleanup that must succeed under its inactive lease before
    *  storage removal — see {@link DeleteExecutionOptions.beforeDelete}. */
   readonly beforeDelete?: (executionId: ExecutionId) => Promise<void>;
 }
 
+/**
+ * Delete every unleased execution and report deleted, raced-away, and active
+ * execution IDs separately.
+ */
 export async function deleteAllExecutions(
   options: DeleteAllExecutionsOptions = {},
 ): Promise<DeleteAllExecutionsResult> {

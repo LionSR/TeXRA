@@ -1513,6 +1513,9 @@ export class StreamSnapshotStore {
       (child) => this.getParentStreamId(child) === parent,
     );
     for (const child of attached) {
+      // A live session later echoes this edge removal through its UI fact
+      // projection. That round-trip is redundant for this store, but the
+      // direct write is required for history/CLI callers with no session.
       this.setParentStream(child, null);
     }
     return attached;
