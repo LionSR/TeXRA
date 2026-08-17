@@ -9,7 +9,7 @@ import type {
   StreamTabId,
   UsageRoute,
 } from '@shared/schemas';
-import { AgentCategory, UsageProviderSchema } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import {
   USAGE_LOG_FLUSH_OUTCOME,
   UsageLogService,
@@ -206,15 +206,19 @@ export class UsageMonitor {
 
       // Log to backend for analytics/billing. Relay-backed rounds wait for the
       // flush because the next relay request enforces the cap from DB state.
-      await this.logToBackend(stateGlobal.totalResponseTimeMs, {
-        inputTokens: roundInputTokens,
-        outputTokens: roundOutputTokens,
-        cachedInputTokens: roundCacheReadTokens,
-        cacheMissInputTokens: roundCacheMissTokens.billing,
-        reasoningTokens: roundReasoningTokens,
-        cost: roundCost,
-        usageRoute,
-      });
+      await this.logToBackend(
+        stateGlobal.totalResponseTimeMs,
+        {
+          inputTokens: roundInputTokens,
+          outputTokens: roundOutputTokens,
+          cachedInputTokens: roundCacheReadTokens,
+          cacheMissInputTokens: roundCacheMissTokens.billing,
+          reasoningTokens: roundReasoningTokens,
+          cost: roundCost,
+          usageRoute,
+        },
+        latestUsage.provider,
+      );
     } catch (error) {
       logger.error(`Error printing ${runKind} statistics`, { data: error });
     }
@@ -269,12 +273,12 @@ export class UsageMonitor {
       | 'reasoningTokens'
       | 'cost'
     > & { cacheMissInputTokens: number; usageRoute?: UsageRoute },
+    provider: NonNullable<
+      AgentRunStateSnapshot['usageAccumulator']['latestUsage']
+    >['provider'],
   ): Promise<void> {
     try {
       const { config } = this.modelInfo;
-      const provider = UsageProviderSchema.catch('unknown').parse(
-        config.provider,
-      );
       const cachedInputTokens = usage.cachedInputTokens ?? 0;
       const usedRelay = usage.usageRoute === 'relay';
 
