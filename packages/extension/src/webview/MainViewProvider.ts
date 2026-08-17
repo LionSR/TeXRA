@@ -1,6 +1,5 @@
 // Third-party imports
 import * as vscode from 'vscode';
-import PQueue from 'p-queue';
 
 // Local imports
 import { refresh, computeAgentOptionsData, getAgent } from '@agent/index';
@@ -80,11 +79,11 @@ export class MainViewProvider
   /**
    * Funnel refresh derives an edge-triggered transition after awaiting the
    * credential probe. Serialize callers so a later completion cannot commit a
-   * transition based on a stale previous funnel state.
+   * transition based on a stale previous funnel state, and collapse any burst
+   * that arrives during a pass into one terminal re-run.
    */
-  private readonly onboardingFunnelRefreshQueue = new PQueue({
-    concurrency: 1,
-  });
+  private onboardingFunnelRefreshChain: Promise<void> = Promise.resolve();
+  private onboardingFunnelRerunRequested = false;
 
   // Debounced refresh for agent option changes
   private debouncedRefreshAgentOptions = debounce(
@@ -209,9 +208,16 @@ export class MainViewProvider
    * hooks replay via refreshOptionsAndView — and after welcome-card actions.
    */
   refreshOnboardingFunnel(): Promise<void> {
-    return this.onboardingFunnelRefreshQueue.add(async () => {
-      await this.refreshOnboardingFunnelSerially();
-    });
+    this.onboardingFunnelRerunRequested = true;
+    this.onboardingFunnelRefreshChain = this.onboardingFunnelRefreshChain
+      .catch(() => undefined)
+      .then(async () => {
+        while (this.onboardingFunnelRerunRequested) {
+          this.onboardingFunnelRerunRequested = false;
+          await this.refreshOnboardingFunnelSerially();
+        }
+      });
+    return this.onboardingFunnelRefreshChain;
   }
 
   private async refreshOnboardingFunnelSerially(): Promise<void> {
