@@ -627,7 +627,7 @@ describe('attachTranscriptRecorder record-time secret redaction', () => {
   });
 });
 
-describe('attachTranscriptRecorder timer failure boundary', () => {
+describe('attachTranscriptRecorder spill artifacts', () => {
   it.each([
     [
       'executions/abcdef123456/toolOutput/tool:spill.txt',
