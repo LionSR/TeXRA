@@ -90,15 +90,14 @@ export class SessionStores {
       ) => void | Promise<void>)
     | undefined;
   /**
-   * Single-flight per stream, then per guard reference. The guard is stable per
-   * incarnation (`SessionState` memoizes it), so two removals of the same
-   * identity at the same incarnation share one promise, while a re-claimed
-   * identity's new guard starts its own deletion independently. `undefined`
-   * is the slot for unguarded deletions.
+   * Single-flight per stream, then per incarnation. Process- and
+   * presentation-owned removals use different guard functions, but the same
+   * incarnation identifies the same deletion. A re-claimed identity's new
+   * incarnation starts independently. `undefined` is the unkeyed slot.
    */
   private readonly pendingStreamDeletions = new Map<
     StreamTabId,
-    Map<(() => boolean) | undefined, Promise<DeleteStreamResult>>
+    Map<number | undefined, Promise<DeleteStreamResult>>
   >();
   private pendingDeleteAll: Promise<DeleteAllStreamsResult> | undefined;
   private readonly deletionQueue = new PQueue({ concurrency: 1 });
@@ -126,10 +125,13 @@ export class SessionStores {
 
   deleteStream(
     stream: StreamTabId,
-    options?: { readonly shouldDelete?: () => boolean },
+    options?: {
+      readonly shouldDelete?: () => boolean;
+      readonly expectedIncarnation?: number;
+    },
   ): Promise<DeleteStreamResult> {
     const shouldDelete = options?.shouldDelete;
-    return this.trackStreamDeletion(stream, shouldDelete, () =>
+    return this.trackStreamDeletion(stream, options?.expectedIncarnation, () =>
       this.enqueueDeletion(() =>
         this.deleteStreamAndNotify(stream, shouldDelete),
       ),
@@ -152,33 +154,40 @@ export class SessionStores {
 
   deleteStreamAfterOwnedExecutionRelease(
     stream: StreamTabId,
-    options?: { readonly shouldDelete?: () => boolean },
+    options?: {
+      readonly shouldDelete?: () => boolean;
+      readonly expectedIncarnation?: number;
+    },
   ): Promise<DeleteStreamResult> {
     const shouldDelete = options?.shouldDelete;
-    return this.trackStreamDeletion(stream, shouldDelete, async () => {
-      // Track the whole wait so a presentation attaching during terminal
-      // artifact persistence cannot replay a stream already marked removed.
-      // If the ownership read fails here, report `failed` immediately rather
-      // than enqueueing a second read that could decide the stream has no
-      // execution and delete it.
-      try {
-        await this.waitForOwnedExecutionRelease(stream);
-      } catch (error) {
-        log.warn(
-          `Stream ${stream} was retained because its execution ownership could not be read: ${toErrorMessage(error)}`,
-          { data: error },
+    return this.trackStreamDeletion(
+      stream,
+      options?.expectedIncarnation,
+      async () => {
+        // Track the whole wait so a presentation attaching during terminal
+        // artifact persistence cannot replay a stream already marked removed.
+        // If the ownership read fails here, report `failed` immediately rather
+        // than enqueueing a second read that could decide the stream has no
+        // execution and delete it.
+        try {
+          await this.waitForOwnedExecutionRelease(stream);
+        } catch (error) {
+          log.warn(
+            `Stream ${stream} was retained because its execution ownership could not be read: ${toErrorMessage(error)}`,
+            { data: error },
+          );
+          return 'failed';
+        }
+        return this.enqueueDeletion(() =>
+          this.deleteStreamAndNotify(stream, shouldDelete),
         );
-        return 'failed';
-      }
-      return this.enqueueDeletion(() =>
-        this.deleteStreamAndNotify(stream, shouldDelete),
-      );
-    });
+      },
+    );
   }
 
   private trackStreamDeletion(
     stream: StreamTabId,
-    guard: (() => boolean) | undefined,
+    expectedIncarnation: number | undefined,
     start: () => Promise<DeleteStreamResult>,
   ): Promise<DeleteStreamResult> {
     let byGuard = this.pendingStreamDeletions.get(stream);
@@ -186,12 +195,12 @@ export class SessionStores {
       byGuard = new Map();
       this.pendingStreamDeletions.set(stream, byGuard);
     }
-    const existing = byGuard.get(guard);
+    const existing = byGuard.get(expectedIncarnation);
     if (existing) return existing;
     const pending = start();
-    byGuard.set(guard, pending);
+    byGuard.set(expectedIncarnation, pending);
     const finish = (): void =>
-      this.finishStreamDeletion(stream, guard, pending);
+      this.finishStreamDeletion(stream, expectedIncarnation, pending);
     void pending.then(finish, finish);
     return pending;
   }
@@ -240,12 +249,12 @@ export class SessionStores {
 
   private finishStreamDeletion(
     stream: StreamTabId,
-    guard: (() => boolean) | undefined,
+    expectedIncarnation: number | undefined,
     pending: Promise<DeleteStreamResult>,
   ): void {
     const byGuard = this.pendingStreamDeletions.get(stream);
-    if (byGuard?.get(guard) !== pending) return;
-    byGuard.delete(guard);
+    if (byGuard?.get(expectedIncarnation) !== pending) return;
+    byGuard.delete(expectedIncarnation);
     if (byGuard.size === 0) this.pendingStreamDeletions.delete(stream);
   }
 

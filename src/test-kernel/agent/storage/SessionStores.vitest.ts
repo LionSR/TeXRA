@@ -251,6 +251,46 @@ describe('SessionStores deletion coordination', () => {
     });
   });
 
+  it('joins process and presentation deletion at the same incarnation', async () => {
+    await withSession(async (session) => {
+      const stream = 'shared-incarnation-delete' as StreamTabId;
+      session.transcripts.ensureStream(stream);
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots: new StreamSnapshotStore(),
+      });
+      let releaseLease!: () => void;
+      const leaseReleased = new Promise<void>((resolve) => {
+        releaseLease = resolve;
+      });
+      vi.spyOn(stores, 'waitForOwnedExecutionRelease').mockReturnValue(
+        leaseReleased,
+      );
+      const deleteTranscript = vi.spyOn(session.transcripts, 'delete');
+
+      try {
+        const processDeletion = stores.deleteStreamAfterOwnedExecutionRelease(
+          stream,
+          {
+            shouldDelete: () => true,
+            expectedIncarnation: 4,
+          },
+        );
+        const presentationDeletion = stores.deleteStream(stream, {
+          shouldDelete: () => true,
+          expectedIncarnation: 4,
+        });
+
+        expect(presentationDeletion).toBe(processDeletion);
+        releaseLease();
+        await expect(processDeletion).resolves.toBe('deleted');
+        expect(deleteTranscript).toHaveBeenCalledOnce();
+      } finally {
+        releaseLease();
+      }
+    });
+  });
+
   it('releases one canonical stream once when single and bulk deletion overlap', async () => {
     await withSession(async (session) => {
       const stream = 'tool@test#abc001' as StreamTabId;

@@ -828,6 +828,33 @@ describe('StreamLogStore load', () => {
     expect(store.has('alpha')).toBe(true);
   });
 
+  it('re-persists a released log re-claimed during durable deletion', async () => {
+    let reClaimed = false;
+    const storage = mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: {
+        alpha: { firstTimestamp: 200, lastTimestamp: 200 },
+      },
+      onLogDelete: () => {
+        reClaimed = true;
+      },
+    });
+    const store = await StreamLogStore.open();
+    expect(store.get('alpha')).toBeUndefined();
+
+    await expect(
+      store.delete('alpha', { shouldDelete: () => !reClaimed }),
+    ).rejects.toMatchObject({ name: 'StreamDeletionSupersededError' });
+
+    await waitForCondition(
+      () => writtenLog(storage.writes, 'alpha') !== undefined,
+    );
+    expect(writtenLog(storage.writes, 'alpha')).toEqual([
+      logEntry('alpha', 1, 200),
+    ]);
+    expect(store.has('alpha')).toBe(true);
+  });
+
   it('clears authoritative logs when summary cache clearing fails', async () => {
     const storage = mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 200)] },

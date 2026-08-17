@@ -1022,6 +1022,7 @@ export class StreamLogStore {
     this.writeTombstones.add(streamId);
     this.saveThrottle.cancel();
     let retrySave = false;
+    let releasedEntries: ParsedPersistedEntries | undefined;
 
     try {
       await this.executeWrite();
@@ -1031,6 +1032,23 @@ export class StreamLogStore {
         throw new StreamDeletionSupersededError(streamId);
       }
       if (this.mode.kind !== 'ephemeral') {
+        // A released stream has no resident log for the failure path to
+        // re-persist. Preserve its authoritative entries across the delete's
+        // commit window so a concurrent identity re-claim cannot turn the
+        // durable delete into permanent transcript loss.
+        if (
+          options?.shouldDelete &&
+          this.streams.get(streamId)?.log === undefined &&
+          this.summaries.has(streamId)
+        ) {
+          const raw = await this.kv().read<unknown[]>(streamId);
+          if (raw !== undefined) {
+            releasedEntries = this.parsePersistedEntries(streamId, raw);
+          }
+          if (!options.shouldDelete()) {
+            throw new StreamDeletionSupersededError(streamId);
+          }
+        }
         log.info(`Deleting stream: ${streamId}`);
         await this.kv().delete(streamId);
         await this.deleteSummaryCache(streamId);
@@ -1040,6 +1058,14 @@ export class StreamLogStore {
       // flight kept its resident transcript alive, and `forgetStreamState`
       // must not drop it.
       if (options?.shouldDelete && !options.shouldDelete()) {
+        if (this.streams.get(streamId)?.log === undefined && releasedEntries) {
+          const restored = new StreamLog(
+            releasedEntries.entries,
+            releasedEntries.preservedRawEntries,
+          );
+          this.ensureStreamState(streamId).log = restored;
+          this.refreshSummary(streamId, restored);
+        }
         throw new StreamDeletionSupersededError(streamId);
       }
       // The summaries map is the progress tab registry. Commit its removal

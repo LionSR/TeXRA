@@ -67,6 +67,7 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
           void stores
             .deleteStreamAfterOwnedExecutionRelease(streamId, {
               shouldDelete: deletionGuard(streamId, expectedIncarnation),
+              expectedIncarnation,
             })
             .then((outcome) => {
               if (outcome === 'superseded') {

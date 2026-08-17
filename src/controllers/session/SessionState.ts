@@ -156,12 +156,9 @@ export class SessionState {
   private readonly _removedStreams = new Map<StreamTabId, number>();
   /**
    * Stable deletion guards, one per (stream, incarnation). `SessionStores`
-   * dedups its pending deletion by guard reference, so two removals of the
-   * same identity at the same incarnation must hand it the same function —
-   * otherwise a `removeStream` fact racing a direct delete would run the
-   * deletion twice. A re-claimed identity gets a new incarnation and a new
-   * guard, which is exactly what lets a superseded deletion and the fresh
-   * incarnation's deletion proceed independently.
+   * dedups pending work by incarnation, while every participant still uses
+   * its guard to stop that shared deletion when the identity is re-claimed.
+   * A fresh incarnation gets a new guard and a new deletion slot.
    */
   private readonly _deletionGuards = new Map<
     StreamTabId,
@@ -602,6 +599,7 @@ export class SessionState {
     // replay. This method only commits the durable delete and the tombstone.
     const deletion = await this.stores.deleteStream(stream, {
       shouldDelete: this.deletionGuard(stream, expectedIncarnation),
+      expectedIncarnation,
     });
     if (deletion !== 'deleted') return deletion;
     if (!this.isCurrentIncarnation(stream, expectedIncarnation)) {
