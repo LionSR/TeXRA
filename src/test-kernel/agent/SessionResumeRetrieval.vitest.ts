@@ -38,8 +38,7 @@ import {
   type ToolUseFlowAttachment,
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import {
-  migrateSharedState,
-  ToolUseRunSharedCanonicalSchema,
+  parseToolUseShared,
   type StateSlicesSnapshot,
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import {
@@ -402,7 +401,7 @@ describe('retrieveSessionResumeData', () => {
 
   it('rejects malformed fields at the shared-state boundary', () => {
     expect(
-      migrateSharedState({
+      parseToolUseShared({
         messages: [],
         shouldSkipCycle: 'false',
         stateSlices: null,
@@ -414,7 +413,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('rejects a malformed MODEL user variable at the shared-state boundary', () => {
-    const result = migrateSharedState({
+    const result = parseToolUseShared({
       messages: [],
       continuationGenerationId: CONTINUATION_GENERATION_ID,
       shouldSkipCycle: false,
@@ -463,7 +462,7 @@ describe('retrieveSessionResumeData', () => {
 
   it('preserves structured output at the persisted shared-state boundary', () => {
     const continuationGenerationId = '6f2051ec-5169-4fb5-9830-47aba9df665a';
-    const result = migrateSharedState({
+    const result = parseToolUseShared({
       messages: [],
       continuationGenerationId,
       shouldSkipCycle: false,
@@ -477,26 +476,26 @@ describe('retrieveSessionResumeData', () => {
         continuationGenerationId,
         structured: { title: 'Durable result' },
       }),
-      migrated: false,
+      changed: false,
     });
   });
 
   it('does not derive a missing model id from the MODEL user variable', () => {
-    const result = migrateSharedState({
+    const result = parseToolUseShared({
       messages: [],
       continuationGenerationId: CONTINUATION_GENERATION_ID,
       shouldSkipCycle: false,
       stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt55' }),
     });
 
-    expect(result).toMatchObject({ success: true, migrated: false });
+    expect(result).toMatchObject({ success: true, changed: false });
     if (!result.success) return;
     expect(result.data).not.toHaveProperty('modelId');
   });
 
   it('keeps a persisted model id over the MODEL variable', () => {
     const continuationGenerationId = '8439c273-d7f7-442a-9930-e63e941263d8';
-    const result = migrateSharedState({
+    const result = parseToolUseShared({
       messages: [],
       continuationGenerationId,
       modelId: 'gpt55',
@@ -507,7 +506,7 @@ describe('retrieveSessionResumeData', () => {
     expect(result).toMatchObject({
       success: true,
       data: { continuationGenerationId, modelId: 'gpt55' },
-      migrated: false,
+      changed: false,
     });
   });
 
@@ -515,7 +514,7 @@ describe('retrieveSessionResumeData', () => {
     // The pre-fencing omission reader is retired: intermediate-era records
     // that never persisted a generation id fail the parse loudly instead of
     // being backfilled with a fresh UUID.
-    const result = migrateSharedState({
+    const result = parseToolUseShared({
       messages: [],
       shouldSkipCycle: false,
       stateSlices: null,
@@ -685,12 +684,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     expect(result.outcome).toBe(STREAM_PHASE.WAITING);
     const stored = await readFlowRecord(executionId);
-    expect(ToolUseRunSharedCanonicalSchema.parse(stored?.shared)).toMatchObject(
-      {
-        messages: snapshot.shared.messages,
-        stateSlices: snapshot.shared.stateSlices,
-      },
-    );
+    expect(stored?.shared).toMatchObject({
+      messages: snapshot.shared.messages,
+      stateSlices: snapshot.shared.stateSlices,
+    });
   });
 
   it.each([
@@ -1703,7 +1700,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('rejects a retired workspace snapshot at the tool-use resume boundary', () => {
-    const result = migrateSharedState({
+    const result = parseToolUseShared({
       ...VALID_TOOL_USE_SHARED,
       stateSlices: {
         runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),

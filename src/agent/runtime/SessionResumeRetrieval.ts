@@ -18,7 +18,7 @@ import type { FlowRecord } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import {
-  migrateSharedState,
+  parseToolUseShared,
   type PreparedShared,
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import { createLog } from '@logger/logUtils';
@@ -165,18 +165,18 @@ async function retrieveToolUseResumeData(
     const flowRecord = await probeResumableFlowRecord(executionId, 'tool-use');
     if (!flowRecord) return null;
 
-    const migrationResult = migrateSharedState(flowRecord.shared);
-    if (!migrationResult.success) {
+    const parsedShared = parseToolUseShared(flowRecord.shared);
+    if (!parsedShared.success) {
       logger.warn(
         `Invalid flow record structure for execution: ${executionId}`,
         {
-          data: { error: migrationResult.error },
+          data: { error: parsedShared.error },
         },
       );
       return null;
     }
 
-    const { stateSlices } = migrationResult.data;
+    const { stateSlices } = parsedShared.data;
     if (stateSlices === null) {
       logger.warn(
         `Invalid flow record structure for execution: ${executionId}`,
@@ -186,17 +186,17 @@ async function retrieveToolUseResumeData(
 
     const currentConfig = {
       ...agentConfig,
-      model: migrationResult.data.modelId ?? agentConfig.model,
+      model: parsedShared.data.modelId ?? agentConfig.model,
     };
     const modelHandlerCompatibilityKey =
-      migrationResult.data.modelHandlerCompatibilityKey ??
+      parsedShared.data.modelHandlerCompatibilityKey ??
       inferAndLogPersistedModelHandlerCompatibilityKey(
         currentConfig.model,
         logger,
       );
 
     const shared: PreparedShared = {
-      ...migrationResult.data,
+      ...parsedShared.data,
       stateSlices,
       ...(modelHandlerCompatibilityKey !== undefined && {
         modelHandlerCompatibilityKey,

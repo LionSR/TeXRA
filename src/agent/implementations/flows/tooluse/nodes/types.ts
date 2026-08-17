@@ -44,7 +44,7 @@ export type StateSlicesSnapshot = z.output<typeof StateSlicesSchema>;
  * build carrying keys this build does not know must still resume — and no
  * `.catch`: malformed known fields must keep failing loudly.
  */
-const ToolUseRunSharedSchema = z.object({
+export const ToolUseRunSharedSchema = z.object({
   messages: ProviderMessageArraySchema,
   /** Durable identity of the continuation attempt that owns this flow. */
   continuationGenerationId: z.uuid(),
@@ -68,9 +68,6 @@ const ToolUseRunSharedSchema = z.object({
   /** Validated terminal-tool result retained across interrupt and resume. */
   structured: JsonValueSchema.optional(),
 });
-
-/** Per-step schema for the canonical persisted shared state. */
-export const ToolUseRunSharedCanonicalSchema = ToolUseRunSharedSchema;
 
 export type ToolUseRunShared = z.output<typeof ToolUseRunSharedSchema>;
 
@@ -127,8 +124,8 @@ export type PreparedShared = ToolUseRunShared & {
   stateSlices: StateSlicesSnapshot;
 };
 
-type SharedStateMigrationResult =
-  | { success: true; data: ToolUseRunShared; migrated: boolean }
+type ParsedToolUseSharedResult =
+  | { success: true; data: ToolUseRunShared; changed: boolean }
   | { success: false; error: z.ZodError };
 
 /**
@@ -136,15 +133,13 @@ type SharedStateMigrationResult =
  * known fields return `{success: false}` and are handled by the existing
  * resume boundary.
  */
-export function migrateSharedState(
-  shared: unknown,
-): SharedStateMigrationResult {
+export function parseToolUseShared(shared: unknown): ParsedToolUseSharedResult {
   const parsed = ToolUseRunSharedSchema.safeParse(shared);
   if (!parsed.success) return parsed;
 
   return {
     success: true,
     data: parsed.data,
-    migrated: !isDeepStrictEqual(shared, parsed.data),
+    changed: !isDeepStrictEqual(shared, parsed.data),
   };
 }
