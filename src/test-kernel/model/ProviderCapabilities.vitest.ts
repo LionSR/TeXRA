@@ -15,9 +15,6 @@ import {
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import {
   CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
-  CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
-  CODEX_GPT56_SUBSCRIPTION_INPUT_LIMIT,
-  CODEX_GPT56_SUBSCRIPTION_CONTEXT_WINDOW,
   isCodexSubscriptionActive,
   resolveCodexSubscriptionCapabilities,
   resolveCodexSubscriptionProfile,
@@ -42,14 +39,6 @@ const gpt55Config: ModelConfig = {
   },
   openRouterOnly: false,
   codexSubscription: true,
-};
-
-const gpt56Config: ModelConfig = {
-  ...gpt55Config,
-  name: 'gpt56--',
-  label: 'GPT-5.6 Luna',
-  fullName: 'gpt-5.6-luna',
-  shortName: 'gpt-5.6-luna',
 };
 
 const signedInSession: CodexSession = {
@@ -88,7 +77,8 @@ describe('provider capabilities', () => {
 
     expect(capabilities).toMatchObject({
       authMode: 'chatgpt-subscription',
-      contextWindow: CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
+      contextWindow:
+        CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT + gpt55Config.maxOutputTokens,
       inputTokenLimit: CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
       inputPrice: 0,
       outputPrice: 0,
@@ -112,17 +102,23 @@ describe('provider capabilities', () => {
     });
   });
 
-  it('uses the larger Codex input budget for GPT-5.6', () => {
-    const capabilities = resolveCodexSubscriptionProfile({
-      model: gpt56Config,
-      useOpenRouter: false,
-    });
+  it.each(['gpt56', 'gpt56-', 'gpt56--'] as const)(
+    'caps ChatGPT-subscription %s to the Codex 272k input / 400k context budget',
+    (id) => {
+      const model = MODEL_CONFIGS[id];
+      const capabilities = resolveCodexSubscriptionProfile({
+        model,
+        useOpenRouter: false,
+      });
 
-    expect(capabilities).toMatchObject({
-      contextWindow: CODEX_GPT56_SUBSCRIPTION_CONTEXT_WINDOW,
-      inputTokenLimit: CODEX_GPT56_SUBSCRIPTION_INPUT_LIMIT,
-    });
-  });
+      expect(model.codexSubscription).toBe(true);
+      expect(capabilities).toMatchObject({
+        contextWindow:
+          CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT + model.maxOutputTokens,
+        inputTokenLimit: CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
+      });
+    },
+  );
 });
 
 describe('ChatGPT subscription model routing', () => {
