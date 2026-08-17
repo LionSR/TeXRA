@@ -507,6 +507,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             await this.runViewCommand('texra.openFile', [file, line]);
           },
           openSpillArtifact: async (spillPath) => {
+            await defaultSession().flushArtifacts();
             const file = await findTranscriptSpillFile(spillPath);
             if (!file) {
               await this.host.error(
