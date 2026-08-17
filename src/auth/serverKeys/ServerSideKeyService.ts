@@ -14,8 +14,6 @@
  * - free tier: Included non-premium models (up to $3/M input)
  */
 
-import type { ModelProvider } from 'llm-zoo';
-
 import type { StateStore } from '@platform/interfaces';
 import type { SpendingStatus, SpendingStatusError } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -26,6 +24,7 @@ import {
   FREE_TIER,
   type UserTier,
 } from '../config';
+import type { ModelProvider } from 'llm-zoo';
 import type { TierService } from './TierService';
 
 interface ServerSideKeyLogger {
