@@ -355,8 +355,16 @@ export function attachTranscriptRecorder(
     // An active stream remains mutable until stream.end materializes its final
     // text. Remember that it crossed the model/tool boundary so stream.end can
     // settle it even though it is no longer the current response correlator.
-    if (streams.has(id)) detachedModelResponseIds.add(id);
-    else writer.settle(id, {});
+    if (streams.has(id)) {
+      // Mutable ancestor headings precede the response in source order. Give
+      // them their terminal positions first; otherwise reserving the response
+      // would move it ahead of its still-open group during cold replay.
+      for (const stageId of activeStageIds) {
+        writer.reserveSettlement(stageId);
+      }
+      detachedModelResponseIds.add(id);
+      writer.reserveSettlement(id);
+    } else writer.settle(id, {});
   };
 
   const flushStream = (state: StreamSinkState, id: string): void => {
@@ -486,11 +494,10 @@ export function attachTranscriptRecorder(
           }
           writer.append({
             id: event.id,
-            // Detached responses settle after this append but belong before
-            // the new heading. Reserve their pending settlement slots so cold
-            // replay preserves the live store order.
-            presentationSeqNo:
-              writer.settlementHead + detachedModelResponseIds.size,
+            // Detached responses settle after this append but already own
+            // their positions before the new heading, so unrelated terminal
+            // rows cannot reorder cold replay around this phase boundary.
+            presentationSeqNo: writer.settlementHead,
             type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
             level: 'info',
             timestamp: Date.now(),

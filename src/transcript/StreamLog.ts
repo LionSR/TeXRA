@@ -284,6 +284,7 @@ export class StreamLog {
    */
   private readonly pendingTextChunks = new Map<string, string[]>();
   private settlementSeqCounter = 0;
+  private readonly reservedSettlements = new Map<string, number>();
   private runningGroupCount = 0;
   private runningStreamingTextCount = 0;
   private nonterminalWorkflowCallCount = 0;
@@ -346,6 +347,22 @@ export class StreamLog {
   /** Latest durable append-only transcript order allocated by this stream. */
   get settlementHead(): number {
     return this.settlementSeqCounter;
+  }
+
+  /** Reserve and persist this mutable entry's eventual presentation position. */
+  reserveSettlement(id: string): StreamLogEntry | undefined {
+    const index = this.indexById.get(id);
+    if (index === undefined) return undefined;
+    const current = this.entries[index];
+    if (current.settlementSeqNo !== undefined) return undefined;
+    const reserved = this.reservedSettlements.get(id);
+    if (reserved === undefined) {
+      this.settlementSeqCounter += 1;
+      this.reservedSettlements.set(id, this.settlementSeqCounter);
+    }
+    return this.update(id, {
+      presentationSeqNo: reserved ?? this.settlementSeqCounter,
+    });
   }
 
   /**
@@ -485,8 +502,11 @@ export class StreamLog {
       logger.warn(`Ignoring update to settled transcript entry: ${id}`);
       return undefined;
     }
+    const reservedSettlement = settle
+      ? this.reservedSettlements.get(id)
+      : undefined;
     const settlementSeqNo = settle
-      ? this.settlementSeqCounter + 1
+      ? (reservedSettlement ?? this.settlementSeqCounter + 1)
       : current.settlementSeqNo;
     if (
       !settle &&
@@ -516,9 +536,13 @@ export class StreamLog {
       seqNo: current.seqNo,
       ...(settlementSeqNo !== undefined ? { settlementSeqNo } : {}),
     } as StreamLogEntry;
-    if (settlementSeqNo !== current.settlementSeqNo) {
+    if (
+      settlementSeqNo !== current.settlementSeqNo &&
+      reservedSettlement === undefined
+    ) {
       this.settlementSeqCounter += 1;
     }
+    if (settle) this.reservedSettlements.delete(id);
 
     this.countEntry(current, -1);
     this.countEntry(updated, 1);
