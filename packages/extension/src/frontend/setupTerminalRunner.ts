@@ -15,14 +15,11 @@ import * as vscode from 'vscode';
 
 // Local imports - hosts
 import {
+  truncateTerminalOutput,
   type TerminalRunRequest,
   type TerminalRunResult,
 } from '@hosts/uiHosts';
-// Local imports - utilities
-import {
-  TERMINAL_OUTPUT_MAX_CHARS,
-  truncateTerminalOutput,
-} from '@utils/core/terminalOutput';
+import { TERMINAL_OUTPUT_MAX_CHARS } from '@shared/constants/terminal';
 
 import { raceWithTimeout } from './vscode/raceWithTimeout';
 
@@ -117,7 +114,7 @@ async function captureExecution(
 
   return {
     exitCode: result.timedOut ? undefined : result.value,
-    output: truncateTerminalOutput(output),
+    output: truncateTerminalOutput(output, TERMINAL_OUTPUT_MAX_CHARS),
     timedOut: result.timedOut,
   };
 }
