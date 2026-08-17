@@ -8,9 +8,10 @@
 // full-screen pager is not an option here — this is an ordinary foreground
 // surface, sized by the same row budget every other one uses.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInput, useWindowSize } from 'ink';
 
+import { defaultSession } from '@agent/runtime';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
@@ -38,26 +39,64 @@ const EMPTY_TRANSCRIPT_TEXT = '(no output yet)';
 const MISSING_SPILL_TEXT =
   '[Full output is unavailable because this run artifact was deleted.]';
 
-async function loadSpillText(spillPath: string): Promise<string> {
+type SpillHydration =
+  | { readonly kind: 'loaded'; readonly text: string }
+  | { readonly kind: 'failed'; readonly notice: string };
+
+const EMPTY_SPILL_HYDRATIONS: ReadonlyMap<string, SpillHydration> = new Map();
+
+async function loadSpill(
+  spillPath: string,
+  flushError: unknown,
+): Promise<SpillHydration> {
   try {
-    return (await readTranscriptSpill(spillPath)) ?? MISSING_SPILL_TEXT;
+    const text = await readTranscriptSpill(spillPath);
+    if (text !== undefined) return { kind: 'loaded', text };
+    return flushError === undefined
+      ? { kind: 'failed', notice: MISSING_SPILL_TEXT }
+      : {
+          kind: 'failed',
+          notice: `[Unable to prepare full output: ${toErrorMessage(flushError)}]`,
+        };
   } catch (error) {
-    return `[Unable to read full output. Check storage access and try again: ${toErrorMessage(error)}]`;
+    return {
+      kind: 'failed',
+      notice: `[Unable to read full output. Check storage access and try again: ${toErrorMessage(error)}]`,
+    };
   }
+}
+
+function withSpillNotice(preview: string, notice: string): string {
+  return preview ? `${preview}\n\n${notice}` : notice;
 }
 
 function hydratedTranscript(
   slice: StreamSlice | undefined,
-  spills: ReadonlyMap<string, string>,
+  spills: ReadonlyMap<string, SpillHydration>,
 ): StreamSlice | undefined {
   if (!slice || spills.size === 0) return slice;
   const entries = slice.entries.map((entry): ConversationEntry => {
     const spill = entry.spillPath ? spills.get(entry.spillPath) : undefined;
     if (spill === undefined) return entry;
     if (entry.role === 'tool') {
-      return { ...entry, toolUse: { ...entry.toolUse, outputText: spill } };
+      return {
+        ...entry,
+        toolUse: {
+          ...entry.toolUse,
+          outputText:
+            spill.kind === 'loaded'
+              ? spill.text
+              : withSpillNotice(entry.toolUse.outputText, spill.notice),
+        },
+      };
     }
-    return { ...entry, text: spill };
+    return {
+      ...entry,
+      text:
+        spill.kind === 'loaded'
+          ? spill.text
+          : withSpillNotice(entry.text, spill.notice),
+    };
   });
   return { ...slice, entries };
 }
@@ -84,7 +123,15 @@ export function TranscriptReader({
   const slice = streams.get(streamId);
   const frameWidth = formFrameWidth(columns);
   const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
-  const [spills, setSpills] = useState<ReadonlyMap<string, string>>(new Map());
+  const [spillState, setSpillState] = useState<{
+    readonly streamId: StreamTabId;
+    readonly values: ReadonlyMap<string, SpillHydration>;
+  }>(() => ({ streamId, values: new Map() }));
+  const requestedSpills = useRef<{
+    streamId: StreamTabId;
+    paths: Set<string>;
+  }>({ streamId, paths: new Set() });
+  const mounted = useRef(true);
 
   const spillPaths = useMemo(
     () => [
@@ -94,21 +141,60 @@ export function TranscriptReader({
     ],
     [slice],
   );
+  const spillPathsKey = spillPaths.join('\0');
 
   useEffect(() => {
-    let disposed = false;
-    void Promise.all(
-      spillPaths.map(
-        async (spillPath) =>
-          [spillPath, await loadSpillText(spillPath)] as const,
-      ),
-    ).then((resolved) => {
-      if (!disposed) setSpills(new Map(resolved));
-    });
+    if (requestedSpills.current.streamId !== streamId) {
+      requestedSpills.current = { streamId, paths: new Set() };
+      setSpillState({ streamId, values: new Map() });
+    }
+    const paths = spillPathsKey ? spillPathsKey.split('\0') : [];
+    const pending = paths.filter(
+      (spillPath) => !requestedSpills.current.paths.has(spillPath),
+    );
+    if (pending.length === 0) return;
+    for (const spillPath of pending) {
+      requestedSpills.current.paths.add(spillPath);
+    }
+
+    void (async () => {
+      const flushError = await defaultSession()
+        .flushArtifacts()
+        .then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+      const resolved = await Promise.all(
+        pending.map(
+          async (spillPath) =>
+            [spillPath, await loadSpill(spillPath, flushError)] as const,
+        ),
+      );
+      if (!mounted.current || requestedSpills.current.streamId !== streamId)
+        return;
+      setSpillState((current) => {
+        const values = new Map(
+          current.streamId === streamId ? current.values : [],
+        );
+        for (const [spillPath, hydration] of resolved) {
+          values.set(spillPath, hydration);
+        }
+        return { streamId, values };
+      });
+    })();
+  }, [spillPathsKey, streamId]);
+
+  useEffect(() => {
+    mounted.current = true;
     return () => {
-      disposed = true;
+      mounted.current = false;
     };
-  }, [spillPaths]);
+  }, []);
+
+  const spills =
+    spillState.streamId === streamId
+      ? spillState.values
+      : EMPTY_SPILL_HYDRATIONS;
 
   const hydratedSlice = useMemo(
     () => hydratedTranscript(slice, spills),
