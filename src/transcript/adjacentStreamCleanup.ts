@@ -14,16 +14,46 @@
  * history deletion while leaving transcript or snapshot state behind.
  */
 import { getExecutionStore } from '@agent/storage';
+import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { deletePersistedStreamLog } from './StreamLogStore';
+import {
+  clearPersistedSummaryParentStream,
+  deletePersistedStreamLog,
+} from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 import type { StagedStreamSnapshotDeletion } from './StagedDeletionCoordinator';
+
+const log = createLog('AdjacentStreamCleanup');
 
 /** The single capability history deletion needs from a live session owner. */
 export interface AdjacentStreamCleanup {
   deleteAdjacentStreamState(stream: StreamTabId): Promise<void>;
+}
+
+/**
+ * Detached children have their durable sidecar parent-edge cleared by
+ * `stageDeleteStream` itself, but this standalone path attaches no
+ * `summaryMetaSink`, so the always-resident summary mirror the progress
+ * rail reads (`StreamLogStore`, not the sidecar) never republishes. Patch it
+ * per child so one unreadable summary cannot block clearing the rest.
+ */
+async function clearChildSummaryParentEdges(
+  children: readonly StreamTabId[],
+): Promise<void> {
+  await Promise.all(
+    children.map(async (child) => {
+      try {
+        await clearPersistedSummaryParentStream(child);
+      } catch (error) {
+        log.warn(
+          `Child stream ${child}'s summary parent-edge could not be cleared after its parent was deleted: ${toErrorMessage(error)}`,
+          { data: error },
+        );
+      }
+    }),
+  );
 }
 
 /**
@@ -36,7 +66,7 @@ async function deletePersistedAdjacentStreamState(
   snapshots: StreamSnapshotStore,
 ): Promise<void> {
   const snapshotDeletion: StagedStreamSnapshotDeletion =
-    await snapshots.stageDeleteStream(stream);
+    await snapshots.stageDeleteStream(stream, clearChildSummaryParentEdges);
   try {
     await deletePersistedStreamLog(stream);
   } catch (error) {

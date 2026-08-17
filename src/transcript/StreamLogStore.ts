@@ -135,6 +135,29 @@ export async function deletePersistedStreamLog(
   }
 }
 
+/**
+ * Clear one known stream's parent-edge from its always-resident summary
+ * mirror, without opening the transcript registry. `StreamSnapshotStore` is
+ * the parent-edge authority and republishes this mirror on every live
+ * mutation (#9947), but a targeted cleanup path with no attached
+ * `summaryMetaSink` (history delete without a live session) can durably
+ * detach a child in its sidecar while this mirror — what the progress rail
+ * actually reads — keeps pointing at the deleted parent. Callers already
+ * know the exact child stream ids to patch, so this stays a single-key
+ * read-modify-write, not a registry sweep.
+ */
+export async function clearPersistedSummaryParentStream(
+  streamId: StreamTabId,
+): Promise<void> {
+  const summaries = new KVStore(STREAM_LOG_SUMMARIES_DIR, {
+    compactJson: true,
+  });
+  const summary = await summaries.read<StreamLogSummary>(streamId);
+  if (!summary?.meta?.parentStreamId) return;
+  const { parentStreamId: _parentStreamId, ...meta } = summary.meta;
+  await summaries.write(streamId, { ...summary, meta });
+}
+
 export interface TranscriptWriter {
   readonly streamId: StreamTabId;
   append(entry: StreamLogAppendInput): StreamLogEntry;

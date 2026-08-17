@@ -106,6 +106,7 @@ import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import {
   StreamLogStore,
   StreamSnapshotStore,
+  STREAM_LOG_SUMMARIES_DIR,
   STREAM_LOGS_DIR,
   type TraceDocument,
 } from '@transcript';
@@ -1126,6 +1127,58 @@ describe('CLI history runtime', () => {
     await expect(
       new StreamSnapshotStore().readPersistedExecutionId(streamId),
     ).resolves.toBeUndefined();
+  });
+
+  it('clears a deleted parent from its child stream summary mirror', async () => {
+    const executionId = 'a1' as ExecutionId;
+    const parentStream = 'chat@deepseek#a1' as StreamTabId;
+    const childStream = 'chat@deepseek#child' as StreamTabId;
+    const logs = await StreamLogStore.open();
+    appendTranscriptEntry(logs, parentStream, {
+      id: 'parent-entry',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1000,
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      text: 'Parent transcript',
+    });
+    appendTranscriptEntry(logs, childStream, {
+      id: 'child-entry',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1000,
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      text: 'Child transcript',
+    });
+    await logs.flush();
+    // The always-resident summary mirror the progress rail reads — seeded
+    // as if a live session had published it while the parent still existed.
+    const summaries = new KVStore(STREAM_LOG_SUMMARIES_DIR, {
+      compactJson: true,
+    });
+    const childSummary = await summaries.read<{ meta?: object }>(childStream);
+    await summaries.write(childStream, {
+      ...childSummary,
+      meta: { ...childSummary?.meta, parentStreamId: parentStream },
+    });
+    const snapshots = new StreamSnapshotStore();
+    snapshotFacts(snapshots).setRunConfig(parentStream, config, executionId);
+    snapshotFacts(snapshots).setParentStream(childStream, parentStream);
+    await snapshots.flush();
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-05-18T08:00:00.000Z',
+      streamId: parentStream,
+    });
+
+    await cleanupExecutionAdjacentStreamState(
+      executionId,
+      resolveAdjacentStreamCleanup(undefined),
+    );
+
+    const updatedChildSummary = await summaries.read<{
+      meta?: { parentStreamId?: string };
+    }>(childStream);
+    expect(updatedChildSummary?.meta?.parentStreamId).toBeUndefined();
   });
 
   it('reports a sidecar cleanup failure before deleting execution storage', async () => {
