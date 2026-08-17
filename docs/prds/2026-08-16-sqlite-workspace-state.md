@@ -219,8 +219,8 @@ FTS (§3.4).
 -- authoritative: a row's existence IS the fact
 streams           (id PK, incarnation, created_ts,
                    parent_stream_id FK → streams(id) ON DELETE SET NULL,
-                   current_execution_id FK → executions(id)
-                     ON DELETE SET NULL NULL)
+                   current_execution_id NULL FK → executions(id)
+                     ON DELETE SET NULL)
                    -- parent edge: SET NULL, not CASCADE — deleting a parent
                    -- DETACHES its children (today's
                    -- deleteAdjacentStreamState semantics); cascading the
@@ -760,8 +760,11 @@ normalization of entry payload internals; no publication of this doc
 config.json, _workspace.json, pasted, recordings }` plus the per-execution
   artifacts
   area (§5 Stage 5) — and legacy `taskRuns/` until #6981 retention drains
-  it (§3.1 exception). §7 and this criterion enumerate the same set by
-  construction; a divergence between the two lists is itself a defect.
+  it (§3.1 exception). The §7 `exports` allowlist entry is a category for
+  caller-chosen destinations outside the workspace-storage bucket, not a
+  `WORKSPACE_STORAGE_LAYOUT` key. §7 and this criterion therefore enumerate
+  the same bucket set by construction; a divergence between the two lists is
+  itself a defect.
 
 ## 10. Open questions
 
