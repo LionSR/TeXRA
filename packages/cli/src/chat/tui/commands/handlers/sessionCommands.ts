@@ -26,14 +26,14 @@ import {
   streams,
   workPlanReaderRequestIsCurrent,
 } from '@cli/chat/tui/state/cliState';
-import {
-  hydrateStreamArtifacts,
-  type StreamArtifactReader,
-} from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import { hydrateStreamArtifacts } from '@cli/chat/tui/state/subscribeStreamArtifacts';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { activeStreamParentOrSelfId } from '@cli/chat/tui/state/streamViews';
-import { projectStreamArtifacts } from '@controllers/session/StreamArtifactProjection';
+import {
+  projectStreamArtifacts,
+  type StreamArtifactReader,
+} from '@controllers/session/StreamArtifactProjection';
 import {
   isCodexSubscriptionActive,
   isKimiCodeSubscriptionActive,
