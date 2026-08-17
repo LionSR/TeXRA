@@ -691,11 +691,7 @@ export class StreamLogStore {
     let closed = false;
 
     const assertOwned = (): void => {
-      if (
-        closed ||
-        this.streams.get(streamId)?.writer !== ownership ||
-        !ownership.tokens.has(token)
-      ) {
+      if (closed || this.streams.get(streamId)?.writer !== ownership) {
         throw new Error(`Transcript writer for ${streamId} has been released.`);
       }
     };
@@ -896,16 +892,6 @@ export class StreamLogStore {
     settled: boolean,
   ): StreamLogEntry {
     this.assertWritableStream(streamId);
-    if (
-      this.mode.kind === 'persistent' &&
-      this.summaries.has(streamId) &&
-      this.streams.get(streamId)?.log === undefined &&
-      this.streams.get(streamId)?.pendingLoad === undefined
-    ) {
-      throw new Error(
-        `Cannot append to released stream ${streamId}. Await ensureLoaded() first.`,
-      );
-    }
     const state = this.ensureStreamState(streamId);
     let logInstance = state.log;
     if (!logInstance) {

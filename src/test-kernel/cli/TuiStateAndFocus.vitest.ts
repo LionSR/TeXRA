@@ -3602,7 +3602,6 @@ describe('sessionSignalsAdapter run facts', () => {
         event: {
           type: 'addOutputFiles',
           streamId: root,
-          executionId,
           filesByRound: {
             0: [
               {
@@ -3628,7 +3627,6 @@ describe('sessionSignalsAdapter run facts', () => {
         event: {
           type: 'addOutputFiles',
           streamId: root,
-          executionId,
           filesByRound: {
             1: [
               {

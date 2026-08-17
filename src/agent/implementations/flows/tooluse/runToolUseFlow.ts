@@ -538,7 +538,6 @@ export async function runToolUseFlow<C = unknown>(
       prepareNode.next(cycleNode);
       cycleNode.next(waitNode);
       waitNode.on(FlowTransition.CONTINUE, cycleNode);
-      waitNode.on(FlowTransition.WAITING, waitNode);
       const pf = new ToolUsePersistedFlow<C>(
         prepareNode,
         kv,
