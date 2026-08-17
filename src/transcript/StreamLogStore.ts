@@ -1765,6 +1765,10 @@ export class StreamLogStore {
         await this.deleteSummaryCache(streamId);
         return;
       }
+      // A mutation can enqueue another journal record while the append above
+      // is in flight. Drain that record before writing the derived summary so
+      // the summary mtime remains at least as new as its authoritative log.
+      if ((state.journalRecords?.length ?? 0) > 0) continue;
       if (state.summaryDirty) {
         const summary = this.summaries.get(streamId);
         state.summaryDirty = false;

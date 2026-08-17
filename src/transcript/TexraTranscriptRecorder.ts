@@ -27,6 +27,10 @@
  * Redaction is lossy by construction: a literal `API_KEY=<value>` in a
  * model-written code sample is scrubbed along with a real key.
  */
+// Third-party imports
+import PQueue from 'p-queue';
+
+// Local imports - agent trace and transcript dependencies
 import type {
   AgentEvent,
   AgentTrace,
@@ -257,7 +261,7 @@ export function attachTranscriptRecorder(
   let pendingFailure: unknown;
   let pendingSpillFailure: unknown;
   const pendingSpills = new Set<Promise<void>>();
-  const spillTails = new Map<string, Promise<void>>();
+  const spillQueues = new Map<string, PQueue>();
   const queueSpill = (
     id: string,
     text: string,
@@ -265,20 +269,27 @@ export function attachTranscriptRecorder(
   ): string | undefined => {
     if (preview === text || !spillWriter) return undefined;
     const path = spillWriter.pathFor(id);
-    const previous = spillTails.get(path) ?? Promise.resolve();
-    const pending = previous
-      .then(
-        () => spillWriter.write(path, text),
-        () => spillWriter.write(path, text),
-      )
+    let queue = spillQueues.get(path);
+    if (!queue) {
+      queue = new PQueue({ concurrency: 1 });
+      spillQueues.set(path, queue);
+    }
+    const pending = queue
+      .add(() => spillWriter.write(path, text))
+      .then(() => undefined)
       .catch((error: unknown) => {
         pendingSpillFailure ??= error;
       })
       .finally(() => {
         pendingSpills.delete(pending);
-        if (spillTails.get(path) === pending) spillTails.delete(path);
+        if (
+          queue.pending === 0 &&
+          queue.size === 0 &&
+          spillQueues.get(path) === queue
+        ) {
+          spillQueues.delete(path);
+        }
       });
-    spillTails.set(path, pending);
     pendingSpills.add(pending);
     return path;
   };
