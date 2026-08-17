@@ -510,6 +510,8 @@ function createWindow(options: {
   // (quit, workspace switch, window close) asks here and nowhere else.
   window.webContents.on('will-prevent-unload', (event) => {
     if (isFatalDesktopShutdownRequested()) {
+      pendingWorkspaceRelaunch = undefined;
+      continueQuitAfterWindowClose = undefined;
       event.preventDefault();
       return;
     }
