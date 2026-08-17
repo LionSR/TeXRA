@@ -13,7 +13,6 @@ import {
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import {
   cleanupTempDirs,
   createTempDirPlatform,
@@ -651,7 +650,6 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
     const store = StreamLogStore.ephemeral('test');
     store.ensureStream(streamId);
     const writes: Array<{ path: string; content: string }> = [];
-    const firstToolWrite = createDeferred();
     const firstToolOutput = 'first tool snapshot'.repeat(4_000);
     const recorder = attachTranscriptRecorder(
       trace,
@@ -660,14 +658,15 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
         pathFor: (id) => `executions/test/toolOutput/${id}.txt`,
         write: async (path, content) => {
           writes.push({ path, content });
-          if (content === firstToolOutput) await firstToolWrite.promise;
         },
       },
     );
 
     const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
-    output.append(`${'line\n'.repeat(2_100)}API_KEY=super-secret-value`);
+    output.append('partial response');
     output.finalize();
+    const finalizedOutput = `${'line\n'.repeat(2_100)}API_KEY=super-secret-value`;
+    trace.responseFinalized(finalizedOutput);
     const toolOutput = `${'界'.repeat(30_000)}API_KEY=keep-tool-output`;
     trace.toolStart({
       logId: 'tool:spill',
@@ -689,7 +688,6 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
         writes.filter(({ path }) => path.endsWith('/tool:spill.txt')),
       ).toHaveLength(1),
     );
-    firstToolWrite.resolve();
     recorder.flushPending();
     await recorder.flushSpills();
 
@@ -711,6 +709,7 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
     expect(toolData.spillPath).toBe(
       'executions/test/toolOutput/tool:spill.txt',
     );
+    expect(writes[0]?.content).toContain('line\nline');
     expect(writes).toEqual([
       expect.objectContaining({
         path: `executions/test/toolOutput/${output.id}.txt`,
@@ -718,13 +717,32 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
       }),
       {
         path: 'executions/test/toolOutput/tool:spill.txt',
-        content: firstToolOutput,
-      },
-      {
-        path: 'executions/test/toolOutput/tool:spill.txt',
         content: toolOutput,
       },
     ]);
+  });
+
+  it('surfaces a spill failure once without poisoning later drains', async () => {
+    const trace = new TraceEmitter();
+    const streamId = 'stream:spill-failure' as StreamTabId;
+    const store = StreamLogStore.ephemeral('test');
+    store.ensureStream(streamId);
+    const failure = new Error('spill write failed');
+    const recorder = attachTranscriptRecorder(
+      trace,
+      store.acquireWriter(streamId, streamId),
+      {
+        pathFor: (id) => `executions/test/toolOutput/${id}.txt`,
+        write: vi.fn().mockRejectedValueOnce(failure),
+      },
+    );
+
+    const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    output.append('oversized output\n'.repeat(4_000));
+    output.finalize();
+
+    await expect(recorder.flushSpills()).rejects.toBe(failure);
+    await expect(recorder.flushSpills()).resolves.toBeUndefined();
   });
 
   it('latches a delayed write failure instead of throwing from the timer', () => {

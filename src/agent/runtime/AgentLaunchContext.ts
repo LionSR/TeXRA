@@ -375,26 +375,27 @@ async function assembleAgentLaunchContext(
     transcriptWriter,
   );
   const runTrace = resources.ownRunTrace(rawRunTrace, () => {
-    let traceDisposed = false;
-    let removeSpillFlusher = (): void => {};
-    removeSpillFlusher = session.useArtifactFlusher(async () => {
-      try {
-        await rawRunTrace.flushSpills();
-      } finally {
-        if (traceDisposed) removeSpillFlusher();
-      }
-    });
-    const detachTrace = session.attachRunTrace(rawRunTrace.trace, streamId);
-    // Status is a session fact, not an AgentEvent: bridge the hub's canonical
-    // status rail into the recorder's transcript-boundary port.
-    const detachStatus = session.events.subscribeStatus(
-      rawRunTrace.handleStatus,
+    const removeSpillFlusher = session.useArtifactFlusher(() =>
+      rawRunTrace.flushSpills(),
     );
-    return () => {
-      traceDisposed = true;
-      detachStatus();
+    let detachTrace = (): void => {};
+    try {
+      detachTrace = session.attachRunTrace(rawRunTrace.trace, streamId);
+      // Status is a session fact, not an AgentEvent: bridge the hub's canonical
+      // status rail into the recorder's transcript-boundary port.
+      const detachStatus = session.events.subscribeStatus(
+        rawRunTrace.handleStatus,
+      );
+      return () => {
+        removeSpillFlusher();
+        detachStatus();
+        detachTrace();
+      };
+    } catch (error) {
       detachTrace();
-    };
+      removeSpillFlusher();
+      throw error;
+    }
   });
   const agentLogger = runTrace.trace;
   modelHandler.setAgentCategory(setting.agentCategory);

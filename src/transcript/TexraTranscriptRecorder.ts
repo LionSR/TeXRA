@@ -27,6 +27,8 @@
  * Redaction is lossy by construction: a literal `API_KEY=<value>` in a
  * model-written code sample is scrubbed along with a real key.
  */
+import PQueue from 'p-queue';
+
 import type {
   AgentEvent,
   AgentTrace,
@@ -257,7 +259,7 @@ export function attachTranscriptRecorder(
   let pendingFailure: unknown;
   let pendingSpillFailure: unknown;
   const pendingSpills = new Set<Promise<void>>();
-  const spillTails = new Map<string, Promise<void>>();
+  const spillQueues = new Map<string, PQueue>();
   const queueSpill = (
     id: string,
     text: string,
@@ -265,36 +267,58 @@ export function attachTranscriptRecorder(
   ): string | undefined => {
     if (preview === text || !spillWriter) return undefined;
     const path = spillWriter.pathFor(id);
-    const previous = spillTails.get(path) ?? Promise.resolve();
-    const pending = previous
-      .then(
-        () => spillWriter.write(path, text),
-        () => spillWriter.write(path, text),
-      )
+    let queue = spillQueues.get(path);
+    if (!queue) {
+      queue = new PQueue({ concurrency: 1 });
+      spillQueues.set(path, queue);
+    }
+    const pending = Promise.resolve(
+      queue.add(() => spillWriter.write(path, text)),
+    )
       .catch((error: unknown) => {
         pendingSpillFailure ??= error;
       })
       .finally(() => {
         pendingSpills.delete(pending);
-        if (spillTails.get(path) === pending) spillTails.delete(path);
+        if (
+          queue.pending === 0 &&
+          queue.size === 0 &&
+          spillQueues.get(path) === queue
+        ) {
+          spillQueues.delete(path);
+        }
       });
-    spillTails.set(path, pending);
     pendingSpills.add(pending);
     return path;
   };
   const boundToolOutput = (
     id: string,
     result: Partial<ToolUseLog>,
+    persistSpill = true,
   ): ToolUseLog => {
     if (typeof result.output !== 'string') return result as ToolUseLog;
     const output = result.output;
     const preview = boundedTranscriptPreview(output);
-    const spillPath = queueSpill(id, output, preview);
+    const spillPath = persistSpill
+      ? queueSpill(id, output, preview)
+      : undefined;
     return {
       ...result,
       output: preview,
       ...(spillPath && { spillPath }),
     } as ToolUseLog;
+  };
+  const boundModelResponse = (
+    id: string,
+    text: string,
+  ): { text: string; data: Record<string, string> } => {
+    const redacted = redactSecrets(text);
+    const preview = boundedTranscriptPreview(redacted);
+    const spillPath = queueSpill(id, redacted, preview);
+    return {
+      text: preview,
+      data: { status: 'completed', ...(spillPath && { spillPath }) },
+    };
   };
   const recordFailure = (error: unknown): void => {
     pendingFailure ??= error;
@@ -368,13 +392,7 @@ export function attachTranscriptRecorder(
     }
 
     if (state.ended) {
-      const text = redactSecrets(state.buffer);
-      const preview = boundedTranscriptPreview(text);
-      const spillPath = queueSpill(id, text, preview);
-      const patch = {
-        text: preview,
-        data: { status: 'completed', ...(spillPath && { spillPath }) },
-      };
+      const patch = boundModelResponse(id, state.buffer);
       if (state.messageType === MESSAGE_TYPES.MODEL_RESPONSE) {
         // The raw stream ends before response.finalized carries the
         // authoritative post-replacement text. Keep this row mutable until
@@ -533,7 +551,11 @@ export function attachTranscriptRecorder(
           const patch = {
             messageType: MESSAGE_TYPES.TOOL_USE,
             data: {
-              ...boundToolOutput(event.logId, redactedResult),
+              ...boundToolOutput(
+                event.logId,
+                redactedResult,
+                event.status !== TOOL_USE_STATUS.IN_PROGRESS,
+              ),
               status: event.status,
             } as ToolUseLog,
           } satisfies StreamLogUpdatePatch;
@@ -727,16 +749,22 @@ export function attachTranscriptRecorder(
           const correlatorId = pendingModelResponseId;
           pendingModelResponseId = undefined;
           if (correlatorId) {
-            writer.settle(correlatorId, {
-              text: redactSecrets(event.text),
-              data: { status: 'completed' },
-            });
+            writer.settle(
+              correlatorId,
+              boundModelResponse(correlatorId, event.text),
+            );
             return;
           }
-          appendLog({
+          const id = generateShortId();
+          writer.appendSettled({
+            id,
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: 'info',
+            timestamp: Date.now(),
             groupId: event.stageId,
             messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-            text: event.text,
+            ...boundModelResponse(id, event.text),
+            verbose: isDebugModeEnabled(),
           });
           return;
         }
@@ -892,7 +920,9 @@ export function attachTranscriptRecorder(
     flushPending,
     flushSpills: async () => {
       await Promise.all([...pendingSpills]);
-      if (pendingSpillFailure !== undefined) throw pendingSpillFailure;
+      const failure = pendingSpillFailure;
+      pendingSpillFailure = undefined;
+      if (failure !== undefined) throw failure;
     },
     handleStatus,
   };
