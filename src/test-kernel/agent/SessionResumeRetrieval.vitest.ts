@@ -686,6 +686,21 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     });
   });
 
+  it('preserves the validation cause for an invalid fresh-launch collision', async () => {
+    const executionId = 'abc-flow-invalid-fresh-collision' as ExecutionId;
+    const streamId =
+      'chat@gpt54#abc-flow-invalid-fresh-collision' as StreamTabId;
+    await writeFlowRecord(executionId, { messages: 'not-an-array' });
+
+    await expect(
+      runPersistedFlow(executionId, streamId, undefined),
+    ).rejects.toMatchObject({
+      name: PersistedFlowStateError.name,
+      reason: 'invalid-shared',
+      cause: expect.anything(),
+    });
+  });
+
   it('creates fresh shared state when the flow record is absent', async () => {
     const executionId = 'abc-flow-absent' as ExecutionId;
     const streamId = 'chat@gpt54#abc-flow-absent' as StreamTabId;

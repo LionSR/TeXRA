@@ -54,6 +54,7 @@ import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
 import {
   extractTouchedFiles,
+  parseToolUseShared,
   ToolUseRunSharedSchema,
   type PreparedShared,
   type ToolUseRunShared,
@@ -478,7 +479,12 @@ export async function runToolUseFlow<C = unknown>(
         );
       }
     } else if (flowRecord) {
-      throw new PersistedFlowStateError(executionId, 'invalid-shared');
+      const parsed = parseToolUseShared(flowRecord.shared);
+      throw new PersistedFlowStateError(
+        executionId,
+        'invalid-shared',
+        parsed.success ? undefined : { cause: parsed.error },
+      );
     }
     // Cleanup may delete a terminal flow record only after absence was
     // confirmed or a present record passed its migration boundary.
