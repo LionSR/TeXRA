@@ -19,7 +19,7 @@ import {
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
 import {
-  CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
+  CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
   isCodexSubscriptionEligible,
 } from '@model/providerCapabilities';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
@@ -399,7 +399,11 @@ describe('computeModelOptionsData relay quota state', () => {
 
     expect(model.availability).toBe('subscription-access');
     expect(model.context).toBe(
-      `${Math.round(CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW / 1000)}K`,
+      `${Math.round(
+        (CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT +
+          MODEL_CONFIGS.gpt55.maxOutputTokens) /
+          1000,
+      )}K`,
     );
     expect(model.cost).toBe('$0.000/$0.000');
     expect(model.hint).not.toContain(FAST_FIRST_RESPONSE_HINT);
