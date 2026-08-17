@@ -288,8 +288,9 @@ function subagentEntryUnchanged(
  * child it never retains (or a direct unit-level projection). A late roster
  * from an incompatible (explicitly edged-elsewhere, or promoted) child
  * cannot resurrect active membership or overwrite a newer parent's summary
- * metadata. Retained membership follows the shared roster only while its
- * current topology remains compatible with that parent.
+ * metadata. Retained rows are admitted and their `finishedAt` marker refreshed
+ * from the shared roster only while their topology remains compatible; the
+ * retained-membership sync below still applies roster cap eviction.
  */
 export function projectChildRoster(
   parentStreamId: StreamTabId,
