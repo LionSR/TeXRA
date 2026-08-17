@@ -479,48 +479,13 @@ export async function runToolUseFlow<C = unknown>(
         );
       }
     } else if (flowRecord) {
-      const parsedShared = parseToolUseShared(flowRecord.shared);
-      if (!parsedShared.success) {
+      const parsed = parseToolUseShared(flowRecord.shared);
+      if (!parsed.success) {
         throw new PersistedFlowStateError(executionId, 'invalid-shared', {
-          cause: parsedShared.error,
+          cause: parsed.error,
         });
       }
-      // Defensive fallback only: no resume handoff means the resume boundary
-      // above was never consulted for this call (e.g. a fresh launch that
-      // finds a leftover record for its execution id). Normalize the parsed
-      // record before `PersistedFlow.ensureRecord` sees it. Model-based
-      // compatibility inference for keyless records lives at the
-      // resume-retrieval boundary; this path stamps the active handler's key.
-      let sharedData = parsedShared.data;
-      let shouldWriteShared = parsedShared.changed;
-      if (sharedData.continuationGenerationId !== continuationGenerationId) {
-        logger.debug(
-          'Rebound leftover tool-use flow state to the fresh continuation generation.',
-        );
-        sharedData = {
-          ...sharedData,
-          continuationGenerationId,
-        };
-        shouldWriteShared = true;
-      }
-      const backfilled = stampCompatibilityKey(sharedData, compatibilityKey);
-      if (backfilled !== sharedData) {
-        logger.debug(
-          'Backfilled tool-use model-handler compatibility key in shared state.',
-        );
-        sharedData = backfilled;
-        shouldWriteShared = true;
-      }
-      if (shouldWriteShared) {
-        if (parsedShared.changed) {
-          logger.debug('Normalized persisted tool-use shared state');
-        }
-        flowRecord.shared = sharedData;
-        await kv.write(
-          flowKey(executionId),
-          stampFlowRecordSchemaVersion(flowRecord),
-        );
-      }
+      throw new PersistedFlowStateError(executionId, 'unexpected-record');
     }
     // Cleanup may delete a terminal flow record only after absence was
     // confirmed or a present record passed its migration boundary.
