@@ -54,7 +54,6 @@ import {
   type CliModelAccess,
 } from '../runtime/modelAccess';
 
-const log = createLog('orchestrate');
 import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import { loadCliApiStatus } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
@@ -89,6 +88,8 @@ import {
 import { runResumeExecution } from './resumeExecution';
 import { type CliContext } from '../runtime/cliContext';
 import type { CliSubscriptionSignOutResult } from '../runtime/subscriptionLogin';
+
+const log = createLog('orchestrate');
 
 /**
  * Sign-out bindings for the subscription providers the launcher's `account`

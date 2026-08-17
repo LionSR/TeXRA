@@ -459,9 +459,9 @@ function formatCliModelRecovery(
     case 'copilot-access':
       return undefined;
     case 'copilot-consent-required':
-      return 'Grant GitHub Copilot access, or choose another model.';
+      return 'Use this model in VS Code through GitHub Copilot, or choose another model.';
     case 'copilot-unavailable':
-      return 'Enable GitHub Copilot access, or choose another model.';
+      return 'Use this model in VS Code through GitHub Copilot, or choose another model.';
     case 'unknown-model':
       return 'Choose a model that is available in the current registry.';
     case undefined:

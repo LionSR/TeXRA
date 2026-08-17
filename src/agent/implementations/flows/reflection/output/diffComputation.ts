@@ -5,6 +5,7 @@
  * using the diff-match-patch library.
  */
 
+import { isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { DiffStats, FileLocation, OutputFileInfo } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -46,7 +47,12 @@ async function computeDiffStats(
     // Preserve diff-match-patch's omitted-argument default: checkLines=true.
     return diffLineChanges(baseContent, outContent, { checkLines: true });
   } catch (err) {
-    log.warn(`Failed to compute diff stats: ${toErrorMessage(err)}`);
+    const message = `Failed to compute diff stats: ${toErrorMessage(err)}`;
+    if (isFileNotFoundError(err)) {
+      log.debug(message);
+    } else {
+      log.warn(message);
+    }
     return {};
   }
 }
