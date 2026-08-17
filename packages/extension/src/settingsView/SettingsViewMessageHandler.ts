@@ -4,12 +4,10 @@
  * This class owns the inbound registry, the memory/profile/model/tool commands,
  * and the refresh fan-out after a mutation. Tab-shaped groups are delegated to
  * focused handler classes in `./handlers/`: `AgentHandlers`,
- * `LatexSettingsHandlers`, `MemoryHandlers`, `HistoryHandlers`,
+ * `LatexSettingsHandlers`, `MemoryHandlers`,
  * `GitHubSubscriptionHandlers`, and `SubscriptionHandlers` (one instance per
  * subscription provider).
  */
-import * as path from 'node:path';
-
 import * as vscode from 'vscode';
 
 // Shared schemas and dispatchers
@@ -59,7 +57,6 @@ import {
   LanguageModelPortError,
 } from '@platform/languageModel';
 import { platform } from '@platform/platform';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -93,15 +90,12 @@ import {
   refreshToolAvailability,
 } from '@tools/toolAvailability';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
-import { debounce } from '@utils/core';
-import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
   buildGitAuthorSettingsMessage,
   readGitAuthorSettingsFromState,
   type GitAuthorSettings,
 } from '@utils/system/gitAuthorSettings';
-import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import {
   setGlobalStreaming,
   setProviderStreaming,
@@ -112,7 +106,6 @@ import { setToolEnabled } from '@utils/config/constants';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { MemoryHandlers } from './handlers/memoryHandlers';
-import { HistoryHandlers } from './handlers/historyHandlers';
 import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
 import {
   CHATGPT_SUBSCRIPTION_PROVIDER,
@@ -128,19 +121,12 @@ import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
-  private executionsWatcher: vscode.FileSystemWatcher | undefined;
-  private executionsWatcherGeneration = 0;
-  private executionsWatcherWanted = false;
-  private visibilityTrackedView:
-    vscode.WebviewView | vscode.WebviewPanel | undefined;
-  private visibilityListener: vscode.Disposable | undefined;
   private readonly handlerRegistry: SettingsViewInboundHandlerRegistry;
 
   // Domain-specific handler delegates
   private readonly agentHandlers: AgentHandlers;
   private readonly latexHandlers: LatexSettingsHandlers;
   private readonly memoryHandlers: MemoryHandlers;
-  private readonly historyHandlers: HistoryHandlers;
   private readonly githubHandlers: GitHubSubscriptionHandlers;
   private readonly chatgptHandlers: SubscriptionHandlers;
   private readonly grokHandlers: SubscriptionHandlers;
@@ -214,7 +200,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.settingsHost,
       this.viewName,
     );
-    this.historyHandlers = new HistoryHandlers(ctx);
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx);
     this.chatgptHandlers = new SubscriptionHandlers(
       CHATGPT_SUBSCRIPTION_PROVIDER,
@@ -256,135 +241,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       void this.withActiveWebview((w) => this.sendGoalList(w));
     });
     context.subscriptions.push({ dispose: unsubscribeGoals });
-
-    // Cross-host history refresh (#8625): the shared ~/.texra executions dir
-    // is written by the CLI and desktop too, so an open history tab re-lists
-    // when any host adds, finishes, or deletes a run. The watcher lives only
-    // while the settings webview is visible — every event debounces into a
-    // full listExecutions() rescan, and the Dashboard panel retains its
-    // context when hidden, so a background tab would otherwise keep rescanning
-    // for days (#9959). Re-registered on workspace-folder changes because the
-    // storage path follows the current workspace.
-    context.subscriptions.push(
-      vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        if (this.executionsWatcherWanted) {
-          void this.registerExecutionsWatcher();
-        }
-      }),
-      { dispose: () => this.detachViewVisibility() },
-    );
-  }
-
-  /**
-   * Track the dispatching view's visibility so the executions watcher runs
-   * only while the settings webview is actually on screen. Dispatch is the
-   * first (and only) place this handler learns which view it serves.
-   */
-  protected override onDispatch(
-    view: vscode.WebviewView | vscode.WebviewPanel,
-  ): void {
-    if (this.visibilityTrackedView === view) return;
-    this.visibilityListener?.dispose();
-    this.visibilityTrackedView = view;
-    const onVisibilityChange = () =>
-      this.syncWatcherToVisibility({ refreshOnShow: true });
-    this.visibilityListener =
-      'viewColumn' in view
-        ? view.onDidChangeViewState(onVisibilityChange)
-        : view.onDidChangeVisibility(onVisibilityChange);
-    // The dispatch in flight already produces fresh data; no extra refresh.
-    this.syncWatcherToVisibility({ refreshOnShow: false });
-  }
-
-  public override clearActiveView(): void {
-    super.clearActiveView();
-    this.detachViewVisibility();
-  }
-
-  private detachViewVisibility(): void {
-    this.visibilityListener?.dispose();
-    this.visibilityListener = undefined;
-    this.visibilityTrackedView = undefined;
-    this.executionsWatcherWanted = false;
-    this.invalidateExecutionsWatcher();
-  }
-
-  private syncWatcherToVisibility(options: { refreshOnShow: boolean }): void {
-    const visible = this.visibilityTrackedView?.visible === true;
-    if (visible === this.executionsWatcherWanted) return;
-    this.executionsWatcherWanted = visible;
-    if (!visible) {
-      this.invalidateExecutionsWatcher();
-      return;
-    }
-    void this.registerExecutionsWatcher();
-    // Runs recorded while hidden never fired the watcher; one list refresh
-    // brings the history tab current on re-show.
-    if (options.refreshOnShow) {
-      void this.withActiveWebview((w) =>
-        this.historyHandlers.sendHistoryData(w),
-      );
-    }
-  }
-
-  private invalidateExecutionsWatcher(): number {
-    const generation = ++this.executionsWatcherGeneration;
-    const watcher = this.executionsWatcher;
-    this.executionsWatcher = undefined;
-    watcher?.dispose();
-    return generation;
-  }
-
-  /**
-   * Watch the shared executions directory (outside the workspace, hence the
-   * RelativePattern base) and re-send the history list to the active settings
-   * webview. The debounce coalesces launch and terminal write bursts.
-   */
-  private async registerExecutionsWatcher(): Promise<void> {
-    const generation = this.invalidateExecutionsWatcher();
-    let candidate: vscode.FileSystemWatcher | undefined;
-    try {
-      const executionsDir = path.join(
-        platform().storage.getStoragePath(),
-        RUNS_STORAGE_DIR,
-      );
-      // A watcher rooted at a not-yet-existing directory can silently never
-      // fire; the dir is cheap to create and always wanted.
-      await StorageFS.ensureDir(RUNS_STORAGE_DIR);
-      // A workspace change or teardown may supersede this registration while
-      // directory setup is pending.
-      if (generation !== this.executionsWatcherGeneration) return;
-      const refreshHistory = debounce(
-        () =>
-          this.withActiveWebview((w) =>
-            this.historyHandlers.sendHistoryData(w),
-          ),
-        DEBOUNCE_OPTIONS_MS,
-      );
-      const onExecutionsEvent = () => {
-        void refreshHistory();
-      };
-      candidate = vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(vscode.Uri.file(executionsDir), '**'),
-      );
-      candidate.onDidCreate(onExecutionsEvent);
-      candidate.onDidChange(onExecutionsEvent);
-      candidate.onDidDelete(onExecutionsEvent);
-      // Publish only a candidate that still owns the current generation.
-      if (generation !== this.executionsWatcherGeneration) {
-        candidate.dispose();
-        return;
-      }
-      this.executionsWatcher = candidate;
-    } catch (error) {
-      candidate?.dispose();
-      if (generation !== this.executionsWatcherGeneration) return;
-      logErrorMessage(
-        this.channel,
-        'Failed to register execution history watcher',
-        error,
-      );
-    }
   }
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
@@ -405,17 +261,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.memoryHandlers.setMemoryPinned(message.storagePath, true),
       unpinMemory: (message) =>
         this.memoryHandlers.setMemoryPinned(message.storagePath, false),
-      rerunAgent: (message) => this.historyHandlers.handleRerunAgent(message),
-      restoreAgent: (message) =>
-        this.historyHandlers.handleRestoreAgent(message),
-      deleteAgent: (message) => this.historyHandlers.handleDeleteAgent(message),
-      clearHistory: () => this.historyHandlers.handleClearHistory(),
-      exportChatMd: (message) =>
-        this.historyHandlers.handleExportChat(message, 'md'),
-      exportChatTex: (message) =>
-        this.historyHandlers.handleExportChat(message, 'tex'),
-      exportChatHtml: (message) =>
-        this.historyHandlers.handleExportChat(message, 'html'),
       signIn: () =>
         safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName),
       signOut: () =>
@@ -630,7 +475,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await Promise.all([
       this.memoryHandlers.sendMemoryData(webview),
       this.memoryHandlers.sendMemoryEnabled(webview),
-      this.historyHandlers.sendHistoryData(webview),
       this.agentHandlers.sendAgentSelectionData(webview),
       this.agentHandlers.sendCustomAgentDir(webview),
       this.sendReliabilityAndOrchestrationSettings(webview),

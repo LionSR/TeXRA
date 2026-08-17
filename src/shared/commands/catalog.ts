@@ -227,13 +227,6 @@ export const commandCatalog = [
     icon: '$(new-file)',
   },
   {
-    id: 'texra.showAgentHistory',
-    extensionRegistry: true,
-    title: 'Show Agent Execution History',
-    category: 'TeXRA',
-    icon: '$(history)',
-  },
-  {
     id: 'texra.showMemory',
     extensionRegistry: true,
     title: 'Show Memory',

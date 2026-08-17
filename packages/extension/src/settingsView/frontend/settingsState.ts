@@ -40,7 +40,6 @@ import type {
   CopilotRouteInfo,
   Goal,
   GrokAuthStatus,
-  HistoryItem,
   LatexConfigValues,
   MemoryViewItem,
   ModelSelectionItem,
@@ -119,11 +118,6 @@ export const selectedTabIndex = trackedSignal<number>(
 export const memoryItems = trackedSignal<MemoryViewItem[]>(() => []);
 export const memoryEnabled = trackedSignal(() => false);
 export const memoryToggleDisabled = trackedSignal(() => true);
-
-// ---------------------------------------------------------------------------
-// History state
-// ---------------------------------------------------------------------------
-export const historyItems = trackedSignal<HistoryItem[]>(() => []);
 
 // ---------------------------------------------------------------------------
 // Profile state
