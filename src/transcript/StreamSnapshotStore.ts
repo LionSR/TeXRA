@@ -43,6 +43,7 @@ import {
   TokenUsageStatsParsingBaseSchema,
   type CompileFailure,
   type ExecutionId,
+  type ExtendedTokenUsageStats,
   type OutputFileInfo,
   type RunIdentity,
   type Plan,
@@ -984,9 +985,18 @@ export class StreamSnapshotStore {
   private addUsage(
     stream: StreamTabId,
     storageKey: StorageKey,
-    usage: TokenUsageStats,
+    usage: ExtendedTokenUsageStats,
   ): void {
-    const parsed = TokenUsageStatsParsingBaseSchema.safeParse(usage);
+    // UI-only per-round display fields are not part of the durable usage row.
+    // Remove them at this live-event boundary so the strict persisted schema
+    // continues to reject unknown fields from disk.
+    const {
+      elapsedTime: _elapsedTime,
+      percentageCached: _percentageCached,
+      toolUseTokens: _toolUseTokens,
+      ...persistedUsage
+    } = usage;
+    const parsed = TokenUsageStatsParsingBaseSchema.safeParse(persistedUsage);
     if (!parsed.success) {
       log.warn(
         `Discarding malformed usage delta for run ${storageKey} on stream ` +

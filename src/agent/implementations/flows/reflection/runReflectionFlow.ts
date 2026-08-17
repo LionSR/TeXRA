@@ -46,7 +46,6 @@ import { ResponseCycleNode } from './nodes/ResponseCycleNode';
 import { OutputNode } from './nodes/OutputNode';
 import {
   ReflectionFlowStateSchema,
-  ReflectionFlowStateCanonicalSchema,
   type ReflectionFlowShared,
 } from './ReflectionFlowState';
 import { RoundPersistedFlow } from './RoundPersistedFlow';
@@ -195,14 +194,9 @@ export async function runReflectionFlow<C = unknown>(
   const flowRecord = await readPersistedFlowRecord(kv, executionId);
 
   if (flowRecord) {
-    // Boundary hydration: the one place a freshly-read persisted record
-    // (possibly written by an older build, hence the legacy todos/plan
-    // fallback in AgentWorkspaceStateSnapshotSchema) is parsed. Downstream,
-    // `RoundPersistedFlow` validates records it re-reads from storage with
-    // ReflectionFlowStateCanonicalSchema (see its constructor call below),
-    // since those are always this run's own canonical toSnapshot() output,
-    // never a legacy shape; records it wrote itself stay trusted per the
-    // boundary-only validation rule.
+    // Validate the freshly-read persisted record before it enters the live
+    // flow. `RoundPersistedFlow` revalidates later writes against the same
+    // canonical schema.
     const validated = ReflectionFlowStateSchema.safeParse(flowRecord.shared);
     if (!validated.success) {
       throw new PersistedFlowStateError(executionId, 'invalid-shared', {
@@ -262,7 +256,7 @@ export async function runReflectionFlow<C = unknown>(
     ReflectionServices<C>
   >(prepContextNode, kv, {
     parentStage,
-    sharedSchema: ReflectionFlowStateCanonicalSchema,
+    sharedSchema: ReflectionFlowStateSchema,
     callbacks: {
       createRoundStage: (roundIndex, parent, shared) =>
         logger.openStage(`r${roundIndex}`, {
