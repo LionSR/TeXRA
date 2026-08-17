@@ -9,8 +9,6 @@
  * - Workflow: agentConfig + executionId + transcript-format key
  */
 
-import { z } from 'zod';
-
 import {
   deriveResumability,
   RESUMABILITY_CAUSE,
@@ -18,9 +16,9 @@ import {
 } from '@agent/storage';
 import type { FlowRecord } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { ProviderMessageArraySchema } from '@agent/types/ProviderMessage';
+import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import {
-  migrateSharedState,
+  parseToolUseShared,
   type PreparedShared,
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import { createLog } from '@logger/logUtils';
@@ -117,17 +115,6 @@ function resumeRetrievalError(
 }
 
 /**
- * Minimal schema for validating workflow flow record exists and has resumable state.
- * Full validation happens when the flow actually resumes.
- */
-const WorkflowFlowRecordStateSchema = z.looseObject({
-  currentRound: z.int().nonnegative(),
-  totalRounds: z.int().nonnegative(),
-  conversation: ProviderMessageArraySchema,
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
-});
-
-/**
  * Retrieve resume data for a WAITING session.
  *
  * Returns appropriate resume data based on task type:
@@ -178,18 +165,18 @@ async function retrieveToolUseResumeData(
     const flowRecord = await probeResumableFlowRecord(executionId, 'tool-use');
     if (!flowRecord) return null;
 
-    const migrationResult = migrateSharedState(flowRecord.shared);
-    if (!migrationResult.success) {
+    const parsedShared = parseToolUseShared(flowRecord.shared);
+    if (!parsedShared.success) {
       logger.warn(
         `Invalid flow record structure for execution: ${executionId}`,
         {
-          data: { error: migrationResult.error },
+          data: { error: parsedShared.error },
         },
       );
       return null;
     }
 
-    const { stateSlices } = migrationResult.data;
+    const { stateSlices } = parsedShared.data;
     if (stateSlices === null) {
       logger.warn(
         `Invalid flow record structure for execution: ${executionId}`,
@@ -199,17 +186,17 @@ async function retrieveToolUseResumeData(
 
     const currentConfig = {
       ...agentConfig,
-      model: migrationResult.data.modelId ?? agentConfig.model,
+      model: parsedShared.data.modelId ?? agentConfig.model,
     };
     const modelHandlerCompatibilityKey =
-      migrationResult.data.modelHandlerCompatibilityKey ??
+      parsedShared.data.modelHandlerCompatibilityKey ??
       inferAndLogPersistedModelHandlerCompatibilityKey(
         currentConfig.model,
         logger,
       );
 
     const shared: PreparedShared = {
-      ...migrationResult.data,
+      ...parsedShared.data,
       stateSlices,
       ...(modelHandlerCompatibilityKey !== undefined && {
         modelHandlerCompatibilityKey,
@@ -247,11 +234,7 @@ async function retrieveWorkflowResumeData(
     const flowRecord = await probeResumableFlowRecord(executionId, 'workflow');
     if (!flowRecord) return null;
 
-    // Minimal validation - just verify essential fields exist.
-    // Full state validation happens when the flow actually resumes.
-    const parseResult = WorkflowFlowRecordStateSchema.safeParse(
-      flowRecord.shared,
-    );
+    const parseResult = ReflectionFlowStateSchema.safeParse(flowRecord.shared);
     if (!parseResult.success) {
       logger.warn(`Invalid workflow flow record for execution: ${executionId}`);
       return null;

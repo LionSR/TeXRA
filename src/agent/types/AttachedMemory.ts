@@ -6,8 +6,3 @@ export const AttachedMemoryMissSchema = z.object({
 });
 
 export type AttachedMemoryMiss = z.infer<typeof AttachedMemoryMissSchema>;
-
-/** Tolerant: malformed or missing input parses to an empty list. */
-export const AttachedMemoryMissesSchema = z
-  .array(AttachedMemoryMissSchema)
-  .catch([]);

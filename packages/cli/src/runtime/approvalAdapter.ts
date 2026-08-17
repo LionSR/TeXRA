@@ -60,13 +60,13 @@ export function toToolEditResult(
   proposedContent: string,
 ): ToolEditApprovalResult {
   if (decision.accepted) {
-    return { accepted: true, appliedContent: proposedContent };
+    return { action: 'apply', appliedContent: proposedContent };
   }
   if (decision.rejectionCause !== undefined) {
-    return { accepted: false, cause: decision.rejectionCause };
+    return { action: 'reject', cause: decision.rejectionCause };
   }
   return {
-    accepted: false,
+    action: 'reject',
     ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
   };
 }

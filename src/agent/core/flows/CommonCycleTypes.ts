@@ -10,7 +10,7 @@ import {
   type ProviderMessage,
 } from '@agent/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
-import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
+import type { ProviderUsage } from '@agent/types/ProviderUsage';
 import type { FinalTool } from '@agent/types/ModelHandlerContracts';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
@@ -123,6 +123,11 @@ export function defaultPostCompactionContext(
 
 interface ExtractedModelResponse {
   text: string;
+  /**
+   * Raw provider usage from `ModelHandler.extractResponse`. This is the one
+   * place `core/` intentionally holds {@link ProviderUsage}: callers should
+   * prefer {@link normalizedUsage}; the raw field is for debug logging only.
+   */
   usage: ProviderUsage;
   stopReason: ProviderStopReason;
   thinking: string | null;

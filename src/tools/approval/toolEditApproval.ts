@@ -61,7 +61,7 @@ export interface ToolEditApprovalRequest {
  */
 export type ToolEditApprovalResult =
   | {
-      readonly accepted: true;
+      readonly action: 'apply';
       readonly appliedContent: string;
       readonly userPatch?: string;
       readonly lineChanges?: {
@@ -70,7 +70,7 @@ export type ToolEditApprovalResult =
       };
       readonly startLine?: number;
     }
-  | ({ readonly accepted: false } & RejectionProvenance);
+  | ({ readonly action: 'reject' } & RejectionProvenance);
 
 const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
 
@@ -254,7 +254,7 @@ export async function requestToolEditApproval(
   );
   const acceptProposedAsIs = (): ToolEditApprovalResult =>
     finalizeApprovalResult(
-      { accepted: true, appliedContent: preparedRequest.proposedContent },
+      { action: 'apply', appliedContent: preparedRequest.proposedContent },
       preparedRequest,
     );
   const decision = decideTexraApproval({
@@ -267,7 +267,7 @@ export async function requestToolEditApproval(
   if (isTexraApprovalDenied(decision)) {
     context?.onApprovalPolicyDenial?.();
     return {
-      accepted: false,
+      action: 'reject',
       reason: texraApprovalDenialMessage(decision),
     };
   }
@@ -291,7 +291,7 @@ function finalizeApprovalResult(
   result: ToolEditApprovalResult,
   request: ToolEditApprovalRequest,
 ): ToolEditApprovalResult {
-  if (!result.accepted) {
+  if (result.action !== 'apply') {
     return result;
   }
 
@@ -315,10 +315,10 @@ function finalizeApprovalResult(
   };
 }
 
-/** The `accepted: true` branch of {@link ToolEditApprovalResult}. */
+/** The `action: 'apply'` branch of {@link ToolEditApprovalResult}. */
 export type AcceptedToolEditApprovalResult = Extract<
   ToolEditApprovalResult,
-  { accepted: true }
+  { action: 'apply' }
 >;
 
 interface WriteApprovedContentResult {
@@ -458,7 +458,7 @@ export async function requestAndWriteApprovedEdit(request: {
     sourceTool,
   });
 
-  if (!approval.accepted) {
+  if (approval.action !== 'apply') {
     return {
       rejected: buildApprovalRejectedResult(displayPath, sourceTool, approval),
     };

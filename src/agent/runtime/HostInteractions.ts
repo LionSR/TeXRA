@@ -207,6 +207,7 @@ export interface HostInteractionResultByKind {
   readonly planApproval: PlanApprovalResult;
   readonly proposal: ProposalResult;
   readonly retry: RetryResult;
+  readonly toolEdit: ToolEditApprovalResult;
   readonly userQuestion: UserQuestionSettlement;
 }
 
@@ -280,6 +281,7 @@ const cancellationResultFactories: CancellationResultFactories = {
   planApproval: (cause) => ({ action: 'reject', cause }),
   proposal: (cause) => ({ action: 'reject', cause }),
   retry: () => ({ action: 'cancel' }),
+  toolEdit: (cause) => ({ action: 'reject', cause }),
   userQuestion: (cause) => ({ action: 'reject', cause }),
 };
 
@@ -566,7 +568,7 @@ export class SessionHostInteractions implements HostInteractions {
       request.streamId,
       (interactions) =>
         interactions.requestToolEditApproval?.(request, options),
-      (cause) => ({ accepted: false, cause }),
+      (cause) => cancellationResultFor('toolEdit', cause),
     );
   }
 

@@ -8,6 +8,7 @@ import {
   STREAM_PHASE,
   STREAM_STATUS,
   STREAM_SUBSTATE,
+  type StreamLifecycleStatus,
 } from '@shared/schemas';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
@@ -200,7 +201,9 @@ describe('formatStageLabel', () => {
 });
 
 describe('stream status display labels', () => {
-  const wordingCases: Array<[StreamStatusLabelStyle, string, string]> = [
+  const wordingCases: Array<
+    [StreamStatusLabelStyle, StreamLifecycleStatus, string]
+  > = [
     ['cli', STREAM_PHASE.WAITING, 'idle'],
     ['cliCompact', STREAM_PHASE.WAITING, 'idle'],
     ['progressHeader', STREAM_PHASE.WAITING, 'Idle'],
@@ -237,9 +240,7 @@ describe('stream status display labels', () => {
     },
   );
 
-  it('passes through unknown statuses and supports an explicit missing label', () => {
-    expect(formatStreamStatusLabel('custom')).toBe('custom');
-    expect(formatStreamStatusLabel('')).toBe('');
+  it('supports an explicit missing label', () => {
     expect(formatStreamStatusLabel(undefined, { missingLabel: '-' })).toBe('-');
   });
 
@@ -275,17 +276,4 @@ describe('stream status display labels', () => {
       expect(streamStatusIndicatorClass(status)).toBe(className);
     },
   );
-
-  // The retired 7-value StreamStatus vocabulary no longer has a display
-  // branch (v0.41 cut): no live producer emits it, and both permanent read
-  // boundaries — StreamLogStore.parsePersistedEntries and the trace-viewer's
-  // file import — normalize to StreamPhase before a renderer sees it. An
-  // unnormalized legacy value now falls through as an unknown status: the raw
-  // string is shown rather than a silently wrong canonical label.
-  it('treats a retired legacy status as unknown', () => {
-    const status = STREAM_STATUS.INITIALIZING;
-    expect(streamStatusDisplayKey(status)).toBeUndefined();
-    expect(streamStatusIndicatorClass(status)).toBeUndefined();
-    expect(formatStreamStatusLabel(status)).toBe(status);
-  });
 });

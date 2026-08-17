@@ -30,6 +30,8 @@ export const ActiveChildInfoSchema = z.object({
   childStreamId: z.string(),
   /** What owns the child stream — every roster emitter declares it. */
   identity: RunIdentitySchema,
+  /** Whether this child can be offered as a native tool-use resume target. */
+  resumeEligible: z.boolean().optional(),
   agentName: z.string(),
   /**
    * Current execution phase. Takes `StreamPhase` only: no artifact carries a

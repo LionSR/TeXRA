@@ -85,5 +85,5 @@ async function readDirty(cwd: string): Promise<boolean | undefined> {
     timeout: GIT_TIMEOUT_MS,
     channel: 'worktreeInfo',
   });
-  return result.success ? (result.stdout ?? '').trim().length > 0 : undefined;
+  return result.success ? result.stdout.trim().length > 0 : undefined;
 }

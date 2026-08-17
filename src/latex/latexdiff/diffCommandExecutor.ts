@@ -191,7 +191,7 @@ export class DiffCommandExecutor {
       );
     }
 
-    if (!this.isBibliographyError(result.stderr ?? '')) {
+    if (!this.isBibliographyError(result.stderr)) {
       throw new Error(
         result.stderr
           ? `Failed to run ${commandType}: ${result.stderr}`

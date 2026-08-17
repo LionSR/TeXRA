@@ -55,7 +55,7 @@ describe('GrepTool execution', () => {
     const executeSpy = vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
       success: true,
       stdout: 'one\n\ntwo\nthree\nfour\n',
-      stderr: null,
+      stderr: '',
       timedOut: false,
       exitCode: 0,
     });
@@ -106,7 +106,7 @@ describe('GrepTool execution', () => {
   it('preserves ripgrep error classification', async () => {
     vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
       success: false,
-      stdout: null,
+      stdout: '',
       stderr: 'regex parse error: unclosed group',
       timedOut: false,
       exitCode: 2,
@@ -127,7 +127,7 @@ describe('GrepTool execution', () => {
     const executeSpy = vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
       success: true,
       stdout: '/outside/dist/external.tex:external\n',
-      stderr: null,
+      stderr: '',
       timedOut: false,
       exitCode: 0,
     });
@@ -158,8 +158,8 @@ describe('GrepTool execution', () => {
     mockWorkspaceGitignore();
     const executeSpy = vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
       success: true,
-      stdout: null,
-      stderr: null,
+      stdout: '',
+      stderr: '',
       timedOut: false,
       exitCode: 1,
     });

@@ -106,7 +106,7 @@ describe('bring-your-own-key is the model layer default', () => {
 
   it('refuses to fabricate a relay URL when nothing is installed', () => {
     assert.throws(
-      () => includedModelAccess().getRelayBaseUrl('openai'),
+      () => includedModelAccess().getRelayBaseUrl(ModelProvider.OPENAI),
       /No included model access is installed/,
     );
   });
@@ -128,7 +128,7 @@ describe('bring-your-own-key is the model layer default', () => {
     const access = includedModelAccess();
     assert.equal(access.getUseIncludedModelAccess(), false);
     assert.equal(
-      access.shouldUseServerSideKeysSync('openai', 'gpt-5.5'),
+      access.shouldUseServerSideKeysSync(ModelProvider.OPENAI, 'gpt-5.5'),
       false,
     );
     assert.equal(await access.canUseServerSideKeys(), false);

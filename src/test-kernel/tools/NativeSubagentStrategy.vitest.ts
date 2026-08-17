@@ -68,7 +68,7 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   captureOwnedExecutionLease:
     (_executionId: ExecutionId) => (operation: () => unknown) =>
       operation(),
-  renewOwnedExecutionLease: vi.fn(async () => {}),
+  validateOwnedExecutionLease: vi.fn(async () => {}),
   abandonOwnedExecutionLease: vi.fn(),
   completeOwnedExecutionLease: vi.fn(async () => ({
     status: 'released' as const,

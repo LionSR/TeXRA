@@ -5,8 +5,8 @@ import { toJSONSchema } from 'zod';
 import { createLog } from '@logger/logUtils';
 
 // Type imports
-import type { ToolDefinition } from '@model/ToolDefinition';
 import type { LanguageModelToolDefinition } from '@platform/languageModel';
+import type { ToolDefinition } from '@shared/schemas';
 
 // Local imports - shared
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';

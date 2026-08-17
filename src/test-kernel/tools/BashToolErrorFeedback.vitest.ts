@@ -135,7 +135,7 @@ describe('BashTool error feedback', () => {
       stubBashApprovalDisabled();
       vi.spyOn(execUtils, 'executeCommand').mockResolvedValueOnce({
         success: false,
-        stdout: null,
+        stdout: '',
         stderr,
         timedOut: false,
         exitCode,

@@ -268,7 +268,11 @@ describe('TierService', () => {
       }),
     );
     const warn = vi.fn();
-    const service = new TierService('https://example.test', { warn });
+    const service = new TierService('https://example.test', {
+      warn,
+      error: vi.fn(),
+      info: vi.fn(),
+    });
 
     expect(await service.getConfig('token')).not.toBeNull();
 

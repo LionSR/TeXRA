@@ -7,6 +7,7 @@ import {
   AgentConfigSchema,
   ModelHandlerCompatibilityKeySchema,
   runAgent,
+  type RunAgentOptions,
 } from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { createLog } from '@logger/logUtils';
@@ -32,7 +33,10 @@ interface WrappedExecuteInput {
  *
  * Tool-use sessions resume through `tryResumeFromResumeData` instead.
  */
-export async function runExecuteCommand(input: unknown): Promise<void> {
+export async function runExecuteCommand(
+  input: unknown,
+  options: Pick<RunAgentOptions, 'canAcquireResumeLease'> = {},
+): Promise<void> {
   try {
     const wrapped =
       input !== null && typeof input === 'object' && 'config' in input
@@ -59,6 +63,12 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
         modelHandlerCompatibilityKey,
         copilotRouteOverride,
         onRun: wrapped?.onRun,
+        // In-process-only resume admission guard. It is never serialized: the
+        // VS Code command action still receives a single `input` argument
+        // across the registry/dispatch boundary.
+        ...(options.canAcquireResumeLease && {
+          canAcquireResumeLease: options.canAcquireResumeLease,
+        }),
       },
     );
   } catch (error) {
