@@ -375,9 +375,12 @@ async function assembleAgentLaunchContext(
     transcriptWriter,
   );
   const runTrace = resources.ownRunTrace(rawRunTrace, () => {
-    const removeSpillFlusher = session.useArtifactFlusher(() =>
-      rawRunTrace.flushSpills(),
-    );
+    let traceDisposed = false;
+    let removeSpillFlusher = (): void => {};
+    removeSpillFlusher = session.useArtifactFlusher(async () => {
+      await rawRunTrace.flushSpills();
+      if (traceDisposed) removeSpillFlusher();
+    });
     let detachTrace = (): void => {};
     try {
       detachTrace = session.attachRunTrace(rawRunTrace.trace, streamId);
@@ -387,7 +390,9 @@ async function assembleAgentLaunchContext(
         rawRunTrace.handleStatus,
       );
       return () => {
-        removeSpillFlusher();
+        // Keep the flusher through the execution lease's post-dispose drain.
+        // Its next successful flush removes it from the session.
+        traceDisposed = true;
         detachStatus();
         detachTrace();
       };
