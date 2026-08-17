@@ -65,8 +65,8 @@ export * from './progressView';
 // Layer 6: Other view message schemas
 export * from './commonViewMessages';
 // Memory/Profile view-message schemas have a single public home in
-// settingsViewMessages (the canonical settings entry point). History run
-// status is host-neutral and published directly above for CLI consumers.
+// settingsViewMessages. History status is shared with the CLI and is exported
+// above from its host-neutral leaf module.
 export * from './settingsViewMessages';
 export * from './subscriptionUsage';
 

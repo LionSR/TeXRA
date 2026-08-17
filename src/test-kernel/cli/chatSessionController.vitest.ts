@@ -63,6 +63,7 @@ vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
 vi.mock('@agent/runtime/executeAgent', () => ({
   executeAgent: mocks.executeAgent,
   resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
+  ResumeSessionUnavailableError: class ResumeSessionUnavailableError extends Error {},
 }));
 
 vi.mock('@agent/runtime/runAgent', () => ({

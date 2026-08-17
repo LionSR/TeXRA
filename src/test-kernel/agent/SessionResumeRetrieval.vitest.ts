@@ -258,7 +258,6 @@ function responseModelHandler(
 function buildToolUseResumeData(
   executionId: ExecutionId,
   streamId: StreamTabId,
-  sourceShared?: unknown,
 ): ToolUseResumeData {
   const shared = {
     messages: [],
@@ -272,7 +271,6 @@ function buildToolUseResumeData(
     streamId,
     agentConfig: CONFIG,
     shared,
-    sourceShared: sourceShared ?? structuredClone(shared),
   };
 }
 
@@ -294,7 +292,6 @@ function buildResponseResumeData(
     streamId,
     agentConfig: CONFIG,
     shared,
-    sourceShared: structuredClone(shared),
   };
 }
 
@@ -702,11 +699,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         `chat@gpt54#abc-flow-stale-response-${suffix}` as StreamTabId;
       const resume = buildResponseResumeData(executionId, streamId, 'A');
       if (persistRecord) {
-        await writeFlowRecord(
-          executionId,
-          resume.sourceShared,
-          WAITING_AT_START,
-        );
+        await writeFlowRecord(executionId, resume.shared, WAITING_AT_START);
       }
 
       const result = await runPersistedFlow(executionId, streamId, resume);
@@ -728,7 +721,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       const streamId =
         `chat@gpt54#abc-flow-fresh-resumed-response-${suffix}` as StreamTabId;
       const resume = buildResponseResumeData(executionId, streamId, prior);
-      await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
+      await writeFlowRecord(executionId, resume.shared, WAITING_AT_START);
 
       const result = await runPersistedFlow(executionId, streamId, resume, {
         modelHandler: responseModelHandler([{ text: fresh }]),
@@ -744,7 +737,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const streamId =
       'chat@gpt54#abc-flow-identical-partial-response' as StreamTabId;
     const resume = buildResponseResumeData(executionId, streamId, 'A');
-    await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
+    await writeFlowRecord(executionId, resume.shared, WAITING_AT_START);
 
     const result = await runPersistedFlow(executionId, streamId, resume, {
       modelHandler: responseModelHandler([{ text: 'A' }], {
@@ -784,9 +777,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const resume: ToolUseResumeData = {
       ...baseResume,
       shared,
-      sourceShared: structuredClone(shared),
     };
-    await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
+    await writeFlowRecord(executionId, resume.shared, WAITING_AT_START);
     const providerError = Object.assign(
       new Error('Answerless provider failure'),
       {
@@ -866,7 +858,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const executionId = 'abc-flow-compacted-response' as ExecutionId;
     const streamId = 'chat@gpt54#abc-flow-compacted-response' as StreamTabId;
     const resume = buildResponseResumeData(executionId, streamId, 'A');
-    await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
+    await writeFlowRecord(executionId, resume.shared, WAITING_AT_START);
 
     const result = await runPersistedFlow(executionId, streamId, resume, {
       modelHandler: responseModelHandler([
@@ -1047,7 +1039,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const snapshot: ToolUseResumeData = {
       ...base,
       shared: failedShared,
-      sourceShared: structuredClone(failedShared),
     };
     // A terminal cursor makes the resumed flow exit COMPLETE without stepping
     // any node, leaving the failed shared state exactly as persisted.
@@ -1125,7 +1116,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     };
     // A terminal cursor makes the resumed flow exit COMPLETE without stepping
     // any node, so the run completes without a structured result.
-    await writeFlowRecord(executionId, snapshot.sourceShared, {
+    await writeFlowRecord(executionId, snapshot.shared, {
       cursor: { nextNodeId: null, lastAction: FlowTransition.COMPLETE },
     });
     const session = createTestSession();
@@ -1146,21 +1137,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it.each([
-    {
-      name: 'invalid shared state',
-      reason: 'invalid-shared',
-      stored: {
-        flowName: 'texra',
-        shared: {
-          messages: [],
-          shouldSkipCycle: 'false',
-          stateSlices: null,
-        },
-        createdAt: '2026-01-01T00:00:00.000Z',
-        cursor: { nextNodeId: 'start' },
-        nodes: [],
-      },
-    },
     {
       name: 'legacy record without a replay cursor',
       reason: 'unsupported-record',
@@ -1220,9 +1196,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       const expectedError = {
         name: PersistedFlowStateError.name,
         reason,
-        ...(reason !== 'invalid-shared' && {
-          cause: expect.objectContaining({ name: 'ZodError' }),
-        }),
+        cause: expect.objectContaining({ name: 'ZodError' }),
       };
       await expect(
         runPersistedFlow(executionId, streamId, snapshot),
@@ -1392,11 +1366,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const store = getExecutionStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
     const storedShared = activeHandlerShared();
-    const snapshot = buildToolUseResumeData(
-      executionId,
-      streamId,
-      storedShared,
-    );
+    const snapshot = buildToolUseResumeData(executionId, streamId);
     await writeFlowRecord(executionId, storedShared);
     const abortError = createAbortError();
     // Reject the flow's first node-step persist with the provider's abort:
@@ -1497,11 +1467,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const streamId = 'chat@gpt54#abc-cancel-active-followup' as StreamTabId;
     const session = createTestSession();
     const storedShared = activeHandlerShared();
-    const snapshot = buildToolUseResumeData(
-      executionId,
-      streamId,
-      storedShared,
-    );
+    const snapshot = buildToolUseResumeData(executionId, streamId);
     await writeFlowRecord(executionId, storedShared);
     // `resumeQueuedToolUseFromResumeData` holds the recovery lease across the
     // whole host resume, so the flow borrows that consumer's queue instead of
@@ -1566,11 +1532,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const streamId = 'chat@gpt54#abc-cancel-child-followup' as StreamTabId;
     const session = createTestSession();
     const storedShared = activeHandlerShared();
-    const snapshot = buildToolUseResumeData(
-      executionId,
-      streamId,
-      storedShared,
-    );
+    const snapshot = buildToolUseResumeData(executionId, streamId);
     await writeFlowRecord(executionId, storedShared);
     const childLease = session.followUps.claimLive(streamId, 'child');
     expect(childLease).toBeDefined();
