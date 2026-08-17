@@ -1110,7 +1110,15 @@ describe('ProgressBackend', () => {
 
   it('retains rendered state when durable stream cleanup fails', async () => {
     const session = track(createTestSession());
-    const lifecycle = createLifecycleOptions();
+    const backendRef: { current?: RecordingTarget['backend'] } = {};
+    const selectableAtRebuild: StreamTabId[][] = [];
+    const lifecycle = createLifecycleOptions({
+      rebuildRenderedStreams: vi.fn(async () => {
+        selectableAtRebuild.push(
+          backendRef.current?.state.selectableStreamNames() ?? [],
+        );
+      }),
+    });
     const backend = track(
       new ProgressBackend({
         storage: new FakeStateStore(),
@@ -1122,6 +1130,7 @@ describe('ProgressBackend', () => {
         lifecycle,
       }),
     );
+    backendRef.current = backend;
     const stream = 'retained-stream' as StreamTabId;
     backend.state.streamLogs.ensureStream(stream);
     vi.spyOn(backend.state, 'clearStream').mockResolvedValueOnce('failed');
@@ -1132,6 +1141,8 @@ describe('ProgressBackend', () => {
     expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
       syncActiveStream: true,
     });
+    expect(selectableAtRebuild).toContainEqual([stream]);
+    expect(backend.state.isStreamRemoved(stream)).toBe(false);
     expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(0, 1);
   });
 
