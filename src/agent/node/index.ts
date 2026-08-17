@@ -11,7 +11,6 @@ const log = createLog('PocketFlow');
 // failure (ResponseCycleNode.post → FlowTransition.FINALIZE); without listing it
 // here, getNextNode logs a spurious "Flow ends: 'finalize' not found" warning on
 // every reflection-flow failure even though ending is the intended behavior.
-// (`waiting` is not terminal — ToolUseWaitNode wires it as a self-loop successor.)
 const TERMINAL_ACTIONS = new Set<Action>(['complete', 'finalize']);
 
 /**

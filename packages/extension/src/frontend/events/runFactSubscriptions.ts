@@ -10,7 +10,6 @@ export function subscribeAddOutputFilesRunFact(
     ({ event }) => {
       listener({
         streamId: event.streamId,
-        ...(event.executionId ? { executionId: event.executionId } : {}),
         filesByRound: event.filesByRound,
       });
     },
