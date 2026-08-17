@@ -194,6 +194,7 @@ async function doLoad(
   if (loadEpoch !== epoch) return false;
 
   cache.clear();
+  // Built-in/tool-use scan.issues stay in logs only; Settings/CLI list custom skips.
   customScanIssues = Object.freeze(customScan.issues);
   for (const entry of allEntries) {
     cache.set(agentKeyOf(entry), entry);
