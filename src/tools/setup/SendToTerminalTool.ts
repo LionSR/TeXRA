@@ -2,8 +2,8 @@
 import { z } from 'zod';
 
 // Local imports
-import { TERMINAL_OUTPUT_MAX_CHARS } from '@hosts/uiHosts';
 import { ToolError, type ToolResult } from '@shared/schemas';
+import { TERMINAL_OUTPUT_MAX_CHARS } from '@shared/constants/terminal';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,

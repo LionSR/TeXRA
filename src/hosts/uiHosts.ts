@@ -1,6 +1,9 @@
 // Third-party imports
 import stripAnsi from 'strip-ansi';
 
+// Local imports
+import { TERMINAL_OUTPUT_MAX_CHARS } from '@shared/constants/terminal';
+
 export interface DiffSource {
   filePath: string;
 }
@@ -99,8 +102,6 @@ export interface TerminalRunRequest {
  * {@link truncateTerminalOutput} so agents see identical truncation regardless
  * of where a setup command ran.
  */
-export const TERMINAL_OUTPUT_MAX_CHARS = 12_000;
-
 /**
  * The shared ANSI-stripped, length-capped tail every host's `TerminalRunner`
  * returns in {@link TerminalRunResult.output}. Strips control sequences, then
