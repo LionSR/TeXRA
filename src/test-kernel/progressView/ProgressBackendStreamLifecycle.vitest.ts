@@ -219,6 +219,38 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('retires a retained fact removal before rebuilding the selectable rail', async () => {
+    const backendRef: { current?: RecordingTarget['backend'] } = {};
+    const selectableAtRebuild: StreamTabId[][] = [];
+    const lifecycle = createLifecycleOptions({
+      rebuildRenderedStreams: vi.fn(async () => {
+        selectableAtRebuild.push(
+          backendRef.current?.state.selectableStreamNames() ?? [],
+        );
+      }),
+    });
+    const target = createIsolatedRecordingBackend(
+      createTestSession(),
+      lifecycle,
+    );
+    const { backend } = target;
+    backendRef.current = backend;
+    backend.setupEventListeners();
+    const streamId = 'retained-fact-stream' as StreamTabId;
+    backend.state.streamLogs.ensureStream(streamId);
+    vi.spyOn(backend.state, 'clearStream').mockResolvedValueOnce('failed');
+
+    emitRemoveStream(target, streamId);
+
+    await vi.waitFor(() =>
+      expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
+        syncActiveStream: true,
+      }),
+    );
+    expect(selectableAtRebuild).toContainEqual([streamId]);
+    expect(backend.state.isStreamRemoved(streamId)).toBe(false);
+  });
+
   it('handles removeStream session facts before backend load', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend } = target;

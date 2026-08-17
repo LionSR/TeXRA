@@ -80,6 +80,7 @@ export type SessionFactApplierOptions = {
   deleteStream: (
     stream: StreamTabId,
     expectedIncarnation?: number,
+    beforeRetainedRepair?: (outcome: 'active' | 'failed') => void,
   ) =>
     | void
     | DeleteStreamResult
@@ -341,41 +342,51 @@ export class SessionFactApplier {
               streamId,
               expectedIncarnation,
             );
+            let settled = false;
+            const settleDeletion = (
+              outcome: void | DeleteStreamResult | undefined,
+            ): void => {
+              // A prior removeStream fact for the same incarnation owns this
+              // deletion's settlement (the store dedups its delete promise);
+              // only the owning barrier retires the tombstone and replays.
+              if (!created || settled) return;
+              settled = true;
+              this.finishPendingDeletion(streamId, pending);
+              const retired =
+                (outcome === 'active' ||
+                  outcome === 'failed' ||
+                  outcome === 'superseded') &&
+                this.state.retireStreamTombstone(streamId, expectedIncarnation);
+              // A retained deletion still lives: replay the facts buffered
+              // while it was provisional so status/stage/roster/metadata are
+              // not stuck stale. Replay only when the retirement above
+              // actually removed THIS removal's barrier — a superseded
+              // deletion whose identity a fresh run re-claimed (or a newer
+              // deletion B owns) must never replay through that newer
+              // barrier. A committed deletion discards them (the stream is
+              // gone).
+              if ((outcome === 'active' || outcome === 'failed') && retired) {
+                this.replayDeferredFacts(pending.facts);
+              }
+            };
             return Promise.resolve(
-              this.options.deleteStream(streamId, expectedIncarnation),
+              this.options.deleteStream(
+                streamId,
+                expectedIncarnation,
+                settleDeletion,
+              ),
             ).then(
               (outcome) => {
-                // A prior removeStream fact for the same incarnation owns this
-                // deletion's settlement (the store dedups its delete promise);
-                // only the owning barrier retires the tombstone and replays.
-                if (!created) return;
-                this.finishPendingDeletion(streamId, pending);
-                const retired =
-                  (outcome === 'active' ||
-                    outcome === 'failed' ||
-                    outcome === 'superseded') &&
-                  this.state.retireStreamTombstone(
-                    streamId,
-                    expectedIncarnation,
-                  );
-                // A retained deletion still lives: replay the facts buffered
-                // while it was provisional so status/stage/roster/metadata are
-                // not stuck stale. Replay only when the retirement above
-                // actually removed THIS removal's barrier — a superseded
-                // deletion whose identity a fresh run re-claimed (or a newer
-                // deletion B owns) must never replay through that newer
-                // barrier. A committed deletion discards them (the stream is
-                // gone).
-                if ((outcome === 'active' || outcome === 'failed') && retired) {
-                  this.replayDeferredFacts(pending.facts);
-                }
+                settleDeletion(outcome);
               },
               (error) => {
                 // Ambiguous failure: keep the barrier (the stream may have
                 // deleted), but drop the provisional buffer — there is no
                 // outcome to replay against. The error still propagates to the
                 // event-error wrapper.
-                if (created) this.finishPendingDeletion(streamId, pending);
+                if (created && !settled) {
+                  this.finishPendingDeletion(streamId, pending);
+                }
                 throw error;
               },
             );

@@ -175,8 +175,8 @@ export class ProgressBackend {
     });
     this.hasPendingPermissions = ui.hasPendingPermissions;
     this.factApplier = new SessionFactApplier(this.state, this.renderer, {
-      deleteStream: (stream, expectedIncarnation) =>
-        this.deleteStream(stream, expectedIncarnation),
+      deleteStream: (stream, expectedIncarnation, beforeRetainedRepair) =>
+        this.deleteStream(stream, expectedIncarnation, beforeRetainedRepair),
     });
     this.setApprovalBypassState = ui.setApprovalBypassState;
   }
@@ -464,6 +464,7 @@ export class ProgressBackend {
   async deleteStream(
     stream: StreamTabId,
     expectedIncarnation?: number,
+    beforeRetainedRepair?: (outcome: 'active' | 'failed') => void,
   ): Promise<DeleteStreamResult | undefined> {
     const wasActive = this.presentation.activeStream === stream;
     const activationGeneration = this.activationGeneration;
@@ -538,6 +539,11 @@ export class ProgressBackend {
         retained,
         commandRemoval.created,
       );
+    } else if (retained === 'active' || retained === 'failed') {
+      // A fact-path removal owns its barrier in SessionFactApplier. Let it
+      // retire and replay before this retained-state rebuild enumerates the
+      // selectable rail, which deliberately hides provisional removals.
+      beforeRetainedRepair?.(retained);
     }
 
     if (retained === 'active' || retained === 'failed') {
