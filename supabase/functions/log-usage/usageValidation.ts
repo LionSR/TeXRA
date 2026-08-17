@@ -74,7 +74,8 @@ export function subscriptionSourceForUsage(
     case 'glm-coding-plan-subscription':
       return entry.subscriptionSource ?? 'glm';
     case 'xai-subscription':
-      return entry.subscriptionSource ?? 'xai';
+      // Product name, matching chatgpt/kimi/glm — not the provider id `xai`.
+      return entry.subscriptionSource ?? 'grok';
     default:
       return undefined;
   }
