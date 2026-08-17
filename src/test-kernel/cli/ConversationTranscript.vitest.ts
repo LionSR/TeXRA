@@ -21,6 +21,7 @@ import {
   terminalVisibleTranscriptText,
   trimAssistantTranscriptLead,
 } from '@cli/chat/tui/panes/transcriptEntries';
+import { hydratedTranscript } from '@cli/chat/tui/panes/TranscriptReader';
 import {
   advanceStaticTranscriptState,
   buildStaticTranscriptItems,
@@ -1979,6 +1980,28 @@ describe('CLI conversation transcript', () => {
       lines.filter((line) => line.includes('complete read output')),
     ).toHaveLength(1);
     expect(lines).toContain('Full output:');
+  });
+
+  it('keeps a failed compact-tool spill visible in the full transcript', () => {
+    const readBase = toolEntry('read', 'completed', 'preview');
+    const spillPath = 'executions/abcdef123456/toolOutput/read.txt';
+    const read = {
+      ...readBase,
+      spillPath,
+      toolUse: { ...readBase.toolUse, toolName: 'read' },
+    };
+    const notice =
+      '[Full output is unavailable because this run artifact was deleted.]';
+
+    const hydrated = hydratedTranscript(
+      sliceWithEntries(STREAM_ID, [read]),
+      new Map([[spillPath, { kind: 'failed' as const, notice }]]),
+    );
+
+    expect(hydrated?.entries[0]?.spillPath).toBe(spillPath);
+    expect(transcriptToLines(hydrated, 80)).toEqual(
+      expect.arrayContaining(['Full output:', expect.stringContaining(notice)]),
+    );
   });
 
   it('uses the full print width without Ink-only role padding', () => {
