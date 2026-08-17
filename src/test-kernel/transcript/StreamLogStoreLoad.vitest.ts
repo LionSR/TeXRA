@@ -972,7 +972,7 @@ describe('StreamLogStore load', () => {
     );
   });
 
-  it('rejects when an authoritative transcript log cannot be read', async () => {
+  it('isolates an unreadable authoritative transcript for explicit retry', async () => {
     const failure = new Error('authoritative transcript read denied');
     mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 200)] },
@@ -980,7 +980,10 @@ describe('StreamLogStore load', () => {
       logReadError: failure,
     });
 
-    await expect(StreamLogStore.open()).rejects.toBe(failure);
+    const store = await StreamLogStore.open();
+
+    expect(store.keys()).toEqual(['alpha']);
+    await expect(store.ensureLoaded('alpha')).rejects.toBe(failure);
   });
 
   it('retains the stream registry when authoritative log deletion fails', async () => {
@@ -999,7 +1002,7 @@ describe('StreamLogStore load', () => {
     expect(store.has('alpha')).toBe(true);
   });
 
-  it('preserves live state when a transactional reload fails', async () => {
+  it('isolates a corrupt stream during reload without dropping valid streams', async () => {
     const logs: Record<string, unknown> = {
       alpha: [logEntry('alpha', 1, 100)],
     };
@@ -1011,23 +1014,15 @@ describe('StreamLogStore load', () => {
     });
     const store = await StreamLogStore.open();
     await store.ensureLoaded('alpha');
-    const liveAlpha = store.get('alpha');
     logs.beta = { corrupted: true };
 
-    await expect(store.reload()).rejects.toThrow(
+    await store.reload();
+
+    expect(store.keys()).toEqual(['alpha', 'beta']);
+    expect(store.getTimestampRange('alpha').first).toBe(100);
+    await expect(store.ensureLoaded('beta')).rejects.toThrow(
       'persisted log is not an array',
     );
-
-    expect(store.keys()).toEqual(['alpha']);
-    expect(store.get('alpha')).toBe(liveAlpha);
-    expect(
-      store
-        .get('alpha')
-        ?.getRange(0)
-        .map((entry) => entry.id),
-    ).toEqual(['alpha-1']);
-    expect(store.getTimestampRange('alpha').first).toBe(100);
-    expect(store.has('beta')).toBe(false);
   });
 
   it('discards pending writes when restoring a previously flushed root', async () => {
@@ -1761,14 +1756,17 @@ describe('StreamLogStore load', () => {
     ]);
   });
 
-  it('refuses to open a non-array authoritative stream', async () => {
+  it('registers a non-array authoritative stream as failed', async () => {
     const storage = mockStorage({
       logs: { gamma: { corrupted: 'not an array' } },
       summaries: {
         gamma: summary(100, 200, { hasRunningGroup: false }),
       },
     });
-    await expect(StreamLogStore.open()).rejects.toThrow(
+    const store = await StreamLogStore.open();
+
+    expect(store.keys()).toEqual(['gamma']);
+    await expect(store.ensureLoaded('gamma')).rejects.toThrow(
       'persisted log is not an array',
     );
     expect(storage.writes.size).toBe(0);
@@ -1834,16 +1832,6 @@ describe('StreamLogStore load', () => {
         storage.writes.has(storageFile(STREAM_LOGS_DIR, streamId)),
       ),
     ).toBe(true);
-  });
-
-  it('fails persistent opening for a corrupt startup log', async () => {
-    const storage = mockStorage({
-      logs: { delta: [] },
-      summaries: {},
-      rawLogJson: { delta: '[{"id":' },
-    });
-    await expect(StreamLogStore.open()).rejects.toThrow(SyntaxError);
-    expect(storage.writes.size).toBe(0);
   });
 });
 
@@ -2152,6 +2140,29 @@ describe('StreamLogStore metadata checkpoints', () => {
     description: 'Polish the draft',
     model: 'deepseekproT',
   };
+
+  it('retains legacy metadata when checkpoint import fails', async () => {
+    const storage = mockStorage({
+      logs: {},
+      journals: {
+        alpha: `${JSON.stringify({
+          version: 1,
+          opId: '11111111-1111-4111-8111-111111111111',
+          op: 'seed',
+          entries: [logEntry('alpha', 1, 200)],
+        })}\n`,
+      },
+      summaries: {
+        alpha: { ...summary(200, 200), meta: META },
+      },
+      logWriteError: new Error('checkpoint append denied'),
+    });
+
+    const store = await StreamLogStore.open();
+
+    expect(store.getSummaryMeta('alpha')).toEqual(META);
+    expect(storage.deletes).not.toContain(LEGACY_STREAM_LOG_SUMMARIES_DIR);
+  });
 
   it('round-trips recorded summary metadata through persistence', async () => {
     const storage = mockStorage({

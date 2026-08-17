@@ -92,6 +92,14 @@ type StreamLogSummary = z.infer<typeof StreamLogSummarySchema>;
 interface StreamLoadResult {
   streamId: StreamTabId;
   summary: StreamLogSummary;
+  preserveLegacySummary?: boolean;
+  loadFailed?: boolean;
+}
+
+interface PersistentSummaryScan {
+  summaries: Map<StreamTabId, StreamLogSummary>;
+  failedStreams: Set<StreamTabId>;
+  canCleanupLegacySummaries: boolean;
 }
 
 interface ParsedPersistedEntries {
@@ -571,8 +579,11 @@ export class StreamLogStore {
   static async open(): Promise<StreamLogStore> {
     const store = new StreamLogStore({ kind: 'persistent' });
     await StorageFS.ensureDir(STREAM_LOGS_DIR);
-    store.replaceSummaries(await store.readPersistentSummaries());
-    await store.cleanupLegacySummaryCache();
+    const scan = await store.readPersistentSummaries();
+    store.replaceSummaries(scan.summaries, scan.failedStreams);
+    if (scan.canCleanupLegacySummaries) {
+      await store.cleanupLegacySummaryCache();
+    }
     return store;
   }
 
@@ -724,7 +735,12 @@ export class StreamLogStore {
     if (isDeepStrictEqual(summary.meta, meta)) return;
     summary.meta = meta;
     this.stateRevision += 1;
-    if (this.mode.kind === 'persistent') {
+    // A failed authoritative read keeps the registry entry visible, but no
+    // write may race an explicit rehydrate retry and overwrite that log.
+    if (
+      this.mode.kind === 'persistent' &&
+      this.streams.get(streamId)?.loadFailed !== true
+    ) {
       this.markPersistentChange(streamId);
     }
   }
@@ -1582,21 +1598,19 @@ export class StreamLogStore {
     // against the new root on next access, before its first write.
     this.kvHandles.invalidateAll();
 
-    const summaries = await this.readPersistentSummaries();
+    const scan = await this.readPersistentSummaries();
     if (revision !== this.stateRevision || this.pendingLoads().length > 0) {
       throw new Error(
         'Transcript state changed during reload; preserving the live state.',
       );
     }
-    this.replaceSummaries(summaries);
-    if (this.mode.kind === 'persistent') {
+    this.replaceSummaries(scan.summaries, scan.failedStreams);
+    if (this.mode.kind === 'persistent' && scan.canCleanupLegacySummaries) {
       await this.cleanupLegacySummaryCache();
     }
   }
 
-  private async readPersistentSummaries(): Promise<
-    Map<StreamTabId, StreamLogSummary>
-  > {
+  private async readPersistentSummaries(): Promise<PersistentSummaryScan> {
     const [legacyIds, journalIds, legacySummaryIds] = await Promise.all([
       this.kv().listKeys(),
       this.kv().listKeysWithExtension(STREAM_LOG_JOURNAL_EXTENSION),
@@ -1606,11 +1620,27 @@ export class StreamLogStore {
     const streamIds = [...new Set([...legacyIds, ...journalIds])];
     const results = await pMap(
       streamIds,
-      (streamId) =>
-        this.loadStreamSummary(
-          streamId as StreamTabId,
-          legacySummaryIdSet.has(streamId),
-        ),
+      async (streamId): Promise<StreamLoadResult | null> => {
+        const typedStreamId = streamId as StreamTabId;
+        try {
+          return await this.loadStreamSummary(
+            typedStreamId,
+            legacySummaryIdSet.has(streamId),
+          );
+        } catch (error) {
+          log.warn(
+            `Stream ${streamId}: transcript summary could not be loaded; retaining the stream for an explicit retry: ${toErrorMessage(error)}`,
+          );
+          return {
+            streamId: typedStreamId,
+            summary: {},
+            loadFailed: true,
+            ...(legacySummaryIdSet.has(streamId) && {
+              preserveLegacySummary: true,
+            }),
+          };
+        }
+      },
       { concurrency: STREAM_LOG_LOAD_CONCURRENCY },
     );
     const sortedResults = results
@@ -1622,13 +1652,24 @@ export class StreamLogStore {
           a.streamId.localeCompare(b.streamId),
       );
 
-    return new Map(
-      sortedResults.map(({ streamId, summary }) => [streamId, summary]),
-    );
+    return {
+      summaries: new Map(
+        sortedResults.map(({ streamId, summary }) => [streamId, summary]),
+      ),
+      failedStreams: new Set(
+        sortedResults
+          .filter((result) => result.loadFailed)
+          .map((result) => result.streamId),
+      ),
+      canCleanupLegacySummaries: sortedResults.every(
+        (result) => !result.preserveLegacySummary,
+      ),
+    };
   }
 
   private replaceSummaries(
     summaries: ReadonlyMap<StreamTabId, StreamLogSummary>,
+    failedStreams: ReadonlySet<StreamTabId> = new Set(),
   ): void {
     // One clear drops every resident per-stream field (log, leases,
     // loadFailed, pendingLoad, pendingRead, writer). `summaries`, `releaseRequests`,
@@ -1639,6 +1680,9 @@ export class StreamLogStore {
     this.summaries.clear();
     for (const [streamId, summary] of summaries) {
       this.summaries.set(streamId, summary);
+    }
+    for (const streamId of failedStreams) {
+      this.ensureStreamState(streamId).loadFailed = true;
     }
     // Metadata recorded while a stream was unregistered lands now if the
     // replacement set knows the stream (no-op on read-only opens: the
@@ -1690,8 +1734,11 @@ export class StreamLogStore {
     const entries = await this.readPersistedEntriesSerialized(streamId);
     if (!entries) return null;
     let legacyMeta = entries.summaryMeta;
+    let preserveLegacySummary = false;
     if (!entries.summaryCheckpointSeen && readLegacyMeta) {
-      legacyMeta = await this.readLegacySummaryMeta(streamId);
+      const legacy = await this.readLegacySummaryMeta(streamId);
+      legacyMeta = legacy.meta;
+      preserveLegacySummary = legacy.readFailed;
     }
     const summary = {
       ...this.summarizeEntries(entries.entries),
@@ -1703,13 +1750,24 @@ export class StreamLogStore {
       legacyMeta !== undefined
     ) {
       const checkpoint = toJournalRecord({ op: 'checkpoint', summary });
-      await this.kv().appendText(
-        streamId,
-        STREAM_LOG_JOURNAL_EXTENSION,
-        `${JSON.stringify(checkpoint)}\n`,
-      );
+      try {
+        await this.kv().appendText(
+          streamId,
+          STREAM_LOG_JOURNAL_EXTENSION,
+          `${JSON.stringify(checkpoint)}\n`,
+        );
+      } catch (error) {
+        preserveLegacySummary = true;
+        log.warn(
+          `Stream ${streamId}: legacy summary checkpoint import failed; retaining the legacy summary for retry: ${toErrorMessage(error)}`,
+        );
+      }
     }
-    return { streamId, summary };
+    return {
+      streamId,
+      summary,
+      ...(preserveLegacySummary && { preserveLegacySummary: true }),
+    };
   }
 
   private parseTrailingSummaryCheckpoint(
@@ -1730,12 +1788,17 @@ export class StreamLogStore {
 
   private async readLegacySummaryMeta(
     streamId: StreamTabId,
-  ): Promise<StreamSummaryMeta | undefined> {
+  ): Promise<{ meta?: StreamSummaryMeta; readFailed: boolean }> {
     try {
       const persisted = await this.legacySummaryKv().read<unknown>(streamId);
-      if (persisted === undefined) return undefined;
+      if (persisted === undefined) return { readFailed: false };
       const parsed = StreamLogSummarySchema.safeParse(persisted);
-      if (parsed.success) return parsed.data.meta;
+      if (parsed.success) {
+        return {
+          ...(parsed.data.meta && { meta: parsed.data.meta }),
+          readFailed: false,
+        };
+      }
       log.warn(
         `Ignoring stale-shaped legacy summary for ${streamId}: ${parsed.error.message}`,
       );
@@ -1743,8 +1806,9 @@ export class StreamLogStore {
       log.warn(
         `Ignoring unavailable legacy summary for ${streamId}: ${toErrorMessage(error)}`,
       );
+      return { readFailed: true };
     }
-    return undefined;
+    return { readFailed: false };
   }
 
   private summarizeEntries(
