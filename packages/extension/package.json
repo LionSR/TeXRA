@@ -1098,7 +1098,7 @@
     "p-queue": "^9.3.3",
     "pdf2pic": "^3.2.0",
     "perfect-debounce": "^2.1.0",
-    "postal-mime": "^2.7.6",
+    "postal-mime": "^3.0.0",
     "shell-quote": "^1.10.0",
     "signal-polyfill": "^0.2.2",
     "sortablejs": "^1.15.7",
