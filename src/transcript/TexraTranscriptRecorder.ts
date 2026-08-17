@@ -926,7 +926,9 @@ export function attachTranscriptRecorder(
     },
     flushPending,
     flushSpills: async () => {
-      await Promise.all([...pendingSpills]);
+      while (pendingSpills.size > 0) {
+        await Promise.all([...pendingSpills]);
+      }
       const failure = pendingSpillFailure;
       pendingSpillFailure = undefined;
       if (failure !== undefined) throw failure;
