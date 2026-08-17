@@ -328,6 +328,49 @@ describe('ProgressBackend cleanup', () => {
     }
   });
 
+  it('preserves a stream created after bulk cleanup starts', async () => {
+    const { backend } = createIsolatedRecordingBackend();
+    const existing = toolStreamAndExecution('bulk-existing');
+    const fresh = toolStreamAndExecution('bulk-fresh');
+    await seedOwnedStream(backend, existing, { load: true });
+
+    let releaseList!: () => void;
+    const listReleased = new Promise<void>((resolve) => {
+      releaseList = resolve;
+    });
+    let markListStarted!: () => void;
+    const listStarted = new Promise<void>((resolve) => {
+      markListStarted = resolve;
+    });
+    const listPersistedStreams =
+      backend.state.snapshots.listPersistedStreams.bind(
+        backend.state.snapshots,
+      );
+    vi.spyOn(
+      backend.state.snapshots,
+      'listPersistedStreams',
+    ).mockImplementationOnce(async () => {
+      markListStarted();
+      await listReleased;
+      return listPersistedStreams();
+    });
+
+    const cleanup = backend.state.clearAll();
+    await listStarted;
+    registerStream(backend, fresh);
+    releaseList();
+
+    await expect(cleanup).resolves.toEqual({
+      active: new Set([fresh.stream]),
+      failed: new Set(),
+      deleted: new Set([existing.stream]),
+    });
+    expect(backend.state.streamLogs.has(existing.stream)).toBe(false);
+    expect(backend.state.streamLogs.has(fresh.stream)).toBe(true);
+
+    await backend.state.clearAll();
+  });
+
   it('reconciles required cleanup and final execution cleanup independently', async () => {
     const failed = toolStreamAndExecution('fa11ed6966');
     const incomplete = toolStreamAndExecution('faded6966');

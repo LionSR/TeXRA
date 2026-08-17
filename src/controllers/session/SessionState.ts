@@ -636,9 +636,18 @@ export class SessionState {
       ...this._sessionState.keys(),
       ...Array.from(this.streamStatus.entries(), ([stream]) => stream),
     ]);
+    const identitiesAtStart = new Set<StreamTabId>([
+      ...preExistingEphemeral,
+      ...this._streamIncarnations.keys(),
+      ...this.streamLogs.keys(),
+    ]);
     const incarnationsAtStart = new Map(this._streamIncarnations);
     const deletion = await this.stores.deleteAll({
       shouldDelete: (stream) =>
+        // Sessionless staged residue is intentionally absent from the live
+        // transcript map and remains eligible for cleanup. A fresh run that
+        // appears after the snapshot has a live transcript and is fenced out.
+        (identitiesAtStart.has(stream) || !this.streamLogs.has(stream)) &&
         this.incarnationOf(stream) === (incarnationsAtStart.get(stream) ?? 0),
     });
     const retained = new Set([...deletion.active, ...deletion.failed]);
