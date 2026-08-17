@@ -27,6 +27,7 @@ vi.mock('@cli/chat/tui/state/childExecutions', () => ({
 }));
 vi.mock('@cli/chat/tui/state/cliState', () => ({
   clearTransientNotice: mocks.clearTransientNotice,
+  registerCliStateResetHook: vi.fn(() => () => undefined),
   resetCliState: mocks.resetCliState,
   setTransientNotice: vi.fn(),
   streams: { get: () => ({}) },

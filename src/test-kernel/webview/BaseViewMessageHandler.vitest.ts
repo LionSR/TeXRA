@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - webview base class
-import { BaseViewMessageHandler } from '@common/webview/BaseViewMessageHandler';
+import { BaseViewMessageHandler } from '@common/webview';
 
 // Type imports
 import type * as vscode from 'vscode';

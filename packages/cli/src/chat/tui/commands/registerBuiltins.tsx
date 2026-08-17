@@ -10,6 +10,7 @@ import {
   type CliLogoutTarget,
   parseChatLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
+import type { StreamArtifactReader } from '@controllers/session/StreamArtifactProjection';
 import type { ApiProvider } from '@model/apiProviders';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type ExecutionId } from '@shared/schemas';
@@ -79,7 +80,6 @@ import {
 } from './handlers/sessionCommands';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
-import type { StreamArtifactReader } from '../state/subscribeStreamArtifacts';
 
 type SelectHandler<T> = (value: T) => void | Promise<void>;
 type FormActionResult =
