@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as logger from '@logger/logUtils';
-import * as config from '@utils/config/configUtils';
+import type { Platform } from '@platform/platform';
+import * as platformAccess from '@platform/platform';
 
 const SECRET = 'sk-proj-redaction-example-1234567890abcdef';
 
 function enableDebugLogging(): void {
-  vi.spyOn(config, 'getConfig').mockReturnValue(true);
+  vi.spyOn(platformAccess, 'tryPlatform').mockReturnValue({
+    config: { get: () => true },
+  } as unknown as Readonly<Platform>);
 }
 
 function captureLines(options?: { trusted: boolean }): string[] {
@@ -26,6 +29,16 @@ describe('logUtils', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     logger.setOutputChannelFactory(null);
+  });
+
+  it('keeps pre-platform error logging on the non-debug path', () => {
+    vi.spyOn(platformAccess, 'tryPlatform').mockReturnValue(null);
+    const lines = captureLines();
+
+    expect(() =>
+      logger.error('startup', 'pre-init failure', { data: new Error('boom') }),
+    ).not.toThrow();
+    expect(lines).toHaveLength(1);
   });
 
   it('serializes self-referential array log data without recursing forever', () => {
