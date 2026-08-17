@@ -1231,6 +1231,45 @@ describe('ProgressBackend', () => {
     expect(workflowScript?.model).toBeUndefined();
   });
 
+  it('keeps metadata reads stable until an owning input changes', () => {
+    const { backend } = createRecordingBackend();
+    const stream = 'stable-metadata-stream' as StreamTabId;
+    const executionId = 'e5ab1e' as ExecutionId;
+
+    backend.state.streamLogs.ensureStream(stream);
+    const initial = backend.state.getStreamMetadata(stream);
+    expect(backend.state.getStreamMetadata(stream)).toBe(initial);
+
+    backend.state.updateStreamMetadata(stream, { isRemote: true });
+    const patched = backend.state.getStreamMetadata(stream);
+    expect(patched).not.toBe(initial);
+    expect(patched.isRemote).toBe(true);
+    expect(backend.state.getStreamMetadata(stream)).toBe(patched);
+
+    snapshotFacts(backend.state.snapshots).setRunConfig(
+      stream,
+      toolUseConfig('search', 'deepseekproT'),
+      executionId,
+    );
+    const summarized = backend.state.getStreamMetadata(stream);
+    expect(summarized).not.toBe(patched);
+    expect(summarized.config?.model).toBe('deepseekproT');
+    expect(backend.state.getStreamMetadata(stream)).toBe(summarized);
+
+    appendTranscriptEntry(backend.state.streamLogs, stream, {
+      id: 'first-entry',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      messageType: MESSAGE_TYPES.DEFAULT,
+      text: 'first transcript entry',
+    });
+    const dated = backend.state.getStreamMetadata(stream);
+    expect(dated).not.toBe(summarized);
+    expect(dated.creationTimestamp).toBe(100);
+    expect(backend.state.getStreamMetadata(stream)).toBe(dated);
+  });
+
   it('promotes the transcript first timestamp into canonical metadata', () => {
     const { backend } = createRecordingBackend();
     const stream = 'timestamp-stream' as StreamTabId;

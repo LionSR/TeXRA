@@ -21,7 +21,6 @@ export function createSessionStores(session: SessionHandle): SessionStores {
     snapshots: session.snapshots,
     goalEntries: {
       forget: (stream) => GoalStore.forget(stream, session),
-      forgetMany: (streams) => GoalStore.forgetMany(streams, session),
     },
     onCanonicalStreamDeleted: (stream) => {
       session.status.clearStream(stream);

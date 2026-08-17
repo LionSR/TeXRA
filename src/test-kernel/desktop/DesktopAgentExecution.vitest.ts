@@ -487,7 +487,6 @@ async function createBridge(
     snapshots: progressSnapshotStore,
     goalEntries: {
       forget: (stream) => bridgeGoalStore.forget(stream, session),
-      forgetMany: (streams) => bridgeGoalStore.forgetMany(streams, session),
     },
     onCanonicalStreamDeleted: (stream) => {
       session.status.clearStream(stream);
@@ -2060,7 +2059,7 @@ describe('DesktopProgressBridge', () => {
     expect(lastContentSync(messages)).toMatchObject({ stream: 'third' });
   });
 
-  it('falls back if a deleted stream is reactivated during deletion', async () => {
+  it('refuses desktop reactivation while a stream deletion is pending', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
 
@@ -2068,6 +2067,7 @@ describe('DesktopProgressBridge', () => {
     activateStream(bridge, 'second');
     await settleProgressEvents();
     bridge.setActiveStream('first');
+    await settleProgressEvents();
     messages.length = 0;
 
     const deletePromise = deleteStreamViaInbound(bridge, 'second');
@@ -2076,17 +2076,8 @@ describe('DesktopProgressBridge', () => {
 
     expect(
       progressMessages(messages, PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
-    ).toEqual([
-      {
-        activeStream: 'second',
-        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-      },
-      {
-        activeStream: 'first',
-        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-      },
-    ]);
-    expect(lastContentSync(messages)).toMatchObject({ stream: 'first' });
+    ).toEqual([]);
+    expect(lastStreamSync(messages)).toMatchObject({ activeStream: 'first' });
   });
 
   it('emits delete-all cleanup before syncing an empty stream list', async () => {
@@ -3561,6 +3552,13 @@ describe('DesktopProgressBridge', () => {
         await vi.waitFor(() =>
           expect(waitForRelease).toHaveBeenCalledWith(childStreamId),
         );
+        owner.processSession.events.emit({
+          scope: 'session',
+          event: {
+            type: 'setActiveStream',
+            payload: { streamId: childStreamId },
+          },
+        });
         const pendingDrain = vi.spyOn(
           owner.sessionStores,
           'waitForPendingStreamDeletions',
