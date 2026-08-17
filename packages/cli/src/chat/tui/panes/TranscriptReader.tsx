@@ -35,6 +35,7 @@ import {
 } from '../state/cliState';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
+import { trimAssistantTranscriptLead } from './transcriptEntries';
 
 const EMPTY_TRANSCRIPT_TEXT = '(no output yet)';
 const MISSING_SPILL_TEXT =
@@ -95,7 +96,9 @@ function hydratedTranscript(
       ...entry,
       text:
         spill.kind === 'loaded'
-          ? normalizeKnownHtmlForCliMarkdown(spill.text)
+          ? normalizeKnownHtmlForCliMarkdown(
+              trimAssistantTranscriptLead(spill.text),
+            )
           : withSpillNotice(entry.text, spill.notice),
     };
   });

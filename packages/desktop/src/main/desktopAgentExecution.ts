@@ -837,6 +837,7 @@ export class DesktopProgressBridge {
         file: {
           openFile: (file, line) => this.options.host.openPath(file, line),
           openSpillArtifact: async (spillPath) => {
+            await this.session.flushArtifacts();
             const file = await findTranscriptSpillFile(spillPath);
             if (!file) {
               await this.options.host.showErrorMessage(
