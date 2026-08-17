@@ -30,7 +30,6 @@ import {
   commandOf,
   createStubDesktopAgentSettingsController,
   createStubDesktopCredentialSettingsController,
-  createStubDesktopHistorySettingsController,
   createStubDesktopSettingsUiHost,
   createStubDesktopToolingSettingsController,
 } from './desktopSettingsTestSupport';
@@ -94,9 +93,6 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
         globalState,
         workspaceState,
       }),
-    historySettingsController:
-      overrides.historySettingsController ??
-      createStubDesktopHistorySettingsController(),
     toolingSettingsController:
       overrides.toolingSettingsController ??
       createStubDesktopToolingSettingsController({
@@ -322,31 +318,6 @@ describe('desktop settings IPC', () => {
     });
   });
 
-  it('delegates history commands to the required controller', async () => {
-    const baseController = createStubDesktopHistorySettingsController();
-    const rerunAgent = vi.fn(async () => undefined);
-    const historySettingsController = {
-      ...baseController,
-      handlers: { ...baseController.handlers, rerunAgent },
-    };
-    const { settings } = createSettingsFixture({
-      historySettingsController,
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
-        historyId: 'history-entry',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(rerunAgent).toHaveBeenCalledWith({
-      command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
-      historyId: 'history-entry',
-    });
-  });
-
   it('round-trips Git author writes through workspace state and refreshes the renderer', async () => {
     const workspaceState = new FakeStateStore();
 
@@ -516,11 +487,7 @@ describe('desktop settings IPC', () => {
     it('continues initial settings delivery after a malformed goal', async () => {
       await seedMalformedGoal();
       const showErrorMessage = vi.fn(async () => undefined);
-      const postHistoryData = vi.fn(async () => undefined);
       const { settings } = createSettingsFixture({
-        historySettingsController: createStubDesktopHistorySettingsController({
-          postHistoryData,
-        }),
         ui: { showErrorMessage },
       });
 
@@ -533,7 +500,6 @@ describe('desktop settings IPC', () => {
       await flushAsyncWork();
 
       expect(showErrorMessage).toHaveBeenCalledOnce();
-      expect(postHistoryData).toHaveBeenCalledOnce();
     });
   });
 
@@ -839,13 +805,8 @@ describe('desktop settings IPC', () => {
         postLatexConfigValues,
         postStartupData: postToolingStartupData,
       });
-    const postHistoryData = vi.fn(async () => undefined);
-    const historySettingsController =
-      createStubDesktopHistorySettingsController({ postHistoryData });
-
     const { settings, posted } = createCapturedSettingsFixture({
       agentSettingsController,
-      historySettingsController,
       toolingSettingsController,
       workspaceState,
       config,
@@ -862,7 +823,6 @@ describe('desktop settings IPC', () => {
 
     expect(postLatexConfigValues).toHaveBeenCalledOnce();
     expect(postToolingStartupData).toHaveBeenCalledOnce();
-    expect(postHistoryData).toHaveBeenCalledOnce();
     expect(postAgentStartupData).toHaveBeenCalledOnce();
 
     expect(

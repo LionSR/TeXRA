@@ -7,25 +7,6 @@ function joinCountedParts(parts: ReadonlyArray<string | undefined>): string {
     .join(' and ');
 }
 
-export function formatExecutionHistoryRetention(
-  activeCount: number,
-  failedCount: number,
-): string {
-  const retained = joinCountedParts([
-    activeCount > 0
-      ? formatResultCount(activeCount, 'active execution')
-      : undefined,
-    failedCount > 0
-      ? formatResultCount(
-          failedCount,
-          'execution that could not be removed',
-          'executions that could not be removed',
-        )
-      : undefined,
-  ]);
-  return `Cleared stored history except for ${retained}.`;
-}
-
 export function formatCliHistoryDeletionSummary(counts: {
   readonly deleted: number;
   readonly active: number;
