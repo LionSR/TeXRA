@@ -8,14 +8,6 @@ import {
   repoSubscriptionRegistry,
 } from '@tools/github/subscriptionBindings';
 
-/**
- * GitHub "new personal access token" page, pre-filled with the description and
- * scope the subscription poller needs. Opened verbatim by the extension and
- * desktop Git tabs, so the query string (notably `scopes`) lives here once.
- */
-export const GITHUB_TOKEN_CREATE_URL =
-  'https://github.com/settings/tokens/new?description=TeXRA%20PR%20subscription&scopes=repo';
-
 interface GitHubSubscriptionOwner {
   readonly streamId: string;
   readonly label: string;

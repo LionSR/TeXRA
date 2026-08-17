@@ -155,7 +155,13 @@ describe('wolframScriptUtils', () => {
     vi.spyOn(toolUtils, 'checkToolInstalled').mockResolvedValue(true);
     const executeCommand = vi
       .spyOn(execUtils, 'executeCommand')
-      .mockResolvedValue({ success: true, stdout: '2', stderr: '' });
+      .mockResolvedValue({
+        success: true,
+        stdout: '2',
+        stderr: '',
+        timedOut: false,
+        exitCode: 0,
+      });
 
     const result = await wolframScriptUtils.executeWolframCode('1+1');
 

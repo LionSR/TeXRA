@@ -309,6 +309,11 @@ interface PersistedFlowRunOptions {
   readonly onFlowRecordDisposition?: (
     disposition: 'preserve' | 'delete',
   ) => void;
+  /**
+   * Keep the session alive after the run so a test can assert on its
+   * follow-up queue before the session-root teardown disposes it.
+   */
+  readonly deferDispose?: boolean;
 }
 
 async function runPersistedFlow(
@@ -380,7 +385,9 @@ async function runPersistedFlow(
       ),
     );
   } finally {
-    session.dispose();
+    if (!options.deferDispose) {
+      session.dispose();
+    }
   }
 }
 
@@ -671,6 +678,35 @@ describe('retrieveSessionResumeData', () => {
 
 describe('runToolUseFlow consumes the resume boundary instead of re-parsing', () => {
   setupPlatform({ workspacePath: '/workspace' });
+
+  it('rejects a persisted record on a fresh launch', async () => {
+    const executionId = 'abc-flow-fresh-collision' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-flow-fresh-collision' as StreamTabId;
+    const snapshot = buildToolUseResumeData(executionId, streamId);
+    await writeFlowRecord(executionId, snapshot.shared);
+
+    await expect(
+      runPersistedFlow(executionId, streamId, undefined),
+    ).rejects.toMatchObject({
+      name: PersistedFlowStateError.name,
+      reason: 'unexpected-record',
+    });
+  });
+
+  it('preserves the validation cause for an invalid fresh-launch collision', async () => {
+    const executionId = 'abc-flow-invalid-fresh-collision' as ExecutionId;
+    const streamId =
+      'chat@gpt54#abc-flow-invalid-fresh-collision' as StreamTabId;
+    await writeFlowRecord(executionId, { messages: 'not-an-array' });
+
+    await expect(
+      runPersistedFlow(executionId, streamId, undefined),
+    ).rejects.toMatchObject({
+      name: PersistedFlowStateError.name,
+      reason: 'invalid-shared',
+      cause: expect.anything(),
+    });
+  });
 
   it('creates fresh shared state when the flow record is absent', async () => {
     const executionId = 'abc-flow-absent' as ExecutionId;
@@ -1349,9 +1385,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       cursor: { nextNodeId: null, lastAction: FlowTransition.COMPLETE },
     });
 
+    const resume = await retrieveToolUseResume(streamId, executionId);
     // The terminal cursor makes the flow exit COMPLETE without stepping any
     // node, leaving the declined-retry marker for the outcome derivation.
-    const result = await runPersistedFlow(executionId, streamId, undefined);
+    const result = await runPersistedFlow(executionId, streamId, resume);
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
     expect(await readFlowRecord(executionId)).toMatchObject({
@@ -1450,6 +1487,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           },
         },
         session,
+        deferDispose: true,
       });
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
@@ -1458,7 +1496,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       ]);
     } finally {
       readSpy.mockRestore();
-      session.followUps.terminalize(streamId);
+      session.dispose();
     }
   });
 
@@ -1512,6 +1550,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           modelHandler: responseModelHandler([]),
           session,
           takePendingFollowUps: () => [],
+          deferDispose: true,
         }),
       ).rejects.toBe(abortError);
       expect(session.followUps.getAll(streamId)).toEqual([
@@ -1519,7 +1558,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       ]);
     } finally {
       writeSpy.mockRestore();
-      session.followUps.terminalize(streamId);
+      session.dispose();
     }
   });
 
@@ -1571,6 +1610,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           },
           modelHandler: responseModelHandler([]),
           session,
+          deferDispose: true,
         }),
       ).rejects.toBe(abortError);
       expect(session.followUps.getAll(streamId)).toEqual([
@@ -1578,7 +1618,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       ]);
     } finally {
       writeSpy.mockRestore();
-      session.followUps.terminalize(streamId);
+      session.dispose();
     }
   });
 

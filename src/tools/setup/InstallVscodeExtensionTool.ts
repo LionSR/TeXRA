@@ -36,6 +36,10 @@ type InstallVscodeExtensionInput = z.infer<
 
 export class InstallVscodeExtensionTool extends defineTool({
   name: 'install_vscode_extension',
+  hosts: {
+    cli: { available: false, reason: 'Requires VS Code extensions.' },
+    desktop: { available: false, reason: 'Requires VS Code extensions.' },
+  },
   requiresApproval: true,
   description: `Install a VS Code extension from the Marketplace. Allowlisted: James-Yu.latex-workshop, leanprover.lean4. Blocks other extension IDs. Use this (rather than \`invoke_command workbench.extensions.installExtension\`) so the caller gets a clean success/failure status.`,
   schema: InstallVscodeExtensionInputSchema,

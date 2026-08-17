@@ -40,6 +40,7 @@ import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
+  ExtractNormalizedResponseResult,
   ExtractResponseResult,
   ModelCredentialRoute,
   ModelCredentialSelection,
@@ -1353,6 +1354,30 @@ export abstract class ModelHandler<
     responseObject: Resp,
     endTag: string,
   ): ExtractResponseResult;
+
+  /**
+   * Normalize raw provider usage before it leaves the model-handler layer.
+   * Core flow code receives only the provider-independent usage contract.
+   */
+  extractNormalizedResponse(
+    responseObject: Resp,
+    endTag: string,
+    responseTimeMs: number,
+    normalizeNullUsage = false,
+  ): ExtractNormalizedResponseResult {
+    const { text, usage, stopReason } = this.extractResponse(
+      responseObject,
+      endTag,
+    );
+    return {
+      text,
+      stopReason,
+      usage:
+        usage != null || normalizeNullUsage
+          ? this.normalizeUsage(usage as U, responseTimeMs)
+          : undefined,
+    };
+  }
 
   /** Append a provider-shaped continuation prompt as a fresh message. */
   protected abstract appendUserText(messages: M[], text: string): void;

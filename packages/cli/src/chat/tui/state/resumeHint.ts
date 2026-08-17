@@ -23,6 +23,7 @@ import {
   retainedChildStreamsFor,
   type ChildStreamEntries,
 } from './childExecutions';
+import { streamPreferredUsage } from './subscribeStreamArtifacts';
 import type { StreamSlice } from './cliState';
 
 export interface ResumeTarget {
@@ -112,9 +113,11 @@ export function collectResumeUsage(
 ): TokenUsageStats | undefined {
   const usages: TokenUsageStats[] = [];
 
-  for (const slice of streams.values()) {
-    const usage: TokenUsageStats | undefined =
-      slice.cumulativeUsage ?? slice.usage;
+  for (const [streamId, slice] of streams) {
+    const usage: TokenUsageStats | undefined = streamPreferredUsage(
+      streamId,
+      slice,
+    );
     if (!usage || !usageHasTokens(usage)) continue;
     usages.push(usage);
   }

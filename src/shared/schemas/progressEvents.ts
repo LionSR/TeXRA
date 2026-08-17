@@ -26,7 +26,6 @@ import type { ExtendedTokenUsageStats } from './usage';
 /** Payload base for stream-scoped run facts (one run per workflow tab). */
 interface StreamScopedPayload {
   streamId: StreamTabId;
-  executionId?: ExecutionId;
 }
 
 export interface SetActiveStreamPayload {

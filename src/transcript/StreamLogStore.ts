@@ -113,6 +113,51 @@ export function ephemeralTranscriptWarning(reason: string): string {
   return `Transcript persistence is unavailable for this session. Its conversation cannot be resumed. ${reason}`;
 }
 
+/**
+ * Delete one known persisted transcript without opening or parsing the
+ * transcript registry. History cleanup already resolved the stream from the
+ * execution metadata, so hydrating every unrelated transcript would add work
+ * and let unrelated corruption block deletion of the requested execution.
+ */
+export async function deletePersistedStreamLog(
+  streamId: StreamTabId,
+): Promise<void> {
+  await new KVStore(STREAM_LOGS_DIR, { compactJson: true }).delete(streamId);
+  try {
+    await new KVStore(STREAM_LOG_SUMMARIES_DIR, {
+      compactJson: true,
+    }).delete(streamId);
+  } catch (error) {
+    log.warn(
+      `Failed to delete derived transcript summary for ${streamId}; continuing after authoritative log deletion: ${toErrorMessage(error)}`,
+      { data: error },
+    );
+  }
+}
+
+/**
+ * Clear one known stream's parent-edge from its always-resident summary
+ * mirror, without opening the transcript registry. `StreamSnapshotStore` is
+ * the parent-edge authority and republishes this mirror on every live
+ * mutation (#9947), but a targeted cleanup path with no attached
+ * `summaryMetaSink` (history delete without a live session) can durably
+ * detach a child in its sidecar while this mirror — what the progress rail
+ * actually reads — keeps pointing at the deleted parent. Callers already
+ * know the exact child stream ids to patch, so this stays a single-key
+ * read-modify-write, not a registry sweep.
+ */
+export async function clearPersistedSummaryParentStream(
+  streamId: StreamTabId,
+): Promise<void> {
+  const summaries = new KVStore(STREAM_LOG_SUMMARIES_DIR, {
+    compactJson: true,
+  });
+  const summary = await summaries.read<StreamLogSummary>(streamId);
+  if (!summary?.meta?.parentStreamId) return;
+  const { parentStreamId: _parentStreamId, ...meta } = summary.meta;
+  await summaries.write(streamId, { ...summary, meta });
+}
+
 export interface TranscriptWriter {
   readonly streamId: StreamTabId;
   append(entry: StreamLogAppendInput): StreamLogEntry;
@@ -691,11 +736,7 @@ export class StreamLogStore {
     let closed = false;
 
     const assertOwned = (): void => {
-      if (
-        closed ||
-        this.streams.get(streamId)?.writer !== ownership ||
-        !ownership.tokens.has(token)
-      ) {
+      if (closed || this.streams.get(streamId)?.writer !== ownership) {
         throw new Error(`Transcript writer for ${streamId} has been released.`);
       }
     };
@@ -896,16 +937,6 @@ export class StreamLogStore {
     settled: boolean,
   ): StreamLogEntry {
     this.assertWritableStream(streamId);
-    if (
-      this.mode.kind === 'persistent' &&
-      this.summaries.has(streamId) &&
-      this.streams.get(streamId)?.log === undefined &&
-      this.streams.get(streamId)?.pendingLoad === undefined
-    ) {
-      throw new Error(
-        `Cannot append to released stream ${streamId}. Await ensureLoaded() first.`,
-      );
-    }
     const state = this.ensureStreamState(streamId);
     let logInstance = state.log;
     if (!logInstance) {

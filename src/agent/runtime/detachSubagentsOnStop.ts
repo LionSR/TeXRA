@@ -1,4 +1,4 @@
-import { tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 /**
@@ -10,13 +10,11 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
  * desktop execution, CLI session controller and TUI kill, and the orchestrator
  * kill tool) so the `detachActiveChildren` policy has one source of truth.
  *
- * Uses `tryPlatform()` and the `=== true` coercion so the policy defaults to
- * false when the toggle is unset or the platform has not been initialized,
- * matching the previous inline reads at every call site.
+ * The platform must be initialized before a run can be stopped or killed.
  */
 export function detachSubagentsOnStop(): boolean {
   return (
-    tryPlatform()?.workspaceState.get<boolean>(
+    platform().workspaceState.get<boolean>(
       WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
       false,
     ) === true

@@ -188,8 +188,7 @@ class ExposedRetryNode extends ModelInvocationNode<BaseCycleFields> {
     return this.getFallbackResult(error);
   }
 
-  seedPersistent401Guards(): void {
-    this._persistent401Error = new Error('persistent relay 401');
+  seedTokenRefreshGuard(): void {
     this._hasAttemptedTokenRefresh = true;
   }
 }
@@ -1469,7 +1468,7 @@ describe('ModelInvocationNode retry', () => {
     }
   });
 
-  it('clears persistent 401 recovery state after the host prepares a replacement client', async () => {
+  it('clears the token refresh guard after the host prepares a replacement client', async () => {
     const streamId = 'retry-state-prepared-client' as StreamTabId;
     const rebind = vi.fn(async () => undefined);
     const { node, session, streamStatus, requestRetry } = createRetryNode(
@@ -1481,7 +1480,7 @@ describe('ModelInvocationNode retry', () => {
       await options?.prepareRetry?.('configured');
       return { action: 'retry' };
     });
-    node.seedPersistent401Guards();
+    node.seedTokenRefreshGuard();
     const ensureFreshToken = vi.fn(async () => 'replacement-token');
     SupabaseClient.setAuthProvider(
       createAuthTokenProvider({ ensureFreshToken }),

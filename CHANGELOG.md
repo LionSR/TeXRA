@@ -16,12 +16,18 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **GPT-5.6 ChatGPT-subscription sessions use the same 272k input budget as GPT-5.5** —
+  matching the current Codex catalog, so history is compacted before the
+  unofficial backend rejects a turn.
 - **A missing helper model falls back to DeepSeek V4 Flash** — disabling or
   removing the helper no longer silently switches auxiliary tasks to the
   first picker model.
 - **An unknown agent name is reported once, with next-step guidance** — the
   error no longer appears twice, and command-line users now get the same
   "agent not found" hint as the other surfaces.
+- **Custom agents that fail to load now say why** — invalid YAML or retired
+  settings no longer vanish from Settings → Agents. The tab lists the skipped
+  files, and `texra agents list` writes the same reasons to stderr.
 - **Long Grok prompts report their true cost** — xAI raises per-token rates
   once a prompt crosses the model's long-context threshold; usage costs for
   those requests no longer underreport.
@@ -65,6 +71,9 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
+- **Subscription usage no longer repeats the same percentages** — plan meters
+  show each window once, without a disclosure header that restates the same
+  5-hour and 7-day figures.
 - **Workflow runs trade the Follow-up chat panel for a Copy button** — the
   panel that started a tool-use chat from a workflow's outputs (agent picker,
   model picker, note box) is gone. In its place the run's header toolbar has a
@@ -95,6 +104,8 @@ All notable changes to this project will be documented in this file.
 
 #### Features
 
+- **`/config` can store a GitHub token** — set, replace, or remove the personal
+  access token used by GitHub subscriptions without leaving the CLI.
 - **`texra agents show` omits access-group tags** — remote agent details no
   longer print visibility labels.
 

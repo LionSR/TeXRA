@@ -10,6 +10,7 @@ const SETTINGS_PROFILE_ROOT =
   'packages/extension/src/settingsView/frontend/components/profile';
 const SETTINGS_BANNER_TABS = [
   'AccountTab.ts',
+  'AgentsTab.ts',
   'LaTeXTab.ts',
   'ShortcutsTab.ts',
 ] as const;

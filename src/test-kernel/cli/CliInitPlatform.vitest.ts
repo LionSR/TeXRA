@@ -238,6 +238,11 @@ describe('CLI platform init', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.shutdownHandlers.length = 0;
+    mocks.cliGlobalState.get.mockReset();
+    mocks.cliGlobalState.get.mockImplementation(
+      (_key, defaultValue) => defaultValue,
+    );
+    mocks.cliGlobalState.update.mockReset();
     mocks.tryPlatform.mockReset();
     mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
     mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
@@ -476,11 +481,10 @@ describe('CLI platform init', () => {
   });
 
   it('keeps included access off when OpenRouter routing is enabled', async () => {
-    mocks.tryPlatform.mockReturnValue({
-      globalState: stubGlobalState((key, defaultValue) =>
-        key === GlobalStateKey.USE_OPENROUTER ? true : defaultValue,
-      ),
-    });
+    mocks.cliGlobalState.get.mockImplementation((key, defaultValue) =>
+      key === GlobalStateKey.USE_OPENROUTER ? true : defaultValue,
+    );
+    mocks.tryPlatform.mockReturnValue({ globalState: mocks.cliGlobalState });
 
     await initCliPlatform(cliContext());
 
@@ -491,14 +495,14 @@ describe('CLI platform init', () => {
   });
 
   it('clears OpenRouter when startup explicitly selects included access', async () => {
-    const globalState = stubGlobalState((key, defaultValue) =>
+    mocks.cliGlobalState.get.mockImplementation((key, defaultValue) =>
       key === GlobalStateKey.USE_OPENROUTER ? true : defaultValue,
     );
-    mocks.tryPlatform.mockReturnValue({ globalState });
+    mocks.tryPlatform.mockReturnValue({ globalState: mocks.cliGlobalState });
 
     await initCliPlatform(cliContext({ apiMode: 'included' }));
 
-    expect(globalState.update).toHaveBeenCalledWith(
+    expect(mocks.cliGlobalState.update).toHaveBeenCalledWith(
       GlobalStateKey.USE_OPENROUTER,
       false,
     );

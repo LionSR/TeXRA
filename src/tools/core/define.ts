@@ -2,6 +2,7 @@
 import { toJSONSchema, type ZodType } from 'zod';
 
 // Type imports
+import type { ToolHost, ToolHostExclusion } from '@agent/core/tools/ToolTypes';
 import type { ToolDefinition } from '@shared/schemas';
 
 // Local imports - shared
@@ -31,6 +32,10 @@ type DefineToolFlags = { [K in ExecutionFlag]?: boolean };
 type DefinedToolFlags = {
   readonly [K in ExecutionFlag]: boolean | undefined;
 };
+type ToolHosts = Partial<Record<ToolHost, ToolHostExclusion>>;
+interface DefinedToolHosts {
+  readonly hosts: ToolHosts | undefined;
+}
 
 /**
  * The abstract class `defineTool` hands back: a `BaseTool<T>` carrying the
@@ -47,7 +52,7 @@ type DefinedToolFlags = {
  */
 export type DefinedToolClass<T> = abstract new (
   override?: Partial<ToolDefinition>,
-) => BaseTool<T> & DefinedToolFlags;
+) => BaseTool<T> & DefinedToolFlags & DefinedToolHosts;
 
 /**
  * Define a tool with type-safe schema and either a static or dynamic description.
@@ -64,6 +69,8 @@ export function defineTool<T>(
     schema: ZodType<T, T>;
     /** Roster namespace a delegation tool's description is annotated from. */
     availabilityCategory?: ToolDefinition['availabilityCategory'];
+    /** Static product-host exclusions owned by this tool definition. */
+    hosts?: ToolHosts;
   } & DefineToolFlags,
 ): DefinedToolClass<T> {
   const getDescription = (): string =>
@@ -90,6 +97,7 @@ export function defineTool<T>(
     readonly slow = def.slow;
     readonly deferLogUntilApproval = def.deferLogUntilApproval;
     readonly streamsOutput = def.streamsOutput;
+    readonly hosts = def.hosts;
 
     constructor(override?: Partial<ToolDefinition>) {
       super(buildDefinition(override), def.schema);

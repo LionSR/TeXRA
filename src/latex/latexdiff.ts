@@ -49,14 +49,10 @@ export class LaTeXdiffService {
   }
 
   /**
-   * Resolve the latexdiff timeout from workspace state. Tolerant of
-   * pre-initialization: `LaTeXdiffService` is instantiated at module scope in
-   * `commands/latex/latexdiffCommands.ts` and `tools/approval/latexPreview.ts`,
-   * which evaluate before `initPlatform()` runs in `activate()`. `readPlatformSetting`
-   * uses `tryPlatform()` internally, so it returns the catalog schema default
-   * instead of throwing when the platform isn't initialized yet — keeping
-   * construction safe. Called per-diff so user updates take effect on the next
-   * invocation without any rebuild.
+   * Resolve the latexdiff timeout from workspace state. The service is created
+   * at module scope, but this getter runs only when a diff is invoked after
+   * platform initialization. Reading per diff also makes user updates take
+   * effect on the next invocation without rebuilding the service.
    */
   private getLatexdiffTimeout(): number {
     return readPlatformSetting<number>(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS);

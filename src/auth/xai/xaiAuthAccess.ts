@@ -16,7 +16,6 @@ const CHANNEL = 'xaiAuth';
 
 const coordinatorAccess = createSecretBackedCoordinator({
   secretKey: XAI_SESSION_SECRET_KEY,
-  notInitializedMessage: 'xAI auth used before the platform was initialized.',
   makeCoordinator: (storage) => new XaiSessionCoordinator({ storage }),
 });
 
@@ -28,7 +27,7 @@ export function xaiCoordinator(): XaiSessionCoordinator {
   return coordinatorAccess.get();
 }
 
-/** Signed-in status, safe to call before platform init (returns signed-out). */
+/** Signed-in status. Call only after the host initializes the platform. */
 export async function getXaiStatus(): Promise<XaiSessionStatus> {
   return getSubscriptionSessionStatus(xaiCoordinator, CHANNEL, 'Grok');
 }

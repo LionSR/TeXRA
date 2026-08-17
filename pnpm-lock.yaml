@@ -226,8 +226,8 @@ importers:
         specifier: ^8.0.0
         version: 8.0.0
       postal-mime:
-        specifier: ^2.7.6
-        version: 2.7.6
+        specifier: ^3.0.0
+        version: 3.0.0
       pretty-bytes:
         specifier: ^7.1.1
         version: 7.1.1
@@ -560,8 +560,8 @@ importers:
         specifier: ^8.0.0
         version: 8.0.0
       postal-mime:
-        specifier: ^2.7.6
-        version: 2.7.6
+        specifier: ^3.0.0
+        version: 3.0.0
       pretty-bytes:
         specifier: ^7.1.1
         version: 7.1.1
@@ -920,8 +920,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0
       postal-mime:
-        specifier: ^2.7.6
-        version: 2.7.6
+        specifier: ^3.0.0
+        version: 3.0.0
       shell-quote:
         specifier: ^1.10.0
         version: 1.10.0
@@ -5663,8 +5663,8 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
-  postal-mime@2.7.6:
-    resolution: {integrity: sha512-UUlyE2KlxmvwMGq060onF/VWU3zD6dVW31FwokQ5v26jWd35fbs2MoTFzh+jXnPwAyV2MULMKXcBInGOl5TO6Q==}
+  postal-mime@3.0.0:
+    resolution: {integrity: sha512-Z4a9ar2Bv3YpK3IXag+Yda30k7bMZfpRuUGyqtHnZ2pjHG8Bl62EhZIk4n1dzv00gfzP9g+94e9kd8+XmjVWLA==}
 
   postcss@8.5.26:
     resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
@@ -11501,7 +11501,7 @@ snapshots:
 
   pluralize@8.0.0: {}
 
-  postal-mime@2.7.6: {}
+  postal-mime@3.0.0: {}
 
   postcss@8.5.26:
     dependencies:

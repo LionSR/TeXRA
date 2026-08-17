@@ -32,7 +32,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import { platform, tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
   formatTexraApprovalPolicy,
@@ -1314,7 +1314,6 @@ function seedWorkflowTimeline(): void {
     streamId: childStreamId,
     event: {
       type: 'addOutputFiles',
-      executionId,
       filesByRound: { 0: [output] },
       streamId: childStreamId,
     },
@@ -1324,7 +1323,6 @@ function seedWorkflowTimeline(): void {
     streamId: childStreamId,
     event: {
       type: 'updateCompileFailures',
-      executionId,
       filesByRound: {
         0: [
           {
@@ -2538,7 +2536,7 @@ async function exitHarness(exitCode: number): Promise<void> {
   ink.unmount();
   try {
     await harnessRetryRuntimeHost?.close();
-    await tryPlatform()?.lifecycle.runShutdown();
+    await platform().lifecycle.runShutdown();
   } finally {
     process.exit(exitCode);
   }
