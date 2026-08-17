@@ -40,7 +40,7 @@ export function baseRoundServices(
  * whose behavior they exercise.
  */
 export function roundModelHandler(overrides: Record<string, unknown>) {
-  return {
+  const handler: Record<string, unknown> = {
     addMediaToUserMessage: vi.fn(async () => []),
     capabilities: { supportsVision: true },
     config: { provider: 'openai', fullName: 'test-model' },
@@ -65,4 +65,26 @@ export function roundModelHandler(overrides: Record<string, unknown>) {
     setOutputStreaming: vi.fn(),
     ...overrides,
   };
+  handler.extractNormalizedResponse ??= (
+    response: unknown,
+    endTag: string,
+    responseTimeMs: number,
+  ) => {
+    const extractResponse = handler.extractResponse as (
+      response: unknown,
+      endTag: string,
+    ) => { text: string; usage: unknown; stopReason: string };
+    const { text, usage, stopReason } = extractResponse(response, endTag);
+    const normalizeUsage = handler.normalizeUsage as
+      ((usage: unknown, responseTimeMs: number) => unknown) | undefined;
+    return {
+      text,
+      stopReason,
+      usage:
+        usage == null
+          ? undefined
+          : (normalizeUsage?.(usage, responseTimeMs) ?? usage),
+    };
+  };
+  return handler;
 }

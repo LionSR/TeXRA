@@ -393,11 +393,6 @@ class ResponseProcessNode<C> extends BaseNode<
       );
     }
 
-    const usageSummary = Object.entries(result.normalizedUsage ?? {})
-      .map(([key, value]) => `${key}: ${value}`)
-      .join(', ');
-    logger.debug(`Usage summary: ${usageSummary}`);
-
     logger.debug(`Normalized usage: ${JSON.stringify(result.normalizedUsage)}`);
 
     logger.debug('Response preview:');

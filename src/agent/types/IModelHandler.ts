@@ -62,7 +62,6 @@ export type IModelHandler<
   | 'extractNormalizedResponse'
   | 'addContinueMessage'
   | 'initializeOutputAndPrefill'
-  | 'normalizeUsage'
   | 'getLastCredentialUsageRoute'
   | 'getCredentialRouteForClient'
   | 'updateMessageContent'
