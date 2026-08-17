@@ -145,7 +145,7 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
       icon: 'triangle-exclamation',
       title: `${issues.length} custom ${pluralize(issues.length, 'agent')} could not be loaded`,
       description:
-        'These files are in the folder above. TeXRA skipped them because the YAML is invalid or uses retired settings.',
+        'These files are in the folder above. TeXRA skipped them; each entry below gives the reason.',
       detail: html`
         <ul class="custom-agent-issues">
           ${issues.map(

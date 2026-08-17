@@ -46,6 +46,7 @@ describe('settingsView notification message builders', () => {
     const message = await buildAgentSelectionMessage({
       loadAgents,
       buildSelectionItems,
+      getCustomAgentScanIssues: () => [],
     });
 
     expect(loadAgents).toHaveBeenCalledOnce();

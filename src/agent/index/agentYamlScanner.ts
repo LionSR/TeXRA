@@ -84,13 +84,13 @@ export async function scanDirectory(
     const entries: AgentEntry[] = [];
     for (const entry of unique) {
       const scanned = scanYaml(entry, source, definitions);
-      if (scanned) {
-        entries.push(scanned);
+      if (scanned.ok) {
+        entries.push(scanned.entry);
         continue;
       }
       issues.push({
         path: relativeScanPath(dir, entry.path),
-        message: 'Agent definition could not be read.',
+        message: scanned.message,
       });
     }
 
@@ -239,7 +239,7 @@ function scanYaml(
   entry: ParsedAgentYaml,
   source: AgentSource,
   definitions: Map<string, ParsedAgentYaml>,
-): AgentEntry | null {
+): { ok: true; entry: AgentEntry } | { ok: false; message: string } {
   try {
     const settingsBlock = inheritedDefinitionBlock(
       entry,
@@ -286,19 +286,22 @@ function scanYaml(
     }
 
     return {
-      name: entry.name,
-      source,
-      path: entry.path,
-      category,
-      description: entry.definition.description,
-      tools: tools?.length ? tools : undefined,
-      defaultOutputFiles: defaultOutputFiles?.length
-        ? defaultOutputFiles
-        : undefined,
-      rounds,
+      ok: true,
+      entry: {
+        name: entry.name,
+        source,
+        path: entry.path,
+        category,
+        description: entry.definition.description,
+        tools: tools?.length ? tools : undefined,
+        defaultOutputFiles: defaultOutputFiles?.length
+          ? defaultOutputFiles
+          : undefined,
+        rounds,
+      },
     };
   } catch (err) {
     log.warn(`Failed to scan ${entry.path}: ${toErrorMessage(err)}`);
-    return null;
+    return { ok: false, message: toErrorMessage(err) };
   }
 }
