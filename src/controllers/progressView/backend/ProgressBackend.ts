@@ -527,6 +527,19 @@ export class ProgressBackend {
     }
     releaseDeletionClaim();
 
+    if (commandRemoval) {
+      // Retire a retained command-owned tombstone before rebuilding the tab
+      // rail. selectableStreamNames() deliberately hides provisional
+      // removals, so repairing presentation first would omit the stream that
+      // durable cleanup just reported as still live.
+      this.factApplier.completeCommandRemoval(
+        stream,
+        commandRemoval.incarnation,
+        retained,
+        commandRemoval.created,
+      );
+    }
+
     if (retained === 'active' || retained === 'failed') {
       // Best-effort presentation repair, each failure isolated so a broken
       // rebuild cannot suppress the retention notification and neither can
@@ -554,14 +567,6 @@ export class ProgressBackend {
       }
     }
 
-    if (commandRemoval) {
-      this.factApplier.completeCommandRemoval(
-        stream,
-        commandRemoval.incarnation,
-        retained,
-        commandRemoval.created,
-      );
-    }
     return retained;
   }
 
