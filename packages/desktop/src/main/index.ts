@@ -989,7 +989,7 @@ function createWindow(options: {
         sessionId,
         exitCode,
       }),
-    onError: reportAsyncError,
+    onError: reportBackgroundError,
   });
   const browserViews = createDesktopBrowserViews({
     getWindow: () => (window.isDestroyed() ? undefined : window),
