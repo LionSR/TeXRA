@@ -361,7 +361,12 @@ export class StreamLog {
       this.reservedSettlements.set(id, this.settlementSeqCounter);
     }
     return this.update(id, {
-      presentationSeqNo: reserved ?? this.settlementSeqCounter,
+      // A heading captures its presentation coordinate when it opens. Keep
+      // that earlier coordinate while reserving its eventual settlement slot;
+      // otherwise a later reservation can move it behind synthetic rows that
+      // were already appended after the heading.
+      presentationSeqNo:
+        current.presentationSeqNo ?? reserved ?? this.settlementSeqCounter,
     });
   }
 
