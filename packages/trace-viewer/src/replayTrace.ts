@@ -8,15 +8,15 @@ import type {
 } from '@shared/schemas';
 import {
   AgentCategory,
+  END_GROUP_STATUS,
   executionStatusToRunOutcome,
+  STREAM_PHASE,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_STATUS,
-  StreamLifecycleStatusSchema,
   streamStatusToLifecycleStatus,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { TraceDocument } from '@transcript';
-import { isObject } from '@utils/core';
 
 type UpdateStreamsMessage = Extract<
   ProgressViewOutboundMessage,
@@ -90,19 +90,16 @@ function findRootStageId(
  * terminal status does this default to `READY`, same as an unqualified
  * successful finish.
  *
- * The terminal group row's `data.status` is parsed with
- * `StreamLifecycleStatusSchema` (StreamPhase-or-legacy-StreamStatus union,
- * already shipped — §2), not the narrower legacy-only `StreamStatusSchema`:
+ * The terminal group row's `data.status` is typed at trace import as the
+ * StreamPhase-or-legacy-EndGroupStatus union, not narrowed here:
  * `assembleTrace()` (src/transcript/traceAssembler.ts) is a `StreamLogStore`
  * client, so every `TraceDocument` it builds — including one assembled from
  * pre-cutover on-disk history — carries the canonical `RunOutcome` values
  * `StreamLogStore.parsePersistedEntries` normalizes to (#7993 step 2), not
  * just the legacy 2-value `EndGroupStatus` strings a genuinely
  * externally-authored, never-reassembled `trace.json` predating this cutover
- * would still carry. `StreamLifecycleStatusSchema` accepts both, so this one
- * parse call keeps working for freshly-`assembleTrace()`d documents and for
- * historical exported files alike — no per-entry rewrite of `trace.entries`,
- * which stays exactly the future work §8.3 scopes separately.
+ * would still carry. The trace-import schema accepts both, so this projection
+ * works for freshly assembled documents and historical exported files alike.
  */
 function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
   if (trace.terminalStatus !== null) {
@@ -113,9 +110,7 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
   for (const entry of trace.entries.toReversed()) {
     if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END) continue;
     if (entry.groupId !== undefined) continue;
-    if (!isObject(entry.data)) continue;
-    const kind =
-      typeof entry.data.kind === 'string' ? entry.data.kind : undefined;
+    const kind = entry.data.kind;
     if (kind !== undefined) {
       if (NESTED_STAGE_KINDS.has(kind)) continue;
     } else if (entry.id !== rootStageId) {
@@ -126,8 +121,13 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
       // else sharing the "no parent" shape is a nested round/phase/session.
       continue;
     }
-    const status = StreamLifecycleStatusSchema.safeParse(entry.data.status);
-    if (status.success) return status.data;
+    if (entry.data.status === END_GROUP_STATUS.ERROR) {
+      return STREAM_PHASE.FAILED;
+    }
+    if (entry.data.status === END_GROUP_STATUS.STOPPED) {
+      return STREAM_PHASE.COMPLETED;
+    }
+    if (entry.data.status !== undefined) return entry.data.status;
   }
   return trace.snapshot.status
     ? streamStatusToLifecycleStatus(trace.snapshot.status)

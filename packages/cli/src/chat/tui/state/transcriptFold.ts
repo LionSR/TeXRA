@@ -18,16 +18,13 @@ import { formatCliWorkflowCallLine } from '@cli/runtime/workflowCallText';
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { redactSecrets } from '@logger/redaction';
 import {
-  ErrorLogDataSchema,
-  FileListEntrySchema,
-  GroupLogPayloadSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   TOOL_USE_STATUS,
-  WorkflowAttemptMarkerSchema,
-  WorkflowCallProgressSchema,
   isPlainAgentIdentity,
   isTerminalWorkflowCallProgress,
+  type ErrorLogData,
+  type FileListEntry,
   type StreamLogEntry,
   type TaskGroup,
 } from '@shared/schemas';
@@ -65,31 +62,13 @@ const MAX_ERROR_DETAIL_LENGTH = 240;
  * Project successful local context-media preparation. FILE_LIST does not
  * claim that a remote provider subsequently accepted the attachment.
  */
-function projectFileListImages(data: unknown): LoadedImage[] {
-  if (!Array.isArray(data)) return [];
-
-  const images: LoadedImage[] = [];
-  const seen = new Set<string>();
-  for (const candidate of data) {
-    const entry = FileListEntrySchema.safeParse(candidate);
-    if (
-      !entry.success ||
-      !entry.data.ok ||
-      entry.data.media?.kind !== 'image'
-    ) {
-      continue;
+function projectFileListImages(data: readonly FileListEntry[]): LoadedImage[] {
+  return data.flatMap((entry) => {
+    if (!entry.ok || entry.media?.kind !== 'image' || !entry.path.trim()) {
+      return [];
     }
-    if (!entry.data.path.trim()) continue;
-    const image = {
-      path: entry.data.path,
-      sizeBytes: entry.data.media.sizeBytes,
-    };
-    const key = `${image.path}\u0000${image.sizeBytes}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    images.push(image);
-  }
-  return images;
+    return [{ path: entry.path, sizeBytes: entry.media.sizeBytes }];
+  });
 }
 
 const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
@@ -204,12 +183,7 @@ function phaseGroupData(
   ) {
     return null;
   }
-  // Same parse `updateTaskGroups` uses for the identical group-log payload:
-  // display fields recover independently, while malformed attempt ownership
-  // rejects the payload and therefore cannot masquerade as a legacy omission.
-  const payload = GroupLogPayloadSchema.safeParse(entry.data);
-  if (!payload.success) return null;
-  const { kind, index, total, attemptId } = payload.data;
+  const { kind, index, total, attemptId } = entry.data;
   if (kind !== 'phase') return null;
   return {
     ...(index !== undefined ? { index } : {}),
@@ -226,29 +200,20 @@ function logEntryRole(
   return 'assistant';
 }
 
-function renderLogEntryText(
-  role: 'error' | 'user',
+function renderErrorLogEntryText(
   text: string,
-  data: unknown,
+  data: ErrorLogData | undefined,
 ): string {
-  switch (role) {
-    case 'error': {
-      const safeSummary = redactSecrets(safeTerminalText(text));
-      const parsed = ErrorLogDataSchema.safeParse(data);
-      if (!parsed.success) return appendCliApiSwitchHint(safeSummary);
-
-      const detail = truncateSummary(
-        redactSecrets(safeTerminalText(parsed.data.message)),
-        MAX_ERROR_DETAIL_LENGTH,
-      );
-      const withDetail = detail
-        ? `${safeSummary}\n${TOOL_OUTPUT_CORNER} ${detail}`
-        : safeSummary;
-      return appendCliApiSwitchHint(withDetail, parsed.data.exhaustionReason);
-    }
-    case 'user':
-      return summarizeFollowupMessage(text);
-  }
+  const safeSummary = redactSecrets(safeTerminalText(text));
+  if (!data) return appendCliApiSwitchHint(safeSummary);
+  const detail = truncateSummary(
+    redactSecrets(safeTerminalText(data.message)),
+    MAX_ERROR_DETAIL_LENGTH,
+  );
+  const withDetail = detail
+    ? `${safeSummary}\n${TOOL_OUTPUT_CORNER} ${detail}`
+    : safeSummary;
+  return appendCliApiSwitchHint(withDetail, data.exhaustionReason);
 }
 
 /**
@@ -314,9 +279,7 @@ function renderLogEntryFresh(
   }
 
   if (entry.messageType === MESSAGE_TYPES.WORKFLOW_TASK) {
-    const parsed = WorkflowCallProgressSchema.safeParse(entry.data);
-    if (!parsed.success) return null;
-    const call = parsed.data;
+    const call = entry.data;
     const next: ConversationEntry = {
       ...baseLogEntryFields(
         entry,
@@ -373,8 +336,10 @@ function renderLogEntryFresh(
   if (role === 'assistant') {
     assistantTranscript = trimAssistantTranscriptLead(text);
     renderedText = normalizeKnownHtmlForCliMarkdown(assistantTranscript);
+  } else if (entry.messageType === MESSAGE_TYPES.ERROR) {
+    renderedText = renderErrorLogEntryText(text, entry.data);
   } else {
-    renderedText = renderLogEntryText(role, text, entry.data);
+    renderedText = summarizeFollowupMessage(text);
   }
   if (
     role === 'assistant' &&
@@ -833,12 +798,16 @@ function applyChangedLogEntry(
     markerCandidate &&
     entry.seqNo >= state.workflowAttemptSeqNo
   ) {
-    const marker = WorkflowAttemptMarkerSchema.safeParse(entry.data);
     // A malformed declared boundary must supersede the preceding attempt.
     // Retaining its identifier would project prior-run rows as current.
-    state.workflowAttemptId = marker.success
-      ? marker.data.attemptId
-      : undefined;
+    state.workflowAttemptId =
+      typeof entry.data === 'object' &&
+      entry.data !== null &&
+      'attemptId' in entry.data &&
+      typeof entry.data.attemptId === 'string' &&
+      entry.data.attemptId.length > 0
+        ? entry.data.attemptId
+        : undefined;
     state.workflowAttemptBoundaryDeclared = true;
     state.workflowAttemptSeqNo = entry.seqNo;
   }

@@ -32,12 +32,6 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
  * `status`/`kind` membership with hand-rolled type guards duplicating
  * `TaskGroupStatusSchema`/`StageKindSchema`.
  *
- * Each field validates (and recovers via `.catch(undefined)`) independently
- * so one invalid field — e.g. an unrecognized `status` from an older/newer
- * producer — doesn't fail the whole payload and drop sibling fields that
- * were otherwise usable; the old per-field guards had this per-field
- * tolerance and a single `.safeParse()` on a non-catching schema would not.
- *
  * `status` accepts both vocabularies a wire row can still carry post-#7993
  * step 3: the native `TaskGroupStatus` (the `StreamPhase` running/completed/
  * cancelled/failed subset) every live/persisted `group-start`/`group-end`
@@ -50,20 +44,36 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
  * is a strict subset of it and needs no separate union member; only the
  * still-disjoint legacy `EndGroupStatus` vocabulary does. The shared
  * projection maps a legacy value UP to the native value it corresponds to;
- * a value in neither vocabulary still falls back to `undefined` here, same
- * as any other display field. `attemptId` is different: it owns physical-run
+ * a value in neither vocabulary is rejected at the canonical persistence
+ * boundary. Exported traces recover stale display fields independently in
+ * `TraceGroupLogPayloadSchema`. `attemptId` is different: it owns physical-run
  * identity, so genuine absence remains valid for older rows while a malformed
  * present value rejects the payload instead of becoming a legacy omission.
  */
-export const GroupLogPayloadSchema = z.looseObject({
-  status: z
-    .union([TaskGroupStatusSchema, EndGroupStatusSchema])
-    .optional()
-    .catch(undefined),
-  kind: StageKindSchema.optional().catch(undefined),
-  index: taskGroupIndexField.optional().catch(undefined),
-  total: taskGroupTotalField.optional().catch(undefined),
+const groupLogPayloadFields = {
+  status: z.union([TaskGroupStatusSchema, EndGroupStatusSchema]).optional(),
+  kind: StageKindSchema.optional(),
+  index: taskGroupIndexField.optional(),
+  total: taskGroupTotalField.optional(),
   attemptId: z.string().min(1).optional(),
-  name: z.string().optional().catch(undefined),
-  endTime: taskGroupEndTimeField.optional().catch(undefined),
+  name: z.string().optional(),
+  endTime: taskGroupEndTimeField.optional(),
+};
+
+export const GroupLogPayloadSchema = z.looseObject(groupLogPayloadFields);
+
+/**
+ * Permanent exported-trace recovery for group rows written by older versions.
+ * Each display-only field recovers independently so one stale value does not
+ * discard the whole trace entry. Attempt identity remains strict because
+ * erasing malformed ownership would attach work to the wrong physical run.
+ */
+export const TraceGroupLogPayloadSchema = z.looseObject({
+  ...groupLogPayloadFields,
+  status: groupLogPayloadFields.status.catch(undefined),
+  kind: groupLogPayloadFields.kind.catch(undefined),
+  index: groupLogPayloadFields.index.catch(undefined),
+  total: groupLogPayloadFields.total.catch(undefined),
+  name: groupLogPayloadFields.name.catch(undefined),
+  endTime: groupLogPayloadFields.endTime.catch(undefined),
 });

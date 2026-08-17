@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   LOG_LEVELS,
+  LogMessageDataSchema,
   MESSAGE_TYPES,
   type LogMessageData,
 } from '@shared/schemas';
@@ -21,7 +22,7 @@ function renderEntry(message: LogMessageData): Element {
 
 /** A streaming thinking entry, overridable per test. */
 function logMessage(overrides: Partial<LogMessageData>): LogMessageData {
-  return {
+  return LogMessageDataSchema.parse({
     id: 'msg-1',
     text: 'text',
     level: LOG_LEVELS.INFO,
@@ -29,7 +30,7 @@ function logMessage(overrides: Partial<LogMessageData>): LogMessageData {
     messageType: MESSAGE_TYPES.THINKING,
     data: { status: 'running' },
     ...overrides,
-  };
+  });
 }
 
 /**

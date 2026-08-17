@@ -10,6 +10,7 @@ import { TraceDocumentSchema } from '@transcript/traceDocumentSchema';
 import {
   STREAM_SNAPSHOT_SCHEMA_VERSION,
   StreamSnapshotSchema,
+  TraceStreamLogEntrySchema,
 } from '@shared/schemas';
 
 const TraceStreamSnapshotSchema = StreamSnapshotSchema.extend({
@@ -19,6 +20,7 @@ const TraceStreamSnapshotSchema = StreamSnapshotSchema.extend({
 });
 
 export const TraceDataSchema = TraceDocumentSchema.extend({
+  entries: z.array(TraceStreamLogEntrySchema),
   snapshot: TraceStreamSnapshotSchema,
 });
 
