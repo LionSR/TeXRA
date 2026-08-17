@@ -381,8 +381,11 @@ async function assembleAgentLaunchContext(
     let traceDisposed = false;
     let removeSpillFlusher = (): void => {};
     removeSpillFlusher = session.useArtifactFlusher(async () => {
-      await rawRunTrace.flushSpills();
-      if (traceDisposed) removeSpillFlusher();
+      try {
+        await rawRunTrace.flushSpills();
+      } finally {
+        if (traceDisposed) removeSpillFlusher();
+      }
     });
     const detachTrace = session.attachRunTrace(rawRunTrace.trace, streamId);
     // Status is a session fact, not an AgentEvent: bridge the hub's canonical

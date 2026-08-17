@@ -65,6 +65,9 @@ const STREAM_UPDATE_THROTTLE_MS = 50;
 const MAX_TRANSCRIPT_ENTRY_BYTES = 50 * 1024;
 const MAX_TRANSCRIPT_ENTRY_LINES = 2_000;
 const TRANSCRIPT_PREVIEW_LINES = 40;
+const TRANSCRIPT_TRUNCATION_MARKER =
+  '\n\n… output truncated; full output is stored separately …\n\n';
+const UTF8_ENCODER = new TextEncoder();
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -186,14 +189,67 @@ export interface TranscriptSpillWriter {
 function boundedTranscriptPreview(text: string): string {
   const lines = text.split('\n');
   if (
-    text.length <= MAX_TRANSCRIPT_ENTRY_BYTES &&
+    UTF8_ENCODER.encode(text).length <= MAX_TRANSCRIPT_ENTRY_BYTES &&
     lines.length <= MAX_TRANSCRIPT_ENTRY_LINES
   ) {
     return text;
   }
-  const head = lines.slice(0, TRANSCRIPT_PREVIEW_LINES).join('\n');
-  const tail = lines.slice(-TRANSCRIPT_PREVIEW_LINES).join('\n');
-  return `${head}\n\n… output truncated; full output is stored separately …\n\n${tail}`;
+  const contentBudget =
+    MAX_TRANSCRIPT_ENTRY_BYTES -
+    UTF8_ENCODER.encode(TRANSCRIPT_TRUNCATION_MARKER).length;
+  const head = utf8Prefix(
+    lines.slice(0, TRANSCRIPT_PREVIEW_LINES).join('\n'),
+    Math.floor(contentBudget / 2),
+  );
+  const tail = utf8Suffix(
+    lines.slice(-TRANSCRIPT_PREVIEW_LINES).join('\n'),
+    Math.ceil(contentBudget / 2),
+  );
+  return `${head}${TRANSCRIPT_TRUNCATION_MARKER}${tail}`;
+}
+
+function utf8Prefix(text: string, byteBudget: number): string {
+  let bytes = 0;
+  let end = 0;
+  for (const character of text) {
+    const characterBytes = utf8CharacterBytes(character);
+    if (bytes + characterBytes > byteBudget) break;
+    bytes += characterBytes;
+    end += character.length;
+  }
+  return text.slice(0, end);
+}
+
+function utf8Suffix(text: string, byteBudget: number): string {
+  let bytes = 0;
+  let start = text.length;
+  while (start > 0) {
+    let characterStart = start - 1;
+    const codeUnit = text.charCodeAt(characterStart);
+    if (
+      codeUnit >= 0xdc00 &&
+      codeUnit <= 0xdfff &&
+      characterStart > 0 &&
+      text.charCodeAt(characterStart - 1) >= 0xd800 &&
+      text.charCodeAt(characterStart - 1) <= 0xdbff
+    ) {
+      characterStart -= 1;
+    }
+    const character = text.slice(characterStart, start);
+    const characterBytes = utf8CharacterBytes(character);
+    if (bytes + characterBytes > byteBudget) break;
+    bytes += characterBytes;
+    start = characterStart;
+  }
+  return text.slice(start);
+}
+
+function utf8CharacterBytes(character: string): number {
+  const codePoint = character.codePointAt(0) ?? 0;
+  if (codePoint <= 0x7f) return 1;
+  if (codePoint <= 0x7ff) return 2;
+  if (codePoint <= 0xffff) return 3;
+  return 4;
 }
 
 export function attachTranscriptRecorder(
