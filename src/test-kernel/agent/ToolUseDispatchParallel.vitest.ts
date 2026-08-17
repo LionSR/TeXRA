@@ -187,6 +187,38 @@ function assertDuplicateInheritsOutput(results: ExecResult[]): void {
 describe('ToolUseDispatchNode parallel dispatch', () => {
   beforeAll(() => installPlatform({ workspacePath: '/workspace' }));
 
+  it('converts a malformed attachment result into a tool error', async () => {
+    const malformedAttachmentTool: ITool = {
+      definition: {
+        name: 'malformed_attachment',
+        description: 'malformed_attachment',
+        parameters: {},
+      },
+      async call(): Promise<ToolResult> {
+        return {
+          status: 'executed',
+          output: 'not accepted',
+          files: [{ path: 42, mimeType: 'image/png' }],
+        } as unknown as ToolResult;
+      },
+    } as ITool;
+
+    await withDispatchHarness(
+      { tools: { malformed_attachment: malformedAttachmentTool } },
+      async ({ node }) => {
+        const [execution] = (await runDispatch(node, [
+          makeCall('c1', 'malformed_attachment', {}),
+        ])) as ExecResult[];
+
+        assert.equal(execution?.result.status, 'error');
+        assert.match(
+          execution?.result.status === 'error' ? execution.result.error : '',
+          /malformed_attachment: Tool returned an invalid result/i,
+        );
+      },
+    );
+  });
+
   it('preserves the unwrapped root instruction across nested delegation', async () => {
     let observedInstruction: string | undefined;
     let observedTrace: unknown;

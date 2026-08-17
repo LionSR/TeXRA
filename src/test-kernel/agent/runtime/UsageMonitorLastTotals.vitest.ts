@@ -168,6 +168,36 @@ describe('UsageMonitor', () => {
     });
   });
 
+  it('uses the normalized provider for backend usage accounting', async () => {
+    await withMonitor(async ({ logger, monitor, modelCell }) => {
+      const warn = vi.spyOn(logger, 'warn');
+      const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
+      modelCell.swap(
+        {
+          ...testModelInfo,
+          config: { ...testModelInfo.config, provider: 'others' },
+          dispose: vi.fn(),
+        } as unknown as RunModelHandler,
+        'other-provider-model',
+      );
+      const state = AgentRunStateSnapshotSchema.parse({});
+      recordCycleMetrics(state, 50, {
+        inputTokens: 10,
+        outputTokens: 2,
+        cost: 0.01,
+        responseTimeMs: 50,
+        provider: 'openrouter' as const,
+      });
+
+      await monitor.recordUsage(state);
+
+      expect(log).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'openrouter' }),
+      );
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
   it('reports permanent relay rejection to the spend-cap caller', async () => {
     await withMonitor(async ({ logger, monitor }) => {
       const error = vi.spyOn(logger, 'error');

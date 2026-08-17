@@ -43,6 +43,7 @@ import {
   clearTerminalScrollback,
   installTerminalRestoreOnExit,
 } from '@cli/tui/terminalCleanup';
+import { DisposableStore } from '@platform/disposable';
 import { platform } from '@platform/platform';
 import {
   formatTexraApprovalPolicy,
@@ -331,18 +332,20 @@ export async function runChat(
     stdout: process.stdout,
   });
 
-  const disposers: Array<() => void> = [];
-  // Crash safety: if the process dies outside the orderly teardown below
-  // (uncaught exception, stray process.exit), still restore the terminal so
-  // the user's shell isn't left in raw/kitty/mouse mode with a hidden cursor.
-  disposers.push(installTerminalRestoreOnExit({ clearItermProgress }));
+  const disposables = new DisposableStore();
+  // Crash safety stays armed until graceful teardown has restored the terminal;
+  // it outlives session subscriptions so a later teardown failure cannot leave
+  // the user's shell in raw/kitty/mouse mode with a hidden cursor.
+  const disposeTerminalRestoreOnExit = installTerminalRestoreOnExit({
+    clearItermProgress,
+  });
   // Cosmetic, but "texra-local" (a local dev binary's own name) or a bare
   // shell prompt in every tab makes a multi-session workflow hard to
   // navigate. Keep the project name while surfacing live attention state.
   const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd);
-  disposers.push(terminalTitleUpdates.dispose);
-  disposers.push(subscribeStreamLog());
-  disposers.push(subscribeStreamArtifacts(runtimeSession.snapshots));
+  disposables.add(terminalTitleUpdates.dispose);
+  disposables.add(subscribeStreamLog());
+  disposables.add(subscribeStreamArtifacts(runtimeSession.snapshots));
 
   const session = new TuiSession();
 
@@ -396,12 +399,12 @@ export async function runChat(
     session,
     runtimeSession,
     getSessionContext: currentSessionContext,
-    disposers,
+    disposables,
     followUpQueue,
     snapshotStore: runtimeSession.snapshots,
   });
-  disposers.push(subscribeStreamStatus());
-  disposers.push(
+  disposables.add(subscribeStreamStatus());
+  disposables.add(
     setCliAgentResumeHandler({
       tryResumeStream: chatController.tryResumeStream,
     }),
@@ -574,7 +577,8 @@ export async function runChat(
     canResume: transcriptLifecycle.canResume,
     clearItermProgress,
     kittyKeyboardEnabled: terminalCaps.kittyKeyboard,
-    disposers,
+    disposables,
+    disposeTerminalRestoreOnExit,
     followUpQueue,
     getApprovalPolicy,
     flushArtifacts: () => runtimeSession.flushArtifacts(),
@@ -603,7 +607,7 @@ export async function runChat(
 
   // Auto-prompt when the active stream goes WAITING so the UI clearly
   // signals "your turn," alongside the StatusBar pill.
-  disposers.push(
+  disposables.add(
     runtimeSession.events.subscribeStatus((change) => {
       if (
         change.streamId === session.streamId &&

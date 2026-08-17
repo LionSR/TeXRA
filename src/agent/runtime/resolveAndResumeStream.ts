@@ -10,6 +10,7 @@ import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
+import { ResumeAdmissionCancelledError } from './executeAgent';
 import type { SessionHandle } from './SessionHandle';
 import type { StreamStatusMachine } from './StreamStatusService';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
@@ -129,6 +130,7 @@ export interface ResumeStreamPorts {
    * hosts.
    */
   readonly streamStatus: Pick<StreamStatusMachine, 'isActiveOrResuming'>;
+  /** Monotone per-attempt cancellation signal: once true it stays true. */
   readonly isCancellationRequested?: () => boolean;
   resolveResumeState(streamId: StreamTabId): Promise<ResumeStateResolution>;
   reportResumeStateResolution?(
@@ -210,6 +212,12 @@ export async function resolveAndResumeStream(
     return true;
   } catch (error) {
     if (isCancellationRequested()) return false;
+    // Shipped hosts that pass the lease guard share this attempt's monotone
+    // cancellation latch, so the preceding check handles their lost-admission
+    // path. Keep this fallback for a future host that supplies the lease guard
+    // without the optional cancellation port: it must still fail silently
+    // rather than toast.
+    if (error instanceof ResumeAdmissionCancelledError) return false;
     try {
       await ports.reportFailure?.(streamId, error);
     } catch {

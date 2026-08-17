@@ -1066,7 +1066,7 @@ describe('attachProviderError end-to-end', () => {
     // Simulates a cached error attached before the retryable/exhaustion-flag
     // migration ran — e.g. a resumed tool-use flow's raw persisted
     // `lastError`, which bypasses the schema-level migration on that resume
-    // path (migrateSharedState casts the persisted shape directly).
+    // path (parseToolUseShared parses the persisted shape directly).
     const legacyCached = {
       message: 'legacy relay-limit record',
       retryable: true,

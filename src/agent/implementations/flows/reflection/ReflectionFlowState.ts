@@ -6,10 +6,7 @@ import {
   AgentRunStateSnapshotSchema,
   ConversationRoundStateSnapshotSchema,
 } from '@agent/core/state/AgentState';
-import {
-  AgentWorkspaceCurrentSnapshotSchema,
-  AgentWorkspaceStateSnapshotSchema,
-} from '@agent/core/state/AgentWorkspaceState';
+import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/state/AgentWorkspaceState';
 import { ProviderMessageArraySchema } from '@agent/types/ProviderMessage';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import {
@@ -65,20 +62,3 @@ export const ReflectionFlowStateSchema = z.object({
 
 /** Shared state type for reflection flow nodes. */
 export type ReflectionFlowShared = z.infer<typeof ReflectionFlowStateSchema>;
-
-/**
- * Same shape as `ReflectionFlowStateSchema`, but `workspaceSnapshot` is
- * validated against the strict canonical schema instead of the
- * legacy-migrating union. `ReflectionFlowStateSchema` itself stays reserved
- * for the one-time boundary parse of a freshly-read persisted record (see
- * `runReflectionFlow`'s resume check); `RoundPersistedFlow`'s defense-in-depth
- * revalidation runs on every node step against an already-canonical
- * in-memory `shared` (round-tripped through `AgentWorkspaceState.toSnapshot()`),
- * so it uses this variant to avoid re-walking the legacy arm on every step —
- * and to fail loudly, rather than silently migrate, if a mid-flow record
- * were ever corrupted into looking like the legacy shape.
- */
-export const ReflectionFlowStateCanonicalSchema =
-  ReflectionFlowStateSchema.extend({
-    workspaceSnapshot: AgentWorkspaceCurrentSnapshotSchema,
-  });

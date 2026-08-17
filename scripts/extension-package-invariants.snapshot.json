@@ -350,10 +350,6 @@
             "when": "texra.activated"
           },
           {
-            "command": "texra.showAgentHistory",
-            "when": "texra.activated"
-          },
-          {
             "command": "texra.showMemory",
             "when": "texra.activated"
           },

@@ -11,6 +11,7 @@
  * each host. Design note: `docs/design/execution-interaction-ownership.md`.
  */
 
+import { DisposableStore } from '@platform/disposable';
 import type { StreamTabId } from '@shared/schemas';
 import type { AgentExecutionHandle } from './ExecutionHandle';
 import type {
@@ -73,7 +74,7 @@ export class ExecutionInteractionOwnership {
   open(onRelease: () => void): ExecutionInteractionScope {
     const liveExecutions = new Set<string>();
     const pendingActivations = new Set<string>();
-    const detachers: Array<() => void> = [];
+    const disposables = new DisposableStore();
     let finished = false;
     let released = false;
 
@@ -152,15 +153,20 @@ export class ExecutionInteractionOwnership {
       release: (): void => {
         if (released) return;
         released = true;
-        for (const detach of detachers) detach();
-        deleteOwnedEntries(this.executionOwners, scope);
-        deleteOwnedEntries(this.streamOwners, scope);
-        onRelease();
+        try {
+          disposables.dispose();
+        } finally {
+          deleteOwnedEntries(this.executionOwners, scope);
+          deleteOwnedEntries(this.streamOwners, scope);
+          onRelease();
+        }
       },
     };
 
-    detachers.push(this.registry.addRegistrationListener(observeRegistration));
-    detachers.push(this.registry.addChildActivationListener(observeActivation));
+    disposables.add(this.registry.addRegistrationListener(observeRegistration));
+    disposables.add(
+      this.registry.addChildActivationListener(observeActivation),
+    );
     return scope;
   }
 }

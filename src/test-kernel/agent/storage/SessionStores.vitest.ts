@@ -323,7 +323,6 @@ describe('SessionStores deletion coordination', () => {
         deleteExecution: async (executionId) => ({
           status: 'active',
           executionId,
-          heartbeatAt: Date.now(),
         }),
         onCanonicalStreamDeleted: (stream) =>
           releaseStreamResources(stream, session),
@@ -688,7 +687,6 @@ describe('SessionStores orphan sweep', () => {
     const deleteExecution = vi.fn(async () => ({
       status: 'active' as const,
       executionId,
-      heartbeatAt: Date.now(),
     }));
     const stores = new SessionStores({
       streamLogs: await StreamLogStore.open(),

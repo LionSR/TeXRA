@@ -2,60 +2,16 @@
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import type { DesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import type { DesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
-import type {
-  DesktopHistoryOptions,
-  DesktopHistorySettingsController,
-} from '@desktop/main/desktopHistoryHandlers';
 import type { DesktopSettingsUiHost } from '@desktop/main/desktopSettingsIpc';
 import type { DesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 import { unsupported } from '@shared/utils/dispatcher';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
-
-// Local file imports
-import { repoPath } from './desktopTestPaths.ts';
 
 const noOp = async (): Promise<void> => undefined;
 
 /** Reads the `command` discriminant off a message posted to the renderer. */
 export function commandOf(message: unknown): string | undefined {
   return (message as { command?: string }).command;
-}
-
-export function createStubDesktopHistoryOptions(
-  overrides: Partial<DesktopHistoryOptions> = {},
-): DesktopHistoryOptions {
-  return {
-    resourcesPath: repoPath('packages', 'extension', 'resources'),
-    runExecution: noOp,
-    restoreRunConfig: async () => true,
-    postToRenderer: () => undefined,
-    openPath: noOp,
-    showInfoMessage: noOp,
-    confirmAction: async () => true,
-    showWarningMessage: noOp,
-    showErrorMessage: noOp,
-    onError: () => undefined,
-    getLiveStreamCleanup: () => undefined,
-    ...overrides,
-  };
-}
-
-export function createStubDesktopHistorySettingsController(
-  overrides: Partial<DesktopHistorySettingsController> = {},
-): DesktopHistorySettingsController {
-  return {
-    handlers: {
-      deleteAgent: noOp,
-      clearHistory: noOp,
-      rerunAgent: noOp,
-      restoreAgent: noOp,
-      exportChatMd: noOp,
-      exportChatTex: noOp,
-      exportChatHtml: noOp,
-    },
-    postHistoryData: noOp,
-    ...overrides,
-  };
 }
 
 export function createStubDesktopSettingsUiHost(

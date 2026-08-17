@@ -72,7 +72,7 @@ describe('approval cleanup scope', () => {
     try {
       cleanupApprovalsForStream(streamId, session);
       await expect(pending).resolves.toEqual({
-        accepted: false,
+        action: 'reject',
         cause: 'Stream resources released.',
       });
       expect(cancel).toHaveBeenCalledWith({
@@ -101,7 +101,7 @@ describe('approval cleanup scope', () => {
     });
     const streamlessCleanupSettlements = [
       {
-        accepted: false,
+        action: 'reject',
         cause: 'Streamless approval cleanup.',
       },
       {
@@ -246,7 +246,7 @@ describe('session-owned approval state (#8144)', () => {
     session.dispose();
 
     await expect(pending).resolves.toEqual({
-      accepted: false,
+      action: 'reject',
       cause: 'Session disposed.',
     });
     expect(isBashApprovalBypassedForStream(streamId, session)).toBe(false);

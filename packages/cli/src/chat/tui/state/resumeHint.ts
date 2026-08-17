@@ -10,7 +10,6 @@ import { quote } from 'shell-quote';
 import type { CliOutputFormat } from '@cli/schemas/cliSettings';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
-  AgentCategory,
   sumUsageStats,
   type StreamTabId,
   type TokenUsageStats,
@@ -144,9 +143,8 @@ export function formatResumeUsage(
     : `Token usage: ${lines.join(' ')}`;
 }
 
-/** The main session followed by each tool-use subagent (any depth), deduped by
- *  executionId. Subagents whose stream isn't a tool-use agent — workflow
- *  children, tool processes — are skipped because they can't be resumed. */
+/** The main session followed by each resume-eligible subagent (any depth),
+ *  deduped by executionId. */
 export function collectResumeTargets({
   childStreamEntries,
   rootExecutionId,
@@ -166,16 +164,7 @@ export function collectResumeTargets({
       childStreamEntries,
       streams,
     )) {
-      if (seen.has(child.executionId)) continue;
-      const childSlice = streams.get(child.childStreamId);
-      // Resume is a native-agent affordance: an external-CLI session or a
-      // process/workflow-script stream is not resumable here.
-      const identity = childSlice?.identity;
-      if (
-        identity?.kind !== 'agent' ||
-        identity.tool !== undefined ||
-        childSlice?.category !== AgentCategory.ToolUse
-      ) {
+      if (seen.has(child.executionId) || child.resumeEligible !== true) {
         continue;
       }
       seen.add(child.executionId);

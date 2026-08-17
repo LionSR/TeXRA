@@ -7,6 +7,8 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { flowKey } from '@agent/node/persistedFlow';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import {
   CLI_HISTORY_RESUMABLE_STATUS,
   formatCliHistoryDetailsText,
@@ -152,11 +154,24 @@ describe('CLI history status formatting', () => {
 
   it('marks workflow flow records as CLI-resumable', async () => {
     const id = 'workflow-with-flow' as ExecutionId;
-    await seedFlowRecord(id, WORKFLOW_CONFIG, 'correct', {
-      currentRound: 1,
-      totalRounds: 2,
-      conversation: [],
-    });
+    await seedFlowRecord(
+      id,
+      WORKFLOW_CONFIG,
+      'correct',
+      ReflectionFlowStateSchema.parse({
+        currentRound: 1,
+        totalRounds: 2,
+        workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
+        context: null,
+        outputLocation: null,
+        conversation: [],
+        runStateSnapshot: {},
+        roundStateSnapshots: [],
+        roundOutputs: [],
+        continueRounds: false,
+        endTurn: false,
+      }),
+    );
 
     const details = await readCliHistoryDetails(id);
 

@@ -18,7 +18,7 @@
  * has said so by installing a provider.
  */
 
-import type { ReasoningEffort } from 'llm-zoo';
+import type { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 /**
  * The relay plane as the model layer consults it. Every member is a question
@@ -39,15 +39,18 @@ export interface IncludedModelAccess {
   /** Whether the primed tier cache covers this model. */
   canUseModelSync(modelName: string): boolean;
   /** Whether included access serves this provider at all. */
-  isProviderOnServer(provider: string): boolean;
+  isProviderOnServer(provider: ModelProvider): boolean;
   /** Combined sync gate: switched on, provider served, model in tier. */
-  shouldUseServerSideKeysSync(provider: string, modelName?: string): boolean;
+  shouldUseServerSideKeysSync(
+    provider: ModelProvider,
+    modelName?: string,
+  ): boolean;
   /** Whether included access was just switched off by quota exhaustion. */
   wasQuotaAutoSwitched(): boolean;
   /** Whether the account's included-access quota is exhausted. */
   isRelayQuotaExceeded(): boolean;
   /** Base URL for this provider's requests through included access. */
-  getRelayBaseUrl(provider: string): string;
+  getRelayBaseUrl(provider: ModelProvider): string;
   /** Bearer credential for an included-access request, or `null` if unavailable. */
   getAccessToken(forceRefresh?: boolean): Promise<string | null>;
   /** Whether that credential is close enough to expiry to warrant a refresh. */

@@ -10,8 +10,7 @@ import {
   type ResumeTarget,
 } from '@cli/chat/tui/state/resumeHint';
 import { emptySlice, type StreamSlice } from '@cli/chat/tui/state/cliState';
-import { type TokenUsageStats } from '@shared/schemas';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import { type StreamTabId, type TokenUsageStats } from '@shared/schemas';
 import {
   buildChildStreamEntries,
   type ChildStreamEntryRow,
@@ -36,6 +35,7 @@ function child(
   return {
     agentName: 'agent',
     identity: { kind: 'agent', agent: 'agent' },
+    resumeEligible: true,
     ...over,
   };
 }
@@ -68,18 +68,10 @@ describe('collectResumeTargets', () => {
     ).toEqual([{ executionId: 'root', label: 'main', isRoot: true }]);
   });
 
-  it('lists tool-use subagents and excludes workflow children', () => {
+  it('lists resume-eligible subagents and excludes ineligible children', () => {
     const root = makeSlice({ streamId: 'main@m#root' });
-    const reviewer = makeSlice({
-      streamId: 'reviewer@m#rev',
-      identity: { kind: 'agent', agent: 'reviewer' },
-      category: AgentCategory.ToolUse,
-    });
-    const builder = makeSlice({
-      streamId: 'builder@m#flow',
-      identity: { kind: 'agent', agent: 'builder' },
-      category: AgentCategory.Workflow,
-    });
+    const reviewer = makeSlice({ streamId: 'reviewer@m#rev' });
+    const builder = makeSlice({ streamId: 'builder@m#flow' });
     const childStreamEntries = buildChildStreamEntries({
       parentStreamId: root.streamId,
       retained: [
@@ -93,6 +85,7 @@ describe('collectResumeTargets', () => {
           executionId: 'flow',
           agentName: 'builder',
           identity: { kind: 'agent', agent: 'builder' },
+          resumeEligible: false,
           childStreamId: 'builder@m#flow' as StreamTabId,
         }),
       ],
@@ -110,15 +103,16 @@ describe('collectResumeTargets', () => {
     ]);
   });
 
-  it('skips children whose stream never reported a category (processes/unknown)', () => {
+  it('skips children whose roster row has no resume eligibility', () => {
     const root = makeSlice({ streamId: 'main@m#root' });
-    const shell = makeSlice({ streamId: 'bash@tool#sh' }); // category undefined
+    const shell = makeSlice({ streamId: 'bash@tool#sh' });
     const childStreamEntries = buildChildStreamEntries({
       parentStreamId: root.streamId,
       retained: [
         child({
           executionId: 'sh',
           agentName: 'bash',
+          resumeEligible: undefined,
           childStreamId: 'bash@tool#sh' as StreamTabId,
         }),
       ],

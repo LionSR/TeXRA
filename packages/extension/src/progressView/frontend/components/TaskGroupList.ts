@@ -13,10 +13,11 @@ import {
   GettingStartedActionSchema,
   MESSAGE_TYPES,
   STREAM_PHASE,
-  StreamPhaseSchema,
+  STREAM_STATUS,
   WorkflowCallProgressSchema,
   type GettingStartedAction,
   type LogMessageData,
+  type StreamLifecycleStatus,
   type TaskGroup,
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
@@ -118,7 +119,8 @@ export class TaskGroupList extends LitElement {
   @property({ type: Boolean }) isToolUse = false;
 
   /** Status for the active stream, used while a run exists before logs arrive. */
-  @property({ attribute: false }) streamStatus: string | null = null;
+  @property({ attribute: false }) streamStatus: StreamLifecycleStatus | null =
+    null;
 
   /** Toggle state store for persistence */
   @property({ attribute: false }) toggleStates: ToggleStateStore | null = null;
@@ -592,8 +594,9 @@ export class TaskGroupList extends LitElement {
     // with no messages the terminal buffer is empty and would render a blank
     // <pre>, so show the same "Run is starting" / idle text instead.
     if (this.messages.length === 0 && this.groups.length === 0) {
-      const parsedPhase = StreamPhaseSchema.safeParse(this.streamStatus);
-      const active = parsedPhase.success && isInFlightPhase(parsedPhase.data);
+      const active =
+        this.streamStatus !== STREAM_STATUS.READY &&
+        isInFlightPhase(this.streamStatus ?? undefined);
       return html`
         <div class="log-placeholder">
           ${

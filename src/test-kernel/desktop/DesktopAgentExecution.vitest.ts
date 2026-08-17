@@ -3148,7 +3148,7 @@ describe('DesktopProgressBridge', () => {
         });
 
         await expect(approvalPromise).resolves.toMatchObject({
-          accepted: false,
+          action: 'reject',
           feedback: 'Not this edit.',
         });
       } finally {

@@ -290,8 +290,8 @@ export interface StreamSlice {
   /** Model identity captured from setTaskState for this specific stream. */
   readonly model?: string | undefined;
   /** Agent category for this stream (`toolUse` / `workflow` / …), captured
-   *  from `setTaskState` or `setActiveStream`. Lets the exit hint list only
-   *  resumable tool-use subagents (workflows don't resume). */
+   *  from `setTaskState` or `setActiveStream` for category-specific rendering
+   *  and focused-child follow-up behavior. */
   readonly category: AgentCategory | undefined;
   /** Canonical workflow artifacts, projected from the shared
    *  `StreamSnapshotStore` accumulator — never accumulated here. */

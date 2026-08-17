@@ -146,6 +146,16 @@ describe('desktop renderer bootstrap fallback', () => {
     );
   });
 
+  it('uses the fatal fallback only while startup is incomplete', () => {
+    const source = loadRendererMain();
+
+    expect(source).toMatch(
+      /window\.addEventListener\('unhandledrejection',[\s\S]*?event\.preventDefault\(\);[\s\S]*?if \(bootstrapComplete\) \{[\s\S]*?reportRuntimeFailure\(event\.reason\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?bootstrapFailed = true;[\s\S]*?renderBootstrapFallback\(event\.reason\);/u,
+    );
+    expect(source).toContain('if (bootstrapFailed) return;');
+    expect(source).toContain('bootstrapComplete = true;');
+  });
+
   it('renders a Reload control and a "continue without saved secrets" affordance', () => {
     const source = loadRendererMain();
     expect(source).toContain('Reload');

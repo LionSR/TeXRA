@@ -12,32 +12,57 @@ import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files/storageFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+
+import {
+  ensureInstancePresence,
+  probeInstance,
+  type InstanceLiveness,
+  InstanceOwnerSchema,
+  type InstanceOwnerRecord,
+} from './instancePresence';
 
 const log = createLog('ExecutionLease');
-/** A host that misses eight heartbeats is no longer considered live. */
-export const EXECUTION_LEASE_STALE_MS = 120_000;
-const EXECUTION_LEASE_HEARTBEAT_MS = 15_000;
 
 const LeaseExecutionIdSchema = z
   .string()
   .min(1)
   .regex(/^[^/\\]+$/);
 
-export const ExecutionLeaseSchema = z
-  .strictObject({
-    version: z.literal(1),
-    executionId: LeaseExecutionIdSchema,
-    ownerToken: z.uuid(),
-    acquiredAt: z.int().nonnegative(),
-    heartbeatAt: z.int().nonnegative(),
-  })
-  .refine((lease) => lease.heartbeatAt >= lease.acquiredAt, {
-    message: 'Execution lease heartbeat precedes acquisition.',
-    path: ['heartbeatAt'],
-  });
+/**
+ * Ownership record for one execution. Written once at acquisition, deleted at
+ * release — never renewed. Liveness of `owner` is proven by probing its
+ * presence socket; no field here is ever compared against a clock.
+ */
+export const ExecutionLeaseSchema = z.strictObject({
+  version: z.literal(2),
+  executionId: LeaseExecutionIdSchema,
+  ownerToken: z.uuid(),
+  acquiredAt: z.int().nonnegative(),
+  owner: InstanceOwnerSchema,
+});
 
 type ExecutionLeaseRecord = z.infer<typeof ExecutionLeaseSchema>;
+
+export interface InactiveExecutionLeaseOptions {
+  /**
+   * Per-operation liveness reader. Restart repair shares this between
+   * executions owned by the same instance, avoiding repeated socket probes.
+   */
+  readonly probeOwner?: (
+    owner: InstanceOwnerRecord,
+  ) => Promise<InstanceLiveness>;
+}
+
+/**
+ * The only surviving recognition of the retired heartbeat protocol: a
+ * `{version: 1}` file is a tombstone with no semantics.
+ */
+const StoredLeaseSchema = z.union([
+  ExecutionLeaseSchema,
+  z
+    .looseObject({ version: z.literal(1) })
+    .transform(() => 'tombstone' as const),
+]);
 
 interface OwnedExecutionLease {
   readonly executionId: ExecutionId;
@@ -46,17 +71,23 @@ interface OwnedExecutionLease {
   readonly released: Promise<void>;
   readonly resolveReleased: () => void;
   readonly lossListeners: Set<() => void>;
-  heartbeatInFlight: Promise<void> | undefined;
-  lastConfirmedHeartbeatAt: number;
   releasing: boolean;
   durabilityFailed: boolean;
 }
 
 export type ExecutionLeasePresence =
   | { readonly status: 'missing' }
-  | { readonly status: 'stale'; readonly heartbeatAt: number }
-  | { readonly status: 'owned'; readonly heartbeatAt: number }
-  | { readonly status: 'foreign'; readonly heartbeatAt: number };
+  | { readonly status: 'orphaned' }
+  | {
+      readonly status: 'owned';
+      readonly acquiredAt: number;
+      readonly owner: InstanceOwnerRecord;
+    }
+  | {
+      readonly status: 'foreign';
+      readonly acquiredAt: number;
+      readonly owner: InstanceOwnerRecord;
+    };
 
 export type OwnedExecutionLeaseCompletion =
   | { readonly status: 'released' }
@@ -74,7 +105,7 @@ export type OwnedExecutionLeaseScope = <T>(
 export class ExecutionLeaseActiveError extends Error {
   constructor(
     readonly executionId: ExecutionId,
-    readonly heartbeatAt: number,
+    readonly owner: InstanceOwnerRecord,
   ) {
     super(`Execution ${executionId} is active in TeXRA.`);
     this.name = 'ExecutionLeaseActiveError';
@@ -91,7 +122,6 @@ export class ExecutionLeaseLostError extends Error {
 const ownedLeases = new Map<string, OwnedExecutionLease>();
 const executionOwnership = new AsyncLocalStorage<ReadonlyMap<string, string>>();
 const maintenanceExecutions = new AsyncLocalStorage<ReadonlySet<string>>();
-let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
 class ExecutionLeaseCoordination {
   private acquisitionsInFlight = 0;
@@ -225,25 +255,45 @@ function coordinationPath(root: string, executionId: ExecutionId): string {
   );
 }
 
-async function readLease(
+async function readStoredLease(
   executionId: ExecutionId,
   root: string,
-): Promise<ExecutionLeaseRecord | undefined> {
+): Promise<ExecutionLeaseRecord | 'tombstone' | undefined> {
+  let stored: ExecutionLeaseRecord | 'tombstone';
   try {
-    const record = await StorageFS.readJson(
+    stored = await StorageFS.readJson(
       leasePath(root, executionId),
-      ExecutionLeaseSchema,
+      StoredLeaseSchema,
     );
-    if (record.executionId !== executionId) {
-      throw new Error(
-        `Execution lease identity mismatch: expected ${executionId}, found ${record.executionId}.`,
-      );
-    }
-    return record;
   } catch (error) {
     if (isFileNotFoundError(error)) return undefined;
     throw error;
   }
+  if (stored !== 'tombstone' && stored.executionId !== executionId) {
+    throw new Error(
+      `Execution lease identity mismatch: expected ${executionId}, found ${stored.executionId}.`,
+    );
+  }
+  return stored;
+}
+
+/**
+ * Locked read that deletes a retired tombstone on contact, so upgrades
+ * self-heal. Only lock holders may call this — an unlocked delete could race
+ * a concurrent acquisition that just replaced the file — so the unlocked
+ * classifier (inspectExecutionLease) reads without healing instead.
+ */
+async function readLease(
+  executionId: ExecutionId,
+  root: string,
+): Promise<ExecutionLeaseRecord | undefined> {
+  const stored = await readStoredLease(executionId, root);
+  if (stored !== 'tombstone') return stored;
+  log.warn(
+    `Deleted retired heartbeat-era lease record for execution ${executionId}`,
+  );
+  await StorageFS.delete(leasePath(root, executionId));
+  return undefined;
 }
 
 async function writeLease(
@@ -271,40 +321,20 @@ async function withLeaseLock<T>(
   );
 }
 
-function isFresh(record: ExecutionLeaseRecord, now: number): boolean {
-  return now - record.heartbeatAt <= EXECUTION_LEASE_STALE_MS;
-}
-
-type PersistedExecutionLiveness =
-  | {
-      readonly status: 'active';
-      readonly heartbeatAt: number;
-      readonly currentLease: ExecutionLeaseRecord;
-    }
-  | {
-      readonly status: 'inactive';
-      readonly staleHeartbeatAt: number | undefined;
-      readonly currentLease: ExecutionLeaseRecord | undefined;
-    };
-
-async function readPersistedExecutionLiveness(
+/** Probe a lease's owner; unprovable verdicts classify as active. */
+async function leaseOwnerIsActive(
   executionId: ExecutionId,
-  root: string,
-  now: number,
-): Promise<PersistedExecutionLiveness> {
-  const currentLease = await readLease(executionId, root);
-  if (currentLease && isFresh(currentLease, now)) {
-    return {
-      status: 'active',
-      heartbeatAt: currentLease.heartbeatAt,
-      currentLease,
-    };
+  record: ExecutionLeaseRecord,
+  options: InactiveExecutionLeaseOptions = {},
+): Promise<boolean> {
+  const liveness = await (options.probeOwner ?? probeInstance)(record.owner);
+  if (liveness === 'unprovable') {
+    log.warn(
+      `Liveness of execution ${executionId}'s owner is unprovable; treating it as active`,
+      { data: { owner: record.owner } },
+    );
   }
-  return {
-    status: 'inactive',
-    staleHeartbeatAt: currentLease?.heartbeatAt,
-    currentLease,
-  };
+  return liveness !== 'dead';
 }
 
 function forgetOwnedLease(
@@ -328,84 +358,6 @@ function forgetOwnedLease(
     }
     lease.lossListeners.clear();
   }
-  if (ownedLeases.size === 0 && heartbeatTimer) {
-    clearInterval(heartbeatTimer);
-    heartbeatTimer = undefined;
-  }
-}
-
-async function heartbeat(
-  lease: OwnedExecutionLease,
-  canContinue?: () => boolean | Promise<boolean>,
-): Promise<'owned' | 'lost' | 'cancelled'> {
-  return withLeaseLock(
-    lease.executionId,
-    async () => {
-      const current = await readLease(lease.executionId, lease.storageRoot);
-      if (current?.ownerToken !== lease.ownerToken) {
-        forgetOwnedLease(lease, { notifyLoss: true });
-        return 'lost';
-      }
-      if ((await canContinue?.()) === false) return 'cancelled';
-      await writeLease(
-        { ...current, heartbeatAt: Date.now() },
-        lease.storageRoot,
-      );
-      lease.lastConfirmedHeartbeatAt = Date.now();
-      return 'owned';
-    },
-    lease.storageRoot,
-  );
-}
-
-function renewHeartbeat(lease: OwnedExecutionLease): Promise<void> {
-  if (lease.releasing) return Promise.resolve();
-  if (lease.heartbeatInFlight) return lease.heartbeatInFlight;
-
-  const work = heartbeat(lease)
-    .then(() => undefined)
-    .catch((error: unknown) => {
-      if (handleHeartbeatFailure(lease, error)) throw error;
-    })
-    .finally(() => {
-      if (lease.heartbeatInFlight === work) {
-        lease.heartbeatInFlight = undefined;
-      }
-    });
-  lease.heartbeatInFlight = work;
-  return work;
-}
-
-function hasErrorCode(error: unknown, code: string): boolean {
-  if (error && typeof error === 'object') {
-    if ('code' in error && error.code === code) return true;
-    if (error instanceof AggregateError) {
-      return error.errors.some((nested) => hasErrorCode(nested, code));
-    }
-  }
-  return false;
-}
-
-function handleHeartbeatFailure(
-  lease: OwnedExecutionLease,
-  error: unknown,
-): boolean {
-  const ownershipUnprovable =
-    hasErrorCode(error, 'ECOMPROMISED') ||
-    Date.now() - lease.lastConfirmedHeartbeatAt > EXECUTION_LEASE_STALE_MS;
-  if (ownershipUnprovable) {
-    forgetOwnedLease(lease, { notifyLoss: true });
-  }
-  log.warn(
-    `Failed to heartbeat execution ${lease.executionId}: ${toErrorMessage(error)}`,
-    {
-      data: {
-        error,
-        ownershipLost: ownershipUnprovable,
-      },
-    },
-  );
-  return ownershipUnprovable;
 }
 
 function rememberOwnership(
@@ -414,32 +366,19 @@ function rememberOwnership(
   root: string,
 ): void {
   const { promise: released, resolve: resolveReleased } = pDefer<void>();
-  const lease: OwnedExecutionLease = {
+  ownedLeases.set(ownershipKey(root, executionId), {
     executionId,
     ownerToken,
     storageRoot: root,
     released,
     resolveReleased,
     lossListeners: new Set(),
-    heartbeatInFlight: undefined,
-    lastConfirmedHeartbeatAt: Date.now(),
     releasing: false,
     durabilityFailed: false,
-  };
-  ownedLeases.set(ownershipKey(root, executionId), lease);
-  if (!heartbeatTimer) {
-    heartbeatTimer = setInterval(() => {
-      for (const owned of ownedLeases.values()) {
-        // heartbeat() records and classifies its own failure before rejecting;
-        // the interval consumes that rejection because it has no caller.
-        void renewHeartbeat(owned).catch(() => undefined);
-      }
-    }, EXECUTION_LEASE_HEARTBEAT_MS);
-    heartbeatTimer.unref();
-  }
+  });
 }
 
-/** Interrupt a live runtime if another process takes over this owned lease. */
+/** Interrupt a live runtime if its ownership record is found displaced. */
 export function onOwnedExecutionLeaseLost(
   executionId: ExecutionId,
   listener: () => void,
@@ -479,11 +418,11 @@ async function runWithValidatedOwnership<T>(
 }
 
 /**
- * Carry this process's exact lease generation through asynchronous run work.
- * A continuation from a displaced owner keeps its original token and cannot
- * borrow a later local owner's lease for the same execution id.
+ * Carry this process's exact lease generation through asynchronous run work,
+ * so a delayed lifecycle root cannot borrow its successor. A continuation from
+ * a displaced owner keeps its original token and cannot borrow a later local
+ * owner's lease for the same execution id.
  */
-/** Capture the current generation so a delayed lifecycle root cannot borrow its successor. */
 export function captureOwnedExecutionLease(
   executionId: ExecutionId,
 ): OwnedExecutionLeaseScope {
@@ -524,8 +463,11 @@ export function captureOwnedExecutionLeaseIfPresent(
     : undefined;
 }
 
-/** Refresh and validate local ownership at a short durability boundary. */
-export async function renewOwnedExecutionLease(
+/**
+ * Validate local ownership against the persisted record at a durability
+ * boundary. A pure fencing check: nothing is written and no clock is read.
+ */
+export async function validateOwnedExecutionLease(
   executionId: ExecutionId,
 ): Promise<void> {
   const key = ownershipKey(storageRoot(), executionId);
@@ -533,11 +475,10 @@ export async function renewOwnedExecutionLease(
   if (!lease || lease.releasing || !currentScopeOwnsLease(lease)) {
     throw new ExecutionLeaseLostError(executionId);
   }
-  await renewHeartbeat(lease);
-  if (
-    lease.releasing ||
-    ownedLeases.get(ownershipKey(lease.storageRoot, executionId)) !== lease
-  ) {
+  await runWithValidatedOwnership(lease, async () => undefined);
+  // A release that started while the disk check was in flight wins: this
+  // boundary must not report ownership the process is already giving up.
+  if (lease.releasing || ownedLeases.get(key) !== lease) {
     throw new ExecutionLeaseLostError(executionId);
   }
 }
@@ -603,53 +544,52 @@ async function acquireExecutionLease(
     const key = ownershipKey(root, executionId);
     const existingOwnership = ownedLeases.get(key);
     if (mode === 'resume' && existingOwnership) {
-      let heartbeatResult: 'owned' | 'lost' | 'cancelled' | undefined;
-      try {
-        heartbeatResult = await heartbeat(existingOwnership, canAcquire);
-      } catch (error) {
-        if (handleHeartbeatFailure(existingOwnership, error)) throw error;
-        if (
-          ownedLeases.get(key) === existingOwnership &&
-          !existingOwnership.releasing
-        ) {
-          const admitted = await withLeaseLock(
-            executionId,
-            async () => (await canAcquire?.()) !== false,
-            root,
-          );
-          return admitted ? 'existing' : 'cancelled';
-        }
+      if (existingOwnership.releasing) {
+        // A release in flight settles the record either way; re-acquire from
+        // persisted state below instead of resurrecting the closing lease.
+        await existingOwnership.released;
+      } else {
+        const validated = await withLeaseLock(
+          executionId,
+          async () => {
+            const current = await readLease(executionId, root);
+            if (current?.ownerToken !== existingOwnership.ownerToken) {
+              forgetOwnedLease(existingOwnership, { notifyLoss: true });
+              return 'lost' as const;
+            }
+            if ((await canAcquire?.()) === false) return 'cancelled' as const;
+            return 'existing' as const;
+          },
+          root,
+        );
+        if (validated !== 'lost') return validated;
       }
-      if (heartbeatResult === 'cancelled') return 'cancelled';
-      if (heartbeatResult === 'owned') return 'existing';
     }
 
     return await withLeaseLock(
       executionId,
       async () => {
-        const now = Date.now();
-        const liveness = await readPersistedExecutionLiveness(
-          executionId,
-          root,
-          now,
-        );
-        if (liveness.status === 'active') {
-          throw new ExecutionLeaseActiveError(
-            executionId,
-            liveness.heartbeatAt,
-          );
+        // Reclamation requires a death proof: a lease whose owner is alive or
+        // merely unprovable refuses acquisition.
+        const currentLease = await readLease(executionId, root);
+        if (
+          currentLease &&
+          (await leaseOwnerIsActive(executionId, currentLease))
+        ) {
+          throw new ExecutionLeaseActiveError(executionId, currentLease.owner);
         }
         if ((await canAcquire?.()) === false) return 'cancelled' as const;
-        const acquiredAt = Date.now();
+        const owner = await ensureInstancePresence();
+        const stale = ownedLeases.get(key);
+        if (stale) forgetOwnedLease(stale);
         const ownerToken = randomUUID();
-        if (existingOwnership) forgetOwnedLease(existingOwnership);
         await writeLease(
           {
-            version: 1,
+            version: 2,
             executionId,
             ownerToken,
-            acquiredAt,
-            heartbeatAt: acquiredAt,
+            acquiredAt: Date.now(),
+            owner,
           },
           root,
         );
@@ -694,9 +634,9 @@ function currentOwnedLeases(executionId: ExecutionId): OwnedExecutionLease[] {
 }
 
 /**
- * Stop renewing ownership without deleting its persisted lease. Used when
- * terminal artifacts are not durable: peers remain blocked until the stale
- * horizon, but a long-lived host cannot keep the failed lease fresh forever.
+ * Stop claiming ownership without deleting the persisted record. Used when
+ * terminal artifacts are not durable: peers keep refusing the execution while
+ * this process lives, and reclaim it the moment this process exits.
  */
 export function abandonOwnedExecutionLease(executionId: ExecutionId): void {
   for (const lease of currentOwnedLeases(executionId)) forgetOwnedLease(lease);
@@ -720,7 +660,7 @@ export function isOwnedExecutionLeaseDurable(
   return leases.every((lease) => !lease.durabilityFailed);
 }
 
-/** Release a durable execution; otherwise stop renewal and retain its record. */
+/** Release a durable execution; otherwise stop claiming and retain its record. */
 export async function completeOwnedExecutionLease(
   executionId: ExecutionId,
 ): Promise<OwnedExecutionLeaseCompletion> {
@@ -733,7 +673,7 @@ export async function completeOwnedExecutionLease(
     return { status: 'released' };
   } catch (error) {
     log.warn(
-      `Failed to release execution ${executionId}; its lease will expire after the stale horizon: ${toErrorMessage(error)}`,
+      `Failed to release execution ${executionId}; peers reclaim its record once this process exits`,
       { data: error },
     );
     return { status: 'retained', reason: 'release-failed', error };
@@ -759,10 +699,10 @@ export async function releaseOwnedExecutionLeaseAfterFailure(
 /**
  * Run pre-handoff launch work under one failure policy: if the operation
  * throws before the child run loop has taken over the execution, release the
- * fresh lease before the error propagates — a failed launch must not strand
- * the lease until its stale horizon and refuse a prompt relaunch. Post-handoff
- * work must stay outside this guard: once the run loop owns the lease,
- * releasing it would yank ownership from a live child.
+ * fresh lease before the error propagates — a failed launch must not leave a
+ * record that refuses a prompt relaunch for this process's whole lifetime.
+ * Post-handoff work must stay outside this guard: once the run loop owns the
+ * lease, releasing it would yank ownership from a live child.
  */
 export async function runWithOwnedExecutionLeaseLaunchGuard<T>(
   executionId: ExecutionId,
@@ -792,7 +732,6 @@ async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
   const root = ownership.storageRoot;
   const { executionId } = ownership;
   ownership.releasing = true;
-  await ownership.heartbeatInFlight?.catch(() => undefined);
   if (ownedLeases.get(ownershipKey(root, executionId)) !== ownership) {
     return;
   }
@@ -817,63 +756,73 @@ async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
   }
 }
 
-/** Classify persisted liveness. Malformed present state rejects deliberately. */
+/** Classify persisted ownership. Malformed present state rejects deliberately. */
 export async function inspectExecutionLease(
   executionId: ExecutionId,
-  now: number = Date.now(),
 ): Promise<ExecutionLeasePresence> {
   const root = storageRoot();
-  const liveness = await readPersistedExecutionLiveness(executionId, root, now);
-  if (liveness.status === 'active') {
-    const local = ownedLeases.get(ownershipKey(root, executionId));
+  // Classification runs without the lease lock, so a retired-era tombstone is
+  // reported as orphaned here and deleted by the next locked path instead.
+  const record = await readStoredLease(executionId, root);
+  if (!record) return { status: 'missing' };
+  if (record === 'tombstone') return { status: 'orphaned' };
+  const local = ownedLeases.get(ownershipKey(root, executionId));
+  if (local?.ownerToken === record.ownerToken) {
     return {
-      status:
-        local?.ownerToken === liveness.currentLease.ownerToken
-          ? 'owned'
-          : 'foreign',
-      heartbeatAt: liveness.heartbeatAt,
+      status: 'owned',
+      acquiredAt: record.acquiredAt,
+      owner: record.owner,
     };
   }
-  return liveness.staleHeartbeatAt === undefined
-    ? { status: 'missing' }
-    : { status: 'stale', heartbeatAt: liveness.staleHeartbeatAt };
+  const liveness = await probeInstance(record.owner);
+  if (liveness === 'dead') return { status: 'orphaned' };
+  return {
+    status: 'foreign',
+    acquiredAt: record.acquiredAt,
+    owner: record.owner,
+  };
 }
 
 /**
- * Run maintenance only while no fresh owner exists. Inspection and mutation
- * share the same cross-process lock, so a host cannot acquire between them.
+ * Run maintenance only while the owner is provably absent. Inspection and
+ * mutation share the same cross-process lock, so a host cannot acquire
+ * between them, and an unprovable owner refuses maintenance outright.
  */
 export async function runWithInactiveExecutionLease<T>(
   executionId: ExecutionId,
   operation: () => Promise<T>,
+  options: InactiveExecutionLeaseOptions = {},
 ): Promise<
-  | { readonly status: 'active'; readonly heartbeatAt: number }
+  | { readonly status: 'active'; readonly owner: InstanceOwnerRecord }
   | { readonly status: 'performed'; readonly value: T }
 > {
   const root = storageRoot();
   return withLeaseLock(
     executionId,
     async () => {
-      const liveness = await readPersistedExecutionLiveness(
-        executionId,
-        root,
-        Date.now(),
-      );
-      const current = liveness.currentLease;
+      const currentLease = await readLease(executionId, root);
       const local = ownedLeases.get(ownershipKey(root, executionId));
-      if (local && current?.ownerToken === local.ownerToken) {
-        return { status: 'active', heartbeatAt: current.heartbeatAt };
+      if (local && currentLease?.ownerToken === local.ownerToken) {
+        // The record names this live process; no probe is needed. A local
+        // owner is protected by its own existence, never by any clock.
+        // Report our own presence identity, not the record's copy: a record
+        // whose owner field was tampered to name a dead instance must not
+        // seed an exit watch that fires while this live owner still runs.
+        return { status: 'active', owner: await ensureInstancePresence() };
       }
       if (local) {
         forgetOwnedLease(local, { notifyLoss: true });
       }
-      if (liveness.status === 'active') {
-        return { status: 'active', heartbeatAt: liveness.heartbeatAt };
+      if (
+        currentLease &&
+        (await leaseOwnerIsActive(executionId, currentLease, options))
+      ) {
+        return { status: 'active', owner: currentLease.owner };
       }
       const maintenanceKeys = new Set(maintenanceExecutions.getStore());
       maintenanceKeys.add(ownershipKey(root, executionId));
       const value = await maintenanceExecutions.run(maintenanceKeys, operation);
-      if (liveness.currentLease) {
+      if (currentLease) {
         await StorageFS.delete(leasePath(root, executionId));
       }
       return { status: 'performed', value };
