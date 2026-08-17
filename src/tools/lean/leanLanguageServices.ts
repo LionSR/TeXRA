@@ -64,7 +64,7 @@ export interface LeanLanguageServices {
    * worktree's server idling until the idle timeout; the VS Code bridge
    * omits it because the Lean 4 extension owns that server's lifetime.
    * Servers still leased by an in-flight request (e.g. a shared worktree's
-   * other run) are left to the idle-timeout backstop.
+   * other run) are marked for disposal when their final lease ends.
    */
   stopSessionsForRun?(runId: ExecutionId): Promise<void>;
 }
