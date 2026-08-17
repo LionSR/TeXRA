@@ -119,9 +119,12 @@ export function createChildStream(
     executionId,
     options.reservedWriter,
   );
-  const removeSpillFlusher = session.useArtifactFlusher(() =>
-    runTrace.flushSpills(),
-  );
+  let traceDisposed = false;
+  let removeSpillFlusher = (): void => {};
+  removeSpillFlusher = session.useArtifactFlusher(async () => {
+    await runTrace.flushSpills();
+    if (traceDisposed) removeSpillFlusher();
+  });
   let detachSessionTrace: (() => void) | undefined;
   let detachStatus: (() => void) | undefined;
   try {
@@ -130,7 +133,7 @@ export function createChildStream(
     // status rail into the recorder's transcript-boundary port.
     detachStatus = session.events.subscribeStatus(runTrace.handleStatus);
     const disposeTrace = () => {
-      removeSpillFlusher();
+      traceDisposed = true;
       detachStatus?.();
       detachSessionTrace?.();
       runTrace.dispose();
