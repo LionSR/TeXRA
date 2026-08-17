@@ -168,17 +168,17 @@ describe('UsageMonitor', () => {
     });
   });
 
-  it('warns when an invalid provider blocks backend usage accounting', async () => {
+  it('uses the normalized provider for backend usage accounting', async () => {
     await withMonitor(async ({ logger, monitor, modelCell }) => {
       const warn = vi.spyOn(logger, 'warn');
       const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
       modelCell.swap(
         {
           ...testModelInfo,
-          config: { ...testModelInfo.config, provider: 'invalid-provider' },
+          config: { ...testModelInfo.config, provider: 'others' },
           dispose: vi.fn(),
         } as unknown as RunModelHandler,
-        'invalid-provider-model',
+        'other-provider-model',
       );
       const state = AgentRunStateSnapshotSchema.parse({});
       recordCycleMetrics(state, 50, {
@@ -186,16 +186,15 @@ describe('UsageMonitor', () => {
         outputTokens: 2,
         cost: 0.01,
         responseTimeMs: 50,
-        provider: 'openai' as const,
+        provider: 'openrouter' as const,
       });
 
       await monitor.recordUsage(state);
 
-      expect(log).not.toHaveBeenCalled();
-      expect(warn).toHaveBeenCalledWith(
-        'Backend usage logging failed',
-        expect.objectContaining({ data: expect.anything() }),
+      expect(log).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'openrouter' }),
       );
+      expect(warn).not.toHaveBeenCalled();
     });
   });
 
