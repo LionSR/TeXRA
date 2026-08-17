@@ -168,15 +168,38 @@ export function createDirectLspLeanAdapter(
     return tracked;
   }
 
-  function endUse(root: string, session?: LeanSession): void {
+  async function endUse(root: string, session?: LeanSession): Promise<void> {
     const tracked = sessions.get(root);
     if (!tracked) return;
     if (session && tracked.session !== session) return;
     tracked.inFlight = Math.max(0, tracked.inFlight - 1);
     if (tracked.inFlight > 0) return;
     tracked.lastUsedAt = now();
+    if (
+      tracked.pendingStopRunId !== undefined &&
+      tracked.pendingStopRunId === tracked.startedByRunId
+    ) {
+      try {
+        await disposeSession(root, 'run-end');
+      } catch (error) {
+        warn(
+          LOG_CHANNEL,
+          `Deferred run-end stop failed for ${root}: ${toErrorMessage(error)}`,
+        );
+      }
+      return;
+    }
     armIdleTimer(root, tracked);
     notifySessionFreed();
+  }
+
+  function attributeSessionToRun(
+    tracked: TrackedLeanSession,
+    runId?: ExecutionId,
+  ): void {
+    if (runId === undefined || tracked.startedByRunId === runId) return;
+    tracked.startedByRunId = runId;
+    tracked.pendingStopRunId = undefined;
   }
 
   async function leaseSession(
@@ -190,7 +213,7 @@ export function createDirectLspLeanAdapter(
       await session.ensureReady();
       return session;
     } catch (error) {
-      endUse(root, session);
+      await endUse(root, session);
       throw error;
     }
   }
@@ -203,7 +226,7 @@ export function createDirectLspLeanAdapter(
     try {
       return await invoke(session);
     } finally {
-      endUse(session.workspaceRoot, session);
+      await endUse(session.workspaceRoot, session);
     }
   }
 
@@ -272,19 +295,19 @@ export function createDirectLspLeanAdapter(
   /**
    * Run-end hook: stop the servers attributed to the ended run. A session
    * still leased by an in-flight request (a shared worktree's other run) is
-   * left running; its last lease re-arms the idle timer, which stays the
-   * backstop. Sessions started outside any run have no attribution and are
-   * likewise left to the idle timeout.
+   * marked for deferred disposal when its final lease ends. Sessions started
+   * outside any run have no attribution and are left to the idle timeout.
    */
   async function stopSessionsForRun(runId: ExecutionId): Promise<void> {
-    const roots = [...sessions.entries()]
-      .filter(
-        ([, tracked]) =>
-          tracked.startedByRunId === runId &&
-          !tracked.disposing &&
-          tracked.inFlight === 0,
-      )
-      .map(([root]) => root);
+    const roots: string[] = [];
+    for (const [root, tracked] of sessions) {
+      if (tracked.startedByRunId !== runId || tracked.disposing) continue;
+      if (tracked.inFlight > 0) {
+        tracked.pendingStopRunId = runId;
+      } else {
+        roots.push(root);
+      }
+    }
     await Promise.all(roots.map((root) => disposeSession(root, 'run-end')));
   }
 
@@ -420,9 +443,7 @@ export function createDirectLspLeanAdapter(
       // rather than by the run that happened to spawn it. An outside-run
       // request leaves the existing attribution intact: it did not start the
       // server and has no run end to stop it at.
-      if (runId !== undefined && existing.startedByRunId !== runId) {
-        existing.startedByRunId = runId;
-      }
+      attributeSessionToRun(existing, runId);
       return session;
     }
     await evictForNewSession(root, generation);
@@ -490,9 +511,8 @@ export function createDirectLspLeanAdapter(
     return leaseSession(root, session);
   }
 
-  function restartSession(root: string): Promise<void> {
+  function restartSession(root: string, runId?: ExecutionId): Promise<void> {
     const generation = startGeneration;
-    const runId = currentRunId();
     return enqueueStart(async () => {
       throwIfStopped(generation);
       await disposeSession(root, 'restart');
@@ -545,7 +565,7 @@ export function createDirectLspLeanAdapter(
         );
         return { ok: false, kind: 'file_missing', message };
       } finally {
-        endUse(session.workspaceRoot, session);
+        await endUse(session.workspaceRoot, session);
       }
     },
 
@@ -577,6 +597,9 @@ export function createDirectLspLeanAdapter(
     },
 
     async executeProjectCommand(command: LeanProjectCommand): Promise<void> {
+      // Capture attribution before any asynchronous work can leave the ambient
+      // run context, matching file-scoped calls through getSession().
+      const runId = currentRunId();
       // Project commands aren't tied to a file. We apply to every active
       // session; lake commands serialize per workspace via the mutex.
       switch (command) {
@@ -585,7 +608,7 @@ export function createDirectLspLeanAdapter(
           if (roots.length === 0) {
             throw new Error('No Lean server running to restart.');
           }
-          await Promise.all(roots.map((root) => restartSession(root)));
+          await Promise.all(roots.map((root) => restartSession(root, runId)));
           return;
         }
         case 'stop_server':
@@ -602,7 +625,10 @@ export function createDirectLspLeanAdapter(
           const acquired: TrackedLeanSession[] = [];
           for (const [root] of [...sessions]) {
             const tracked = beginUse(root);
-            if (tracked) acquired.push(tracked);
+            if (tracked) {
+              attributeSessionToRun(tracked, runId);
+              acquired.push(tracked);
+            }
           }
           try {
             await runForAllSessions(
@@ -617,7 +643,7 @@ export function createDirectLspLeanAdapter(
             );
           } finally {
             for (const tracked of acquired) {
-              endUse(tracked.session.workspaceRoot, tracked.session);
+              await endUse(tracked.session.workspaceRoot, tracked.session);
             }
           }
           return;
@@ -710,6 +736,8 @@ interface TrackedLeanSession {
   inFlight: number;
   /** Agent run this server is attributed to (the starter, or a later reuser). */
   startedByRunId?: ExecutionId;
+  /** Ended owner whose leased server must stop when the final use releases. */
+  pendingStopRunId?: ExecutionId;
   idleTimer?: ReturnType<typeof setTimeout>;
   disposing?: Promise<void>;
 }

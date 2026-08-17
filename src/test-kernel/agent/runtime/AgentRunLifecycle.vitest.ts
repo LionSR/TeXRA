@@ -366,7 +366,7 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
-  it('does not stop the Lean servers when a subagent run ends', async () => {
+  it('stops the Lean servers attributed to a subagent when it ends', async () => {
     await initLifecycleTestPlatform(true);
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-lean-server-stop-subagent',
@@ -380,10 +380,8 @@ describe('runFlowWithLifecycle', () => {
         { isSubagent: true, onRunEnd: stopSessionsForRun },
       );
 
-      // The parent run owns the worktree, so a subagent's own terminal
-      // boundary must not stop a server the parent may still reuse.
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-      expect(stopSessionsForRun).not.toHaveBeenCalled();
+      expect(stopSessionsForRun).toHaveBeenCalledWith(executionId);
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
     }
@@ -1024,6 +1022,35 @@ describe('runFlowWithLifecycle', () => {
           }),
         }),
       );
+    } finally {
+      defaultSession().executions.untrack(executionId);
+      clearStreamStatusForTest(defaultSession().status, streamId);
+    }
+  });
+
+  it('runs run-end cleanup when waiting transcript teardown fails', async () => {
+    const { executionId, streamId, ctx } = lifecycleFixture(
+      'lifecycle-waiting-transcript-failure-run-end',
+    );
+    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
+    vi.spyOn(
+      ctx.runScope.session.transcripts,
+      'loadAndAcquireWriter',
+    ).mockRejectedValueOnce(new Error('transcript close failed'));
+
+    try {
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => waitingResult(executionId, streamId),
+        { onRunEnd: stopSessionsForRun },
+      );
+      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+      const waitingHandle = takeWaitingHandle(executionId);
+
+      expect(defaultSession().executions.kill(executionId)).toBe(true);
+      await waitingHandle.result;
+
+      expect(stopSessionsForRun).toHaveBeenCalledWith(executionId);
     } finally {
       defaultSession().executions.untrack(executionId);
       clearStreamStatusForTest(defaultSession().status, streamId);
