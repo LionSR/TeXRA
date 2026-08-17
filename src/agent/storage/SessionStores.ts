@@ -147,8 +147,10 @@ export class SessionStores {
 
   deleteStreamAfterOwnedExecutionRelease(
     stream: StreamTabId,
+    options?: { readonly shouldDelete?: () => boolean },
   ): Promise<DeleteStreamResult> {
-    return this.trackStreamDeletion(stream, undefined, async () => {
+    const shouldDelete = options?.shouldDelete;
+    return this.trackStreamDeletion(stream, shouldDelete, async () => {
       // Track the whole wait so a presentation attaching during terminal
       // artifact persistence cannot replay a stream already marked removed.
       // If the ownership read fails here, report `failed` immediately rather
@@ -163,7 +165,9 @@ export class SessionStores {
         );
         return 'failed';
       }
-      return this.enqueueDeletion(() => this.deleteStreamAndNotify(stream));
+      return this.enqueueDeletion(() =>
+        this.deleteStreamAndNotify(stream, shouldDelete),
+      );
     });
   }
 

@@ -631,7 +631,11 @@ export class SessionState {
     // sole source for tombstoning durable streams — deriving them from a
     // pre-delete enumeration would reintroduce the TOCTOU this barrier exists
     // to close.
-    const preExistingEphemeral = this.ephemeralStreamIds();
+    const preExistingEphemeral = new Set<StreamTabId>([
+      ...this._streamStates.keys(),
+      ...this._sessionState.keys(),
+      ...Array.from(this.streamStatus.entries(), ([stream]) => stream),
+    ]);
     const incarnationsAtStart = new Map(this._streamIncarnations);
     const deletion = await this.stores.deleteAll({
       shouldDelete: (stream) =>
@@ -657,14 +661,6 @@ export class SessionState {
       clearIdentity(stream);
     }
     return deletion;
-  }
-
-  private ephemeralStreamIds(): Set<StreamTabId> {
-    return new Set<StreamTabId>([
-      ...this._streamStates.keys(),
-      ...this._sessionState.keys(),
-      ...Array.from(this.streamStatus.entries(), ([stream]) => stream),
-    ]);
   }
 
   async load(stateOwnership: 'backend' | 'session' = 'backend'): Promise<void> {
