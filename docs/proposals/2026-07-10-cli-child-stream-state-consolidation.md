@@ -157,10 +157,10 @@ parent list to rewrite copied status values (`packages/cli/src/chat/tui/state/cl
 must clear active membership without deleting retained history, and its retained-row selector must read status
 from the child slice so no cross-list status rewrite is needed.
 
-### 6. Promotion is an explicit edge removal followed by a roster refresh
+### 6. Promotion refreshes the roster before explicit edge removal
 
 Detaching children first mutates each execution handle to top-level, then emits
-`setParentStream(child, null)`, and finally emits the old parent's refreshed roster
+the old parent's refreshed roster before `setParentStream(child, null)` for each promoted child
 (`src/agent/runtime/executionRegistry.ts:542-566`; handle mutation is
 `src/agent/runtime/ExecutionHandle.ts:147-151`).
 

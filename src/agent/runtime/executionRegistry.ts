@@ -537,6 +537,7 @@ export class ExecutionRegistry {
    * children.
    */
   detachActiveChildren(parentStreamId: StreamTabId): void {
+    const detachedChildStreamIds: StreamTabId[] = [];
     for (const activation of this.childActivations.values()) {
       if (
         activation.parentStreamId !== parentStreamId ||
@@ -546,21 +547,21 @@ export class ExecutionRegistry {
       }
       activation.detach();
       this.approvals?.detachStreamFromParent(activation.childStreamId);
-      this.emitParentStreamUpdate({
-        childStreamId: activation.childStreamId,
-        parentStreamId: null,
-      });
+      detachedChildStreamIds.push(activation.childStreamId);
     }
     for (const handle of this.handles.values()) {
       if (!isChildExecution(handle, parentStreamId)) continue;
       this.approvals?.detachStreamFromParent(handle.childStreamId);
       handle.detach();
+      detachedChildStreamIds.push(handle.childStreamId);
+    }
+    this.emitChildActivity(parentStreamId);
+    for (const childStreamId of detachedChildStreamIds) {
       this.emitParentStreamUpdate({
-        childStreamId: handle.childStreamId,
+        childStreamId,
         parentStreamId: null,
       });
     }
-    this.emitChildActivity(parentStreamId);
   }
 
   /**
