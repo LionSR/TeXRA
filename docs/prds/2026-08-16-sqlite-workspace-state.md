@@ -1,6 +1,6 @@
 ---
 created: 2026-08-16
-updated: 2026-08-16
+updated: 2026-08-17
 ---
 
 # PRD: One SQLite database per workspace for app-owned durable state
@@ -499,7 +499,8 @@ rows; export compat is not storage compat.
   fail while the parent deletion still commits (`stageDeleteStream` logs
   and proceeds), so a supported legacy sidecar can name a parent absent
   from the registry — the import verifies the edge and writes NULL with a
-  `warn` instead of aborting on the FK. Plus, plus `GoalStore`'s durable goal records into `goals` rows
+  `warn` instead of aborting on the FK. Plus, `GoalStore`'s durable goal
+  records move into `goals` rows
   (§2 narrowing). **Goal sources are per-host and one of them is not a
   file this importer can see:** the CLI persists goals in the bucket
   `state.json`, and the extension persists them in VS Code's
@@ -748,8 +749,9 @@ normalization of entry payload internals; no publication of this doc
   recovery sweep finalizes orphans from an indexed query.
 - All ratchets green; no store public-surface change; Waves A–C unaffected.
 - `WORKSPACE_STORAGE_LAYOUT` shrinks to the §7 permanent set —
-  `{ texra.db, original, memories, state.json, config.json,
-_workspace.json, pasted, recordings }` plus the per-execution artifacts
+  `{ texra.db, texra.db-wal, texra.db-shm, original, memories, state.json,
+config.json, _workspace.json, pasted, recordings }` plus the per-execution
+  artifacts
   area (§5 Stage 5) — and legacy `taskRuns/` until #6981 retention drains
   it (§3.1 exception). §7 and this criterion enumerate the same set by
   construction; a divergence between the two lists is itself a defect.
