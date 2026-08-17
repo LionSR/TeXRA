@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import PQueue from 'p-queue';
 
 // Local imports
 import { refresh, computeAgentOptionsData, getAgent } from '@agent/index';
@@ -76,6 +77,14 @@ export class MainViewProvider
   /** A State 1 entry observed with no view keeps its setup-agent selection
    *  pending until a launcher exists to receive it. */
   private pendingSetupAgentSelection = false;
+  /**
+   * Funnel refresh derives an edge-triggered transition after awaiting the
+   * credential probe. Serialize callers so a later completion cannot commit a
+   * transition based on a stale previous funnel state.
+   */
+  private readonly onboardingFunnelRefreshQueue = new PQueue({
+    concurrency: 1,
+  });
 
   // Debounced refresh for agent option changes
   private debouncedRefreshAgentOptions = debounce(
@@ -199,7 +208,13 @@ export class MainViewProvider
    * Invoked by the message handler on webview ready — which credential-changed
    * hooks replay via refreshOptionsAndView — and after welcome-card actions.
    */
-  async refreshOnboardingFunnel(): Promise<void> {
+  refreshOnboardingFunnel(): Promise<void> {
+    return this.onboardingFunnelRefreshQueue.add(async () => {
+      await this.refreshOnboardingFunnelSerially();
+    });
+  }
+
+  private async refreshOnboardingFunnelSerially(): Promise<void> {
     const view = this.getMainModeView();
     // Mode === MAIN is not enough: after an HTML swap the document has not
     // installed its listener yet. Posting into that window drops messages, and
