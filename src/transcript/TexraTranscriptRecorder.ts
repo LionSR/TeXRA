@@ -313,6 +313,18 @@ export function attachTranscriptRecorder(
       ...(spillPath && { spillPath }),
     } as ToolUseLog;
   };
+  const boundModelResponse = (
+    id: string,
+    text: string,
+  ): { text: string; data: Record<string, string> } => {
+    const redacted = redactSecrets(text);
+    const preview = boundedTranscriptPreview(redacted);
+    const spillPath = queueSpill(id, redacted, preview);
+    return {
+      text: preview,
+      data: { status: 'completed', ...(spillPath && { spillPath }) },
+    };
+  };
   const recordFailure = (error: unknown): void => {
     pendingFailure ??= error;
     for (const state of streams.values()) {
@@ -376,13 +388,7 @@ export function attachTranscriptRecorder(
     }
 
     if (state.ended) {
-      const text = redactSecrets(state.buffer);
-      const preview = boundedTranscriptPreview(text);
-      const spillPath = queueSpill(id, text, preview);
-      writer.settle(id, {
-        text: preview,
-        data: { status: 'completed', ...(spillPath && { spillPath }) },
-      });
+      writer.settle(id, boundModelResponse(id, state.buffer));
     }
   };
 
@@ -727,16 +733,22 @@ export function attachTranscriptRecorder(
           const correlatorId = pendingModelResponseId;
           pendingModelResponseId = undefined;
           if (correlatorId) {
-            writer.settle(correlatorId, {
-              text: redactSecrets(event.text),
-              data: { status: 'completed' },
-            });
+            writer.settle(
+              correlatorId,
+              boundModelResponse(correlatorId, event.text),
+            );
             return;
           }
-          appendLog({
+          const id = generateShortId();
+          writer.appendSettled({
+            id,
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: 'info',
+            timestamp: Date.now(),
             groupId: event.stageId,
             messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-            text: event.text,
+            ...boundModelResponse(id, event.text),
+            verbose: isDebugModeEnabled(),
           });
           return;
         }

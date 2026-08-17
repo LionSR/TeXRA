@@ -646,8 +646,10 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
     );
 
     const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
-    output.append(`${'line\n'.repeat(2_100)}API_KEY=super-secret-value`);
+    output.append('partial response');
     output.finalize();
+    const finalizedOutput = `${'line\n'.repeat(2_100)}API_KEY=super-secret-value`;
+    trace.responseFinalized(finalizedOutput);
     const toolOutput = `${'界'.repeat(30_000)}API_KEY=keep-tool-output`;
     trace.toolStart({
       logId: 'tool:spill',
@@ -690,6 +692,7 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
     expect(toolData.spillPath).toBe(
       'executions/test/toolOutput/tool:spill.txt',
     );
+    expect(writes[0]?.content).toContain('line\nline');
     expect(writes).toEqual([
       expect.objectContaining({
         path: `executions/test/toolOutput/${output.id}.txt`,
