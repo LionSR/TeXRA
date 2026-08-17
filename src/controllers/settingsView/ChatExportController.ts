@@ -40,8 +40,7 @@ import { StorageFS } from '@utils/files/storageFS';
 // ============================================================
 
 /** Outcome of loading execution data for export. */
-export type ExportInputStatus =
-  'ok' | 'config_missing' | 'conversation_missing';
+type ExportInputStatus = 'ok' | 'config_missing' | 'conversation_missing';
 
 type ExportInputResult =
   | { readonly status: 'ok'; readonly exportInput: ChatExportInput }

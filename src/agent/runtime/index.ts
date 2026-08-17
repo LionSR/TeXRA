@@ -56,7 +56,7 @@ export type {
 
 // runAgent
 export { runAgent } from './runAgent';
-export type { RunAgentOptions } from './runAgent';
+export type { RunAgentOptions, RunAgentRequest } from './runAgent';
 
 // SessionResumeRetrieval
 export { retrieveSessionResumeData } from './SessionResumeRetrieval';

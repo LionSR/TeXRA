@@ -316,7 +316,7 @@ export class UsageMonitor {
         }
       }
     } catch (error) {
-      this.context.logger.debug('Backend usage logging failed', {
+      this.context.logger.warn('Backend usage logging failed', {
         data: error,
       });
     }

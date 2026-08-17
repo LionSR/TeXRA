@@ -165,7 +165,7 @@ async function readCommandStdout(
     cwd: cwd ?? (await resolveCliCwd(undefined)),
     quiet: true,
   });
-  return result.success ? (result.stdout ?? '') : undefined;
+  return result.success ? result.stdout : undefined;
 }
 
 /**

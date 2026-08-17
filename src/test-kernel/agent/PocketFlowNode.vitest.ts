@@ -114,6 +114,11 @@ class ScriptedRetryNode extends Node {
 }
 
 describe('Node manual retry', () => {
+  it('rejects an invalid retry limit at construction', () => {
+    expect(() => new ScriptedRetryNode(0, [], [])).toThrow(RangeError);
+    expect(() => new ScriptedRetryNode(-1, [], [])).toThrow(RangeError);
+  });
+
   it('grants one attempt after an exhausted automatic retry batch', async () => {
     const node = new ScriptedRetryNode(3, failureSequence(4), [true, false]);
 

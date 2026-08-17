@@ -1,6 +1,6 @@
 // Local imports
-import type { ToolDefinition } from '@model/ToolDefinition';
 import type { LanguageModelToolCallPart } from '@platform/languageModel';
+import type { ToolDefinition } from '@shared/schemas';
 
 // Local file imports
 import type { ProviderMessage } from './ProviderMessage';

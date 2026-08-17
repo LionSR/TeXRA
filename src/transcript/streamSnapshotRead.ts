@@ -159,65 +159,53 @@ function parseStreamMeta(raw: unknown): StreamTabMeta | undefined {
  * Read `workPlan.json`. A file written by a NEWER `schemaVersion` is IGNORED
  * (returns empty) rather than coerced, so we never consume a future shape's
  * fields as v1 — this is the single forward-compat gate. Within a known
- * version, `PersistedWorkPlanSchema`'s per-field `.catch` keeps one corrupt
- * value from nuking the rest, but `.catch` itself is silent — so each field is
- * re-checked here against its raw (non-`.catch`) shape to log which one, if
- * any, actually got defaulted. Without this, a corrupted field is silently
- * dropped on this read and then permanently baked over the real on-disk value
- * by the next unrelated write (`writeWorkPlan` rewrites all three fields
- * together), with no diagnostic ever produced — the same silent-data-loss
- * trap `parseUsageData` (`@shared/schemas/streamData`, #7464) was built to
- * avoid for `usageStats.json`. A structurally unreadable file (a non-object
- * shape that survives the `!raw` guard) degrades to an empty plan LOUDLY —
- * warned and diagnosable — rather than via a silent whole-object `.catch`
- * default, matching the read-side degradation handling in
- * {@link assembleSnapshot}.
+ * version, each field is parsed independently so a malformed value cannot
+ * erase valid siblings on the next whole-file write. Every recovery logs a
+ * warning; a structurally unreadable file degrades to an empty plan loudly,
+ * matching {@link assembleSnapshot}.
  */
 function readPersistedWorkPlan(raw: unknown): WorkPlanSnapshot {
   if (!raw) return EMPTY_WORK_PLAN;
-  const version =
-    isObject(raw) && typeof raw.schemaVersion === 'number'
-      ? raw.schemaVersion
-      : STREAM_SNAPSHOT_SCHEMA_VERSION;
-  if (version > STREAM_SNAPSHOT_SCHEMA_VERSION) return EMPTY_WORK_PLAN;
-  const result = PersistedWorkPlanSchema.safeParse(raw);
-  if (!result.success) {
+  if (!isObject(raw)) {
     log.warn('Discarding unreadable persisted work plan; using empty.', {
-      data: result.error,
+      data: raw,
     });
     return EMPTY_WORK_PLAN;
   }
-  if (isObject(raw)) {
-    // schemaVersion carries the same silent `.catch` as the three fields
-    // below; the forward-compat gate above only handles a NEWER version, so
-    // any other present-but-wrong value (e.g. a string) still gets defaulted
-    // here and deserves the same loud treatment.
-    if (
-      raw.schemaVersion !== undefined &&
-      raw.schemaVersion !== STREAM_SNAPSHOT_SCHEMA_VERSION
-    ) {
-      log.warn(
-        'Discarding corrupted "schemaVersion" in persisted work plan; using current.',
-        { data: raw.schemaVersion },
-      );
-    }
-    for (const field of Object.keys(WorkPlanSnapshotShape) as Array<
-      keyof typeof WorkPlanSnapshotShape
-    >) {
-      // A field that was never written (older file, or the key is simply
-      // absent) is not corruption — only warn when a present value fails to
-      // validate against its raw (non-`.catch`) shape.
-      if (raw[field] === undefined) continue;
-      const fieldResult = WorkPlanSnapshotShape[field].safeParse(raw[field]);
-      if (!fieldResult.success) {
-        log.warn(
-          `Discarding corrupted "${field}" in persisted work plan; using default.`,
-          { data: fieldResult.error },
-        );
-      }
-    }
+  const version = raw.schemaVersion;
+  if (typeof version === 'number' && version > STREAM_SNAPSHOT_SCHEMA_VERSION) {
+    return EMPTY_WORK_PLAN;
   }
-  return result.data;
+  if (version !== undefined && version !== STREAM_SNAPSHOT_SCHEMA_VERSION) {
+    log.warn(
+      'Discarding corrupted "schemaVersion" in persisted work plan; using current.',
+      { data: version },
+    );
+  }
+  const readField = <T>(
+    field: keyof typeof WorkPlanSnapshotShape,
+    schema: z.ZodType<T>,
+    fallback: T,
+  ): T => {
+    if (raw[field] === undefined) return fallback;
+    const parsed = schema.safeParse(raw[field]);
+    if (parsed.success) return parsed.data;
+    log.warn(
+      `Discarding corrupted "${field}" in persisted work plan; using default.`,
+      { data: parsed.error },
+    );
+    return fallback;
+  };
+  return PersistedWorkPlanSchema.parse({
+    schemaVersion: STREAM_SNAPSHOT_SCHEMA_VERSION,
+    todos: readField('todos', WorkPlanSnapshotShape.todos, [] as TodoItem[]),
+    plan: readField('plan', WorkPlanSnapshotShape.plan, null),
+    planSummary: readField(
+      'planSummary',
+      WorkPlanSnapshotShape.planSummary,
+      null,
+    ),
+  });
 }
 
 /** Read every per-stream sidecar file once. */

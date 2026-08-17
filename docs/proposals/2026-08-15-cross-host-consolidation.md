@@ -501,7 +501,10 @@ login` does not sign in the GUI hosts and vice-versa. Ruling: is
   `!session.transcripts.has(streamId)`, so a stream re-created under the
   same id _un-cancelled_ a resume; (d) double-toast (fixed by C11).
   **Ruling + landed shape:** each attempt owns one monotone host-cancellation
-  latch. The extension latches observed transcript absence
+  latch. The proposed shared default was rejected because cancellation is a
+  host-owned lifecycle fact assembled from different signals; a core default
+  would either duplicate host policy or silently weaken it, so the monotone
+  `isCancellationRequested` port remains optional. The extension latches observed transcript absence
   (`resumeFromResumeData.ts:35-46`) and forwards the same latch/guard to both
   resume branches (`:82-102`); desktop latches host detach + transcript
   absence + authoritative-stream absence (`desktopAgentResume.ts:72-94`); the
@@ -510,7 +513,9 @@ login` does not sign in the GUI hosts and vice-versa. Ruling: is
   `canAcquireResumeLease` rechecks it under the lease lock. Desktop alone
   also checks the durable authoritative stream identity
   (`desktopAgentResume.ts:84-94`), fenced as desktop-only — extension/CLI
-  must not copy it.
+  must not copy it. The rejected shared-default admission port would wrongly
+  centralize host-owned cancellation; the optional port instead documents the
+  monotone contract while each host retains its own lifecycle authority.
 - **V5. Only the CLI settles executions at exit.** CLI shutdown
   (`runExecution.ts:344-399`) kills, persists `CANCELLED` with `'preserve'`,
   releases the lease, derives resumability, then advertises recovery.

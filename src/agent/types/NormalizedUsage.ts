@@ -6,23 +6,22 @@ import { z } from 'zod';
 
 import {
   TokenCountSchema,
-  TokenUsageStatsBaseSchema,
+  TokenUsageStatsSchema,
   UsageProviderSchema,
   UsageRouteSchema,
-  withLegacyUsageRoute,
 } from '@shared/schemas';
 
 /**
  * Normalized usage statistics from any model provider.
  *
  * Reuses only the required base fields via `.pick()` — the optional cache
- * fields on `TokenUsageStatsBaseSchema` (`cacheReadInputTokens` /
+ * fields on `TokenUsageStatsSchema` (`cacheReadInputTokens` /
  * `cacheCreationInputTokens`) are never populated for a NormalizedUsage; the
  * live cache metrics below (`cachedInputTokens` / `cacheCreationTokens`) are
  * the authoritative names. Extending the full base instead would inherit
  * those dead fields and duplicate `cacheMissInputTokens`.
  */
-const NormalizedUsageBaseSchema = TokenUsageStatsBaseSchema.pick({
+const NormalizedUsageBaseSchema = TokenUsageStatsSchema.pick({
   inputTokens: true,
   outputTokens: true,
   cost: true,
@@ -53,8 +52,6 @@ const NormalizedUsageBaseSchema = TokenUsageStatsBaseSchema.pick({
   _native: z.unknown().optional(),
 });
 
-export const NormalizedUsageSchema = withLegacyUsageRoute(
-  NormalizedUsageBaseSchema,
-);
+export const NormalizedUsageSchema = NormalizedUsageBaseSchema;
 
 export type NormalizedUsage = z.infer<typeof NormalizedUsageSchema>;

@@ -13,7 +13,7 @@ import {
   toOpenAITools,
   toOpenAIResponseTools,
 } from '@agent/modelHandlers/toolConversion';
-import type { ToolDefinition } from '@model/ToolDefinition';
+import type { ToolDefinition } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { resolveToolDefinitions } from '@tools/registry';

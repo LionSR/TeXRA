@@ -24,11 +24,11 @@ import { K_SLICE } from '@agent/core/constants';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import type { ResponseCycleServices } from '@agent/core/flows/CycleServices';
-import type { ToolDefinition } from '@model/ToolDefinition';
 import {
   AgentFileLocationSchema,
   MESSAGE_TYPES,
   OUTPUT_END_TAG,
+  type ToolDefinition,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';

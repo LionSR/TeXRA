@@ -159,6 +159,7 @@ async function resumePersistedStream(
   const resumed = await resumeQueuedToolUseFromResumeData(streamId, resume, {
     session,
     recovery,
+    isCancellationRequested: () => false,
     onError: (error) => {
       throw error;
     },

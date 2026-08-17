@@ -492,8 +492,8 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     const runResult = runWithOwnership(async () => {
       // Attempt-scoped setup runs inside the lease launch guard: it runs after
       // the deterministic run lease is held, so a throw here must release the
-      // lease - otherwise it survives to its heartbeat timeout and a prompt
-      // relaunch is refused.
+      // lease - otherwise the record survives for this process's lifetime and
+      // a prompt relaunch is refused.
       const { childStreamId: runChildStreamId, completion: runCompletion } =
         await startDetachedChildRunLoop({
           executionId: runExecutionId,
