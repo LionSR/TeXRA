@@ -27,6 +27,8 @@
  * Redaction is lossy by construction: a literal `API_KEY=<value>` in a
  * model-written code sample is scrubbed along with a real key.
  */
+import PQueue from 'p-queue';
+
 import type {
   AgentEvent,
   AgentTrace,
@@ -62,6 +64,14 @@ import type { StreamLogAppendInput, StreamLogUpdatePatch } from './StreamLog';
 import type { TranscriptWriter } from './StreamLogStore';
 
 const STREAM_UPDATE_THROTTLE_MS = 50;
+const MAX_TRANSCRIPT_ENTRY_BYTES = 50 * 1024;
+const MAX_TRANSCRIPT_ENTRY_LINES = 2_000;
+const TRANSCRIPT_PREVIEW_LINES = 40;
+const TRANSCRIPT_TRUNCATION_MARKER =
+  '\n\n… output truncated in transcript; retained in run artifacts …\n\n';
+const LIVE_TOOL_TRUNCATION_MARKER =
+  '\n\n… output truncated while the tool is running …\n\n';
+const UTF8_ENCODER = new TextEncoder();
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -165,6 +175,7 @@ type StageMetadata = Pick<
 export interface TranscriptRecorderHandle {
   unsubscribe(): void;
   flushPending(): void;
+  flushSpills(): Promise<void>;
   /**
    * Consume one canonical `status` session fact for this recorder's stream.
    * Status travels only on the session-fact rail (it is not an `AgentEvent`),
@@ -174,13 +185,153 @@ export interface TranscriptRecorderHandle {
   handleStatus(event: StatusEvent): void;
 }
 
+export interface TranscriptSpillWriter {
+  readonly pathFor: (entryId: string) => string;
+  write(path: string, content: string): Promise<void>;
+}
+
+function boundedTranscriptPreview(
+  text: string,
+  marker = TRANSCRIPT_TRUNCATION_MARKER,
+): string {
+  const lines = text.split('\n');
+  if (
+    UTF8_ENCODER.encode(text).length <= MAX_TRANSCRIPT_ENTRY_BYTES &&
+    lines.length <= MAX_TRANSCRIPT_ENTRY_LINES
+  ) {
+    return text;
+  }
+  const contentBudget =
+    MAX_TRANSCRIPT_ENTRY_BYTES - UTF8_ENCODER.encode(marker).length;
+  const head = utf8Prefix(
+    lines.slice(0, TRANSCRIPT_PREVIEW_LINES).join('\n'),
+    Math.floor(contentBudget / 2),
+  );
+  const tail = utf8Suffix(
+    lines.slice(-TRANSCRIPT_PREVIEW_LINES).join('\n'),
+    Math.ceil(contentBudget / 2),
+  );
+  return `${head}${marker}${tail}`;
+}
+
+function utf8Prefix(text: string, byteBudget: number): string {
+  let bytes = 0;
+  let end = 0;
+  for (const character of text) {
+    const characterBytes = utf8CharacterBytes(character);
+    if (bytes + characterBytes > byteBudget) break;
+    bytes += characterBytes;
+    end += character.length;
+  }
+  return text.slice(0, end);
+}
+
+function utf8Suffix(text: string, byteBudget: number): string {
+  let bytes = 0;
+  let start = text.length;
+  while (start > 0) {
+    let characterStart = start - 1;
+    const codeUnit = text.charCodeAt(characterStart);
+    if (
+      codeUnit >= 0xdc00 &&
+      codeUnit <= 0xdfff &&
+      characterStart > 0 &&
+      text.charCodeAt(characterStart - 1) >= 0xd800 &&
+      text.charCodeAt(characterStart - 1) <= 0xdbff
+    ) {
+      characterStart -= 1;
+    }
+    const character = text.slice(characterStart, start);
+    const characterBytes = utf8CharacterBytes(character);
+    if (bytes + characterBytes > byteBudget) break;
+    bytes += characterBytes;
+    start = characterStart;
+  }
+  return text.slice(start);
+}
+
+function utf8CharacterBytes(character: string): number {
+  const codePoint = character.codePointAt(0) ?? 0;
+  if (codePoint <= 0x7f) return 1;
+  if (codePoint <= 0x7ff) return 2;
+  if (codePoint <= 0xffff) return 3;
+  return 4;
+}
+
 export function attachTranscriptRecorder(
   trace: AgentTrace,
   writer: TranscriptWriter,
+  spillWriter?: TranscriptSpillWriter,
 ): TranscriptRecorderHandle {
   const { streamId } = writer;
   const streams = new Map<string, StreamSinkState>();
   let pendingFailure: unknown;
+  let pendingSpillFailure: unknown;
+  const pendingSpills = new Set<Promise<void>>();
+  const spillQueues = new Map<string, PQueue>();
+  const queueSpill = (
+    id: string,
+    text: string,
+    preview: string,
+  ): string | undefined => {
+    if (preview === text || !spillWriter) return undefined;
+    const path = spillWriter.pathFor(id);
+    let queue = spillQueues.get(path);
+    if (!queue) {
+      queue = new PQueue({ concurrency: 1 });
+      spillQueues.set(path, queue);
+    }
+    const pending = Promise.resolve(
+      queue.add(() => spillWriter.write(path, text)),
+    )
+      .catch((error: unknown) => {
+        pendingSpillFailure ??= error;
+      })
+      .finally(() => {
+        pendingSpills.delete(pending);
+        if (
+          queue.pending === 0 &&
+          queue.size === 0 &&
+          spillQueues.get(path) === queue
+        ) {
+          spillQueues.delete(path);
+        }
+      });
+    pendingSpills.add(pending);
+    return path;
+  };
+  const boundToolOutput = (
+    id: string,
+    result: Partial<ToolUseLog>,
+    persistSpill = true,
+  ): ToolUseLog => {
+    if (typeof result.output !== 'string') return result as ToolUseLog;
+    const output = result.output;
+    const preview = boundedTranscriptPreview(
+      output,
+      persistSpill ? TRANSCRIPT_TRUNCATION_MARKER : LIVE_TOOL_TRUNCATION_MARKER,
+    );
+    const spillPath = persistSpill
+      ? queueSpill(id, output, preview)
+      : undefined;
+    return {
+      ...result,
+      output: preview,
+      ...(spillPath && { spillPath }),
+    } as ToolUseLog;
+  };
+  const boundModelResponse = (
+    id: string,
+    text: string,
+  ): { text: string; data: Record<string, string> } => {
+    const redacted = redactSecrets(text);
+    const preview = boundedTranscriptPreview(redacted);
+    const spillPath = queueSpill(id, redacted, preview);
+    return {
+      text: preview,
+      data: { status: 'completed', ...(spillPath && { spillPath }) },
+    };
+  };
   const recordFailure = (error: unknown): void => {
     pendingFailure ??= error;
     for (const state of streams.values()) {
@@ -244,10 +395,7 @@ export function attachTranscriptRecorder(
     }
 
     if (state.ended) {
-      writer.settle(id, {
-        text: redactSecrets(state.buffer),
-        data: { status: 'completed' },
-      });
+      writer.settle(id, boundModelResponse(id, state.buffer));
     }
   };
 
@@ -396,7 +544,11 @@ export function attachTranscriptRecorder(
           const patch = {
             messageType: MESSAGE_TYPES.TOOL_USE,
             data: {
-              ...redactedResult,
+              ...boundToolOutput(
+                event.logId,
+                redactedResult,
+                event.status !== TOOL_USE_STATUS.IN_PROGRESS,
+              ),
               status: event.status,
             } as ToolUseLog,
           } satisfies StreamLogUpdatePatch;
@@ -588,16 +740,22 @@ export function attachTranscriptRecorder(
           const correlatorId = pendingModelResponseId;
           pendingModelResponseId = undefined;
           if (correlatorId) {
-            writer.settle(correlatorId, {
-              text: redactSecrets(event.text),
-              data: { status: 'completed' },
-            });
+            writer.settle(
+              correlatorId,
+              boundModelResponse(correlatorId, event.text),
+            );
             return;
           }
-          appendLog({
+          const id = generateShortId();
+          writer.appendSettled({
+            id,
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: 'info',
+            timestamp: Date.now(),
             groupId: event.stageId,
             messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-            text: event.text,
+            ...boundModelResponse(id, event.text),
+            verbose: isDebugModeEnabled(),
           });
           return;
         }
@@ -729,6 +887,14 @@ export function attachTranscriptRecorder(
       }
     },
     flushPending,
+    flushSpills: async () => {
+      while (pendingSpills.size > 0) {
+        await Promise.all([...pendingSpills]);
+      }
+      const failure = pendingSpillFailure;
+      pendingSpillFailure = undefined;
+      if (failure !== undefined) throw failure;
+    },
     handleStatus,
   };
 }
