@@ -11,6 +11,7 @@
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   AgentModePreset,
+  AgentScanIssue,
   AgentSelectionItem,
   ByCategory,
   UpdateAgentModePresetsMessage,
@@ -21,6 +22,7 @@ import type {
 export interface AgentSelectionPorts {
   loadAgents(): Promise<void>;
   buildSelectionItems(): ByCategory<AgentSelectionItem[]>;
+  getCustomAgentScanIssues(): readonly AgentScanIssue[];
 }
 
 export async function buildAgentSelectionMessage(
@@ -30,6 +32,7 @@ export async function buildAgentSelectionMessage(
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
     agents: ports.buildSelectionItems(),
+    customAgentIssues: [...ports.getCustomAgentScanIssues()],
   };
 }
 
