@@ -130,6 +130,7 @@ export function GitHubTokenForm(
       action="select"
       escapeAction="back"
       onSelect={(action) => {
+        if (saving) return;
         setError(undefined);
         if (action === 'set') {
           setEntering(true);

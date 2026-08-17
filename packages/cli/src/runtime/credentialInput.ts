@@ -6,7 +6,7 @@ const PROVIDER_PLACEHOLDER_PATTERNS: readonly RegExp[] = [
 ];
 
 const GITHUB_PLACEHOLDER_PATTERNS: readonly RegExp[] = [
-  /^(?:sk-?)?(?:x{3,}|\*{3,}|\.{3,}|<.*>|your[- _]?.*)$/i,
+  /^(?:sk-?)?(?:x{3,}|\*{3,}|\.{3,}|<.*>|your[- _]?.*)/i,
   /^(?:(?:api|github)[- _]?)?(?:key|token)[- _]?here$/i,
   /^placeholder$/i,
   /^example$/i,

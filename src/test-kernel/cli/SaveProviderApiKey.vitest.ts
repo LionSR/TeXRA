@@ -15,6 +15,7 @@ vi.mock('@model/apiProviders', async (importOriginal) => {
 });
 
 const { saveProviderApiKey } = await import('@cli/runtime/providerApiKey');
+const { saveGitHubToken } = await import('@cli/runtime/githubToken');
 
 describe('saveProviderApiKey', () => {
   beforeEach(() => {
@@ -77,5 +78,18 @@ describe('saveProviderApiKey', () => {
     await saveProviderApiKey('anthropic', 'sk-ant-secret');
 
     expect(order).toEqual(['set', 'invalidateApiKeyCache']);
+  });
+});
+
+describe('saveGitHubToken', () => {
+  beforeEach(() => {
+    mocks.set.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('rejects a masked prefix even when it has a suffix', async () => {
+    await expect(saveGitHubToken('xxx-not-a-real-token')).rejects.toThrow(
+      'placeholder',
+    );
+    expect(mocks.set).not.toHaveBeenCalled();
   });
 });
