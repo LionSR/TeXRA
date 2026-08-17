@@ -7,6 +7,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   TOOL_USE_STATUS,
+  ToolUseLogSchema,
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
@@ -646,20 +647,44 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
     const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     output.append(`${'line\n'.repeat(2_100)}API_KEY=super-secret-value`);
     output.finalize();
+    const toolOutput = `${'tool line\n'.repeat(6_000)}API_KEY=keep-tool-output`;
+    trace.toolStart({
+      logId: 'tool:spill',
+      toolName: 'read',
+      input: { path: 'large.txt' },
+    });
+    trace.toolEnd({
+      logId: 'tool:spill',
+      status: TOOL_USE_STATUS.COMPLETED,
+      result: { toolName: 'read', output: toolOutput },
+    });
     recorder.flushPending();
     await recorder.flushSpills();
 
     const entry = store.get(streamId)?.getRange(0).at(-1);
-    expect(entry?.text?.length).toBeLessThan(50 * 1024);
-    expect(entry?.text).toContain('full output is stored separately');
-    expect(dataOf(entry).spillPath).toBe(
+    const modelEntry = store
+      .get(streamId)
+      ?.getRange(0)
+      .find((candidate) => candidate.id === output.id);
+    expect(modelEntry?.text?.length).toBeLessThan(50 * 1024);
+    expect(modelEntry?.text).toContain('full output is stored separately');
+    expect(dataOf(modelEntry).spillPath).toBe(
       `executions/test/toolOutput/${output.id}.txt`,
+    );
+    const toolData = ToolUseLogSchema.parse(dataOf(entry));
+    expect(toolData.output).toContain('full output is stored separately');
+    expect(toolData.outputSpillPath).toBe(
+      'executions/test/toolOutput/tool:spill.txt',
     );
     expect(writes).toEqual([
       expect.objectContaining({
         path: `executions/test/toolOutput/${output.id}.txt`,
         content: expect.not.stringContaining('super-secret-value'),
       }),
+      {
+        path: 'executions/test/toolOutput/tool:spill.txt',
+        content: toolOutput,
+      },
     ]);
   });
 

@@ -204,13 +204,20 @@ export function attachTranscriptRecorder(
   const { streamId } = writer;
   const streams = new Map<string, StreamSinkState>();
   let pendingFailure: unknown;
+  let pendingSpillFailure: unknown;
   const pendingSpills = new Set<Promise<void>>();
-  const queueSpill = (id: string, text: string): string | undefined => {
-    if (boundedTranscriptPreview(text) === text || !spillWriter)
-      return undefined;
+  const queueSpill = (
+    id: string,
+    text: string,
+    preview: string,
+  ): string | undefined => {
+    if (preview === text || !spillWriter) return undefined;
     const path = spillWriter.pathFor(id);
     const pending = spillWriter
       .write(path, text)
+      .catch((error: unknown) => {
+        pendingSpillFailure ??= error;
+      })
       .finally(() => pendingSpills.delete(pending));
     pendingSpills.add(pending);
     return path;
@@ -220,11 +227,12 @@ export function attachTranscriptRecorder(
     result: Partial<ToolUseLog>,
   ): ToolUseLog => {
     if (typeof result.output !== 'string') return result as ToolUseLog;
-    const output = redactSecrets(result.output);
-    const spillPath = queueSpill(id, output);
+    const output = result.output;
+    const preview = boundedTranscriptPreview(output);
+    const spillPath = queueSpill(id, output, preview);
     return {
       ...result,
-      output: boundedTranscriptPreview(output),
+      output: preview,
       ...(spillPath && { outputSpillPath: spillPath }),
     } as ToolUseLog;
   };
@@ -292,9 +300,10 @@ export function attachTranscriptRecorder(
 
     if (state.ended) {
       const text = redactSecrets(state.buffer);
-      const spillPath = queueSpill(id, text);
+      const preview = boundedTranscriptPreview(text);
+      const spillPath = queueSpill(id, text, preview);
       writer.settle(id, {
-        text: boundedTranscriptPreview(text),
+        text: preview,
         data: { status: 'completed', ...(spillPath && { spillPath }) },
       });
     }
@@ -780,6 +789,7 @@ export function attachTranscriptRecorder(
     flushPending,
     flushSpills: async () => {
       await Promise.all([...pendingSpills]);
+      if (pendingSpillFailure !== undefined) throw pendingSpillFailure;
     },
     handleStatus,
   };

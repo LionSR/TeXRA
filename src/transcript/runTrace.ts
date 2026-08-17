@@ -92,7 +92,12 @@ export function createRunTrace(
     transcript = attachTranscriptRecorder(trace, writer, {
       pathFor: (entryId) =>
         `${WORKSPACE_STORAGE_LAYOUT.runs}/${ownerKey}/toolOutput/${entryId}.txt`,
-      write: (path, content) => StorageFS.writeAtomic(path, content),
+      write: async (path, content) => {
+        await StorageFS.ensureDir(
+          `${WORKSPACE_STORAGE_LAYOUT.runs}/${ownerKey}/toolOutput`,
+        );
+        await StorageFS.writeAtomic(path, content);
+      },
     });
   } catch (error) {
     const failures = [error];
