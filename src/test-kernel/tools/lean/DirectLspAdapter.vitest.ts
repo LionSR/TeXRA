@@ -705,33 +705,87 @@ describe('createDirectLspLeanAdapter', () => {
   );
 
   fakeLakeIt(
-    'keeps a server whose request is still in flight when its run ends',
+    'stops a shared server after its final owner and lease end',
     async () => {
       const adapter = createDirectLspLeanAdapter({
         lakeCommand: fakeLakePath,
         idleTimeoutMs: 0,
       });
-      // Attribute the session to run e00001, then hold it leased with a build
-      // whose lake process is gated on an env delay — the shared-worktree case
-      // where another run is mid-request when this run ends. A project command
-      // acquires its lease synchronously with the call, so no settling delay
-      // is needed before the stop.
-      await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
-      expect(activeServerRoots()).toEqual([projectRoot]);
-      vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '1500');
-      const build = adapter.executeProjectCommand('build');
       try {
+        await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
+        expect(activeServerRoots()).toEqual([projectRoot]);
+        vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '1500');
+        const build = asRun('e00001', () =>
+          adapter.executeProjectCommand('build'),
+        );
+        await asRun('e00002', () => adapter.fetchDiagnosticsForFile(filePath));
+
+        // The reuser joins the original owner. Ending only e00002 keeps the
+        // shared server for e00001; ending the final owner defers disposal
+        // until e00001's already-running build releases its lease.
+        await adapter.stopSessionsForRun?.('e00002');
+        expect(activeServerRoots()).toEqual([projectRoot]);
         await adapter.stopSessionsForRun?.('e00001');
         expect(activeServerRoots()).toEqual([projectRoot]);
+
+        await build;
+        expect(activeServerRoots()).toEqual([]);
       } finally {
         await adapter.dispose();
-        await Promise.allSettled([build]);
       }
     },
   );
 
   fakeLakeIt(
-    'reattributes a reused server to the run that leases it',
+    'cancels a deferred stop when a later run takes ownership',
+    async () => {
+      const adapter = createDirectLspLeanAdapter({
+        lakeCommand: fakeLakePath,
+        idleTimeoutMs: 0,
+      });
+      try {
+        await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
+        vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '1500');
+        const build = asRun('e00001', () =>
+          adapter.executeProjectCommand('build'),
+        );
+        await asRun('e00002', () => adapter.fetchDiagnosticsForFile(filePath));
+        await adapter.stopSessionsForRun?.('e00001');
+        await adapter.stopSessionsForRun?.('e00002');
+
+        await asRun('e00003', () => adapter.fetchDiagnosticsForFile(filePath));
+        await build;
+        expect(activeServerRoots()).toEqual([projectRoot]);
+
+        await adapter.stopSessionsForRun?.('e00003');
+        expect(activeServerRoots()).toEqual([]);
+      } finally {
+        await adapter.dispose();
+      }
+    },
+  );
+
+  fakeLakeIt('adds a project-command run as a session owner', async () => {
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 0,
+    });
+    try {
+      await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
+      await asRun('e00002', () => adapter.executeProjectCommand('build'));
+
+      await adapter.stopSessionsForRun?.('e00001');
+      expect(activeServerRoots()).toEqual([projectRoot]);
+
+      await adapter.stopSessionsForRun?.('e00002');
+      expect(activeServerRoots()).toEqual([]);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
+  fakeLakeIt(
+    "keeps a parent's reused server until both parent and subagent end",
     async () => {
       const adapter = createDirectLspLeanAdapter({
         lakeCommand: fakeLakePath,
@@ -742,8 +796,8 @@ describe('createDirectLspLeanAdapter', () => {
         await asRun('e00002', () => adapter.fetchDiagnosticsForFile(filePath));
         expect(await countStarts()).toBe(1);
 
-        // The server now belongs to the run that last used it, so the
-        // original run's end leaves it running.
+        // A subagent joins the parent as an owner; either run ending alone
+        // leaves the shared-worktree server available to the other.
         await adapter.stopSessionsForRun?.('e00001');
         expect(activeServerRoots()).toEqual([projectRoot]);
 
@@ -754,6 +808,46 @@ describe('createDirectLspLeanAdapter', () => {
       }
     },
   );
+
+  fakeLakeIt('records a reuser before awaiting session readiness', async () => {
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 0,
+    });
+    try {
+      // Start without run ownership so the reuser below is the only owner.
+      await adapter.fetchDiagnosticsForFile(filePath);
+      const originalEnsureReady = LeanSession.prototype.ensureReady;
+      let enteredReady!: () => void;
+      const readyEntered = new Promise<void>((resolve) => {
+        enteredReady = resolve;
+      });
+      let releaseReady!: () => void;
+      const readyGate = new Promise<void>((resolve) => {
+        releaseReady = resolve;
+      });
+      vi.spyOn(LeanSession.prototype, 'ensureReady').mockImplementation(
+        async function (this: LeanSession): Promise<void> {
+          enteredReady();
+          await readyGate;
+          await originalEnsureReady.call(this);
+        },
+      );
+
+      const request = asRun('e00002', () =>
+        adapter.fetchDiagnosticsForFile(filePath),
+      );
+      await readyEntered;
+      await adapter.stopSessionsForRun?.('e00002');
+      expect(activeServerRoots()).toEqual([projectRoot]);
+
+      releaseReady();
+      await request;
+      expect(activeServerRoots()).toEqual([]);
+    } finally {
+      await adapter.dispose();
+    }
+  });
 
   fakeLakeIt(
     'reattributes a restarted server to the restarting run',
