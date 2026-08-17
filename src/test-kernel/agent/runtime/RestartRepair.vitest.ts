@@ -5,7 +5,6 @@ import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   repairRestartedStreams,
-  RestartRepairRetryScheduler,
   type RestartRepairOptions,
 } from '@agent/runtime/restartRepair';
 import {
@@ -110,56 +109,68 @@ async function failGroupClose(): Promise<StreamTabId[]> {
 }
 
 describe('repairRestartedStreams', () => {
-  it('keeps only one delayed lease retry and cancels it on disposal', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(1_000);
-    const scheduler = new RestartRepairRetryScheduler();
-    const superseded = vi.fn();
-    const retry = vi.fn();
-    const disposed = vi.fn();
-
-    try {
-      scheduler.schedule(1_010, superseded);
-      scheduler.schedule(1_020, retry);
-      vi.advanceTimersByTime(19);
-      expect(superseded).not.toHaveBeenCalled();
-      expect(retry).not.toHaveBeenCalled();
-      vi.advanceTimersByTime(1);
-      expect(retry).toHaveBeenCalledOnce();
-
-      scheduler.schedule(1_030, disposed);
-      scheduler.dispose();
-      vi.advanceTimersByTime(10);
-      expect(disposed).not.toHaveBeenCalled();
-
-      const rearmedAfterDispose = vi.fn();
-      scheduler.schedule(1_040, rearmedAfterDispose);
-      vi.advanceTimersByTime(10);
-      expect(rearmedAfterDispose).not.toHaveBeenCalled();
-    } finally {
-      scheduler.dispose();
-      vi.useRealTimers();
-    }
-  });
-
-  it('skips every repair mutation for a fresh foreign lease', async () => {
+  it('skips every repair mutation for a live foreign owner', async () => {
     const setup = setupRunningStream('foreign-active');
     const closeRunningGroups = vi.fn(async () => [] as StreamTabId[]);
     const finalizeExecution = createDurableFinalizer();
+    const owner = {
+      instanceId: 'test-instance',
+      socketPath: '/tmp/texra-test.sock',
+      pid: 1,
+      hostname: 'test-host',
+    };
 
     const result = await runRepair(setup, {
       closeRunningGroups,
       finalizeExecution,
       runWithInactiveExecutionLease: vi.fn(async () => ({
         status: 'active' as const,
-        heartbeatAt: 123,
+        owner,
       })),
     });
 
     expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.RUNNING);
-    expect(result).toEqual({ nextLeaseCheckAt: 120_124 });
+    expect(result).toEqual({
+      activeOwners: [
+        { streamId: setup.streamId, executionId: setup.executionId, owner },
+      ],
+    });
     expect(closeRunningGroups).not.toHaveBeenCalled();
     expect(finalizeExecution).not.toHaveBeenCalled();
+  });
+
+  it('probes one shared active owner once per repair pass', async () => {
+    const first = setupRunningStream('shared-owner-first');
+    const second = setupRunningStream('shared-owner-second');
+    const owner = {
+      instanceId: 'shared-instance',
+      socketPath: '/tmp/texra-shared.sock',
+      pid: 1,
+      hostname: 'test-host',
+    };
+    const probeOwner = vi.fn(async () => 'alive' as const);
+    const runWithInactiveExecutionLease = vi.fn(
+      async (_executionId, _operation, leaseOptions) => {
+        expect(await leaseOptions?.probeOwner?.(owner)).toBe('alive');
+        return { status: 'active' as const, owner };
+      },
+    );
+
+    const result = await repairRestartedStreams({
+      streamStatus: first.streamStatus,
+      waitingStreams: new Set(),
+      executionIds: new Map([
+        [first.streamId, first.executionId],
+        [second.streamId, second.executionId],
+      ]),
+      repairStreams: [first.streamId, second.streamId],
+      closeRunningGroups: vi.fn(async () => [] as StreamTabId[]),
+      probeOwner,
+      runWithInactiveExecutionLease,
+    });
+
+    expect(probeOwner).toHaveBeenCalledOnce();
+    expect(result.activeOwners).toHaveLength(2);
   });
 
   it('preserves an execution that completed before a delayed lease retry', async () => {
