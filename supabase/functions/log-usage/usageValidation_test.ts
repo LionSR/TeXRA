@@ -64,7 +64,7 @@ Deno.test('classifies GLM Coding Plan usage under the GLM source', () => {
   equal(subscriptionSourceForUsage(parsed), 'glm');
 });
 
-Deno.test('classifies Grok usage under the xai subscription source', () => {
+Deno.test('classifies Grok usage under the grok subscription source', () => {
   const parsed = UsageLogEntrySchema.parse({
     ...usageEntry(),
     model: 'grok-5',
@@ -72,7 +72,7 @@ Deno.test('classifies Grok usage under the xai subscription source', () => {
     usageRoute: 'xai-subscription',
   });
 
-  equal(subscriptionSourceForUsage(parsed), 'xai');
+  equal(subscriptionSourceForUsage(parsed), 'grok');
 });
 
 Deno.test('keeps paid usage outside subscription sources', () => {
