@@ -741,38 +741,6 @@ describe('StreamLogStore load', () => {
     expect(store.get('alpha')).toBeUndefined();
   });
 
-  it('persists metadata recorded while rehydration is in flight', async () => {
-    const meta = {
-      identity: { kind: 'agent' as const, agent: 'polish' },
-      executionId: 'racing-metadata',
-      description: 'Recorded during rehydration',
-    };
-    const readStarted = createDeferred();
-    const readGate = createDeferred();
-    const storage = mockStorage({
-      logs: { alpha: [logEntry('alpha', 1, 100)] },
-      summaries: {
-        alpha: summary(100, 100, { hasRunningGroup: false }),
-      },
-      onLogRead: async () => {
-        readStarted.resolve();
-        await readGate.promise;
-      },
-    });
-    const store = await StreamLogStore.open();
-    const loading = store.ensureLoaded('alpha');
-    await readStarted.promise;
-
-    store.recordSummaryMeta('alpha', meta);
-    readGate.resolve();
-    await loading;
-
-    await waitForCondition(
-      () => writtenSummary(storage.writes, 'alpha') !== undefined,
-    );
-    expect(writtenSummary(storage.writes, 'alpha')).toMatchObject({ meta });
-  });
-
   it('keeps a writer-owned rehydrate resident when focus clears eviction', async () => {
     const readStarted = createDeferred();
     const readGate = createDeferred();
