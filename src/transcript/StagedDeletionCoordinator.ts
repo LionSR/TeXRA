@@ -221,7 +221,10 @@ export class StagedDeletionCoordinator {
    * restores the directory only into the orphan-cleanup namespace so the
    * execution directory and goal can be removed with the snapshot.
    */
-  async reconcile(liveStreams: ReadonlySet<StreamTabId>): Promise<{
+  async reconcile(
+    liveStreams: ReadonlySet<StreamTabId>,
+    selectedStreams?: ReadonlySet<StreamTabId>,
+  ): Promise<{
     restored: StreamTabId[];
     pendingCleanup: StreamTabId[];
     discarded: StreamTabId[];
@@ -253,6 +256,7 @@ export class StagedDeletionCoordinator {
           return;
         }
         const stream = parsedStream.data;
+        if (selectedStreams && !selectedStreams.has(stream)) return;
         const deletionState = this.deletionStates.get(stream);
         if (deletionState?.kind === 'staging') return;
 
@@ -287,7 +291,10 @@ export class StagedDeletionCoordinator {
       { concurrency: DELETION_IO_CONCURRENCY },
     );
     await pMap(
-      [...this.deletionStates],
+      [...this.deletionStates].filter(
+        ([stream]) =>
+          selectedStreams === undefined || selectedStreams.has(stream),
+      ),
       async ([stream, state]) => {
         if (!liveStreams.has(stream) || state.kind === 'staging') return;
         await this.recoverFailedRollback(stream, state);

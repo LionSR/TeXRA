@@ -538,16 +538,19 @@ describe('cross-process execution leases', () => {
   it('reports deleted, missing races, and protected IDs in bulk', async () => {
     const deletedId = 'a86440' as ExecutionId;
     const activeId = 'a86441' as ExecutionId;
+    const beforeDelete = vi.fn(async () => {});
     await writeExecution(deletedId);
     await writeExecution(activeId);
     await writeForeignLease(activeId);
 
-    await expect(deleteAllExecutions()).resolves.toEqual({
+    await expect(deleteAllExecutions({ beforeDelete })).resolves.toEqual({
       deleted: [deletedId],
       notFound: [],
       active: [activeId],
       failed: [],
     });
+    expect(beforeDelete).toHaveBeenCalledOnce();
+    expect(beforeDelete).toHaveBeenCalledWith(deletedId);
   });
 
   it('preflights every lease before bulk deletion mutates storage', async () => {
