@@ -134,6 +134,10 @@ function formatThread(thread: InlineCommentThreadView): string {
 
 export class InlineCommentTool extends defineTool({
   name: 'inline_comment',
+  hosts: {
+    cli: { available: false, reason: 'Requires the VS Code Comments UI.' },
+    desktop: { available: false, reason: 'Requires the VS Code Comments UI.' },
+  },
   description:
     'Leave inline comment threads in the editor via VS Code\'s native Comments UI (gutter bubbles + Comments panel) that the user can reply to and resolve. Commands: "add" opens a thread on a file range, "reply" appends to a thread, "resolve"/"unresolve" toggle a thread\'s state, "list" reads open threads including the user\'s replies. Use this for conversational, resolvable review notes; use the diagnostics tool\'s "add" command for one-off lint-style critique squiggles. Not available outside the VS Code extension host.',
   schema: InlineCommentInputSchema,

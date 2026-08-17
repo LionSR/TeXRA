@@ -145,21 +145,18 @@ const PROGRESS_PROJECTION_CASES = {
     source: runEvent({
       type: 'addOutputFiles',
       streamId,
-      executionId,
       filesByRound: { 1: [] },
     }),
-    payload: { streamId, executionId, filesByRound: { 1: [] } },
+    payload: { streamId, filesByRound: { 1: [] } },
   },
   updateMissingOutputs: {
     source: runEvent({
       type: 'updateMissingOutputs',
       streamId,
-      executionId,
       filesByRound: { 1: ['missing.tex'] },
     }),
     payload: {
       streamId,
-      executionId,
       filesByRound: { 1: ['missing.tex'] },
     },
   },
@@ -167,10 +164,9 @@ const PROGRESS_PROJECTION_CASES = {
     source: runEvent({
       type: 'updateCompileFailures',
       streamId,
-      executionId,
       filesByRound: { 1: [] },
     }),
-    payload: { streamId, executionId, filesByRound: { 1: [] } },
+    payload: { streamId, filesByRound: { 1: [] } },
   },
   clearMissingOutputs: {
     source: sessionFact('clearMissingOutputs', { streamId }),

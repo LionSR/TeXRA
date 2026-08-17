@@ -415,6 +415,7 @@ describe('UsageLogService', () => {
     it.each([
       'relay',
       'chatgpt-subscription',
+      'xai-subscription',
       'kimi-code-subscription',
       'glm-coding-plan-subscription',
     ] as const)(

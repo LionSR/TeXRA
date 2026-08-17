@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import { loadAgents } from '@agent/index';
+import { getCustomAgentScanIssues, loadAgents } from '@agent/index';
 
 import {
   AGENT_NAME_DESCRIPTION,
@@ -40,6 +40,9 @@ export async function listAgents(
       options.category,
     );
     if (hiddenNotice) writeTextStderr(hiddenNotice);
+    for (const issue of getCustomAgentScanIssues()) {
+      writeTextStderr(`Skipped custom agent ${issue.path}: ${issue.message}`);
+    }
   }
 
   emitCliResult(

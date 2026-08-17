@@ -324,6 +324,7 @@ describe('BashTool', () => {
       stdout: `${longOutput}\n`.trim(),
       stderr: '',
       timedOut: false,
+      exitCode: 0,
     };
 
     let receivedSignal: AbortSignal | undefined;

@@ -15,6 +15,7 @@ vi.mock('@model/apiProviders', async (importOriginal) => {
 });
 
 const { saveProviderApiKey } = await import('@cli/runtime/providerApiKey');
+const { saveGitHubToken } = await import('@cli/runtime/githubToken');
 
 describe('saveProviderApiKey', () => {
   beforeEach(() => {
@@ -37,6 +38,8 @@ describe('saveProviderApiKey', () => {
 
   it.each([
     'sk-xxx',
+    'sk-xxx-123',
+    'xxxabc-secret',
     '<your-key>',
     'your-api-key',
     'your_api_key',
@@ -75,5 +78,21 @@ describe('saveProviderApiKey', () => {
     await saveProviderApiKey('anthropic', 'sk-ant-secret');
 
     expect(order).toEqual(['set', 'invalidateApiKeyCache']);
+  });
+});
+
+describe('saveGitHubToken', () => {
+  beforeEach(() => {
+    mocks.set.mockReset().mockResolvedValue(undefined);
+  });
+
+  it.each([
+    'xxx-not-a-real-token',
+    'ghp_xxx-not-a-real-token',
+    'github_pat_***-not-a-real-token',
+    '[REDACTED_GITHUB_TOKEN]',
+  ])('rejects the GitHub placeholder %s', async (placeholder) => {
+    await expect(saveGitHubToken(placeholder)).rejects.toThrow('placeholder');
+    expect(mocks.set).not.toHaveBeenCalled();
   });
 });

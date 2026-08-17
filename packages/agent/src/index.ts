@@ -38,7 +38,12 @@ import {
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
 export type { AgentEvent } from '@agent/trace';
-export type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
+export type {
+  ITool,
+  IToolRegistry,
+  ToolHost,
+  ToolHostExclusion,
+} from '@agent/core/tools/ToolTypes';
 export { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 export { defineTool } from '@tools/core/define';
 export type { DefinedToolClass } from '@tools/core/define';
