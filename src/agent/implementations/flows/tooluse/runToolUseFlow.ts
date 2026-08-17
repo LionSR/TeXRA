@@ -54,7 +54,6 @@ import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
 import {
   extractTouchedFiles,
-  migrateSharedState,
   ToolUseRunSharedCanonicalSchema,
   type PreparedShared,
   type ToolUseRunShared,
@@ -480,49 +479,7 @@ export async function runToolUseFlow<C = unknown>(
         );
       }
     } else if (flowRecord) {
-      const migrationResult = migrateSharedState(flowRecord.shared);
-      if (!migrationResult.success) {
-        throw new PersistedFlowStateError(executionId, 'invalid-shared', {
-          cause: migrationResult.error,
-        });
-      }
-      // Defensive fallback only: no resume handoff means the resume
-      // boundary above was never consulted for this call (e.g. a fresh
-      // launch that happens to find a leftover record for its execution
-      // id). Migrate/backfill here so PersistedFlow.ensureRecord never sees
-      // a stale legacy shape. Model-based compatibility inference for
-      // keyless records lives at the resume-retrieval boundary
-      // (SessionResumeRetrieval); this path stamps the active handler's key.
-      let migratedData = migrationResult.data;
-      let shouldWriteShared = migrationResult.migrated;
-      if (migratedData.continuationGenerationId !== continuationGenerationId) {
-        logger.debug(
-          'Rebound leftover tool-use flow state to the fresh continuation generation.',
-        );
-        migratedData = {
-          ...migratedData,
-          continuationGenerationId,
-        };
-        shouldWriteShared = true;
-      }
-      const backfilled = stampCompatibilityKey(migratedData, compatibilityKey);
-      if (backfilled !== migratedData) {
-        logger.debug(
-          'Backfilled tool-use model-handler compatibility key in shared state.',
-        );
-        migratedData = backfilled;
-        shouldWriteShared = true;
-      }
-      if (shouldWriteShared) {
-        if (migrationResult.migrated) {
-          logger.debug('Normalized persisted tool-use shared state');
-        }
-        flowRecord.shared = migratedData;
-        await kv.write(
-          flowKey(executionId),
-          stampFlowRecordSchemaVersion(flowRecord),
-        );
-      }
+      throw new PersistedFlowStateError(executionId, 'invalid-shared');
     }
     // Cleanup may delete a terminal flow record only after absence was
     // confirmed or a present record passed its migration boundary.

@@ -288,10 +288,8 @@ function subagentEntryUnchanged(
  * child it never retains (or a direct unit-level projection). A late roster
  * from an incompatible (explicitly edged-elsewhere, or promoted) child
  * cannot resurrect active membership or overwrite a newer parent's summary
- * metadata — but a *retained* row still refreshes the historical
- * placement's marker when that placement names this parent (post-promotion
- * roster refreshes land here, e.g. "keep subagents running"), because
- * retained membership follows the shared roster, not current topology.
+ * metadata. Retained membership follows the shared roster only while its
+ * current topology remains compatible with that parent.
  */
 export function projectChildRoster(
   parentStreamId: StreamTabId,
@@ -303,7 +301,6 @@ export function projectChildRoster(
   const snapshotIds = new Set<StreamTabId>();
   const live = new Map<StreamTabId, ActiveChildInfo>();
   const retainedRows = new Map<StreamTabId, ActiveChildInfo>();
-  const incompatibleRetainedRows = new Map<StreamTabId, ActiveChildInfo>();
   for (const child of children) {
     snapshotIds.add(child.childStreamId);
     const entry = current.get(child.childStreamId);
@@ -316,8 +313,6 @@ export function projectChildRoster(
       live.set(child.childStreamId, child);
     } else if (compatible) {
       retainedRows.set(child.childStreamId, child);
-    } else {
-      incompatibleRetainedRows.set(child.childStreamId, child);
     }
   }
 
@@ -405,32 +400,6 @@ export function projectChildRoster(
       out.set(childStreamId, nextEntry);
       changed = true;
     }
-  }
-
-  // Retained rows under an incompatible current topology (promoted or
-  // explicitly edged elsewhere) still refresh the historical placement's
-  // marker when that placement names this parent. Only the marker moves:
-  // active membership stays untouched and summary metadata is never
-  // overwritten from a stale parent's roster.
-  for (const [childStreamId, child] of incompatibleRetainedRows) {
-    const entry = out.get(childStreamId);
-    if (entry?.kind !== 'live') continue;
-    // Incompatible current topology with a placement naming this parent is
-    // always an explicit edge (a roster-kind placement naming this parent
-    // IS the compatible case).
-    const parent = entry.parent;
-    if (parent?.kind !== 'explicit') continue;
-    const retained = parent.retained;
-    if (retained?.streamId !== parentStreamId) continue;
-    if (retained.finishedAt === child.finishedAt) continue;
-    out.set(childStreamId, {
-      ...entry,
-      parent: {
-        ...parent,
-        retained: { ...retained, finishedAt: child.finishedAt },
-      },
-    });
-    changed = true;
   }
 
   // Retained-membership sync: once a placement carries the roster's

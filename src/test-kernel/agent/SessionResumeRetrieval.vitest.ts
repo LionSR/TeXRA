@@ -676,6 +676,20 @@ describe('retrieveSessionResumeData', () => {
 describe('runToolUseFlow consumes the resume boundary instead of re-parsing', () => {
   setupPlatform({ workspacePath: '/workspace' });
 
+  it('rejects a persisted record on a fresh launch', async () => {
+    const executionId = 'abc-flow-fresh-collision' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-flow-fresh-collision' as StreamTabId;
+    const snapshot = buildToolUseResumeData(executionId, streamId);
+    await writeFlowRecord(executionId, snapshot.sourceShared);
+
+    await expect(
+      runPersistedFlow(executionId, streamId, undefined),
+    ).rejects.toMatchObject({
+      name: PersistedFlowStateError.name,
+      reason: 'invalid-shared',
+    });
+  });
+
   it('creates fresh shared state when the flow record is absent', async () => {
     const executionId = 'abc-flow-absent' as ExecutionId;
     const streamId = 'chat@gpt54#abc-flow-absent' as StreamTabId;
@@ -1378,9 +1392,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       cursor: { nextNodeId: null, lastAction: FlowTransition.COMPLETE },
     });
 
+    const resume = await retrieveToolUseResume(streamId, executionId);
     // The terminal cursor makes the flow exit COMPLETE without stepping any
     // node, leaving the declined-retry marker for the outcome derivation.
-    const result = await runPersistedFlow(executionId, streamId, undefined);
+    const result = await runPersistedFlow(executionId, streamId, resume);
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
     expect(await readFlowRecord(executionId)).toMatchObject({
@@ -1702,68 +1717,57 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     });
   });
 
-  it.each([
-    { name: 'direct stored-state recovery', withResume: false },
-    { name: 'retrieved canonical resume', withResume: true },
-  ])(
-    'migrates a legacy workspace before strict validation: $name',
-    async ({ withResume }) => {
-      const suffix = withResume ? 'retrieved' : 'stored';
-      const executionId = `abc141-${suffix}` as ExecutionId;
-      const streamId = `chat@gpt54#abc141-${suffix}` as StreamTabId;
-      const legacyWorkspaceSnapshot = {
-        todos: [
-          {
-            content: 'Ship the fix',
-            status: 'in_progress',
-            activeForm: 'Shipping the fix',
-          },
-        ],
-        plan: { objective: 'Migrate legacy workspace snapshots on resume' },
-      };
-      await writeFlowRecord(
-        executionId,
+  it('migrates a legacy workspace at the retrieval boundary before strict validation', async () => {
+    const executionId = 'abc141-retrieved' as ExecutionId;
+    const streamId = 'chat@gpt54#abc141-retrieved' as StreamTabId;
+    const legacyWorkspaceSnapshot = {
+      todos: [
         {
-          messages: [{ role: 'user', content: 'Continue.' }],
-          continuationGenerationId: CONTINUATION_GENERATION_ID,
-          shouldSkipCycle: true,
-          stateSlices: {
-            runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-            workspaceSnapshot: legacyWorkspaceSnapshot,
-            userChannels: {
-              input: Object.freeze({ MODEL: 'gpt54' }),
-              transient: {},
-            },
+          content: 'Ship the fix',
+          status: 'in_progress',
+          activeForm: 'Shipping the fix',
+        },
+      ],
+      plan: { objective: 'Migrate legacy workspace snapshots on resume' },
+    };
+    await writeFlowRecord(
+      executionId,
+      {
+        messages: [{ role: 'user', content: 'Continue.' }],
+        continuationGenerationId: CONTINUATION_GENERATION_ID,
+        shouldSkipCycle: true,
+        stateSlices: {
+          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+          workspaceSnapshot: legacyWorkspaceSnapshot,
+          userChannels: {
+            input: Object.freeze({ MODEL: 'gpt54' }),
+            transient: {},
           },
         },
-        {
-          cursor: { nextNodeId: 'start/default' },
-          nodes: [{ action: 'default', nodeId: 'start' }],
-        },
-      );
+      },
+      {
+        cursor: { nextNodeId: 'start/default' },
+        nodes: [{ action: 'default', nodeId: 'start' }],
+      },
+    );
 
-      const resume = withResume
-        ? await retrieveToolUseResume(streamId, executionId)
-        : undefined;
-      const result = await runPersistedFlow(executionId, streamId, resume);
-      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+    const resume = await retrieveToolUseResume(streamId, executionId);
+    const result = await runPersistedFlow(executionId, streamId, resume);
+    expect(result.outcome).toBe(STREAM_PHASE.WAITING);
 
-      const healedRecord = await readFlowRecord(executionId);
-      const healedShared = ToolUseRunSharedCanonicalSchema.parse(
-        healedRecord?.shared,
-      );
-      expect(healedShared.modelId).toBe('gpt54');
-      expect(healedShared.stateSlices).not.toBeNull();
-      if (!healedShared.stateSlices) return;
-      const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(
-        healedShared.stateSlices.workspaceSnapshot,
-      );
-      expect(workspaceState.workPlan.todos).toEqual(
-        legacyWorkspaceSnapshot.todos,
-      );
-      expect(workspaceState.workPlan.plan).toEqual(
-        legacyWorkspaceSnapshot.plan,
-      );
-    },
-  );
+    const healedRecord = await readFlowRecord(executionId);
+    const healedShared = ToolUseRunSharedCanonicalSchema.parse(
+      healedRecord?.shared,
+    );
+    expect(healedShared.modelId).toBe('gpt54');
+    expect(healedShared.stateSlices).not.toBeNull();
+    if (!healedShared.stateSlices) return;
+    const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(
+      healedShared.stateSlices.workspaceSnapshot,
+    );
+    expect(workspaceState.workPlan.todos).toEqual(
+      legacyWorkspaceSnapshot.todos,
+    );
+    expect(workspaceState.workPlan.plan).toEqual(legacyWorkspaceSnapshot.plan);
+  });
 });

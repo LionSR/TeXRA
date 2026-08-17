@@ -1723,9 +1723,15 @@ describe('executionRegistry', () => {
       const handle = createHandle(executionId, parentStreamId, childStreamId);
 
       registry.track(handle);
+      recorded.events.length = 0;
       expect(handle.deliveryTargetStreamId).toBe(parentStreamId);
       registry.detachActiveChildren(parentStreamId);
       expect(handle.deliveryTargetStreamId).toBeUndefined();
+
+      expect(recorded.events.map(({ event }) => event.type)).toEqual([
+        'child.activity',
+        'setParentStream',
+      ]);
 
       expect(
         sessionFactPayloads(recorded.events, 'setParentStream'),
