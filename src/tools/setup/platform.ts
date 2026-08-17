@@ -9,6 +9,7 @@
  */
 
 // Local imports
+import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import {
   fetchRelayTokenStatus,
   getConfiguredRelayToken,
@@ -28,7 +29,6 @@ import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { platform as currentPlatform } from '@platform/platform';
-import type { RegisteredToolName } from '@tools/registry';
 import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
 
 /** Per-provider API key surface. */
@@ -87,7 +87,7 @@ interface SetupExtensionAdapter {
  */
 export type { TerminalRunResult };
 
-export type SetupHost = 'cli' | 'desktop' | 'extension';
+export type SetupHost = ToolHost;
 
 /** Host-varying setup capabilities. */
 export interface SetupPlatform {
@@ -102,13 +102,6 @@ export interface SetupPlatform {
   /** VS Code integrated-terminal execution. */
   terminal?: TerminalRunner;
 }
-
-/** Setup tools that require a VS Code-specific adapter. */
-export const SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES = Object.freeze([
-  'invoke_command',
-  'install_vscode_extension',
-  'send_to_terminal',
-] as const satisfies readonly RegisteredToolName[]);
 
 function assertTexraScopedKey(key: string): void {
   if (!key.startsWith('texra.')) {

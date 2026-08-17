@@ -5,20 +5,11 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import type { RequestOpenFilePayload } from '@shared/schemas';
-import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
-import type { RegisteredToolName } from '@tools/registry';
-import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
-
-export const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
-  ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
-  'inline_comment',
-  DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
-];
 
 export interface DesktopAgentLaunchContext {
   readonly session: SessionHandle;
@@ -40,10 +31,13 @@ export async function launchDesktopAgent(
   context: DesktopAgentLaunchContext,
   options: DesktopAgentLaunchOptions = {},
 ): Promise<void> {
-  const { runAgent } = await import('@agent/runtime');
+  const [{ runAgent }, { getDefaultUnavailableToolNames }] = await Promise.all([
+    import('@agent/runtime'),
+    import('@tools/registry'),
+  ]);
   await runAgent(request, {
     session: context.session,
-    runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
+    runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
     ...(options.preferHelperModel && { preferHelperModel: true }),
     onRun: options.onRun,

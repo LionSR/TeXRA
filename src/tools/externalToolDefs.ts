@@ -105,7 +105,7 @@ export interface ExternalToolDef {
   readonly configNotes?: string;
   /** When true, the tool is checked for availability but not shown in the Tools tab dashboard. */
   readonly hideFromDashboard?: boolean;
-  /** When true, the tool is shown in app dashboards but hidden from CLI tools surfaces. */
+  /** Explicit CLI visibility for tool-less integrations; tool-backed rows derive it from the registry. */
   readonly hideFromCli?: boolean;
   /** Short auth/billing note shown as a badge (e.g. "Uses ChatGPT subscription"). */
   readonly authNote?: string;
@@ -520,10 +520,6 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'No local install required. Uses your own external chat subscription through a human-in-the-loop copy/paste flow.',
     authNote: 'Uses your premium chat subscription',
     toggleable: true,
-    // VS Code / desktop only — the async paste-the-answer-back flow depends on
-    // the long-lived progress-view panel. CLI runs hide the `inquiry` tool
-    // (see CLI_UNAVAILABLE_TOOLS), so it must not appear on CLI tools surfaces.
-    hideFromCli: true,
     check: async () => true,
   },
 
