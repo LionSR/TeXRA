@@ -291,6 +291,22 @@ describe('SessionStores deletion coordination', () => {
     });
   });
 
+  it('reports a live presentation claim without process incarnation state', async () => {
+    await withSession(async (session) => {
+      const stream = 'presentation-owned-delete' as StreamTabId;
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots: new StreamSnapshotStore(),
+      });
+
+      const releaseClaim = stores.claimStreamDeletion(stream, 1);
+      expect(stores.hasStreamDeletionClaim(stream)).toBe(true);
+
+      releaseClaim();
+      expect(stores.hasStreamDeletionClaim(stream)).toBe(false);
+    });
+  });
+
   it('releases one canonical stream once when single and bulk deletion overlap', async () => {
     await withSession(async (session) => {
       const stream = 'tool@test#abc001' as StreamTabId;
