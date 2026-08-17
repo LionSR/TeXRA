@@ -5,11 +5,10 @@
  * integration. Per-workspace sessions are cached: the first request that
  * targets a file in a given Lake project spawns `lake env lean --server`
  * from that project root; subsequent requests from any agent reuse the
- * same session. A server is attributed to the agent run that started it,
- * and a later run that reuses the server takes over that attribution; the
- * server stops when its attributed run ends. An unused one is otherwise
- * stopped after thirty minutes. Sessions are also torn down on platform
- * shutdown.
+ * same session. Every agent run that uses a server remains an owner until its
+ * run-end hook fires; the server stops after its final owner and final lease
+ * are gone. An unused one is otherwise stopped after thirty minutes. Sessions
+ * are also torn down on platform shutdown.
  */
 
 // Node imports
@@ -175,7 +174,7 @@ export function createDirectLspLeanAdapter(
     tracked.inFlight = Math.max(0, tracked.inFlight - 1);
     if (tracked.inFlight > 0) return;
     tracked.lastUsedAt = now();
-    if (tracked.pendingStopRunId !== undefined) {
+    if (tracked.stopWhenIdle) {
       try {
         await disposeSession(root, 'run-end');
       } catch (error) {
@@ -190,13 +189,15 @@ export function createDirectLspLeanAdapter(
     notifySessionFreed();
   }
 
-  function attributeSessionToRun(
+  function registerSessionOwner(
     tracked: TrackedLeanSession,
     runId?: ExecutionId,
   ): void {
-    if (runId === undefined || tracked.startedByRunId === runId) return;
-    tracked.startedByRunId = runId;
-    tracked.pendingStopRunId = undefined;
+    if (runId === undefined || tracked.ownerRunIds.has(runId)) return;
+    tracked.ownerRunIds.add(runId);
+    // A new live owner supersedes a deferred stop requested after the previous
+    // final owner ended. Its own run-end hook will mark the session again.
+    tracked.stopWhenIdle = false;
   }
 
   async function leaseSession(
@@ -290,17 +291,18 @@ export function createDirectLspLeanAdapter(
   }
 
   /**
-   * Run-end hook: stop the servers attributed to the ended run. A session
-   * still leased by an in-flight request (a shared worktree's other run) is
-   * marked for deferred disposal when its final lease ends. Sessions started
-   * outside any run have no attribution and are left to the idle timeout.
+   * Run-end hook: release the ended run's ownership of every server it used.
+   * A shared server survives while another run still owns it. If the final
+   * owner ends during an in-flight request, disposal waits for the final lease.
+   * Sessions started outside any run have no owners and use the idle timeout.
    */
   async function stopSessionsForRun(runId: ExecutionId): Promise<void> {
     const roots: string[] = [];
     for (const [root, tracked] of sessions) {
-      if (tracked.startedByRunId !== runId || tracked.disposing) continue;
+      if (tracked.disposing || !tracked.ownerRunIds.delete(runId)) continue;
+      if (tracked.ownerRunIds.size > 0) continue;
       if (tracked.inFlight > 0) {
-        tracked.pendingStopRunId = runId;
+        tracked.stopWhenIdle = true;
       } else {
         roots.push(root);
       }
@@ -434,14 +436,11 @@ export function createDirectLspLeanAdapter(
       return getOrStartSessionLocked(root, generation, runId);
     }
     if (existing) {
-      const session = await leaseSession(root, existing.session);
-      // Reuse moves the attribution to the run currently using the session,
-      // so a shared worktree's server is stopped by the run that last used it
-      // rather than by the run that happened to spawn it. An outside-run
-      // request leaves the existing attribution intact: it did not start the
-      // server and has no run end to stop it at.
-      attributeSessionToRun(existing, runId);
-      return session;
+      // Register before ensureReady's await so a concurrent run-end hook sees
+      // this owner. Reusers join the owner set rather than displacing a parent
+      // or sibling that may use the shared-worktree server again.
+      registerSessionOwner(existing, runId);
+      return leaseSession(root, existing.session);
     }
     await evictForNewSession(root, generation);
     throwIfStopped(generation);
@@ -480,7 +479,7 @@ export function createDirectLspLeanAdapter(
       session,
       lastUsedAt: now(),
       inFlight: 0,
-      startedByRunId: runId,
+      ownerRunIds: new Set(runId === undefined ? [] : [runId]),
     });
     if (startGeneration !== generation) {
       await disposeSession(root, 'shutdown');
@@ -623,7 +622,7 @@ export function createDirectLspLeanAdapter(
           for (const [root] of [...sessions]) {
             const tracked = beginUse(root);
             if (tracked) {
-              attributeSessionToRun(tracked, runId);
+              registerSessionOwner(tracked, runId);
               acquired.push(tracked);
             }
           }
@@ -733,10 +732,10 @@ interface TrackedLeanSession {
   session: LeanSession;
   lastUsedAt: number;
   inFlight: number;
-  /** Agent run this server is attributed to (the starter, or a later reuser). */
-  startedByRunId?: ExecutionId;
-  /** Ended owner whose leased server must stop when the final use releases. */
-  pendingStopRunId?: ExecutionId;
+  /** Runs that used this shared server and have not reached run end yet. */
+  ownerRunIds: Set<ExecutionId>;
+  /** Final owner ended while a request was still leased. */
+  stopWhenIdle?: boolean;
   idleTimer?: ReturnType<typeof setTimeout>;
   disposing?: Promise<void>;
 }
