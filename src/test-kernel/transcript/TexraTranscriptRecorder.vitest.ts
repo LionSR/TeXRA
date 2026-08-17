@@ -304,6 +304,21 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
 });
 
 describe('attachTranscriptRecorder workflow task state', () => {
+  it('settles a model response that ends after a new round starts', () => {
+    const { trace, row } = attachRecorder();
+    const response = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    response.append('Final answer');
+
+    trace.openStage('Next round', { kind: 'round' });
+    response.finalize();
+
+    expect(row(response.id)).toMatchObject({
+      settlementSeqNo: 1,
+      text: 'Final answer',
+      data: { status: 'completed' },
+    });
+  });
+
   it('assigns source settlement order before terminal status projection', () => {
     const streamId = 'stream:terminal-settlement' as StreamTabId;
     const { trace, handleStatus, row, rows } = attachRecorder(streamId);

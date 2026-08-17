@@ -966,7 +966,7 @@ describe('ProgressBackend', () => {
     expect(backend.state.streamLogs.get(stream)).toBeDefined();
   });
 
-  it('evicts unfocused streams before sending their status update', async () => {
+  it('preserves logHead on status updates that evict unfocused streams', async () => {
     const { backend, messages } = await createPersistentRecordingBackend();
     const focused = 'focused-stream' as StreamTabId;
     const background = 'background-stream' as StreamTabId;
@@ -997,6 +997,8 @@ describe('ProgressBackend', () => {
       });
       // Durability must drain first; dirty streams only queue release.
       await backend.state.flush();
+      const expectedHead = backend.state.streamLogs.get(background)?.head;
+      expect(expectedHead).toBeGreaterThan(0);
       messages.length = 0;
       await backend.applyStreamStatus(
         background,
@@ -1014,9 +1016,9 @@ describe('ProgressBackend', () => {
         command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
         stream: background,
         status: STREAM_PHASE.WAITING,
+        logHead: expectedHead,
         lastTimestamp: 200,
       });
-      expect(statusMessage).not.toHaveProperty('logHead');
     } finally {
       await backend.state.clearAll();
     }

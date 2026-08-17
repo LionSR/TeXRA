@@ -315,16 +315,17 @@ export function attachTranscriptRecorder(
   // session stage can contain several model invocations, so the outer stage is
   // too coarse to be the only reset boundary.
   let pendingModelResponseId: string | undefined;
+  const detachedModelResponseIds = new Set<string>();
 
   const settlePendingModelResponse = (): void => {
     if (!pendingModelResponseId) return;
     const id = pendingModelResponseId;
     pendingModelResponseId = undefined;
-    // An active stream is still mutable and the lifecycle boundary will flush
-    // and settle it. A stream.end row has already been fully materialized and
-    // only awaits either authoritative response.finalized text or this next
-    // model/tool boundary.
-    if (!streams.has(id)) writer.settle(id, {});
+    // An active stream remains mutable until stream.end materializes its final
+    // text. Remember that it crossed the model/tool boundary so stream.end can
+    // settle it even though it is no longer the current response correlator.
+    if (streams.has(id)) detachedModelResponseIds.add(id);
+    else writer.settle(id, {});
   };
 
   const flushStream = (state: StreamSinkState, id: string): void => {
@@ -705,6 +706,9 @@ export function attachTranscriptRecorder(
           state.ended = true;
           flushStream(state, event.id);
           streams.delete(event.id);
+          if (detachedModelResponseIds.delete(event.id)) {
+            writer.settle(event.id, {});
+          }
           return;
         }
 
@@ -844,6 +848,7 @@ export function attachTranscriptRecorder(
         flushStream(state, id);
         if (state.messageType === MESSAGE_TYPES.MODEL_RESPONSE) {
           writer.settle(id, {});
+          detachedModelResponseIds.delete(id);
           if (pendingModelResponseId === id) pendingModelResponseId = undefined;
         }
         streams.delete(id);

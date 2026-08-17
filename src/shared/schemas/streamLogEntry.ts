@@ -75,7 +75,7 @@ const streamLogSharedFields = {
    * settlement cursor so cold replay matches live Static
    * scrollback without claiming that the lifecycle row is immutable yet.
    */
-  presentationSeqNo: z.number().nonnegative().optional(),
+  presentationSeqNo: z.int().nonnegative().optional(),
   id: z.string().min(1),
   level: LogLevelSchema,
   timestamp: z.number(),
