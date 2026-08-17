@@ -80,9 +80,7 @@ describe('SendToTerminalTool', () => {
     const description = tool.definition.description;
     assert.ok(description);
     assert.ok(
-      description.includes(
-        `up to ${TERMINAL_OUTPUT_MAX_CHARS} characters`,
-      ),
+      description.includes(`up to ${TERMINAL_OUTPUT_MAX_CHARS} characters`),
     );
   });
 
