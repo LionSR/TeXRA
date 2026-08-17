@@ -1782,6 +1782,8 @@ export class StreamLogStore {
         ? parsed.data.summary
         : undefined;
     } catch {
+      // A malformed or torn trailing line is not a usable checkpoint. The
+      // caller falls back to full replay, which re-parses and warns loudly.
       return undefined;
     }
   }
@@ -1803,6 +1805,12 @@ export class StreamLogStore {
         `Ignoring stale-shaped legacy summary for ${streamId}: ${parsed.error.message}`,
       );
     } catch (error) {
+      if (error instanceof SyntaxError) {
+        log.warn(
+          `Ignoring corrupt legacy summary for ${streamId}: ${toErrorMessage(error)}`,
+        );
+        return { readFailed: false };
+      }
       log.warn(
         `Ignoring unavailable legacy summary for ${streamId}: ${toErrorMessage(error)}`,
       );
@@ -1840,39 +1848,43 @@ export class StreamLogStore {
         ? toJournalRecord({ op: 'checkpoint', summary: { ...summary } })
         : undefined;
       const recordsToWrite = checkpoint ? [...records, checkpoint] : records;
-      if (recordsToWrite.length > 0 && state.journalNeedsTailRepair) {
-        const raw = await this.kv().readText(
-          streamId,
-          STREAM_LOG_JOURNAL_EXTENSION,
-        );
-        if (raw !== undefined) {
-          const parsed = parseJsonlEntries(streamId, raw);
-          if (parsed.repairedText !== undefined) {
-            await this.kv().writeTextAtomic(
-              streamId,
-              STREAM_LOG_JOURNAL_EXTENSION,
-              parsed.repairedText,
-            );
-          }
-        }
-        state.journalNeedsTailRepair = false;
-      }
-      if (recordsToWrite.length > 0) {
-        if (checkpoint) state.summaryDirty = false;
-        try {
-          await this.kv().appendText(
+      if (checkpoint) state.summaryDirty = false;
+      try {
+        if (recordsToWrite.length > 0 && state.journalNeedsTailRepair) {
+          const raw = await this.kv().readText(
             streamId,
             STREAM_LOG_JOURNAL_EXTENSION,
-            `${recordsToWrite.map((record) => JSON.stringify(record)).join('\n')}\n`,
           );
-        } catch (error) {
-          state.journalNeedsTailRepair = true;
-          if (checkpoint) state.summaryDirty = true;
-          throw error;
+          if (raw !== undefined) {
+            const parsed = parseJsonlEntries(streamId, raw);
+            if (parsed.repairedText !== undefined) {
+              await this.kv().writeTextAtomic(
+                streamId,
+                STREAM_LOG_JOURNAL_EXTENSION,
+                parsed.repairedText,
+              );
+            }
+          }
+          state.journalNeedsTailRepair = false;
         }
-        // Mutations can queue records while the append is in flight. Remove
-        // only the durable prefix; the loop picks up the remainder.
-        state.journalRecords?.splice(0, records.length);
+        if (recordsToWrite.length > 0) {
+          try {
+            await this.kv().appendText(
+              streamId,
+              STREAM_LOG_JOURNAL_EXTENSION,
+              `${recordsToWrite.map((record) => JSON.stringify(record)).join('\n')}\n`,
+            );
+          } catch (error) {
+            state.journalNeedsTailRepair = true;
+            throw error;
+          }
+          // Mutations can queue records while the append is in flight. Remove
+          // only the durable prefix; the loop picks up the remainder.
+          state.journalRecords?.splice(0, records.length);
+        }
+      } catch (error) {
+        if (checkpoint) state.summaryDirty = true;
+        throw error;
       }
 
       if (this.shouldSkipWrite(streamId, expectedGeneration)) {

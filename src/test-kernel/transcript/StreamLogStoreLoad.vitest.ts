@@ -1560,10 +1560,13 @@ describe('StreamLogStore load', () => {
   it('lets delete drain a direct legacy read before removing its seed journal', async () => {
     const readStarted = createDeferred();
     const releaseRead = createDeferred();
+    let reads = 0;
     mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 100)] },
       summaries: { alpha: summary(100, 100) },
       onLogRead: async () => {
+        reads += 1;
+        if (reads !== 2) return;
         readStarted.resolve();
         await releaseRead.promise;
       },
