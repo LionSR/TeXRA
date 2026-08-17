@@ -27,12 +27,12 @@ import {
 // the Playwright ESM loader trips over the schema import.
 const SETTINGS_TAB_INDEX = {
   MEMORY: 0,
-  MODELS: 2,
-  AGENTS: 3,
-  MULTI_AGENT: 4,
-  TOOLS: 5,
-  LATEX: 8,
-  ACCOUNT: 10,
+  MODELS: 1,
+  AGENTS: 2,
+  MULTI_AGENT: 3,
+  TOOLS: 4,
+  LATEX: 7,
+  ACCOUNT: 9,
 } as const;
 
 let launched: LaunchedApp;

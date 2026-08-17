@@ -2292,7 +2292,7 @@ function appendHarnessStatus(): void {
       }),
       approval: formatTexraApprovalPolicy(harnessRuntimeSession.approvalPolicy),
       approvalBypasses: slice?.bypass,
-      status: slice?.status ?? 'not started',
+      status: slice?.status,
       goal: GoalStore.getForStream(streamId),
       queuedFollowUpMessages: defaultSession().followUps.getAll(streamId),
     }),

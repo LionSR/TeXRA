@@ -110,7 +110,10 @@ class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
   signal?: AbortSignal;
   constructor(maxRetries: number = 1, wait: number = 0) {
     super();
-    this.maxRetries = Math.max(1, maxRetries);
+    if (maxRetries < 1) {
+      throw new RangeError(`Node maxRetries must be >= 1, got ${maxRetries}.`);
+    }
+    this.maxRetries = maxRetries;
     this.wait = wait;
   }
 

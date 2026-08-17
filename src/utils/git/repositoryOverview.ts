@@ -57,11 +57,11 @@ async function readGit(
     maxBuffer: MAX_BUFFER_BYTES,
     quiet: !reportFailure,
   });
-  if (result.success) return result.stdout ?? '';
+  if (result.success) return result.stdout;
   if (reportFailure) {
     options.onError?.(
       new Error(
-        result.stderr ?? `git ${args[0] ?? 'command'} exited unsuccessfully`,
+        result.stderr || `git ${args[0] ?? 'command'} exited unsuccessfully`,
       ),
     );
   }

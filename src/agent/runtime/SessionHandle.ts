@@ -40,9 +40,10 @@ import {
   abandonOwnedExecutionLease,
   completeOwnedExecutionLease,
   isOwnedExecutionLeaseDurable,
-  renewOwnedExecutionLease,
   runWithOwnedExecutionLeaseQuiescence,
+  validateOwnedExecutionLease,
 } from '@agent/storage/executionLease';
+import { watchInstanceExit } from '@agent/storage/instancePresence';
 import { deriveResumability } from '@agent/storage/resumability';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
@@ -79,10 +80,7 @@ import {
   type SessionApprovals,
 } from './streamApprovalQueue';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
-import {
-  repairRestartedStreams,
-  RestartRepairRetryScheduler,
-} from './restartRepair';
+import { repairRestartedStreams } from './restartRepair';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 
 const logger = createLog('sessionHandle');
@@ -183,7 +181,7 @@ export class SessionHandle {
     WaitingRepairProbe
   >();
   private readonly restartRepairQueue = new PQueue({ concurrency: 1 });
-  private readonly restartRepairRetry = new RestartRepairRetryScheduler();
+  private readonly restartRepairWatches = new Map<string, () => void>();
   private readonly restartRepairAbort = new AbortController();
   private storageGeneration = 0;
   constructor(init: SessionHandleInit) {
@@ -302,7 +300,7 @@ export class SessionHandle {
     if (hasPendingStorageChange === false) return Promise.resolve(false);
     this.storageGeneration += 1;
     const generation = this.storageGeneration;
-    this.restartRepairRetry.cancel();
+    this.disposeRestartRepairWatches();
     const repair = this.enqueueRestartRepair(() =>
       this.repairStoresAfterRestart(generation, true, hooks),
     );
@@ -840,13 +838,33 @@ export class SessionHandle {
       signal: this.restartRepairAbort.signal,
     });
     if (this.restartRepairAbort.signal.aborted) return;
-    this.restartRepairRetry.schedule(result.nextLeaseCheckAt, () => {
-      void this.enqueueRestartRepair(() =>
-        this.runRestartRepair(generation),
-      ).catch((error: unknown) => {
-        logger.warn('Failed delayed restart repair', { data: error });
-      });
-    });
+    // A live foreign owner is never revisited on a clock: the kernel closes
+    // the presence watch when that process exits, and only then does repair
+    // re-run for its streams.
+    this.disposeRestartRepairWatches();
+    for (const { owner } of result.activeOwners) {
+      // One watch per owner instance, not per execution: an owner holding
+      // many executions must trigger exactly one repair pass when it exits.
+      const watchKey = owner.socketPath;
+      if (this.restartRepairWatches.has(watchKey)) continue;
+      this.restartRepairWatches.set(
+        watchKey,
+        watchInstanceExit(owner, () => {
+          this.restartRepairWatches.delete(watchKey);
+          if (this.restartRepairAbort.signal.aborted) return;
+          void this.enqueueRestartRepair(() =>
+            this.runRestartRepair(generation),
+          ).catch((error: unknown) => {
+            logger.warn('Failed owner-exit restart repair', { data: error });
+          });
+        }),
+      );
+    }
+  }
+
+  private disposeRestartRepairWatches(): void {
+    for (const dispose of this.restartRepairWatches.values()) dispose();
+    this.restartRepairWatches.clear();
   }
 
   useHostInteractions(interactions: HostInteractions): () => void {
@@ -881,13 +899,14 @@ export class SessionHandle {
   /**
    * End ownership of one execution only after every session-owned durable
    * writer has drained. Session artifacts persist between two short
-   * owner-token validations — the durable lease remains fresh while the
-   * session drains, so no file lock needs to cover unrelated transcript and
-   * snapshot I/O. An optional post-drain operation may publish lifecycle state
+   * owner-token validations — the persisted record and this process's
+   * presence already prove ownership while the session drains, so no file
+   * lock needs to cover unrelated transcript and snapshot I/O. An optional post-drain operation may publish lifecycle state
    * that is valid only once those artifacts are durable; it still runs before
    * the lease record is deleted. A drain or post-drain failure abandons the
-   * lease (record retained, renewal stopped) and rethrows. A poisoned lease or
-   * failed lease deletion also retains the record and rejects this boundary.
+   * lease (record retained until this process exits) and rethrows. A poisoned
+   * lease or failed lease deletion also retains the record and rejects this
+   * boundary.
    * This is the one exit choreography every run driver calls.
    */
   async releaseExecutionLease(
@@ -895,9 +914,9 @@ export class SessionHandle {
     afterArtifactsDrained?: () => void | Promise<void>,
   ): Promise<void> {
     try {
-      await renewOwnedExecutionLease(executionId);
+      await validateOwnedExecutionLease(executionId);
       await this.flushArtifacts(executionId);
-      await renewOwnedExecutionLease(executionId);
+      await validateOwnedExecutionLease(executionId);
       if (afterArtifactsDrained && isOwnedExecutionLeaseDurable(executionId)) {
         await afterArtifactsDrained();
       }
@@ -1107,7 +1126,7 @@ export class SessionHandle {
   /** Dispose the runtime owners and drop result listeners. */
   private teardownOwners(): void {
     this.restartRepairAbort.abort();
-    this.restartRepairRetry.dispose();
+    this.disposeRestartRepairWatches();
     this.subscriptions.dispose();
     this.executions.dispose();
     // Drop bypass state before the interaction slot settles pending approvals.

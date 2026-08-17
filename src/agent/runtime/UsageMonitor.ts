@@ -273,7 +273,7 @@ export class UsageMonitor {
     try {
       const { config } = this.modelInfo;
       const provider = UsageProviderSchema.catch('unknown').parse(
-        config.provider.toLowerCase(),
+        config.provider,
       );
       const cachedInputTokens = usage.cachedInputTokens ?? 0;
       const usedRelay = usage.usageRoute === 'relay';
@@ -312,7 +312,7 @@ export class UsageMonitor {
         }
       }
     } catch (error) {
-      this.context.logger.debug('Backend usage logging failed', {
+      this.context.logger.warn('Backend usage logging failed', {
         data: error,
       });
     }

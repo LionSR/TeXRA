@@ -4,7 +4,7 @@ import {
 } from '@cli/runtime/modelAccessRoute';
 import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import type { StreamSubstate } from '@shared/schemas';
+import type { StreamPhase, StreamSubstate } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
@@ -28,7 +28,7 @@ export interface CliSessionStatusInput {
   readonly modelAccess: CliModelAccessRoute;
   readonly approval: string;
   readonly approvalBypasses?: Partial<BypassState>;
-  readonly status: string;
+  readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
   readonly activeChildSessions?: number;
   readonly goal?: CliSessionGoalStatus | null;
@@ -43,7 +43,7 @@ export interface CliSessionStatusInput {
 }
 
 export function formatCliStatusLabel(
-  status: string | undefined,
+  status: StreamPhase | undefined,
   substate?: StreamSubstate,
   isChildStream?: boolean,
 ): string {
@@ -96,7 +96,11 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
     ...(bypassLabels.length > 0
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]
       : []),
-    `status: ${formatCliStatusLabel(input.status, input.substate)}`,
+    `status: ${
+      input.status === undefined
+        ? 'not started'
+        : formatCliStatusLabel(input.status, input.substate)
+    }`,
     ...(input.activeChildSessions && input.activeChildSessions > 0
       ? [`active ${BACKGROUND_TASK.inlinePlural}: ${input.activeChildSessions}`]
       : []),

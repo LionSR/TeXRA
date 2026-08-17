@@ -44,7 +44,6 @@ import {
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
 import type { DesktopStreamRevealResult } from './desktopAgentExecution.js';
-import type { DesktopHistorySettingsController } from './desktopHistoryHandlers.js';
 import type { DesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import type { DesktopToolingSettingsController } from './desktopToolingSettingsController.js';
@@ -81,7 +80,6 @@ export interface DesktopSettingsIpcOptions {
   postToRenderer(message: unknown): void;
   agentSettingsController: DesktopAgentSettingsController;
   credentialSettingsController: DesktopCredentialSettingsController;
-  historySettingsController: DesktopHistorySettingsController;
   toolingSettingsController: DesktopToolingSettingsController;
   state: SettingsStatePorts;
   config: ConfigProvider;
@@ -211,7 +209,6 @@ export function createDesktopSettingsIpc(
       goalListPosted,
       memoryEnabledPosted,
       settingsHost.sendMemoryData(),
-      options.historySettingsController.postHistoryData(),
       modelSelectionDataPosted,
       postGitHubTokenStatus(),
       postGitHubSubscriptions(),
@@ -367,7 +364,6 @@ export function createDesktopSettingsIpc(
       settingsHost.setMemoryPinned(message.storagePath, true),
     unpinMemory: (message) =>
       settingsHost.setMemoryPinned(message.storagePath, false),
-    ...options.historySettingsController.handlers,
     ...options.credentialSettingsController.profileHandlers,
     setModelEnabled: updateModelEnabled,
     setPolishModel: (message) => settingsHost.setHelperModel(message.modelName),

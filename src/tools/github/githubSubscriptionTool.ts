@@ -345,10 +345,10 @@ async function gitInDir(args: string[], cwd: string): Promise<string> {
   });
   if (!result.success) {
     throw new ToolError(
-      result.stderr ?? `git ${args.join(' ')} failed with no stderr.`,
+      result.stderr || `git ${args.join(' ')} failed with no stderr.`,
     );
   }
-  return (result.stdout ?? '').trim();
+  return result.stdout.trim();
 }
 
 interface OpenPullSummary {

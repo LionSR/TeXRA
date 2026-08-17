@@ -4,9 +4,14 @@ import {
   type FinalizeExecutionResult,
 } from '@agent/storage/executionLifecycle';
 import {
-  EXECUTION_LEASE_STALE_MS,
   runWithInactiveExecutionLease as defaultRunWithInactiveExecutionLease,
+  type InactiveExecutionLeaseOptions,
 } from '@agent/storage/executionLease';
+import {
+  probeInstance,
+  type InstanceLiveness,
+  type InstanceOwnerRecord,
+} from '@agent/storage/instancePresence';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { deriveResumability } from '@agent/storage/resumability';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -44,17 +49,23 @@ export interface RestartRepairOptions {
   runWithInactiveExecutionLease?: <T>(
     executionId: ExecutionId,
     operation: () => Promise<T>,
+    options?: InactiveExecutionLeaseOptions,
   ) => Promise<
-    | { readonly status: 'active'; readonly heartbeatAt: number }
+    | { readonly status: 'active'; readonly owner: InstanceOwnerRecord }
     | { readonly status: 'performed'; readonly value: T }
   >;
+  /** Override liveness reads in focused tests. */
+  probeOwner?: (owner: InstanceOwnerRecord) => Promise<InstanceLiveness>;
   logger?: RestartRepairLogger;
   now?: number;
   /** Stop before beginning another repair mutation after session teardown. */
   signal?: AbortSignal;
   /**
    * Revalidate one candidate under its execution lease, immediately before
-   * settlement/mutation. Return `false` to skip the stale candidate.
+   * settlement/mutation. Return `false` to skip the stale candidate — the
+   * caller compares the status generation it captured before the async
+   * ownership/detection pass, so a stream reused after discovery but before
+   * its turn in this sequential loop is dropped.
    */
   isRepairCandidateCurrent?: (
     streamId: StreamTabId,
@@ -62,39 +73,20 @@ export interface RestartRepairOptions {
   ) => boolean;
 }
 
-export interface RestartRepairResult {
-  /** Earliest time a fresh lease skipped at startup can be checked again. */
-  nextLeaseCheckAt?: number;
+/** One stream skipped because its execution's owner is provably alive. */
+export interface ActiveOwnerSkip {
+  readonly streamId: StreamTabId;
+  readonly executionId: ExecutionId;
+  readonly owner: InstanceOwnerRecord;
 }
 
-/** Owns the single delayed retry used to revisit leases left fresh by a crash. */
-export class RestartRepairRetryScheduler {
-  private timer: ReturnType<typeof setTimeout> | undefined;
-  private disposed = false;
-
-  schedule(nextLeaseCheckAt: number | undefined, retry: () => void): void {
-    this.cancel();
-    if (this.disposed || nextLeaseCheckAt === undefined) return;
-    this.timer = setTimeout(
-      () => {
-        this.timer = undefined;
-        if (this.disposed) return;
-        retry();
-      },
-      Math.max(0, nextLeaseCheckAt - Date.now()),
-    );
-    this.timer.unref();
-  }
-
-  dispose(): void {
-    this.disposed = true;
-    this.cancel();
-  }
-
-  cancel(): void {
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = undefined;
-  }
+export interface RestartRepairResult {
+  /**
+   * Streams left untouched because a live owner holds their execution. The
+   * caller watches each owner's instance exit and re-runs repair on that
+   * kernel-pushed event; nothing here is ever revisited on a clock.
+   */
+  readonly activeOwners: ActiveOwnerSkip[];
 }
 
 const RESTART_REPAIR_PHASES: ReadonlySet<StreamPhase> = new Set([
@@ -110,6 +102,10 @@ function repairCandidates(
   return [...streamStatus.entries()]
     .filter(([, phase]) => phase === STREAM_PHASE.RUNNING)
     .map(([streamId]) => streamId);
+}
+
+function livenessCacheKey(owner: InstanceOwnerRecord): string {
+  return `${owner.hostname}\0${owner.instanceId}\0${owner.socketPath}`;
 }
 
 type ExecutionSettlement =
@@ -225,8 +221,21 @@ async function writeFailedOutcome(
 export async function repairRestartedStreams(
   options: RestartRepairOptions,
 ): Promise<RestartRepairResult> {
-  const result: RestartRepairResult = {};
+  const result: RestartRepairResult = { activeOwners: [] };
   const now = options.now ?? Date.now();
+  const probeOwner = options.probeOwner ?? probeInstance;
+  const ownerLiveness = new Map<string, Promise<InstanceLiveness>>();
+  const inactiveLeaseOptions: InactiveExecutionLeaseOptions = {
+    probeOwner: (owner) => {
+      const key = livenessCacheKey(owner);
+      let liveness = ownerLiveness.get(key);
+      if (!liveness) {
+        liveness = probeOwner(owner);
+        ownerLiveness.set(key, liveness);
+      }
+      return liveness;
+    },
+  };
 
   for (const streamId of repairCandidates(
     options.streamStatus,
@@ -276,15 +285,16 @@ export async function repairRestartedStreams(
         ? await (
             options.runWithInactiveExecutionLease ??
             defaultRunWithInactiveExecutionLease
-          )(executionId, repair)
+          )(executionId, repair, inactiveLeaseOptions)
         : { status: 'performed' as const, value: await repair() };
       if (repaired.status === 'active') {
-        const nextLeaseCheckAt =
-          repaired.heartbeatAt + EXECUTION_LEASE_STALE_MS + 1;
-        result.nextLeaseCheckAt = Math.min(
-          result.nextLeaseCheckAt ?? Number.POSITIVE_INFINITY,
-          nextLeaseCheckAt,
-        );
+        if (executionId) {
+          result.activeOwners.push({
+            streamId,
+            executionId,
+            owner: repaired.owner,
+          });
+        }
         options.logger?.debug(
           `Skipped restart repair for active execution ${executionId}`,
         );

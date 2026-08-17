@@ -60,18 +60,16 @@ export const STREAM_SNAPSHOT_SCHEMA_VERSION = 1 as const;
  * for the one NEW durable file (todos/plan/planSummary have no other home). The
  * lenient {@link WorkPlanSnapshotSchema} (in `@shared/schemas/workPlan`) is a
  * deliberately separate role: it normalizes UNTRUSTED bus/agent input (deriving
- * planSummary from the plan), whereas this schema reads/writes our own trusted
- * disk format. `.catch` per field keeps one corrupt value from nuking the rest;
- * a missing/older `schemaVersion` is tolerated (treated as v1), while a NEWER
- * one is gated out upstream in `readPersistedWorkPlan` before this parse runs.
+ * planSummary from the plan), whereas this schema writes our own trusted disk
+ * format. The reader recovers individual malformed fields loudly; a missing
+ * `schemaVersion` is treated as v1, while a NEWER one is gated out upstream in
+ * `readPersistedWorkPlan` before fields are read.
  */
 export const PersistedWorkPlanSchema = z.object({
-  schemaVersion: z
-    .literal(STREAM_SNAPSHOT_SCHEMA_VERSION)
-    .catch(STREAM_SNAPSHOT_SCHEMA_VERSION),
-  todos: WorkPlanSnapshotShape.todos.catch([]),
-  plan: WorkPlanSnapshotShape.plan.catch(null),
-  planSummary: WorkPlanSnapshotShape.planSummary.catch(null),
+  schemaVersion: z.literal(STREAM_SNAPSHOT_SCHEMA_VERSION),
+  todos: WorkPlanSnapshotShape.todos,
+  plan: WorkPlanSnapshotShape.plan,
+  planSummary: WorkPlanSnapshotShape.planSummary,
 });
 
 // ============================================================================

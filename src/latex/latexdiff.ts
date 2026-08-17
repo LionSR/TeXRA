@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { formatError } from '@common/errors';
+import { formatError, isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -68,7 +68,7 @@ export class LaTeXdiffService {
     return { success: false, message };
   }
 
-  /** Read both diff inputs, returning their contents or null if either read fails. */
+  /** Read both diff inputs, returning null when either input no longer exists. */
   private async readDiffInputs(
     inputLocation: FileLocation,
     editedLocation: FileLocation,
@@ -78,8 +78,9 @@ export class LaTeXdiffService {
         AbsoluteFS.read(inputLocation.absolutePath),
         AbsoluteFS.read(editedLocation.absolutePath),
       ]);
-    } catch {
-      return null;
+    } catch (error) {
+      if (isFileNotFoundError(error)) return null;
+      throw error;
     }
   }
 
