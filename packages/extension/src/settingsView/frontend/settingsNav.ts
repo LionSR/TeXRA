@@ -48,11 +48,6 @@ const SETTINGS_TAB_METADATA: Record<
     label: 'Memory',
     description: 'Control and inspect the notes TeXRA keeps across tasks.',
   },
-  HISTORY: {
-    icon: 'clock-rotate-left',
-    label: 'History',
-    description: 'Search, revisit, and manage previous TeXRA activity.',
-  },
   MODELS: {
     icon: 'server',
     label: 'Providers & Models',

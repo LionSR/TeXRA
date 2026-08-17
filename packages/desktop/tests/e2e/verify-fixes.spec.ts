@@ -18,7 +18,7 @@ import {
 // src/shared/schemas/settingsViewMessages.ts.
 const SET_TAB_COMMAND = 'setTab';
 const SETTINGS_TAB_INDEX = {
-  TOOLS: 5,
+  TOOLS: 4,
 } as const;
 
 let launched: LaunchedApp;
