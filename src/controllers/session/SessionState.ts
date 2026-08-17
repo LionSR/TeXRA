@@ -186,9 +186,9 @@ export class SessionState {
 
   /**
    * Stream tabs offered for selection, newest first — the order
-   * `buildStreamInfos` renders. Membership and rotation only depend on
-   * creation time, so this answers them without building tab infos or
-   * touching the worktree resolver.
+   * `buildStreamInfos` renders. Provisionally removed streams are excluded;
+   * membership and rotation otherwise depend only on creation time, so this
+   * answers them without building tab infos or touching the worktree resolver.
    */
   selectableStreamNames(): StreamTabId[] {
     return this.streamLogs
