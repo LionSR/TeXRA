@@ -19,6 +19,7 @@ import {
 } from '@test/support/tempDirPlatform';
 import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { StreamLogStore } from '@transcript/StreamLogStore';
+import { resolveTranscriptSpillPath } from '@transcript/spillArtifacts';
 import { isObject } from '@utils/core';
 
 /** A recorder attached to a fresh ephemeral store, plus its persisted rows. */
@@ -627,6 +628,25 @@ describe('attachTranscriptRecorder record-time secret redaction', () => {
 });
 
 describe('attachTranscriptRecorder timer failure boundary', () => {
+  it.each([
+    [
+      'executions/abcdef123456/toolOutput/tool:spill.txt',
+      'executions/abcdef123456/toolOutput/tool:spill.txt',
+    ],
+    [
+      String.raw`executions\abcdef123456\toolOutput\tool.txt`,
+      'executions/abcdef123456/toolOutput/tool.txt',
+    ],
+    ['/executions/abcdef123456/toolOutput/tool.txt', undefined],
+    [String.raw`C:\executions\abcdef123456\toolOutput\tool.txt`, undefined],
+    ['executions/abcdef123456/toolOutput/../secret.txt', undefined],
+    ['executions/not-an-id/toolOutput/tool.txt', undefined],
+    ['executions/abcdef123456/toolOutput/nested/tool.txt', undefined],
+    ['executions/abcdef123456/toolOutput/tool.json', undefined],
+  ])('validates recorder-owned spill path %s', (candidate, expected) => {
+    expect(resolveTranscriptSpillPath(candidate)).toBe(expected);
+  });
+
   it('spills redacted oversized terminal output and keeps a bounded preview', async () => {
     const trace = new TraceEmitter();
     const streamId = 'stream:spill' as StreamTabId;

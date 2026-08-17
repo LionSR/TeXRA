@@ -19,6 +19,7 @@ import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import type { StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { readTranscriptSpill } from '@transcript';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import {
@@ -36,6 +37,14 @@ import { useSignal } from '../state/useSignal';
 const EMPTY_TRANSCRIPT_TEXT = '(no output yet)';
 const MISSING_SPILL_TEXT =
   '[Full output is unavailable because this run artifact was deleted.]';
+
+async function loadSpillText(spillPath: string): Promise<string> {
+  try {
+    return (await readTranscriptSpill(spillPath)) ?? MISSING_SPILL_TEXT;
+  } catch (error) {
+    return `[Unable to read full output. Check storage access and try again: ${toErrorMessage(error)}]`;
+  }
+}
 
 function hydratedTranscript(
   slice: StreamSlice | undefined,
@@ -91,11 +100,7 @@ export function TranscriptReader({
     void Promise.all(
       spillPaths.map(
         async (spillPath) =>
-          [
-            spillPath,
-            (await readTranscriptSpill(spillPath).catch(() => undefined)) ??
-              MISSING_SPILL_TEXT,
-          ] as const,
+          [spillPath, await loadSpillText(spillPath)] as const,
       ),
     ).then((resolved) => {
       if (!disposed) setSpills(new Map(resolved));

@@ -1952,6 +1952,35 @@ describe('CLI conversation transcript', () => {
     expect(lines.some((line) => line.length > 40)).toBe(false);
   });
 
+  it('prints hydrated spill output once for detailed and compact tools', () => {
+    const bash = {
+      ...toolEntry('bash', 'completed', 'complete bash output'),
+      spillPath: 'executions/abcdef123456/toolOutput/bash.txt',
+    };
+    const readBase = toolEntry('read', 'completed', 'complete read output');
+    const read = {
+      ...readBase,
+      spillPath: 'executions/abcdef123456/toolOutput/read.txt',
+      toolUse: {
+        ...readBase.toolUse,
+        toolName: 'read',
+      },
+    };
+
+    const lines = transcriptToLines(
+      sliceWithEntries(STREAM_ID, [bash, read]),
+      80,
+    );
+
+    expect(
+      lines.filter((line) => line.includes('complete bash output')),
+    ).toHaveLength(1);
+    expect(
+      lines.filter((line) => line.includes('complete read output')),
+    ).toHaveLength(1);
+    expect(lines).toContain('Full output:');
+  });
+
   it('uses the full print width without Ink-only role padding', () => {
     const entries = [
       entry('u1', 'user', 'user text', true),
