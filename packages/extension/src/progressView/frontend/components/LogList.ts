@@ -295,7 +295,12 @@ export class LogList extends LitElement {
     if (!(event instanceof KeyboardEvent)) return;
     if (event.key !== 'Enter' && event.key !== ' ') return;
     if (event.defaultPrevented) return;
-    if (!getComposedPathElement<Element>(event, '.file-link, .latex-ref')) {
+    if (
+      !getComposedPathElement<HTMLElement>(
+        event,
+        '.file-link, .latex-ref, .spill-artifact-link',
+      )
+    ) {
       return;
     }
     event.preventDefault();
@@ -307,6 +312,18 @@ export class LogList extends LitElement {
    * click or keydown event. Returns true when one was handled.
    */
   private activateLinkFromEvent(event: Event): boolean {
+    const spillLink = getComposedPathElement<HTMLElement>(
+      event,
+      '.spill-artifact-link',
+    );
+    if (spillLink?.dataset.spillPath) {
+      event.preventDefault();
+      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_SPILL_ARTIFACT, {
+        spillPath: spillLink.dataset.spillPath,
+      });
+      return true;
+    }
+
     const fileLink = getComposedPathElement<HTMLElement>(event, '.file-link');
     if (fileLink?.dataset.file) {
       postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, {

@@ -65,6 +65,8 @@ interface ConversationEntryBase {
   readonly pendingEmbeddedSubagentFollowup?: boolean;
   /** True once the stream transitions to `WAITING`/`COMPLETED`. */
   readonly finalized: boolean;
+  /** Recorder-owned full text, available only through the on-demand reader. */
+  readonly spillPath?: string;
 }
 
 type ConversationEntryOrigin =
