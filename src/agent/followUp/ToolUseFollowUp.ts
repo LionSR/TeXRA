@@ -148,15 +148,25 @@ async function restorePersistedGeneration(
     streamId,
     parsed.data.continuationGenerationId,
   );
-  if (!restored) {
+  if (restored === 'disposed') {
+    logger.warn(
+      `Cannot restore continuation generation for ${streamId}: follow-up queue was disposed.`,
+      {
+        data: { streamId, executionId, cause: 'disposed' },
+      },
+    );
+    return false;
+  }
+  if (restored === 'unavailable') {
     logger.warn(
       `Cannot restore continuation generation for ${streamId}: the retained queue belongs to another generation.`,
       {
         data: { streamId, executionId, cause: 'generation_mismatch' },
       },
     );
+    return false;
   }
-  return restored;
+  return true;
 }
 
 export function notifyFollowUpSent(

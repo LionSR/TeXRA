@@ -13,6 +13,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { KVStore } from '@common/storage/KVStore';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import {
   LOG_LEVELS,
@@ -50,6 +51,7 @@ vi.mock('@agent/storage', async () => {
         readConfig: mocks.readConfig,
         readWorkspaceFiles: mocks.readWorkspaceFiles,
         readMeta: mocks.readMeta,
+        readMetaStrict: mocks.readMeta,
         readResultMeta: mocks.readResultMeta,
         readReport: mocks.readReport,
         exists: mocks.exists,
@@ -104,8 +106,14 @@ import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import {
   StreamLogStore,
   StreamSnapshotStore,
+  STREAM_LOG_SUMMARIES_DIR,
+  STREAM_LOGS_DIR,
   type TraceDocument,
 } from '@transcript';
+import {
+  cleanupExecutionAdjacentStreamState,
+  resolveAdjacentStreamCleanup,
+} from '@transcript/adjacentStreamCleanup';
 import {
   cliHistoryDetailNdjsonRecord,
   cliHistoryNdjsonRecords,
@@ -1083,6 +1091,113 @@ describe('CLI history runtime', () => {
     });
 
     expect(GoalStore.getForStream(streamId)).toBeNull();
+  });
+
+  it('deletes one execution sidecar set despite an unrelated corrupt transcript', async () => {
+    const executionId = 'a1' as ExecutionId;
+    const streamId = 'chat@deepseek#a1' as StreamTabId;
+    const unrelated = 'chat@deepseek#corrupt' as StreamTabId;
+    const logs = await StreamLogStore.open();
+    appendTranscriptEntry(logs, streamId, {
+      id: 'target-entry',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1000,
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      text: 'Target transcript',
+    });
+    await logs.flush();
+    const persistedLogs = new KVStore(STREAM_LOGS_DIR, { compactJson: true });
+    await persistedLogs.write(unrelated, { invalid: 'transcript' });
+    const snapshots = new StreamSnapshotStore();
+    snapshotFacts(snapshots).setRunConfig(streamId, config, executionId);
+    await snapshots.flush();
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-05-18T08:00:00.000Z',
+      streamId,
+    });
+
+    await cleanupExecutionAdjacentStreamState(
+      executionId,
+      resolveAdjacentStreamCleanup(undefined),
+    );
+
+    await expect(persistedLogs.exists(streamId)).resolves.toBe(false);
+    await expect(persistedLogs.exists(unrelated)).resolves.toBe(true);
+    await expect(
+      new StreamSnapshotStore().readPersistedExecutionId(streamId),
+    ).resolves.toBeUndefined();
+  });
+
+  it('clears a deleted parent from its child stream summary mirror', async () => {
+    const executionId = 'a1' as ExecutionId;
+    const parentStream = 'chat@deepseek#a1' as StreamTabId;
+    const childStream = 'chat@deepseek#child' as StreamTabId;
+    const logs = await StreamLogStore.open();
+    appendTranscriptEntry(logs, parentStream, {
+      id: 'parent-entry',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1000,
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      text: 'Parent transcript',
+    });
+    appendTranscriptEntry(logs, childStream, {
+      id: 'child-entry',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1000,
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      text: 'Child transcript',
+    });
+    await logs.flush();
+    // The always-resident summary mirror the progress rail reads — seeded
+    // as if a live session had published it while the parent still existed.
+    const summaries = new KVStore(STREAM_LOG_SUMMARIES_DIR, {
+      compactJson: true,
+    });
+    const childSummary = await summaries.read<{ meta?: object }>(childStream);
+    await summaries.write(childStream, {
+      ...childSummary,
+      meta: { ...childSummary?.meta, parentStreamId: parentStream },
+    });
+    const snapshots = new StreamSnapshotStore();
+    snapshotFacts(snapshots).setRunConfig(parentStream, config, executionId);
+    snapshotFacts(snapshots).setParentStream(childStream, parentStream);
+    await snapshots.flush();
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-05-18T08:00:00.000Z',
+      streamId: parentStream,
+    });
+
+    await cleanupExecutionAdjacentStreamState(
+      executionId,
+      resolveAdjacentStreamCleanup(undefined),
+    );
+
+    const updatedChildSummary = await summaries.read<{
+      meta?: { parentStreamId?: string };
+    }>(childStream);
+    expect(updatedChildSummary?.meta?.parentStreamId).toBeUndefined();
+  });
+
+  it('reports a sidecar cleanup failure before deleting execution storage', async () => {
+    const executionId = 'a1' as ExecutionId;
+    const streamId = 'chat@deepseek#a1' as StreamTabId;
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-05-18T08:00:00.000Z',
+      streamId,
+    });
+
+    await expect(
+      cleanupExecutionAdjacentStreamState(executionId, {
+        deleteAdjacentStreamState: async () => {
+          throw new Error('snapshot permission denied');
+        },
+      }),
+    ).rejects.toThrow(
+      "Execution a1's transcript/snapshot sidecars could not be cleaned up: snapshot permission denied",
+    );
   });
 
   it('validates execution id shape before command handlers use storage', () => {
