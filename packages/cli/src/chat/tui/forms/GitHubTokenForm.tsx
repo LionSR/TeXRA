@@ -127,6 +127,12 @@ export function GitHubTokenForm(
           <Text color={COLOR_ERROR}>{`${CROSS} ${error}`}</Text>
         ) : undefined
       }
+      detailRows={error ? 1 : 0}
+      compactDetail={
+        error ? (
+          <Text color={COLOR_ERROR}>{`${CROSS} ${error}`}</Text>
+        ) : undefined
+      }
       action="select"
       escapeAction="back"
       onSelect={(action) => {
