@@ -20,13 +20,13 @@ import safeStringify from 'safe-stable-stringify';
 // Local imports
 import * as loggerSelf from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
+import { tryPlatform } from '@platform/platform';
 // Deliberate deep import: the '@shared/schemas' barrel transitively imports
 // this module (stateSettings → '@shared/approvalPolicy' → here), so importing
 // the barrel would create an import cycle. Recorded in the shared-schemas
 // deep-import baseline as its documented cycle floor.
 import { LOG_LEVELS, type LogLevel } from '@shared/schemas/log';
 import { serializeError } from '@utils/core';
-import { getConfig } from '@utils/config/configUtils';
 
 export interface LogUtilsOptions {
   data?: unknown;
@@ -120,7 +120,9 @@ export function disposeAgentChannel(channel: string): void {
  * place.
  */
 export function isDebugModeEnabled(): boolean {
-  return getConfig<boolean>('texra.logger.debugMode', false);
+  return (
+    tryPlatform()?.config.get<boolean>('texra.logger.debugMode', false) ?? false
+  );
 }
 
 /**
