@@ -77,13 +77,17 @@ function hydratedTranscript(
   slice: StreamSlice | undefined,
   spills: ReadonlyMap<string, SpillHydration>,
 ): StreamSlice | undefined {
-  if (!slice || spills.size === 0) return slice;
+  if (!slice) return slice;
   const entries = slice.entries.map((entry): ConversationEntry => {
-    const spill = entry.spillPath ? spills.get(entry.spillPath) : undefined;
-    if (spill === undefined) return entry;
+    if (!entry.spillPath) return entry;
+    const spill = spills.get(entry.spillPath);
+    const hydratedSpillPath =
+      spill?.kind === 'loaded' ? entry.spillPath : undefined;
+    if (spill === undefined) return { ...entry, spillPath: undefined };
     if (entry.role === 'tool') {
       return {
         ...entry,
+        spillPath: hydratedSpillPath,
         toolUse: {
           ...entry.toolUse,
           outputText:
@@ -95,6 +99,7 @@ function hydratedTranscript(
     }
     return {
       ...entry,
+      spillPath: hydratedSpillPath,
       text:
         spill.kind === 'loaded'
           ? safeTerminalText(
