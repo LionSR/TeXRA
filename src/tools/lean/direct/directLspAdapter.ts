@@ -196,6 +196,7 @@ export function createDirectLspLeanAdapter(
   ): void {
     if (runId === undefined || tracked.startedByRunId === runId) return;
     tracked.startedByRunId = runId;
+    tracked.pendingStopRunId = undefined;
   }
 
   async function leaseSession(
