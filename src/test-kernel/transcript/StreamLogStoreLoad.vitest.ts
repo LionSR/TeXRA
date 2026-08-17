@@ -1534,10 +1534,13 @@ describe('StreamLogStore load', () => {
   it('lets delete drain a legacy load before removing its seed journal', async () => {
     const loadStarted = createDeferred();
     const releaseLoad = createDeferred();
+    let reads = 0;
     mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 100)] },
       summaries: { alpha: summary(100, 100) },
       onLogRead: async () => {
+        reads += 1;
+        if (reads !== 2) return;
         loadStarted.resolve();
         await releaseLoad.promise;
       },
