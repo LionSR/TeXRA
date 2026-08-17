@@ -5,14 +5,20 @@ updated: 2026-08-17
 
 # PRD: One SQLite database per workspace for app-owned durable state
 
-**Status:** draft proposal. Companion to
-`docs/prds/2026-08-11-transcript-memory-architecture.md` (the memory
-evidence), `docs/proposals/2026-08-15-single-substrate-hosts-as-renderers.md`
-(orthogonal campaign, no shared PRs), and issues #10702, #10773, #10774,
-#10775. **Supersedes the JSONL prescription in #10773** (its diagnosis — the
-whole-file rewrite primitive is the root defect — is exactly what this PRD
-fixes; the prescription changes because the engine decision changes the
-trade-off, §3.2).
+**Status:** PARKED long-term direction (2026-08-17 ruling). The decided
+execution order is append-only JSONL first — #10773 is the ACTIVE plan and
+must NOT be closed on this document's acceptance; the supersession this PRD
+originally declared over #10773 is reversed. SQLite re-enters in two steps,
+each gated on JSONL-era evidence: (a) the derived, rebuildable summary index
+(the Codex model, already prescribed by #10773) if listing/search hurts at
+scale; (b) this full one-database design only on a later go/no-go. §3.2's
+rows-vs-JSONL argument and Stage 1's close-#10773 instruction are retained
+as the parked design's internal logic, not as active instructions.
+Companion docs: `docs/prds/2026-08-11-transcript-memory-architecture.md`
+(the memory evidence),
+`docs/proposals/2026-08-15-single-substrate-hosts-as-renderers.md`
+(orthogonal campaign, no shared PRs), and issues #10702 (closed —
+superseded by #10805's single-owner removal), #10773, #10774, #10775.
 
 **Decision in one sentence:** all app-owned durable workspace state moves into
 one SQLite database per workspace (`node:sqlite`, WAL); files remain only for
@@ -456,9 +462,11 @@ rows; export compat is not storage compat.
   `better-sqlite3`.
 - **Stage 1 — schema + adapter.** The full §3.3 schema lands as one design
   (no incremental schema drift), plus open/migrate/recovery/backup adapter
-  and the architecture test (§7). On acceptance of this PRD, close #10773
-  with a pointer here (diagnosis absorbed, prescription superseded) and file
-  the importer-removal issue (§5 retirement condition).
+  and the architecture test (§7). (Historical instruction, reversed by the
+  2026-08-17 JSONL-first ruling in the Status block: #10773 stays open and
+  active; if this PRD is later un-parked, its Stage 1 instead re-baselines
+  against the then-current JSONL store.) File the importer-removal issue
+  (§5 retirement condition).
 - **Stage 2 — registry rows + execution identity rows + summaries table.**
   The `streams` registry migrates FIRST: every later stage inserts child
   rows with enforced FKs to `streams`, so the parent rows must exist before
