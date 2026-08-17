@@ -106,8 +106,7 @@ async function mutateIndex(
   mutate: (index: StreamTabId[]) => StreamTabId[],
 ): Promise<void> {
   await indexMutex.runExclusive(async () => {
-    const state = tryWorkspaceState();
-    if (!state) return;
+    const state = platform().workspaceState;
     const index = readIndex();
     const next = mutate(index);
     if (next !== index) {
@@ -265,9 +264,7 @@ export const GoalStore = Object.freeze({
     return updated;
   },
 
-  /** Drop the record (used on complete, abandon, or conversation delete).
-   *  Bootstrap-tolerant — cleanup paths shouldn't fail loudly if state isn't
-   *  wired yet. */
+  /** Drop the record (used on complete, abandon, or conversation delete). */
   async forget(streamId: StreamTabId, session?: SessionHandle): Promise<void> {
     // Dual-context: PlanTool forgets in-run (→ run session via ALS); hosts
     // pass their owning session for non-default windows.
@@ -284,8 +281,7 @@ export const GoalStore = Object.freeze({
     streamIds: readonly StreamTabId[],
     session?: SessionHandle,
   ): Promise<void> {
-    const state = tryWorkspaceState();
-    if (!state) return;
+    const state = platform().workspaceState;
     // Gate on raw key presence, not parse success, so explicit cleanup can
     // still remove an invalid record without first reading it.
     const toRemove = streamIds.filter(

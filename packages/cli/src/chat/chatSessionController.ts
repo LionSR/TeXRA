@@ -426,9 +426,8 @@ export function createChatSessionController(
       .then(() => AgentConfigSchema.parse(config))
       .then((registeredConfig) =>
         runAgent(
-          { config: registeredConfig, executionId },
+          { kind: 'fresh', config: registeredConfig, executionId },
           {
-            registerExecution: true,
             enforceCategory: true,
             approvalPromptsUnavailable: approvalsUnavailable,
             onApprovalPolicyDenial: () =>

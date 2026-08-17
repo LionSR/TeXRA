@@ -5,7 +5,7 @@ import { glob, hasMagic } from 'glob';
 
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import type { Disposable } from '@platform/interfaces';
 import { unique } from '@utils/core';
@@ -144,7 +144,7 @@ export function createStdinWorkflowInputMaterializer(options: {
     })();
     await cleanupPromise;
   };
-  shutdownCleanup = tryPlatform()?.lifecycle.onShutdown(
+  shutdownCleanup = platform().lifecycle.onShutdown(
     SHUTDOWN_PHASE.BEFORE,
     inputFile.cleanup,
   );

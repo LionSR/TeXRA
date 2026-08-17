@@ -34,7 +34,7 @@ export interface ResumeQueuedToolUseOptions extends Pick<
   /** Recheck canonical admission atomically while acquiring the resumed lease. */
   readonly canAcquireResumeLease?: () => boolean | Promise<boolean>;
   /** Query a caller-owned stop request at the resumed flow attachment boundary. */
-  readonly isCancellationRequested?: () => boolean;
+  readonly isCancellationRequested: () => boolean;
   /**
    * Fires with the resumed run's raw outcome — terminal or WAITING — right
    * after the call returns successfully. Native child-run strategies use this
