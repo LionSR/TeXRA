@@ -518,10 +518,17 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
   it('retains a bulk-deleted identity re-claimed during transcript cleanup', async () => {
     await withSession(async (session) => {
       const stream = 'tool@test#bulk-fence' as StreamTabId;
+      const sibling = 'tool@test#bulk-sibling' as StreamTabId;
+      const executionId = 'bulk-fence' as ExecutionId;
       session.transcripts.ensureStream(stream);
+      session.transcripts.ensureStream(sibling);
+      const snapshots = new StreamSnapshotStore();
+      ownExecution(snapshots, stream, executionId);
+      ownExecution(snapshots, sibling, executionId);
       const stores = new SessionStores({
         streamLogs: session.transcripts,
-        snapshots: new StreamSnapshotStore(),
+        snapshots,
+        deleteExecution: deletionSpy(),
       });
 
       let reClaimed = false;
@@ -542,6 +549,9 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
       expect(result.failed).not.toContain(stream);
       expect(result.deleted).not.toContain(stream);
       expect(session.transcripts.has(stream)).toBe(true);
+      expect(result.deleted).toContain(sibling);
+      expect(result.failed).not.toContain(sibling);
+      expect(session.transcripts.has(sibling)).toBe(false);
     });
   });
 });

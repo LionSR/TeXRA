@@ -505,6 +505,7 @@ export class SessionStores {
     await Promise.all(
       [...streamsByExecution].map(async ([executionId, streams]) => {
         let failedAdjacentStreams = new Set<StreamTabId>();
+        let supersededAdjacentStreams = new Set<StreamTabId>();
         const shouldDelete = shouldDeleteStream
           ? () => streams.every((stream) => shouldDeleteStream(stream))
           : undefined;
@@ -516,10 +517,14 @@ export class SessionStores {
               shouldDeleteStream,
             );
             failedAdjacentStreams = cleanup.failed;
+            supersededAdjacentStreams = cleanup.superseded;
             throwAggregated(
               cleanup.failures,
               'Multiple adjacent cleanups failed',
             );
+            if (cleanup.superseded.size > 0) {
+              throw new StreamDeletionSupersededError();
+            }
           },
           shouldDelete,
         );
@@ -543,35 +548,51 @@ export class SessionStores {
           return;
         }
         if (outcome.kind === 'superseded') {
-          for (const stream of streams) active.add(stream);
+          if (supersededAdjacentStreams.size === 0) {
+            for (const stream of streams) active.add(stream);
+            return;
+          }
+          for (const stream of supersededAdjacentStreams) active.add(stream);
+          for (const stream of streams) {
+            if (!supersededAdjacentStreams.has(stream)) deleted.add(stream);
+          }
+          await this.notifyCanonicalDeletions(
+            streams,
+            canonicalStreams,
+            supersededAdjacentStreams,
+          );
           return;
         }
         log.warn(
           `Failed to delete streams for execution ${executionId}: ${toErrorMessage(outcome.error)}`,
           { data: outcome.error },
         );
-        // `retained` means the execution deletion failed before its
-        // `beforeDelete` cleanup committed. With per-stream cleanup failures
-        // some streams in the group DID commit, so only those exact committed
-        // streams belong in `deleted`; the failed ones are the retained set.
-        // With no per-stream failures the cleanup never ran, so nothing
-        // committed and `deleted` must stay empty even for snapshot-only
+        // `retained` normally means execution deletion failed before its
+        // `beforeDelete` cleanup committed. When adjacent cleanup did run,
+        // retain only the streams that failed or were superseded; the others
+        // committed and belong in `deleted`. With no adjacent outcome, cleanup
+        // never ran, so `deleted` must stay empty even for snapshot-only
         // identities that have no canonical tab to report in `failed`.
-        const retainedStreams =
-          failedAdjacentStreams.size > 0
-            ? failedAdjacentStreams
-            : streams.filter((stream) => this.streamLogs.has(stream));
-        for (const stream of retainedStreams) failed.add(stream);
-        if (failedAdjacentStreams.size > 0) {
+        const retainedAdjacentStreams = new Set([
+          ...failedAdjacentStreams,
+          ...supersededAdjacentStreams,
+        ]);
+        if (retainedAdjacentStreams.size === 0) {
           for (const stream of streams) {
-            if (!failedAdjacentStreams.has(stream)) deleted.add(stream);
+            if (this.streamLogs.has(stream)) failed.add(stream);
           }
-          await this.notifyCanonicalDeletions(
-            streams,
-            canonicalStreams,
-            failedAdjacentStreams,
-          );
+          return;
         }
+        for (const stream of failedAdjacentStreams) failed.add(stream);
+        for (const stream of supersededAdjacentStreams) active.add(stream);
+        for (const stream of streams) {
+          if (!retainedAdjacentStreams.has(stream)) deleted.add(stream);
+        }
+        await this.notifyCanonicalDeletions(
+          streams,
+          canonicalStreams,
+          retainedAdjacentStreams,
+        );
       }),
     );
     return { active, failed, deleted };
@@ -876,9 +897,11 @@ export class SessionStores {
     shouldDeleteStream?: (stream: StreamTabId) => boolean,
   ): Promise<{
     failed: Set<StreamTabId>;
+    superseded: Set<StreamTabId>;
     failures: unknown[];
   }> {
     const failed = new Set<StreamTabId>();
+    const superseded = new Set<StreamTabId>();
     const failures: unknown[] = [];
     await Promise.all(
       streams.map(async (stream) => {
@@ -888,11 +911,15 @@ export class SessionStores {
             shouldDeleteStream ? () => shouldDeleteStream(stream) : undefined,
           );
         } catch (error) {
+          if (error instanceof StreamDeletionSupersededError) {
+            superseded.add(stream);
+            return;
+          }
           failed.add(stream);
           failures.push(error);
         }
       }),
     );
-    return { failed, failures };
+    return { failed, superseded, failures };
   }
 }

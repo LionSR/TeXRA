@@ -3552,6 +3552,13 @@ describe('DesktopProgressBridge', () => {
         await vi.waitFor(() =>
           expect(waitForRelease).toHaveBeenCalledWith(childStreamId),
         );
+        owner.processSession.events.emit({
+          scope: 'session',
+          event: {
+            type: 'setActiveStream',
+            payload: { streamId: childStreamId },
+          },
+        });
         const pendingDrain = vi.spyOn(
           owner.sessionStores,
           'waitForPendingStreamDeletions',
