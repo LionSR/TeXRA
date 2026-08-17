@@ -13,7 +13,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { createLog } from '@logger/logUtils';
-import type { AgentSource } from '@shared/schemas';
+import type { AgentScanIssue, AgentSource } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { groupBy, isObject } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -21,12 +21,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { AgentEntry } from './agentEntry';
 
 const log = createLog('agentRegistry');
-
-/** A YAML file the scanner found but could not turn into an agent. */
-export interface AgentScanIssue {
-  readonly path: string;
-  readonly message: string;
-}
 
 interface AgentDirectoryScan {
   readonly entries: AgentEntry[];

@@ -8,6 +8,7 @@ import type {
   AgentCategory as AgentCategoryType,
   AgentDelegationScope,
   AgentOptionData,
+  AgentScanIssue,
   AgentSource,
 } from '@shared/schemas';
 import {
@@ -22,7 +23,7 @@ import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName } from '@utils/core';
-import { scanDirectory, type AgentScanIssue } from './agentYamlScanner';
+import { scanDirectory } from './agentYamlScanner';
 import {
   clearInlineAgentDefinitions,
   defineInlineAgents,
