@@ -986,6 +986,7 @@ export class StreamLogStore {
     if (state?.log !== undefined && state.loadFailed !== true) return;
     if (!this.summaries.has(streamId)) return;
     if (state?.pendingLoad) return state.pendingLoad;
+    let recoveredFromLoad = false;
     const work = (async () => {
       try {
         // If `delete` or `clear` ran during the read, don't resurrect it.
@@ -1035,9 +1036,7 @@ export class StreamLogStore {
         // append to unblock it.
         const recovered = this.streams.get(streamId);
         if (recovered) recovered.loadFailed = false;
-        if (this.hasPendingPersistence(streamId)) {
-          this.schedulePersistence(streamId);
-        }
+        recoveredFromLoad = true;
       } catch (err) {
         // Keep the disk copy authoritative and surface the failed read. A
         // caller may retry `ensureLoaded`, but no append is accepted until a
@@ -1058,6 +1057,9 @@ export class StreamLogStore {
       if (state) {
         state.pendingLoad = undefined;
         this.tryRelease(streamId);
+        if (recoveredFromLoad && this.hasPendingPersistence(streamId)) {
+          this.schedulePersistence(streamId);
+        }
       }
     }
   }
