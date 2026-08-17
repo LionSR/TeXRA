@@ -41,12 +41,11 @@ function reportFatalDesktopError(
   error: unknown,
   options: { title: string; message: string; forceQuit?: boolean },
 ): void {
-  if (fatalStartupErrorReported) return;
-  fatalStartupErrorReported = true;
-
   const detail =
     error instanceof Error ? (error.stack ?? error.message) : String(error);
   console.error(`Fatal TeXRA desktop error:\n${detail}`);
+  if (fatalStartupErrorReported) return;
+  fatalStartupErrorReported = true;
 
   const showFailureDialog = (): void => {
     if (options.forceQuit) {

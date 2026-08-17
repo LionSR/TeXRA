@@ -31,7 +31,7 @@ export interface DesktopBrowserViewsOptions {
   /** Records a URL rejected by the browser-tab policy. */
   onBlockedExternalUrl?(error: unknown): void;
   /** Records a failure after the host has already surfaced the user-facing error. */
-  onExternalOpenError?(error: unknown): void;
+  onExternalOpenError(error: unknown): void;
   onError?(error: unknown): void;
 }
 
@@ -87,13 +87,7 @@ export function createDesktopBrowserViews(
       );
       return;
     }
-    options.openExternalUrl(url).catch((error: unknown) => {
-      if (options.onExternalOpenError) {
-        options.onExternalOpenError(error);
-        return;
-      }
-      reportError(error);
-    });
+    options.openExternalUrl(url).catch(options.onExternalOpenError);
   }
 
   function publishState(tabId: string, view: WebContentsView): void {
