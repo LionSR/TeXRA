@@ -16,8 +16,12 @@ export function reportFatalStartupError(error: unknown): void {
 export function installPostStartupRejectionHandler(): () => void {
   const report = (error: unknown) => {
     reportFatalDesktopError(error, {
-      title: 'TeXRA encountered a fatal error',
-      message: 'TeXRA hit an unrecoverable error after startup and must close.',
+      title: app.isReady()
+        ? 'TeXRA encountered a fatal error'
+        : 'TeXRA failed to start',
+      message: app.isReady()
+        ? 'TeXRA hit an unrecoverable error after startup and must close.'
+        : 'TeXRA hit a startup error before the desktop window was ready.',
     });
   };
   process.on('unhandledRejection', report);

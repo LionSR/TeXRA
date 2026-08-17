@@ -344,6 +344,9 @@ function createWindow(options: {
       );
     });
   };
+  const reportBackgroundError = (error: unknown) => {
+    console.error('Desktop background operation failed:', error);
+  };
   installDesktopNavigationPolicy(window.webContents, {
     onAsyncError: reportAsyncError,
   });
@@ -796,7 +799,7 @@ function createWindow(options: {
           outDir: true,
           autoRevealExclude: true,
         }),
-        onDetectionError: reportAsyncError,
+        onDetectionError: reportBackgroundError,
       }),
       latexConfigPersistenceController: new LatexConfigPersistenceController(),
     },
@@ -812,7 +815,7 @@ function createWindow(options: {
         const execution = await getAgentExecution();
         return await execution.revealStream(streamId);
       } catch (error) {
-        if (!presentationAbort.signal.aborted) reportAsyncError(error);
+        if (!presentationAbort.signal.aborted) reportBackgroundError(error);
         return 'unavailable';
       }
     },
