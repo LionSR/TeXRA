@@ -534,8 +534,9 @@ export function attachTranscriptRecorder(
             } as ToolUseLog,
           } satisfies StreamLogUpdatePatch;
           if (event.status === TOOL_USE_STATUS.IN_PROGRESS) {
-            writer.update(event.logId, patch);
-            activeToolEntries.set(event.logId, patch.data);
+            if (writer.update(event.logId, patch)) {
+              activeToolEntries.set(event.logId, patch.data);
+            }
           } else {
             writer.settle(event.logId, patch);
             activeToolEntries.delete(event.logId);
