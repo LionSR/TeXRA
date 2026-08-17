@@ -12,13 +12,6 @@ import {
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
 
-/** Resolve host exclusions only when a desktop run is launched or resumed. */
-export function getDesktopUnavailableTools(): ReturnType<
-  typeof getDefaultUnavailableToolNames
-> {
-  return getDefaultUnavailableToolNames('desktop');
-}
-
 export interface DesktopAgentLaunchContext {
   readonly session: SessionHandle;
   /** Resume-only canonical admission checked under the execution lease lock. */
@@ -42,7 +35,7 @@ export async function launchDesktopAgent(
   const { runAgent } = await import('@agent/runtime');
   await runAgent(request, {
     session: context.session,
-    runtimeUnavailableTools: getDesktopUnavailableTools(),
+    runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
     ...(options.preferHelperModel && { preferHelperModel: true }),
     onRun: options.onRun,

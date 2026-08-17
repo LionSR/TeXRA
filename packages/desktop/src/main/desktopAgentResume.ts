@@ -12,10 +12,8 @@ import {
 } from '@agent/runtime';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
-import {
-  getDesktopUnavailableTools,
-  launchDesktopAgent,
-} from './desktopAgentLaunch.js';
+import { getDefaultUnavailableToolNames } from '@tools/registry';
+import { launchDesktopAgent } from './desktopAgentLaunch.js';
 import { toLogData } from './desktopLogUtils.js';
 
 interface DesktopResumeContext {
@@ -128,7 +126,7 @@ function resumeDesktopStream(
         resumeQueuedToolUseFromResumeData(snapshot.streamId, snapshot, {
           session: context.session,
           recovery: claimedRecovery,
-          runtimeUnavailableTools: getDesktopUnavailableTools(),
+          runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
           canAcquireResumeLease,
           isCancellationRequested: isResumeInvalidated,
           onError: (error) => reportUnhandledFailure(streamId, error),
