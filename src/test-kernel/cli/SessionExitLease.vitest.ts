@@ -20,7 +20,7 @@ vi.mock('@cli/runtime/logSinks', () => ({
   writeTextStdout: mocks.writeTextStdout,
 }));
 vi.mock('@platform/platform', () => ({
-  tryPlatform: () => undefined,
+  platform: () => ({ lifecycle: {} }),
 }));
 vi.mock('@cli/chat/tui/state/childExecutions', () => ({
   childStreamEntries: { get: () => [] },

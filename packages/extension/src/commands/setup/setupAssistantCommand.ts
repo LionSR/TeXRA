@@ -253,7 +253,7 @@ export async function launchSetupAssistant(): Promise<
     // fresh load.
     await loadAgents();
 
-    const launch = () => runAgent({ config }, {});
+    const launch = () => runAgent({ kind: 'fresh', config }, {});
 
     if (resolution.requiresOpenRouter) {
       await withOpenRouterFlagOn(launch);
