@@ -50,9 +50,12 @@ export class SubscriptionUsageRow extends LitElement {
         min-width: 0;
       }
 
-      .usage-facts {
+      .usage-card {
         display: grid;
         gap: 0.4rem;
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
+        background-color: var(--wa-color-surface-lowered, transparent);
+        border-radius: var(--wa-border-radius-m, 0.5rem);
       }
 
       .usage-window {
@@ -109,46 +112,35 @@ export class SubscriptionUsageRow extends LitElement {
       `;
     }
 
-    const summary = snapshot.windows
-      .map(
-        (window) =>
-          `${subscriptionUsageWindowLabel(window)}: ${formatSubscriptionUsagePercent(window.percentUsed)}`,
-      )
-      .join(' · ');
     return html`
       <div class="settings-row subscription-usage-row">
         <div class="settings-row-text">
-          <wa-details
-            class="panel-collapsible"
-            summary="${snapshot.planName} usage · ${summary}"
-          >
-            <div class="usage-facts">
-              ${snapshot.windows.map((window) => {
-                const label = subscriptionUsageWindowLabel(window);
-                const percent = formatSubscriptionUsagePercent(
-                  window.percentUsed,
-                );
-                const reset = formatSubscriptionUsageReset(
-                  window.resetAt,
-                  this.now,
-                );
-                return html`
-                  <div class="usage-window">
-                    <span>${label}: ${percent}</span>
-                    <progress
-                      max="100"
-                      value=${window.percentUsed}
-                      aria-label="${snapshot.providerName} ${label} usage: ${percent} used"
-                    ></progress>
-                    <span>${reset ?? ''}</span>
-                  </div>
-                `;
-              })}
-              <span class="usage-updated">
-                ${formatSubscriptionUsageUpdated(snapshot.fetchedAt, this.now)}
-              </span>
-            </div>
-          </wa-details>
+          <div class="usage-card">
+            ${snapshot.windows.map((window) => {
+              const label = subscriptionUsageWindowLabel(window);
+              const percent = formatSubscriptionUsagePercent(
+                window.percentUsed,
+              );
+              const reset = formatSubscriptionUsageReset(
+                window.resetAt,
+                this.now,
+              );
+              return html`
+                <div class="usage-window">
+                  <span>${label}: ${percent}</span>
+                  <progress
+                    max="100"
+                    value=${window.percentUsed}
+                    aria-label="${snapshot.providerName} ${label} usage: ${percent} used"
+                  ></progress>
+                  <span>${reset ?? ''}</span>
+                </div>
+              `;
+            })}
+            <span class="usage-updated">
+              ${formatSubscriptionUsageUpdated(snapshot.fetchedAt, this.now)}
+            </span>
+          </div>
         </div>
       </div>
     `;

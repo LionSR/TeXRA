@@ -127,7 +127,7 @@ function parsePath(raw: string): ParsedPath {
 async function requireToken(): Promise<void> {
   if (!(await getGitHubToken())) {
     throw new ToolError(
-      'No GitHub token configured. Set one in host settings (VS Code: TeXRA settings → Git tab → "Set token"), or export GITHUB_TOKEN or GH_TOKEN. Needs `repo` scope for private repos, `public_repo` for public.',
+      'No GitHub token configured. In the CLI, open /config → GitHub token. In VS Code, use TeXRA settings → Git tab → "Set token". Or export GITHUB_TOKEN or GH_TOKEN. Needs `repo` scope for private repos, `public_repo` for public.',
     );
   }
 }
@@ -501,7 +501,7 @@ export class GitHubSubscriptionTool extends defineTool({
     '- list: list active subscriptions on this stream.',
     '- find_current: resolve the current git branch to its PR path (returns "owner/repo/pulls/N").',
     'Bot-authored events are dropped end-to-end by policy.',
-    `Caps: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PR subscriptions, ${MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS} concurrent issue subscriptions, ${MAX_CONCURRENT_REPO_SUBSCRIPTIONS} concurrent repo subscriptions per process. Poll interval ≈ ${PR_POLL_INTERVAL_MS / 1000}s. Requires a GitHub token: set it in host settings, or via GITHUB_TOKEN or GH_TOKEN.`,
+    `Caps: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PR subscriptions, ${MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS} concurrent issue subscriptions, ${MAX_CONCURRENT_REPO_SUBSCRIPTIONS} concurrent repo subscriptions per process. Poll interval ≈ ${PR_POLL_INTERVAL_MS / 1000}s. Requires a GitHub token: set it in /config → GitHub token, the VS Code Git tab, or via GITHUB_TOKEN or GH_TOKEN.`,
   ].join(' '),
   schema: GitHubSubscriptionInputSchema,
 }) {

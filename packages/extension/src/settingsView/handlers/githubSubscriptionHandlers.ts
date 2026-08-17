@@ -8,7 +8,6 @@
 import * as vscode from 'vscode';
 
 import {
-  GITHUB_TOKEN_CREATE_URL,
   listGitHubSubscriptionEntries,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
@@ -21,7 +20,10 @@ import {
 } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
-import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
+import {
+  GITHUB_TOKEN_CREATE_URL,
+  GITHUB_TOKEN_STORAGE_KEY,
+} from '@tools/github/githubAuth';
 import {
   withHandlerErrorHandling,
   type SettingsHandlerContext,

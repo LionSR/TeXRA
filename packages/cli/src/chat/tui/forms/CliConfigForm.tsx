@@ -3,6 +3,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import { applyCliGitAuthorConfig } from '@cli/runtime/gitAuthor';
 import {
+  loadGitHubTokenStatus,
+  removeGitHubToken,
+  saveGitHubToken,
+} from '@cli/runtime/githubToken';
+import {
   loadProviderApiKeyStatuses,
   saveProviderApiKey,
 } from '@cli/runtime/providerApiKey';
@@ -20,6 +25,11 @@ import { setPreferKimiCode } from '@utils/config/providerConfig';
 import { refreshSubscriptionPreferenceViews } from '../state/codexSubscription';
 import { AgentRosterForm } from './AgentRosterForm';
 import { ConfigForm, type ConfigFormProps } from './ConfigForm';
+import {
+  formatGitHubTokenSummary,
+  GitHubTokenForm,
+  type GitHubTokenStatusView,
+} from './GitHubTokenForm';
 import {
   formatProviderApiKeySummary,
   ProviderApiKeyForm,
@@ -41,6 +51,9 @@ export interface CreateCliConfigFormPropsInput extends CliConfigFormProps {
   readonly apiKeyStatusView?: ProviderApiKeyStatusView;
   readonly markProviderApiKeySet?: (provider: ApiProvider) => void;
   readonly refreshApiKeyStatuses?: () => void | Promise<void>;
+  readonly githubTokenStatusView?: GitHubTokenStatusView;
+  readonly markGitHubTokenSet?: () => void;
+  readonly refreshGitHubTokenStatus?: () => void | Promise<void>;
 }
 
 /**
@@ -59,6 +72,11 @@ const INITIAL_API_KEY_STATUS_VIEW: ProviderApiKeyStatusView = {
   error: false,
 };
 
+const INITIAL_GITHUB_TOKEN_STATUS_VIEW: GitHubTokenStatusView = {
+  loading: true,
+  error: false,
+};
+
 /**
  * Construct the canonical CLI configuration interface. Both the standalone
  * command and the in-chat form use this function, so persistence and runtime
@@ -70,6 +88,8 @@ export function createCliConfigFormProps(
   const { stores } = props;
   const apiKeyStatusView =
     props.apiKeyStatusView ?? INITIAL_API_KEY_STATUS_VIEW;
+  const githubTokenStatusView =
+    props.githubTokenStatusView ?? INITIAL_GITHUB_TOKEN_STATUS_VIEW;
   return {
     availableRows: props.availableRows,
     entries: CLI_STATE_SETTINGS,
@@ -108,6 +128,11 @@ export function createCliConfigFormProps(
         label: 'API keys',
         description: formatProviderApiKeySummary(apiKeyStatusView),
       },
+      {
+        name: 'github-token',
+        label: 'GitHub token',
+        description: formatGitHubTokenSummary(githubTokenStatusView),
+      },
     ],
     formRenderers: {
       agents: (onBack) => (
@@ -131,6 +156,23 @@ export function createCliConfigFormProps(
           onCancel={onBack}
         />
       ),
+      'github-token': (onBack) => (
+        <GitHubTokenForm
+          availableRows={props.availableRows}
+          statusView={githubTokenStatusView}
+          onSave={async (token) => {
+            await saveGitHubToken(token);
+            props.markGitHubTokenSet?.();
+            await props.refreshGitHubTokenStatus?.();
+          }}
+          onRemove={async () => {
+            await removeGitHubToken();
+            await props.refreshGitHubTokenStatus?.();
+          }}
+          onDone={onBack}
+          onCancel={onBack}
+        />
+      ),
       tools: (onBack) => (
         <ToolsListForm availableRows={props.availableRows} onClose={onBack} />
       ),
@@ -146,8 +188,11 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   const [stores] = useState(() => props.stores ?? cliSettingsStores());
   const [apiKeyStatusView, setApiKeyStatusView] =
     useState<ProviderApiKeyStatusView>(INITIAL_API_KEY_STATUS_VIEW);
+  const [githubTokenStatusView, setGitHubTokenStatusView] =
+    useState<GitHubTokenStatusView>(INITIAL_GITHUB_TOKEN_STATUS_VIEW);
   const mounted = useRef(false);
   const requestSequence = useRef(0);
+  const githubTokenRequestSequence = useRef(0);
   const onError = useRef(props.onError);
   onError.current = props.onError;
 
@@ -155,6 +200,15 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     if (!mounted.current) return;
     setApiKeyStatusView((current) => ({
       statuses: { ...current.statuses, [provider]: 'set' },
+      loading: current.loading,
+      error: false,
+    }));
+  }, []);
+
+  const markGitHubTokenSet = useCallback(() => {
+    if (!mounted.current) return;
+    setGitHubTokenStatusView((current) => ({
+      status: 'secret',
       loading: current.loading,
       error: false,
     }));
@@ -184,14 +238,44 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     }
   }, []);
 
+  const refreshGitHubTokenStatus = useCallback(async () => {
+    const request = ++githubTokenRequestSequence.current;
+    if (mounted.current) {
+      setGitHubTokenStatusView((current) => ({
+        ...current,
+        loading: true,
+        error: false,
+      }));
+    }
+    try {
+      const status = await loadGitHubTokenStatus();
+      if (!mounted.current || request !== githubTokenRequestSequence.current) {
+        return;
+      }
+      setGitHubTokenStatusView({ status, loading: false, error: false });
+    } catch (error: unknown) {
+      if (!mounted.current || request !== githubTokenRequestSequence.current) {
+        return;
+      }
+      setGitHubTokenStatusView((current) => ({
+        ...current,
+        loading: false,
+        error: true,
+      }));
+      onError.current?.(error);
+    }
+  }, []);
+
   useEffect(() => {
     mounted.current = true;
     void refreshApiKeyStatuses();
+    void refreshGitHubTokenStatus();
     return () => {
       mounted.current = false;
       requestSequence.current += 1;
+      githubTokenRequestSequence.current += 1;
     };
-  }, [refreshApiKeyStatuses]);
+  }, [refreshApiKeyStatuses, refreshGitHubTokenStatus]);
 
   return (
     <ConfigForm
@@ -201,6 +285,9 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         apiKeyStatusView,
         markProviderApiKeySet,
         refreshApiKeyStatuses,
+        githubTokenStatusView,
+        markGitHubTokenSet,
+        refreshGitHubTokenStatus,
       })}
     />
   );
