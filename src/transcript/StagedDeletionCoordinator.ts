@@ -63,7 +63,14 @@ async function storagePathExists(target: string): Promise<boolean> {
 }
 
 export interface StagedStreamSnapshotDeletion {
-  commit(): Promise<void>;
+  /**
+   * Commit the staged deletion. `shouldDelete`, when provided, is re-checked
+   * after the staged copy is removed: a re-claim landing during that awaited
+   * delete keeps its fresh sidecar writes buffered, and this replays them
+   * instead of discarding them with the deletion state. Returns whether the
+   * commit was superseded (buffered writes were replayed rather than dropped).
+   */
+  commit(shouldDelete?: () => boolean): Promise<boolean>;
   rollback(): Promise<void>;
 }
 
@@ -524,10 +531,11 @@ export class StagedDeletionCoordinator {
 
       let settled = false;
       return {
-        commit: async () => {
-          if (settled) return;
+        commit: async (shouldDelete?: () => boolean): Promise<boolean> => {
+          if (settled) return false;
           settled = true;
           this.host.evict(stream);
+          let superseded = false;
           try {
             if (state.phase === 'staged' && stagedDir) {
               try {
@@ -539,9 +547,27 @@ export class StagedDeletionCoordinator {
                 );
               }
             }
+            // A re-claim landing while the staged copy was being deleted kept
+            // its fresh sidecar writes buffered here (the stream stayed in
+            // `deletionStates`). Replay them so the new incarnation's sidecars
+            // survive the commit instead of being discarded with the deletion
+            // state. A replay write failure must not demote the supersede: the
+            // deletion still did not commit, so report superseded regardless.
+            if (shouldDelete && !shouldDelete()) {
+              superseded = true;
+              try {
+                await this.drainStagedWrites(stream, state);
+              } catch (error) {
+                log.warn(
+                  `Stream ${stream} was superseded, but buffered sidecar replay was incomplete.`,
+                  { data: error },
+                );
+              }
+            }
           } finally {
             this.settleStagedDeletion(stream, state);
           }
+          return superseded;
         },
         rollback: async () => {
           if (settled) return;

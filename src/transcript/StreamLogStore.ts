@@ -46,6 +46,32 @@ const STREAM_LOG_LOAD_CONCURRENCY = 8;
 const LOG_TAG = 'StreamLogStore';
 const log = createLog(LOG_TAG);
 
+/**
+ * A deletion guard decided the stream was re-claimed while the delete was
+ * committed. Thrown inside {@link StreamLogStore.delete} so the caller can
+ * roll adjacent snapshot staging back instead of discarding a fresh
+ * incarnation's buffered writes.
+ */
+export class StreamDeletionSupersededError extends Error {
+  constructor(readonly subject?: string) {
+    super(
+      subject === undefined
+        ? 'Stream deletion superseded'
+        : `Stream deletion superseded for ${subject}`,
+    );
+    this.name = 'StreamDeletionSupersededError';
+  }
+}
+
+export interface StreamLogDeleteOptions {
+  /**
+   * Re-checked inside the serialized deletion: once after pending writes drain
+   * and again after the durable transcript delete but before in-memory state is
+   * forgotten. Returning `false` aborts the delete.
+   */
+  readonly shouldDelete?: () => boolean;
+}
+
 type StreamLogListener = (streamId: StreamTabId, delta: StreamLogDelta) => void;
 
 /**
@@ -988,17 +1014,59 @@ export class StreamLogStore {
     };
   }
 
-  async delete(streamId: StreamTabId): Promise<void> {
+  async delete(
+    streamId: StreamTabId,
+    options?: StreamLogDeleteOptions,
+  ): Promise<void> {
     this.assertWritableStore('delete a transcript stream');
     this.writeTombstones.add(streamId);
     this.saveThrottle.cancel();
+    let retrySave = false;
+    let releasedEntries: ParsedPersistedEntries | undefined;
 
     try {
       await this.executeWrite();
+      // A re-claim may have landed while pending writes drained. Refuse before
+      // the irreversible durable delete so its transcript is never erased.
+      if (options?.shouldDelete && !options.shouldDelete()) {
+        throw new StreamDeletionSupersededError(streamId);
+      }
       if (this.mode.kind !== 'ephemeral') {
+        // A released stream has no resident log for the failure path to
+        // re-persist. Preserve its authoritative entries across the delete's
+        // commit window so a concurrent identity re-claim cannot turn the
+        // durable delete into permanent transcript loss.
+        if (
+          options?.shouldDelete &&
+          this.streams.get(streamId)?.log === undefined &&
+          this.summaries.has(streamId)
+        ) {
+          const raw = await this.kv().read<unknown[]>(streamId);
+          if (raw !== undefined) {
+            releasedEntries = this.parsePersistedEntries(streamId, raw);
+          }
+          if (!options.shouldDelete()) {
+            throw new StreamDeletionSupersededError(streamId);
+          }
+        }
         log.info(`Deleting stream: ${streamId}`);
         await this.kv().delete(streamId);
         await this.deleteSummaryCache(streamId);
+      }
+      // The durable delete is irreversible. Re-check again before forgetting
+      // in-memory state: a re-claim that landed while the KV delete was in
+      // flight kept its resident transcript alive, and `forgetStreamState`
+      // must not drop it.
+      if (options?.shouldDelete && !options.shouldDelete()) {
+        if (this.streams.get(streamId)?.log === undefined && releasedEntries) {
+          const restored = new StreamLog(
+            releasedEntries.entries,
+            releasedEntries.preservedRawEntries,
+          );
+          this.ensureStreamState(streamId).log = restored;
+          this.refreshSummary(streamId, restored);
+        }
+        throw new StreamDeletionSupersededError(streamId);
       }
       // The summaries map is the progress tab registry. Commit its removal
       // only after durable deletion succeeds so callers can retain and retry a
@@ -1008,11 +1076,14 @@ export class StreamLogStore {
     } catch (error) {
       // executeWrite() drains dirty ids while the tombstone suppresses writes.
       // Restore the retry marker if deletion fails and a resident log remains.
-      if (this.streams.get(streamId)?.log !== undefined)
+      if (this.streams.get(streamId)?.log !== undefined) {
         this.markDirty(streamId);
+        retrySave = true;
+      }
       throw error;
     } finally {
       this.writeTombstones.delete(streamId);
+      if (retrySave) this.scheduleSave();
     }
   }
 

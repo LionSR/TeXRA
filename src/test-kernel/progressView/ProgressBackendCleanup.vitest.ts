@@ -286,7 +286,11 @@ describe('ProgressBackend cleanup', () => {
 
       // A log-only stream carries no sidecar FK, so it owns no execution:
       // its stream state clears and the leased execution stays untouched.
-      expect(retained).toEqual({ active: new Set(), failed: new Set() });
+      expect(retained).toEqual({
+        active: new Set(),
+        failed: new Set(),
+        deleted: new Set([stream]),
+      });
       expect(backend.state.streamLogs.has(stream)).toBe(false);
       await expectStored(`executions/${executionId}`, true);
     } finally {
@@ -313,6 +317,7 @@ describe('ProgressBackend cleanup', () => {
       expect(retained).toEqual({
         active: new Set(),
         failed: new Set(),
+        deleted: new Set([stream]),
       });
       expect(backend.state.streamLogs.has(stream)).toBe(false);
       await expectStored(`executions/${executionId}`, false);
@@ -321,6 +326,49 @@ describe('ProgressBackend cleanup', () => {
       await getExecutionStore(executionId).clear();
       await backend.state.clearAll();
     }
+  });
+
+  it('preserves a stream created after bulk cleanup starts', async () => {
+    const { backend } = createIsolatedRecordingBackend();
+    const existing = toolStreamAndExecution('bulk-existing');
+    const fresh = toolStreamAndExecution('bulk-fresh');
+    await seedOwnedStream(backend, existing, { load: true });
+
+    let releaseList!: () => void;
+    const listReleased = new Promise<void>((resolve) => {
+      releaseList = resolve;
+    });
+    let markListStarted!: () => void;
+    const listStarted = new Promise<void>((resolve) => {
+      markListStarted = resolve;
+    });
+    const listPersistedStreams =
+      backend.state.snapshots.listPersistedStreams.bind(
+        backend.state.snapshots,
+      );
+    vi.spyOn(
+      backend.state.snapshots,
+      'listPersistedStreams',
+    ).mockImplementationOnce(async () => {
+      markListStarted();
+      await listReleased;
+      return listPersistedStreams();
+    });
+
+    const cleanup = backend.state.clearAll();
+    await listStarted;
+    registerStream(backend, fresh);
+    releaseList();
+
+    await expect(cleanup).resolves.toEqual({
+      active: new Set([fresh.stream]),
+      failed: new Set(),
+      deleted: new Set([existing.stream]),
+    });
+    expect(backend.state.streamLogs.has(existing.stream)).toBe(false);
+    expect(backend.state.streamLogs.has(fresh.stream)).toBe(true);
+
+    await backend.state.clearAll();
   });
 
   it('reconciles required cleanup and final execution cleanup independently', async () => {
@@ -350,6 +398,7 @@ describe('ProgressBackend cleanup', () => {
       expect(result).toEqual({
         active: new Set(),
         failed: new Set([failed.stream]),
+        deleted: new Set([incomplete.stream, deleted.stream]),
       });
       expect(backend.state.streamLogs.has(failed.stream)).toBe(true);
       expect(backend.state.streamLogs.has(incomplete.stream)).toBe(false);
@@ -373,6 +422,7 @@ describe('ProgressBackend cleanup', () => {
       await expect(backend.state.clearAll()).resolves.toEqual({
         active: new Set(),
         failed: new Set(),
+        deleted: new Set([stream]),
       });
 
       expect(backend.state.streamLogs.has(stream)).toBe(false);
@@ -410,6 +460,7 @@ describe('ProgressBackend cleanup', () => {
       expect(result).toEqual({
         active: new Set(),
         failed: new Set([failedStream]),
+        deleted: new Set([deletedStream]),
       });
       expect(backend.state.streamLogs.has(failedStream)).toBe(true);
       expect(backend.state.streamLogs.has(deletedStream)).toBe(false);
