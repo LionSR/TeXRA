@@ -161,7 +161,7 @@ export class SessionStores {
    * headless fallback in the removal microtask. Any outstanding claim means
    * that a presentation already owns that decision, and claims are released
    * when its deletion settles or fails.
-  */
+   */
   hasStreamDeletionClaim(stream: StreamTabId): boolean {
     return (this.streamDeletionClaims.get(stream)?.size ?? 0) !== 0;
   }
