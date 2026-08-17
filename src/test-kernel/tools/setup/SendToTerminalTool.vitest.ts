@@ -150,9 +150,9 @@ describe('SendToTerminalTool', () => {
     assert.equal(runs.length, 0);
   });
 
-  it('truncates from the head, not the tail — the success/error line is at the end', async () => {
-    // Output longer than the tool's preview cap. We sentinel the start
-    // and end so we can see which side survived truncation.
+  it('returns complete terminal output for recorder-owned bounding', async () => {
+    // The transcript recorder owns output bounds and spill artifacts. Keep both
+    // sentinels so the tool does not discard either half before that boundary.
     const head = 'BEGIN_MARKER\n' + 'x'.repeat(8_000);
     const end = 'Setting up perl ... done\nEND_MARKER';
     const { tool } = setupTool({
@@ -168,11 +168,11 @@ describe('SendToTerminalTool', () => {
     assert.equal(result.status, 'executed');
     assert.ok(
       (result.output ?? '').includes('END_MARKER'),
-      'tail (success line) must survive truncation',
+      'tail must be preserved for the recorder',
     );
     assert.ok(
-      !(result.output ?? '').includes('BEGIN_MARKER'),
-      'head must be elided when output exceeds the preview cap',
+      (result.output ?? '').includes('BEGIN_MARKER'),
+      'head must be preserved for the recorder',
     );
   });
 });
