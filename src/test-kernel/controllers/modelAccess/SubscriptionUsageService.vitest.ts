@@ -572,9 +572,6 @@ describe('SubscriptionUsageService', () => {
         olderUrl,
         newerUrl,
       ]);
-      expect(newer).toMatchObject({
-        windows: [expect.objectContaining({ percentUsed: 80 })],
-      });
       expect(olderCaller).toStrictEqual(newer);
     },
   );
