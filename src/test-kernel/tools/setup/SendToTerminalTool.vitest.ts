@@ -150,9 +150,9 @@ describe('SendToTerminalTool', () => {
     assert.equal(runs.length, 0);
   });
 
-  it('returns complete terminal output for recorder-owned bounding', async () => {
-    // The transcript recorder owns output bounds and spill artifacts. Keep both
-    // sentinels so the tool does not discard either half before that boundary.
+  it('does not truncate the host-captured terminal tail again', async () => {
+    // The host owns its process-level capture bound; the recorder owns the
+    // display preview and spill. Keep both sentinels inside the host result.
     const head = 'BEGIN_MARKER\n' + 'x'.repeat(8_000);
     const end = 'Setting up perl ... done\nEND_MARKER';
     const { tool } = setupTool({
@@ -168,11 +168,11 @@ describe('SendToTerminalTool', () => {
     assert.equal(result.status, 'executed');
     assert.ok(
       (result.output ?? '').includes('END_MARKER'),
-      'tail must be preserved for the recorder',
+      'the captured tail must be preserved for the recorder',
     );
     assert.ok(
       (result.output ?? '').includes('BEGIN_MARKER'),
-      'head must be preserved for the recorder',
+      'the captured tail must not be truncated again',
     );
   });
 });
