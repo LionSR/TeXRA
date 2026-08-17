@@ -113,18 +113,26 @@ function isStaticTranscriptEntryAt(
   );
 }
 
-/** `(settlement order, synthetic-after-source tiebreak)` sort key for one entry. */
+/**
+ * `(printable order, synthetic-after-source tiebreak)` for one entry.
+ * Settlement order is the single printable coordinate: a group heading's
+ * slot is reserved when it opens and consumed by its terminal settlement,
+ * so headings sort at their open position without a second field.
+ */
 function transcriptOrderKey(
   entry: ConversationEntry,
   index: number,
-): readonly [seq: number, synthetic: number] {
+): readonly [seq: number, sourcePosition: number] {
   const seq =
     entry.settlementSeqNo ??
     entry.syntheticAfterSettlementSeqNo ??
     entry.sourceSeqNo ??
     index + 1;
-  const synthetic = entry.syntheticAfterSettlementSeqNo !== undefined ? 1 : 0;
-  return [seq, synthetic];
+  const sourcePosition =
+    entry.syntheticAfterSeq !== undefined
+      ? entry.syntheticAfterSeq + 0.5
+      : (entry.sourceSeqNo ?? index + 1);
+  return [seq, sourcePosition];
 }
 
 function compareTranscriptOrderKeys(
@@ -137,15 +145,10 @@ function compareTranscriptOrderKeys(
 /**
  * Printable rows in their append-only scrollback order.
  *
- * Source-backed rows use the durable order in which they became immutable.
- * Synthetic rows retain the settlement cursor captured when the CLI appended
- * them, with their original array position as the final stable tie-breaker.
- * Consumers that place rows relative to `<Static>` output must use this same
- * order rather than the stream's mutable storage order.
- *
- * Runs on every stream-sync tick, and entries arrive in settlement order on
- * all but the rare reorder — so it skips the O(n log n) sort whenever the
- * filtered slice is already ordered, at the cost of one O(n) pass over it.
+ * Source-backed rows use the durable order in which their rendered view became
+ * immutable. Synthetic rows retain the settlement cursor captured when the
+ * CLI appended them. Consumers that place rows relative to `<Static>` output
+ * must use this same order rather than mutable storage order.
  */
 export function orderedStaticTranscriptEntries(
   entries: readonly ConversationEntry[],

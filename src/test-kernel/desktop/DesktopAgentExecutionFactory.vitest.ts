@@ -116,7 +116,17 @@ async function createExecution(options: {
 
       async write(): Promise<void> {}
 
+      async readText(): Promise<undefined> {
+        return undefined;
+      }
+
+      async appendText(): Promise<void> {}
+
+      async writeTextAtomic(): Promise<void> {}
+
       async delete(): Promise<void> {}
+
+      async deleteWithExtension(): Promise<void> {}
 
       async deleteDir(): Promise<void> {}
 
@@ -124,8 +134,24 @@ async function createExecution(options: {
         return false;
       }
 
+      async existsWithExtension(): Promise<boolean> {
+        return false;
+      }
+
+      async modifiedAt(): Promise<undefined> {
+        return undefined;
+      }
+
+      async modifiedAtWithExtension(): Promise<undefined> {
+        return undefined;
+      }
+
       async listKeys(): Promise<string[]> {
         if (options.transcriptOpenError) throw options.transcriptOpenError;
+        return [];
+      }
+
+      async listKeysWithExtension(): Promise<string[]> {
         return [];
       }
     },

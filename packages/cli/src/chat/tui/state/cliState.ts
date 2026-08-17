@@ -73,7 +73,11 @@ type ConversationEntryOrigin =
       readonly synthetic?: false;
       /** Durable StreamLog position, including legacy rows without settlement order. */
       readonly sourceSeqNo?: number;
-      /** Source-owned order in which this immutable row became printable. */
+      /**
+       * Source-owned order in which this immutable row became printable. A
+       * group heading's slot is reserved when it opens, so its terminal
+       * settlement already encodes open-time order.
+       */
       readonly settlementSeqNo?: number;
       readonly syntheticKind?: never;
       readonly syntheticAfterSeq?: never;

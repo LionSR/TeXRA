@@ -1,3 +1,4 @@
+import { createLog } from '@logger/logUtils';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -8,6 +9,8 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
+
+const logger = createLog('StreamLog');
 
 export type StreamLogAppendInput = Omit<
   StreamLogEntry,
@@ -281,6 +284,7 @@ export class StreamLog {
    */
   private readonly pendingTextChunks = new Map<string, string[]>();
   private settlementSeqCounter = 0;
+  private readonly reservedSettlements = new Map<string, number>();
   private runningGroupCount = 0;
   private runningStreamingTextCount = 0;
   private nonterminalWorkflowCallCount = 0;
@@ -343,6 +347,25 @@ export class StreamLog {
   /** Latest durable append-only transcript order allocated by this stream. */
   get settlementHead(): number {
     return this.settlementSeqCounter;
+  }
+
+  /**
+   * Reserve a mutable entry's eventual settlement slot at its open time, so
+   * a group heading settles at the position it appeared instead of where its
+   * terminal record lands — `updateWithSettlement` consumes the reservation
+   * as the entry's `settlementSeqNo`. In-memory only, deliberately: the
+   * settlement coordinate is the single persisted ordering authority, so a
+   * crash drops unconsumed reservations and the recovery sweep settles those
+   * orphans in sweep order instead.
+   */
+  reserveSettlement(id: string): void {
+    const index = this.indexById.get(id);
+    if (index === undefined) return;
+    if (this.entries[index].settlementSeqNo !== undefined) return;
+    if (!this.reservedSettlements.has(id)) {
+      this.settlementSeqCounter += 1;
+      this.reservedSettlements.set(id, this.settlementSeqCounter);
+    }
   }
 
   /**
@@ -478,12 +501,18 @@ export class StreamLog {
     if (index === undefined) return undefined;
 
     const current = this.entries[index];
-    const settlementSeqNo =
-      settle && current.settlementSeqNo === undefined
-        ? this.settlementSeqCounter + 1
-        : current.settlementSeqNo;
+    if (current.settlementSeqNo !== undefined) {
+      logger.warn(`Ignoring update to settled transcript entry: ${id}`);
+      return undefined;
+    }
+    const reservedSettlement = settle
+      ? this.reservedSettlements.get(id)
+      : undefined;
+    const settlementSeqNo = settle
+      ? (reservedSettlement ?? this.settlementSeqCounter + 1)
+      : current.settlementSeqNo;
     if (
-      settlementSeqNo === current.settlementSeqNo &&
+      !settle &&
       Object.entries(patch).every(([key, value]) =>
         Object.is(current[key as keyof StreamLogUpdatePatch], value),
       )
@@ -496,16 +525,27 @@ export class StreamLog {
     // AgentTrace. Persisted entries are parsed when loaded from storage.
     // Spreading `current` reads its (possibly lazy) text getter, so this is
     // where a streaming entry's chunks are joined into a plain value.
+    const mergedData =
+      current.type === STREAM_LOG_ENTRY_TYPES.GROUP_START &&
+      patch.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
+      patch.data !== undefined
+        ? { ...current.data, ...patch.data }
+        : patch.data;
     const updated = {
       ...current,
       ...patch,
+      ...(mergedData !== undefined ? { data: mergedData } : {}),
       id: current.id,
       seqNo: current.seqNo,
       ...(settlementSeqNo !== undefined ? { settlementSeqNo } : {}),
     } as StreamLogEntry;
-    if (settlementSeqNo !== current.settlementSeqNo) {
+    if (
+      settlementSeqNo !== current.settlementSeqNo &&
+      reservedSettlement === undefined
+    ) {
       this.settlementSeqCounter += 1;
     }
+    if (settle) this.reservedSettlements.delete(id);
 
     this.countEntry(current, -1);
     this.countEntry(updated, 1);
@@ -524,6 +564,10 @@ export class StreamLog {
 
     const current = this.entries[index];
     if (current.type !== STREAM_LOG_ENTRY_TYPES.LOG) return undefined;
+    if (current.settlementSeqNo !== undefined) {
+      logger.warn(`Ignoring text append to settled transcript entry: ${id}`);
+      return undefined;
+    }
 
     let acc = this.streamingText.get(id);
     if (!acc) {

@@ -67,6 +67,9 @@ const streamLogSharedFields = {
    * Monotone order in which immutable transcript rows became printable.
    * Unlike seqNo, this is assigned when an existing row settles, so cold
    * reconstruction preserves the same append-only chronology as a live UI.
+   * A mutable group heading's slot is reserved when it opens and consumed
+   * by its terminal settlement, so headings keep open-time order under this
+   * single coordinate.
    */
   settlementSeqNo: z.int().positive().optional(),
   id: z.string().min(1),

@@ -218,7 +218,7 @@ function renderErrorLogEntryText(
 
 /**
  * Fields every {@link ConversationEntry} shares, regardless of role: the
- * source identity plus the two spreads (`messageType`, `settlementSeqNo`)
+ * source identity plus optional source-owned presentation fields
  * that must stay absent — not merely `undefined` — when the source entry
  * doesn't carry them, matching {@link ConversationEntry}'s optional-key shape.
  */
@@ -241,9 +241,11 @@ function baseLogEntryFields<R extends ConversationEntry['role']>(
 
 /**
  * Renders a log entry from scratch. `prev` is consulted only for phase
- * count inheritance (a GROUP_END row carries no index/total of its own);
- * finalization here is source-owned only — the fold re-applies inherited
- * promotion at the row's slot, so an already-promoted row never rolls back.
+ * count inheritance (a GROUP_END row carries no index/total of its own).
+ * A phase header's rendered content is stable at GROUP_START; settlement only
+ * adds status/endTime, so it is printable immediately. Finalization here is
+ * source-owned only — the fold re-applies inherited promotion at the row's
+ * slot, so an already-promoted row never rolls back.
  */
 function renderLogEntryFresh(
   entry: StreamLogEntry,

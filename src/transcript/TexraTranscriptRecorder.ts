@@ -27,8 +27,10 @@
  * Redaction is lossy by construction: a literal `API_KEY=<value>` in a
  * model-written code sample is scrubbed along with a real key.
  */
+// Third-party imports
 import PQueue from 'p-queue';
 
+// Local imports - agent trace and transcript dependencies
 import type {
   AgentEvent,
   AgentTrace,
@@ -162,11 +164,6 @@ interface StreamSinkState {
   updateDebounce: FlushableDebounce;
 }
 
-type StageMetadata = Pick<
-  Extract<AgentEvent, { type: 'stage.start' }>,
-  'kind' | 'index' | 'total' | 'attemptId'
->;
-
 /**
  * Subscribe to a trace and route every event into the StreamLogStore for the
  * given streamId. Returns an `unsubscribe()` plus a `flushPending()` used by
@@ -281,9 +278,9 @@ export function attachTranscriptRecorder(
       queue = new PQueue({ concurrency: 1 });
       spillQueues.set(path, queue);
     }
-    const pending = Promise.resolve(
-      queue.add(() => spillWriter.write(path, text)),
-    )
+    const pending = queue
+      .add(() => spillWriter.write(path, text))
+      .then(() => undefined)
       .catch((error: unknown) => {
         pendingSpillFailure ??= error;
       })
@@ -339,13 +336,7 @@ export function attachTranscriptRecorder(
       state.enabled = false;
     }
   };
-  // Stage presentation lives only on stage.start — `store.update` at
-  // stage.end replaces `data` wholesale (see StreamLog.update), so without
-  // this the persisted GROUP_END row would forget whether the stage was the
-  // root "Run:" stage or a nested round/phase/session. Replayed legacy traces
-  // rely on that distinction to tell a root run's terminal status apart from
-  // a round's (see toStreamLifecycleStatus in packages/trace-viewer).
-  const stageMetadata = new Map<string, StageMetadata>();
+  const activeStageIds = new Set<string>();
   const workflowCallEntries = new Set<string>();
   const activeToolEntries = new Map<string, ToolUseLog>();
   let transcriptBoundaryClosed = false;
@@ -357,6 +348,26 @@ export function attachTranscriptRecorder(
   // session stage can contain several model invocations, so the outer stage is
   // too coarse to be the only reset boundary.
   let pendingModelResponseId: string | undefined;
+  const detachedModelResponseIds = new Set<string>();
+
+  const settlePendingModelResponse = (): void => {
+    if (!pendingModelResponseId) return;
+    const id = pendingModelResponseId;
+    pendingModelResponseId = undefined;
+    // An active stream remains mutable until stream.end materializes its final
+    // text. Remember that it crossed the model/tool boundary so stream.end can
+    // settle it even though it is no longer the current response correlator.
+    if (streams.has(id)) {
+      // Mutable ancestor headings precede the response in source order. Give
+      // them their terminal positions first; otherwise reserving the response
+      // would move it ahead of its still-open group during cold replay.
+      for (const stageId of activeStageIds) {
+        writer.reserveSettlement(stageId);
+      }
+      detachedModelResponseIds.add(id);
+      writer.reserveSettlement(id);
+    } else writer.settle(id, {});
+  };
 
   const flushStream = (state: StreamSinkState, id: string): void => {
     state.updateDebounce.cancel();
@@ -379,8 +390,11 @@ export function attachTranscriptRecorder(
         data: { status: state.ended ? 'completed' : 'running' },
         verbose: isDebugModeEnabled(),
       } satisfies StreamLogAppendInput;
-      if (state.ended) writer.appendSettled(entry);
-      else writer.append(entry);
+      if (state.ended && state.messageType !== MESSAGE_TYPES.MODEL_RESPONSE) {
+        writer.appendSettled(entry);
+      } else {
+        writer.append(entry);
+      }
       state.created = true;
       return;
     }
@@ -395,7 +409,15 @@ export function attachTranscriptRecorder(
     }
 
     if (state.ended) {
-      writer.settle(id, boundModelResponse(id, state.buffer));
+      const patch = boundModelResponse(id, state.buffer);
+      if (state.messageType === MESSAGE_TYPES.MODEL_RESPONSE) {
+        // The raw stream ends before response.finalized carries the
+        // authoritative post-replacement text. Keep this row mutable until
+        // that event reconciles and settles it.
+        writer.update(id, patch);
+      } else {
+        writer.settle(id, patch);
+      }
     }
   };
 
@@ -463,16 +485,16 @@ export function attachTranscriptRecorder(
             ...(event.attemptId !== undefined
               ? { attemptId: event.attemptId }
               : {}),
-          } satisfies StageMetadata;
-          stageMetadata.set(event.id, metadata);
+          };
+          activeStageIds.add(event.id);
           // A new model-turn boundary starts fresh: whatever MODEL_RESPONSE
           // stream the previous turn may have opened is no longer this turn's
           // to reuse. Tool-use turns are session stages containing several
           // inner model/tool rounds, while other flows expose round stages.
           if (event.kind === 'round' || event.kind === 'session') {
-            pendingModelResponseId = undefined;
+            settlePendingModelResponse();
           }
-          writer.appendSettled({
+          writer.append({
             id: event.id,
             type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
             level: 'info',
@@ -486,18 +508,21 @@ export function attachTranscriptRecorder(
             },
             verbose: isDebugModeEnabled(),
           });
+          // Reserve the heading's settlement slot at open so its eventual
+          // terminal settlement keeps this position: children and detached
+          // responses settling inside the group take later slots, and rows
+          // that settled before this append already hold earlier ones.
+          writer.reserveSettlement(event.id);
           return;
         }
 
         case 'stage.end': {
-          const metadata = stageMetadata.get(event.id);
-          stageMetadata.delete(event.id);
-          writer.update(event.id, {
+          activeStageIds.delete(event.id);
+          writer.settle(event.id, {
             type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
             data: {
               status: event.status ?? RUN_OUTCOME.COMPLETED,
               endTime: Date.now(),
-              ...metadata,
             },
           });
           return;
@@ -505,7 +530,7 @@ export function attachTranscriptRecorder(
 
         case 'tool.start': {
           if (transcriptBoundaryClosed) return;
-          pendingModelResponseId = undefined;
+          settlePendingModelResponse();
           // event.logId is the canonical id — SDK consumers correlate
           // tool.start/end by it and the store entry shares the same id so
           // callers can lookup with store.get(streamId).find(e => e.id === logId).
@@ -529,7 +554,6 @@ export function attachTranscriptRecorder(
         }
 
         case 'tool.end': {
-          if (transcriptBoundaryClosed) return;
           const result = (event.result ?? {}) as Partial<ToolUseLog>;
           const redactedResult =
             typeof result.toolName === 'string'
@@ -553,8 +577,9 @@ export function attachTranscriptRecorder(
             } as ToolUseLog,
           } satisfies StreamLogUpdatePatch;
           if (event.status === TOOL_USE_STATUS.IN_PROGRESS) {
-            writer.update(event.logId, patch);
-            activeToolEntries.set(event.logId, patch.data);
+            if (writer.update(event.logId, patch)) {
+              activeToolEntries.set(event.logId, patch.data);
+            }
           } else {
             writer.settle(event.logId, patch);
             activeToolEntries.delete(event.logId);
@@ -701,7 +726,6 @@ export function attachTranscriptRecorder(
         }
 
         case 'stream.chunk': {
-          if (transcriptBoundaryClosed) return;
           const state = streams.get(event.id);
           if (!state || !state.enabled) return;
           state.pending.push(event.text);
@@ -717,7 +741,6 @@ export function attachTranscriptRecorder(
         }
 
         case 'stream.end': {
-          if (transcriptBoundaryClosed) return;
           const state = streams.get(event.id);
           if (!state) return;
           if (typeof event.finalText === 'string') {
@@ -727,6 +750,9 @@ export function attachTranscriptRecorder(
           state.ended = true;
           flushStream(state, event.id);
           streams.delete(event.id);
+          if (detachedModelResponseIds.delete(event.id)) {
+            writer.settle(event.id, {});
+          }
           return;
         }
 
@@ -855,11 +881,33 @@ export function attachTranscriptRecorder(
       // Workflow calls are deliberately absent: their typed bridge cleanup
       // owns planned/running terminal transitions and settles them afterward.
       transcriptBoundaryClosed = true;
-      pendingModelResponseId = undefined;
+      if (isTerminalOutcomePhase(event.phase)) {
+        for (const id of activeStageIds) {
+          writer.settle(id, {
+            type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+            data: {
+              status: event.phase,
+              endTime: Date.now(),
+            },
+          });
+        }
+        activeStageIds.clear();
+      }
       for (const [id, state] of streams) {
         state.ended = true;
         flushStream(state, id);
+        if (state.messageType === MESSAGE_TYPES.MODEL_RESPONSE) {
+          writer.settle(id, {});
+          detachedModelResponseIds.delete(id);
+          if (pendingModelResponseId === id) pendingModelResponseId = undefined;
+        }
         streams.delete(id);
+      }
+      if (pendingModelResponseId) {
+        // A provider/abort path may close the stream without emitting the
+        // authoritative response.finalized event. Settle the fully flushed,
+        // redacted stream text at the lifecycle boundary.
+        settlePendingModelResponse();
       }
       for (const [id, data] of activeToolEntries) {
         writer.settle(id, {

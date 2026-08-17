@@ -30,6 +30,7 @@ function notFound(): NodeJS.ErrnoException {
 function emptyStorage(): { writes: Map<string, unknown> } {
   const writes = new Map<string, unknown>();
   vi.spyOn(StorageFS, 'readDir').mockResolvedValue([]);
+  vi.spyOn(StorageFS, 'read').mockRejectedValue(notFound());
   vi.spyOn(StorageFS, 'readJson').mockRejectedValue(notFound());
   vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
   vi.spyOn(StorageFS, 'stat').mockRejectedValue(notFound());
@@ -41,10 +42,23 @@ function emptyStorage(): { writes: Map<string, unknown> } {
       typeof content === 'string'
         ? content
         : Buffer.from(content).toString('utf8');
-    writes.set(target, JSON.parse(text));
+    writes.set(target, target.endsWith('.jsonl') ? text : JSON.parse(text));
   };
   vi.spyOn(StorageFS, 'write').mockImplementation(recordWrite);
   vi.spyOn(StorageFS, 'writeAtomic').mockImplementation(recordWrite);
+  vi.spyOn(StorageFS, 'appendFile').mockImplementation(
+    async (target, content) => {
+      const previous = writes.get(target);
+      const text =
+        typeof content === 'string'
+          ? content
+          : Buffer.from(content).toString('utf8');
+      writes.set(
+        target,
+        `${typeof previous === 'string' ? previous : ''}${text}`,
+      );
+    },
+  );
   vi.spyOn(StorageFS, 'delete').mockResolvedValue(undefined);
   return { writes };
 }
@@ -70,9 +84,9 @@ describe('CLI StreamLog persistence (flush on exit is load-bearing)', () => {
     const store = await StreamLogStore.open();
 
     const streamId = 'reviewer@opus#e1';
-    const logFile = path.join(
+    const journalFile = path.join(
       STREAM_LOGS_DIR,
-      `${encodeURIComponent(streamId)}.json`,
+      `${encodeURIComponent(streamId)}.jsonl`,
     );
     appendTranscriptEntry(store, streamId, entry('a', 'first'));
     appendTranscriptEntry(store, streamId, entry('b', 'second'));
@@ -80,13 +94,25 @@ describe('CLI StreamLog persistence (flush on exit is load-bearing)', () => {
     // The SAVE_DEBOUNCE_MS (300ms) timer has not fired in this synchronous
     // window, so nothing is on disk yet — this is exactly the tail the exit
     // path would lose without an explicit flush.
-    expect(storage.writes.has(logFile)).toBe(false);
+    expect(storage.writes.has(journalFile)).toBe(false);
 
     await store.flush();
 
-    expect(storage.writes.get(logFile)).toEqual([
-      expect.objectContaining({ id: 'a', text: 'first' }),
-      expect.objectContaining({ id: 'b', text: 'second' }),
+    const journal = storage.writes.get(journalFile);
+    expect(typeof journal).toBe('string');
+    const records = String(journal)
+      .trimEnd()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(records).toEqual([
+      expect.objectContaining({
+        op: 'append',
+        entry: expect.objectContaining({ id: 'a', text: 'first' }),
+      }),
+      expect.objectContaining({
+        op: 'append',
+        entry: expect.objectContaining({ id: 'b', text: 'second' }),
+      }),
     ]);
   });
 
