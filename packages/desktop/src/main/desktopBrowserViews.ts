@@ -29,7 +29,7 @@ export interface DesktopBrowserViewsOptions {
   /** Reports the page title so the renderer can rename the browser tab. */
   onNavigated(input: { tabId: string; title: string }): void;
   /** Records a URL rejected by the browser-tab policy. */
-  onBlockedExternalUrl?(error: unknown): void;
+  onBlockedExternalUrl(error: unknown): void;
   /** Records a failure after the host has already surfaced the user-facing error. */
   onExternalOpenError(error: unknown): void;
   onError?(error: unknown): void;
@@ -72,17 +72,10 @@ export function createDesktopBrowserViews(
   let attachedTabId: string | undefined;
 
   const reportError = (error: unknown) => options.onError?.(error);
-  const reportBlockedExternalUrl = (error: unknown): void => {
-    if (options.onBlockedExternalUrl) {
-      options.onBlockedExternalUrl(error);
-      return;
-    }
-    reportError(error);
-  };
 
   function openAllowedExternalUrl(url: string): void {
     if (!isHandOffableUrl(url)) {
-      reportBlockedExternalUrl(
+      options.onBlockedExternalUrl(
         new Error(`Blocked external browser URL: ${url}`),
       );
       return;
