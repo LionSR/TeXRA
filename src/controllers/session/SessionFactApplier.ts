@@ -83,7 +83,8 @@ export type SessionFactApplierOptions = {
    * provisional removal barrier and replays buffered facts; rebuilding first
    * would omit the still-live stream because selectable projections hide
    * provisional removals. Hosts without a selectable-stream repair path may
-   * ignore the optional hook and let normal promise settlement retire it.
+   * ignore the optional hook; a retained `active`/`failed` outcome still
+   * retires the barrier through normal promise settlement.
    */
   deleteStream: (
     stream: StreamTabId,

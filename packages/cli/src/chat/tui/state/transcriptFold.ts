@@ -239,6 +239,16 @@ function baseLogEntryFields<R extends ConversationEntry['role']>(
   };
 }
 
+function spillPathOf(entry: StreamLogEntry): string | undefined {
+  const data = entry.data;
+  return typeof data === 'object' &&
+    data !== null &&
+    'spillPath' in data &&
+    typeof data.spillPath === 'string'
+    ? data.spillPath
+    : undefined;
+}
+
 /**
  * Renders a log entry from scratch. `prev` is consulted only for phase
  * count inheritance (a GROUP_END row carries no index/total of its own);
@@ -274,6 +284,7 @@ function renderLogEntryFresh(
       ...baseLogEntryFields(entry, 'tool', ''),
       finalized: entry.settlementSeqNo !== undefined,
       toolUse,
+      ...(toolUse.spillPath ? { spillPath: toolUse.spillPath } : {}),
     };
     return next;
   }
@@ -352,8 +363,10 @@ function renderLogEntryFresh(
   // moves on to a later entry. User/error rows can't change after they
   // appear, so they finalize immediately.
   const finalized = entry.settlementSeqNo !== undefined || role !== 'assistant';
+  const spillPath = spillPathOf(entry);
   const next: ConversationEntry = {
     ...baseLogEntryFields(entry, role, renderedText),
+    ...(spillPath ? { spillPath } : {}),
     ...(assistantTranscript !== undefined &&
     hasIncompleteEmbeddedSubagentFollowup(assistantTranscript)
       ? { pendingEmbeddedSubagentFollowup: true }
