@@ -195,19 +195,22 @@ The in-memory `StreamLog` object and the delta/emission protocol are
 **unchanged** — they are the UI contract. Only the persistence layer beneath
 `StreamLogStore` swaps; the store's public surface stays frozen (the
 store-public-surface ratchet is what makes this a swap, not a rewrite) —
-**with one scheduled, additive exception**: the synchronous `keys()`
+without an additive exception to either ratcheted store: the synchronous `keys()`
 contract returns every stream id from the always-resident summaries map,
 and startup paths iterate it (`SessionState.load`, desktop wiring), so
 freezing it verbatim would force loading all ids before startup and defeat
-the O(visible page) criterion no index can rescue. Stage 2 adds a
-paginated listing surface and migrates **every startup-wide scan** to it
+the O(visible page) criterion no index can rescue. Stage 2 puts the paginated
+listing query on the new database repository, outside `StreamLogStore` and
+`StreamSnapshotStore`; startup owners receive that internal query capability
+without adding a method to either frozen public surface. It migrates
+**every startup-wide scan** to it
 or to indexed queries in the same PR family — not only `SessionState.load`
 and the desktop wiring, but the scans they invoke:
 `SessionStores.sweepLeftoverStreams()` (builds complete sets from
 `streamLogs.keys()`) and `SessionHandle.runRestartRepair()` (iterates the
 full registry; becomes the §3.3 partial-index recovery query). `keys()`
-remains for non-startup callers during the transition and retires with a
-ratchet-baseline shrink, not a widen.
+remains for non-startup callers during the transition and its retirement
+shrinks the store-public-surface baseline; no interim widening is required.
 
 Entry payloads remain opaque JSON in a single column (Tier 3 stays Tier 3);
 this PRD does not normalize entry internals. A separate `text` column feeds
@@ -579,7 +582,11 @@ rows; export compat is not storage compat.
   `SessionFactApplier` (the reducer owns admission; `SessionEventHub`
   stays fan-out only) — collapsing #10702's machinery. Record the identity
   ruling: **stream ids are never reused** — a workflow relaunch mints a
-  fresh id; the deterministic slot maps to the current id.
+  fresh id; the deterministic slot maps to the current id. Tombstones remain
+  indefinitely by default. This stage may add pruning only with a transactional
+  proof that no execution lease, buffered event-plane fact, or resumable
+  execution can still reference the id; if it cannot implement that proof,
+  it does not prune.
 - **Stage 8 — feature payoffs.** FTS5, retention policy, usage analytics.
 
 Ordering with other programs: independent of Waves A–C (different band, no
@@ -728,7 +735,7 @@ artifacts area named below. Each migration stage removes its directory from
 the baseline in the same PR — the same
 only-shrinks discipline as `host-agent-import-baseline`. A Stage-1-strict
 test would fail CI by construction while Stages 2–6 still write files.
-After Stage 6 one **temporary** entry remains alongside the permanent set:
+After Stage 6 one **importer-owned temporary** entry remains alongside the permanent set:
 `*.pre-sqlite-backup`, which the §5 retirement window requires for 90 days
 and two releases — the importer-removal PR deletes the backups and this
 ratchet entry together. Strict (permanent entries only) is that removal
