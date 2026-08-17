@@ -17,7 +17,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared schemas
-import type { LogMessageData } from '@shared/schemas';
+import { MESSAGE_TYPES, type LogMessageData } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 
 // Local imports - formatter helpers
@@ -99,11 +99,10 @@ export function formatBannerContentTemplate(
     ? `${config.contentClass} message-${level}`
     : config.contentClass;
   const spillPath =
-    typeof message.data === 'object' &&
-    message.data !== null &&
-    'spillPath' in message.data &&
-    typeof message.data.spillPath === 'string'
-      ? message.data.spillPath
+    message.messageType === MESSAGE_TYPES.THINKING ||
+    message.messageType === MESSAGE_TYPES.SCRATCHPAD ||
+    message.messageType === MESSAGE_TYPES.MODEL_RESPONSE
+      ? message.data?.spillPath
       : undefined;
   // While still streaming in, skip the markdown parse on every chunk and
   // show the raw text — the banner shell (icon/label/chevron) stays the
