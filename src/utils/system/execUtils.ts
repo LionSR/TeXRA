@@ -34,8 +34,8 @@ type ExecOutput = Extract<StdoutStderrOption, string>;
 const MAX_OUTPUT_LENGTH = 150;
 const FORCE_KILL_DELAY_MS = 5_000;
 
-function normalizeOutput(text: string | null | undefined): string | null {
-  return text?.trim() || null;
+function normalizeOutput(text: string | null | undefined): string {
+  return text?.trim() ?? '';
 }
 
 /**
@@ -124,7 +124,7 @@ function resultFromExecutionError(err: unknown): ExecResult {
 
   return {
     success: false,
-    stdout: null,
+    stdout: '',
     stderr: normalizeOutput(toErrorMessage(err)),
     timedOut: false,
     exitCode: 127,

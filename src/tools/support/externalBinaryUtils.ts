@@ -183,7 +183,7 @@ async function resolveBinary(
       },
     );
     const pathHits = lookupResult.success
-      ? (lookupResult.stdout ?? '').split(/\r?\n/)
+      ? lookupResult.stdout.split(/\r?\n/)
       : [];
 
     for (const hit of pathHits) {
