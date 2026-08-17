@@ -284,11 +284,8 @@ export function attachSessionSignalsAdapter({
     // reaction there, while the shared applier only updates session facts and
     // requests lease-aware eviction. The old TUI ignored status facts here.
     if (fact.type === 'status') return;
-    const sessionStreamId = getSessionFactStreamId(fact);
-    if (sessionStreamId) renderer.captureDispatchGeneration(sessionStreamId);
-    const admitted = applier.handleSessionFact(fact);
-    // A refused attachment (removed stream) must not move the TUI focus.
-    if (admitted && fact.type === 'setActiveStream') {
+    applier.handleSessionFact(fact);
+    if (fact.type === 'setActiveStream') {
       const streamId = fact.payload.streamId;
       if (!streamId) {
         renderer.onActiveStreamChanged('');

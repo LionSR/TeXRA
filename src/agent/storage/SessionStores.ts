@@ -960,7 +960,7 @@ export class SessionStores {
     await Promise.all(
       streams.map(async (stream) => {
         try {
-          await this.deleteAdjacentStreamState(
+          await this.deleteStreamSidecars(
             stream,
             shouldDeleteStream ? () => shouldDeleteStream(stream) : undefined,
           );
