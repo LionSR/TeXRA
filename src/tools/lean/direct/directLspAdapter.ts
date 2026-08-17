@@ -638,9 +638,11 @@ export function createDirectLspLeanAdapter(
               LAKE_PROJECT_ARGS[command],
             );
           } finally {
-            for (const tracked of acquired) {
-              await endUse(tracked.session.workspaceRoot, tracked.session);
-            }
+            await Promise.all(
+              acquired.map((tracked) =>
+                endUse(tracked.session.workspaceRoot, tracked.session),
+              ),
+            );
           }
           return;
         }
