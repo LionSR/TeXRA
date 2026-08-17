@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
-import { ToolDefinitionSchema } from '@model/ToolDefinition';
 import {
   AgentCategory,
   AgentCategorySchema,
   AgentNameSchema,
   OUTPUT_END_TAG,
+  ToolDefinitionSchema,
 } from '@shared/schemas';
 
 /**
