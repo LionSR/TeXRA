@@ -263,6 +263,8 @@ interface StreamState {
   loadFailed?: boolean;
   /** In-flight `ensureLoaded`; deduplicates concurrent calls for one stream. */
   pendingLoad?: Promise<void>;
+  /** Completion of the latest queued non-resident `readEntries` read. */
+  pendingRead?: Promise<void>;
   /** Exact mutation capabilities currently keeping a stream resident. */
   writer?: StreamWriterOwnership;
   /** Unflushed append-only records, retained until their exact prefix lands. */
@@ -530,6 +532,7 @@ export class StreamLogStore {
           s.presentationLeases.size === 0) &&
         !s.loadFailed &&
         s.pendingLoad === undefined &&
+        s.pendingRead === undefined &&
         s.writer === undefined &&
         !s.journalNeedsTailRepair &&
         (s.journalRecords === undefined || s.journalRecords.length === 0) &&
@@ -632,6 +635,8 @@ export class StreamLogStore {
 
   /** Read a transcript once without adding it to the resident set. */
   async readEntries(streamId: StreamTabId): Promise<StreamLogEntry[]> {
+    if (this.pendingReload) await this.pendingReload;
+    if (this.clearing || this.writeTombstones.has(streamId)) return [];
     const resident = this.streams.get(streamId)?.log;
     if (resident) return resident.toJSON();
     if (this.mode.kind === 'ephemeral' || !this.summaries.has(streamId)) {
@@ -1152,9 +1157,11 @@ export class StreamLogStore {
 
     try {
       const state = this.streams.get(streamId);
-      const pending = [state?.pendingLoad, state?.persistenceWork].filter(
-        (work): work is Promise<void> => work !== undefined,
-      );
+      const pending = [
+        state?.pendingLoad,
+        state?.pendingRead,
+        state?.persistenceWork,
+      ].filter((work): work is Promise<void> => work !== undefined);
       if (pending.length > 0) await Promise.allSettled(pending);
       if (this.mode.kind !== 'ephemeral') {
         log.info(`Deleting stream: ${streamId}`);
@@ -1184,7 +1191,7 @@ export class StreamLogStore {
 
     try {
       const pending = [...this.streams.values()].flatMap((state) =>
-        [state.pendingLoad, state.persistenceWork].filter(
+        [state.pendingLoad, state.pendingRead, state.persistenceWork].filter(
           (work): work is Promise<void> => work !== undefined,
         ),
       );
@@ -1541,7 +1548,7 @@ export class StreamLogStore {
       // drain keeps a mid-write stream from straddling the repoint.
       this.writeGeneration += 1;
       const pending = [...this.streams.values()].flatMap((state) =>
-        [state.pendingLoad, state.persistenceWork].filter(
+        [state.pendingLoad, state.pendingRead, state.persistenceWork].filter(
           (work): work is Promise<void> => work !== undefined,
         ),
       );
@@ -1608,7 +1615,7 @@ export class StreamLogStore {
     summaries: ReadonlyMap<StreamTabId, StreamLogSummary>,
   ): void {
     // One clear drops every resident per-stream field (log, leases,
-    // loadFailed, pendingLoad, writer). `summaries`, `releaseRequests`,
+    // loadFailed, pendingLoad, pendingRead, writer). `summaries`, `releaseRequests`,
     // `writeTombstones` does not share the record's lifecycle and is cleared
     // separately.
     this.streams.clear();
@@ -2037,9 +2044,23 @@ export class StreamLogStore {
   private async readPersistedEntries(
     streamId: StreamTabId,
   ): Promise<ParsedPersistedEntries | undefined> {
-    return this.runInPersistenceQueue(streamId, () =>
+    const work = this.runInPersistenceQueue(streamId, () =>
       this.readPersistedEntriesSerialized(streamId),
     );
+    const completion = work.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.ensureStreamState(streamId).pendingRead = completion;
+    try {
+      return await work;
+    } finally {
+      const state = this.streams.get(streamId);
+      if (state?.pendingRead === completion) {
+        state.pendingRead = undefined;
+        this.pruneStreamState(streamId);
+      }
+    }
   }
 
   private async readPersistedEntriesSerialized(

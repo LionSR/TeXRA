@@ -1638,6 +1638,29 @@ describe('StreamLogStore load', () => {
     expect((await StreamLogStore.open()).has('alpha')).toBe(false);
   });
 
+  it('lets delete drain a direct legacy read before removing its seed journal', async () => {
+    const readStarted = createDeferred();
+    const releaseRead = createDeferred();
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: { alpha: summary(100, 100) },
+      onLogRead: async () => {
+        readStarted.resolve();
+        await releaseRead.promise;
+      },
+    });
+    const store = await StreamLogStore.open();
+
+    const read = store.readEntries('alpha');
+    await readStarted.promise;
+    const deletion = store.delete('alpha');
+    releaseRead.resolve();
+    await Promise.all([read, deletion]);
+
+    expect(store.has('alpha')).toBe(false);
+    expect((await StreamLogStore.open()).has('alpha')).toBe(false);
+  });
+
   it('flushes unrelated dirty streams when delete cancels a pending save', async () => {
     const storage = mockStorage({
       logs: {},
