@@ -16,10 +16,9 @@ import { z } from 'zod';
 import { ExecutionIdSchema } from './identifiers';
 import { formatZodIssuesMessage } from './toolResult';
 import {
-  TokenUsageStatsBaseSchema,
+  TokenUsageStatsSchema,
   UsageRouteSchema,
   isEmptyUsage,
-  withLegacyUsageRoute,
   type TokenUsageStats,
 } from './usage';
 
@@ -57,22 +56,6 @@ const FiniteNumber = z.coerce
   .number()
   .transform((n) => (Number.isFinite(n) ? n : 0));
 
-function isNumericUsageField(schema: z.ZodType): boolean {
-  const inner = schema instanceof z.ZodOptional ? schema.unwrap() : schema;
-  return inner instanceof z.ZodNumber;
-}
-
-const numericUsageParsingShape = Object.fromEntries(
-  Object.entries(TokenUsageStatsBaseSchema.shape)
-    .filter(([, schema]) => isNumericUsageField(schema))
-    .map(([key, schema]) => [
-      key,
-      schema instanceof z.ZodOptional
-        ? FiniteNumber.optional().prefault(0)
-        : FiniteNumber,
-    ]),
-);
-
 /**
  * Parsing schema with safe number coercion.
  *
@@ -81,14 +64,16 @@ const numericUsageParsingShape = Object.fromEntries(
  * loudly on failure, instead of defaulting to zero. Never wrap this in
  * `.catch()` for persisted/cost data — see `parseUsageData`'s docs and #7464.
  */
-export const TokenUsageStatsParsingBaseSchema = withLegacyUsageRoute(
-  z.object({
-    ...numericUsageParsingShape,
-    usageRoute: UsageRouteSchema.optional(),
-    // The numeric fields are derived from `TokenUsageStatsBaseSchema.shape` above;
-    // TypeScript cannot recover the required keys through `Object.fromEntries`.
-  }),
-) as z.ZodType<TokenUsageStats>;
+export const TokenUsageStatsParsingBaseSchema = TokenUsageStatsSchema.extend({
+  inputTokens: FiniteNumber,
+  outputTokens: FiniteNumber,
+  cost: FiniteNumber,
+  cacheReadInputTokens: FiniteNumber.optional().prefault(0),
+  cacheMissInputTokens: FiniteNumber.optional().prefault(0),
+  cacheCreationInputTokens: FiniteNumber.optional().prefault(0),
+  reasoningTokens: FiniteNumber.optional().prefault(0),
+  usageRoute: UsageRouteSchema.optional(),
+});
 
 export interface ParsedUsageData {
   /** Successfully parsed, non-empty per-run usage. */
