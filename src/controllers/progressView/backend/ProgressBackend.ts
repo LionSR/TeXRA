@@ -175,8 +175,8 @@ export class ProgressBackend {
     });
     this.hasPendingPermissions = ui.hasPendingPermissions;
     this.factApplier = new SessionFactApplier(this.state, this.renderer, {
-      deleteStream: (stream, expectedIncarnation) =>
-        this.deleteStream(stream, expectedIncarnation),
+      deleteStream: (stream, expectedIncarnation, beforeRetainedRepair) =>
+        this.deleteStream(stream, expectedIncarnation, beforeRetainedRepair),
     });
     this.setApprovalBypassState = ui.setApprovalBypassState;
   }
@@ -464,6 +464,7 @@ export class ProgressBackend {
   async deleteStream(
     stream: StreamTabId,
     expectedIncarnation?: number,
+    beforeRetainedRepair?: (outcome: 'active' | 'failed') => void,
   ): Promise<DeleteStreamResult | undefined> {
     const wasActive = this.presentation.activeStream === stream;
     const activationGeneration = this.activationGeneration;
@@ -527,6 +528,24 @@ export class ProgressBackend {
     }
     releaseDeletionClaim();
 
+    if (commandRemoval) {
+      // Retire a retained command-owned tombstone before rebuilding the tab
+      // rail. selectableStreamNames() deliberately hides provisional
+      // removals, so repairing presentation first would omit the stream that
+      // durable cleanup just reported as still live.
+      this.factApplier.completeCommandRemoval(
+        stream,
+        commandRemoval.incarnation,
+        retained,
+        commandRemoval.created,
+      );
+    } else if (retained === 'active' || retained === 'failed') {
+      // A fact-path removal owns its barrier in SessionFactApplier. Let it
+      // retire and replay before this retained-state rebuild enumerates the
+      // selectable rail, which deliberately hides provisional removals.
+      beforeRetainedRepair?.(retained);
+    }
+
     if (retained === 'active' || retained === 'failed') {
       // Best-effort presentation repair, each failure isolated so a broken
       // rebuild cannot suppress the retention notification and neither can
@@ -554,14 +573,6 @@ export class ProgressBackend {
       }
     }
 
-    if (commandRemoval) {
-      this.factApplier.completeCommandRemoval(
-        stream,
-        commandRemoval.incarnation,
-        retained,
-        commandRemoval.created,
-      );
-    }
     return retained;
   }
 

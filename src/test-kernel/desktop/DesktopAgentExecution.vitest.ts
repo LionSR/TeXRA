@@ -3586,6 +3586,83 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
+    it('does not start a process fallback for a newer presentation deletion claim', async () => {
+      const streamId = 'reclaimed-presentation-delete' as StreamTabId;
+      const owner = await createProcessOwner({
+        streamId,
+        executionId: 'ec00f9' as ExecutionId,
+      });
+      seedStreamStatusForTest(owner.processSession.status, streamId, {
+        phase: STREAM_PHASE.COMPLETED,
+      });
+      const firstRelease = createDeferred();
+      const secondRelease = createDeferred();
+      const waitForRelease = vi
+        .spyOn(owner.sessionStores, 'waitForOwnedExecutionRelease')
+        .mockReturnValueOnce(firstRelease.promise)
+        .mockReturnValueOnce(secondRelease.promise);
+      const processFallback = vi.spyOn(
+        owner.sessionStores,
+        'deleteStreamAfterOwnedExecutionRelease',
+      );
+
+      try {
+        emitSessionFact(owner.bridgeA, 'removeStream', {
+          streamId,
+        });
+        await vi.waitFor(() =>
+          expect(owner.sessionStores.hasStreamDeletionClaim(streamId)).toBe(
+            true,
+          ),
+        );
+        // Let the process fallback observe the presentation's first claim and
+        // retire its own pending-removal marker before the identity is
+        // legitimately re-claimed.
+        await settleProgressEvents();
+
+        const freshExecutionId = 'ec00fa' as ExecutionId;
+        snapshotFacts(owner.progressSnapshotStore).setRunStart({
+          streamId,
+          executionId: freshExecutionId,
+          identity: {
+            kind: 'multiAgentWorkflow',
+            workflowName: 'reclaimed-workflow',
+          },
+        });
+        const { handle: freshHandle } = owner.createHandle({
+          executionId: freshExecutionId,
+        });
+        owner.processSession.executions.trackAgentExecution(freshHandle, {
+          status: STREAM_PHASE.COMPLETED,
+        });
+        activateStream(owner.bridgeA, streamId);
+        firstRelease.resolve();
+        await vi.waitFor(() =>
+          expect(owner.sessionStores.hasStreamDeletionClaim(streamId)).toBe(
+            false,
+          ),
+        );
+        expect(waitForRelease).toHaveBeenCalledTimes(1);
+
+        emitSessionFact(owner.bridgeA, 'removeStream', {
+          streamId,
+        });
+        await vi.waitFor(() =>
+          expect(owner.sessionStores.hasStreamDeletionClaim(streamId)).toBe(
+            true,
+          ),
+        );
+        await vi.waitFor(() => expect(waitForRelease).toHaveBeenCalledTimes(2));
+        await settleProgressEvents();
+
+        expect(processFallback).not.toHaveBeenCalled();
+        expect(owner.processSession.transcripts.has(streamId)).toBe(true);
+      } finally {
+        firstRelease.resolve();
+        secondRelease.resolve();
+      }
+    });
+
     it('reattaches while an overlapping headless deletion settles as failed', async () => {
       const streamId = 'headless-remove-owner' as StreamTabId;
       const failedStreamId = 'headless-remove-failure' as StreamTabId;

@@ -58,7 +58,7 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
         // Check in the following microtask so the process fallback runs only
         // when no presentation owns the removal.
         queueMicrotask(() => {
-          if (stores.hasStreamDeletionClaim(streamId, expectedIncarnation)) {
+          if (stores.hasStreamDeletionClaim(streamId)) {
             if (pendingRemovals.get(streamId) === expectedIncarnation) {
               pendingRemovals.delete(streamId);
             }
