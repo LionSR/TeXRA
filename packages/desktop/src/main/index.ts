@@ -511,7 +511,6 @@ function createWindow(options: {
   window.webContents.on('will-prevent-unload', (event) => {
     if (isFatalDesktopShutdownRequested()) {
       pendingWorkspaceRelaunch = undefined;
-      continueQuitAfterWindowClose = undefined;
       event.preventDefault();
       return;
     }
@@ -574,7 +573,9 @@ function createWindow(options: {
     signInForRemoteAgentCatalog,
     showInfoMessage,
     showWarningMessage,
-    showErrorMessage,
+    showErrorMessage: async (message) => {
+      await showErrorMessage(message).catch(reportBackgroundError);
+    },
     // Recompute the onboarding funnel after a run completes so a user's first
     // successful run leaves the setup card without waiting for a restart
     // (the run lifecycle has already persisted firstRunDone). Mirrors the
@@ -1003,6 +1004,7 @@ function createWindow(options: {
       }),
     onError: reportAsyncError,
     onBlockedExternalUrl: reportBackgroundError,
+    onExternalOpenError: reportBackgroundError,
   });
   const workspaceIpc = createDesktopWorkspaceIpc(
     { postToRenderer: postToRendererIfAlive },
