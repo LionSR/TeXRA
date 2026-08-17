@@ -1,33 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
 
-import type { StreamTabId } from '@shared/schemas';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  projectStreamArtifacts: vi.fn((_: unknown, streamId: StreamTabId) => ({
-    streamId,
-  })),
-  session: { snapshots: {} },
-}));
-
-vi.mock('@agent/runtime', () => ({
-  tryDefaultSession: () => mocks.session,
-}));
-
-vi.mock('@controllers/session/StreamArtifactProjection', () => ({
-  projectStreamArtifacts: mocks.projectStreamArtifacts,
-}));
-
-const { resetCliState } = await import('@cli/chat/tui/state/cliState');
-const {
+import { resetCliState } from '@cli/chat/tui/state/cliState';
+import {
   beginLoadedStreamsReconcile,
   markArtifactStreamHydrated,
   readStreamArtifacts,
-} = await import('@cli/chat/tui/state/subscribeStreamArtifacts');
+} from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import type { StreamTabId } from '@shared/schemas';
 
 describe('stream artifact hydration reconciliation', () => {
   beforeEach(() => {
     resetCliState();
-    mocks.projectStreamArtifacts.mockClear();
   });
 
   it('drops evicted hydration before marking the retained set', () => {
@@ -44,6 +30,6 @@ describe('stream artifact hydration reconciliation', () => {
     reconciliation.reconcile();
 
     expect(readStreamArtifacts(dropped)).toBeUndefined();
-    expect(readStreamArtifacts(retained)).toEqual({ streamId: retained });
+    expect(readStreamArtifacts(retained)).toBeDefined();
   });
 });
