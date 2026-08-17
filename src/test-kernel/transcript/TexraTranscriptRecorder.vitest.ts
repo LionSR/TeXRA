@@ -13,6 +13,7 @@ import {
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import {
   cleanupTempDirs,
   createTempDirPlatform,
@@ -633,6 +634,8 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
     const store = StreamLogStore.ephemeral('test');
     store.ensureStream(streamId);
     const writes: Array<{ path: string; content: string }> = [];
+    const firstToolWrite = createDeferred();
+    const firstToolOutput = 'first tool snapshot'.repeat(4_000);
     const recorder = attachTranscriptRecorder(
       trace,
       store.acquireWriter(streamId, streamId),
@@ -640,6 +643,7 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
         pathFor: (id) => `executions/test/toolOutput/${id}.txt`,
         write: async (path, content) => {
           writes.push({ path, content });
+          if (content === firstToolOutput) await firstToolWrite.promise;
         },
       },
     );
@@ -655,9 +659,20 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
     });
     trace.toolEnd({
       logId: 'tool:spill',
+      status: TOOL_USE_STATUS.IN_PROGRESS,
+      result: { toolName: 'read', output: firstToolOutput },
+    });
+    trace.toolEnd({
+      logId: 'tool:spill',
       status: TOOL_USE_STATUS.COMPLETED,
       result: { toolName: 'read', output: toolOutput },
     });
+    await vi.waitFor(() =>
+      expect(
+        writes.filter(({ path }) => path.endsWith('/tool:spill.txt')),
+      ).toHaveLength(1),
+    );
+    firstToolWrite.resolve();
     recorder.flushPending();
     await recorder.flushSpills();
 
@@ -667,16 +682,16 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
       ?.getRange(0)
       .find((candidate) => candidate.id === output.id);
     expect(modelEntry?.text?.length).toBeLessThan(50 * 1024);
-    expect(modelEntry?.text).toContain('full output is stored separately');
+    expect(modelEntry?.text).toContain('retained in run artifacts');
     expect(dataOf(modelEntry).spillPath).toBe(
       `executions/test/toolOutput/${output.id}.txt`,
     );
     const toolData = ToolUseLogSchema.parse(dataOf(entry));
-    expect(toolData.output).toContain('full output is stored separately');
+    expect(toolData.output).toContain('retained in run artifacts');
     expect(
       new TextEncoder().encode(toolData.output as string).length,
     ).toBeLessThanOrEqual(50 * 1024);
-    expect(toolData.outputSpillPath).toBe(
+    expect(toolData.spillPath).toBe(
       'executions/test/toolOutput/tool:spill.txt',
     );
     expect(writes).toEqual([
@@ -684,6 +699,10 @@ describe('attachTranscriptRecorder timer failure boundary', () => {
         path: `executions/test/toolOutput/${output.id}.txt`,
         content: expect.not.stringContaining('super-secret-value'),
       }),
+      {
+        path: 'executions/test/toolOutput/tool:spill.txt',
+        content: firstToolOutput,
+      },
       {
         path: 'executions/test/toolOutput/tool:spill.txt',
         content: toolOutput,

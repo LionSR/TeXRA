@@ -66,7 +66,7 @@ const MAX_TRANSCRIPT_ENTRY_BYTES = 50 * 1024;
 const MAX_TRANSCRIPT_ENTRY_LINES = 2_000;
 const TRANSCRIPT_PREVIEW_LINES = 40;
 const TRANSCRIPT_TRUNCATION_MARKER =
-  '\n\n… output truncated; full output is stored separately …\n\n';
+  '\n\n… output truncated in transcript; retained in run artifacts …\n\n';
 const UTF8_ENCODER = new TextEncoder();
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
@@ -262,6 +262,7 @@ export function attachTranscriptRecorder(
   let pendingFailure: unknown;
   let pendingSpillFailure: unknown;
   const pendingSpills = new Set<Promise<void>>();
+  const spillTails = new Map<string, Promise<void>>();
   const queueSpill = (
     id: string,
     text: string,
@@ -269,12 +270,20 @@ export function attachTranscriptRecorder(
   ): string | undefined => {
     if (preview === text || !spillWriter) return undefined;
     const path = spillWriter.pathFor(id);
-    const pending = spillWriter
-      .write(path, text)
+    const previous = spillTails.get(path) ?? Promise.resolve();
+    const pending = previous
+      .then(
+        () => spillWriter.write(path, text),
+        () => spillWriter.write(path, text),
+      )
       .catch((error: unknown) => {
         pendingSpillFailure ??= error;
       })
-      .finally(() => pendingSpills.delete(pending));
+      .finally(() => {
+        pendingSpills.delete(pending);
+        if (spillTails.get(path) === pending) spillTails.delete(path);
+      });
+    spillTails.set(path, pending);
     pendingSpills.add(pending);
     return path;
   };
@@ -289,7 +298,7 @@ export function attachTranscriptRecorder(
     return {
       ...result,
       output: preview,
-      ...(spillPath && { outputSpillPath: spillPath }),
+      ...(spillPath && { spillPath }),
     } as ToolUseLog;
   };
   const recordFailure = (error: unknown): void => {

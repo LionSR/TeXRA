@@ -117,9 +117,7 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
     toolName,
     errorText,
     outputText,
-    ...(validated.outputSpillPath
-      ? { outputSpillPath: validated.outputSpillPath }
-      : {}),
+    ...(validated.spillPath ? { spillPath: validated.spillPath } : {}),
     ...(exitCode !== undefined ? { exitCode } : {}),
     userInstructionText,
     input: validated.input,
