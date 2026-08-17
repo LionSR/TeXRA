@@ -5,7 +5,6 @@ import {
 } from '@agent/runtime';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import type { RequestOpenFilePayload } from '@shared/schemas';
-import { getDefaultUnavailableToolNames } from '@tools/registry';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -32,7 +31,10 @@ export async function launchDesktopAgent(
   context: DesktopAgentLaunchContext,
   options: DesktopAgentLaunchOptions = {},
 ): Promise<void> {
-  const { runAgent } = await import('@agent/runtime');
+  const [{ runAgent }, { getDefaultUnavailableToolNames }] = await Promise.all([
+    import('@agent/runtime'),
+    import('@tools/registry'),
+  ]);
   await runAgent(request, {
     session: context.session,
     runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
