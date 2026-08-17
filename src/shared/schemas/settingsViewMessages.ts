@@ -231,10 +231,18 @@ const AgentSelectionItemSchema = AgentMetadataBaseSchema.extend({
 });
 export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
 
+/** A custom-agent YAML file the registry found but could not load. */
+const AgentScanIssueSchema = z.object({
+  path: z.string(),
+  message: z.string(),
+});
+export type AgentScanIssue = z.infer<typeof AgentScanIssueSchema>;
+
 /** Outbound: backend → frontend agent selection data */
 const UpdateAgentSelectionMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION),
   agents: z.record(AgentCategorySchema, z.array(AgentSelectionItemSchema)),
+  customAgentIssues: z.array(AgentScanIssueSchema).prefault([]),
 });
 export type UpdateAgentSelectionMessage = z.infer<
   typeof UpdateAgentSelectionMessageSchema
