@@ -81,13 +81,10 @@ function hydratedTranscript(
   const entries = slice.entries.map((entry): ConversationEntry => {
     if (!entry.spillPath) return entry;
     const spill = spills.get(entry.spillPath);
-    const hydratedSpillPath =
-      spill?.kind === 'loaded' ? entry.spillPath : undefined;
     if (spill === undefined) return { ...entry, spillPath: undefined };
     if (entry.role === 'tool') {
       return {
         ...entry,
-        spillPath: hydratedSpillPath,
         toolUse: {
           ...entry.toolUse,
           outputText:
@@ -99,7 +96,6 @@ function hydratedTranscript(
     }
     return {
       ...entry,
-      spillPath: hydratedSpillPath,
       text:
         spill.kind === 'loaded'
           ? safeTerminalText(
