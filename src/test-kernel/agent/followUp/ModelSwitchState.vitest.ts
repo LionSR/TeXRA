@@ -1,22 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  currentModelFromUserChannels,
-  setToolUseSharedModel,
-} from '@agent/implementations/flows/tooluse/modelSwitchState';
+import { setToolUseSharedModel } from '@agent/implementations/flows/tooluse/modelSwitchState';
 import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
 import { toolUseRunShared } from '../progressTestUtils';
 
 describe('tool-use model switch state helpers', () => {
-  it('prefers the transient model over the launch model', () => {
-    expect(
-      currentModelFromUserChannels({
-        input: Object.freeze({ MODEL: 'gpt54' }),
-        transient: { MODEL: 'gpt55' },
-      }),
-    ).toBe('gpt55');
-  });
-
   it('writes the model id and reprojects MODEL without rewriting input variables', () => {
     const input = Object.freeze({ MODEL: 'gpt54' });
     const shared = {

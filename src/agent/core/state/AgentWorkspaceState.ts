@@ -6,9 +6,7 @@ import type { ServerToolContentBlock } from '@agent/types/ServerTools';
 import {
   FileLocationSchema,
   LineCountSchema,
-  PlanSchema,
   planSummaryLine,
-  TodoItemSchema,
   type EditRecord,
   type FileLocation,
   type LineChanges,
@@ -17,7 +15,6 @@ import {
   type WorkPlanSnapshot,
   WorkPlanSnapshotSchema,
 } from '@shared/schemas';
-import { isObject } from '@utils/core';
 import { pathToLocation } from '@utils/files/fileLocation';
 
 /** Schema for thinking blocks (used by model handlers). */
@@ -324,71 +321,15 @@ const AgentWorkspaceSnapshotFieldsSchema = z.object({
 });
 
 /**
- * Strict canonical shape of an `AgentWorkspaceState` snapshot — the "current
- * format" arm of `AgentWorkspaceStateSnapshotSchema`, with no legacy fallback.
- * Exported for downstream code (e.g. per-round node prep, or a
- * `PersistedFlow`'s repeated defense-in-depth revalidation) that only ever
- * handles a snapshot already produced by `toSnapshot()`/`fromSnapshot()` and
- * must never re-run the legacy-migration arms in `AgentWorkspaceStateSnapshotSchema`.
- * The one-time migration from a persisted/legacy shape belongs solely at the
- * hydration boundary (see `AgentWorkspaceState.fromSnapshot`).
+ * Canonical shape of an `AgentWorkspaceState` snapshot. Persisted workspace
+ * state has one supported format; an older record fails its resume parse.
  */
-export const AgentWorkspaceCurrentSnapshotSchema = z
+export const AgentWorkspaceStateSnapshotSchema = z
   .looseObject({ workPlan: z.unknown() })
   .refine(
     (record) => Object.hasOwn(record, 'workPlan') && record.workPlan != null,
   )
   .transform((record) => AgentWorkspaceSnapshotFieldsSchema.parse(record));
-
-const LegacyTodosSnapshotValueSchema = z.union([
-  z.undefined(),
-  z.null().transform(() => undefined),
-  z.array(TodoItemSchema),
-  z
-    .looseObject({ todos: z.unknown().optional() })
-    .refine((record) => Object.hasOwn(record, 'todos'))
-    .transform(({ todos }) => todos),
-]);
-
-const LegacyPlanSnapshotValueSchema = z.union([
-  z.undefined(),
-  z
-    .looseObject({ plan: z.unknown().optional() })
-    .refine((record) => Object.hasOwn(record, 'plan'))
-    .transform(({ plan }) => plan),
-  z.unknown(),
-]);
-
-const AgentWorkspaceLegacySnapshotSchema = z
-  .looseObject({
-    todos: LegacyTodosSnapshotValueSchema.optional(),
-    plan: LegacyPlanSnapshotValueSchema.optional(),
-  })
-  .refine(
-    (record) => !Object.hasOwn(record, 'workPlan') || record.workPlan == null,
-  )
-  .transform((record) => {
-    const plan = PlanSchema.nullable().prefault(null).parse(record.plan);
-    return AgentWorkspaceSnapshotFieldsSchema.parse({
-      ...record,
-      workPlan: {
-        todos: record.todos,
-        plan,
-        planSummary: plan ? planSummaryLine(plan.objective) : null,
-      },
-    });
-  });
-
-const EmptyAgentWorkspaceSnapshotSchema = z
-  .unknown()
-  .refine((input) => !isObject(input))
-  .transform(() => AgentWorkspaceSnapshotFieldsSchema.parse({ workPlan: {} }));
-
-export const AgentWorkspaceStateSnapshotSchema = z.union([
-  AgentWorkspaceCurrentSnapshotSchema,
-  AgentWorkspaceLegacySnapshotSchema,
-  EmptyAgentWorkspaceSnapshotSchema,
-]);
 
 export type AgentWorkspaceSnapshot = z.output<
   typeof AgentWorkspaceStateSnapshotSchema
@@ -421,13 +362,12 @@ export class AgentWorkspaceState {
    * (e.g., constructing initial ReflectionFlowShared).
    */
   static emptySnapshot(): AgentWorkspaceSnapshot {
-    return AgentWorkspaceStateSnapshotSchema.parse({});
+    return AgentWorkspaceStateSnapshotSchema.parse({ workPlan: {} });
   }
 
   /**
-   * Boundary hydration: accepts an untrusted/possibly-legacy persisted
-   * snapshot (union with the `todos`/`plan` fallback arm — see
-   * `AgentWorkspaceStateSnapshotSchema`). Call this exactly once, where a
+   * Boundary hydration: validates an untrusted persisted snapshot. Call this
+   * exactly once, where a
    * persisted snapshot first hydrates into a session (session-init resume in
    * `ToolUsePrepareNode`, a reflection flow's resume read in
    * `runReflectionFlow`, or `runToolUseFlow`'s tool-use resume boundary
@@ -436,7 +376,7 @@ export class AgentWorkspaceState {
    * is already past `ToolUsePrepareNode` never runs that node's own
    * hydration). Everywhere else — per-round node prep re-deriving state from
    * `toSnapshot()` output already produced this run — use
-   * `fromCanonicalSnapshot` instead so the legacy arm is never re-evaluated.
+   * `fromCanonicalSnapshot` instead.
    */
   static fromSnapshot(snapshot: unknown): AgentWorkspaceState {
     const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);
@@ -445,16 +385,14 @@ export class AgentWorkspaceState {
 
   /**
    * Rebuild from a snapshot already known to be canonical (e.g. round-tripped
-   * through this class's own `toSnapshot()`). Validates only the strict
-   * canonical shape — never the legacy `todos`/`plan` fallback arm — so
+   * through this class's own `toSnapshot()`). Validates the canonical shape so
    * repeated per-round calls (tool-use `ToolUseCycleNode`, reflection
-   * `ResponseCycleNode`/`MediaExtractionNode`) don't pay for, or silently
-   * accept, a migration that can only ever apply at first hydration.
+   * `ResponseCycleNode`/`MediaExtractionNode`) have the same validation path.
    */
   static fromCanonicalSnapshot(
     snapshot: AgentWorkspaceSnapshot,
   ): AgentWorkspaceState {
-    const parsed = AgentWorkspaceCurrentSnapshotSchema.parse(snapshot);
+    const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);
     return AgentWorkspaceState.fromParsedFields(parsed);
   }
 
