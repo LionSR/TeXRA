@@ -8,13 +8,13 @@ import {
   requestBashApproval,
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
+import { TERMINAL_OUTPUT_MAX_CHARS } from '@utils/core/terminalOutput';
 
 // Local file imports
 import { defineTool } from '../core/define';
 import { getSetupPlatform } from './platform';
 
 const DEFAULT_TIMEOUT_MS = 300_000;
-const TERMINAL_CAPTURE_MAX_CHARS = 12_000;
 const TERMINAL_NAME_PREFIX = 'TeXRA: ';
 
 const SendToTerminalInputSchema = z.strictObject({
@@ -55,7 +55,7 @@ export class SendToTerminalTool extends defineTool({
     desktop: { available: false, reason: 'Requires a VS Code terminal.' },
   },
   requiresApproval: true,
-  description: `Run a command in a VS Code integrated terminal: use this instead of \`bash\` when the command needs a real TTY: \`sudo\` password prompts, package managers that ask for confirmation (e.g. \`brew install --cask\`), or anything that drops the user into an interactive UI. Approval reuses the regular \`bash\` approval dialog. Returns an exit code and an ANSI-stripped output tail of up to ${TERMINAL_CAPTURE_MAX_CHARS} characters when shell integration is active (bash/zsh/pwsh/fish in VS Code-launched terminals); returns an undefined exit code with empty output otherwise: re-probe with \`verify_setup\` to confirm what actually happened. Do NOT use this to bypass \`bash\` approvals on commands that would work in \`bash\`.`,
+  description: `Run a command in a VS Code integrated terminal: use this instead of \`bash\` when the command needs a real TTY: \`sudo\` password prompts, package managers that ask for confirmation (e.g. \`brew install --cask\`), or anything that drops the user into an interactive UI. Approval reuses the regular \`bash\` approval dialog. Returns an exit code and an ANSI-stripped output tail of up to ${TERMINAL_OUTPUT_MAX_CHARS} characters when shell integration is active (bash/zsh/pwsh/fish in VS Code-launched terminals); returns an undefined exit code with empty output otherwise: re-probe with \`verify_setup\` to confirm what actually happened. Do NOT use this to bypass \`bash\` approvals on commands that would work in \`bash\`.`,
   schema: SendToTerminalInputSchema,
 }) {
   protected async execute(input: SendToTerminalInput): Promise<ToolResult> {
