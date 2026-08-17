@@ -12,9 +12,10 @@ import type { ProviderMessage } from './ProviderMessage';
  * drift from the base class: adding, renaming, or retyping a member there is
  * automatically reflected here, and a base-class signature change breaks
  * exactly one place (the class) instead of two. Only members consumers
- * actually call through this port are picked — internal-only members (e.g.
- * `computePrice`, `supportsReasoningLevelOverride`) are reached through the
- * concrete class instead and are intentionally omitted.
+ * actually call through this port are picked. Omitted members are reached
+ * through the concrete class instead: this includes internal-only helpers
+ * such as `computePrice` and `supportsReasoningLevelOverride`, plus
+ * `extractResponse`, which `helperModel` calls on its concrete handler.
  *
  * `createBatchedToolUseFollowUpMessages` is the one thing this port expresses
  * that the class doesn't: it's an interface-only optional extension that
