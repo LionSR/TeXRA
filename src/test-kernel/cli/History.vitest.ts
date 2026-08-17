@@ -1128,6 +1128,25 @@ describe('CLI history runtime', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('reports a sidecar cleanup failure before deleting execution storage', async () => {
+    const executionId = 'a1' as ExecutionId;
+    const streamId = 'chat@deepseek#a1' as StreamTabId;
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-05-18T08:00:00.000Z',
+      streamId,
+    });
+
+    await expect(
+      cleanupExecutionAdjacentStreamState(executionId, {
+        deleteAdjacentStreamState: async () => {
+          throw new Error('snapshot permission denied');
+        },
+      }),
+    ).rejects.toThrow(
+      "Execution a1's transcript/snapshot sidecars could not be cleaned up: snapshot permission denied",
+    );
+  });
+
   it('validates execution id shape before command handlers use storage', () => {
     expect(parseCliHistoryId('abc123')).toBe('abc123');
     expect(parseCliHistoryId('../abc123')).toBeUndefined();

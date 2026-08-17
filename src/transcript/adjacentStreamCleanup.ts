@@ -9,20 +9,17 @@
  * or parses the transcript registry, so unrelated corruption and history size
  * cannot block deletion of the requested execution.
  *
- * Cleanup is best-effort. Malformed execution metadata is reported instead of
- * silently treated as absent, but no cleanup failure blocks deletion of the
- * execution directory; that was the behavior before adjacent cleanup existed.
+ * Cleanup must complete before the execution directory is removed. This keeps
+ * a failed sidecar deletion visible to callers instead of reporting a clean
+ * history deletion while leaving transcript or snapshot state behind.
  */
 import { getExecutionStore } from '@agent/storage';
-import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { deletePersistedStreamLog } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 import type { StagedStreamSnapshotDeletion } from './StagedDeletionCoordinator';
-
-const log = createLog('AdjacentStreamCleanup');
 
 /** The single capability history deletion needs from a live session owner. */
 export interface AdjacentStreamCleanup {
@@ -80,7 +77,6 @@ export function resolveAdjacentStreamCleanup(
 /**
  * Resolve an execution's stamped stream and delete its adjacent state.
  * Intended for `deleteExecution`/`deleteAllExecutions` `beforeDelete` hooks.
- * Never throws: failure is reported and the execution deletion proceeds.
  */
 export async function cleanupExecutionAdjacentStreamState(
   executionId: ExecutionId,
@@ -91,9 +87,9 @@ export async function cleanupExecutionAdjacentStreamState(
     if (!meta?.streamId) return;
     await cleanup.deleteAdjacentStreamState(meta.streamId);
   } catch (error) {
-    log.warn(
-      `Execution ${executionId} was deleted, but its transcript/snapshot sidecars could not be cleaned up: ${toErrorMessage(error)}`,
-      { data: error },
+    throw new Error(
+      `Execution ${executionId}'s transcript/snapshot sidecars could not be cleaned up: ${toErrorMessage(error)}`,
+      { cause: error },
     );
   }
 }
