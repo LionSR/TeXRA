@@ -281,7 +281,6 @@ class ResponseProcessNode<C> extends BaseNode<
         );
       }
       logger.debug(`Stop reason: ${stopReason}`);
-      logger.debug(`Token usage: ${JSON.stringify(normalizedUsage)}`);
 
       if (thinkingContent && !useStreaming) {
         logger.info(thinkingContent, {
