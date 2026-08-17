@@ -944,7 +944,7 @@ function createWindow(options: {
       return { commits: [] as string[], isGitRepo: false };
     }
     return readRecentCommits(workspacePath, DESKTOP_RECENT_COMMIT_LIMIT, {
-      onError: reportAsyncError,
+      onError: reportBackgroundError,
     });
   };
   const getEnvironmentSummary = async () => {
@@ -954,7 +954,7 @@ function createWindow(options: {
     }
     return (
       (await readGitEnvironmentSummary(workspacePath, {
-        onError: reportAsyncError,
+        onError: reportBackgroundError,
       })) ?? EMPTY_DESKTOP_ENVIRONMENT_SUMMARY
     );
   };
