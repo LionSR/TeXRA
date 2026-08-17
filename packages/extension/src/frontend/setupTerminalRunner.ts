@@ -11,13 +11,11 @@
  */
 
 // Third-party imports
+import stripAnsi from 'strip-ansi';
 import * as vscode from 'vscode';
 
 // Local imports - common
-import {
-  TERMINAL_OUTPUT_MAX_CHARS,
-  truncateTerminalOutput,
-} from '@common/terminalOutput';
+import { TERMINAL_OUTPUT_MAX_CHARS } from '@common/terminalOutput';
 // Local imports - hosts
 import type { TerminalRunRequest, TerminalRunResult } from '@hosts/uiHosts';
 
@@ -117,6 +115,14 @@ async function captureExecution(
     output: truncateTerminalOutput(output),
     timedOut: result.timedOut,
   };
+}
+
+/** Strip ANSI control sequences and retain the captured output tail. */
+function truncateTerminalOutput(output: string): string {
+  const stripped = stripAnsi(output);
+  return stripped.length > TERMINAL_OUTPUT_MAX_CHARS
+    ? stripped.slice(-TERMINAL_OUTPUT_MAX_CHARS)
+    : stripped;
 }
 
 /**
