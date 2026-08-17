@@ -294,7 +294,6 @@ export type DeleteExecutionResult =
   | {
       readonly status: 'active';
       readonly executionId: ExecutionId;
-      readonly heartbeatAt: number;
     };
 
 export interface DeleteAllExecutionsResult {
@@ -336,7 +335,7 @@ export async function deleteExecution(
     },
   );
   if (guarded.status === 'active') {
-    return { status: 'active', executionId, heartbeatAt: guarded.heartbeatAt };
+    return { status: 'active', executionId };
   }
   return guarded.value;
 }
