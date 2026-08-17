@@ -193,6 +193,7 @@ export class SessionState {
   selectableStreamNames(): StreamTabId[] {
     return this.streamLogs
       .keys()
+      .filter((name) => !this.isStreamRemoved(name))
       .map((name) => ({
         name,
         creationTimestamp: this.getStreamMetadata(name).creationTimestamp,
