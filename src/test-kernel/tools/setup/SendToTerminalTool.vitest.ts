@@ -8,6 +8,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it, beforeAll } from 'vitest';
 
 // Local imports
+import { TERMINAL_OUTPUT_MAX_CHARS } from '@common/terminalOutput';
 import type { ConfigProvider } from '@platform/interfaces';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -73,6 +74,15 @@ function setupTool(
 
 describe('SendToTerminalTool', () => {
   beforeAll(() => installApprovalSkippingPlatform());
+
+  it('advertises the host terminal capture limit', () => {
+    const { tool } = setupTool();
+    const description = tool.definition.description;
+    assert.ok(description);
+    assert.ok(
+      description.includes(`up to ${TERMINAL_OUTPUT_MAX_CHARS} characters`),
+    );
+  });
 
   it('runs the command and returns exit code + captured output', async () => {
     const { tool, runs } = setupTool();
@@ -150,9 +160,9 @@ describe('SendToTerminalTool', () => {
     assert.equal(runs.length, 0);
   });
 
-  it('truncates from the head, not the tail — the success/error line is at the end', async () => {
-    // Output longer than the tool's preview cap. We sentinel the start
-    // and end so we can see which side survived truncation.
+  it('does not truncate the host-captured terminal tail again', async () => {
+    // The host owns its process-level capture bound; the recorder owns the
+    // display preview and spill. Keep both sentinels inside the host result.
     const head = 'BEGIN_MARKER\n' + 'x'.repeat(8_000);
     const end = 'Setting up perl ... done\nEND_MARKER';
     const { tool } = setupTool({
@@ -168,11 +178,11 @@ describe('SendToTerminalTool', () => {
     assert.equal(result.status, 'executed');
     assert.ok(
       (result.output ?? '').includes('END_MARKER'),
-      'tail (success line) must survive truncation',
+      'the captured tail must be preserved for the recorder',
     );
     assert.ok(
-      !(result.output ?? '').includes('BEGIN_MARKER'),
-      'head must be elided when output exceeds the preview cap',
+      (result.output ?? '').includes('BEGIN_MARKER'),
+      'the captured tail must not be truncated again',
     );
   });
 });

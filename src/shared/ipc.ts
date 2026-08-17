@@ -182,6 +182,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   GOAL_ACTIVE_UPDATED: 'goalActiveUpdated',
 
   OPEN_FILE: 'openFile',
+  OPEN_SPILL_ARTIFACT: 'openSpillArtifact',
   COMPARE_ORIGINAL: 'compareOriginal',
   COMPARE_PREVIOUS: 'comparePrevious',
   ACCEPT_FILE: 'acceptFile',

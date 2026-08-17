@@ -96,6 +96,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { cleanupUnscopedApprovals } from '@tools/approval';
 import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
+import { findTranscriptSpillFile } from '@transcript/spillArtifacts';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -835,6 +836,31 @@ export class DesktopProgressBridge {
         },
         file: {
           openFile: (file, line) => this.options.host.openPath(file, line),
+          openSpillArtifact: async (spillPath) => {
+            let file: string | undefined;
+            try {
+              await this.session.flushArtifacts();
+              file = await findTranscriptSpillFile(spillPath);
+            } catch (error) {
+              await this.options.host.showErrorMessage(
+                `Full output could not be opened: ${toErrorMessage(error)}`,
+              );
+              return;
+            }
+            if (!file) {
+              await this.options.host.showErrorMessage(
+                'Full output is unavailable because this run artifact was deleted.',
+              );
+              return;
+            }
+            try {
+              await this.options.host.openPath(file);
+            } catch (error) {
+              await this.options.host.showErrorMessage(
+                `Full output could not be opened: ${toErrorMessage(error)}`,
+              );
+            }
+          },
         },
         approval: {
           approvePendingDelegatedWork: (stream, initiatingProposalId) =>

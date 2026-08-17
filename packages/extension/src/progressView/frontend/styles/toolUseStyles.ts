@@ -134,11 +134,11 @@ export const toolUseStyles = css`
     padding: 0 var(--wa-space-xs) var(--wa-space-xs);
   }
 
-  /* Proposal restore link — a real <button> (not a role="button" span) so
+  /* Summary actions — real <button>s (not role="button" spans) so
    * wa-details' own summary click handler recognizes it as interactive and
    * skips its toggle; reset native button chrome to keep the prior
    * link-like appearance. */
-  .proposal-restore-link {
+  :is(.proposal-restore-link, .spill-artifact-link) {
     background: none;
     border: none;
     margin: 0;
@@ -155,12 +155,12 @@ export const toolUseStyles = css`
   }
 
   /* Radius only — the ring comes from focusRingStyles. */
-  .proposal-restore-link:focus-visible {
+  :is(.proposal-restore-link, .spill-artifact-link):focus-visible {
     border-radius: var(--border-radius-small);
   }
 
-  /* Proposal setup link (in summary row and body) */
-  .proposal-restore-link:hover {
+  /* Summary actions (in summary row and body) */
+  :is(.proposal-restore-link, .spill-artifact-link):hover {
     text-decoration: underline;
   }
 

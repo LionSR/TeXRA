@@ -82,6 +82,7 @@ function createActions(
     },
     file: {
       openFile: vi.fn(),
+      openSpillArtifact: vi.fn(),
       openTaskStorage: vi.fn(),
       compareOriginal: vi.fn(),
       comparePrevious: vi.fn(),
@@ -244,6 +245,13 @@ describe('createProgressViewCommandHandlers', () => {
     );
     expectDispatched(
       {
+        command: PROGRESS_VIEW_COMMANDS.OPEN_SPILL_ARTIFACT,
+        spillPath: 'executions/abcdef123456/toolOutput/tool.txt',
+      },
+      handlers,
+    );
+    expectDispatched(
+      {
         command: PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE,
         stream: 'stream-a',
       },
@@ -296,6 +304,9 @@ describe('createProgressViewCommandHandlers', () => {
     );
 
     expect(actions.file.openFile).toHaveBeenCalledWith('paper.tex', 12);
+    expect(actions.file.openSpillArtifact).toHaveBeenCalledWith(
+      'executions/abcdef123456/toolOutput/tool.txt',
+    );
     expect(actions.file.openTaskStorage).toHaveBeenCalledWith('stream-a');
     expect(actions.file.compareOriginal).toHaveBeenCalledWith(
       'edited.tex',
