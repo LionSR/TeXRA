@@ -119,7 +119,7 @@
     "arxiv-client": "^0.0.9",
     "async-mutex": "^0.5.0",
     "bibtex": "^0.9.0",
-    "content-disposition": "^2.0.1",
+    "content-disposition": "^3.0.0",
     "data-uri-to-buffer": "^7.0.0",
     "date-fns": "^4.4.0",
     "deepmerge": "^4.3.1",
