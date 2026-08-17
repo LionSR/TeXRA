@@ -13,6 +13,7 @@ import {
 } from '@controllers/settingsView/backend/HistoryActions';
 import { confirmModal } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
 
@@ -56,11 +57,10 @@ export class HistoryHandlers {
       confirm: confirmModal,
       reportDetail: (message, data) =>
         ctx.logger.error(ctx.channel, message, { data }),
-      getLiveStreamStores: () => {
+      getLiveStreamCleanup: () => {
         const session = tryDefaultSession();
-        return session
-          ? { streamLogs: session.transcripts, snapshots: session.snapshots }
-          : undefined;
+        if (session?.transcripts.mode.kind !== 'persistent') return undefined;
+        return ProgressViewProvider.getInstance()?.state.stores;
       },
     };
     this.actions = new HistoryActions(ports);

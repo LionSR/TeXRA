@@ -113,6 +113,28 @@ export function ephemeralTranscriptWarning(reason: string): string {
   return `Transcript persistence is unavailable for this session. Its conversation cannot be resumed. ${reason}`;
 }
 
+/**
+ * Delete one known persisted transcript without opening or parsing the
+ * transcript registry. History cleanup already resolved the stream from the
+ * execution metadata, so hydrating every unrelated transcript would add work
+ * and let unrelated corruption block deletion of the requested execution.
+ */
+export async function deletePersistedStreamLog(
+  streamId: StreamTabId,
+): Promise<void> {
+  await new KVStore(STREAM_LOGS_DIR, { compactJson: true }).delete(streamId);
+  try {
+    await new KVStore(STREAM_LOG_SUMMARIES_DIR, {
+      compactJson: true,
+    }).delete(streamId);
+  } catch (error) {
+    log.warn(
+      `Failed to delete derived transcript summary for ${streamId}; continuing after authoritative log deletion: ${toErrorMessage(error)}`,
+      { data: error },
+    );
+  }
+}
+
 export interface TranscriptWriter {
   readonly streamId: StreamTabId;
   append(entry: StreamLogAppendInput): StreamLogEntry;

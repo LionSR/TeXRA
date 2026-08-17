@@ -1139,12 +1139,13 @@ export class StreamSnapshotStore {
    */
   async reconcileStagedDeletions(
     liveStreams: ReadonlySet<StreamTabId>,
+    selectedStreams?: ReadonlySet<StreamTabId>,
   ): Promise<{
     restored: StreamTabId[];
     pendingCleanup: StreamTabId[];
     discarded: StreamTabId[];
   }> {
-    return this.deletions.reconcile(liveStreams);
+    return this.deletions.reconcile(liveStreams, selectedStreams);
   }
 
   /**

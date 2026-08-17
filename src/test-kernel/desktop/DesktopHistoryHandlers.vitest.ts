@@ -263,6 +263,23 @@ describe('DesktopHistoryHandlers', () => {
     });
   });
 
+  it('routes stream cleanup through the live session owner', async () => {
+    await writeHistoryConfig();
+    const streamId = `chat@deepseek#${HISTORY_ID}` as StreamTabId;
+    await getExecutionStore(HISTORY_ID).writeMeta({
+      timestamp: '2026-01-01T00:00:00.000Z',
+      streamId,
+    });
+    const deleteAdjacentStreamState = vi.fn(async () => undefined);
+    const actions = createHistoryHandlers({
+      getLiveStreamCleanup: () => ({ deleteAdjacentStreamState }),
+    });
+
+    await deleteAgent(actions, HISTORY_ID);
+
+    expect(deleteAdjacentStreamState).toHaveBeenCalledWith(streamId);
+  });
+
   it('drops the goal owned by a deleted execution', async () => {
     await writeHistoryConfig();
     const streamId = `chat@deepseek#${HISTORY_ID}` as StreamTabId;

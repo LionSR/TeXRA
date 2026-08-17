@@ -31,8 +31,8 @@ import type { ExecutionId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 import {
   cleanupExecutionAdjacentStreamState,
-  resolveAdjacentStreamStores,
-  type AdjacentStreamStores,
+  resolveAdjacentStreamCleanup,
+  type AdjacentStreamCleanup,
 } from '@transcript/adjacentStreamCleanup';
 
 type HistoryExportFormat = 'md' | 'tex' | 'html';
@@ -51,17 +51,15 @@ export interface HistoryActionPorts {
   confirm(message: string, confirmLabel: string): Promise<boolean>;
   reportDetail(message: string, data?: unknown): void;
   /**
-   * The host's live session's transcript/snapshot pair, if one is running —
-   * reused so a delete here is immediately visible there too. Without this,
-   * `HistoryActions` would open a second, independent store pair, and the
-   * live session's in-memory registry would keep listing a stream whose
-   * sidecars this class just deleted, until the process later reloads it.
+   * The host's live session-store owner, if one is running. Reusing its
+   * deletion capability keeps child links, goals, status, resources, and the
+   * visible stream registry synchronized with durable cleanup.
    * Neither host can be assumed to have a globally-reachable default
    * session (desktop's process session in particular is never registered as
    * one), so each host provides this explicitly rather than `HistoryActions`
    * reaching for one itself. Return `undefined` when no session is running.
    */
-  getLiveStreamStores?(): AdjacentStreamStores | undefined;
+  getLiveStreamCleanup?(): AdjacentStreamCleanup | undefined;
 }
 
 /** Host-neutral orchestration for the seven history settings actions. */
@@ -74,14 +72,13 @@ export class HistoryActions {
 
   async deleteItem(historyId: string): Promise<void> {
     const executionId = historyId as ExecutionId;
-    const stores = await resolveAdjacentStreamStores(
-      this.ports.getLiveStreamStores?.(),
+    const cleanup = resolveAdjacentStreamCleanup(
+      this.ports.getLiveStreamCleanup?.(),
     );
     const outcome = describeDeleteExecutionResult(
       await deleteExecution(executionId, {
-        beforeDelete: stores
-          ? () => cleanupExecutionAdjacentStreamState(executionId, stores)
-          : undefined,
+        beforeDelete: () =>
+          cleanupExecutionAdjacentStreamState(executionId, cleanup),
       }),
     );
     if (outcome.kind !== 'deleted') {
@@ -105,14 +102,12 @@ export class HistoryActions {
     ) {
       return;
     }
-    const stores = await resolveAdjacentStreamStores(
-      this.ports.getLiveStreamStores?.(),
+    const cleanup = resolveAdjacentStreamCleanup(
+      this.ports.getLiveStreamCleanup?.(),
     );
     const result = await deleteAllExecutions({
-      beforeDelete: stores
-        ? (executionId) =>
-            cleanupExecutionAdjacentStreamState(executionId, stores)
-        : undefined,
+      beforeDelete: (executionId) =>
+        cleanupExecutionAdjacentStreamState(executionId, cleanup),
     });
     await GoalStore.forgetByExecutionIds(result.deleted);
     const outcome = describeClearHistoryResult(result);

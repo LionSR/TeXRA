@@ -13,6 +13,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { KVStore } from '@common/storage/KVStore';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import {
   LOG_LEVELS,
@@ -50,6 +51,7 @@ vi.mock('@agent/storage', async () => {
         readConfig: mocks.readConfig,
         readWorkspaceFiles: mocks.readWorkspaceFiles,
         readMeta: mocks.readMeta,
+        readMetaStrict: mocks.readMeta,
         readResultMeta: mocks.readResultMeta,
         readReport: mocks.readReport,
         exists: mocks.exists,
@@ -104,8 +106,13 @@ import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import {
   StreamLogStore,
   StreamSnapshotStore,
+  STREAM_LOGS_DIR,
   type TraceDocument,
 } from '@transcript';
+import {
+  cleanupExecutionAdjacentStreamState,
+  resolveAdjacentStreamCleanup,
+} from '@transcript/adjacentStreamCleanup';
 import {
   cliHistoryDetailNdjsonRecord,
   cliHistoryNdjsonRecords,
@@ -1083,6 +1090,42 @@ describe('CLI history runtime', () => {
     });
 
     expect(GoalStore.getForStream(streamId)).toBeNull();
+  });
+
+  it('deletes one execution sidecar set despite an unrelated corrupt transcript', async () => {
+    const executionId = 'a1' as ExecutionId;
+    const streamId = 'chat@deepseek#a1' as StreamTabId;
+    const unrelated = 'chat@deepseek#corrupt' as StreamTabId;
+    const logs = await StreamLogStore.open();
+    appendTranscriptEntry(logs, streamId, {
+      id: 'target-entry',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1000,
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      text: 'Target transcript',
+    });
+    await logs.flush();
+    const persistedLogs = new KVStore(STREAM_LOGS_DIR, { compactJson: true });
+    await persistedLogs.write(unrelated, { invalid: 'transcript' });
+    const snapshots = new StreamSnapshotStore();
+    snapshotFacts(snapshots).setRunConfig(streamId, config, executionId);
+    await snapshots.flush();
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-05-18T08:00:00.000Z',
+      streamId,
+    });
+
+    await cleanupExecutionAdjacentStreamState(
+      executionId,
+      resolveAdjacentStreamCleanup(undefined),
+    );
+
+    await expect(persistedLogs.exists(streamId)).resolves.toBe(false);
+    await expect(persistedLogs.exists(unrelated)).resolves.toBe(true);
+    await expect(
+      new StreamSnapshotStore().readPersistedExecutionId(streamId),
+    ).resolves.toBeUndefined();
   });
 
   it('validates execution id shape before command handlers use storage', () => {

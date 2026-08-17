@@ -1,66 +1,47 @@
 /**
- * Deleting an execution and deleting its stream's adjacent transcript +
- * snapshot sidecars (`streamLogs/{stream}.json`, `streamData/{stream}/*`) are
- * two different storage domains with no shared writer unless a caller wires
- * them together explicitly — `deleteExecution`'s `beforeDelete` hook exists
- * for exactly that. `SessionStores` (`@agent/storage`) wires it for the
- * Progress rail, which already owns a live `StreamLogStore`/
- * `StreamSnapshotStore` pair; its own copy of the rollback-safe delete stays
- * separate rather than importing this module, since `@agent/storage`'s
- * barrel must not gain a runtime dependency on `@transcript` (this module
- * already depends on `@agent/storage` for `getExecutionStore`, and the
- * reverse edge would make that a cycle).
+ * Execution history and stream sidecars live in separate storage domains.
+ * `deleteExecution` therefore exposes a `beforeDelete` hook so callers can
+ * remove the transcript and snapshot state before the execution directory.
  *
- * Callers with no live session (Settings → History, `texra history delete`)
- * have neither store open, so {@link openStandaloneStreamStores} opens a
- * short-lived pair backed by the same persistent storage root, and
- * {@link cleanupExecutionAdjacentStreamState} resolves the execution's
- * stream and applies the same cleanup.
+ * A live host supplies its `SessionStores` cleanup capability, preserving
+ * child, goal, status, resource, and UI projections. A caller without a live
+ * session uses the targeted persistent implementation below. It never opens
+ * or parses the transcript registry, so unrelated corruption and history size
+ * cannot block deletion of the requested execution.
  *
- * A cleanup path must be more tolerant than the state it repairs: this is
- * best-effort by design. `getExecutionStore(...).readMetaStrict()` fails
- * loudly instead of silently treating malformed metadata as "nothing to
- * clean up" (which would recreate the exact orphan this module exists to
- * prevent), but nothing in {@link cleanupExecutionAdjacentStreamState}
- * propagates — a stream this store can't resolve, or a transcript store that
- * fails to open at all (e.g. one corrupt, unrelated persisted log), must not
- * block deleting the requested execution's own directory. `deleteExecution`
- * removed that directory unconditionally before this module existed; a
- * failure to also clean up its sidecars is strictly better reported loudly
- * and left for a later pass than treated as a reason to keep the execution.
+ * Cleanup is best-effort. Malformed execution metadata is reported instead of
+ * silently treated as absent, but no cleanup failure blocks deletion of the
+ * execution directory; that was the behavior before adjacent cleanup existed.
  */
 import { getExecutionStore } from '@agent/storage';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { StreamLogStore } from './StreamLogStore';
+import { deletePersistedStreamLog } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 import type { StagedStreamSnapshotDeletion } from './StagedDeletionCoordinator';
 
 const log = createLog('AdjacentStreamCleanup');
 
-export interface AdjacentStreamStores {
-  readonly streamLogs: StreamLogStore;
-  readonly snapshots: StreamSnapshotStore;
+/** The single capability history deletion needs from a live session owner. */
+export interface AdjacentStreamCleanup {
+  deleteAdjacentStreamState(stream: StreamTabId): Promise<void>;
 }
 
 /**
- * Delete a stream's transcript log and snapshot sidecars as one unit, rolling
- * the snapshot side back if the transcript delete fails so neither is left
- * half-deleted. Child parent-edge clearing is owned by
- * `StreamSnapshotStore.stageDeleteStream` itself (no session callback needed
- * here); a live Progress session still passes `onChildrenDetached` for
- * in-memory registry / UI projection on top of that durable detach.
+ * Delete a persisted stream's transcript and snapshot sidecars as one unit.
+ * Snapshot staging is rolled back when authoritative transcript deletion
+ * fails, so neither storage domain is left half-deleted.
  */
-async function deleteAdjacentStreamState(
+async function deletePersistedAdjacentStreamState(
   stream: StreamTabId,
-  stores: AdjacentStreamStores,
+  snapshots: StreamSnapshotStore,
 ): Promise<void> {
   const snapshotDeletion: StagedStreamSnapshotDeletion =
-    await stores.snapshots.stageDeleteStream(stream);
+    await snapshots.stageDeleteStream(stream);
   try {
-    await stores.streamLogs.delete(stream);
+    await deletePersistedStreamLog(stream);
   } catch (error) {
     try {
       await snapshotDeletion.rollback();
@@ -72,96 +53,43 @@ async function deleteAdjacentStreamState(
     }
     throw error;
   }
-
   await snapshotDeletion.commit();
 }
 
-/**
- * Open a transcript/snapshot store pair backed by the persistent storage
- * root, for a caller with no live `SessionHandle` to reuse. Safe to open
- * alongside a host's own live stores: the persistent storage root already
- * tolerates concurrent readers/writers across independent CLI, desktop, and
- * extension processes (see `@agent/storage/executionListing`), so a second
- * in-process store pair is no different in kind. Callers should open one
- * pair per operation (not per execution) and let it be garbage-collected
- * when done.
- *
- * Unlike interactive session startup, a one-shot history command has no
- * resident store that already ran `reconcileStagedDeletions`. Without that
- * pass, a prior interrupted `stageDeleteStream` leaves the sidecar in the
- * staged namespace and the next delete for the same stream fails with an
- * unreconciled-deletion error — so every standalone open reconciles against
- * the transcript registry first, matching `SessionStores.deleteAll` /
- * `sweepLeftoverStreams`.
- */
-async function openStandaloneStreamStores(): Promise<AdjacentStreamStores> {
-  const streamLogs = await StreamLogStore.open();
+/** Build one operation-scoped cleaner for callers without a live session. */
+function createStandaloneStreamCleanup(): AdjacentStreamCleanup {
   const snapshots = new StreamSnapshotStore();
-  await snapshots.reconcileStagedDeletions(new Set(streamLogs.keys()));
-  return { streamLogs, snapshots };
+  return {
+    deleteAdjacentStreamState: async (stream) => {
+      // This operation intends to remove the stream, so recover an interrupted
+      // snapshot deletion as non-live before staging it again. Restrict the
+      // repair to this stream; other interrupted operations keep their owner.
+      await snapshots.reconcileStagedDeletions(new Set(), new Set([stream]));
+      await deletePersistedAdjacentStreamState(stream, snapshots);
+    },
+  };
+}
+
+/** Prefer the live session's lifecycle owner; otherwise use targeted I/O. */
+export function resolveAdjacentStreamCleanup(
+  liveStreamCleanup: AdjacentStreamCleanup | undefined,
+): AdjacentStreamCleanup {
+  return liveStreamCleanup ?? createStandaloneStreamCleanup();
 }
 
 /**
- * Resolve the stores a caller should clean up through: a host-provided live
- * session's stores when usable, otherwise a standalone pair.
- *
- * A live `StreamLogStore` can be in `ephemeral` mode — a host degrades to it
- * when its persistent transcript directory failed to open at startup
- * (`StreamLogStore.openOrEphemeral`), and deliberately never touches disk
- * again for the rest of that process's life. `StreamLogStore.delete()`
- * silently no-ops its on-disk removal in that mode (by design — it has
- * nothing trustworthy to reconcile against), so reusing an ephemeral live
- * store here would commit the snapshot deletion and let the execution
- * directory go while the transcript log sidecar and its index entry are
- * never actually removed — recreating the exact orphan this module exists
- * to prevent, silently. Skip it and fall through to a real, targeted
- * persistent open instead.
- *
- * A store that fails to open (e.g. one corrupt, unrelated persisted stream)
- * must not block deleting the requested execution — warn once and return
- * `undefined` so the caller proceeds with no adjacent-state cleanup for this
- * call.
- */
-export async function resolveAdjacentStreamStores(
-  liveStreamStores: AdjacentStreamStores | undefined,
-): Promise<AdjacentStreamStores | undefined> {
-  if (
-    liveStreamStores &&
-    liveStreamStores.streamLogs.mode.kind !== 'ephemeral'
-  ) {
-    return liveStreamStores;
-  }
-  try {
-    return await openStandaloneStreamStores();
-  } catch (error) {
-    log.warn(
-      `Could not open the transcript store for history cleanup; deleted executions may leave orphaned sidecars: ${toErrorMessage(error)}`,
-      { data: error },
-    );
-    return undefined;
-  }
-}
-
-/**
- * Delete a completed execution's adjacent stream state, if it has one.
- * Intended as a `deleteExecution`/`deleteAllExecutions` `beforeDelete` hook
- * for callers that key off `ExecutionId` rather than `StreamTabId` — e.g.
- * Settings → History and `texra history delete`, which otherwise remove only
- * the execution directory and leave its transcript/snapshot sidecars
- * orphaned on disk forever (the startup orphan sweep does not catch them:
- * their stream stays listed in the persistent transcript index).
- *
- * Never throws — see the module doc for why a cleanup failure must not block
- * the execution-directory deletion it's attached to.
+ * Resolve an execution's stamped stream and delete its adjacent state.
+ * Intended for `deleteExecution`/`deleteAllExecutions` `beforeDelete` hooks.
+ * Never throws: failure is reported and the execution deletion proceeds.
  */
 export async function cleanupExecutionAdjacentStreamState(
   executionId: ExecutionId,
-  stores: AdjacentStreamStores,
+  cleanup: AdjacentStreamCleanup,
 ): Promise<void> {
   try {
     const meta = await getExecutionStore(executionId).readMetaStrict();
     if (!meta?.streamId) return;
-    await deleteAdjacentStreamState(meta.streamId, stores);
+    await cleanup.deleteAdjacentStreamState(meta.streamId);
   } catch (error) {
     log.warn(
       `Execution ${executionId} was deleted, but its transcript/snapshot sidecars could not be cleaned up: ${toErrorMessage(error)}`,

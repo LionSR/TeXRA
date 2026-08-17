@@ -17,6 +17,7 @@ import { tryDefaultSession, type AgentConfig } from '@agent/runtime';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import { createSessionStores } from '@controllers/session/sessionStores';
 import type {
   ExecutionId,
   ExecutionMeta,
@@ -36,7 +37,7 @@ import {
 } from '@transcript';
 import {
   cleanupExecutionAdjacentStreamState,
-  resolveAdjacentStreamStores,
+  resolveAdjacentStreamCleanup,
 } from '@transcript/adjacentStreamCleanup';
 
 import { readCliResumeDataForListing } from './toolUseResumeData';
@@ -320,13 +321,12 @@ export async function stageCliHistoryTraceViewerAssets(params: {
 
 /**
  * A live session (rare for the one-shot `history` command, but not
- * impossible) already has its `transcripts`/`snapshots` open — reuse them
- * rather than opening a second, independent pair.
+ * impossible) supplies the canonical lifecycle callbacks for cleanup.
  */
-function liveStreamStores() {
+function liveStreamCleanup() {
   const session = tryDefaultSession();
-  return session
-    ? { streamLogs: session.transcripts, snapshots: session.snapshots }
+  return session?.transcripts.mode.kind === 'persistent'
+    ? createSessionStores(session)
     : undefined;
 }
 
@@ -338,13 +338,11 @@ export async function deleteCliHistory(options: {
   if (!options.all && !id) {
     throw new Error('Expected an execution id, or --all.');
   }
-  const stores = await resolveAdjacentStreamStores(liveStreamStores());
+  const cleanup = resolveAdjacentStreamCleanup(liveStreamCleanup());
   if (options.all) {
     const result = await deleteAllExecutions({
-      beforeDelete: stores
-        ? (executionId) =>
-            cleanupExecutionAdjacentStreamState(executionId, stores)
-        : undefined,
+      beforeDelete: (executionId) =>
+        cleanupExecutionAdjacentStreamState(executionId, cleanup),
     });
     await GoalStore.forgetByExecutionIds(result.deleted);
     return {
@@ -358,9 +356,7 @@ export async function deleteCliHistory(options: {
     throw new Error('Expected an execution id, or --all.');
   }
   const result = await deleteExecution(id, {
-    beforeDelete: stores
-      ? () => cleanupExecutionAdjacentStreamState(id, stores)
-      : undefined,
+    beforeDelete: () => cleanupExecutionAdjacentStreamState(id, cleanup),
   });
   if (result.status === 'deleted') {
     await GoalStore.forgetByExecutionIds([id]);

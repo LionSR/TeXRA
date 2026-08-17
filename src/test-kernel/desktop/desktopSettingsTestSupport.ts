@@ -35,7 +35,7 @@ export function createStubDesktopHistoryOptions(
     showWarningMessage: noOp,
     showErrorMessage: noOp,
     onError: () => undefined,
-    getLiveStreamStores: () => undefined,
+    getLiveStreamCleanup: () => undefined,
     ...overrides,
   };
 }
