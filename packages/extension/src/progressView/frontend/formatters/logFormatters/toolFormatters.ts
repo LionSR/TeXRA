@@ -89,6 +89,7 @@ export function formatToolUseTemplate(
     input,
     isUserFeedback,
     status,
+    spillPath,
   } = normalizedToolLog;
 
   // Determine display state
@@ -223,7 +224,7 @@ export function formatToolUseTemplate(
   // stopSummaryToggleKeydown for why the keydown path additionally needs an
   // explicit stopPropagation.
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration" @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Setup</button>` : nothing}`;
+  const extraContent = html`${timerTemplate ?? nothing}${spillPath ? html`<button type="button" class="spill-artifact-link proposal-banner-setup" data-spill-path=${spillPath} title="Show full output" @keydown=${stopSummaryToggleKeydown}>${waIcon('file-lines')} Full output</button>` : nothing}${proposalId ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration" @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Setup</button>` : nothing}`;
 
   return buildToolUseDetails({
     message,

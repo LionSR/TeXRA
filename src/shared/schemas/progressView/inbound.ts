@@ -230,6 +230,11 @@ const OpenFileMessageSchema = z.object({
   line: z.int().nonnegative().optional(),
 });
 
+const OpenSpillArtifactMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_SPILL_ARTIFACT),
+  spillPath: z.string().min(1),
+});
+
 const ComparePreviousMessageSchema = fileWithBaseCommand(
   PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS,
 ).extend({
@@ -287,6 +292,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     UserQuestionActionMessageSchema,
     RestoreProposalConfigMessageSchema,
     OpenFileMessageSchema,
+    OpenSpillArtifactMessageSchema,
     fileWithBaseCommand(PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL),
     ComparePreviousMessageSchema,
     fileWithBaseCommand(PROGRESS_VIEW_COMMANDS.ACCEPT_FILE),
