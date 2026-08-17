@@ -15,11 +15,11 @@ import * as vscode from 'vscode';
 
 // Local imports - hosts
 import {
+  TERMINAL_OUTPUT_MAX_CHARS,
   truncateTerminalOutput,
   type TerminalRunRequest,
   type TerminalRunResult,
 } from '@hosts/uiHosts';
-import { TERMINAL_OUTPUT_MAX_CHARS } from '@shared/constants/terminal';
 
 import { raceWithTimeout } from './vscode/raceWithTimeout';
 
