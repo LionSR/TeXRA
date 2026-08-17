@@ -178,6 +178,8 @@ async function doLoad(
       scanDirectory(toolUseDir, 'builtInToolUse'),
       includeRemote ? loadRemoteAgents() : Promise.resolve([]),
     ]);
+  // builtInScan.issues and toolUseScan.issues are intentionally unused:
+  // only custom-agent scan failures are a product surface.
 
   // Register all entries. Inline definitions were normalized at registration
   // and live outside the directory scan, so they are re-merged on every load —
@@ -194,7 +196,6 @@ async function doLoad(
   if (loadEpoch !== epoch) return false;
 
   cache.clear();
-  // Built-in/tool-use scan.issues stay in logs only; Settings/CLI list custom skips.
   customScanIssues = Object.freeze(customScan.issues);
   for (const entry of allEntries) {
     cache.set(agentKeyOf(entry), entry);
