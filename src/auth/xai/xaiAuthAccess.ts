@@ -27,7 +27,7 @@ export function xaiCoordinator(): XaiSessionCoordinator {
   return coordinatorAccess.get();
 }
 
-/** Signed-in status, safe to call before platform init (returns signed-out). */
+/** Signed-in status. Call only after the host initializes the platform. */
 export async function getXaiStatus(): Promise<XaiSessionStatus> {
   return getSubscriptionSessionStatus(xaiCoordinator, CHANNEL, 'Grok');
 }

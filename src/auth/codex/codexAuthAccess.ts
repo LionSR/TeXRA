@@ -34,7 +34,7 @@ export function resetCodexCoordinator(): void {
   coordinatorAccess.reset();
 }
 
-/** Signed-in status, safe to call before platform init (returns signed-out). */
+/** Signed-in status. Call only after the host initializes the platform. */
 export async function getCodexStatus(): Promise<CodexSessionStatus> {
   return getSubscriptionSessionStatus(codexCoordinator, CHANNEL, 'ChatGPT');
 }
