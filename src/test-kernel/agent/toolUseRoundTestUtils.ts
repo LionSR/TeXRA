@@ -69,6 +69,7 @@ export function roundModelHandler(overrides: Record<string, unknown>) {
     response: unknown,
     endTag: string,
     responseTimeMs: number,
+    normalizeNullUsage = false,
   ) => {
     const extractResponse = handler.extractResponse as (
       response: unknown,
@@ -81,7 +82,9 @@ export function roundModelHandler(overrides: Record<string, unknown>) {
       text,
       stopReason,
       usage:
-        usage == null ? undefined : normalizeUsage?.(usage, responseTimeMs),
+        usage != null || normalizeNullUsage
+          ? normalizeUsage?.(usage, responseTimeMs)
+          : undefined,
     };
   };
   return handler;
