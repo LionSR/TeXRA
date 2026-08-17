@@ -83,8 +83,8 @@ export interface RunFlowLifecycleOptions {
   /**
    * Run-end side effect supplied by the composition layer. The lifecycle owns
    * *when* it fires (terminal completion/failure, and the parked-handle
-   * teardown for a later kill) and the guard rails (skipped for subagents and
-   * WAITING suspensions, logged rather than rethrown), but not *what* it does.
+   * teardown for a later kill) and the guard rails (skipped for WAITING
+   * suspensions, logged rather than rethrown), but not *what* it does.
    * Kept injected so this module does not statically reach tool-domain
    * services such as the Lean language adapter.
    */
@@ -668,12 +668,10 @@ export async function runFlowWithLifecycle(
   };
   /**
    * Invoke the composition-supplied run-end hook when the run genuinely ends.
-   * The lifecycle owns the guard rails: subagent runs do not invoke it (the
-   * parent owns the worktree), and the WAITING branch invokes it only from the
-   * parked-handle teardown if a later kill actually ends the run.
+   * The lifecycle owns the guard rails: the WAITING branch invokes it only
+   * from the parked-handle teardown if a later kill actually ends the run.
    */
   const runOnRunEnd = async (): Promise<void> => {
-    if (options?.isSubagent) return;
     if (!options?.onRunEnd) return;
     try {
       await options.onRunEnd(executionId);
@@ -733,17 +731,19 @@ export async function runFlowWithLifecycle(
         // See closeSuspendedTranscriptGroup for why this closes the transcript
         // group via the store instead of the stage abstraction, and for the
         // dispose-ordering caveat that makes the stage path a silent no-op.
-        await closeSuspendedTranscriptGroup(
-          session,
-          streamId,
-          handle,
-          ctx.parentStage.id,
-        );
-        // A parked run that a later stop/kill tears down has ended here,
-        // through the suspended-handle path instead of the success/error arms.
-        // Stop its Lean servers on that path too; the WAITING return above
-        // deliberately did not.
-        await runOnRunEnd();
+        try {
+          await closeSuspendedTranscriptGroup(
+            session,
+            streamId,
+            handle,
+            ctx.parentStage.id,
+          );
+        } finally {
+          // A parked run that a later stop/kill tears down has ended here,
+          // through the suspended-handle path instead of the success/error
+          // arms. Lean cleanup is independent of transcript persistence.
+          await runOnRunEnd();
+        }
       });
       return result;
     }
@@ -808,11 +808,11 @@ export async function runFlowWithLifecycle(
     // Stop the Lean servers attributed to this run in its worktree(s) so they
     // do not idle until the timeout after the run is gone (CLI/desktop; a host
     // whose Lean integration owns server lifetime no-ops here). Servers still
-    // leased by another run's in-flight request survive on the idle-timeout
-    // backstop. Guarded like the cancel above: a failing stop must not
-    // replace the result this run already published. A WAITING suspension is
-    // not a run end, so its return skips this and leaves the stop to the
-    // suspended-handle teardown if a later kill actually ends the run.
+    // leased by an in-flight request are disposed after their final lease
+    // ends. Guarded like the cancel above: a failing stop must not replace the
+    // result this run already published. A WAITING suspension is not a run
+    // end, so its return skips this and leaves the stop to the suspended-handle
+    // teardown if a later kill actually ends the run.
     if (!keepLeaseWatcher) {
       await runOnRunEnd();
     }
