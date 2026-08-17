@@ -9,6 +9,7 @@
  */
 
 // Local imports
+import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import {
   fetchRelayTokenStatus,
   getConfiguredRelayToken,
@@ -86,7 +87,7 @@ interface SetupExtensionAdapter {
  */
 export type { TerminalRunResult };
 
-export type SetupHost = 'cli' | 'desktop' | 'extension';
+export type SetupHost = ToolHost;
 
 /** Host-varying setup capabilities. */
 export interface SetupPlatform {

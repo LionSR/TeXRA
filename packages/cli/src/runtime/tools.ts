@@ -30,15 +30,17 @@ export interface CliToolGuide {
   readonly command?: string;
 }
 
-const cliToolDefs = EXTERNAL_TOOL_DEFS.filter(
-  (def) =>
-    !def.hideFromDashboard &&
-    !def.hideFromCli &&
-    !(
-      def.tools.length > 0 &&
-      def.tools.every((name) => isDefaultToolUnavailableOnHost(name, 'cli'))
-    ),
-);
+function getCliToolDefs(): ExternalToolDef[] {
+  return EXTERNAL_TOOL_DEFS.filter(
+    (def) =>
+      !def.hideFromDashboard &&
+      !def.hideFromCli &&
+      !(
+        def.tools.length > 0 &&
+        def.tools.every((name) => isDefaultToolUnavailableOnHost(name, 'cli'))
+      ),
+  );
+}
 
 function detectedFromStatus(status: string): boolean | null {
   if (status === 'available') return true;
@@ -61,7 +63,7 @@ export async function readCliToolStatuses(): Promise<CliToolStatusRecord[]> {
   const checks = new Map((await runExternalToolChecks()).map((r) => [r.id, r]));
   const disabledIds = getDisabledToolIds();
 
-  return cliToolDefs.map((def) => {
+  return getCliToolDefs().map((def) => {
     const check = checks.get(def.id);
     const comingSoon = def.comingSoon === true;
     const toggleable = def.toggleable === true;
@@ -92,11 +94,11 @@ export async function readCliToolStatus(
 }
 
 export function findCliToolDef(id: string): ExternalToolDef | undefined {
-  return cliToolDefs.find((def) => def.id === id);
+  return getCliToolDefs().find((def) => def.id === id);
 }
 
 export function cliToolIds(): string[] {
-  return cliToolDefs.map((def) => def.id);
+  return getCliToolDefs().map((def) => def.id);
 }
 
 export function readCliToolGuide(

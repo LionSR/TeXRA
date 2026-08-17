@@ -13,7 +13,7 @@ import {
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
 import {
-  DESKTOP_UNAVAILABLE_TOOLS,
+  getDesktopUnavailableTools,
   launchDesktopAgent,
 } from './desktopAgentLaunch.js';
 import { toLogData } from './desktopLogUtils.js';
@@ -128,7 +128,7 @@ function resumeDesktopStream(
         resumeQueuedToolUseFromResumeData(snapshot.streamId, snapshot, {
           session: context.session,
           recovery: claimedRecovery,
-          runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
+          runtimeUnavailableTools: getDesktopUnavailableTools(),
           canAcquireResumeLease,
           isCancellationRequested: isResumeInvalidated,
           onError: (error) => reportUnhandledFailure(streamId, error),
