@@ -154,6 +154,9 @@ async function loadApprovalModules(workspacePath = '/workspace') {
   };
   mocks.doMock('@utils/config/configUtils', () => ({
     getConfig: vi.fn(() => 'sameDirectory'),
+    getConfigBeforePlatformInit: vi.fn(
+      <T>(_path: string, defaultValue: T) => defaultValue,
+    ),
     getValidatedConfig: vi.fn(
       <T>(_path: string, _schema: unknown, defaultValue: T) => defaultValue,
     ),
