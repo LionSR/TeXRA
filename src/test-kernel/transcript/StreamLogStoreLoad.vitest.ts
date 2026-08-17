@@ -44,6 +44,7 @@ interface MockStorageOptions {
   logMtimes?: Record<string, number>;
   summaryMtimes?: Record<string, number>;
   onLogRead?: (key: string) => Promise<void> | void;
+  onLogDelete?: (key: string) => Promise<void> | void;
   onLogWrite?: (key: string) => Promise<void> | void;
   onSummaryWrite?: (key: string) => Promise<void> | void;
   pauseLogWriteKey?: string;
@@ -215,6 +216,7 @@ function mockStorage({
   logMtimes = {},
   summaryMtimes = {},
   onLogRead,
+  onLogDelete,
   onLogWrite,
   onSummaryWrite,
   pauseLogWriteKey,
@@ -321,6 +323,9 @@ function mockStorage({
   vi.spyOn(StorageFS, 'writeAtomic').mockImplementation(recordWrite);
   vi.spyOn(StorageFS, 'delete').mockImplementation(async (target) => {
     if (logDeleteError && areaOf(target) === 'log') throw logDeleteError;
+    if (areaOf(target) === 'log') {
+      await onLogDelete?.(streamKeyFromFile(target));
+    }
     if (
       summaryDeleteError &&
       (target === STREAM_LOG_SUMMARIES_DIR || areaOf(target) === 'summary')
@@ -793,6 +798,33 @@ describe('StreamLogStore load', () => {
     await expect(store.delete('alpha')).rejects.toThrow('log delete denied');
 
     expect(store.keys()).toEqual(['alpha']);
+    expect(store.has('alpha')).toBe(true);
+  });
+
+  it('re-persists a resident log re-claimed during durable deletion', async () => {
+    let reClaimed = false;
+    const storage = mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: {
+        alpha: { firstTimestamp: 200, lastTimestamp: 200 },
+      },
+      onLogDelete: () => {
+        reClaimed = true;
+      },
+    });
+    const store = await StreamLogStore.open();
+    await store.ensureLoaded('alpha');
+
+    await expect(
+      store.delete('alpha', { shouldDelete: () => !reClaimed }),
+    ).rejects.toMatchObject({ name: 'StreamDeletionSupersededError' });
+
+    await waitForCondition(
+      () => writtenLog(storage.writes, 'alpha') !== undefined,
+    );
+    expect(writtenLog(storage.writes, 'alpha')).toEqual([
+      logEntry('alpha', 1, 200),
+    ]);
     expect(store.has('alpha')).toBe(true);
   });
 

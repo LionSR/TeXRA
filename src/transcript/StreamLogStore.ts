@@ -1021,6 +1021,7 @@ export class StreamLogStore {
     this.assertWritableStore('delete a transcript stream');
     this.writeTombstones.add(streamId);
     this.saveThrottle.cancel();
+    let retrySave = false;
 
     try {
       await this.executeWrite();
@@ -1049,11 +1050,14 @@ export class StreamLogStore {
     } catch (error) {
       // executeWrite() drains dirty ids while the tombstone suppresses writes.
       // Restore the retry marker if deletion fails and a resident log remains.
-      if (this.streams.get(streamId)?.log !== undefined)
+      if (this.streams.get(streamId)?.log !== undefined) {
         this.markDirty(streamId);
+        retrySave = true;
+      }
       throw error;
     } finally {
       this.writeTombstones.delete(streamId);
+      if (retrySave) this.scheduleSave();
     }
   }
 
