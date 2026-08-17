@@ -10,13 +10,13 @@ import { describe, it, beforeAll } from 'vitest';
 // Local imports
 import type { ConfigProvider } from '@platform/interfaces';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
+import { TERMINAL_OUTPUT_MAX_CHARS } from '@shared/constants/terminal';
 import { installPlatform } from '@test/support/setupPlatform';
 import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
 import {
   setSetupPlatform,
   type TerminalRunResult,
 } from '@tools/setup/platform';
-import { TERMINAL_OUTPUT_MAX_CHARS } from '@utils/core/terminalOutput';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';

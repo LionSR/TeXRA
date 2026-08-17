@@ -3,12 +3,12 @@ import { z } from 'zod';
 
 // Local imports
 import { ToolError, type ToolResult } from '@shared/schemas';
+import { TERMINAL_OUTPUT_MAX_CHARS } from '@shared/constants/terminal';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
-import { TERMINAL_OUTPUT_MAX_CHARS } from '@utils/core/terminalOutput';
 
 // Local file imports
 import { defineTool } from '../core/define';
