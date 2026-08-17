@@ -80,6 +80,7 @@ export const ToolUseLogSchema = z.object({
   toolName: z.string().optional(),
   input: z.unknown().optional(),
   output: z.unknown().optional(),
+  spillPath: z.string().optional(),
   summary: z.string().optional(),
   error: z.string().optional(),
   isError: z.boolean().optional(),
@@ -98,6 +99,7 @@ export type NormalizedToolUse = {
   toolName: string;
   errorText: string;
   outputText: string;
+  spillPath?: string;
   exitCode?: number;
   userInstructionText: string;
   input: unknown;

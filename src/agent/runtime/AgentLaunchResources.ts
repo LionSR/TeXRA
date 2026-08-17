@@ -26,6 +26,7 @@ export class AgentLaunchResources {
     const runTrace: RunTrace = {
       trace: rawRunTrace.trace,
       handleStatus: rawRunTrace.handleStatus,
+      flushSpills: rawRunTrace.flushSpills,
       dispose: () => {
         try {
           attachment.detach?.();
