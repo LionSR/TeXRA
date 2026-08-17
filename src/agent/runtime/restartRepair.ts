@@ -3,8 +3,15 @@ import {
   type FinalizeExecutionInput,
   type FinalizeExecutionResult,
 } from '@agent/storage/executionLifecycle';
-import { runWithInactiveExecutionLease as defaultRunWithInactiveExecutionLease } from '@agent/storage/executionLease';
-import type { InstanceOwnerRecord } from '@agent/storage/instancePresence';
+import {
+  runWithInactiveExecutionLease as defaultRunWithInactiveExecutionLease,
+  type InactiveExecutionLeaseOptions,
+} from '@agent/storage/executionLease';
+import {
+  probeInstance,
+  type InstanceLiveness,
+  type InstanceOwnerRecord,
+} from '@agent/storage/instancePresence';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { deriveResumability } from '@agent/storage/resumability';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -42,10 +49,13 @@ export interface RestartRepairOptions {
   runWithInactiveExecutionLease?: <T>(
     executionId: ExecutionId,
     operation: () => Promise<T>,
+    options?: InactiveExecutionLeaseOptions,
   ) => Promise<
     | { readonly status: 'active'; readonly owner: InstanceOwnerRecord }
     | { readonly status: 'performed'; readonly value: T }
   >;
+  /** Override liveness reads in focused tests. */
+  probeOwner?: (owner: InstanceOwnerRecord) => Promise<InstanceLiveness>;
   logger?: RestartRepairLogger;
   now?: number;
   /** Stop before beginning another repair mutation after session teardown. */
@@ -92,6 +102,10 @@ function repairCandidates(
   return [...streamStatus.entries()]
     .filter(([, phase]) => phase === STREAM_PHASE.RUNNING)
     .map(([streamId]) => streamId);
+}
+
+function livenessCacheKey(owner: InstanceOwnerRecord): string {
+  return `${owner.hostname}\0${owner.instanceId}\0${owner.socketPath}`;
 }
 
 type ExecutionSettlement =
@@ -209,6 +223,19 @@ export async function repairRestartedStreams(
 ): Promise<RestartRepairResult> {
   const result: RestartRepairResult = { activeOwners: [] };
   const now = options.now ?? Date.now();
+  const probeOwner = options.probeOwner ?? probeInstance;
+  const ownerLiveness = new Map<string, Promise<InstanceLiveness>>();
+  const inactiveLeaseOptions: InactiveExecutionLeaseOptions = {
+    probeOwner: (owner) => {
+      const key = livenessCacheKey(owner);
+      let liveness = ownerLiveness.get(key);
+      if (!liveness) {
+        liveness = probeOwner(owner);
+        ownerLiveness.set(key, liveness);
+      }
+      return liveness;
+    },
+  };
 
   for (const streamId of repairCandidates(
     options.streamStatus,
@@ -258,7 +285,7 @@ export async function repairRestartedStreams(
         ? await (
             options.runWithInactiveExecutionLease ??
             defaultRunWithInactiveExecutionLease
-          )(executionId, repair)
+          )(executionId, repair, inactiveLeaseOptions)
         : { status: 'performed' as const, value: await repair() };
       if (repaired.status === 'active') {
         if (executionId) {

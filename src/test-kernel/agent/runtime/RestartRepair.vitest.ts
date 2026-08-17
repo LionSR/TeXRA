@@ -139,6 +139,40 @@ describe('repairRestartedStreams', () => {
     expect(finalizeExecution).not.toHaveBeenCalled();
   });
 
+  it('probes one shared active owner once per repair pass', async () => {
+    const first = setupRunningStream('shared-owner-first');
+    const second = setupRunningStream('shared-owner-second');
+    const owner = {
+      instanceId: 'shared-instance',
+      socketPath: '/tmp/texra-shared.sock',
+      pid: 1,
+      hostname: 'test-host',
+    };
+    const probeOwner = vi.fn(async () => 'alive' as const);
+    const runWithInactiveExecutionLease = vi.fn(
+      async (_executionId, _operation, leaseOptions) => {
+        expect(await leaseOptions?.probeOwner?.(owner)).toBe('alive');
+        return { status: 'active' as const, owner };
+      },
+    );
+
+    const result = await repairRestartedStreams({
+      streamStatus: first.streamStatus,
+      waitingStreams: new Set(),
+      executionIds: new Map([
+        [first.streamId, first.executionId],
+        [second.streamId, second.executionId],
+      ]),
+      repairStreams: [first.streamId, second.streamId],
+      closeRunningGroups: vi.fn(async () => [] as StreamTabId[]),
+      probeOwner,
+      runWithInactiveExecutionLease,
+    });
+
+    expect(probeOwner).toHaveBeenCalledOnce();
+    expect(result.activeOwners).toHaveLength(2);
+  });
+
   it('preserves an execution that completed before a delayed lease retry', async () => {
     const setup = setupRunningStream('completed-before-retry');
     const { streamId, executionId, streamStatus } = setup;

@@ -16,6 +16,7 @@ import { StorageFS } from '@utils/files/storageFS';
 import {
   ensureInstancePresence,
   probeInstance,
+  type InstanceLiveness,
   InstanceOwnerSchema,
   type InstanceOwnerRecord,
 } from './instancePresence';
@@ -41,6 +42,16 @@ export const ExecutionLeaseSchema = z.strictObject({
 });
 
 type ExecutionLeaseRecord = z.infer<typeof ExecutionLeaseSchema>;
+
+export interface InactiveExecutionLeaseOptions {
+  /**
+   * Per-operation liveness reader. Restart repair shares this between
+   * executions owned by the same instance, avoiding repeated socket probes.
+   */
+  readonly probeOwner?: (
+    owner: InstanceOwnerRecord,
+  ) => Promise<InstanceLiveness>;
+}
 
 /**
  * The only surviving recognition of the retired heartbeat protocol: a
@@ -314,8 +325,9 @@ async function withLeaseLock<T>(
 async function leaseOwnerIsActive(
   executionId: ExecutionId,
   record: ExecutionLeaseRecord,
+  options: InactiveExecutionLeaseOptions = {},
 ): Promise<boolean> {
-  const liveness = await probeInstance(record.owner);
+  const liveness = await (options.probeOwner ?? probeInstance)(record.owner);
   if (liveness === 'unprovable') {
     log.warn(
       `Liveness of execution ${executionId}'s owner is unprovable; treating it as active`,
@@ -779,6 +791,7 @@ export async function inspectExecutionLease(
 export async function runWithInactiveExecutionLease<T>(
   executionId: ExecutionId,
   operation: () => Promise<T>,
+  options: InactiveExecutionLeaseOptions = {},
 ): Promise<
   | { readonly status: 'active'; readonly owner: InstanceOwnerRecord }
   | { readonly status: 'performed'; readonly value: T }
@@ -802,7 +815,7 @@ export async function runWithInactiveExecutionLease<T>(
       }
       if (
         currentLease &&
-        (await leaseOwnerIsActive(executionId, currentLease))
+        (await leaseOwnerIsActive(executionId, currentLease, options))
       ) {
         return { status: 'active', owner: currentLease.owner };
       }
