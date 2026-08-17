@@ -12,9 +12,9 @@ import {
 } from '@shared/constants/latexToolchain';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
+import { GoalStore } from '@tools/goal';
 import { ARXIV_CONSTANTS, CROSSREF_CONSTANTS } from '@tools/citation/constants';
 import { DEFAULT_POLLING_BACKOFF_CONFIG } from '@tools/github/PollingSourceBase';
-import { GoalStore } from '@tools/goal/goalStore';
 import {
   LEAN_FILE_COMMANDS,
   LEAN_PROJECT_COMMANDS,
