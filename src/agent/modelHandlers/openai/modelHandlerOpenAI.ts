@@ -30,10 +30,10 @@ import {
 } from '@common/errors/sdkError/errorPatterns';
 import { buildErrorLogData } from '@common/errors/sdkError/providerErrorFormat';
 import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
-import type { ToolDefinition } from '@model/ToolDefinition';
 import type {
   FileLocation,
   MediaAttachmentKind,
+  ToolDefinition,
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas';

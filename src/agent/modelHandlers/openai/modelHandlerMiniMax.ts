@@ -1,6 +1,6 @@
 // Local file imports
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type { ToolDefinition } from '@model/ToolDefinition';
+import type { ToolDefinition } from '@shared/schemas';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 import { joinReasoningItemsText } from '../utils/reasoningDetailsText';
 

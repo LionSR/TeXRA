@@ -30,12 +30,12 @@ import {
 } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import type { ToolDefinition } from '@model/ToolDefinition';
 import { decideRunModel } from '@model/runModelDecision';
 import type {
   AgentCategory,
   AgentDelegationScope,
   ModelOptionData,
+  ToolDefinition,
 } from '@shared/schemas';
 import { isModelOptionAvailable } from '@shared/schemas';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
