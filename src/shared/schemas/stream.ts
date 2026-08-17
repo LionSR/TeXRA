@@ -9,7 +9,7 @@ import { WorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
  * The retired 7-value live-status vocabulary. **Read-only residue** — no
  * production code decides anything from it any more (#7993 steps 2-3 moved
  * every live producer and host reader to `StreamPhase` + `StreamSubstate`).
- * It survives for exactly two reasons:
+ * It survives for one reason:
  *
  * 1. The standalone trace-viewer's file import (`replayTrace.ts`) parses
  *    externally-authored `trace.json` exports through

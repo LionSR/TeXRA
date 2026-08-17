@@ -17,17 +17,14 @@ import type { AgentConfig } from '@agent/runtime';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import type {
-  ExecutionId,
-  ExecutionMeta,
-  HistoryRunStatus,
-} from '@shared/schemas';
+import type { ExecutionId, ExecutionMeta } from '@shared/schemas';
+import { ExecutionIdSchema, RunOutcomeSchema } from '@shared/schemas';
 import {
-  ExecutionIdSchema,
   HISTORY_RUN_STATUS,
   HISTORY_RUN_STATUS_LABEL,
   resolveHistoryRunStatus,
-} from '@shared/schemas';
+  type HistoryRunStatus,
+} from '@shared/schemas/historyRunStatus';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import {
@@ -421,7 +418,7 @@ function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
   ) {
     return status;
   }
-  return runOutcomeToExecutionStatus(status);
+  return runOutcomeToExecutionStatus(RunOutcomeSchema.parse(status));
 }
 
 export function cliHistoryNdjsonRecords(

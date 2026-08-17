@@ -29,7 +29,7 @@ const PROVIDERS: ReadonlyMap<string, ProviderStateEntry> = new Map(
 );
 
 function entry(provider: string): ProviderStateEntry | undefined {
-  return PROVIDERS.get(provider);
+  return PROVIDERS.get(provider) ?? PROVIDERS.get(provider.toLowerCase());
 }
 
 /** Non-catalog fallback — see the module-level "Canonical read path" note. */
