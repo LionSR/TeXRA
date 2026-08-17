@@ -18,7 +18,6 @@ const CHANNEL = 'codexAuth';
 
 const coordinatorAccess = createSecretBackedCoordinator({
   secretKey: CODEX_SESSION_SECRET_KEY,
-  notInitializedMessage: 'Codex auth used before the platform was initialized.',
   makeCoordinator: (storage) => new CodexSessionCoordinator({ storage }),
 });
 

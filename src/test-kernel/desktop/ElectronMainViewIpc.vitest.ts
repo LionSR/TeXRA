@@ -16,7 +16,7 @@ import {
 } from '@shared/ipc';
 import { AgentCategory, SETTINGS_TAB } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { FakeStateStore } from '@test/support/FakePlatform';
+import { FakeConfigProvider, FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 // Local imports - desktop test paths
@@ -104,6 +104,9 @@ async function loadDesktopMainViewIpcModule(electron: {
 }): Promise<MainViewIpcModule> {
   vi.resetModules();
   mocks.doMock('electron', () => electron);
+  mocks.doMock('@platform/platform', () => ({
+    platform: () => ({ config: new FakeConfigProvider() }),
+  }));
   return import(
     moduleFileUrl(desktopSourcePath('main', 'mainViewIpc.ts'))
   ) as Promise<MainViewIpcModule>;

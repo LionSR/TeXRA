@@ -6,7 +6,7 @@
  * the platform dance.
  */
 import { createLog } from '@logger/logUtils';
-import { tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { SubscriptionOAuthError } from './subscriptionOAuthError';
@@ -41,17 +41,15 @@ export function secretBackedSessionStorage(
  */
 export function createSecretBackedCoordinator<C>(init: {
   secretKey: string;
-  notInitializedMessage: string;
   makeCoordinator: (storage: SubscriptionSessionStorage) => C;
 }): { get(): C; reset(): void } {
   let singleton: C | null = null;
   return {
     get() {
       if (singleton) return singleton;
-      const platform = tryPlatform();
-      if (!platform) throw new Error(init.notInitializedMessage);
+      const activePlatform = platform();
       singleton = init.makeCoordinator(
-        secretBackedSessionStorage(platform.secrets, init.secretKey),
+        secretBackedSessionStorage(activePlatform.secrets, init.secretKey),
       );
       return singleton;
     },
@@ -69,14 +67,14 @@ export interface SessionAccessCoordinator {
 }
 
 /**
- * Read signed-in status without throwing. Safe before platform init.
+ * Read signed-in status without throwing after platform initialization.
  */
 export async function getSubscriptionSessionStatus(
   getCoordinator: () => SessionAccessCoordinator,
   channel: string,
   displayName: string,
 ): Promise<SubscriptionSessionStatus> {
-  if (!tryPlatform()) return { signedIn: false };
+  platform();
   const log = createLog(channel);
   try {
     return await getCoordinator().getStatus();
@@ -97,7 +95,7 @@ export async function isSubscriptionSessionRoutable(
   ErrorType: ProviderAuthErrorCtor,
   displayName: string,
 ): Promise<boolean> {
-  if (!tryPlatform()) return false;
+  platform();
   const coordinator = getCoordinator();
   try {
     await coordinator.getFreshAccessToken();

@@ -1,6 +1,6 @@
 // Local imports
 import { createLog } from '@logger/logUtils';
-import { tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import type { ConfigTarget, Disposable } from '@platform/interfaces';
 import { ensureArray } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -16,7 +16,7 @@ interface UpdateConfigOptions {
 }
 
 function configProvider() {
-  return tryPlatform()?.config;
+  return platform().config;
 }
 
 /**
@@ -32,8 +32,7 @@ function configProvider() {
  * @returns The configuration value or default value
  */
 export function getConfig<T>(path: string, defaultValue?: T): T {
-  const provider = configProvider();
-  return provider ? provider.get(path, defaultValue) : (defaultValue as T);
+  return configProvider().get(path, defaultValue);
 }
 
 /**
@@ -93,10 +92,7 @@ export async function updateConfig<T>(
   const { target = 'workspace', prefix = true } = options;
 
   const key = prefix && !path.startsWith('texra.') ? `texra.${path}` : path;
-  const provider = configProvider();
-  if (!provider) return;
-
-  await provider.update(key, value, target);
+  await configProvider().update(key, value, target);
 }
 
 /**
@@ -114,9 +110,7 @@ export function watchConfig(
 ): Disposable {
   const keyArray = ensureArray(keys);
   const provider = configProvider();
-  const disposable = provider?.watch(keyArray, callback) ?? {
-    dispose: () => {},
-  };
+  const disposable = provider.watch(keyArray, callback);
 
   context.subscriptions.push(disposable);
   return disposable;
