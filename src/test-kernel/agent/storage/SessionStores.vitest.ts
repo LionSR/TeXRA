@@ -251,6 +251,46 @@ describe('SessionStores deletion coordination', () => {
     });
   });
 
+  it('joins process and presentation deletion at the same incarnation', async () => {
+    await withSession(async (session) => {
+      const stream = 'shared-incarnation-delete' as StreamTabId;
+      session.transcripts.ensureStream(stream);
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots: new StreamSnapshotStore(),
+      });
+      let releaseLease!: () => void;
+      const leaseReleased = new Promise<void>((resolve) => {
+        releaseLease = resolve;
+      });
+      vi.spyOn(stores, 'waitForOwnedExecutionRelease').mockReturnValue(
+        leaseReleased,
+      );
+      const deleteTranscript = vi.spyOn(session.transcripts, 'delete');
+
+      try {
+        const processDeletion = stores.deleteStreamAfterOwnedExecutionRelease(
+          stream,
+          {
+            shouldDelete: () => true,
+            expectedIncarnation: 4,
+          },
+        );
+        const presentationDeletion = stores.deleteStream(stream, {
+          shouldDelete: () => true,
+          expectedIncarnation: 4,
+        });
+
+        expect(presentationDeletion).toBe(processDeletion);
+        releaseLease();
+        await expect(processDeletion).resolves.toBe('deleted');
+        expect(deleteTranscript).toHaveBeenCalledOnce();
+      } finally {
+        releaseLease();
+      }
+    });
+  });
+
   it('releases one canonical stream once when single and bulk deletion overlap', async () => {
     await withSession(async (session) => {
       const stream = 'tool@test#abc001' as StreamTabId;
@@ -291,10 +331,10 @@ describe('SessionStores deletion coordination', () => {
       const bulk = stores.deleteAll();
       unblockDeletion();
 
-      await expect(Promise.all([single, bulk])).resolves.toEqual([
-        'deleted',
-        { active: new Set(), failed: new Set() },
-      ]);
+      const [singleResult, bulkResult] = await Promise.all([single, bulk]);
+      expect(singleResult).toBe('deleted');
+      expect(bulkResult.active).toEqual(new Set());
+      expect(bulkResult.failed).toEqual(new Set());
       expect(releases).toEqual([stream]);
     });
   });
@@ -479,6 +519,79 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
       await expect(
         getExecutionStore(executionId).readMeta(),
       ).resolves.not.toBeNull();
+    });
+  });
+
+  it('refuses a deletion whose generation guard flips during the transcript delete', async () => {
+    await withSession(async (session) => {
+      const stream = 'tool@test#fence' as StreamTabId;
+      session.transcripts.ensureStream(stream);
+      const snapshots = new StreamSnapshotStore();
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+      });
+
+      // The generation fence must stay atomic with the transcript commit. Flip
+      // the guard once `delete` is entered — a deterministic workflow re-claim
+      // landing while the transcript delete drains pending writes — and assert
+      // the delete reports `superseded` with the transcript still resident.
+      let reClaimed = false;
+      const shouldDelete = (): boolean => !reClaimed;
+      const originalDelete = session.transcripts.delete.bind(
+        session.transcripts,
+      );
+      vi.spyOn(session.transcripts, 'delete').mockImplementation(
+        async (streamId, options) => {
+          reClaimed = true;
+          return originalDelete(streamId, options);
+        },
+      );
+
+      await expect(stores.deleteStream(stream, { shouldDelete })).resolves.toBe(
+        'superseded',
+      );
+      expect(session.transcripts.has(stream)).toBe(true);
+    });
+  });
+
+  it('retains a bulk-deleted identity re-claimed during transcript cleanup', async () => {
+    await withSession(async (session) => {
+      const stream = 'tool@test#bulk-fence' as StreamTabId;
+      const sibling = 'tool@test#bulk-sibling' as StreamTabId;
+      const executionId = 'bulk-fence' as ExecutionId;
+      session.transcripts.ensureStream(stream);
+      session.transcripts.ensureStream(sibling);
+      const snapshots = new StreamSnapshotStore();
+      ownExecution(snapshots, stream, executionId);
+      ownExecution(snapshots, sibling, executionId);
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        deleteExecution: deletionSpy(),
+      });
+
+      let reClaimed = false;
+      const originalDelete = session.transcripts.delete.bind(
+        session.transcripts,
+      );
+      vi.spyOn(session.transcripts, 'delete').mockImplementation(
+        async (streamId, options) => {
+          if (streamId === stream) reClaimed = true;
+          return originalDelete(streamId, options);
+        },
+      );
+
+      const result = await stores.deleteAll({
+        shouldDelete: (streamId) => streamId !== stream || !reClaimed,
+      });
+      expect(result.active).toContain(stream);
+      expect(result.failed).not.toContain(stream);
+      expect(result.deleted).not.toContain(stream);
+      expect(session.transcripts.has(stream)).toBe(true);
+      expect(result.deleted).toContain(sibling);
+      expect(result.failed).not.toContain(sibling);
+      expect(session.transcripts.has(sibling)).toBe(false);
     });
   });
 });
