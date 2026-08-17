@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInput, useWindowSize } from 'ink';
 
 import { tryDefaultSession } from '@agent/runtime';
+import { safeTerminalText } from '@cli/runtime/terminalText';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
@@ -96,8 +97,10 @@ function hydratedTranscript(
       ...entry,
       text:
         spill.kind === 'loaded'
-          ? normalizeKnownHtmlForCliMarkdown(
-              trimAssistantTranscriptLead(spill.text),
+          ? safeTerminalText(
+              normalizeKnownHtmlForCliMarkdown(
+                trimAssistantTranscriptLead(spill.text),
+              ),
             )
           : withSpillNotice(entry.text, spill.notice),
     };
