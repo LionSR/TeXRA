@@ -387,13 +387,23 @@ export function fullTranscriptEntryLayout(
     width: printWidth,
   });
   if (entry.role !== 'tool') return layout;
+  // Spilled rows carry only a bounded preview in the normal transcript. The
+  // on-demand reader substitutes the artifact text before reaching this
+  // layout; append it explicitly so read/edit-style tools (whose compact card
+  // intentionally omits ordinary output) still expose their recovered value.
+  const spillOutput = entry.spillPath
+    ? ['Full output:', ...entry.toolUse.outputText.split('\n')]
+    : [];
   return {
     ...layout,
     lines: wrapDisplayLines(
-      toolUseDisplayLines(entry.toolUse, {
-        elide: false,
-        executionLabels,
-      }),
+      [
+        ...toolUseDisplayLines(entry.toolUse, {
+          elide: false,
+          executionLabels,
+        }),
+        ...spillOutput,
+      ],
       layout.columns,
     ),
   };

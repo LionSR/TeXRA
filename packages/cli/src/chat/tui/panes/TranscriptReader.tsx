@@ -8,7 +8,7 @@
 // full-screen pager is not an option here — this is an ordinary foreground
 // surface, sized by the same row budget every other one uses.
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useInput, useWindowSize } from 'ink';
 
 import { isEscapeInput } from '@cli/tui/inputKeys';
@@ -18,17 +18,40 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import type { StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import { readTranscriptSpill } from '@transcript';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from '../modals/ScrollableModalText';
-import { streams as streamsSignal } from '../state/cliState';
+import {
+  streams as streamsSignal,
+  type ConversationEntry,
+  type StreamSlice,
+} from '../state/cliState';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 
 const EMPTY_TRANSCRIPT_TEXT = '(no output yet)';
+const MISSING_SPILL_TEXT =
+  '[Full output is unavailable because this run artifact was deleted.]';
+
+function hydratedTranscript(
+  slice: StreamSlice | undefined,
+  spills: ReadonlyMap<string, string>,
+): StreamSlice | undefined {
+  if (!slice || spills.size === 0) return slice;
+  const entries = slice.entries.map((entry): ConversationEntry => {
+    const spill = entry.spillPath ? spills.get(entry.spillPath) : undefined;
+    if (spill === undefined) return entry;
+    if (entry.role === 'tool') {
+      return { ...entry, toolUse: { ...entry.toolUse, outputText: spill } };
+    }
+    return { ...entry, text: spill };
+  });
+  return { ...slice, entries };
+}
 
 export function transcriptReaderTitle(label: string | undefined): string {
   return label ? `Transcript: ${label}` : 'Transcript';
@@ -52,15 +75,49 @@ export function TranscriptReader({
   const slice = streams.get(streamId);
   const frameWidth = formFrameWidth(columns);
   const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
+  const [spills, setSpills] = useState<ReadonlyMap<string, string>>(new Map());
+
+  const spillPaths = useMemo(
+    () => [
+      ...new Set(
+        slice?.entries.flatMap((entry) => entry.spillPath ?? []) ?? [],
+      ),
+    ],
+    [slice],
+  );
+
+  useEffect(() => {
+    let disposed = false;
+    void Promise.all(
+      spillPaths.map(
+        async (spillPath) =>
+          [
+            spillPath,
+            (await readTranscriptSpill(spillPath).catch(() => undefined)) ??
+              MISSING_SPILL_TEXT,
+          ] as const,
+      ),
+    ).then((resolved) => {
+      if (!disposed) setSpills(new Map(resolved));
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [spillPaths]);
+
+  const hydratedSlice = useMemo(
+    () => hydratedTranscript(slice, spills),
+    [slice, spills],
+  );
 
   // Recomputed as the run appends rows, so the reader stays live rather than
   // freezing at the content present when it opened.
   const text = useMemo(() => {
-    const body = transcriptToLines(slice, width, executionLabels)
+    const body = transcriptToLines(hydratedSlice, width, executionLabels)
       .join('\n')
       .trimEnd();
     return body || EMPTY_TRANSCRIPT_TEXT;
-  }, [executionLabels, slice, width]);
+  }, [executionLabels, hydratedSlice, width]);
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) {
