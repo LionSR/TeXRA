@@ -43,7 +43,7 @@ const STREAM = 'stream:desktop-parent' as StreamTabId;
 function restoreGeneration(session: SessionHandle): void {
   expect(
     session.followUps.restorePersistedGeneration(STREAM, 'generation-a'),
-  ).toBe(true);
+  ).toBe('restored');
 }
 
 function sessionStub(tag?: string): SessionHandle {

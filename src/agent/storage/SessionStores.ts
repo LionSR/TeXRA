@@ -116,6 +116,20 @@ export class SessionStores {
     );
   }
 
+  /**
+   * Delete only the transcript and snapshot state for an execution that an
+   * external history owner is already deleting. Keeping this operation here
+   * preserves the session's child, goal, status, and resource projections
+   * without recursively deleting the execution a second time.
+   */
+  deleteAdjacentStreamState(stream: StreamTabId): Promise<void> {
+    return this.enqueueDeletion(async () => {
+      const hadCanonicalStream = this.streamLogs.has(stream);
+      await this.deleteStreamSidecars(stream);
+      if (hadCanonicalStream) await this.notifyDeleted(stream);
+    });
+  }
+
   deleteStreamAfterOwnedExecutionRelease(
     stream: StreamTabId,
   ): Promise<DeleteStreamResult> {
@@ -254,7 +268,7 @@ export class SessionStores {
 
     if (!executionId) {
       try {
-        await this.deleteAdjacentStreamState(stream);
+        await this.deleteStreamSidecars(stream);
       } catch (error) {
         log.warn(
           `Stream ${stream} was retained because cleanup was incomplete: ${toErrorMessage(error)}`,
@@ -266,7 +280,7 @@ export class SessionStores {
     }
 
     const outcome = await this.deleteExecutionWithStreamState(executionId, () =>
-      this.deleteAdjacentStreamState(stream),
+      this.deleteStreamSidecars(stream),
     );
     switch (outcome.kind) {
       case 'completed':
@@ -409,7 +423,7 @@ export class SessionStores {
     await Promise.all(
       streamsWithoutExecution.map(async (stream) => {
         try {
-          await this.deleteAdjacentStreamState(stream);
+          await this.deleteStreamSidecars(stream);
           if (canonicalStreams.has(stream)) await this.notifyDeleted(stream);
         } catch (error) {
           log.warn(
@@ -591,7 +605,7 @@ export class SessionStores {
           if (executionId) {
             const outcome = await this.deleteExecutionWithStreamState(
               executionId,
-              () => this.deleteAdjacentStreamState(stream),
+              () => this.deleteStreamSidecars(stream),
             );
             if (outcome.kind === 'streams-deleted') {
               sweptStreams.push(stream);
@@ -613,7 +627,7 @@ export class SessionStores {
               sweptExecutionIds.push(executionId);
             }
           } else {
-            await this.deleteAdjacentStreamState(stream);
+            await this.deleteStreamSidecars(stream);
           }
           sweptStreams.push(stream);
         } catch (error) {
@@ -675,7 +689,7 @@ export class SessionStores {
     return swept;
   }
 
-  private async deleteAdjacentStreamState(stream: StreamTabId): Promise<void> {
+  private async deleteStreamSidecars(stream: StreamTabId): Promise<void> {
     const snapshotDeletion = await this.snapshots.stageDeleteStream(
       stream,
       (children) => this.notifyChildrenDetached(stream, children),
