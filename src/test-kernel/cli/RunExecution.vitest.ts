@@ -1005,7 +1005,16 @@ describe('executeCliRequest', () => {
   it.each([
     {
       label: 'a fresh lease remains',
-      inspection: { status: 'foreign' as const, heartbeatAt: 1 },
+      inspection: {
+        status: 'foreign' as const,
+        acquiredAt: 1,
+        owner: {
+          instanceId: 'test-instance',
+          socketPath: '/tmp/texra-test.sock',
+          pid: 1,
+          hostname: 'test-host',
+        },
+      },
     },
     {
       label: 'lease inspection fails',

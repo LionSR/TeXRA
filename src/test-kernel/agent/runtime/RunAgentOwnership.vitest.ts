@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   abandonOwnedExecutionLease: vi.fn(),
-  renewOwnedExecutionLease: vi.fn(),
+  validateOwnedExecutionLease: vi.fn(),
   acquireResumedExecutionLease: vi.fn(),
   clearTerminalExecutionState: vi.fn(),
   executeAgent: vi.fn(),
@@ -18,7 +18,6 @@ vi.mock('@agent/storage', () => ({
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
-  EXECUTION_LEASE_STALE_MS: 120_000,
   abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
   completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
@@ -26,7 +25,7 @@ vi.mock('@agent/storage/executionLease', () => ({
     (_executionId: ExecutionId) => (operation: () => unknown) =>
       operation(),
   markOwnedExecutionLeaseUndurable: mocks.markOwnedExecutionLeaseUndurable,
-  renewOwnedExecutionLease: mocks.renewOwnedExecutionLease,
+  validateOwnedExecutionLease: mocks.validateOwnedExecutionLease,
 }));
 
 vi.mock('@agent/storage/executionLifecycle', () => ({
@@ -90,7 +89,7 @@ describe('runAgent execution ownership', () => {
       streamId: 'assistant#run-agent-owner',
     });
     mocks.completeOwnedExecutionLease.mockResolvedValue({ status: 'released' });
-    mocks.renewOwnedExecutionLease.mockResolvedValue(undefined);
+    mocks.validateOwnedExecutionLease.mockResolvedValue(undefined);
     flushArtifacts.mockResolvedValue(undefined);
     mocks.finalizeExecution.mockResolvedValue(FINALIZE_RESULT);
     mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);

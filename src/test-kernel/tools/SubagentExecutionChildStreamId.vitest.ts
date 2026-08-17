@@ -60,7 +60,6 @@ vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
 });
 
 vi.mock('@agent/storage/executionLease', () => ({
-  EXECUTION_LEASE_STALE_MS: 120_000,
   captureOwnedExecutionLease:
     (_executionId: string) => (operation: () => unknown) =>
       operation(),

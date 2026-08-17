@@ -55,7 +55,6 @@ vi.mock('@agent/storage', () => ({
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
-  EXECUTION_LEASE_STALE_MS: 120_000,
   captureOwnedExecutionLease:
     (_executionId: ExecutionId) => (operation: () => unknown) =>
       operation(),
