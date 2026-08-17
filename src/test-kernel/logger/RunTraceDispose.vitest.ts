@@ -72,6 +72,7 @@ describe('createRunTrace dispose', () => {
     const writer: TranscriptWriter = {
       streamId: 'failed-stream' as StreamTabId,
       settlementHead: 0,
+      reserveSettlement: vi.fn(),
       append: vi.fn((entry) => ({ ...entry, seqNo: 0 })),
       appendSettled: vi.fn((entry) => ({ ...entry, seqNo: 0 })),
       update: vi.fn(),
@@ -118,6 +119,7 @@ describe('createRunTrace dispose', () => {
         throw setupFailure;
       },
       settlementHead: 0,
+      reserveSettlement: vi.fn(),
       append: vi.fn(),
       appendSettled: vi.fn(),
       update: vi.fn(),

@@ -345,14 +345,22 @@ describe('attachTranscriptRecorder workflow task state', () => {
     response.append('Final answer');
 
     const nextRound = trace.openStage('Next round', { kind: 'round' });
+    trace.toolStart({
+      logId: 'tool:next-round',
+      toolName: 'read',
+      input: { path: 'paper.tex' },
+    });
+    trace.toolEnd({ logId: 'tool:next-round', status: 'completed' });
     response.finalize();
 
     expect(row(response.id)).toMatchObject({
       settlementSeqNo: 1,
+      presentationSeqNo: 1,
       text: 'Final answer',
       data: { status: 'completed' },
     });
     expect(row(nextRound.id)?.presentationSeqNo).toBe(1);
+    expect(row('tool:next-round')?.settlementSeqNo).toBe(2);
   });
 
   it('assigns source settlement order before terminal status projection', () => {
