@@ -17,9 +17,9 @@
  * `meta`, `config`, etc. from being wrongly hidden.
  */
 
+import { isWorkflowScriptCheckpointKvKey } from '@agent/workflowScript';
 import { isReservedKvKeyName } from '@agent/storage';
 import { FLOW_KEY_PREFIX } from '@agent/node/persistedFlow';
-import { isWorkflowScriptCheckpointKvKey } from '@agent/workflowScript/checkpointKey';
 import { isStableSubagentStateKvKey } from '@tools/delegation/stableSubagentAttempt';
 
 export function isKVFile(name: string): boolean {

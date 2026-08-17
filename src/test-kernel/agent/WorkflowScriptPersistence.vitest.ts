@@ -4,6 +4,7 @@ import {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
   runWorkflowScript,
+  workflowScriptCheckpointKvKey,
   WorkflowScriptPersistenceError,
   writeWorkflowScriptCheckpoint,
   type WorkflowScriptControl,
@@ -13,7 +14,6 @@ import {
   getExecutionStore,
   type ExecutionKVStore,
 } from '@agent/storage';
-import { workflowScriptCheckpointKvKey } from '@agent/workflowScript/checkpointKey';
 import {
   WorkflowExecutionSnapshotSchema,
   deriveWorkflowCounts,
