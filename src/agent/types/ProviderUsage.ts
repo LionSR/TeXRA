@@ -11,9 +11,10 @@ import type { ChatUsage as OpenRouterChatUsage } from '@openrouter/sdk/models';
  * SDK types there: a plain data contract between `ModelHandler`/`IModelHandler`
  * and each provider's SDK, not a normalized domain value.
  *
- * Raw usage stays inside the model-handler layer: `ModelHandler` normalizes
- * it before response extraction reaches core flows. `core/usage/` (the
- * value-object layer: `RunUsageAccumulator`) sees only `NormalizedUsage`.
+ * Raw usage no longer crosses into core flows. `ModelHandler` normalizes the
+ * primary response path, while helper-model integrations may still pass it
+ * through their own boundary. `core/usage/` (the value-object layer:
+ * `RunUsageAccumulator`) sees only `NormalizedUsage`.
  */
 
 /**
