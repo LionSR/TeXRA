@@ -14,7 +14,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
-import type { LogMessageData } from '@shared/schemas';
+import { MESSAGE_TYPES, type LogMessageOf } from '@shared/schemas';
 import { normalizeToolUseForRender } from '@shared/toolUse';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
@@ -69,7 +69,7 @@ function inputPathOf(input: Record<string, unknown>): string {
 
 /** Format tool use log entry as TemplateResult. */
 export function formatToolUseTemplate(
-  message: LogMessageData,
+  message: LogMessageOf<typeof MESSAGE_TYPES.TOOL_USE>,
   options?: { executionLabels?: ExecutionLabels },
 ): FormatResult {
   const { timestamp, data } = message;
@@ -79,7 +79,7 @@ export function formatToolUseTemplate(
   // Keep the raw value local to this render so fallback sections can include
   // fields outside the common schema without retaining a second copy in UI
   // state.
-  const parsed = isObject(data) ? data : {};
+  const parsed = data;
 
   const {
     toolName,

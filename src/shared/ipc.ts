@@ -196,19 +196,6 @@ export const PROGRESS_VIEW_COMMANDS = {
   SET_PLACEMENT: 'setPlacement',
 } as const;
 
-export const HISTORY_VIEW_COMMANDS = {
-  ...COMMON_COMMANDS,
-  UPDATE_HISTORY: 'updateHistory',
-  CLEAR_HISTORY: 'clearHistory',
-  HISTORY_CLEARED: 'historyCleared',
-  RERUN_AGENT: 'rerunAgent',
-  RESTORE_AGENT: 'restoreAgent',
-  DELETE_AGENT: 'deleteAgent',
-  EXPORT_CHAT_MD: 'exportChatMd',
-  EXPORT_CHAT_TEX: 'exportChatTex',
-  EXPORT_CHAT_HTML: 'exportChatHtml',
-} as const;
-
 export const PROFILE_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
   UPDATE_PROFILE: 'updateProfile',
@@ -238,7 +225,7 @@ export const MEMORY_VIEW_COMMANDS = {
  * Defined here (not in settingsViewMessages.ts) to avoid the cycle
  * `ipc.ts → settingsViewMessages.ts → memoryViewMessages.ts → ipc.ts`.
  *
- * Memory/History/Profile inbound commands reference their own view's
+ * Memory and Profile inbound commands reference their own view's
  * command map (the single source of truth for those literals) instead of
  * repeating the string values, so the two can't drift.
  */
@@ -254,14 +241,6 @@ export const SETTINGS_VIEW_CMD = {
   SET_MEMORY_ENABLED: MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED,
   PIN_MEMORY: MEMORY_VIEW_COMMANDS.PIN_MEMORY,
   UNPIN_MEMORY: MEMORY_VIEW_COMMANDS.UNPIN_MEMORY,
-  // History commands
-  RERUN_AGENT: HISTORY_VIEW_COMMANDS.RERUN_AGENT,
-  RESTORE_AGENT: HISTORY_VIEW_COMMANDS.RESTORE_AGENT,
-  DELETE_AGENT: HISTORY_VIEW_COMMANDS.DELETE_AGENT,
-  CLEAR_HISTORY: HISTORY_VIEW_COMMANDS.CLEAR_HISTORY,
-  EXPORT_CHAT_MD: HISTORY_VIEW_COMMANDS.EXPORT_CHAT_MD,
-  EXPORT_CHAT_TEX: HISTORY_VIEW_COMMANDS.EXPORT_CHAT_TEX,
-  EXPORT_CHAT_HTML: HISTORY_VIEW_COMMANDS.EXPORT_CHAT_HTML,
   // Profile commands
   SIGN_IN: PROFILE_VIEW_COMMANDS.SIGN_IN,
   SIGN_OUT: PROFILE_VIEW_COMMANDS.SIGN_OUT,
@@ -340,7 +319,7 @@ export const SETTINGS_VIEW_CMD = {
   REVEAL_GOAL_STREAM: 'revealGoalStream',
 } as const;
 
-// Settings view specific commands (combines Memory, History, and Profile views)
+// Settings view specific commands (combines Memory and Profile views)
 // SETTINGS_VIEW_CMD is the source of truth; outbound-only commands are added here
 export const SETTINGS_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
@@ -349,8 +328,6 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_MEMORY: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY,
   UPDATE_MEMORY_PREVIEW: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
   UPDATE_MEMORY_ENABLED: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
-  UPDATE_HISTORY: HISTORY_VIEW_COMMANDS.UPDATE_HISTORY,
-  HISTORY_CLEARED: HISTORY_VIEW_COMMANDS.HISTORY_CLEARED,
   UPDATE_PROFILE: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
   UPDATE_MODEL_SELECTION: 'updateModelSelection',
   UPDATE_AGENT_SELECTION: 'updateAgentSelection',

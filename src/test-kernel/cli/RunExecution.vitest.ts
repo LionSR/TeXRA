@@ -5,6 +5,8 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RunAgentOptions } from '@agent/runtime/runAgent';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
 import { AgentError } from '@common/errors';
@@ -144,8 +146,11 @@ const COMPLETED_WORKFLOW_RUN: Parameters<
   compileFailures: [],
 };
 
-function baseRequest(): CliRequest {
-  return { config: {}, executionId: 'exec-1' } as CliRequest;
+function baseRequest(kind: 'fresh' | 'resume' = 'fresh'): CliRequest {
+  const request = { config: {}, executionId: 'exec-1' } as const;
+  return kind === 'fresh'
+    ? ({ kind, ...request } as CliRequest)
+    : ({ kind, ...request } as CliRequest);
 }
 
 function toolUseConfig() {
@@ -179,6 +184,7 @@ type LeaseOptions = {
   openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
   onRun?: () => void;
   launchSignal?: AbortSignal;
+  session?: SessionHandle;
   onExecutionLeaseAcquired?: (
     scope: (operation: () => unknown) => unknown,
     executionId: ExecutionId,
@@ -194,11 +200,30 @@ function stubHangingRun(handleOptions: (options: LeaseOptions) => void): {
   resolve: (result: unknown) => void;
 } {
   let resolveRun!: (result: unknown) => void;
-  mocks.runAgent.mockImplementation(async (_request, options: LeaseOptions) => {
+  mocks.runAgent.mockImplementation(async (request, options: LeaseOptions) => {
     handleOptions(options);
-    return new Promise((resolve) => {
-      resolveRun = resolve;
-    });
+    const executionId = request.executionId as ExecutionId;
+    const streamId = `chat#${executionId}` as StreamTabId;
+    const launchHandle = new AgentExecutionHandle(
+      {
+        streamId,
+        executionId,
+        identity: { kind: 'agent', agent: 'chat' },
+        category: 'toolUse',
+      },
+      streamId,
+    );
+    launchHandle.attachInterruptHandler({ interrupt: () => undefined });
+    options.session?.executions.track(launchHandle);
+    try {
+      return await new Promise((resolve) => {
+        resolveRun = resolve;
+      });
+    } finally {
+      if (options.session?.executions.getHandle(executionId) === launchHandle) {
+        options.session.executions.untrack(executionId);
+      }
+    }
   });
   return { resolve: (result: unknown) => resolveRun(result) };
 }
@@ -844,11 +869,11 @@ describe('executeCliRequest', () => {
   });
 
   it.each([
-    { label: 'fresh', options: { registerExecution: true } },
-    { label: 'resumed', options: {} },
+    { label: 'fresh', kind: 'fresh' },
+    { label: 'resumed', kind: 'resume' },
   ] as const)(
     'marks $label owned executions interrupted during platform shutdown',
-    async ({ options }) => {
+    async ({ kind }) => {
       const { platform, executeCliRequest } = await installFakePlatform();
       const { flushSpy } = await spyOnTranscriptFlush();
       const { defaultSession } = await import('@agent/runtime/SessionHandle');
@@ -869,8 +894,7 @@ describe('executeCliRequest', () => {
         publishRun = options.onRun;
       });
 
-      const run = executeCliRequest(baseRequest(), cliContext(), {
-        ...options,
+      const run = executeCliRequest(baseRequest(kind), cliContext(), {
         onInterruptedExecutionFinalized,
       });
       await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
@@ -952,7 +976,6 @@ describe('executeCliRequest', () => {
     });
 
     const run = executeCliRequest(baseRequest(), cliContext(), {
-      registerExecution: true,
       onInterruptedExecutionFinalized,
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
@@ -983,7 +1006,6 @@ describe('executeCliRequest', () => {
       leaseOptions = options;
     });
     const run = executeCliRequest(baseRequest(), cliContext(), {
-      registerExecution: true,
       onInterruptedExecutionFinalized,
     });
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
@@ -1005,7 +1027,16 @@ describe('executeCliRequest', () => {
   it.each([
     {
       label: 'a fresh lease remains',
-      inspection: { status: 'foreign' as const, heartbeatAt: 1 },
+      inspection: {
+        status: 'foreign' as const,
+        acquiredAt: 1,
+        owner: {
+          instanceId: 'test-instance',
+          socketPath: '/tmp/texra-test.sock',
+          pid: 1,
+          hostname: 'test-host',
+        },
+      },
     },
     {
       label: 'lease inspection fails',
@@ -1029,7 +1060,6 @@ describe('executeCliRequest', () => {
       });
 
       const run = executeCliRequest(baseRequest(), cliContext(), {
-        registerExecution: true,
         onInterruptedExecutionFinalized,
       });
       await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
@@ -1074,9 +1104,7 @@ describe('executeCliRequest', () => {
       leaseOptions = options;
     });
 
-    const run = executeCliRequest(baseRequest(), cliContext(), {
-      registerExecution: true,
-    });
+    const run = executeCliRequest(baseRequest(), cliContext(), {});
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
     leaseOptions?.onExecutionLeaseAcquired?.(
       runWithOwnership,
@@ -1107,9 +1135,7 @@ describe('executeCliRequest', () => {
       },
     );
 
-    const run = executeCliRequest(baseRequest(), cliContext(), {
-      registerExecution: true,
-    });
+    const run = executeCliRequest(baseRequest(), cliContext(), {});
     await vi.waitFor(() => expect(launchSignal).toBeDefined());
 
     await platform.lifecycle.runShutdown();
@@ -1129,9 +1155,7 @@ describe('executeCliRequest', () => {
     const hangingRun = stubHangingRun((options) => {
       leaseOptions = options;
     });
-    const run = executeCliRequest(baseRequest(), cliContext(), {
-      registerExecution: true,
-    });
+    const run = executeCliRequest(baseRequest(), cliContext(), {});
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
     leaseOptions?.onExecutionLeaseAcquired?.(
       (operation: () => unknown) => operation(),
@@ -1156,7 +1180,6 @@ describe('executeCliRequest', () => {
     });
     let publicationCommitted: boolean | undefined;
     const run = executeCliRequest(baseRequest(), cliContext(), {
-      registerExecution: true,
       openWorkflowOutput: async (_result, tryCommitPublication) => {
         publicationCommitted = tryCommitPublication();
       },
@@ -1199,7 +1222,6 @@ describe('executeCliRequest', () => {
     });
     let publicationCommitted: boolean | undefined;
     const run = executeCliRequest(baseRequest(), cliContext(), {
-      registerExecution: true,
       openWorkflowOutput: async (_result, tryCommitPublication) => {
         publicationCommitted = tryCommitPublication();
       },
@@ -1267,7 +1289,6 @@ describe('executeCliRequest', () => {
     );
 
     const run = executeCliRequest(baseRequest(), cliContext(), {
-      registerExecution: true,
       openWorkflowOutput: async (_result, tryCommitPublication) => {
         publicationCommitted = tryCommitPublication();
         throw outputFailure;
@@ -1305,9 +1326,7 @@ describe('executeCliRequest', () => {
       }, 'exec-1' as ExecutionId);
     });
 
-    const run = executeCliRequest(baseRequest(), cliContext(), {
-      registerExecution: true,
-    });
+    const run = executeCliRequest(baseRequest(), cliContext(), {});
     await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledOnce());
     const shutdown = platform.lifecycle.runShutdown();
     await Promise.resolve();
@@ -1337,7 +1356,6 @@ describe('executeCliRequest', () => {
 
     const onInterruptedExecutionFinalized = vi.fn();
     const run = executeCliRequest(baseRequest(), cliContext(), {
-      registerExecution: true,
       onInterruptedExecutionFinalized,
     });
     await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledOnce());
@@ -1375,9 +1393,7 @@ describe('executeCliRequest', () => {
     const { platform, executeCliRequest } = await installFakePlatform();
     const request = baseRequest();
 
-    await executeCliRequest(request, cliContext(), {
-      registerExecution: true,
-    });
+    await executeCliRequest(request, cliContext(), {});
     mocks.finalizeExecution.mockClear();
     await platform.lifecycle.runShutdown();
 
@@ -1406,7 +1422,6 @@ describe('executeCliConfig', () => {
       outcomePersisted: true,
     });
     return executeCliToolUseConfig(toolUseConfig(), cliContext(), {
-      registerExecution: true,
       stopAfterCycle: true,
     });
   }
@@ -1435,7 +1450,6 @@ describe('executeCliConfig', () => {
     mocks.writeTextStderrAndWait.mockReturnValueOnce(recoveryWrite);
 
     const run = executeCliToolUseConfig(toolUseConfig(), context, {
-      registerExecution: true,
       stopAfterCycle: true,
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
@@ -1479,7 +1493,6 @@ describe('executeCliConfig', () => {
     });
 
     const run = executeCliToolUseConfig(toolUseConfig(), cliContext(), {
-      registerExecution: true,
       recoveryInputIsDurable: false,
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());

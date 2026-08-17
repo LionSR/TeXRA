@@ -13,11 +13,7 @@ import {
   SPINNER_ICON_NAME,
 } from '@progressView/frontend/formatters/htmlBuilders';
 import type { FormatResult } from '@progressView/frontend/formatters/baseLogFormatter';
-import {
-  WebSearchPayloadSchema,
-  WebFetchPayloadSchema,
-  type LogMessageData,
-} from '@shared/schemas';
+import { MESSAGE_TYPES, type LogMessageOf } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { tryParseUrl } from '@utils/core';
@@ -42,15 +38,11 @@ const STATUS_ICONS: Record<string, TeXRAIconName | typeof SPINNER_ICON_NAME> = {
 };
 
 /** Format web search results as TemplateResult. */
-export function formatWebSearchTemplate(message: LogMessageData): FormatResult {
+export function formatWebSearchTemplate(
+  message: LogMessageOf<typeof MESSAGE_TYPES.WEB_SEARCH>,
+): FormatResult {
   const { data } = message;
-  if (!data || typeof data !== 'object') return null;
-
-  // Parsed (not merely cast) so `WebSearchPayloadItemSchema` actually
-  // sanitizes each result's `url` — a `javascript:`/`data:` scheme from a
-  // web_search tool result must never reach the `<a href>` below.
-  const { query, results, provider, status } =
-    WebSearchPayloadSchema.parse(data);
+  const { query, results, provider, status } = data;
   const searchResults = results ?? [];
   const resultCount = searchResults.length;
   const statusKey = status ?? '';
@@ -114,14 +106,11 @@ const FETCH_ERROR_LABELS: Record<string, string> = {
 };
 
 /** Format web fetch results as TemplateResult. */
-export function formatWebFetchTemplate(message: LogMessageData): FormatResult {
+export function formatWebFetchTemplate(
+  message: LogMessageOf<typeof MESSAGE_TYPES.WEB_FETCH>,
+): FormatResult {
   const { data } = message;
-  if (!data || typeof data !== 'object') return null;
-
-  // Parsed (not merely cast) so `WebFetchPayloadSchema` actually sanitizes
-  // `url` — a `javascript:`/`data:` scheme from a web_fetch tool result must
-  // never reach the `<a href>` below.
-  const { url, title, status, errorCode } = WebFetchPayloadSchema.parse(data);
+  const { url, title, status, errorCode } = data;
   const isFailed = status === 'failed';
 
   const iconName = isFailed ? 'circle-exclamation' : 'cloud-arrow-down';

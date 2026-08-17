@@ -2,8 +2,8 @@
  * Schema definitions for SettingsView messages.
  *
  * Public entry point and single home for the settings-view wire format:
- * combines the messages re-exported from MemoryView, HistoryView, and
- * ProfileView with the settings-specific data schemas, the outbound
+ * combines the messages re-exported from MemoryView and ProfileView with the
+ * settings-specific data schemas, the outbound
  * (backend → webview) message union, and the inbound (webview → backend)
  * message union plus their dispatchers.
  */
@@ -58,17 +58,6 @@ import {
   UpdateMemoryPreviewMessageSchema,
 } from './memoryViewMessages';
 import {
-  ClearHistoryMessageSchema,
-  DeleteAgentMessageSchema,
-  ExportChatHtmlMessageSchema,
-  ExportChatMdMessageSchema,
-  ExportChatTexMessageSchema,
-  HistoryClearedMessageSchema,
-  RerunAgentMessageSchema,
-  RestoreAgentMessageSchema,
-  UpdateHistoryMessageSchema,
-} from './historyViewMessages';
-import {
   ClaudeAgentEffortSchema,
   ClaudeAgentModelSchema,
   ClaudeAgentPermissionModeSchema,
@@ -93,15 +82,6 @@ export { type Goal } from './goal';
 // import site) stays intact. Keep this selective: the schemas themselves are
 // deliberately not re-exported here.
 export { type MemoryViewItem, type MemoryPreview } from './memoryViewMessages';
-
-export {
-  HISTORY_RUN_STATUS,
-  HISTORY_RUN_STATUS_LABEL,
-  resolveHistoryRunStatus,
-  type HistoryItem,
-  type HistoryRunStatus,
-  type UpdateHistoryMessage,
-} from './historyViewMessages';
 
 export {
   API_ACCESS_MODE_OPTIONS,
@@ -131,16 +111,11 @@ export type {
  * hand-copied as integer tables in the desktop e2e specs and the walkthrough
  * capture script.
  *
- * Therefore this array is APPEND-ONLY, forever. Never reorder, rename, or
- * remove an entry — an existing index must keep meaning the same panel, or a
- * producer built against an older index silently lands on the wrong panel while
- * every hardcoded index table still "passes". Display grouping and display
- * order are a separate presentation layer (`SETTINGS_TAB_GROUPS` below), so a
- * nav reshuffle never touches these indices.
+ * New entries append at the end. Retired internal panels are removed together
+ * with their producers and command surfaces so no stale IPC target remains.
  */
 export const SETTINGS_TAB_ORDER = [
   'MEMORY',
-  'HISTORY',
   'MODELS',
   'AGENTS',
   'MULTI_AGENT',
@@ -222,7 +197,7 @@ export const SETTINGS_TAB_GROUPS = [
   { label: 'Agents', tabs: ['AGENTS', 'MULTI_AGENT'] },
   { label: 'Capabilities', tabs: ['TOOLS', 'AI_AGENTS', 'LATEX'] },
   { label: 'Workspace', tabs: ['GIT', 'SHORTCUTS'] },
-  { label: 'Data & Activity', tabs: ['HISTORY', 'MEMORY', 'GOAL'] },
+  { label: 'Data & Activity', tabs: ['MEMORY', 'GOAL'] },
 ] as const satisfies readonly {
   label: string;
   tabs: readonly SettingsTabName[];
@@ -723,8 +698,6 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateMemoryMessageSchema,
   UpdateMemoryEnabledMessageSchema,
   UpdateMemoryPreviewMessageSchema,
-  UpdateHistoryMessageSchema,
-  HistoryClearedMessageSchema,
   UpdateModelSelectionMessageSchema,
   UpdateAgentSelectionMessageSchema,
   UpdateCustomAgentDirMessageSchema,
@@ -1071,14 +1044,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetMemoryEnabledMessageSchema,
     PinMemoryMessageSchema,
     UnpinMemoryMessageSchema,
-    // History messages
-    RerunAgentMessageSchema,
-    RestoreAgentMessageSchema,
-    DeleteAgentMessageSchema,
-    ClearHistoryMessageSchema,
-    ExportChatMdMessageSchema,
-    ExportChatTexMessageSchema,
-    ExportChatHtmlMessageSchema,
     // Profile messages
     SignInMessageSchema,
     SignOutMessageSchema,

@@ -354,12 +354,6 @@
         "icon": "$(new-file)"
       },
       {
-        "command": "texra.showAgentHistory",
-        "title": "Show Agent Execution History",
-        "category": "TeXRA",
-        "icon": "$(history)"
-      },
-      {
         "command": "texra.showMemory",
         "title": "Show Memory",
         "category": "TeXRA",
@@ -866,10 +860,6 @@
         },
         {
           "command": "texra.mainView.reset",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.showAgentHistory",
           "when": "texra.activated"
         },
         {

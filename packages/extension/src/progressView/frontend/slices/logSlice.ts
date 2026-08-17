@@ -2,8 +2,6 @@ import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
-  ActiveSkillsSnapshotSchema,
-  ContextStateDataSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   isToolUseState,
@@ -24,6 +22,9 @@ import { appState } from '../progressState';
 import { ensureStreamState, type StreamLogs } from '../store';
 
 function toLogMessage(entry: StreamLogEntry): LogMessageData {
+  // `entry` is already the messageType-discriminated source union. Object
+  // spread cannot retain that correlation, so reassert it after projecting
+  // only the shared envelope fields.
   return {
     id: entry.id,
     seqNo: entry.seqNo,
@@ -34,7 +35,7 @@ function toLogMessage(entry: StreamLogEntry): LogMessageData {
     ...(entry.messageType ? { messageType: entry.messageType } : {}),
     ...(entry.verbose !== undefined ? { verbose: entry.verbose } : {}),
     ...(entry.data !== undefined ? { data: entry.data } : {}),
-  };
+  } as LogMessageData;
 }
 
 interface EntryResult {
@@ -103,14 +104,7 @@ function applyEntry(
     if (!isToolUseState(streamState)) {
       return { logChanged: false, stateChanged: false, updatedIndices: [] };
     }
-    const snapshot = ActiveSkillsSnapshotSchema.safeParse(entry.data);
-    if (!snapshot.success) {
-      console.warn(
-        '[logSlice] Cleared malformed active-skills entry',
-        snapshot.error,
-      );
-    }
-    streamState.activeSkills = snapshot.success ? snapshot.data.skills : [];
+    streamState.activeSkills = entry.data.skills;
     return { logChanged: false, stateChanged: true, updatedIndices: [] };
   }
 
@@ -134,18 +128,8 @@ function applyEntry(
   );
 
   if (entry.messageType === MESSAGE_TYPES.CONTEXT_STATE) {
-    const contextState = ContextStateDataSchema.safeParse(entry.data);
-    if (contextState.success) {
-      streamState.contextState = contextState.data;
-      stateChanged = true;
-    } else {
-      // The context gauge silently freezing at its last value is the visible
-      // symptom of a producer/schema mismatch, so say so.
-      console.warn(
-        '[logSlice] Dropped malformed context-state entry',
-        contextState.error,
-      );
-    }
+    streamState.contextState = entry.data;
+    stateChanged = true;
   }
 
   if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) {

@@ -144,7 +144,6 @@ export async function runWorkflowAgent(
       };
 
       return executeCliWorkflowConfig(config, runContext, {
-        registerExecution: true,
         categoryMismatchMessage: `Agent "${init.agent}" resolved to a non workflow run.`,
         output: init.output,
         outputDir: init.outputDir,
@@ -167,7 +166,6 @@ export async function executeCliWorkflowConfig(
   config: AgentConfigPayload,
   runContext: CliContext,
   options: {
-    readonly registerExecution?: boolean;
     readonly categoryMismatchMessage: string;
     readonly output?: string;
     readonly outputDir?: string;
@@ -218,7 +216,6 @@ export async function executeCliWorkflowConfig(
   };
   const execution = await executeCliConfig(config, runContext, {
     enforceCategory: true,
-    registerExecution: options.registerExecution,
     executionId: options.executionId,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
     onInterruptedExecutionFinalized: recoveryInputIsDurable

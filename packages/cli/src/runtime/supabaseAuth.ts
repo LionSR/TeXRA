@@ -20,14 +20,13 @@ import {
   getConfiguredRelayToken,
 } from '@auth/relayToken';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { readCliEnv } from './cliContext';
-import { getCliSecrets } from './cliSecrets';
 import { openBrowser } from './browser';
 import { startLoopbackCallbackServer } from './supabaseAuthCallbackServer';
 import {
@@ -102,10 +101,9 @@ const deferredAuthLog: LogBackend = {
 
 export function initializeCliSupabaseAuth(
   log?: LogBackend,
-  storageRoot?: string,
 ): SupabaseSessionCoordinator {
   activeAuthLog = log ?? activeAuthLog;
-  const secrets = tryPlatform()?.secrets ?? getCliSecrets(storageRoot);
+  const secrets = platform().secrets;
   if (!coordinator || coordinatorSecrets !== secrets) {
     coordinator = createHostAuthCoordinator({
       secrets,

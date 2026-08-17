@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => {
       secrets: init.secrets,
     })),
     clearServerKeyCaches: vi.fn(),
-    getCliSecrets: vi.fn(),
     getConfiguredRelayToken: vi.fn(),
     getStoredSessionState: vi.fn(),
     getUserTier: vi.fn(),
@@ -23,7 +22,7 @@ const mocks = vi.hoisted(() => {
     signInWithOAuth: vi.fn(),
     startLoopbackCallbackServer: vi.fn(),
     toStorableSupabaseSession: vi.fn((session) => session),
-    tryPlatform: vi.fn(),
+    platform: vi.fn(),
     invalidateRemoteAgentsAfterSignOut: vi.fn(),
   };
 });
@@ -72,15 +71,11 @@ vi.mock('@auth/serverKeys', () => ({
 }));
 
 vi.mock('@platform/platform', () => ({
-  tryPlatform: mocks.tryPlatform,
+  platform: mocks.platform,
 }));
 
 vi.mock('@cli/runtime/cliContext', () => ({
   readCliEnv: () => ({}),
-}));
-
-vi.mock('@cli/runtime/cliSecrets', () => ({
-  getCliSecrets: mocks.getCliSecrets,
 }));
 
 vi.mock('@cli/runtime/browser', () => ({
@@ -147,39 +142,22 @@ function stubSuccessfulSignIns(session: {
 describe('CLI Supabase auth', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.tryPlatform.mockReturnValue(null);
-    mocks.getCliSecrets.mockReturnValue({ kind: 'cli-secrets' });
+    mocks.platform.mockReturnValue({ secrets: { kind: 'platform-secrets' } });
     mocks.setUseIncludedModelAccess.mockResolvedValue(undefined);
     mocks.invalidateRemoteAgentsAfterSignOut.mockResolvedValue(undefined);
   });
 
   it('uses platform-owned secrets after CLI platform init', async () => {
     const platformSecrets = { kind: 'platform-secrets' };
-    mocks.tryPlatform.mockReturnValue({ secrets: platformSecrets });
+    mocks.platform.mockReturnValue({ secrets: platformSecrets });
     const { initializeCliSupabaseAuth } = await loadSupabaseAuth();
 
-    initializeCliSupabaseAuth(undefined, '/tmp/sandbox-storage');
+    initializeCliSupabaseAuth();
     initializeCliSupabaseAuth();
 
     expect(mocks.createHostAuthCoordinator).toHaveBeenCalledTimes(1);
     expect(mocks.createHostAuthCoordinator).toHaveBeenCalledWith(
       expect.objectContaining({ secrets: platformSecrets }),
-    );
-    expect(mocks.getCliSecrets).not.toHaveBeenCalled();
-  });
-
-  it('does not rebind no-arg auth init to the default secrets path', async () => {
-    const cliSecrets = { kind: 'sandbox-secrets' };
-    mocks.getCliSecrets.mockReturnValue(cliSecrets);
-    const { initializeCliSupabaseAuth } = await loadSupabaseAuth();
-
-    initializeCliSupabaseAuth(undefined, '/tmp/sandbox-storage');
-    initializeCliSupabaseAuth();
-
-    expect(mocks.createHostAuthCoordinator).toHaveBeenCalledTimes(1);
-    expect(mocks.getCliSecrets).toHaveBeenCalledWith('/tmp/sandbox-storage');
-    expect(mocks.createHostAuthCoordinator).toHaveBeenCalledWith(
-      expect.objectContaining({ secrets: cliSecrets }),
     );
   });
 

@@ -119,7 +119,10 @@ vi.mock('@platform/platform', () => ({
   initPlatform: vi.fn(),
   tryPlatform: mocks.tryPlatform,
   tryGlobalState: () => mocks.tryPlatform()?.globalState,
-  platform: () => ({ config: { get: (_key: string, def: unknown) => def } }),
+  platform: () => ({
+    config: { get: (_key: string, def: unknown) => def },
+    globalState: mocks.cliGlobalState,
+  }),
 }));
 
 // initCliPlatform delegates shared Node-host construction and runtime wiring to
@@ -259,7 +262,6 @@ describe('CLI platform init', () => {
     expect(mocks.initNodeAgentRuntime).toHaveBeenCalledOnce();
     expect(mocks.initializeCliSupabaseAuth).toHaveBeenCalledWith(
       expect.anything(),
-      '/tmp/texra-storage-root',
     );
   });
 

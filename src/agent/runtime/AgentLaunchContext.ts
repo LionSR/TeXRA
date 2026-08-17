@@ -22,10 +22,7 @@ import {
 } from '@agent/core/flows/BaseFlowServices';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
-import {
-  AttachedMemoryMissesSchema,
-  type AttachedMemoryMiss,
-} from '@agent/types/AttachedMemory';
+import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import {
   createModelHandler,
@@ -500,9 +497,7 @@ async function assembleAgentLaunchContext(
     input: Object.freeze(baseVars),
     transient: { ...baseVars },
   };
-  const attachedMemoryMisses = AttachedMemoryMissesSchema.parse(
-    baseVars.ATTACHED_MEMORY_MISSES,
-  );
+  const attachedMemoryMisses = baseVars.ATTACHED_MEMORY_MISSES;
 
   const usageMonitor = new UsageMonitor(
     modelCell,

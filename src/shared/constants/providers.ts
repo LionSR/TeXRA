@@ -205,9 +205,6 @@ export const MODEL_SOURCE_ORDER = [
 /**
  * All providers that support server-side API keys.
  * Derived from PROVIDER_REGISTRY — no manual sync needed.
- *
- * Note: We use a type-level extraction so ServerSideProvider is a proper
- * union of literal ModelProvider values, not just `ModelProvider`.
  */
 type ServerKeyEntry = Extract<
   (typeof PROVIDER_REGISTRY)[number],
@@ -215,9 +212,6 @@ type ServerKeyEntry = Extract<
 >;
 export const SERVER_SIDE_PROVIDER_IDS: readonly ServerKeyEntry['id'][] =
   PROVIDER_REGISTRY.filter((p) => p.hasServerKey).map((p) => p.id);
-
-/** Type for providers that support server-side keys (narrow union, not just ModelProvider). */
-export type ServerSideProvider = ServerKeyEntry['id'];
 
 /** Consolidated provider display names used across settings UI and model selection. */
 export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {

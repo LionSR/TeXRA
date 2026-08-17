@@ -52,25 +52,25 @@ export async function runExecuteCommand(
       .optional()
       .parse(wrapped?.copilotRouteOverride);
 
-    await runAgent(
-      { config, executionId: wrapped?.executionId },
-      {
-        openWorkflowOutput: openFinalOutputIfAvailable,
-        // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
-        // progress-view compile fixer); a direct main-view launch omits it and
-        // keeps the user's selected model.
-        preferHelperModel: wrapped?.preferHelperModel === true,
-        modelHandlerCompatibilityKey,
-        copilotRouteOverride,
-        onRun: wrapped?.onRun,
-        // In-process-only resume admission guard. It is never serialized: the
-        // VS Code command action still receives a single `input` argument
-        // across the registry/dispatch boundary.
-        ...(options.canAcquireResumeLease && {
-          canAcquireResumeLease: options.canAcquireResumeLease,
-        }),
-      },
-    );
+    const request = wrapped?.executionId
+      ? ({ kind: 'resume', config, executionId: wrapped.executionId } as const)
+      : ({ kind: 'fresh', config } as const);
+    await runAgent(request, {
+      openWorkflowOutput: openFinalOutputIfAvailable,
+      // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
+      // progress-view compile fixer); a direct main-view launch omits it and
+      // keeps the user's selected model.
+      preferHelperModel: wrapped?.preferHelperModel === true,
+      modelHandlerCompatibilityKey,
+      copilotRouteOverride,
+      onRun: wrapped?.onRun,
+      // In-process-only resume admission guard. It is never serialized: the
+      // VS Code command action still receives a single `input` argument
+      // across the registry/dispatch boundary.
+      ...(options.canAcquireResumeLease && {
+        canAcquireResumeLease: options.canAcquireResumeLease,
+      }),
+    });
   } catch (error) {
     if (error instanceof ZodError) {
       const message = `Invalid agent configuration. ${z.prettifyError(error)}`;

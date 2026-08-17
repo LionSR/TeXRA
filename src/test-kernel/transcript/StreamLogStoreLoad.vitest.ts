@@ -14,6 +14,7 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
+  StreamLogEntrySchema,
   type StreamLogEntry,
 } from '@shared/schemas';
 import { createDeferred, waitForCondition } from '@test/support/asyncTestUtils';
@@ -98,14 +99,14 @@ function logEntry(
   seqNo: number,
   timestamp: number,
 ): StreamLogEntry {
-  return {
+  return StreamLogEntrySchema.parse({
     ...namedEntry(
       `${streamId}-${seqNo}`,
       timestamp,
       `${streamId} entry ${seqNo}`,
     ),
     seqNo,
-  };
+  });
 }
 
 function summary(

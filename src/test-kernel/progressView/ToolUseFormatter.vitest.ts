@@ -2,7 +2,12 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - shared schemas
-import { LOG_LEVELS, type LogMessageData } from '@shared/schemas';
+import {
+  LOG_LEVELS,
+  LogMessageDataSchema,
+  MESSAGE_TYPES,
+  type LogMessageOf,
+} from '@shared/schemas';
 
 // Local imports - test utilities
 import {
@@ -57,15 +62,18 @@ function renderTemplateInDocument(template: FormatterTemplate): HTMLElement {
 }
 
 /** The shared shell of an INFO-level tool-use log entry. */
-function toolUseMessage(id: string, data: unknown): LogMessageData {
-  return {
+function toolUseMessage(
+  id: string,
+  data: unknown,
+): LogMessageOf<typeof MESSAGE_TYPES.TOOL_USE> {
+  return LogMessageDataSchema.parse({
     id,
     text: '',
     level: LOG_LEVELS.INFO,
     timestamp: 1,
     messageType: 'toolUse',
     data,
-  };
+  }) as LogMessageOf<typeof MESSAGE_TYPES.TOOL_USE>;
 }
 
 /** Renders an `executions` tool call with subagent labels and returns the title. */
@@ -202,7 +210,7 @@ return { papers, question: args.question };`;
       { length: 20 },
       (_, i) => `[${i}/100] Built Mathlib.Example.Module${i}`,
     ).join(' ');
-    const message: LogMessageData = {
+    const message: ReturnType<typeof toolUseMessage> = {
       id: 'bash-timeout',
       text: '',
       level: LOG_LEVELS.ERROR,
@@ -492,7 +500,11 @@ const SUMMARY_CONTROL_CASES = [
         level: LOG_LEVELS.ERROR,
         timestamp: 1,
         messageType: 'error',
-        data: { operation: 'test-op' },
+        data: {
+          message: 'something failed',
+          operation: 'test-op',
+          userRetryable: false,
+        },
       }),
   },
 ];

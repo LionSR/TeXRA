@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ToolDefinition } from '@model/ToolDefinition';
-import type { ModelOptionData } from '@shared/schemas';
+import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
 import {
   availableModelNamesFromOptions,
   selectDelegationModelFromAvailableNames,

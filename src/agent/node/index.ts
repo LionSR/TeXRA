@@ -111,6 +111,9 @@ class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
   signal?: AbortSignal;
   constructor(maxRetries: number = 1, wait: number = 0) {
     super();
+    if (maxRetries < 1) {
+      throw new RangeError(`Node maxRetries must be >= 1, got ${maxRetries}.`);
+    }
     this.maxRetries = maxRetries;
     this.wait = wait;
   }
@@ -169,12 +172,7 @@ class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
     return cloned;
   }
   async _exec(prepRes: unknown): Promise<unknown> {
-    if (this.maxRetries < 1) {
-      log.warn(
-        `Node maxRetries must be >= 1, got ${this.maxRetries}. Using 1.`,
-      );
-    }
-    const effectiveMaxRetries = Math.max(1, this.maxRetries);
+    const effectiveMaxRetries = this.maxRetries;
 
     // Track the last exec error so we can forward it to execFallback when
     // the abort signal fires during the inter-retry delay (p-retry would
