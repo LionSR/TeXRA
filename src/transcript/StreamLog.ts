@@ -489,7 +489,7 @@ export class StreamLog {
       ? this.settlementSeqCounter + 1
       : current.settlementSeqNo;
     if (
-      settlementSeqNo === current.settlementSeqNo &&
+      !settle &&
       Object.entries(patch).every(([key, value]) =>
         Object.is(current[key as keyof StreamLogUpdatePatch], value),
       )
