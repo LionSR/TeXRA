@@ -103,8 +103,8 @@ async function launchBackgroundRun(
     finish: async () => {
       release({
         success: true,
-        stdout: null,
-        stderr: null,
+        stdout: '',
+        stderr: '',
         timedOut: false,
         exitCode: 0,
       });
