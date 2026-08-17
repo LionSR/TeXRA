@@ -675,7 +675,10 @@ seq)` would drop or overwrite one side when both hosts wrote the same
   `(legacy source, key)`** — the CLI's `state.json` and the extension's
   Memento are separate sources with separate ledgers) and, on every
   migrated open, diffs that host's legacy source against **that source's
-  ledger only** — key present and newer → update the row; key present in
+  ledger only** — key present with a value hash different from that source's
+  last-absorbed ledger hash → update the row and ledger; key present with the
+  same hash → skip, even if another source has since deleted the canonical row,
+  so an unchanged stale copy cannot resurrect it; key present in
   the same source's ledger but **absent from that source → that host
   deleted it → delete the row, but only if the canonical row still matches
   that source's last absorbed value hash** (the ledger stores it) — if a
@@ -701,7 +704,7 @@ public surfaces (`store-public-surface-baseline`); hosts-as-renderers plane
 rules untouched. **Added:** the §2 rule, pinned by a new architecture test.
 The test lands at Stage 1 as a **shrinking ratchet, not a strict gate**: it
 starts with an explicit allowlist of the not-yet-migrated directories
-(`streamLogSummaries/`, `streamData/`, `streamData.deleting/` — the staged-
+(`streamLogSummaries/`, `streamData/`, `streamData.deleting/`, `taskRuns/` — the staged-
 deletion namespace `StagedDeletionCoordinator` renames into, retained in
 the baseline through the **Stage-7** deletion-protocol cutover that retires
 the coordinator — `streamLogs/`, `executions/` KV records, lease/lock
@@ -717,8 +720,12 @@ tool — live writers today that the ratchet must not reject), and
 `WorkspaceStorageProvider.getStoragePath()` writes before any store (and
 therefore the database) can open; it cannot live in the DB it locates, so
 it must be in the initial baseline (a ratchet can only shrink — omitting it
-at Stage 1 could not be repaired later without widening). Each migration
-stage removes its directory from the baseline in the same PR — the same
+at Stage 1 could not be repaired later without widening). Here
+"documents" and "exports" are architecture-test categories rather than
+additional top-level layout names: documents materialize as `original/` and
+`memories/`, while archived traces and chat exports live in the per-execution
+artifacts area named below. Each migration stage removes its directory from
+the baseline in the same PR — the same
 only-shrinks discipline as `host-agent-import-baseline`. A Stage-1-strict
 test would fail CI by construction while Stages 2–6 still write files.
 After Stage 6 one **temporary** entry remains alongside the permanent set:
