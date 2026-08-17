@@ -59,6 +59,7 @@ export interface SessionStreamMetadata {
  * carried through every patch that has nothing to say about it.
  */
 type StoredStreamMetadata = Omit<SessionStreamMetadata, 'creationTimestamp'>;
+const EMPTY_STORED_STREAM_METADATA: StoredStreamMetadata = Object.freeze({});
 
 /** Ephemeral session state per stream (not persisted). */
 interface StreamSessionState {
@@ -70,6 +71,14 @@ interface StreamSessionState {
    * saw it.
    */
   provisionalCreationTimestamp: number;
+}
+
+interface CachedStreamMetadata {
+  readonly stored: StoredStreamMetadata;
+  readonly summary: ReturnType<StreamLogStore['getSummaryMeta']>;
+  readonly firstTimestamp: number | undefined;
+  readonly removed: boolean;
+  readonly value: Readonly<SessionStreamMetadata>;
 }
 
 /**
@@ -112,6 +121,49 @@ export class SessionState {
   // -- Ephemeral state (session-only, not persisted) --------------------------
   private readonly _streamStates = new Map<StreamTabId, StreamExecutionState>();
   private readonly _sessionState = new Map<StreamTabId, StreamSessionState>();
+  private readonly _streamMetadataCache = new Map<
+    StreamTabId,
+    CachedStreamMetadata
+  >();
+  /**
+   * Per-stream incarnation generation, bumped only by a legitimate claim on
+   * the identity (`claimStreamIdentity`, from a workflow attachment with live
+   * execution evidence). A removal captures the generation it saw and only
+   * commits if the generation is unchanged, so a fresh deterministic run that
+   * starts while an old delete is queued invalidates that delete instead of
+   * being erased.
+   */
+  private readonly _streamIncarnations = new Map<StreamTabId, number>();
+  /**
+   * Identities removed this session, mapped to the incarnation they were
+   * removed at. The fact applier refuses any later fact naming a removed
+   * stream, so a stale status, roster, edge, or attachment fact cannot
+   * re-mint the transcript, execution, or metadata state deletion dropped.
+   * This map is the single owner of that rejection.
+   *
+   * Durable sidecar finality is owned by {@link SessionStores} + the snapshot
+   * store's staged-deletion/eviction write guards, not by this tombstone; its
+   * "removal is final" semantics are scoped to this in-memory projection.
+   *
+   * Lifecycle: deliberately uncapped, because every eviction policy invented
+   * so far reopens resurrection for an evicted id and would be a false
+   * finality claim. An entry retires when a fresh workflow attachment
+   * legitimately re-claims the identity (live-execution evidence → {@link
+   * SessionFactApplier}), or when the whole storage root is replaced
+   * (`resetAfterStorageRootChange`). Otherwise it lives for the session — the
+   * proven horizon for in-flight facts.
+   */
+  private readonly _removedStreams = new Map<StreamTabId, number>();
+  /**
+   * Stable deletion guards, one per (stream, incarnation). `SessionStores`
+   * dedups pending work by incarnation, while every participant still uses
+   * its guard to stop that shared deletion when the identity is re-claimed.
+   * A fresh incarnation gets a new guard and a new deletion slot.
+   */
+  private readonly _deletionGuards = new Map<
+    StreamTabId,
+    { readonly incarnation: number; readonly guard: () => boolean }
+  >();
 
   readonly streamStatus: StreamStatusMachine;
   readonly followUps: ToolUseFollowUpQueue;
@@ -191,10 +243,9 @@ export class SessionState {
    * mirror that hasn't caught up can never clear a live field.
    */
   private applySummaryMetadata(
-    stream: StreamTabId,
     stored: StoredStreamMetadata,
+    meta: ReturnType<StreamLogStore['getSummaryMeta']>,
   ): StoredStreamMetadata {
-    const meta = this.streamLogs.getSummaryMeta(stream);
     const merged: StoredStreamMetadata = { ...stored };
     if (meta?.identity) merged.identity = meta.identity;
     merged.userFollowUpSupport = meta?.userFollowUpSupport;
@@ -212,6 +263,15 @@ export class SessionState {
     return merged;
   }
 
+  /** Replace one live metadata record and invalidate its derived view. */
+  private setStoredStreamMetadata(
+    stream: StreamTabId,
+    metadata: StoredStreamMetadata,
+  ): void {
+    this.getOrCreateSession(stream).metadata = metadata;
+    this._streamMetadataCache.delete(stream);
+  }
+
   /**
    * Apply metadata known before durable task state catches up. The durable
    * authority is overlaid at read time (`getStreamMetadata`), so late events
@@ -223,29 +283,63 @@ export class SessionState {
     patch: Partial<StoredStreamMetadata>,
   ): void {
     const state = this.getOrCreateSession(stream);
-    state.metadata = this.applyMetadataPatch(state.metadata, patch);
+    this.setStoredStreamMetadata(
+      stream,
+      this.applyMetadataPatch(state.metadata, patch),
+    );
   }
 
   /** Start a run fresh, dropping this session's live-only metadata. */
   resetStreamMetadataForRun(stream: StreamTabId): void {
-    this.getOrCreateSession(stream).metadata = {};
+    this.setStoredStreamMetadata(stream, {});
   }
 
   /**
-   * Read effective metadata, creating the ephemeral record when needed. The
-   * transcript's first entry dates the tab as soon as one exists; until then
-   * the record's provisional timestamp stands in.
+   * Read effective metadata. For a live stream this lazily creates the
+   * ephemeral record and latches its provisional creation timestamp to the
+   * transcript's first entry, so a later eviction cannot move an established
+   * tab back to when this session first saw it. A removed stream is read
+   * read-only from the durable summary mirror: the tombstone gate calls this
+   * to inspect a re-claimed identity, and minting the ephemeral record here
+   * would undo the deletion the barrier exists to protect.
    */
   getStreamMetadata(stream: StreamTabId): Readonly<SessionStreamMetadata> {
-    const session = this.getOrCreateSession(stream);
+    const removed = this.isStreamRemoved(stream);
+    const session = removed ? undefined : this.getOrCreateSession(stream);
+    const stored = session?.metadata ?? EMPTY_STORED_STREAM_METADATA;
+    const summary = this.streamLogs.getSummaryMeta(stream);
     const firstTimestamp = this.streamLogs.getTimestampRange(stream).first;
-    if (firstTimestamp !== undefined) {
+    if (session && firstTimestamp !== undefined) {
       session.provisionalCreationTimestamp = firstTimestamp;
     }
-    return {
-      ...this.applySummaryMetadata(stream, session.metadata),
-      creationTimestamp: session.provisionalCreationTimestamp,
+    const cached = this._streamMetadataCache.get(stream);
+    if (
+      cached?.stored === stored &&
+      cached.summary === summary &&
+      cached.firstTimestamp === firstTimestamp &&
+      cached.removed === removed
+    ) {
+      return cached.value;
+    }
+    const value: Readonly<SessionStreamMetadata> = {
+      ...this.applySummaryMetadata(stored, summary),
+      // A removed, never-read stream has no durable timestamp to recover.
+      // Latch an ordering-only value without recreating its ephemeral record;
+      // removed streams are excluded from the rail and never listed again.
+      creationTimestamp:
+        firstTimestamp ??
+        session?.provisionalCreationTimestamp ??
+        cached?.value.creationTimestamp ??
+        Date.now(),
     };
+    this._streamMetadataCache.set(stream, {
+      stored,
+      summary,
+      firstTimestamp,
+      removed,
+      value,
+    });
+    return value;
   }
 
   setStreamParent(
@@ -253,14 +347,20 @@ export class SessionState {
     parent: StreamTabId | null | undefined,
   ): void {
     const state = this.getOrCreateSession(stream);
-    state.metadata = this.applyMetadataPatch(state.metadata, {
-      parentStreamId: parent ?? undefined,
-    });
+    this.setStoredStreamMetadata(
+      stream,
+      this.applyMetadataPatch(state.metadata, {
+        parentStreamId: parent ?? undefined,
+      }),
+    );
   }
 
   setStreamDescription(stream: StreamTabId, description: string): void {
     const state = this.getOrCreateSession(stream);
-    state.metadata = this.applyMetadataPatch(state.metadata, { description });
+    this.setStoredStreamMetadata(
+      stream,
+      this.applyMetadataPatch(state.metadata, { description }),
+    );
   }
 
   // todos/plan are owned + persisted by StreamSnapshotStore (workPlan.json).
@@ -370,13 +470,147 @@ export class SessionState {
 
   // -- Lifecycle --------------------------------------------------------------
 
-  async clearStream(stream: StreamTabId): Promise<DeleteStreamResult> {
-    const deletion = await this.stores.deleteStream(stream);
+  /**
+   * Begin a removal barrier for `stream`, capturing its current incarnation.
+   * Explicit ownership: `created` is true only when this call installed a new
+   * barrier. When a barrier already exists (a `removeStream` fact racing a
+   * direct delete, or a command racing a fact-path removal) the existing
+   * incarnation is returned with `created === false`, so a caller that finds
+   * one can avoid starting a second deletion or touching/retiring a barrier
+   * it does not own.
+   */
+  beginStreamRemoval(stream: StreamTabId): {
+    incarnation: number;
+    created: boolean;
+  } {
+    const existing = this._removedStreams.get(stream);
+    if (existing !== undefined) {
+      return { incarnation: existing, created: false };
+    }
+    const incarnation = this.incarnationOf(stream);
+    this._removedStreams.set(stream, incarnation);
+    this._streamMetadataCache.delete(stream);
+    return { incarnation, created: true };
+  }
+
+  /**
+   * A legitimate workflow attachment claims a deterministic stream identity:
+   * bump its incarnation and drop any removal barrier, so the new run's facts
+   * flow and any queued deletion captured against the previous incarnation is
+   * stale. Called only when the applier has live-execution evidence for the
+   * claim — never from a bare `run.start`, which a delayed stale event could
+   * replay after the deletion committed.
+   */
+  claimStreamIdentity(stream: StreamTabId): number {
+    const next = this.incarnationOf(stream) + 1;
+    this._streamIncarnations.set(stream, next);
+    this._removedStreams.delete(stream);
+    // A re-claimed identity starts a fresh run: drop any ephemeral session and
+    // execution state the previous incarnation left behind (a provisional
+    // removal may not have committed yet). The status machine is left alone —
+    // the fresh run has already tracked its own phase there.
+    this._sessionState.delete(stream);
+    this._streamStates.delete(stream);
+    this._streamMetadataCache.delete(stream);
+    return next;
+  }
+
+  /** Whether `stream` was removed this session and must not be resurrected. */
+  isStreamRemoved(stream: StreamTabId): boolean {
+    return this._removedStreams.has(stream);
+  }
+
+  /**
+   * Current live-execution evidence for a re-claim: the execution registry
+   * holds a handle for this exact stream. A fresh workflow relaunch tracks its
+   * handle before its attachment fact lands, while a replayed `run.start`
+   * does not, so this is the gate that lets a legitimate re-claim through and
+   * keeps a stale fact from reopening a committed tombstone.
+   */
+  hasLiveStreamExecution(stream: StreamTabId): boolean {
+    return this.session.executions.getAgentHandleByStream(stream) !== undefined;
+  }
+
+  /**
+   * Drop the tombstone only if it still belongs to `expectedIncarnation`.
+   * Used when a removal's durable delete ended in retention
+   * (`active`/`failed`/`superseded`): the stream still lives, so its facts
+   * must flow again. A fresh deletion B may already have installed its own
+   * barrier for a newer incarnation; this retirement must never remove that.
+   * Returns whether it actually removed the barrier: callers that buffer facts
+   * across a provisional deletion must replay them only when this returns
+   * true, so a superseded deletion A can never replay through deletion B's
+   * newer barrier.
+   */
+  retireStreamTombstone(
+    stream: StreamTabId,
+    expectedIncarnation: number,
+  ): boolean {
+    if (this._removedStreams.get(stream) === expectedIncarnation) {
+      this._removedStreams.delete(stream);
+      this._streamMetadataCache.delete(stream);
+      return true;
+    }
+    return false;
+  }
+
+  private incarnationOf(stream: StreamTabId): number {
+    return this._streamIncarnations.get(stream) ?? 0;
+  }
+
+  private isCurrentIncarnation(
+    stream: StreamTabId,
+    incarnation: number,
+  ): boolean {
+    return this.incarnationOf(stream) === incarnation;
+  }
+
+  /** Stable per-incarnation fence for {@link SessionStores.deleteStream}. */
+  private deletionGuard(
+    stream: StreamTabId,
+    expectedIncarnation: number,
+  ): () => boolean {
+    const cached = this._deletionGuards.get(stream);
+    if (cached && cached.incarnation === expectedIncarnation) {
+      return cached.guard;
+    }
+    const guard = (): boolean =>
+      this.isCurrentIncarnation(stream, expectedIncarnation);
+    this._deletionGuards.set(stream, {
+      incarnation: expectedIncarnation,
+      guard,
+    });
+    return guard;
+  }
+
+  async clearStream(
+    stream: StreamTabId,
+    options?: { readonly expectedIncarnation?: number },
+  ): Promise<DeleteStreamResult> {
+    const expectedIncarnation =
+      options?.expectedIncarnation ?? this.incarnationOf(stream);
+    if (!this.isCurrentIncarnation(stream, expectedIncarnation)) {
+      return 'superseded';
+    }
+
+    // The removal barrier is installed by the caller (the fact applier for a
+    // `removeStream` fact, or `ProgressBackend` for a host command) before
+    // this storage await, and that caller owns its retirement and buffered-fact
+    // replay. This method only commits the durable delete and the tombstone.
+    const deletion = await this.stores.deleteStream(stream, {
+      shouldDelete: this.deletionGuard(stream, expectedIncarnation),
+      expectedIncarnation,
+    });
     if (deletion !== 'deleted') return deletion;
+    if (!this.isCurrentIncarnation(stream, expectedIncarnation)) {
+      return 'superseded';
+    }
 
     this.streamStatus.clearStream(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
+    this._streamMetadataCache.delete(stream);
+    this._removedStreams.set(stream, expectedIncarnation);
 
     return 'deleted';
   }
@@ -387,19 +621,51 @@ export class SessionState {
       { data: { stack: new Error().stack } },
     );
 
-    const knownStreams = new Set<StreamTabId>([
-      ...this.streamLogs.keys(),
-      ...this._sessionState.keys(),
+    // Capture the ephemeral-only identity set before the bulk delete awaits:
+    // this operation may only clear/tombstone identities that existed when it
+    // began. A stream created during the bulk snapshot (a fresh run) is not in
+    // this set and must survive untouched. `deleteAll` still reports the exact
+    // durable identities it committed as `deleted`, and that result is the
+    // sole source for tombstoning durable streams — deriving them from a
+    // pre-delete enumeration would reintroduce the TOCTOU this barrier exists
+    // to close.
+    const preExistingEphemeral = new Set<StreamTabId>([
       ...this._streamStates.keys(),
+      ...this._sessionState.keys(),
       ...Array.from(this.streamStatus.entries(), ([stream]) => stream),
     ]);
-    const deletion = await this.stores.deleteAll();
-    const retainedStreams = new Set([...deletion.active, ...deletion.failed]);
-    for (const stream of knownStreams) {
-      if (retainedStreams.has(stream)) continue;
+    const identitiesAtStart = new Set<StreamTabId>([
+      ...preExistingEphemeral,
+      ...this._streamIncarnations.keys(),
+      ...this.streamLogs.keys(),
+    ]);
+    const incarnationsAtStart = new Map(this._streamIncarnations);
+    const deletion = await this.stores.deleteAll({
+      shouldDelete: (stream) =>
+        // Sessionless staged residue is intentionally absent from the live
+        // transcript map and remains eligible for cleanup. A fresh run that
+        // appears after the snapshot has a live transcript and is fenced out.
+        (identitiesAtStart.has(stream) || !this.streamLogs.has(stream)) &&
+        this.incarnationOf(stream) === (incarnationsAtStart.get(stream) ?? 0),
+    });
+    const retained = new Set([...deletion.active, ...deletion.failed]);
+    const clearIdentity = (stream: StreamTabId): void => {
       this.streamStatus.clearStream(stream);
       this._sessionState.delete(stream);
       this._streamStates.delete(stream);
+      this._streamMetadataCache.delete(stream);
+      this._removedStreams.set(stream, this.incarnationOf(stream));
+    };
+    for (const stream of deletion.deleted) clearIdentity(stream);
+    // Ephemeral-only identities (for example a RUNNING transition that created
+    // execution/status state without ever minting a durable transcript) are
+    // invisible to `SessionStores.deleteAll`, so the exact durable `deleted`
+    // set cannot contain them. Clear and tombstone the pre-existing ones too,
+    // but never clear durable identities the bulk delete reported retained and
+    // never clear a stream that appeared after the snapshot.
+    for (const stream of preExistingEphemeral) {
+      if (retained.has(stream) || this._removedStreams.has(stream)) continue;
+      clearIdentity(stream);
     }
     return deletion;
   }
@@ -432,10 +698,20 @@ export class SessionState {
     this.logger.info('[Persistence] State load complete');
   }
 
-  /** Drop workspace-scoped caches before loading a replacement storage root. */
+  /**
+   * Drop workspace-scoped caches before loading a replacement storage root.
+   * The incarnation generations and deletion-guard memoization are identity
+   * projections over the old root's stream ids, so they reset with the
+   * tombstones: a re-claimed identity in the new root must start from
+   * incarnation 0 again.
+   */
   resetAfterStorageRootChange(): void {
     this._sessionState.clear();
     this._streamStates.clear();
+    this._streamMetadataCache.clear();
+    this._removedStreams.clear();
+    this._streamIncarnations.clear();
+    this._deletionGuards.clear();
   }
 
   /**

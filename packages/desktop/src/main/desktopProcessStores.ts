@@ -1,6 +1,7 @@
 import type { SessionHandle } from '@agent/runtime';
 import { createSessionStores } from '@controllers/session/sessionStores';
 import { createLog } from '@logger/logUtils';
+import type { StreamTabId } from '@shared/schemas';
 import { toLogData } from './desktopLogUtils.js';
 
 /**
@@ -10,24 +11,82 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
   const logger = createLog('DesktopProcessStores');
   const stores = createSessionStores(session);
   await stores.sweepLeftoverStreams();
+  const streamIncarnations = new Map<StreamTabId, number>();
+  const pendingRemovals = new Map<StreamTabId, number>();
+  const deletionGuards = new Map<
+    StreamTabId,
+    { readonly incarnation: number; readonly guard: () => boolean }
+  >();
+  const deletionGuard = (
+    streamId: StreamTabId,
+    expectedIncarnation: number,
+  ): (() => boolean) => {
+    const cached = deletionGuards.get(streamId);
+    if (cached?.incarnation === expectedIncarnation) return cached.guard;
+    const guard = (): boolean =>
+      (streamIncarnations.get(streamId) ?? 0) === expectedIncarnation;
+    deletionGuards.set(streamId, { incarnation: expectedIncarnation, guard });
+    return guard;
+  };
 
   const detachStreamRemoval = session.events.subscribe(
     (sessionEvent) => {
-      if (
-        sessionEvent.scope === 'session' &&
-        sessionEvent.event.type === 'removeStream'
-      ) {
+      if (sessionEvent.scope !== 'session') return;
+      if (sessionEvent.event.type === 'setActiveStream') {
         const { streamId } = sessionEvent.event.payload;
-        // SessionStores tracks the lease barrier immediately so a window
-        // reattaching before terminal artifact persistence finishes cannot
-        // replay a stream already marked removed.
-        void stores
-          .deleteStreamAfterOwnedExecutionRelease(streamId)
-          .catch((error: unknown) => {
-            logger.warn('Failed to delete a headless desktop stream', {
-              data: toLogData(error),
+        if (
+          !streamId ||
+          !pendingRemovals.has(streamId) ||
+          session.snapshots.getRunMetadata(streamId, { quiet: true }).identity
+            ?.kind !== 'multiAgentWorkflow' ||
+          !session.executions.getAgentHandleByStream(streamId)
+        ) {
+          return;
+        }
+        streamIncarnations.set(
+          streamId,
+          (streamIncarnations.get(streamId) ?? 0) + 1,
+        );
+        return;
+      }
+      if (sessionEvent.event.type === 'removeStream') {
+        const { streamId } = sessionEvent.event.payload;
+        const expectedIncarnation = streamIncarnations.get(streamId) ?? 0;
+        pendingRemovals.set(streamId, expectedIncarnation);
+        // A live ProgressBackend claims this incarnation synchronously during
+        // fact dispatch, before its deletion preparation reaches an await.
+        // Check in the following microtask so the process fallback runs only
+        // when no presentation owns the removal.
+        queueMicrotask(() => {
+          if (stores.hasStreamDeletionClaim(streamId, expectedIncarnation)) {
+            if (pendingRemovals.get(streamId) === expectedIncarnation) {
+              pendingRemovals.delete(streamId);
+            }
+            return;
+          }
+          void stores
+            .deleteStreamAfterOwnedExecutionRelease(streamId, {
+              shouldDelete: deletionGuard(streamId, expectedIncarnation),
+              expectedIncarnation,
+            })
+            .then((outcome) => {
+              if (outcome === 'superseded') {
+                logger.info(
+                  `Skipped deletion for re-claimed desktop stream ${streamId}`,
+                );
+              }
+            })
+            .catch((error: unknown) => {
+              logger.warn('Failed to delete a headless desktop stream', {
+                data: toLogData(error),
+              });
+            })
+            .finally(() => {
+              if (pendingRemovals.get(streamId) === expectedIncarnation) {
+                pendingRemovals.delete(streamId);
+              }
             });
-          });
+        });
       }
     },
     { scope: 'session' },
@@ -40,6 +99,7 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
     dispose() {
       detachStreamRemoval();
       detachArtifactFlusher();
+      deletionGuards.clear();
     },
   };
 }
