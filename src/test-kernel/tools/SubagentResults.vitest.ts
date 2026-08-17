@@ -361,7 +361,7 @@ describe('formatBashDelivery', () => {
       'bash-1',
       'printf lines',
       1000,
-      { success: true, stdout: '', stderr: '', exitCode: 0 },
+      { success: true, stdout: '', stderr: '', timedOut: false, exitCode: 0 },
       { tail: `${outputTail}\n` },
       { tail: '' },
     );
@@ -375,7 +375,7 @@ describe('formatBashDelivery', () => {
       'bash&1"<',
       'printf lines',
       1000,
-      { success: true, stdout: '', stderr: '', exitCode: 0 },
+      { success: true, stdout: '', stderr: '', timedOut: false, exitCode: 0 },
       { tail: 'ok' },
       { tail: '' },
     );
@@ -390,7 +390,7 @@ describe('formatBashDelivery', () => {
       'bash-3',
       'make build',
       1000,
-      { success: false, stdout: '', stderr: '', exitCode: 1 },
+      { success: false, stdout: '', stderr: '', timedOut: false, exitCode: 1 },
       { tail: 'tail output', head: 'first fatal error', elidedChars: 500 },
       { tail: 'tail stderr', head: 'first fatal stderr', elidedChars: 250 },
     );
@@ -410,7 +410,7 @@ describe('formatBashDelivery', () => {
       'bash-4',
       'echo hi',
       1000,
-      { success: true, stdout: '', stderr: '', exitCode: 0 },
+      { success: true, stdout: '', stderr: '', timedOut: false, exitCode: 0 },
       { tail: 'ok' },
       { tail: '' },
     );
@@ -429,7 +429,7 @@ describe('formatBashDelivery', () => {
       'bash-2',
       'printf lines',
       1000,
-      { success: true, stdout: '', stderr: '', exitCode: 0 },
+      { success: true, stdout: '', stderr: '', timedOut: false, exitCode: 0 },
       { tail: `${outputTail}\r\n` },
       { tail: '' },
     );
