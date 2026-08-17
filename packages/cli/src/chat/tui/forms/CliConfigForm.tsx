@@ -67,15 +67,15 @@ const MODEL_ROUTING_SETTING_KEYS: ReadonlySet<string> = new Set([
   GlobalStateKey.GLM_CODING_PLAN,
 ]);
 
-const INITIAL_API_KEY_STATUS_VIEW: ProviderApiKeyStatusView = {
+const INITIAL_API_KEY_STATUS_VIEW: ProviderApiKeyStatusView = Object.freeze({
   loading: true,
   error: false,
-};
+} as const);
 
-const INITIAL_GITHUB_TOKEN_STATUS_VIEW: GitHubTokenStatusView = {
+const INITIAL_GITHUB_TOKEN_STATUS_VIEW: GitHubTokenStatusView = Object.freeze({
   loading: true,
   error: false,
-};
+} as const);
 
 /**
  * Construct the canonical CLI configuration interface. Both the standalone

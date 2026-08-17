@@ -86,10 +86,13 @@ describe('saveGitHubToken', () => {
     mocks.set.mockReset().mockResolvedValue(undefined);
   });
 
-  it('rejects a masked prefix even when it has a suffix', async () => {
-    await expect(saveGitHubToken('xxx-not-a-real-token')).rejects.toThrow(
-      'placeholder',
-    );
+  it.each([
+    'xxx-not-a-real-token',
+    'ghp_xxx-not-a-real-token',
+    'github_pat_***-not-a-real-token',
+    '[REDACTED_GITHUB_TOKEN]',
+  ])('rejects the GitHub placeholder %s', async (placeholder) => {
+    await expect(saveGitHubToken(placeholder)).rejects.toThrow('placeholder');
     expect(mocks.set).not.toHaveBeenCalled();
   });
 });
