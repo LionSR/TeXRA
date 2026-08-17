@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInput, useWindowSize } from 'ink';
 
-import { defaultSession } from '@agent/runtime';
+import { tryDefaultSession } from '@agent/runtime';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
@@ -158,12 +158,13 @@ export function TranscriptReader({
     }
 
     void (async () => {
-      const flushError = await defaultSession()
-        .flushArtifacts()
-        .then(
-          () => undefined,
-          (error: unknown) => error,
-        );
+      const session = tryDefaultSession();
+      const flushError = session
+        ? await session.flushArtifacts().then(
+            () => undefined,
+            (error: unknown) => error,
+          )
+        : new Error('Transcript session is unavailable');
       const resolved = await Promise.all(
         pending.map(
           async (spillPath) =>

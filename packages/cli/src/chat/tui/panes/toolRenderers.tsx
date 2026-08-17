@@ -121,6 +121,8 @@ export interface DisplayLineOptions {
   readonly width?: number;
   /** Retained subagent identities used by executions wait/view headers. */
   readonly executionLabels?: ExecutionLabels;
+  /** Include recovered output for compact tool kinds in the full transcript. */
+  readonly includeCompactOutput?: boolean;
 }
 
 /** One styled fragment of a tool row. */
@@ -332,12 +334,6 @@ function toolRowOptions(
   return plain;
 }
 
-/** Whether this tool kind's full-detail row already includes raw output. */
-export function toolUseRendersOutput(toolUse: NormalizedToolUse): boolean {
-  return toolRowOptions(toolUse, toolUsePatchGroups(toolUse) !== undefined)
-    .showOutput;
-}
-
 function buildStyledLines(
   toolUse: NormalizedToolUse,
   options: DisplayLineOptions,
@@ -366,6 +362,15 @@ function buildStyledLines(
     output.length === 0 &&
     !patchGroups &&
     !toolUse.isError;
+  const compactOutput =
+    options.includeCompactOutput && !opts.showOutput
+      ? [
+          row([{ text: 'Full output:' }]),
+          ...toolUse.outputText
+            .split('\n')
+            .map((line) => row([{ text: line }])),
+        ]
+      : [];
 
   return [
     row([
@@ -416,6 +421,7 @@ function buildStyledLines(
     ...(showNoOutput
       ? [row([CORNER_PREFIX_SPAN, { text: '(no output)', dim: true }])]
       : []),
+    ...compactOutput,
   ];
 }
 
@@ -438,7 +444,7 @@ export function toolUseStyledLines(
     toolUse.toolName === 'executions' && options.executionLabels
       ? executionsSubagentSummary(toolUse.input, options.executionLabels)
       : undefined;
-  const key = `${options.elide === false ? 'f' : 'e'}|${options.width ?? 'd'}|${executionSummary ?? ''}`;
+  const key = `${options.elide === false ? 'f' : 'e'}|${options.includeCompactOutput ? 'c' : 'n'}|${options.width ?? 'd'}|${executionSummary ?? ''}`;
   let cached = styledLinesCache.get(toolUse);
   const hit = cached?.get(key);
   if (hit) return hit;
