@@ -675,10 +675,6 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
         phase: 'Map',
         status: 'running',
       }),
-      // A malformed row must drop out of the fold rather than throw.
-      workflowTaskMessage('phase-map', 'task-bad', 5, {
-        id: 'broken',
-      } as unknown as WorkflowCallProgress),
     ];
 
     const list = await renderList([run, phase], messages);

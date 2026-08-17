@@ -7,9 +7,6 @@
  * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
-// Third-party imports
-import { z } from 'zod';
-
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
@@ -22,11 +19,13 @@ import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - shared schemas and utilities
-import type { ExtendedTokenUsageStats, LogMessageData } from '@shared/schemas';
+import type {
+  ExtendedTokenUsageStats,
+  LogMessageData,
+  LogMessageOf,
+} from '@shared/schemas';
 import {
-  ExtendedTokenUsageStatsSchema,
-  FileListEntrySchema,
-  MissingOutputsPayloadSchema,
+  MESSAGE_TYPES,
   OUTPUT_DOCUMENTS_TAG,
   parseDiffResultEntries,
 } from '@shared/schemas';
@@ -64,22 +63,11 @@ function buildFileListDetails(options: {
 }
 
 /** Format file list entry as TemplateResult. */
-export function formatFileListTemplate(message: LogMessageData): FormatResult {
-  const { id, data, text } = message;
-  // Validate with Zod schema - renderer handles display field computation
-  const parseResult = z.array(FileListEntrySchema).safeParse(data);
-
-  // Raw fallback when parsing fails
-  if (!parseResult.success) {
-    return buildFileListDetails({
-      logId: id,
-      iconName: 'file',
-      label: 'Files (raw)',
-      items: html`<pre>${text ?? ''}</pre>`,
-    });
-  }
-
-  const { items, summary } = buildFileListRender(parseResult.data);
+export function formatFileListTemplate(
+  message: LogMessageOf<typeof MESSAGE_TYPES.FILE_LIST>,
+): FormatResult {
+  const { id, data } = message;
+  const { items, summary } = buildFileListRender(data);
   return buildFileListDetails({
     logId: id,
     iconName: 'file',
@@ -97,16 +85,10 @@ function renderXmlLink(xmlFile: string): TemplateResult {
 
 /** Format missing outputs entry as TemplateResult. */
 export function formatMissingOutputsTemplate(
-  message: LogMessageData,
+  message: LogMessageOf<typeof MESSAGE_TYPES.MISSING_OUTPUTS>,
 ): FormatResult {
   const { id, data } = message;
-  // Parse with Zod schema
-  const parseResult = MissingOutputsPayloadSchema.safeParse(data);
-  if (!parseResult.success) {
-    return null;
-  }
-
-  const { missing, xmlFile } = parseResult.data;
+  const { missing, xmlFile } = data;
 
   // Special case: only XML link, no missing files
   if (missing.length === 0 && xmlFile) {
@@ -206,14 +188,10 @@ const STATISTICS_CONFIG = Object.freeze({
 
 /** Format statistics entry as TemplateResult. */
 export function formatStatisticsTemplate(
-  message: LogMessageData,
+  message: LogMessageOf<typeof MESSAGE_TYPES.STATISTICS>,
 ): FormatResult {
   const { id, data } = message;
-  // Use partial schema to allow missing optional fields
-  const parseResult = ExtendedTokenUsageStatsSchema.partial().safeParse(data);
-  if (!parseResult.success) return null;
-
-  const stats = parseResult.data;
+  const stats = data;
   const items = STAT_FIELDS.filter(([key]) => stats[key] !== undefined).map(
     ([key, icon, label, formatter]) => ({
       icon,

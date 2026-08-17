@@ -6,9 +6,9 @@ import { ProgressEvents } from '@progressView/frontend/events';
 
 // Local imports - shared contracts
 import {
+  MESSAGE_TYPES,
   WORKFLOW_TASK_STATUS_LABEL,
-  WorkflowCallProgressSchema,
-  type LogMessageData,
+  type LogMessageOf,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import {
@@ -47,9 +47,9 @@ function terminalMetadata(
 
 /** Render one workflow call as a status card updated in place by log id. */
 export function formatWorkflowCallTemplate(
-  message: LogMessageData,
+  message: LogMessageOf<typeof MESSAGE_TYPES.WORKFLOW_TASK>,
 ): TemplateResult {
-  const call = WorkflowCallProgressSchema.parse(message.data);
+  const call = message.data;
   const detail = workflowCallDetail(call);
   const hasChildStream = call.childStreamId !== undefined;
   const openChildStream = (event: Event): void => {

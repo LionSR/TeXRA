@@ -1889,7 +1889,7 @@ describe('CLI transcript state', () => {
     );
   });
 
-  it('renders typed loaded images once and excludes ordinary file lists', () => {
+  it('renders typed loaded images in source order and excludes ordinary file lists', () => {
     const logger = runTrace(root);
     logger.domain({
       key: 'filesLoaded',
@@ -1951,10 +1951,12 @@ describe('CLI transcript state', () => {
       finalized: true,
       images: [
         { path: '/private/tmp/loaded.png', sizeBytes: 8704 },
+        { path: '/private/tmp/loaded.png', sizeBytes: 8704 },
         { path: '/private/tmp/paper.pdf', sizeBytes: 8192 },
       ],
     });
     expect(transcriptEntryLayout(entries[0]).lines).toEqual([
+      '› [image] /private/tmp/loaded.png (8.5 KiB)',
       '› [image] /private/tmp/loaded.png (8.5 KiB)',
       '› [image] /private/tmp/paper.pdf (8 KiB)',
     ]);
@@ -2091,20 +2093,6 @@ describe('CLI transcript state', () => {
       '! Model request failed (no retry available)',
       '  ⎿ HTTP 400 Bad Request – status code without a body',
     ]);
-  });
-
-  it('keeps the error summary when structured error data is malformed', () => {
-    const logger = runTrace(root);
-    logModelError(logger, 'Model request failed', {
-      message: { nested: 'not a canonical message' },
-      rawErrorBody: { apiKey: 'secret-must-not-render' },
-      userRetryable: 'sometimes',
-    });
-
-    syncStreamLog(root);
-
-    const entries = streamEntries(root);
-    expect(entries[0]?.text).toBe('Model request failed');
   });
 
   it('removes terminal control sequences from model-error reasons', () => {

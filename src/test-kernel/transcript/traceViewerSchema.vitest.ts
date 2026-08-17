@@ -172,6 +172,44 @@ describe('trace-viewer TraceDataSchema', () => {
     expectTraceRejected(trace({ entries: [{ notAStreamLogEntry: true }] }));
   });
 
+  it('recovers malformed nested trace payloads without rejecting sibling entries', () => {
+    const parsed = parseTraceData(
+      trace({
+        entries: [
+          {
+            seqNo: 1,
+            id: 'bad-files',
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: LOG_LEVELS.INFO,
+            timestamp: 1,
+            messageType: MESSAGE_TYPES.FILE_LIST,
+            data: [{ path: '/tmp/incomplete' }],
+            text: 'Legacy files',
+          },
+          {
+            seqNo: 2,
+            id: 'legacy-group',
+            type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+            level: LOG_LEVELS.INFO,
+            timestamp: 2,
+            data: { status: 'future-status', kind: 'run', total: 3 },
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.entries[0]).toMatchObject({
+      id: 'bad-files',
+      messageType: MESSAGE_TYPES.DEFAULT,
+      text: 'Legacy files',
+    });
+    expect(parsed.entries[1]).toMatchObject({
+      id: 'legacy-group',
+      data: { kind: 'run', total: 3 },
+    });
+    expect(parsed.entries[1]?.data).toHaveProperty('status', undefined);
+  });
+
   it('rejects a null/undefined/primitive trace payload', () => {
     expectTraceRejected(null);
     expectTraceRejected(undefined);
