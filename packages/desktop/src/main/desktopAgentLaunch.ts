@@ -5,20 +5,15 @@ import {
 } from '@agent/runtime';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import type { RequestOpenFilePayload } from '@shared/schemas';
-import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
-import type { RegisteredToolName } from '@tools/registry';
-import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
+import { getDefaultUnavailableToolNames } from '@tools/registry';
 import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
 
-export const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
-  ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
-  'inline_comment',
-  DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
-];
+export const DESKTOP_UNAVAILABLE_TOOLS =
+  getDefaultUnavailableToolNames('desktop');
 
 export interface DesktopAgentLaunchContext {
   readonly session: SessionHandle;

@@ -5,6 +5,15 @@
 import type { ToolDefinition } from '@model/ToolDefinition';
 import type { ToolResult } from '@shared/schemas';
 
+/** Product hosts that expose the shared agent-tool registry. */
+export type ToolHost = 'cli' | 'desktop' | 'extension';
+
+/** A static host exclusion declared by the tool that owns the capability. */
+export interface ToolHostExclusion {
+  readonly available: false;
+  readonly reason: string;
+}
+
 /**
  * Contract for tool implementations.
  * BaseTool provides the canonical implementation with Zod validation. Expected
@@ -14,6 +23,8 @@ import type { ToolResult } from '@shared/schemas';
  */
 export interface ITool {
   readonly definition: ToolDefinition;
+  /** Static host exclusions; an omitted host supports the tool. */
+  readonly hosts?: Partial<Record<ToolHost, ToolHostExclusion>>;
   /**
    * True only for tools that are side-effect-free AND approval-free, so
    * parallel calls in one model response may execute concurrently.

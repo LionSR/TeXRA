@@ -10,7 +10,6 @@ import type { ToolDefinition } from '@model/ToolDefinition';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
-import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { getDefaultToolRegistry } from '@tools/registry';
 
 const logger = { warn: () => {} };
@@ -106,9 +105,7 @@ describe('tool-use tool resolution', () => {
   });
 
   it('omits diagnostics when read support is host-unavailable', async () => {
-    const { tools } = await resolveDiagnostics([
-      DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
-    ]);
+    const { tools } = await resolveDiagnostics(['diagnostics']);
 
     expect(tools).toEqual([]);
   });

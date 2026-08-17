@@ -22,8 +22,7 @@ import type {
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
 import { cleanupTempDirs } from '@test/support/tempDirPlatform';
-import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
-import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
+import { getDefaultUnavailableToolNames } from '@tools/registry';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
@@ -161,12 +160,7 @@ function toolUseConfig() {
 }
 
 /** Tools the CLI runtime hides by default during agent execution. */
-const DEFAULT_RUNTIME_UNAVAILABLE_TOOLS = [
-  'inquiry',
-  ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
-  'inline_comment',
-  DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
-];
+const DEFAULT_RUNTIME_UNAVAILABLE_TOOLS = getDefaultUnavailableToolNames('cli');
 
 function loadRunExecution(): Promise<
   typeof import('@cli/runtime/runExecution')

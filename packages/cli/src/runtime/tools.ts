@@ -4,6 +4,7 @@ import {
   type ExternalToolDef,
 } from '@tools/externalToolDefs';
 import { runExternalToolChecks } from '@tools/toolAvailability';
+import { isDefaultToolUnavailableOnHost } from '@tools/registry';
 import { getDisabledToolIds, setToolEnabled } from '@utils/config/constants';
 
 export interface CliToolStatusRecord {
@@ -30,7 +31,13 @@ export interface CliToolGuide {
 }
 
 const cliToolDefs = EXTERNAL_TOOL_DEFS.filter(
-  (def) => !def.hideFromDashboard && !def.hideFromCli,
+  (def) =>
+    !def.hideFromDashboard &&
+    !def.hideFromCli &&
+    !(
+      def.tools.length > 0 &&
+      def.tools.every((name) => isDefaultToolUnavailableOnHost(name, 'cli'))
+    ),
 );
 
 function detectedFromStatus(status: string): boolean | null {

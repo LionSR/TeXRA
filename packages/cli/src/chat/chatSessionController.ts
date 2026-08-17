@@ -40,7 +40,6 @@ import {
   runOutcomeExitCode,
   type TurnOutcome,
 } from '@cli/runtime/terminalStatus';
-import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
 import {
   hasErrorPresentationPending,
   hasErrorPresentedMarker,
@@ -55,6 +54,7 @@ import {
   sumUsageStats,
   AgentCategory,
 } from '@shared/schemas';
+import { getDefaultUnavailableToolNames } from '@tools/registry';
 import { StreamSnapshotStore } from '@transcript';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -433,7 +433,7 @@ export function createChatSessionController(
             approvalPromptsUnavailable: approvalsUnavailable,
             onApprovalPolicyDenial: () =>
               warnApprovalDenied(sessionContext, 'Tool or edit approval'),
-            runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+            runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
             onStreamResolved: (resolvedStreamId) => {
               // Each chat round mints a fresh root StreamTabId (new
               // executionId), so bash/tool-edit/super-YOLO bypass — which is
@@ -589,7 +589,7 @@ export function createChatSessionController(
             approvalPromptsUnavailable: approvalsUnavailable,
             onApprovalPolicyDenial: () =>
               warnApprovalDenied(sessionContext, 'Tool or edit approval'),
-            runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+            runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
             drainedFollowUps: supersededRecovery?.followUps.map((followUp) => ({
               ...followUp,
               origin: 'user' as const,
@@ -721,7 +721,8 @@ export function createChatSessionController(
                   approvalPromptsUnavailable: approvalsUnavailable,
                   onApprovalPolicyDenial: () =>
                     warnApprovalDenied(sessionContext, 'Tool or edit approval'),
-                  runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+                  runtimeUnavailableTools:
+                    getDefaultUnavailableToolNames('cli'),
                   extraFollowUps: options.extraFollowUps,
                   onFollowUpQueueReady: (lease) => {
                     if (options.onFollowUpQueueReady) {
