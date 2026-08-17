@@ -177,7 +177,7 @@ export class GrepTool extends defineTool({
     }
 
     // Filter empty lines consistently for counting and pagination
-    const allLines = splitOutputLines(result.stdout ?? '');
+    const allLines = splitOutputLines(result.stdout);
     const totalCount = allLines.length;
 
     if (totalCount === 0) {
