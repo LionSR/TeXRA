@@ -45,13 +45,13 @@ export interface ProviderCapabilityKey {
   readonly useOpenRouter: boolean;
 }
 
-/** Default Codex budget (GPT-5.5 and earlier). */
-export const CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW = 400_000;
+/**
+ * ChatGPT-subscription Codex input budget. Matches Codex CLI 0.145.0's
+ * `context_window` / `max_context_window` for GPT-5.5 and GPT-5.6 Sol /
+ * Terra / Luna. Displayed context is this plus the registry `maxOutputTokens`
+ * (128k → 400k), same split OpenCode uses.
+ */
 export const CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT = 272_000;
-
-/** GPT-5.6 Codex budget: 372k input plus 128k output. */
-export const CODEX_GPT56_SUBSCRIPTION_CONTEXT_WINDOW = 500_000;
-export const CODEX_GPT56_SUBSCRIPTION_INPUT_LIMIT = 372_000;
 
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `fullName`. */
 const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
@@ -65,22 +65,6 @@ export function codexBackendModelId(config: {
   readonly fullName: string;
 }): string {
   return config.shortName || config.fullName.replace(CODEX_MODEL_DATE_PIN, '');
-}
-
-function codexSubscriptionTokenLimits(model: ModelConfig): {
-  contextWindow: number;
-  inputTokenLimit: number;
-} {
-  if (codexBackendModelId(model).startsWith('gpt-5.6')) {
-    return {
-      contextWindow: CODEX_GPT56_SUBSCRIPTION_CONTEXT_WINDOW,
-      inputTokenLimit: CODEX_GPT56_SUBSCRIPTION_INPUT_LIMIT,
-    };
-  }
-  return {
-    contextWindow: CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
-    inputTokenLimit: CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
-  };
 }
 
 /**
@@ -122,14 +106,19 @@ export function resolveCodexSubscriptionProfile({
   if (model.provider !== ModelProvider.OPENAI) return null;
   if (model.openRouterOnly) return null;
   if (!isCodexSubscriptionEligible(model)) return null;
-  const tokenLimits = codexSubscriptionTokenLimits(model);
+  const inputTokenLimit = Math.min(
+    CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
+    model.contextWindow,
+  );
+  const contextWindow = Math.min(
+    inputTokenLimit + model.maxOutputTokens,
+    model.contextWindow,
+  );
 
   return {
     authMode: 'chatgpt-subscription',
-    ...zeroCostAccessOverrides(
-      Math.min(tokenLimits.contextWindow, model.contextWindow),
-    ),
-    inputTokenLimit: Math.min(tokenLimits.inputTokenLimit, model.contextWindow),
+    ...zeroCostAccessOverrides(contextWindow),
+    inputTokenLimit,
     usageRoute: 'chatgpt-subscription',
     openAIResponses: {
       backgroundMode: 'disabled',
