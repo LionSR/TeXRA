@@ -9,12 +9,12 @@
  * which resolves the default from the entry's schema and snaps an
  * invalid/stale stored value back to that default. Keys not yet in the
  * catalog (the per-provider streaming toggles below) fall back to the
- * local `read()` helper, a thin `tryGlobalState()` wrapper — migrate a key to
+ * local `read()` helper — migrate a key to
  * `readPlatformSetting()` once it gets a catalog entry rather than adding a
  * fourth read path.
  */
 
-import { tryGlobalState } from '@platform/platform';
+import { platform } from '@platform/platform';
 import type { StateStore } from '@platform/interfaces';
 import {
   PROVIDER_STATE_ENTRIES,
@@ -34,7 +34,7 @@ function entry(provider: string): ProviderStateEntry | undefined {
 
 /** Non-catalog fallback — see the module-level "Canonical read path" note. */
 function read<T>(key: GlobalStateKey, defaultValue: T): T {
-  return tryGlobalState()?.get(key, defaultValue) ?? defaultValue;
+  return platform().globalState.get(key, defaultValue);
 }
 
 function regionSet(provider: string): boolean | undefined {
@@ -54,7 +54,7 @@ export function getGlobalStreaming(): boolean {
 }
 
 export async function setGlobalStreaming(enabled: boolean): Promise<void> {
-  await tryGlobalState()?.update(GlobalStateKey.STREAMING_GLOBAL, enabled);
+  await platform().globalState.update(GlobalStateKey.STREAMING_GLOBAL, enabled);
 }
 
 export function getProviderStreaming(provider: string): boolean {
@@ -68,7 +68,7 @@ export async function setProviderStreaming(
   enabled: boolean,
 ): Promise<void> {
   const key = entry(provider)?.streamingKey;
-  if (key) await tryGlobalState()?.update(key, enabled);
+  if (key) await platform().globalState.update(key, enabled);
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ export async function setProviderEndpoint(
   endpoint: string,
 ): Promise<void> {
   const key = entry(provider)?.endpointKey;
-  if (key) await tryGlobalState()?.update(key, endpoint);
+  if (key) await platform().globalState.update(key, endpoint);
 }
 
 export function supportsCustomEndpoint(provider: string): boolean {
@@ -144,7 +144,7 @@ export function getGLMCodingPlan(): boolean {
 }
 
 export async function setGLMCodingPlan(enabled: boolean): Promise<void> {
-  await tryGlobalState()?.update(GlobalStateKey.GLM_CODING_PLAN, enabled);
+  await platform().globalState.update(GlobalStateKey.GLM_CODING_PLAN, enabled);
 }
 
 /**
@@ -166,12 +166,12 @@ export function getPreferKimiCode(): boolean {
  */
 export async function setPreferKimiCode(
   enabled: boolean,
-  state: StateStore | null = tryGlobalState(),
+  state: StateStore = platform().globalState,
   options: { readonly preserveOpenRouter?: boolean } = {},
 ): Promise<void> {
-  await state?.update(GlobalStateKey.KIMI_CODE_PREFER, enabled);
+  await state.update(GlobalStateKey.KIMI_CODE_PREFER, enabled);
   if (enabled && options.preserveOpenRouter !== true) {
-    await state?.update(GlobalStateKey.USE_OPENROUTER, false);
+    await state.update(GlobalStateKey.USE_OPENROUTER, false);
   }
 }
 

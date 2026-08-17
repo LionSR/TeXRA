@@ -1,6 +1,6 @@
 // Local imports
 import type { StateStore } from '@platform/interfaces';
-import { tryGlobalState } from '@platform/platform';
+import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Time constants
@@ -29,8 +29,8 @@ export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
  * silently dropped the write.
  */
 export function getDisabledToolIds(store?: StateStore): ReadonlySet<string> {
-  const resolved = store ?? tryGlobalState();
-  const raw = resolved?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
+  const resolved = store ?? platform().globalState;
+  const raw = resolved.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []);
   return new Set(raw);
 }
 
@@ -40,12 +40,12 @@ export async function setToolEnabled(
   enabled: boolean,
   store?: StateStore,
 ): Promise<void> {
-  const resolved = store ?? tryGlobalState();
-  const set = new Set(getDisabledToolIds(resolved ?? undefined));
+  const resolved = store ?? platform().globalState;
+  const set = new Set(getDisabledToolIds(resolved));
   if (enabled) {
     set.delete(toolId);
   } else {
     set.add(toolId);
   }
-  await resolved?.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
+  await resolved.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
 }
