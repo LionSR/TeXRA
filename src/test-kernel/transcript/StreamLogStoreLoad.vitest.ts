@@ -132,6 +132,28 @@ function settledSummary(
   });
 }
 
+function journalWithCheckpoint(
+  entries: readonly StreamLogEntry[],
+  checkpoint: Record<string, unknown>,
+): string {
+  return `${[
+    {
+      version: 1,
+      opId: '11111111-1111-4111-8111-111111111111',
+      op: 'seed',
+      entries,
+    },
+    {
+      version: 1,
+      opId: '22222222-2222-4222-8222-222222222222',
+      op: 'checkpoint',
+      summary: checkpoint,
+    },
+  ]
+    .map((record) => JSON.stringify(record))
+    .join('\n')}\n`;
+}
+
 function writtenSummary(
   writes: ReadonlyMap<string, unknown>,
   streamId: string,
@@ -320,6 +342,16 @@ function mockStorage({
 
     throw new Error(`Unexpected read target: ${target}`);
   });
+  vi.spyOn(StorageFS, 'readTail').mockImplementation(
+    async (target, maxBytes) => {
+      const key = streamKeyFromFile(target);
+      if (areaOf(target) !== 'log' || !isJournalFile(target)) {
+        throw new Error(`Unexpected tail-read target: ${target}`);
+      }
+      if (!Object.hasOwn(journals, key)) throw notFound();
+      return journals[key].slice(-maxBytes);
+    },
+  );
 
   vi.spyOn(StorageFS, 'ensureDir').mockImplementation(async (target) => {
     ensuredDirs.push(target);
@@ -549,7 +581,7 @@ describe('StreamLogStore load', () => {
 
     const third = await StreamLogStore.open();
     expect(third.keys()).toEqual(['registered-empty']);
-    expect(storage.fullLogReads()).toBe(2);
+    expect(storage.fullLogReads()).toBe(0);
   });
 
   it('replays append-only mutations over an unchanged legacy array', async () => {
@@ -1042,28 +1074,34 @@ describe('StreamLogStore load', () => {
     ).toHaveLength(oldRootPreparations + 1);
   });
 
-  it('folds authoritative logs at startup without making streams resident', async () => {
+  it('loads trailing checkpoints at startup without reading full journals', async () => {
+    const alphaEntries = [logEntry('alpha', 1, 200), logEntry('alpha', 2, 250)];
+    const betaEntries = [logEntry('beta', 1, 100), logEntry('beta', 2, 160)];
     const storage = mockStorage({
-      logs: {
-        alpha: [logEntry('alpha', 1, 200), logEntry('alpha', 2, 250)],
-        beta: [logEntry('beta', 1, 100), logEntry('beta', 2, 160)],
-      },
-      summaries: {
-        alpha: summary(200, 250, { hasRunningGroup: false }),
-        beta: summary(100, 160, { hasRunningGroup: false }),
+      logs: {},
+      summaries: {},
+      journals: {
+        alpha: journalWithCheckpoint(
+          alphaEntries,
+          summary(200, 250, { hasRunningGroup: false }),
+        ),
+        beta: journalWithCheckpoint(
+          betaEntries,
+          summary(100, 160, { hasRunningGroup: false }),
+        ),
       },
     });
 
     const store = await StreamLogStore.open();
 
-    expect(storage.fullLogReads()).toBe(2);
+    expect(storage.fullLogReads()).toBe(0);
     expect(store.keys()).toEqual(['beta', 'alpha']);
     expect(store.get('alpha')).toBeUndefined();
     expect(store.getTimestampRange('alpha')).toEqual({ first: 200, last: 250 });
 
     await store.ensureLoaded('alpha');
 
-    expect(storage.fullLogReads()).toBe(3);
+    expect(storage.fullLogReads()).toBe(1);
     expect(store.get('alpha')?.size).toBe(2);
   });
 

@@ -45,6 +45,7 @@ export const STREAM_LOGS_DIR = WORKSPACE_STORAGE_LAYOUT.streamLogs;
 // Introduced 2026-08-17; remove after 2026-11-17.
 const LEGACY_STREAM_LOG_SUMMARIES_DIR = 'streamLogSummaries';
 const STREAM_LOG_LOAD_CONCURRENCY = 8;
+const STREAM_LOG_CHECKPOINT_TAIL_BYTES = 64 * 1024;
 const STREAM_LOG_JOURNAL_EXTENSION = '.jsonl';
 const STREAM_LOG_JOURNAL_VERSION = 1;
 const LOG_TAG = 'StreamLogStore';
@@ -1662,11 +1663,31 @@ export class StreamLogStore {
     streamId: StreamTabId,
     readLegacyMeta = true,
   ): Promise<StreamLoadResult | null> {
+    return this.runInPersistenceQueue(streamId, () =>
+      this.loadStreamSummarySerialized(streamId, readLegacyMeta),
+    );
+  }
+
+  private async loadStreamSummarySerialized(
+    streamId: StreamTabId,
+    readLegacyMeta: boolean,
+  ): Promise<StreamLoadResult | null> {
     // A discovered file may disappear before its read completes. Recheck the
     // union so neither a legacy array nor a journal-only empty registration is
     // resurrected after deletion.
     if (!(await this.hasPersistedStream(streamId))) return null;
-    const entries = await this.readPersistedEntries(streamId);
+    const legacyLogExists = await this.kv().exists(streamId);
+    if (!legacyLogExists) {
+      const tail = await this.kv().readTextTail(
+        streamId,
+        STREAM_LOG_JOURNAL_EXTENSION,
+        STREAM_LOG_CHECKPOINT_TAIL_BYTES,
+      );
+      const checkpoint = this.parseTrailingSummaryCheckpoint(tail);
+      if (checkpoint) return { streamId, summary: checkpoint };
+    }
+
+    const entries = await this.readPersistedEntriesSerialized(streamId);
     if (!entries) return null;
     let legacyMeta = entries.summaryMeta;
     if (!entries.summaryCheckpointSeen && readLegacyMeta) {
@@ -1689,6 +1710,22 @@ export class StreamLogStore {
       );
     }
     return { streamId, summary };
+  }
+
+  private parseTrailingSummaryCheckpoint(
+    tail: string | undefined,
+  ): StreamLogSummary | undefined {
+    if (!tail?.endsWith('\n')) return undefined;
+    const line = tail.trimEnd().split('\n').at(-1);
+    if (!line) return undefined;
+    try {
+      const parsed = StreamLogJournalRecordSchema.safeParse(JSON.parse(line));
+      return parsed.success && parsed.data.op === 'checkpoint'
+        ? parsed.data.summary
+        : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private async readLegacySummaryMeta(

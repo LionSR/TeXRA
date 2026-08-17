@@ -84,6 +84,23 @@ export abstract class BaseFS {
     return Buffer.from(content);
   }
 
+  /** Read at most the final `maxBytes` without loading the whole file. */
+  public static async readTail(
+    this: typeof BaseFS,
+    target: string,
+    maxBytes: number,
+  ): Promise<string> {
+    const resolved = this.preparePath(target);
+    const { size } = await platform().fs.stat(resolved);
+    const offset = Math.max(0, size - maxBytes);
+    const content = await platform().fs.readFileChunk(
+      resolved,
+      offset,
+      size - offset,
+    );
+    return normalizeLineEndings(Buffer.from(content).toString('utf-8'));
+  }
+
   public static async write(
     this: typeof BaseFS,
     target: string,

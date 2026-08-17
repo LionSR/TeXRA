@@ -69,6 +69,18 @@ export class KVStore {
     );
   }
 
+  /** Read a bounded suffix from a caller-owned text value. */
+  async readTextTail(
+    key: string,
+    extension: string,
+    maxBytes: number,
+  ): Promise<string | undefined> {
+    return withMissingFallback(
+      () => StorageFS.readTail(keyToPath(this.dir, key, extension), maxBytes),
+      undefined,
+    );
+  }
+
   /** Append text to one storage value; callers own record framing. */
   async appendText(
     key: string,
