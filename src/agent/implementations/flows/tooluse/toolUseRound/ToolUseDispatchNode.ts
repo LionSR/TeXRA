@@ -23,6 +23,7 @@ import {
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import type { FileLocation, ToolResult } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 
@@ -294,8 +295,9 @@ export class ToolUseDispatchNode<C> extends Node<
     }
 
     const options = this.services;
+    let result: ToolResult;
     try {
-      const result = await withToolFileInteractionContext(
+      result = await withToolFileInteractionContext(
         {
           tracker: options.workspace.interactions,
           workPlanState: options.workspace.workPlan,
@@ -319,13 +321,22 @@ export class ToolUseDispatchNode<C> extends Node<
         },
         () => tool.call(parsedInput),
       );
-      return { result, extracted: extractToolAttachments(result) };
     } catch (err) {
       const { message, diagnostics } = normalizeToolCallError(call.name, err);
-      const result: ToolResult = {
+      result = {
         status: 'error',
         error: message.trim() || 'Tool execution failed.',
         ...(diagnostics ? { diagnostics } : {}),
+      };
+      return { result, extracted: extractToolAttachments(result) };
+    }
+
+    try {
+      return { result, extracted: extractToolAttachments(result) };
+    } catch (err) {
+      result = {
+        status: 'error',
+        error: `${call.name}: Tool returned an invalid result (${toErrorMessage(err)})`,
       };
       return { result, extracted: extractToolAttachments(result) };
     }
@@ -425,6 +436,7 @@ export class ToolUseDispatchNode<C> extends Node<
       trackedEdits.lineChanges
     ) {
       result.lineChanges = trackedEdits.lineChanges;
+      extracted.sanitizedResult.lineChanges = trackedEdits.lineChanges;
     }
 
     const editedFiles = trackedEdits.paths.map((path) => ({

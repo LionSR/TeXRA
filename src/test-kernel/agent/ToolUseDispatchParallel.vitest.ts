@@ -213,7 +213,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
         assert.equal(execution?.result.status, 'error');
         assert.match(
           execution?.result.status === 'error' ? execution.result.error : '',
-          /malformed_attachment/i,
+          /malformed_attachment: Tool returned an invalid result/i,
         );
       },
     );
