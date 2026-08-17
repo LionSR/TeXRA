@@ -40,13 +40,13 @@ import {
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import { projectChildRoster } from '@cli/chat/tui/state/childExecutions';
-import type { StreamArtifactReader } from '@cli/chat/tui/state/subscribeStreamArtifacts';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as chatGptLogin from '@cli/runtime/chatgptLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
+import type { StreamArtifactReader } from '@controllers/session/StreamArtifactProjection';
 import * as codexPreference from '@model/codex/codexPreference';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
