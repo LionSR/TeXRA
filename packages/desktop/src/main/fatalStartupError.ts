@@ -22,6 +22,7 @@ export function installPostStartupRejectionHandler(): () => void {
       message: app.isReady()
         ? 'TeXRA hit an unrecoverable error after startup and must close.'
         : 'TeXRA hit a startup error before the desktop window was ready.',
+      forceExit: app.isReady(),
     });
   };
   process.on('unhandledRejection', report);
@@ -33,7 +34,7 @@ export function installPostStartupRejectionHandler(): () => void {
 
 function reportFatalDesktopError(
   error: unknown,
-  options: { title: string; message: string },
+  options: { title: string; message: string; forceExit?: boolean },
 ): void {
   if (fatalStartupErrorReported) return;
   fatalStartupErrorReported = true;
@@ -47,7 +48,8 @@ function reportFatalDesktopError(
       options.title,
       [options.message, '', detail].join('\n'),
     );
-    app.quit();
+    if (options.forceExit) app.exit(1);
+    else app.quit();
   };
 
   if (app.isReady()) {
