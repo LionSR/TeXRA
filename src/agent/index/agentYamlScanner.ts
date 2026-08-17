@@ -1,5 +1,7 @@
 /** Stateless YAML scanning for the agent registry. */
 
+import * as path from 'node:path';
+
 import { glob } from 'glob';
 import pMap from 'p-map';
 
@@ -13,12 +15,23 @@ import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { createLog } from '@logger/logUtils';
 import type { AgentSource } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import { filterNotNull, groupBy } from '@utils/core';
+import { groupBy, isObject } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { AgentEntry } from './agentEntry';
 
 const log = createLog('agentRegistry');
+
+/** A YAML file the scanner found but could not turn into an agent. */
+export interface AgentScanIssue {
+  readonly path: string;
+  readonly message: string;
+}
+
+interface AgentDirectoryScan {
+  readonly entries: AgentEntry[];
+  readonly issues: AgentScanIssue[];
+}
 
 interface ParsedAgentYaml {
   readonly name: string;
@@ -43,8 +56,8 @@ export function extractToolNames(
 export async function scanDirectory(
   dir: string,
   source: AgentSource,
-): Promise<AgentEntry[]> {
-  if (!dir) return [];
+): Promise<AgentDirectoryScan> {
+  if (!dir) return { entries: [], issues: [] };
 
   try {
     const files = (
@@ -54,27 +67,46 @@ export async function scanDirectory(
         nodir: true,
       })
     ).toSorted();
-    const parsed = (
-      await pMap(files, readYamlDefinition, { concurrency: 8 })
-    ).filter(filterNotNull);
-    const unique = entriesWithUniqueNames(parsed);
+    const issues: AgentScanIssue[] = [];
+    const parsed: ParsedAgentYaml[] = [];
+    for (const result of await pMap(
+      files,
+      (yamlPath) => readYamlDefinition(yamlPath, dir),
+      { concurrency: 8 },
+    )) {
+      if (result.ok) parsed.push(result.value);
+      else issues.push(result.issue);
+    }
+    const unique = entriesWithUniqueNames(parsed, dir, issues);
     const definitions = new Map(
       unique.map((entry) => [entry.name, entry] as const),
     );
-    const entries = unique
-      .map((entry) => scanYaml(entry, source, definitions))
-      .filter(filterNotNull);
+    const entries: AgentEntry[] = [];
+    for (const entry of unique) {
+      const scanned = scanYaml(entry, source, definitions);
+      if (scanned) {
+        entries.push(scanned);
+        continue;
+      }
+      issues.push({
+        path: relativeScanPath(dir, entry.path),
+        message: 'Agent definition could not be read.',
+      });
+    }
 
     log.debug(`Scanned ${entries.length} agents from ${source}`);
-    return entries;
+    return { entries, issues };
   } catch (err) {
-    log.error(`Failed to scan ${dir}: ${toErrorMessage(err)}`);
-    return [];
+    const message = toErrorMessage(err);
+    log.error(`Failed to scan ${dir}: ${message}`);
+    return { entries: [], issues: [{ path: dir, message }] };
   }
 }
 
 function entriesWithUniqueNames(
   entries: readonly ParsedAgentYaml[],
+  dir: string,
+  issues: AgentScanIssue[],
 ): ParsedAgentYaml[] {
   const byName = groupBy(entries, (entry) => entry.name);
 
@@ -85,6 +117,12 @@ function entriesWithUniqueNames(
       log.warn(
         `Duplicate agent name "${name}" in ${paths}; skipping all duplicates.`,
       );
+      for (const match of matches) {
+        issues.push({
+          path: relativeScanPath(dir, match.path),
+          message: `Duplicate agent name "${name}".`,
+        });
+      }
       continue;
     }
     unique.push(matches[0]);
@@ -94,23 +132,59 @@ function entriesWithUniqueNames(
 
 async function readYamlDefinition(
   yamlPath: string,
-): Promise<ParsedAgentYaml | null> {
+  dir: string,
+): Promise<
+  { ok: true; value: ParsedAgentYaml } | { ok: false; issue: AgentScanIssue }
+> {
+  const displayPath = relativeScanPath(dir, yamlPath);
   try {
     const content = await AbsoluteFS.read(yamlPath);
     const parsed = parseYamlWith(content, AgentDefinitionSchema);
     if (parsed.isErr()) {
-      log.warn(`Failed to scan ${yamlPath}: ${toErrorMessage(parsed.error)}`);
-      return null;
+      const message = formatScanFailure(parsed.error);
+      log.warn(`Failed to scan ${yamlPath}: ${message}`);
+      return { ok: false, issue: { path: displayPath, message } };
     }
     return {
-      name: parsed.value.name,
-      path: yamlPath,
-      definition: parsed.value,
+      ok: true,
+      value: {
+        name: parsed.value.name,
+        path: yamlPath,
+        definition: parsed.value,
+      },
     };
   } catch (err) {
-    log.warn(`Failed to scan ${yamlPath}: ${toErrorMessage(err)}`);
-    return null;
+    const message = formatScanFailure(err);
+    log.warn(`Failed to scan ${yamlPath}: ${message}`);
+    return { ok: false, issue: { path: displayPath, message } };
   }
+}
+
+function relativeScanPath(dir: string, yamlPath: string): string {
+  const relative = path.relative(dir, yamlPath);
+  return relative || yamlPath;
+}
+
+function formatScanFailure(error: unknown): string {
+  if (isObject(error) && Array.isArray(error.issues)) {
+    const formatted = error.issues
+      .map((issue) => formatSchemaIssue(issue))
+      .filter((part) => part.length > 0);
+    if (formatted.length > 0) return formatted.join('; ');
+  }
+  return toErrorMessage(error);
+}
+
+function formatSchemaIssue(issue: unknown): string {
+  if (!isObject(issue)) return '';
+  const where = Array.isArray(issue.path) ? issue.path.join('.') : '';
+  const prefix = where ? `${where}: ` : '';
+  if (issue.code === 'unrecognized_keys' && Array.isArray(issue.keys)) {
+    return `${prefix}unrecognized keys ${issue.keys.filter((key) => typeof key === 'string').join(', ')}`;
+  }
+  return typeof issue.message === 'string' && issue.message
+    ? `${prefix}${issue.message}`
+    : '';
 }
 
 type InheritedBlockName = 'prompts' | 'settings';

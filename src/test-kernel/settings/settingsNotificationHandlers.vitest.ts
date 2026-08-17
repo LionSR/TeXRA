@@ -53,7 +53,27 @@ describe('settingsView notification message builders', () => {
     expect(message).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
       agents: { workflow: [workflowItem], toolUse: [toolUseItem] },
+      customAgentIssues: [],
     });
+  });
+
+  it('buildAgentSelectionMessage includes custom agent scan issues', async () => {
+    const issues = [
+      {
+        path: 'retired.yaml',
+        message: 'settings: unrecognized keys documentTag',
+      },
+    ];
+    const message = await buildAgentSelectionMessage({
+      loadAgents: vi.fn().mockResolvedValue(undefined),
+      buildSelectionItems: vi.fn().mockReturnValue({
+        workflow: [],
+        toolUse: [],
+      }),
+      getCustomAgentScanIssues: () => issues,
+    });
+
+    expect(message.customAgentIssues).toEqual(issues);
   });
 
   it('buildCustomAgentDirMessage wraps the resolved status', async () => {

@@ -4,6 +4,7 @@ import {
   type AgentEntry,
   type AgentRosterController,
   getAgent,
+  getCustomAgentScanIssues,
 } from '@agent/index';
 import type {
   computeAgentOptionsData,
@@ -251,6 +252,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       await buildAgentSelectionMessage({
         loadAgents: this.registry.loadAgents,
         buildSelectionItems: () => this.catalogController.buildSelectionItems(),
+        getCustomAgentScanIssues,
       }),
     );
   }

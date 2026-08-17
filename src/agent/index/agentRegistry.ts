@@ -22,7 +22,7 @@ import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName } from '@utils/core';
-import { scanDirectory } from './agentYamlScanner';
+import { scanDirectory, type AgentScanIssue } from './agentYamlScanner';
 import {
   clearInlineAgentDefinitions,
   defineInlineAgents,
@@ -69,6 +69,9 @@ const cache = new Map<string, AgentEntry>();
  * leaves the previous catalog described exactly as it still is.
  */
 let catalog: { readonly includesRemote: boolean } | undefined;
+
+/** Custom-directory YAML the last published load could not turn into an agent. */
+let customScanIssues: readonly AgentScanIssue[] = Object.freeze([]);
 
 /**
  * The load producing the next catalog. Every load chains on it, so the registry
@@ -167,7 +170,7 @@ async function doLoad(
     dirs.builtInToolUse(),
   ]);
 
-  const [customEntries, builtInEntries, toolUseEntries, remoteEntries] =
+  const [customScan, builtInScan, toolUseScan, remoteEntries] =
     await Promise.all([
       scanDirectory(customDir, 'custom'),
       scanDirectory(builtInDir, 'builtInWorkflow'),
@@ -181,15 +184,16 @@ async function doLoad(
   // them.
   const allEntries = [
     ...inlineAgentEntries(),
-    ...customEntries,
-    ...builtInEntries,
-    ...toolUseEntries,
+    ...customScan.entries,
+    ...builtInScan.entries,
+    ...toolUseScan.entries,
     ...remoteEntries,
   ];
 
   if (loadEpoch !== epoch) return false;
 
   cache.clear();
+  customScanIssues = Object.freeze(customScan.issues);
   for (const entry of allEntries) {
     cache.set(agentKeyOf(entry), entry);
   }
@@ -304,6 +308,14 @@ export function getAgentsByCategory(category: AgentCategory): AgentEntry[] {
 /** Get agents by source. */
 export function getAgentsBySource(source: AgentSource): AgentEntry[] {
   return [...cache.values()].filter((e) => e.source === source);
+}
+
+/**
+ * Custom-directory YAML files the last published load skipped, with the
+ * reason. Empty until a load publishes a catalog.
+ */
+export function getCustomAgentScanIssues(): readonly AgentScanIssue[] {
+  return customScanIssues;
 }
 
 /**
