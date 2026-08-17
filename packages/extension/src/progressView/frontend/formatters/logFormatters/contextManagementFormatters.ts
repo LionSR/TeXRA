@@ -18,9 +18,9 @@ import type {
   StatItem,
 } from '@progressView/frontend/components/ContextManagement';
 import {
-  ContextManagementDataSchema,
+  MESSAGE_TYPES,
   type ContextManagementData,
-  type LogMessageData,
+  type LogMessageOf,
 } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { formatCompactTokenCount } from '@utils/core';
@@ -148,22 +148,19 @@ function buildContextManagementItems(data: ContextManagementData): {
 
 /** Format context management event as TemplateResult. */
 export function formatContextManagementTemplate(
-  message: LogMessageData,
+  message: LogMessageOf<typeof MESSAGE_TYPES.CONTEXT_MANAGEMENT>,
 ): FormatResult {
   const { id, data } = message;
 
-  const parsed = ContextManagementDataSchema.safeParse(data);
-  if (!parsed.success) return null;
-
   // Hide max_tokens_reduced events when the reduced value is still comfortable
   if (
-    parsed.data.action === 'max_tokens_reduced' &&
-    parsed.data.reducedMaxTokens >= MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD
+    data.action === 'max_tokens_reduced' &&
+    data.reducedMaxTokens >= MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD
   ) {
     return null;
   }
 
-  const { config, items, summary } = buildContextManagementItems(parsed.data);
+  const { config, items, summary } = buildContextManagementItems(data);
 
   return html`
     <context-management

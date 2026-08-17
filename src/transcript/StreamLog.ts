@@ -2,7 +2,6 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   STREAMING_TEXT_MESSAGE_TYPES,
-  WorkflowCallProgressSchema,
   isTerminalWorkflowCallProgress,
   type StreamLogEntry,
   type StreamLogTextDelta,
@@ -246,11 +245,11 @@ export function nonterminalWorkflowCall(
   ) {
     return undefined;
   }
-  const call = WorkflowCallProgressSchema.safeParse(entry.data);
-  if (!call.success || isTerminalWorkflowCallProgress(call.data)) {
+  const call = entry.data;
+  if (isTerminalWorkflowCallProgress(call)) {
     return undefined;
   }
-  return call.data;
+  return call;
 }
 
 export class StreamLog {
@@ -448,11 +447,11 @@ export class StreamLog {
     entry: StreamLogAppendInput,
     settled: boolean,
   ): StreamLogEntry {
-    const fullEntry: StreamLogEntry = {
+    const fullEntry = {
       ...entry,
       seqNo: this.seqCounter + 1,
       ...(settled ? { settlementSeqNo: this.settlementSeqCounter + 1 } : {}),
-    };
+    } as StreamLogEntry;
     this.seqCounter = fullEntry.seqNo;
     if (settled) this.settlementSeqCounter += 1;
     this.indexById.set(fullEntry.id, this.entries.length);
@@ -497,13 +496,13 @@ export class StreamLog {
     // AgentTrace. Persisted entries are parsed when loaded from storage.
     // Spreading `current` reads its (possibly lazy) text getter, so this is
     // where a streaming entry's chunks are joined into a plain value.
-    const updated: StreamLogEntry = {
+    const updated = {
       ...current,
       ...patch,
       id: current.id,
       seqNo: current.seqNo,
       ...(settlementSeqNo !== undefined ? { settlementSeqNo } : {}),
-    };
+    } as StreamLogEntry;
     if (settlementSeqNo !== current.settlementSeqNo) {
       this.settlementSeqCounter += 1;
     }

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   invokeModelOrTool: vi.fn(),
   runFlowWithLifecycle: vi.fn(),
   runToolUseFlow: vi.fn(),
+  retrieveSessionResumeData: vi.fn(),
   acquireResumedExecutionLease: vi.fn(),
   validateOwnedExecutionLease: vi.fn(),
   runWithExecutionLeaseWriteFence: vi.fn(
@@ -64,12 +65,17 @@ vi.mock('@agent/implementations/flows/tooluse/runToolUseFlow', () => ({
   runToolUseFlow: mocks.runToolUseFlow,
 }));
 
+vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
+  retrieveSessionResumeData: mocks.retrieveSessionResumeData,
+}));
+
 // Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import {
   resumeToolUseFromResumeData,
   ResumeAdmissionCancelledError,
+  ResumeSessionUnavailableError,
 } from '@agent/runtime/executeAgent';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -142,6 +148,10 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
+    mocks.retrieveSessionResumeData.mockImplementation(
+      async (streamId, executionId, agentConfig) =>
+        createToolUseResumeData({ executionId, streamId, agentConfig }),
+    );
     mocks.clearTerminalExecutionState.mockResolvedValue(undefined);
     mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
       USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
@@ -168,6 +178,14 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     const executionId = 'e9503-boundary' as ExecutionId;
     const streamId = 'stream-9503-boundary' as StreamTabId;
     const order: string[] = [];
+    mocks.acquireResumedExecutionLease.mockImplementationOnce(async () => {
+      order.push('lease');
+      return 'existing';
+    });
+    mocks.retrieveSessionResumeData.mockImplementationOnce(async () => {
+      order.push('retrieve');
+      return createToolUseResumeData({ executionId, streamId });
+    });
     mocks.clearTerminalExecutionState.mockImplementationOnce(async () => {
       order.push('clear');
     });
@@ -186,7 +204,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     );
 
     expect(mocks.clearTerminalExecutionState).toHaveBeenCalledWith(executionId);
-    expect(order).toEqual(['clear', 'launch', 'flow']);
+    expect(order).toEqual(['lease', 'retrieve', 'clear', 'launch', 'flow']);
   });
 
   it('preserves persisted native follow-up support across resumed waiting turns', async () => {
@@ -237,6 +255,9 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       snapshot.executionId,
       storageError,
     );
+    expect(mocks.releaseOwnedExecutionLeaseAfterFailure).toHaveBeenCalledTimes(
+      1,
+    );
   });
 
   it('resolves execution lineage before activating the resume stream', async () => {
@@ -256,6 +277,9 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       snapshot.executionId,
       storageError,
     );
+    expect(mocks.releaseOwnedExecutionLeaseAfterFailure).toHaveBeenCalledTimes(
+      1,
+    );
   });
 
   it('does not build a launch context when canonical admission is withdrawn under the lease lock', async () => {
@@ -274,6 +298,16 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       }),
     ).rejects.toBeInstanceOf(ResumeAdmissionCancelledError);
 
+    expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
+  });
+
+  it('reports a reloaded session that is no longer resumable distinctly', async () => {
+    const snapshot = createToolUseResumeData();
+    mocks.retrieveSessionResumeData.mockResolvedValueOnce(null);
+
+    await expect(resumeToolUseFromResumeData(snapshot)).rejects.toBeInstanceOf(
+      ResumeSessionUnavailableError,
+    );
     expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
   });
 

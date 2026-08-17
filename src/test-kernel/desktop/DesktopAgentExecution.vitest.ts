@@ -666,6 +666,7 @@ function expectWorkflowResume(
 ): void {
   expect(runAgent).toHaveBeenCalledWith(
     {
+      kind: 'resume',
       config: expect.objectContaining(config),
       executionId,
     },
@@ -2257,7 +2258,7 @@ describe('DesktopProgressBridge', () => {
 
     // Fresh run: the existing execution id is dropped (no resume reuse).
     expect(runAgent).toHaveBeenCalledWith(
-      { config: expect.objectContaining(runConfig) },
+      { kind: 'fresh', config: expect.objectContaining(runConfig) },
       expect.objectContaining({
         session: expect.objectContaining({
           interactions: expect.objectContaining({ emit: expect.any(Function) }),
