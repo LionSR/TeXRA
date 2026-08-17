@@ -77,8 +77,10 @@ describe('SendToTerminalTool', () => {
 
   it('advertises the host terminal capture limit', () => {
     const { tool } = setupTool();
+    const description = tool.definition.description;
+    assert.ok(description);
     assert.ok(
-      tool.definition.description.includes(
+      description.includes(
         `up to ${TERMINAL_OUTPUT_MAX_CHARS} characters`,
       ),
     );
