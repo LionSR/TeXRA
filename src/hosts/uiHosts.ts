@@ -1,3 +1,6 @@
+// Third-party imports
+import stripAnsi from 'strip-ansi';
+
 export interface DiffSource {
   filePath: string;
 }
@@ -89,6 +92,15 @@ export interface TerminalRunRequest {
   command: string;
   /** Hard cap on how long to wait for captured execution. */
   timeoutMs: number;
+}
+
+/** Strip ANSI control sequences and retain a bounded output tail. */
+export function truncateTerminalOutput(
+  output: string,
+  maxChars: number,
+): string {
+  const stripped = stripAnsi(output);
+  return stripped.length > maxChars ? stripped.slice(-maxChars) : stripped;
 }
 
 export interface TerminalRunResult {
