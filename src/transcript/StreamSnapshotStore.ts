@@ -1150,12 +1150,13 @@ export class StreamSnapshotStore {
    */
   async reconcileStagedDeletions(
     liveStreams: ReadonlySet<StreamTabId>,
+    selectedStreams?: ReadonlySet<StreamTabId>,
   ): Promise<{
     restored: StreamTabId[];
     pendingCleanup: StreamTabId[];
     discarded: StreamTabId[];
   }> {
-    return this.deletions.reconcile(liveStreams);
+    return this.deletions.reconcile(liveStreams, selectedStreams);
   }
 
   /**
@@ -1476,7 +1477,13 @@ export class StreamSnapshotStore {
     return this.records.get(stream)?.meta?.parentStreamId;
   }
 
-  /** Find and seed children before their canonical parent-detach facts emit. */
+  /**
+   * Find children of `parent`, clear their durable parent edges, and seed
+   * them so a follow-up `onCommitted` projection (session registry / UI
+   * facts) can run against resident records. Edge clearing stays here so
+   * callers with no session — history delete, CLI cleanup — still detach
+   * without widening this store's public surface.
+   */
   private async detachPersistedChildren(
     parent: StreamTabId,
   ): Promise<StreamTabId[]> {
@@ -1502,7 +1509,16 @@ export class StreamSnapshotStore {
       }
     }
     await this.preload(children);
-    return children.filter((child) => this.getParentStreamId(child) === parent);
+    const attached = children.filter(
+      (child) => this.getParentStreamId(child) === parent,
+    );
+    for (const child of attached) {
+      // A live session later echoes this edge removal through its UI fact
+      // projection. That round-trip is redundant for this store, but the
+      // direct write is required for history/CLI callers with no session.
+      this.setParentStream(child, null);
+    }
+    return attached;
   }
 
   /** Read-only view of stream→executionId for waiting-stream detection. */

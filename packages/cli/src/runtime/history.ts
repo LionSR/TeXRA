@@ -13,10 +13,11 @@ import {
   unwrapResultMeta,
   type AgentExecutionListingEntry,
 } from '@agent/storage';
-import type { AgentConfig } from '@agent/runtime';
+import { tryDefaultSession, type AgentConfig } from '@agent/runtime';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import { createSessionStores } from '@controllers/session/sessionStores';
 import {
   ExecutionIdSchema,
   HISTORY_RUN_STATUS,
@@ -33,6 +34,10 @@ import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
 } from '@transcript';
+import {
+  cleanupExecutionAdjacentStreamState,
+  resolveAdjacentStreamCleanup,
+} from '@transcript/adjacentStreamCleanup';
 
 import { readCliResumeDataForListing } from './toolUseResumeData';
 import {
@@ -313,12 +318,31 @@ export async function stageCliHistoryTraceViewerAssets(params: {
   return 'staged';
 }
 
+/**
+ * A live session (rare for the one-shot `history` command, but not
+ * impossible) supplies the canonical lifecycle callbacks for cleanup.
+ */
+function liveStreamCleanup() {
+  const session = tryDefaultSession();
+  return session?.transcripts.mode.kind === 'persistent'
+    ? createSessionStores(session)
+    : undefined;
+}
+
 export async function deleteCliHistory(options: {
   id?: ExecutionId;
   all?: boolean;
 }): Promise<CliHistoryDeleteResult> {
+  const { id } = options;
+  if (!options.all && !id) {
+    throw new Error('Expected an execution id, or --all.');
+  }
+  const cleanup = resolveAdjacentStreamCleanup(liveStreamCleanup());
   if (options.all) {
-    const result = await deleteAllExecutions();
+    const result = await deleteAllExecutions({
+      beforeDelete: (executionId) =>
+        cleanupExecutionAdjacentStreamState(executionId, cleanup),
+    });
     await GoalStore.forgetByExecutionIds(result.deleted);
     return {
       deleted: 'all',
@@ -327,16 +351,18 @@ export async function deleteCliHistory(options: {
       failed: result.failed,
     };
   }
-  if (!options.id) {
+  if (!id) {
     throw new Error('Expected an execution id, or --all.');
   }
-  const result = await deleteExecution(options.id);
+  const result = await deleteExecution(id, {
+    beforeDelete: () => cleanupExecutionAdjacentStreamState(id, cleanup),
+  });
   if (result.status === 'deleted') {
-    await GoalStore.forgetByExecutionIds([options.id]);
+    await GoalStore.forgetByExecutionIds([id]);
   }
   return {
     deleted: 'one',
-    id: options.id,
+    id,
     found: result.status !== 'not-found',
     status: result.status,
   };
