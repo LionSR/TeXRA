@@ -682,7 +682,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       runPersistedFlow(executionId, streamId, undefined),
     ).rejects.toMatchObject({
       name: PersistedFlowStateError.name,
-      reason: 'invalid-shared',
+      reason: 'unexpected-record',
     });
   });
 

@@ -4061,6 +4061,22 @@ describe('child-stream ordered transition matrix', () => {
     expect(retainedRows(parentP)).toMatchObject([{ executionId: 'kid-exec' }]);
   });
 
+  it('6b. edge-before-retained-roster promotion still propagates cap eviction', () => {
+    setStatus(kid, STREAM_PHASE.RUNNING);
+    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
+    setParentStream(kid, parentP);
+    setParentStream(kid, null);
+
+    projectChildRoster(parentP, [
+      { ...rosterRow(STREAM_PHASE.COMPLETED), finishedAt: 100 },
+    ]);
+    expect(retainedRows(parentP)).toHaveLength(1);
+
+    projectChildRoster(parentP, []);
+    expect(retainedRows(parentP)).toEqual([]);
+    expect(parentStream.get().has(kid)).toBe(false);
+  });
+
   it('7. explicit reattachment: (6) then E_Q+, R_Q+, R_P+', () => {
     setStatus(kid, STREAM_PHASE.RUNNING);
     projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);

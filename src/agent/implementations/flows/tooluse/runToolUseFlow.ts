@@ -480,11 +480,12 @@ export async function runToolUseFlow<C = unknown>(
       }
     } else if (flowRecord) {
       const parsed = parseToolUseShared(flowRecord.shared);
-      throw new PersistedFlowStateError(
-        executionId,
-        'invalid-shared',
-        parsed.success ? undefined : { cause: parsed.error },
-      );
+      if (!parsed.success) {
+        throw new PersistedFlowStateError(executionId, 'invalid-shared', {
+          cause: parsed.error,
+        });
+      }
+      throw new PersistedFlowStateError(executionId, 'unexpected-record');
     }
     // Cleanup may delete a terminal flow record only after absence was
     // confirmed or a present record passed its migration boundary.

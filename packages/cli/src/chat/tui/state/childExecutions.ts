@@ -302,6 +302,7 @@ export function projectChildRoster(
   const snapshotIds = new Set<StreamTabId>();
   const live = new Map<StreamTabId, ActiveChildInfo>();
   const retainedRows = new Map<StreamTabId, ActiveChildInfo>();
+  const incompatibleRetainedMarkers = new Map<StreamTabId, number>();
   for (const child of children) {
     snapshotIds.add(child.childStreamId);
     const entry = current.get(child.childStreamId);
@@ -314,6 +315,14 @@ export function projectChildRoster(
       live.set(child.childStreamId, child);
     } else if (compatible) {
       retainedRows.set(child.childStreamId, child);
+    } else {
+      const retained = retainedParent(entry);
+      if (
+        retained?.streamId === parentStreamId &&
+        retained.finishedAt !== child.finishedAt
+      ) {
+        incompatibleRetainedMarkers.set(child.childStreamId, child.finishedAt);
+      }
     }
   }
 
@@ -328,6 +337,23 @@ export function projectChildRoster(
 
   const out = new Map(current);
   let changed = false;
+
+  // A replayed promotion edge can arrive before the old parent's retained
+  // roster. Preserve explicit topology and summary authority, but accept the
+  // retention stamp so a later roster omission can propagate cap eviction.
+  for (const [childStreamId, finishedAt] of incompatibleRetainedMarkers) {
+    const entry = out.get(childStreamId);
+    if (entry?.kind !== 'live' || !entry.parent) continue;
+    const retained = retainedParent(entry);
+    if (!retained || retained.streamId !== parentStreamId) continue;
+    const nextRetained = { ...retained, finishedAt };
+    const parent: ParentProvenance =
+      entry.parent.kind === 'roster'
+        ? { kind: 'roster', retained: nextRetained }
+        : { ...entry.parent, retained: nextRetained };
+    out.set(childStreamId, { ...entry, parent });
+    changed = true;
+  }
 
   // Clear active membership for entries previously active under this parent
   // but absent or incompatible with this snapshot — including rows that
