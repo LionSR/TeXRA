@@ -14,8 +14,8 @@ import {
   type AgentTrace,
   type StatusEvent,
 } from '@agent/trace';
-import type { StreamTabId } from '@shared/schemas';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import type { StreamTabId } from '@shared/schemas';
 import { aggregateError } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
 
