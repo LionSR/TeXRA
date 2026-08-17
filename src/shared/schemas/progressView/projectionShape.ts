@@ -93,21 +93,3 @@ export function pickProjection<
 >(key: K): (typeof StreamContentProjectionValues)[K] {
   return StreamContentProjectionValues[key];
 }
-
-/**
- * The canonical browser-safe projection DTO: every field the SYNC render
- * snapshot and the targeted arms read, with the SYNC wire's envelope
- * optionality applied.
- */
-export const StreamContentProjectionShapeSchema = z.object({
-  stream: pickProjection('stream'),
-  runUsage: pickProjection('runUsage'),
-  activeState: pickProjection('activeState').optional(),
-  outputs: pickProjection('outputs').optional(),
-  workPlan: pickProjection('workPlan').optional(),
-  controls: pickProjection('controls').optional(),
-});
-
-export type StreamContentProjectionShape = z.infer<
-  typeof StreamContentProjectionShapeSchema
->;
