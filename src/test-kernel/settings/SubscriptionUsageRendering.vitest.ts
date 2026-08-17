@@ -124,6 +124,7 @@ describe('subscription usage rendering', () => {
     expect(styleText).toContain('flex: 1 1 100%');
     expect(styleText).toContain('min-width: 0');
     const text = kimiRow!.shadowRoot?.textContent ?? '';
+    expect(text).toContain('Kimi Code plan usage');
     expect(text.split('5-hour: 25%')).toHaveLength(2);
     expect(text.split('7-day: 100%')).toHaveLength(2);
     const meters = kimiRow!.shadowRoot?.querySelectorAll('progress');

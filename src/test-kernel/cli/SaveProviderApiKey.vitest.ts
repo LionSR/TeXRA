@@ -37,6 +37,8 @@ describe('saveProviderApiKey', () => {
 
   it.each([
     'sk-xxx',
+    'sk-xxx-123',
+    'xxxabc-secret',
     '<your-key>',
     'your-api-key',
     'your_api_key',

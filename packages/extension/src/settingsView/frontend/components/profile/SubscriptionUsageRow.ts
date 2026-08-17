@@ -77,6 +77,10 @@ export class SubscriptionUsageRow extends LitElement {
         font-variant-numeric: tabular-nums;
       }
 
+      .usage-plan {
+        font-weight: 600;
+      }
+
       .usage-updated,
       .usage-unavailable-detail {
         color: var(--vscode-descriptionForeground);
@@ -116,6 +120,7 @@ export class SubscriptionUsageRow extends LitElement {
       <div class="settings-row subscription-usage-row">
         <div class="settings-row-text">
           <div class="usage-card">
+            <span class="usage-plan">${snapshot.planName} usage</span>
             ${snapshot.windows.map((window) => {
               const label = subscriptionUsageWindowLabel(window);
               const percent = formatSubscriptionUsagePercent(

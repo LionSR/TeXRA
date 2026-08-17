@@ -15,7 +15,7 @@ export function loadGitHubTokenStatus(): Promise<GitHubTokenStatus> {
 export async function saveGitHubToken(token: string): Promise<void> {
   const trimmed = token.trim();
   if (!trimmed) throw new Error('GitHub token is empty.');
-  if (looksLikeCredentialPlaceholder(trimmed)) {
+  if (looksLikeCredentialPlaceholder(trimmed, 'github')) {
     throw new Error(
       'This looks like a placeholder rather than a GitHub token. Enter a personal access token from GitHub.',
     );

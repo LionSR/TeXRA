@@ -1,16 +1,14 @@
-import { Box, Text, useInput } from 'ink';
+import { Text } from 'ink';
 import { useState } from 'react';
 
 import { tryOpenBrowser } from '@cli/runtime/browser';
 import type { GitHubTokenStatus } from '@cli/runtime/githubToken';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
-import { CROSS, POINTER } from '@cli/tui/ui/glyphs';
+import { CROSS } from '@cli/tui/ui/glyphs';
 import { GITHUB_TOKEN_CREATE_URL } from '@tools/github/githubAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { BaseTextInput } from '../input/BaseTextInput';
-import { FormFrame } from './_shared/FormFrame';
+import { CredentialEntryForm } from './ApiKeyEntryForm';
 import { ListForm } from './_shared/ListForm';
 
 export interface GitHubTokenStatusView {
@@ -116,7 +114,7 @@ export function GitHubTokenForm(
       description={
         <Text dimColor>
           {formatGitHubTokenSummary({
-            status,
+            status: props.statusView?.status,
             loading: props.statusView?.loading ?? false,
             error: props.statusView?.error ?? false,
           })}
@@ -165,47 +163,13 @@ function GitHubTokenEntryForm(props: {
   readonly onSubmit: (token: string) => void;
   readonly onCancel: () => void;
 }): React.JSX.Element {
-  const [token, setToken] = useState('');
-
-  useInput((_input, k) => {
-    if (k.escape && !props.saving) props.onCancel();
-  });
-
   return (
-    <FormFrame title="Set GitHub token" showCloseHint={false}>
-      <Text dimColor>Get a token: {GITHUB_TOKEN_CREATE_URL}</Text>
-      <Box marginTop={1}>
-        <Text>{`${POINTER} `}</Text>
-        <BaseTextInput
-          value={token}
-          masked
-          placeholder="enter your GitHub token (hidden)"
-          onChange={setToken}
-          onSubmit={(value) => {
-            const trimmed = value.trim();
-            if (trimmed && !props.saving) props.onSubmit(trimmed);
-          }}
-        />
-      </Box>
-      <Box marginTop={1} flexDirection="column">
-        {props.error ? (
-          <Text color={COLOR_ERROR}>{`${CROSS} ${props.error}`}</Text>
-        ) : (
-          <Text dimColor>
-            Stored in TeXRA secrets on Enter — or set GH_TOKEN / GITHUB_TOKEN.
-          </Text>
-        )}
-        {props.saving ? <Text dimColor>Saving…</Text> : null}
-      </Box>
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            { key: 'Enter', action: 'save' },
-            { key: 'Esc', action: 'back' },
-          ]}
-          confirmCancel={false}
-        />
-      </Box>
-    </FormFrame>
+    <CredentialEntryForm
+      title="Set GitHub token"
+      helper={<Text dimColor>Get a token: {GITHUB_TOKEN_CREATE_URL}</Text>}
+      placeholder="enter your GitHub token (hidden)"
+      savedHint="Stored in TeXRA secrets on Enter — or set GH_TOKEN / GITHUB_TOKEN."
+      {...props}
+    />
   );
 }
