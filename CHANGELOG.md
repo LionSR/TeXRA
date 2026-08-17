@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **GPT-5.6 ChatGPT-subscription sessions use the same 272k input budget as GPT-5.5** —
+  matching the current Codex catalog, so history is compacted before the
+  unofficial backend rejects a turn.
 - **A missing helper model falls back to DeepSeek V4 Flash** — disabling or
   removing the helper no longer silently switches auxiliary tasks to the
   first picker model.

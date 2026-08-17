@@ -733,9 +733,9 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    // gpt-5.6's Codex subscription budget caps to 500k
-    // (CODEX_GPT56_SUBSCRIPTION_CONTEXT_WINDOW), not the raw 1.05M API window.
-    expect(leftTexts(display)).toContain('187k/500k (37%)');
+    // gpt-5.6's Codex subscription budget caps to 400k
+    // (CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW), not the raw 1.05M API window.
+    expect(leftTexts(display)).toContain('187k/400k (47%)');
   });
 
   it('uses the default 400k subscription budget for earlier Codex models', () => {
