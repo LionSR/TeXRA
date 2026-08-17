@@ -219,6 +219,38 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('retires a retained fact removal before rebuilding the selectable rail', async () => {
+    const backendRef: { current?: RecordingTarget['backend'] } = {};
+    const selectableAtRebuild: StreamTabId[][] = [];
+    const lifecycle = createLifecycleOptions({
+      rebuildRenderedStreams: vi.fn(async () => {
+        selectableAtRebuild.push(
+          backendRef.current?.state.selectableStreamNames() ?? [],
+        );
+      }),
+    });
+    const target = createIsolatedRecordingBackend(
+      createTestSession(),
+      lifecycle,
+    );
+    const { backend } = target;
+    backendRef.current = backend;
+    backend.setupEventListeners();
+    const streamId = 'retained-fact-stream' as StreamTabId;
+    backend.state.streamLogs.ensureStream(streamId);
+    vi.spyOn(backend.state, 'clearStream').mockResolvedValueOnce('failed');
+
+    emitRemoveStream(target, streamId);
+
+    await vi.waitFor(() =>
+      expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
+        syncActiveStream: true,
+      }),
+    );
+    expect(selectableAtRebuild).toContainEqual([streamId]);
+    expect(backend.state.isStreamRemoved(streamId)).toBe(false);
+  });
+
   it('handles removeStream session facts before backend load', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend } = target;
@@ -275,7 +307,7 @@ describe('ProgressBackend', () => {
       expect(session.executions.getAgentHandleByStream(stream)).toBeUndefined();
 
       const deletion = backend.deleteStream(stream);
-      expect(backend.state.stores.hasStreamDeletionClaim(stream, 0)).toBe(true);
+      expect(backend.state.stores.hasStreamDeletionClaim(stream)).toBe(true);
       await vi.waitFor(() =>
         expect(waitForRelease).toHaveBeenCalledWith(stream),
       );
@@ -287,9 +319,7 @@ describe('ProgressBackend', () => {
       expect(clearStream).toHaveBeenCalledWith(stream, {
         expectedIncarnation: 0,
       });
-      expect(backend.state.stores.hasStreamDeletionClaim(stream, 0)).toBe(
-        false,
-      );
+      expect(backend.state.stores.hasStreamDeletionClaim(stream)).toBe(false);
       expect(backend.state.streamLogs.has(stream)).toBe(false);
     } finally {
       releaseLease();
@@ -1080,7 +1110,15 @@ describe('ProgressBackend', () => {
 
   it('retains rendered state when durable stream cleanup fails', async () => {
     const session = track(createTestSession());
-    const lifecycle = createLifecycleOptions();
+    const backendRef: { current?: RecordingTarget['backend'] } = {};
+    const selectableAtRebuild: StreamTabId[][] = [];
+    const lifecycle = createLifecycleOptions({
+      rebuildRenderedStreams: vi.fn(async () => {
+        selectableAtRebuild.push(
+          backendRef.current?.state.selectableStreamNames() ?? [],
+        );
+      }),
+    });
     const backend = track(
       new ProgressBackend({
         storage: new FakeStateStore(),
@@ -1092,6 +1130,7 @@ describe('ProgressBackend', () => {
         lifecycle,
       }),
     );
+    backendRef.current = backend;
     const stream = 'retained-stream' as StreamTabId;
     backend.state.streamLogs.ensureStream(stream);
     vi.spyOn(backend.state, 'clearStream').mockResolvedValueOnce('failed');
@@ -1102,6 +1141,8 @@ describe('ProgressBackend', () => {
     expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
       syncActiveStream: true,
     });
+    expect(selectableAtRebuild).toContainEqual([stream]);
+    expect(backend.state.isStreamRemoved(stream)).toBe(false);
     expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(0, 1);
   });
 
